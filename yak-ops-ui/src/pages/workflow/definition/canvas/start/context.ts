@@ -1,9 +1,5 @@
 import { WORKFLOW_EDITOR_META_KEY } from '../note/types';
 import {
-  getWorkflowStartConnections,
-  replaceWorkflowStartConnections,
-} from './connections';
-import {
   WORKFLOW_START_META_KEY,
   type WorkflowStartConfig,
   type WorkflowStartInputField,
@@ -37,13 +33,22 @@ const normalizePosition = (value?: { x?: number; y?: number }) => ({
   y: Number.isFinite(value?.y) ? Number(value?.y) : 160,
 });
 
+const readStartMeta = (
+  editorMeta?: Record<string, unknown>,
+  legacyInput?: Record<string, unknown>,
+): StartMeta | undefined => {
+  const current = editorMeta?.[WORKFLOW_START_META_KEY];
+  if (isRecord(current)) return current as StartMeta;
+  const legacy = legacyInput?.[WORKFLOW_START_META_KEY];
+  return isRecord(legacy) ? legacy as StartMeta : undefined;
+};
+
 export const hydrateWorkflowStartConfig = (
-  rawInput?: Record<string, unknown>,
+  runtimeInput?: Record<string, unknown>,
+  editorMeta?: Record<string, unknown>,
 ): WorkflowStartConfig => {
-  const input = rawInput || {};
-  const meta = isRecord(input[WORKFLOW_START_META_KEY])
-    ? (input[WORKFLOW_START_META_KEY] as StartMeta)
-    : undefined;
+  const input = runtimeInput || {};
+  const meta = readStartMeta(editorMeta, input);
   const inputValues = isRecord(input.inputs) ? input.inputs : undefined;
   const variableValues = isRecord(input.vars) ? input.vars : {};
 
@@ -92,7 +97,6 @@ export const hydrateWorkflowStartConfig = (
   const nextNodeIds = Array.isArray(meta?.nextNodeIds)
     ? [...new Set(meta.nextNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && Boolean(nodeId)))]
     : [];
-  replaceWorkflowStartConnections(nextNodeIds);
 
   return {
     position: normalizePosition(meta?.position),
@@ -120,10 +124,10 @@ const serializeValue = (type: WorkflowStartValueType, value: unknown) => {
   return value === undefined || value === null ? '' : String(value);
 };
 
+/** 仅序列化运行时输入，不再夹带画布元数据。 */
 export const serializeWorkflowStartContext = (
   config: WorkflowStartConfig,
   system: { definitionId: string; workflowName: string },
-  editorMeta: Record<string, unknown> = {},
 ): Record<string, unknown> => ({
   sys: {
     definitionId: system.definitionId,
@@ -135,12 +139,17 @@ export const serializeWorkflowStartContext = (
   vars: Object.fromEntries(
     config.variables.map((variable) => [variable.name, serializeValue(variable.type, variable.value)]),
   ),
-  ...editorMeta,
+});
+
+/** Start 的位置、字段定义和显式连线仅属于编辑器元数据。 */
+export const serializeWorkflowStartEditorMeta = (
+  config: WorkflowStartConfig,
+): Record<string, unknown> => ({
   [WORKFLOW_START_META_KEY]: {
     version: 2,
     position: config.position,
     inputFields: config.inputs.map(({ defaultValue: _defaultValue, ...field }) => field),
     variables: config.variables.map(({ value: _value, ...variable }) => variable),
-    nextNodeIds: getWorkflowStartConnections(),
+    nextNodeIds: [...new Set(config.nextNodeIds.filter(Boolean))],
   } satisfies StartMeta,
 });
