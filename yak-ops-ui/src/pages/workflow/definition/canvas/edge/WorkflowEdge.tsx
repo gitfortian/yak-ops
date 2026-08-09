@@ -7,7 +7,6 @@ import {
   type EdgeProps,
 } from 'reactflow';
 import { WORKFLOW_EDGE_HANDLE_OVERLAP } from '../constants';
-import { useWorkflowStartConnections } from '../start/connections';
 import { WORKFLOW_START_NODE_ID } from '../start/types';
 import type { WorkflowEdgeData } from '../types';
 import WorkflowEdgeInsert from './WorkflowEdgeInsert';
@@ -25,9 +24,7 @@ const WorkflowEdge = ({
 }: EdgeProps<WorkflowEdgeData>) => {
   const [hovered, setHovered] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
-  const startConnections = useWorkflowStartConnections();
   const isStartEdge = source === WORKFLOW_START_NODE_ID;
-  const startEdgeVisible = !isStartEdge || startConnections.includes(target);
 
   const [edgePath, labelX, labelY] = useMemo(
     () => getBezierPath({
@@ -57,8 +54,6 @@ const WorkflowEdge = ({
     data?.onInsert?.(id, source, target, taskId);
     setInsertOpen(false);
   }, [data, id, source, target]);
-
-  if (!startEdgeVisible) return null;
 
   return (
     <>

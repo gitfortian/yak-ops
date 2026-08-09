@@ -1,6 +1,9 @@
-import type { WorkflowNodeFailurePolicy } from '@/services/workflow';
-import { InputNumber, Select, Slider, Switch, Tooltip } from 'antd';
-import { CircleHelp } from 'lucide-react';
+import type {
+  WorkflowNodeFailurePolicy,
+  WorkflowTriggerRule,
+} from '@/services/workflow';
+import { Input, InputNumber, Select, Slider, Switch, Tooltip } from 'antd';
+import { ChevronDown, CircleHelp } from 'lucide-react';
 import type { Node } from 'reactflow';
 import WorkflowNextStep from './WorkflowNextStep';
 import type { WorkflowCanvasTaskOption, WorkflowNodeData } from './types';
@@ -12,8 +15,17 @@ const NODE_FAILURE_OPTIONS = [
   { value: 'IGNORE_FAILURE', label: '忽略并继续' },
 ];
 
+const NODE_TRIGGER_OPTIONS = [
+  { value: 'ALL_SUCCESS', label: '所有前置成功' },
+  { value: 'ALL_DONE', label: '所有前置结束' },
+  { value: 'NONE_FAILED', label: '前置无失败' },
+  { value: 'ONE_SUCCESS', label: '任一前置成功' },
+  { value: 'ALWAYS', label: '始终执行' },
+];
+
 const MAX_RETRY_TIMES = 9;
 const MAX_RETRY_DELAY_SECONDS = 3600;
+const MAX_TIMEOUT_SECONDS = 24 * 60 * 60;
 
 export interface WorkflowInspectorNextNode {
   id: string;
@@ -52,6 +64,11 @@ const WorkflowNodeInspectorSettings = ({
 }: WorkflowNodeInspectorSettingsProps) => {
   const retryTimes = Math.max(0, (node.data.maxAttempts || 1) - 1);
   const retryEnabled = retryTimes > 0;
+  const mappingText = node.data.inputMappingText?.trim() || '{}';
+  const hasAdvancedConfig = node.data.triggerRule !== 'ALL_SUCCESS'
+    || (node.data.dispatchTimeoutSeconds || 0) > 0
+    || (node.data.executionTimeoutSeconds || 0) > 0
+    || (mappingText !== '{}' && mappingText !== '');
 
   const handleRetryEnabledChange = (checked: boolean) => {
     if (!checked) {
@@ -157,6 +174,87 @@ const WorkflowNodeInspectorSettings = ({
           onChange={(value) => onChange({ failurePolicy: value as WorkflowNodeFailurePolicy })}
         />
       </section>
+
+      <Divider />
+
+      <details className="group px-4 py-3" open={hasAdvancedConfig || undefined}>
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-0 py-1 text-[12px] font-semibold text-[#344054] [&::-webkit-details-marker]:hidden">
+          <div className="flex items-center">
+            高级运行设置
+            {hasAdvancedConfig ? (
+              <span className="ml-2 rounded bg-[#fff1f3] px-1.5 py-0.5 text-[9px] font-medium text-[#d92d50]">已配置</span>
+            ) : null}
+          </div>
+          <ChevronDown size={14} className="text-[#98a2b3] transition-transform group-open:rotate-180" />
+        </summary>
+
+        <div className="mt-3 space-y-4 rounded-lg bg-[#fafafa] p-3">
+          <div>
+            <div className="mb-1.5 flex items-center text-[11px] font-medium text-[#667085]">
+              触发规则
+              <HelpTip title="多个前置节点汇聚时，决定当前节点何时满足调度条件。" />
+            </div>
+            <Select
+              disabled={locked}
+              size="small"
+              className="w-full"
+              value={node.data.triggerRule}
+              options={NODE_TRIGGER_OPTIONS}
+              onChange={(value) => onChange({ triggerRule: value as WorkflowTriggerRule })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium text-[#667085]">调度超时</div>
+              <InputNumber
+                size="small"
+                controls={false}
+                disabled={locked}
+                min={0}
+                max={MAX_TIMEOUT_SECONDS}
+                value={node.data.dispatchTimeoutSeconds}
+                className="!w-full"
+                addonAfter="秒"
+                onChange={(value) => onChange({ dispatchTimeoutSeconds: Number(value || 0) })}
+              />
+              <div className="mt-1 text-[9px] text-[#98a2b3]">0 表示不限制等待调度时间</div>
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium text-[#667085]">执行超时</div>
+              <InputNumber
+                size="small"
+                controls={false}
+                disabled={locked}
+                min={0}
+                max={MAX_TIMEOUT_SECONDS}
+                value={node.data.executionTimeoutSeconds}
+                className="!w-full"
+                addonAfter="秒"
+                onChange={(value) => onChange({ executionTimeoutSeconds: Number(value || 0) })}
+              />
+              <div className="mt-1 text-[9px] text-[#98a2b3]">0 表示不限制节点运行时间</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center text-[11px] font-medium text-[#667085]">
+              输入映射
+              <HelpTip title="JSON 对象；将工作流输入或前置节点输出映射为当前节点输入。" />
+            </div>
+            <Input.TextArea
+              disabled={locked}
+              autoSize={{ minRows: 3, maxRows: 8 }}
+              spellCheck={false}
+              value={node.data.inputMappingText}
+              placeholder={'{\n  "requestId": "$workflow.requestId"\n}'}
+              className="font-mono !text-[10px]"
+              onChange={(event) => onChange({ inputMappingText: event.target.value })}
+            />
+          </div>
+        </div>
+      </details>
 
       <Divider />
 

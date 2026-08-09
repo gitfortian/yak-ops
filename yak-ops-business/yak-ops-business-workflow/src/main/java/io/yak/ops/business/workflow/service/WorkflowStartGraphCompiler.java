@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Compiles the editor-only Start connections into the executable task DAG. */
+/** Compiles editor-only Start connections into the executable task DAG. */
 final class WorkflowStartGraphCompiler {
 
   private static final String START_META_KEY = "__yak_start__";
@@ -18,35 +18,40 @@ final class WorkflowStartGraphCompiler {
 
   private WorkflowStartGraphCompiler() {}
 
+  /** 兼容旧调用：显式 Start 信息曾存放在 input。 */
   static RuntimeGraph compile(
       List<NodeRequest> nodes,
       List<EdgeRequest> edges,
       Map<String, Object> input) {
+    return compile(nodes, edges, Map.of(), input);
+  }
+
+  /**
+   * 新模型优先从 editorMeta 读取 Start 连线；legacyInput 仅用于兼容历史定义。
+   * Runtime input 不参与新的画布拓扑建模。
+   */
+  static RuntimeGraph compile(
+      List<NodeRequest> nodes,
+      List<EdgeRequest> edges,
+      Map<String, Object> editorMeta,
+      Map<String, Object> legacyInput) {
     Map<String, NodeRequest> nodesById = new LinkedHashMap<>();
-    for (NodeRequest node : nodes) {
-      nodesById.put(node.id(), node);
-    }
+    for (NodeRequest node : nodes) nodesById.put(node.id(), node);
 
     Map<String, List<String>> adjacency = new LinkedHashMap<>();
     Set<String> taskTargets = new LinkedHashSet<>();
-    for (String nodeId : nodesById.keySet()) {
-      adjacency.put(nodeId, new ArrayList<>());
-    }
+    for (String nodeId : nodesById.keySet()) adjacency.put(nodeId, new ArrayList<>());
     for (EdgeRequest edge : edges) {
-      if (!nodesById.containsKey(edge.source()) || !nodesById.containsKey(edge.target())) {
-        continue;
-      }
+      if (!nodesById.containsKey(edge.source()) || !nodesById.containsKey(edge.target())) continue;
       adjacency.get(edge.source()).add(edge.target());
       taskTargets.add(edge.target());
     }
 
-    StartSelection selection = readStartSelection(input);
+    StartSelection selection = readStartSelection(editorMeta, legacyInput);
     List<String> startNodeIds;
     if (selection.explicit()) {
       startNodeIds = selection.nodeIds();
-      if (startNodeIds.isEmpty()) {
-        throw new IllegalStateException("开始节点至少需要连接一个任务节点");
-      }
+      if (startNodeIds.isEmpty()) throw new IllegalStateException("开始节点至少需要连接一个任务节点");
       for (String nodeId : startNodeIds) {
         if (!nodesById.containsKey(nodeId)) {
           throw new IllegalStateException("开始节点连接了不存在的任务节点：" + nodeId);
@@ -70,12 +75,8 @@ final class WorkflowStartGraphCompiler {
     ArrayDeque<String> queue = new ArrayDeque<>(startNodeIds);
     while (!queue.isEmpty()) {
       String current = queue.removeFirst();
-      if (!reachable.add(current)) {
-        continue;
-      }
-      for (String next : adjacency.getOrDefault(current, List.of())) {
-        queue.addLast(next);
-      }
+      if (!reachable.add(current)) continue;
+      for (String next : adjacency.getOrDefault(current, List.of())) queue.addLast(next);
     }
 
     if (selection.explicit()) {
@@ -96,28 +97,29 @@ final class WorkflowStartGraphCompiler {
     return new RuntimeGraph(runtimeNodes, runtimeEdges);
   }
 
-  private static StartSelection readStartSelection(Map<String, Object> input) {
-    if (input == null) {
-      return StartSelection.legacy();
-    }
-    Object rawMeta = input.get(START_META_KEY);
+  private static StartSelection readStartSelection(
+      Map<String, Object> editorMeta,
+      Map<String, Object> legacyInput) {
+    StartSelection current = readStartSelection(editorMeta);
+    return current.explicit() ? current : readStartSelection(legacyInput);
+  }
+
+  private static StartSelection readStartSelection(Map<String, Object> source) {
+    if (source == null) return StartSelection.legacy();
+    Object rawMeta = source.get(START_META_KEY);
     if (!(rawMeta instanceof Map<?, ?> meta) || !meta.containsKey(NEXT_NODE_IDS_KEY)) {
       return StartSelection.legacy();
     }
 
     Object rawNodeIds = meta.get(NEXT_NODE_IDS_KEY);
-    if (rawNodeIds == null) {
-      return StartSelection.explicit(List.of());
-    }
+    if (rawNodeIds == null) return StartSelection.explicit(List.of());
     if (!(rawNodeIds instanceof List<?> values)) {
       throw new IllegalStateException("开始节点连接信息格式不正确");
     }
 
     LinkedHashSet<String> nodeIds = new LinkedHashSet<>();
     for (Object value : values) {
-      if (value instanceof String nodeId && !nodeId.isBlank()) {
-        nodeIds.add(nodeId.trim());
-      }
+      if (value instanceof String nodeId && !nodeId.isBlank()) nodeIds.add(nodeId.trim());
     }
     return StartSelection.explicit(List.copyOf(nodeIds));
   }

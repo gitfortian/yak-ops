@@ -15,6 +15,7 @@ public record WorkflowDefinitionVO(
     List<WorkflowDefinitionUpdateRequest.NodeRequest> nodes,
     List<WorkflowDefinitionUpdateRequest.EdgeRequest> edges,
     Map<String, Object> input,
+    Map<String, Object> editorMeta,
     long workflowTimeoutSeconds,
     String failureStrategy,
     String activeVersionId,

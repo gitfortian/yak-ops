@@ -60,6 +60,7 @@ import WorkflowStartNode from './canvas/start/WorkflowStartNode';
 import {
   hydrateWorkflowStartConfig,
   serializeWorkflowStartContext,
+  serializeWorkflowStartEditorMeta,
 } from './canvas/start/context';
 import {
   WORKFLOW_START_NODE_ID,
@@ -69,6 +70,8 @@ import {
 import type { WorkflowEdgeData, WorkflowNodeData } from './canvas/types';
 import useWorkflowCanvasHistory from './canvas/useWorkflowCanvasHistory';
 import 'reactflow/dist/style.css';
+
+const START_EDGE_PREFIX = 'edge-start-';
 
 const parseObject = <T extends Record<string, unknown>>(raw: string, label: string): T => {
   const value = raw.trim() ? JSON.parse(raw) : {};
@@ -96,6 +99,7 @@ const DEFAULT_START_CONFIG: WorkflowStartConfig = {
   position: { x: 80, y: 160 },
   inputs: [],
   variables: [],
+  nextNodeIds: [],
 };
 
 const createNoteNode = (snapshot: WorkflowNoteSnapshot): Node<WorkflowNoteData> => ({
@@ -176,6 +180,11 @@ const WorkflowDefinitionContent = () => {
     return nodes.filter((node) => !targets.has(node.id));
   }, [edges, nodes]);
 
+  const explicitStartTargetIds = useMemo(() => {
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    return startConfig.nextNodeIds.filter((nodeId) => nodeIds.has(nodeId));
+  }, [nodes, startConfig.nextNodeIds]);
+
   const historySnapshot = useMemo<WorkflowEditorHistorySnapshot>(() => ({
     nodes: nodes.map((node) => ({ id: node.id, type: node.type, position: { ...node.position }, data: { ...node.data } })),
     noteNodes: noteNodes.map((node) => ({
@@ -185,14 +194,19 @@ const WorkflowDefinitionContent = () => {
       data: { text: node.data.text, theme: node.data.theme },
     })),
     edges: edges.map((edge) => ({
-      id: edge.id, source: edge.source, target: edge.target,
-      sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle, type: edge.type,
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+      type: edge.type,
     })),
     startConfig: {
       ...startConfig,
       position: { ...startConfig.position },
       inputs: startConfig.inputs.map((item) => ({ ...item })),
       variables: startConfig.variables.map((item) => ({ ...item })),
+      nextNodeIds: [...startConfig.nextNodeIds],
     },
     workflowName,
     workflowDescription,
@@ -205,7 +219,7 @@ const WorkflowDefinitionContent = () => {
     setWorkflowDescription(snapshot.workflowDescription);
     setWorkflowTimeoutSeconds(snapshot.workflowTimeoutSeconds);
     setFailureStrategy(snapshot.failureStrategy);
-    setStartConfig(snapshot.startConfig);
+    setStartConfig({ ...snapshot.startConfig, nextNodeIds: [...snapshot.startConfig.nextNodeIds] });
     setStartSelected(false);
     setStartNodeState((current) => ({ ...current, position: snapshot.startConfig.position, selected: false, dragging: false }));
     setNodes(snapshot.nodes.map((node) => ({ ...node, selected: false, dragging: false })));
@@ -227,8 +241,8 @@ const WorkflowDefinitionContent = () => {
 
   const hydrateDefinition = useCallback((value: WorkflowDefinition, taskList: WorkflowTaskDefinition[]) => {
     const taskMap = new Map(taskList.map((task) => [task.id, task]));
-    const hydratedStartConfig = hydrateWorkflowStartConfig(value.input || {});
-    const hydratedNotes = hydrateWorkflowNotes(value.input || {});
+    const hydratedStartConfig = hydrateWorkflowStartConfig(value.input || {}, value.editorMeta || {});
+    const hydratedNotes = hydrateWorkflowNotes(value.editorMeta || {}, value.input || {});
     setDefinition(value);
     setWorkflowName(value.name);
     setWorkflowDescription(value.description || '');
@@ -288,7 +302,10 @@ const WorkflowDefinitionContent = () => {
       } catch (error) {
         if (active) message.error(error instanceof Error ? error.message : '工作流加载失败');
       } finally {
-        if (active) { setLoading(false); setTasksLoading(false); }
+        if (active) {
+          setLoading(false);
+          setTasksLoading(false);
+        }
       }
     };
     void load();
@@ -306,15 +323,29 @@ const WorkflowDefinitionContent = () => {
   }, [locked, setNodes]);
 
   const handleConnect = (connection: Connection) => {
-    if (locked) return;
+    if (locked || !connection.target) return;
+
     if (connection.source === WORKFLOW_START_NODE_ID) {
-      if (!connection.target) return;
       const hasTaskPredecessor = edges.some((edge) => edge.target === connection.target);
-      if (hasTaskPredecessor) message.warning('开始节点只能连接没有前置任务的根节点');
+      if (hasTaskPredecessor) {
+        message.warning('开始节点只能连接没有前置任务的根节点');
+        return;
+      }
+      if (startConfig.nextNodeIds.includes(connection.target)) return;
+      markHistory('开始节点已连接');
+      setStartConfig((current) => ({
+        ...current,
+        nextNodeIds: [...current.nextNodeIds, connection.target!],
+      }));
       return;
     }
+
     markHistory('节点已连接');
     setEdges((current) => addEdge({ ...connection, type: 'workflow' }, current));
+    setStartConfig((current) => ({
+      ...current,
+      nextNodeIds: current.nextNodeIds.filter((nodeId) => nodeId !== connection.target),
+    }));
   };
 
   const handleDragStart = (event: DragEvent<HTMLDivElement>, task: WorkflowTaskDefinition) => {
@@ -383,7 +414,10 @@ const WorkflowDefinitionContent = () => {
     if (locked) return;
     setNoteNodes((current) => current.map((node) => node.id === nodeId ? { ...node, data: { ...node.data, ...patch } } : node));
   }, [locked]);
-  const handleNoteCommit = useCallback((_nodeId: string, label: string) => { if (!locked) markHistory(label); }, [locked, markHistory]);
+
+  const handleNoteCommit = useCallback((_nodeId: string, label: string) => {
+    if (!locked) markHistory(label);
+  }, [locked, markHistory]);
 
   const handleDuplicateNote = useCallback((nodeId: string) => {
     if (locked) return;
@@ -420,7 +454,9 @@ const WorkflowDefinitionContent = () => {
     setStartSelected(false);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
-      id: nodeId, type: 'workflow', selected: true,
+      id: nodeId,
+      type: 'workflow',
+      selected: true,
       position: { x: (sourceNode.position.x + targetNode.position.x) / 2, y: (sourceNode.position.y + targetNode.position.y) / 2 },
       data: createNodeData(task),
     }]);
@@ -449,9 +485,18 @@ const WorkflowDefinitionContent = () => {
     setStartSelected(false);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
-      id: nodeId, type: 'workflow', selected: true, position, data: createNodeData(task),
+      id: nodeId,
+      type: 'workflow',
+      selected: true,
+      position,
+      data: createNodeData(task),
     }]);
-    setEdges((current) => [...current, { id: `edge-${sourceNodeId}-${nodeId}-${sequence}`, source: sourceNodeId, target: nodeId, type: 'workflow' }]);
+    setEdges((current) => [...current, {
+      id: `edge-${sourceNodeId}-${nodeId}-${sequence}`,
+      source: sourceNodeId,
+      target: nodeId,
+      type: 'workflow',
+    }]);
   }, [edges, locked, markHistory, nodes, setEdges, setNodes, syncTasks]);
 
   const handleAppendFromStart = useCallback((_startNodeId: string, taskId: string) => {
@@ -459,19 +504,29 @@ const WorkflowDefinitionContent = () => {
     const task = syncTasks.find((item) => item.id === taskId);
     if (!task) return;
     const taskTargets = new Set(edges.map((edge) => edge.target));
-    const currentRoots = nodes.filter((node) => !taskTargets.has(node.id)).sort((left, right) => left.position.y - right.position.y);
+    const currentRoots = nodes
+      .filter((node) => !taskTargets.has(node.id))
+      .sort((left, right) => left.position.y - right.position.y);
     const lastRoot = currentRoots[currentRoots.length - 1];
     const sequence = sequenceRef.current++;
     const nodeId = `task-${Date.now()}-${sequence}`;
     const position = lastRoot
       ? { x: lastRoot.position.x, y: lastRoot.position.y + (lastRoot.height ?? 72) + WORKFLOW_NODE_VERTICAL_GAP }
       : { x: startConfig.position.x + WORKFLOW_NODE_WIDTH + WORKFLOW_NODE_HORIZONTAL_GAP, y: startConfig.position.y };
-    markHistory(`${task.name} 节点已添加`);
+    markHistory(`${task.name} 节点已添加并连接开始节点`);
     setStartSelected(false);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
-      id: nodeId, type: 'workflow', selected: true, position, data: createNodeData(task),
+      id: nodeId,
+      type: 'workflow',
+      selected: true,
+      position,
+      data: createNodeData(task),
     }]);
+    setStartConfig((current) => ({
+      ...current,
+      nextNodeIds: [...current.nextNodeIds, nodeId],
+    }));
   }, [edges, locked, markHistory, nodes, setNodes, startConfig.position.x, startConfig.position.y, syncTasks]);
 
   const handleDuplicateNode = useCallback((nodeId: string) => {
@@ -484,8 +539,11 @@ const WorkflowDefinitionContent = () => {
     setStartSelected(false);
     setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), {
-      ...sourceNode, id: duplicatedId, selected: true,
-      position: { x: sourceNode.position.x + 36, y: sourceNode.position.y + 36 }, data: { ...sourceNode.data },
+      ...sourceNode,
+      id: duplicatedId,
+      selected: true,
+      position: { x: sourceNode.position.x + 36, y: sourceNode.position.y + 36 },
+      data: { ...sourceNode.data },
     }]);
   }, [locked, markHistory, nodes, setNodes]);
 
@@ -504,6 +562,10 @@ const WorkflowDefinitionContent = () => {
         markHistory(`${node.data.label} 节点已删除`);
         setNodes((current) => current.filter((item) => item.id !== nodeId));
         setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+        setStartConfig((current) => ({
+          ...current,
+          nextNodeIds: current.nextNodeIds.filter((idValue) => idValue !== nodeId),
+        }));
       },
     });
   }, [locked, markHistory, nodes, setEdges, setNodes]);
@@ -513,6 +575,7 @@ const WorkflowDefinitionContent = () => {
     const startChanges = changes.filter((change) => change.id === WORKFLOW_START_NODE_ID);
     const noteChanges = changes.filter((change) => noteIds.has(change.id));
     const taskChanges = changes.filter((change) => change.id !== WORKFLOW_START_NODE_ID && !noteIds.has(change.id));
+
     if (startChanges.length) {
       const safeStartChanges = startChanges.filter((change) => change.type !== 'remove');
       if (safeStartChanges.length) {
@@ -522,10 +585,13 @@ const WorkflowDefinitionContent = () => {
         });
       }
       startChanges.forEach((change) => {
-        if (change.type === 'position' && change.position && !locked) setStartConfig((current) => ({ ...current, position: change.position! }));
+        if (change.type === 'position' && change.position && !locked) {
+          setStartConfig((current) => ({ ...current, position: change.position! }));
+        }
         if (change.type === 'select') setStartSelected(change.selected);
       });
     }
+
     if (noteChanges.length) {
       if (noteChanges.find((change) => change.type === 'remove')) markHistory('注释已删除');
       if (noteChanges.some((change) => change.type === 'select' && change.selected)) {
@@ -534,10 +600,18 @@ const WorkflowDefinitionContent = () => {
       }
       setNoteNodes((current) => applyNodeChanges(noteChanges, current));
     }
-    const removedTask = taskChanges.find((change) => change.type === 'remove');
-    if (removedTask) {
-      const removedNode = nodes.find((node) => node.id === removedTask.id);
+
+    const removedTaskIds = taskChanges
+      .filter((change) => change.type === 'remove')
+      .map((change) => change.id);
+    if (removedTaskIds.length) {
+      const removedNode = nodes.find((node) => node.id === removedTaskIds[0]);
       markHistory(`${removedNode?.data.label || '任务'} 节点已删除`);
+      const removedSet = new Set(removedTaskIds);
+      setStartConfig((current) => ({
+        ...current,
+        nextNodeIds: current.nextNodeIds.filter((nodeId) => !removedSet.has(nodeId)),
+      }));
     }
     if (taskChanges.some((change) => change.type === 'select' && change.selected)) {
       setStartSelected(false);
@@ -547,8 +621,21 @@ const WorkflowDefinitionContent = () => {
   }, [locked, markHistory, nodes, noteNodes, onNodesChange, setNodes]);
 
   const handleCanvasEdgesChange = useCallback((changes: EdgeChange[]) => {
-    if (changes.some((change) => change.type === 'remove')) markHistory('节点连接已断开');
-    onEdgesChange(changes);
+    const removedStartTargets = changes
+      .filter((change) => change.type === 'remove' && change.id.startsWith(START_EDGE_PREFIX))
+      .map((change) => change.id.slice(START_EDGE_PREFIX.length));
+    if (removedStartTargets.length) {
+      markHistory('开始节点连接已断开');
+      const removed = new Set(removedStartTargets);
+      setStartConfig((current) => ({
+        ...current,
+        nextNodeIds: current.nextNodeIds.filter((nodeId) => !removed.has(nodeId)),
+      }));
+    }
+
+    const taskEdgeChanges = changes.filter((change) => !change.id.startsWith(START_EDGE_PREFIX));
+    if (taskEdgeChanges.some((change) => change.type === 'remove')) markHistory('节点连接已断开');
+    if (taskEdgeChanges.length) onEdgesChange(taskEdgeChanges);
   }, [markHistory, onEdgesChange]);
 
   const handleNodeMouseEnter = useCallback<NodeMouseHandler>((_, node) => setHoveredNodeId(node.id), []);
@@ -564,23 +651,47 @@ const WorkflowDefinitionContent = () => {
   const inspectorNextNodes = useMemo(() => {
     if (!selectedNode) return [];
     const targetIds = new Set(edges.filter((edge) => edge.source === selectedNode.id).map((edge) => edge.target));
-    return nodes.filter((node) => targetIds.has(node.id)).map((node) => ({ id: node.id, label: node.data.label, taskType: node.data.taskType }));
+    return nodes
+      .filter((node) => targetIds.has(node.id))
+      .map((node) => ({ id: node.id, label: node.data.label, taskType: node.data.taskType }));
   }, [edges, nodes, selectedNode]);
 
-  const startNextNodes = useMemo(() => rootNodes.map((node) => ({ id: node.id, label: node.data.label, taskType: node.data.taskType })), [rootNodes]);
-  const closeNodeInspector = useCallback(() => setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node)), [setNodes]);
+  const startNextNodes = useMemo(() => {
+    const targetIds = new Set(explicitStartTargetIds);
+    return nodes
+      .filter((node) => targetIds.has(node.id))
+      .map((node) => ({ id: node.id, label: node.data.label, taskType: node.data.taskType }));
+  }, [explicitStartTargetIds, nodes]);
+
+  const closeNodeInspector = useCallback(() => {
+    setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
+  }, [setNodes]);
   const closeStartInspector = useCallback(() => setStartSelected(false), []);
 
   const taskCanvasNodes = useMemo(() => nodes.map((node) => ({
     ...node,
-    data: { ...node.data, locked, appendOptions: taskOptions, onAppend: handleAppendTask, onDuplicate: handleDuplicateNode, onDelete: handleDeleteNode },
+    data: {
+      ...node.data,
+      locked,
+      appendOptions: taskOptions,
+      onAppend: handleAppendTask,
+      onDuplicate: handleDuplicateNode,
+      onDelete: handleDeleteNode,
+    },
   })), [handleAppendTask, handleDeleteNode, handleDuplicateNode, locked, nodes, taskOptions]);
 
   const noteCanvasNodes = useMemo(() => noteNodes.map((node) => ({
     ...node,
     draggable: !locked && controlMode === 'pointer',
     selectable: controlMode === 'pointer',
-    data: { ...node.data, locked, onChange: handleNoteChange, onCommit: handleNoteCommit, onDuplicate: handleDuplicateNote, onDelete: handleDeleteNote },
+    data: {
+      ...node.data,
+      locked,
+      onChange: handleNoteChange,
+      onCommit: handleNoteCommit,
+      onDuplicate: handleDuplicateNote,
+      onDelete: handleDeleteNote,
+    },
   })), [controlMode, handleDeleteNote, handleDuplicateNote, handleNoteChange, handleNoteCommit, locked, noteNodes]);
 
   const startCanvasNode = useMemo<Node<WorkflowStartNodeData>>(() => ({
@@ -591,34 +702,59 @@ const WorkflowDefinitionContent = () => {
     selected: startSelected,
     deletable: false,
     draggable: !locked && controlMode === 'pointer',
-    data: { label: '开始', locked, inputs: startConfig.inputs, appendOptions: taskOptions, onAppend: handleAppendFromStart },
+    data: {
+      label: '开始',
+      locked,
+      inputs: startConfig.inputs,
+      appendOptions: taskOptions,
+      onAppend: handleAppendFromStart,
+    },
   }), [controlMode, handleAppendFromStart, locked, startConfig.inputs, startConfig.position, startNodeState, startSelected, taskOptions]);
 
-  const canvasNodes = useMemo(() => [startCanvasNode, ...taskCanvasNodes, ...noteCanvasNodes], [noteCanvasNodes, startCanvasNode, taskCanvasNodes]);
+  const canvasNodes = useMemo(
+    () => [startCanvasNode, ...taskCanvasNodes, ...noteCanvasNodes],
+    [noteCanvasNodes, startCanvasNode, taskCanvasNodes],
+  );
+
   const taskCanvasEdges = useMemo(() => edges.map((edge) => ({
     ...edge,
     type: 'workflow',
-    data: { ...edge.data, locked, connectedNodeHovered: edge.source === hoveredNodeId || edge.target === hoveredNodeId, insertOptions: taskOptions, onInsert: handleInsertTaskIntoEdge },
+    data: {
+      ...edge.data,
+      locked,
+      connectedNodeHovered: edge.source === hoveredNodeId || edge.target === hoveredNodeId,
+      insertOptions: taskOptions,
+      onInsert: handleInsertTaskIntoEdge,
+    },
   })), [edges, handleInsertTaskIntoEdge, hoveredNodeId, locked, taskOptions]);
-  const startCanvasEdges = useMemo(() => rootNodes.map((node, index) => ({
-    id: `edge-start-${node.id}-${index}`,
+
+  const startCanvasEdges = useMemo(() => explicitStartTargetIds.map((nodeId) => ({
+    id: `${START_EDGE_PREFIX}${nodeId}`,
     source: WORKFLOW_START_NODE_ID,
-    target: node.id,
+    target: nodeId,
     type: 'workflow',
-    data: { locked: true, connectedNodeHovered: hoveredNodeId === WORKFLOW_START_NODE_ID || hoveredNodeId === node.id },
-  })), [hoveredNodeId, rootNodes]);
-  const canvasEdges = useMemo(() => [...startCanvasEdges, ...taskCanvasEdges], [startCanvasEdges, taskCanvasEdges]);
+    data: {
+      locked: false,
+      connectedNodeHovered: hoveredNodeId === WORKFLOW_START_NODE_ID || hoveredNodeId === nodeId,
+    },
+  })), [explicitStartTargetIds, hoveredNodeId]);
+
+  const canvasEdges = useMemo(
+    () => [...startCanvasEdges, ...taskCanvasEdges],
+    [startCanvasEdges, taskCanvasEdges],
+  );
 
   const updateSelectedNode = (patch: Partial<WorkflowNodeData>) => {
     if (!selectedNode || locked) return;
     markHistory(`${selectedNode.data.label} 节点配置已更新`);
-    setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, ...patch } } : node));
+    setNodes((current) => current.map((node) =>
+      node.id === selectedNode.id ? { ...node, data: { ...node.data, ...patch } } : node));
   };
 
   const updateStartConfig = useCallback((nextConfig: WorkflowStartConfig) => {
     if (locked) return;
     markHistory('开始节点配置已更新');
-    setStartConfig(nextConfig);
+    setStartConfig({ ...nextConfig, nextNodeIds: [...nextConfig.nextNodeIds] });
   }, [locked, markHistory]);
 
   const buildPayload = () => ({
@@ -635,14 +771,20 @@ const WorkflowDefinitionContent = () => {
       retryDelaySeconds: node.data.retryDelaySeconds,
       dispatchTimeoutSeconds: node.data.dispatchTimeoutSeconds,
       executionTimeoutSeconds: node.data.executionTimeoutSeconds,
-      inputMapping: parseObject<Record<string, string>>(node.data.inputMappingText, `${node.data.label} 输入映射`),
+      inputMapping: parseObject<Record<string, string>>(
+        node.data.inputMappingText,
+        `${node.data.label} 输入映射`,
+      ),
     })),
     edges: edges.map((edge: Edge) => ({ source: edge.source, target: edge.target })),
     input: serializeWorkflowStartContext(
       startConfig,
       { definitionId: id, workflowName: workflowName.trim() },
-      serializeWorkflowEditorMeta(noteNodes.map(toNoteSnapshot)),
     ),
+    editorMeta: {
+      ...serializeWorkflowStartEditorMeta(startConfig),
+      ...serializeWorkflowEditorMeta(noteNodes.map(toNoteSnapshot)),
+    },
     workflowTimeoutSeconds,
     failureStrategy,
   });
@@ -653,8 +795,8 @@ const WorkflowDefinitionContent = () => {
     setSaving(true);
     try {
       const saved = await updateWorkflowDefinition(id, buildPayload());
-      const hydratedStartConfig = hydrateWorkflowStartConfig(saved.input || {});
-      const hydratedNotes = hydrateWorkflowNotes(saved.input || {});
+      const hydratedStartConfig = hydrateWorkflowStartConfig(saved.input || {}, saved.editorMeta || {});
+      const hydratedNotes = hydrateWorkflowNotes(saved.editorMeta || {}, saved.input || {});
       setDefinition(saved);
       setStartConfig(hydratedStartConfig);
       setNoteNodes(hydratedNotes.map(createNoteNode));
@@ -667,8 +809,11 @@ const WorkflowDefinitionContent = () => {
   };
 
   const handleSave = async () => {
-    try { await saveDefinition(); }
-    catch (error) { message.error(error instanceof Error ? error.message : '保存工作流失败'); }
+    try {
+      await saveDefinition();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存工作流失败');
+    }
   };
 
   const handleTestRun = async () => {
@@ -687,7 +832,10 @@ const WorkflowDefinitionContent = () => {
   };
 
   const handleOnline = async () => {
-    if (!nodes.length) { message.warning('请先添加至少一个任务节点'); return; }
+    if (!nodes.length) {
+      message.warning('请先添加至少一个任务节点');
+      return;
+    }
     setStatusAction(true);
     try {
       await saveDefinition(false);
@@ -713,7 +861,9 @@ const WorkflowDefinitionContent = () => {
     }
   };
 
-  if (loading) return <div className="flex h-[calc(100vh-48px)] items-center justify-center bg-white"><Spin /></div>;
+  if (loading) {
+    return <div className="flex h-[calc(100vh-48px)] items-center justify-center bg-white"><Spin /></div>;
+  }
 
   return (
     <div className="flex h-[calc(100vh-48px)] min-h-[620px] overflow-hidden" style={{ backgroundColor: '#F2F4F7' }}>
@@ -726,7 +876,7 @@ const WorkflowDefinitionContent = () => {
           workflowTimeoutSeconds={workflowTimeoutSeconds}
           failureStrategy={failureStrategy}
           nodesCount={nodes.length + 1}
-          edgesCount={edges.length + rootNodes.length}
+          edgesCount={edges.length + explicitStartTargetIds.length}
           locked={locked}
           saving={saving}
           testing={testing}
@@ -738,7 +888,10 @@ const WorkflowDefinitionContent = () => {
           onClear={() => {
             if (!locked) {
               markHistory('画布任务已清空');
-              setNodes([]); setEdges([]); setStartSelected(true);
+              setNodes([]);
+              setEdges([]);
+              setStartConfig((current) => ({ ...current, nextNodeIds: [] }));
+              setStartSelected(true);
               setNoteNodes((current) => current.map((node) => ({ ...node, selected: false })));
             }
           }}
@@ -800,13 +953,17 @@ const WorkflowDefinitionContent = () => {
             }}
             onPaneClick={() => {
               if (controlMode === 'hand') return;
-              setStartSelected(false); closeNodeInspector();
+              setStartSelected(false);
+              closeNodeInspector();
               setNoteNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
             }}
             onNodeMouseEnter={handleNodeMouseEnter}
             onNodeMouseLeave={handleNodeMouseLeave}
             onInit={setReactFlowInstance}
-            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = locked ? 'none' : 'move'; }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = locked ? 'none' : 'move';
+            }}
             panOnDrag={controlMode === 'hand'}
             selectionOnDrag={controlMode === 'pointer'}
             nodesDraggable={!locked && controlMode === 'pointer'}

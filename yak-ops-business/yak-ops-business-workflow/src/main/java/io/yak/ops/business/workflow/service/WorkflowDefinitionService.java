@@ -61,10 +61,15 @@ public class WorkflowDefinitionService {
     s.name = required(request.name(), "工作流名称不能为空");
     s.description = trim(request.description());
     s.status = "DRAFT";
-    s.nodes = List.of(); s.edges = List.of(); s.input = Map.of();
+    s.nodes = List.of();
+    s.edges = List.of();
+    s.input = Map.of();
+    s.editorMeta = Map.of();
     s.failureStrategy = "CONTINUE_INDEPENDENT_BRANCHES";
-    s.draftRevision = 1L; s.versions = new ArrayList<>();
-    s.createTime = now; s.updateTime = now;
+    s.draftRevision = 1L;
+    s.versions = new ArrayList<>();
+    s.createTime = now;
+    s.updateTime = now;
     definitions.put(s.id, s);
     return toView(s);
   }
@@ -80,6 +85,7 @@ public class WorkflowDefinitionService {
       List<NodeRequest> nextNodes = List.copyOf(request.nodes());
       List<EdgeRequest> nextEdges = List.copyOf(request.edges());
       Map<String, Object> nextInput = Map.copyOf(new LinkedHashMap<>(request.input()));
+      Map<String, Object> nextEditorMeta = Map.copyOf(new LinkedHashMap<>(request.editorMeta()));
       long nextTimeout = request.workflowTimeoutSeconds();
       String nextFailureStrategy = request.failureStrategy();
       boolean changed = !Objects.equals(s.name, nextName)
@@ -87,6 +93,7 @@ public class WorkflowDefinitionService {
           || !Objects.equals(s.nodes, nextNodes)
           || !Objects.equals(s.edges, nextEdges)
           || !Objects.equals(s.input, nextInput)
+          || !Objects.equals(s.editorMeta, nextEditorMeta)
           || s.workflowTimeoutSeconds != nextTimeout
           || !Objects.equals(s.failureStrategy, nextFailureStrategy);
 
@@ -95,6 +102,7 @@ public class WorkflowDefinitionService {
       s.nodes = nextNodes;
       s.edges = nextEdges;
       s.input = nextInput;
+      s.editorMeta = nextEditorMeta;
       s.workflowTimeoutSeconds = nextTimeout;
       s.failureStrategy = nextFailureStrategy;
       if (changed) {
@@ -111,11 +119,19 @@ public class WorkflowDefinitionService {
       if (s.activeVersion == null || draftChanged(s)) {
         PreparedDraft draft = prepare(s);
         WorkflowVersion v = new WorkflowVersion(
-            "workflow-version-" + UUID.randomUUID(), s.id, ++s.latestVersionNo,
-            s.draftRevision, draft.request(), draft.tasks(), Instant.now());
-        s.versions.add(v); s.activeVersion = v;
+            "workflow-version-" + UUID.randomUUID(),
+            s.id,
+            ++s.latestVersionNo,
+            s.draftRevision,
+            draft.request(),
+            s.editorMeta,
+            draft.tasks(),
+            Instant.now());
+        s.versions.add(v);
+        s.activeVersion = v;
       }
-      s.status = "ONLINE"; s.updateTime = Instant.now();
+      s.status = "ONLINE";
+      s.updateTime = Instant.now();
       return toView(s);
     }
   }
@@ -125,7 +141,8 @@ public class WorkflowDefinitionService {
     DefinitionState s = require(id);
     synchronized (s) {
       if (s.activeVersion == null) throw new IllegalStateException("工作流还没有已发布版本");
-      s.status = "OFFLINE"; s.updateTime = Instant.now();
+      s.status = "OFFLINE";
+      s.updateTime = Instant.now();
       return toView(s);
     }
   }
@@ -133,11 +150,13 @@ public class WorkflowDefinitionService {
   public WorkflowDefinitionVO run(String id) {
     DefinitionState s = require(id);
     synchronized (s) {
-      if (!"ONLINE".equals(s.status) || s.activeVersion == null)
+      if (!"ONLINE".equals(s.status) || s.activeVersion == null) {
         throw new IllegalStateException("工作流没有启用的发布版本，不能正式执行");
+      }
       ensureIdle(s);
       WorkflowVersion v = s.activeVersion;
-      return activate(s, runtimeService.run(v.runRequest(), v.taskVersionsByNode(), v.id(), v.versionNo(), false));
+      return activate(s, runtimeService.run(
+          v.runRequest(), v.taskVersionsByNode(), v.id(), v.versionNo(), false));
     }
   }
 
@@ -155,8 +174,10 @@ public class WorkflowDefinitionService {
     DefinitionState s = require(id);
     synchronized (s) {
       String activeId = s.activeVersion == null ? null : s.activeVersion.id();
-      return s.versions.stream().sorted(Comparator.comparingInt(WorkflowVersion::versionNo).reversed())
-          .map(v -> versionView(v, v.id().equals(activeId))).toList();
+      return s.versions.stream()
+          .sorted(Comparator.comparingInt(WorkflowVersion::versionNo).reversed())
+          .map(v -> versionView(v, v.id().equals(activeId)))
+          .toList();
     }
   }
 
@@ -164,7 +185,9 @@ public class WorkflowDefinitionService {
     DefinitionState s = require(id);
     synchronized (s) {
       WorkflowInstanceVO v = runtimeService.pause(requireLatestExecution(s));
-      s.latestExecutionStatus = v.status(); s.updateTime = Instant.now(); return toView(s);
+      s.latestExecutionStatus = v.status();
+      s.updateTime = Instant.now();
+      return toView(s);
     }
   }
 
@@ -172,7 +195,9 @@ public class WorkflowDefinitionService {
     DefinitionState s = require(id);
     synchronized (s) {
       WorkflowInstanceVO v = runtimeService.resume(requireLatestExecution(s));
-      s.latestExecutionStatus = v.status(); s.updateTime = Instant.now(); return toView(s);
+      s.latestExecutionStatus = v.status();
+      s.updateTime = Instant.now();
+      return toView(s);
     }
   }
 
@@ -188,7 +213,9 @@ public class WorkflowDefinitionService {
 
   private WorkflowDefinitionVO activate(DefinitionState s, WorkflowInstanceVO prepared) {
     WorkflowInstanceVO v = runtimeService.activate(prepared.id());
-    s.latestExecutionId = v.id(); s.latestExecutionStatus = v.status(); s.updateTime = Instant.now();
+    s.latestExecutionId = v.id();
+    s.latestExecutionStatus = v.status();
+    s.updateTime = Instant.now();
     return toView(s);
   }
 
@@ -199,12 +226,14 @@ public class WorkflowDefinitionService {
 
   private PreparedDraft prepare(DefinitionState s) {
     validateGraph(s);
-    WorkflowStartGraphCompiler.RuntimeGraph graph = WorkflowStartGraphCompiler.compile(s.nodes, s.edges, s.input);
+    WorkflowStartGraphCompiler.RuntimeGraph graph = WorkflowStartGraphCompiler.compile(
+        s.nodes, s.edges, s.editorMeta, s.input);
     Map<String, TaskVersionSnapshot> tasks = new LinkedHashMap<>();
     for (NodeRequest n : graph.nodes()) {
       TaskVersionSnapshot task = taskRegistry.snapshot(n.taskId());
-      if (!"SYNC".equalsIgnoreCase(task.type()))
+      if (!"SYNC".equalsIgnoreCase(task.type())) {
         throw new IllegalStateException("第一阶段工作流仅支持 SYNC 任务：" + n.taskId());
+      }
       tasks.put(n.id(), task);
     }
     return new PreparedDraft(toRunRequest(s, graph), Map.copyOf(tasks));
@@ -213,48 +242,98 @@ public class WorkflowDefinitionService {
   private void validateGraph(DefinitionState s) {
     if (s.nodes.isEmpty()) throw new IllegalStateException("请先配置至少一个任务节点");
     Set<String> ids = new HashSet<>();
-    for (NodeRequest n : s.nodes)
+    for (NodeRequest n : s.nodes) {
       if (!ids.add(n.id())) throw new IllegalStateException("工作流存在重复节点 ID：" + n.id());
-    Map<String, Integer> in = new HashMap<>(); Map<String, List<String>> next = new HashMap<>();
+    }
+    Map<String, Integer> in = new HashMap<>();
+    Map<String, List<String>> next = new HashMap<>();
     ids.forEach(x -> { in.put(x, 0); next.put(x, new ArrayList<>()); });
     for (EdgeRequest e : s.edges) {
-      if (!ids.contains(e.source()) || !ids.contains(e.target()))
+      if (!ids.contains(e.source()) || !ids.contains(e.target())) {
         throw new IllegalStateException("连线引用了不存在的节点：" + e.source() + " -> " + e.target());
-      if (e.source().equals(e.target())) throw new IllegalStateException("工作流节点不能连接自身：" + e.source());
-      next.get(e.source()).add(e.target()); in.compute(e.target(), (k, v) -> v == null ? 1 : v + 1);
+      }
+      if (e.source().equals(e.target())) {
+        throw new IllegalStateException("工作流节点不能连接自身：" + e.source());
+      }
+      next.get(e.source()).add(e.target());
+      in.compute(e.target(), (k, v) -> v == null ? 1 : v + 1);
     }
-    ArrayDeque<String> q = new ArrayDeque<>(); in.forEach((x, d) -> { if (d == 0) q.add(x); });
+    ArrayDeque<String> q = new ArrayDeque<>();
+    in.forEach((x, d) -> { if (d == 0) q.add(x); });
     int visited = 0;
     while (!q.isEmpty()) {
-      String x = q.removeFirst(); visited++;
-      for (String y : next.get(x)) if (in.compute(y, (k, v) -> v == null ? 0 : v - 1) == 0) q.addLast(y);
+      String x = q.removeFirst();
+      visited++;
+      for (String y : next.get(x)) {
+        if (in.compute(y, (k, v) -> v == null ? 0 : v - 1) == 0) q.addLast(y);
+      }
     }
     if (visited != ids.size()) throw new IllegalStateException("工作流存在循环依赖，不能发布或测试");
   }
 
-  private WorkflowRunRequest toRunRequest(DefinitionState s, WorkflowStartGraphCompiler.RuntimeGraph graph) {
-    List<WorkflowRunRequest.NodeRequest> nodes = graph.nodes().stream().map(n -> new WorkflowRunRequest.NodeRequest(
-        n.id(), n.taskId(), n.maxAttempts(), n.retryDelaySeconds(), n.dispatchTimeoutSeconds(),
-        n.executionTimeoutSeconds(), n.inputMapping(), n.triggerRule(), n.failurePolicy())).toList();
+  private WorkflowRunRequest toRunRequest(
+      DefinitionState s,
+      WorkflowStartGraphCompiler.RuntimeGraph graph) {
+    List<WorkflowRunRequest.NodeRequest> nodes = graph.nodes().stream()
+        .map(n -> new WorkflowRunRequest.NodeRequest(
+            n.id(),
+            n.taskId(),
+            n.maxAttempts(),
+            n.retryDelaySeconds(),
+            n.dispatchTimeoutSeconds(),
+            n.executionTimeoutSeconds(),
+            n.inputMapping(),
+            n.triggerRule(),
+            n.failurePolicy()))
+        .toList();
     List<WorkflowRunRequest.EdgeRequest> edges = graph.edges().stream()
-        .map(e -> new WorkflowRunRequest.EdgeRequest(e.source(), e.target())).toList();
-    return new WorkflowRunRequest(s.name, nodes, edges, s.input, s.workflowTimeoutSeconds, s.failureStrategy);
+        .map(e -> new WorkflowRunRequest.EdgeRequest(e.source(), e.target()))
+        .toList();
+    // Runtime 只接收 input；editorMeta 不进入 Yak Framework execution input。
+    return new WorkflowRunRequest(
+        s.name, nodes, edges, s.input, s.workflowTimeoutSeconds, s.failureStrategy);
   }
 
   private WorkflowVersionVO versionView(WorkflowVersion v, boolean active) {
-    List<TaskBindingVO> bindings = v.taskVersionsByNode().entrySet().stream().map(e -> new TaskBindingVO(
-        e.getKey(), e.getValue().taskId(), e.getValue().name(), e.getValue().version())).toList();
-    return new WorkflowVersionVO(v.id(), v.versionNo(), active, v.runRequest().nodes().size(),
-        v.runRequest().edges().size(), bindings, v.publishedAt());
+    List<TaskBindingVO> bindings = v.taskVersionsByNode().entrySet().stream()
+        .map(e -> new TaskBindingVO(
+            e.getKey(), e.getValue().taskId(), e.getValue().name(), e.getValue().version()))
+        .toList();
+    return new WorkflowVersionVO(
+        v.id(),
+        v.versionNo(),
+        active,
+        v.runRequest().nodes().size(),
+        v.runRequest().edges().size(),
+        bindings,
+        v.publishedAt());
   }
 
   private WorkflowDefinitionVO toView(DefinitionState s) {
     synchronized (s) {
-      refresh(s); WorkflowVersion a = s.activeVersion;
-      return new WorkflowDefinitionVO(s.id, s.name, s.description, s.status, s.nodes.size(), s.edges.size(),
-          s.nodes, s.edges, s.input, s.workflowTimeoutSeconds, s.failureStrategy,
-          a == null ? null : a.id(), a == null ? null : a.versionNo(), s.latestVersionNo, draftChanged(s),
-          s.latestExecutionId, s.latestExecutionStatus, s.createTime, s.updateTime);
+      refresh(s);
+      WorkflowVersion a = s.activeVersion;
+      return new WorkflowDefinitionVO(
+          s.id,
+          s.name,
+          s.description,
+          s.status,
+          s.nodes.size(),
+          s.edges.size(),
+          s.nodes,
+          s.edges,
+          s.input,
+          s.editorMeta,
+          s.workflowTimeoutSeconds,
+          s.failureStrategy,
+          a == null ? null : a.id(),
+          a == null ? null : a.versionNo(),
+          s.latestVersionNo,
+          draftChanged(s),
+          s.latestExecutionId,
+          s.latestExecutionStatus,
+          s.createTime,
+          s.updateTime);
     }
   }
 
@@ -264,8 +343,11 @@ public class WorkflowDefinitionService {
 
   private void refresh(DefinitionState s) {
     if (!StringUtils.hasText(s.latestExecutionId)) return;
-    try { s.latestExecutionStatus = runtimeService.getInstance(s.latestExecutionId).status(); }
-    catch (RuntimeException ignored) { }
+    try {
+      s.latestExecutionStatus = runtimeService.getInstance(s.latestExecutionId).status();
+    } catch (RuntimeException ignored) {
+      // Runtime storage is currently in-process; keep the last known state if it was restarted.
+    }
   }
 
   private DefinitionState require(String id) {
@@ -277,24 +359,48 @@ public class WorkflowDefinitionService {
 
   private String requireLatestExecution(DefinitionState s) {
     refresh(s);
-    if (!StringUtils.hasText(s.latestExecutionId)) throw new IllegalStateException("工作流还没有可控制的执行实例");
+    if (!StringUtils.hasText(s.latestExecutionId)) {
+      throw new IllegalStateException("工作流还没有可控制的执行实例");
+    }
     return s.latestExecutionId;
   }
 
-  private boolean isActive(String status) { return status != null && ACTIVE.contains(status.toUpperCase(Locale.ROOT)); }
-  private String required(String value, String message) {
-    if (!StringUtils.hasText(value)) throw new IllegalArgumentException(message); return value.trim();
+  private boolean isActive(String status) {
+    return status != null && ACTIVE.contains(status.toUpperCase(Locale.ROOT));
   }
+
+  private String required(String value, String message) {
+    if (!StringUtils.hasText(value)) throw new IllegalArgumentException(message);
+    return value.trim();
+  }
+
   private String trim(String value) { return StringUtils.hasText(value) ? value.trim() : null; }
   private String text(String value) { return value == null ? "" : value; }
   private String normalize(String v) { return StringUtils.hasText(v) ? v.trim().toLowerCase(Locale.ROOT) : null; }
   private String normalizeUpper(String v) { return StringUtils.hasText(v) ? v.trim().toUpperCase(Locale.ROOT) : null; }
 
-  private record PreparedDraft(WorkflowRunRequest request, Map<String, TaskVersionSnapshot> tasks) { }
+  private record PreparedDraft(
+      WorkflowRunRequest request,
+      Map<String, TaskVersionSnapshot> tasks) { }
+
   private static final class DefinitionState {
-    String id, name, description, status, failureStrategy, latestExecutionId, latestExecutionStatus;
-    List<NodeRequest> nodes; List<EdgeRequest> edges; Map<String, Object> input;
-    long workflowTimeoutSeconds, draftRevision; int latestVersionNo;
-    List<WorkflowVersion> versions; WorkflowVersion activeVersion; Instant createTime, updateTime;
+    String id;
+    String name;
+    String description;
+    String status;
+    String failureStrategy;
+    String latestExecutionId;
+    String latestExecutionStatus;
+    List<NodeRequest> nodes;
+    List<EdgeRequest> edges;
+    Map<String, Object> input;
+    Map<String, Object> editorMeta;
+    long workflowTimeoutSeconds;
+    long draftRevision;
+    int latestVersionNo;
+    List<WorkflowVersion> versions;
+    WorkflowVersion activeVersion;
+    Instant createTime;
+    Instant updateTime;
   }
 }

@@ -36,7 +36,10 @@ export interface WorkflowDefinition {
   edgeCount: number;
   nodes: WorkflowDefinitionNode[];
   edges: WorkflowDefinitionEdge[];
+  /** 仅运行时输入；不再包含 ReactFlow/Start/Note 编辑信息。 */
   input: Record<string, unknown>;
+  /** 仅编辑器使用；不会进入工作流运行 input。 */
+  editorMeta: Record<string, unknown>;
   workflowTimeoutSeconds: number;
   failureStrategy: WorkflowFailureStrategy;
   activeVersionId?: string;
@@ -77,6 +80,7 @@ export interface WorkflowDefinitionUpdatePayload {
   nodes: WorkflowDefinitionNode[];
   edges: WorkflowDefinitionEdge[];
   input: Record<string, unknown>;
+  editorMeta: Record<string, unknown>;
   workflowTimeoutSeconds: number;
   failureStrategy: WorkflowFailureStrategy;
 }
