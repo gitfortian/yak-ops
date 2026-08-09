@@ -17,7 +17,8 @@ public interface WorkflowDefinitionPersistence {
 
   void saveDefinition(DefinitionRecord definition);
 
-  void saveVersion(VersionRecord version);
+  /** Persist a new immutable version and advance the current definition projection atomically. */
+  void publish(DefinitionRecord definition, VersionRecord version);
 
   void deleteDefinition(String workflowId);
 
