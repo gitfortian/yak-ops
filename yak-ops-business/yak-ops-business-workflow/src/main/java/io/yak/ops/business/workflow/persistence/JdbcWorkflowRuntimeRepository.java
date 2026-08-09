@@ -33,6 +33,17 @@ public class JdbcWorkflowRuntimeRepository implements WorkflowRuntimePersistence
   }
 
   @Override
+  public void prepareMetadata(String definitionId, RuntimeMetadataRecord metadata) {
+    int updated = jdbc.update(
+        "UPDATE yak_workflow_version SET runtime_metadata_json=? WHERE id=?",
+        write(metadata),
+        definitionId);
+    if (updated == 0) {
+      throw new IllegalArgumentException("工作流运行定义不存在：" + definitionId);
+    }
+  }
+
+  @Override
   public void saveMetadata(String executionId, RuntimeMetadataRecord metadata) {
     int updated = jdbc.update(
         "UPDATE yak_workflow_execution SET workflow_name=?,workflow_version_id=?,"
@@ -56,7 +67,9 @@ public class JdbcWorkflowRuntimeRepository implements WorkflowRuntimePersistence
   public Optional<RuntimeMetadataRecord> findMetadata(String executionId) {
     try {
       String json = jdbc.queryForObject(
-          "SELECT runtime_metadata_json FROM yak_workflow_execution WHERE id=?",
+          "SELECT COALESCE(e.runtime_metadata_json,v.runtime_metadata_json) "
+              + "FROM yak_workflow_execution e "
+              + "LEFT JOIN yak_workflow_version v ON v.id=e.definition_id WHERE e.id=?",
           String.class,
           executionId);
       if (json == null || json.isBlank()) return Optional.empty();
