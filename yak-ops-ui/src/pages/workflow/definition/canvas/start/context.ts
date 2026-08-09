@@ -1,5 +1,9 @@
 import { WORKFLOW_EDITOR_META_KEY } from '../note/types';
 import {
+  getWorkflowStartConnections,
+  replaceWorkflowStartConnections,
+} from './connections';
+import {
   WORKFLOW_START_META_KEY,
   type WorkflowStartConfig,
   type WorkflowStartInputField,
@@ -85,13 +89,16 @@ export const hydrateWorkflowStartConfig = (
     }));
   }
 
+  const nextNodeIds = Array.isArray(meta?.nextNodeIds)
+    ? [...new Set(meta.nextNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && Boolean(nodeId)))]
+    : [];
+  replaceWorkflowStartConnections(nextNodeIds);
+
   return {
     position: normalizePosition(meta?.position),
     inputs,
     variables,
-    nextNodeIds: Array.isArray(meta?.nextNodeIds)
-      ? [...new Set(meta.nextNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && Boolean(nodeId)))]
-      : [],
+    nextNodeIds,
   };
 };
 
@@ -134,6 +141,6 @@ export const serializeWorkflowStartContext = (
     position: config.position,
     inputFields: config.inputs.map(({ defaultValue: _defaultValue, ...field }) => field),
     variables: config.variables.map(({ value: _value, ...variable }) => variable),
-    nextNodeIds: [...new Set(config.nextNodeIds)],
+    nextNodeIds: getWorkflowStartConnections(),
   } satisfies StartMeta,
 });
