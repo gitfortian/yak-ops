@@ -5,11 +5,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionPageRequest;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionPageView;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionView;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.service.QualityExecutionService;
+import io.yak.ops.common.bean.dto.quality.QualityExecutionDTO;
+import io.yak.ops.common.bean.vo.quality.QualityExecutionVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,19 +25,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/execution")
 @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
 public class QualityExecutionController {
-
   private final QualityExecutionService service;
 
   @Operation(summary = "分页查询执行记录")
   @PostMapping("/page")
-  public Result<ExecutionPageView> page(
-      @Valid @RequestBody(required = false) ExecutionPageRequest request) {
+  public Result<QualityExecutionVO.Page> page(
+      @Valid @RequestBody(required = false) QualityExecutionDTO.PageRequest request) {
     return Result.success(service.page(request));
   }
 
   @Operation(summary = "查询执行详情")
   @GetMapping("/{executionNo}")
-  public Result<ExecutionView> detail(@PathVariable String executionNo) {
+  public Result<QualityExecutionVO.Detail> detail(@PathVariable String executionNo) {
     return Result.success(service.get(executionNo));
   }
 }
