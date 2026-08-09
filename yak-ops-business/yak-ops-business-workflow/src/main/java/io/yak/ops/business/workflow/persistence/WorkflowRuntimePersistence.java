@@ -8,8 +8,13 @@ import java.util.Optional;
 /** Durable runtime metadata and external-attempt binding needed for restart recovery. */
 public interface WorkflowRuntimePersistence {
 
+  /** Persist recovery metadata on the immutable engine definition before an execution is created. */
+  void prepareMetadata(String definitionId, RuntimeMetadataRecord metadata);
+
+  /** Copy recovery metadata to the concrete execution after the engine creates it. */
   void saveMetadata(String executionId, RuntimeMetadataRecord metadata);
 
+  /** Load execution metadata, falling back to its immutable definition snapshot when necessary. */
   Optional<RuntimeMetadataRecord> findMetadata(String executionId);
 
   List<String> listExecutionIds();
