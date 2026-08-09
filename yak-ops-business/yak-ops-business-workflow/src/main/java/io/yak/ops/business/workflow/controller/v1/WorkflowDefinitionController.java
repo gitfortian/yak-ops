@@ -3,11 +3,11 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionCreateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionVO;
-import io.yak.ops.business.workflow.model.WorkflowVersionVO;
 import io.yak.ops.business.workflow.service.WorkflowDefinitionService;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,7 +43,7 @@ public class WorkflowDefinitionController {
   @Operation(summary = "创建工作流草稿")
   @PostMapping
   public Result<WorkflowDefinitionVO> create(
-      @Valid @RequestBody WorkflowDefinitionCreateRequest request) {
+      @Valid @RequestBody WorkflowDefinitionCreateDTO request) {
     return Result.success(definitionService.create(request));
   }
 
@@ -57,7 +57,7 @@ public class WorkflowDefinitionController {
   @PutMapping("/{id}")
   public Result<WorkflowDefinitionVO> update(
       @PathVariable("id") String id,
-      @Valid @RequestBody WorkflowDefinitionUpdateRequest request) {
+      @Valid @RequestBody WorkflowDefinitionUpdateDTO request) {
     return Result.success(definitionService.update(id, request));
   }
 

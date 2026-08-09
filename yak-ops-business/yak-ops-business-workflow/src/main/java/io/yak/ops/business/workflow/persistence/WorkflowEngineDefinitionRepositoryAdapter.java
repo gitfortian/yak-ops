@@ -1,7 +1,5 @@
 package io.yak.ops.business.workflow.persistence;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.framework.workflow.engine.definition.EdgeDefinition;
 import io.yak.framework.workflow.engine.definition.NodeDefinition;
 import io.yak.framework.workflow.engine.definition.NodeFailurePolicy;
@@ -13,68 +11,54 @@ import io.yak.framework.workflow.engine.definition.WorkflowDefinition;
 import io.yak.framework.workflow.engine.definition.WorkflowFailureStrategy;
 import io.yak.framework.workflow.engine.definition.WorkflowTimeoutPolicy;
 import io.yak.framework.workflow.engine.spi.WorkflowDefinitionRepository;
-import java.sql.Timestamp;
+import io.yak.ops.business.workflow.dao.WorkflowCatalogDao;
+import io.yak.ops.business.workflow.persistence.support.WorkflowJsonCodec;
+import io.yak.ops.common.bean.po.workflow.WorkflowVersionPO;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import javax.sql.DataSource;
-import org.springframework.beans.factory.annotation.Qualifier;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** Database-backed Yak Framework definition repository using immutable workflow-version rows. */
+/** MyBatis-Plus adapter for immutable Yak Framework workflow definitions. */
 @Repository
+@RequiredArgsConstructor
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(
     prefix = "yak.database",
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitionRepository {
-
-  private final JdbcTemplate jdbc;
-  private final ObjectMapper objectMapper;
-
-  public JdbcWorkflowEngineDefinitionRepository(
-      @Qualifier("yakBusinessDataSource") DataSource dataSource,
-      ObjectMapper objectMapper) {
-    this.jdbc = new JdbcTemplate(dataSource);
-    this.objectMapper = objectMapper;
-  }
+public class WorkflowEngineDefinitionRepositoryAdapter implements WorkflowDefinitionRepository {
+  private final WorkflowCatalogDao catalogDao;
+  private final WorkflowJsonCodec json;
 
   @Override
   public void save(WorkflowDefinition definition) {
-    String json = write(EngineDefinitionSnapshot.from(definition));
-    StoredDefinition stored = stored(definition.id());
-    if (!stored.exists()) {
-      jdbc.update(
-          "INSERT INTO yak_workflow_version "
-              + "(id,workflow_id,version_no,version_kind,draft_revision,engine_definition_json,create_time) "
-              + "VALUES (?,NULL,NULL,'RUNTIME',NULL,?,?)",
-          definition.id(),
-          json,
-          Timestamp.from(Instant.now()));
+    String value = json.write(EngineDefinitionSnapshot.from(definition));
+    WorkflowVersionPO stored = catalogDao.selectVersionById(definition.id());
+    if (stored == null) {
+      WorkflowVersionPO runtime = new WorkflowVersionPO();
+      runtime.setId(definition.id());
+      runtime.setVersionKind("RUNTIME");
+      runtime.setEngineDefinitionJson(value);
+      runtime.setCreateTime(Instant.now());
+      catalogDao.insertVersion(runtime);
       return;
     }
 
-    if (stored.json() == null || stored.json().isBlank()) {
-      int updated = jdbc.update(
-          "UPDATE yak_workflow_version SET engine_definition_json=? "
-              + "WHERE id=? AND engine_definition_json IS NULL",
-          json,
-          definition.id());
-      if (updated > 0) {
-        return;
-      }
-      stored = stored(definition.id());
+    if (stored.getEngineDefinitionJson() == null || stored.getEngineDefinitionJson().isBlank()) {
+      catalogDao.initializeEngineDefinition(definition.id(), value);
+      stored = catalogDao.selectVersionById(definition.id());
     }
-
-    if (!sameJson(json, stored.json())) {
+    if (stored == null || stored.getEngineDefinitionJson() == null) {
+      throw new IllegalStateException("工作流 Engine Definition 保存失败：" + definition.id());
+    }
+    if (!json.sameJson(value, stored.getEngineDefinitionJson())) {
       throw new IllegalStateException(
           "工作流版本的 Engine Definition 已固定，禁止覆盖：" + definition.id());
     }
@@ -82,54 +66,14 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
 
   @Override
   public Optional<WorkflowDefinition> findById(String definitionId) {
-    try {
-      String json = jdbc.queryForObject(
-          "SELECT engine_definition_json FROM yak_workflow_version WHERE id=?",
-          String.class,
-          definitionId);
-      if (json == null || json.isBlank()) return Optional.empty();
-      return Optional.of(read(json).toDefinition());
-    } catch (EmptyResultDataAccessException ignored) {
+    WorkflowVersionPO stored = catalogDao.selectVersionById(definitionId);
+    if (stored == null
+        || stored.getEngineDefinitionJson() == null
+        || stored.getEngineDefinitionJson().isBlank()) {
       return Optional.empty();
     }
-  }
-
-  private StoredDefinition stored(String definitionId) {
-    List<String> values = jdbc.query(
-        "SELECT engine_definition_json FROM yak_workflow_version WHERE id=?",
-        (rs, row) -> rs.getString(1),
-        definitionId);
-    return values.isEmpty()
-        ? new StoredDefinition(false, null)
-        : new StoredDefinition(true, values.get(0));
-  }
-
-  private boolean sameJson(String left, String right) {
-    if (left == null || right == null) return left == right;
-    try {
-      return objectMapper.readTree(left).equals(objectMapper.readTree(right));
-    } catch (JsonProcessingException exception) {
-      throw new IllegalStateException("比较 Engine Definition JSON 失败", exception);
-    }
-  }
-
-  private String write(EngineDefinitionSnapshot snapshot) {
-    try {
-      return objectMapper.writeValueAsString(snapshot);
-    } catch (JsonProcessingException exception) {
-      throw new IllegalStateException("序列化 Engine Definition 失败", exception);
-    }
-  }
-
-  private EngineDefinitionSnapshot read(String json) {
-    try {
-      return objectMapper.readValue(json, EngineDefinitionSnapshot.class);
-    } catch (JsonProcessingException exception) {
-      throw new IllegalStateException("读取 Engine Definition 失败", exception);
-    }
-  }
-
-  private record StoredDefinition(boolean exists, String json) {
+    return Optional.of(
+        json.read(stored.getEngineDefinitionJson(), EngineDefinitionSnapshot.class).toDefinition());
   }
 
   private record EngineDefinitionSnapshot(

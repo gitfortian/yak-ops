@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.yak.ops.business.workflow.dao.mapper.WorkflowExecutionMapper">
+
+  <insert id="upsert" parameterType="io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO">
+    INSERT INTO yak_workflow_execution
+      (id, definition_id, source_execution_id, status, input_json, scheduling_stopped,
+       run_started_at, paused_at, paused_duration_ms, created_at, updated_at, ended_at)
+    VALUES
+      (#{id}, #{definitionId}, #{sourceExecutionId}, #{status}, #{inputJson}, #{schedulingStopped},
+       #{runStartedAt}, #{pausedAt}, #{pausedDurationMs}, #{createdAt}, #{updatedAt}, #{endedAt})
+    ON DUPLICATE KEY UPDATE
+      definition_id = VALUES(definition_id),
+      source_execution_id = VALUES(source_execution_id),
+      status = VALUES(status),
+      input_json = VALUES(input_json),
+      scheduling_stopped = VALUES(scheduling_stopped),
+      run_started_at = VALUES(run_started_at),
+      paused_at = VALUES(paused_at),
+      paused_duration_ms = VALUES(paused_duration_ms),
+      updated_at = VALUES(updated_at),
+      ended_at = VALUES(ended_at)
+  </insert>
+
+  <select id="selectExecutionIds" resultType="java.lang.String">
+    SELECT id
+    FROM yak_workflow_execution
+    ORDER BY created_at DESC
+  </select>
+
+  <select id="selectRecoverableExecutionIds" resultType="java.lang.String">
+    SELECT e.id
+    FROM yak_workflow_execution e
+    INNER JOIN yak_workflow_definition d
+      ON d.latest_execution_id = e.id
+    WHERE e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
+    ORDER BY e.created_at
+  </select>
+
+  <select id="selectEffectiveRuntimeMetadata" resultType="java.lang.String">
+    SELECT COALESCE(e.runtime_metadata_json, v.runtime_metadata_json)
+    FROM yak_workflow_execution e
+    LEFT JOIN yak_workflow_version v
+      ON v.id = e.definition_id
+    WHERE e.id = #{executionId}
+  </select>
+</mapper>

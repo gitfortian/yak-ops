@@ -7,8 +7,9 @@ import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,11 +38,7 @@ class WorkflowRuntimeVersionSnapshotTest {
     service = new WorkflowRuntimeService(new WorkflowEventStreamService(), registry, runner, 2L);
     TaskVersionSnapshot pinned = new TaskVersionSnapshot(
         "task-a", "订单同步", "SYNC", 17L, "digest-17", "{\"definition\":17}", "{\"jobSpec\":17}");
-    WorkflowRunRequest request = new WorkflowRunRequest(
-        "published-v3",
-        List.of(new WorkflowRunRequest.NodeRequest("a", "task-a")),
-        List.of(),
-        Map.of());
+    WorkflowRunSpec request = request("published-v3");
 
     WorkflowInstanceVO prepared = service.run(request, Map.of("a", pinned), "version-3", 3, false);
     service.activate(prepared.id());
@@ -65,11 +62,7 @@ class WorkflowRuntimeVersionSnapshotTest {
     runner.runningPolls.set(4);
     service = new WorkflowRuntimeService(new WorkflowEventStreamService(), registry, runner, 2L);
     TaskVersionSnapshot pinned = new TaskVersionSnapshot("task-a", "A", "SYNC", 2L, null, "{}", "{}");
-    WorkflowRunRequest request = new WorkflowRunRequest(
-        "polling",
-        List.of(new WorkflowRunRequest.NodeRequest("a", "task-a")),
-        List.of(),
-        Map.of());
+    WorkflowRunSpec request = request("polling");
 
     WorkflowInstanceVO prepared = service.run(request, Map.of("a", pinned), "version-1", 1, false);
     service.activate(prepared.id());
@@ -77,6 +70,18 @@ class WorkflowRuntimeVersionSnapshotTest {
 
     assertThat(completed.status()).isEqualTo("SUCCESS");
     assertThat(runner.statusCalls.get()).isGreaterThanOrEqualTo(5);
+  }
+
+  private WorkflowRunSpec request(String name) {
+    return new WorkflowRunSpec(
+        name,
+        List.of(new WorkflowNodeSpec(
+            "a", "task-a", 0D, 0D, 1, 0L, 0L, 0L,
+            Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW")),
+        List.of(),
+        Map.of(),
+        0L,
+        "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
   private WorkflowInstanceVO waitForTerminal(String executionId) throws InterruptedException {

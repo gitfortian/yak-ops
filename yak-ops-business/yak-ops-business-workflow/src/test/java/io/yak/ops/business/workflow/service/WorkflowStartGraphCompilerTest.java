@@ -3,8 +3,8 @@ package io.yak.ops.business.workflow.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
+import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,17 +14,17 @@ class WorkflowStartGraphCompilerTest {
 
   @Test
   void shouldOnlyCompileNodesReachableFromExplicitStartConnections() {
-    List<NodeRequest> nodes = List.of(
+    List<WorkflowNodeSpec> nodes = List.of(
         node("a", "task-a"),
         node("b", "task-b"),
         node("c", "task-c"));
-    List<EdgeRequest> edges = List.of(new EdgeRequest("a", "c"));
+    List<WorkflowEdgeSpec> edges = List.of(new WorkflowEdgeSpec("a", "c"));
     Map<String, Object> input = startInput(List.of("a"));
 
     WorkflowStartGraphCompiler.RuntimeGraph runtimeGraph =
         WorkflowStartGraphCompiler.compile(nodes, edges, input);
 
-    assertThat(runtimeGraph.nodes()).extracting(NodeRequest::id).containsExactly("a", "c");
+    assertThat(runtimeGraph.nodes()).extracting(WorkflowNodeSpec::id).containsExactly("a", "c");
     assertThat(runtimeGraph.edges())
         .extracting(edge -> edge.source() + "->" + edge.target())
         .containsExactly("a->c");
@@ -32,16 +32,16 @@ class WorkflowStartGraphCompilerTest {
 
   @Test
   void shouldKeepLegacyDefinitionsUsingAllTaskRoots() {
-    List<NodeRequest> nodes = List.of(
+    List<WorkflowNodeSpec> nodes = List.of(
         node("a", "task-a"),
         node("b", "task-b"),
         node("c", "task-c"));
-    List<EdgeRequest> edges = List.of(new EdgeRequest("a", "c"));
+    List<WorkflowEdgeSpec> edges = List.of(new WorkflowEdgeSpec("a", "c"));
 
     WorkflowStartGraphCompiler.RuntimeGraph runtimeGraph =
         WorkflowStartGraphCompiler.compile(nodes, edges, Map.of());
 
-    assertThat(runtimeGraph.nodes()).extracting(NodeRequest::id).containsExactly("a", "b", "c");
+    assertThat(runtimeGraph.nodes()).extracting(WorkflowNodeSpec::id).containsExactly("a", "b", "c");
     assertThat(runtimeGraph.edges()).hasSize(1);
   }
 
@@ -57,8 +57,8 @@ class WorkflowStartGraphCompilerTest {
 
   @Test
   void shouldRejectStartConnectionToNonRootTask() {
-    List<NodeRequest> nodes = List.of(node("a", "task-a"), node("b", "task-b"));
-    List<EdgeRequest> edges = List.of(new EdgeRequest("a", "b"));
+    List<WorkflowNodeSpec> nodes = List.of(node("a", "task-a"), node("b", "task-b"));
+    List<WorkflowEdgeSpec> edges = List.of(new WorkflowEdgeSpec("a", "b"));
 
     assertThatThrownBy(() -> WorkflowStartGraphCompiler.compile(
         nodes,
@@ -70,13 +70,13 @@ class WorkflowStartGraphCompilerTest {
 
   @Test
   void shouldRejectJoinWhenOneRequiredRootIsNotConnectedFromStart() {
-    List<NodeRequest> nodes = List.of(
+    List<WorkflowNodeSpec> nodes = List.of(
         node("a", "task-a"),
         node("b", "task-b"),
         node("join", "task-join"));
-    List<EdgeRequest> edges = List.of(
-        new EdgeRequest("a", "join"),
-        new EdgeRequest("b", "join"));
+    List<WorkflowEdgeSpec> edges = List.of(
+        new WorkflowEdgeSpec("a", "join"),
+        new WorkflowEdgeSpec("b", "join"));
 
     assertThatThrownBy(() -> WorkflowStartGraphCompiler.compile(
         nodes,
@@ -94,8 +94,8 @@ class WorkflowStartGraphCompilerTest {
     return input;
   }
 
-  private NodeRequest node(String id, String taskId) {
-    return new NodeRequest(
+  private WorkflowNodeSpec node(String id, String taskId) {
+    return new WorkflowNodeSpec(
         id,
         taskId,
         0D,

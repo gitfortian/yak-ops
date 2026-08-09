@@ -1,4 +1,4 @@
-package io.yak.ops.business.workflow.model;
+package io.yak.ops.common.bean.vo.workflow;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,5 +17,6 @@ public record WorkflowVersionVO(
       String nodeId,
       String taskId,
       String taskName,
-      long taskVersion) {}
+      long taskVersion) {
+  }
 }

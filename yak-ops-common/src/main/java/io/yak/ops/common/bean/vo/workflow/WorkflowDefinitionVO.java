@@ -1,4 +1,4 @@
-package io.yak.ops.business.workflow.model;
+package io.yak.ops.common.bean.vo.workflow;
 
 import java.time.Instant;
 import java.util.List;
@@ -12,8 +12,8 @@ public record WorkflowDefinitionVO(
     String status,
     int nodeCount,
     int edgeCount,
-    List<WorkflowDefinitionUpdateRequest.NodeRequest> nodes,
-    List<WorkflowDefinitionUpdateRequest.EdgeRequest> edges,
+    List<NodeVO> nodes,
+    List<EdgeVO> edges,
     Map<String, Object> input,
     Map<String, Object> editorMeta,
     long workflowTimeoutSeconds,
@@ -25,4 +25,22 @@ public record WorkflowDefinitionVO(
     String latestExecutionId,
     String latestExecutionStatus,
     Instant createTime,
-    Instant updateTime) {}
+    Instant updateTime) {
+
+  public record NodeVO(
+      String id,
+      String taskId,
+      double positionX,
+      double positionY,
+      int maxAttempts,
+      long retryDelaySeconds,
+      long dispatchTimeoutSeconds,
+      long executionTimeoutSeconds,
+      Map<String, String> inputMapping,
+      String triggerRule,
+      String failurePolicy) {
+  }
+
+  public record EdgeVO(String source, String target) {
+  }
+}

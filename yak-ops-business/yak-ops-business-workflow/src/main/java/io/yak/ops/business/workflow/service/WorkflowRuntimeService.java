@@ -36,16 +36,17 @@ import io.yak.ops.business.job.task.SyncTaskExecution;
 import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO.AttemptVO;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO.NodeInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
+import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
 import io.yak.ops.business.workflow.persistence.InMemoryWorkflowRuntimePersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence.NodeMetadataRecord;
 import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence.RuntimeMetadataRecord;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO.AttemptVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO.NodeInstanceVO;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
@@ -207,10 +208,15 @@ public class WorkflowRuntimeService {
         this::scanTimeouts, 250L, 250L, TimeUnit.MILLISECONDS);
   }
 
-  /** 兼容直接运行 API：执行开始前固定一次当前任务快照。 */
-  public WorkflowInstanceVO run(WorkflowRunRequest request) {
+  /** 直接运行 API：DTO 只存在于接口边界，进入 Runtime 后立即转换为领域规格。 */
+  public WorkflowInstanceVO run(WorkflowRunDTO request) {
+    return run(toRunSpec(request));
+  }
+
+  /** 直接运行领域入口：执行开始前固定一次当前任务快照。 */
+  public WorkflowInstanceVO run(WorkflowRunSpec request) {
     Map<String, TaskVersionSnapshot> snapshots = new LinkedHashMap<>();
-    for (NodeRequest node : request.nodes()) {
+    for (WorkflowNodeSpec node : request.nodes()) {
       snapshots.put(node.id(), taskRegistry.snapshot(node.taskId()));
     }
     return run(request, snapshots, null, null, false);
@@ -218,7 +224,7 @@ public class WorkflowRuntimeService {
 
   /** WorkflowVersion/草稿测试运行入口，使用调用方已经固定的任务版本快照。 */
   public WorkflowInstanceVO run(
-      WorkflowRunRequest request,
+      WorkflowRunSpec request,
       Map<String, TaskVersionSnapshot> taskVersionsByNode,
       String workflowVersionId,
       Integer workflowVersionNo,
@@ -251,7 +257,6 @@ public class WorkflowRuntimeService {
         testRun,
         nodeMetadata(request.nodes(), tasks));
 
-    // Definition + runtime bindings are durable before the first execution row is created.
     engine.registerDefinition(definition);
     runtimePersistence.prepareMetadata(definitionId, toPersistence(runMetadata));
 
@@ -428,11 +433,38 @@ public class WorkflowRuntimeService {
         .orElseThrow(() -> new IllegalArgumentException("Workflow execution not found: " + id));
   }
 
+  private WorkflowRunSpec toRunSpec(WorkflowRunDTO request) {
+    List<WorkflowNodeSpec> nodes = request.nodes().stream()
+        .map(node -> new WorkflowNodeSpec(
+            node.id(),
+            node.taskId(),
+            0D,
+            0D,
+            node.maxAttempts(),
+            node.retryDelaySeconds(),
+            node.dispatchTimeoutSeconds(),
+            node.executionTimeoutSeconds(),
+            node.inputMapping(),
+            node.triggerRule(),
+            node.failurePolicy()))
+        .toList();
+    List<WorkflowEdgeSpec> edges = request.edges().stream()
+        .map(edge -> new WorkflowEdgeSpec(edge.source(), edge.target()))
+        .toList();
+    return new WorkflowRunSpec(
+        request.name(),
+        nodes,
+        edges,
+        request.input(),
+        request.workflowTimeoutSeconds(),
+        request.failureStrategy());
+  }
+
   private Map<String, TaskVersionSnapshot> validateTaskSnapshots(
-      List<NodeRequest> nodes,
+      List<WorkflowNodeSpec> nodes,
       Map<String, TaskVersionSnapshot> supplied) {
     Map<String, TaskVersionSnapshot> result = new LinkedHashMap<>();
-    for (NodeRequest node : nodes) {
+    for (WorkflowNodeSpec node : nodes) {
       TaskVersionSnapshot task = supplied == null ? null : supplied.get(node.id());
       if (task == null) {
         throw new IllegalArgumentException("工作流节点缺少任务版本快照：" + node.id());
@@ -448,7 +480,7 @@ public class WorkflowRuntimeService {
     return Map.copyOf(result);
   }
 
-  private NodeDefinition toNodeDefinition(NodeRequest node, TaskVersionSnapshot task) {
+  private NodeDefinition toNodeDefinition(WorkflowNodeSpec node, TaskVersionSnapshot task) {
     RetryPolicy retry = node.maxAttempts() > 1
         ? RetryPolicy.fixed(node.maxAttempts(), Duration.ofSeconds(node.retryDelaySeconds()))
         : RetryPolicy.none();
@@ -466,15 +498,15 @@ public class WorkflowRuntimeService {
         Map.of("taskId", task.taskId(), "taskVersion", task.version()));
   }
 
-  private EdgeDefinition toEdgeDefinition(EdgeRequest edge) {
+  private EdgeDefinition toEdgeDefinition(WorkflowEdgeSpec edge) {
     return new EdgeDefinition(edge.source(), edge.target());
   }
 
   private Map<String, NodeMetadata> nodeMetadata(
-      List<NodeRequest> nodes,
+      List<WorkflowNodeSpec> nodes,
       Map<String, TaskVersionSnapshot> tasks) {
     Map<String, NodeMetadata> result = new LinkedHashMap<>();
-    for (NodeRequest node : nodes) {
+    for (WorkflowNodeSpec node : nodes) {
       TaskVersionSnapshot task = tasks.get(node.id());
       result.put(
           node.id(),
@@ -951,8 +983,6 @@ public class WorkflowRuntimeService {
         return;
       }
       if (control.taskExecutionId() == null) {
-        // The process may have crashed before or just after remote submission. Reusing the same
-        // attemptId as the runner idempotency key makes this a safe find-or-create operation.
         enqueueDispatch(dispatch);
         return;
       }

@@ -1,6 +1,6 @@
 package io.yak.ops.business.workflow.service;
 
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
@@ -104,10 +104,6 @@ public class WorkflowEventStreamService {
     }
   }
 
-  /**
-   * 工作流可能数十秒都停留在 RUNNING；heartbeat 防止代理把没有业务事件的 SSE 连接当作空闲连接关闭。
-   * 前端只消费 workflow 事件，因此 ping 不会污染运行快照状态机。
-   */
   private void heartbeat() {
     if (emitters.isEmpty()) {
       return;

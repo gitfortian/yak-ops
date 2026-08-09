@@ -11,13 +11,15 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionCreateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionVO;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowVersionVO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.EdgeDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.NodeDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO.EdgeVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO.NodeVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -53,11 +55,11 @@ class WorkflowDefinitionServiceTest {
 
     WorkflowDefinitionVO edited = service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             "订单同步工作流-草稿修改",
             "新的草稿",
-            created.nodes(),
-            created.edges(),
+            nodeDTOs(created.nodes()),
+            edgeDTOs(created.edges()),
             created.input(),
             created.workflowTimeoutSeconds(),
             created.failureStrategy()));
@@ -84,7 +86,7 @@ class WorkflowDefinitionServiceTest {
     assertThat(tested.activeVersionNo()).isNull();
     assertThat(tested.latestExecutionId()).isEqualTo("test-exec");
     verify(runtimeService).run(
-        argThat(request -> request.name().equals("草稿测试")),
+        argThat(spec -> spec.name().equals("草稿测试")),
         argThat(tasks -> tasks.get("node-a").version() == 7L),
         eq(null),
         eq(null),
@@ -98,7 +100,6 @@ class WorkflowDefinitionServiceTest {
     when(taskRegistry.snapshot("sync-2")).thenReturn(snapshot("sync-2", "同步明细", 12));
     WorkflowDefinitionVO published = service.online(created.id());
 
-    // 发布以后当前任务已经升级；正式运行不应再次向 TaskRegistry 取新版本。
     when(taskRegistry.snapshot("sync-1")).thenReturn(snapshot("sync-1", "同步订单", 99));
     when(taskRegistry.snapshot("sync-2")).thenReturn(snapshot("sync-2", "同步明细", 99));
     WorkflowInstanceVO prepared = instance("exec-v1", "CREATED");
@@ -110,7 +111,7 @@ class WorkflowDefinitionServiceTest {
     service.run(created.id());
 
     verify(runtimeService).run(
-        argThat(request -> request.name().equals("可复现工作流")),
+        argThat(spec -> spec.name().equals("可复现工作流")),
         argThat(tasks -> tasks.get("node-a").version() == 11L
             && tasks.get("node-b").version() == 12L),
         eq(published.activeVersionId()),
@@ -125,14 +126,13 @@ class WorkflowDefinitionServiceTest {
     when(taskRegistry.snapshot("sync-2")).thenReturn(snapshot("sync-2", "同步明细", 1));
     WorkflowDefinitionVO v1 = service.online(created.id());
 
-    // 编辑器发布/测试前会先保存；完全相同的 payload 不应制造新的 draft revision。
     WorkflowDefinitionVO equivalentSave = service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             created.name(),
             created.description(),
-            created.nodes(),
-            created.edges(),
+            nodeDTOs(created.nodes()),
+            edgeDTOs(created.edges()),
             created.input(),
             created.workflowTimeoutSeconds(),
             created.failureStrategy()));
@@ -148,11 +148,11 @@ class WorkflowDefinitionServiceTest {
 
     service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             "版本工作流 v2 草稿",
             null,
-            created.nodes(),
-            created.edges(),
+            nodeDTOs(created.nodes()),
+            edgeDTOs(created.edges()),
             created.input(),
             30L,
             created.failureStrategy()));
@@ -174,14 +174,14 @@ class WorkflowDefinitionServiceTest {
 
   @Test
   void shouldRejectCycleWhenPublishing() {
-    WorkflowDefinitionVO created = service.create(new WorkflowDefinitionCreateRequest("循环工作流", null));
+    WorkflowDefinitionVO created = service.create(new WorkflowDefinitionCreateDTO("循环工作流", null));
     service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             "循环工作流",
             null,
             List.of(node("a", "sync-1", 0D, 0D), node("b", "sync-2", 0D, 0D)),
-            List.of(new EdgeRequest("a", "b"), new EdgeRequest("b", "a")),
+            List.of(new EdgeDTO("a", "b"), new EdgeDTO("b", "a")),
             Map.of(),
             0L,
             "CONTINUE_INDEPENDENT_BRANCHES"));
@@ -192,17 +192,38 @@ class WorkflowDefinitionServiceTest {
   }
 
   private WorkflowDefinitionVO createConfigured(String name) {
-    WorkflowDefinitionVO created = service.create(new WorkflowDefinitionCreateRequest(name, "测试定义"));
+    WorkflowDefinitionVO created = service.create(new WorkflowDefinitionCreateDTO(name, "测试定义"));
     return service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             name,
             "测试定义",
             List.of(node("node-a", "sync-1", 120D, 80D), node("node-b", "sync-2", 380D, 80D)),
-            List.of(new EdgeRequest("node-a", "node-b")),
+            List.of(new EdgeDTO("node-a", "node-b")),
             Map.of("bizDate", "2026-08-08"),
             600L,
             "CONTINUE_INDEPENDENT_BRANCHES"));
+  }
+
+  private List<NodeDTO> nodeDTOs(List<NodeVO> nodes) {
+    return nodes.stream()
+        .map(node -> new NodeDTO(
+            node.id(),
+            node.taskId(),
+            node.positionX(),
+            node.positionY(),
+            node.maxAttempts(),
+            node.retryDelaySeconds(),
+            node.dispatchTimeoutSeconds(),
+            node.executionTimeoutSeconds(),
+            node.inputMapping(),
+            node.triggerRule(),
+            node.failurePolicy()))
+        .toList();
+  }
+
+  private List<EdgeDTO> edgeDTOs(List<EdgeVO> edges) {
+    return edges.stream().map(edge -> new EdgeDTO(edge.source(), edge.target())).toList();
   }
 
   private TaskVersionSnapshot snapshot(String id, String name, long version) {
@@ -216,8 +237,8 @@ class WorkflowDefinitionServiceTest {
         "{\"jobSpecVersion\":" + version + "}");
   }
 
-  private NodeRequest node(String id, String taskId, double x, double y) {
-    return new NodeRequest(id, taskId, x, y, 1, 0L, 0L, 0L, Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
+  private NodeDTO node(String id, String taskId, double x, double y) {
+    return new NodeDTO(id, taskId, x, y, 1, 0L, 0L, 0L, Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
 
   private WorkflowInstanceVO instance(String id, String status) {

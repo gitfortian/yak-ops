@@ -1,9 +1,10 @@
-package io.yak.ops.business.workflow.model;
+package io.yak.ops.common.bean.vo.workflow;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+/** 工作流执行实例展示对象。 */
 public record WorkflowInstanceVO(
     String id,
     String definitionId,
@@ -23,7 +24,6 @@ public record WorkflowInstanceVO(
     Integer workflowVersionNo,
     boolean testRun) {
 
-  /** 保持现有调用方/测试源码兼容。 */
   public WorkflowInstanceVO(
       String id,
       String definitionId,
@@ -67,7 +67,8 @@ public record WorkflowInstanceVO(
       Map<String, Object> input,
       Map<String, Map<String, Object>> predecessorOutputs,
       Map<String, Object> output,
-      List<AttemptVO> attempts) {}
+      List<AttemptVO> attempts) {
+  }
 
   public record AttemptVO(
       String id,
@@ -79,5 +80,6 @@ public record WorkflowInstanceVO(
       Instant startedAt,
       Instant pausedAt,
       long pausedMillis,
-      Instant endedAt) {}
+      Instant endedAt) {
+  }
 }

@@ -1,56 +1,62 @@
-package io.yak.ops.business.workflow.model;
+package io.yak.ops.common.bean.dto.workflow;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 工作流定义配置保存请求。 */
-public record WorkflowDefinitionUpdateRequest(
-    @NotBlank @Size(max = 100) String name,
-    @Size(max = 500) String description,
-    List<@Valid NodeRequest> nodes,
-    List<@Valid EdgeRequest> edges,
+/** 直接运行工作流 DTO。 */
+public record WorkflowRunDTO(
+    @NotBlank String name,
+    @NotEmpty List<@Valid NodeDTO> nodes,
+    List<@Valid EdgeDTO> edges,
     Map<String, Object> input,
-    Map<String, Object> editorMeta,
     @Min(0) Long workflowTimeoutSeconds,
     @Pattern(
         regexp = "FAIL_FAST|CONTINUE_INDEPENDENT_BRANCHES|TERMINATE_ALL",
         message = "unsupported workflow failureStrategy")
     String failureStrategy) {
 
-  public WorkflowDefinitionUpdateRequest {
+  public WorkflowRunDTO {
     nodes = nodes == null ? List.of() : List.copyOf(nodes);
     edges = edges == null ? List.of() : List.copyOf(edges);
     input = input == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(input));
-    editorMeta = editorMeta == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(editorMeta));
     workflowTimeoutSeconds = workflowTimeoutSeconds == null ? 0L : workflowTimeoutSeconds;
     failureStrategy = failureStrategy == null || failureStrategy.isBlank()
         ? "CONTINUE_INDEPENDENT_BRANCHES"
         : failureStrategy;
   }
 
-  /** 兼容内部旧调用；新 API 请求应显式传 editorMeta。 */
-  public WorkflowDefinitionUpdateRequest(
+  public WorkflowRunDTO(
       String name,
-      String description,
-      List<NodeRequest> nodes,
-      List<EdgeRequest> edges,
+      List<NodeDTO> nodes,
+      List<EdgeDTO> edges,
       Map<String, Object> input,
-      Long workflowTimeoutSeconds,
-      String failureStrategy) {
-    this(name, description, nodes, edges, input, Map.of(), workflowTimeoutSeconds, failureStrategy);
+      Long workflowTimeoutSeconds) {
+    this(
+        name,
+        nodes,
+        edges,
+        input,
+        workflowTimeoutSeconds,
+        "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
-  public record NodeRequest(
+  public WorkflowRunDTO(
+      String name,
+      List<NodeDTO> nodes,
+      List<EdgeDTO> edges,
+      Map<String, Object> input) {
+    this(name, nodes, edges, input, 0L);
+  }
+
+  public record NodeDTO(
       @NotBlank String id,
       @NotBlank String taskId,
-      Double positionX,
-      Double positionY,
       @Min(1) Integer maxAttempts,
       @Min(0) Long retryDelaySeconds,
       @Min(0) Long dispatchTimeoutSeconds,
@@ -65,26 +71,41 @@ public record WorkflowDefinitionUpdateRequest(
           message = "unsupported failurePolicy")
       String failurePolicy) {
 
-    public NodeRequest {
-      positionX = positionX == null ? 0D : positionX;
-      positionY = positionY == null ? 0D : positionY;
+    public NodeDTO {
       maxAttempts = maxAttempts == null ? 1 : maxAttempts;
       retryDelaySeconds = retryDelaySeconds == null ? 0L : retryDelaySeconds;
       dispatchTimeoutSeconds = dispatchTimeoutSeconds == null ? 0L : dispatchTimeoutSeconds;
       executionTimeoutSeconds = executionTimeoutSeconds == null ? 0L : executionTimeoutSeconds;
-      inputMapping = inputMapping == null
-          ? Map.of()
-          : Map.copyOf(new LinkedHashMap<>(inputMapping));
-      triggerRule = triggerRule == null || triggerRule.isBlank()
-          ? "ALL_SUCCESS"
-          : triggerRule;
-      failurePolicy = failurePolicy == null || failurePolicy.isBlank()
-          ? "FAIL_WORKFLOW"
-          : failurePolicy;
+      inputMapping = inputMapping == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(inputMapping));
+      triggerRule = triggerRule == null || triggerRule.isBlank() ? "ALL_SUCCESS" : triggerRule;
+      failurePolicy = failurePolicy == null || failurePolicy.isBlank() ? "FAIL_WORKFLOW" : failurePolicy;
+    }
+
+    public NodeDTO(
+        String id,
+        String taskId,
+        Integer maxAttempts,
+        Long retryDelaySeconds,
+        Long dispatchTimeoutSeconds,
+        Long executionTimeoutSeconds,
+        Map<String, String> inputMapping) {
+      this(
+          id,
+          taskId,
+          maxAttempts,
+          retryDelaySeconds,
+          dispatchTimeoutSeconds,
+          executionTimeoutSeconds,
+          inputMapping,
+          "ALL_SUCCESS",
+          "FAIL_WORKFLOW");
+    }
+
+    public NodeDTO(String id, String taskId) {
+      this(id, taskId, 1, 0L, 0L, 0L, Map.of());
     }
   }
 
-  public record EdgeRequest(
-      @NotBlank String source,
-      @NotBlank String target) {}
+  public record EdgeDTO(@NotBlank String source, @NotBlank String target) {
+  }
 }

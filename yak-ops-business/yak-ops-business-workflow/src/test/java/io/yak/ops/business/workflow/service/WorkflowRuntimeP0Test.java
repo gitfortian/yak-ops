@@ -7,9 +7,9 @@ import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,11 +42,11 @@ class WorkflowRuntimeP0Test {
     runner.failNext("task-a", 1);
     service = service(runner, "task-a");
 
-    WorkflowRunRequest request = new WorkflowRunRequest(
+    WorkflowRunSpec request = runSpec(
         "retry-delay",
-        List.of(new NodeRequest("a", "task-a", 2, 1L, 0L, 0L, Map.of())),
-        List.of(),
-        Map.of());
+        new WorkflowNodeSpec(
+            "a", "task-a", 0D, 0D, 2, 1L, 0L, 0L,
+            Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW"));
 
     WorkflowInstanceVO started = service.run(request);
     service.activate(started.id());
@@ -74,11 +74,11 @@ class WorkflowRuntimeP0Test {
     runner.failNext("task-a", 1);
     service = service(runner, "task-a");
 
-    WorkflowRunRequest request = new WorkflowRunRequest(
+    WorkflowRunSpec request = runSpec(
         "cancel-delayed-retry",
-        List.of(new NodeRequest("a", "task-a", 2, 1L, 0L, 0L, Map.of())),
-        List.of(),
-        Map.of());
+        new WorkflowNodeSpec(
+            "a", "task-a", 0D, 0D, 2, 1L, 0L, 0L,
+            Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW"));
 
     WorkflowInstanceVO started = service.run(request);
     service.activate(started.id());
@@ -89,6 +89,16 @@ class WorkflowRuntimeP0Test {
 
     Thread.sleep(1_200L);
     assertThat(runner.started("task-a")).isEqualTo(1);
+  }
+
+  private WorkflowRunSpec runSpec(String name, WorkflowNodeSpec node) {
+    return new WorkflowRunSpec(
+        name,
+        List.of(node),
+        List.of(),
+        Map.of(),
+        0L,
+        "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
   private WorkflowRuntimeService service(RecordingRunner runner, String... taskIds) {

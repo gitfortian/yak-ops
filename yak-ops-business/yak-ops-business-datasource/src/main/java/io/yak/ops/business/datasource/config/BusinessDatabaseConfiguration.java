@@ -23,10 +23,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 
-/**
- * Yak Ops 业务模块共享的数据源、MyBatis 与事务基础设施。
- */
-
+/** Yak Ops 业务模块共享的数据源、MyBatis 与事务基础设施。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
         prefix = "yak.database",
@@ -86,10 +83,13 @@ public class BusinessDatabaseConfiguration {
         factory.setTypeAliasesPackage(
                 "io.yak.ops.common.bean.po.datasource,"
                         + "io.yak.ops.common.bean.po.resource,"
-                        + "io.yak.ops.common.bean.po.sync.offline");
+                        + "io.yak.ops.common.bean.po.sync.offline,"
+                        + "io.yak.ops.common.bean.po.workflow");
 
+        // All Yak Ops business modules share this SqlSessionFactory. Each module keeps its XML files
+        // under mapper/<domain>/ so complex SQL stays close to the owning business module.
         Resource[] mapperLocations = new PathMatchingResourcePatternResolver()
-                .getResources("classpath*:mapper/datasource/*.xml");
+                .getResources("classpath*:mapper/**/*.xml");
         if (mapperLocations.length > 0) {
             factory.setMapperLocations(mapperLocations);
         }

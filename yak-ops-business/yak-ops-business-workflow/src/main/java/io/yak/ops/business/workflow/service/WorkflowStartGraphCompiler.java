@@ -1,7 +1,7 @@
 package io.yak.ops.business.workflow.service;
 
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
+import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -20,8 +20,8 @@ final class WorkflowStartGraphCompiler {
 
   /** 兼容旧调用：显式 Start 信息曾存放在 input。 */
   static RuntimeGraph compile(
-      List<NodeRequest> nodes,
-      List<EdgeRequest> edges,
+      List<WorkflowNodeSpec> nodes,
+      List<WorkflowEdgeSpec> edges,
       Map<String, Object> input) {
     return compile(nodes, edges, Map.of(), input);
   }
@@ -31,17 +31,17 @@ final class WorkflowStartGraphCompiler {
    * Runtime input 不参与新的画布拓扑建模。
    */
   static RuntimeGraph compile(
-      List<NodeRequest> nodes,
-      List<EdgeRequest> edges,
+      List<WorkflowNodeSpec> nodes,
+      List<WorkflowEdgeSpec> edges,
       Map<String, Object> editorMeta,
       Map<String, Object> legacyInput) {
-    Map<String, NodeRequest> nodesById = new LinkedHashMap<>();
-    for (NodeRequest node : nodes) nodesById.put(node.id(), node);
+    Map<String, WorkflowNodeSpec> nodesById = new LinkedHashMap<>();
+    for (WorkflowNodeSpec node : nodes) nodesById.put(node.id(), node);
 
     Map<String, List<String>> adjacency = new LinkedHashMap<>();
     Set<String> taskTargets = new LinkedHashSet<>();
     for (String nodeId : nodesById.keySet()) adjacency.put(nodeId, new ArrayList<>());
-    for (EdgeRequest edge : edges) {
+    for (WorkflowEdgeSpec edge : edges) {
       if (!nodesById.containsKey(edge.source()) || !nodesById.containsKey(edge.target())) continue;
       adjacency.get(edge.source()).add(edge.target());
       taskTargets.add(edge.target());
@@ -61,7 +61,6 @@ final class WorkflowStartGraphCompiler {
         }
       }
     } else {
-      // Backward compatibility for definitions saved before explicit Start connections existed.
       startNodeIds = nodesById.keySet().stream()
           .filter(nodeId -> !taskTargets.contains(nodeId))
           .toList();
@@ -80,7 +79,7 @@ final class WorkflowStartGraphCompiler {
     }
 
     if (selection.explicit()) {
-      for (EdgeRequest edge : edges) {
+      for (WorkflowEdgeSpec edge : edges) {
         if (reachable.contains(edge.target()) && !reachable.contains(edge.source())) {
           throw new IllegalStateException(
               "开始节点未接入完整前置分支：" + edge.source() + " -> " + edge.target());
@@ -88,10 +87,10 @@ final class WorkflowStartGraphCompiler {
       }
     }
 
-    List<NodeRequest> runtimeNodes = nodes.stream()
+    List<WorkflowNodeSpec> runtimeNodes = nodes.stream()
         .filter(node -> reachable.contains(node.id()))
         .toList();
-    List<EdgeRequest> runtimeEdges = edges.stream()
+    List<WorkflowEdgeSpec> runtimeEdges = edges.stream()
         .filter(edge -> reachable.contains(edge.source()) && reachable.contains(edge.target()))
         .toList();
     return new RuntimeGraph(runtimeNodes, runtimeEdges);
@@ -124,7 +123,7 @@ final class WorkflowStartGraphCompiler {
     return StartSelection.explicit(List.copyOf(nodeIds));
   }
 
-  record RuntimeGraph(List<NodeRequest> nodes, List<EdgeRequest> edges) {}
+  record RuntimeGraph(List<WorkflowNodeSpec> nodes, List<WorkflowEdgeSpec> edges) {}
 
   private record StartSelection(boolean explicit, List<String> nodeIds) {
     static StartSelection legacy() {

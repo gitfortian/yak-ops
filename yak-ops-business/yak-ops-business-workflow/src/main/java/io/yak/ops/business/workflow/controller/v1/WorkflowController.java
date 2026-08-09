@@ -3,9 +3,9 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
 import io.yak.ops.business.workflow.service.WorkflowRuntimeService;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.MediaType;
@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/** 工作流内存运行接口。 */
+/** 工作流运行接口。 */
 @Tag(name = "工作流接口")
 @RestController
 @RequestMapping("/api/v1/workflows")
@@ -32,7 +32,7 @@ public class WorkflowController {
   @Operation(summary = "创建工作流运行实例")
   @PostMapping("/run")
   public Result<WorkflowInstanceVO> run(
-      @Valid @RequestBody WorkflowRunRequest request) {
+      @Valid @RequestBody WorkflowRunDTO request) {
     return Result.success(workflowRuntimeService.run(request));
   }
 
