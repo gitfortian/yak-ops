@@ -6,7 +6,7 @@ import io.yak.framework.common.PagingResult;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
-import io.yak.ops.business.resource.model.ResourceDownload;
+import io.yak.ops.business.resource.domain.ResourceDownload;
 import io.yak.ops.business.resource.service.ResourceService;
 import io.yak.ops.common.bean.dto.resource.ResourceContentUpdateDTO;
 import io.yak.ops.common.bean.dto.resource.ResourceCreateContentDTO;
@@ -170,16 +170,16 @@ public class ResourcesController {
       @PathVariable("id") Long id,
       HttpServletResponse response) throws IOException {
     ResourceDownload download = resourceService.download(id);
-    response.setContentType(download.getContentType());
-    if (download.getFileSize() >= 0L) {
-      response.setContentLengthLong(download.getFileSize());
+    response.setContentType(download.contentType());
+    if (download.fileSize() >= 0L) {
+      response.setContentLengthLong(download.fileSize());
     }
-    String encodedName = URLEncoder.encode(download.getFileName(), StandardCharsets.UTF_8)
-        .replace("+", "%20");
+    String encodedName =
+        URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
     response.setHeader(
         HttpHeaders.CONTENT_DISPOSITION,
         "attachment; filename*=UTF-8''" + encodedName);
-    try (InputStream inputStream = download.getInputStream()) {
+    try (InputStream inputStream = download.inputStream()) {
       StreamUtils.copy(inputStream, response.getOutputStream());
       response.flushBuffer();
     }
