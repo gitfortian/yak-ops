@@ -29,7 +29,6 @@ public class OfflineScheduleRepositoryAdapter implements OfflineScheduleReposito
         schedule.cronExpression(),
         Math.max(1, schedule.retryMaxAttempts()),
         Math.max(1, schedule.retryBackoffSeconds()),
-        schedule.lastFireTime(),
         schedule.nextFireTime(),
         now)) {
       throw new IllegalArgumentException("离线同步任务不存在：" + schedule.jobDefinitionId());
