@@ -273,7 +273,6 @@ public class WorkflowRuntimeService {
       if (control.canceled()) {
         cancelRemote(taskExecution.executionId()); cleanupAttempt(dispatch, control); return;
       }
-      // 只有 Link-Up 已接受并创建执行实例后，工作流节点才进入 RUNNING。
       engine.acknowledgeNodeStarted(dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId());
       publishCurrent(dispatch.workflowExecutionId());
       log.info("[workflow] sync task started workflowExecution={}, node={}, attempt={}, task={}, taskVersion={}, taskExecution={}",
@@ -400,7 +399,8 @@ public class WorkflowRuntimeService {
     List<NodeInstanceVO> nodes = execution.nodes().values().stream().map(n -> toNodeView(execution.id(), n, m.nodes().get(n.nodeId()))).toList();
     return new WorkflowInstanceVO(execution.id(), execution.definitionId(), execution.sourceExecutionId(), m.name(),
         execution.status().name(), m.failureStrategy(), execution.createdAt(), execution.runStartedAt(), execution.endedAt(),
-        m.workflowTimeoutSeconds(), execution.input(), nodes.size(), m.edgeCount(), nodes);
+        m.workflowTimeoutSeconds(), execution.input(), nodes.size(), m.edgeCount(), nodes,
+        m.workflowVersionId(), m.workflowVersionNo(), m.testRun());
   }
   private NodeInstanceVO toNodeView(String executionId, NodeExecution node, NodeMetadata m) {
     TaskVersionSnapshot task = m == null ? null : m.task();
