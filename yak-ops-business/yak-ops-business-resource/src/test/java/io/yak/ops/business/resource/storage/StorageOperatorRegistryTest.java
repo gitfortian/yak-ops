@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.yak.ops.business.resource.config.ResourceProperties;
+import io.yak.ops.business.resource.domain.ResourceStoragePlugin;
 import io.yak.ops.business.resource.exception.ResourceException;
-import io.yak.ops.common.bean.vo.resource.ResourceStoragePluginVO;
 import io.yak.ops.common.enums.resource.ResourceStorageType;
 import io.yak.ops.spi.storage.StorageObjectMetadata;
 import io.yak.ops.spi.storage.StorageOperator;
@@ -20,18 +20,17 @@ class StorageOperatorRegistryTest {
     ResourceProperties properties = new ResourceProperties();
     StorageOperator local = new StubOperator(ResourceStorageType.LOCAL, "本地存储");
     StorageOperator minio = new StubOperator(ResourceStorageType.MINIO, "MinIO");
-    StorageOperatorRegistry registry =
-        new StorageOperatorRegistry(List.of(local, minio), properties);
+    StorageOperatorRegistry registry = new StorageOperatorRegistry(List.of(local, minio), properties);
 
     assertThat(registry.require(null)).isSameAs(local);
 
-    List<ResourceStoragePluginVO> plugins = registry.list();
+    List<ResourceStoragePlugin> plugins = registry.list();
     assertThat(plugins).hasSize(2);
-    assertThat(plugins.get(0).getType()).isEqualTo(ResourceStorageType.LOCAL);
-    assertThat(plugins.get(0).getName()).isEqualTo("本地存储");
-    assertThat(plugins.get(0).isActive()).isTrue();
-    assertThat(plugins.get(1).getType()).isEqualTo(ResourceStorageType.MINIO);
-    assertThat(plugins.get(1).isActive()).isFalse();
+    assertThat(plugins.get(0).type()).isEqualTo(ResourceStorageType.LOCAL);
+    assertThat(plugins.get(0).name()).isEqualTo("本地存储");
+    assertThat(plugins.get(0).active()).isTrue();
+    assertThat(plugins.get(1).type()).isEqualTo(ResourceStorageType.MINIO);
+    assertThat(plugins.get(1).active()).isFalse();
   }
 
   @Test
@@ -40,8 +39,7 @@ class StorageOperatorRegistryTest {
     properties.getStorage().setType(ResourceStorageType.HDFS);
     StorageOperatorRegistry registry = new StorageOperatorRegistry(List.of(), properties);
 
-    assertThatThrownBy(() -> registry.require(null))
-        .isInstanceOf(ResourceException.class);
+    assertThatThrownBy(() -> registry.require(null)).isInstanceOf(ResourceException.class);
   }
 
   private static final class StubOperator implements StorageOperator {
@@ -65,8 +63,7 @@ class StorageOperatorRegistryTest {
     }
 
     @Override
-    public void createDirectory(String path) {
-    }
+    public void createDirectory(String path) {}
 
     @Override
     public boolean exists(String path) {
@@ -79,8 +76,7 @@ class StorageOperatorRegistryTest {
         InputStream inputStream,
         long size,
         String contentType,
-        boolean overwrite) {
-    }
+        boolean overwrite) {}
 
     @Override
     public InputStream download(String path) {
@@ -88,12 +84,10 @@ class StorageOperatorRegistryTest {
     }
 
     @Override
-    public void delete(String path, boolean recursive) {
-    }
+    public void delete(String path, boolean recursive) {}
 
     @Override
-    public void move(String sourcePath, String targetPath, boolean overwrite) {
-    }
+    public void move(String sourcePath, String targetPath, boolean overwrite) {}
 
     @Override
     public StorageObjectMetadata metadata(String path) {
