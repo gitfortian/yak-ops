@@ -2,10 +2,11 @@ package io.yak.ops.business.workflow.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.job.task.TaskDefinition;
 import io.yak.ops.business.job.task.TaskRegistry;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.workflow.model.WorkflowDefinitionCreateRequest;
 import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest;
 import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
@@ -29,7 +30,6 @@ class WorkflowStartDefinitionExecutionTest {
 
   @Mock private WorkflowRuntimeService runtimeService;
   @Mock private TaskRegistry taskRegistry;
-
   private WorkflowDefinitionService service;
 
   @BeforeEach
@@ -38,83 +38,55 @@ class WorkflowStartDefinitionExecutionTest {
   }
 
   @Test
-  void shouldExcludeUnconnectedRootFromRuntimeRequest() {
-    WorkflowDefinitionVO created = service.create(
-        new WorkflowDefinitionCreateRequest("start-semantics", null));
+  void shouldExcludeUnconnectedRootFromPublishedRuntimeRequest() {
+    WorkflowDefinitionVO created = service.create(new WorkflowDefinitionCreateRequest("start-semantics", null));
     service.update(
         created.id(),
         new WorkflowDefinitionUpdateRequest(
             "start-semantics",
             null,
-            List.of(
-                node("a", "task-a"),
-                node("b", "task-b"),
-                node("c", "task-c")),
+            List.of(node("a", "task-a"), node("b", "task-b"), node("c", "task-c")),
             List.of(new EdgeRequest("a", "c")),
             startInput(List.of("a")),
             0L,
             "CONTINUE_INDEPENDENT_BRANCHES"));
 
-    when(taskRegistry.get("task-a")).thenReturn(new TaskDefinition("task-a", "A", "SYNC"));
-    when(taskRegistry.get("task-b")).thenReturn(new TaskDefinition("task-b", "B", "SYNC"));
-    when(taskRegistry.get("task-c")).thenReturn(new TaskDefinition("task-c", "C", "SYNC"));
+    when(taskRegistry.snapshot("task-a")).thenReturn(snapshot("task-a", "A"));
+    when(taskRegistry.snapshot("task-c")).thenReturn(snapshot("task-c", "C"));
     service.online(created.id());
 
     WorkflowInstanceVO prepared = instance("exec-1", "CREATED", 2, 1);
     WorkflowInstanceVO running = instance("exec-1", "RUNNING", 2, 1);
     ArgumentCaptor<WorkflowRunRequest> requestCaptor = ArgumentCaptor.forClass(WorkflowRunRequest.class);
-    when(runtimeService.run(requestCaptor.capture())).thenReturn(prepared);
+    when(runtimeService.run(requestCaptor.capture(), any(), any(), any(), anyBoolean())).thenReturn(prepared);
     when(runtimeService.activate("exec-1")).thenReturn(running);
     when(runtimeService.getInstance("exec-1")).thenReturn(running);
 
     service.run(created.id());
 
     WorkflowRunRequest runtimeRequest = requestCaptor.getValue();
-    assertThat(runtimeRequest.nodes()).extracting(WorkflowRunRequest.NodeRequest::id)
-        .containsExactly("a", "c");
-    assertThat(runtimeRequest.edges())
-        .extracting(edge -> edge.source() + "->" + edge.target())
-        .containsExactly("a->c");
+    assertThat(runtimeRequest.nodes()).extracting(WorkflowRunRequest.NodeRequest::id).containsExactly("a", "c");
+    assertThat(runtimeRequest.edges()).extracting(edge -> edge.source() + "->" + edge.target()).containsExactly("a->c");
+  }
+
+  private TaskVersionSnapshot snapshot(String id, String name) {
+    return new TaskVersionSnapshot(id, name, "SYNC", 1L, "digest", "{}", "{}");
   }
 
   private Map<String, Object> startInput(List<String> nextNodeIds) {
     Map<String, Object> input = new LinkedHashMap<>();
-    input.put("__yak_start__", Map.of(
-        "version", 2,
-        "nextNodeIds", nextNodeIds));
+    input.put("__yak_start__", Map.of("version", 2, "nextNodeIds", nextNodeIds));
     return input;
   }
 
   private NodeRequest node(String id, String taskId) {
-    return new NodeRequest(
-        id,
-        taskId,
-        0D,
-        0D,
-        1,
-        0L,
-        0L,
-        0L,
-        Map.of(),
-        "ALL_SUCCESS",
-        "FAIL_WORKFLOW");
+    return new NodeRequest(id, taskId, 0D, 0D, 1, 0L, 0L, 0L, Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
 
   private WorkflowInstanceVO instance(String id, String status, int nodeCount, int edgeCount) {
     return new WorkflowInstanceVO(
-        id,
-        "runtime-definition",
-        null,
-        "start-semantics",
-        status,
-        "CONTINUE_INDEPENDENT_BRANCHES",
-        Instant.now(),
-        null,
-        null,
-        0L,
-        Map.of(),
-        nodeCount,
-        edgeCount,
-        List.of());
+        id, "runtime-definition", null, "start-semantics", status,
+        "CONTINUE_INDEPENDENT_BRANCHES", Instant.now(), null, null, 0L,
+        Map.of(), nodeCount, edgeCount, List.of());
   }
 }
