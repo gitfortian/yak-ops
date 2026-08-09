@@ -49,4 +49,15 @@
       notify_target = VALUES(notify_target),
       alert_level = VALUES(alert_level)
   </insert>
+
+  <update id="claimMonitorSchedule">
+    UPDATE yak_quality_monitor_setting s
+    JOIN yak_quality_monitor m ON m.id = s.monitor_id
+    SET s.next_run_time = #{nextRunTime}
+    WHERE s.monitor_id = #{monitorId}
+      AND s.run_mode = 'SCHEDULE'
+      AND s.next_run_time = #{expectedRunTime}
+      AND m.deleted = 0
+      AND m.enabled = 1
+  </update>
 </mapper>
