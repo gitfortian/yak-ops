@@ -1,22 +1,23 @@
 package io.yak.ops.business.sync.offline.service;
 
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
+import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.OfflinePage;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import io.yak.ops.business.sync.offline.service.OfflineDefinitionSupport.DraftDefinition;
 import io.yak.ops.business.sync.offline.service.OfflineDefinitionSupport.PreparedDefinition;
+import io.yak.ops.business.sync.offline.service.support.OfflineScheduleSupport;
+import io.yak.ops.business.sync.offline.service.support.OfflineSyncViewMapper;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionQueryDTO;
-import io.yak.ops.common.bean.po.datasource.DataSourcePO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobDefinitionVO;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
@@ -29,16 +30,18 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class OfflineJobDefinitionService {
-  private final OfflineJobDefinitionDao definitionDao;
+  private final OfflineJobDefinitionRepository definitionRepository;
+  private final OfflineJobExecutionRepository executionRepository;
   private final OfflineScheduleRepository scheduleRepository;
-  private final OfflineExecutionControlRepository executionRepository;
   private final OfflineDefinitionSupport support;
+  private final OfflineScheduleSupport scheduleSupport;
+  private final OfflineSyncViewMapper viewMapper;
   private final AtomicLong idSequence = new AtomicLong(System.currentTimeMillis() * 1000L);
 
   public Long nextId() {
     long floor = System.currentTimeMillis() * 1000L;
     long value = idSequence.updateAndGet(current -> Math.max(current + 1, floor));
-    while (definitionDao.selectById(value) != null) value = idSequence.incrementAndGet();
+    while (definitionRepository.findById(value).isPresent()) value = idSequence.incrementAndGet();
     return value;
   }
 
@@ -46,40 +49,41 @@ public class OfflineJobDefinitionService {
   public Long saveDraft(OfflineJobDefinitionDTO dto) {
     if (dto == null) throw new IllegalArgumentException("任务定义不能为空");
     Long id = dto.getId();
-    if (id == null || id <= 0) {
+    if (id == null || id <= 0L) {
       id = nextId();
       dto.setId(id);
     }
-    OfflineJobDefinitionPO existing = definitionDao.selectById(id);
+    OfflineJobDefinition existing = definitionRepository.findById(id).orElse(null);
     ensureEditable(existing);
     if (existing != null && StringUtils.hasText(existing.getJobSpecJson())) {
       throw new IllegalStateException("已生成可执行配置的任务不能退回草稿");
     }
     DraftDefinition draft = support.prepareDraft(dto);
-    if (definitionDao.existsByName(draft.getJobName(), id)) {
+    if (definitionRepository.existsByName(draft.getJobName(), id)) {
       throw new IllegalArgumentException("离线同步任务名称已存在：" + draft.getJobName());
     }
     LocalDateTime now = LocalDateTime.now();
-    OfflineJobDefinitionPO d = existing == null ? new OfflineJobDefinitionPO() : existing;
-    d.setId(id);
-    d.setJobName(draft.getJobName());
-    d.setJobDesc(draft.getJobDesc());
-    d.setMode(draft.getMode());
-    d.setDefinitionJson(draft.getDefinitionJson());
-    d.setJobSpecJson(null);
-    d.setConfigDigest(null);
-    d.setReleaseState("OFFLINE");
-    d.setSourceType(draft.getSourceType());
-    d.setSinkType(draft.getSinkType());
-    d.setSourceDatasourceId(null);
-    d.setSinkDatasourceId(null);
-    d.setSourceTable(null);
-    d.setSinkTable(null);
-    d.setVersion(0);
-    d.setCreateTime(existing == null ? now : existing.getCreateTime());
-    d.setUpdateTime(now);
-    if (existing == null) definitionDao.insert(d); else definitionDao.updateById(d);
-    scheduleRepository.saveSchedule(id, draft.getRequest().get("schedule"));
+    OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
+    definition.setId(id);
+    definition.setJobName(draft.getJobName());
+    definition.setJobDesc(draft.getJobDesc());
+    definition.setMode(draft.getMode());
+    definition.setDefinitionJson(draft.getDefinitionJson());
+    definition.setJobSpecJson(null);
+    definition.setConfigDigest(null);
+    definition.setReleaseState("OFFLINE");
+    definition.setSourceType(draft.getSourceType());
+    definition.setSinkType(draft.getSinkType());
+    definition.setSourceDatasourceId(null);
+    definition.setSinkDatasourceId(null);
+    definition.setSourceTable(null);
+    definition.setSinkTable(null);
+    definition.setVersion(0);
+    definition.setCreateTime(existing == null ? now : existing.getCreateTime());
+    definition.setUpdateTime(now);
+    if (existing == null) definitionRepository.insert(definition); else definitionRepository.update(definition);
+    scheduleRepository.saveSchedule(
+        scheduleSupport.prepare(id, draft.getRequest().get("schedule")));
     return id;
   }
 
@@ -87,37 +91,38 @@ public class OfflineJobDefinitionService {
   public Long saveGuide(OfflineJobDefinitionDTO dto) {
     if (dto == null) throw new IllegalArgumentException("任务定义不能为空");
     Long id = dto.getId();
-    if (id == null || id <= 0) {
+    if (id == null || id <= 0L) {
       id = nextId();
       dto.setId(id);
     }
-    OfflineJobDefinitionPO existing = definitionDao.selectById(id);
+    OfflineJobDefinition existing = definitionRepository.findById(id).orElse(null);
     ensureEditable(existing);
-    PreparedDefinition p = support.prepare(dto);
-    if (definitionDao.existsByName(p.getJobName(), id)) {
-      throw new IllegalArgumentException("离线同步任务名称已存在：" + p.getJobName());
+    PreparedDefinition prepared = support.prepare(dto);
+    if (definitionRepository.existsByName(prepared.getJobName(), id)) {
+      throw new IllegalArgumentException("离线同步任务名称已存在：" + prepared.getJobName());
     }
     LocalDateTime now = LocalDateTime.now();
-    OfflineJobDefinitionPO d = existing == null ? new OfflineJobDefinitionPO() : existing;
-    d.setId(id);
-    d.setJobName(p.getJobName());
-    d.setJobDesc(p.getJobDesc());
-    d.setMode(p.getMode());
-    d.setDefinitionJson(p.getDefinitionJson());
-    d.setJobSpecJson(p.getJobSpecJson());
-    d.setConfigDigest(p.getDigest());
-    d.setReleaseState(existing == null ? "OFFLINE" : existing.getReleaseState());
-    d.setSourceType(displayType(p.getSource(), p.getSourceConnectorId()));
-    d.setSinkType(displayType(p.getSink(), p.getSinkConnectorId()));
-    d.setSourceDatasourceId(id(p.getSource()));
-    d.setSinkDatasourceId(id(p.getSink()));
-    d.setSourceTable(p.getSourceTable());
-    d.setSinkTable(p.getSinkTable());
-    d.setVersion((existing == null || existing.getVersion() == null ? 0 : Math.max(0, existing.getVersion())) + 1);
-    d.setCreateTime(existing == null ? now : existing.getCreateTime());
-    d.setUpdateTime(now);
-    if (existing == null) definitionDao.insert(d); else definitionDao.updateById(d);
-    scheduleRepository.saveSchedule(id, p.getRequest().get("schedule"));
+    OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
+    definition.setId(id);
+    definition.setJobName(prepared.getJobName());
+    definition.setJobDesc(prepared.getJobDesc());
+    definition.setMode(prepared.getMode());
+    definition.setDefinitionJson(prepared.getDefinitionJson());
+    definition.setJobSpecJson(prepared.getJobSpecJson());
+    definition.setConfigDigest(prepared.getDigest());
+    definition.setReleaseState(existing == null ? "OFFLINE" : existing.getReleaseState());
+    definition.setSourceType(prepared.getSourceType());
+    definition.setSinkType(prepared.getSinkType());
+    definition.setSourceDatasourceId(prepared.getSourceDatasourceId());
+    definition.setSinkDatasourceId(prepared.getSinkDatasourceId());
+    definition.setSourceTable(prepared.getSourceTable());
+    definition.setSinkTable(prepared.getSinkTable());
+    definition.setVersion((existing == null || existing.getVersion() == null ? 0 : Math.max(0, existing.getVersion())) + 1);
+    definition.setCreateTime(existing == null ? now : existing.getCreateTime());
+    definition.setUpdateTime(now);
+    if (existing == null) definitionRepository.insert(definition); else definitionRepository.update(definition);
+    scheduleRepository.saveSchedule(
+        scheduleSupport.prepare(id, prepared.getRequest().get("schedule")));
     return id;
   }
 
@@ -125,15 +130,15 @@ public class OfflineJobDefinitionService {
     return support.buildJobSpec(dto);
   }
 
-  public String resolveLogicalJobSpec(OfflineJobDefinitionPO d) {
-    if (d == null || !StringUtils.hasText(d.getJobSpecJson())) {
+  public String resolveLogicalJobSpec(OfflineJobDefinition definition) {
+    if (definition == null || !StringUtils.hasText(definition.getJobSpecJson())) {
       throw new IllegalStateException("任务仍是草稿，请完成配置并保存");
     }
-    return d.getJobSpecJson();
+    return definition.getJobSpecJson();
   }
 
-  public String resolveExecutionJobSpec(OfflineJobDefinitionPO d) {
-    return resolveExecutionJobSpec(resolveLogicalJobSpec(d));
+  public String resolveExecutionJobSpec(OfflineJobDefinition definition) {
+    return resolveExecutionJobSpec(resolveLogicalJobSpec(definition));
   }
 
   /** 使用已固化的逻辑 JobSpec，在提交前解析最新数据源凭据。 */
@@ -145,75 +150,77 @@ public class OfflineJobDefinitionService {
   }
 
   public OfflineJobDefinitionVO get(Long id) {
-    return support.toVO(require(id));
+    return viewMapper.definition(require(id));
   }
 
   public JsonNode getEditDetail(Long id) {
     return support.editDetail(require(id));
   }
 
-  public PagingData<OfflineJobDefinitionVO> page(OfflineJobDefinitionQueryDTO query) {
-    IPage<OfflineJobDefinitionPO> page = definitionDao.selectPage(query);
-    List<OfflineJobDefinitionVO> list = new ArrayList<>();
-    for (OfflineJobDefinitionPO d : page.getRecords()) list.add(support.toVO(d));
-    return new PagingData<>(list, page);
+  public PagingData<OfflineJobDefinitionVO> page(OfflineJobDefinitionQueryDTO queryDTO) {
+    OfflineJobDefinitionQueryDTO query = queryDTO == null ? new OfflineJobDefinitionQueryDTO() : queryDTO;
+    OfflinePage<OfflineJobDefinition> page = definitionRepository.page(
+        new OfflineDefinitionQuery(
+            query.getCurrent(), query.getPageSize(), query.getId(), query.getJobName(), query.getStatus(),
+            query.getSourceType(), query.getSinkType(), query.getSourceTable(), query.getSinkTable(),
+            query.getCreateTimeStart(), query.getCreateTimeEnd()));
+    List<OfflineJobDefinitionVO> records = page.records().stream().map(viewMapper::definition).toList();
+    return new PagingData<>(
+        records,
+        PagingData.Pagination.builder()
+            .total(page.total())
+            .pages(page.pages())
+            .pageNo(page.current())
+            .pageSize(page.pageSize())
+            .build());
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public boolean online(Long id) {
-    OfflineJobDefinitionPO d = require(id);
-    resolveLogicalJobSpec(d);
-    d.setReleaseState("ONLINE");
-    d.setUpdateTime(LocalDateTime.now());
-    return definitionDao.updateById(d);
+    OfflineJobDefinition definition = require(id);
+    resolveLogicalJobSpec(definition);
+    definition.setReleaseState("ONLINE");
+    definition.setUpdateTime(LocalDateTime.now());
+    return definitionRepository.update(definition);
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public boolean offline(Long id) {
-    OfflineJobDefinitionPO d = require(id);
+    OfflineJobDefinition definition = require(id);
     if (executionRepository.hasActiveExecution(id)) {
       throw new IllegalStateException("运行中的任务不能下线，请先停止任务");
     }
-    d.setReleaseState("OFFLINE");
-    d.setUpdateTime(LocalDateTime.now());
-    return definitionDao.updateById(d);
+    definition.setReleaseState("OFFLINE");
+    definition.setUpdateTime(LocalDateTime.now());
+    return definitionRepository.update(definition);
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public boolean delete(Long id) {
-    OfflineJobDefinitionPO d = require(id);
-    if ("ONLINE".equalsIgnoreCase(d.getReleaseState())) {
+    OfflineJobDefinition definition = require(id);
+    if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("已上线任务不能删除，请先下线");
     }
     if (executionRepository.hasActiveExecution(id)) {
       throw new IllegalStateException("运行中的任务不能删除");
     }
-    return definitionDao.deleteById(id);
+    return definitionRepository.delete(id);
   }
 
-  public OfflineJobDefinitionPO require(Long id) {
-    if (id == null || id <= 0) throw new IllegalArgumentException("任务定义 ID 不合法");
-    OfflineJobDefinitionPO d = definitionDao.selectById(id);
-    if (d == null) throw new IllegalArgumentException("离线同步任务不存在：" + id);
-    return d;
+  public OfflineJobDefinition require(Long id) {
+    if (id == null || id <= 0L) throw new IllegalArgumentException("任务定义 ID 不合法");
+    return definitionRepository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("离线同步任务不存在：" + id));
   }
 
-  private void ensureEditable(OfflineJobDefinitionPO d) {
-    if (d == null) return;
-    if ("ONLINE".equalsIgnoreCase(d.getReleaseState())) {
+  private void ensureEditable(OfflineJobDefinition definition) {
+    if (definition == null) return;
+    if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("已上线任务不能修改，请先下线");
     }
-    if (OfflineExecutionStatus.isActive(d.getLastJobStatus())
-        || executionRepository.hasActiveExecution(d.getId())) {
+    if (OfflineExecutionStatus.isActive(definition.getLastJobStatus())
+        || executionRepository.hasActiveExecution(definition.getId())) {
       throw new IllegalStateException("运行中的任务不能修改");
     }
-  }
-
-  private Long id(DataSourcePO source) {
-    return source == null ? null : source.getId();
-  }
-
-  private String displayType(DataSourcePO source, String connectorId) {
-    return source != null && source.getDbType() != null ? source.getDbType().name() : connectorId;
   }
 }
