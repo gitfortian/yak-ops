@@ -5,13 +5,9 @@ export type WorkflowNoteTheme = 'blue' | 'cyan' | 'green' | 'yellow' | 'pink' | 
 
 export interface WorkflowNoteData {
   text: string;
-  html?: string;
   theme: WorkflowNoteTheme;
   locked?: boolean;
-  onChange?: (
-    nodeId: string,
-    patch: Partial<Pick<WorkflowNoteData, 'text' | 'html' | 'theme'>>,
-  ) => void;
+  onChange?: (nodeId: string, patch: Partial<Pick<WorkflowNoteData, 'text' | 'theme'>>) => void;
   onCommit?: (nodeId: string, label: string) => void;
   onDuplicate?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
@@ -23,6 +19,5 @@ export interface WorkflowNoteSnapshot {
   width: number;
   height: number;
   text: string;
-  html?: string;
   theme: WorkflowNoteTheme;
 }
