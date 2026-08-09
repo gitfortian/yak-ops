@@ -3,13 +3,11 @@ package io.yak.ops.business.resource.service.impl;
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.config.ResourceProperties;
 import io.yak.ops.business.resource.domain.ResourceNode;
-import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.business.resource.exception.ResourceException;
 import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.storage.StorageOperatorRegistry;
 import io.yak.ops.business.resource.sync.ResourceFileSyncDispatcher;
 import io.yak.ops.business.resource.util.ResourcePathUtils;
-import io.yak.ops.common.bean.dto.resource.ResourceQueryDTO;
 import io.yak.ops.common.enums.resource.ResourceErrorCode;
 import io.yak.ops.common.enums.resource.ResourceNodeType;
 import io.yak.ops.common.enums.resource.ResourceStorageType;
@@ -20,7 +18,6 @@ import io.yak.ops.spi.storage.StoragePluginException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,25 +74,6 @@ class ResourceServiceSupport {
     if (repository.existsByParentAndName(normalizeParentId(parentId), name, excludeId)) {
       throw new ResourceException(ResourceErrorCode.DUPLICATE_NAME, name);
     }
-  }
-
-  ResourceQuery normalizeQuery(ResourceQueryDTO queryDTO) {
-    ResourceQueryDTO source = queryDTO == null ? new ResourceQueryDTO() : queryDTO;
-    ResourceNodeType nodeType = null;
-    if (StringUtils.hasText(source.getNodeType())) {
-      String normalized = source.getNodeType().trim().toUpperCase(Locale.ROOT);
-      try {
-        nodeType = ResourceNodeType.valueOf(normalized);
-      } catch (IllegalArgumentException exception) {
-        throw new ResourceException(ResourceErrorCode.INVALID_NODE_TYPE, normalized);
-      }
-    }
-    return new ResourceQuery(
-        source.getPageNo(),
-        source.getPageSize(),
-        source.getParentId(),
-        trimToNull(source.getKeyword()),
-        nodeType);
   }
 
   ResourceNode newResource(
