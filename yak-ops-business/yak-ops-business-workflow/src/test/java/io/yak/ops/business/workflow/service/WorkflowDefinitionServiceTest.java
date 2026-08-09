@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,6 +124,22 @@ class WorkflowDefinitionServiceTest {
     when(taskRegistry.snapshot("sync-1")).thenReturn(snapshot("sync-1", "同步订单", 1));
     when(taskRegistry.snapshot("sync-2")).thenReturn(snapshot("sync-2", "同步明细", 1));
     WorkflowDefinitionVO v1 = service.online(created.id());
+
+    // 编辑器发布/测试前会先保存；完全相同的 payload 不应制造新的 draft revision。
+    WorkflowDefinitionVO equivalentSave = service.update(
+        created.id(),
+        new WorkflowDefinitionUpdateRequest(
+            created.name(),
+            created.description(),
+            created.nodes(),
+            created.edges(),
+            created.input(),
+            created.workflowTimeoutSeconds(),
+            created.failureStrategy()));
+    assertThat(equivalentSave.draftChanged()).isFalse();
+    WorkflowDefinitionVO sameVersion = service.online(created.id());
+    assertThat(sameVersion.activeVersionNo()).isEqualTo(1);
+    assertThat(sameVersion.latestVersionNo()).isEqualTo(1);
 
     service.offline(created.id());
     WorkflowDefinitionVO enabledAgain = service.online(created.id());
