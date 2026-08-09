@@ -5,13 +5,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
-import io.yak.ops.business.quality.api.QualityApi.RegisterTablesRequest;
-import io.yak.ops.business.quality.api.QualityApi.RegisterTablesView;
-import io.yak.ops.business.quality.api.QualityApi.TableAssetPageRequest;
-import io.yak.ops.business.quality.api.QualityApi.TableAssetPageView;
-import io.yak.ops.business.quality.api.QualityApi.TableCandidatePageView;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.service.QualityTableAssetService;
+import io.yak.ops.common.bean.dto.quality.QualityTableAssetDTO;
+import io.yak.ops.common.bean.vo.quality.QualityTableAssetVO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -35,19 +32,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/table-asset")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
 public class QualityTableAssetController {
-
   private final QualityTableAssetService service;
 
   @Operation(summary = "分页查询已注册数据表")
   @PostMapping("/page")
-  public Result<TableAssetPageView> page(
-      @Valid @RequestBody TableAssetPageRequest request) {
+  public Result<QualityTableAssetVO.Page> page(
+      @Valid @RequestBody QualityTableAssetDTO.PageRequest request) {
     return Result.success(service.page(request));
   }
 
   @Operation(summary = "从数据源插件分页查询可注册数据表")
   @GetMapping("/candidates")
-  public Result<TableCandidatePageView> candidates(
+  public Result<QualityTableAssetVO.CandidatePage> candidates(
       @RequestParam long dataSourceId,
       @RequestParam(value = "databaseName", required = false) String databaseName,
       @RequestParam(value = "schemaName", required = false) String schemaName,
@@ -55,19 +51,14 @@ public class QualityTableAssetController {
       @RequestParam(defaultValue = "1") @Min(1) int current,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
     return Result.success(service.candidates(
-        dataSourceId,
-        databaseName,
-        schemaName,
-        keyword,
-        current,
-        pageSize));
+        dataSourceId, databaseName, schemaName, keyword, current, pageSize));
   }
 
   @Operation(summary = "批量注册数据表")
   @PostMapping("/register")
   @RequiresPermission(QualityPermissionCode.MONITOR_CREATE)
-  public Result<RegisterTablesView> register(
-      @Valid @RequestBody RegisterTablesRequest request,
+  public Result<QualityTableAssetVO.RegisterResult> register(
+      @Valid @RequestBody QualityTableAssetDTO.RegisterRequest request,
       Principal principal) {
     return Result.success(service.register(request, operator(principal)));
   }
@@ -81,7 +72,6 @@ public class QualityTableAssetController {
 
   private static String operator(Principal principal) {
     return principal == null || principal.getName() == null || principal.getName().isBlank()
-        ? "system"
-        : principal.getName();
+        ? "system" : principal.getName();
   }
 }
