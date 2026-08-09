@@ -7,7 +7,6 @@ import {
   type EdgeProps,
 } from 'reactflow';
 import { WORKFLOW_EDGE_HANDLE_OVERLAP } from '../constants';
-import { WORKFLOW_START_NODE_ID } from '../start/types';
 import type { WorkflowEdgeData } from '../types';
 import WorkflowEdgeInsert from './WorkflowEdgeInsert';
 
@@ -53,10 +52,6 @@ const WorkflowEdge = ({
     data?.onInsert?.(id, source, target, taskId);
     setInsertOpen(false);
   }, [data, id, source, target]);
-
-  // Start is a virtual context node. Root tasks should not be visually auto-connected
-  // just because they have no predecessor; users explicitly decide workflow wiring.
-  if (source === WORKFLOW_START_NODE_ID) return null;
 
   return (
     <>
