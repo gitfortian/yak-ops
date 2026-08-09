@@ -34,12 +34,26 @@ public class JdbcWorkflowRuntimeRepository implements WorkflowRuntimePersistence
 
   @Override
   public void prepareMetadata(String definitionId, RuntimeMetadataRecord metadata) {
-    int updated = jdbc.update(
-        "UPDATE yak_workflow_version SET runtime_metadata_json=? WHERE id=?",
-        write(metadata),
+    String json = write(metadata);
+    jdbc.update(
+        "UPDATE yak_workflow_version "
+            + "SET runtime_metadata_json=COALESCE(runtime_metadata_json,?) WHERE id=?",
+        json,
         definitionId);
-    if (updated == 0) {
-      throw new IllegalArgumentException("工作流运行定义不存在：" + definitionId);
+    try {
+      String stored = jdbc.queryForObject(
+          "SELECT runtime_metadata_json FROM yak_workflow_version WHERE id=?",
+          String.class,
+          definitionId);
+      if (stored == null || stored.isBlank()) {
+        throw new IllegalStateException("工作流运行元数据保存失败：" + definitionId);
+      }
+      if (!json.equals(stored)) {
+        throw new IllegalStateException(
+            "工作流版本的 Runtime Metadata 已固定，禁止覆盖：" + definitionId);
+      }
+    } catch (EmptyResultDataAccessException exception) {
+      throw new IllegalArgumentException("工作流运行定义不存在：" + definitionId, exception);
     }
   }
 
@@ -88,9 +102,14 @@ public class JdbcWorkflowRuntimeRepository implements WorkflowRuntimePersistence
 
   @Override
   public List<String> findRecoverableExecutionIds() {
+    // Only executions that were successfully linked as the workflow's active/latest run are
+    // recoverable. A prepared execution whose business activation failed must stay orphaned and
+    // must never start unexpectedly after a process restart.
     return jdbc.queryForList(
-        "SELECT id FROM yak_workflow_execution WHERE status IN "
-            + "('CREATED','RUNNING','PAUSING','PAUSED','RESUMING') ORDER BY created_at",
+        "SELECT e.id FROM yak_workflow_execution e "
+            + "JOIN yak_workflow_definition d ON d.latest_execution_id=e.id "
+            + "WHERE e.status IN ('CREATED','RUNNING','PAUSING','PAUSED','RESUMING') "
+            + "ORDER BY e.created_at",
         String.class);
   }
 
