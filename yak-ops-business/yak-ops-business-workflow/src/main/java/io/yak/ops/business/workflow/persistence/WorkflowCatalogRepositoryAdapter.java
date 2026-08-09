@@ -1,10 +1,9 @@
 package io.yak.ops.business.workflow.persistence;
 
-import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.workflow.dao.WorkflowCatalogDao;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
+import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
 import io.yak.ops.business.workflow.persistence.support.WorkflowJsonCodec;
 import io.yak.ops.common.bean.po.workflow.WorkflowDefinitionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowVersionPO;
@@ -87,7 +86,7 @@ public class WorkflowCatalogRepositoryAdapter implements WorkflowDefinitionPersi
     po.setVersionNo(value.versionNo());
     po.setVersionKind("PUBLISHED");
     po.setDraftRevision(value.draftRevision());
-    po.setRunRequestJson(json.write(value.runRequest()));
+    po.setRunRequestJson(json.write(value.runSpec()));
     po.setEditorMetaJson(json.write(value.editorMeta()));
     po.setTaskVersionsJson(json.write(value.taskVersionsByNode()));
     po.setCreateTime(value.publishedAt());
@@ -122,7 +121,7 @@ public class WorkflowCatalogRepositoryAdapter implements WorkflowDefinitionPersi
         po.getWorkflowId(),
         po.getVersionNo(),
         po.getDraftRevision(),
-        json.read(po.getRunRequestJson(), WorkflowRunRequest.class),
+        json.read(po.getRunRequestJson(), WorkflowRunSpec.class),
         json.readMap(po.getEditorMetaJson()),
         json.readTaskVersions(po.getTaskVersionsJson()),
         po.getCreateTime());
@@ -130,8 +129,8 @@ public class WorkflowCatalogRepositoryAdapter implements WorkflowDefinitionPersi
 
   private record DraftPayload(
       String failureStrategy,
-      List<NodeRequest> nodes,
-      List<EdgeRequest> edges,
+      List<WorkflowNodeSpec> nodes,
+      List<WorkflowEdgeSpec> edges,
       Map<String, Object> input,
       Map<String, Object> editorMeta,
       long workflowTimeoutSeconds) {
