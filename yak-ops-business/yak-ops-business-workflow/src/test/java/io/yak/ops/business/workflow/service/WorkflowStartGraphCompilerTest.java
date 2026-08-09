@@ -68,6 +68,24 @@ class WorkflowStartGraphCompilerTest {
         .hasMessageContaining("只能连接没有前置任务的根节点");
   }
 
+  @Test
+  void shouldRejectJoinWhenOneRequiredRootIsNotConnectedFromStart() {
+    List<NodeRequest> nodes = List.of(
+        node("a", "task-a"),
+        node("b", "task-b"),
+        node("join", "task-join"));
+    List<EdgeRequest> edges = List.of(
+        new EdgeRequest("a", "join"),
+        new EdgeRequest("b", "join"));
+
+    assertThatThrownBy(() -> WorkflowStartGraphCompiler.compile(
+        nodes,
+        edges,
+        startInput(List.of("a"))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("未接入完整前置分支");
+  }
+
   private Map<String, Object> startInput(List<String> nextNodeIds) {
     Map<String, Object> input = new LinkedHashMap<>();
     input.put("__yak_start__", Map.of(
