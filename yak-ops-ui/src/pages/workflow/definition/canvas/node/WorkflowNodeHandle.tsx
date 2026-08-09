@@ -1,10 +1,16 @@
 import type { CSSProperties, MouseEvent } from 'react';
 import { useEffect, useState } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Handle, Position, useReactFlow, type Connection } from 'reactflow';
 import {
   WORKFLOW_HANDLE_OFFSET,
   WORKFLOW_HANDLE_TOP,
 } from '../constants';
+import {
+  addWorkflowStartConnection,
+  hasWorkflowStartConnection,
+  removeWorkflowStartConnection,
+} from '../start/connections';
+import { WORKFLOW_START_NODE_ID } from '../start/types';
 import type { WorkflowCanvasTaskOption } from '../types';
 import WorkflowNodeAppend from './WorkflowNodeAppend';
 
@@ -32,6 +38,7 @@ const WorkflowNodeHandle = ({
   const isTarget = type === 'target';
   const canAppend = !isTarget && !locked && appendOptions.length > 0 && Boolean(onAppend);
   const [appendOpen, setAppendOpen] = useState(false);
+  const reactFlow = useReactFlow();
 
   useEffect(() => {
     if (!canAppend && appendOpen) setAppendOpen(false);
@@ -41,6 +48,22 @@ const WorkflowNodeHandle = ({
     if (!canAppend) return;
     event.stopPropagation();
     setAppendOpen((current) => !current);
+  };
+
+  const handleConnect = (connection: Connection) => {
+    if (locked || isTarget || !connection.target) return;
+
+    const hasTaskPredecessor = reactFlow.getEdges().some((edge) =>
+      edge.target === connection.target && edge.source !== WORKFLOW_START_NODE_ID);
+
+    if (nodeId === WORKFLOW_START_NODE_ID) {
+      if (!hasTaskPredecessor) addWorkflowStartConnection(connection.target);
+      return;
+    }
+
+    if (hasWorkflowStartConnection(connection.target)) {
+      removeWorkflowStartConnection(connection.target);
+    }
   };
 
   return (
@@ -54,6 +77,7 @@ const WorkflowNodeHandle = ({
           : { right: WORKFLOW_HANDLE_OFFSET }),
       }}
       isConnectable={!locked}
+      onConnect={handleConnect}
       onClick={handleClick}
       className={[
         'group/handle !h-4 !w-4 !translate-y-0 !rounded-none !border-0 !bg-transparent !outline-none',
