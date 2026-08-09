@@ -26,7 +26,8 @@ export interface WorkflowStartConfig {
   position: { x: number; y: number };
   inputs: WorkflowStartInputField[];
   variables: WorkflowStartVariable[];
-  nextNodeIds?: string[];
+  /** Start 的显式后继节点，是编辑器历史状态的一部分。 */
+  nextNodeIds: string[];
 }
 
 export interface WorkflowStartNodeData {
