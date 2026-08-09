@@ -1,18 +1,14 @@
 package io.yak.ops.business.quality.service;
 
-import io.yak.ops.business.quality.api.QualityApi.CheckResult;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.ExecutionLogLine;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.ExecutionLogView;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.ExecutionPageRequest;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.ExecutionPageView;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.ExecutionView;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.LogLevel;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.RuleExecutionListItem;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.RuleExecutionPageView;
-import io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.RuleExecutionView;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
+import io.yak.ops.business.quality.domain.QualityDomain.Execution;
+import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.QualityExecutionWorkspaceRepository;
-import io.yak.ops.business.quality.repository.QualityExecutionWorkspaceRepository.PageResult;
+import io.yak.ops.business.quality.service.support.QualityViewMapper;
+import io.yak.ops.common.bean.dto.quality.QualityExecutionWorkspaceDTO;
+import io.yak.ops.common.bean.vo.quality.QualityExecutionWorkspaceVO;
+import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
+import io.yak.ops.common.enums.quality.QualityEnums.LogLevel;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,111 +26,86 @@ public class QualityExecutionWorkspaceService {
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public ExecutionPageView page(ExecutionPageRequest request) {
-    ExecutionPageRequest normalized = normalize(request);
-    PageResult<io.yak.ops.business.quality.api.QualityExecutionWorkspaceApi.ExecutionListItem>
-        result = repository.page(normalized);
-    return new ExecutionPageView(
-        result.records(),
-        result.total(),
-        normalized.normalizedCurrent(),
-        normalized.normalizedPageSize());
+  public QualityExecutionWorkspaceVO.ExecutionPage page(QualityExecutionWorkspaceDTO.PageRequest request) {
+    QualityQuery.ExecutionWorkspace query = query(request);
+    var result = repository.page(query);
+    return new QualityExecutionWorkspaceVO.ExecutionPage(
+        result.records().stream().map(QualityViewMapper::executionWorkspaceList).toList(),
+        result.total(), query.current(), query.pageSize());
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public RuleExecutionPageView pageRules(ExecutionPageRequest request) {
-    ExecutionPageRequest normalized = normalize(request);
-    PageResult<RuleExecutionListItem> result = repository.pageRules(normalized);
-    return new RuleExecutionPageView(
-        result.records(),
-        result.total(),
-        normalized.normalizedCurrent(),
-        normalized.normalizedPageSize());
+  public QualityExecutionWorkspaceVO.RuleExecutionPage pageRules(QualityExecutionWorkspaceDTO.PageRequest request) {
+    QualityQuery.ExecutionWorkspace query = query(request);
+    var result = repository.pageRules(query);
+    return new QualityExecutionWorkspaceVO.RuleExecutionPage(
+        result.records().stream().map(QualityViewMapper::ruleWorkspace).toList(),
+        result.total(), query.current(), query.pageSize());
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public ExecutionView get(String executionNo) {
+  public QualityExecutionWorkspaceVO.ExecutionDetail get(String executionNo) {
     return repository.find(executionNo)
-        .orElseThrow(
-            () -> new IllegalArgumentException("质量执行记录不存在：" + executionNo));
+        .map(QualityViewMapper::executionWorkspace)
+        .orElseThrow(() -> new IllegalArgumentException("质量执行记录不存在：" + executionNo));
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public ExecutionLogView logs(String executionNo) {
-    ExecutionView execution = get(executionNo);
-    List<ExecutionLogLine> lines = new ArrayList<>();
-    lines.add(new ExecutionLogLine(
-        execution.queuedAt(),
-        LogLevel.INFO,
-        "DISPATCH",
-        "执行任务已创建，触发方式：" + triggerLabel(execution)
+  public QualityExecutionWorkspaceVO.LogView logs(String executionNo) {
+    Execution execution = repository.find(executionNo)
+        .orElseThrow(() -> new IllegalArgumentException("质量执行记录不存在：" + executionNo));
+    List<QualityExecutionWorkspaceVO.LogLine> lines = new ArrayList<>();
+    lines.add(new QualityExecutionWorkspaceVO.LogLine(
+        execution.queuedAt(), LogLevel.INFO, "DISPATCH",
+        "执行任务已创建，触发方式：" + (execution.triggerType().name().equals("SCHEDULE") ? "调度触发" : "手动触发")
             + "，操作人：" + safe(execution.operator())));
 
     if (execution.startedAt() != null) {
-      lines.add(new ExecutionLogLine(
-          execution.startedAt(),
-          LogLevel.INFO,
-          "EXECUTION",
+      lines.add(new QualityExecutionWorkspaceVO.LogLine(
+          execution.startedAt(), LogLevel.INFO, "EXECUTION",
           "开始执行质量检查，共 " + execution.totalRules() + " 条规则"));
     }
 
-    for (RuleExecutionView rule : execution.rules()) {
-      lines.add(new ExecutionLogLine(
+    for (var rule : execution.rules()) {
+      lines.add(new QualityExecutionWorkspaceVO.LogLine(
           fallback(rule.createdAt(), execution.startedAt(), execution.queuedAt()),
-          logLevel(rule.checkResult()),
-          "RULE",
-          ruleMessage(rule)));
+          logLevel(rule.checkResult()), "RULE", ruleMessage(rule)));
     }
 
     if (execution.errorMessage() != null && !execution.errorMessage().isBlank()) {
-      lines.add(new ExecutionLogLine(
+      lines.add(new QualityExecutionWorkspaceVO.LogLine(
           fallback(execution.finishedAt(), execution.startedAt(), execution.queuedAt()),
-          LogLevel.ERROR,
-          "EXECUTION",
-          execution.errorMessage()));
+          LogLevel.ERROR, "EXECUTION", execution.errorMessage()));
     }
 
     if (execution.finishedAt() != null) {
-      lines.add(new ExecutionLogLine(
-          execution.finishedAt(),
-          execution.checkResult() == CheckResult.PASSED ? LogLevel.INFO : LogLevel.WARN,
-          "FINISH",
-          "执行结束：通过 " + execution.passedRules()
-              + "，未通过 " + execution.failedRules()
-              + "，异常 " + execution.errorRules()
-              + "，耗时 " + (execution.durationMs() == null ? 0 : execution.durationMs())
-              + " ms"));
+      lines.add(new QualityExecutionWorkspaceVO.LogLine(
+          execution.finishedAt(), execution.checkResult() == CheckResult.PASSED ? LogLevel.INFO : LogLevel.WARN,
+          "FINISH", "执行结束：通过 " + execution.passedRules() + "，未通过 " + execution.failedRules()
+              + "，异常 " + execution.errorRules() + "，耗时 "
+              + (execution.durationMs() == null ? 0 : execution.durationMs()) + " ms"));
     }
-
-    return new ExecutionLogView(execution.executionNo(), List.copyOf(lines));
+    return new QualityExecutionWorkspaceVO.LogView(execution.executionNo(), List.copyOf(lines));
   }
 
-  private static ExecutionPageRequest normalize(ExecutionPageRequest request) {
-    return request == null
-        ? new ExecutionPageRequest(
-            1, 20, null, null, null, null, null, null, null, null,
-            null, null, null, null)
+  private QualityQuery.ExecutionWorkspace query(QualityExecutionWorkspaceDTO.PageRequest request) {
+    QualityExecutionWorkspaceDTO.PageRequest v = request == null
+        ? new QualityExecutionWorkspaceDTO.PageRequest(
+            1, 20, null, null, null, null, null, null, null, null, null, null, null, null)
         : request;
+    return new QualityQuery.ExecutionWorkspace(
+        v.normalizedCurrent(), v.normalizedPageSize(), v.keyword(), v.objectKeyword(),
+        v.dataSourceId(), v.monitorId(), v.executionStatus(), v.checkResult(), v.triggerType(),
+        v.hasIssues(), v.dimension(), v.scope(), v.queuedAfter(), v.queuedBefore());
   }
 
-  private static String ruleMessage(RuleExecutionView rule) {
-    StringBuilder message = new StringBuilder()
-        .append("规则「")
-        .append(rule.ruleName())
-        .append("」")
+  private static String ruleMessage(io.yak.ops.business.quality.domain.QualityDomain.RuleExecution rule) {
+    StringBuilder message = new StringBuilder().append("规则「").append(rule.ruleName()).append("」")
         .append(resultLabel(rule.checkResult()));
-    if (rule.metricValue() != null && !rule.metricValue().isBlank()) {
-      message.append("，实际值：").append(rule.metricValue());
-    }
-    if (rule.expectedValue() != null && !rule.expectedValue().isBlank()) {
-      message.append("，期望值：").append(rule.expectedValue());
-    }
-    if (rule.durationMs() != null) {
-      message.append("，耗时：").append(rule.durationMs()).append(" ms");
-    }
-    if (rule.errorMessage() != null && !rule.errorMessage().isBlank()) {
-      message.append("，错误：").append(rule.errorMessage());
-    }
+    if (hasText(rule.metricValue())) message.append("，实际值：").append(rule.metricValue());
+    if (hasText(rule.expectedValue())) message.append("，期望值：").append(rule.expectedValue());
+    if (rule.durationMs() != null) message.append("，耗时：").append(rule.durationMs()).append(" ms");
+    if (hasText(rule.errorMessage())) message.append("，错误：").append(rule.errorMessage());
     return message.toString();
   }
 
@@ -156,20 +127,10 @@ public class QualityExecutionWorkspaceService {
     };
   }
 
-  private static String triggerLabel(ExecutionView execution) {
-    return execution.triggerType().name().equals("SCHEDULE") ? "调度触发" : "手动触发";
-  }
-
-  private static String safe(String value) {
-    return value == null || value.isBlank() ? "system" : value;
-  }
-
+  private static boolean hasText(String value) { return value != null && !value.isBlank(); }
+  private static String safe(String value) { return hasText(value) ? value : "system"; }
   private static LocalDateTime fallback(LocalDateTime... values) {
-    for (LocalDateTime value : values) {
-      if (value != null) {
-        return value;
-      }
-    }
+    for (LocalDateTime value : values) if (value != null) return value;
     return LocalDateTime.now();
   }
 }
