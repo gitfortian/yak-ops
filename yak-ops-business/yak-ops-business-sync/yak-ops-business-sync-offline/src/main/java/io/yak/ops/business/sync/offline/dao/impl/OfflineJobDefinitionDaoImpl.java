@@ -115,7 +115,6 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
       String cronExpression,
       int retryMaxAttempts,
       int retryBackoffSeconds,
-      LocalDateTime lastFireTime,
       LocalDateTime nextFireTime,
       LocalDateTime updateTime) {
     return mapper.update(
@@ -127,7 +126,6 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
             .set(OfflineJobDefinitionPO::getCronExpression, cronExpression)
             .set(OfflineJobDefinitionPO::getRetryMaxAttempts, retryMaxAttempts)
             .set(OfflineJobDefinitionPO::getRetryBackoffSeconds, retryBackoffSeconds)
-            .set(OfflineJobDefinitionPO::getScheduleLastFireTime, lastFireTime)
             .set(OfflineJobDefinitionPO::getScheduleNextFireTime, nextFireTime)
             .set(OfflineJobDefinitionPO::getUpdateTime, updateTime)) > 0;
   }
