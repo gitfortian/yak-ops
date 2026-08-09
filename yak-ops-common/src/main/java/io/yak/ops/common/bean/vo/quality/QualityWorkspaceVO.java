@@ -1,29 +1,25 @@
-package io.yak.ops.business.quality.api;
+package io.yak.ops.common.bean.vo.quality;
 
-import io.yak.ops.business.quality.api.QualityApi.MonitorSettingsView;
-import io.yak.ops.business.quality.api.QualityApi.MonitorView;
+import io.yak.ops.common.annotation.quality.QualityDateTimeFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public final class QualityWorkspaceApi {
+/** 数据质量监控工作台响应契约。 */
+public final class QualityWorkspaceVO {
+  private QualityWorkspaceVO() {}
 
-  private QualityWorkspaceApi() {
-  }
-
-  public record WorkspaceStats(
+  public record Stats(
       int ruleCount,
       int enabledRuleCount,
       int executionCount,
       int issueExecutionCount,
-      @QualityDateTimeFormat LocalDateTime latestExecutionTime) {
-  }
+      @QualityDateTimeFormat LocalDateTime latestExecutionTime) {}
 
-  public record MonitorWorkspaceView(
-      MonitorView monitor,
-      MonitorSettingsView settings,
-      WorkspaceStats stats) {
-  }
+  public record MonitorWorkspace(
+      QualityMonitorVO.Detail monitor,
+      QualityMonitorVO.Settings settings,
+      Stats stats) {}
 
   public record ReportOverview(
       int totalRules,
@@ -31,8 +27,7 @@ public final class QualityWorkspaceApi {
       int executedRules,
       int issueRules,
       int errorRules,
-      double passRate) {
-  }
+      double passRate) {}
 
   public record DimensionReport(
       String dimension,
@@ -40,8 +35,7 @@ public final class QualityWorkspaceApi {
       int passed,
       int notPassed,
       int errors,
-      double passRate) {
-  }
+      double passRate) {}
 
   public record TrendPoint(
       LocalDate date,
@@ -49,8 +43,7 @@ public final class QualityWorkspaceApi {
       int total,
       int passed,
       int issues,
-      double passRate) {
-  }
+      double passRate) {}
 
   public record ColumnReport(
       String columnName,
@@ -58,30 +51,26 @@ public final class QualityWorkspaceApi {
       int total,
       int passed,
       int issues,
-      double passRate) {
-  }
+      double passRate) {}
 
-  public record MonitorReportView(
+  public record MonitorReport(
       LocalDate reportDate,
       LocalDate trendStartDate,
       ReportOverview overview,
       List<DimensionReport> dimensions,
       List<TrendPoint> trend,
-      List<ColumnReport> columns) {
-  }
+      List<ColumnReport> columns) {}
 
   public record OperationLogItem(
       String id,
       String operator,
       @QualityDateTimeFormat LocalDateTime operationTime,
       String actionType,
-      String content) {
-  }
+      String content) {}
 
-  public record OperationLogPageView(
+  public record OperationLogPage(
       List<OperationLogItem> records,
       long total,
       int current,
-      int pageSize) {
-  }
+      int pageSize) {}
 }

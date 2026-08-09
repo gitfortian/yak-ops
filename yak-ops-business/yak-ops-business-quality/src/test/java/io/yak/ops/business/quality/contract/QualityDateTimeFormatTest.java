@@ -1,28 +1,30 @@
-package io.yak.ops.business.quality.api;
+package io.yak.ops.business.quality.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.yak.ops.common.annotation.quality.QualityDateTimeFormat;
+import io.yak.ops.common.bean.vo.quality.CustomQualityTemplateVO;
+import io.yak.ops.common.bean.vo.quality.QualityExecutionVO;
+import io.yak.ops.common.bean.vo.quality.QualityExecutionWorkspaceVO;
+import io.yak.ops.common.bean.vo.quality.QualityMonitorVO;
+import io.yak.ops.common.bean.vo.quality.QualityTableAssetVO;
+import io.yak.ops.common.bean.vo.quality.QualityWorkspaceVO;
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.stream.Stream;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class QualityDateTimeFormatTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper()
-      .registerModule(new JavaTimeModule());
+  private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
   @Test
   void serializesTimestampToSecondPrecisionWithSpaceSeparator() throws Exception {
-    QualityWorkspaceApi.WorkspaceStats stats = new QualityWorkspaceApi.WorkspaceStats(
-        3,
-        2,
-        8,
-        1,
-        LocalDateTime.of(2026, 8, 6, 18, 20, 6, 653_000_000));
+    QualityWorkspaceVO.Stats stats = new QualityWorkspaceVO.Stats(
+        3, 2, 8, 1, LocalDateTime.of(2026, 8, 6, 18, 20, 6, 653_000_000));
 
     String actual = objectMapper
         .readTree(objectMapper.writeValueAsString(stats))
@@ -34,9 +36,16 @@ class QualityDateTimeFormatTest {
 
   @Test
   void everyQualityResponseTimestampUsesTheSharedFormat() {
-    RecordComponent[] timestampComponents = Stream.concat(
-            Arrays.stream(QualityApi.class.getDeclaredClasses()),
-            Arrays.stream(QualityWorkspaceApi.class.getDeclaredClasses()))
+    List<Class<?>> contracts = List.of(
+        QualityMonitorVO.class,
+        QualityTableAssetVO.class,
+        QualityExecutionVO.class,
+        QualityWorkspaceVO.class,
+        QualityExecutionWorkspaceVO.class,
+        CustomQualityTemplateVO.class);
+
+    RecordComponent[] timestampComponents = contracts.stream()
+        .flatMap(type -> Arrays.stream(type.getDeclaredClasses()))
         .filter(Class::isRecord)
         .flatMap(type -> Arrays.stream(type.getRecordComponents()))
         .filter(component -> component.getType() == LocalDateTime.class)

@@ -1,48 +1,18 @@
-package io.yak.ops.business.quality.api;
+package io.yak.ops.common.bean.vo.quality;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import io.yak.ops.business.quality.api.QualityApi.CheckResult;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionStatus;
-import io.yak.ops.business.quality.api.QualityApi.RuleScope;
-import io.yak.ops.business.quality.api.QualityApi.RuleType;
-import io.yak.ops.business.quality.api.QualityApi.TriggerType;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import io.yak.ops.common.annotation.quality.QualityDateTimeFormat;
+import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
+import io.yak.ops.common.enums.quality.QualityEnums.ExecutionStatus;
+import io.yak.ops.common.enums.quality.QualityEnums.LogLevel;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleScope;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleType;
+import io.yak.ops.common.enums.quality.QualityEnums.TriggerType;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Read-only contracts used by the execution list and execution workspace. */
-public final class QualityExecutionWorkspaceApi {
-
-  private QualityExecutionWorkspaceApi() {
-  }
-
-  public enum LogLevel { INFO, WARN, ERROR }
-
-  public record ExecutionPageRequest(
-      @Min(1) Integer current,
-      @Min(1) @Max(100) Integer pageSize,
-      String keyword,
-      String objectKeyword,
-      Long dataSourceId,
-      Long monitorId,
-      ExecutionStatus executionStatus,
-      CheckResult checkResult,
-      TriggerType triggerType,
-      Boolean hasIssues,
-      String dimension,
-      RuleScope scope,
-      @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime queuedAfter,
-      @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime queuedBefore) {
-
-    public int normalizedCurrent() {
-      return current == null ? 1 : current;
-    }
-
-    public int normalizedPageSize() {
-      return pageSize == null ? 20 : pageSize;
-    }
-  }
+/** 数据质量执行工作台响应契约。 */
+public final class QualityExecutionWorkspaceVO {
+  private QualityExecutionWorkspaceVO() {}
 
   public record ExecutionListItem(
       String executionNo,
@@ -63,8 +33,7 @@ public final class QualityExecutionWorkspaceApi {
       @QualityDateTimeFormat LocalDateTime startedAt,
       @QualityDateTimeFormat LocalDateTime finishedAt,
       Long durationMs,
-      String errorMessage) {
-  }
+      String errorMessage) {}
 
   public record RuleExecutionListItem(
       Long id,
@@ -94,10 +63,9 @@ public final class QualityExecutionWorkspaceApi {
       @QualityDateTimeFormat LocalDateTime startedAt,
       @QualityDateTimeFormat LocalDateTime finishedAt,
       Long durationMs,
-      String errorMessage) {
-  }
+      String errorMessage) {}
 
-  public record RuleExecutionView(
+  public record RuleExecution(
       Long id,
       Long ruleId,
       String ruleName,
@@ -112,10 +80,9 @@ public final class QualityExecutionWorkspaceApi {
       String executedSql,
       String errorMessage,
       Long durationMs,
-      @QualityDateTimeFormat LocalDateTime createdAt) {
-  }
+      @QualityDateTimeFormat LocalDateTime createdAt) {}
 
-  public record ExecutionView(
+  public record ExecutionDetail(
       String executionNo,
       Long monitorId,
       String monitorName,
@@ -138,32 +105,16 @@ public final class QualityExecutionWorkspaceApi {
       @QualityDateTimeFormat LocalDateTime finishedAt,
       Long durationMs,
       String errorMessage,
-      List<RuleExecutionView> rules) {
-  }
+      List<RuleExecution> rules) {}
 
-  public record ExecutionPageView(
-      List<ExecutionListItem> records,
-      long total,
-      int current,
-      int pageSize) {
-  }
+  public record ExecutionPage(List<ExecutionListItem> records, long total, int current, int pageSize) {}
+  public record RuleExecutionPage(List<RuleExecutionListItem> records, long total, int current, int pageSize) {}
 
-  public record RuleExecutionPageView(
-      List<RuleExecutionListItem> records,
-      long total,
-      int current,
-      int pageSize) {
-  }
-
-  public record ExecutionLogLine(
+  public record LogLine(
       @QualityDateTimeFormat LocalDateTime timestamp,
       LogLevel level,
       String stage,
-      String message) {
-  }
+      String message) {}
 
-  public record ExecutionLogView(
-      String executionNo,
-      List<ExecutionLogLine> lines) {
-  }
+  public record LogView(String executionNo, List<LogLine> lines) {}
 }

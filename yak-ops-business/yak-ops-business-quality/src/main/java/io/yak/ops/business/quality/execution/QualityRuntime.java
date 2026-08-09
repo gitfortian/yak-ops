@@ -1,18 +1,17 @@
 package io.yak.ops.business.quality.execution;
 
-import io.yak.ops.business.quality.api.QualityApi.AlertLevel;
-import io.yak.ops.business.quality.api.QualityApi.ComparisonOperator;
-import io.yak.ops.business.quality.api.QualityApi.NotifyChannel;
-import io.yak.ops.business.quality.api.QualityApi.RuleFailureAction;
-import io.yak.ops.business.quality.api.QualityApi.RuleScope;
-import io.yak.ops.business.quality.api.QualityApi.RuleType;
+import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
+import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
+import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleFailureAction;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleScope;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleType;
 import java.math.BigDecimal;
 import java.util.List;
 
 public final class QualityRuntime {
 
-  private QualityRuntime() {
-  }
+  private QualityRuntime() {}
 
   public record MonitorSnapshot(
       long id,
@@ -23,8 +22,7 @@ public final class QualityRuntime {
       String schemaName,
       String tableName,
       String whereClause,
-      String owner) {
-  }
+      String owner) {}
 
   public record RuleSnapshot(
       long id,
@@ -39,8 +37,7 @@ public final class QualityRuntime {
       BigDecimal threshold,
       BigDecimal thresholdEnd,
       List<String> enumValues,
-      String customSql) {
-  }
+      String customSql) {}
 
   public record ExecutionJob(
       long executionId,
@@ -58,16 +55,8 @@ public final class QualityRuntime {
         String executionNo,
         MonitorSnapshot monitor,
         List<RuleSnapshot> rules) {
-      this(
-          executionId,
-          executionNo,
-          monitor,
-          rules,
-          RuleFailureAction.CONTINUE,
-          false,
-          NotifyChannel.MESSAGE,
-          null,
-          AlertLevel.WARNING);
+      this(executionId, executionNo, monitor, rules, RuleFailureAction.CONTINUE,
+          false, NotifyChannel.MESSAGE, null, AlertLevel.WARNING);
     }
   }
 }

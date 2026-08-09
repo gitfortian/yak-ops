@@ -1,18 +1,18 @@
 package io.yak.ops.business.quality.service;
 
-import io.yak.ops.business.quality.api.QualityApi.CheckResult;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionPageRequest;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionPageView;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionStatus;
-import io.yak.ops.business.quality.api.QualityApi.ExecutionView;
-import io.yak.ops.business.quality.api.QualityApi.MonitorView;
-import io.yak.ops.business.quality.api.QualityApi.RunView;
-import io.yak.ops.business.quality.api.QualityApi.TriggerType;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
+import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
+import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.execution.QualityExecutionWorker;
 import io.yak.ops.business.quality.execution.QualityRuntime.ExecutionJob;
 import io.yak.ops.business.quality.repository.QualityRepository;
-import io.yak.ops.business.quality.repository.QualityRepository.PageResult;
+import io.yak.ops.business.quality.service.support.QualityViewMapper;
+import io.yak.ops.common.bean.dto.quality.QualityExecutionDTO;
+import io.yak.ops.common.bean.vo.quality.QualityExecutionVO;
+import io.yak.ops.common.bean.vo.quality.QualityMonitorVO;
+import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
+import io.yak.ops.common.enums.quality.QualityEnums.ExecutionStatus;
+import io.yak.ops.common.enums.quality.QualityEnums.TriggerType;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -45,46 +45,44 @@ public class QualityExecutionService {
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public RunView run(long monitorId, String operator) {
+  public QualityMonitorVO.Run run(long monitorId, String operator) {
     return enqueue(monitorId, operator, TriggerType.MANUAL);
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public RunView runScheduled(long monitorId) {
+  public QualityMonitorVO.Run runScheduled(long monitorId) {
     return enqueue(monitorId, "quality-scheduler", TriggerType.SCHEDULE);
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public ExecutionPageView page(ExecutionPageRequest request) {
-    ExecutionPageRequest normalized = request == null
-        ? new ExecutionPageRequest(1, 20, null, null, null, null)
+  public QualityExecutionVO.Page page(QualityExecutionDTO.PageRequest request) {
+    QualityExecutionDTO.PageRequest normalized = request == null
+        ? new QualityExecutionDTO.PageRequest(1, 20, null, null, null, null)
         : request;
-    PageResult<io.yak.ops.business.quality.api.QualityApi.ExecutionListItem> result =
-        repository.pageExecutions(normalized);
-    return new ExecutionPageView(
-        result.records(),
-        result.total(),
-        normalized.normalizedCurrent(),
-        normalized.normalizedPageSize());
+    QualityQuery.Execution query = new QualityQuery.Execution(
+        normalized.normalizedCurrent(), normalized.normalizedPageSize(), normalized.keyword(),
+        normalized.monitorId(), normalized.executionStatus(), normalized.checkResult());
+    var result = repository.pageExecutions(query);
+    return new QualityExecutionVO.Page(
+        result.records().stream().map(QualityViewMapper::executionList).toList(),
+        result.total(), query.current(), query.pageSize());
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public ExecutionView get(String executionNo) {
+  public QualityExecutionVO.Detail get(String executionNo) {
     return repository.findExecution(executionNo)
-        .orElseThrow(
-            () -> new IllegalArgumentException("质量执行记录不存在：" + executionNo));
+        .map(QualityViewMapper::execution)
+        .orElseThrow(() -> new IllegalArgumentException("质量执行记录不存在：" + executionNo));
   }
 
-  private RunView enqueue(long monitorId, String operator, TriggerType triggerType) {
+  private QualityMonitorVO.Run enqueue(long monitorId, String operator, TriggerType triggerType) {
     repository.lockMonitor(monitorId);
-    MonitorView monitor = repository.findMonitor(monitorId)
+    Monitor monitor = repository.findMonitor(monitorId)
         .orElseThrow(() -> new IllegalArgumentException("质量监控不存在：" + monitorId));
     if (!monitor.enabled()) {
       throw new IllegalStateException("质量监控已停用，无法执行");
     }
-    int enabledRules = (int) monitor.rules().stream()
-        .filter(io.yak.ops.business.quality.api.QualityApi.RuleView::enabled)
-        .count();
+    int enabledRules = (int) monitor.rules().stream().filter(rule -> rule.enabled()).count();
     if (enabledRules == 0) {
       throw new IllegalStateException("质量监控没有可执行规则");
     }
@@ -95,15 +93,10 @@ public class QualityExecutionService {
     LocalDateTime queuedAt = LocalDateTime.now();
     String executionNo = executionNo(queuedAt);
     long executionId = repository.insertExecution(
-        executionNo,
-        monitor,
-        enabledRules,
-        normalizeOperator(operator),
-        triggerType,
-        queuedAt);
+        executionNo, monitor, enabledRules, normalizeOperator(operator), triggerType, queuedAt);
     ExecutionJob job = repository.executionJob(monitorId, executionId, executionNo);
     dispatchAfterCommit(job);
-    return new RunView(executionNo, ExecutionStatus.WAITING, CheckResult.RUNNING);
+    return new QualityMonitorVO.Run(executionNo, ExecutionStatus.WAITING, CheckResult.RUNNING);
   }
 
   private void dispatchAfterCommit(ExecutionJob job) {
@@ -113,24 +106,19 @@ public class QualityExecutionService {
       } catch (TaskRejectedException exception) {
         LocalDateTime now = LocalDateTime.now();
         repository.failExecution(job.executionId(), "质量执行队列已满", now, 0L);
-        repository.updateMonitorResult(
-            job.monitor().id(),
-            job.executionNo(),
-            CheckResult.ERROR,
-            now);
+        repository.updateMonitorResult(job.monitor().id(), job.executionNo(), CheckResult.ERROR, now);
       }
     };
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
       dispatch.run();
       return;
     }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            dispatch.run();
-          }
-        });
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        dispatch.run();
+      }
+    });
   }
 
   private static String executionNo(LocalDateTime queuedAt) {
