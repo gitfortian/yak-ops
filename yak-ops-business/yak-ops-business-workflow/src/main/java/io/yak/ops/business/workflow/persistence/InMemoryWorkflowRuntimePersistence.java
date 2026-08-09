@@ -10,10 +10,23 @@ import java.util.concurrent.ConcurrentMap;
 /** In-process fallback used by focused runtime tests and database-disabled development. */
 public final class InMemoryWorkflowRuntimePersistence implements WorkflowRuntimePersistence {
 
+  private final ConcurrentMap<String, RuntimeMetadataRecord> definitionMetadata =
+      new ConcurrentHashMap<>();
   private final ConcurrentMap<String, RuntimeMetadataRecord> metadata = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, String> executionDefinitions = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, String> externalExecutions = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, String> executionStatuses = new ConcurrentHashMap<>();
   private final ConcurrentLinkedDeque<String> executionOrder = new ConcurrentLinkedDeque<>();
+
+  @Override
+  public void prepareMetadata(String definitionId, RuntimeMetadataRecord value) {
+    definitionMetadata.put(definitionId, value);
+  }
+
+  /** Test/runtime helper to associate an execution with its durable engine definition. */
+  public void bindDefinition(String executionId, String definitionId) {
+    executionDefinitions.put(executionId, definitionId);
+  }
 
   @Override
   public void saveMetadata(String executionId, RuntimeMetadataRecord value) {
@@ -28,7 +41,12 @@ public final class InMemoryWorkflowRuntimePersistence implements WorkflowRuntime
 
   @Override
   public Optional<RuntimeMetadataRecord> findMetadata(String executionId) {
-    return Optional.ofNullable(metadata.get(executionId));
+    RuntimeMetadataRecord direct = metadata.get(executionId);
+    if (direct != null) return Optional.of(direct);
+    String definitionId = executionDefinitions.get(executionId);
+    return definitionId == null
+        ? Optional.empty()
+        : Optional.ofNullable(definitionMetadata.get(definitionId));
   }
 
   @Override
