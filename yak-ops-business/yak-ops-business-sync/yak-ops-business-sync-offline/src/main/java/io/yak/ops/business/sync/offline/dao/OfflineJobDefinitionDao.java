@@ -24,6 +24,25 @@ public interface OfflineJobDefinitionDao {
 
   Long lockById(Long id);
 
+  boolean updateSchedule(
+      Long id,
+      String scheduleJson,
+      boolean enabled,
+      String cronExpression,
+      int retryMaxAttempts,
+      int retryBackoffSeconds,
+      LocalDateTime lastFireTime,
+      LocalDateTime nextFireTime,
+      LocalDateTime updateTime);
+
+  void updateScheduleRuntime(
+      Long id,
+      LocalDateTime lastFireTime,
+      LocalDateTime nextFireTime,
+      LocalDateTime updateTime);
+
+  void clearSchedule(Long id, LocalDateTime updateTime);
+
   record PageQuery(
       int current,
       int pageSize,
