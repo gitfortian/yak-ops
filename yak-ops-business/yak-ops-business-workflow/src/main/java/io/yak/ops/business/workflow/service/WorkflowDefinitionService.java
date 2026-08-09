@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,13 +75,32 @@ public class WorkflowDefinitionService {
     if (request == null) throw new IllegalArgumentException("工作流配置不能为空");
     DefinitionState s = require(id);
     synchronized (s) {
-      s.name = required(request.name(), "工作流名称不能为空");
-      s.description = trim(request.description());
-      s.nodes = List.copyOf(request.nodes()); s.edges = List.copyOf(request.edges());
-      s.input = Map.copyOf(new LinkedHashMap<>(request.input()));
-      s.workflowTimeoutSeconds = request.workflowTimeoutSeconds();
-      s.failureStrategy = request.failureStrategy();
-      s.draftRevision++; s.updateTime = Instant.now();
+      String nextName = required(request.name(), "工作流名称不能为空");
+      String nextDescription = trim(request.description());
+      List<NodeRequest> nextNodes = List.copyOf(request.nodes());
+      List<EdgeRequest> nextEdges = List.copyOf(request.edges());
+      Map<String, Object> nextInput = Map.copyOf(new LinkedHashMap<>(request.input()));
+      long nextTimeout = request.workflowTimeoutSeconds();
+      String nextFailureStrategy = request.failureStrategy();
+      boolean changed = !Objects.equals(s.name, nextName)
+          || !Objects.equals(s.description, nextDescription)
+          || !Objects.equals(s.nodes, nextNodes)
+          || !Objects.equals(s.edges, nextEdges)
+          || !Objects.equals(s.input, nextInput)
+          || s.workflowTimeoutSeconds != nextTimeout
+          || !Objects.equals(s.failureStrategy, nextFailureStrategy);
+
+      s.name = nextName;
+      s.description = nextDescription;
+      s.nodes = nextNodes;
+      s.edges = nextEdges;
+      s.input = nextInput;
+      s.workflowTimeoutSeconds = nextTimeout;
+      s.failureStrategy = nextFailureStrategy;
+      if (changed) {
+        s.draftRevision++;
+        s.updateTime = Instant.now();
+      }
       return toView(s);
     }
   }
