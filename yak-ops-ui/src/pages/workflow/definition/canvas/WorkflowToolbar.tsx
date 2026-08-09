@@ -50,7 +50,6 @@ const formatDateTime = (value?: string) => {
 const WorkflowToolbar = (props: WorkflowToolbarProps) => {
   const {
     definition,
-    locked,
     saving,
     statusAction,
     onSave,
@@ -86,7 +85,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
           </div>
         </div>
         <div className="mt-3 text-[10px] leading-[18px] text-[#98a2b3]">
-          后续接入工作流版本快照后，这里将展示已发布版本和恢复记录。
+          当前先展示工作流状态与更新时间；后续版本快照能力可直接从这里扩展。
         </div>
       </div>
     </div>
