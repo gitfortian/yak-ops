@@ -3,7 +3,7 @@ package io.yak.ops.common.bean.po.workflow;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.Data;
 
 /** 工作流版本持久化对象。 */
@@ -21,5 +21,5 @@ public class WorkflowVersionPO {
   private String taskVersionsJson;
   private String engineDefinitionJson;
   private String runtimeMetadataJson;
-  private LocalDateTime createTime;
+  private Instant createTime;
 }
