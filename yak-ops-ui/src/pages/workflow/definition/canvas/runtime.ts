@@ -1,8 +1,8 @@
 import type { WorkflowNodeInstance } from '@/services/workflow';
 import type { WorkflowNodeRuntimeState } from './types';
 
+/** 与 yak-workflow-engine NodeExecutionStatus.isActive() 保持一致。 */
 export const WORKFLOW_ACTIVE_NODE_STATUSES = new Set([
-  'WAITING',
   'READY',
   'SUBMITTED',
   'RUNNING',
@@ -61,8 +61,9 @@ export const workflowNodeRuntimeState = (
 export const runtimeStatusLabel = (status?: string) => {
   switch (status) {
     case 'WAITING':
-    case 'READY':
       return '等待中';
+    case 'READY':
+      return '就绪';
     case 'SUBMITTED':
       return '提交中';
     case 'RUNNING':
