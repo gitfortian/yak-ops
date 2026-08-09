@@ -14,6 +14,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
@@ -32,25 +33,27 @@ import org.springframework.stereotype.Component;
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-@ConditionalOnProperty(
-    prefix = "yak.workflow.runtime",
-    name = "single-master-guard-enabled",
-    havingValue = "true",
-    matchIfMissing = true)
 public class WorkflowRuntimeSingleMasterGuard {
   private static final Logger log = LoggerFactory.getLogger(WorkflowRuntimeSingleMasterGuard.class);
 
   private final DataSource dataSource;
+  private final boolean enabled;
   private Connection ownershipConnection;
   private String lockName;
 
   public WorkflowRuntimeSingleMasterGuard(
-      @Qualifier("yakBusinessDataSource") DataSource dataSource) {
+      @Qualifier("yakBusinessDataSource") DataSource dataSource,
+      @Value("${yak.workflow.runtime.single-master-guard-enabled:true}") boolean enabled) {
     this.dataSource = dataSource;
+    this.enabled = enabled;
   }
 
   @PostConstruct
   void acquire() {
+    if (!enabled) {
+      log.warn("[workflow] single-master runtime guard is disabled");
+      return;
+    }
     try {
       ownershipConnection = dataSource.getConnection();
       lockName = lockName(databaseName(ownershipConnection));
