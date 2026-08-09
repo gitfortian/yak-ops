@@ -63,6 +63,17 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
 
   @Override
   public OfflinePage<OfflineJobDefinition> page(OfflineDefinitionQuery query) {
+    return page(query, false);
+  }
+
+  @Override
+  public OfflinePage<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query) {
+    return page(query, true);
+  }
+
+  private OfflinePage<OfflineJobDefinition> page(
+      OfflineDefinitionQuery query,
+      boolean includeDisplayNames) {
     OfflineDefinitionQuery q = query == null
         ? new OfflineDefinitionQuery(1, 10, null, null, null, null, null, null, null, null, null)
         : query;
@@ -72,7 +83,7 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
             q.sourceType(), q.sinkType(), q.sourceTable(), q.sinkTable(),
             q.createTimeStart(), q.createTimeEnd()));
     List<OfflineJobDefinition> records = page.getRecords().stream()
-        .map(po -> toDomain(po, true))
+        .map(po -> toDomain(po, includeDisplayNames))
         .toList();
     return new OfflinePage<>(records, page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());
   }
