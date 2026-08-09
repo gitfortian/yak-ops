@@ -31,7 +31,6 @@ public interface OfflineJobDefinitionDao {
       String cronExpression,
       int retryMaxAttempts,
       int retryBackoffSeconds,
-      LocalDateTime lastFireTime,
       LocalDateTime nextFireTime,
       LocalDateTime updateTime);
 
