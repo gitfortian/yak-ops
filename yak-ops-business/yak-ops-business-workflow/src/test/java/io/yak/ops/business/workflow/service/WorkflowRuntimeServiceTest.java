@@ -147,6 +147,7 @@ class WorkflowRuntimeServiceTest {
     WorkflowInstanceVO completed = waitForTerminal(started.id());
     assertThat(completed.status()).isEqualTo("TIMED_OUT");
     assertThat(node(completed, "slow").status()).isEqualTo("CANCELED");
+    waitForCancel(runner);
     assertThat(runner.cancelCount()).isGreaterThanOrEqualTo(1);
   }
 
@@ -183,6 +184,12 @@ class WorkflowRuntimeServiceTest {
       Thread.sleep(10L);
     }
     return service.getInstance(executionId);
+  }
+
+  private void waitForCancel(FakeRunner runner) throws InterruptedException {
+    for (int i = 0; i < 100 && runner.cancelCount() == 0; i++) {
+      Thread.sleep(5L);
+    }
   }
 
   private WorkflowInstanceVO.NodeInstanceVO node(WorkflowInstanceVO instance, String id) {
