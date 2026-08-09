@@ -6,10 +6,10 @@ import io.yak.ops.business.job.task.SyncTaskExecution;
 import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
 import io.yak.ops.business.job.task.TaskRegistry;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.EdgeDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.NodeDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,10 +38,10 @@ class WorkflowRuntimeServiceTest {
   void shouldExecuteReferencedSyncTasksInSerial() throws InterruptedException {
     FakeRunner runner = new FakeRunner();
     service = service(runner, "task-a", "task-b");
-    WorkflowRunRequest request = new WorkflowRunRequest(
+    WorkflowRunDTO request = new WorkflowRunDTO(
         "serial",
-        List.of(new NodeRequest("a", "task-a"), new NodeRequest("b", "task-b")),
-        List.of(new EdgeRequest("a", "b")),
+        List.of(node("a", "task-a"), node("b", "task-b")),
+        List.of(new EdgeDTO("a", "b")),
         Map.of());
 
     WorkflowInstanceVO started = service.run(request);
@@ -60,9 +60,9 @@ class WorkflowRuntimeServiceTest {
     FakeRunner runner = new FakeRunner();
     runner.failNext("task-a", 1);
     service = service(runner, "task-a");
-    WorkflowRunRequest request = new WorkflowRunRequest(
+    WorkflowRunDTO request = new WorkflowRunDTO(
         "retry",
-        List.of(new NodeRequest("a", "task-a")),
+        List.of(node("a", "task-a")),
         List.of(),
         Map.of());
 
@@ -84,17 +84,17 @@ class WorkflowRuntimeServiceTest {
     FakeRunner runner = new FakeRunner();
     runner.failNext("task-bad", 10);
     service = service(runner, "task-root", "task-bad", "task-blocked", "task-independent");
-    WorkflowRunRequest request = new WorkflowRunRequest(
+    WorkflowRunDTO request = new WorkflowRunDTO(
         "failure",
         List.of(
-            new NodeRequest("root", "task-root"),
-            new NodeRequest("bad", "task-bad"),
-            new NodeRequest("blocked", "task-blocked"),
-            new NodeRequest("independent", "task-independent")),
+            node("root", "task-root"),
+            node("bad", "task-bad"),
+            node("blocked", "task-blocked"),
+            node("independent", "task-independent")),
         List.of(
-            new EdgeRequest("root", "bad"),
-            new EdgeRequest("bad", "blocked"),
-            new EdgeRequest("root", "independent")),
+            new EdgeDTO("root", "bad"),
+            new EdgeDTO("bad", "blocked"),
+            new EdgeDTO("root", "independent")),
         Map.of());
 
     WorkflowInstanceVO started = service.run(request);
@@ -111,17 +111,15 @@ class WorkflowRuntimeServiceTest {
   void shouldKeepInputMappingAcrossTaskReferences() throws InterruptedException {
     FakeRunner runner = new FakeRunner();
     service = service(runner, "task-load", "task-consume");
-    NodeRequest load = new NodeRequest(
-        "load", "task-load", 1, 0L, 0L, 0L,
-        Map.of("requestId", "$workflow.requestId"));
-    NodeRequest consume = new NodeRequest(
-        "consume", "task-consume", 1, 0L, 0L, 0L,
-        Map.of("requestId", "load.receivedInput.requestId"));
+    NodeDTO load = node(
+        "load", "task-load", Map.of("requestId", "$workflow.requestId"));
+    NodeDTO consume = node(
+        "consume", "task-consume", Map.of("requestId", "load.receivedInput.requestId"));
 
-    WorkflowInstanceVO started = service.run(new WorkflowRunRequest(
+    WorkflowInstanceVO started = service.run(new WorkflowRunDTO(
         "mapping",
         List.of(load, consume),
-        List.of(new EdgeRequest("load", "consume")),
+        List.of(new EdgeDTO("load", "consume")),
         Map.of("requestId", "REQ-001")));
     service.activate(started.id());
     WorkflowInstanceVO completed = waitForTerminal(started.id());
@@ -136,12 +134,13 @@ class WorkflowRuntimeServiceTest {
     FakeRunner runner = new FakeRunner();
     runner.duration("task-slow", 3_000L);
     service = service(runner, "task-slow");
-    WorkflowInstanceVO started = service.run(new WorkflowRunRequest(
+    WorkflowInstanceVO started = service.run(new WorkflowRunDTO(
         "timeout",
-        List.of(new NodeRequest("slow", "task-slow")),
+        List.of(node("slow", "task-slow")),
         List.of(),
         Map.of(),
-        1L));
+        1L,
+        "CONTINUE_INDEPENDENT_BRANCHES"));
     service.activate(started.id());
 
     WorkflowInstanceVO completed = waitForTerminal(started.id());
@@ -149,6 +148,16 @@ class WorkflowRuntimeServiceTest {
     assertThat(node(completed, "slow").status()).isEqualTo("CANCELED");
     waitForCancel(runner);
     assertThat(runner.cancelCount()).isGreaterThanOrEqualTo(1);
+  }
+
+  private NodeDTO node(String id, String taskId) {
+    return node(id, taskId, Map.of());
+  }
+
+  private NodeDTO node(String id, String taskId, Map<String, String> inputMapping) {
+    return new NodeDTO(
+        id, taskId, 1, 0L, 0L, 0L,
+        inputMapping, "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
 
   private WorkflowRuntimeService service(FakeRunner runner, String... taskIds) {
