@@ -201,6 +201,14 @@ public class OfflineExecutionClaimService {
     private final OfflineJobExecutionPO execution;
     private final boolean reused;
 
+    /** Backward-compatible constructor for existing callers that create fresh claims. */
+    public ClaimResult(
+        OfflineJobDefinitionPO definition,
+        String logicalJobSpecJson,
+        OfflineJobExecutionPO execution) {
+      this(definition, logicalJobSpecJson, execution, false);
+    }
+
     public ClaimResult(
         OfflineJobDefinitionPO definition,
         String logicalJobSpecJson,
