@@ -7,12 +7,12 @@ import io.yak.ops.business.quality.execution.QualitySqlCompiler;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
@@ -21,6 +21,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableScheduling
 @EnableConfigurationProperties(QualityProperties.class)
 @Import(BusinessDatabaseConfiguration.class)
+@MapperScan(
+    basePackages = "io.yak.ops.business.quality.dao.mapper",
+    sqlSessionFactoryRef = "yakBusinessSqlSessionFactory")
 public class QualityConfiguration {
 
   @Bean(initMethod = "migrate")
@@ -36,12 +39,6 @@ public class QualityConfiguration {
         .load();
   }
 
-  @Bean(name = "qualityJdbcTemplate")
-  public NamedParameterJdbcTemplate qualityJdbcTemplate(
-      @Qualifier("yakBusinessDataSource") DataSource dataSource) {
-    return new NamedParameterJdbcTemplate(dataSource);
-  }
-
   @Bean
   public QualityMetricEvaluator qualityMetricEvaluator() {
     return new QualityMetricEvaluator();
@@ -55,8 +52,7 @@ public class QualityConfiguration {
   }
 
   @Bean(name = "qualityExecutionTaskExecutor", destroyMethod = "shutdown")
-  public ThreadPoolTaskExecutor qualityExecutionTaskExecutor(
-      QualityProperties properties) {
+  public ThreadPoolTaskExecutor qualityExecutionTaskExecutor(QualityProperties properties) {
     QualityProperties.Executor executor = properties.getExecutor();
     int corePoolSize = Math.max(1, executor.getCorePoolSize());
     int maximumPoolSize = Math.max(corePoolSize, executor.getMaximumPoolSize());
