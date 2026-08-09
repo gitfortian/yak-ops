@@ -19,6 +19,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** JDBC catalog for editable workflow definitions and immutable published versions. */
 @Repository
@@ -35,12 +37,15 @@ public class JdbcWorkflowCatalogRepository implements WorkflowDefinitionPersiste
 
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
+  private final TransactionTemplate transaction;
 
   public JdbcWorkflowCatalogRepository(
       @Qualifier("yakBusinessDataSource") DataSource dataSource,
+      @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager,
       ObjectMapper objectMapper) {
     this.jdbc = new JdbcTemplate(dataSource);
     this.objectMapper = objectMapper;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
   @Override
@@ -61,6 +66,24 @@ public class JdbcWorkflowCatalogRepository implements WorkflowDefinitionPersiste
 
   @Override
   public void saveDefinition(DefinitionRecord definition) {
+    upsertDefinition(definition);
+  }
+
+  @Override
+  public void publish(DefinitionRecord definition, VersionRecord version) {
+    transaction.executeWithoutResult(status -> {
+      insertVersion(version);
+      upsertDefinition(definition);
+    });
+  }
+
+  @Override
+  public void deleteDefinition(String workflowId) {
+    // Published versions are intentionally retained because historical executions still reference them.
+    jdbc.update("DELETE FROM yak_workflow_definition WHERE id=?", workflowId);
+  }
+
+  private void upsertDefinition(DefinitionRecord definition) {
     DraftPayload payload = new DraftPayload(
         definition.failureStrategy(),
         definition.nodes(),
@@ -92,8 +115,7 @@ public class JdbcWorkflowCatalogRepository implements WorkflowDefinitionPersiste
         timestamp(definition.updateTime()));
   }
 
-  @Override
-  public void saveVersion(VersionRecord version) {
+  private void insertVersion(VersionRecord version) {
     jdbc.update(
         "INSERT INTO yak_workflow_version "
             + "(id,workflow_id,version_no,version_kind,draft_revision,run_request_json,"
@@ -107,12 +129,6 @@ public class JdbcWorkflowCatalogRepository implements WorkflowDefinitionPersiste
         write(version.editorMeta()),
         write(version.taskVersionsByNode()),
         timestamp(version.publishedAt()));
-  }
-
-  @Override
-  public void deleteDefinition(String workflowId) {
-    // Published versions are intentionally retained because historical executions still reference them.
-    jdbc.update("DELETE FROM yak_workflow_definition WHERE id=?", workflowId);
   }
 
   private DefinitionRecord mapDefinition(ResultSet rs, int row) throws SQLException {
