@@ -3,7 +3,7 @@ package io.yak.ops.common.bean.po.workflow;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.Data;
 
 /** 工作流定义持久化对象。 */
@@ -21,6 +21,6 @@ public class WorkflowDefinitionPO {
   private String draftJson;
   private String latestExecutionId;
   private String latestExecutionStatus;
-  private LocalDateTime createTime;
-  private LocalDateTime updateTime;
+  private Instant createTime;
+  private Instant updateTime;
 }
