@@ -2,12 +2,11 @@ package io.yak.ops.business.sync.offline.service;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionIdempotencyRepository;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -20,21 +19,18 @@ import org.springframework.util.StringUtils;
 @Service
 public class OfflineExecutionClaimService {
   private final OfflineJobDefinitionService definitionService;
-  private final OfflineJobExecutionDao executionDao;
-  private final OfflineExecutionControlRepository repository;
-  private final OfflineExecutionIdempotencyRepository idempotencyRepository;
+  private final OfflineJobDefinitionRepository definitionRepository;
+  private final OfflineJobExecutionRepository executionRepository;
   private final OfflineSyncProperties properties;
 
   public OfflineExecutionClaimService(
       OfflineJobDefinitionService definitionService,
-      OfflineJobExecutionDao executionDao,
-      OfflineExecutionControlRepository repository,
-      OfflineExecutionIdempotencyRepository idempotencyRepository,
+      OfflineJobDefinitionRepository definitionRepository,
+      OfflineJobExecutionRepository executionRepository,
       OfflineSyncProperties properties) {
     this.definitionService = definitionService;
-    this.executionDao = executionDao;
-    this.repository = repository;
-    this.idempotencyRepository = idempotencyRepository;
+    this.definitionRepository = definitionRepository;
+    this.executionRepository = executionRepository;
     this.properties = properties;
   }
 
@@ -44,8 +40,8 @@ public class OfflineExecutionClaimService {
       String triggerType,
       Long retryFromExecutionId,
       int attemptNo) {
-    repository.lockDefinition(definitionId);
-    OfflineJobDefinitionPO definition = definitionService.require(definitionId);
+    definitionRepository.lock(definitionId);
+    OfflineJobDefinition definition = definitionService.require(definitionId);
     if (!"ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("请先上线任务，再执行运行操作");
     }
@@ -62,12 +58,7 @@ public class OfflineExecutionClaimService {
         null);
   }
 
-  /**
-   * 按工作流发布时保存的任务快照创建执行。
-   *
-   * <p>这里不要求任务当前仍处于 ONLINE，也不要求当前 version 与快照一致；工作流发布版本
-   * 已经完成过可执行性校验。仍对任务定义行加锁并检查活跃实例，沿用现有同步任务并发保护。</p>
-   */
+  /** 工作流按发布时保存的任务快照创建执行，不要求当前任务仍处于 ONLINE。 */
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public ClaimResult claimSnapshot(
       Long definitionId,
@@ -99,11 +90,11 @@ public class OfflineExecutionClaimService {
     if (!StringUtils.hasText(logicalJobSpecJson)) {
       throw new IllegalArgumentException("任务版本快照缺少 JobSpec");
     }
-    repository.lockDefinition(definitionId);
-    OfflineJobDefinitionPO current = definitionService.require(definitionId);
+    definitionRepository.lock(definitionId);
+    OfflineJobDefinition current = definitionService.require(definitionId);
     String normalizedKey = StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : null;
     if (normalizedKey != null) {
-      OfflineJobExecutionPO existing = idempotencyRepository.findByKey(normalizedKey).orElse(null);
+      OfflineJobExecution existing = executionRepository.findByIdempotencyKey(normalizedKey).orElse(null);
       if (existing != null) {
         validateIdempotentReuse(
             existing,
@@ -128,7 +119,7 @@ public class OfflineExecutionClaimService {
   }
 
   private ClaimResult createClaim(
-      OfflineJobDefinitionPO definition,
+      OfflineJobDefinition definition,
       long definitionVersion,
       String configDigest,
       String definitionSnapshotJson,
@@ -138,20 +129,18 @@ public class OfflineExecutionClaimService {
       int attemptNo,
       String idempotencyKey) {
     Long definitionId = definition.getId();
-    if (repository.hasActiveExecution(definitionId)) {
+    if (executionRepository.hasActiveExecution(definitionId)) {
       throw new IllegalStateException("任务已有运行中的执行实例，不能重复提交");
     }
 
     LocalDateTime now = LocalDateTime.now();
-    OfflineJobExecutionPO execution = new OfflineJobExecutionPO();
+    OfflineJobExecution execution = new OfflineJobExecution();
     execution.setJobDefinitionId(definitionId);
     execution.setDefinitionVersion((int) Math.min(Integer.MAX_VALUE, definitionVersion));
     execution.setEngineBaseUrl(properties.getEngine().getBaseUrl());
     execution.setExternalExecutionId("yak-offline-" + UUID.randomUUID());
     execution.setIdempotencyKey(
-        StringUtils.hasText(idempotencyKey)
-            ? idempotencyKey.trim()
-            : UUID.randomUUID().toString());
+        StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : UUID.randomUUID().toString());
     execution.setStatus(OfflineExecutionStatus.CREATED.name());
     execution.setStateVersion(1L);
     execution.setAttemptNo(Math.max(1, attemptNo));
@@ -170,14 +159,14 @@ public class OfflineExecutionClaimService {
     execution.setDurationMillis(0L);
     execution.setCreateTime(now);
     execution.setUpdateTime(now);
-    if (!executionDao.insert(execution) || execution.getId() == null) {
+    if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建离线同步执行实例失败");
     }
     return new ClaimResult(definition, logicalJobSpecJson, execution, false);
   }
 
   private void validateIdempotentReuse(
-      OfflineJobExecutionPO existing,
+      OfflineJobExecution existing,
       Long definitionId,
       long definitionVersion,
       String configDigest,
@@ -190,29 +179,27 @@ public class OfflineExecutionClaimService {
         && Objects.equals(existing.getDefinitionSnapshotJson(), definitionSnapshotJson)
         && Objects.equals(existing.getSubmittedConfig(), logicalJobSpecJson);
     if (!same) {
-      throw new IllegalStateException(
-          "幂等键已被不同任务执行占用：" + existing.getIdempotencyKey());
+      throw new IllegalStateException("幂等键已被不同任务执行占用：" + existing.getIdempotencyKey());
     }
   }
 
   public static final class ClaimResult {
-    private final OfflineJobDefinitionPO definition;
+    private final OfflineJobDefinition definition;
     private final String logicalJobSpecJson;
-    private final OfflineJobExecutionPO execution;
+    private final OfflineJobExecution execution;
     private final boolean reused;
 
-    /** Backward-compatible constructor for existing callers that create fresh claims. */
     public ClaimResult(
-        OfflineJobDefinitionPO definition,
+        OfflineJobDefinition definition,
         String logicalJobSpecJson,
-        OfflineJobExecutionPO execution) {
+        OfflineJobExecution execution) {
       this(definition, logicalJobSpecJson, execution, false);
     }
 
     public ClaimResult(
-        OfflineJobDefinitionPO definition,
+        OfflineJobDefinition definition,
         String logicalJobSpecJson,
-        OfflineJobExecutionPO execution,
+        OfflineJobExecution execution,
         boolean reused) {
       this.definition = definition;
       this.logicalJobSpecJson = logicalJobSpecJson;
@@ -220,20 +207,9 @@ public class OfflineExecutionClaimService {
       this.reused = reused;
     }
 
-    public OfflineJobDefinitionPO getDefinition() {
-      return definition;
-    }
-
-    public String getLogicalJobSpecJson() {
-      return logicalJobSpecJson;
-    }
-
-    public OfflineJobExecutionPO getExecution() {
-      return execution;
-    }
-
-    public boolean isReused() {
-      return reused;
-    }
+    public OfflineJobDefinition getDefinition() { return definition; }
+    public String getLogicalJobSpecJson() { return logicalJobSpecJson; }
+    public OfflineJobExecution getExecution() { return execution; }
+    public boolean isReused() { return reused; }
   }
 }

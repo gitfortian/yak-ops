@@ -14,8 +14,8 @@ import io.yak.framework.schedule.api.ScheduleManager;
 import io.yak.framework.schedule.api.ScheduleSnapshot;
 import io.yak.framework.schedule.api.ScheduleStatus;
 import io.yak.ops.business.job.schedule.JobScheduleProperties;
+import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository.ScheduleRecord;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -33,16 +33,15 @@ class OfflineSyncScheduleRegistrarTest {
     JobScheduleProperties properties = new JobScheduleProperties();
     properties.setZoneId("Asia/Shanghai");
 
-    ScheduleRecord record =
-        new ScheduleRecord(
-            42L,
-            "0 0/5 * * * ?",
-            true,
-            4,
-            60,
-            null,
-            null,
-            "{}");
+    OfflineSchedule record = new OfflineSchedule(
+        42L,
+        "0 0/5 * * * ?",
+        true,
+        4,
+        60,
+        null,
+        null,
+        "{}");
     when(repository.findAllSchedules()).thenReturn(List.of(record));
     when(manager.get(OfflineSyncScheduleConstants.key(42L))).thenReturn(Optional.empty());
     when(manager.save(any(ScheduleDefinition.class)))
@@ -60,20 +59,17 @@ class OfflineSyncScheduleRegistrarTest {
 
     new OfflineSyncScheduleRegistrar(manager, repository, properties).synchronize();
 
-    ArgumentCaptor<ScheduleDefinition> captor =
-        ArgumentCaptor.forClass(ScheduleDefinition.class);
+    ArgumentCaptor<ScheduleDefinition> captor = ArgumentCaptor.forClass(ScheduleDefinition.class);
     verify(manager).save(captor.capture());
 
     ScheduleDefinition definition = captor.getValue();
     assertThat(definition.key()).isEqualTo(OfflineSyncScheduleConstants.key(42L));
     assertThat(definition.trigger().expression()).isEqualTo("0 0/5 * * * ?");
     assertThat(definition.trigger().zoneId()).isEqualTo(ZoneId.of("Asia/Shanghai"));
-    assertThat(definition.target().handler())
-        .isEqualTo(OfflineSyncScheduleConstants.HANDLER_NAME);
+    assertThat(definition.target().handler()).isEqualTo(OfflineSyncScheduleConstants.HANDLER_NAME);
     assertThat(definition.target().payload())
         .containsEntry(OfflineSyncScheduleConstants.PAYLOAD_DEFINITION_ID, "42");
-    assertThat(definition.policy().concurrencyPolicy())
-        .isEqualTo(ConcurrencyPolicy.FORBID);
+    assertThat(definition.policy().concurrencyPolicy()).isEqualTo(ConcurrencyPolicy.FORBID);
     assertThat(definition.policy().triggerRetries()).isZero();
 
     verify(repository).updateRuntimeState(
@@ -90,16 +86,15 @@ class OfflineSyncScheduleRegistrarTest {
 
     ScheduleDefinition orphan =
         new OfflineSyncScheduleRegistrar(manager, repository, properties)
-            .definition(
-                new ScheduleRecord(
-                    99L,
-                    "0 0 2 * * ?",
-                    true,
-                    1,
-                    30,
-                    null,
-                    null,
-                    "{}"));
+            .definition(new OfflineSchedule(
+                99L,
+                "0 0 2 * * ?",
+                true,
+                1,
+                30,
+                null,
+                null,
+                "{}"));
 
     when(repository.findAllSchedules()).thenReturn(List.of());
     when(manager.list(OfflineSyncScheduleConstants.NAMESPACE))
@@ -113,7 +108,6 @@ class OfflineSyncScheduleRegistrarTest {
                 null)));
 
     new OfflineSyncScheduleRegistrar(manager, repository, properties).synchronize();
-
     verify(manager).delete(orphan.key());
   }
 }

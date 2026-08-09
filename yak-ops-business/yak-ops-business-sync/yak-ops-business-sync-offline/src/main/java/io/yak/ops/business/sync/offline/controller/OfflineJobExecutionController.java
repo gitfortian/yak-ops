@@ -4,12 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.framework.common.PagingResult;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.engine.LinkUpClient;
-import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
 import io.yak.ops.business.sync.offline.service.OfflineJobExecutionService;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationVO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineEngineHealthVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionLogPageVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionDetailVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionVO;
@@ -28,28 +27,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OfflineJobExecutionController {
   private final OfflineJobExecutionService service;
-  private final LinkUpClient linkUpClient;
 
   @GetMapping({"/api/v1/job/batch-execution/health", "/api/v1/executor/health"})
-  public Result<LinkUpNodeResponse> health() {
-    return Result.success(linkUpClient.node());
+  public Result<OfflineEngineHealthVO> health() {
+    return Result.success(service.health());
   }
 
   @PostMapping("/api/v1/job/batch-execution/{jobDefineId}/execute")
-  public Result<OfflineJobExecutionVO> execute(
-      @PathVariable Long jobDefineId) {
+  public Result<OfflineJobExecutionVO> execute(@PathVariable Long jobDefineId) {
     return Result.success(service.execute(jobDefineId));
   }
 
   @PostMapping("/api/v1/job/batch-execution/{jobInstanceId}/cancel")
-  public Result<OfflineJobExecutionVO> cancel(
-      @PathVariable Long jobInstanceId) {
+  public Result<OfflineJobExecutionVO> cancel(@PathVariable Long jobInstanceId) {
     return Result.success(service.cancel(jobInstanceId));
   }
 
   @PostMapping("/api/v1/job/batch-execution/{jobInstanceId}/retry")
-  public Result<OfflineJobExecutionVO> retry(
-      @PathVariable Long jobInstanceId) {
+  public Result<OfflineJobExecutionVO> retry(@PathVariable Long jobInstanceId) {
     return Result.success(service.retry(jobInstanceId));
   }
 
@@ -73,14 +68,12 @@ public class OfflineJobExecutionController {
 
   @PostMapping("/api/v1/job/batch-instance/page")
   public PagingResult<OfflineJobExecutionVO> instancePage(
-      @Valid @RequestBody(required = false)
-          OfflineJobExecutionQueryDTO queryDTO) {
+      @Valid @RequestBody(required = false) OfflineJobExecutionQueryDTO queryDTO) {
     return PagingResult.success(service.page(queryDTO));
   }
 
   @GetMapping("/api/v1/job/batch-instance/{id}")
-  public Result<OfflineJobExecutionDetailVO> instance(
-      @PathVariable Long id) {
+  public Result<OfflineJobExecutionDetailVO> instance(@PathVariable Long id) {
     return Result.success(service.detail(id));
   }
 

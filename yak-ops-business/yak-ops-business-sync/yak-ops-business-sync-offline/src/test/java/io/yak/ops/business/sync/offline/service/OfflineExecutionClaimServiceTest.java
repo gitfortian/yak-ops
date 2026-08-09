@@ -7,12 +7,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionIdempotencyRepository;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.service.OfflineExecutionClaimService.ClaimResult;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,9 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OfflineExecutionClaimServiceTest {
 
   @Mock private OfflineJobDefinitionService definitionService;
-  @Mock private OfflineJobExecutionDao executionDao;
-  @Mock private OfflineExecutionControlRepository repository;
-  @Mock private OfflineExecutionIdempotencyRepository idempotencyRepository;
+  @Mock private OfflineJobDefinitionRepository definitionRepository;
+  @Mock private OfflineJobExecutionRepository executionRepository;
 
   private OfflineExecutionClaimService service;
 
@@ -34,15 +32,14 @@ class OfflineExecutionClaimServiceTest {
   void setUp() {
     service = new OfflineExecutionClaimService(
         definitionService,
-        executionDao,
-        repository,
-        idempotencyRepository,
+        definitionRepository,
+        executionRepository,
         new OfflineSyncProperties());
   }
 
   @Test
   void shouldPersistCreatedExecutionBeforeAnyEngineProbe() {
-    OfflineJobDefinitionPO definition = new OfflineJobDefinitionPO();
+    OfflineJobDefinition definition = new OfflineJobDefinition();
     definition.setId(10L);
     definition.setReleaseState("ONLINE");
     definition.setVersion(3);
@@ -51,9 +48,9 @@ class OfflineExecutionClaimServiceTest {
 
     when(definitionService.require(10L)).thenReturn(definition);
     when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{\"job\":\"spec\"}");
-    when(executionDao.insert(any(OfflineJobExecutionPO.class)))
+    when(executionRepository.insert(any(OfflineJobExecution.class)))
         .thenAnswer(invocation -> {
-          OfflineJobExecutionPO execution = invocation.getArgument(0);
+          OfflineJobExecution execution = invocation.getArgument(0);
           execution.setId(99L);
           return true;
         });
@@ -64,21 +61,20 @@ class OfflineExecutionClaimServiceTest {
     assertThat(result.getExecution().getStatus()).isEqualTo("CREATED");
     assertThat(result.getExecution().getWorkerInstanceId()).isNull();
     assertThat(result.getExecution().getEngineBaseUrl()).isEqualTo("http://127.0.0.1:18080");
-    verify(repository).lockDefinition(10L);
-    verify(repository).hasActiveExecution(10L);
-    verify(executionDao).insert(result.getExecution());
+    verify(definitionRepository).lock(10L);
+    verify(executionRepository).hasActiveExecution(10L);
+    verify(executionRepository).insert(result.getExecution());
   }
 
   @Test
   void shouldPersistWorkflowAttemptAsSnapshotIdempotencyKey() {
-    OfflineJobDefinitionPO definition = new OfflineJobDefinitionPO();
+    OfflineJobDefinition definition = new OfflineJobDefinition();
     definition.setId(10L);
-
     when(definitionService.require(10L)).thenReturn(definition);
-    when(idempotencyRepository.findByKey("attempt-123")).thenReturn(Optional.empty());
-    when(executionDao.insert(any(OfflineJobExecutionPO.class)))
+    when(executionRepository.findByIdempotencyKey("attempt-123")).thenReturn(Optional.empty());
+    when(executionRepository.insert(any(OfflineJobExecution.class)))
         .thenAnswer(invocation -> {
-          OfflineJobExecutionPO execution = invocation.getArgument(0);
+          OfflineJobExecution execution = invocation.getArgument(0);
           execution.setId(100L);
           return true;
         });
@@ -95,18 +91,18 @@ class OfflineExecutionClaimServiceTest {
     assertThat(result.getExecution().getIdempotencyKey()).isEqualTo("attempt-123");
     assertThat(result.getExecution().getTriggerType()).isEqualTo("WORKFLOW");
     assertThat(result.isReused()).isFalse();
-    verify(repository).lockDefinition(10L);
-    verify(repository).hasActiveExecution(10L);
-    verify(executionDao).insert(result.getExecution());
+    verify(definitionRepository).lock(10L);
+    verify(executionRepository).hasActiveExecution(10L);
+    verify(executionRepository).insert(result.getExecution());
   }
 
   @Test
   void shouldReuseSameWorkflowAttemptInsteadOfCreatingAnotherOfflineExecution() {
-    OfflineJobDefinitionPO definition = new OfflineJobDefinitionPO();
+    OfflineJobDefinition definition = new OfflineJobDefinition();
     definition.setId(10L);
     when(definitionService.require(10L)).thenReturn(definition);
 
-    OfflineJobExecutionPO existing = new OfflineJobExecutionPO();
+    OfflineJobExecution existing = new OfflineJobExecution();
     existing.setId(101L);
     existing.setJobDefinitionId(10L);
     existing.setDefinitionVersion(3);
@@ -115,7 +111,7 @@ class OfflineExecutionClaimServiceTest {
     existing.setSubmittedConfig("{\"job\":\"spec\"}");
     existing.setIdempotencyKey("attempt-123");
     existing.setStatus("SUBMITTED");
-    when(idempotencyRepository.findByKey("attempt-123"))
+    when(executionRepository.findByIdempotencyKey("attempt-123"))
         .thenReturn(Optional.of(existing));
 
     ClaimResult result = service.claimSnapshot(
@@ -129,8 +125,8 @@ class OfflineExecutionClaimServiceTest {
 
     assertThat(result.getExecution()).isSameAs(existing);
     assertThat(result.isReused()).isTrue();
-    verify(repository).lockDefinition(10L);
-    verify(repository, never()).hasActiveExecution(10L);
-    verify(executionDao, never()).insert(any(OfflineJobExecutionPO.class));
+    verify(definitionRepository).lock(10L);
+    verify(executionRepository, never()).hasActiveExecution(10L);
+    verify(executionRepository, never()).insert(any(OfflineJobExecution.class));
   }
 }

@@ -12,8 +12,8 @@ import io.yak.framework.schedule.api.ScheduleTrigger;
 import io.yak.ops.business.job.schedule.JobScheduleProperties;
 import io.yak.ops.business.job.schedule.JobScheduleRegistrar;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
+import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository.ScheduleRecord;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -26,11 +26,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/**
- * 将离线同步调度配置注册到 Yak Schedule。
- *
- * <p>该注册器只负责时间触发。业务失败重试、Worker 选择、状态对账仍由离线同步模块负责。</p>
- */
+/** 将离线同步调度配置注册到 Yak Schedule。 */
 @Component
 @ConditionalOnOfflineSyncEnabled
 @ConditionalOnProperty(
@@ -60,14 +56,11 @@ public class OfflineSyncScheduleRegistrar implements JobScheduleRegistrar {
 
   @Override
   public void synchronize() {
-    List<ScheduleRecord> records = scheduleRepository.findAllSchedules();
+    List<OfflineSchedule> records = scheduleRepository.findAllSchedules();
     Set<ScheduleKey> desiredKeys = new LinkedHashSet<>();
 
-    for (ScheduleRecord record : records) {
-      if (!StringUtils.hasText(record.getCronExpression())) {
-        continue;
-      }
-
+    for (OfflineSchedule record : records) {
+      if (!StringUtils.hasText(record.cronExpression())) continue;
       ScheduleDefinition desired = definition(record);
       desiredKeys.add(desired.key());
 
@@ -78,52 +71,38 @@ public class OfflineSyncScheduleRegistrar implements JobScheduleRegistrar {
               : scheduleManager.save(desired);
 
       scheduleRepository.updateRuntimeState(
-          record.getJobDefinitionId(),
+          record.jobDefinitionId(),
           localDateTime(snapshot.lastFireTime()),
           localDateTime(snapshot.nextFireTime()));
     }
 
-    for (ScheduleSnapshot snapshot :
-        scheduleManager.list(OfflineSyncScheduleConstants.NAMESPACE)) {
+    for (ScheduleSnapshot snapshot : scheduleManager.list(OfflineSyncScheduleConstants.NAMESPACE)) {
       if (!desiredKeys.contains(snapshot.definition().key())) {
         scheduleManager.delete(snapshot.definition().key());
       }
     }
   }
 
-  ScheduleDefinition definition(ScheduleRecord record) {
-    Long definitionId = record.getJobDefinitionId();
-    ScheduleKey key = OfflineSyncScheduleConstants.key(definitionId);
+  ScheduleDefinition definition(OfflineSchedule record) {
+    Long definitionId = record.jobDefinitionId();
     return new ScheduleDefinition(
-        key,
+        OfflineSyncScheduleConstants.key(definitionId),
         "离线同步任务定义 " + definitionId,
-        ScheduleTrigger.cron(record.getCronExpression(), zoneId()),
+        ScheduleTrigger.cron(record.cronExpression(), zoneId()),
         new ScheduleTarget(
             OfflineSyncScheduleConstants.HANDLER_NAME,
-            Map.of(
-                OfflineSyncScheduleConstants.PAYLOAD_DEFINITION_ID,
-                definitionId.toString())),
-        new SchedulePolicy(
-            ConcurrencyPolicy.FORBID,
-            MisfirePolicy.FIRE_ONCE_NOW,
-            0),
-        record.isEnabled(),
-        Map.of(
-            "businessType", "OFFLINE_SYNC",
-            "definitionId", definitionId.toString()));
+            Map.of(OfflineSyncScheduleConstants.PAYLOAD_DEFINITION_ID, definitionId.toString())),
+        new SchedulePolicy(ConcurrencyPolicy.FORBID, MisfirePolicy.FIRE_ONCE_NOW, 0),
+        record.enabled(),
+        Map.of("businessType", "OFFLINE_SYNC", "definitionId", definitionId.toString()));
   }
 
   private ZoneId zoneId() {
     String configured = properties.getZoneId();
-    return ZoneId.of(
-        StringUtils.hasText(configured)
-            ? configured.trim()
-            : "Asia/Shanghai");
+    return ZoneId.of(StringUtils.hasText(configured) ? configured.trim() : "Asia/Shanghai");
   }
 
   private LocalDateTime localDateTime(Instant instant) {
-    return instant == null
-        ? null
-        : LocalDateTime.ofInstant(instant, zoneId());
+    return instant == null ? null : LocalDateTime.ofInstant(instant, zoneId());
   }
 }

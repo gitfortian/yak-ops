@@ -2,36 +2,35 @@ package io.yak.ops.business.job.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.ops.common.bean.vo.sync.offline.OfflineJobDefinitionVO;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import org.junit.jupiter.api.Test;
 
 class InMemoryTaskRegistryTest {
 
   @Test
-  void shouldOnlyExposeOnlineTasksWithSchedulePaused() {
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("ONLINE", "PAUSED"))).isTrue();
+  void shouldOnlyExposeOnlineTasksWithoutEnabledSchedule() {
+    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("ONLINE", false))).isTrue();
 
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("OFFLINE", "PAUSED"))).isFalse();
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("ONLINE", "NORMAL"))).isFalse();
+    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("OFFLINE", false))).isFalse();
+    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("ONLINE", true))).isFalse();
   }
 
   @Test
   void shouldRejectIncompleteTaskMetadata() {
     assertThat(InMemoryTaskRegistry.isWorkflowEligible(null)).isFalse();
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(
-        OfflineJobDefinitionVO.builder()
-            .jobName("未完成任务")
-            .releaseState("ONLINE")
-            .scheduleStatus("PAUSED")
-            .build())).isFalse();
+    OfflineJobDefinition incomplete = new OfflineJobDefinition();
+    incomplete.setJobName("未完成任务");
+    incomplete.setReleaseState("ONLINE");
+    incomplete.setScheduleEnabled(false);
+    assertThat(InMemoryTaskRegistry.isWorkflowEligible(incomplete)).isFalse();
   }
 
-  private OfflineJobDefinitionVO task(String releaseState, String scheduleStatus) {
-    return OfflineJobDefinitionVO.builder()
-        .id(1001L)
-        .jobName("用户数据同步")
-        .releaseState(releaseState)
-        .scheduleStatus(scheduleStatus)
-        .build();
+  private OfflineJobDefinition task(String releaseState, boolean scheduleEnabled) {
+    OfflineJobDefinition definition = new OfflineJobDefinition();
+    definition.setId(1001L);
+    definition.setJobName("用户数据同步");
+    definition.setReleaseState(releaseState);
+    definition.setScheduleEnabled(scheduleEnabled);
+    return definition;
   }
 }

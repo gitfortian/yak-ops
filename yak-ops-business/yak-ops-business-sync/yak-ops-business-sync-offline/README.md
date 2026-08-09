@@ -21,6 +21,27 @@ yak:
 
 不再提供客户端管理、Connector 管理、多 Worker 调度、能力匹配、Preflight、动态注册和告警投递。
 
+## 工程分层
+
+离线同步遵循 Yak Ops 统一业务模块边界：
+
+```text
+Controller -> DTO -> Service -> Domain
+           -> Repository -> Adapter -> DAO
+           -> BaseMapper / Mapper XML -> PO -> MySQL
+
+Domain -> View Mapper -> VO -> Controller
+```
+
+约束：
+
+- Controller 只通过 Service 进入业务链路，不直接依赖 Repository、DAO 或 Link-Up Client。
+- Service 和执行状态机使用 Domain，不直接操作 MyBatis PO。
+- Repository 接口只暴露 Domain；PO 与 DAO 仅存在于持久化适配层。
+- DAO 不接收 HTTP DTO；分页筛选使用 DAO 自己的查询条件。
+- 普通单表操作使用 MyBatis-Plus，只有行锁等数据库原子语义进入 Mapper XML。
+- Link-Up 协议对象只存在于 engine/service 内部，不作为 HTTP 响应模型直接暴露。
+
 ## 数据表
 
 仅保留：

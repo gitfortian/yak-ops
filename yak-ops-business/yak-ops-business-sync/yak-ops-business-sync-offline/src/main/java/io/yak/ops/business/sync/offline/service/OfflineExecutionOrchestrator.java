@@ -5,20 +5,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
-import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
+import io.yak.ops.business.sync.offline.domain.OfflineExecutionEvent;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpRequestException;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpTransportException;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository.ScheduleRecord;
 import io.yak.ops.business.sync.offline.service.OfflineExecutionClaimService.ClaimResult;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -32,9 +33,9 @@ import org.springframework.util.StringUtils;
 public class OfflineExecutionOrchestrator {
   private final OfflineJobDefinitionService definitionService;
   private final OfflineExecutionClaimService claimService;
-  private final OfflineJobDefinitionDao definitionDao;
-  private final OfflineJobExecutionDao executionDao;
-  private final OfflineExecutionControlRepository executionRepository;
+  private final OfflineJobDefinitionRepository definitionRepository;
+  private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineExecutionEventRepository eventRepository;
   private final OfflineScheduleRepository scheduleRepository;
   private final LinkUpClient linkUpClient;
   private final OfflineSyncProperties properties;
@@ -43,38 +44,35 @@ public class OfflineExecutionOrchestrator {
   public OfflineExecutionOrchestrator(
       OfflineJobDefinitionService definitionService,
       OfflineExecutionClaimService claimService,
-      OfflineJobDefinitionDao definitionDao,
-      OfflineJobExecutionDao executionDao,
-      OfflineExecutionControlRepository executionRepository,
+      OfflineJobDefinitionRepository definitionRepository,
+      OfflineJobExecutionRepository executionRepository,
+      OfflineExecutionEventRepository eventRepository,
       OfflineScheduleRepository scheduleRepository,
       LinkUpClient linkUpClient,
       OfflineSyncProperties properties,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
     this.definitionService = definitionService;
     this.claimService = claimService;
-    this.definitionDao = definitionDao;
-    this.executionDao = executionDao;
+    this.definitionRepository = definitionRepository;
     this.executionRepository = executionRepository;
+    this.eventRepository = eventRepository;
     this.scheduleRepository = scheduleRepository;
     this.linkUpClient = linkUpClient;
     this.properties = properties;
     this.objectMapper = objectMapper;
   }
 
-  public OfflineJobExecutionPO execute(
+  public OfflineJobExecution execute(
       Long definitionId,
       String triggerType,
       Long retryFromExecutionId,
       int attemptNo) {
-    ClaimResult claim =
-        claimService.claim(definitionId, triggerType, retryFromExecutionId, attemptNo);
-    return submitClaim(
-        claim,
-        definitionService.resolveExecutionJobSpec(claim.getDefinition()));
+    ClaimResult claim = claimService.claim(definitionId, triggerType, retryFromExecutionId, attemptNo);
+    return submitClaim(claim, definitionService.resolveExecutionJobSpec(claim.getDefinition()));
   }
 
   /** 按工作流版本固定的任务配置快照执行，不回读任务当前 JobSpec。 */
-  public OfflineJobExecutionPO executeSnapshot(
+  public OfflineJobExecution executeSnapshot(
       Long definitionId,
       long definitionVersion,
       String configDigest,
@@ -90,7 +88,7 @@ public class OfflineExecutionOrchestrator {
   }
 
   /** 按工作流版本快照和 Attempt 幂等键执行。 */
-  public OfflineJobExecutionPO executeSnapshot(
+  public OfflineJobExecution executeSnapshot(
       Long definitionId,
       long definitionVersion,
       String configDigest,
@@ -110,10 +108,8 @@ public class OfflineExecutionOrchestrator {
         definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));
   }
 
-  private OfflineJobExecutionPO submitClaim(
-      ClaimResult claim,
-      String resolvedExecutionJobSpec) {
-    OfflineJobExecutionPO execution = claim.getExecution();
+  private OfflineJobExecution submitClaim(ClaimResult claim, String resolvedExecutionJobSpec) {
+    OfflineJobExecution execution = claim.getExecution();
     record(
         execution,
         null,
@@ -125,7 +121,7 @@ public class OfflineExecutionOrchestrator {
       LinkUpNodeResponse node = linkUpClient.node();
       execution.setWorkerInstanceId(node.getInstanceId());
       execution.setUpdateTime(LocalDateTime.now());
-      executionDao.updateById(execution);
+      executionRepository.update(execution);
 
       JsonNode jobSpec = readJobSpec(resolvedExecutionJobSpec);
       transition(
@@ -134,56 +130,45 @@ public class OfflineExecutionOrchestrator {
           "SUBMITTING",
           "正在向 Link-Up 提交 JobSpec",
           null);
-      LinkUpJobResponse response =
-          linkUpClient.submit(
-              execution.getExternalExecutionId(),
-              execution.getIdempotencyKey(),
-              execution.getDefinitionVersion(),
-              jobSpec);
+      LinkUpJobResponse response = linkUpClient.submit(
+          execution.getExternalExecutionId(),
+          execution.getIdempotencyKey(),
+          execution.getDefinitionVersion(),
+          jobSpec);
       applySnapshot(execution, response, "SUBMITTED");
       return execution;
-    } catch (LinkUpRequestException e) {
+    } catch (LinkUpRequestException exception) {
       markTerminal(
           execution,
           OfflineExecutionStatus.FAILED,
-          e.getCode() + "：" + e.getMessage(),
+          exception.getCode() + "：" + exception.getMessage(),
           null,
-          e.getStatusCode() == 429 || e.getStatusCode() >= 500);
-      throw e;
-    } catch (LinkUpTransportException e) {
-      if (e.isUncertain()) {
-        execution.setErrorMessage(e.getMessage());
+          exception.getStatusCode() == 429 || exception.getStatusCode() >= 500);
+      throw exception;
+    } catch (LinkUpTransportException exception) {
+      if (exception.isUncertain()) {
+        execution.setErrorMessage(exception.getMessage());
         execution.setLastSyncTime(LocalDateTime.now());
         execution.setUpdateTime(LocalDateTime.now());
-        executionDao.updateById(execution);
+        executionRepository.update(execution);
         record(
             execution,
             execution.getStatus(),
             execution.getStatus(),
             "SUBMIT_UNCERTAIN",
-            e.getMessage(),
+            exception.getMessage(),
             null);
         return execution;
       }
-      markTerminal(
-          execution,
-          OfflineExecutionStatus.FAILED,
-          e.getMessage(),
-          null,
-          true);
-      throw e;
-    } catch (RuntimeException e) {
-      markTerminal(
-          execution,
-          OfflineExecutionStatus.FAILED,
-          e.getMessage(),
-          null,
-          false);
-      throw e;
+      markTerminal(execution, OfflineExecutionStatus.FAILED, exception.getMessage(), null, true);
+      throw exception;
+    } catch (RuntimeException exception) {
+      markTerminal(execution, OfflineExecutionStatus.FAILED, exception.getMessage(), null, false);
+      throw exception;
     }
   }
 
-  public OfflineJobExecutionPO retryFrom(OfflineJobExecutionPO previous) {
+  public OfflineJobExecution retryFrom(OfflineJobExecution previous) {
     if (previous == null || previous.getId() == null) {
       throw new IllegalArgumentException("重试来源实例不能为空");
     }
@@ -194,14 +179,14 @@ public class OfflineExecutionOrchestrator {
         value(previous.getAttemptNo(), 1) + 1);
   }
 
-  public OfflineJobExecutionPO cancel(Long id) {
-    OfflineJobExecutionPO execution = require(id);
+  public OfflineJobExecution cancel(Long id) {
+    OfflineJobExecution execution = require(id);
     if (!OfflineExecutionStatus.isActive(execution.getStatus())) {
       throw new IllegalStateException("当前执行实例已结束，无需停止");
     }
     execution.setCancellationRequested(true);
     execution.setUpdateTime(LocalDateTime.now());
-    executionDao.updateById(execution);
+    executionRepository.update(execution);
     record(
         execution,
         execution.getStatus(),
@@ -210,51 +195,40 @@ public class OfflineExecutionOrchestrator {
         "Yak Ops 已记录取消意图",
         null);
     if (StringUtils.hasText(execution.getEngineJobId())) {
-      applySnapshot(
-          execution,
-          linkUpClient.cancel(execution.getEngineJobId()),
-          "CANCEL_ACCEPTED");
+      applySnapshot(execution, linkUpClient.cancel(execution.getEngineJobId()), "CANCEL_ACCEPTED");
     }
     return execution;
   }
 
   public void applySnapshot(
-      OfflineJobExecutionPO execution,
+      OfflineJobExecution execution,
       LinkUpJobResponse response,
       String eventType) {
-    if (execution == null || response == null) {
-      return;
-    }
+    if (execution == null || response == null) return;
 
     String previous = execution.getStatus();
-    OfflineExecutionStatus next =
-        StringUtils.hasText(response.getStatus())
-            ? OfflineExecutionStatus.parse(response.getStatus())
-            : OfflineExecutionStatus.parse(execution.getStatus());
+    OfflineExecutionStatus next = StringUtils.hasText(response.getStatus())
+        ? OfflineExecutionStatus.parse(response.getStatus())
+        : OfflineExecutionStatus.parse(execution.getStatus());
 
     execution.setEngineJobId(first(response.getJobId(), execution.getEngineJobId()));
-    execution.setWorkerInstanceId(
-        first(response.getWorkerInstanceId(), execution.getWorkerInstanceId()));
+    execution.setWorkerInstanceId(first(response.getWorkerInstanceId(), execution.getWorkerInstanceId()));
     execution.setStatus(next.name());
     execution.setStateVersion(
-        Math.max(
-            value(execution.getStateVersion(), 0L),
-            value(response.getStateVersion(), 0L)));
+        Math.max(value(execution.getStateVersion(), 0L), value(response.getStateVersion(), 0L)));
     execution.setCancellationRequested(
         Boolean.TRUE.equals(response.getCancellationRequested())
             || Boolean.TRUE.equals(execution.getCancellationRequested()));
     execution.setEngineSnapshotJson(write(response));
     execution.setErrorMessage(response.getErrorMessage());
-
     applyMetrics(execution, response);
-
     execution.setDurationMillis(value(response.getDurationMillis(), 0L));
     execution.setStartTime(time(response.getStartTimeMillis()));
     execution.setEndTime(time(response.getEndTimeMillis()));
     execution.setLastSyncTime(LocalDateTime.now());
     execution.setUpdateTime(LocalDateTime.now());
     configureRetry(execution, next, retryable(response, next));
-    executionDao.updateById(execution);
+    executionRepository.update(execution);
     updateDefinition(execution, next);
 
     if (!next.name().equals(previous)) {
@@ -268,9 +242,7 @@ public class OfflineExecutionOrchestrator {
     }
   }
 
-  private void applyMetrics(
-      OfflineJobExecutionPO execution,
-      LinkUpJobResponse response) {
+  private void applyMetrics(OfflineJobExecution execution, LinkUpJobResponse response) {
     JsonNode metrics = response.getMetrics();
     JsonNode commitSummary = response.getCommitSummary();
 
@@ -278,9 +250,7 @@ public class OfflineExecutionOrchestrator {
     long sinkAttemptedRecordCount = number(metrics, "sinkAttemptedRecordCount", 0L);
     long sinkSuccessRecordCount = number(metrics, "sinkSuccessRecordCount", 0L);
     long sinkCommittedRecordCount = number(
-        commitSummary,
-        "successfullyCommittedRecordCount",
-        sinkSuccessRecordCount);
+        commitSummary, "successfullyCommittedRecordCount", sinkSuccessRecordCount);
     double sourceAverageQps = decimal(metrics, "sourceAverageQps", 0D);
     double sinkAverageQps = decimal(metrics, "sinkAverageQps", 0D);
 
@@ -299,30 +269,20 @@ public class OfflineExecutionOrchestrator {
     execution.setQps(sourceAverageQps > 0D ? sourceAverageQps : sinkAverageQps);
   }
 
-  public void markLost(OfflineJobExecutionPO execution, String message) {
+  public void markLost(OfflineJobExecution execution, String message) {
     if (execution != null && OfflineExecutionStatus.isActive(execution.getStatus())) {
-      markTerminal(
-          execution,
-          OfflineExecutionStatus.LOST,
-          message,
-          null,
-          true);
+      markTerminal(execution, OfflineExecutionStatus.LOST, message, null, true);
     }
   }
 
-  public OfflineJobExecutionPO require(Long id) {
-    if (id == null || id <= 0L) {
-      throw new IllegalArgumentException("任务实例 ID 不合法");
-    }
-    OfflineJobExecutionPO execution = executionDao.selectById(id);
-    if (execution == null) {
-      throw new IllegalArgumentException("离线同步任务实例不存在：" + id);
-    }
-    return execution;
+  public OfflineJobExecution require(Long id) {
+    if (id == null || id <= 0L) throw new IllegalArgumentException("任务实例 ID 不合法");
+    return executionRepository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("离线同步任务实例不存在：" + id));
   }
 
   private void markTerminal(
-      OfflineJobExecutionPO execution,
+      OfflineJobExecution execution,
       OfflineExecutionStatus status,
       String message,
       String payload,
@@ -335,25 +295,14 @@ public class OfflineExecutionOrchestrator {
     execution.setLastSyncTime(LocalDateTime.now());
     execution.setUpdateTime(LocalDateTime.now());
     configureRetry(execution, status, retryable);
-    executionDao.updateById(execution);
+    executionRepository.update(execution);
     updateDefinition(execution, status);
-    record(
-        execution,
-        previous,
-        status.name(),
-        status.name(),
-        message,
-        payload);
+    record(execution, previous, status.name(), status.name(), message, payload);
   }
 
-  private void updateDefinition(
-      OfflineJobExecutionPO execution,
-      OfflineExecutionStatus status) {
-    OfflineJobDefinitionPO definition =
-        definitionDao.selectById(execution.getJobDefinitionId());
-    if (definition == null) {
-      return;
-    }
+  private void updateDefinition(OfflineJobExecution execution, OfflineExecutionStatus status) {
+    OfflineJobDefinition definition = definitionRepository.findById(execution.getJobDefinitionId()).orElse(null);
+    if (definition == null) return;
     definition.setLastExecutionId(execution.getId());
     definition.setLastEngineJobId(execution.getEngineJobId());
     definition.setLastJobStatus(status.name());
@@ -362,17 +311,15 @@ public class OfflineExecutionOrchestrator {
     definition.setLastReadRowCount(execution.getSourceRecordCount());
     definition.setLastQps(execution.getQps());
     definition.setLastSyncBytes(
-        Math.max(
-            value(execution.getSourceReadBytes(), 0L),
-            value(execution.getSinkWrittenBytes(), 0L)));
+        Math.max(value(execution.getSourceReadBytes(), 0L), value(execution.getSinkWrittenBytes(), 0L)));
     definition.setLastStartTime(execution.getStartTime());
     definition.setLastEndTime(execution.getEndTime());
     definition.setUpdateTime(LocalDateTime.now());
-    definitionDao.updateById(definition);
+    definitionRepository.update(definition);
   }
 
   private void transition(
-      OfflineJobExecutionPO execution,
+      OfflineJobExecution execution,
       OfflineExecutionStatus target,
       String type,
       String message,
@@ -381,53 +328,36 @@ public class OfflineExecutionOrchestrator {
     execution.setStatus(target.name());
     execution.setStateVersion(value(execution.getStateVersion(), 0L) + 1L);
     execution.setUpdateTime(LocalDateTime.now());
-    executionDao.updateById(execution);
-    record(
-        execution,
-        previous,
-        target.name(),
-        type,
-        message,
-        payload);
+    executionRepository.update(execution);
+    record(execution, previous, target.name(), type, message, payload);
   }
 
   private void configureRetry(
-      OfflineJobExecutionPO execution,
+      OfflineJobExecution execution,
       OfflineExecutionStatus status,
       boolean retryable) {
     execution.setNextRetryTime(null);
     if (!retryable
-        || (status != OfflineExecutionStatus.FAILED
-            && status != OfflineExecutionStatus.LOST)) {
+        || (status != OfflineExecutionStatus.FAILED && status != OfflineExecutionStatus.LOST)) {
       return;
     }
-    ScheduleRecord schedule =
-        scheduleRepository.findSchedule(execution.getJobDefinitionId());
+    OfflineSchedule schedule = scheduleRepository.findSchedule(execution.getJobDefinitionId());
     int attempts = schedule == null
         ? properties.getControl().getDefaultMaxAttempts()
-        : schedule.getRetryMaxAttempts();
+        : schedule.retryMaxAttempts();
     int backoff = schedule == null
         ? properties.getControl().getDefaultRetryBackoffSeconds()
-        : schedule.getRetryBackoffSeconds();
+        : schedule.retryBackoffSeconds();
     if (value(execution.getAttemptNo(), 1) < Math.max(1, attempts)) {
-      execution.setNextRetryTime(
-          LocalDateTime.now().plusSeconds(Math.max(1, backoff)));
+      execution.setNextRetryTime(LocalDateTime.now().plusSeconds(Math.max(1, backoff)));
     }
   }
 
-  private boolean retryable(
-      LinkUpJobResponse response,
-      OfflineExecutionStatus status) {
-    if (status == OfflineExecutionStatus.LOST) {
-      return true;
-    }
-    if (status != OfflineExecutionStatus.FAILED) {
-      return false;
-    }
+  private boolean retryable(LinkUpJobResponse response, OfflineExecutionStatus status) {
+    if (status == OfflineExecutionStatus.LOST) return true;
+    if (status != OfflineExecutionStatus.FAILED) return false;
     String code = response == null ? null : response.getErrorCode();
-    if (!StringUtils.hasText(code)) {
-      return true;
-    }
+    if (!StringUtils.hasText(code)) return true;
     String normalized = code.toUpperCase(java.util.Locale.ROOT);
     return !(normalized.contains("CONFIG")
         || normalized.contains("VALIDATION")
@@ -437,9 +367,7 @@ public class OfflineExecutionOrchestrator {
   }
 
   private JsonNode readJobSpec(String value) {
-    if (!StringUtils.hasText(value)) {
-      throw new IllegalStateException("任务缺少 Link-Up JobSpec");
-    }
+    if (!StringUtils.hasText(value)) throw new IllegalStateException("任务缺少 Link-Up JobSpec");
     try {
       JsonNode node = objectMapper.readTree(value);
       if (node == null || !node.isObject()) {
@@ -452,20 +380,23 @@ public class OfflineExecutionOrchestrator {
   }
 
   private void record(
-      OfflineJobExecutionPO execution,
+      OfflineJobExecution execution,
       String from,
       String to,
       String type,
       String message,
       String payload) {
-    executionRepository.recordExecutionEvent(
-        execution.getId(),
-        value(execution.getStateVersion(), 0L),
-        from,
-        to,
-        type,
-        message,
-        payload);
+    eventRepository.append(
+        OfflineExecutionEvent.builder()
+            .executionId(execution.getId())
+            .stateVersion(value(execution.getStateVersion(), 0L))
+            .fromStatus(from)
+            .toStatus(to)
+            .eventType(type)
+            .message(message)
+            .payloadJson(payload)
+            .createTime(LocalDateTime.now())
+            .build());
   }
 
   private String write(Object value) {
@@ -489,9 +420,7 @@ public class OfflineExecutionOrchestrator {
   private LocalDateTime time(Long millis) {
     return millis == null || millis <= 0L
         ? null
-        : LocalDateTime.ofInstant(
-            Instant.ofEpochMilli(millis),
-            ZoneId.systemDefault());
+        : LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault());
   }
 
   private String first(String value, String fallback) {

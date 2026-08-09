@@ -3,13 +3,17 @@ package io.yak.ops.business.sync.offline.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
+import io.yak.ops.business.sync.offline.service.support.OfflineSyncViewMapper;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationErrorVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationVO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineEngineHealthVO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionEventVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionLogPageVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionDetailVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionVO;
@@ -27,10 +31,15 @@ public class OfflineJobExecutionService {
   private final OfflineExecutionReadService readService;
   private final OfflineExecutionLogService logService;
   private final OfflineJobDefinitionService definitionService;
+  private final LinkUpClient linkUpClient;
+  private final OfflineSyncViewMapper viewMapper;
+
+  public OfflineEngineHealthVO health() {
+    return viewMapper.engineHealth(linkUpClient.node());
+  }
 
   public OfflineJobExecutionVO execute(Long id) {
-    return readService.toVO(
-        orchestrator.execute(id, "MANUAL", null, 1));
+    return readService.toVO(orchestrator.execute(id, "MANUAL", null, 1));
   }
 
   /** 工作流按发布时固定的任务版本快照执行。 */
@@ -40,13 +49,7 @@ public class OfflineJobExecutionService {
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson) {
-    return executeSnapshot(
-        id,
-        version,
-        configDigest,
-        definitionSnapshotJson,
-        logicalJobSpecJson,
-        null);
+    return executeSnapshot(id, version, configDigest, definitionSnapshotJson, logicalJobSpecJson, null);
   }
 
   /** 工作流按发布快照和 Attempt 幂等键执行。 */
@@ -68,16 +71,14 @@ public class OfflineJobExecutionService {
   }
 
   public OfflineJobExecutionVO executeScheduled(Long id) {
-    return readService.toVO(
-        orchestrator.execute(id, "SCHEDULE", null, 1));
+    return readService.toVO(orchestrator.execute(id, "SCHEDULE", null, 1));
   }
 
   public OfflineJobExecutionVO retry(Long id) {
-    return readService.toVO(
-        orchestrator.retryFrom(readService.require(id)));
+    return readService.toVO(orchestrator.retryFrom(readService.require(id)));
   }
 
-  public OfflineJobExecutionVO retryFrom(OfflineJobExecutionPO previous) {
+  public OfflineJobExecutionVO retryFrom(OfflineJobExecution previous) {
     return readService.toVO(orchestrator.retryFrom(previous));
   }
 
@@ -86,7 +87,7 @@ public class OfflineJobExecutionService {
   }
 
   public OfflineJobExecutionVO cancelLatest(Long definitionId) {
-    OfflineJobDefinitionPO definition = definitionService.require(definitionId);
+    OfflineJobDefinition definition = definitionService.require(definitionId);
     if (definition.getLastExecutionId() == null) {
       throw new IllegalStateException("任务没有可停止的执行实例");
     }
@@ -101,8 +102,7 @@ public class OfflineJobExecutionService {
     return batch(request, false);
   }
 
-  public PagingData<OfflineJobExecutionVO> page(
-      OfflineJobExecutionQueryDTO query) {
+  public PagingData<OfflineJobExecutionVO> page(OfflineJobExecutionQueryDTO query) {
     return readService.page(query);
   }
 
@@ -114,37 +114,28 @@ public class OfflineJobExecutionService {
     return readService.tableMetrics(id);
   }
 
+  public List<OfflineExecutionEventVO> events(Long id) {
+    return readService.events(id);
+  }
+
   /** 旧文本接口保留，并直接渲染新的统一时间线。 */
   public String logs(Long id) {
     return logService.text(readService.require(id));
   }
 
-  public OfflineExecutionLogPageVO logs(
-      Long id,
-      String cursor,
-      int limit) {
-    return logService.logs(
-        readService.require(id),
-        cursor,
-        limit);
+  public OfflineExecutionLogPageVO logs(Long id, String cursor, int limit) {
+    return logService.logs(readService.require(id), cursor, limit);
   }
 
-  public void applySnapshot(
-      OfflineJobExecutionPO execution,
-      LinkUpJobResponse response,
-      String type) {
+  public void applySnapshot(OfflineJobExecution execution, LinkUpJobResponse response, String type) {
     orchestrator.applySnapshot(execution, response, type);
   }
 
-  public void markLost(
-      OfflineJobExecutionPO execution,
-      String message) {
+  public void markLost(OfflineJobExecution execution, String message) {
     orchestrator.markLost(execution, message);
   }
 
-  private OfflineBatchOperationVO batch(
-      OfflineBatchOperationDTO request,
-      boolean execute) {
+  private OfflineBatchOperationVO batch(OfflineBatchOperationDTO request, boolean execute) {
     if (request == null
         || request.getJobDefinitionIds() == null
         || request.getJobDefinitionIds().isEmpty()) {
@@ -155,14 +146,8 @@ public class OfflineJobExecutionService {
     List<OfflineBatchOperationErrorVO> errors = new ArrayList<>();
     for (Long id : request.getJobDefinitionIds()) {
       try {
-        if (id == null || id <= 0L) {
-          throw new IllegalArgumentException("任务定义 ID 不合法");
-        }
-        if (execute) {
-          execute(id);
-        } else {
-          cancelLatest(id);
-        }
+        if (id == null || id <= 0L) throw new IllegalArgumentException("任务定义 ID 不合法");
+        if (execute) execute(id); else cancelLatest(id);
         success++;
       } catch (RuntimeException exception) {
         errors.add(
