@@ -1,4 +1,4 @@
-import { GitBranch, Variable } from 'lucide-react';
+import { CheckCircle2, GitBranch, LoaderCircle, Variable } from 'lucide-react';
 import type { NodeProps } from 'reactflow';
 import WorkflowNodeHandle from '../node/WorkflowNodeHandle';
 import type { WorkflowStartNodeData } from './types';
@@ -14,6 +14,8 @@ const TYPE_LABEL: Record<string, string> = {
 const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeData>) => {
   const visibleInputs = data.inputs.slice(0, 3);
   const moreCount = Math.max(0, data.inputs.length - visibleInputs.length);
+  const running = data.runtimeStatus === 'RUNNING';
+  const succeeded = data.runtimeStatus === 'SUCCESS';
 
   return (
     <div className="group relative w-60">
@@ -21,11 +23,14 @@ const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeDa
         className={[
           'relative overflow-hidden rounded-[15px] border bg-white',
           'shadow-[0_1px_2px_rgba(22,24,35,.06)]',
-          'transition-[border-color,box-shadow] duration-150',
-          'group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
-          selected
-            ? 'border-[#fe2c55] shadow-[0_0_0_2px_rgba(254,44,85,.08)]'
-            : 'border-[#e8e9ec] group-hover:border-[#d7d9de]',
+          'transition-[border-color,box-shadow] duration-200',
+          running
+            ? 'border-[#fe2c55] shadow-[0_0_0_3px_rgba(254,44,85,.08)]'
+            : succeeded
+              ? 'border-[#12b76a] shadow-[0_0_0_2px_rgba(18,183,106,.07)]'
+              : selected
+                ? 'border-[#fe2c55] shadow-[0_0_0_2px_rgba(254,44,85,.08)]'
+                : 'border-[#e8e9ec] group-hover:border-[#d7d9de] group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
         ].join(' ')}
       >
         <div className="flex min-h-9 items-center gap-2.5 px-3 py-3">
@@ -35,6 +40,17 @@ const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeDa
           <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#161823]">
             开始
           </div>
+          {running ? (
+            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-[#fff1f3] px-1.5 text-[10px] font-medium text-[#d92d50]">
+              <LoaderCircle size={11} className="animate-spin" />
+              运行中
+            </span>
+          ) : succeeded ? (
+            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-[#ecfdf3] px-1.5 text-[10px] font-medium text-[#067647]">
+              <CheckCircle2 size={11} />
+              成功
+            </span>
+          ) : null}
         </div>
 
         {visibleInputs.length ? (
