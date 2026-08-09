@@ -85,9 +85,10 @@ public class InMemoryTaskRegistry implements TaskRegistry {
       for (OfflineJobDefinition definition : page.records()) {
         if (!isWorkflowEligible(definition)) continue;
         try {
-          String logicalJobSpec = service.resolveLogicalJobSpec(definition);
-          String id = String.valueOf(definition.getId());
-          String name = definition.getJobName();
+          OfflineJobDefinition current = service.require(definition.getId());
+          String logicalJobSpec = service.resolveLogicalJobSpec(current);
+          String id = String.valueOf(current.getId());
+          String name = current.getJobName();
           TaskDefinition task = new TaskDefinition(id, name, "SYNC");
           taskSnapshot.put(id, task);
           versionSnapshot.put(
@@ -96,12 +97,12 @@ public class InMemoryTaskRegistry implements TaskRegistry {
                   id,
                   name,
                   "SYNC",
-                  Math.max(1, definition.getVersion() == null ? 1 : definition.getVersion()),
-                  definition.getConfigDigest(),
-                  definition.getDefinitionJson(),
+                  Math.max(1, current.getVersion() == null ? 1 : current.getVersion()),
+                  current.getConfigDigest(),
+                  current.getDefinitionJson(),
                   logicalJobSpec));
         } catch (RuntimeException ignored) {
-          // 草稿或没有可执行 JobSpec 的同步任务不进入工作流任务列表。
+          // 草稿、被删除或没有可执行 JobSpec 的同步任务不进入工作流任务列表。
         }
       }
       if (pageNo >= page.pages()) break;
