@@ -15,4 +15,5 @@ public interface OfflineJobDefinitionRepository {
   boolean delete(Long id);
   boolean existsByName(String jobName, Long excludeId);
   OfflinePage<OfflineJobDefinition> page(OfflineDefinitionQuery query);
+  OfflinePage<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query);
 }
