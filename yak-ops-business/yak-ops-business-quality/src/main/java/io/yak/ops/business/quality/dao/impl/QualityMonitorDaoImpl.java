@@ -9,6 +9,7 @@ import io.yak.ops.business.quality.dao.mapper.QualityMonitorSettingMapper;
 import io.yak.ops.business.quality.dao.mapper.QualityQueryMapper;
 import io.yak.ops.business.quality.dao.mapper.QualityRuleMapper;
 import io.yak.ops.business.quality.dao.mapper.QualityTableAssetMapper;
+import io.yak.ops.business.quality.dao.mapper.QualityWriteMapper;
 import io.yak.ops.common.bean.po.quality.QualityAlertEventPO;
 import io.yak.ops.common.bean.po.quality.QualityMonitorPO;
 import io.yak.ops.common.bean.po.quality.QualityMonitorSettingPO;
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Repository;
 @DependsOn("qualityFlyway")
 public class QualityMonitorDaoImpl implements QualityMonitorDao {
   private final QualityQueryMapper queryMapper;
+  private final QualityWriteMapper writeMapper;
   private final QualityMonitorMapper monitorMapper;
   private final QualityRuleMapper ruleMapper;
   private final QualityMonitorSettingMapper settingMapper;
@@ -93,7 +95,7 @@ public class QualityMonitorDaoImpl implements QualityMonitorDao {
     return monitorMapper.selectCount(query) > 0;
   }
 
-  @Override public void lockMonitor(long monitorId) { queryMapper.lockMonitor(monitorId); }
+  @Override public void lockMonitor(long monitorId) { writeMapper.lockMonitor(monitorId); }
 
   @Override
   public boolean updateMonitorResult(long monitorId, String executionNo, String result, LocalDateTime runTime) {
@@ -130,7 +132,7 @@ public class QualityMonitorDaoImpl implements QualityMonitorDao {
   }
 
   @Override public QualityMonitorSettingPO selectSetting(long monitorId) { return settingMapper.selectById(monitorId); }
-  @Override public void upsertSetting(QualityMonitorSettingPO setting) { queryMapper.upsertMonitorSetting(setting); }
+  @Override public void upsertSetting(QualityMonitorSettingPO setting) { writeMapper.upsertMonitorSetting(setting); }
   @Override public List<QualityMonitorSettingPO> selectDue(LocalDateTime now, int limit) { return queryMapper.selectDueMonitors(now, Math.max(1, limit)); }
   @Override public boolean claimSchedule(long monitorId, LocalDateTime expectedRunTime, LocalDateTime nextRunTime) { return queryMapper.claimMonitorSchedule(monitorId, expectedRunTime, nextRunTime) == 1; }
   @Override public void insertAlert(QualityAlertEventPO alert) { alertEventMapper.insert(alert); }
@@ -160,7 +162,7 @@ public class QualityMonitorDaoImpl implements QualityMonitorDao {
 
   @Override
   public int upsertTableAssets(List<QualityTableAssetPO> assets) {
-    for (QualityTableAssetPO asset : assets) queryMapper.upsertTableAsset(asset);
+    for (QualityTableAssetPO asset : assets) writeMapper.upsertTableAsset(asset);
     return assets.size();
   }
 
