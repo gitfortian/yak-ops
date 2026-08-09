@@ -55,11 +55,20 @@ class ResourceLayeringConventionTest {
   }
 
   @Test
-  void serviceDoesNotInjectDaoOrPersistenceObjects() {
-    for (Field field : ResourceServiceImpl.class.getDeclaredFields()) {
-      String type = field.getGenericType().getTypeName();
-      assertThat(type).doesNotContain(".resource.dao.");
-      assertThat(type).doesNotContain(".bean.po.resource.");
+  void serviceInternalsDoNotInjectDaoPoOrHttpModels() throws Exception {
+    for (Class<?> type :
+        List.of(
+            ResourceServiceImpl.class,
+            Class.forName("io.yak.ops.business.resource.service.impl.ResourceServiceSupport"),
+            Class.forName("io.yak.ops.business.resource.service.impl.ResourceFileOperations"))) {
+      for (Field field : type.getDeclaredFields()) {
+        String fieldType = field.getGenericType().getTypeName();
+        assertThat(fieldType).as("field %s.%s", type.getSimpleName(), field.getName())
+            .doesNotContain(".resource.dao.")
+            .doesNotContain(".bean.po.resource.")
+            .doesNotContain(".bean.dto.resource.")
+            .doesNotContain(".bean.vo.resource.");
+      }
     }
   }
 
