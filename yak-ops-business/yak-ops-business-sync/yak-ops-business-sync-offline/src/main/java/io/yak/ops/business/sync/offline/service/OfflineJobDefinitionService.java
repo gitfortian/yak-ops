@@ -160,13 +160,18 @@ public class OfflineJobDefinitionService {
     return support.editDetail(require(id));
   }
 
+  /** 业务模块之间使用 Domain 分页，不经过 HTTP DTO/VO。 */
+  public OfflinePage<OfflineJobDefinition> pageDomain(OfflineDefinitionQuery query) {
+    return definitionRepository.page(query);
+  }
+
   public PagingData<OfflineJobDefinitionVO> page(OfflineJobDefinitionQueryDTO queryDTO) {
     OfflineJobDefinitionQueryDTO query = queryDTO == null ? new OfflineJobDefinitionQueryDTO() : queryDTO;
-    OfflinePage<OfflineJobDefinition> page = definitionRepository.page(
-        new OfflineDefinitionQuery(
-            query.getCurrent(), query.getPageSize(), query.getId(), query.getJobName(), query.getStatus(),
-            query.getSourceType(), query.getSinkType(), query.getSourceTable(), query.getSinkTable(),
-            query.getCreateTimeStart(), query.getCreateTimeEnd()));
+    OfflineDefinitionQuery domainQuery = new OfflineDefinitionQuery(
+        query.getCurrent(), query.getPageSize(), query.getId(), query.getJobName(), query.getStatus(),
+        query.getSourceType(), query.getSinkType(), query.getSourceTable(), query.getSinkTable(),
+        query.getCreateTimeStart(), query.getCreateTimeEnd());
+    OfflinePage<OfflineJobDefinition> page = definitionRepository.pageForView(domainQuery);
     List<OfflineJobDefinitionVO> records = page.records().stream().map(viewMapper::definition).toList();
     return new PagingData<>(
         records,
