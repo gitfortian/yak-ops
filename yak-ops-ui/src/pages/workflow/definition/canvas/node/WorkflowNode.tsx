@@ -30,6 +30,11 @@ interface RuntimeVisual {
 const runtimeVisual = (status?: string): RuntimeVisual | undefined => {
   switch (status) {
     case 'WAITING':
+      return {
+        borderClassName: 'border-[#e4e7ec]',
+        badgeClassName: 'bg-[#f5f6f7] text-[#98a2b3]',
+        icon: <Clock3 size={11} />,
+      };
     case 'READY':
     case 'SUBMITTED':
       return {
