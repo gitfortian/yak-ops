@@ -7,13 +7,14 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionCreateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionVO;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.EdgeDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.NodeDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,14 +41,14 @@ class WorkflowStartDefinitionExecutionTest {
   @Test
   void shouldCompileStartFromEditorMetaAndKeepRuntimeInputClean() {
     WorkflowDefinitionVO created = service.create(
-        new WorkflowDefinitionCreateRequest("start-semantics", null));
+        new WorkflowDefinitionCreateDTO("start-semantics", null));
     service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             "start-semantics",
             null,
             List.of(node("a", "task-a"), node("b", "task-b"), node("c", "task-c")),
-            List.of(new EdgeRequest("a", "c")),
+            List.of(new EdgeDTO("a", "c")),
             Map.of("inputs", Map.of("bizDate", "2026-08-09")),
             startEditorMeta(List.of("a")),
             0L,
@@ -59,21 +60,21 @@ class WorkflowStartDefinitionExecutionTest {
 
     WorkflowInstanceVO prepared = instance("exec-1", "CREATED", 2, 1);
     WorkflowInstanceVO running = instance("exec-1", "RUNNING", 2, 1);
-    ArgumentCaptor<WorkflowRunRequest> requestCaptor = ArgumentCaptor.forClass(WorkflowRunRequest.class);
-    when(runtimeService.run(requestCaptor.capture(), any(), any(), any(), anyBoolean())).thenReturn(prepared);
+    ArgumentCaptor<WorkflowRunSpec> specCaptor = ArgumentCaptor.forClass(WorkflowRunSpec.class);
+    when(runtimeService.run(specCaptor.capture(), any(), any(), any(), anyBoolean())).thenReturn(prepared);
     when(runtimeService.activate("exec-1")).thenReturn(running);
     when(runtimeService.getInstance("exec-1")).thenReturn(running);
 
     service.run(created.id());
 
-    WorkflowRunRequest runtimeRequest = requestCaptor.getValue();
-    assertThat(runtimeRequest.nodes())
-        .extracting(WorkflowRunRequest.NodeRequest::id)
+    WorkflowRunSpec runtimeSpec = specCaptor.getValue();
+    assertThat(runtimeSpec.nodes())
+        .extracting(WorkflowNodeSpec::id)
         .containsExactly("a", "c");
-    assertThat(runtimeRequest.edges())
+    assertThat(runtimeSpec.edges())
         .extracting(edge -> edge.source() + "->" + edge.target())
         .containsExactly("a->c");
-    assertThat(runtimeRequest.input())
+    assertThat(runtimeSpec.input())
         .containsEntry("inputs", Map.of("bizDate", "2026-08-09"))
         .doesNotContainKeys("__yak_start__", "__yak_editor__");
   }
@@ -81,10 +82,10 @@ class WorkflowStartDefinitionExecutionTest {
   @Test
   void shouldKeepLegacyStartMetaInInputReadable() {
     WorkflowDefinitionVO created = service.create(
-        new WorkflowDefinitionCreateRequest("legacy-start", null));
+        new WorkflowDefinitionCreateDTO("legacy-start", null));
     service.update(
         created.id(),
-        new WorkflowDefinitionUpdateRequest(
+        new WorkflowDefinitionUpdateDTO(
             "legacy-start",
             null,
             List.of(node("a", "task-a"), node("b", "task-b")),
@@ -114,8 +115,8 @@ class WorkflowStartDefinitionExecutionTest {
     return input;
   }
 
-  private NodeRequest node(String id, String taskId) {
-    return new NodeRequest(
+  private NodeDTO node(String id, String taskId) {
+    return new NodeDTO(
         id, taskId, 0D, 0D, 1, 0L, 0L, 0L,
         Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
