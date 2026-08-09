@@ -3,6 +3,8 @@ package io.yak.ops.business.sync.offline.service.support;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionEvent;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineEngineHealthVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionEventVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobDefinitionVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionVO;
@@ -101,6 +103,24 @@ public class OfflineSyncViewMapper {
         .message(event.getMessage())
         .payloadJson(event.getPayloadJson())
         .createTime(event.getCreateTime())
+        .build();
+  }
+
+  public OfflineEngineHealthVO engineHealth(LinkUpNodeResponse node) {
+    return OfflineEngineHealthVO.builder()
+        .nodeId(node.getNodeId())
+        .nodeName(node.getNodeName())
+        .instanceId(node.getInstanceId())
+        .version(node.getVersion())
+        .status(node.getStatus())
+        .startedAtMillis(node.getStartedAtMillis())
+        .offlineOnly(node.getOfflineOnly())
+        .maxConcurrentJobs(node.getMaxConcurrentJobs())
+        .maxQueuedJobs(node.getMaxQueuedJobs())
+        .runningJobs(node.getRunningJobs())
+        .queuedJobs(node.getQueuedJobs())
+        .activeJobs(node.getActiveJobs())
+        .lifecycle(node.getLifecycle())
         .build();
   }
 
