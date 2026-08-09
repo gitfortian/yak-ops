@@ -1,9 +1,9 @@
 package io.yak.ops.business.job.task;
 
 import io.yak.framework.common.PagingData;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.service.OfflineJobDefinitionService;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionQueryDTO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobDefinitionVO;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -14,12 +14,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/**
- * 第一阶段任务注册表。
- *
- * <p>注册表本身仅保存在内存中，数据同步任务元数据从现有离线同步定义服务投影而来，
- * 不新增任务表。工作流发布时可从这里取得当前任务版本和逻辑 JobSpec 的不可变快照。</p>
- */
+/** 第一阶段任务注册表；同步任务元数据由离线同步定义服务投影。 */
 @Service
 public class InMemoryTaskRegistry implements TaskRegistry {
 
@@ -31,17 +26,14 @@ public class InMemoryTaskRegistry implements TaskRegistry {
   private final ConcurrentMap<String, TaskDefinition> tasks = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, TaskVersionSnapshot> snapshots = new ConcurrentHashMap<>();
 
-  public InMemoryTaskRegistry(
-      ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider) {
+  public InMemoryTaskRegistry(ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider) {
     this.definitionServiceProvider = definitionServiceProvider;
   }
 
   @Override
   public List<TaskDefinition> list() {
     refresh();
-    return tasks.values().stream()
-        .sorted(Comparator.comparing(TaskDefinition::name))
-        .toList();
+    return tasks.values().stream().sorted(Comparator.comparing(TaskDefinition::name)).toList();
   }
 
   @Override
@@ -49,9 +41,7 @@ public class InMemoryTaskRegistry implements TaskRegistry {
     String normalized = requireTaskId(taskId);
     refresh();
     TaskDefinition task = tasks.get(normalized);
-    if (task == null) {
-      throw new IllegalArgumentException("任务不存在或尚不可执行：" + taskId);
-    }
+    if (task == null) throw new IllegalArgumentException("任务不存在或尚不可执行：" + taskId);
     return task;
   }
 
@@ -60,16 +50,12 @@ public class InMemoryTaskRegistry implements TaskRegistry {
     String normalized = requireTaskId(taskId);
     refresh();
     TaskVersionSnapshot snapshot = snapshots.get(normalized);
-    if (snapshot == null) {
-      throw new IllegalArgumentException("任务不存在或尚不可执行：" + taskId);
-    }
+    if (snapshot == null) throw new IllegalArgumentException("任务不存在或尚不可执行：" + taskId);
     return snapshot;
   }
 
   private String requireTaskId(String taskId) {
-    if (taskId == null || taskId.isBlank()) {
-      throw new IllegalArgumentException("taskId 不能为空");
-    }
+    if (taskId == null || taskId.isBlank()) throw new IllegalArgumentException("taskId 不能为空");
     return taskId.trim();
   }
 
@@ -90,11 +76,9 @@ public class InMemoryTaskRegistry implements TaskRegistry {
       query.setPageSize(PAGE_SIZE);
       PagingData<OfflineJobDefinitionVO> page = service.page(query);
       for (OfflineJobDefinitionVO definition : page.getBizData()) {
-        if (!isWorkflowEligible(definition)) {
-          continue;
-        }
+        if (!isWorkflowEligible(definition)) continue;
         try {
-          OfflineJobDefinitionPO current = service.require(definition.getId());
+          OfflineJobDefinition current = service.require(definition.getId());
           String logicalJobSpec = service.resolveLogicalJobSpec(current);
           String id = String.valueOf(current.getId());
           String name = current.getJobName();
@@ -114,9 +98,7 @@ public class InMemoryTaskRegistry implements TaskRegistry {
           // 草稿或没有可执行 JobSpec 的同步任务不进入工作流任务列表。
         }
       }
-      if (page.getPagination() == null || pageNo >= page.getPagination().getPages()) {
-        break;
-      }
+      if (page.getPagination() == null || pageNo >= page.getPagination().getPages()) break;
       pageNo++;
     }
 
