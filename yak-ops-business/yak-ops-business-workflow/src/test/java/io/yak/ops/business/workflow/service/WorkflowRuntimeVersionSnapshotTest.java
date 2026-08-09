@@ -48,6 +48,9 @@ class WorkflowRuntimeVersionSnapshotTest {
     WorkflowInstanceVO completed = waitForTerminal(prepared.id());
 
     assertThat(completed.status()).isEqualTo("SUCCESS");
+    assertThat(completed.workflowVersionId()).isEqualTo("version-3");
+    assertThat(completed.workflowVersionNo()).isEqualTo(3);
+    assertThat(completed.testRun()).isFalse();
     assertThat(runner.snapshot.get()).isEqualTo(pinned);
     assertThat(completed.nodes().get(0).output()).containsEntry("taskVersion", 17L);
   }
