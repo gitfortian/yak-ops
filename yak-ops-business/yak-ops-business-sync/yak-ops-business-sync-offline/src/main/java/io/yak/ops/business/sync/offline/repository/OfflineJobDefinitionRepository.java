@@ -9,6 +9,7 @@ import java.util.Optional;
 public interface OfflineJobDefinitionRepository {
   void lock(Long id);
   Optional<OfflineJobDefinition> findById(Long id);
+  Optional<OfflineJobDefinition> findForViewById(Long id);
   boolean insert(OfflineJobDefinition definition);
   boolean update(OfflineJobDefinition definition);
   boolean delete(Long id);
