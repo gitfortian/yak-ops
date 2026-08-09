@@ -6,10 +6,10 @@ import io.yak.ops.business.job.task.SyncTaskExecution;
 import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
 import io.yak.ops.business.job.task.TaskRegistry;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.EdgeDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.NodeDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,10 +41,10 @@ class WorkflowPauseSchedulingTest {
     runner.duration("task-b", 20L);
     service = service(runner, "task-a", "task-b");
 
-    WorkflowInstanceVO prepared = service.run(new WorkflowRunRequest(
+    WorkflowInstanceVO prepared = service.run(new WorkflowRunDTO(
         "pause-scheduling",
-        List.of(new NodeRequest("a", "task-a"), new NodeRequest("b", "task-b")),
-        List.of(new EdgeRequest("a", "b")),
+        List.of(node("a", "task-a"), node("b", "task-b")),
+        List.of(new EdgeDTO("a", "b")),
         Map.of()));
     service.activate(prepared.id());
     waitUntilStarted(runner, "task-a");
@@ -68,6 +68,11 @@ class WorkflowPauseSchedulingTest {
     assertThat(completed.status()).isEqualTo("SUCCESS");
     assertThat(node(completed, "b").status()).isEqualTo("SUCCESS");
     assertThat(runner.started("task-b")).isEqualTo(1);
+  }
+
+  private NodeDTO node(String id, String taskId) {
+    return new NodeDTO(
+        id, taskId, 1, 0L, 0L, 0L, Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
 
   private WorkflowRuntimeService service(FakeRunner runner, String... taskIds) {
