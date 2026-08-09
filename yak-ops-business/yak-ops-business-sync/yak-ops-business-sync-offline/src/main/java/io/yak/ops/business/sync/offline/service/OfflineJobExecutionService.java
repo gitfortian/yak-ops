@@ -5,11 +5,14 @@ import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
+import io.yak.ops.business.sync.offline.service.support.OfflineSyncViewMapper;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationErrorVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationVO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineEngineHealthVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionEventVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionLogPageVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionDetailVO;
@@ -28,6 +31,12 @@ public class OfflineJobExecutionService {
   private final OfflineExecutionReadService readService;
   private final OfflineExecutionLogService logService;
   private final OfflineJobDefinitionService definitionService;
+  private final LinkUpClient linkUpClient;
+  private final OfflineSyncViewMapper viewMapper;
+
+  public OfflineEngineHealthVO health() {
+    return viewMapper.engineHealth(linkUpClient.node());
+  }
 
   public OfflineJobExecutionVO execute(Long id) {
     return readService.toVO(orchestrator.execute(id, "MANUAL", null, 1));
