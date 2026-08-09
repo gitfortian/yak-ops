@@ -1,30 +1,162 @@
-import { Copy, Trash2 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { NodeResizer, type NodeProps } from 'reactflow';
+import WorkflowNoteToolbar from './WorkflowNoteToolbar';
 import type { WorkflowNoteData, WorkflowNoteTheme } from './types';
 
-const THEME_META: Record<WorkflowNoteTheme, {
+const NOTE_THEME_META: Record<WorkflowNoteTheme, {
   background: string;
   accent: string;
   border: string;
 }> = {
-  blue: { background: '#eef6ff', accent: '#4f8cff', border: '#8cb8ff' },
-  cyan: { background: '#ecfbfb', accent: '#22a6a6', border: '#78d7d7' },
-  green: { background: '#effaf2', accent: '#3d9b62', border: '#8fd0a7' },
-  yellow: { background: '#fff9e8', accent: '#d69a00', border: '#edcb6a' },
-  pink: { background: '#fff1f5', accent: '#e05a83', border: '#f2a0b9' },
-  violet: { background: '#f5f0ff', accent: '#8b5cf6', border: '#c3a6ff' },
+  blue: { background: '#eef7ff', accent: '#8ec5ff', border: '#5aa7f8' },
+  cyan: { background: '#ecfbfb', accent: '#20b8b0', border: '#0f9d96' },
+  green: { background: '#effaf2', accent: '#39a66a', border: '#248c55' },
+  yellow: { background: '#fff9e8', accent: '#e3a400', border: '#c78e00' },
+  pink: { background: '#fff1f5', accent: '#e85f88', border: '#d94773' },
+  violet: { background: '#f5f0ff', accent: '#8b5cf6', border: '#7245da' },
 };
 
-const THEMES = Object.keys(THEME_META) as WorkflowNoteTheme[];
+const escapeHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;')
+  .replace(/\n/g, '<br>');
+
+const normalizeLink = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (/^(https?:|mailto:)/i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
+const sanitizeNoteHtml = (raw: string) => {
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') return raw;
+
+  const parser = new DOMParser();
+  const documentNode = parser.parseFromString(`<div>${raw}</div>`, 'text/html');
+  const root = documentNode.body.firstElementChild;
+  if (!root) return '';
+
+  const allowedTags = new Set([
+    'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'A', 'UL', 'LI', 'DIV', 'P', 'BR', 'FONT', 'SPAN',
+  ]);
+
+  const sanitizeElement = (element: Element) => {
+    [...element.children].forEach(sanitizeElement);
+
+    if (!allowedTags.has(element.tagName)) {
+      const parent = element.parentNode;
+      if (!parent) return;
+      while (element.firstChild) parent.insertBefore(element.firstChild, element);
+      parent.removeChild(element);
+      return;
+    }
+
+    const href = element.tagName === 'A' ? normalizeLink(element.getAttribute('href') || '') : undefined;
+    const fontSize = element.tagName === 'FONT' ? element.getAttribute('size') || '' : '';
+    [...element.attributes].forEach((attribute) => element.removeAttribute(attribute.name));
+
+    if (element.tagName === 'A' && href) {
+      element.setAttribute('href', href);
+      element.setAttribute('target', '_blank');
+      element.setAttribute('rel', 'noopener noreferrer');
+    }
+    if (element.tagName === 'FONT' && ['1', '3', '5'].includes(fontSize)) {
+      element.setAttribute('size', fontSize);
+    }
+  };
+
+  [...root.children].forEach(sanitizeElement);
+  return root.innerHTML;
+};
+
+const normalizeFontSize = (value: string): '1' | '3' | '5' => {
+  if (value === '5' || value === '16px' || value === '6') return '5';
+  if (value === '3' || value === '14px' || value === '4') return '3';
+  return '1';
+};
 
 const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) => {
-  const theme = THEME_META[data.theme] || THEME_META.blue;
+  const theme = NOTE_THEME_META[data.theme] || NOTE_THEME_META.blue;
   const editable = selected && !data.locked;
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const [currentFontSize, setCurrentFontSize] = useState<'1' | '3' | '5'>('1');
+
+  const resolvedHtml = data.html?.trim() ? data.html : escapeHtml(data.text || '');
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || document.activeElement === editor) return;
+    const sanitized = sanitizeNoteHtml(resolvedHtml);
+    if (editor.innerHTML !== sanitized) editor.innerHTML = sanitized;
+  }, [resolvedHtml]);
+
+  const captureSelection = useCallback(() => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    savedRangeRef.current = range.cloneRange();
+    setCurrentFontSize(normalizeFontSize(String(document.queryCommandValue('fontSize') || '1')));
+  }, []);
+
+  const restoreSelection = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const range = savedRangeRef.current;
+    if (!range) return;
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }, []);
+
+  const syncEditorValue = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const html = sanitizeNoteHtml(editor.innerHTML);
+    if (editor.innerHTML !== html) editor.innerHTML = html;
+    data.onChange?.(id, {
+      text: editor.innerText,
+      html,
+    });
+  }, [data, id]);
+
+  const runCommand = useCallback((command: 'bold' | 'italic' | 'strikeThrough' | 'createLink' | 'insertUnorderedList') => {
+    if (!editable) return;
+    restoreSelection();
+
+    if (command === 'createLink') {
+      const rawUrl = window.prompt('请输入链接地址');
+      const url = rawUrl ? normalizeLink(rawUrl) : undefined;
+      if (!url) return;
+      document.execCommand('createLink', false, url);
+    } else {
+      document.execCommand(command, false);
+    }
+
+    captureSelection();
+    syncEditorValue();
+    data.onCommit?.(id, '注释格式已修改');
+  }, [captureSelection, data, editable, id, restoreSelection, syncEditorValue]);
+
+  const changeFontSize = useCallback((size: '1' | '3' | '5') => {
+    if (!editable) return;
+    restoreSelection();
+    document.execCommand('fontSize', false, size);
+    setCurrentFontSize(size);
+    captureSelection();
+    syncEditorValue();
+    data.onCommit?.(id, '注释字号已修改');
+  }, [captureSelection, data, editable, id, restoreSelection, syncEditorValue]);
 
   return (
     <div
-      className="relative flex h-full w-full flex-col overflow-visible rounded-md border shadow-[0_1px_3px_rgba(22,24,35,.08)] transition-shadow hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]"
+      className="relative flex h-full w-full flex-col overflow-visible rounded-md border shadow-[0_1px_2px_rgba(22,24,35,.06)] transition-shadow hover:shadow-[0_4px_12px_rgba(22,24,35,.08)]"
       style={{
         backgroundColor: theme.background,
         borderColor: selected ? theme.border : 'rgba(22,24,35,.06)',
@@ -34,83 +166,60 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
         isVisible={Boolean(selected && !data.locked)}
         minWidth={240}
         minHeight={88}
-        color={theme.accent}
+        color={theme.border}
         lineStyle={{ borderWidth: 1 }}
         handleStyle={{
           width: 8,
           height: 8,
-          borderRadius: 3,
+          borderRadius: 2,
+          backgroundColor: theme.border,
           border: '1px solid rgba(255,255,255,.95)',
         }}
         onResizeEnd={() => data.onCommit?.(id, '注释大小已调整')}
       />
 
-      <div
-        className="h-2 shrink-0 rounded-t-[5px] opacity-55"
-        style={{ backgroundColor: theme.accent }}
-      />
-
       {selected && !data.locked ? (
-        <div className="nodrag nopan pointer-events-auto absolute -top-10 left-1/2 z-40 flex h-8 -translate-x-1/2 items-center gap-1 rounded-lg border border-[#e4e7ec] bg-white px-1.5 shadow-[0_6px_18px_rgba(22,24,35,.12)]">
-          <div className="flex items-center gap-0.5 pr-1">
-            {THEMES.map((item) => (
-              <button
-                key={item}
-                type="button"
-                aria-label={`切换为${item}主题`}
-                className="flex h-6 w-6 items-center justify-center rounded-md border-0 bg-transparent hover:bg-[#f5f6f7]"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  data.onChange?.(id, { theme: item });
-                  data.onCommit?.(id, '注释主题已修改');
-                }}
-              >
-                <span
-                  className="h-3.5 w-3.5 rounded-full border border-black/5"
-                  style={{ backgroundColor: THEME_META[item].accent }}
-                />
-              </button>
-            ))}
-          </div>
-
-          <div className="h-4 w-px bg-[#e4e7ec]" />
-
-          <button
-            type="button"
-            aria-label="复制注释"
-            className="flex h-6 w-6 items-center justify-center rounded-md border-0 bg-transparent text-[#667085] hover:bg-[#f5f6f7] hover:text-[#344054]"
-            onClick={(event) => {
-              event.stopPropagation();
-              data.onDuplicate?.(id);
+        <div className="absolute -top-[40px] left-1/2 z-40 -translate-x-1/2">
+          <WorkflowNoteToolbar
+            theme={data.theme}
+            currentFontSize={currentFontSize}
+            onThemeChange={(nextTheme) => {
+              data.onChange?.(id, { theme: nextTheme });
+              data.onCommit?.(id, '注释主题已修改');
             }}
-          >
-            <Copy size={13} />
-          </button>
-          <button
-            type="button"
-            aria-label="删除注释"
-            className="flex h-6 w-6 items-center justify-center rounded-md border-0 bg-transparent text-[#667085] hover:bg-[#fff1f3] hover:text-[#d92d50]"
-            onClick={(event) => {
-              event.stopPropagation();
-              data.onDelete?.(id);
+            onFontSizeChange={changeFontSize}
+            onCommand={runCommand}
+            onCopyText={() => {
+              void navigator.clipboard?.writeText(data.text || '');
             }}
-          >
-            <Trash2 size={13} />
-          </button>
+            onDuplicate={() => data.onDuplicate?.(id)}
+            onDelete={() => data.onDelete?.(id)}
+          />
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden px-3 py-2.5">
-        <textarea
-          value={data.text}
-          readOnly={!editable}
-          placeholder="输入注释..."
+      <div className="relative min-h-0 flex-1 overflow-auto px-3 py-2.5">
+        {!data.text && !data.html ? (
+          <div className="pointer-events-none absolute left-3 top-2.5 text-[12px] leading-5 text-[#98a2b3]">
+            输入注释...
+          </div>
+        ) : null}
+        <div
+          ref={editorRef}
+          contentEditable={editable}
+          suppressContentEditableWarning
           className={[
-            'h-full min-h-[52px] w-full resize-none border-0 bg-transparent p-0 text-[12px] leading-5 text-[#475467] outline-none placeholder:text-[#98a2b3]',
+            'min-h-full whitespace-pre-wrap break-words text-[12px] leading-5 text-[#475467] outline-none',
             editable ? 'nodrag nopan nowheel cursor-text' : 'pointer-events-none cursor-default',
+            '[&_a]:text-[#155eef] [&_a]:underline [&_ul]:my-0 [&_ul]:list-disc [&_ul]:pl-5',
           ].join(' ')}
-          onChange={(event) => data.onChange?.(id, { text: event.target.value })}
-          onBlur={() => data.onCommit?.(id, '注释内容已修改')}
+          onInput={syncEditorValue}
+          onBlur={() => {
+            syncEditorValue();
+            data.onCommit?.(id, '注释内容已修改');
+          }}
+          onMouseUp={captureSelection}
+          onKeyUp={captureSelection}
           onKeyDown={(event) => event.stopPropagation()}
         />
       </div>
