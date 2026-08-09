@@ -63,4 +63,33 @@ class OfflineExecutionClaimServiceTest {
     verify(repository).hasActiveExecution(10L);
     verify(executionDao).insert(result.getExecution());
   }
+
+  @Test
+  void shouldPersistWorkflowAttemptAsSnapshotIdempotencyKey() {
+    OfflineJobDefinitionPO definition = new OfflineJobDefinitionPO();
+    definition.setId(10L);
+
+    when(definitionService.require(10L)).thenReturn(definition);
+    when(executionDao.insert(any(OfflineJobExecutionPO.class)))
+        .thenAnswer(invocation -> {
+          OfflineJobExecutionPO execution = invocation.getArgument(0);
+          execution.setId(100L);
+          return true;
+        });
+
+    ClaimResult result = service.claimSnapshot(
+        10L,
+        3L,
+        "digest",
+        "{}",
+        "{\"job\":\"spec\"}",
+        "WORKFLOW",
+        "attempt-123");
+
+    assertThat(result.getExecution().getIdempotencyKey()).isEqualTo("attempt-123");
+    assertThat(result.getExecution().getTriggerType()).isEqualTo("WORKFLOW");
+    verify(repository).lockDefinition(10L);
+    verify(repository).hasActiveExecution(10L);
+    verify(executionDao).insert(result.getExecution());
+  }
 }
