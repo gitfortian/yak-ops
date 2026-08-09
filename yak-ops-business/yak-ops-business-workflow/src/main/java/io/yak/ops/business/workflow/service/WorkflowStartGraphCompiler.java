@@ -78,6 +78,15 @@ final class WorkflowStartGraphCompiler {
       }
     }
 
+    if (selection.explicit()) {
+      for (EdgeRequest edge : edges) {
+        if (reachable.contains(edge.target()) && !reachable.contains(edge.source())) {
+          throw new IllegalStateException(
+              "开始节点未接入完整前置分支：" + edge.source() + " -> " + edge.target());
+        }
+      }
+    }
+
     List<NodeRequest> runtimeNodes = nodes.stream()
         .filter(node -> reachable.contains(node.id()))
         .toList();
