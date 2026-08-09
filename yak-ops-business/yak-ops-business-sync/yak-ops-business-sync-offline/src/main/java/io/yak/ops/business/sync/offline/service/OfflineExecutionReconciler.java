@@ -2,11 +2,11 @@ package io.yak.ops.business.sync.offline.service;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,14 +18,95 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /** 使用 YAML 固定地址持续对账，并通过 instanceId 识别 Worker 重启。 */
-@ConditionalOnOfflineSyncEnabled @Component @RequiredArgsConstructor
+@ConditionalOnOfflineSyncEnabled
+@Component
+@RequiredArgsConstructor
 public class OfflineExecutionReconciler {
-  private static final Logger LOG=LoggerFactory.getLogger(OfflineExecutionReconciler.class);
-  private final OfflineExecutionControlRepository repository;private final OfflineJobExecutionService executionService;private final LinkUpClient linkUpClient;private final OfflineSyncProperties properties;
-  @Scheduled(initialDelayString="${yak.sync.offline.control.reconcile-delay-millis:5000}",fixedDelayString="${yak.sync.offline.control.reconcile-delay-millis:5000}")
-  public void reconcile(){int limit=Math.max(1,properties.getControl().getScanBatchSize());List<OfflineJobExecutionPO> executions=repository.findActiveExecutions(limit);LinkUpNodeResponse node=null;RuntimeException probeError=null;try{node=linkUpClient.node();}catch(RuntimeException e){probeError=e;}for(OfflineJobExecutionPO execution:executions)reconcileExecution(execution,node,probeError);for(OfflineJobExecutionPO execution:repository.findRetryCandidates(LocalDateTime.now(),limit))retry(execution);}
-  private void reconcileExecution(OfflineJobExecutionPO e,LinkUpNodeResponse node,RuntimeException probeError){try{if(probeError!=null)throw probeError;if(node!=null&&StringUtils.hasText(e.getWorkerInstanceId())&&StringUtils.hasText(node.getInstanceId())&&!e.getWorkerInstanceId().equals(node.getInstanceId())){executionService.markLost(e,"Link-Up instanceId 已变化，旧实例执行结果无法继续确认");return;}LinkUpJobResponse response=StringUtils.hasText(e.getEngineJobId())?linkUpClient.getJob(e.getEngineJobId()):linkUpClient.findByExternalExecutionId(e.getExternalExecutionId());executionService.applySnapshot(e,response,"RECONCILED");if(Boolean.TRUE.equals(e.getCancellationRequested())&&StringUtils.hasText(e.getEngineJobId())&&response!=null&&isActive(response.getStatus()))executionService.applySnapshot(e,linkUpClient.cancel(e.getEngineJobId()),"CANCEL_RECONCILED");}catch(RuntimeException ex){if(isPastLostDeadline(e))executionService.markLost(e,"Link-Up 状态对账超时："+ex.getMessage());else LOG.debug("Offline execution reconcile failed, executionId={}",e.getId(),ex);}}
-  private void retry(OfflineJobExecutionPO e){try{executionService.retryFrom(e);repository.markRetryCreated(e.getId());}catch(RuntimeException ex){LOG.warn("Offline execution retry failed, executionId={}",e.getId(),ex);}}
-  private boolean isPastLostDeadline(OfflineJobExecutionPO e){LocalDateTime reference=e.getLastSyncTime()==null?e.getCreateTime():e.getLastSyncTime();return reference!=null&&Duration.between(reference,LocalDateTime.now()).toMillis()>=Math.max(1000,properties.getControl().getLostAfterMillis());}
-  private boolean isActive(String s){return "CREATED".equalsIgnoreCase(s)||"SUBMITTED".equalsIgnoreCase(s)||"QUEUED".equalsIgnoreCase(s)||"RUNNING".equalsIgnoreCase(s);}
+  private static final Logger LOG = LoggerFactory.getLogger(OfflineExecutionReconciler.class);
+
+  private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineJobExecutionService executionService;
+  private final LinkUpClient linkUpClient;
+  private final OfflineSyncProperties properties;
+
+  @Scheduled(
+      initialDelayString = "${yak.sync.offline.control.reconcile-delay-millis:5000}",
+      fixedDelayString = "${yak.sync.offline.control.reconcile-delay-millis:5000}")
+  public void reconcile() {
+    int limit = Math.max(1, properties.getControl().getScanBatchSize());
+    List<OfflineJobExecution> executions = executionRepository.findActiveExecutions(limit);
+    LinkUpNodeResponse node = null;
+    RuntimeException probeError = null;
+    try {
+      node = linkUpClient.node();
+    } catch (RuntimeException exception) {
+      probeError = exception;
+    }
+    for (OfflineJobExecution execution : executions) {
+      reconcileExecution(execution, node, probeError);
+    }
+    for (OfflineJobExecution execution : executionRepository.findRetryCandidates(LocalDateTime.now(), limit)) {
+      retry(execution);
+    }
+  }
+
+  private void reconcileExecution(
+      OfflineJobExecution execution,
+      LinkUpNodeResponse node,
+      RuntimeException probeError) {
+    try {
+      if (probeError != null) throw probeError;
+      if (node != null
+          && StringUtils.hasText(execution.getWorkerInstanceId())
+          && StringUtils.hasText(node.getInstanceId())
+          && !execution.getWorkerInstanceId().equals(node.getInstanceId())) {
+        executionService.markLost(execution, "Link-Up instanceId 已变化，旧实例执行结果无法继续确认");
+        return;
+      }
+      LinkUpJobResponse response = StringUtils.hasText(execution.getEngineJobId())
+          ? linkUpClient.getJob(execution.getEngineJobId())
+          : linkUpClient.findByExternalExecutionId(execution.getExternalExecutionId());
+      executionService.applySnapshot(execution, response, "RECONCILED");
+      if (Boolean.TRUE.equals(execution.getCancellationRequested())
+          && StringUtils.hasText(execution.getEngineJobId())
+          && response != null
+          && isActive(response.getStatus())) {
+        executionService.applySnapshot(
+            execution,
+            linkUpClient.cancel(execution.getEngineJobId()),
+            "CANCEL_RECONCILED");
+      }
+    } catch (RuntimeException exception) {
+      if (isPastLostDeadline(execution)) {
+        executionService.markLost(execution, "Link-Up 状态对账超时：" + exception.getMessage());
+      } else {
+        LOG.debug("Offline execution reconcile failed, executionId={}", execution.getId(), exception);
+      }
+    }
+  }
+
+  private void retry(OfflineJobExecution execution) {
+    try {
+      executionService.retryFrom(execution);
+      executionRepository.markRetryCreated(execution.getId());
+    } catch (RuntimeException exception) {
+      LOG.warn("Offline execution retry failed, executionId={}", execution.getId(), exception);
+    }
+  }
+
+  private boolean isPastLostDeadline(OfflineJobExecution execution) {
+    LocalDateTime reference = execution.getLastSyncTime() == null
+        ? execution.getCreateTime()
+        : execution.getLastSyncTime();
+    return reference != null
+        && Duration.between(reference, LocalDateTime.now()).toMillis()
+            >= Math.max(1000, properties.getControl().getLostAfterMillis());
+  }
+
+  private boolean isActive(String status) {
+    return "CREATED".equalsIgnoreCase(status)
+        || "SUBMITTED".equalsIgnoreCase(status)
+        || "QUEUED".equalsIgnoreCase(status)
+        || "RUNNING".equalsIgnoreCase(status);
+  }
 }
