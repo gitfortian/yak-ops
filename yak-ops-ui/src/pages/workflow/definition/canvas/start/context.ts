@@ -46,6 +46,7 @@ const readStartMeta = (
 export const hydrateWorkflowStartConfig = (
   runtimeInput?: Record<string, unknown>,
   editorMeta?: Record<string, unknown>,
+  legacyRootNodeIds: string[] = [],
 ): WorkflowStartConfig => {
   const input = runtimeInput || {};
   const meta = readStartMeta(editorMeta, input);
@@ -94,9 +95,10 @@ export const hydrateWorkflowStartConfig = (
     }));
   }
 
-  const nextNodeIds = Array.isArray(meta?.nextNodeIds)
+  const hasExplicitNextNodes = Boolean(meta && Object.prototype.hasOwnProperty.call(meta, 'nextNodeIds'));
+  const nextNodeIds = hasExplicitNextNodes && Array.isArray(meta?.nextNodeIds)
     ? [...new Set(meta.nextNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && Boolean(nodeId)))]
-    : [];
+    : [...new Set(legacyRootNodeIds.filter(Boolean))];
 
   return {
     position: normalizePosition(meta?.position),
