@@ -27,6 +27,7 @@ const runtimeStroke = (status?: string) => {
     case 'SUCCESS':
       return '#12b76a';
     case 'FAILED':
+    case 'UPSTREAM_FAILED':
     case 'TIMED_OUT':
       return '#f04438';
     case 'CANCELED':
