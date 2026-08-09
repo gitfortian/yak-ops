@@ -21,17 +21,19 @@ public class OfflineScheduleRepositoryAdapter implements OfflineScheduleReposito
     if (schedule == null || schedule.jobDefinitionId() == null) {
       throw new IllegalArgumentException("调度配置缺少任务定义 ID");
     }
-    OfflineJobDefinitionPO po = new OfflineJobDefinitionPO();
-    po.setId(schedule.jobDefinitionId());
-    po.setScheduleJson(schedule.scheduleJson());
-    po.setScheduleEnabled(schedule.enabled());
-    po.setCronExpression(schedule.cronExpression());
-    po.setRetryMaxAttempts(Math.max(1, schedule.retryMaxAttempts()));
-    po.setRetryBackoffSeconds(Math.max(1, schedule.retryBackoffSeconds()));
-    po.setScheduleLastFireTime(schedule.lastFireTime());
-    po.setScheduleNextFireTime(schedule.nextFireTime());
-    po.setUpdateTime(LocalDateTime.now());
-    if (!dao.updateById(po)) throw new IllegalArgumentException("离线同步任务不存在：" + schedule.jobDefinitionId());
+    LocalDateTime now = LocalDateTime.now();
+    if (!dao.updateSchedule(
+        schedule.jobDefinitionId(),
+        schedule.scheduleJson(),
+        schedule.enabled(),
+        schedule.cronExpression(),
+        Math.max(1, schedule.retryMaxAttempts()),
+        Math.max(1, schedule.retryBackoffSeconds()),
+        schedule.lastFireTime(),
+        schedule.nextFireTime(),
+        now)) {
+      throw new IllegalArgumentException("离线同步任务不存在：" + schedule.jobDefinitionId());
+    }
     return findSchedule(schedule.jobDefinitionId());
   }
 
@@ -47,27 +49,12 @@ public class OfflineScheduleRepositoryAdapter implements OfflineScheduleReposito
 
   @Override
   public void updateRuntimeState(Long definitionId, LocalDateTime last, LocalDateTime next) {
-    OfflineJobDefinitionPO po = new OfflineJobDefinitionPO();
-    po.setId(definitionId);
-    po.setScheduleLastFireTime(last);
-    po.setScheduleNextFireTime(next);
-    po.setUpdateTime(LocalDateTime.now());
-    dao.updateById(po);
+    dao.updateScheduleRuntime(definitionId, last, next, LocalDateTime.now());
   }
 
   @Override
   public void deleteSchedule(Long definitionId) {
-    OfflineJobDefinitionPO po = new OfflineJobDefinitionPO();
-    po.setId(definitionId);
-    po.setScheduleJson(null);
-    po.setScheduleEnabled(false);
-    po.setCronExpression(null);
-    po.setRetryMaxAttempts(1);
-    po.setRetryBackoffSeconds(60);
-    po.setScheduleLastFireTime(null);
-    po.setScheduleNextFireTime(null);
-    po.setUpdateTime(LocalDateTime.now());
-    dao.updateById(po);
+    dao.clearSchedule(definitionId, LocalDateTime.now());
   }
 
   private OfflineSchedule from(OfflineJobDefinitionPO po) {
