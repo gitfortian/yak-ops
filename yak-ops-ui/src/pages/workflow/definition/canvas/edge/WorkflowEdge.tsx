@@ -13,10 +13,6 @@ import WorkflowEdgeInsert from './WorkflowEdgeInsert';
 
 const runtimeStroke = (status?: string) => {
   switch (status) {
-    case 'RUNNING':
-    case 'RESUMING':
-      return '#fe2c55';
-    case 'WAITING':
     case 'READY':
     case 'SUBMITTED':
     case 'PAUSING':
@@ -24,6 +20,9 @@ const runtimeStroke = (status?: string) => {
     case 'SUCCESS_WITH_WARNINGS':
     case 'WARNING':
       return '#f79009';
+    case 'RUNNING':
+    case 'RESUMING':
+      return '#fe2c55';
     case 'SUCCESS':
       return '#12b76a';
     case 'FAILED':
