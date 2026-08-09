@@ -38,8 +38,9 @@ class WorkflowStartDefinitionExecutionTest {
   }
 
   @Test
-  void shouldExcludeUnconnectedRootFromPublishedRuntimeRequest() {
-    WorkflowDefinitionVO created = service.create(new WorkflowDefinitionCreateRequest("start-semantics", null));
+  void shouldCompileStartFromEditorMetaAndKeepRuntimeInputClean() {
+    WorkflowDefinitionVO created = service.create(
+        new WorkflowDefinitionCreateRequest("start-semantics", null));
     service.update(
         created.id(),
         new WorkflowDefinitionUpdateRequest(
@@ -47,7 +48,8 @@ class WorkflowStartDefinitionExecutionTest {
             null,
             List.of(node("a", "task-a"), node("b", "task-b"), node("c", "task-c")),
             List.of(new EdgeRequest("a", "c")),
-            startInput(List.of("a")),
+            Map.of("inputs", Map.of("bizDate", "2026-08-09")),
+            startEditorMeta(List.of("a")),
             0L,
             "CONTINUE_INDEPENDENT_BRANCHES"));
 
@@ -65,22 +67,57 @@ class WorkflowStartDefinitionExecutionTest {
     service.run(created.id());
 
     WorkflowRunRequest runtimeRequest = requestCaptor.getValue();
-    assertThat(runtimeRequest.nodes()).extracting(WorkflowRunRequest.NodeRequest::id).containsExactly("a", "c");
-    assertThat(runtimeRequest.edges()).extracting(edge -> edge.source() + "->" + edge.target()).containsExactly("a->c");
+    assertThat(runtimeRequest.nodes())
+        .extracting(WorkflowRunRequest.NodeRequest::id)
+        .containsExactly("a", "c");
+    assertThat(runtimeRequest.edges())
+        .extracting(edge -> edge.source() + "->" + edge.target())
+        .containsExactly("a->c");
+    assertThat(runtimeRequest.input())
+        .containsEntry("inputs", Map.of("bizDate", "2026-08-09"))
+        .doesNotContainKeys("__yak_start__", "__yak_editor__");
+  }
+
+  @Test
+  void shouldKeepLegacyStartMetaInInputReadable() {
+    WorkflowDefinitionVO created = service.create(
+        new WorkflowDefinitionCreateRequest("legacy-start", null));
+    service.update(
+        created.id(),
+        new WorkflowDefinitionUpdateRequest(
+            "legacy-start",
+            null,
+            List.of(node("a", "task-a"), node("b", "task-b")),
+            List.of(),
+            legacyStartInput(List.of("b")),
+            0L,
+            "CONTINUE_INDEPENDENT_BRANCHES"));
+
+    when(taskRegistry.snapshot("task-b")).thenReturn(snapshot("task-b", "B"));
+    WorkflowDefinitionVO published = service.online(created.id());
+
+    assertThat(published.activeVersionNo()).isEqualTo(1);
+    assertThat(service.versions(created.id()).get(0).nodeCount()).isEqualTo(1);
   }
 
   private TaskVersionSnapshot snapshot(String id, String name) {
     return new TaskVersionSnapshot(id, name, "SYNC", 1L, "digest", "{}", "{}");
   }
 
-  private Map<String, Object> startInput(List<String> nextNodeIds) {
+  private Map<String, Object> startEditorMeta(List<String> nextNodeIds) {
+    return Map.of("__yak_start__", Map.of("version", 2, "nextNodeIds", nextNodeIds));
+  }
+
+  private Map<String, Object> legacyStartInput(List<String> nextNodeIds) {
     Map<String, Object> input = new LinkedHashMap<>();
     input.put("__yak_start__", Map.of("version", 2, "nextNodeIds", nextNodeIds));
     return input;
   }
 
   private NodeRequest node(String id, String taskId) {
-    return new NodeRequest(id, taskId, 0D, 0D, 1, 0L, 0L, 0L, Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
+    return new NodeRequest(
+        id, taskId, 0D, 0D, 1, 0L, 0L, 0L,
+        Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
 
   private WorkflowInstanceVO instance(String id, String status, int nodeCount, int edgeCount) {
