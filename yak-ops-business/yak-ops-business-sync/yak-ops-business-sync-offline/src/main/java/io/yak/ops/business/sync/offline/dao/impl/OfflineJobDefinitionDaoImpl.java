@@ -2,12 +2,14 @@ package io.yak.ops.business.sync.offline.dao.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobDefinitionMapper;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineWriteMapper;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -103,6 +105,62 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
   @Override
   public Long lockById(Long id) {
     return writeMapper.lockDefinition(id);
+  }
+
+  @Override
+  public boolean updateSchedule(
+      Long id,
+      String scheduleJson,
+      boolean enabled,
+      String cronExpression,
+      int retryMaxAttempts,
+      int retryBackoffSeconds,
+      LocalDateTime lastFireTime,
+      LocalDateTime nextFireTime,
+      LocalDateTime updateTime) {
+    return mapper.update(
+        null,
+        Wrappers.<OfflineJobDefinitionPO>lambdaUpdate()
+            .eq(OfflineJobDefinitionPO::getId, id)
+            .set(OfflineJobDefinitionPO::getScheduleJson, scheduleJson)
+            .set(OfflineJobDefinitionPO::getScheduleEnabled, enabled)
+            .set(OfflineJobDefinitionPO::getCronExpression, cronExpression)
+            .set(OfflineJobDefinitionPO::getRetryMaxAttempts, retryMaxAttempts)
+            .set(OfflineJobDefinitionPO::getRetryBackoffSeconds, retryBackoffSeconds)
+            .set(OfflineJobDefinitionPO::getScheduleLastFireTime, lastFireTime)
+            .set(OfflineJobDefinitionPO::getScheduleNextFireTime, nextFireTime)
+            .set(OfflineJobDefinitionPO::getUpdateTime, updateTime)) > 0;
+  }
+
+  @Override
+  public void updateScheduleRuntime(
+      Long id,
+      LocalDateTime lastFireTime,
+      LocalDateTime nextFireTime,
+      LocalDateTime updateTime) {
+    mapper.update(
+        null,
+        Wrappers.<OfflineJobDefinitionPO>lambdaUpdate()
+            .eq(OfflineJobDefinitionPO::getId, id)
+            .set(OfflineJobDefinitionPO::getScheduleLastFireTime, lastFireTime)
+            .set(OfflineJobDefinitionPO::getScheduleNextFireTime, nextFireTime)
+            .set(OfflineJobDefinitionPO::getUpdateTime, updateTime));
+  }
+
+  @Override
+  public void clearSchedule(Long id, LocalDateTime updateTime) {
+    mapper.update(
+        null,
+        Wrappers.<OfflineJobDefinitionPO>lambdaUpdate()
+            .eq(OfflineJobDefinitionPO::getId, id)
+            .set(OfflineJobDefinitionPO::getScheduleJson, null)
+            .set(OfflineJobDefinitionPO::getScheduleEnabled, false)
+            .set(OfflineJobDefinitionPO::getCronExpression, null)
+            .set(OfflineJobDefinitionPO::getRetryMaxAttempts, 1)
+            .set(OfflineJobDefinitionPO::getRetryBackoffSeconds, 60)
+            .set(OfflineJobDefinitionPO::getScheduleLastFireTime, null)
+            .set(OfflineJobDefinitionPO::getScheduleNextFireTime, null)
+            .set(OfflineJobDefinitionPO::getUpdateTime, updateTime));
   }
 
   private <T> void addLike(
