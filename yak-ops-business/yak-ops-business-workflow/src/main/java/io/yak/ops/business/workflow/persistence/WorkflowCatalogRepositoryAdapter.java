@@ -86,7 +86,7 @@ public class WorkflowCatalogRepositoryAdapter implements WorkflowDefinitionPersi
     po.setVersionNo(value.versionNo());
     po.setVersionKind("PUBLISHED");
     po.setDraftRevision(value.draftRevision());
-    po.setRunRequestJson(json.write(value.runSpec()));
+    po.setRunRequestJson(json.write(RunPayload.from(value.runSpec())));
     po.setEditorMetaJson(json.write(value.editorMeta()));
     po.setTaskVersionsJson(json.write(value.taskVersionsByNode()));
     po.setCreateTime(value.publishedAt());
@@ -116,12 +116,13 @@ public class WorkflowCatalogRepositoryAdapter implements WorkflowDefinitionPersi
   }
 
   private VersionRecord toRecord(WorkflowVersionPO po) {
+    RunPayload run = json.read(po.getRunRequestJson(), RunPayload.class);
     return new VersionRecord(
         po.getId(),
         po.getWorkflowId(),
         po.getVersionNo(),
         po.getDraftRevision(),
-        json.read(po.getRunRequestJson(), WorkflowRunSpec.class),
+        run.toSpec(),
         json.readMap(po.getEditorMetaJson()),
         json.readTaskVersions(po.getTaskVersionsJson()),
         po.getCreateTime());
@@ -142,6 +143,76 @@ public class WorkflowCatalogRepositoryAdapter implements WorkflowDefinitionPersi
       failureStrategy = failureStrategy == null || failureStrategy.isBlank()
           ? "CONTINUE_INDEPENDENT_BRANCHES"
           : failureStrategy;
+    }
+  }
+
+  /** Stable runtime-version JSON projection; canvas coordinates stay in draft/editor metadata. */
+  private record RunPayload(
+      String name,
+      List<RunNodePayload> nodes,
+      List<WorkflowEdgeSpec> edges,
+      Map<String, Object> input,
+      long workflowTimeoutSeconds,
+      String failureStrategy) {
+
+    static RunPayload from(WorkflowRunSpec spec) {
+      return new RunPayload(
+          spec.name(),
+          spec.nodes().stream().map(RunNodePayload::from).toList(),
+          spec.edges(),
+          spec.input(),
+          spec.workflowTimeoutSeconds(),
+          spec.failureStrategy());
+    }
+
+    WorkflowRunSpec toSpec() {
+      return new WorkflowRunSpec(
+          name,
+          nodes == null ? List.of() : nodes.stream().map(RunNodePayload::toSpec).toList(),
+          edges == null ? List.of() : edges,
+          input == null ? Map.of() : input,
+          workflowTimeoutSeconds,
+          failureStrategy);
+    }
+  }
+
+  private record RunNodePayload(
+      String id,
+      String taskId,
+      int maxAttempts,
+      long retryDelaySeconds,
+      long dispatchTimeoutSeconds,
+      long executionTimeoutSeconds,
+      Map<String, String> inputMapping,
+      String triggerRule,
+      String failurePolicy) {
+
+    static RunNodePayload from(WorkflowNodeSpec node) {
+      return new RunNodePayload(
+          node.id(),
+          node.taskId(),
+          node.maxAttempts(),
+          node.retryDelaySeconds(),
+          node.dispatchTimeoutSeconds(),
+          node.executionTimeoutSeconds(),
+          node.inputMapping(),
+          node.triggerRule(),
+          node.failurePolicy());
+    }
+
+    WorkflowNodeSpec toSpec() {
+      return new WorkflowNodeSpec(
+          id,
+          taskId,
+          0D,
+          0D,
+          maxAttempts,
+          retryDelaySeconds,
+          dispatchTimeoutSeconds,
+          executionTimeoutSeconds,
+          inputMapping,
+          triggerRule,
+          failurePolicy);
     }
   }
 }
