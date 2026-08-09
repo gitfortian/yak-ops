@@ -11,7 +11,6 @@ import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
 import io.yak.ops.business.workflow.model.WorkflowRunRequest;
 import io.yak.ops.business.workflow.model.WorkflowVersionVO;
 import io.yak.ops.business.workflow.model.WorkflowVersionVO.TaskBindingVO;
-import io.yak.ops.business.workflow.persistence.JdbcWorkflowCatalogRepository;
 import io.yak.ops.business.workflow.persistence.NoopWorkflowDefinitionPersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence.DefinitionRecord;
@@ -33,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -51,18 +51,31 @@ public class WorkflowDefinitionService {
   public WorkflowDefinitionService(
       WorkflowRuntimeService runtimeService,
       TaskRegistry taskRegistry,
-      ObjectProvider<JdbcWorkflowCatalogRepository> persistence) {
-    this(
-        runtimeService,
-        taskRegistry,
-        persistence.getIfAvailable(() -> NoopWorkflowDefinitionPersistence.INSTANCE));
+      ObjectProvider<WorkflowDefinitionPersistence> persistence,
+      @Value("${yak.database.enabled:true}") boolean databaseEnabled) {
+    this(runtimeService, taskRegistry, resolvePersistence(persistence, databaseEnabled));
   }
 
-  /** Focused tests and database-disabled development retain the lightweight in-memory catalog. */
+  /** Focused tests and explicit database-disabled development retain the lightweight catalog. */
   WorkflowDefinitionService(
       WorkflowRuntimeService runtimeService,
       TaskRegistry taskRegistry) {
     this(runtimeService, taskRegistry, NoopWorkflowDefinitionPersistence.INSTANCE);
+  }
+
+  private static WorkflowDefinitionPersistence resolvePersistence(
+      ObjectProvider<WorkflowDefinitionPersistence> provider,
+      boolean databaseEnabled) {
+    WorkflowDefinitionPersistence resolved = provider.getIfAvailable();
+    if (resolved != null) {
+      return resolved;
+    }
+    if (!databaseEnabled) {
+      return NoopWorkflowDefinitionPersistence.INSTANCE;
+    }
+    throw new IllegalStateException(
+        "Workflow durable persistence bean is missing while yak.database.enabled=true: "
+            + "WorkflowDefinitionPersistence");
   }
 
   WorkflowDefinitionService(
