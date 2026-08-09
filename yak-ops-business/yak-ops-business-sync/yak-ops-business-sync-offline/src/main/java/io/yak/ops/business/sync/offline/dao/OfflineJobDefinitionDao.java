@@ -1,14 +1,11 @@
 package io.yak.ops.business.sync.offline.dao;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionQueryDTO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
+import java.time.LocalDateTime;
+import java.util.List;
 
-/**
- * 离线同步任务定义数据访问接口。
- *
- * @author weifuwan
- */
+/** 离线同步任务定义数据访问接口，只暴露持久化模型和 DAO 查询条件。 */
 public interface OfflineJobDefinitionDao {
 
   OfflineJobDefinitionPO selectById(Long id);
@@ -21,5 +18,22 @@ public interface OfflineJobDefinitionDao {
 
   boolean existsByName(String jobName, Long excludeId);
 
-  IPage<OfflineJobDefinitionPO> selectPage(OfflineJobDefinitionQueryDTO queryDTO);
+  IPage<OfflineJobDefinitionPO> selectPage(PageQuery query);
+
+  List<OfflineJobDefinitionPO> selectWithCron();
+
+  Long lockById(Long id);
+
+  record PageQuery(
+      int current,
+      int pageSize,
+      Long id,
+      String jobName,
+      String status,
+      String sourceType,
+      String sinkType,
+      String sourceTable,
+      String sinkTable,
+      LocalDateTime createTimeStart,
+      LocalDateTime createTimeEnd) {}
 }
