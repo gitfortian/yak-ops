@@ -164,61 +164,98 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
   };
 
   return (
-    <header className="flex h-[48px] shrink-0 items-center justify-end border-b border-[#ebecef] bg-white px-3">
-      <div className="flex items-center gap-1.5">
-        <Tooltip title="运行最近保存的工作流配置">
-          <Button
-            size="small"
-            loading={testing}
-            disabled={!definition?.id}
-            icon={<Play size={14} />}
-            onClick={() => void handleTestRun()}
-            className="!h-8 !rounded-lg !border-[#dfe2e7] !px-3 !text-[12px] !font-medium !text-[#344054] shadow-none"
-          >
-            测试运行
-          </Button>
-        </Tooltip>
-
-        <Popover
-          open={publishOpen}
-          onOpenChange={setPublishOpen}
-          trigger="click"
-          placement="bottomRight"
-          arrow={false}
-          content={publishContent}
-          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
-        >
-          <Button
-            type="primary"
-            size="small"
-            icon={<Rocket size={14} />}
-            className="!h-8 !rounded-lg !px-3.5 !text-[12px] !font-medium"
-          >
-            发布
-            <ChevronDown size={13} className="ml-1" />
-          </Button>
-        </Popover>
-
-        <Popover
-          open={versionOpen}
-          onOpenChange={setVersionOpen}
-          trigger="click"
-          placement="bottomRight"
-          arrow={false}
-          content={versionContent}
-          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
-        >
-          <Tooltip title="版本">
+    <>
+      <style>{`
+        .workflow-editor-toolbar + div::before {
+          position: absolute;
+          top: 12px;
+          left: 14px;
+          z-index: 8;
+          display: inline-flex;
+          align-items: center;
+          height: 24px;
+          padding: 0 9px;
+          border: 1px solid rgba(22, 24, 35, .06);
+          border-radius: 7px;
+          background: rgba(255, 255, 255, .86);
+          box-shadow: 0 2px 8px rgba(22, 24, 35, .05);
+          backdrop-filter: blur(8px);
+          color: #667085;
+          font-size: 10px;
+          font-weight: 500;
+          line-height: 24px;
+          pointer-events: none;
+        }
+        .workflow-editor-toolbar[data-workflow-status='DRAFT'] + div::before {
+          content: '●  草稿';
+        }
+        .workflow-editor-toolbar[data-workflow-status='OFFLINE'] + div::before {
+          content: '●  未发布';
+        }
+        .workflow-editor-toolbar[data-workflow-status='ONLINE'] + div::before {
+          content: '●  已发布';
+          color: #d92d50;
+        }
+      `}</style>
+      <header
+        data-workflow-status={status}
+        className="workflow-editor-toolbar flex h-[48px] shrink-0 items-center justify-end border-b border-[#ebecef] bg-white px-3"
+      >
+        <div className="flex items-center gap-1.5">
+          <Tooltip title="运行最近保存的工作流配置">
             <Button
               size="small"
-              aria-label="版本"
-              icon={<History size={15} />}
-              className="!h-8 !rounded-lg !border-[#dfe2e7] !px-2.5 !text-[#667085] shadow-none"
-            />
+              loading={testing}
+              disabled={!definition?.id}
+              icon={<Play size={14} />}
+              onClick={() => void handleTestRun()}
+              className="!h-8 !rounded-lg !border-[#dfe2e7] !px-3 !text-[12px] !font-medium !text-[#344054] shadow-none"
+            >
+              测试运行
+            </Button>
           </Tooltip>
-        </Popover>
-      </div>
-    </header>
+
+          <Popover
+            open={publishOpen}
+            onOpenChange={setPublishOpen}
+            trigger="click"
+            placement="bottomRight"
+            arrow={false}
+            content={publishContent}
+            overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
+          >
+            <Button
+              type="primary"
+              size="small"
+              icon={<Rocket size={14} />}
+              className="!h-8 !rounded-lg !px-3.5 !text-[12px] !font-medium"
+            >
+              发布
+              <ChevronDown size={13} className="ml-1" />
+            </Button>
+          </Popover>
+
+          <Popover
+            open={versionOpen}
+            onOpenChange={setVersionOpen}
+            trigger="click"
+            placement="bottomRight"
+            arrow={false}
+            content={versionContent}
+            overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
+          >
+            <Tooltip title="版本">
+              <Button
+                size="small"
+                aria-label="版本"
+                icon={<History size={15} />}
+                className="!h-8 !rounded-lg !border-[#dfe2e7] !px-2.5 !text-[#667085] shadow-none"
+              />
+            </Tooltip>
+          </Popover>
+        </div>
+      </header>
+    </>
   );
 };
 
