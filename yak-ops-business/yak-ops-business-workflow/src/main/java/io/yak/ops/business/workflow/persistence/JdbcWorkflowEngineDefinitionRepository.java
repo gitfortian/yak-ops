@@ -74,7 +74,7 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
       stored = stored(definition.id());
     }
 
-    if (!json.equals(stored.json())) {
+    if (!sameJson(json, stored.json())) {
       throw new IllegalStateException(
           "工作流版本的 Engine Definition 已固定，禁止覆盖：" + definition.id());
     }
@@ -102,6 +102,15 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
     return values.isEmpty()
         ? new StoredDefinition(false, null)
         : new StoredDefinition(true, values.get(0));
+  }
+
+  private boolean sameJson(String left, String right) {
+    if (left == null || right == null) return left == right;
+    try {
+      return objectMapper.readTree(left).equals(objectMapper.readTree(right));
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("比较 Engine Definition JSON 失败", exception);
+    }
   }
 
   private String write(EngineDefinitionSnapshot snapshot) {
