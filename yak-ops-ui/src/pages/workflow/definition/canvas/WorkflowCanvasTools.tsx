@@ -10,8 +10,9 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { useNodesInitialized, useReactFlow } from 'reactflow';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNodesInitialized, useReactFlow, useViewport } from 'reactflow';
+import WorkflowNodeIcon from './node/icons/WorkflowNodeIcon';
 import WorkflowTaskPicker from './WorkflowTaskPicker';
 import type { WorkflowCanvasTaskOption } from './types';
 import type { WorkflowCanvasHistoryEntry } from './useWorkflowCanvasHistory';
@@ -33,6 +34,11 @@ interface WorkflowCanvasToolsProps<T> {
   onRedo: () => void;
   onJumpToHistory: (index: number) => void;
   onClearHistory: () => void;
+}
+
+interface CandidatePointer {
+  x: number;
+  y: number;
 }
 
 const iconButtonClass = (active = false) => [
@@ -68,9 +74,30 @@ const WorkflowCanvasTools = <T,>({
   onClearHistory,
 }: WorkflowCanvasToolsProps<T>) => {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [candidateTaskId, setCandidateTaskId] = useState<string>();
+  const [candidatePointer, setCandidatePointer] = useState<CandidatePointer>();
+  const lastPointerRef = useRef<CandidatePointer>({ x: 0, y: 0 });
   const reactFlow = useReactFlow();
+  const { zoom } = useViewport();
   const nodesInitialized = useNodesInitialized();
   const initialFitDoneRef = useRef(false);
+
+  const candidateTask = taskOptions.find((task) => task.id === candidateTaskId);
+
+  const cancelCandidate = useCallback(() => {
+    setCandidateTaskId(undefined);
+    setCandidatePointer(undefined);
+  }, []);
+
+  const beginCandidate = useCallback((taskId: string) => {
+    if (locked) return;
+    setHistoryOpen(false);
+    onModeChange('pointer');
+    setCandidateTaskId(taskId);
+    setCandidatePointer(lastPointerRef.current.x || lastPointerRef.current.y
+      ? { ...lastPointerRef.current }
+      : undefined);
+  }, [locked, onModeChange]);
 
   useEffect(() => {
     if (!nodesInitialized || initialFitDoneRef.current) return;
@@ -83,8 +110,93 @@ const WorkflowCanvasTools = <T,>({
   }, [nodesInitialized, reactFlow]);
 
   useEffect(() => {
+    const rememberPointer = (event: PointerEvent) => {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener('pointermove', rememberPointer, { passive: true });
+    return () => window.removeEventListener('pointermove', rememberPointer);
+  }, []);
+
+  useEffect(() => {
+    if (!candidateTaskId) return;
+
+    const previousCursor = document.body.style.cursor;
+    document.body.style.cursor = 'crosshair';
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const next = { x: event.clientX, y: event.clientY };
+      lastPointerRef.current = next;
+      setCandidatePointer(next);
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const target = event.target instanceof Element
+        ? event.target
+        : document.elementFromPoint(event.clientX, event.clientY);
+      const flowRoot = target?.closest('.react-flow');
+      if (!flowRoot || !candidateTask) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      try {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.setData('application/yak-workflow-task', JSON.stringify({
+          id: candidateTask.id,
+          name: candidateTask.label,
+          type: candidateTask.taskType || 'SYNC',
+        }));
+        dataTransfer.effectAllowed = 'move';
+
+        flowRoot.dispatchEvent(new DragEvent('drop', {
+          bubbles: true,
+          cancelable: true,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          dataTransfer,
+        }));
+      } catch {
+        // Older browser fallback: preserve the previous add behavior instead of losing the action.
+        onAddTask(candidateTask.id);
+      }
+
+      cancelCandidate();
+    };
+
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      cancelCandidate();
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (locked || isEditableTarget(event.target)) return;
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      cancelCandidate();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('click', handleClick, true);
+    window.addEventListener('contextmenu', handleContextMenu, true);
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('click', handleClick, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [candidateTask, candidateTaskId, cancelCandidate, onAddTask]);
+
+  useEffect(() => {
+    if (!locked) return;
+    cancelCandidate();
+  }, [cancelCandidate, locked]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (locked || candidateTaskId || isEditableTarget(event.target)) return;
 
       const modifier = event.metaKey || event.ctrlKey;
       if (modifier && event.key.toLowerCase() === 'z') {
@@ -106,7 +218,7 @@ const WorkflowCanvasTools = <T,>({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [locked, onModeChange, onRedo, onUndo]);
+  }, [candidateTaskId, locked, onModeChange, onRedo, onUndo]);
 
   const historyContent = (
     <div className="w-[320px] overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-[0_12px_36px_rgba(22,24,35,.14)]">
@@ -198,12 +310,33 @@ const WorkflowCanvasTools = <T,>({
         }
       `}</style>
 
+      {candidateTask && candidatePointer ? (
+        <div
+          className="pointer-events-none fixed z-[1000] w-60"
+          style={{
+            left: candidatePointer.x,
+            top: candidatePointer.y,
+            transform: `scale(${zoom})`,
+            transformOrigin: '0 0',
+          }}
+        >
+          <div className="rounded-[15px] border border-[#d7d9de] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(22,24,35,.14)] opacity-95">
+            <div className="flex min-h-9 items-center gap-2.5">
+              <WorkflowNodeIcon taskType={candidateTask.taskType} />
+              <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#161823]">
+                {candidateTask.label}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="pointer-events-auto absolute left-3 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center rounded-lg border border-[#e4e7ec] bg-white p-0.5 shadow-[0_4px_14px_rgba(22,24,35,.08)]">
         <WorkflowTaskPicker
           options={taskOptions}
           disabled={locked || !taskOptions.length}
           placement="rightTop"
-          onSelect={onAddTask}
+          onSelect={beginCandidate}
         >
           <span>
             <Tooltip title="新增节点" placement="right">
@@ -211,7 +344,7 @@ const WorkflowCanvasTools = <T,>({
                 type="button"
                 aria-label="新增节点"
                 disabled={locked || !taskOptions.length}
-                className={`${iconButtonClass()} ${disabledButtonClass}`}
+                className={`${iconButtonClass(Boolean(candidateTaskId))} ${disabledButtonClass}`}
               >
                 <CirclePlus size={16} strokeWidth={1.9} />
               </button>
