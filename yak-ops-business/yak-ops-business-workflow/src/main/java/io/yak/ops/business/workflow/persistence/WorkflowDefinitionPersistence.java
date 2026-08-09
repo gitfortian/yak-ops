@@ -1,9 +1,9 @@
 package io.yak.ops.business.workflow.persistence;
 
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
+import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +28,8 @@ public interface WorkflowDefinitionPersistence {
       String description,
       String status,
       String failureStrategy,
-      List<NodeRequest> nodes,
-      List<EdgeRequest> edges,
+      List<WorkflowNodeSpec> nodes,
+      List<WorkflowEdgeSpec> edges,
       Map<String, Object> input,
       Map<String, Object> editorMeta,
       long workflowTimeoutSeconds,
@@ -47,7 +47,7 @@ public interface WorkflowDefinitionPersistence {
       String workflowId,
       int versionNo,
       long draftRevision,
-      WorkflowRunRequest runRequest,
+      WorkflowRunSpec runSpec,
       Map<String, Object> editorMeta,
       Map<String, TaskVersionSnapshot> taskVersionsByNode,
       Instant publishedAt) {
