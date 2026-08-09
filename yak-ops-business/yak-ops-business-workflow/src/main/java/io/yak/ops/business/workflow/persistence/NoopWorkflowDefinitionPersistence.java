@@ -27,7 +27,7 @@ public final class NoopWorkflowDefinitionPersistence implements WorkflowDefiniti
   }
 
   @Override
-  public void saveVersion(VersionRecord version) {
+  public void publish(DefinitionRecord definition, VersionRecord version) {
     // In-memory WorkflowDefinitionService remains the fallback fact source.
   }
 
