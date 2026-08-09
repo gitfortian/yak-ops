@@ -5,11 +5,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
-import io.yak.ops.business.quality.api.QualityWorkspaceApi.MonitorReportView;
-import io.yak.ops.business.quality.api.QualityWorkspaceApi.MonitorWorkspaceView;
-import io.yak.ops.business.quality.api.QualityWorkspaceApi.OperationLogPageView;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.service.QualityWorkspaceService;
+import io.yak.ops.common.bean.vo.quality.QualityWorkspaceVO;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/monitor")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
 public class QualityWorkspaceController {
-
   private final QualityWorkspaceService service;
 
   public QualityWorkspaceController(QualityWorkspaceService service) {
@@ -33,13 +30,13 @@ public class QualityWorkspaceController {
 
   @Operation(summary = "查询质量监控工作台")
   @GetMapping("/{id}/workspace")
-  public Result<MonitorWorkspaceView> workspace(@PathVariable long id) {
+  public Result<QualityWorkspaceVO.MonitorWorkspace> workspace(@PathVariable long id) {
     return Result.success(service.workspace(id));
   }
 
   @Operation(summary = "查询质量监控报告")
   @GetMapping("/{id}/report")
-  public Result<MonitorReportView> report(
+  public Result<QualityWorkspaceVO.MonitorReport> report(
       @PathVariable long id,
       @RequestParam(value = "date", required = false)
       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -48,7 +45,7 @@ public class QualityWorkspaceController {
 
   @Operation(summary = "查询质量监控操作日志")
   @GetMapping("/{id}/operation-log")
-  public Result<OperationLogPageView> operationLog(
+  public Result<QualityWorkspaceVO.OperationLogPage> operationLog(
       @PathVariable long id,
       @RequestParam(value = "current", required = false) Integer current,
       @RequestParam(value = "pageSize", required = false) Integer pageSize) {
