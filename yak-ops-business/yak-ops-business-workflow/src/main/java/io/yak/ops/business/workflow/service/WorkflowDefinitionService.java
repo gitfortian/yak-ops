@@ -238,10 +238,15 @@ public class WorkflowDefinitionService {
     if (visited != nodeIds.size()) {
       throw new IllegalStateException("工作流存在循环依赖，不能上线");
     }
+
+    // Start is editor-only, but its explicit connections define which roots enter the runtime DAG.
+    WorkflowStartGraphCompiler.compile(state.nodes, state.edges, state.input);
   }
 
   private WorkflowRunRequest toRunRequest(DefinitionState state) {
-    List<WorkflowRunRequest.NodeRequest> nodes = state.nodes.stream()
+    WorkflowStartGraphCompiler.RuntimeGraph runtimeGraph =
+        WorkflowStartGraphCompiler.compile(state.nodes, state.edges, state.input);
+    List<WorkflowRunRequest.NodeRequest> nodes = runtimeGraph.nodes().stream()
         .map(node -> new WorkflowRunRequest.NodeRequest(
             node.id(),
             node.taskId(),
@@ -253,7 +258,7 @@ public class WorkflowDefinitionService {
             node.triggerRule(),
             node.failurePolicy()))
         .toList();
-    List<WorkflowRunRequest.EdgeRequest> edges = state.edges.stream()
+    List<WorkflowRunRequest.EdgeRequest> edges = runtimeGraph.edges().stream()
         .map(edge -> new WorkflowRunRequest.EdgeRequest(edge.source(), edge.target()))
         .toList();
     return new WorkflowRunRequest(

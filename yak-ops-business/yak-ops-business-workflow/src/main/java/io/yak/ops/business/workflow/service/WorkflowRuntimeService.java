@@ -714,20 +714,13 @@ public class WorkflowRuntimeService {
 
     @Override
     public NodeControlResult pause(NodePauseRequest request) {
-      NodeTaskControl control = taskControls.get(request.attemptId());
-      if (control == null) {
-        return NodeControlResult.UNSUPPORTED;
-      }
-      boolean notStarted = control.requestPause(request);
-      if (notStarted) {
-        runtimeScheduler.execute(() -> {
-          NodePauseRequest pending = control.claimPauseAcknowledgement();
-          if (pending != null) {
-            acknowledgePaused(pending);
-          }
-        });
-      }
-      return NodeControlResult.ACCEPTED;
+      // Link-Up/SyncTaskRunner has no physical pause API. Reporting UNSUPPORTED lets the engine
+      // pause scheduling safely: the active sync task keeps running, no downstream node is
+      // dispatched, and the workflow reaches PAUSED only after the active task finishes.
+      log.debug(
+          "[workflow] sync task pause unsupported; pausing scheduling only execution={}, node={}, attempt={}",
+          request.workflowExecutionId(), request.nodeId(), request.attemptId());
+      return NodeControlResult.UNSUPPORTED;
     }
 
     @Override
