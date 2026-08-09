@@ -40,10 +40,6 @@ public interface QualityQueryMapper {
   List<QualityMonitorSettingPO> selectDueMonitors(
       @Param("now") LocalDateTime now,
       @Param("limit") int limit);
-  int claimMonitorSchedule(
-      @Param("monitorId") long monitorId,
-      @Param("expectedRunTime") LocalDateTime expectedRunTime,
-      @Param("nextRunTime") LocalDateTime nextRunTime);
 
   long countExecutions(Map<String, Object> params);
   List<QualityExecutionPO> selectExecutions(Map<String, Object> params);
