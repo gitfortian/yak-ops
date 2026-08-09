@@ -15,6 +15,7 @@ export const WORKFLOW_TERMINAL_NODE_STATUSES = new Set([
   'SUCCESS',
   'SUCCESS_WITH_WARNINGS',
   'FAILED',
+  'UPSTREAM_FAILED',
   'WARNING',
   'CANCELED',
   'TIMED_OUT',
@@ -80,6 +81,8 @@ export const runtimeStatusLabel = (status?: string) => {
       return '告警';
     case 'FAILED':
       return '失败';
+    case 'UPSTREAM_FAILED':
+      return '上游失败';
     case 'TIMED_OUT':
       return '已超时';
     case 'CANCELED':
