@@ -5,6 +5,7 @@ import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.domain.ResourceDownload;
 import io.yak.ops.business.resource.domain.ResourceNode;
 import io.yak.ops.business.resource.domain.ResourcePage;
+import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.business.resource.exception.ResourceException;
 import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.service.ResourceService;
@@ -28,11 +29,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 资源管理服务实现。目录元数据由 Repository 管理，文件内容由存储插件负责。 */
@@ -126,7 +129,7 @@ public class ResourceServiceImpl implements ResourceService {
 
   @Override
   public PagingData<ResourceVO> page(ResourceQueryDTO queryDTO) {
-    ResourcePage<ResourceNode> page = repository.page(support.normalizeQuery(queryDTO));
+    ResourcePage<ResourceNode> page = repository.page(toQuery(queryDTO));
     List<ResourceVO> records = page.records().stream().map(viewMapper::node).toList();
     return pagingData(records, page);
   }
@@ -251,6 +254,25 @@ public class ResourceServiceImpl implements ResourceService {
   @Override
   public List<ResourceStoragePluginVO> storagePlugins() {
     return storageRegistry.list().stream().map(viewMapper::storagePlugin).toList();
+  }
+
+  private ResourceQuery toQuery(ResourceQueryDTO queryDTO) {
+    ResourceQueryDTO source = queryDTO == null ? new ResourceQueryDTO() : queryDTO;
+    ResourceNodeType nodeType = null;
+    if (StringUtils.hasText(source.getNodeType())) {
+      String normalized = source.getNodeType().trim().toUpperCase(Locale.ROOT);
+      try {
+        nodeType = ResourceNodeType.valueOf(normalized);
+      } catch (IllegalArgumentException exception) {
+        throw new ResourceException(ResourceErrorCode.INVALID_NODE_TYPE, normalized);
+      }
+    }
+    return new ResourceQuery(
+        source.getPageNo(),
+        source.getPageSize(),
+        source.getParentId(),
+        support.trimToNull(source.getKeyword()),
+        nodeType);
   }
 
   private PagingData<ResourceVO> pagingData(
