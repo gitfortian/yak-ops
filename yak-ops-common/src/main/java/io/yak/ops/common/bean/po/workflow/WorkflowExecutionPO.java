@@ -3,7 +3,7 @@ package io.yak.ops.common.bean.po.workflow;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.Data;
 
 /** 工作流执行实例持久化对象。 */
@@ -17,12 +17,12 @@ public class WorkflowExecutionPO {
   private String status;
   private String inputJson;
   private Boolean schedulingStopped;
-  private LocalDateTime runStartedAt;
-  private LocalDateTime pausedAt;
+  private Instant runStartedAt;
+  private Instant pausedAt;
   private Long pausedDurationMs;
-  private LocalDateTime createdAt;
-  private LocalDateTime updatedAt;
-  private LocalDateTime endedAt;
+  private Instant createdAt;
+  private Instant updatedAt;
+  private Instant endedAt;
   private String workflowName;
   private String workflowVersionId;
   private Integer workflowVersionNo;
