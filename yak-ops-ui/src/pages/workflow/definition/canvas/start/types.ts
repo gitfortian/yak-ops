@@ -26,6 +26,7 @@ export interface WorkflowStartConfig {
   position: { x: number; y: number };
   inputs: WorkflowStartInputField[];
   variables: WorkflowStartVariable[];
+  nextNodeIds?: string[];
 }
 
 export interface WorkflowStartNodeData {
