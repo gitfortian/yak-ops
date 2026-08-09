@@ -10,8 +10,8 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useReactFlow } from 'reactflow';
+import { useEffect, useRef, useState } from 'react';
+import { useNodesInitialized, useReactFlow } from 'reactflow';
 import WorkflowTaskPicker from './WorkflowTaskPicker';
 import type { WorkflowCanvasTaskOption } from './types';
 import type { WorkflowCanvasHistoryEntry } from './useWorkflowCanvasHistory';
@@ -69,13 +69,18 @@ const WorkflowCanvasTools = <T,>({
 }: WorkflowCanvasToolsProps<T>) => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const reactFlow = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const initialFitDoneRef = useRef(false);
 
   useEffect(() => {
+    if (!nodesInitialized || initialFitDoneRef.current) return;
+    initialFitDoneRef.current = true;
+
     const frame = window.requestAnimationFrame(() => {
-      void reactFlow.fitView({ padding: 0.18, maxZoom: 1, duration: 0 });
+      void reactFlow.fitView({ padding: 0.18, maxZoom: 0.9, duration: 0 });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [reactFlow]);
+  }, [nodesInitialized, reactFlow]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
