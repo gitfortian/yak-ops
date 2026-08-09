@@ -35,8 +35,23 @@ public record WorkflowRunDTO(
       String name,
       List<NodeDTO> nodes,
       List<EdgeDTO> edges,
+      Map<String, Object> input,
+      Long workflowTimeoutSeconds) {
+    this(
+        name,
+        nodes,
+        edges,
+        input,
+        workflowTimeoutSeconds,
+        "CONTINUE_INDEPENDENT_BRANCHES");
+  }
+
+  public WorkflowRunDTO(
+      String name,
+      List<NodeDTO> nodes,
+      List<EdgeDTO> edges,
       Map<String, Object> input) {
-    this(name, nodes, edges, input, 0L, "CONTINUE_INDEPENDENT_BRANCHES");
+    this(name, nodes, edges, input, 0L);
   }
 
   public record NodeDTO(
@@ -64,6 +79,30 @@ public record WorkflowRunDTO(
       inputMapping = inputMapping == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(inputMapping));
       triggerRule = triggerRule == null || triggerRule.isBlank() ? "ALL_SUCCESS" : triggerRule;
       failurePolicy = failurePolicy == null || failurePolicy.isBlank() ? "FAIL_WORKFLOW" : failurePolicy;
+    }
+
+    public NodeDTO(
+        String id,
+        String taskId,
+        Integer maxAttempts,
+        Long retryDelaySeconds,
+        Long dispatchTimeoutSeconds,
+        Long executionTimeoutSeconds,
+        Map<String, String> inputMapping) {
+      this(
+          id,
+          taskId,
+          maxAttempts,
+          retryDelaySeconds,
+          dispatchTimeoutSeconds,
+          executionTimeoutSeconds,
+          inputMapping,
+          "ALL_SUCCESS",
+          "FAIL_WORKFLOW");
+    }
+
+    public NodeDTO(String id, String taskId) {
+      this(id, taskId, 1, 0L, 0L, 0L, Map.of());
     }
   }
 
