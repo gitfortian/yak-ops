@@ -34,6 +34,8 @@ export interface WorkflowStartNodeData {
   label: string;
   locked?: boolean;
   inputs: WorkflowStartInputField[];
+  /** Start 是虚拟编辑器节点，该状态只由当前测试运行前端派生，不进入后端 DAG。 */
+  runtimeStatus?: 'RUNNING' | 'SUCCESS';
   appendOptions?: WorkflowCanvasTaskOption[];
   onAppend?: (nodeId: string, taskId: string) => void;
 }

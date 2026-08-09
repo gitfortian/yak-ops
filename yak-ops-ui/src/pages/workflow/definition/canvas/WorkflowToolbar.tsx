@@ -196,6 +196,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
           <Button
             block
             type="primary"
+            disabled={testing}
             loading={statusAction || saving}
             icon={<Rocket size={14} />}
             onClick={() => { onOnline(); setPublishOpen(false); }}
@@ -206,6 +207,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
         ) : null}
         <Button
           block
+          disabled={testing}
           loading={saving}
           icon={<Save size={14} />}
           onClick={() => { onSave(); setPublishOpen(false); }}
@@ -216,6 +218,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
         {status === 'ONLINE' && hasPublished ? (
           <Button
             block
+            disabled={testing}
             loading={statusAction}
             icon={<CircleStop size={14} />}
             onClick={() => { onOffline(); setPublishOpen(false); }}
@@ -265,13 +268,13 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
             onClick={onTestRun}
             className="!h-8 !rounded-lg !border-[#dfe2e7] !px-3 !text-[12px] !font-medium !text-[#344054] shadow-none"
           >
-            测试运行
+            {testing ? '测试运行中' : '测试运行'}
           </Button>
         </Tooltip>
 
         <Popover
           open={publishOpen}
-          onOpenChange={setPublishOpen}
+          onOpenChange={(open) => { if (!testing) setPublishOpen(open); }}
           trigger="click"
           placement="bottomRight"
           arrow={false}
@@ -281,6 +284,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
           <Button
             type="primary"
             size="small"
+            disabled={testing}
             icon={<Rocket size={14} />}
             className="!h-8 !rounded-lg !px-3.5 !text-[12px] !font-medium"
           >

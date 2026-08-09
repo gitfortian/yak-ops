@@ -11,6 +11,32 @@ import { WORKFLOW_START_NODE_ID } from '../start/types';
 import type { WorkflowEdgeData } from '../types';
 import WorkflowEdgeInsert from './WorkflowEdgeInsert';
 
+const runtimeStroke = (status?: string) => {
+  switch (status) {
+    case 'READY':
+    case 'SUBMITTED':
+    case 'PAUSING':
+    case 'PAUSED':
+    case 'SUCCESS_WITH_WARNINGS':
+    case 'WARNING':
+      return '#f79009';
+    case 'RUNNING':
+    case 'RESUMING':
+      return '#fe2c55';
+    case 'SUCCESS':
+      return '#12b76a';
+    case 'FAILED':
+    case 'UPSTREAM_FAILED':
+    case 'TIMED_OUT':
+      return '#f04438';
+    case 'CANCELED':
+    case 'SKIPPED':
+      return '#98a2b3';
+    default:
+      return undefined;
+  }
+};
+
 const WorkflowEdge = ({
   id,
   source,
@@ -41,11 +67,13 @@ const WorkflowEdge = ({
 
   const connectedNodeHovered = Boolean(data?.connectedNodeHovered);
   const highlighted = selected || connectedNodeHovered;
-  const stroke = highlighted
-    ? '#fe2c55'
-    : hovered || insertOpen
-      ? '#8a8f99'
-      : '#cfd2d7';
+  const executionStroke = runtimeStroke(data?.runtimeStatus);
+  const stroke = executionStroke
+    || (highlighted
+      ? '#fe2c55'
+      : hovered || insertOpen
+        ? '#8a8f99'
+        : '#cfd2d7');
   const insertOptions = data?.insertOptions || [];
   const canInsert = !isStartEdge && !data?.locked && insertOptions.length > 0 && Boolean(data?.onInsert);
   const insertVisible = canInsert && (hovered || selected || insertOpen);
@@ -72,8 +100,8 @@ const WorkflowEdge = ({
         path={edgePath}
         style={{
           stroke,
-          strokeWidth: highlighted ? 2.2 : 2,
-          transition: 'stroke 150ms ease, stroke-width 150ms ease',
+          strokeWidth: executionStroke || highlighted ? 2.2 : 2,
+          transition: 'stroke 180ms ease, stroke-width 180ms ease',
         }}
       />
 
