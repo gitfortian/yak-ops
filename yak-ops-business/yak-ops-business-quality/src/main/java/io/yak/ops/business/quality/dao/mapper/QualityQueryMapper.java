@@ -14,14 +14,13 @@ import io.yak.ops.common.bean.po.quality.QualityQueryPO.TableMonitorSummaryRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.TemplateRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.TrendPointRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.WorkspaceStatsRow;
-import io.yak.ops.common.bean.po.quality.QualityTableAssetPO;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-/** 质量模块复杂查询/数据库原子操作 Mapper；普通单表 CRUD 仍由 BaseMapper 承担。 */
+/** 质量模块复杂只读查询 Mapper；普通单表 CRUD 仍由 BaseMapper 承担。 */
 @Mapper
 public interface QualityQueryMapper {
   List<TemplateRow> selectTemplates(Map<String, Object> params);
@@ -33,14 +32,11 @@ public interface QualityQueryMapper {
   List<MonitorRow> selectMonitors(Map<String, Object> params);
   MonitorRow selectMonitor(@Param("id") long id);
   List<TableMonitorSummaryRow> selectTableSummaries(Map<String, Object> params);
-  void lockMonitor(@Param("monitorId") long monitorId);
 
   long countTableAssets(Map<String, Object> params);
   List<TableAssetRow> selectTableAssets(Map<String, Object> params);
   int countMonitorsForAsset(@Param("assetId") long assetId);
-  int upsertTableAsset(QualityTableAssetPO asset);
 
-  int upsertMonitorSetting(QualityMonitorSettingPO setting);
   List<QualityMonitorSettingPO> selectDueMonitors(
       @Param("now") LocalDateTime now,
       @Param("limit") int limit);
