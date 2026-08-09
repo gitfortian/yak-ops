@@ -65,6 +65,7 @@ const runtimeVisual = (status?: string): RuntimeVisual | undefined => {
         icon: <TriangleAlert size={11} />,
       };
     case 'FAILED':
+    case 'UPSTREAM_FAILED':
       return {
         borderClassName: 'border-[#f04438] shadow-[0_0_0_2px_rgba(240,68,56,.08)]',
         badgeClassName: 'bg-[#fef3f2] text-[#b42318]',
