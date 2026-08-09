@@ -3,6 +3,9 @@ package io.yak.ops.business.sync.offline.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
+import io.yak.ops.business.sync.offline.controller.OfflineJobDefinitionController;
+import io.yak.ops.business.sync.offline.controller.OfflineJobExecutionController;
 import io.yak.ops.business.sync.offline.dao.OfflineExecutionEventDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
@@ -15,6 +18,7 @@ import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import io.yak.ops.common.bean.po.sync.offline.OfflineExecutionEventPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -22,6 +26,23 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class OfflineSyncLayeringConventionTest {
+
+  @Test
+  void controllersDependOnServicesInsteadOfPersistenceOrEngineClients() {
+    for (Class<?> type : List.of(
+        OfflineJobDefinitionController.class,
+        OfflineJobExecutionController.class,
+        OfflineControlPlaneController.class)) {
+      for (Field field : type.getDeclaredFields()) {
+        String dependency = field.getType().getName();
+        assertThat(dependency)
+            .as("%s.%s must not bypass Service", type.getSimpleName(), field.getName())
+            .doesNotContain(".repository.")
+            .doesNotContain(".dao.")
+            .doesNotContain(".engine.");
+      }
+    }
+  }
 
   @Test
   void repositoriesExposeOnlyDomainContracts() {
