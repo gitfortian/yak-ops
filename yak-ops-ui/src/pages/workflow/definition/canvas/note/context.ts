@@ -26,10 +26,13 @@ const finiteNumber = (value: unknown, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+/** 新模型优先读取 editorMeta，legacyInput 仅用于兼容历史定义。 */
 export const hydrateWorkflowNotes = (
-  rawInput?: Record<string, unknown>,
+  editorMeta?: Record<string, unknown>,
+  legacyInput?: Record<string, unknown>,
 ): WorkflowNoteSnapshot[] => {
-  const rawMeta = rawInput?.[WORKFLOW_EDITOR_META_KEY];
+  const rawMeta = editorMeta?.[WORKFLOW_EDITOR_META_KEY]
+    ?? legacyInput?.[WORKFLOW_EDITOR_META_KEY];
   if (!isRecord(rawMeta) || rawMeta.version !== 1 || !Array.isArray(rawMeta.notes)) return [];
 
   return rawMeta.notes
