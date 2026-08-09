@@ -1,14 +1,14 @@
 package io.yak.ops.business.datasource.dao;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
+import io.yak.ops.business.datasource.dao.model.DataSourceSummaryRow;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceSummaryVO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
 import java.util.List;
 
-/** 数据源数据访问接口。 */
+/** 数据源数据访问接口，只暴露持久化模型和 DAO 查询条件。 */
 public interface DataSourceDao {
 
   int addDataSource(DataSourcePO dataSourcePO);
@@ -17,9 +17,9 @@ public interface DataSourceDao {
 
   DataSourcePO selectById(Long id);
 
-  IPage<DataSourcePO> selectPage(DataSourceQueryDTO queryDTO);
+  IPage<DataSourcePO> selectPage(PageQuery query);
 
-  DataSourceSummaryVO selectSummary();
+  DataSourceSummaryRow selectSummary();
 
   List<DataSourcePO> selectAll(DataSourceDbType dbType);
 
@@ -28,4 +28,14 @@ public interface DataSourceDao {
   boolean deleteById(Long id);
 
   boolean updateConnectionStatus(Long id, DataSourceConnStatus connStatus);
+
+  /** DAO 自有分页条件，不依赖 HTTP DTO。 */
+  record PageQuery(
+      int pageNo,
+      int pageSize,
+      String name,
+      String keyword,
+      DataSourceDbType dbType,
+      DataSourceEnvironment environment,
+      DataSourceConnStatus connStatus) {}
 }

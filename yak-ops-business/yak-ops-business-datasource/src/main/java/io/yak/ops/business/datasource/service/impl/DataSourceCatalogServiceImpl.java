@@ -2,11 +2,11 @@ package io.yak.ops.business.datasource.service.impl;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
-import io.yak.ops.business.datasource.dao.DataSourceDao;
+import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
+import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.business.datasource.service.DataSourceCatalogService;
-import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnOptionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogOptionVO;
@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Catalog 服务实现，业务层只负责数据源加载、插件路由和响应模型转换。 */
+/** Catalog 服务实现，业务层只负责领域数据源加载、插件路由和响应转换。 */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -42,7 +42,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
   private static final int MAX_MATCH_KEYWORD_LENGTH = 256;
   private static final Pattern READ_ONLY_SELECT = Pattern.compile("(?is)^SELECT\\b.*");
 
-  private final DataSourceDao dataSourceDao;
+  private final DataSourceRepository repository;
   private final DataSourcePluginRegistry pluginRegistry;
   private final DataSourceProperties properties;
 
@@ -110,12 +110,9 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
             catalog.listTables(new DataSourceCatalogQuery(null, null, null)).stream()
                 .map(
                     table -> {
-                      String label =
-                          isBlank(table.getRemarks()) ? table.getName() : table.getRemarks();
+                      String label = isBlank(table.getRemarks()) ? table.getName() : table.getRemarks();
                       return new DataSourceCatalogOptionVO(
-                          table.getName(),
-                          label,
-                          table.getRemarks());
+                          table.getName(), label, table.getRemarks());
                     })
                 .collect(Collectors.toList()));
   }
@@ -126,9 +123,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
       String matchMode,
       String keyword) {
     List<DataSourceCatalogOptionVO> options = listTable(dataSourceId);
-    if (isBlank(keyword)) {
-      return options;
-    }
+    if (isBlank(keyword)) return options;
     if (keyword.length() > MAX_MATCH_KEYWORD_LENGTH) {
       throw new DataSourceException(
           DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
@@ -233,9 +228,9 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
   private <T> T execute(Long dataSourceId, Function<DataSourceCatalog, T> action) {
     try {
-      DataSourcePO dataSourcePO = getDataSourceOrThrow(dataSourceId);
-      DataSourcePlugin plugin = pluginRegistry.get(dataSourcePO.getDbType());
-      DataSourceConnection connection = plugin.parseConnection(dataSourcePO.getConnectionParams());
+      DataSourceDefinition definition = getDataSourceOrThrow(dataSourceId);
+      DataSourcePlugin plugin = pluginRegistry.get(definition.getDbType());
+      DataSourceConnection connection = plugin.parseConnection(definition.getConnectionParams());
       DataSourceCatalog catalog =
           plugin.createCatalog(
               connection,
@@ -256,15 +251,12 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     }
   }
 
-  private DataSourcePO getDataSourceOrThrow(Long id) {
-    if (id == null || id <= 0) {
+  private DataSourceDefinition getDataSourceOrThrow(Long id) {
+    if (id == null || id <= 0L) {
       throw new DataSourceException(DataSourceErrorCode.NOT_FOUND);
     }
-    DataSourcePO dataSourcePO = dataSourceDao.selectById(id);
-    if (dataSourcePO == null) {
-      throw new DataSourceException(DataSourceErrorCode.NOT_FOUND);
-    }
-    return dataSourcePO;
+    return repository.findById(id)
+        .orElseThrow(() -> new DataSourceException(DataSourceErrorCode.NOT_FOUND));
   }
 
   private Map<String, Object> requireRequest(Map<String, Object> requestBody) {
@@ -282,9 +274,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     String query = optionalText(request, "query", "sql");
     boolean sqlMode =
         "sql".equalsIgnoreCase(readMode) || (!isBlank(query) && isBlank(tablePath));
-    if (!sqlMode) {
-      return;
-    }
+    if (!sqlMode) return;
     if (isBlank(query)) {
       throw new DataSourceException(
           DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
@@ -304,9 +294,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
   private String requiredText(Map<String, Object> request, String... keys) {
     String value = optionalText(request, keys);
-    if (!isBlank(value)) {
-      return value;
-    }
+    if (!isBlank(value)) return value;
     throw new DataSourceException(
         DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
         keys[0] + " 不能为空");

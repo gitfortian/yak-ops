@@ -5,19 +5,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import io.yak.ops.business.datasource.config.DataSourceProperties;
-import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
+import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class DataSourceCatalogServiceImplTest {
 
-  private final DataSourceDao dataSourceDao = mock(DataSourceDao.class);
+  private final DataSourceRepository repository = mock(DataSourceRepository.class);
   private final DataSourcePluginRegistry pluginRegistry = mock(DataSourcePluginRegistry.class);
   private final DataSourceProperties properties = mock(DataSourceProperties.class);
   private final DataSourceCatalogServiceImpl service =
-      new DataSourceCatalogServiceImpl(dataSourceDao, pluginRegistry, properties);
+      new DataSourceCatalogServiceImpl(repository, pluginRegistry, properties);
 
   @Test
   void shouldRejectNonSelectSqlBeforeOpeningDatasourceConnection() {
@@ -31,7 +31,7 @@ class DataSourceCatalogServiceImplTest {
         .isInstanceOf(DataSourceException.class)
         .hasMessageContaining("仅允许执行单条 SELECT 查询");
 
-    verifyNoInteractions(dataSourceDao, pluginRegistry, properties);
+    verifyNoInteractions(repository, pluginRegistry, properties);
   }
 
   @Test
