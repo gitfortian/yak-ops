@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS yak_workflow_version (
     editor_meta_json LONGTEXT NULL,
     task_versions_json LONGTEXT NULL,
     engine_definition_json LONGTEXT NULL,
+    runtime_metadata_json LONGTEXT NULL,
     create_time DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_yak_workflow_version_no (workflow_id, version_no),
