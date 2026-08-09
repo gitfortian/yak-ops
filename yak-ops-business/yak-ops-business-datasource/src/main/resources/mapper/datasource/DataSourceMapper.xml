@@ -10,7 +10,7 @@
                COALESCE(SUM(CASE WHEN conn_status = 'CONNECTED' THEN 1 ELSE 0 END), 0) AS connected,
                COALESCE(SUM(CASE WHEN conn_status = 'DISCONNECTED' THEN 1 ELSE 0 END), 0) AS disconnected,
                COALESCE(SUM(CASE WHEN conn_status = 'UNKNOWN' THEN 1 ELSE 0 END), 0) AS unknown,
-               COUNT(DISTINCT environment) AS environmentCount
+               COUNT(DISTINCT environment) AS environment_count
         FROM yak_ops_data_source
     </select>
 
