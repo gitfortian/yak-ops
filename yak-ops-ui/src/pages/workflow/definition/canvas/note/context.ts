@@ -45,6 +45,7 @@ export const hydrateWorkflowNotes = (
       width: Math.max(240, finiteNumber(item.width, 240)),
       height: Math.max(88, finiteNumber(item.height, 88)),
       text: typeof item.text === 'string' ? item.text : '',
+      html: typeof item.html === 'string' ? item.html : undefined,
       theme: NOTE_THEMES.has(item.theme as WorkflowNoteTheme)
         ? item.theme as WorkflowNoteTheme
         : 'blue',
