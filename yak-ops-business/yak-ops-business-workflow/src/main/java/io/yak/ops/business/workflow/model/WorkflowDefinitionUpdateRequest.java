@@ -16,6 +16,7 @@ public record WorkflowDefinitionUpdateRequest(
     List<@Valid NodeRequest> nodes,
     List<@Valid EdgeRequest> edges,
     Map<String, Object> input,
+    Map<String, Object> editorMeta,
     @Min(0) Long workflowTimeoutSeconds,
     @Pattern(
         regexp = "FAIL_FAST|CONTINUE_INDEPENDENT_BRANCHES|TERMINATE_ALL",
@@ -26,10 +27,23 @@ public record WorkflowDefinitionUpdateRequest(
     nodes = nodes == null ? List.of() : List.copyOf(nodes);
     edges = edges == null ? List.of() : List.copyOf(edges);
     input = input == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(input));
+    editorMeta = editorMeta == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(editorMeta));
     workflowTimeoutSeconds = workflowTimeoutSeconds == null ? 0L : workflowTimeoutSeconds;
     failureStrategy = failureStrategy == null || failureStrategy.isBlank()
         ? "CONTINUE_INDEPENDENT_BRANCHES"
         : failureStrategy;
+  }
+
+  /** 兼容内部旧调用；新 API 请求应显式传 editorMeta。 */
+  public WorkflowDefinitionUpdateRequest(
+      String name,
+      String description,
+      List<NodeRequest> nodes,
+      List<EdgeRequest> edges,
+      Map<String, Object> input,
+      Long workflowTimeoutSeconds,
+      String failureStrategy) {
+    this(name, description, nodes, edges, input, Map.of(), workflowTimeoutSeconds, failureStrategy);
   }
 
   public record NodeRequest(
