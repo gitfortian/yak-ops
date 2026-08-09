@@ -18,7 +18,32 @@ public record WorkflowInstanceVO(
     Map<String, Object> input,
     int nodeCount,
     int edgeCount,
-    List<NodeInstanceVO> nodes) {
+    List<NodeInstanceVO> nodes,
+    String workflowVersionId,
+    Integer workflowVersionNo,
+    boolean testRun) {
+
+  /** 保持现有调用方/测试源码兼容。 */
+  public WorkflowInstanceVO(
+      String id,
+      String definitionId,
+      String sourceExecutionId,
+      String name,
+      String status,
+      String failureStrategy,
+      Instant startedAt,
+      Instant runStartedAt,
+      Instant endedAt,
+      long workflowTimeoutSeconds,
+      Map<String, Object> input,
+      int nodeCount,
+      int edgeCount,
+      List<NodeInstanceVO> nodes) {
+    this(
+        id, definitionId, sourceExecutionId, name, status, failureStrategy,
+        startedAt, runStartedAt, endedAt, workflowTimeoutSeconds, input,
+        nodeCount, edgeCount, nodes, null, null, false);
+  }
 
   public record NodeInstanceVO(
       String id,

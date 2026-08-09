@@ -6,6 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.ops.business.workflow.model.WorkflowDefinitionCreateRequest;
 import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest;
 import io.yak.ops.business.workflow.model.WorkflowDefinitionVO;
+import io.yak.ops.business.workflow.model.WorkflowVersionVO;
 import io.yak.ops.business.workflow.service.WorkflowDefinitionService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -52,7 +53,7 @@ public class WorkflowDefinitionController {
     return Result.success(definitionService.get(id));
   }
 
-  @Operation(summary = "保存工作流定义")
+  @Operation(summary = "保存工作流草稿")
   @PutMapping("/{id}")
   public Result<WorkflowDefinitionVO> update(
       @PathVariable("id") String id,
@@ -67,22 +68,34 @@ public class WorkflowDefinitionController {
     return Result.success(Boolean.TRUE);
   }
 
-  @Operation(summary = "上线工作流定义")
+  @Operation(summary = "发布或重新启用工作流版本")
   @PostMapping("/{id}/online")
   public Result<WorkflowDefinitionVO> online(@PathVariable("id") String id) {
     return Result.success(definitionService.online(id));
   }
 
-  @Operation(summary = "下线工作流定义")
+  @Operation(summary = "停用工作流正式运行入口")
   @PostMapping("/{id}/offline")
   public Result<WorkflowDefinitionVO> offline(@PathVariable("id") String id) {
     return Result.success(definitionService.offline(id));
   }
 
-  @Operation(summary = "执行已上线工作流")
+  @Operation(summary = "执行当前启用的已发布版本")
   @PostMapping("/{id}/run")
   public Result<WorkflowDefinitionVO> run(@PathVariable("id") String id) {
     return Result.success(definitionService.run(id));
+  }
+
+  @Operation(summary = "测试运行当前工作流草稿")
+  @PostMapping("/{id}/test-run")
+  public Result<WorkflowDefinitionVO> testRun(@PathVariable("id") String id) {
+    return Result.success(definitionService.testRun(id));
+  }
+
+  @Operation(summary = "查询工作流发布版本")
+  @GetMapping("/{id}/versions")
+  public Result<List<WorkflowVersionVO>> versions(@PathVariable("id") String id) {
+    return Result.success(definitionService.versions(id));
   }
 
   @Operation(summary = "暂停工作流最近一次执行")

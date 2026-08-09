@@ -101,6 +101,9 @@ export interface WorkflowInstance {
   nodeCount: number;
   edgeCount: number;
   nodes: WorkflowNodeInstance[];
+  workflowVersionId?: string;
+  workflowVersionNo?: number;
+  testRun: boolean;
 }
 
 interface WorkflowEventSubscription {
@@ -119,36 +122,25 @@ const TERMINAL_STATUSES = new Set([
   'TIMED_OUT',
 ]);
 
-const workflowEventSubscriptions = new Map<
-  string,
-  WorkflowEventSubscription
->();
+const workflowEventSubscriptions = new Map<string, WorkflowEventSubscription>();
 
 export const isWorkflowTerminal = (status?: string) =>
   Boolean(status && TERMINAL_STATUSES.has(status));
 
 export const getWorkflowTasks = async () => {
-  const response = await request<ApiResponse<WorkflowTaskDefinition[]>>(
-    '/api/v1/tasks',
-  );
+  const response = await request<ApiResponse<WorkflowTaskDefinition[]>>('/api/v1/tasks');
   return response.data;
 };
 
 export const runWorkflow = async (payload: WorkflowRunPayload) => {
-  const response = await request<ApiResponse<WorkflowInstance>>(
-    '/api/v1/workflows/run',
-    {
-      method: 'POST',
-      data: payload,
-    },
-  );
+  const response = await request<ApiResponse<WorkflowInstance>>('/api/v1/workflows/run', {
+    method: 'POST',
+    data: payload,
+  });
   return response.data;
 };
 
-const postInstanceAction = async (
-  executionId: string,
-  action: string,
-) => {
+const postInstanceAction = async (executionId: string, action: string) => {
   const response = await request<ApiResponse<WorkflowInstance>>(
     `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/${action}`,
     { method: 'POST' },
@@ -157,28 +149,14 @@ const postInstanceAction = async (
   return response.data;
 };
 
-export const activateWorkflowInstance = (executionId: string) =>
-  postInstanceAction(executionId, 'activate');
+export const activateWorkflowInstance = (executionId: string) => postInstanceAction(executionId, 'activate');
+export const pauseWorkflowInstance = (executionId: string) => postInstanceAction(executionId, 'pause');
+export const resumeWorkflowInstance = (executionId: string) => postInstanceAction(executionId, 'resume');
+export const cancelWorkflowInstance = (executionId: string) => postInstanceAction(executionId, 'cancel');
+export const retryWorkflowFailedNodes = (executionId: string) => postInstanceAction(executionId, 'retry-failed');
+export const restartWorkflowInstance = (executionId: string) => postInstanceAction(executionId, 'restart');
 
-export const pauseWorkflowInstance = (executionId: string) =>
-  postInstanceAction(executionId, 'pause');
-
-export const resumeWorkflowInstance = (executionId: string) =>
-  postInstanceAction(executionId, 'resume');
-
-export const cancelWorkflowInstance = (executionId: string) =>
-  postInstanceAction(executionId, 'cancel');
-
-export const retryWorkflowFailedNodes = (executionId: string) =>
-  postInstanceAction(executionId, 'retry-failed');
-
-export const restartWorkflowInstance = (executionId: string) =>
-  postInstanceAction(executionId, 'restart');
-
-export const continueWorkflowAfterFailure = async (
-  executionId: string,
-  nodeId: string,
-) => {
+export const continueWorkflowAfterFailure = async (executionId: string, nodeId: string) => {
   const response = await request<ApiResponse<WorkflowInstance>>(
     `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/nodes/${encodeURIComponent(nodeId)}/continue`,
     { method: 'POST' },
@@ -187,10 +165,7 @@ export const continueWorkflowAfterFailure = async (
   return response.data;
 };
 
-export const retryWorkflowFailedNode = async (
-  executionId: string,
-  nodeId: string,
-) => {
+export const retryWorkflowFailedNode = async (executionId: string, nodeId: string) => {
   const response = await request<ApiResponse<WorkflowInstance>>(
     `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/nodes/${encodeURIComponent(nodeId)}/retry`,
     { method: 'POST' },
@@ -199,10 +174,7 @@ export const retryWorkflowFailedNode = async (
   return response.data;
 };
 
-export const rerunWorkflowFromNode = async (
-  executionId: string,
-  nodeId: string,
-) => {
+export const rerunWorkflowFromNode = async (executionId: string, nodeId: string) => {
   const response = await request<ApiResponse<WorkflowInstance>>(
     `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/nodes/${encodeURIComponent(nodeId)}/rerun`,
     { method: 'POST' },
@@ -211,9 +183,7 @@ export const rerunWorkflowFromNode = async (
 };
 
 export const getWorkflowInstances = async () => {
-  const response = await request<ApiResponse<WorkflowInstance[]>>(
-    '/api/v1/workflows/instances',
-  );
+  const response = await request<ApiResponse<WorkflowInstance[]>>('/api/v1/workflows/instances');
   return response.data;
 };
 
@@ -224,20 +194,17 @@ export const getWorkflowInstance = async (executionId: string) => {
   return response.data;
 };
 
-const snapshotSignature = (instance: WorkflowInstance) =>
-  [
-    instance.status,
-    ...instance.nodes.map((node) =>
-      [
-        node.id,
-        node.status,
-        node.currentAttemptId || '',
-        node.attemptCount,
-        node.failureReason || '',
-        node.errorMessage || '',
-      ].join(':'),
-    ),
-  ].join('|');
+const snapshotSignature = (instance: WorkflowInstance) => [
+  instance.status,
+  ...instance.nodes.map((node) => [
+    node.id,
+    node.status,
+    node.currentAttemptId || '',
+    node.attemptCount,
+    node.failureReason || '',
+    node.errorMessage || '',
+  ].join(':')),
+].join('|');
 
 const openWorkflowEventSubscription = (
   executionId: string,
@@ -245,7 +212,6 @@ const openWorkflowEventSubscription = (
 ) => {
   if (subscription.stopped) return;
   subscription.closeActive?.();
-
   let activeClosed = false;
   let polling = false;
 
@@ -255,25 +221,17 @@ const openWorkflowEventSubscription = (
     if (signature === subscription.lastSignature) return;
     subscription.lastSignature = signature;
     subscription.onSnapshot(snapshot);
-    if (isWorkflowTerminal(snapshot.status)) {
-      cleanupActive();
-    }
+    if (isWorkflowTerminal(snapshot.status)) cleanupActive();
   };
 
-  const source = new EventSource(
-    `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/events`,
-  );
-
+  const source = new EventSource(`/api/v1/workflows/instances/${encodeURIComponent(executionId)}/events`);
   const handleWorkflowEvent = (event: Event) => {
     try {
-      deliver(
-        JSON.parse((event as MessageEvent<string>).data) as WorkflowInstance,
-      );
+      deliver(JSON.parse((event as MessageEvent<string>).data) as WorkflowInstance);
     } catch {
       // 单次异常事件不关闭连接。
     }
   };
-
   source.addEventListener('workflow', handleWorkflowEvent);
 
   const poll = async () => {
@@ -287,10 +245,7 @@ const openWorkflowEventSubscription = (
       polling = false;
     }
   };
-
-  const timer = window.setInterval(() => {
-    void poll();
-  }, 500);
+  const timer = window.setInterval(() => void poll(), 500);
 
   function cleanupActive() {
     if (activeClosed) return;
@@ -298,31 +253,21 @@ const openWorkflowEventSubscription = (
     window.clearInterval(timer);
     source.removeEventListener('workflow', handleWorkflowEvent);
     source.close();
-    if (subscription.closeActive === cleanupActive) {
-      subscription.closeActive = undefined;
-    }
+    if (subscription.closeActive === cleanupActive) subscription.closeActive = undefined;
   }
 
   subscription.closeActive = cleanupActive;
   void poll();
 };
 
-function resumeWorkflowEventsIfNeeded(
-  executionId: string,
-  snapshot: WorkflowInstance,
-) {
+function resumeWorkflowEventsIfNeeded(executionId: string, snapshot: WorkflowInstance) {
   if (snapshot.id !== executionId || isWorkflowTerminal(snapshot.status)) return;
   const subscription = workflowEventSubscriptions.get(executionId);
   if (!subscription || subscription.stopped || subscription.closeActive) return;
   openWorkflowEventSubscription(executionId, subscription);
 }
 
-/**
- * SSE 为主，500ms authenticated request 作为代理/认证链路下的状态同步兜底。
- *
- * 终态只关闭当前网络连接，保留订阅句柄；失败节点被人工重试或放行后，
- * service 层会自动恢复同一个 executionId 的 SSE + polling。
- */
+/** SSE 为主，500ms authenticated request 作为代理/认证链路下的状态同步兜底。 */
 export const subscribeWorkflowEvents = (
   executionId: string,
   onSnapshot: (instance: WorkflowInstance) => void,
@@ -332,7 +277,6 @@ export const subscribeWorkflowEvents = (
     existing.stopped = true;
     existing.closeActive?.();
   }
-
   const subscription: WorkflowEventSubscription = {
     onSnapshot,
     lastSignature: '',
@@ -340,7 +284,6 @@ export const subscribeWorkflowEvents = (
   };
   workflowEventSubscriptions.set(executionId, subscription);
   openWorkflowEventSubscription(executionId, subscription);
-
   return () => {
     subscription.stopped = true;
     subscription.closeActive?.();

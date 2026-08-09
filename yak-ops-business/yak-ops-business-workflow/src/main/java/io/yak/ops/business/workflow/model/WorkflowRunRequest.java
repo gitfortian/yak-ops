@@ -21,6 +21,7 @@ public record WorkflowRunRequest(
     String failureStrategy) {
 
   public WorkflowRunRequest {
+    nodes = nodes == null ? List.of() : List.copyOf(nodes);
     edges = edges == null ? List.of() : List.copyOf(edges);
     input = input == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(input));
     workflowTimeoutSeconds = workflowTimeoutSeconds == null ? 0L : workflowTimeoutSeconds;
@@ -35,13 +36,7 @@ public record WorkflowRunRequest(
       List<EdgeRequest> edges,
       Map<String, Object> input,
       Long workflowTimeoutSeconds) {
-    this(
-        name,
-        nodes,
-        edges,
-        input,
-        workflowTimeoutSeconds,
-        "CONTINUE_INDEPENDENT_BRANCHES");
+    this(name, nodes, edges, input, workflowTimeoutSeconds, "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
   public WorkflowRunRequest(
@@ -74,15 +69,9 @@ public record WorkflowRunRequest(
       retryDelaySeconds = retryDelaySeconds == null ? 0L : retryDelaySeconds;
       dispatchTimeoutSeconds = dispatchTimeoutSeconds == null ? 0L : dispatchTimeoutSeconds;
       executionTimeoutSeconds = executionTimeoutSeconds == null ? 0L : executionTimeoutSeconds;
-      inputMapping = inputMapping == null
-          ? Map.of()
-          : Map.copyOf(new LinkedHashMap<>(inputMapping));
-      triggerRule = triggerRule == null || triggerRule.isBlank()
-          ? "ALL_SUCCESS"
-          : triggerRule;
-      failurePolicy = failurePolicy == null || failurePolicy.isBlank()
-          ? "FAIL_WORKFLOW"
-          : failurePolicy;
+      inputMapping = inputMapping == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(inputMapping));
+      triggerRule = triggerRule == null || triggerRule.isBlank() ? "ALL_SUCCESS" : triggerRule;
+      failurePolicy = failurePolicy == null || failurePolicy.isBlank() ? "FAIL_WORKFLOW" : failurePolicy;
     }
 
     public NodeRequest(
@@ -93,16 +82,8 @@ public record WorkflowRunRequest(
         Long dispatchTimeoutSeconds,
         Long executionTimeoutSeconds,
         Map<String, String> inputMapping) {
-      this(
-          id,
-          taskId,
-          maxAttempts,
-          retryDelaySeconds,
-          dispatchTimeoutSeconds,
-          executionTimeoutSeconds,
-          inputMapping,
-          "ALL_SUCCESS",
-          "FAIL_WORKFLOW");
+      this(id, taskId, maxAttempts, retryDelaySeconds, dispatchTimeoutSeconds,
+          executionTimeoutSeconds, inputMapping, "ALL_SUCCESS", "FAIL_WORKFLOW");
     }
 
     public NodeRequest(String id, String taskId) {
@@ -110,7 +91,5 @@ public record WorkflowRunRequest(
     }
   }
 
-  public record EdgeRequest(
-      @NotBlank String source,
-      @NotBlank String target) {}
+  public record EdgeRequest(@NotBlank String source, @NotBlank String target) {}
 }

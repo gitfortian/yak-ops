@@ -68,6 +68,33 @@ public class OfflineExecutionOrchestrator {
       int attemptNo) {
     ClaimResult claim =
         claimService.claim(definitionId, triggerType, retryFromExecutionId, attemptNo);
+    return submitClaim(
+        claim,
+        definitionService.resolveExecutionJobSpec(claim.getDefinition()));
+  }
+
+  /** 按工作流版本固定的任务配置快照执行，不回读任务当前 JobSpec。 */
+  public OfflineJobExecutionPO executeSnapshot(
+      Long definitionId,
+      long definitionVersion,
+      String configDigest,
+      String definitionSnapshotJson,
+      String logicalJobSpecJson) {
+    ClaimResult claim = claimService.claimSnapshot(
+        definitionId,
+        definitionVersion,
+        configDigest,
+        definitionSnapshotJson,
+        logicalJobSpecJson,
+        "WORKFLOW");
+    return submitClaim(
+        claim,
+        definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));
+  }
+
+  private OfflineJobExecutionPO submitClaim(
+      ClaimResult claim,
+      String resolvedExecutionJobSpec) {
     OfflineJobExecutionPO execution = claim.getExecution();
     record(
         execution,
@@ -82,8 +109,7 @@ public class OfflineExecutionOrchestrator {
       execution.setUpdateTime(LocalDateTime.now());
       executionDao.updateById(execution);
 
-      String resolved = definitionService.resolveExecutionJobSpec(claim.getDefinition());
-      JsonNode jobSpec = readJobSpec(resolved);
+      JsonNode jobSpec = readJobSpec(resolvedExecutionJobSpec);
       transition(
           execution,
           OfflineExecutionStatus.SUBMITTED,
@@ -231,15 +257,12 @@ public class OfflineExecutionOrchestrator {
     JsonNode commitSummary = response.getCommitSummary();
 
     long sourceRecordCount = number(metrics, "sourceRecordCount", 0L);
-    long sinkAttemptedRecordCount =
-        number(metrics, "sinkAttemptedRecordCount", 0L);
-    long sinkSuccessRecordCount =
-        number(metrics, "sinkSuccessRecordCount", 0L);
-    long sinkCommittedRecordCount =
-        number(
-            commitSummary,
-            "successfullyCommittedRecordCount",
-            sinkSuccessRecordCount);
+    long sinkAttemptedRecordCount = number(metrics, "sinkAttemptedRecordCount", 0L);
+    long sinkSuccessRecordCount = number(metrics, "sinkSuccessRecordCount", 0L);
+    long sinkCommittedRecordCount = number(
+        commitSummary,
+        "successfullyCommittedRecordCount",
+        sinkSuccessRecordCount);
     double sourceAverageQps = decimal(metrics, "sourceAverageQps", 0D);
     double sinkAverageQps = decimal(metrics, "sinkAverageQps", 0D);
 
@@ -255,17 +278,11 @@ public class OfflineExecutionOrchestrator {
     execution.setSkippedRecordCount(number(metrics, "skippedRecordCount", 0L));
     execution.setDatabaseCommitMillis(number(metrics, "databaseCommitMillis", 0L));
     execution.setSqlExecutionMillis(number(metrics, "sqlExecutionMillis", 0L));
-
-    // 保留 qps 字段兼容已有列表和接口；独立的读写 QPS 使用上面的两个字段。
-    execution.setQps(
-        sourceAverageQps > 0D
-            ? sourceAverageQps
-            : sinkAverageQps);
+    execution.setQps(sourceAverageQps > 0D ? sourceAverageQps : sinkAverageQps);
   }
 
   public void markLost(OfflineJobExecutionPO execution, String message) {
-    if (execution != null
-        && OfflineExecutionStatus.isActive(execution.getStatus())) {
+    if (execution != null && OfflineExecutionStatus.isActive(execution.getStatus())) {
       markTerminal(
           execution,
           OfflineExecutionStatus.LOST,
@@ -368,14 +385,12 @@ public class OfflineExecutionOrchestrator {
     }
     ScheduleRecord schedule =
         scheduleRepository.findSchedule(execution.getJobDefinitionId());
-    int attempts =
-        schedule == null
-            ? properties.getControl().getDefaultMaxAttempts()
-            : schedule.getRetryMaxAttempts();
-    int backoff =
-        schedule == null
-            ? properties.getControl().getDefaultRetryBackoffSeconds()
-            : schedule.getRetryBackoffSeconds();
+    int attempts = schedule == null
+        ? properties.getControl().getDefaultMaxAttempts()
+        : schedule.getRetryMaxAttempts();
+    int backoff = schedule == null
+        ? properties.getControl().getDefaultRetryBackoffSeconds()
+        : schedule.getRetryBackoffSeconds();
     if (value(execution.getAttemptNo(), 1) < Math.max(1, attempts)) {
       execution.setNextRetryTime(
           LocalDateTime.now().plusSeconds(Math.max(1, backoff)));
@@ -445,16 +460,12 @@ public class OfflineExecutionOrchestrator {
 
   private long number(JsonNode node, String field, long fallback) {
     JsonNode value = node == null ? null : node.get(field);
-    return value == null || !value.isNumber()
-        ? fallback
-        : value.asLong(fallback);
+    return value == null || !value.isNumber() ? fallback : value.asLong(fallback);
   }
 
   private double decimal(JsonNode node, String field, double fallback) {
     JsonNode value = node == null ? null : node.get(field);
-    return value == null || !value.isNumber()
-        ? fallback
-        : value.asDouble(fallback);
+    return value == null || !value.isNumber() ? fallback : value.asDouble(fallback);
   }
 
   private LocalDateTime time(Long millis) {

@@ -39,10 +39,31 @@ export interface WorkflowDefinition {
   input: Record<string, unknown>;
   workflowTimeoutSeconds: number;
   failureStrategy: WorkflowFailureStrategy;
+  activeVersionId?: string;
+  activeVersionNo?: number;
+  latestVersionNo: number;
+  draftChanged: boolean;
   latestExecutionId?: string;
   latestExecutionStatus?: string;
   createTime: string;
   updateTime: string;
+}
+
+export interface WorkflowTaskVersionBinding {
+  nodeId: string;
+  taskId: string;
+  taskName: string;
+  taskVersion: number;
+}
+
+export interface WorkflowVersionSummary {
+  id: string;
+  versionNo: number;
+  active: boolean;
+  nodeCount: number;
+  edgeCount: number;
+  taskBindings: WorkflowTaskVersionBinding[];
+  publishedAt: string;
 }
 
 export interface WorkflowDefinitionCreatePayload {
@@ -114,17 +135,16 @@ export const deleteWorkflowDefinition = async (id: string) => {
   );
 };
 
-export const onlineWorkflowDefinition = (id: string) =>
-  definitionAction(id, 'online');
+export const onlineWorkflowDefinition = (id: string) => definitionAction(id, 'online');
+export const offlineWorkflowDefinition = (id: string) => definitionAction(id, 'offline');
+export const runWorkflowDefinition = (id: string) => definitionAction(id, 'run');
+export const testRunWorkflowDefinition = (id: string) => definitionAction(id, 'test-run');
+export const pauseWorkflowDefinition = (id: string) => definitionAction(id, 'pause');
+export const resumeWorkflowDefinition = (id: string) => definitionAction(id, 'resume');
 
-export const offlineWorkflowDefinition = (id: string) =>
-  definitionAction(id, 'offline');
-
-export const runWorkflowDefinition = (id: string) =>
-  definitionAction(id, 'run');
-
-export const pauseWorkflowDefinition = (id: string) =>
-  definitionAction(id, 'pause');
-
-export const resumeWorkflowDefinition = (id: string) =>
-  definitionAction(id, 'resume');
+export const listWorkflowVersions = async (id: string) => {
+  const response = await request<ApiResponse<WorkflowVersionSummary[]>>(
+    `/api/v1/workflows/definitions/${encodeURIComponent(id)}/versions`,
+  );
+  return response.data || [];
+};

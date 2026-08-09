@@ -3,6 +3,7 @@ package io.yak.ops.business.job.task;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.service.OfflineJobDefinitionService;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionQueryDTO;
+import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobDefinitionVO;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Service;
  * 第一阶段任务注册表。
  *
  * <p>注册表本身仅保存在内存中，数据同步任务元数据从现有离线同步定义服务投影而来，
- * 不新增任务表，也不复制同步任务的具体配置。</p>
+ * 不新增任务表。工作流发布时可从这里取得当前任务版本和逻辑 JobSpec 的不可变快照。</p>
  */
 @Service
 public class InMemoryTaskRegistry implements TaskRegistry {
@@ -28,6 +29,7 @@ public class InMemoryTaskRegistry implements TaskRegistry {
 
   private final ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider;
   private final ConcurrentMap<String, TaskDefinition> tasks = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, TaskVersionSnapshot> snapshots = new ConcurrentHashMap<>();
 
   public InMemoryTaskRegistry(
       ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider) {
@@ -44,25 +46,43 @@ public class InMemoryTaskRegistry implements TaskRegistry {
 
   @Override
   public TaskDefinition get(String taskId) {
-    if (taskId == null || taskId.isBlank()) {
-      throw new IllegalArgumentException("taskId 不能为空");
-    }
+    String normalized = requireTaskId(taskId);
     refresh();
-    TaskDefinition task = tasks.get(taskId.trim());
+    TaskDefinition task = tasks.get(normalized);
     if (task == null) {
       throw new IllegalArgumentException("任务不存在或尚不可执行：" + taskId);
     }
     return task;
   }
 
+  @Override
+  public TaskVersionSnapshot snapshot(String taskId) {
+    String normalized = requireTaskId(taskId);
+    refresh();
+    TaskVersionSnapshot snapshot = snapshots.get(normalized);
+    if (snapshot == null) {
+      throw new IllegalArgumentException("任务不存在或尚不可执行：" + taskId);
+    }
+    return snapshot;
+  }
+
+  private String requireTaskId(String taskId) {
+    if (taskId == null || taskId.isBlank()) {
+      throw new IllegalArgumentException("taskId 不能为空");
+    }
+    return taskId.trim();
+  }
+
   private void refresh() {
     OfflineJobDefinitionService service = definitionServiceProvider.getIfAvailable();
     if (service == null) {
       tasks.clear();
+      snapshots.clear();
       return;
     }
 
-    Map<String, TaskDefinition> snapshot = new LinkedHashMap<>();
+    Map<String, TaskDefinition> taskSnapshot = new LinkedHashMap<>();
+    Map<String, TaskVersionSnapshot> versionSnapshot = new LinkedHashMap<>();
     int pageNo = 1;
     while (true) {
       OfflineJobDefinitionQueryDTO query = new OfflineJobDefinitionQueryDTO();
@@ -74,9 +94,22 @@ public class InMemoryTaskRegistry implements TaskRegistry {
           continue;
         }
         try {
-          service.resolveLogicalJobSpec(service.require(definition.getId()));
-          String id = String.valueOf(definition.getId());
-          snapshot.put(id, new TaskDefinition(id, definition.getJobName(), "SYNC"));
+          OfflineJobDefinitionPO current = service.require(definition.getId());
+          String logicalJobSpec = service.resolveLogicalJobSpec(current);
+          String id = String.valueOf(current.getId());
+          String name = current.getJobName();
+          TaskDefinition task = new TaskDefinition(id, name, "SYNC");
+          taskSnapshot.put(id, task);
+          versionSnapshot.put(
+              id,
+              new TaskVersionSnapshot(
+                  id,
+                  name,
+                  "SYNC",
+                  Math.max(1, current.getVersion() == null ? 1 : current.getVersion()),
+                  current.getConfigDigest(),
+                  current.getDefinitionJson(),
+                  logicalJobSpec));
         } catch (RuntimeException ignored) {
           // 草稿或没有可执行 JobSpec 的同步任务不进入工作流任务列表。
         }
@@ -88,7 +121,9 @@ public class InMemoryTaskRegistry implements TaskRegistry {
     }
 
     tasks.clear();
-    tasks.putAll(snapshot);
+    tasks.putAll(taskSnapshot);
+    snapshots.clear();
+    snapshots.putAll(versionSnapshot);
   }
 
   static boolean isWorkflowEligible(OfflineJobDefinitionVO definition) {
