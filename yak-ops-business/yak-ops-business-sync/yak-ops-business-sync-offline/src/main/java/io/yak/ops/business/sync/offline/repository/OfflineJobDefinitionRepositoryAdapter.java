@@ -1,14 +1,12 @@
 package io.yak.ops.business.sync.offline.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao.PageQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflinePage;
-import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import java.util.List;
 import java.util.Optional;
@@ -22,7 +20,6 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefinitionRepository {
   private final OfflineJobDefinitionDao dao;
-  private final DataSourceDao dataSourceDao;
 
   @Override
   public void lock(Long id) {
@@ -74,8 +71,6 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
     if (po == null) return null;
     OfflineJobDefinition value = new OfflineJobDefinition();
     BeanUtils.copyProperties(po, value);
-    value.setSourceDatasourceName(dataSourceName(po.getSourceDatasourceId()));
-    value.setSinkDatasourceName(dataSourceName(po.getSinkDatasourceId()));
     return value;
   }
 
@@ -83,11 +78,5 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
     OfflineJobDefinitionPO po = new OfflineJobDefinitionPO();
     BeanUtils.copyProperties(value, po);
     return po;
-  }
-
-  private String dataSourceName(Long id) {
-    if (id == null) return null;
-    DataSourcePO dataSource = dataSourceDao.selectById(id);
-    return dataSource == null ? null : dataSource.getName();
   }
 }
