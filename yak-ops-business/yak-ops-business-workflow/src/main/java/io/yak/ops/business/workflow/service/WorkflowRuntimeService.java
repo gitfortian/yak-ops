@@ -43,9 +43,6 @@ import io.yak.ops.business.workflow.model.WorkflowRunRequest;
 import io.yak.ops.business.workflow.model.WorkflowRunRequest.EdgeRequest;
 import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
 import io.yak.ops.business.workflow.persistence.InMemoryWorkflowRuntimePersistence;
-import io.yak.ops.business.workflow.persistence.JdbcWorkflowEngineDefinitionRepository;
-import io.yak.ops.business.workflow.persistence.JdbcWorkflowExecutionRepository;
-import io.yak.ops.business.workflow.persistence.JdbcWorkflowRuntimeRepository;
 import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence.NodeMetadataRecord;
 import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence.RuntimeMetadataRecord;
@@ -67,10 +64,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -104,20 +103,33 @@ public class WorkflowRuntimeService {
       WorkflowEventStreamService eventStreamService,
       TaskRegistry taskRegistry,
       SyncTaskRunner syncTaskRunner,
-      ObjectProvider<JdbcWorkflowEngineDefinitionRepository> definitionRepository,
-      ObjectProvider<JdbcWorkflowExecutionRepository> executionRepository,
-      ObjectProvider<JdbcWorkflowRuntimeRepository> runtimePersistence) {
+      ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
+      ObjectProvider<ExecutionRepository> executionRepository,
+      ObjectProvider<WorkflowRuntimePersistence> runtimePersistence,
+      @Value("${yak.database.enabled:true}") boolean databaseEnabled) {
     this(
         eventStreamService,
         taskRegistry,
         syncTaskRunner,
         TASK_POLL_INTERVAL_MILLIS,
-        definitionRepository.getIfAvailable(InMemoryWorkflowDefinitionRepository::new),
-        executionRepository.getIfAvailable(InMemoryExecutionRepository::new),
-        runtimePersistence.getIfAvailable(InMemoryWorkflowRuntimePersistence::new));
+        resolvePersistence(
+            definitionRepository,
+            databaseEnabled,
+            InMemoryWorkflowDefinitionRepository::new,
+            "WorkflowDefinitionRepository"),
+        resolvePersistence(
+            executionRepository,
+            databaseEnabled,
+            InMemoryExecutionRepository::new,
+            "ExecutionRepository"),
+        resolvePersistence(
+            runtimePersistence,
+            databaseEnabled,
+            InMemoryWorkflowRuntimePersistence::new,
+            "WorkflowRuntimePersistence"));
   }
 
-  /** Focused tests and database-disabled development keep the original lightweight constructor. */
+  /** Focused tests and explicit database-disabled development keep the lightweight runtime. */
   WorkflowRuntimeService(
       WorkflowEventStreamService eventStreamService,
       TaskRegistry taskRegistry,
@@ -131,6 +143,23 @@ public class WorkflowRuntimeService {
         new InMemoryWorkflowDefinitionRepository(),
         new InMemoryExecutionRepository(),
         new InMemoryWorkflowRuntimePersistence());
+  }
+
+  private static <T> T resolvePersistence(
+      ObjectProvider<T> provider,
+      boolean databaseEnabled,
+      Supplier<T> fallback,
+      String componentName) {
+    T resolved = provider.getIfAvailable();
+    if (resolved != null) {
+      return resolved;
+    }
+    if (!databaseEnabled) {
+      return fallback.get();
+    }
+    throw new IllegalStateException(
+        "Workflow durable persistence bean is missing while yak.database.enabled=true: "
+            + componentName);
   }
 
   WorkflowRuntimeService(
