@@ -7,7 +7,6 @@ import {
   List,
   MoreHorizontal,
   Strikethrough,
-  Type,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import type { WorkflowNoteTheme } from './types';
@@ -164,8 +163,7 @@ const WorkflowNoteToolbar = ({
           aria-label="字号"
           className="flex h-8 items-center rounded-md border-0 bg-transparent px-2 text-[12px] font-medium text-[#667085] transition-colors hover:bg-[#f2f4f7] hover:text-[#344054]"
         >
-          <Type size={14} className="mr-1" />
-          {fontSizeLabel}
+          <span className="text-[12px] font-medium">Aa / {fontSizeLabel}</span>
         </button>
       </Popover>
 
