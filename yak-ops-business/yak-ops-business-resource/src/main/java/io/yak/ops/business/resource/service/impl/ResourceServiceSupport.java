@@ -2,14 +2,14 @@ package io.yak.ops.business.resource.service.impl;
 
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.config.ResourceProperties;
-import io.yak.ops.business.resource.dao.ResourceDao;
+import io.yak.ops.business.resource.domain.ResourceNode;
+import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.business.resource.exception.ResourceException;
+import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.storage.StorageOperatorRegistry;
 import io.yak.ops.business.resource.sync.ResourceFileSyncDispatcher;
 import io.yak.ops.business.resource.util.ResourcePathUtils;
 import io.yak.ops.common.bean.dto.resource.ResourceQueryDTO;
-import io.yak.ops.common.bean.po.resource.ResourcePO;
-import io.yak.ops.common.bean.vo.resource.ResourceVO;
 import io.yak.ops.common.enums.resource.ResourceErrorCode;
 import io.yak.ops.common.enums.resource.ResourceNodeType;
 import io.yak.ops.common.enums.resource.ResourceStorageType;
@@ -29,14 +29,14 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
-/** 资源服务共享的元数据、路径、存储异常与同步事件支持。 */
+/** 资源服务共享的领域元数据、路径、存储异常与同步事件支持。 */
 @Slf4j
 @Component
 @ConditionalOnResourceEnabled
 @RequiredArgsConstructor
 class ResourceServiceSupport {
 
-  private final ResourceDao resourceDao;
+  private final ResourceRepository repository;
   private final StorageOperatorRegistry storageRegistry;
   private final ResourceFileSyncDispatcher syncDispatcher;
   private final ResourceProperties properties;
@@ -48,29 +48,25 @@ class ResourceServiceSupport {
       storageRegistry.require(type);
       return new ParentContext(0L, "/", type);
     }
-    ResourcePO parent = resourceDao.selectById(normalized);
-    if (parent == null) {
-      throw new ResourceException(ResourceErrorCode.PARENT_NOT_FOUND);
-    }
+    ResourceNode parent =
+        repository.findById(normalized)
+            .orElseThrow(() -> new ResourceException(ResourceErrorCode.PARENT_NOT_FOUND));
     if (parent.getNodeType() != ResourceNodeType.DIRECTORY) {
       throw new ResourceException(ResourceErrorCode.PARENT_NOT_DIRECTORY);
     }
     return new ParentContext(parent.getId(), parent.getFullPath(), parent.getStorageType());
   }
 
-  ResourcePO require(Long id) {
+  ResourceNode require(Long id) {
     if (id == null || id <= 0L) {
       throw new ResourceException(ResourceErrorCode.NOT_FOUND);
     }
-    ResourcePO resource = resourceDao.selectById(id);
-    if (resource == null) {
-      throw new ResourceException(ResourceErrorCode.NOT_FOUND, String.valueOf(id));
-    }
-    return resource;
+    return repository.findById(id)
+        .orElseThrow(() -> new ResourceException(ResourceErrorCode.NOT_FOUND, String.valueOf(id)));
   }
 
-  ResourcePO requireFile(Long id) {
-    ResourcePO resource = require(id);
+  ResourceNode requireFile(Long id) {
+    ResourceNode resource = require(id);
     if (resource.getNodeType() != ResourceNodeType.FILE) {
       throw new ResourceException(ResourceErrorCode.DIRECTORY_CONTENT_UNSUPPORTED);
     }
@@ -78,27 +74,31 @@ class ResourceServiceSupport {
   }
 
   void ensureNameAvailable(Long parentId, String name, Long excludeId) {
-    if (resourceDao.existsByParentAndName(normalizeParentId(parentId), name, excludeId)) {
+    if (repository.existsByParentAndName(normalizeParentId(parentId), name, excludeId)) {
       throw new ResourceException(ResourceErrorCode.DUPLICATE_NAME, name);
     }
   }
 
-  ResourceQueryDTO normalizeQuery(ResourceQueryDTO queryDTO) {
-    ResourceQueryDTO normalized = queryDTO == null ? new ResourceQueryDTO() : queryDTO;
-    normalized.setKeyword(trimToNull(normalized.getKeyword()));
-    if (StringUtils.hasText(normalized.getNodeType())) {
-      String nodeType = normalized.getNodeType().trim().toUpperCase(Locale.ROOT);
+  ResourceQuery normalizeQuery(ResourceQueryDTO queryDTO) {
+    ResourceQueryDTO source = queryDTO == null ? new ResourceQueryDTO() : queryDTO;
+    ResourceNodeType nodeType = null;
+    if (StringUtils.hasText(source.getNodeType())) {
+      String normalized = source.getNodeType().trim().toUpperCase(Locale.ROOT);
       try {
-        ResourceNodeType.valueOf(nodeType);
+        nodeType = ResourceNodeType.valueOf(normalized);
       } catch (IllegalArgumentException exception) {
-        throw new ResourceException(ResourceErrorCode.INVALID_NODE_TYPE, nodeType);
+        throw new ResourceException(ResourceErrorCode.INVALID_NODE_TYPE, normalized);
       }
-      normalized.setNodeType(nodeType);
     }
-    return normalized;
+    return new ResourceQuery(
+        source.getPageNo(),
+        source.getPageSize(),
+        source.getParentId(),
+        trimToNull(source.getKeyword()),
+        nodeType);
   }
 
-  ResourcePO newResource(
+  ResourceNode newResource(
       Long parentId,
       String name,
       String fullPath,
@@ -111,7 +111,7 @@ class ResourceServiceSupport {
       String checksum,
       String description) {
     LocalDateTime now = LocalDateTime.now();
-    ResourcePO resource = new ResourcePO();
+    ResourceNode resource = new ResourceNode();
     resource.setParentId(normalizeParentId(parentId));
     resource.setName(name);
     resource.setFullPath(fullPath);
@@ -130,13 +130,13 @@ class ResourceServiceSupport {
     return resource;
   }
 
-  void insert(ResourcePO resource) {
-    if (resourceDao.insert(resource) <= 0) {
+  void insert(ResourceNode resource) {
+    if (!repository.insert(resource)) {
       throw new ResourceException(ResourceErrorCode.CREATE_FAILED);
     }
   }
 
-  void relocate(ResourcePO resource, ParentContext targetParent, String targetName) {
+  void relocate(ResourceNode resource, ParentContext targetParent, String targetName) {
     if (resource.getId().equals(targetParent.id)) {
       throw new ResourceException(ResourceErrorCode.INVALID_MOVE_TARGET);
     }
@@ -158,7 +158,7 @@ class ResourceServiceSupport {
     StorageOperator operator = storageRegistry.require(resource.getStorageType());
     storageRun(() -> operator.move(oldStoragePath, newStoragePath, false));
 
-    List<ResourcePO> updates = new ArrayList<>();
+    List<ResourceNode> updates = new ArrayList<>();
     resource.setParentId(targetParent.id);
     resource.setName(targetName);
     resource.setFullPath(newFullPath);
@@ -168,7 +168,7 @@ class ResourceServiceSupport {
     updates.add(resource);
 
     if (resource.getNodeType() == ResourceNodeType.DIRECTORY) {
-      for (ResourcePO descendant : resourceDao.selectDescendants(oldFullPath)) {
+      for (ResourceNode descendant : repository.findDescendants(oldFullPath)) {
         String suffix = descendant.getFullPath().substring(oldFullPath.length());
         descendant.setFullPath(newFullPath + suffix);
         descendant.setStoragePath(ResourcePathUtils.storagePath(descendant.getFullPath()));
@@ -178,48 +178,32 @@ class ResourceServiceSupport {
       }
     }
 
-    if (!resourceDao.updateBatch(updates)) {
+    if (!repository.updateBatch(updates)) {
       try {
         operator.move(newStoragePath, oldStoragePath, false);
       } catch (RuntimeException rollbackException) {
-        log.error("Failed to rollback storage move: {} -> {}",
-            newStoragePath, oldStoragePath, rollbackException);
+        log.error(
+            "Failed to rollback storage move: {} -> {}",
+            newStoragePath,
+            oldStoragePath,
+            rollbackException);
       }
       throw new ResourceException(ResourceErrorCode.UPDATE_FAILED);
     }
   }
 
-  ResourceVO toVO(ResourcePO resource) {
-    return ResourceVO.builder()
-        .id(resource.getId())
-        .parentId(resource.getParentId())
-        .name(resource.getName())
-        .fullPath(resource.getFullPath())
-        .nodeType(resource.getNodeType())
-        .storageType(resource.getStorageType())
-        .contentType(resource.getContentType())
-        .suffix(resource.getSuffix())
-        .fileSize(resource.getFileSize())
-        .checksum(resource.getChecksum())
-        .description(resource.getDescription())
-        .version(resource.getVersion())
-        .gitSyncStatus(resource.getGitSyncStatus())
-        .createTime(resource.getCreateTime())
-        .updateTime(resource.getUpdateTime())
-        .build();
-  }
-
-  void dispatch(ResourcePO resource, ResourceFileSyncAction action, String oldFullPath) {
-    syncDispatcher.dispatchAfterCommit(ResourceFileSyncContext.builder()
-        .resourceId(resource.getId())
-        .action(action)
-        .nodeType(resource.getNodeType())
-        .storageType(resource.getStorageType())
-        .oldFullPath(oldFullPath)
-        .fullPath(resource.getFullPath())
-        .storagePath(resource.getStoragePath())
-        .version(resource.getVersion())
-        .build());
+  void dispatch(ResourceNode resource, ResourceFileSyncAction action, String oldFullPath) {
+    syncDispatcher.dispatchAfterCommit(
+        ResourceFileSyncContext.builder()
+            .resourceId(resource.getId())
+            .action(action)
+            .nodeType(resource.getNodeType())
+            .storageType(resource.getStorageType())
+            .oldFullPath(oldFullPath)
+            .fullPath(resource.getFullPath())
+            .storagePath(resource.getStoragePath())
+            .version(resource.getVersion())
+            .build());
   }
 
   void storageRun(Runnable operation) {
@@ -250,8 +234,10 @@ class ResourceServiceSupport {
     try {
       operator.delete(storagePath, recursive);
     } catch (RuntimeException cleanupException) {
-      log.warn("Failed to cleanup storage object after persistence failure: {}",
-          storagePath, cleanupException);
+      log.warn(
+          "Failed to cleanup storage object after persistence failure: {}",
+          storagePath,
+          cleanupException);
     }
   }
 
@@ -260,19 +246,20 @@ class ResourceServiceSupport {
       action.run();
       return;
     }
-    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-      @Override
-      public void afterCommit() {
-        action.run();
-      }
-    });
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            action.run();
+          }
+        });
   }
 
   Long normalizeParentId(Long parentId) {
     return parentId == null || parentId <= 0L ? 0L : parentId;
   }
 
-  int nextVersion(ResourcePO resource) {
+  int nextVersion(ResourceNode resource) {
     return resource.getVersion() == null ? 1 : resource.getVersion() + 1;
   }
 
