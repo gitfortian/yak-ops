@@ -7,7 +7,7 @@ import java.util.Map;
 /** 工作流一次运行的不可变领域规格。 */
 public record WorkflowRunSpec(
     String name,
-    List<WorkflowRunNodeSpec> nodes,
+    List<WorkflowNodeSpec> nodes,
     List<WorkflowEdgeSpec> edges,
     Map<String, Object> input,
     long workflowTimeoutSeconds,
