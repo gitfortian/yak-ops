@@ -1,6 +1,6 @@
 package io.yak.ops.business.workflow.service;
 
-import io.yak.ops.business.workflow.persistence.JdbcWorkflowRuntimeRepository;
+import io.yak.ops.business.workflow.persistence.WorkflowRuntimePersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,20 +19,20 @@ public class WorkflowRecoveryService {
   private static final Logger log = LoggerFactory.getLogger(WorkflowRecoveryService.class);
 
   private final WorkflowRuntimeService runtimeService;
-  private final JdbcWorkflowRuntimeRepository runtimeRepository;
+  private final WorkflowRuntimePersistence runtimePersistence;
 
   public WorkflowRecoveryService(
       WorkflowRuntimeService runtimeService,
-      JdbcWorkflowRuntimeRepository runtimeRepository) {
+      WorkflowRuntimePersistence runtimePersistence) {
     this.runtimeService = runtimeService;
-    this.runtimeRepository = runtimeRepository;
+    this.runtimePersistence = runtimePersistence;
   }
 
   @EventListener(ApplicationReadyEvent.class)
   public void recover() {
     // Register executions as active before reconciliation. This does not execute a node by itself;
     // it only guarantees that a recovered SUBMITTED dispatch drains immediately when reconstructed.
-    for (String executionId : runtimeRepository.findRecoverableExecutionIds()) {
+    for (String executionId : runtimePersistence.findRecoverableExecutionIds()) {
       try {
         runtimeService.activate(executionId);
       } catch (RuntimeException exception) {

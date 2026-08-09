@@ -50,11 +50,8 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
   @Override
   public void save(WorkflowDefinition definition) {
     String json = write(EngineDefinitionSnapshot.from(definition));
-    int updated = jdbc.update(
-        "UPDATE yak_workflow_version SET engine_definition_json=? WHERE id=?",
-        json,
-        definition.id());
-    if (updated == 0) {
+    StoredDefinition stored = stored(definition.id());
+    if (!stored.exists()) {
       jdbc.update(
           "INSERT INTO yak_workflow_version "
               + "(id,workflow_id,version_no,version_kind,draft_revision,engine_definition_json,create_time) "
@@ -62,6 +59,24 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
           definition.id(),
           json,
           Timestamp.from(Instant.now()));
+      return;
+    }
+
+    if (stored.json() == null || stored.json().isBlank()) {
+      int updated = jdbc.update(
+          "UPDATE yak_workflow_version SET engine_definition_json=? "
+              + "WHERE id=? AND engine_definition_json IS NULL",
+          json,
+          definition.id());
+      if (updated > 0) {
+        return;
+      }
+      stored = stored(definition.id());
+    }
+
+    if (!sameJson(json, stored.json())) {
+      throw new IllegalStateException(
+          "工作流版本的 Engine Definition 已固定，禁止覆盖：" + definition.id());
     }
   }
 
@@ -79,6 +94,25 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
     }
   }
 
+  private StoredDefinition stored(String definitionId) {
+    List<String> values = jdbc.query(
+        "SELECT engine_definition_json FROM yak_workflow_version WHERE id=?",
+        (rs, row) -> rs.getString(1),
+        definitionId);
+    return values.isEmpty()
+        ? new StoredDefinition(false, null)
+        : new StoredDefinition(true, values.get(0));
+  }
+
+  private boolean sameJson(String left, String right) {
+    if (left == null || right == null) return left == right;
+    try {
+      return objectMapper.readTree(left).equals(objectMapper.readTree(right));
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("比较 Engine Definition JSON 失败", exception);
+    }
+  }
+
   private String write(EngineDefinitionSnapshot snapshot) {
     try {
       return objectMapper.writeValueAsString(snapshot);
@@ -93,6 +127,9 @@ public class JdbcWorkflowEngineDefinitionRepository implements WorkflowDefinitio
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("读取 Engine Definition 失败", exception);
     }
+  }
+
+  private record StoredDefinition(boolean exists, String json) {
   }
 
   private record EngineDefinitionSnapshot(
