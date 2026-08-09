@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.yak.ops.business.workflow.dao.mapper.WorkflowVersionMapper">
+
+  <update id="initializeEngineDefinition">
+    UPDATE yak_workflow_version
+    SET engine_definition_json = #{engineDefinitionJson}
+    WHERE id = #{id}
+      AND engine_definition_json IS NULL
+  </update>
+
+  <update id="initializeRuntimeMetadata">
+    UPDATE yak_workflow_version
+    SET runtime_metadata_json = #{runtimeMetadataJson}
+    WHERE id = #{id}
+      AND runtime_metadata_json IS NULL
+  </update>
+</mapper>
