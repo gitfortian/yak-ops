@@ -1,7 +1,7 @@
 package io.yak.ops.business.resource.service;
 
 import io.yak.framework.common.PagingData;
-import io.yak.ops.business.resource.model.ResourceDownload;
+import io.yak.ops.business.resource.domain.ResourceDownload;
 import io.yak.ops.common.bean.dto.resource.ResourceContentUpdateDTO;
 import io.yak.ops.common.bean.dto.resource.ResourceCreateContentDTO;
 import io.yak.ops.common.bean.dto.resource.ResourceCreateDirectoryDTO;
