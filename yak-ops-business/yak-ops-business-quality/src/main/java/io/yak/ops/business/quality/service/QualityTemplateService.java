@@ -1,13 +1,12 @@
 package io.yak.ops.business.quality.service;
 
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.api.QualityApi.TemplateListView;
-import io.yak.ops.business.quality.api.QualityApi.TemplateQuery;
-import io.yak.ops.business.quality.api.QualityApi.TemplateSummary;
-import io.yak.ops.business.quality.api.QualityApi.TemplateView;
+import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.QualityRepository;
+import io.yak.ops.business.quality.service.support.QualityViewMapper;
+import io.yak.ops.common.bean.dto.quality.QualityTemplateDTO;
+import io.yak.ops.common.bean.vo.quality.QualityTemplateVO;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,23 +22,22 @@ public class QualityTemplateService {
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public TemplateListView list(TemplateQuery query) {
-    TemplateQuery normalized = query == null
-        ? new TemplateQuery(null, null, null)
-        : query;
-    List<TemplateView> all = repository.listTemplates(new TemplateQuery(null, null, null));
+  public QualityTemplateVO.ListView list(QualityTemplateDTO.Query request) {
+    QualityQuery.Template query = request == null
+        ? new QualityQuery.Template(null, null, null)
+        : new QualityQuery.Template(request.keyword(), request.dimension(), request.scope());
+    var all = repository.listTemplates(new QualityQuery.Template(null, null, null));
     Map<String, Long> dimensions = new LinkedHashMap<>();
-    for (TemplateView template : all) {
-      dimensions.merge(template.dimension(), 1L, Long::sum);
-    }
-    return new TemplateListView(
-        repository.listTemplates(normalized),
-        new TemplateSummary(all.size(), dimensions));
+    all.forEach(template -> dimensions.merge(template.dimension(), 1L, Long::sum));
+    return new QualityTemplateVO.ListView(
+        repository.listTemplates(query).stream().map(QualityViewMapper::template).toList(),
+        new QualityTemplateVO.Summary(all.size(), dimensions));
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public TemplateView get(long id) {
+  public QualityTemplateVO.Template get(long id) {
     return repository.findTemplate(id)
+        .map(QualityViewMapper::template)
         .orElseThrow(() -> new IllegalArgumentException("规则模板不存在：" + id));
   }
 }
