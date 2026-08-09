@@ -9,10 +9,10 @@ import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
 import io.yak.ops.business.workflow.persistence.InMemoryWorkflowRuntimePersistence;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +49,6 @@ class WorkflowRuntimeRecoveryTest {
     first = null;
 
     second = service(registry, runner, definitions, executions, runtime);
-    // Startup recovery pre-registers persisted executions as active before reconciliation.
     second.activate(prepared.id());
     assertThat(second.recoverPersistedExecutions()).isEqualTo(1);
     waitFor(() -> runner.starts() == 1);
@@ -117,12 +116,16 @@ class WorkflowRuntimeRecoveryTest {
     };
   }
 
-  private WorkflowRunRequest request() {
-    return new WorkflowRunRequest(
+  private WorkflowRunSpec request() {
+    return new WorkflowRunSpec(
         "recovery",
-        List.of(new NodeRequest("a", "task-a")),
+        List.of(new WorkflowNodeSpec(
+            "a", "task-a", 0D, 0D, 1, 0L, 0L, 0L,
+            Map.of(), "ALL_SUCCESS", "FAIL_WORKFLOW")),
         List.of(),
-        Map.of());
+        Map.of(),
+        0L,
+        "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
   private WorkflowInstanceVO.NodeInstanceVO node(WorkflowInstanceVO instance) {
