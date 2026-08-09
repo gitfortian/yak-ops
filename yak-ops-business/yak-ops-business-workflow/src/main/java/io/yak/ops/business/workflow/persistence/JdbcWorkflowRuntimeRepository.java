@@ -48,7 +48,7 @@ public class JdbcWorkflowRuntimeRepository implements WorkflowRuntimePersistence
       if (stored == null || stored.isBlank()) {
         throw new IllegalStateException("工作流运行元数据保存失败：" + definitionId);
       }
-      if (!json.equals(stored)) {
+      if (!sameJson(json, stored)) {
         throw new IllegalStateException(
             "工作流版本的 Runtime Metadata 已固定，禁止覆盖：" + definitionId);
       }
@@ -146,6 +146,15 @@ public class JdbcWorkflowRuntimeRepository implements WorkflowRuntimePersistence
           attemptId));
     } catch (EmptyResultDataAccessException ignored) {
       return Optional.empty();
+    }
+  }
+
+  private boolean sameJson(String left, String right) {
+    if (left == null || right == null) return left == right;
+    try {
+      return objectMapper.readTree(left).equals(objectMapper.readTree(right));
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("比较 Workflow Runtime Metadata JSON 失败", exception);
     }
   }
 
