@@ -22,7 +22,7 @@ import io.yak.framework.workflow.engine.spi.NodePauseRequest;
 import io.yak.framework.workflow.engine.spi.NodeResumeRequest;
 import io.yak.ops.business.job.task.SyncTaskExecution;
 import io.yak.ops.business.job.task.SyncTaskRunner;
-import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
 import io.yak.ops.business.workflow.model.WorkflowInstanceVO.AttemptVO;
@@ -56,23 +56,21 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /** Yak Framework 工作流引擎的轻量内存适配层。 */
 @Service
 public class WorkflowRuntimeService {
-
   private static final Logger log = LoggerFactory.getLogger(WorkflowRuntimeService.class);
   private static final long TASK_POLL_INTERVAL_MILLIS = 500L;
 
-  private final ExecutorService workerPool;
+  /** 每次远程 start/status/cancel 都是短生命周期 I/O；不会再为任务全生命周期占用固定平台线程。 */
+  private final ExecutorService ioExecutor;
   private final ScheduledExecutorService runtimeScheduler;
   private final DefaultWorkflowEngine engine;
   private final WorkflowEventStreamService eventStreamService;
   private final TaskRegistry taskRegistry;
   private final SyncTaskRunner syncTaskRunner;
   private final long taskPollIntervalMillis;
-  private final ConcurrentMap<String, ConcurrentLinkedQueue<NodeDispatch>> pendingDispatches =
-      new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, ConcurrentLinkedQueue<NodeDispatch>> pendingDispatches = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, Object> publishLocks = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, NodeTaskControl> taskControls = new ConcurrentHashMap<>();
-  private final ConcurrentMap<String, ConcurrentMap<String, NodeDispatch>> latestDispatches =
-      new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, ConcurrentMap<String, NodeDispatch>> latestDispatches = new ConcurrentHashMap<>();
   private final Set<String> activeExecutions = ConcurrentHashMap.newKeySet();
   private final Map<String, RunMetadata> metadata = new ConcurrentHashMap<>();
   private final ConcurrentLinkedDeque<String> executionOrder = new ConcurrentLinkedDeque<>();
@@ -94,42 +92,36 @@ public class WorkflowRuntimeService {
     this.taskRegistry = taskRegistry;
     this.syncTaskRunner = syncTaskRunner;
     this.taskPollIntervalMillis = Math.max(1L, taskPollIntervalMillis);
-    AtomicInteger workerIndex = new AtomicInteger();
-    this.workerPool = Executors.newFixedThreadPool(
-        Math.max(2, Runtime.getRuntime().availableProcessors()),
-        runnable -> {
-          Thread thread = new Thread(runnable);
-          thread.setName("yak-workflow-worker-" + workerIndex.incrementAndGet());
-          thread.setDaemon(true);
-          return thread;
-        });
+    this.ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
     AtomicInteger schedulerIndex = new AtomicInteger();
-    this.runtimeScheduler = Executors.newScheduledThreadPool(
-        2,
-        runnable -> {
-          Thread thread = new Thread(runnable);
-          thread.setName("yak-workflow-runtime-" + schedulerIndex.incrementAndGet());
-          thread.setDaemon(true);
-          return thread;
-        });
+    this.runtimeScheduler = Executors.newScheduledThreadPool(2, runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setName("yak-workflow-runtime-" + schedulerIndex.incrementAndGet());
+      thread.setDaemon(true);
+      return thread;
+    });
     this.engine = DefaultWorkflowEngine.inMemory(new RuntimeNodeExecutor());
-    this.runtimeScheduler.scheduleAtFixedRate(
-        this::scanTimeouts,
-        250L,
-        250L,
-        TimeUnit.MILLISECONDS);
+    this.runtimeScheduler.scheduleAtFixedRate(this::scanTimeouts, 250L, 250L, TimeUnit.MILLISECONDS);
   }
 
+  /** 兼容直接运行 API：执行开始前固定一次当前任务快照。 */
   public WorkflowInstanceVO run(WorkflowRunRequest request) {
-    String definitionId = "workflow-" + UUID.randomUUID();
-    Map<String, TaskDefinition> tasksByNode = resolveTasks(request.nodes());
-    List<NodeDefinition> nodes = request.nodes().stream()
-        .map(node -> toNodeDefinition(node, tasksByNode.get(node.id())))
-        .toList();
-    List<EdgeDefinition> edges = request.edges().stream()
-        .map(this::toEdgeDefinition)
-        .toList();
+    Map<String, TaskVersionSnapshot> snapshots = new LinkedHashMap<>();
+    for (NodeRequest node : request.nodes()) snapshots.put(node.id(), taskRegistry.snapshot(node.taskId()));
+    return run(request, snapshots, null, null, false);
+  }
 
+  /** WorkflowVersion/草稿测试运行入口，使用调用方已经固定的任务版本快照。 */
+  public WorkflowInstanceVO run(
+      WorkflowRunRequest request,
+      Map<String, TaskVersionSnapshot> taskVersionsByNode,
+      String workflowVersionId,
+      Integer workflowVersionNo,
+      boolean testRun) {
+    String definitionId = "workflow-" + UUID.randomUUID();
+    Map<String, TaskVersionSnapshot> tasks = validateTaskSnapshots(request.nodes(), taskVersionsByNode);
+    List<NodeDefinition> nodes = request.nodes().stream().map(n -> toNodeDefinition(n, tasks.get(n.id()))).toList();
+    List<EdgeDefinition> edges = request.edges().stream().map(this::toEdgeDefinition).toList();
     WorkflowDefinition definition = new WorkflowDefinition(
         definitionId,
         request.name(),
@@ -143,36 +135,19 @@ public class WorkflowRuntimeService {
 
     WorkflowExecution execution = engine.start(definitionId, request.input());
     RunMetadata runMetadata = new RunMetadata(
-        request.name(),
-        request.edges().size(),
-        request.workflowTimeoutSeconds(),
-        request.failureStrategy(),
-        nodeMetadata(request.nodes(), tasksByNode));
+        request.name(), request.edges().size(), request.workflowTimeoutSeconds(), request.failureStrategy(),
+        workflowVersionId, workflowVersionNo, testRun, nodeMetadata(request.nodes(), tasks));
     registerExecution(execution, runMetadata);
-
     WorkflowInstanceVO started = toView(execution, runMetadata);
     log.info(
-        "[workflow] prepared execution={}, definition={}, name={}, nodes={}, edges={}, timeoutSeconds={}, failureStrategy={}",
-        execution.id(),
-        definitionId,
-        request.name(),
-        request.nodes().size(),
-        request.edges().size(),
-        request.workflowTimeoutSeconds(),
-        request.failureStrategy());
+        "[workflow] prepared execution={}, engineDefinition={}, workflowVersion={}, versionNo={}, testRun={}, nodes={}, edges={}",
+        execution.id(), definitionId, workflowVersionId, workflowVersionNo, testRun,
+        request.nodes().size(), request.edges().size());
     return started;
   }
 
-  public WorkflowInstanceVO activate(String executionId) {
-    activateExecution(executionId);
-    return getInstance(executionId);
-  }
-
-  public WorkflowInstanceVO pause(String executionId) {
-    WorkflowExecution execution = engine.pause(executionId, "Paused from Yak Ops");
-    return publishAndView(execution);
-  }
-
+  public WorkflowInstanceVO activate(String executionId) { activateExecution(executionId); return getInstance(executionId); }
+  public WorkflowInstanceVO pause(String executionId) { return publishAndView(engine.pause(executionId, "Paused from Yak Ops")); }
   public WorkflowInstanceVO resume(String executionId) {
     WorkflowExecution execution = engine.resume(executionId);
     activeExecutions.add(executionId);
@@ -180,656 +155,311 @@ public class WorkflowRuntimeService {
     drainDispatches(executionId);
     return snapshot;
   }
-
-  public WorkflowInstanceVO cancel(String executionId) {
-    WorkflowExecution execution = engine.cancel(executionId, "Canceled from Yak Ops");
-    return publishAndView(execution);
-  }
+  public WorkflowInstanceVO cancel(String executionId) { return publishAndView(engine.cancel(executionId, "Canceled from Yak Ops")); }
 
   public WorkflowInstanceVO continueAfterFailure(String executionId, String nodeId) {
     WorkflowExecution execution = engine.continueAfterFailure(executionId, nodeId);
-    WorkflowInstanceVO snapshot = publishAndView(execution);
-    reactivateExecution(executionId);
-    log.info(
-        "[workflow] manual continue execution={}, failedNode={}, status={}",
-        executionId,
-        nodeId,
-        snapshot.status());
-    return snapshot;
+    WorkflowInstanceVO snapshot = publishAndView(execution); reactivateExecution(executionId); return snapshot;
   }
-
   public WorkflowInstanceVO retryFailedNode(String executionId, String nodeId) {
-    requireMetadata(executionId);
-    WorkflowExecution execution = engine.retryFailedNode(executionId, nodeId);
-    WorkflowInstanceVO snapshot = publishAndView(execution);
-    reactivateExecution(executionId);
-    return snapshot;
+    requireMetadata(executionId); WorkflowInstanceVO snapshot = publishAndView(engine.retryFailedNode(executionId, nodeId));
+    reactivateExecution(executionId); return snapshot;
   }
-
   public WorkflowInstanceVO retryFailedNodes(String executionId) {
-    requireExecution(executionId);
-    WorkflowExecution execution = engine.retryFailedNodes(executionId);
-    WorkflowInstanceVO snapshot = publishAndView(execution);
-    reactivateExecution(executionId);
-    return snapshot;
+    requireExecution(executionId); WorkflowInstanceVO snapshot = publishAndView(engine.retryFailedNodes(executionId));
+    reactivateExecution(executionId); return snapshot;
   }
-
   public WorkflowInstanceVO restart(String executionId) {
-    RunMetadata sourceMetadata = requireMetadata(executionId);
-    WorkflowExecution execution = engine.restart(executionId);
-    registerExecution(execution, sourceMetadata);
-    return toView(execution, sourceMetadata);
+    RunMetadata source = requireMetadata(executionId); WorkflowExecution execution = engine.restart(executionId);
+    registerExecution(execution, source); return toView(execution, source);
   }
-
   public WorkflowInstanceVO rerunFromNode(String executionId, String nodeId) {
-    RunMetadata sourceMetadata = requireMetadata(executionId);
-    WorkflowExecution execution = engine.rerunFromNode(executionId, nodeId);
-    registerExecution(execution, sourceMetadata);
-    return toView(execution, sourceMetadata);
+    RunMetadata source = requireMetadata(executionId); WorkflowExecution execution = engine.rerunFromNode(executionId, nodeId);
+    registerExecution(execution, source); return toView(execution, source);
   }
 
   public List<WorkflowInstanceVO> listInstances() {
-    List<WorkflowInstanceVO> instances = new ArrayList<>();
-    for (String executionId : executionOrder) {
-      RunMetadata runMetadata = metadata.get(executionId);
-      if (runMetadata == null) {
-        continue;
-      }
-      engine.findExecution(executionId)
-          .map(execution -> toView(execution, runMetadata))
-          .ifPresent(instances::add);
+    List<WorkflowInstanceVO> result = new ArrayList<>();
+    for (String id : executionOrder) {
+      RunMetadata m = metadata.get(id);
+      if (m != null) engine.findExecution(id).map(x -> toView(x, m)).ifPresent(result::add);
     }
-    return instances;
+    return result;
   }
-
-  public WorkflowInstanceVO getInstance(String executionId) {
-    return toView(requireExecution(executionId), requireMetadata(executionId));
-  }
-
+  public WorkflowInstanceVO getInstance(String executionId) { return toView(requireExecution(executionId), requireMetadata(executionId)); }
   public SseEmitter subscribe(String executionId) {
     WorkflowInstanceVO snapshot = getInstance(executionId);
     SseEmitter emitter = eventStreamService.subscribe(executionId, snapshot);
-    activateExecution(executionId);
-    publishCurrent(executionId);
-    return emitter;
+    activateExecution(executionId); publishCurrent(executionId); return emitter;
   }
 
   void activateExecution(String executionId) {
     getInstance(executionId);
-    if (activeExecutions.add(executionId)) {
-      log.info("[workflow] activated execution={}", executionId);
-    }
+    if (activeExecutions.add(executionId)) log.info("[workflow] activated execution={}", executionId);
     drainDispatches(executionId);
   }
-
-  private void registerExecution(WorkflowExecution execution, RunMetadata runMetadata) {
-    metadata.put(execution.id(), runMetadata);
-    executionOrder.remove(execution.id());
-    executionOrder.addFirst(execution.id());
-  }
-
   private void reactivateExecution(String executionId) {
-    if (activeExecutions.add(executionId)) {
-      log.info("[workflow] reactivated execution={}", executionId);
-    }
+    if (activeExecutions.add(executionId)) log.info("[workflow] reactivated execution={}", executionId);
     drainDispatches(executionId);
   }
-
-  private RunMetadata requireMetadata(String executionId) {
-    RunMetadata runMetadata = metadata.get(executionId);
-    if (runMetadata == null) {
-      throw new IllegalArgumentException("Workflow execution metadata not found: " + executionId);
-    }
-    return runMetadata;
+  private void registerExecution(WorkflowExecution execution, RunMetadata m) {
+    metadata.put(execution.id(), m); executionOrder.remove(execution.id()); executionOrder.addFirst(execution.id());
+  }
+  private RunMetadata requireMetadata(String id) {
+    RunMetadata m = metadata.get(id); if (m == null) throw new IllegalArgumentException("Workflow execution metadata not found: " + id); return m;
+  }
+  private WorkflowExecution requireExecution(String id) {
+    return engine.findExecution(id).orElseThrow(() -> new IllegalArgumentException("Workflow execution not found: " + id));
   }
 
-  private WorkflowExecution requireExecution(String executionId) {
-    return engine.findExecution(executionId)
-        .orElseThrow(() -> new IllegalArgumentException(
-            "Workflow execution not found: " + executionId));
-  }
-
-  private Map<String, TaskDefinition> resolveTasks(List<NodeRequest> nodes) {
-    Map<String, TaskDefinition> result = new LinkedHashMap<>();
+  private Map<String, TaskVersionSnapshot> validateTaskSnapshots(
+      List<NodeRequest> nodes, Map<String, TaskVersionSnapshot> supplied) {
+    Map<String, TaskVersionSnapshot> result = new LinkedHashMap<>();
     for (NodeRequest node : nodes) {
-      TaskDefinition task = taskRegistry.get(node.taskId());
-      if (!"SYNC".equalsIgnoreCase(task.type())) {
-        throw new IllegalArgumentException(
-            "第一阶段工作流仅支持 SYNC 任务：" + task.id());
-      }
+      TaskVersionSnapshot task = supplied == null ? null : supplied.get(node.id());
+      if (task == null) throw new IllegalArgumentException("工作流节点缺少任务版本快照：" + node.id());
+      if (!node.taskId().equals(task.taskId())) throw new IllegalArgumentException("工作流节点任务快照不匹配：" + node.id());
+      if (!"SYNC".equalsIgnoreCase(task.type())) throw new IllegalArgumentException("第一阶段工作流仅支持 SYNC 任务：" + task.taskId());
       result.put(node.id(), task);
     }
     return Map.copyOf(result);
   }
 
-  private NodeDefinition toNodeDefinition(NodeRequest node, TaskDefinition task) {
-    RetryPolicy retryPolicy = node.maxAttempts() > 1
-        ? RetryPolicy.fixed(node.maxAttempts(), Duration.ofSeconds(node.retryDelaySeconds()))
-        : RetryPolicy.none();
-    NodeTimeoutPolicy timeoutPolicy = NodeTimeoutPolicy.of(
-        Duration.ofSeconds(node.dispatchTimeoutSeconds()),
-        Duration.ofSeconds(node.executionTimeoutSeconds()));
-    return new NodeDefinition(
-        node.id(),
-        task.name(),
-        TriggerRule.valueOf(node.triggerRule()),
-        retryPolicy,
-        NodeFailurePolicy.valueOf(node.failurePolicy()),
-        timeoutPolicy,
-        NodeInputMapping.of(node.inputMapping()),
-        Map.of("taskId", task.id()));
+  private NodeDefinition toNodeDefinition(NodeRequest node, TaskVersionSnapshot task) {
+    RetryPolicy retry = node.maxAttempts() > 1
+        ? RetryPolicy.fixed(node.maxAttempts(), Duration.ofSeconds(node.retryDelaySeconds())) : RetryPolicy.none();
+    NodeTimeoutPolicy timeout = NodeTimeoutPolicy.of(
+        Duration.ofSeconds(node.dispatchTimeoutSeconds()), Duration.ofSeconds(node.executionTimeoutSeconds()));
+    return new NodeDefinition(node.id(), task.name(), TriggerRule.valueOf(node.triggerRule()), retry,
+        NodeFailurePolicy.valueOf(node.failurePolicy()), timeout, NodeInputMapping.of(node.inputMapping()),
+        Map.of("taskId", task.taskId(), "taskVersion", task.version()));
   }
+  private EdgeDefinition toEdgeDefinition(EdgeRequest edge) { return new EdgeDefinition(edge.source(), edge.target()); }
 
-  private EdgeDefinition toEdgeDefinition(EdgeRequest edge) {
-    return new EdgeDefinition(edge.source(), edge.target());
-  }
-
-  private Map<String, NodeMetadata> nodeMetadata(
-      List<NodeRequest> nodes,
-      Map<String, TaskDefinition> tasksByNode) {
+  private Map<String, NodeMetadata> nodeMetadata(List<NodeRequest> nodes, Map<String, TaskVersionSnapshot> tasks) {
     Map<String, NodeMetadata> result = new LinkedHashMap<>();
     for (NodeRequest node : nodes) {
-      TaskDefinition task = tasksByNode.get(node.id());
-      result.put(node.id(), new NodeMetadata(
-          task.id(),
-          task.name(),
-          task.type(),
-          node.triggerRule(),
-          node.failurePolicy(),
-          node.maxAttempts(),
-          node.retryDelaySeconds(),
-          node.dispatchTimeoutSeconds(),
-          node.executionTimeoutSeconds(),
-          node.inputMapping()));
+      TaskVersionSnapshot task = tasks.get(node.id());
+      result.put(node.id(), new NodeMetadata(task, node.triggerRule(), node.failurePolicy(), node.maxAttempts(),
+          node.retryDelaySeconds(), node.dispatchTimeoutSeconds(), node.executionTimeoutSeconds(), node.inputMapping()));
     }
     return Map.copyOf(result);
   }
 
   private void enqueueDispatch(NodeDispatch dispatch) {
-    latestDispatches
-        .computeIfAbsent(dispatch.workflowExecutionId(), ignored -> new ConcurrentHashMap<>())
-        .put(dispatch.nodeId(), dispatch);
-    pendingDispatches
-        .computeIfAbsent(
-            dispatch.workflowExecutionId(),
-            ignored -> new ConcurrentLinkedQueue<>())
-        .offer(dispatch);
-
-    if (activeExecutions.contains(dispatch.workflowExecutionId())) {
-      drainDispatches(dispatch.workflowExecutionId());
-    }
+    latestDispatches.computeIfAbsent(dispatch.workflowExecutionId(), ignored -> new ConcurrentHashMap<>()).put(dispatch.nodeId(), dispatch);
+    pendingDispatches.computeIfAbsent(dispatch.workflowExecutionId(), ignored -> new ConcurrentLinkedQueue<>()).offer(dispatch);
+    if (activeExecutions.contains(dispatch.workflowExecutionId())) drainDispatches(dispatch.workflowExecutionId());
   }
 
   private void drainDispatches(String executionId) {
     ConcurrentLinkedQueue<NodeDispatch> queue = pendingDispatches.get(executionId);
-    if (queue == null) {
-      return;
-    }
+    if (queue == null) return;
     NodeDispatch dispatch;
     while ((dispatch = queue.poll()) != null) {
       NodeDispatch current = dispatch;
-      workerPool.execute(() -> executeNode(current));
+      ioExecutor.execute(() -> startNode(current));
     }
   }
 
-  private void executeNode(NodeDispatch dispatch) {
-    NodeTaskControl control = taskControls.computeIfAbsent(
-        dispatch.attemptId(), ignored -> new NodeTaskControl());
-    control.bind(dispatch.workflowExecutionId());
-    control.attach(Thread.currentThread());
+  private void startNode(NodeDispatch dispatch) {
+    NodeTaskControl control = taskControls.computeIfAbsent(dispatch.attemptId(), ignored -> new NodeTaskControl(dispatch.workflowExecutionId()));
+    if (control.canceled()) { cleanupAttempt(dispatch, control); return; }
     try {
-      if (!awaitRunnable(control)) {
-        return;
-      }
-      acknowledgeStarted(dispatch);
-
-      String taskId = String.valueOf(dispatch.nodeConfiguration().get("taskId"));
-      TaskDefinition task = taskRegistry.get(taskId);
-      if (!"SYNC".equalsIgnoreCase(task.type())) {
-        throw new IllegalStateException("当前仅支持 SYNC 任务：" + task.id());
-      }
-
-      SyncTaskExecution taskExecution = syncTaskRunner.start(task.id());
+      NodeMetadata node = requireMetadata(dispatch.workflowExecutionId()).nodes().get(dispatch.nodeId());
+      if (node == null) throw new IllegalStateException("工作流节点运行元数据不存在：" + dispatch.nodeId());
+      SyncTaskExecution taskExecution = syncTaskRunner.start(node.task());
       control.bindTaskExecution(taskExecution.executionId());
-      log.info(
-          "[workflow] sync task started workflowExecution={}, node={}, attempt={}, task={}, taskExecution={}",
-          dispatch.workflowExecutionId(),
-          dispatch.nodeId(),
-          dispatch.attemptId(),
-          task.id(),
-          taskExecution.executionId());
-
-      while (!taskExecution.terminal()) {
-        if (!awaitRunnable(control)) {
-          return;
-        }
-        Thread.sleep(taskPollIntervalMillis);
-        if (!awaitRunnable(control)) {
-          return;
-        }
-        taskExecution = syncTaskRunner.status(taskExecution.executionId());
+      if (control.canceled()) {
+        cancelRemote(taskExecution.executionId()); cleanupAttempt(dispatch, control); return;
       }
+      // 只有 Link-Up 已接受并创建执行实例后，工作流节点才进入 RUNNING。
+      engine.acknowledgeNodeStarted(dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId());
+      publishCurrent(dispatch.workflowExecutionId());
+      log.info("[workflow] sync task started workflowExecution={}, node={}, attempt={}, task={}, taskVersion={}, taskExecution={}",
+          dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), node.task().taskId(),
+          node.task().version(), taskExecution.executionId());
+      handleTaskSnapshot(dispatch, control, node, taskExecution);
+    } catch (RuntimeException exception) {
+      failNode(dispatch, control, exception);
+    }
+  }
 
+  private void pollNode(NodeDispatch dispatch, NodeTaskControl control, NodeMetadata node) {
+    if (control.canceled() || taskControls.get(dispatch.attemptId()) != control) return;
+    try {
+      String taskExecutionId = control.taskExecutionId();
+      if (taskExecutionId == null) throw new IllegalStateException("同步任务执行 ID 不存在");
+      handleTaskSnapshot(dispatch, control, node, syncTaskRunner.status(taskExecutionId));
+    } catch (RuntimeException exception) {
+      failNode(dispatch, control, exception);
+    }
+  }
+
+  private void handleTaskSnapshot(
+      NodeDispatch dispatch, NodeTaskControl control, NodeMetadata node, SyncTaskExecution taskExecution) {
+    if (control.canceled()) return;
+    if (!taskExecution.terminal()) {
+      runtimeScheduler.schedule(
+          () -> ioExecutor.execute(() -> pollNode(dispatch, control, node)),
+          taskPollIntervalMillis,
+          TimeUnit.MILLISECONDS);
+      return;
+    }
+    try {
       if (taskExecution.successful()) {
         Map<String, Object> output = new LinkedHashMap<>();
-        output.put("taskId", task.id());
-        output.put("taskName", task.name());
-        output.put("taskType", task.type());
-        output.put("syncExecutionId", taskExecution.executionId());
-        output.put("syncStatus", taskExecution.status());
-        output.put("receivedInput", dispatch.nodeInput());
-        output.put("taskOutput", taskExecution.output());
-        engine.completeNode(
-            dispatch.workflowExecutionId(),
-            dispatch.nodeId(),
-            dispatch.attemptId(),
-            output);
-        publishCurrent(dispatch.workflowExecutionId());
-        return;
+        output.put("taskId", node.task().taskId()); output.put("taskName", node.task().name());
+        output.put("taskType", node.task().type()); output.put("taskVersion", node.task().version());
+        output.put("syncExecutionId", taskExecution.executionId()); output.put("syncStatus", taskExecution.status());
+        output.put("receivedInput", dispatch.nodeInput()); output.put("taskOutput", taskExecution.output());
+        engine.completeNode(dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), output);
+      } else {
+        String message = taskExecution.errorMessage();
+        if (message == null || message.isBlank()) message = "同步任务执行失败，状态：" + taskExecution.status();
+        engine.failNode(dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), message);
       }
-
-      String errorMessage = taskExecution.errorMessage();
-      if (errorMessage == null || errorMessage.isBlank()) {
-        errorMessage = "同步任务执行失败，状态：" + taskExecution.status();
-      }
-      engine.failNode(
-          dispatch.workflowExecutionId(),
-          dispatch.nodeId(),
-          dispatch.attemptId(),
-          errorMessage);
       publishCurrent(dispatch.workflowExecutionId());
-    } catch (InterruptedException exception) {
-      Thread.currentThread().interrupt();
-      if (!control.canceled()) {
-        failNode(dispatch, "Node execution interrupted", exception);
-      }
-    } catch (RuntimeException exception) {
-      if (!control.canceled()) {
-        failNode(
-            dispatch,
-            exception.getMessage() == null
-                ? exception.getClass().getSimpleName()
-                : exception.getMessage(),
-            exception);
-      }
     } finally {
-      control.detach(Thread.currentThread());
-      taskControls.remove(dispatch.attemptId(), control);
-      drainDispatches(dispatch.workflowExecutionId());
+      cleanupAttempt(dispatch, control);
     }
   }
 
-  private void acknowledgeStarted(NodeDispatch dispatch) {
-    engine.acknowledgeNodeStarted(
-        dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId());
-    publishCurrent(dispatch.workflowExecutionId());
-  }
-
-  private boolean awaitRunnable(NodeTaskControl control) throws InterruptedException {
-    NodePauseRequest pauseRequest = control.claimPauseAcknowledgement();
-    if (pauseRequest != null) {
-      acknowledgePaused(pauseRequest);
-    }
-    control.awaitResume();
-    return !control.canceled();
-  }
-
-  private void acknowledgePaused(NodePauseRequest request) {
+  private void failNode(NodeDispatch dispatch, NodeTaskControl control, RuntimeException exception) {
+    if (control.canceled()) { cleanupAttempt(dispatch, control); return; }
+    String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+    log.error("[workflow] node failed execution={}, node={}, attempt={}, message={}",
+        dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), message, exception);
     try {
-      engine.acknowledgeNodePaused(
-          request.workflowExecutionId(), request.nodeId(), request.attemptId());
-      publishCurrent(request.workflowExecutionId());
-    } catch (RuntimeException exception) {
-      log.debug(
-          "[workflow] pause acknowledgement ignored execution={}, node={}, attempt={}, message={}",
-          request.workflowExecutionId(), request.nodeId(), request.attemptId(), exception.getMessage());
-    }
-  }
-
-  private void failNode(NodeDispatch dispatch, String errorMessage, Exception exception) {
-    log.error(
-        "[workflow] node failed execution={}, node={}, attempt={}, message={}",
-        dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), errorMessage, exception);
-    try {
-      engine.failNode(
-          dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), errorMessage);
+      engine.failNode(dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), message);
       publishCurrent(dispatch.workflowExecutionId());
-    } catch (RuntimeException callbackException) {
-      log.warn(
-          "[workflow] failure callback skipped execution={}, node={}, attempt={}, message={}",
-          dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), callbackException.getMessage());
+    } catch (RuntimeException callback) {
+      log.warn("[workflow] failure callback skipped execution={}, node={}, attempt={}, message={}",
+          dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), callback.getMessage());
+    } finally {
+      cleanupAttempt(dispatch, control);
     }
+  }
+
+  private void cleanupAttempt(NodeDispatch dispatch, NodeTaskControl control) {
+    taskControls.remove(dispatch.attemptId(), control);
+    drainDispatches(dispatch.workflowExecutionId());
+  }
+
+  private void cancelRemote(String taskExecutionId) {
+    try { syncTaskRunner.cancel(taskExecutionId); }
+    catch (RuntimeException exception) { log.warn("[workflow] sync task cancel ignored taskExecution={}, message={}", taskExecutionId, exception.getMessage()); }
   }
 
   private void scanTimeouts() {
     for (String executionId : List.copyOf(activeExecutions)) {
       try {
-        WorkflowExecution before = requireExecution(executionId);
-        String beforeSignature = runtimeSignature(before);
+        WorkflowExecution before = requireExecution(executionId); String signature = runtimeSignature(before);
         WorkflowExecution after = engine.checkTimeouts(executionId);
-        if (!beforeSignature.equals(runtimeSignature(after))) {
-          publishCurrent(executionId);
-        }
+        if (!signature.equals(runtimeSignature(after))) publishCurrent(executionId);
       } catch (RuntimeException exception) {
-        log.debug(
-            "[workflow] timeout scan skipped execution={}, message={}",
-            executionId, exception.getMessage());
+        log.debug("[workflow] timeout scan skipped execution={}, message={}", executionId, exception.getMessage());
       }
     }
   }
-
   private String runtimeSignature(WorkflowExecution execution) {
-    StringBuilder signature = new StringBuilder(execution.status().name());
+    StringBuilder s = new StringBuilder(execution.status().name());
     execution.nodes().values().forEach(node -> {
-      signature.append('|').append(node.nodeId()).append(':').append(node.status().name());
+      s.append('|').append(node.nodeId()).append(':').append(node.status().name());
       if (!node.attempts().isEmpty()) {
-        NodeAttempt attempt = node.attempts().get(node.attempts().size() - 1);
-        signature.append(':').append(attempt.id()).append(':').append(attempt.status().name());
+        NodeAttempt a = node.attempts().get(node.attempts().size() - 1);
+        s.append(':').append(a.id()).append(':').append(a.status().name());
       }
-    });
-    return signature.toString();
+    }); return s.toString();
   }
 
   private WorkflowInstanceVO publishAndView(WorkflowExecution execution) {
-    RunMetadata runMetadata = requireMetadata(execution.id());
-    WorkflowInstanceVO snapshot = toView(execution, runMetadata);
-    eventStreamService.publish(snapshot);
-    if (isTerminal(snapshot.status())) {
-      cleanupTerminalRuntime(execution.id());
-    }
-    return snapshot;
+    RunMetadata m = requireMetadata(execution.id()); WorkflowInstanceVO snapshot = toView(execution, m);
+    eventStreamService.publish(snapshot); if (isTerminal(snapshot.status())) cleanupTerminalRuntime(execution.id()); return snapshot;
   }
-
   private void publishCurrent(String executionId) {
-    Object publishLock = publishLocks.computeIfAbsent(executionId, ignored -> new Object());
-    synchronized (publishLock) {
-      RunMetadata runMetadata = metadata.get(executionId);
-      if (runMetadata == null) {
-        return;
-      }
-      engine.findExecution(executionId)
-          .map(execution -> toView(execution, runMetadata))
-          .ifPresent(snapshot -> {
-            eventStreamService.publish(snapshot);
-            if (isTerminal(snapshot.status())) {
-              cleanupTerminalRuntime(executionId);
-              publishLocks.remove(executionId, publishLock);
-            }
-          });
+    Object lock = publishLocks.computeIfAbsent(executionId, ignored -> new Object());
+    synchronized (lock) {
+      RunMetadata m = metadata.get(executionId); if (m == null) return;
+      engine.findExecution(executionId).map(x -> toView(x, m)).ifPresent(snapshot -> {
+        eventStreamService.publish(snapshot);
+        if (isTerminal(snapshot.status())) { cleanupTerminalRuntime(executionId); publishLocks.remove(executionId, lock); }
+      });
     }
   }
-
   private void cleanupTerminalRuntime(String executionId) {
-    activeExecutions.remove(executionId);
-    pendingDispatches.remove(executionId);
-    taskControls.entrySet().removeIf(
-        entry -> executionId.equals(entry.getValue().workflowExecutionId()));
+    activeExecutions.remove(executionId); pendingDispatches.remove(executionId);
+    taskControls.entrySet().removeIf(e -> executionId.equals(e.getValue().workflowExecutionId()));
+  }
+  private boolean isTerminal(String s) {
+    return "SUCCESS".equals(s) || "SUCCESS_WITH_WARNINGS".equals(s) || "FAILED".equals(s)
+        || "WARNING".equals(s) || "CANCELED".equals(s) || "TIMED_OUT".equals(s);
   }
 
-  private boolean isTerminal(String status) {
-    return "SUCCESS".equals(status)
-        || "SUCCESS_WITH_WARNINGS".equals(status)
-        || "FAILED".equals(status)
-        || "WARNING".equals(status)
-        || "CANCELED".equals(status)
-        || "TIMED_OUT".equals(status);
+  private WorkflowInstanceVO toView(WorkflowExecution execution, RunMetadata m) {
+    List<NodeInstanceVO> nodes = execution.nodes().values().stream().map(n -> toNodeView(execution.id(), n, m.nodes().get(n.nodeId()))).toList();
+    return new WorkflowInstanceVO(execution.id(), execution.definitionId(), execution.sourceExecutionId(), m.name(),
+        execution.status().name(), m.failureStrategy(), execution.createdAt(), execution.runStartedAt(), execution.endedAt(),
+        m.workflowTimeoutSeconds(), execution.input(), nodes.size(), m.edgeCount(), nodes);
   }
-
-  private WorkflowInstanceVO toView(WorkflowExecution execution, RunMetadata runMetadata) {
-    List<NodeInstanceVO> nodes = execution.nodes().values().stream()
-        .map(node -> toNodeView(execution.id(), node, runMetadata.nodes().get(node.nodeId())))
-        .toList();
-    return new WorkflowInstanceVO(
-        execution.id(),
-        execution.definitionId(),
-        execution.sourceExecutionId(),
-        runMetadata.name(),
-        execution.status().name(),
-        runMetadata.failureStrategy(),
-        execution.createdAt(),
-        execution.runStartedAt(),
-        execution.endedAt(),
-        runMetadata.workflowTimeoutSeconds(),
-        execution.input(),
-        nodes.size(),
-        runMetadata.edgeCount(),
-        nodes);
-  }
-
-  private NodeInstanceVO toNodeView(
-      String executionId,
-      NodeExecution node,
-      NodeMetadata nodeMetadata) {
-    String taskId = nodeMetadata == null ? null : nodeMetadata.taskId();
-    String name = nodeMetadata == null ? node.nodeId() : nodeMetadata.name();
-    String type = nodeMetadata == null ? "SYNC" : nodeMetadata.type();
+  private NodeInstanceVO toNodeView(String executionId, NodeExecution node, NodeMetadata m) {
+    TaskVersionSnapshot task = m == null ? null : m.task();
     List<AttemptVO> attempts = node.attempts().stream().map(this::toAttemptView).toList();
-    NodeAttempt currentAttempt = node.attempts().isEmpty()
-        ? null
-        : node.attempts().get(node.attempts().size() - 1);
-    String failureReason = currentAttempt == null || currentAttempt.failureReason() == null
-        ? null
-        : currentAttempt.failureReason().name();
-    ConcurrentMap<String, NodeDispatch> executionDispatches = latestDispatches.get(executionId);
-    NodeDispatch dispatch = executionDispatches == null
-        ? null
-        : executionDispatches.get(node.nodeId());
-
-    return new NodeInstanceVO(
-        node.nodeId(),
-        taskId,
-        name,
-        type,
-        node.status().name(),
-        nodeMetadata == null ? TriggerRule.ALL_SUCCESS.name() : nodeMetadata.triggerRule(),
-        nodeMetadata == null ? NodeFailurePolicy.FAIL_WORKFLOW.name() : nodeMetadata.failurePolicy(),
-        node.errorMessage(),
-        failureReason,
-        node.downstreamContinuationAllowed(),
-        attempts.size(),
-        currentAttempt == null ? null : currentAttempt.id(),
-        currentAttempt == null ? null : currentAttempt.attemptNumber(),
-        nodeMetadata == null ? 1 : nodeMetadata.maxAttempts(),
-        nodeMetadata == null ? 0L : nodeMetadata.retryDelaySeconds(),
-        nodeMetadata == null ? 0L : nodeMetadata.dispatchTimeoutSeconds(),
-        nodeMetadata == null ? 0L : nodeMetadata.executionTimeoutSeconds(),
-        nodeMetadata == null ? Map.of() : nodeMetadata.inputMapping(),
-        dispatch == null ? Map.of() : dispatch.nodeInput(),
-        dispatch == null ? Map.of() : dispatch.predecessorOutputs(),
-        node.output(),
-        attempts);
+    NodeAttempt a = node.attempts().isEmpty() ? null : node.attempts().get(node.attempts().size() - 1);
+    ConcurrentMap<String, NodeDispatch> ds = latestDispatches.get(executionId); NodeDispatch d = ds == null ? null : ds.get(node.nodeId());
+    return new NodeInstanceVO(node.nodeId(), task == null ? null : task.taskId(), task == null ? node.nodeId() : task.name(),
+        task == null ? "SYNC" : task.type(), node.status().name(), m == null ? TriggerRule.ALL_SUCCESS.name() : m.triggerRule(),
+        m == null ? NodeFailurePolicy.FAIL_WORKFLOW.name() : m.failurePolicy(), node.errorMessage(),
+        a == null || a.failureReason() == null ? null : a.failureReason().name(), node.downstreamContinuationAllowed(), attempts.size(),
+        a == null ? null : a.id(), a == null ? null : a.attemptNumber(), m == null ? 1 : m.maxAttempts(),
+        m == null ? 0L : m.retryDelaySeconds(), m == null ? 0L : m.dispatchTimeoutSeconds(), m == null ? 0L : m.executionTimeoutSeconds(),
+        m == null ? Map.of() : m.inputMapping(), d == null ? Map.of() : d.nodeInput(), d == null ? Map.of() : d.predecessorOutputs(),
+        node.output(), attempts);
   }
-
-  private AttemptVO toAttemptView(NodeAttempt attempt) {
-    return new AttemptVO(
-        attempt.id(),
-        attempt.attemptNumber(),
-        attempt.status().name(),
-        attempt.failureReason() == null ? null : attempt.failureReason().name(),
-        attempt.errorMessage(),
-        attempt.availableAt(),
-        attempt.startedAt(),
-        attempt.pausedAt(),
-        attempt.pausedDuration().toMillis(),
-        attempt.endedAt());
+  private AttemptVO toAttemptView(NodeAttempt a) {
+    return new AttemptVO(a.id(), a.attemptNumber(), a.status().name(), a.failureReason() == null ? null : a.failureReason().name(),
+        a.errorMessage(), a.availableAt(), a.startedAt(), a.pausedAt(), a.pausedDuration().toMillis(), a.endedAt());
   }
 
   @PreDestroy
-  void shutdown() {
-    runtimeScheduler.shutdownNow();
-    workerPool.shutdownNow();
-  }
+  void shutdown() { runtimeScheduler.shutdownNow(); ioExecutor.shutdownNow(); }
 
   private record RunMetadata(
-      String name,
-      int edgeCount,
-      long workflowTimeoutSeconds,
-      String failureStrategy,
-      Map<String, NodeMetadata> nodes) {}
-
+      String name, int edgeCount, long workflowTimeoutSeconds, String failureStrategy,
+      String workflowVersionId, Integer workflowVersionNo, boolean testRun, Map<String, NodeMetadata> nodes) {}
   private record NodeMetadata(
-      String taskId,
-      String name,
-      String type,
-      String triggerRule,
-      String failurePolicy,
-      int maxAttempts,
-      long retryDelaySeconds,
-      long dispatchTimeoutSeconds,
-      long executionTimeoutSeconds,
-      Map<String, String> inputMapping) {}
+      TaskVersionSnapshot task, String triggerRule, String failurePolicy, int maxAttempts,
+      long retryDelaySeconds, long dispatchTimeoutSeconds, long executionTimeoutSeconds, Map<String, String> inputMapping) {}
 
   private final class RuntimeNodeExecutor implements NodeExecutor {
-
-    @Override
-    public void submit(NodeDispatch dispatch) {
-      NodeTaskControl control = taskControls.computeIfAbsent(
-          dispatch.attemptId(), ignored -> new NodeTaskControl());
-      control.bind(dispatch.workflowExecutionId());
+    @Override public void submit(NodeDispatch dispatch) {
+      taskControls.computeIfAbsent(dispatch.attemptId(), ignored -> new NodeTaskControl(dispatch.workflowExecutionId()));
       enqueueDispatch(dispatch);
     }
-
-    @Override
-    public void cancel(NodeCancellation cancellation) {
-      NodeTaskControl control = taskControls.get(cancellation.attemptId());
-      if (control == null) {
-        return;
-      }
-      String taskExecutionId = control.taskExecutionId();
-      if (taskExecutionId != null) {
-        try {
-          syncTaskRunner.cancel(taskExecutionId);
-        } catch (RuntimeException exception) {
-          log.warn(
-              "[workflow] sync task cancel ignored execution={}, node={}, attempt={}, taskExecution={}, message={}",
-              cancellation.workflowExecutionId(),
-              cancellation.nodeId(),
-              cancellation.attemptId(),
-              taskExecutionId,
-              exception.getMessage());
-        }
-      }
-      control.cancel();
+    @Override public void cancel(NodeCancellation cancellation) {
+      NodeTaskControl control = taskControls.get(cancellation.attemptId()); if (control == null) return;
+      control.cancel(); String taskExecutionId = control.taskExecutionId();
+      if (taskExecutionId != null) ioExecutor.execute(() -> cancelRemote(taskExecutionId));
     }
-
-    @Override
-    public NodeControlResult pause(NodePauseRequest request) {
-      // Link-Up/SyncTaskRunner has no physical pause API. Reporting UNSUPPORTED lets the engine
-      // pause scheduling safely: the active sync task keeps running, no downstream node is
-      // dispatched, and the workflow reaches PAUSED only after the active task finishes.
-      log.debug(
-          "[workflow] sync task pause unsupported; pausing scheduling only execution={}, node={}, attempt={}",
+    @Override public NodeControlResult pause(NodePauseRequest request) {
+      log.debug("[workflow] sync task pause unsupported; pausing scheduling only execution={}, node={}, attempt={}",
           request.workflowExecutionId(), request.nodeId(), request.attemptId());
       return NodeControlResult.UNSUPPORTED;
     }
-
-    @Override
-    public void resume(NodeResumeRequest request) {
-      NodeTaskControl control = taskControls.get(request.attemptId());
-      if (control == null) {
-        return;
-      }
-      runtimeScheduler.execute(() -> {
-        try {
-          engine.acknowledgeNodeResumed(
-              request.workflowExecutionId(), request.nodeId(), request.attemptId());
-          control.resume();
-          publishCurrent(request.workflowExecutionId());
-        } catch (RuntimeException exception) {
-          log.debug(
-              "[workflow] resume acknowledgement ignored execution={}, node={}, attempt={}, message={}",
-              request.workflowExecutionId(), request.nodeId(), request.attemptId(), exception.getMessage());
-        }
-      });
+    @Override public void resume(NodeResumeRequest request) {
+      // UNSUPPORTED attempts are never physically resumed; engine resume only releases deferred scheduling.
     }
   }
 
   private static final class NodeTaskControl {
-
-    private final Object monitor = new Object();
-    private volatile String workflowExecutionId;
+    private final String workflowExecutionId;
     private volatile String taskExecutionId;
-    private volatile Thread thread;
-    private volatile boolean pauseRequested;
-    private volatile boolean pauseAcknowledged;
     private volatile boolean canceled;
-    private NodePauseRequest pauseRequest;
-
-    void bind(String workflowExecutionId) {
-      this.workflowExecutionId = workflowExecutionId;
-    }
-
-    String workflowExecutionId() {
-      return workflowExecutionId;
-    }
-
-    void bindTaskExecution(String taskExecutionId) {
-      this.taskExecutionId = taskExecutionId;
-    }
-
-    String taskExecutionId() {
-      return taskExecutionId;
-    }
-
-    void attach(Thread thread) {
-      this.thread = thread;
-    }
-
-    void detach(Thread thread) {
-      if (this.thread == thread) {
-        this.thread = null;
-      }
-    }
-
-    boolean requestPause(NodePauseRequest request) {
-      synchronized (monitor) {
-        pauseRequested = true;
-        pauseAcknowledged = false;
-        pauseRequest = request;
-        return thread == null;
-      }
-    }
-
-    NodePauseRequest claimPauseAcknowledgement() {
-      synchronized (monitor) {
-        if (!pauseRequested || pauseAcknowledged || canceled) {
-          return null;
-        }
-        pauseAcknowledged = true;
-        return pauseRequest;
-      }
-    }
-
-    void awaitResume() throws InterruptedException {
-      synchronized (monitor) {
-        while (pauseRequested && !canceled) {
-          monitor.wait();
-        }
-      }
-    }
-
-    void resume() {
-      synchronized (monitor) {
-        pauseRequested = false;
-        pauseRequest = null;
-        monitor.notifyAll();
-      }
-    }
-
-    void cancel() {
-      synchronized (monitor) {
-        canceled = true;
-        pauseRequested = false;
-        monitor.notifyAll();
-      }
-      Thread runningThread = thread;
-      if (runningThread != null) {
-        runningThread.interrupt();
-      }
-    }
-
-    boolean canceled() {
-      return canceled;
-    }
+    NodeTaskControl(String workflowExecutionId) { this.workflowExecutionId = workflowExecutionId; }
+    String workflowExecutionId() { return workflowExecutionId; }
+    String taskExecutionId() { return taskExecutionId; }
+    void bindTaskExecution(String id) { this.taskExecutionId = id; }
+    void cancel() { this.canceled = true; }
+    boolean canceled() { return canceled; }
   }
 }
