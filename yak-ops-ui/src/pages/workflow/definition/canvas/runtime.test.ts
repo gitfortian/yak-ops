@@ -59,19 +59,20 @@ describe('workflow runtime canvas mapping', () => {
     expect(formatRuntimeDuration(state.elapsedMillis)).toBe('1.3s');
   });
 
-  it('treats scheduling/running/pause states as active canvas states', () => {
-    expect(isWorkflowNodeActive('WAITING')).toBe(true);
+  it('aligns active canvas states with the workflow engine state machine', () => {
+    expect(isWorkflowNodeActive('WAITING')).toBe(false);
+    expect(isWorkflowNodeActive('READY')).toBe(true);
     expect(isWorkflowNodeActive('SUBMITTED')).toBe(true);
     expect(isWorkflowNodeActive('RUNNING')).toBe(true);
     expect(isWorkflowNodeActive('PAUSED')).toBe(true);
     expect(isWorkflowNodeActive('SUCCESS')).toBe(false);
-    expect(isWorkflowNodeActive('FAILED')).toBe(false);
+    expect(isWorkflowNodeActive('UPSTREAM_FAILED')).toBe(false);
   });
 
   it('provides stable labels for streamed statuses', () => {
     expect(runtimeStatusLabel('RUNNING')).toBe('运行中');
     expect(runtimeStatusLabel('SUCCESS')).toBe('成功');
     expect(runtimeStatusLabel('FAILED')).toBe('失败');
-    expect(runtimeStatusLabel('TIMED_OUT')).toBe('已超时');
+    expect(runtimeStatusLabel('UPSTREAM_FAILED')).toBe('上游失败');
   });
 });
