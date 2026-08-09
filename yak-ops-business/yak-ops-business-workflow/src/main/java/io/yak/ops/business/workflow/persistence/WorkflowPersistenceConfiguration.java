@@ -6,6 +6,7 @@ import io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -13,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 
-/** Workflow persistence shares the Yak Ops business database but owns its Flyway history. */
+/** Workflow persistence shares the Yak Ops business database and MyBatis infrastructure. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     prefix = "yak.database",
@@ -21,6 +22,9 @@ import org.springframework.context.annotation.Primary;
     havingValue = "true",
     matchIfMissing = true)
 @Import(BusinessDatabaseConfiguration.class)
+@MapperScan(
+    basePackages = "io.yak.ops.business.workflow.dao.mapper",
+    sqlSessionFactoryRef = "yakBusinessSqlSessionFactory")
 public class WorkflowPersistenceConfiguration {
 
   @Bean(initMethod = "migrate", name = "workflowFlyway")
@@ -36,14 +40,13 @@ public class WorkflowPersistenceConfiguration {
   }
 
   /**
-   * Active executions use a write-through cache while the JDBC repository remains the restart and
-   * history source of truth. This keeps high-frequency timeout scans off the database when state has
-   * not changed.
+   * Active executions use a write-through cache while the MyBatis repository adapter remains the
+   * restart and history source of truth.
    */
   @Bean
   @Primary
   public ExecutionRepository workflowExecutionRepository(
-      JdbcWorkflowExecutionRepository durableRepository) {
+      WorkflowExecutionRepositoryAdapter durableRepository) {
     return new CachingExecutionRepository(durableRepository);
   }
 }
