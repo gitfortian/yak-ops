@@ -2,19 +2,24 @@ package io.yak.ops.business.workflow.service;
 
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionCreateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.EdgeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionUpdateRequest.NodeRequest;
-import io.yak.ops.business.workflow.model.WorkflowDefinitionVO;
-import io.yak.ops.business.workflow.model.WorkflowInstanceVO;
-import io.yak.ops.business.workflow.model.WorkflowRunRequest;
-import io.yak.ops.business.workflow.model.WorkflowVersionVO;
-import io.yak.ops.business.workflow.model.WorkflowVersionVO.TaskBindingVO;
+import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
+import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
+import io.yak.ops.business.workflow.domain.WorkflowVersion;
 import io.yak.ops.business.workflow.persistence.NoopWorkflowDefinitionPersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence.DefinitionRecord;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence.VersionRecord;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.EdgeDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.NodeDTO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO.EdgeVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO.NodeVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO.TaskBindingVO;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -101,7 +106,7 @@ public class WorkflowDefinitionService {
         .toList();
   }
 
-  public WorkflowDefinitionVO create(WorkflowDefinitionCreateRequest request) {
+  public WorkflowDefinitionVO create(WorkflowDefinitionCreateDTO request) {
     if (request == null) throw new IllegalArgumentException("工作流创建参数不能为空");
     DefinitionState state = new DefinitionState();
     Instant now = Instant.now();
@@ -127,14 +132,14 @@ public class WorkflowDefinitionService {
     return toView(require(id));
   }
 
-  public WorkflowDefinitionVO update(String id, WorkflowDefinitionUpdateRequest request) {
+  public WorkflowDefinitionVO update(String id, WorkflowDefinitionUpdateDTO request) {
     if (request == null) throw new IllegalArgumentException("工作流配置不能为空");
     DefinitionState state = require(id);
     synchronized (state) {
       String nextName = required(request.name(), "工作流名称不能为空");
       String nextDescription = trim(request.description());
-      List<NodeRequest> nextNodes = List.copyOf(request.nodes());
-      List<EdgeRequest> nextEdges = List.copyOf(request.edges());
+      List<WorkflowNodeSpec> nextNodes = request.nodes().stream().map(this::toSpec).toList();
+      List<WorkflowEdgeSpec> nextEdges = request.edges().stream().map(this::toSpec).toList();
       Map<String, Object> nextInput = Map.copyOf(new LinkedHashMap<>(request.input()));
       Map<String, Object> nextEditorMeta = Map.copyOf(new LinkedHashMap<>(request.editorMeta()));
       long nextTimeout = request.workflowTimeoutSeconds();
@@ -184,7 +189,7 @@ public class WorkflowDefinitionService {
               state.id,
               state.latestVersionNo + 1,
               state.draftRevision,
-              draft.request(),
+              draft.spec(),
               state.editorMeta,
               draft.tasks(),
               Instant.now());
@@ -241,7 +246,7 @@ public class WorkflowDefinitionService {
       return activate(
           state,
           runtimeService.run(
-              version.runRequest(),
+              version.runSpec(),
               version.taskVersionsByNode(),
               version.id(),
               version.versionNo(),
@@ -257,7 +262,7 @@ public class WorkflowDefinitionService {
       PreparedDraft draft = prepare(state);
       return activate(
           state,
-          runtimeService.run(draft.request(), draft.tasks(), null, null, true));
+          runtimeService.run(draft.spec(), draft.tasks(), null, null, true));
     }
   }
 
@@ -312,7 +317,6 @@ public class WorkflowDefinitionService {
   private WorkflowDefinitionVO activate(
       DefinitionState state,
       WorkflowInstanceVO prepared) {
-    // Persist the execution pointer before any pending remote dispatch is activated.
     String previousExecutionId = state.latestExecutionId;
     String previousExecutionStatus = state.latestExecutionStatus;
     Instant previousUpdateTime = state.updateTime;
@@ -352,20 +356,20 @@ public class WorkflowDefinitionService {
         state.editorMeta,
         state.input);
     Map<String, TaskVersionSnapshot> tasks = new LinkedHashMap<>();
-    for (NodeRequest node : graph.nodes()) {
+    for (WorkflowNodeSpec node : graph.nodes()) {
       TaskVersionSnapshot task = taskRegistry.snapshot(node.taskId());
       if (!"SYNC".equalsIgnoreCase(task.type())) {
         throw new IllegalStateException("第一阶段工作流仅支持 SYNC 任务：" + node.taskId());
       }
       tasks.put(node.id(), task);
     }
-    return new PreparedDraft(toRunRequest(state, graph), Map.copyOf(tasks));
+    return new PreparedDraft(toRunSpec(state, graph), Map.copyOf(tasks));
   }
 
   private void validateGraph(DefinitionState state) {
     if (state.nodes.isEmpty()) throw new IllegalStateException("请先配置至少一个任务节点");
     Set<String> ids = new HashSet<>();
-    for (NodeRequest node : state.nodes) {
+    for (WorkflowNodeSpec node : state.nodes) {
       if (!ids.add(node.id())) {
         throw new IllegalStateException("工作流存在重复节点 ID：" + node.id());
       }
@@ -376,7 +380,7 @@ public class WorkflowDefinitionService {
       in.put(nodeId, 0);
       next.put(nodeId, new ArrayList<>());
     });
-    for (EdgeRequest edge : state.edges) {
+    for (WorkflowEdgeSpec edge : state.edges) {
       if (!ids.contains(edge.source()) || !ids.contains(edge.target())) {
         throw new IllegalStateException(
             "连线引用了不存在的节点：" + edge.source() + " -> " + edge.target());
@@ -406,29 +410,13 @@ public class WorkflowDefinitionService {
     }
   }
 
-  private WorkflowRunRequest toRunRequest(
+  private WorkflowRunSpec toRunSpec(
       DefinitionState state,
       WorkflowStartGraphCompiler.RuntimeGraph graph) {
-    List<WorkflowRunRequest.NodeRequest> nodes = graph.nodes().stream()
-        .map(node -> new WorkflowRunRequest.NodeRequest(
-            node.id(),
-            node.taskId(),
-            node.maxAttempts(),
-            node.retryDelaySeconds(),
-            node.dispatchTimeoutSeconds(),
-            node.executionTimeoutSeconds(),
-            node.inputMapping(),
-            node.triggerRule(),
-            node.failurePolicy()))
-        .toList();
-    List<WorkflowRunRequest.EdgeRequest> edges = graph.edges().stream()
-        .map(edge -> new WorkflowRunRequest.EdgeRequest(edge.source(), edge.target()))
-        .toList();
-    // Runtime 只接收 input；editorMeta 不进入 Yak Framework execution input。
-    return new WorkflowRunRequest(
+    return new WorkflowRunSpec(
         state.name,
-        nodes,
-        edges,
+        graph.nodes(),
+        graph.edges(),
         state.input,
         state.workflowTimeoutSeconds,
         state.failureStrategy);
@@ -446,8 +434,8 @@ public class WorkflowDefinitionService {
         version.id(),
         version.versionNo(),
         active,
-        version.runRequest().nodes().size(),
-        version.runRequest().edges().size(),
+        version.runSpec().nodes().size(),
+        version.runSpec().edges().size(),
         bindings,
         version.publishedAt());
   }
@@ -463,8 +451,8 @@ public class WorkflowDefinitionService {
           state.status,
           state.nodes.size(),
           state.edges.size(),
-          state.nodes,
-          state.edges,
+          state.nodes.stream().map(this::toView).toList(),
+          state.edges.stream().map(this::toView).toList(),
           state.input,
           state.editorMeta,
           state.workflowTimeoutSeconds,
@@ -478,6 +466,44 @@ public class WorkflowDefinitionService {
           state.createTime,
           state.updateTime);
     }
+  }
+
+  private WorkflowNodeSpec toSpec(NodeDTO node) {
+    return new WorkflowNodeSpec(
+        node.id(),
+        node.taskId(),
+        node.positionX(),
+        node.positionY(),
+        node.maxAttempts(),
+        node.retryDelaySeconds(),
+        node.dispatchTimeoutSeconds(),
+        node.executionTimeoutSeconds(),
+        node.inputMapping(),
+        node.triggerRule(),
+        node.failurePolicy());
+  }
+
+  private WorkflowEdgeSpec toSpec(EdgeDTO edge) {
+    return new WorkflowEdgeSpec(edge.source(), edge.target());
+  }
+
+  private NodeVO toView(WorkflowNodeSpec node) {
+    return new NodeVO(
+        node.id(),
+        node.taskId(),
+        node.positionX(),
+        node.positionY(),
+        node.maxAttempts(),
+        node.retryDelaySeconds(),
+        node.dispatchTimeoutSeconds(),
+        node.executionTimeoutSeconds(),
+        node.inputMapping(),
+        node.triggerRule(),
+        node.failurePolicy());
+  }
+
+  private EdgeVO toView(WorkflowEdgeSpec edge) {
+    return new EdgeVO(edge.source(), edge.target());
   }
 
   private boolean draftChanged(DefinitionState state) {
@@ -559,7 +585,7 @@ public class WorkflowDefinitionService {
         version.workflowId(),
         version.versionNo(),
         version.draftRevision(),
-        version.runRequest(),
+        version.runSpec(),
         version.editorMeta(),
         version.taskVersionsByNode(),
         version.publishedAt());
@@ -592,7 +618,7 @@ public class WorkflowDefinitionService {
         record.workflowId(),
         record.versionNo(),
         record.draftRevision(),
-        record.runRequest(),
+        record.runSpec(),
         record.editorMeta(),
         record.taskVersionsByNode(),
         record.publishedAt());
@@ -620,7 +646,7 @@ public class WorkflowDefinitionService {
   }
 
   private record PreparedDraft(
-      WorkflowRunRequest request,
+      WorkflowRunSpec spec,
       Map<String, TaskVersionSnapshot> tasks) {
   }
 
@@ -632,8 +658,8 @@ public class WorkflowDefinitionService {
     String failureStrategy;
     String latestExecutionId;
     String latestExecutionStatus;
-    List<NodeRequest> nodes;
-    List<EdgeRequest> edges;
+    List<WorkflowNodeSpec> nodes;
+    List<WorkflowEdgeSpec> edges;
     Map<String, Object> input;
     Map<String, Object> editorMeta;
     long workflowTimeoutSeconds;
@@ -652,8 +678,8 @@ public class WorkflowDefinitionService {
       String failureStrategy,
       String latestExecutionId,
       String latestExecutionStatus,
-      List<NodeRequest> nodes,
-      List<EdgeRequest> edges,
+      List<WorkflowNodeSpec> nodes,
+      List<WorkflowEdgeSpec> edges,
       Map<String, Object> input,
       Map<String, Object> editorMeta,
       long workflowTimeoutSeconds,
