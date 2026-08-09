@@ -1,31 +1,26 @@
 package io.yak.ops.business.quality.service;
 
-import io.yak.ops.business.quality.api.QualityApi.AlertLevel;
-import io.yak.ops.business.quality.api.QualityApi.ComparisonOperator;
-import io.yak.ops.business.quality.api.QualityApi.MonitorPageRequest;
-import io.yak.ops.business.quality.api.QualityApi.MonitorPageView;
-import io.yak.ops.business.quality.api.QualityApi.MonitorSettingsRequest;
-import io.yak.ops.business.quality.api.QualityApi.MonitorSettingsView;
-import io.yak.ops.business.quality.api.QualityApi.MonitorView;
-import io.yak.ops.business.quality.api.QualityApi.NotifyChannel;
-import io.yak.ops.business.quality.api.QualityApi.RuleFailureAction;
-import io.yak.ops.business.quality.api.QualityApi.RuleScope;
-import io.yak.ops.business.quality.api.QualityApi.RuleType;
-import io.yak.ops.business.quality.api.QualityApi.RunMode;
-import io.yak.ops.business.quality.api.QualityApi.RunView;
-import io.yak.ops.business.quality.api.QualityApi.SaveMonitorRequest;
-import io.yak.ops.business.quality.api.QualityApi.SaveRuleRequest;
-import io.yak.ops.business.quality.api.QualityApi.ScheduleFrequency;
-import io.yak.ops.business.quality.api.QualityApi.ScheduleWeekday;
-import io.yak.ops.business.quality.api.QualityApi.TableMonitorSummary;
-import io.yak.ops.business.quality.api.QualityApi.TemplateView;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
+import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
+import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettingsSpec;
+import io.yak.ops.business.quality.domain.QualityDomain.MonitorSpec;
+import io.yak.ops.business.quality.domain.QualityDomain.RuleSpec;
+import io.yak.ops.business.quality.domain.QualityDomain.Template;
+import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.QualityRepository;
-import io.yak.ops.business.quality.repository.QualityRepository.MonitorSettingsWrite;
-import io.yak.ops.business.quality.repository.QualityRepository.MonitorWrite;
-import io.yak.ops.business.quality.repository.QualityRepository.PageResult;
-import io.yak.ops.business.quality.repository.QualityRepository.RuleWrite;
 import io.yak.ops.business.quality.schedule.QualityScheduleCalculator;
+import io.yak.ops.business.quality.service.support.QualityViewMapper;
+import io.yak.ops.common.bean.dto.quality.QualityMonitorDTO;
+import io.yak.ops.common.bean.vo.quality.QualityMonitorVO;
+import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
+import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
+import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleFailureAction;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleScope;
+import io.yak.ops.common.enums.quality.QualityEnums.RuleType;
+import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
+import io.yak.ops.common.enums.quality.QualityEnums.ScheduleFrequency;
+import io.yak.ops.common.enums.quality.QualityEnums.ScheduleWeekday;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -51,57 +46,61 @@ public class QualityMonitorService {
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public MonitorPageView page(MonitorPageRequest request) {
-    MonitorPageRequest normalized = request == null
-        ? new MonitorPageRequest(1, 20, null, null, null, null, null, null, null)
+  public QualityMonitorVO.Page page(QualityMonitorDTO.PageRequest request) {
+    QualityMonitorDTO.PageRequest normalized = request == null
+        ? new QualityMonitorDTO.PageRequest(1, 20, null, null, null, null, null, null, null)
         : request;
-    PageResult<io.yak.ops.business.quality.api.QualityApi.MonitorListItem> result =
-        repository.pageMonitors(normalized);
-    return new MonitorPageView(
-        result.records(), result.total(), normalized.normalizedCurrent(),
-        normalized.normalizedPageSize());
+    QualityQuery.Monitor query = new QualityQuery.Monitor(
+        normalized.normalizedCurrent(), normalized.normalizedPageSize(), normalized.keyword(),
+        normalized.dataSourceId(), normalized.databaseName(), normalized.databaseName() != null,
+        normalized.schemaName(), normalized.schemaName() != null, normalized.tableName(),
+        normalized.enabled(), normalized.lastResult());
+    var result = repository.pageMonitors(query);
+    return new QualityMonitorVO.Page(
+        result.records().stream().map(QualityViewMapper::monitorList).toList(),
+        result.total(), query.current(), query.pageSize());
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public MonitorView get(long id) {
+  public QualityMonitorVO.Detail get(long id) {
     return repository.findMonitor(id)
+        .map(QualityViewMapper::monitor)
         .orElseThrow(() -> new IllegalArgumentException("质量监控不存在：" + id));
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public MonitorSettingsView getSettings(long id) {
-    get(id);
-    return repository.findMonitorSettings(id);
+  public QualityMonitorVO.Settings getSettings(long id) {
+    requireMonitor(id);
+    return QualityViewMapper.settings(repository.findMonitorSettings(id));
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
-  public List<TableMonitorSummary> tableSummaries(
+  public List<QualityMonitorVO.TableSummary> tableSummaries(
       long dataSourceId, String databaseName, String schemaName) {
-    if (dataSourceId <= 0) {
-      throw new IllegalArgumentException("数据源编号无效");
-    }
-    return repository.tableSummaries(dataSourceId, databaseName, schemaName);
+    if (dataSourceId <= 0) throw new IllegalArgumentException("数据源编号无效");
+    return repository.tableSummaries(dataSourceId, databaseName, schemaName).stream()
+        .map(QualityViewMapper::tableSummary).toList();
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public MonitorView create(SaveMonitorRequest request) {
+  public QualityMonitorVO.Detail create(QualityMonitorDTO.SaveRequest request) {
     validateTarget(null, request);
-    List<RuleWrite> rules = normalizeRules(request.rules());
-    MonitorSettingsWrite settings = normalizeSettings(request.settings(), null, request.enabled());
-    long id = repository.insertMonitor(toMonitorWrite(request));
+    List<RuleSpec> rules = normalizeRules(request.rules());
+    MonitorSettingsSpec settings = normalizeSettings(request.settings(), null, request.enabled());
+    long id = repository.insertMonitor(toMonitorSpec(request));
     repository.upsertMonitorSettings(id, settings);
     repository.replaceRules(id, rules);
     return get(id);
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public MonitorView update(long id, SaveMonitorRequest request) {
-    get(id);
+  public QualityMonitorVO.Detail update(long id, QualityMonitorDTO.SaveRequest request) {
+    requireMonitor(id);
     validateTarget(id, request);
-    List<RuleWrite> rules = normalizeRules(request.rules());
-    MonitorSettingsWrite settings = normalizeSettings(
+    List<RuleSpec> rules = normalizeRules(request.rules());
+    MonitorSettingsSpec settings = normalizeSettings(
         request.settings(), repository.findMonitorSettings(id), request.enabled());
-    if (!repository.updateMonitor(id, toMonitorWrite(request))) {
+    if (!repository.updateMonitor(id, toMonitorSpec(request))) {
       throw new IllegalArgumentException("质量监控不存在：" + id);
     }
     repository.upsertMonitorSettings(id, settings);
@@ -120,13 +119,13 @@ public class QualityMonitorService {
     return true;
   }
 
-  public RunView run(long id, String operator) {
+  public QualityMonitorVO.Run run(long id, String operator) {
     return executionService.run(id, operator);
   }
 
-  private MonitorSettingsWrite normalizeSettings(
-      MonitorSettingsRequest request,
-      MonitorSettingsView existing,
+  private MonitorSettingsSpec normalizeSettings(
+      QualityMonitorDTO.SettingsRequest request,
+      MonitorSettings existing,
       Boolean monitorEnabled) {
     RunMode runMode = request == null
         ? existing == null ? RunMode.MANUAL : existing.runMode()
@@ -165,9 +164,7 @@ public class QualityMonitorService {
       weekday = null;
       cron = null;
     } else {
-      if (frequency == null) {
-        throw new IllegalArgumentException("调度触发必须选择调度周期");
-      }
+      if (frequency == null) throw new IllegalArgumentException("调度触发必须选择调度周期");
       switch (frequency) {
         case DAILY -> {
           requireScheduleTime(scheduleTime);
@@ -176,9 +173,7 @@ public class QualityMonitorService {
         }
         case WEEKLY -> {
           requireScheduleTime(scheduleTime);
-          if (weekday == null) {
-            throw new IllegalArgumentException("每周调度必须选择执行日期");
-          }
+          if (weekday == null) throw new IllegalArgumentException("每周调度必须选择执行日期");
           cron = null;
         }
         case CRON -> {
@@ -186,7 +181,6 @@ public class QualityMonitorService {
           scheduleTime = null;
           weekday = null;
         }
-        default -> throw new IllegalArgumentException("不支持的调度周期");
       }
     }
 
@@ -202,22 +196,17 @@ public class QualityMonitorService {
         ? scheduleCalculator.nextRun(
             runMode, frequency, scheduleTime, weekday, cron, LocalDateTime.now())
         : null;
-    return new MonitorSettingsWrite(
+    return new MonitorSettingsSpec(
         runMode, frequency, scheduleTime, weekday, cron, nextRunTime,
         failureAction, notifyEnabled, notifyChannel, notifyTarget, alertLevel);
   }
 
   private void requireScheduleTime(String scheduleTime) {
     scheduleCalculator.nextRun(
-        RunMode.SCHEDULE,
-        ScheduleFrequency.DAILY,
-        scheduleTime,
-        null,
-        null,
-        LocalDateTime.now());
+        RunMode.SCHEDULE, ScheduleFrequency.DAILY, scheduleTime, null, null, LocalDateTime.now());
   }
 
-  private void validateTarget(Long excludeId, SaveMonitorRequest request) {
+  private void validateTarget(Long excludeId, QualityMonitorDTO.SaveRequest request) {
     if (request.dataSourceId() == null || request.dataSourceId() <= 0) {
       throw new IllegalArgumentException("请选择有效的数据源");
     }
@@ -227,22 +216,20 @@ public class QualityMonitorService {
       throw new IllegalStateException("当前数据表尚未注册，请先在按表配置页面注册数据表");
     }
     if (repository.existsMonitorForTarget(
-        excludeId, request.dataSourceId(), request.databaseName(),
-        request.schemaName(), tableName)) {
+        excludeId, request.dataSourceId(), request.databaseName(), request.schemaName(), tableName)) {
       throw new IllegalStateException("当前数据表已经创建质量监控，请直接进入监控详情");
     }
     validateWhereClause(request.whereClause());
   }
 
-  private List<RuleWrite> normalizeRules(List<SaveRuleRequest> requests) {
+  private List<RuleSpec> normalizeRules(List<QualityMonitorDTO.SaveRuleRequest> requests) {
     if (requests == null || requests.isEmpty()) {
       throw new IllegalArgumentException("至少需要添加一条质量规则");
     }
-    List<RuleWrite> result = new ArrayList<>();
-    for (SaveRuleRequest request : requests) {
-      TemplateView template = repository.findTemplate(request.templateId())
-          .orElseThrow(
-              () -> new IllegalArgumentException("规则模板不存在：" + request.templateId()));
+    List<RuleSpec> result = new ArrayList<>();
+    for (QualityMonitorDTO.SaveRuleRequest request : requests) {
+      Template template = repository.findTemplate(request.templateId())
+          .orElseThrow(() -> new IllegalArgumentException("规则模板不存在：" + request.templateId()));
       String columnName = trimToNull(request.columnName());
       if (template.scope() == RuleScope.COLUMN && columnName == null) {
         throw new IllegalArgumentException(template.name() + " 必须选择检查字段");
@@ -280,27 +267,29 @@ public class QualityMonitorService {
         }
       }
 
-      if (template.ruleType() == RuleType.CUSTOM_SQL) {
-        validateCustomSql(customSql);
-      } else {
-        customSql = null;
-      }
-      result.add(new RuleWrite(
-          template.id(), template.code(), request.name().trim(),
-          template.ruleType(), template.scope(), template.dimension(),
-          columnName, operator, threshold, thresholdEnd, enumValues,
-          customSql, request.enabled() == null || request.enabled()));
+      if (template.ruleType() == RuleType.CUSTOM_SQL) validateCustomSql(customSql);
+      else customSql = null;
+
+      result.add(new RuleSpec(
+          template.id(), template.code(), request.name().trim(), template.ruleType(), template.scope(),
+          template.dimension(), columnName, operator, threshold, thresholdEnd, enumValues, customSql,
+          request.enabled() == null || request.enabled()));
     }
     return result;
   }
 
-  private MonitorWrite toMonitorWrite(SaveMonitorRequest request) {
-    return new MonitorWrite(
+  private MonitorSpec toMonitorSpec(QualityMonitorDTO.SaveRequest request) {
+    return new MonitorSpec(
         request.name().trim(), trimToNull(request.description()), request.dataSourceId(),
         request.dataSourceName().trim(), trimToNull(request.databaseName()),
         trimToNull(request.schemaName()), request.tableName().trim(),
         trimToNull(request.whereClause()), request.owner().trim(),
         request.enabled() == null || request.enabled());
+  }
+
+  private void requireMonitor(long id) {
+    repository.findMonitor(id)
+        .orElseThrow(() -> new IllegalArgumentException("质量监控不存在：" + id));
   }
 
   private ComparisonOperator defaultOperator(RuleType ruleType) {
@@ -320,18 +309,14 @@ public class QualityMonitorService {
   }
 
   private List<String> normalizeEnumValues(List<String> values) {
-    if (values == null) {
-      return List.of();
-    }
+    if (values == null) return List.of();
     return values.stream().map(QualityMonitorService::trimToNull)
         .filter(value -> value != null).distinct().toList();
   }
 
   private void validateWhereClause(String value) {
     String filter = trimToNull(value);
-    if (filter == null) {
-      return;
-    }
+    if (filter == null) return;
     String upper = filter.toUpperCase();
     if (filter.contains(";") || upper.contains("--") || upper.contains("/*")
         || upper.matches("(?s).*\\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE)\\b.*")) {
@@ -340,33 +325,21 @@ public class QualityMonitorService {
   }
 
   private void validateCustomSql(String sql) {
-    if (sql == null) {
-      throw new IllegalArgumentException("自定义 SQL 不能为空");
-    }
+    if (sql == null) throw new IllegalArgumentException("自定义 SQL 不能为空");
     String normalized = sql.trim();
-    if (normalized.endsWith(";")) {
-      normalized = normalized.substring(0, normalized.length() - 1).trim();
-    }
+    if (normalized.endsWith(";")) normalized = normalized.substring(0, normalized.length() - 1).trim();
     if (!normalized.toUpperCase().startsWith("SELECT ") || normalized.contains(";")) {
       throw new IllegalArgumentException("自定义 SQL 仅允许执行单条 SELECT 查询");
     }
   }
 
   private static BigDecimal required(BigDecimal value, String message) {
-    if (value == null) {
-      throw new IllegalArgumentException(message);
-    }
+    if (value == null) throw new IllegalArgumentException(message);
     return value;
   }
-
-  private static <T> T defaultValue(T value, T fallback) {
-    return value == null ? fallback : value;
-  }
-
+  private static <T> T defaultValue(T value, T fallback) { return value == null ? fallback : value; }
   private static String trimToNull(String value) {
-    if (value == null) {
-      return null;
-    }
+    if (value == null) return null;
     String trimmed = value.trim();
     return trimmed.isEmpty() ? null : trimmed;
   }
