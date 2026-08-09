@@ -80,13 +80,31 @@ public class OfflineExecutionOrchestrator {
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson) {
+    return executeSnapshot(
+        definitionId,
+        definitionVersion,
+        configDigest,
+        definitionSnapshotJson,
+        logicalJobSpecJson,
+        null);
+  }
+
+  /** 按工作流版本快照和 Attempt 幂等键执行。 */
+  public OfflineJobExecutionPO executeSnapshot(
+      Long definitionId,
+      long definitionVersion,
+      String configDigest,
+      String definitionSnapshotJson,
+      String logicalJobSpecJson,
+      String idempotencyKey) {
     ClaimResult claim = claimService.claimSnapshot(
         definitionId,
         definitionVersion,
         configDigest,
         definitionSnapshotJson,
         logicalJobSpecJson,
-        "WORKFLOW");
+        "WORKFLOW",
+        idempotencyKey);
     return submitClaim(
         claim,
         definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));

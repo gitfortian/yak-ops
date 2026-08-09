@@ -32,6 +32,7 @@ import io.yak.ops.business.workflow.model.WorkflowRunRequest.EdgeRequest;
 import io.yak.ops.business.workflow.model.WorkflowRunRequest.NodeRequest;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -257,18 +258,39 @@ public class WorkflowRuntimeService {
     if (queue == null) return;
     NodeDispatch dispatch;
     while ((dispatch = queue.poll()) != null) {
-      NodeDispatch current = dispatch;
-      ioExecutor.execute(() -> startNode(current));
+      scheduleDispatch(dispatch);
     }
   }
 
+  private void scheduleDispatch(NodeDispatch dispatch) {
+    Instant availableAt = dispatch.availableAt();
+    long delayMillis = availableAt == null
+        ? 0L
+        : Math.max(0L, Duration.between(Instant.now(), availableAt).toMillis());
+    Runnable start = () -> ioExecutor.execute(() -> startNode(dispatch));
+    if (delayMillis <= 0L) {
+      start.run();
+      return;
+    }
+    runtimeScheduler.schedule(start, delayMillis, TimeUnit.MILLISECONDS);
+    log.debug(
+        "[workflow] delayed dispatch scheduled execution={}, node={}, attempt={}, delayMillis={}",
+        dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), delayMillis);
+  }
+
   private void startNode(NodeDispatch dispatch) {
-    NodeTaskControl control = taskControls.computeIfAbsent(dispatch.attemptId(), ignored -> new NodeTaskControl(dispatch.workflowExecutionId()));
+    NodeTaskControl control = taskControls.get(dispatch.attemptId());
+    if (control == null) {
+      log.debug(
+          "[workflow] stale queued dispatch skipped execution={}, node={}, attempt={}",
+          dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId());
+      return;
+    }
     if (control.canceled()) { cleanupAttempt(dispatch, control); return; }
     try {
       NodeMetadata node = requireMetadata(dispatch.workflowExecutionId()).nodes().get(dispatch.nodeId());
       if (node == null) throw new IllegalStateException("工作流节点运行元数据不存在：" + dispatch.nodeId());
-      SyncTaskExecution taskExecution = syncTaskRunner.start(node.task());
+      SyncTaskExecution taskExecution = syncTaskRunner.start(node.task(), dispatch.attemptId());
       control.bindTaskExecution(taskExecution.executionId());
       if (control.canceled()) {
         cancelRemote(taskExecution.executionId()); cleanupAttempt(dispatch, control); return;

@@ -53,7 +53,8 @@ public class OfflineExecutionClaimService {
         logicalJobSpec,
         triggerType,
         retryFromExecutionId,
-        attemptNo);
+        attemptNo,
+        null);
   }
 
   /**
@@ -70,6 +71,26 @@ public class OfflineExecutionClaimService {
       String definitionSnapshotJson,
       String logicalJobSpecJson,
       String triggerType) {
+    return claimSnapshot(
+        definitionId,
+        definitionVersion,
+        configDigest,
+        definitionSnapshotJson,
+        logicalJobSpecJson,
+        triggerType,
+        null);
+  }
+
+  /** 工作流 Attempt 级快照执行；idempotencyKey 通常直接使用 workflow attemptId。 */
+  @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
+  public ClaimResult claimSnapshot(
+      Long definitionId,
+      long definitionVersion,
+      String configDigest,
+      String definitionSnapshotJson,
+      String logicalJobSpecJson,
+      String triggerType,
+      String idempotencyKey) {
     if (!StringUtils.hasText(logicalJobSpecJson)) {
       throw new IllegalArgumentException("任务版本快照缺少 JobSpec");
     }
@@ -83,7 +104,8 @@ public class OfflineExecutionClaimService {
         logicalJobSpecJson,
         triggerType,
         null,
-        1);
+        1,
+        idempotencyKey);
   }
 
   private ClaimResult createClaim(
@@ -94,7 +116,8 @@ public class OfflineExecutionClaimService {
       String logicalJobSpecJson,
       String triggerType,
       Long retryFromExecutionId,
-      int attemptNo) {
+      int attemptNo,
+      String idempotencyKey) {
     Long definitionId = definition.getId();
     if (repository.hasActiveExecution(definitionId)) {
       throw new IllegalStateException("任务已有运行中的执行实例，不能重复提交");
@@ -106,7 +129,10 @@ public class OfflineExecutionClaimService {
     execution.setDefinitionVersion((int) Math.min(Integer.MAX_VALUE, definitionVersion));
     execution.setEngineBaseUrl(properties.getEngine().getBaseUrl());
     execution.setExternalExecutionId("yak-offline-" + UUID.randomUUID());
-    execution.setIdempotencyKey(UUID.randomUUID().toString());
+    execution.setIdempotencyKey(
+        StringUtils.hasText(idempotencyKey)
+            ? idempotencyKey.trim()
+            : UUID.randomUUID().toString());
     execution.setStatus(OfflineExecutionStatus.CREATED.name());
     execution.setStateVersion(1L);
     execution.setAttemptNo(Math.max(1, attemptNo));

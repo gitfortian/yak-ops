@@ -14,6 +14,16 @@ public interface SyncTaskRunner {
     return start(snapshot.taskId());
   }
 
+  /**
+   * 按工作流 Attempt 启动任务。
+   *
+   * <p>{@code idempotencyKey} 由工作流当前 attemptId 提供。支持远端幂等的 Runner 应覆盖该方法，
+   * 将同一个 Attempt 的重复启动请求收敛为同一次远端执行；旧 Runner 默认仍按快照启动。</p>
+   */
+  default SyncTaskExecution start(TaskVersionSnapshot snapshot, String idempotencyKey) {
+    return start(snapshot);
+  }
+
   SyncTaskExecution status(String executionId);
 
   void cancel(String executionId);

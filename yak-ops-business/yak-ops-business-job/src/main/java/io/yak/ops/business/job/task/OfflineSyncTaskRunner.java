@@ -27,6 +27,17 @@ public class OfflineSyncTaskRunner implements SyncTaskRunner {
 
   @Override
   public SyncTaskExecution start(TaskVersionSnapshot snapshot) {
+    return startSnapshot(snapshot, null);
+  }
+
+  @Override
+  public SyncTaskExecution start(TaskVersionSnapshot snapshot, String idempotencyKey) {
+    return startSnapshot(snapshot, idempotencyKey);
+  }
+
+  private SyncTaskExecution startSnapshot(
+      TaskVersionSnapshot snapshot,
+      String idempotencyKey) {
     if (snapshot == null) {
       throw new IllegalArgumentException("任务版本快照不能为空");
     }
@@ -37,14 +48,15 @@ public class OfflineSyncTaskRunner implements SyncTaskRunner {
         || snapshot.definitionSnapshotJson() == null
         || snapshot.executionConfigSnapshotJson() == null) {
       // 没有版本能力的兼容 TaskRegistry 仍走原执行入口。
-      return SyncTaskRunner.super.start(snapshot);
+      return start(snapshot.taskId());
     }
     OfflineJobExecutionVO execution = service().executeSnapshot(
         parseId(snapshot.taskId(), "taskId"),
         snapshot.version(),
         snapshot.configDigest(),
         snapshot.definitionSnapshotJson(),
-        snapshot.executionConfigSnapshotJson());
+        snapshot.executionConfigSnapshotJson(),
+        idempotencyKey);
     return toExecution(execution);
   }
 

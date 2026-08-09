@@ -40,13 +40,31 @@ public class OfflineJobExecutionService {
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson) {
+    return executeSnapshot(
+        id,
+        version,
+        configDigest,
+        definitionSnapshotJson,
+        logicalJobSpecJson,
+        null);
+  }
+
+  /** 工作流按发布快照和 Attempt 幂等键执行。 */
+  public OfflineJobExecutionVO executeSnapshot(
+      Long id,
+      long version,
+      String configDigest,
+      String definitionSnapshotJson,
+      String logicalJobSpecJson,
+      String idempotencyKey) {
     return readService.toVO(
         orchestrator.executeSnapshot(
             id,
             version,
             configDigest,
             definitionSnapshotJson,
-            logicalJobSpecJson));
+            logicalJobSpecJson,
+            idempotencyKey));
   }
 
   public OfflineJobExecutionVO executeScheduled(Long id) {
