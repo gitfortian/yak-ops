@@ -3,6 +3,8 @@ import { NodeResizer, type NodeProps } from 'reactflow';
 import WorkflowNoteToolbar from './WorkflowNoteToolbar';
 import type { WorkflowNoteData, WorkflowNoteTheme } from './types';
 
+const NOTE_RICH_TEXT_PREFIX = '__YAK_NOTE_RICH__:';
+
 const NOTE_THEME_META: Record<WorkflowNoteTheme, {
   background: string;
   accent: string;
@@ -72,6 +74,10 @@ const sanitizeNoteHtml = (raw: string) => {
   return root.innerHTML;
 };
 
+const decodeNoteHtml = (value: string) => value.startsWith(NOTE_RICH_TEXT_PREFIX)
+  ? value.slice(NOTE_RICH_TEXT_PREFIX.length)
+  : escapeHtml(value);
+
 const normalizeFontSize = (value: string): '1' | '3' | '5' => {
   if (value === '5' || value === '16px' || value === '6') return '5';
   if (value === '3' || value === '14px' || value === '4') return '3';
@@ -84,8 +90,7 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const [currentFontSize, setCurrentFontSize] = useState<'1' | '3' | '5'>('1');
-
-  const resolvedHtml = data.html?.trim() ? data.html : escapeHtml(data.text || '');
+  const resolvedHtml = decodeNoteHtml(data.text || '');
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -121,8 +126,7 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
     const html = sanitizeNoteHtml(editor.innerHTML);
     if (editor.innerHTML !== html) editor.innerHTML = html;
     data.onChange?.(id, {
-      text: editor.innerText,
-      html,
+      text: `${NOTE_RICH_TEXT_PREFIX}${html}`,
     });
   }, [data, id]);
 
@@ -153,6 +157,9 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
     syncEditorValue();
     data.onCommit?.(id, '注释字号已修改');
   }, [captureSelection, data, editable, id, restoreSelection, syncEditorValue]);
+
+  const visibleText = editorRef.current?.innerText
+    || (data.text.startsWith(NOTE_RICH_TEXT_PREFIX) ? '' : data.text);
 
   return (
     <div
@@ -190,7 +197,8 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
             onFontSizeChange={changeFontSize}
             onCommand={runCommand}
             onCopyText={() => {
-              void navigator.clipboard?.writeText(data.text || '');
+              const text = editorRef.current?.innerText || visibleText;
+              void navigator.clipboard?.writeText(text);
             }}
             onDuplicate={() => data.onDuplicate?.(id)}
             onDelete={() => data.onDelete?.(id)}
@@ -199,7 +207,7 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
       ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-auto px-3 py-2.5">
-        {!data.text && !data.html ? (
+        {!visibleText && !resolvedHtml ? (
           <div className="pointer-events-none absolute left-3 top-2.5 text-[12px] leading-5 text-[#98a2b3]">
             输入注释...
           </div>
@@ -209,9 +217,9 @@ const WorkflowNoteNode = ({ id, data, selected }: NodeProps<WorkflowNoteData>) =
           contentEditable={editable}
           suppressContentEditableWarning
           className={[
-            'min-h-full whitespace-pre-wrap break-words text-[12px] leading-5 text-[#475467] outline-none',
+            'min-h-full break-words text-[12px] leading-5 text-[#475467] outline-none',
             editable ? 'nodrag nopan nowheel cursor-text' : 'pointer-events-none cursor-default',
-            '[&_a]:text-[#155eef] [&_a]:underline [&_ul]:my-0 [&_ul]:list-disc [&_ul]:pl-5',
+            '[&_a]:text-[#155eef] [&_a]:underline [&_p]:my-0 [&_ul]:my-0 [&_ul]:list-disc [&_ul]:pl-5',
           ].join(' ')}
           onInput={syncEditorValue}
           onBlur={() => {
