@@ -214,6 +214,7 @@ const openWorkflowEventSubscription = (
   subscription.closeActive?.();
   let activeClosed = false;
   let polling = false;
+  let fallbackTimer: number | undefined;
 
   const deliver = (snapshot: WorkflowInstance) => {
     if (activeClosed || subscription.stopped) return;
@@ -222,6 +223,30 @@ const openWorkflowEventSubscription = (
     subscription.lastSignature = signature;
     subscription.onSnapshot(snapshot);
     if (isWorkflowTerminal(snapshot.status)) cleanupActive();
+  };
+
+  const poll = async () => {
+    if (activeClosed || subscription.stopped || polling) return;
+    polling = true;
+    try {
+      deliver(await getWorkflowInstance(executionId));
+    } catch {
+      // SSE/代理异常时的兜底查询失败不打断编辑器。
+    } finally {
+      polling = false;
+    }
+  };
+
+  const stopFallbackPolling = () => {
+    if (fallbackTimer === undefined) return;
+    window.clearInterval(fallbackTimer);
+    fallbackTimer = undefined;
+  };
+
+  const startFallbackPolling = () => {
+    if (activeClosed || subscription.stopped || fallbackTimer !== undefined) return;
+    fallbackTimer = window.setInterval(() => void poll(), 1000);
+    void poll();
   };
 
   const source = new EventSource(`/api/v1/workflows/instances/${encodeURIComponent(executionId)}/events`);
@@ -233,30 +258,23 @@ const openWorkflowEventSubscription = (
     }
   };
   source.addEventListener('workflow', handleWorkflowEvent);
-
-  const poll = async () => {
-    if (activeClosed || subscription.stopped || polling) return;
-    polling = true;
-    try {
-      deliver(await getWorkflowInstance(executionId));
-    } catch {
-      // SSE 正常时不把兜底查询异常暴露给页面。
-    } finally {
-      polling = false;
-    }
+  source.onopen = () => stopFallbackPolling();
+  source.onerror = () => {
+    // EventSource 会自行重连；重连期间用低频 authenticated request 保证状态不会停住。
+    startFallbackPolling();
   };
-  const timer = window.setInterval(() => void poll(), 500);
 
   function cleanupActive() {
     if (activeClosed) return;
     activeClosed = true;
-    window.clearInterval(timer);
+    stopFallbackPolling();
     source.removeEventListener('workflow', handleWorkflowEvent);
     source.close();
     if (subscription.closeActive === cleanupActive) subscription.closeActive = undefined;
   }
 
   subscription.closeActive = cleanupActive;
+  // 首帧主动读取一次，随后以 SSE 为主；不会再在健康连接下每 500ms 打接口。
   void poll();
 };
 
@@ -267,7 +285,7 @@ function resumeWorkflowEventsIfNeeded(executionId: string, snapshot: WorkflowIns
   openWorkflowEventSubscription(executionId, subscription);
 }
 
-/** SSE 为主，500ms authenticated request 作为代理/认证链路下的状态同步兜底。 */
+/** SSE 为主；只有连接异常/重连期间才启用 1s 查询兜底。 */
 export const subscribeWorkflowEvents = (
   executionId: string,
   onSnapshot: (instance: WorkflowInstance) => void,
