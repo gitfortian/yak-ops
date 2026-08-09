@@ -7,11 +7,12 @@ import {
   type WorkflowStartVariable,
 } from './types';
 
-interface StartMetaV1 {
-  version: 1;
+interface StartMeta {
+  version?: 1 | 2;
   position?: { x?: number; y?: number };
   inputFields?: Array<Omit<WorkflowStartInputField, 'defaultValue'>>;
   variables?: Array<Omit<WorkflowStartVariable, 'value'>>;
+  nextNodeIds?: string[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -37,7 +38,7 @@ export const hydrateWorkflowStartConfig = (
 ): WorkflowStartConfig => {
   const input = rawInput || {};
   const meta = isRecord(input[WORKFLOW_START_META_KEY])
-    ? (input[WORKFLOW_START_META_KEY] as StartMetaV1)
+    ? (input[WORKFLOW_START_META_KEY] as StartMeta)
     : undefined;
   const inputValues = isRecord(input.inputs) ? input.inputs : undefined;
   const variableValues = isRecord(input.vars) ? input.vars : {};
@@ -88,6 +89,9 @@ export const hydrateWorkflowStartConfig = (
     position: normalizePosition(meta?.position),
     inputs,
     variables,
+    nextNodeIds: Array.isArray(meta?.nextNodeIds)
+      ? [...new Set(meta.nextNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && Boolean(nodeId)))]
+      : [],
   };
 };
 
@@ -126,9 +130,10 @@ export const serializeWorkflowStartContext = (
   ),
   ...editorMeta,
   [WORKFLOW_START_META_KEY]: {
-    version: 1,
+    version: 2,
     position: config.position,
     inputFields: config.inputs.map(({ defaultValue: _defaultValue, ...field }) => field),
     variables: config.variables.map(({ value: _value, ...variable }) => variable),
-  } satisfies StartMetaV1,
+    nextNodeIds: [...new Set(config.nextNodeIds)],
+  } satisfies StartMeta,
 });
