@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS yak_workflow_execution (
     edge_count INT NOT NULL DEFAULT 0,
     workflow_timeout_seconds BIGINT NOT NULL DEFAULT 0,
     failure_strategy VARCHAR(64) NULL,
+    runtime_metadata_json LONGTEXT NULL,
     PRIMARY KEY (id),
     KEY idx_yak_workflow_execution_status (status, updated_at),
     KEY idx_yak_workflow_execution_version (workflow_version_id),
