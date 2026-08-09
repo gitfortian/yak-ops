@@ -1,20 +1,24 @@
 import type { WorkflowFailureStrategy } from '@/services/workflow';
-import type { WorkflowDefinition } from '@/services/workflow/definitions';
-import { history } from '@umijs/max';
-import { Button, Input, InputNumber, Popconfirm, Popover, Select, Tooltip } from 'antd';
-import { ArrowLeft, CloudOff, CloudUpload, RotateCcw, Save, Settings2 } from 'lucide-react';
-import type { ReactNode } from 'react';
-
-const WORKFLOW_FAILURE_OPTIONS = [
-  { value: 'CONTINUE_INDEPENDENT_BRANCHES', label: '独立分支继续' },
-  { value: 'FAIL_FAST', label: '失败快速结束' },
-  { value: 'TERMINATE_ALL', label: '终止全部节点' },
-];
+import {
+  runWorkflowDefinition,
+  type WorkflowDefinition,
+} from '@/services/workflow/definitions';
+import { Button, Popover, Tooltip, message } from 'antd';
+import {
+  ChevronDown,
+  CircleStop,
+  Clock3,
+  History,
+  Play,
+  Rocket,
+  Save,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿',
-  ONLINE: '已上线',
-  OFFLINE: '已下线',
+  ONLINE: '已发布',
+  OFFLINE: '未发布',
 };
 
 interface WorkflowToolbarProps {
@@ -38,170 +42,181 @@ interface WorkflowToolbarProps {
   onOffline: () => void;
 }
 
-const ConfigLabel = ({ children }: { children: ReactNode }) => (
-  <div className="text-[12px] font-medium text-[#344054]">{children}</div>
-);
+const formatDateTime = (value?: string) => {
+  if (!value) return '--';
+  return value.replace('T', ' ').slice(0, 19);
+};
 
-const WorkflowToolbar = ({
-  definition,
-  name,
-  description,
-  workflowTimeoutSeconds,
-  failureStrategy,
-  nodesCount,
-  edgesCount,
-  locked,
-  saving,
-  statusAction,
-  onNameChange,
-  onDescriptionChange,
-  onWorkflowTimeoutChange,
-  onFailureStrategyChange,
-  onClear,
-  onSave,
-  onOnline,
-  onOffline,
-}: WorkflowToolbarProps) => {
+const WorkflowToolbar = (props: WorkflowToolbarProps) => {
+  const {
+    definition,
+    locked,
+    saving,
+    statusAction,
+    onSave,
+    onOnline,
+    onOffline,
+  } = props;
+  const [testing, setTesting] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+
   const status = definition?.status || 'DRAFT';
-  const runtimeConfig = (
-    <div className="w-[360px] space-y-4 p-0.5">
-      <div>
-        <ConfigLabel>失败策略</ConfigLabel>
-        <Select
-          className="mt-1.5 w-full"
-          value={failureStrategy}
-          disabled={locked}
-          options={WORKFLOW_FAILURE_OPTIONS}
-          onChange={(value) => onFailureStrategyChange(value as WorkflowFailureStrategy)}
-        />
-      </div>
+  const statusLabel = STATUS_LABEL[status] || status;
 
-      <div>
-        <ConfigLabel>工作流超时</ConfigLabel>
-        <div className="mt-1.5 flex items-center gap-2">
-          <InputNumber
-            min={0}
-            value={workflowTimeoutSeconds}
-            onChange={(value) => onWorkflowTimeoutChange(Number(value || 0))}
-            disabled={locked}
-            className="w-[150px]"
-          />
-          <span className="text-[11px] text-[#98a2b3]">秒，0 表示不限制</span>
+  const versionContent = useMemo(() => (
+    <div className="w-[300px] overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-[0_12px_32px_rgba(22,24,35,.14)]">
+      <div className="flex h-11 items-center justify-between border-b border-[#f0f1f3] px-3.5">
+        <div className="text-[13px] font-semibold text-[#344054]">版本</div>
+        <span className="rounded-md bg-[#f2f4f7] px-2 py-1 text-[10px] font-medium text-[#667085]">
+          {statusLabel}
+        </span>
+      </div>
+      <div className="p-3.5">
+        <div className="rounded-lg border border-[#eaecf0] bg-[#fafafa] p-3">
+          <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
+            <Clock3 size={14} className="text-[#667085]" />
+            当前工作流
+          </div>
+          <div className="mt-2 grid grid-cols-[72px_1fr] gap-y-1.5 text-[11px] leading-5">
+            <span className="text-[#98a2b3]">状态</span>
+            <span className="text-[#475467]">{statusLabel}</span>
+            <span className="text-[#98a2b3]">最后更新</span>
+            <span className="text-[#475467]">{formatDateTime(definition?.updateTime)}</span>
+          </div>
+        </div>
+        <div className="mt-3 text-[10px] leading-[18px] text-[#98a2b3]">
+          后续接入工作流版本快照后，这里将展示已发布版本和恢复记录。
+        </div>
+      </div>
+    </div>
+  ), [definition?.updateTime, statusLabel]);
+
+  const publishContent = (
+    <div className="w-[320px] overflow-hidden rounded-xl border border-[#e4e7ec] bg-white shadow-[0_12px_32px_rgba(22,24,35,.14)]">
+      <div className="px-4 pb-3 pt-4">
+        <div className="text-[12px] text-[#667085]">
+          {status === 'ONLINE' ? '当前工作流已发布' : '当前草稿未发布'}
+        </div>
+        <div className="mt-1 text-[14px] font-semibold text-[#344054]">
+          {status === 'ONLINE' ? '工作流正在使用已发布配置' : '发布后即可按当前配置运行工作流'}
         </div>
       </div>
 
-      <div className="rounded-lg bg-[#f7f8fa] px-3 py-2 text-[11px] leading-5 text-[#667085]">
-        工作流输入和全局变量统一在“开始”节点中维护。
-      </div>
-
-      <div>
-        <ConfigLabel>描述</ConfigLabel>
-        <Input.TextArea
-          rows={3}
-          value={description}
-          onChange={(event) => onDescriptionChange(event.target.value)}
-          disabled={locked}
-          className="mt-1.5 !text-[12px]"
-          placeholder="添加工作流描述..."
-        />
-      </div>
+      {status !== 'ONLINE' ? (
+        <div className="space-y-2 border-t border-[#f0f1f3] p-4">
+          <Button
+            block
+            type="primary"
+            loading={statusAction || saving}
+            icon={<Rocket size={14} />}
+            onClick={() => {
+              onOnline();
+              setPublishOpen(false);
+            }}
+            className="!h-9 !rounded-lg !font-medium"
+          >
+            发布更新
+          </Button>
+          <Button
+            block
+            loading={saving}
+            icon={<Save size={14} />}
+            onClick={() => {
+              onSave();
+              setPublishOpen(false);
+            }}
+            className="!h-9 !rounded-lg"
+          >
+            仅保存草稿
+          </Button>
+        </div>
+      ) : (
+        <div className="border-t border-[#f0f1f3] p-4">
+          <Button
+            block
+            loading={statusAction}
+            icon={<CircleStop size={14} />}
+            onClick={() => {
+              onOffline();
+              setPublishOpen(false);
+            }}
+            className="!h-9 !rounded-lg"
+          >
+            下线后继续编辑
+          </Button>
+        </div>
+      )}
     </div>
   );
 
+  const handleTestRun = async () => {
+    if (!definition?.id || testing) return;
+    setTesting(true);
+    try {
+      await runWorkflowDefinition(definition.id);
+      message.success('测试运行已提交');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '测试运行失败');
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
-    <header className="grid h-[52px] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#ebecef] bg-white px-3">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <Tooltip title="返回工作流定义">
+    <header className="flex h-[48px] shrink-0 items-center justify-end border-b border-[#ebecef] bg-white px-3">
+      <div className="flex items-center gap-1.5">
+        <Tooltip title="运行最近保存的工作流配置">
           <Button
-            type="text"
             size="small"
-            aria-label="返回工作流定义"
-            icon={<ArrowLeft size={15} />}
-            onClick={() => history.push('/workflow/definitions')}
-          />
+            loading={testing}
+            disabled={!definition?.id}
+            icon={<Play size={14} />}
+            onClick={() => void handleTestRun()}
+            className="!h-8 !rounded-lg !border-[#dfe2e7] !px-3 !text-[12px] !font-medium !text-[#344054] shadow-none"
+          >
+            测试运行
+          </Button>
         </Tooltip>
 
-        <div className="h-4 w-px bg-[#eceef1]" />
-
-        <Input
-          value={name}
-          disabled={locked}
-          variant="borderless"
-          onChange={(event) => onNameChange(event.target.value)}
-          className="max-w-[300px] min-w-[120px] !px-2 !text-[14px] !font-semibold !text-[#161823] transition-colors hover:!bg-[#f7f8fa] focus-within:!bg-[#f7f8fa]"
-        />
-
-        <span
-          className={[
-            'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-[10px] font-medium',
-            status === 'ONLINE'
-              ? 'bg-[rgba(254,44,85,.08)] text-[#d92d50]'
-              : 'bg-[#f2f4f7] text-[#667085]',
-          ].join(' ')}
+        <Popover
+          open={publishOpen}
+          onOpenChange={setPublishOpen}
+          trigger="click"
+          placement="bottomRight"
+          arrow={false}
+          content={publishContent}
+          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
         >
-          <span
-            className={[
-              'h-1.5 w-1.5 rounded-full',
-              status === 'ONLINE' ? 'bg-[#fe2c55]' : 'bg-[#98a2b3]',
-            ].join(' ')}
-          />
-          {saving ? '保存中' : STATUS_LABEL[status] || status}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Popover content={runtimeConfig} title="运行配置" trigger="click" placement="bottom">
-          <Button
-            size="small"
-            icon={<Settings2 size={13} />}
-            className="!h-8 !rounded-lg !border-[#e4e7ec] !bg-white !px-3 !text-[12px] !text-[#475467] shadow-none"
-          >
-            运行配置
-          </Button>
-        </Popover>
-
-        <span className="whitespace-nowrap text-[11px] text-[#98a2b3]">
-          {nodesCount} 节点 · {edgesCount} 连线
-        </span>
-
-        {locked ? (
-          <span className="whitespace-nowrap text-[10px] text-[#98a2b3]">已上线，需下线后修改</span>
-        ) : null}
-      </div>
-
-      <div className="flex items-center justify-end gap-1.5">
-        <Popconfirm
-          title="清空任务节点？开始节点与全局输入会保留。"
-          disabled={locked}
-          onConfirm={onClear}
-        >
-          <Button size="small" icon={<RotateCcw size={14} />} disabled={locked}>
-            清空
-          </Button>
-        </Popconfirm>
-
-        {!locked ? (
-          <Button size="small" icon={<Save size={14} />} loading={saving} onClick={onSave}>
-            保存
-          </Button>
-        ) : null}
-
-        {status === 'ONLINE' ? (
-          <Button size="small" icon={<CloudOff size={14} />} loading={statusAction} onClick={onOffline}>
-            下线
-          </Button>
-        ) : (
           <Button
             type="primary"
             size="small"
-            icon={<CloudUpload size={14} />}
-            loading={statusAction || saving}
-            onClick={onOnline}
-            className="!px-3.5"
+            icon={<Rocket size={14} />}
+            className="!h-8 !rounded-lg !px-3.5 !text-[12px] !font-medium"
           >
-            保存并上线
+            发布
+            <ChevronDown size={13} className="ml-1" />
           </Button>
-        )}
+        </Popover>
+
+        <Popover
+          open={versionOpen}
+          onOpenChange={setVersionOpen}
+          trigger="click"
+          placement="bottomRight"
+          arrow={false}
+          content={versionContent}
+          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
+        >
+          <Tooltip title="版本">
+            <Button
+              size="small"
+              aria-label="版本"
+              icon={<History size={15} />}
+              className="!h-8 !rounded-lg !border-[#dfe2e7] !px-2.5 !text-[#667085] shadow-none"
+            />
+          </Tooltip>
+        </Popover>
       </div>
     </header>
   );
