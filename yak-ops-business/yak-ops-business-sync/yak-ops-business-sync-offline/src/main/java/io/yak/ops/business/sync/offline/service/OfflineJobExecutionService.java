@@ -33,6 +33,22 @@ public class OfflineJobExecutionService {
         orchestrator.execute(id, "MANUAL", null, 1));
   }
 
+  /** 工作流按发布时固定的任务版本快照执行。 */
+  public OfflineJobExecutionVO executeSnapshot(
+      Long id,
+      long version,
+      String configDigest,
+      String definitionSnapshotJson,
+      String logicalJobSpecJson) {
+    return readService.toVO(
+        orchestrator.executeSnapshot(
+            id,
+            version,
+            configDigest,
+            definitionSnapshotJson,
+            logicalJobSpecJson));
+  }
+
   public OfflineJobExecutionVO executeScheduled(Long id) {
     return readService.toVO(
         orchestrator.execute(id, "SCHEDULE", null, 1));
