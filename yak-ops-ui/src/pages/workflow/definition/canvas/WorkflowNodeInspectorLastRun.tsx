@@ -1,9 +1,9 @@
 import {
   getWorkflowInstance,
-  getWorkflowInstances,
   type WorkflowInstance,
   type WorkflowNodeInstance,
 } from '@/services/workflow';
+import { getWorkflowDefinition } from '@/services/workflow/definitions';
 import { Spin } from 'antd';
 import dayjs from 'dayjs';
 import { RefreshCw } from 'lucide-react';
@@ -90,18 +90,19 @@ const WorkflowNodeInspectorLastRun = ({
     setLoading(true);
     setLoadError('');
     try {
-      const instances = (await getWorkflowInstances()) || [];
-      const latest = instances
-        .filter((item) => item.definitionId === definitionId)
-        .sort((left, right) => dayjs(right.startedAt).valueOf() - dayjs(left.startedAt).valueOf())[0];
+      // Runtime 的 WorkflowInstance.definitionId 是每次执行临时注册给 Yak Workflow Engine 的 ID，
+      // 不能与业务 WorkflowDefinition.id 直接比较。业务定义已维护 latestExecutionId，
+      // 因此“上次运行”直接沿稳定的 execution 关联读取最近一次执行。
+      const definition = await getWorkflowDefinition(definitionId);
+      const latestExecutionId = definition.latestExecutionId;
 
-      if (!latest) {
+      if (!latestExecutionId) {
         setInstance(undefined);
         setNodeRun(undefined);
         return;
       }
 
-      const detail = await getWorkflowInstance(latest.id);
+      const detail = await getWorkflowInstance(latestExecutionId);
       setInstance(detail);
       setNodeRun(detail.nodes?.find((node) => node.id === nodeId));
     } catch (error) {
