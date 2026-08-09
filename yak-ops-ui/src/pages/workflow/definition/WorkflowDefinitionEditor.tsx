@@ -1,6 +1,9 @@
 import {
+  isWorkflowTerminal,
+  subscribeWorkflowEvents,
   getWorkflowTasks,
   type WorkflowFailureStrategy,
+  type WorkflowInstance,
   type WorkflowTaskDefinition,
 } from '@/services/workflow';
 import {
@@ -55,6 +58,7 @@ import {
   type WorkflowNoteData,
   type WorkflowNoteSnapshot,
 } from './canvas/note/types';
+import { workflowNodeRuntimeState } from './canvas/runtime';
 import WorkflowStartInspector from './canvas/start/WorkflowStartInspector';
 import WorkflowStartNode from './canvas/start/WorkflowStartNode';
 import {
@@ -72,6 +76,7 @@ import useWorkflowCanvasHistory from './canvas/useWorkflowCanvasHistory';
 import 'reactflow/dist/style.css';
 
 const START_EDGE_PREFIX = 'edge-start-';
+const RUNNING_NODE_STATUSES = new Set(['SUBMITTED', 'RUNNING', 'RESUMING']);
 
 const parseObject = <T extends Record<string, unknown>>(raw: string, label: string): T => {
   const value = raw.trim() ? JSON.parse(raw) : {};
@@ -140,6 +145,8 @@ const WorkflowDefinitionContent = () => {
   const { id = '' } = useParams<{ id: string }>();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sequenceRef = useRef(1);
+  const testRunSubscriptionRef = useRef<() => void>();
+  const focusedRuntimeNodeRef = useRef<string>();
   const [tasks, setTasks] = useState<WorkflowTaskDefinition[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -147,6 +154,7 @@ const WorkflowDefinitionContent = () => {
   const [testing, setTesting] = useState(false);
   const [statusAction, setStatusAction] = useState(false);
   const [definition, setDefinition] = useState<WorkflowDefinition>();
+  const [testRunSnapshot, setTestRunSnapshot] = useState<WorkflowInstance>();
   const [workflowName, setWorkflowName] = useState('');
   const [workflowDescription, setWorkflowDescription] = useState('');
   const [workflowTimeoutSeconds, setWorkflowTimeoutSeconds] = useState(0);
@@ -172,8 +180,8 @@ const WorkflowDefinitionContent = () => {
   const edgeTypes = useMemo(() => ({ workflow: WorkflowEdge }), []);
   const selectedNode = useMemo(() => nodes.find((node) => node.selected), [nodes]);
   const syncTasks = useMemo(() => tasks.filter((task) => task.type === 'SYNC'), [tasks]);
-  // 发布版本和编辑草稿分离；ONLINE 不再锁住编辑器。
-  const locked = false;
+  // 测试运行期间锁住结构编辑，避免正在执行的 nodeId 与画布拓扑发生漂移。
+  const locked = testing;
 
   const rootNodes = useMemo(() => {
     const targets = new Set(edges.map((edge) => edge.target));
@@ -185,8 +193,12 @@ const WorkflowDefinitionContent = () => {
     return startConfig.nextNodeIds.filter((nodeId) => nodeIds.has(nodeId));
   }, [nodes, startConfig.nextNodeIds]);
 
+  const runtimeByNodeId = useMemo(() => new Map(
+    (testRunSnapshot?.nodes || []).map((node) => [node.id, workflowNodeRuntimeState(node)]),
+  ), [testRunSnapshot]);
+
   const historySnapshot = useMemo<WorkflowEditorHistorySnapshot>(() => ({
-    nodes: nodes.map((node) => ({ id: node.id, type: node.type, position: { ...node.position }, data: { ...node.data } })),
+    nodes: nodes.map((node) => ({ id: node.id, type: node.type, position: { ...node.position }, data: { ...node.data, runtime: undefined } })),
     noteNodes: noteNodes.map((node) => ({
       ...node,
       position: { ...node.position },
@@ -222,7 +234,7 @@ const WorkflowDefinitionContent = () => {
     setStartConfig({ ...snapshot.startConfig, nextNodeIds: [...snapshot.startConfig.nextNodeIds] });
     setStartSelected(false);
     setStartNodeState((current) => ({ ...current, position: snapshot.startConfig.position, selected: false, dragging: false }));
-    setNodes(snapshot.nodes.map((node) => ({ ...node, selected: false, dragging: false })));
+    setNodes(snapshot.nodes.map((node) => ({ ...node, selected: false, dragging: false, data: { ...node.data, runtime: undefined } })));
     setNoteNodes(snapshot.noteNodes.map((node) => ({ ...node, selected: false, dragging: false })));
     setEdges(snapshot.edges.map((edge) => ({ ...edge, selected: false })));
   }, [setEdges, setNodes]);
@@ -237,7 +249,63 @@ const WorkflowDefinitionContent = () => {
     redo: redoHistory,
     jumpTo: jumpToHistory,
     clear: clearHistory,
-  } = useWorkflowCanvasHistory({ snapshot: historySnapshot, historyKey: id, enabled: !loading, onRestore: restoreHistorySnapshot });
+  } = useWorkflowCanvasHistory({ snapshot: historySnapshot, historyKey: id, enabled: !loading && !testing, onRestore: restoreHistorySnapshot });
+
+  const stopTestRunSubscription = useCallback(() => {
+    testRunSubscriptionRef.current?.();
+    testRunSubscriptionRef.current = undefined;
+  }, []);
+
+  const handleTestRunSnapshot = useCallback((snapshot: WorkflowInstance) => {
+    if (!snapshot.testRun) return;
+    setTestRunSnapshot(snapshot);
+    setDefinition((current) => current ? {
+      ...current,
+      latestExecutionId: snapshot.id,
+      latestExecutionStatus: snapshot.status,
+    } : current);
+
+    if (!isWorkflowTerminal(snapshot.status)) return;
+
+    stopTestRunSubscription();
+    setTesting(false);
+    if (snapshot.status === 'SUCCESS') {
+      message.success('测试运行完成');
+    } else if (snapshot.status === 'SUCCESS_WITH_WARNINGS' || snapshot.status === 'WARNING') {
+      message.warning('测试运行完成，但存在告警节点');
+    } else if (snapshot.status === 'CANCELED') {
+      message.info('测试运行已取消');
+    } else {
+      message.error(`测试运行结束：${snapshot.status}`);
+    }
+  }, [stopTestRunSubscription]);
+
+  const subscribeTestRun = useCallback((executionId: string) => {
+    stopTestRunSubscription();
+    focusedRuntimeNodeRef.current = undefined;
+    testRunSubscriptionRef.current = subscribeWorkflowEvents(executionId, handleTestRunSnapshot);
+  }, [handleTestRunSnapshot, stopTestRunSubscription]);
+
+  useEffect(() => () => stopTestRunSubscription(), [stopTestRunSubscription]);
+
+  useEffect(() => {
+    const runningNode = testRunSnapshot?.nodes.find((node) => RUNNING_NODE_STATUSES.has(node.status));
+    if (!runningNode || !reactFlowInstance || focusedRuntimeNodeRef.current === runningNode.id) return;
+    const canvasNode = nodes.find((node) => node.id === runningNode.id);
+    if (!canvasNode) return;
+
+    focusedRuntimeNodeRef.current = runningNode.id;
+    const width = canvasNode.width ?? WORKFLOW_NODE_WIDTH;
+    const height = canvasNode.height ?? 72;
+    reactFlowInstance.setCenter(
+      canvasNode.position.x + width / 2,
+      canvasNode.position.y + height / 2,
+      {
+        zoom: Math.min(reactFlowInstance.getZoom(), 1),
+        duration: 320,
+      },
+    );
+  }, [nodes, reactFlowInstance, testRunSnapshot]);
 
   const hydrateDefinition = useCallback((value: WorkflowDefinition, taskList: WorkflowTaskDefinition[]) => {
     const taskMap = new Map(taskList.map((task) => [task.id, task]));
@@ -543,7 +611,7 @@ const WorkflowDefinitionContent = () => {
       id: duplicatedId,
       selected: true,
       position: { x: sourceNode.position.x + 36, y: sourceNode.position.y + 36 },
-      data: { ...sourceNode.data },
+      data: { ...sourceNode.data, runtime: undefined },
     }]);
   }, [locked, markHistory, nodes, setNodes]);
 
@@ -672,13 +740,14 @@ const WorkflowDefinitionContent = () => {
     ...node,
     data: {
       ...node.data,
+      runtime: runtimeByNodeId.get(node.id),
       locked,
       appendOptions: taskOptions,
       onAppend: handleAppendTask,
       onDuplicate: handleDuplicateNode,
       onDelete: handleDeleteNode,
     },
-  })), [handleAppendTask, handleDeleteNode, handleDuplicateNode, locked, nodes, taskOptions]);
+  })), [handleAppendTask, handleDeleteNode, handleDuplicateNode, locked, nodes, runtimeByNodeId, taskOptions]);
 
   const noteCanvasNodes = useMemo(() => noteNodes.map((node) => ({
     ...node,
@@ -722,11 +791,12 @@ const WorkflowDefinitionContent = () => {
     data: {
       ...edge.data,
       locked,
+      runtimeStatus: runtimeByNodeId.get(edge.target)?.status,
       connectedNodeHovered: edge.source === hoveredNodeId || edge.target === hoveredNodeId,
       insertOptions: taskOptions,
       onInsert: handleInsertTaskIntoEdge,
     },
-  })), [edges, handleInsertTaskIntoEdge, hoveredNodeId, locked, taskOptions]);
+  })), [edges, handleInsertTaskIntoEdge, hoveredNodeId, locked, runtimeByNodeId, taskOptions]);
 
   const startCanvasEdges = useMemo(() => explicitStartTargetIds.map((nodeId) => ({
     id: `${START_EDGE_PREFIX}${nodeId}`,
@@ -734,10 +804,11 @@ const WorkflowDefinitionContent = () => {
     target: nodeId,
     type: 'workflow',
     data: {
-      locked: false,
+      locked,
+      runtimeStatus: runtimeByNodeId.get(nodeId)?.status,
       connectedNodeHovered: hoveredNodeId === WORKFLOW_START_NODE_ID || hoveredNodeId === nodeId,
     },
-  })), [explicitStartTargetIds, hoveredNodeId]);
+  })), [explicitStartTargetIds, hoveredNodeId, locked, runtimeByNodeId]);
 
   const canvasEdges = useMemo(
     () => [...startCanvasEdges, ...taskCanvasEdges],
@@ -748,7 +819,7 @@ const WorkflowDefinitionContent = () => {
     if (!selectedNode || locked) return;
     markHistory(`${selectedNode.data.label} 节点配置已更新`);
     setNodes((current) => current.map((node) =>
-      node.id === selectedNode.id ? { ...node, data: { ...node.data, ...patch } } : node));
+      node.id === selectedNode.id ? { ...node, data: { ...node.data, ...patch, runtime: undefined } } : node));
   };
 
   const updateStartConfig = useCallback((nextConfig: WorkflowStartConfig) => {
@@ -819,15 +890,21 @@ const WorkflowDefinitionContent = () => {
   const handleTestRun = async () => {
     if (testing || statusAction) return;
     setTesting(true);
+    setTestRunSnapshot(undefined);
+    focusedRuntimeNodeRef.current = undefined;
+    stopTestRunSubscription();
     try {
       await saveDefinition(false);
       const tested = await testRunWorkflowDefinition(id);
       setDefinition(tested);
-      message.success('当前草稿已提交测试运行，不影响已发布版本');
+      const executionId = tested.latestExecutionId;
+      if (!executionId) throw new Error('测试运行未返回执行实例 ID');
+      subscribeTestRun(executionId);
+      message.info('测试运行已开始，画布将实时显示节点执行状态');
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '测试运行失败');
-    } finally {
+      stopTestRunSubscription();
       setTesting(false);
+      message.error(error instanceof Error ? error.message : '测试运行失败');
     }
   };
 
