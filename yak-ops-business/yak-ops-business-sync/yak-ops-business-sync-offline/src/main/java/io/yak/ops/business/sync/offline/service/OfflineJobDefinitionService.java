@@ -150,7 +150,10 @@ public class OfflineJobDefinitionService {
   }
 
   public OfflineJobDefinitionVO get(Long id) {
-    return viewMapper.definition(require(id));
+    if (id == null || id <= 0L) throw new IllegalArgumentException("任务定义 ID 不合法");
+    OfflineJobDefinition definition = definitionRepository.findForViewById(id)
+        .orElseThrow(() -> new IllegalArgumentException("离线同步任务不存在：" + id));
+    return viewMapper.definition(definition);
   }
 
   public JsonNode getEditDetail(Long id) {
