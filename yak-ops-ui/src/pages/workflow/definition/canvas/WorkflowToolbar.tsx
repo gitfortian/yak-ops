@@ -65,13 +65,11 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
   const draftChanged = definition?.draftChanged ?? true;
   const nextVersionNo = (definition?.latestVersionNo || 0) + 1;
   const hasPublished = Boolean(activeVersionNo);
-
   const lifecycleText = !hasPublished
     ? '尚未发布'
     : status === 'OFFLINE'
       ? `已停用 v${activeVersionNo}${draftChanged ? ' · 有草稿修改' : ''}`
       : `已发布 v${activeVersionNo}${draftChanged ? ' · 有草稿修改' : ''}`;
-
   const primaryPublishText = !hasPublished
     ? '发布 v1'
     : draftChanged
@@ -102,10 +100,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
         {versionsLoading ? (
           <div className="flex h-24 items-center justify-center"><Spin size="small" /></div>
         ) : versions.length ? versions.map((version) => (
-          <div
-            key={version.id}
-            className="mb-1.5 rounded-lg border border-[#eaecf0] bg-white px-3 py-2.5 last:mb-0"
-          >
+          <div key={version.id} className="mb-1.5 rounded-lg border border-[#eaecf0] bg-white px-3 py-2.5 last:mb-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#344054]">
                 <GitCommitHorizontal size={13} />
@@ -143,7 +138,6 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
               : '当前草稿与已发布版本一致'}
         </div>
       </div>
-
       <div className="space-y-2 border-t border-[#f0f1f3] p-4">
         {canPublish ? (
           <Button
@@ -151,10 +145,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
             type="primary"
             loading={statusAction || saving}
             icon={<Rocket size={14} />}
-            onClick={() => {
-              onOnline();
-              setPublishOpen(false);
-            }}
+            onClick={() => { onOnline(); setPublishOpen(false); }}
             className="!h-9 !rounded-lg !font-medium"
           >
             {primaryPublishText}
@@ -164,10 +155,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
           block
           loading={saving}
           icon={<Save size={14} />}
-          onClick={() => {
-            onSave();
-            setPublishOpen(false);
-          }}
+          onClick={() => { onSave(); setPublishOpen(false); }}
           className="!h-9 !rounded-lg"
         >
           保存草稿
@@ -177,10 +165,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
             block
             loading={statusAction}
             icon={<CircleStop size={14} />}
-            onClick={() => {
-              onOffline();
-              setPublishOpen(false);
-            }}
+            onClick={() => { onOffline(); setPublishOpen(false); }}
             className="!h-9 !rounded-lg"
           >
             停用正式运行入口
@@ -191,80 +176,68 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
   );
 
   return (
-    <>
-      <style>{`
-        .workflow-editor-toolbar + div::before {
-          position: absolute; top: 12px; left: 14px; z-index: 8;
-          display: inline-flex; align-items: center; height: 24px; padding: 0 9px;
-          border: 1px solid rgba(22,24,35,.06); border-radius: 7px;
-          background: rgba(255,255,255,.86); box-shadow: 0 2px 8px rgba(22,24,35,.05);
-          backdrop-filter: blur(8px); color: #667085; font-size: 10px; font-weight: 500;
-          line-height: 24px; pointer-events: none;
-          content: attr(data-status-label);
-        }
-      `}</style>
-      <header
-        data-status-label={lifecycleText}
-        className="workflow-editor-toolbar flex h-[48px] shrink-0 items-center justify-end border-b border-[#ebecef] bg-white px-3"
-      >
-        <div className="flex items-center gap-1.5">
-          <Tooltip title="保存当前草稿并按草稿配置测试，不影响已发布版本">
+    <header className="workflow-editor-toolbar flex h-[48px] shrink-0 items-center border-b border-[#ebecef] bg-white px-3">
+      <span className="mr-auto inline-flex h-6 items-center rounded-[7px] border border-[rgba(22,24,35,.06)] bg-[#fafafa] px-2.5 text-[10px] font-medium text-[#667085]">
+        {lifecycleText}
+      </span>
+
+      <div className="flex items-center gap-1.5">
+        <Tooltip title="保存当前草稿并按草稿配置测试，不影响已发布版本">
+          <Button
+            size="small"
+            loading={testing}
+            disabled={!definition?.id || saving || statusAction}
+            icon={<Play size={14} />}
+            onClick={onTestRun}
+            className="!h-8 !rounded-lg !border-[#dfe2e7] !px-3 !text-[12px] !font-medium !text-[#344054] shadow-none"
+          >
+            测试运行
+          </Button>
+        </Tooltip>
+
+        <Popover
+          open={publishOpen}
+          onOpenChange={setPublishOpen}
+          trigger="click"
+          placement="bottomRight"
+          arrow={false}
+          content={publishContent}
+          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
+        >
+          <Button
+            type="primary"
+            size="small"
+            icon={<Rocket size={14} />}
+            className="!h-8 !rounded-lg !px-3.5 !text-[12px] !font-medium"
+          >
+            发布
+            <ChevronDown size={13} className="ml-1" />
+          </Button>
+        </Popover>
+
+        <Popover
+          open={versionOpen}
+          onOpenChange={(open) => {
+            setVersionOpen(open);
+            if (open) void loadVersions();
+          }}
+          trigger="click"
+          placement="bottomRight"
+          arrow={false}
+          content={versionContent}
+          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
+        >
+          <Tooltip title="发布版本">
             <Button
               size="small"
-              loading={testing}
-              disabled={!definition?.id || saving || statusAction}
-              icon={<Play size={14} />}
-              onClick={onTestRun}
-              className="!h-8 !rounded-lg !border-[#dfe2e7] !px-3 !text-[12px] !font-medium !text-[#344054] shadow-none"
-            >
-              测试运行
-            </Button>
+              aria-label="发布版本"
+              icon={<History size={15} />}
+              className="!h-8 !rounded-lg !border-[#dfe2e7] !px-2.5 !text-[#667085] shadow-none"
+            />
           </Tooltip>
-
-          <Popover
-            open={publishOpen}
-            onOpenChange={setPublishOpen}
-            trigger="click"
-            placement="bottomRight"
-            arrow={false}
-            content={publishContent}
-            overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
-          >
-            <Button
-              type="primary"
-              size="small"
-              icon={<Rocket size={14} />}
-              className="!h-8 !rounded-lg !px-3.5 !text-[12px] !font-medium"
-            >
-              发布
-              <ChevronDown size={13} className="ml-1" />
-            </Button>
-          </Popover>
-
-          <Popover
-            open={versionOpen}
-            onOpenChange={(open) => {
-              setVersionOpen(open);
-              if (open) void loadVersions();
-            }}
-            trigger="click"
-            placement="bottomRight"
-            arrow={false}
-            content={versionContent}
-            overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
-          >
-            <Tooltip title="发布版本">
-              <Button
-                size="small"
-                aria-label="发布版本"
-                icon={<History size={15} />}
-                className="!h-8 !rounded-lg !border-[#dfe2e7] !px-2.5 !text-[#667085] shadow-none"
-              />
-            </Tooltip>
-          </Popover>
-        </div>
-      </header>
-    </>
+        </Popover>
+      </div>
+    </header>
   );
 };
 
