@@ -1,7 +1,7 @@
 import {
+  getWorkflowTasks,
   isWorkflowTerminal,
   subscribeWorkflowEvents,
-  getWorkflowTasks,
   type WorkflowFailureStrategy,
   type WorkflowInstance,
   type WorkflowTaskDefinition,
@@ -194,11 +194,18 @@ const WorkflowDefinitionContent = () => {
   }, [nodes, startConfig.nextNodeIds]);
 
   const runtimeByNodeId = useMemo(() => new Map(
-    (testRunSnapshot?.nodes || []).map((node) => [node.id, workflowNodeRuntimeState(node)]),
+    (testRunSnapshot?.nodes || []).map(
+      (node) => [node.id, workflowNodeRuntimeState(node)] as const,
+    ),
   ), [testRunSnapshot]);
 
   const historySnapshot = useMemo<WorkflowEditorHistorySnapshot>(() => ({
-    nodes: nodes.map((node) => ({ id: node.id, type: node.type, position: { ...node.position }, data: { ...node.data, runtime: undefined } })),
+    nodes: nodes.map((node) => ({
+      id: node.id,
+      type: node.type,
+      position: { ...node.position },
+      data: { ...node.data, runtime: undefined },
+    })),
     noteNodes: noteNodes.map((node) => ({
       ...node,
       position: { ...node.position },
@@ -233,8 +240,18 @@ const WorkflowDefinitionContent = () => {
     setFailureStrategy(snapshot.failureStrategy);
     setStartConfig({ ...snapshot.startConfig, nextNodeIds: [...snapshot.startConfig.nextNodeIds] });
     setStartSelected(false);
-    setStartNodeState((current) => ({ ...current, position: snapshot.startConfig.position, selected: false, dragging: false }));
-    setNodes(snapshot.nodes.map((node) => ({ ...node, selected: false, dragging: false, data: { ...node.data, runtime: undefined } })));
+    setStartNodeState((current) => ({
+      ...current,
+      position: snapshot.startConfig.position,
+      selected: false,
+      dragging: false,
+    }));
+    setNodes(snapshot.nodes.map((node) => ({
+      ...node,
+      selected: false,
+      dragging: false,
+      data: { ...node.data, runtime: undefined },
+    })));
     setNoteNodes(snapshot.noteNodes.map((node) => ({ ...node, selected: false, dragging: false })));
     setEdges(snapshot.edges.map((edge) => ({ ...edge, selected: false })));
   }, [setEdges, setNodes]);
@@ -249,7 +266,12 @@ const WorkflowDefinitionContent = () => {
     redo: redoHistory,
     jumpTo: jumpToHistory,
     clear: clearHistory,
-  } = useWorkflowCanvasHistory({ snapshot: historySnapshot, historyKey: id, enabled: !loading && !testing, onRestore: restoreHistorySnapshot });
+  } = useWorkflowCanvasHistory({
+    snapshot: historySnapshot,
+    historyKey: id,
+    enabled: !loading && !testing,
+    onRestore: restoreHistorySnapshot,
+  });
 
   const stopTestRunSubscription = useCallback(() => {
     testRunSubscriptionRef.current?.();
@@ -308,7 +330,7 @@ const WorkflowDefinitionContent = () => {
   }, [nodes, reactFlowInstance, testRunSnapshot]);
 
   const hydrateDefinition = useCallback((value: WorkflowDefinition, taskList: WorkflowTaskDefinition[]) => {
-    const taskMap = new Map(taskList.map((task) => [task.id, task]));
+    const taskMap = new Map(taskList.map((task) => [task.id, task] as const));
     const hydratedStartConfig = hydrateWorkflowStartConfig(value.input || {}, value.editorMeta || {});
     const hydratedNotes = hydrateWorkflowNotes(value.editorMeta || {}, value.input || {});
     setDefinition(value);
@@ -319,7 +341,12 @@ const WorkflowDefinitionContent = () => {
     setStartConfig(hydratedStartConfig);
     setStartSelected(false);
     setControlMode('pointer');
-    setStartNodeState((current) => ({ ...current, position: hydratedStartConfig.position, selected: false, dragging: false }));
+    setStartNodeState((current) => ({
+      ...current,
+      position: hydratedStartConfig.position,
+      selected: false,
+      dragging: false,
+    }));
     setNoteNodes(hydratedNotes.map(createNoteNode));
     setNodes(value.nodes.map((node) => {
       const task = taskMap.get(node.taskId);
@@ -763,6 +790,12 @@ const WorkflowDefinitionContent = () => {
     },
   })), [controlMode, handleDeleteNote, handleDuplicateNote, handleNoteChange, handleNoteCommit, locked, noteNodes]);
 
+  const startRuntimeStatus: WorkflowStartNodeData['runtimeStatus'] = testRunSnapshot
+    ? 'SUCCESS'
+    : testing
+      ? 'RUNNING'
+      : undefined;
+
   const startCanvasNode = useMemo<Node<WorkflowStartNodeData>>(() => ({
     ...startNodeState,
     id: WORKFLOW_START_NODE_ID,
@@ -775,10 +808,21 @@ const WorkflowDefinitionContent = () => {
       label: '开始',
       locked,
       inputs: startConfig.inputs,
+      runtimeStatus: startRuntimeStatus,
       appendOptions: taskOptions,
       onAppend: handleAppendFromStart,
     },
-  }), [controlMode, handleAppendFromStart, locked, startConfig.inputs, startConfig.position, startNodeState, startSelected, taskOptions]);
+  }), [
+    controlMode,
+    handleAppendFromStart,
+    locked,
+    startConfig.inputs,
+    startConfig.position,
+    startNodeState,
+    startRuntimeStatus,
+    startSelected,
+    taskOptions,
+  ]);
 
   const canvasNodes = useMemo(
     () => [startCanvasNode, ...taskCanvasNodes, ...noteCanvasNodes],
@@ -819,7 +863,9 @@ const WorkflowDefinitionContent = () => {
     if (!selectedNode || locked) return;
     markHistory(`${selectedNode.data.label} 节点配置已更新`);
     setNodes((current) => current.map((node) =>
-      node.id === selectedNode.id ? { ...node, data: { ...node.data, ...patch, runtime: undefined } } : node));
+      node.id === selectedNode.id
+        ? { ...node, data: { ...node.data, ...patch, runtime: undefined } }
+        : node));
   };
 
   const updateStartConfig = useCallback((nextConfig: WorkflowStartConfig) => {
