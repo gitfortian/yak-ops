@@ -1,16 +1,27 @@
-import { Input, Modal, Select, Typography } from 'antd';
+import { Input, Modal, TreeSelect, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { DevelopmentDirectory } from '../types';
+import type { DevelopmentDirectory, DevelopmentId } from '../types';
 
 interface CreateDirectoryModalProps {
   open: boolean;
   directories: DevelopmentDirectory[];
-  defaultParentId?: number;
+  defaultParentId?: DevelopmentId;
   loading?: boolean;
   onCancel: () => void;
-  onSubmit: (parentId: number | undefined, name: string) => void;
+  onSubmit: (parentId: DevelopmentId | undefined, name: string) => void;
 }
+
+interface DirectoryTreeOption {
+  title: string;
+  pathLabel: string;
+  value: string;
+  key: string;
+  searchText: string;
+  children?: DirectoryTreeOption[];
+}
+
+const ROOT_VALUE = '__root__';
 
 const CreateDirectoryModal = ({
   open,
@@ -20,19 +31,34 @@ const CreateDirectoryModal = ({
   onCancel,
   onSubmit,
 }: CreateDirectoryModalProps) => {
-  const [parentId, setParentId] = useState<number>();
+  const [parentId, setParentId] = useState<DevelopmentId>();
   const [name, setName] = useState('');
 
-  const pathOptions = useMemo(
-    () => [
-      { label: '/', value: 0 },
-      ...directories.map((directory) => ({
-        label: directory.path,
-        value: Number(directory.id),
-      })),
-    ],
-    [directories],
-  );
+  const pathTreeData = useMemo<DirectoryTreeOption[]>(() => {
+    const childrenOf = (parent?: DevelopmentId): DirectoryTreeOption[] =>
+      directories
+        .filter((directory) => (directory.parentId || undefined) === parent)
+        .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+        .map((directory) => ({
+          title: directory.name,
+          pathLabel: directory.path,
+          value: directory.id,
+          key: directory.id,
+          searchText: `${directory.name} ${directory.path}`,
+          children: childrenOf(directory.id),
+        }));
+
+    return [
+      {
+        title: '/',
+        pathLabel: '/',
+        value: ROOT_VALUE,
+        key: ROOT_VALUE,
+        searchText: '/',
+        children: childrenOf(),
+      },
+    ];
+  }, [directories]);
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +67,11 @@ const CreateDirectoryModal = ({
   }, [defaultParentId, open]);
 
   const normalizedName = name.trim();
+
+  const submit = () => {
+    if (!normalizedName || loading) return;
+    onSubmit(parentId, normalizedName);
+  };
 
   return (
     <Modal
@@ -55,23 +86,29 @@ const CreateDirectoryModal = ({
       maskClosable={!loading}
       closable={!loading}
       onCancel={onCancel}
-      onOk={() => {
-        if (!normalizedName) return;
-        onSubmit(parentId && parentId > 0 ? parentId : undefined, normalizedName);
-      }}
+      onOk={submit}
     >
       <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-y-3 pt-2">
         <Typography.Text className="text-[13px] text-[#344054]">
           <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
           路径：
         </Typography.Text>
-        <Select
-          value={parentId ?? 0}
-          options={pathOptions}
+        <TreeSelect
+          value={parentId ?? ROOT_VALUE}
+          treeData={pathTreeData}
+          treeDefaultExpandAll
+          treeLine
+          treeNodeLabelProp="pathLabel"
           showSearch
-          optionFilterProp="label"
+          treeNodeFilterProp="searchText"
+          popupMatchSelectWidth
           className="w-full"
-          onChange={(value) => setParentId(Number(value) || undefined)}
+          disabled={loading}
+          placeholder="请选择父目录"
+          onChange={(value) => {
+            const selected = String(value);
+            setParentId(selected === ROOT_VALUE ? undefined : selected);
+          }}
         />
 
         <Typography.Text className="text-[13px] text-[#344054]">
@@ -82,16 +119,10 @@ const CreateDirectoryModal = ({
           autoFocus
           value={name}
           maxLength={128}
+          disabled={loading}
           placeholder="名称"
           onChange={(event) => setName(event.target.value)}
-          onPressEnter={() => {
-            if (normalizedName && !loading) {
-              onSubmit(
-                parentId && parentId > 0 ? parentId : undefined,
-                normalizedName,
-              );
-            }
-          }}
+          onPressEnter={submit}
         />
       </div>
     </Modal>
