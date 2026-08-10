@@ -15,6 +15,7 @@ public interface SqlDevelopmentRepository {
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters);
@@ -33,6 +34,7 @@ public interface SqlDevelopmentRepository {
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters);
