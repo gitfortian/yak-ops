@@ -1,7 +1,6 @@
 package io.yak.ops.business.development.service;
 
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
-import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.domain.SqlDevelopmentModel.Definition;
 import io.yak.ops.business.development.domain.SqlDevelopmentModel.Execution;
 import io.yak.ops.business.development.domain.SqlDevelopmentModel.Version;
@@ -18,7 +17,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -60,7 +58,7 @@ public class SqlDevelopmentService {
       String sql,
       List<SqlParameterDefinition> parameters) {
     Long normalizedProjectId = normalizeProjectId(projectId);
-    Long normalizedDirectoryId = normalizeDirectoryAssignment(normalizedProjectId, directoryId);
+    Long normalizedDirectoryId = normalizeDirectoryAssignment(directoryId);
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     return repository.insertDefinition(
         requireText(name, "任务名称"),
@@ -98,14 +96,9 @@ public class SqlDevelopmentService {
       List<SqlParameterDefinition> parameters) {
     Definition current = requireDefinition(id);
     Long normalizedProjectId = projectId == null ? current.projectId() : normalizeProjectId(projectId);
-    Long normalizedDirectoryId;
-    if (directoryId == null) {
-      normalizedDirectoryId = Objects.equals(normalizedProjectId, current.projectId())
-          ? current.directoryId()
-          : null;
-    } else {
-      normalizedDirectoryId = normalizeDirectoryAssignment(normalizedProjectId, directoryId);
-    }
+    Long normalizedDirectoryId = directoryId == null
+        ? current.directoryId()
+        : normalizeDirectoryAssignment(directoryId);
 
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     boolean updated = repository.updateDraft(
@@ -193,15 +186,10 @@ public class SqlDevelopmentService {
     return execution(executionId);
   }
 
-  private Long normalizeDirectoryAssignment(Long projectId, Long directoryId) {
+  private Long normalizeDirectoryAssignment(Long directoryId) {
     if (directoryId == null || directoryId <= 0L) return null;
-    if (projectId == null) {
-      throw new IllegalArgumentException("设置目录前必须先选择所属项目");
-    }
-    DevelopmentDirectory directory = directoryRepository.findById(directoryId)
-        .orElseThrow(() -> new IllegalArgumentException("数据开发目录不存在：" + directoryId));
-    if (!Objects.equals(directory.projectId(), projectId)) {
-      throw new IllegalArgumentException("数据开发目录不属于当前项目：" + directoryId);
+    if (directoryRepository.findById(directoryId).isEmpty()) {
+      throw new IllegalArgumentException("数据开发目录不存在：" + directoryId);
     }
     return directoryId;
   }
