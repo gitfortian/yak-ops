@@ -2,6 +2,7 @@ package io.yak.ops.business.development.service;
 
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
+import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -16,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class DevelopmentDirectoryService {
 
   private final DevelopmentDirectoryRepository repository;
+  private final DevelopmentNodeRepository nodeRepository;
 
-  public DevelopmentDirectoryService(DevelopmentDirectoryRepository repository) {
+  public DevelopmentDirectoryService(
+      DevelopmentDirectoryRepository repository,
+      DevelopmentNodeRepository nodeRepository) {
     this.repository = repository;
+    this.nodeRepository = nodeRepository;
   }
 
   public List<DevelopmentDirectory> list() {
@@ -50,10 +55,41 @@ public class DevelopmentDirectoryService {
     }
 
     DevelopmentDirectory created = repository.insert(normalizedParentId, normalizedName);
+    return requireFromList(created.id());
+  }
+
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DevelopmentDirectory rename(Long id, String name) {
+    DevelopmentDirectory current = repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("目录不存在：" + id));
+    String normalizedName = normalizeName(name);
+    if (current.name().equals(normalizedName)) return requireFromList(id);
+    if (repository.existsByName(current.parentId(), normalizedName)) {
+      throw new IllegalStateException("当前路径下已存在同名目录：" + normalizedName);
+    }
+    if (!repository.updateName(id, normalizedName)) {
+      throw new IllegalStateException("目录重命名失败：" + id);
+    }
+    return requireFromList(id);
+  }
+
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public void delete(Long id) {
+    repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("目录不存在：" + id));
+    if (repository.hasChildren(id) || nodeRepository.existsInDirectory(id)) {
+      throw new IllegalStateException("目录不为空，请先删除目录下的节点和子目录");
+    }
+    if (!repository.deleteById(id)) {
+      throw new IllegalStateException("目录删除失败：" + id);
+    }
+  }
+
+  private DevelopmentDirectory requireFromList(Long id) {
     return list().stream()
-        .filter(directory -> directory.id().equals(created.id()))
+        .filter(directory -> directory.id().equals(id))
         .findFirst()
-        .orElseThrow(() -> new IllegalStateException("目录创建成功但无法重新读取：" + created.id()));
+        .orElseThrow(() -> new IllegalStateException("目录保存成功但无法重新读取：" + id));
   }
 
   private DevelopmentDirectory withPath(DevelopmentDirectory directory, String path) {
