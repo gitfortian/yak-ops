@@ -122,10 +122,10 @@ const DevelopmentTreePane = ({
           className="flex h-full flex-col overflow-hidden py-3"
           style={{ width: leftWidth }}
         >
-          <div className="flex h-8 items-center justify-between px-[14px]">
-            <div className="text-[13px] font-semibold text-[#161823]">
+          <div className="flex h-7 shrink-0 items-center justify-between px-4">
+            <span className="text-[13px] font-semibold text-[#30323b]">
               开发目录
-            </div>
+            </span>
             <Tooltip title="新建目录" placement="right">
               <Button
                 type="text"
