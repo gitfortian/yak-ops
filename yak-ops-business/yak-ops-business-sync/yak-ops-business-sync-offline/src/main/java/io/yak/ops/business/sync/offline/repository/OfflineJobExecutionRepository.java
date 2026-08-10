@@ -1,8 +1,8 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -17,5 +17,5 @@ public interface OfflineJobExecutionRepository {
   List<OfflineJobExecution> findActiveExecutions(int limit);
   List<OfflineJobExecution> findRetryCandidates(LocalDateTime now, int limit);
   void markRetryCreated(Long executionId);
-  OfflinePage<OfflineJobExecution> page(OfflineExecutionQuery query);
+  PageData<OfflineJobExecution> page(OfflineExecutionQuery query);
 }
