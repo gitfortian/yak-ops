@@ -3,11 +3,13 @@ package io.yak.ops.business.datasource.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.datasource.controller.v1.DataSourceCatalogController;
 import io.yak.ops.business.datasource.controller.v1.DataSourceController;
 import io.yak.ops.business.datasource.controller.v1.DataSourcePluginConfigController;
 import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.datasource.dao.mapper.DataSourceMapper;
+import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.business.datasource.service.impl.DataSourceCatalogServiceImpl;
 import io.yak.ops.business.datasource.service.impl.DataSourcePluginConfigServiceImpl;
@@ -24,7 +26,18 @@ class DataSourceLayeringConventionTest {
 
   @Test
   void repositoryExposesOnlyDomainContracts() {
-    assertMethodsAvoid(DataSourceRepository.class, ".bean.dto.", ".bean.vo.", ".bean.po.");
+    assertMethodsAvoid(
+        DataSourceRepository.class,
+        ".bean.dto.",
+        ".bean.vo.",
+        ".bean.po.",
+        "com.baomidou.mybatisplus");
+  }
+
+  @Test
+  void repositoryUsesSharedPageData() throws Exception {
+    Method page = DataSourceRepository.class.getMethod("page", DataSourceQuery.class);
+    assertThat(((ParameterizedType) page.getGenericReturnType()).getRawType()).isEqualTo(PageData.class);
   }
 
   @Test
