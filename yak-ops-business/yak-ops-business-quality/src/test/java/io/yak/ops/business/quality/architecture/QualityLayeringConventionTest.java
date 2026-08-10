@@ -8,6 +8,7 @@ import io.yak.ops.business.quality.dao.QualityAnalyticsDao;
 import io.yak.ops.business.quality.dao.QualityCatalogDao;
 import io.yak.ops.business.quality.dao.QualityExecutionDao;
 import io.yak.ops.business.quality.dao.QualityMonitorDao;
+import io.yak.ops.business.quality.domain.QualityDomain;
 import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.CustomTemplateRepository;
 import io.yak.ops.business.quality.repository.QualityExecutionWorkspaceRepository;
@@ -24,6 +25,7 @@ import io.yak.ops.common.bean.po.quality.QualityTableAssetPO;
 import io.yak.ops.common.bean.po.quality.QualityTemplateFolderPO;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -40,15 +42,26 @@ class QualityLayeringConventionTest {
 
   @Test
   void repositoryPagingUsesSharedPageData() throws Exception {
+    Method tableAssets =
+        QualityRepository.class.getMethod("pageTableAssets", QualityQuery.TableAsset.class);
     Method monitors = QualityRepository.class.getMethod("pageMonitors", QualityQuery.Monitor.class);
     Method executions = QualityRepository.class.getMethod("pageExecutions", QualityQuery.Execution.class);
     Method workspace =
         QualityExecutionWorkspaceRepository.class.getMethod("page", QualityQuery.ExecutionWorkspace.class);
-    for (Method method : List.of(monitors, executions, workspace)) {
+    Method workspaceRules =
+        QualityExecutionWorkspaceRepository.class.getMethod("pageRules", QualityQuery.ExecutionWorkspace.class);
+    for (Method method : List.of(tableAssets, monitors, executions, workspace, workspaceRules)) {
       assertThat(((ParameterizedType) method.getGenericReturnType()).getRawType())
           .as(method.getName())
           .isEqualTo(PageData.class);
     }
+  }
+
+  @Test
+  void qualityDomainDoesNotReintroducePrivatePagingContainers() {
+    assertThat(Arrays.stream(QualityDomain.class.getDeclaredClasses())
+            .map(Class::getSimpleName))
+        .doesNotContain("Page", "PageData", "PagingData");
   }
 
   @Test
