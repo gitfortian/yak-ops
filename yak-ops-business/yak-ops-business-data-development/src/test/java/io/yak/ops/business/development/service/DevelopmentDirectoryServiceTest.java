@@ -21,25 +21,23 @@ class DevelopmentDirectoryServiceTest {
     InMemoryDirectoryRepository repository = new InMemoryDirectoryRepository();
     DevelopmentDirectoryService service = new DevelopmentDirectoryService(repository);
 
-    DevelopmentDirectory ods = service.create(1L, null, "ODS");
-    DevelopmentDirectory user = service.create(1L, ods.id(), "用户域");
+    DevelopmentDirectory ods = service.create(null, "ODS");
+    DevelopmentDirectory user = service.create(ods.id(), "用户域");
 
     assertEquals("/ODS", ods.path());
     assertEquals("/ODS/用户域", user.path());
     assertEquals(
         List.of("/ODS", "/ODS/用户域"),
-        service.list(1L).stream().map(DevelopmentDirectory::path).toList());
+        service.list().stream().map(DevelopmentDirectory::path).toList());
   }
 
   @Test
-  void rejectsParentDirectoryFromAnotherProject() {
+  void rejectsDuplicateSiblingDirectory() {
     InMemoryDirectoryRepository repository = new InMemoryDirectoryRepository();
     DevelopmentDirectoryService service = new DevelopmentDirectoryService(repository);
-    DevelopmentDirectory otherProject = service.create(2L, null, "ODS");
+    service.create(null, "ODS");
 
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> service.create(1L, otherProject.id(), "非法子目录"));
+    assertThrows(IllegalStateException.class, () -> service.create(null, "ODS"));
   }
 
   private static final class InMemoryDirectoryRepository
@@ -49,12 +47,11 @@ class DevelopmentDirectoryServiceTest {
     private final Map<Long, DevelopmentDirectory> values = new LinkedHashMap<>();
 
     @Override
-    public DevelopmentDirectory insert(Long projectId, Long parentId, String name) {
+    public DevelopmentDirectory insert(Long parentId, String name) {
       Long id = ids.getAndIncrement();
       Instant now = Instant.now();
       DevelopmentDirectory directory = new DevelopmentDirectory(
           id,
-          projectId,
           parentId,
           name,
           null,
@@ -70,19 +67,14 @@ class DevelopmentDirectoryServiceTest {
     }
 
     @Override
-    public List<DevelopmentDirectory> listByProjectId(Long projectId) {
-      List<DevelopmentDirectory> result = new ArrayList<>();
-      values.values().stream()
-          .filter(directory -> projectId.equals(directory.projectId()))
-          .forEach(result::add);
-      return result;
+    public List<DevelopmentDirectory> list() {
+      return new ArrayList<>(values.values());
     }
 
     @Override
-    public boolean existsByName(Long projectId, Long parentId, String name) {
+    public boolean existsByName(Long parentId, String name) {
       return values.values().stream().anyMatch(directory ->
-          projectId.equals(directory.projectId())
-              && java.util.Objects.equals(parentId, directory.parentId())
+          java.util.Objects.equals(parentId, directory.parentId())
               && name.equals(directory.name()));
     }
   }
