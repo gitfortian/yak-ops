@@ -63,6 +63,10 @@ public class SqlDevelopmentService {
         normalized);
   }
 
+  public List<Definition> list() {
+    return list(null);
+  }
+
   public List<Definition> list(Long projectId) {
     if (projectId == null) return repository.listDefinitions();
     return repository.listDefinitions(requirePositive(projectId, "项目 ID"));
