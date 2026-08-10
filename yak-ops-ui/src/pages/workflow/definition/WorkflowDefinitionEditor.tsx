@@ -86,11 +86,17 @@ const parseObject = <T extends Record<string, unknown>>(raw: string, label: stri
   return value as T;
 };
 
+const taskTypeLabel = (taskType?: string) => {
+  if (!taskType || taskType === 'SYNC') return '数据同步';
+  if (taskType === 'SQL') return 'SQL';
+  return taskType;
+};
+
 const createNodeData = (task: WorkflowTaskDefinition): WorkflowNodeData => ({
   label: task.name,
   taskId: task.id,
   taskType: task.type,
-  typeLabel: task.type === 'SYNC' ? '数据同步' : task.type,
+  typeLabel: taskTypeLabel(task.type),
   triggerRule: 'ALL_SUCCESS',
   failurePolicy: 'FAIL_WORKFLOW',
   maxAttempts: 1,
@@ -179,7 +185,6 @@ const WorkflowDefinitionContent = () => {
   const nodeTypes = useMemo(() => ({ workflow: WorkflowNode, start: WorkflowStartNode, note: WorkflowNoteNode }), []);
   const edgeTypes = useMemo(() => ({ workflow: WorkflowEdge }), []);
   const selectedNode = useMemo(() => nodes.find((node) => node.selected), [nodes]);
-  const syncTasks = useMemo(() => tasks.filter((task) => task.type === 'SYNC'), [tasks]);
   // 测试运行期间锁住结构编辑，避免正在执行的 nodeId 与画布拓扑发生漂移。
   const locked = testing;
 
@@ -358,7 +363,7 @@ const WorkflowDefinitionContent = () => {
           label: task?.name || `任务 ${node.taskId}`,
           taskId: node.taskId,
           taskType: task?.type || 'SYNC',
-          typeLabel: task?.type === 'SYNC' || !task ? '数据同步' : task.type,
+          typeLabel: taskTypeLabel(task?.type),
           triggerRule: node.triggerRule,
           failurePolicy: node.failurePolicy,
           maxAttempts: node.maxAttempts,
@@ -475,7 +480,7 @@ const WorkflowDefinitionContent = () => {
 
   const handleAddTaskFromToolbar = useCallback((taskId: string) => {
     if (locked) return;
-    const task = syncTasks.find((item) => item.id === taskId);
+    const task = tasks.find((item) => item.id === taskId);
     const position = getCanvasCenterPosition(WORKFLOW_NODE_WIDTH, 72);
     if (!task || !position) return;
     const sequence = sequenceRef.current++;
@@ -487,7 +492,7 @@ const WorkflowDefinitionContent = () => {
       ...current.map((node) => ({ ...node, selected: false })),
       { id: `task-${Date.now()}-${sequence}`, type: 'workflow', position, selected: true, data: createNodeData(task) },
     ]);
-  }, [getCanvasCenterPosition, locked, markHistory, setNodes, syncTasks]);
+  }, [getCanvasCenterPosition, locked, markHistory, setNodes, tasks]);
 
   const handleAddNote = useCallback(() => {
     if (locked) return;
@@ -538,7 +543,7 @@ const WorkflowDefinitionContent = () => {
 
   const handleInsertTaskIntoEdge = useCallback((edgeId: string, source: string, target: string, taskId: string) => {
     if (locked) return;
-    const task = syncTasks.find((item) => item.id === taskId);
+    const task = tasks.find((item) => item.id === taskId);
     const sourceNode = nodes.find((node) => node.id === source);
     const targetNode = nodes.find((node) => node.id === target);
     const sourceEdge = edges.find((edge) => edge.id === edgeId);
@@ -560,11 +565,11 @@ const WorkflowDefinitionContent = () => {
       { id: `edge-${source}-${nodeId}-${sequence}`, source, sourceHandle: sourceEdge.sourceHandle, target: nodeId, type: 'workflow' },
       { id: `edge-${nodeId}-${target}-${sequence}`, source: nodeId, target, targetHandle: sourceEdge.targetHandle, type: 'workflow' },
     ]);
-  }, [edges, locked, markHistory, nodes, setEdges, setNodes, syncTasks]);
+  }, [edges, locked, markHistory, nodes, setEdges, setNodes, tasks]);
 
   const handleAppendTask = useCallback((sourceNodeId: string, taskId: string) => {
     if (locked) return;
-    const task = syncTasks.find((item) => item.id === taskId);
+    const task = tasks.find((item) => item.id === taskId);
     const sourceNode = nodes.find((node) => node.id === sourceNodeId);
     if (!task || !sourceNode) return;
     const outgoers = getOutgoers(sourceNode, nodes, edges).sort((left, right) => left.position.y - right.position.y);
@@ -592,11 +597,11 @@ const WorkflowDefinitionContent = () => {
       target: nodeId,
       type: 'workflow',
     }]);
-  }, [edges, locked, markHistory, nodes, setEdges, setNodes, syncTasks]);
+  }, [edges, locked, markHistory, nodes, setEdges, setNodes, tasks]);
 
   const handleAppendFromStart = useCallback((_startNodeId: string, taskId: string) => {
     if (locked) return;
-    const task = syncTasks.find((item) => item.id === taskId);
+    const task = tasks.find((item) => item.id === taskId);
     if (!task) return;
     const taskTargets = new Set(edges.map((edge) => edge.target));
     const currentRoots = nodes
@@ -622,7 +627,7 @@ const WorkflowDefinitionContent = () => {
       ...current,
       nextNodeIds: [...current.nextNodeIds, nodeId],
     }));
-  }, [edges, locked, markHistory, nodes, setNodes, startConfig.position.x, startConfig.position.y, syncTasks]);
+  }, [edges, locked, markHistory, nodes, setNodes, startConfig.position.x, startConfig.position.y, tasks]);
 
   const handleDuplicateNode = useCallback((nodeId: string) => {
     if (locked) return;
@@ -736,12 +741,12 @@ const WorkflowDefinitionContent = () => {
   const handleNodeMouseEnter = useCallback<NodeMouseHandler>((_, node) => setHoveredNodeId(node.id), []);
   const handleNodeMouseLeave = useCallback<NodeMouseHandler>(() => setHoveredNodeId(undefined), []);
 
-  const taskOptions = useMemo(() => syncTasks.map((task) => ({
+  const taskOptions = useMemo(() => tasks.map((task) => ({
     id: task.id,
     label: task.name,
-    typeLabel: task.type === 'SYNC' ? '数据同步' : task.type,
+    typeLabel: taskTypeLabel(task.type),
     taskType: task.type,
-  })), [syncTasks]);
+  })), [tasks]);
 
   const inspectorNextNodes = useMemo(() => {
     if (!selectedNode) return [];
@@ -990,7 +995,7 @@ const WorkflowDefinitionContent = () => {
 
   return (
     <div className="flex h-[calc(100vh-48px)] min-h-[620px] overflow-hidden" style={{ backgroundColor: '#F2F4F7' }}>
-      <WorkflowTaskLibrary tasks={syncTasks} loading={tasksLoading} locked={locked} onDragStart={handleDragStart} />
+      <WorkflowTaskLibrary tasks={tasks} loading={tasksLoading} locked={locked} onDragStart={handleDragStart} />
       <section className="flex min-w-0 flex-1 flex-col">
         <WorkflowToolbar
           definition={definition}
