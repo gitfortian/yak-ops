@@ -12,7 +12,6 @@ export type SqlParameterType =
 
 export interface DevelopmentDirectory {
   id: number;
-  projectId: number;
   parentId?: number | null;
   name: string;
   path: string;
@@ -21,7 +20,6 @@ export interface DevelopmentDirectory {
 }
 
 export interface CreateDevelopmentDirectoryPayload {
-  projectId: number;
   parentId?: number;
   name: string;
 }
@@ -78,8 +76,8 @@ export interface SqlTaskExecution {
 export interface SqlTaskSavePayload {
   name: string;
   description?: string;
-  projectId: number;
-  /** 0 表示项目根目录。 */
+  projectId?: number;
+  /** 0 表示数据开发根目录。 */
   directoryId: number;
   dataSourceId: number;
   sql: string;
