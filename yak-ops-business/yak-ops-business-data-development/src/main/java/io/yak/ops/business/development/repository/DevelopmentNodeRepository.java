@@ -19,4 +19,10 @@ public interface DevelopmentNodeRepository {
   List<DevelopmentNode> list();
 
   boolean existsByName(Long directoryId, String name);
+
+  boolean existsInDirectory(Long directoryId);
+
+  boolean updateName(Long id, String name);
+
+  boolean deleteById(Long id);
 }
