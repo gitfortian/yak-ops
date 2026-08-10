@@ -1,4 +1,5 @@
 import type { ComponentType, SVGProps } from 'react';
+import SqlNodeIcon from './SqlNodeIcon';
 import SyncNodeIcon from './SyncNodeIcon';
 
 interface WorkflowNodeIconProps {
@@ -34,6 +35,10 @@ const NODE_ICON_META: Record<string, NodeIconMeta> = {
   SYNC: {
     icon: SyncNodeIcon,
     className: 'bg-[rgba(254,44,85,.08)] text-[#fe2c55]',
+  },
+  SQL: {
+    icon: SqlNodeIcon,
+    className: 'bg-[#f4f4f5] text-[#344054]',
   },
 };
 
