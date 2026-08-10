@@ -7,10 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.resource.dao.ResourceDao;
 import io.yak.ops.business.resource.dao.ResourceDao.PageQuery;
 import io.yak.ops.business.resource.domain.ResourceNode;
-import io.yak.ops.business.resource.domain.ResourcePage;
 import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.common.bean.po.resource.ResourcePO;
 import io.yak.ops.common.enums.resource.ResourceNodeType;
@@ -67,7 +67,7 @@ class ResourceRepositoryAdapterTest {
     page.setTotal(21L);
     when(resourceDao.selectPage(any(PageQuery.class))).thenReturn(page);
 
-    ResourcePage<ResourceNode> result =
+    PageData<ResourceNode> result =
         adapter.page(new ResourceQuery(2, 10, 3L, "job", ResourceNodeType.FILE));
 
     assertThat(result.records()).hasSize(1);
