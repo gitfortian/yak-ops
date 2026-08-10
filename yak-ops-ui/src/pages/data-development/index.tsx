@@ -17,7 +17,11 @@ import {
   listDevelopmentDirectories,
   listDevelopmentNodes,
 } from './service';
-import type { DevelopmentDirectory, DevelopmentNode } from './types';
+import type {
+  DevelopmentDirectory,
+  DevelopmentNode,
+  DevelopmentTaskType,
+} from './types';
 
 type TreeNodeKey = `directory:${number}` | `node:${number}`;
 
@@ -229,7 +233,7 @@ export default function DataDevelopmentPage() {
   };
 
   const submitNode = async (
-    type: DevelopmentNodeCreateType,
+    type: DevelopmentTaskType,
     projectId: number | undefined,
     directoryId: number | undefined,
     name: string,
