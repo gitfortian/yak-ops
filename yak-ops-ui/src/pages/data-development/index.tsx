@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -37,21 +37,17 @@ import type {
   DevelopmentTaskType,
 } from './types';
 
-type TreeFilterKey =
-  | 'all'
-  | 'root'
-  | 'unassigned'
-  | `project:${number}`
-  | `directory:${number}`;
+type TreeFilterKey = 'root' | `directory:${number}` | `task:${number}`;
 type PublishFilter = 'ALL' | 'DRAFT' | 'PUBLISHED';
 
-const DEFAULT_LEFT_WIDTH = 252;
-const MIN_LEFT_WIDTH = 210;
-const MAX_LEFT_WIDTH = 420;
+const DEFAULT_LEFT_WIDTH = 272;
+const MIN_LEFT_WIDTH = 220;
+const MAX_LEFT_WIDTH = 440;
 const LEFT_WIDTH_STORAGE_KEY = 'yak-data-development.left-width';
 
-const projectKey = (projectId: number): TreeFilterKey => `project:${projectId}`;
-const directoryKey = (directoryId: number): TreeFilterKey => `directory:${directoryId}`;
+const directoryKey = (directoryId: number): TreeFilterKey =>
+  `directory:${directoryId}`;
+const taskKey = (taskId: number): TreeFilterKey => `task:${taskId}`;
 
 const numberFromKey = (key: string, prefix: string) => {
   if (!key.startsWith(prefix)) return undefined;
@@ -117,11 +113,12 @@ export default function DataDevelopmentPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
+  const [treeKeyword, setTreeKeyword] = useState('');
   const [keywordDraft, setKeywordDraft] = useState('');
   const [keyword, setKeyword] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | DevelopmentTaskType>('ALL');
   const [publishFilter, setPublishFilter] = useState<PublishFilter>('ALL');
-  const [selectedNode, setSelectedNode] = useState<TreeFilterKey>('all');
+  const [selectedNode, setSelectedNode] = useState<TreeFilterKey>('root');
   const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [current, setCurrent] = useState(1);
@@ -185,109 +182,100 @@ export default function DataDevelopmentPage() {
     () => numberFromKey(selectedNode, 'directory:'),
     [selectedNode],
   );
-  const projectIdForSelection = useMemo(
-    () => numberFromKey(selectedNode, 'project:'),
-    [selectedNode],
-  );
 
-  const counts = useMemo(() => {
-    const byProject = new Map<number, number>();
-    const byDirectory = new Map<number, number>();
-    let rootCount = 0;
-    let unassigned = 0;
+  const fullTreeData = useMemo<DevelopmentTreeNode[]>(() => {
+    const taskNodes = (directoryId?: number): DevelopmentTreeNode[] =>
+      tasks
+        .filter((task) => {
+          const taskDirectoryId = task.directoryId
+            ? Number(task.directoryId)
+            : undefined;
+          return taskDirectoryId === directoryId;
+        })
+        .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+        .map((task) => ({
+          key: taskKey(Number(task.id)),
+          title: task.name,
+          nodeType: 'task',
+          taskId: Number(task.id),
+          taskType: task.type,
+          searchText: `${task.name} ${task.description || ''} ${task.id}`,
+          isLeaf: true,
+        }));
 
-    tasks.forEach((task) => {
-      if (task.projectId) {
-        const projectId = Number(task.projectId);
-        byProject.set(projectId, (byProject.get(projectId) || 0) + 1);
-      } else {
-        unassigned += 1;
-      }
-
-      if (task.directoryId) {
-        const directoryId = Number(task.directoryId);
-        byDirectory.set(directoryId, (byDirectory.get(directoryId) || 0) + 1);
-      } else {
-        rootCount += 1;
-      }
-    });
-
-    return { byProject, byDirectory, rootCount, unassigned };
-  }, [tasks]);
-
-  const treeData = useMemo<DevelopmentTreeNode[]>(() => {
-    const buildDirectoryChildren = (parentId?: number): DevelopmentTreeNode[] =>
+    const directoryNodes = (parentId?: number): DevelopmentTreeNode[] =>
       directories
         .filter((directory) => (directory.parentId ?? undefined) === parentId)
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
-        .map((directory) => ({
-          key: directoryKey(Number(directory.id)),
-          title: directory.name,
-          nodeType: 'directory',
-          directoryId: Number(directory.id),
-          count: counts.byDirectory.get(Number(directory.id)) || 0,
-          children: buildDirectoryChildren(Number(directory.id)),
-        }));
+        .map((directory) => {
+          const directoryId = Number(directory.id);
+          return {
+            key: directoryKey(directoryId),
+            title: directory.name,
+            nodeType: 'directory',
+            directoryId,
+            searchText: `${directory.name} ${directory.path || ''}`,
+            children: [
+              ...directoryNodes(directoryId),
+              ...taskNodes(directoryId),
+            ],
+          };
+        });
 
-    const nodes: DevelopmentTreeNode[] = [
-      {
-        key: 'all',
-        title: '全部任务',
-        nodeType: 'all',
-        count: tasks.length,
-      },
+    return [
       {
         key: 'root',
         title: '/',
-        nodeType: 'directory',
-        count: counts.rootCount,
-        children: buildDirectoryChildren(),
+        nodeType: 'root',
+        searchText: '/',
+        children: [...directoryNodes(), ...taskNodes()],
       },
     ];
+  }, [directories, tasks]);
 
-    if (projects.length) {
-      nodes.push(
-        ...projects.map((project) => {
-          const projectId = Number(project.id);
-          return {
-            key: projectKey(projectId),
-            title: project.projectName,
-            nodeType: 'project' as const,
-            projectId,
-            count: counts.byProject.get(projectId) || 0,
-          };
-        }),
-      );
-    }
+  const treeData = useMemo<DevelopmentTreeNode[]>(() => {
+    const normalized = treeKeyword.trim().toLowerCase();
+    if (!normalized) return fullTreeData;
 
-    if (counts.unassigned > 0) {
-      nodes.push({
-        key: 'unassigned',
-        title: '未归属项目',
-        nodeType: 'unassigned',
-        count: counts.unassigned,
+    const filterNodes = (
+      nodes: DevelopmentTreeNode[],
+    ): DevelopmentTreeNode[] =>
+      nodes.flatMap((node) => {
+        const children = node.children ? filterNodes(node.children) : [];
+        const text = `${node.title} ${node.searchText || ''}`.toLowerCase();
+        const selfMatched = node.nodeType !== 'root' && text.includes(normalized);
+
+        if (selfMatched) {
+          return [{ ...node, children: node.children }];
+        }
+        if (children.length) {
+          return [{ ...node, children }];
+        }
+        return [];
       });
-    }
 
-    return nodes;
-  }, [counts, directories, projects, tasks.length]);
+    return filterNodes(fullTreeData);
+  }, [fullTreeData, treeKeyword]);
 
   const filteredTasks = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
-    const selectedProjectId = numberFromKey(selectedNode, 'project:');
     const selectedDirectoryId = numberFromKey(selectedNode, 'directory:');
 
     return tasks.filter((task) => {
-      if (selectedNode === 'root' && task.directoryId) return false;
-      if (selectedNode === 'unassigned' && task.projectId) return false;
-      if (selectedProjectId && Number(task.projectId) !== selectedProjectId) return false;
-      if (selectedDirectoryId && Number(task.directoryId) !== selectedDirectoryId) return false;
+      if (
+        selectedDirectoryId
+        && Number(task.directoryId) !== selectedDirectoryId
+      ) {
+        return false;
+      }
       if (typeFilter !== 'ALL' && task.type !== typeFilter) return false;
       if (publishFilter === 'DRAFT' && task.latestVersionNo > 0) return false;
       if (publishFilter === 'PUBLISHED' && task.latestVersionNo <= 0) return false;
       if (
         normalizedKeyword
-        && !`${task.name} ${task.description || ''}`.toLowerCase().includes(normalizedKeyword)
+        && !`${task.name} ${task.description || ''}`
+          .toLowerCase()
+          .includes(normalizedKeyword)
       ) {
         return false;
       }
@@ -408,7 +396,12 @@ export default function DataDevelopmentPage() {
       width: 90,
       fixed: 'right',
       render: (_, task) => (
-        <Button type="link" size="small" className="!px-0" onClick={() => openTask(task)}>
+        <Button
+          type="link"
+          size="small"
+          className="!px-0"
+          onClick={() => openTask(task)}
+        >
           配置
         </Button>
       ),
@@ -447,8 +440,6 @@ export default function DataDevelopmentPage() {
     [leftCollapsed, leftWidth],
   );
 
-  const openCreateDirectory = () => setDirectoryOpen(true);
-
   const submitDirectory = async (parentId: number | undefined, name: string) => {
     setDirectorySaving(true);
     try {
@@ -479,77 +470,76 @@ export default function DataDevelopmentPage() {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <DevelopmentTreePane
             treeData={treeData}
-            treeLoading={treeLoading}
+            treeLoading={treeLoading || loading}
             selectedNodeKey={selectedNode}
+            searchValue={treeKeyword}
             leftWidth={leftWidth}
             collapsed={leftCollapsed}
-            onCreateDirectory={openCreateDirectory}
+            onCreateDirectory={() => setDirectoryOpen(true)}
+            onCreateNode={() => setCreateOpen(true)}
+            onSearchChange={setTreeKeyword}
             onResizeStart={handleResizeStart}
             onCollapsedChange={setLeftCollapsed}
             onSelect={(keys) => {
               const key = keys[0];
-              if (key) setSelectedNode(String(key) as TreeFilterKey);
+              if (!key) return;
+              const normalizedKey = String(key) as TreeFilterKey;
+              const selectedTaskId = numberFromKey(normalizedKey, 'task:');
+              if (selectedTaskId) {
+                history.push(`/data-development/task/${selectedTaskId}`);
+                return;
+              }
+              setSelectedNode(normalizedKey);
             }}
           />
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3">
             <div className="shrink-0 border-b border-[#eceef0] pb-2">
-              <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto">
+              <div className="flex min-w-0 flex-nowrap items-center justify-end gap-2 overflow-x-auto">
+                <Input
+                  allowClear
+                  variant="filled"
+                  value={keywordDraft}
+                  onChange={(event) => setKeywordDraft(event.target.value)}
+                  onPressEnter={applySearch}
+                  prefix={<Search size={14} className="text-[#98a2b3]" />}
+                  placeholder="搜索任务名称或描述"
+                  className="w-[220px] shrink-0"
+                />
+
+                <Select
+                  variant="filled"
+                  value={typeFilter}
+                  className="w-[120px] shrink-0"
+                  options={[
+                    { label: '全部类型', value: 'ALL' },
+                    { label: 'SQL', value: 'SQL' },
+                  ]}
+                  onChange={setTypeFilter}
+                />
+
+                <Select
+                  variant="filled"
+                  value={publishFilter}
+                  className="w-[130px] shrink-0"
+                  options={[
+                    { label: '全部状态', value: 'ALL' },
+                    { label: '草稿', value: 'DRAFT' },
+                    { label: '已发布', value: 'PUBLISHED' },
+                  ]}
+                  onChange={setPublishFilter}
+                />
+
+                <Button onClick={applySearch}>查询</Button>
+
                 <Button
-                  type="primary"
-                  icon={<Plus size={14} />}
-                  className="shrink-0"
-                  onClick={() => setCreateOpen(true)}
-                >
-                  新建任务
-                </Button>
-
-                <div className="ml-auto flex shrink-0 items-center gap-2">
-                  <Input
-                    allowClear
-                    variant="filled"
-                    value={keywordDraft}
-                    onChange={(event) => setKeywordDraft(event.target.value)}
-                    onPressEnter={applySearch}
-                    prefix={<Search size={14} className="text-[#98a2b3]" />}
-                    placeholder="搜索任务名称或描述"
-                    className="w-[220px]"
-                  />
-
-                  <Select
-                    variant="filled"
-                    value={typeFilter}
-                    className="w-[120px]"
-                    options={[
-                      { label: '全部类型', value: 'ALL' },
-                      { label: 'SQL', value: 'SQL' },
-                    ]}
-                    onChange={setTypeFilter}
-                  />
-
-                  <Select
-                    variant="filled"
-                    value={publishFilter}
-                    className="w-[130px]"
-                    options={[
-                      { label: '全部状态', value: 'ALL' },
-                      { label: '草稿', value: 'DRAFT' },
-                      { label: '已发布', value: 'PUBLISHED' },
-                    ]}
-                    onChange={setPublishFilter}
-                  />
-
-                  <Button onClick={applySearch}>查询</Button>
-
-                  <Button
-                    aria-label="刷新"
-                    icon={<RefreshCw size={14} />}
-                    onClick={() => {
-                      void load();
-                      void loadDirectories();
-                    }}
-                  />
-                </div>
+                  aria-label="刷新"
+                  icon={<RefreshCw size={14} />}
+                  onClick={() => {
+                    void load();
+                    void loadDirectories();
+                  }}
+                />
               </div>
             </div>
 
@@ -600,8 +590,7 @@ export default function DataDevelopmentPage() {
           open={createOpen}
           projects={projects}
           defaultProjectId={
-            projectIdForSelection
-            ?? (currentProject?.id ? Number(currentProject.id) : undefined)
+            currentProject?.id ? Number(currentProject.id) : undefined
           }
           onCancel={() => setCreateOpen(false)}
           onNext={(type, projectId) => {

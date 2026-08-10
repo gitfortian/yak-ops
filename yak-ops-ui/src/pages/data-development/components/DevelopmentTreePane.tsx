@@ -1,31 +1,28 @@
 import type { DataNode } from 'antd/es/tree';
-import type { TreeProps } from 'antd';
-import { Button, Empty, Spin, Tooltip, Tree } from 'antd';
+import type { MenuProps, TreeProps } from 'antd';
+import { Button, Dropdown, Empty, Input, Spin, Tooltip, Tree } from 'antd';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Code2,
   Folder,
-  FolderOpen,
   FolderPlus,
-  Layers3,
-  Workflow,
+  Plus,
+  Search,
 } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 
-export type DevelopmentTreeNodeType =
-  | 'all'
-  | 'project'
-  | 'directory'
-  | 'unassigned';
+export type DevelopmentTreeNodeType = 'root' | 'directory' | 'task';
 
 export interface DevelopmentTreeNode extends DataNode {
   key: string;
   title: string;
   nodeType: DevelopmentTreeNodeType;
-  projectId?: number;
   directoryId?: number;
-  count?: number;
+  taskId?: number;
+  taskType?: string;
+  searchText?: string;
   children?: DevelopmentTreeNode[];
 }
 
@@ -33,9 +30,12 @@ interface DevelopmentTreePaneProps {
   treeData: DevelopmentTreeNode[];
   treeLoading: boolean;
   selectedNodeKey?: string;
+  searchValue: string;
   leftWidth: number;
   collapsed: boolean;
   onCreateDirectory: () => void;
+  onCreateNode: () => void;
+  onSearchChange: (value: string) => void;
   onSelect: TreeProps['onSelect'];
   onResizeStart: (event: ReactPointerEvent) => void;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -45,64 +45,67 @@ const DevelopmentTreePane = ({
   treeData,
   treeLoading,
   selectedNodeKey,
+  searchValue,
   leftWidth,
   collapsed,
   onCreateDirectory,
+  onCreateNode,
+  onSearchChange,
   onSelect,
   onResizeStart,
   onCollapsedChange,
 }: DevelopmentTreePaneProps) => {
+  const createMenuItems: MenuProps['items'] = [
+    {
+      key: 'node',
+      label: '新建节点',
+      icon: <Code2 size={14} strokeWidth={1.8} />,
+    },
+    {
+      key: 'directory',
+      label: '新建目录',
+      icon: <FolderPlus size={14} strokeWidth={1.8} />,
+    },
+  ];
+
   const renderTitle: TreeProps['titleRender'] = (rawNode) => {
     const node = rawNode as DevelopmentTreeNode;
-    const isDirectory = node.nodeType === 'directory';
-    const isProject = node.nodeType === 'project';
-    const isAll = node.nodeType === 'all';
+    const isTask = node.nodeType === 'task';
 
     return (
       <div
         className="flex min-w-0 flex-1 items-center gap-2"
         title={node.title}
       >
-        {isProject ? (
-          <Workflow
-            size={14}
-            strokeWidth={2}
-            className="shrink-0 text-[#ff7a00]"
-          />
-        ) : isDirectory ? (
-          <Folder
-            size={14}
-            strokeWidth={1.8}
-            className="shrink-0 text-[#98a2b3]"
-          />
-        ) : isAll ? (
-          <Layers3
-            size={14}
+        {isTask ? (
+          <Code2
+            size={13}
             strokeWidth={1.8}
             className="shrink-0 text-[#667085]"
           />
         ) : (
-          <FolderOpen
+          <Folder
             size={14}
             strokeWidth={1.8}
-            className="shrink-0 text-[#98a2b3]"
+            className={[
+              'shrink-0',
+              node.nodeType === 'root' ? 'text-[#475467]' : 'text-[#98a2b3]',
+            ].join(' ')}
           />
         )}
 
         <span
           className={[
             'min-w-0 flex-1 truncate text-[13px] leading-8',
-            isProject
-              ? 'font-medium text-[#1f2937]'
-              : 'font-normal text-[#344054]',
+            isTask ? 'font-normal text-[#344054]' : 'font-medium text-[#1f2937]',
           ].join(' ')}
         >
           {node.title}
         </span>
 
-        {typeof node.count === 'number' ? (
-          <span className="shrink-0 text-[10px] text-[rgba(22,24,35,.3)]">
-            {node.count}
+        {isTask && node.taskType ? (
+          <span className="shrink-0 text-[10px] text-[#98a2b3]">
+            {node.taskType}
           </span>
         ) : null}
       </div>
@@ -126,18 +129,43 @@ const DevelopmentTreePane = ({
             <span className="text-[13px] font-semibold text-[#30323b]">
               开发目录
             </span>
-            <Tooltip title="新建目录" placement="right">
-              <Button
-                type="text"
-                size="small"
-                icon={<FolderPlus size={15} strokeWidth={1.8} />}
-                className="!flex !h-7 !w-7 !items-center !justify-center !p-0"
-                onClick={onCreateDirectory}
-              />
-            </Tooltip>
+
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              menu={{
+                items: createMenuItems,
+                onClick: ({ key }) => {
+                  if (key === 'directory') onCreateDirectory();
+                  if (key === 'node') onCreateNode();
+                },
+              }}
+            >
+              <Tooltip title="新建" placement="right">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="新建目录或节点"
+                  icon={<Plus size={16} strokeWidth={1.8} />}
+                  className="!flex !h-7 !w-7 !items-center !justify-center !p-0"
+                />
+              </Tooltip>
+            </Dropdown>
           </div>
 
-          <div className="mt-1 min-h-0 flex-1 overflow-y-auto px-[14px]">
+          <div className="shrink-0 px-[14px] pb-2 pt-1">
+            <Input
+              allowClear
+              size="small"
+              variant="filled"
+              value={searchValue}
+              prefix={<Search size={13} className="text-[#98a2b3]" />}
+              placeholder="搜索名称 / 节点"
+              onChange={(event) => onSearchChange(event.target.value)}
+            />
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-[14px]">
             <Spin
               spinning={treeLoading}
               wrapperClassName="block min-h-full"
@@ -146,6 +174,7 @@ const DevelopmentTreePane = ({
                 <Tree
                   blockNode
                   defaultExpandAll
+                  autoExpandParent={Boolean(searchValue.trim())}
                   selectedKeys={selectedNodeKey ? [selectedNodeKey] : []}
                   treeData={treeData}
                   titleRender={renderTitle}
@@ -156,7 +185,7 @@ const DevelopmentTreePane = ({
               ) : (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="暂无开发目录"
+                  description={searchValue.trim() ? '未找到匹配节点' : '暂无开发节点'}
                   className="mt-10"
                 />
               )}
@@ -213,14 +242,14 @@ const DevelopmentTreePane = ({
         }
 
         .development-tree .ant-tree-list-holder-inner {
-          gap: 2px;
+          gap: 1px;
         }
 
         .development-tree .ant-tree-treenode {
           box-sizing: border-box;
           width: 100%;
-          min-height: 32px;
-          padding: 0 8px !important;
+          min-height: 30px;
+          padding: 0 6px !important;
           align-items: center;
           border-radius: 0;
           transition: background-color 0.15s ease;
@@ -235,13 +264,13 @@ const DevelopmentTreePane = ({
         .development-tree .ant-tree-node-content-wrapper {
           display: flex;
           min-width: 0;
-          height: 32px;
+          height: 30px;
           flex: 1;
           align-items: center;
           padding: 0 !important;
           border-radius: 0 !important;
           background: transparent !important;
-          line-height: 32px;
+          line-height: 30px;
         }
 
         .development-tree
@@ -257,18 +286,18 @@ const DevelopmentTreePane = ({
         }
 
         .development-tree .ant-tree-indent-unit {
-          width: 22px;
+          width: 18px;
         }
 
         .development-tree .ant-tree-switcher {
           display: inline-flex;
-          width: 20px;
-          height: 32px;
+          width: 18px;
+          height: 30px;
           flex: none;
           align-items: center;
           justify-content: center;
           color: #98a2b3;
-          line-height: 32px;
+          line-height: 30px;
         }
 
         .development-tree .ant-tree-switcher svg {
@@ -280,7 +309,7 @@ const DevelopmentTreePane = ({
         }
 
         .development-tree .ant-tree-switcher-noop {
-          width: 20px;
+          width: 18px;
         }
       `}</style>
     </>
