@@ -1,5 +1,6 @@
 package io.yak.ops.business.job.task;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -37,10 +38,10 @@ public class TaskExecutionGateway {
     if (snapshot == null) {
       throw new IllegalArgumentException("任务版本快照不能为空");
     }
-    return require(snapshot.type()).start(
-        snapshot,
-        idempotencyKey,
-        input == null ? Map.of() : Map.copyOf(input));
+    Map<String, Object> safeInput = input == null
+        ? Map.of()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(input));
+    return require(snapshot.type()).start(snapshot, idempotencyKey, safeInput);
   }
 
   public TaskExecution status(String taskType, String executionId) {
