@@ -2,16 +2,13 @@ package io.yak.ops.business.resource.service.impl;
 
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.config.ResourceProperties;
-import io.yak.ops.business.resource.dao.ResourceDao;
+import io.yak.ops.business.resource.domain.ResourceContent;
+import io.yak.ops.business.resource.domain.ResourceDownload;
+import io.yak.ops.business.resource.domain.ResourceNode;
 import io.yak.ops.business.resource.exception.ResourceException;
-import io.yak.ops.business.resource.model.ResourceDownload;
+import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.storage.StorageOperatorRegistry;
 import io.yak.ops.business.resource.util.ResourcePathUtils;
-import io.yak.ops.common.bean.dto.resource.ResourceContentUpdateDTO;
-import io.yak.ops.common.bean.dto.resource.ResourceCreateContentDTO;
-import io.yak.ops.common.bean.po.resource.ResourcePO;
-import io.yak.ops.common.bean.vo.resource.ResourceContentVO;
-import io.yak.ops.common.bean.vo.resource.ResourceVO;
 import io.yak.ops.common.enums.resource.ResourceErrorCode;
 import io.yak.ops.common.enums.resource.ResourceNodeType;
 import io.yak.ops.spi.resource.ResourceFileSyncAction;
@@ -34,7 +31,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-/** 资源文件上传、下载、替换和在线编辑操作。 */
+/** 资源文件上传、下载、替换和在线编辑操作；只处理 Domain 与存储 SPI。 */
 @Component
 @ConditionalOnResourceEnabled
 @RequiredArgsConstructor
@@ -43,20 +40,18 @@ class ResourceFileOperations {
   private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
   private static final int MAX_CONTENT_LINES = 2000;
 
-  private final ResourceDao resourceDao;
+  private final ResourceRepository repository;
   private final StorageOperatorRegistry storageRegistry;
   private final ResourceServiceSupport support;
   private final ResourceProperties properties;
 
-  ResourceVO upload(Long parentId, String requestedName, String description, MultipartFile file) {
+  ResourceNode upload(Long parentId, String requestedName, String description, MultipartFile file) {
     if (file == null || file.isEmpty()) {
       throw new ResourceException(ResourceErrorCode.INVALID_NAME, "上传文件不能为空");
     }
     ensureFileSize(file.getSize());
     ResourceServiceSupport.ParentContext parent = support.parent(parentId);
-    String sourceName = StringUtils.hasText(requestedName)
-        ? requestedName
-        : file.getOriginalFilename();
+    String sourceName = StringUtils.hasText(requestedName) ? requestedName : file.getOriginalFilename();
     String name = ResourcePathUtils.normalizeName(sourceName);
     support.ensureNameAvailable(parent.id, name, null);
     String fullPath = ResourcePathUtils.childPath(parent.fullPath, name);
@@ -66,89 +61,100 @@ class ResourceFileOperations {
     StorageOperator operator = storageRegistry.require(parent.storageType);
 
     try (InputStream inputStream = file.getInputStream()) {
-      support.storageRun(() -> operator.upload(
-          storagePath, inputStream, file.getSize(), contentType, false));
+      support.storageRun(
+          () -> operator.upload(storagePath, inputStream, file.getSize(), contentType, false));
     } catch (IOException exception) {
       throw new ResourceException(
           ResourceErrorCode.STORAGE_OPERATION_FAILED, "读取上传文件失败", exception);
     }
 
     try {
-      ResourcePO resource = support.newResource(
-          parent.id,
-          name,
-          fullPath,
-          ResourceNodeType.FILE,
-          parent.storageType,
-          storagePath,
-          contentType,
-          ResourcePathUtils.suffix(name),
-          file.getSize(),
-          checksum,
-          description);
+      ResourceNode resource =
+          support.newResource(
+              parent.id,
+              name,
+              fullPath,
+              ResourceNodeType.FILE,
+              parent.storageType,
+              storagePath,
+              contentType,
+              ResourcePathUtils.suffix(name),
+              file.getSize(),
+              checksum,
+              description);
       support.insert(resource);
       support.dispatch(resource, ResourceFileSyncAction.CREATED, null);
-      return support.toVO(resource);
+      return resource;
     } catch (RuntimeException exception) {
       support.cleanupCreatedObject(operator, storagePath, false);
       throw exception;
     }
   }
 
-  ResourceVO createContent(ResourceCreateContentDTO requestDTO) {
-    if (requestDTO == null) {
-      throw new ResourceException(ResourceErrorCode.INVALID_NAME, "在线创建参数不能为空");
+  ResourceNode createContent(
+      Long parentId,
+      String requestedName,
+      String description,
+      String requestedContentType,
+      String text) {
+    if (text == null) {
+      throw new ResourceException(ResourceErrorCode.INVALID_NAME, "在线创建内容不能为空");
     }
-    byte[] content = requestDTO.getContent().getBytes(StandardCharsets.UTF_8);
+    byte[] content = text.getBytes(StandardCharsets.UTF_8);
     ensureFileSize(content.length);
-    ResourceServiceSupport.ParentContext parent = support.parent(requestDTO.getParentId());
-    String name = ResourcePathUtils.normalizeName(requestDTO.getName());
+    ResourceServiceSupport.ParentContext parent = support.parent(parentId);
+    String name = ResourcePathUtils.normalizeName(requestedName);
     ensureEditableName(name);
     support.ensureNameAvailable(parent.id, name, null);
     String fullPath = ResourcePathUtils.childPath(parent.fullPath, name);
     String storagePath = ResourcePathUtils.storagePath(fullPath);
-    String contentType = contentType(requestDTO.getContentType());
+    String contentType = contentType(requestedContentType);
     StorageOperator operator = storageRegistry.require(parent.storageType);
 
-    support.storageRun(() -> operator.upload(
-        storagePath,
-        new ByteArrayInputStream(content),
-        content.length,
-        contentType,
-        false));
+    support.storageRun(
+        () ->
+            operator.upload(
+                storagePath,
+                new ByteArrayInputStream(content),
+                content.length,
+                contentType,
+                false));
     try {
-      ResourcePO resource = support.newResource(
-          parent.id,
-          name,
-          fullPath,
-          ResourceNodeType.FILE,
-          parent.storageType,
-          storagePath,
-          contentType,
-          ResourcePathUtils.suffix(name),
-          (long) content.length,
-          checksum(content),
-          requestDTO.getDescription());
+      ResourceNode resource =
+          support.newResource(
+              parent.id,
+              name,
+              fullPath,
+              ResourceNodeType.FILE,
+              parent.storageType,
+              storagePath,
+              contentType,
+              ResourcePathUtils.suffix(name),
+              (long) content.length,
+              checksum(content),
+              description);
       support.insert(resource);
       support.dispatch(resource, ResourceFileSyncAction.CREATED, null);
-      return support.toVO(resource);
+      return resource;
     } catch (RuntimeException exception) {
       support.cleanupCreatedObject(operator, storagePath, false);
       throw exception;
     }
   }
 
-  ResourceVO replaceFile(Long id, MultipartFile file) {
+  ResourceNode replaceFile(Long id, MultipartFile file) {
     if (file == null || file.isEmpty()) {
       throw new ResourceException(ResourceErrorCode.INVALID_NAME, "更新文件不能为空");
     }
     ensureFileSize(file.getSize());
-    ResourcePO resource = support.requireFile(id);
+    ResourceNode resource = support.requireFile(id);
     String contentType = contentType(file.getContentType());
     StorageOperator operator = storageRegistry.require(resource.getStorageType());
     try (InputStream inputStream = file.getInputStream()) {
-      support.storageRun(() -> operator.upload(
-          resource.getStoragePath(), inputStream, file.getSize(), contentType, true));
+      support.storageRun(
+          () ->
+              operator.upload(
+                  resource.getStoragePath(), inputStream, file.getSize(), contentType, true));
     } catch (IOException exception) {
       throw new ResourceException(
           ResourceErrorCode.STORAGE_OPERATION_FAILED, "读取更新文件失败", exception);
@@ -158,20 +164,20 @@ class ResourceFileOperations {
     resource.setChecksum(checksum(file));
     resource.setVersion(support.nextVersion(resource));
     resource.setUpdateTime(LocalDateTime.now());
-    if (!resourceDao.update(resource)) {
+    if (!repository.update(resource)) {
       throw new ResourceException(ResourceErrorCode.UPDATE_FAILED);
     }
     support.dispatch(resource, ResourceFileSyncAction.UPDATED, resource.getFullPath());
-    return support.toVO(resource);
+    return resource;
   }
 
-  ResourceContentVO updateContent(Long id, ResourceContentUpdateDTO requestDTO) {
-    if (requestDTO == null || requestDTO.getContent() == null) {
+  ResourceContent updateContent(Long id, String text) {
+    if (text == null) {
       throw new ResourceException(ResourceErrorCode.CONTENT_NOT_EDITABLE, "文件内容不能为空");
     }
-    ResourcePO resource = support.requireFile(id);
+    ResourceNode resource = support.requireFile(id);
     ensureEditable(resource);
-    byte[] content = requestDTO.getContent().getBytes(StandardCharsets.UTF_8);
+    byte[] content = text.getBytes(StandardCharsets.UTF_8);
     ensureFileSize(content.length);
     if (content.length > properties.getEditableMaxBytes()) {
       throw new ResourceException(
@@ -179,25 +185,27 @@ class ResourceFileOperations {
           "在线编辑内容不能超过 " + properties.getEditableMaxBytes() + " 字节");
     }
     StorageOperator operator = storageRegistry.require(resource.getStorageType());
-    support.storageRun(() -> operator.upload(
-        resource.getStoragePath(),
-        new ByteArrayInputStream(content),
-        content.length,
-        contentType(resource.getContentType()),
-        true));
+    support.storageRun(
+        () ->
+            operator.upload(
+                resource.getStoragePath(),
+                new ByteArrayInputStream(content),
+                content.length,
+                contentType(resource.getContentType()),
+                true));
     resource.setFileSize((long) content.length);
     resource.setChecksum(checksum(content));
     resource.setVersion(support.nextVersion(resource));
     resource.setUpdateTime(LocalDateTime.now());
-    if (!resourceDao.update(resource)) {
+    if (!repository.update(resource)) {
       throw new ResourceException(ResourceErrorCode.UPDATE_FAILED);
     }
     support.dispatch(resource, ResourceFileSyncAction.UPDATED, resource.getFullPath());
-    return contentVO(resource, requestDTO.getContent(), 0, lineCount(requestDTO.getContent()), false);
+    return content(resource, text, 0, lineCount(text), false);
   }
 
-  ResourceContentVO getContent(Long id, int skipLineNum, int limit) {
-    ResourcePO resource = support.requireFile(id);
+  ResourceContent getContent(Long id, int skipLineNum, int limit) {
+    ResourceNode resource = support.requireFile(id);
     ensureEditable(resource);
     if (resource.getFileSize() != null
         && resource.getFileSize() > properties.getEditableMaxBytes()) {
@@ -209,11 +217,11 @@ class ResourceFileOperations {
     StorageOperator operator = storageRegistry.require(resource.getStorageType());
     try (InputStream inputStream =
             support.storageGet(() -> operator.download(resource.getStoragePath()));
-        BufferedReader reader = new BufferedReader(
-            new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+        BufferedReader reader =
+            new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
       for (int index = 0; index < normalizedSkip; index++) {
         if (reader.readLine() == null) {
-          return contentVO(resource, "", normalizedSkip, 0, false);
+          return content(resource, "", normalizedSkip, 0, false);
         }
       }
       List<String> lines = new ArrayList<>();
@@ -225,8 +233,12 @@ class ResourceFileOperations {
       if (hasMore) {
         lines.remove(lines.size() - 1);
       }
-      return contentVO(
-          resource, String.join("\n", lines), normalizedSkip, lines.size(), hasMore);
+      return content(
+          resource,
+          String.join("\n", lines),
+          normalizedSkip,
+          lines.size(),
+          hasMore);
     } catch (IOException exception) {
       throw new ResourceException(
           ResourceErrorCode.STORAGE_OPERATION_FAILED, "读取资源内容失败", exception);
@@ -234,10 +246,9 @@ class ResourceFileOperations {
   }
 
   ResourceDownload download(Long id) {
-    ResourcePO resource = support.requireFile(id);
+    ResourceNode resource = support.requireFile(id);
     StorageOperator operator = storageRegistry.require(resource.getStorageType());
-    InputStream inputStream =
-        support.storageGet(() -> operator.download(resource.getStoragePath()));
+    InputStream inputStream = support.storageGet(() -> operator.download(resource.getStoragePath()));
     return new ResourceDownload(
         resource.getName(),
         contentType(resource.getContentType()),
@@ -253,7 +264,7 @@ class ResourceFileOperations {
     }
   }
 
-  private void ensureEditable(ResourcePO resource) {
+  private void ensureEditable(ResourceNode resource) {
     ensureEditableName(resource.getName());
   }
 
@@ -299,20 +310,19 @@ class ResourceFileOperations {
     }
   }
 
-  private ResourceContentVO contentVO(
-      ResourcePO resource,
-      String content,
+  private ResourceContent content(
+      ResourceNode resource,
+      String text,
       int skipLineNum,
       int lineCount,
       boolean hasMore) {
-    return ResourceContentVO.builder()
-        .resourceId(resource.getId())
-        .fullPath(resource.getFullPath())
-        .content(content)
-        .skipLineNum(skipLineNum)
-        .lineCount(lineCount)
-        .hasMore(hasMore)
-        .build();
+    return new ResourceContent(
+        resource.getId(),
+        resource.getFullPath(),
+        text,
+        skipLineNum,
+        lineCount,
+        hasMore);
   }
 
   private String contentType(String value) {

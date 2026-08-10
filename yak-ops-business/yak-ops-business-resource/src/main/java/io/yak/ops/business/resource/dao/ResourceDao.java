@@ -1,11 +1,11 @@
 package io.yak.ops.business.resource.dao;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import io.yak.ops.common.bean.dto.resource.ResourceQueryDTO;
 import io.yak.ops.common.bean.po.resource.ResourcePO;
+import io.yak.ops.common.enums.resource.ResourceNodeType;
 import java.util.List;
 
-/** 资源数据访问接口。 */
+/** 资源数据访问接口，只暴露持久化模型和 DAO 查询条件。 */
 public interface ResourceDao {
 
   int insert(ResourcePO resourcePO);
@@ -24,9 +24,17 @@ public interface ResourceDao {
 
   List<ResourcePO> selectDescendants(String fullPath);
 
-  IPage<ResourcePO> selectPage(ResourceQueryDTO queryDTO);
+  IPage<ResourcePO> selectPage(PageQuery query);
 
   boolean updateBatch(List<ResourcePO> resources);
 
   boolean deleteBatch(List<Long> ids);
+
+  /** DAO 自有分页条件，不依赖 HTTP DTO。 */
+  record PageQuery(
+      int pageNo,
+      int pageSize,
+      Long parentId,
+      String keyword,
+      ResourceNodeType nodeType) {}
 }

@@ -2,8 +2,8 @@ package io.yak.ops.business.resource.storage;
 
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.config.ResourceProperties;
+import io.yak.ops.business.resource.domain.ResourceStoragePlugin;
 import io.yak.ops.business.resource.exception.ResourceException;
-import io.yak.ops.common.bean.vo.resource.ResourceStoragePluginVO;
 import io.yak.ops.common.enums.resource.ResourceErrorCode;
 import io.yak.ops.common.enums.resource.ResourceStorageType;
 import io.yak.ops.spi.storage.StorageOperator;
@@ -26,8 +26,7 @@ public class StorageOperatorRegistry {
       List<StorageOperator> storageOperators,
       ResourceProperties properties) {
     this.properties = properties;
-    Map<ResourceStorageType, StorageOperator> mapped =
-        new EnumMap<>(ResourceStorageType.class);
+    Map<ResourceStorageType, StorageOperator> mapped = new EnumMap<>(ResourceStorageType.class);
     for (StorageOperator operator : storageOperators) {
       StorageOperator previous = mapped.put(operator.type(), operator);
       if (previous != null) {
@@ -48,15 +47,15 @@ public class StorageOperatorRegistry {
     return operator;
   }
 
-  public List<ResourceStoragePluginVO> list() {
-    List<ResourceStoragePluginVO> plugins = new ArrayList<>();
+  public List<ResourceStoragePlugin> list() {
+    List<ResourceStoragePlugin> plugins = new ArrayList<>();
     ResourceStorageType activeType = properties.getStorage().getType();
     for (StorageOperator operator : operators.values()) {
-      plugins.add(ResourceStoragePluginVO.builder()
-          .type(operator.type())
-          .name(operator.name())
-          .active(operator.type() == activeType)
-          .build());
+      plugins.add(
+          new ResourceStoragePlugin(
+              operator.type(),
+              operator.name(),
+              operator.type() == activeType));
     }
     return plugins;
   }
