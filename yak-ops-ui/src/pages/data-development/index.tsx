@@ -38,9 +38,9 @@ import type {
 
 type TreeFilterKey =
   | 'all'
+  | 'root'
   | 'unassigned'
   | `project:${number}`
-  | `root:${number}`
   | `directory:${number}`;
 type PublishFilter = 'ALL' | 'DRAFT' | 'PUBLISHED';
 
@@ -49,12 +49,8 @@ const MIN_LEFT_WIDTH = 210;
 const MAX_LEFT_WIDTH = 420;
 const LEFT_WIDTH_STORAGE_KEY = 'yak-data-development.left-width';
 
-const projectKey = (projectId: number): TreeFilterKey =>
-  `project:${projectId}`;
-const rootKey = (projectId: number): TreeFilterKey =>
-  `root:${projectId}`;
-const directoryKey = (directoryId: number): TreeFilterKey =>
-  `directory:${directoryId}`;
+const projectKey = (projectId: number): TreeFilterKey => `project:${projectId}`;
+const directoryKey = (directoryId: number): TreeFilterKey => `directory:${directoryId}`;
 
 const numberFromKey = (key: string, prefix: string) => {
   if (!key.startsWith(prefix)) return undefined;
@@ -99,30 +95,22 @@ export default function DataDevelopmentPage() {
   const [keyword, setKeyword] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | DevelopmentTaskType>('ALL');
   const [publishFilter, setPublishFilter] = useState<PublishFilter>('ALL');
-  const [selectedNode, setSelectedNode] = useState<TreeFilterKey>(() =>
-    currentProject?.id ? projectKey(Number(currentProject.id)) : 'all',
-  );
+  const [selectedNode, setSelectedNode] = useState<TreeFilterKey>('all');
   const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
 
   const loadDirectories = useCallback(async () => {
     setTreeLoading(true);
     try {
-      const responses = await Promise.all(
-        projects.map(async (project) => {
-          const projectId = Number(project.id);
-          const response = await listDevelopmentDirectories(projectId);
-          return responseData(response, `查询项目“${project.projectName}”目录失败`);
-        }),
-      );
-      setDirectories(responses.flat());
+      const response = await listDevelopmentDirectories();
+      setDirectories(responseData(response, '查询数据开发目录失败') || []);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '查询数据开发目录失败');
       setDirectories([]);
     } finally {
       setTreeLoading(false);
     }
-  }, [projects]);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,11 +137,8 @@ export default function DataDevelopmentPage() {
 
   useEffect(() => {
     void load();
-  }, [load]);
-
-  useEffect(() => {
     void loadDirectories();
-  }, [loadDirectories]);
+  }, [load, loadDirectories]);
 
   const projectNameMap = useMemo(
     () => new Map(projects.map((project) => [Number(project.id), project.projectName])),
@@ -168,129 +153,106 @@ export default function DataDevelopmentPage() {
     [directories],
   );
 
-  const projectIdForSelection = useMemo(() => {
-    const projectId = numberFromKey(selectedNode, 'project:')
-      ?? numberFromKey(selectedNode, 'root:');
-    if (projectId) return projectId;
-    const directoryId = numberFromKey(selectedNode, 'directory:');
-    return directoryId ? directoryMap.get(directoryId)?.projectId : undefined;
-  }, [directoryMap, selectedNode]);
-
   const directoryIdForSelection = useMemo(
     () => numberFromKey(selectedNode, 'directory:'),
     [selectedNode],
   );
-
-  const projectDirectories = useMemo(
-    () => projectIdForSelection
-      ? directories.filter((directory) => directory.projectId === projectIdForSelection)
-      : [],
-    [directories, projectIdForSelection],
+  const projectIdForSelection = useMemo(
+    () => numberFromKey(selectedNode, 'project:'),
+    [selectedNode],
   );
 
   const counts = useMemo(() => {
     const byProject = new Map<number, number>();
     const byDirectory = new Map<number, number>();
-    const rootByProject = new Map<number, number>();
+    let rootCount = 0;
     let unassigned = 0;
 
     tasks.forEach((task) => {
-      if (!task.projectId) {
+      if (task.projectId) {
+        const projectId = Number(task.projectId);
+        byProject.set(projectId, (byProject.get(projectId) || 0) + 1);
+      } else {
         unassigned += 1;
-        return;
       }
-      const projectId = Number(task.projectId);
-      byProject.set(projectId, (byProject.get(projectId) || 0) + 1);
+
       if (task.directoryId) {
         const directoryId = Number(task.directoryId);
         byDirectory.set(directoryId, (byDirectory.get(directoryId) || 0) + 1);
       } else {
-        rootByProject.set(projectId, (rootByProject.get(projectId) || 0) + 1);
+        rootCount += 1;
       }
     });
 
-    return { byProject, byDirectory, rootByProject, unassigned };
+    return { byProject, byDirectory, rootCount, unassigned };
   }, [tasks]);
 
   const treeData = useMemo<DevelopmentTreeNode[]>(() => {
-    const buildDirectoryChildren = (
-      projectId: number,
-      parentId?: number,
-    ): DevelopmentTreeNode[] =>
+    const buildDirectoryChildren = (parentId?: number): DevelopmentTreeNode[] =>
       directories
-        .filter(
-          (directory) =>
-            directory.projectId === projectId
-            && (directory.parentId ?? undefined) === parentId,
-        )
+        .filter((directory) => (directory.parentId ?? undefined) === parentId)
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
         .map((directory) => ({
           key: directoryKey(Number(directory.id)),
           title: directory.name,
           nodeType: 'directory',
-          projectId,
           directoryId: Number(directory.id),
           count: counts.byDirectory.get(Number(directory.id)) || 0,
-          children: buildDirectoryChildren(projectId, Number(directory.id)),
+          children: buildDirectoryChildren(Number(directory.id)),
         }));
 
-    const projectNodes: DevelopmentTreeNode[] = projects.map((project) => {
-      const projectId = Number(project.id);
-      return {
-        key: projectKey(projectId),
-        title: project.projectName,
-        nodeType: 'project',
-        projectId,
-        count: counts.byProject.get(projectId) || 0,
-        children: [
-          {
-            key: rootKey(projectId),
-            title: '/',
-            nodeType: 'directory',
-            projectId,
-            count: counts.rootByProject.get(projectId) || 0,
-            children: buildDirectoryChildren(projectId),
-          },
-        ],
-      };
-    });
-
-    return [
+    const nodes: DevelopmentTreeNode[] = [
       {
         key: 'all',
         title: '全部任务',
         nodeType: 'all',
         count: tasks.length,
       },
-      ...projectNodes,
-      ...(counts.unassigned > 0
-        ? [
-            {
-              key: 'unassigned' as const,
-              title: '未归属项目',
-              nodeType: 'unassigned' as const,
-              count: counts.unassigned,
-            },
-          ]
-        : []),
+      {
+        key: 'root',
+        title: '/',
+        nodeType: 'directory',
+        count: counts.rootCount,
+        children: buildDirectoryChildren(),
+      },
     ];
+
+    if (projects.length) {
+      nodes.push(
+        ...projects.map((project) => {
+          const projectId = Number(project.id);
+          return {
+            key: projectKey(projectId),
+            title: project.projectName,
+            nodeType: 'project' as const,
+            projectId,
+            count: counts.byProject.get(projectId) || 0,
+          };
+        }),
+      );
+    }
+
+    if (counts.unassigned > 0) {
+      nodes.push({
+        key: 'unassigned',
+        title: '未归属项目',
+        nodeType: 'unassigned',
+        count: counts.unassigned,
+      });
+    }
+
+    return nodes;
   }, [counts, directories, projects, tasks.length]);
 
   const filteredTasks = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
     const selectedProjectId = numberFromKey(selectedNode, 'project:');
-    const selectedRootProjectId = numberFromKey(selectedNode, 'root:');
     const selectedDirectoryId = numberFromKey(selectedNode, 'directory:');
 
     return tasks.filter((task) => {
+      if (selectedNode === 'root' && task.directoryId) return false;
       if (selectedNode === 'unassigned' && task.projectId) return false;
       if (selectedProjectId && Number(task.projectId) !== selectedProjectId) return false;
-      if (
-        selectedRootProjectId
-        && (Number(task.projectId) !== selectedRootProjectId || Boolean(task.directoryId))
-      ) {
-        return false;
-      }
       if (selectedDirectoryId && Number(task.directoryId) !== selectedDirectoryId) return false;
       if (typeFilter !== 'ALL' && task.type !== typeFilter) return false;
       if (publishFilter === 'DRAFT' && task.latestVersionNo > 0) return false;
@@ -339,7 +301,6 @@ export default function DataDevelopmentPage() {
     },
     {
       title: '所属项目 / 目录',
-      dataIndex: 'projectId',
       width: 220,
       render: (_, task) => {
         const projectName = task.projectId
@@ -427,24 +388,13 @@ export default function DataDevelopmentPage() {
     [leftCollapsed, leftWidth],
   );
 
-  const openCreateDirectory = () => {
-    if (!projectIdForSelection) {
-      message.info('请先在左侧选择一个项目或目录');
-      return;
-    }
-    setDirectoryOpen(true);
-  };
+  const openCreateDirectory = () => setDirectoryOpen(true);
 
   const submitDirectory = async (parentId: number | undefined, name: string) => {
-    if (!projectIdForSelection) return;
     setDirectorySaving(true);
     try {
       const created = responseData(
-        await createDevelopmentDirectory({
-          projectId: projectIdForSelection,
-          parentId,
-          name,
-        }),
+        await createDevelopmentDirectory({ parentId, name }),
         '新建目录失败',
       );
       await loadDirectories();
@@ -458,11 +408,6 @@ export default function DataDevelopmentPage() {
     }
   };
 
-  const selectedProjectName = projectIdForSelection
-    ? projectNameMap.get(projectIdForSelection)
-    : undefined;
-  const defaultDirectoryParentId = directoryIdForSelection;
-
   return (
     <section className="m-4 overflow-hidden rounded-xl border border-[#e4e7ec] bg-white">
       <div className="flex h-[calc(100vh-80px)] min-h-[620px]">
@@ -472,7 +417,6 @@ export default function DataDevelopmentPage() {
           selectedNodeKey={selectedNode}
           leftWidth={leftWidth}
           collapsed={leftCollapsed}
-          createDisabled={!projectIdForSelection}
           onCreateDirectory={openCreateDirectory}
           onResizeStart={handleResizeStart}
           onCollapsedChange={setLeftCollapsed}
@@ -573,21 +517,18 @@ export default function DataDevelopmentPage() {
         onCancel={() => setCreateOpen(false)}
         onNext={(type, projectId) => {
           setCreateOpen(false);
-          const directoryId =
-            projectId === projectIdForSelection && directoryIdForSelection
-              ? directoryIdForSelection
-              : 0;
-          history.push(
-            `/data-development/task/new?type=${encodeURIComponent(type)}&projectId=${projectId}&directoryId=${directoryId}`,
-          );
+          const params = new URLSearchParams();
+          params.set('type', type);
+          params.set('directoryId', String(directoryIdForSelection || 0));
+          if (projectId) params.set('projectId', String(projectId));
+          history.push(`/data-development/task/new?${params.toString()}`);
         }}
       />
 
       <CreateDirectoryModal
         open={directoryOpen}
-        projectName={selectedProjectName}
-        directories={projectDirectories}
-        defaultParentId={defaultDirectoryParentId}
+        directories={directories}
+        defaultParentId={directoryIdForSelection}
         loading={directorySaving}
         onCancel={() => {
           if (!directorySaving) setDirectoryOpen(false);

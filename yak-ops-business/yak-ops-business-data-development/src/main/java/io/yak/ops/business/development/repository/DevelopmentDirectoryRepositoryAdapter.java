@@ -22,10 +22,9 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
   }
 
   @Override
-  public DevelopmentDirectory insert(Long projectId, Long parentId, String name) {
+  public DevelopmentDirectory insert(Long parentId, String name) {
     Instant now = Instant.now();
     DevelopmentDirectoryPO po = new DevelopmentDirectoryPO();
-    po.setProjectId(projectId);
     po.setParentId(toStoredParentId(parentId));
     po.setName(name);
     po.setCreateTime(now);
@@ -40,10 +39,9 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
   }
 
   @Override
-  public List<DevelopmentDirectory> listByProjectId(Long projectId) {
+  public List<DevelopmentDirectory> list() {
     return mapper.selectList(
             new LambdaQueryWrapper<DevelopmentDirectoryPO>()
-                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
                 .orderByAsc(DevelopmentDirectoryPO::getName)
                 .orderByAsc(DevelopmentDirectoryPO::getId))
         .stream()
@@ -52,10 +50,9 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
   }
 
   @Override
-  public boolean existsByName(Long projectId, Long parentId, String name) {
+  public boolean existsByName(Long parentId, String name) {
     return mapper.selectCount(
             new LambdaQueryWrapper<DevelopmentDirectoryPO>()
-                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
                 .eq(DevelopmentDirectoryPO::getParentId, toStoredParentId(parentId))
                 .eq(DevelopmentDirectoryPO::getName, name))
         > 0L;
@@ -71,7 +68,6 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
         : po.getParentId();
     return new DevelopmentDirectory(
         po.getId(),
-        po.getProjectId(),
         parentId,
         po.getName(),
         null,

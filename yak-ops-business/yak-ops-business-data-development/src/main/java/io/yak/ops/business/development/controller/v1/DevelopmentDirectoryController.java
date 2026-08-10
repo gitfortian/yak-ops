@@ -12,10 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Project-scoped directory management for data development. */
+/** Hierarchical directory management for data development. */
 @Tag(name = "数据开发目录接口")
 @RestController
 @RequestMapping("/api/v1/data-development/directories")
@@ -27,19 +26,15 @@ public class DevelopmentDirectoryController {
     this.service = service;
   }
 
-  @Operation(summary = "查询项目数据开发目录")
+  @Operation(summary = "查询数据开发目录")
   @GetMapping
-  public Result<List<DevelopmentDirectory>> list(
-      @RequestParam(name = "projectId") Long projectId) {
-    return Result.success(service.list(projectId));
+  public Result<List<DevelopmentDirectory>> list() {
+    return Result.success(service.list());
   }
 
   @Operation(summary = "新建数据开发目录")
   @PostMapping
   public Result<DevelopmentDirectory> create(@Valid @RequestBody CreateRequest request) {
-    return Result.success(service.create(
-        request.projectId(),
-        request.parentId(),
-        request.name()));
+    return Result.success(service.create(request.parentId(), request.name()));
   }
 }

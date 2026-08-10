@@ -35,7 +35,6 @@ interface DevelopmentTreePaneProps {
   selectedNodeKey?: string;
   leftWidth: number;
   collapsed: boolean;
-  createDisabled?: boolean;
   onCreateDirectory: () => void;
   onSelect: TreeProps['onSelect'];
   onResizeStart: (event: ReactPointerEvent) => void;
@@ -48,7 +47,6 @@ const DevelopmentTreePane = ({
   selectedNodeKey,
   leftWidth,
   collapsed,
-  createDisabled = false,
   onCreateDirectory,
   onSelect,
   onResizeStart,
@@ -128,20 +126,14 @@ const DevelopmentTreePane = ({
             <div className="text-[13px] font-semibold text-[#161823]">
               开发目录
             </div>
-            <Tooltip
-              title={createDisabled ? '请先选择一个项目' : '新建目录'}
-              placement="right"
-            >
-              <span>
-                <Button
-                  type="text"
-                  size="small"
-                  disabled={createDisabled}
-                  icon={<FolderPlus size={15} strokeWidth={1.8} />}
-                  className="!flex !h-7 !w-7 !items-center !justify-center !p-0"
-                  onClick={onCreateDirectory}
-                />
-              </span>
+            <Tooltip title="新建目录" placement="right">
+              <Button
+                type="text"
+                size="small"
+                icon={<FolderPlus size={15} strokeWidth={1.8} />}
+                className="!flex !h-7 !w-7 !items-center !justify-center !p-0"
+                onClick={onCreateDirectory}
+              />
             </Tooltip>
           </div>
 
@@ -154,14 +146,10 @@ const DevelopmentTreePane = ({
                 <Tree
                   blockNode
                   defaultExpandAll
-                  selectedKeys={
-                    selectedNodeKey ? [selectedNodeKey] : []
-                  }
+                  selectedKeys={selectedNodeKey ? [selectedNodeKey] : []}
                   treeData={treeData}
                   titleRender={renderTitle}
-                  switcherIcon={
-                    <ChevronDown size={12} strokeWidth={1.8} />
-                  }
+                  switcherIcon={<ChevronDown size={12} strokeWidth={1.8} />}
                   onSelect={onSelect}
                   className="development-tree bg-transparent"
                 />
@@ -215,11 +203,7 @@ const DevelopmentTreePane = ({
             'focus-visible:ring-[rgba(254,44,85,.16)]',
           ].join(' ')}
         >
-          {collapsed ? (
-            <ChevronRight size={12} />
-          ) : (
-            <ChevronLeft size={12} />
-          )}
+          {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>
       </div>
 

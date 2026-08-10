@@ -11,7 +11,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Application service for project-scoped hierarchical data-development directories. */
+/** Application service for hierarchical data-development directories. */
 @Service
 public class DevelopmentDirectoryService {
 
@@ -21,9 +21,8 @@ public class DevelopmentDirectoryService {
     this.repository = repository;
   }
 
-  public List<DevelopmentDirectory> list(Long projectId) {
-    long normalizedProjectId = requirePositive(projectId, "项目 ID");
-    List<DevelopmentDirectory> directories = repository.listByProjectId(normalizedProjectId);
+  public List<DevelopmentDirectory> list() {
+    List<DevelopmentDirectory> directories = repository.list();
     Map<Long, DevelopmentDirectory> byId = new HashMap<>();
     directories.forEach(directory -> byId.put(directory.id(), directory));
     Map<Long, String> pathCache = new HashMap<>();
@@ -37,28 +36,21 @@ public class DevelopmentDirectoryService {
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
-  public DevelopmentDirectory create(Long projectId, Long parentId, String name) {
-    long normalizedProjectId = requirePositive(projectId, "项目 ID");
+  public DevelopmentDirectory create(Long parentId, String name) {
     Long normalizedParentId = normalizeParentId(parentId);
     String normalizedName = normalizeName(name);
 
     if (normalizedParentId != null) {
-      DevelopmentDirectory parent = repository.findById(normalizedParentId)
+      repository.findById(normalizedParentId)
           .orElseThrow(() -> new IllegalArgumentException("父目录不存在：" + normalizedParentId));
-      if (!normalizedProjectIdEquals(parent.projectId(), normalizedProjectId)) {
-        throw new IllegalArgumentException("父目录不属于当前项目：" + normalizedParentId);
-      }
     }
 
-    if (repository.existsByName(normalizedProjectId, normalizedParentId, normalizedName)) {
+    if (repository.existsByName(normalizedParentId, normalizedName)) {
       throw new IllegalStateException("当前路径下已存在同名目录：" + normalizedName);
     }
 
-    DevelopmentDirectory created = repository.insert(
-        normalizedProjectId,
-        normalizedParentId,
-        normalizedName);
-    return list(normalizedProjectId).stream()
+    DevelopmentDirectory created = repository.insert(normalizedParentId, normalizedName);
+    return list().stream()
         .filter(directory -> directory.id().equals(created.id()))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException("目录创建成功但无法重新读取：" + created.id()));
@@ -67,7 +59,6 @@ public class DevelopmentDirectoryService {
   private DevelopmentDirectory withPath(DevelopmentDirectory directory, String path) {
     return new DevelopmentDirectory(
         directory.id(),
-        directory.projectId(),
         directory.parentId(),
         directory.name(),
         path,
@@ -116,14 +107,5 @@ public class DevelopmentDirectoryService {
       throw new IllegalArgumentException("目录名称不能包含 /、\\，也不能使用 . 或 ..");
     }
     return normalized;
-  }
-
-  private long requirePositive(Long value, String name) {
-    if (value == null || value <= 0L) throw new IllegalArgumentException(name + "不合法：" + value);
-    return value;
-  }
-
-  private boolean normalizedProjectIdEquals(Long value, long expected) {
-    return value != null && value == expected;
   }
 }
