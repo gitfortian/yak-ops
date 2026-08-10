@@ -5,7 +5,6 @@ import type { DevelopmentDirectory } from '../types';
 
 interface CreateDirectoryModalProps {
   open: boolean;
-  projectName?: string;
   directories: DevelopmentDirectory[];
   defaultParentId?: number;
   loading?: boolean;
@@ -15,7 +14,6 @@ interface CreateDirectoryModalProps {
 
 const CreateDirectoryModal = ({
   open,
-  projectName,
   directories,
   defaultParentId,
   loading = false,
@@ -62,48 +60,39 @@ const CreateDirectoryModal = ({
         onSubmit(parentId && parentId > 0 ? parentId : undefined, normalizedName);
       }}
     >
-      <div className="pt-2">
-        {projectName ? (
-          <div className="mb-4 rounded-lg bg-[#fafafa] px-3 py-2 text-[12px] text-[rgba(22,24,35,.55)]">
-            当前项目：
-            <span className="font-medium text-[#344054]">{projectName}</span>
-          </div>
-        ) : null}
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-y-3 pt-2">
+        <Typography.Text className="text-[13px] text-[#344054]">
+          <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
+          路径：
+        </Typography.Text>
+        <Select
+          value={parentId ?? 0}
+          options={pathOptions}
+          showSearch
+          optionFilterProp="label"
+          className="w-full"
+          onChange={(value) => setParentId(Number(value) || undefined)}
+        />
 
-        <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-y-3">
-          <Typography.Text className="text-[13px] text-[#344054]">
-            <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
-            路径：
-          </Typography.Text>
-          <Select
-            value={parentId ?? 0}
-            options={pathOptions}
-            showSearch
-            optionFilterProp="label"
-            className="w-full"
-            onChange={(value) => setParentId(Number(value) || undefined)}
-          />
-
-          <Typography.Text className="text-[13px] text-[#344054]">
-            <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
-            名称：
-          </Typography.Text>
-          <Input
-            autoFocus
-            value={name}
-            maxLength={128}
-            placeholder="名称"
-            onChange={(event) => setName(event.target.value)}
-            onPressEnter={() => {
-              if (normalizedName && !loading) {
-                onSubmit(
-                  parentId && parentId > 0 ? parentId : undefined,
-                  normalizedName,
-                );
-              }
-            }}
-          />
-        </div>
+        <Typography.Text className="text-[13px] text-[#344054]">
+          <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
+          名称：
+        </Typography.Text>
+        <Input
+          autoFocus
+          value={name}
+          maxLength={128}
+          placeholder="名称"
+          onChange={(event) => setName(event.target.value)}
+          onPressEnter={() => {
+            if (normalizedName && !loading) {
+              onSubmit(
+                parentId && parentId > 0 ? parentId : undefined,
+                normalizedName,
+              );
+            }
+          }}
+        />
       </div>
     </Modal>
   );
