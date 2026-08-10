@@ -24,6 +24,25 @@ export interface CreateDevelopmentDirectoryPayload {
   name: string;
 }
 
+export interface DevelopmentNode {
+  id: number;
+  name: string;
+  type: DevelopmentTaskType;
+  projectId?: number | null;
+  directoryId?: number | null;
+  configured: boolean;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface CreateDevelopmentNodePayload {
+  name: string;
+  type: DevelopmentTaskType;
+  projectId?: number;
+  /** 0 或省略表示数据开发根目录。 */
+  directoryId?: number;
+}
+
 export interface SqlParameterDefinition {
   name: string;
   type: SqlParameterType;
