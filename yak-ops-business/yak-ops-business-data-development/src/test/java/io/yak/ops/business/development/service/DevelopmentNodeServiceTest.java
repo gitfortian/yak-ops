@@ -54,6 +54,20 @@ class DevelopmentNodeServiceTest {
         () -> service.create("任务", "SHELL", null, null));
   }
 
+  @Test
+  void renamesAndDeletesNode() {
+    InMemoryDirectoryRepository directories = new InMemoryDirectoryRepository();
+    InMemoryNodeRepository nodes = new InMemoryNodeRepository();
+    DevelopmentNodeService service = new DevelopmentNodeService(nodes, directories);
+    DevelopmentNode node = service.create("任务", "SQL", null, null);
+
+    DevelopmentNode renamed = service.rename(node.id(), "新任务");
+    assertEquals("新任务", renamed.name());
+
+    service.delete(node.id());
+    assertEquals(List.of(), service.list());
+  }
+
   private static final class InMemoryNodeRepository implements DevelopmentNodeRepository {
 
     private final AtomicLong ids = new AtomicLong(1L);
@@ -97,6 +111,33 @@ class DevelopmentNodeServiceTest {
           java.util.Objects.equals(directoryId, node.directoryId())
               && name.equals(node.name()));
     }
+
+    @Override
+    public boolean existsInDirectory(Long directoryId) {
+      return values.values().stream().anyMatch(node ->
+          java.util.Objects.equals(directoryId, node.directoryId()));
+    }
+
+    @Override
+    public boolean updateName(Long id, String name) {
+      DevelopmentNode current = values.get(id);
+      if (current == null) return false;
+      values.put(id, new DevelopmentNode(
+          current.id(),
+          name,
+          current.type(),
+          current.projectId(),
+          current.directoryId(),
+          current.configured(),
+          current.createTime(),
+          Instant.now()));
+      return true;
+    }
+
+    @Override
+    public boolean deleteById(Long id) {
+      return values.remove(id) != null;
+    }
   }
 
   private static final class InMemoryDirectoryRepository
@@ -135,6 +176,25 @@ class DevelopmentNodeServiceTest {
       return values.values().stream().anyMatch(directory ->
           java.util.Objects.equals(parentId, directory.parentId())
               && name.equals(directory.name()));
+    }
+
+    @Override
+    public boolean hasChildren(Long id) {
+      return values.values().stream().anyMatch(directory -> id.equals(directory.parentId()));
+    }
+
+    @Override
+    public boolean updateName(Long id, String name) {
+      DevelopmentDirectory current = values.get(id);
+      if (current == null) return false;
+      values.put(id, new DevelopmentDirectory(
+          current.id(), current.parentId(), name, null, current.createTime(), Instant.now()));
+      return true;
+    }
+
+    @Override
+    public boolean deleteById(Long id) {
+      return values.remove(id) != null;
     }
   }
 }
