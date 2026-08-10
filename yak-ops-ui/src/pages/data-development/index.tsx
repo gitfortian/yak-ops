@@ -29,16 +29,19 @@ import DevelopmentTreePane, {
 } from './components/DevelopmentTreePane';
 import {
   createDevelopmentDirectory,
+  createDevelopmentNode,
   listDevelopmentDirectories,
+  listDevelopmentNodes,
   listSqlTasks,
 } from './service';
 import type {
   DevelopmentDirectory,
+  DevelopmentNode,
   DevelopmentTaskRow,
   DevelopmentTaskType,
 } from './types';
 
-type TreeFilterKey = 'root' | `directory:${number}` | `task:${number}`;
+type TreeFilterKey = 'root' | `directory:${number}` | `node:${number}`;
 type PublishFilter = 'ALL' | 'DRAFT' | 'PUBLISHED';
 
 const DEFAULT_LEFT_WIDTH = 272;
@@ -48,7 +51,7 @@ const LEFT_WIDTH_STORAGE_KEY = 'yak-data-development.left-width';
 
 const directoryKey = (directoryId: number): TreeFilterKey =>
   `directory:${directoryId}`;
-const taskKey = (taskId: number): TreeFilterKey => `task:${taskId}`;
+const nodeKey = (nodeId: number): TreeFilterKey => `node:${nodeId}`;
 
 const numberFromKey = (key: string, prefix: string) => {
   if (!key.startsWith(prefix)) return undefined;
@@ -107,12 +110,14 @@ const taskTableClassName = [
 export default function DataDevelopmentPage() {
   const { projects, currentProject } = useSecurityProject();
   const [tasks, setTasks] = useState<DevelopmentTaskRow[]>([]);
+  const [nodes, setNodes] = useState<DevelopmentNode[]>([]);
   const [directories, setDirectories] = useState<DevelopmentDirectory[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [treeLoading, setTreeLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createType, setCreateType] = useState<DevelopmentNodeCreateType>('SQL');
+  const [nodeSaving, setNodeSaving] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
   const [treeKeyword, setTreeKeyword] = useState('');
@@ -126,14 +131,19 @@ export default function DataDevelopmentPage() {
   const [current, setCurrent] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const loadDirectories = useCallback(async () => {
+  const loadTree = useCallback(async () => {
     setTreeLoading(true);
     try {
-      const response = await listDevelopmentDirectories();
-      setDirectories(responseData(response, '查询数据开发目录失败') || []);
+      const [directoryResponse, nodeResponse] = await Promise.all([
+        listDevelopmentDirectories(),
+        listDevelopmentNodes(),
+      ]);
+      setDirectories(responseData(directoryResponse, '查询数据开发目录失败') || []);
+      setNodes(responseData(nodeResponse, '查询数据开发节点失败') || []);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '查询数据开发目录失败');
+      message.error(error instanceof Error ? error.message : '查询数据开发树失败');
       setDirectories([]);
+      setNodes([]);
     } finally {
       setTreeLoading(false);
     }
@@ -164,8 +174,8 @@ export default function DataDevelopmentPage() {
 
   useEffect(() => {
     void load();
-    void loadDirectories();
-  }, [load, loadDirectories]);
+    void loadTree();
+  }, [load, loadTree]);
 
   const projectNameMap = useMemo(
     () => new Map(projects.map((project) => [Number(project.id), project.projectName])),
@@ -179,29 +189,43 @@ export default function DataDevelopmentPage() {
     () => new Map(directories.map((directory) => [Number(directory.id), directory])),
     [directories],
   );
-
-  const directoryIdForSelection = useMemo(
-    () => numberFromKey(selectedNode, 'directory:'),
-    [selectedNode],
+  const nodeMap = useMemo(
+    () => new Map(nodes.map((node) => [Number(node.id), node])),
+    [nodes],
   );
 
+  const selectedResourceNodeId = useMemo(
+    () => numberFromKey(selectedNode, 'node:'),
+    [selectedNode],
+  );
+  const directoryIdForSelection = useMemo(() => {
+    const selectedDirectoryId = numberFromKey(selectedNode, 'directory:');
+    if (selectedDirectoryId) return selectedDirectoryId;
+    if (!selectedResourceNodeId) return undefined;
+    const resourceNode = nodeMap.get(selectedResourceNodeId);
+    return resourceNode?.directoryId ? Number(resourceNode.directoryId) : undefined;
+  }, [nodeMap, selectedNode, selectedResourceNodeId]);
+
   const fullTreeData = useMemo<DevelopmentTreeNode[]>(() => {
-    const taskNodes = (directoryId?: number): DevelopmentTreeNode[] =>
-      tasks
-        .filter((task) => {
-          const taskDirectoryId = task.directoryId
-            ? Number(task.directoryId)
+    if (!directories.length && !nodes.length) return [];
+
+    const resourceNodes = (directoryId?: number): DevelopmentTreeNode[] =>
+      nodes
+        .filter((node) => {
+          const nodeDirectoryId = node.directoryId
+            ? Number(node.directoryId)
             : undefined;
-          return taskDirectoryId === directoryId;
+          return nodeDirectoryId === directoryId;
         })
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
-        .map((task) => ({
-          key: taskKey(Number(task.id)),
-          title: task.name,
-          nodeType: 'task',
-          taskId: Number(task.id),
-          taskType: task.type,
-          searchText: `${task.name} ${task.description || ''} ${task.id}`,
+        .map((node) => ({
+          key: nodeKey(Number(node.id)),
+          title: node.name,
+          nodeType: 'node',
+          nodeId: Number(node.id),
+          taskType: node.type,
+          configured: node.configured,
+          searchText: `${node.name} ${node.type} ${node.id}`,
           isLeaf: true,
         }));
 
@@ -219,7 +243,7 @@ export default function DataDevelopmentPage() {
             searchText: `${directory.name} ${directory.path || ''}`,
             children: [
               ...directoryNodes(directoryId),
-              ...taskNodes(directoryId),
+              ...resourceNodes(directoryId),
             ],
           };
         });
@@ -230,19 +254,19 @@ export default function DataDevelopmentPage() {
         title: '/',
         nodeType: 'root',
         searchText: '/',
-        children: [...directoryNodes(), ...taskNodes()],
+        children: [...directoryNodes(), ...resourceNodes()],
       },
     ];
-  }, [directories, tasks]);
+  }, [directories, nodes]);
 
   const treeData = useMemo<DevelopmentTreeNode[]>(() => {
     const normalized = treeKeyword.trim().toLowerCase();
     if (!normalized) return fullTreeData;
 
     const filterNodes = (
-      nodes: DevelopmentTreeNode[],
+      values: DevelopmentTreeNode[],
     ): DevelopmentTreeNode[] =>
-      nodes.flatMap((node) => {
+      values.flatMap((node) => {
         const children = node.children ? filterNodes(node.children) : [];
         const text = `${node.title} ${node.searchText || ''}`.toLowerCase();
         const selfMatched = node.nodeType !== 'root' && text.includes(normalized);
@@ -449,7 +473,8 @@ export default function DataDevelopmentPage() {
         await createDevelopmentDirectory({ parentId, name }),
         '新建目录失败',
       );
-      await loadDirectories();
+      setTreeKeyword('');
+      await loadTree();
       setDirectoryOpen(false);
       setSelectedNode(directoryKey(Number(created.id)));
       message.success('目录创建成功');
@@ -457,6 +482,35 @@ export default function DataDevelopmentPage() {
       message.error(error instanceof Error ? error.message : '新建目录失败');
     } finally {
       setDirectorySaving(false);
+    }
+  };
+
+  const submitNode = async (
+    type: DevelopmentTaskType,
+    projectId: number | undefined,
+    directoryId: number | undefined,
+    name: string,
+  ) => {
+    setNodeSaving(true);
+    try {
+      const created = responseData(
+        await createDevelopmentNode({
+          name,
+          type,
+          projectId,
+          directoryId,
+        }),
+        '新建节点失败',
+      );
+      setTreeKeyword('');
+      await loadTree();
+      setCreateOpen(false);
+      setSelectedNode(nodeKey(Number(created.id)));
+      message.success('节点创建成功');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '新建节点失败');
+    } finally {
+      setNodeSaving(false);
     }
   };
 
@@ -472,7 +526,7 @@ export default function DataDevelopmentPage() {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <DevelopmentTreePane
             treeData={treeData}
-            treeLoading={treeLoading || loading}
+            treeLoading={treeLoading}
             selectedNodeKey={selectedNode}
             searchValue={treeKeyword}
             leftWidth={leftWidth}
@@ -488,13 +542,7 @@ export default function DataDevelopmentPage() {
             onSelect={(keys) => {
               const key = keys[0];
               if (!key) return;
-              const normalizedKey = String(key) as TreeFilterKey;
-              const selectedTaskId = numberFromKey(normalizedKey, 'task:');
-              if (selectedTaskId) {
-                history.push(`/data-development/task/${selectedTaskId}`);
-                return;
-              }
-              setSelectedNode(normalizedKey);
+              setSelectedNode(String(key) as TreeFilterKey);
             }}
           />
 
@@ -542,7 +590,7 @@ export default function DataDevelopmentPage() {
                   icon={<RefreshCw size={14} />}
                   onClick={() => {
                     void load();
-                    void loadDirectories();
+                    void loadTree();
                   }}
                 />
               </div>
@@ -599,15 +647,12 @@ export default function DataDevelopmentPage() {
             currentProject?.id ? Number(currentProject.id) : undefined
           }
           defaultDirectoryId={directoryIdForSelection}
-          onCancel={() => setCreateOpen(false)}
+          loading={nodeSaving}
+          onCancel={() => {
+            if (!nodeSaving) setCreateOpen(false);
+          }}
           onNext={(type, projectId, directoryId, name) => {
-            setCreateOpen(false);
-            const params = new URLSearchParams();
-            params.set('type', type);
-            params.set('directoryId', String(directoryId || 0));
-            params.set('name', name);
-            if (projectId) params.set('projectId', String(projectId));
-            history.push(`/data-development/task/new?${params.toString()}`);
+            void submitNode(type, projectId, directoryId, name);
           }}
         />
 
