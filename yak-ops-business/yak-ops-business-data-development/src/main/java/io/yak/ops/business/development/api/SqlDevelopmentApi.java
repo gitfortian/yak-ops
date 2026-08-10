@@ -15,6 +15,7 @@ public final class SqlDevelopmentApi {
   public record CreateRequest(
       @NotBlank String name,
       String description,
+      @NotNull @Min(1) Long projectId,
       @NotNull @Min(1) Long dataSourceId,
       @NotBlank String sql,
       List<SqlParameterDefinition> parameters) {
@@ -24,6 +25,7 @@ public final class SqlDevelopmentApi {
       @Min(1) long baseRevision,
       @NotBlank String name,
       String description,
+      @NotNull @Min(1) Long projectId,
       @NotNull @Min(1) Long dataSourceId,
       @NotBlank String sql,
       List<SqlParameterDefinition> parameters) {
