@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS yak_dev_node (
     create_time DATETIME(6) NOT NULL,
     update_time DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_yak_dev_node_sibling (directory_id, name),
+    KEY idx_yak_dev_node_directory (directory_id, name),
     KEY idx_yak_dev_node_type (type, update_time),
     KEY idx_yak_dev_node_project (project_id, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
