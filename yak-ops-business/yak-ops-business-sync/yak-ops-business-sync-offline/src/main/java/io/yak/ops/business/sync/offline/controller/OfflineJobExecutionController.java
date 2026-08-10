@@ -1,7 +1,7 @@
 package io.yak.ops.business.sync.offline.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.framework.common.PagingResult;
+import io.yak.framework.common.PagingData;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.service.OfflineJobExecutionService;
@@ -67,9 +67,9 @@ public class OfflineJobExecutionController {
   }
 
   @PostMapping("/api/v1/job/batch-instance/page")
-  public PagingResult<OfflineJobExecutionVO> instancePage(
+  public Result<PagingData<OfflineJobExecutionVO>> instancePage(
       @Valid @RequestBody(required = false) OfflineJobExecutionQueryDTO queryDTO) {
-    return PagingResult.success(service.page(queryDTO));
+    return Result.success(service.page(queryDTO));
   }
 
   @GetMapping("/api/v1/job/batch-instance/{id}")

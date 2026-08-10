@@ -3,7 +3,6 @@ package io.yak.ops.business.datasource.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.PagingData;
-import io.yak.framework.common.PagingResult;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
@@ -72,9 +71,9 @@ public class DataSourceController {
 
   @Operation(summary = "分页查询数据源")
   @PostMapping("/page")
-  public PagingResult<DataSourceVO> page(
+  public Result<PagingData<DataSourceVO>> page(
       @Valid @RequestBody DataSourceQueryDTO queryDTO) {
-    return PagingResult.success(dataSourceService.getDataSourcePage(queryDTO));
+    return Result.success(dataSourceService.getDataSourcePage(queryDTO));
   }
 
   @Operation(summary = "查询数据源总览统计")
