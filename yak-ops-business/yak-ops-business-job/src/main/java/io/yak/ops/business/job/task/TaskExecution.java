@@ -1,5 +1,7 @@
 package io.yak.ops.business.job.task;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -14,7 +16,9 @@ public record TaskExecution(
     if (executionId == null || executionId.isBlank()) {
       throw new IllegalArgumentException("executionId 不能为空");
     }
-    output = output == null ? Map.of() : Map.copyOf(output);
+    output = output == null
+        ? Map.of()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(output));
   }
 
   public boolean terminal() {
