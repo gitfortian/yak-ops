@@ -13,4 +13,7 @@ public final class DevelopmentDirectoryApi {
       @Min(1) Long parentId,
       @NotBlank @Size(max = 128) String name) {
   }
+
+  public record RenameRequest(@NotBlank @Size(max = 128) String name) {
+  }
 }
