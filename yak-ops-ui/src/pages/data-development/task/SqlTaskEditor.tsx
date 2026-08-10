@@ -38,6 +38,7 @@ import {
   createSqlTask,
   getSqlTask,
   getSqlTaskExecution,
+  listDevelopmentDirectories,
   listSqlTaskVersions,
   publishSqlTask,
   runSqlTask,
@@ -46,6 +47,7 @@ import {
 import {
   SQL_PARAMETER_TYPES,
   TERMINAL_EXECUTION_STATUSES,
+  type DevelopmentDirectory,
   type SqlParameterDefinition,
   type SqlTaskDefinition,
   type SqlTaskExecution,
@@ -56,6 +58,7 @@ import {
 interface SqlTaskEditorProps {
   taskId?: number;
   initialProjectId?: number;
+  initialDirectoryId?: number;
 }
 
 interface DraftState {
@@ -63,6 +66,7 @@ interface DraftState {
   name: string;
   description: string;
   projectId?: number;
+  directoryId?: number;
   dataSourceId?: number;
   sql: string;
   parameters: SqlParameterDefinition[];
@@ -95,6 +99,7 @@ const toDraft = (task: SqlTaskDefinition): DraftState => ({
   name: task.name || '',
   description: task.description || '',
   projectId: task.projectId ? Number(task.projectId) : undefined,
+  directoryId: task.directoryId ? Number(task.directoryId) : undefined,
   dataSourceId: Number(task.dataSourceId),
   sql: task.sql || '',
   parameters: Array.isArray(task.parameters) ? task.parameters : [],
@@ -119,6 +124,7 @@ const executionStatusText: Record<string, string> = {
 export default function SqlTaskEditor({
   taskId,
   initialProjectId,
+  initialDirectoryId,
 }: SqlTaskEditorProps) {
   const { projects, currentProject } = useSecurityProject();
   const [draft, setDraft] = useState<DraftState>(() => ({
@@ -126,7 +132,10 @@ export default function SqlTaskEditor({
     projectId:
       initialProjectId ??
       (currentProject?.id ? Number(currentProject.id) : undefined),
+    directoryId: initialDirectoryId,
   }));
+  const [directories, setDirectories] = useState<DevelopmentDirectory[]>([]);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [versions, setVersions] = useState<SqlTaskVersion[]>([]);
   const [execution, setExecution] = useState<SqlTaskExecution>();
@@ -143,6 +152,16 @@ export default function SqlTaskEditor({
       value: Number(project.id),
     })),
     [projects],
+  );
+  const directoryOptions = useMemo(
+    () => [
+      { label: '/', value: 0 },
+      ...directories.map((directory) => ({
+        label: directory.path,
+        value: Number(directory.id),
+      })),
+    ],
+    [directories],
   );
   const dataSourceOptions = useMemo(
     () => dataSources
@@ -178,6 +197,33 @@ export default function SqlTaskEditor({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!draft.projectId) {
+      setDirectories([]);
+      return undefined;
+    }
+
+    let active = true;
+    setDirectoryLoading(true);
+    void listDevelopmentDirectories(draft.projectId)
+      .then((response) => {
+        if (!active) return;
+        setDirectories(responseData(response, '查询数据开发目录失败') || []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setDirectories([]);
+        message.error(error instanceof Error ? error.message : '查询数据开发目录失败');
+      })
+      .finally(() => {
+        if (active) setDirectoryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [draft.projectId]);
 
   useEffect(() => {
     setRunInput((previous) => {
@@ -235,6 +281,7 @@ export default function SqlTaskEditor({
     name: draft.name.trim(),
     description: draft.description.trim() || undefined,
     projectId: Number(draft.projectId),
+    directoryId: draft.directoryId ? Number(draft.directoryId) : 0,
     dataSourceId: Number(draft.dataSourceId),
     sql: draft.sql,
     parameters: draft.parameters.map((parameter) => ({
@@ -699,7 +746,7 @@ export default function SqlTaskEditor({
 
         <main className="p-5">
           <div className="mb-5 grid grid-cols-12 gap-4">
-            <div className="col-span-4">
+            <div className="col-span-3">
               <div className="mb-1.5 text-[12px] font-medium text-[#161823]">任务名称</div>
               <Input
                 value={draft.name}
@@ -708,7 +755,7 @@ export default function SqlTaskEditor({
                 onChange={(event) => updateDraftField('name', event.target.value)}
               />
             </div>
-            <div className="col-span-4">
+            <div className="col-span-3">
               <div className="mb-1.5 text-[12px] font-medium text-[#161823]">所属项目</div>
               <Select
                 value={draft.projectId}
@@ -717,10 +764,32 @@ export default function SqlTaskEditor({
                 optionFilterProp="label"
                 placeholder="请选择项目"
                 options={projectOptions}
-                onChange={(value) => updateDraftField('projectId', Number(value))}
+                onChange={(value) =>
+                  setDraft((previous) => ({
+                    ...previous,
+                    projectId: Number(value),
+                    directoryId: undefined,
+                  }))
+                }
               />
             </div>
-            <div className="col-span-4">
+            <div className="col-span-3">
+              <div className="mb-1.5 text-[12px] font-medium text-[#161823]">所属目录</div>
+              <Select
+                value={draft.directoryId ?? 0}
+                className="w-full"
+                showSearch
+                optionFilterProp="label"
+                placeholder="/"
+                loading={directoryLoading}
+                disabled={!draft.projectId}
+                options={directoryOptions}
+                onChange={(value) =>
+                  updateDraftField('directoryId', Number(value) > 0 ? Number(value) : undefined)
+                }
+              />
+            </div>
+            <div className="col-span-3">
               <div className="mb-1.5 text-[12px] font-medium text-[#161823]">数据源</div>
               <Select
                 value={draft.dataSourceId}
@@ -778,8 +847,8 @@ export default function SqlTaskEditor({
         onOk={() => void executeRun(runInput)}
       >
         <div className="space-y-4 pt-2">
-          {draft.parameters.map((parameter) => (
-            <div key={parameter.name || Math.random()}>
+          {draft.parameters.map((parameter, index) => (
+            <div key={`${parameter.name || 'parameter'}-${index}`}>
               <div className="mb-1.5 flex items-center gap-2 text-[12px] font-medium text-[#161823]">
                 {parameter.name || '未命名参数'}
                 <Tag className="!m-0">{parameter.type}</Tag>

@@ -44,6 +44,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
@@ -52,6 +53,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
     po.setName(name);
     po.setDescription(description);
     po.setProjectId(projectId);
+    po.setDirectoryId(directoryId);
     po.setDataSourceId(dataSourceId);
     po.setSqlText(sql);
     po.setParameterJson(jsonCodec.write(parameters));
@@ -84,6 +86,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
@@ -95,6 +98,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
                 .set(SqlTaskPO::getName, name)
                 .set(SqlTaskPO::getDescription, description)
                 .set(SqlTaskPO::getProjectId, projectId)
+                .set(SqlTaskPO::getDirectoryId, directoryId)
                 .set(SqlTaskPO::getDataSourceId, dataSourceId)
                 .set(SqlTaskPO::getSqlText, sql)
                 .set(SqlTaskPO::getParameterJson, jsonCodec.write(parameters))
@@ -265,6 +269,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
         po.getName(),
         po.getDescription(),
         po.getProjectId(),
+        po.getDirectoryId(),
         po.getDataSourceId(),
         po.getSqlText(),
         jsonCodec.readParameters(po.getParameterJson()),

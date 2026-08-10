@@ -14,6 +14,7 @@ public final class SqlDevelopmentModel {
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters,

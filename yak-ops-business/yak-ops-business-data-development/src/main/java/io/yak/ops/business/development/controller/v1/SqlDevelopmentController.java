@@ -41,6 +41,7 @@ public class SqlDevelopmentController {
         request.name(),
         request.description(),
         request.projectId(),
+        request.directoryId(),
         request.dataSourceId(),
         request.sql(),
         request.parameters()));
@@ -70,6 +71,7 @@ public class SqlDevelopmentController {
         request.name(),
         request.description(),
         request.projectId(),
+        request.directoryId(),
         request.dataSourceId(),
         request.sql(),
         request.parameters()));

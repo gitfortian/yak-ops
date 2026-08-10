@@ -16,6 +16,7 @@ public final class SqlDevelopmentApi {
       @NotBlank String name,
       String description,
       @Min(1) Long projectId,
+      @Min(0) Long directoryId,
       @NotNull @Min(1) Long dataSourceId,
       @NotBlank String sql,
       List<SqlParameterDefinition> parameters) {
@@ -26,6 +27,7 @@ public final class SqlDevelopmentApi {
       @NotBlank String name,
       String description,
       @Min(1) Long projectId,
+      @Min(0) Long directoryId,
       @NotNull @Min(1) Long dataSourceId,
       @NotBlank String sql,
       List<SqlParameterDefinition> parameters) {
