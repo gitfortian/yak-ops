@@ -48,16 +48,24 @@ public class SqlDevelopmentService {
   public Definition create(
       String name,
       String description,
+      Long projectId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
+    long normalizedProjectId = requirePositive(projectId, "项目 ID");
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     return repository.insertDefinition(
-        requireText(name, "任务名称"), trimToNull(description), dataSourceId, sql.trim(), normalized);
+        requireText(name, "任务名称"),
+        trimToNull(description),
+        normalizedProjectId,
+        dataSourceId,
+        sql.trim(),
+        normalized);
   }
 
-  public List<Definition> list() {
-    return repository.listDefinitions();
+  public List<Definition> list(Long projectId) {
+    if (projectId == null) return repository.listDefinitions();
+    return repository.listDefinitions(requirePositive(projectId, "项目 ID"));
   }
 
   public Definition get(Long id) {
@@ -70,16 +78,19 @@ public class SqlDevelopmentService {
       long baseRevision,
       String name,
       String description,
+      Long projectId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
     requireDefinition(id);
+    long normalizedProjectId = requirePositive(projectId, "项目 ID");
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     boolean updated = repository.updateDraft(
         id,
         baseRevision,
         requireText(name, "任务名称"),
         trimToNull(description),
+        normalizedProjectId,
         dataSourceId,
         sql.trim(),
         normalized);
@@ -202,6 +213,11 @@ public class SqlDevelopmentService {
     if (id == null || id <= 0L) throw new IllegalArgumentException("SQL 任务 ID 不合法：" + id);
     return repository.findDefinition(id)
         .orElseThrow(() -> new IllegalArgumentException("SQL 任务不存在：" + id));
+  }
+
+  private long requirePositive(Long value, String name) {
+    if (value == null || value <= 0L) throw new IllegalArgumentException(name + "不合法：" + value);
+    return value;
   }
 
   private String workflowTaskId(Long id) {
