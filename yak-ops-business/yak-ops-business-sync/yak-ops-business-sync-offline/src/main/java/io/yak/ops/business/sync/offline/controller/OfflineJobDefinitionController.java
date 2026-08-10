@@ -1,7 +1,7 @@
 package io.yak.ops.business.sync.offline.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.framework.common.PagingResult;
+import io.yak.framework.common.PagingData;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.service.OfflineJobDefinitionService;
@@ -67,9 +67,9 @@ public class OfflineJobDefinitionController {
   }
 
   @PostMapping("/page")
-  public PagingResult<OfflineJobDefinitionVO> page(
+  public Result<PagingData<OfflineJobDefinitionVO>> page(
       @Valid @RequestBody(required = false) OfflineJobDefinitionQueryDTO queryDTO) {
-    return PagingResult.success(service.page(queryDTO));
+    return Result.success(service.page(queryDTO));
   }
 
   @PutMapping("/{id}/online")
