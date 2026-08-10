@@ -1,23 +1,29 @@
 import { Input, Modal, Select, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { DevelopmentDirectory, DevelopmentTaskType } from '../types';
+import type {
+  DevelopmentDirectory,
+  DevelopmentId,
+  DevelopmentTaskType,
+} from '../types';
 
 interface CreateTaskModalProps {
   open: boolean;
   type: DevelopmentTaskType;
   directories: DevelopmentDirectory[];
-  defaultProjectId?: number;
-  defaultDirectoryId?: number;
+  defaultProjectId?: DevelopmentId;
+  defaultDirectoryId?: DevelopmentId;
   loading?: boolean;
   onCancel: () => void;
   onNext: (
     type: DevelopmentTaskType,
-    projectId: number | undefined,
-    directoryId: number | undefined,
+    projectId: DevelopmentId | undefined,
+    directoryId: DevelopmentId | undefined,
     name: string,
   ) => void;
 }
+
+const ROOT_VALUE = '__root__';
 
 export default function CreateTaskModal({
   open,
@@ -30,8 +36,8 @@ export default function CreateTaskModal({
   onNext,
 }: CreateTaskModalProps) {
   const [type, setType] = useState<DevelopmentTaskType>(initialType);
-  const [projectId, setProjectId] = useState<number>();
-  const [directoryId, setDirectoryId] = useState<number>();
+  const [projectId, setProjectId] = useState<DevelopmentId>();
+  const [directoryId, setDirectoryId] = useState<DevelopmentId>();
   const [name, setName] = useState('');
 
   const typeOptions = useMemo(
@@ -44,10 +50,10 @@ export default function CreateTaskModal({
 
   const pathOptions = useMemo(
     () => [
-      { label: '/', value: 0 },
+      { label: '/', value: ROOT_VALUE },
       ...directories.map((directory) => ({
         label: directory.path,
-        value: Number(directory.id),
+        value: directory.id,
       })),
     ],
     [directories],
@@ -65,12 +71,7 @@ export default function CreateTaskModal({
 
   const submit = () => {
     if (!normalizedName || loading) return;
-    onNext(
-      type,
-      projectId,
-      directoryId && directoryId > 0 ? directoryId : undefined,
-      normalizedName,
-    );
+    onNext(type, projectId, directoryId, normalizedName);
   };
 
   return (
@@ -106,13 +107,16 @@ export default function CreateTaskModal({
           路径：
         </Typography.Text>
         <Select
-          value={directoryId ?? 0}
+          value={directoryId ?? ROOT_VALUE}
           options={pathOptions}
           showSearch
           optionFilterProp="label"
           className="w-full"
           disabled={loading}
-          onChange={(value) => setDirectoryId(Number(value) || undefined)}
+          onChange={(value) => {
+            const selected = String(value);
+            setDirectoryId(selected === ROOT_VALUE ? undefined : selected);
+          }}
         />
 
         <Typography.Text className="text-[13px] text-[#344054]">
