@@ -8,6 +8,7 @@
                name,
                description,
                project_id,
+               directory_id,
                data_source_id,
                sql_text,
                parameter_json,
