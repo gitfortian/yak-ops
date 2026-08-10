@@ -126,20 +126,17 @@ export default function SqlTaskEditor({
   initialProjectId,
   initialDirectoryId,
 }: SqlTaskEditorProps) {
-  const { projects, currentProject } = useSecurityProject();
+  const { projects } = useSecurityProject();
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
-    projectId:
-      initialProjectId ??
-      (currentProject?.id ? Number(currentProject.id) : undefined),
+    projectId: initialProjectId,
     directoryId: initialDirectoryId,
   }));
   const [directories, setDirectories] = useState<DevelopmentDirectory[]>([]);
-  const [directoryLoading, setDirectoryLoading] = useState(false);
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
   const [versions, setVersions] = useState<SqlTaskVersion[]>([]);
   const [execution, setExecution] = useState<SqlTaskExecution>();
-  const [loading, setLoading] = useState(Boolean(taskId));
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [running, setRunning] = useState(false);
@@ -176,9 +173,13 @@ export default function SqlTaskEditor({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const dataSourceResponse = await fetchDataSourceAll();
+      const [dataSourceResponse, directoryResponse] = await Promise.all([
+        fetchDataSourceAll(),
+        listDevelopmentDirectories(),
+      ]);
       const sourceResult = responseData(dataSourceResponse, '查询数据源失败');
       setDataSources(sourceResult?.bizData || []);
+      setDirectories(responseData(directoryResponse, '查询数据开发目录失败') || []);
 
       if (!taskId) return;
       const [taskResponse, versionResponse] = await Promise.all([
@@ -197,33 +198,6 @@ export default function SqlTaskEditor({
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!draft.projectId) {
-      setDirectories([]);
-      return undefined;
-    }
-
-    let active = true;
-    setDirectoryLoading(true);
-    void listDevelopmentDirectories(draft.projectId)
-      .then((response) => {
-        if (!active) return;
-        setDirectories(responseData(response, '查询数据开发目录失败') || []);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setDirectories([]);
-        message.error(error instanceof Error ? error.message : '查询数据开发目录失败');
-      })
-      .finally(() => {
-        if (active) setDirectoryLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [draft.projectId]);
 
   useEffect(() => {
     setRunInput((previous) => {
@@ -246,10 +220,9 @@ export default function SqlTaskEditor({
     const timer = window.setInterval(async () => {
       try {
         const response = await getSqlTaskExecution(Number(execution.id));
-        const current = responseData(response, '查询 SQL 执行状态失败');
-        setExecution(current);
+        setExecution(responseData(response, '查询 SQL 执行状态失败'));
       } catch {
-        // Keep the last known execution state and allow the next poll to retry.
+        // Keep the last known execution state and retry on the next interval.
       }
     }, 1200);
     return () => window.clearInterval(timer);
@@ -262,7 +235,6 @@ export default function SqlTaskEditor({
 
   const validateDraft = () => {
     if (!draft.name.trim()) throw new Error('请输入任务名称');
-    if (!draft.projectId) throw new Error('请选择所属项目');
     if (!draft.dataSourceId) throw new Error('请选择数据源');
     if (!draft.sql.trim()) throw new Error('请输入 SQL');
     const names = new Set<string>();
@@ -280,7 +252,7 @@ export default function SqlTaskEditor({
   const savePayload = (): SqlTaskSavePayload => ({
     name: draft.name.trim(),
     description: draft.description.trim() || undefined,
-    projectId: Number(draft.projectId),
+    projectId: draft.projectId ? Number(draft.projectId) : draft.id ? 0 : undefined,
     directoryId: draft.directoryId ? Number(draft.directoryId) : 0,
     dataSourceId: Number(draft.dataSourceId),
     sql: draft.sql,
@@ -303,9 +275,7 @@ export default function SqlTaskEditor({
         : await createSqlTask(payload);
       const saved = responseData(response, '保存 SQL 草稿失败');
       setDraft(toDraft(saved));
-      if (!draft.id) {
-        history.replace(`/data-development/task/${saved.id}`);
-      }
+      if (!draft.id) history.replace(`/data-development/task/${saved.id}`);
       if (showSuccess) message.success('草稿已保存');
       return saved;
     } finally {
@@ -326,8 +296,7 @@ export default function SqlTaskEditor({
     try {
       const saved = await persistDraft(false);
       const response = await runSqlTask(Number(saved.id), input);
-      const current = responseData(response, '启动 SQL 执行失败');
-      setExecution(current);
+      setExecution(responseData(response, '启动 SQL 执行失败'));
       setRunModalOpen(false);
       message.success('SQL 已提交执行');
     } catch (error) {
@@ -375,11 +344,10 @@ export default function SqlTaskEditor({
   const handleCancelExecution = async () => {
     if (!execution?.id) return;
     try {
-      const current = responseData(
+      setExecution(responseData(
         await cancelSqlTaskExecution(Number(execution.id)),
         '取消 SQL 执行失败',
-      );
-      setExecution(current);
+      ));
       message.success('已提交取消');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '取消 SQL 执行失败');
@@ -391,12 +359,7 @@ export default function SqlTaskEditor({
       ...previous,
       parameters: [
         ...previous.parameters,
-        {
-          name: '',
-          type: 'STRING',
-          required: false,
-          defaultValue: undefined,
-        },
+        { name: '', type: 'STRING', required: false, defaultValue: undefined },
       ],
     }));
   };
@@ -599,12 +562,8 @@ export default function SqlTaskEditor({
       );
     }
 
-    const resultColumns = Array.isArray(output.columns)
-      ? (output.columns as string[])
-      : [];
-    const rows = Array.isArray(output.rows)
-      ? (output.rows as Record<string, unknown>[])
-      : [];
+    const resultColumns = Array.isArray(output.columns) ? (output.columns as string[]) : [];
+    const rows = Array.isArray(output.rows) ? (output.rows as Record<string, unknown>[]) : [];
     return (
       <div>
         {header}
@@ -719,18 +678,10 @@ export default function SqlTaskEditor({
             </div>
           </div>
           <Space>
-            <Button
-              icon={<Save size={14} />}
-              loading={saving}
-              onClick={() => void handleSave()}
-            >
+            <Button icon={<Save size={14} />} loading={saving} onClick={() => void handleSave()}>
               保存
             </Button>
-            <Button
-              icon={<Play size={14} />}
-              loading={running}
-              onClick={handleRun}
-            >
+            <Button icon={<Play size={14} />} loading={running} onClick={handleRun}>
               运行
             </Button>
             <Button
@@ -756,21 +707,16 @@ export default function SqlTaskEditor({
               />
             </div>
             <div className="col-span-3">
-              <div className="mb-1.5 text-[12px] font-medium text-[#161823]">所属项目</div>
+              <div className="mb-1.5 text-[12px] font-medium text-[#161823]">所属项目（可选）</div>
               <Select
+                allowClear
                 value={draft.projectId}
                 className="w-full"
                 showSearch
                 optionFilterProp="label"
-                placeholder="请选择项目"
+                placeholder="未归属项目"
                 options={projectOptions}
-                onChange={(value) =>
-                  setDraft((previous) => ({
-                    ...previous,
-                    projectId: Number(value),
-                    directoryId: undefined,
-                  }))
-                }
+                onChange={(value) => updateDraftField('projectId', value ? Number(value) : undefined)}
               />
             </div>
             <div className="col-span-3">
@@ -781,8 +727,6 @@ export default function SqlTaskEditor({
                 showSearch
                 optionFilterProp="label"
                 placeholder="/"
-                loading={directoryLoading}
-                disabled={!draft.projectId}
                 options={directoryOptions}
                 onChange={(value) =>
                   updateDraftField('directoryId', Number(value) > 0 ? Number(value) : undefined)
@@ -852,9 +796,7 @@ export default function SqlTaskEditor({
               <div className="mb-1.5 flex items-center gap-2 text-[12px] font-medium text-[#161823]">
                 {parameter.name || '未命名参数'}
                 <Tag className="!m-0">{parameter.type}</Tag>
-                {parameter.required && (
-                  <span className="text-[rgba(254,44,85,1)]">*</span>
-                )}
+                {parameter.required && <span className="text-[rgba(254,44,85,1)]">*</span>}
               </div>
               <Input
                 value={
