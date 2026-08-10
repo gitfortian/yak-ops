@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** First-phase SQL data-development backend. */
@@ -39,6 +40,7 @@ public class SqlDevelopmentController {
     return Result.success(service.create(
         request.name(),
         request.description(),
+        request.projectId(),
         request.dataSourceId(),
         request.sql(),
         request.parameters()));
@@ -46,8 +48,9 @@ public class SqlDevelopmentController {
 
   @Operation(summary = "查询 SQL 开发任务")
   @GetMapping
-  public Result<List<Definition>> list() {
-    return Result.success(service.list());
+  public Result<List<Definition>> list(
+      @RequestParam(name = "projectId", required = false) Long projectId) {
+    return Result.success(service.list(projectId));
   }
 
   @Operation(summary = "查询 SQL 开发任务详情")
@@ -66,6 +69,7 @@ public class SqlDevelopmentController {
         request.baseRevision(),
         request.name(),
         request.description(),
+        request.projectId(),
         request.dataSourceId(),
         request.sql(),
         request.parameters()));

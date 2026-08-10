@@ -43,6 +43,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
   public Definition insertDefinition(
       String name,
       String description,
+      Long projectId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
@@ -50,6 +51,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
     SqlTaskPO po = new SqlTaskPO();
     po.setName(name);
     po.setDescription(description);
+    po.setProjectId(projectId);
     po.setDataSourceId(dataSourceId);
     po.setSqlText(sql);
     po.setParameterJson(jsonCodec.write(parameters));
@@ -68,12 +70,11 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
   }
 
   @Override
-  public List<Definition> listDefinitions() {
-    return taskMapper.selectList(
-            new LambdaQueryWrapper<SqlTaskPO>().orderByDesc(SqlTaskPO::getUpdateTime))
-        .stream()
-        .map(this::toDefinition)
-        .toList();
+  public List<Definition> listDefinitions(Long projectId) {
+    LambdaQueryWrapper<SqlTaskPO> query = new LambdaQueryWrapper<>();
+    if (projectId != null) query.eq(SqlTaskPO::getProjectId, projectId);
+    query.orderByDesc(SqlTaskPO::getUpdateTime);
+    return taskMapper.selectList(query).stream().map(this::toDefinition).toList();
   }
 
   @Override
@@ -82,6 +83,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
       long baseRevision,
       String name,
       String description,
+      Long projectId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
@@ -92,6 +94,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
                 .eq(SqlTaskPO::getDraftRevision, baseRevision)
                 .set(SqlTaskPO::getName, name)
                 .set(SqlTaskPO::getDescription, description)
+                .set(SqlTaskPO::getProjectId, projectId)
                 .set(SqlTaskPO::getDataSourceId, dataSourceId)
                 .set(SqlTaskPO::getSqlText, sql)
                 .set(SqlTaskPO::getParameterJson, jsonCodec.write(parameters))
@@ -261,6 +264,7 @@ public class SqlDevelopmentRepositoryAdapter implements SqlDevelopmentRepository
         po.getId(),
         po.getName(),
         po.getDescription(),
+        po.getProjectId(),
         po.getDataSourceId(),
         po.getSqlText(),
         jsonCodec.readParameters(po.getParameterJson()),
