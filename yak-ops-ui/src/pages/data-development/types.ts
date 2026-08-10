@@ -10,6 +10,22 @@ export type SqlParameterType =
   | 'DATE'
   | 'TIMESTAMP';
 
+export interface DevelopmentDirectory {
+  id: number;
+  projectId: number;
+  parentId?: number | null;
+  name: string;
+  path: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface CreateDevelopmentDirectoryPayload {
+  projectId: number;
+  parentId?: number;
+  name: string;
+}
+
 export interface SqlParameterDefinition {
   name: string;
   type: SqlParameterType;
@@ -22,6 +38,7 @@ export interface SqlTaskDefinition {
   name: string;
   description?: string | null;
   projectId?: number | null;
+  directoryId?: number | null;
   dataSourceId: number;
   sql: string;
   parameters: SqlParameterDefinition[];
@@ -62,6 +79,8 @@ export interface SqlTaskSavePayload {
   name: string;
   description?: string;
   projectId: number;
+  /** 0 表示项目根目录。 */
+  directoryId: number;
   dataSourceId: number;
   sql: string;
   parameters: SqlParameterDefinition[];
