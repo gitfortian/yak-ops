@@ -1,4 +1,4 @@
-import { FolderTree } from 'lucide-react';
+import { Folder } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 interface YakEmptyProps {
@@ -27,7 +27,7 @@ const YakEmpty = ({
         compact ? 'h-10 w-10' : 'h-12 w-12',
       ].join(' ')}
     >
-      <FolderTree size={compact ? 20 : 24} strokeWidth={1.4} />
+      <Folder size={compact ? 20 : 24} strokeWidth={1.4} />
     </div>
     <div className="mt-3 text-[13px] font-medium text-[#667085]">{title}</div>
     {description ? (
