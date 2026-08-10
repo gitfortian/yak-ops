@@ -7,11 +7,11 @@ import java.util.Optional;
 /** Durable directory repository for data-development organization metadata. */
 public interface DevelopmentDirectoryRepository {
 
-  DevelopmentDirectory insert(Long projectId, Long parentId, String name);
+  DevelopmentDirectory insert(Long parentId, String name);
 
   Optional<DevelopmentDirectory> findById(Long id);
 
-  List<DevelopmentDirectory> listByProjectId(Long projectId);
+  List<DevelopmentDirectory> list();
 
-  boolean existsByName(Long projectId, Long parentId, String name);
+  boolean existsByName(Long parentId, String name);
 }
