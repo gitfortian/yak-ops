@@ -7,23 +7,35 @@ import {
   ChevronLeft,
   ChevronRight,
   Code2,
+  Copy,
+  FileText,
   Folder,
   FolderPlus,
+  Pencil,
   Plus,
   Search,
   TerminalSquare,
+  Trash2,
 } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 
 export type DevelopmentTreeNodeType = 'directory' | 'node';
 export type DevelopmentNodeCreateType = 'SQL' | 'SHELL';
+export type DevelopmentTreeAction =
+  | 'create-directory'
+  | 'create-sql'
+  | 'create-shell'
+  | 'copy-name'
+  | 'copy-path'
+  | 'rename'
+  | 'delete';
 
 export interface DevelopmentTreeNode extends DataNode {
   key: string;
   title: string;
   nodeType: DevelopmentTreeNodeType;
-  directoryId?: number;
-  nodeId?: number;
+  resourceId: string;
+  resourcePath: string;
   taskType?: string;
   searchText?: string;
   children?: DevelopmentTreeNode[];
@@ -38,6 +50,10 @@ interface DevelopmentTreePaneProps {
   collapsed: boolean;
   onCreateDirectory: () => void;
   onCreateNode: (type: DevelopmentNodeCreateType) => void;
+  onResourceAction: (
+    action: DevelopmentTreeAction,
+    node: DevelopmentTreeNode,
+  ) => void;
   onSearchChange: (value: string) => void;
   onSelect: TreeProps['onSelect'];
   onResizeStart: (event: ReactPointerEvent) => void;
@@ -53,6 +69,7 @@ const DevelopmentTreePane = ({
   collapsed,
   onCreateDirectory,
   onCreateNode,
+  onResourceAction,
   onSearchChange,
   onSelect,
   onResizeStart,
@@ -83,49 +100,116 @@ const DevelopmentTreePane = ({
     },
   ];
 
+  const contextMenuItems = (node: DevelopmentTreeNode): MenuProps['items'] => {
+    const commonItems: MenuProps['items'] = [
+      {
+        key: 'copy-name',
+        label: '复制名称',
+        icon: <Copy size={14} strokeWidth={1.8} />,
+      },
+      {
+        key: 'copy-path',
+        label: '复制路径',
+        icon: <FileText size={14} strokeWidth={1.8} />,
+      },
+      { type: 'divider' },
+      {
+        key: 'rename',
+        label: '重命名',
+        icon: <Pencil size={14} strokeWidth={1.8} />,
+      },
+      {
+        key: 'delete',
+        label: '删除',
+        icon: <Trash2 size={14} strokeWidth={1.8} />,
+        danger: true,
+      },
+    ];
+
+    if (node.nodeType !== 'directory') return commonItems;
+    return [
+      {
+        key: 'create-node',
+        label: '新建节点',
+        icon: <Code2 size={14} strokeWidth={1.8} />,
+        children: [
+          {
+            key: 'create-sql',
+            label: 'SQL 节点',
+            icon: <Code2 size={14} strokeWidth={1.8} />,
+          },
+          {
+            key: 'create-shell',
+            label: 'Shell 节点',
+            icon: <TerminalSquare size={14} strokeWidth={1.8} />,
+          },
+        ],
+      },
+      {
+        key: 'create-directory',
+        label: '新建目录',
+        icon: <FolderPlus size={14} strokeWidth={1.8} />,
+      },
+      { type: 'divider' },
+      ...commonItems,
+    ];
+  };
+
   const renderTitle: TreeProps['titleRender'] = (rawNode) => {
     const node = rawNode as DevelopmentTreeNode;
     const isNode = node.nodeType === 'node';
 
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-2" title={node.title}>
-        {isNode ? (
-          node.taskType === 'SHELL' ? (
-            <TerminalSquare
-              size={13}
-              strokeWidth={1.8}
-              className="shrink-0 text-[#667085]"
-            />
+      <Dropdown
+        trigger={['contextMenu']}
+        menu={{
+          items: contextMenuItems(node),
+          triggerSubMenuAction: 'hover',
+          subMenuOpenDelay: 0.05,
+          subMenuCloseDelay: 0.1,
+          onClick: ({ key }) =>
+            onResourceAction(key as DevelopmentTreeAction, node),
+        }}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2" title={node.title}>
+          {isNode ? (
+            node.taskType === 'SHELL' ? (
+              <TerminalSquare
+                size={13}
+                strokeWidth={1.8}
+                className="shrink-0 text-[#667085]"
+              />
+            ) : (
+              <Code2
+                size={13}
+                strokeWidth={1.8}
+                className="shrink-0 text-[#667085]"
+              />
+            )
           ) : (
-            <Code2
-              size={13}
+            <Folder
+              size={14}
               strokeWidth={1.8}
-              className="shrink-0 text-[#667085]"
+              className="shrink-0 text-[#98a2b3]"
             />
-          )
-        ) : (
-          <Folder
-            size={14}
-            strokeWidth={1.8}
-            className="shrink-0 text-[#98a2b3]"
-          />
-        )}
+          )}
 
-        <span
-          className={[
-            'min-w-0 flex-1 truncate text-[13px] leading-8',
-            isNode ? 'font-normal text-[#344054]' : 'font-medium text-[#1f2937]',
-          ].join(' ')}
-        >
-          {node.title}
-        </span>
-
-        {isNode && node.taskType ? (
-          <span className="shrink-0 text-[10px] text-[#98a2b3]">
-            {node.taskType}
+          <span
+            className={[
+              'min-w-0 flex-1 truncate text-[13px] leading-8',
+              isNode ? 'font-normal text-[#344054]' : 'font-medium text-[#1f2937]',
+            ].join(' ')}
+          >
+            {node.title}
           </span>
-        ) : null}
-      </div>
+
+          {isNode && node.taskType ? (
+            <span className="shrink-0 text-[10px] text-[#98a2b3]">
+              {node.taskType}
+            </span>
+          ) : null}
+        </div>
+      </Dropdown>
     );
   };
 
@@ -259,14 +343,8 @@ const DevelopmentTreePane = ({
       </div>
 
       <style>{`
-        .development-tree.ant-tree {
-          color: #344054;
-        }
-
-        .development-tree .ant-tree-list-holder-inner {
-          gap: 1px;
-        }
-
+        .development-tree.ant-tree { color: #344054; }
+        .development-tree .ant-tree-list-holder-inner { gap: 1px; }
         .development-tree .ant-tree-treenode {
           box-sizing: border-box;
           width: 100%;
@@ -276,12 +354,8 @@ const DevelopmentTreePane = ({
           border-radius: 0;
           transition: background-color 0.15s ease;
         }
-
         .development-tree .ant-tree-treenode:hover,
-        .development-tree .ant-tree-treenode:has(.ant-tree-node-selected) {
-          background: #f5f5f5;
-        }
-
+        .development-tree .ant-tree-treenode:has(.ant-tree-node-selected) { background: #f5f5f5; }
         .development-tree .ant-tree-node-content-wrapper {
           display: flex;
           min-width: 0;
@@ -293,22 +367,12 @@ const DevelopmentTreePane = ({
           background: transparent !important;
           line-height: 30px;
         }
-
         .development-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
           color: #1f2937;
           background: transparent !important;
         }
-
-        .development-tree .ant-tree-title {
-          display: flex;
-          min-width: 0;
-          flex: 1;
-        }
-
-        .development-tree .ant-tree-indent-unit {
-          width: 18px;
-        }
-
+        .development-tree .ant-tree-title { display: flex; min-width: 0; flex: 1; }
+        .development-tree .ant-tree-indent-unit { width: 18px; }
         .development-tree .ant-tree-switcher {
           display: inline-flex;
           width: 18px;
@@ -319,18 +383,9 @@ const DevelopmentTreePane = ({
           color: #98a2b3;
           line-height: 30px;
         }
-
-        .development-tree .ant-tree-switcher svg {
-          transition: transform 0.15s ease;
-        }
-
-        .development-tree .ant-tree-switcher_close svg {
-          transform: rotate(-90deg);
-        }
-
-        .development-tree .ant-tree-switcher-noop {
-          width: 18px;
-        }
+        .development-tree .ant-tree-switcher svg { transition: transform 0.15s ease; }
+        .development-tree .ant-tree-switcher_close svg { transform: rotate(-90deg); }
+        .development-tree .ant-tree-switcher-noop { width: 18px; }
       `}</style>
     </>
   );
