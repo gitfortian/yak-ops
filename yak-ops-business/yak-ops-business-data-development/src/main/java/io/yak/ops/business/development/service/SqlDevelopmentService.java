@@ -57,7 +57,7 @@ public class SqlDevelopmentService {
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
-    Long normalizedProjectId = normalizeProjectId(projectId);
+    Long normalizedProjectId = normalizeProjectAssignment(projectId);
     Long normalizedDirectoryId = normalizeDirectoryAssignment(directoryId);
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     return repository.insertDefinition(
@@ -95,7 +95,9 @@ public class SqlDevelopmentService {
       String sql,
       List<SqlParameterDefinition> parameters) {
     Definition current = requireDefinition(id);
-    Long normalizedProjectId = projectId == null ? current.projectId() : normalizeProjectId(projectId);
+    Long normalizedProjectId = projectId == null
+        ? current.projectId()
+        : normalizeProjectAssignment(projectId);
     Long normalizedDirectoryId = directoryId == null
         ? current.directoryId()
         : normalizeDirectoryAssignment(directoryId);
@@ -240,8 +242,8 @@ public class SqlDevelopmentService {
         .orElseThrow(() -> new IllegalArgumentException("SQL 任务不存在：" + id));
   }
 
-  private Long normalizeProjectId(Long value) {
-    return value == null ? null : requirePositive(value, "项目 ID");
+  private Long normalizeProjectAssignment(Long value) {
+    return value == null || value <= 0L ? null : value;
   }
 
   private long requirePositive(Long value, String name) {
