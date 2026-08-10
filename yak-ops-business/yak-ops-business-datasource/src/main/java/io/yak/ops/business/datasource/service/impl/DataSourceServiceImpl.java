@@ -1,10 +1,10 @@
 package io.yak.ops.business.datasource.service.impl;
 
+import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
-import io.yak.ops.business.datasource.domain.DataSourcePage;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
@@ -103,10 +103,8 @@ public class DataSourceServiceImpl implements DataSourceService {
 
   @Override
   public PagingData<DataSourceVO> getDataSourcePage(DataSourceQueryDTO queryDTO) {
-    DataSourcePage<DataSourceDefinition> page = repository.page(toQuery(queryDTO));
-    List<DataSourceVO> records =
-        page.records().stream().map(value -> viewMapper.definition(value, false)).toList();
-    return pagingData(records, page.total(), page.pageNo(), page.pageSize(), page.pages());
+    PageData<DataSourceDefinition> page = repository.page(toQuery(queryDTO));
+    return PagingData.from(page.map(value -> viewMapper.definition(value, false)));
   }
 
   @Override
@@ -120,7 +118,9 @@ public class DataSourceServiceImpl implements DataSourceService {
         repository.findAll(null).stream()
             .map(value -> viewMapper.definition(value, false))
             .toList();
-    return pagingData(records, records.size(), 1L, Math.max(1, records.size()), records.isEmpty() ? 0L : 1L);
+    long pages = records.isEmpty() ? 0L : 1L;
+    long pageSize = Math.max(1, records.size());
+    return PagingData.from(new PageData<>(records, records.size(), pages, 1L, pageSize));
   }
 
   @Override
@@ -325,23 +325,5 @@ public class DataSourceServiceImpl implements DataSourceService {
           "不支持的连接状态：" + value,
           exception);
     }
-  }
-
-  private PagingData<DataSourceVO> pagingData(
-      List<DataSourceVO> records,
-      long total,
-      long pageNo,
-      long pageSize,
-      long pages) {
-    PagingData<DataSourceVO> pagingData = new PagingData<>();
-    pagingData.setBizData(records);
-    pagingData.setPagination(
-        PagingData.Pagination.builder()
-            .total(total)
-            .pages(pages)
-            .pageNo(pageNo)
-            .pageSize(pageSize)
-            .build());
-    return pagingData;
   }
 }
