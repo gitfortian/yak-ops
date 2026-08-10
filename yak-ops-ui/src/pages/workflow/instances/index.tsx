@@ -435,7 +435,7 @@ const WorkflowInstancesPage = () => {
   );
 
   return (
-    <div className="min-h-[calc(100vh-48px)] bg-white px-5 py-4">
+    <div className="min-h-[calc(100vh-64px)] bg-white px-5 py-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h1 className="m-0 text-[20px] font-semibold text-[#161823]">工作流实例</h1>

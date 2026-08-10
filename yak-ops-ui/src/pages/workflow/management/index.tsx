@@ -1010,7 +1010,7 @@ const WorkflowManagementPage = () => {
       >
         <div
           className={[
-            'min-h-[calc(100vh-48px)]',
+            'min-h-[calc(100vh-64px)]',
             'bg-[#f7f8fa]',
             'text-[#161823]',
             'max-[1280px]:p-[22px]',
