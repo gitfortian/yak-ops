@@ -2,16 +2,17 @@ import { API_SUCCESS_CODE } from '@/services/http/response';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import { fetchDataSourceAll } from '@/pages/data-source/service';
 import type { DataSourceRecord } from '@/pages/data-source/types';
+import { BRAND_THEME } from '@/styles/brand';
 import { history } from '@umijs/max';
 import {
   Button,
+  ConfigProvider,
   Empty,
   Input,
+  Pagination,
   Select,
-  Spin,
   Table,
   Tag,
-  Typography,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -82,6 +83,30 @@ const responseData = <T,>(
   return response.data;
 };
 
+const taskTableClassName = [
+  'compact-development-task-table',
+  '[&_.ant-table]:!text-[13px]',
+  '[&_.ant-table-container]:!rounded-none',
+  '[&_.ant-table-container]:!border-[#eaecf0]',
+  '[&_.ant-table-cell]:!align-middle',
+  '[&_.ant-table-thead>tr>th]:!h-10',
+  '[&_.ant-table-thead>tr>th]:!bg-[#f8f9fb]',
+  '[&_.ant-table-thead>tr>th]:!px-4',
+  '[&_.ant-table-thead>tr>th]:!py-2',
+  '[&_.ant-table-thead>tr>th]:!text-[12px]',
+  '[&_.ant-table-thead>tr>th]:!font-medium',
+  '[&_.ant-table-thead>tr>th]:!text-[#667085]',
+  '[&_.ant-table-thead>tr>th]:!border-[#eaecf0]',
+  '[&_.ant-table-tbody>tr>td]:!px-4',
+  '[&_.ant-table-tbody>tr>td]:!py-2.5',
+  '[&_.ant-table-tbody>tr>td]:!border-[#f0f2f5]',
+  '[&_.ant-table-tbody>tr>td]:!text-[#667085]',
+  '[&_.ant-table-tbody>tr:hover>td]:!bg-[#fafbfc]',
+  '[&_.ant-table-cell-fix-right]:!bg-white',
+  '[&_.ant-table-tbody>tr:hover_.ant-table-cell-fix-right]:!bg-[#fafbfc]',
+  '[&_.ant-table-placeholder>td]:!h-[240px]',
+].join(' ');
+
 export default function DataDevelopmentPage() {
   const { projects, currentProject } = useSecurityProject();
   const [tasks, setTasks] = useState<DevelopmentTaskRow[]>([]);
@@ -92,12 +117,15 @@ export default function DataDevelopmentPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
+  const [keywordDraft, setKeywordDraft] = useState('');
   const [keyword, setKeyword] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | DevelopmentTaskType>('ALL');
   const [publishFilter, setPublishFilter] = useState<PublishFilter>('ALL');
   const [selectedNode, setSelectedNode] = useState<TreeFilterKey>('all');
   const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const loadDirectories = useCallback(async () => {
     setTreeLoading(true);
@@ -267,6 +295,25 @@ export default function DataDevelopmentPage() {
     });
   }, [keyword, publishFilter, selectedNode, tasks, typeFilter]);
 
+  useEffect(() => {
+    setCurrent(1);
+  }, [keyword, publishFilter, selectedNode, typeFilter]);
+
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
+    if (current > lastPage) setCurrent(lastPage);
+  }, [current, filteredTasks.length, pageSize]);
+
+  const pagedTasks = useMemo(() => {
+    const start = (current - 1) * pageSize;
+    return filteredTasks.slice(start, start + pageSize);
+  }, [current, filteredTasks, pageSize]);
+
+  const applySearch = () => {
+    setKeyword(keywordDraft.trim());
+    setCurrent(1);
+  };
+
   const openTask = (task: DevelopmentTaskRow) => {
     history.push(`/data-development/task/${task.id}`);
   };
@@ -276,14 +323,17 @@ export default function DataDevelopmentPage() {
       title: '任务名称',
       dataIndex: 'name',
       minWidth: 260,
+      fixed: 'left',
       render: (_, task) => (
         <button
           type="button"
           className="border-0 bg-transparent p-0 text-left"
           onClick={() => openTask(task)}
         >
-          <div className="font-medium text-[#161823] hover:underline">{task.name}</div>
-          <div className="mt-1 max-w-[420px] truncate text-[12px] text-[rgba(22,24,35,.45)]">
+          <div className="font-medium text-[#161823] hover:text-[#fe2c55]">
+            {task.name}
+          </div>
+          <div className="mt-1 max-w-[420px] truncate text-[11px] text-[#98a2b3]">
             {task.description || `SQL Task · ${task.id}`}
           </div>
         </button>
@@ -294,7 +344,7 @@ export default function DataDevelopmentPage() {
       dataIndex: 'type',
       width: 100,
       render: () => (
-        <Tag className="!m-0 !border-[#e4e7ec] !bg-[#f7f7f8] !text-[#161823]">
+        <Tag className="!m-0 !border-[#e4e7ec] !bg-[#f7f7f8] !text-[#344054]">
           SQL
         </Tag>
       ),
@@ -310,10 +360,10 @@ export default function DataDevelopmentPage() {
           ? directoryMap.get(Number(task.directoryId))?.path || `目录 #${task.directoryId}`
           : '/';
         return (
-          <div className="min-w-0">
-            <div className="truncate text-[#344054]">{projectName}</div>
-            <div className="mt-0.5 truncate text-[11px] text-[rgba(22,24,35,.38)]">
-              {path}
+          <div className="min-w-0 py-0.5">
+            <div className="truncate text-[#344054]">{path}</div>
+            <div className="mt-1 truncate text-[11px] text-[#98a2b3]">
+              {projectName}
             </div>
           </div>
         );
@@ -325,7 +375,16 @@ export default function DataDevelopmentPage() {
       width: 180,
       render: (value: number) => {
         const source = dataSourceMap.get(Number(value));
-        return source ? `${source.name || '-'} · ${source.dbType || '-'}` : `#${value}`;
+        return source ? (
+          <div className="min-w-0 py-0.5">
+            <div className="truncate text-[#344054]">{source.name || '-'}</div>
+            <div className="mt-1 truncate text-[11px] text-[#98a2b3]">
+              {source.dbType || '-'}
+            </div>
+          </div>
+        ) : (
+          `#${value}`
+        );
       },
     },
     {
@@ -333,9 +392,9 @@ export default function DataDevelopmentPage() {
       width: 140,
       render: (_, task) =>
         task.latestVersionNo > 0 ? (
-          <span className="text-[#161823]">已发布 · V{task.latestVersionNo}</span>
+          <span className="text-[#344054]">已发布 · V{task.latestVersionNo}</span>
         ) : (
-          <span className="text-[rgba(22,24,35,.45)]">草稿</span>
+          <span className="text-[#98a2b3]">草稿</span>
         ),
     },
     {
@@ -349,7 +408,7 @@ export default function DataDevelopmentPage() {
       width: 90,
       fixed: 'right',
       render: (_, task) => (
-        <Button type="link" className="!px-0" onClick={() => openTask(task)}>
+        <Button type="link" size="small" className="!px-0" onClick={() => openTask(task)}>
           配置
         </Button>
       ),
@@ -409,132 +468,163 @@ export default function DataDevelopmentPage() {
   };
 
   return (
-    <section className="m-4 overflow-hidden rounded-xl border border-[#e4e7ec] bg-white">
-      <div className="flex h-[calc(100vh-80px)] min-h-[620px]">
-        <DevelopmentTreePane
-          treeData={treeData}
-          treeLoading={treeLoading}
-          selectedNodeKey={selectedNode}
-          leftWidth={leftWidth}
-          collapsed={leftCollapsed}
-          onCreateDirectory={openCreateDirectory}
-          onResizeStart={handleResizeStart}
-          onCollapsedChange={setLeftCollapsed}
-          onSelect={(keys) => {
-            const key = keys[0];
-            if (key) setSelectedNode(String(key) as TreeFilterKey);
+    <ConfigProvider theme={BRAND_THEME}>
+      <div className="flex h-[calc(100vh-64px)] min-h-[640px] flex-col overflow-hidden bg-white">
+        <header className="shrink-0 border-b border-[#e8e9ec] px-5 py-3">
+          <h1 className="m-0 text-[22px] font-semibold leading-8 text-[#161823]">
+            数据开发
+          </h1>
+        </header>
+
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <DevelopmentTreePane
+            treeData={treeData}
+            treeLoading={treeLoading}
+            selectedNodeKey={selectedNode}
+            leftWidth={leftWidth}
+            collapsed={leftCollapsed}
+            onCreateDirectory={openCreateDirectory}
+            onResizeStart={handleResizeStart}
+            onCollapsedChange={setLeftCollapsed}
+            onSelect={(keys) => {
+              const key = keys[0];
+              if (key) setSelectedNode(String(key) as TreeFilterKey);
+            }}
+          />
+
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3">
+            <div className="shrink-0 border-b border-[#eceef0] pb-2">
+              <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto">
+                <Button
+                  type="primary"
+                  icon={<Plus size={14} />}
+                  className="shrink-0"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  新建任务
+                </Button>
+
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <Input
+                    allowClear
+                    variant="filled"
+                    value={keywordDraft}
+                    onChange={(event) => setKeywordDraft(event.target.value)}
+                    onPressEnter={applySearch}
+                    prefix={<Search size={14} className="text-[#98a2b3]" />}
+                    placeholder="搜索任务名称或描述"
+                    className="w-[220px]"
+                  />
+
+                  <Select
+                    variant="filled"
+                    value={typeFilter}
+                    className="w-[120px]"
+                    options={[
+                      { label: '全部类型', value: 'ALL' },
+                      { label: 'SQL', value: 'SQL' },
+                    ]}
+                    onChange={setTypeFilter}
+                  />
+
+                  <Select
+                    variant="filled"
+                    value={publishFilter}
+                    className="w-[130px]"
+                    options={[
+                      { label: '全部状态', value: 'ALL' },
+                      { label: '草稿', value: 'DRAFT' },
+                      { label: '已发布', value: 'PUBLISHED' },
+                    ]}
+                    onChange={setPublishFilter}
+                  />
+
+                  <Button onClick={applySearch}>查询</Button>
+
+                  <Button
+                    aria-label="刷新"
+                    icon={<RefreshCw size={14} />}
+                    onClick={() => {
+                      void load();
+                      void loadDirectories();
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto pt-2">
+              <Table<DevelopmentTaskRow>
+                rowKey="id"
+                size="small"
+                bordered
+                loading={loading}
+                pagination={false}
+                columns={columns}
+                dataSource={pagedTasks}
+                scroll={{ x: 1180 }}
+                className={taskTableClassName}
+                locale={{
+                  emptyText: (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="当前目录暂无数据开发任务"
+                    />
+                  ),
+                }}
+              />
+            </div>
+
+            <div className="flex shrink-0 justify-end border-t border-[#f0f2f5] pt-3">
+              <Pagination
+                size="small"
+                current={current}
+                pageSize={pageSize}
+                total={filteredTasks.length}
+                showSizeChanger
+                showTotal={(value) => `共 ${value} 条`}
+                onChange={(nextCurrent, nextPageSize) => {
+                  if (nextPageSize !== pageSize) {
+                    setPageSize(nextPageSize);
+                    setCurrent(1);
+                    return;
+                  }
+                  setCurrent(nextCurrent);
+                }}
+              />
+            </div>
+          </main>
+        </div>
+
+        <CreateTaskModal
+          open={createOpen}
+          projects={projects}
+          defaultProjectId={
+            projectIdForSelection
+            ?? (currentProject?.id ? Number(currentProject.id) : undefined)
+          }
+          onCancel={() => setCreateOpen(false)}
+          onNext={(type, projectId) => {
+            setCreateOpen(false);
+            const params = new URLSearchParams();
+            params.set('type', type);
+            params.set('directoryId', String(directoryIdForSelection || 0));
+            if (projectId) params.set('projectId', String(projectId));
+            history.push(`/data-development/task/new?${params.toString()}`);
           }}
         />
 
-        <main className="min-w-0 flex-1 overflow-auto">
-          <div className="flex items-start justify-between gap-4 px-6 pb-4 pt-5">
-            <div>
-              <Typography.Title level={4} className="!mb-1 !text-[#161823]">
-                数据开发
-              </Typography.Title>
-              <Typography.Text className="text-[12px] text-[rgba(22,24,35,.45)]">
-                统一管理 SQL、Shell、HTTP、Python 等开发任务；当前阶段开放 SQL。
-              </Typography.Text>
-            </div>
-            <Button
-              type="primary"
-              icon={<Plus size={15} />}
-              onClick={() => setCreateOpen(true)}
-            >
-              新建任务
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 border-y border-[#eceef1] bg-[#fafafa] px-6 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <Input
-                value={keyword}
-                allowClear
-                prefix={<Search size={14} className="text-[rgba(22,24,35,.34)]" />}
-                placeholder="搜索任务名称或描述"
-                className="w-[260px]"
-                onChange={(event) => setKeyword(event.target.value)}
-              />
-              <Select
-                value={typeFilter}
-                className="w-[120px]"
-                options={[
-                  { label: '全部类型', value: 'ALL' },
-                  { label: 'SQL', value: 'SQL' },
-                ]}
-                onChange={setTypeFilter}
-              />
-              <Select
-                value={publishFilter}
-                className="w-[130px]"
-                options={[
-                  { label: '全部状态', value: 'ALL' },
-                  { label: '草稿', value: 'DRAFT' },
-                  { label: '已发布', value: 'PUBLISHED' },
-                ]}
-                onChange={setPublishFilter}
-              />
-            </div>
-            <Button
-              icon={<RefreshCw size={14} />}
-              onClick={() => {
-                void load();
-                void loadDirectories();
-              }}
-            >
-              刷新
-            </Button>
-          </div>
-
-          <Spin spinning={loading}>
-            <Table<DevelopmentTaskRow>
-              rowKey="id"
-              size="small"
-              pagination={{ pageSize: 15, showSizeChanger: false }}
-              columns={columns}
-              dataSource={filteredTasks}
-              scroll={{ x: 1180 }}
-              locale={{
-                emptyText: (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="当前目录暂无数据开发任务"
-                  />
-                ),
-              }}
-            />
-          </Spin>
-        </main>
+        <CreateDirectoryModal
+          open={directoryOpen}
+          directories={directories}
+          defaultParentId={directoryIdForSelection}
+          loading={directorySaving}
+          onCancel={() => {
+            if (!directorySaving) setDirectoryOpen(false);
+          }}
+          onSubmit={(parentId, name) => void submitDirectory(parentId, name)}
+        />
       </div>
-
-      <CreateTaskModal
-        open={createOpen}
-        projects={projects}
-        defaultProjectId={
-          projectIdForSelection
-          ?? (currentProject?.id ? Number(currentProject.id) : undefined)
-        }
-        onCancel={() => setCreateOpen(false)}
-        onNext={(type, projectId) => {
-          setCreateOpen(false);
-          const params = new URLSearchParams();
-          params.set('type', type);
-          params.set('directoryId', String(directoryIdForSelection || 0));
-          if (projectId) params.set('projectId', String(projectId));
-          history.push(`/data-development/task/new?${params.toString()}`);
-        }}
-      />
-
-      <CreateDirectoryModal
-        open={directoryOpen}
-        directories={directories}
-        defaultParentId={directoryIdForSelection}
-        loading={directorySaving}
-        onCancel={() => {
-          if (!directorySaving) setDirectoryOpen(false);
-        }}
-        onSubmit={(parentId, name) => void submitDirectory(parentId, name)}
-      />
-    </section>
+    </ConfigProvider>
   );
 }
