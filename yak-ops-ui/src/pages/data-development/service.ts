@@ -3,7 +3,9 @@ import HttpUtils from '@/utils/HttpUtils';
 
 import type {
   CreateDevelopmentDirectoryPayload,
+  CreateDevelopmentNodePayload,
   DevelopmentDirectory,
+  DevelopmentNode,
   SqlTaskDefinition,
   SqlTaskExecution,
   SqlTaskSavePayload,
@@ -14,6 +16,7 @@ import type {
 const DATA_DEVELOPMENT_API = '/api/v1/data-development';
 const SQL_TASK_API = `${DATA_DEVELOPMENT_API}/sql-tasks`;
 const DIRECTORY_API = `${DATA_DEVELOPMENT_API}/directories`;
+const NODE_API = `${DATA_DEVELOPMENT_API}/nodes`;
 
 const queryString = (params: Record<string, unknown>) => {
   const search = new URLSearchParams();
@@ -33,6 +36,14 @@ export const createDevelopmentDirectory = (
   payload: CreateDevelopmentDirectoryPayload,
 ): Promise<ApiResponse<DevelopmentDirectory>> =>
   HttpUtils.post<DevelopmentDirectory>(DIRECTORY_API, payload);
+
+export const listDevelopmentNodes = (): Promise<ApiResponse<DevelopmentNode[]>> =>
+  HttpUtils.get<DevelopmentNode[]>(NODE_API);
+
+export const createDevelopmentNode = (
+  payload: CreateDevelopmentNodePayload,
+): Promise<ApiResponse<DevelopmentNode>> =>
+  HttpUtils.post<DevelopmentNode>(NODE_API, payload);
 
 export const listSqlTasks = (
   projectId?: number,

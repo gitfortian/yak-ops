@@ -1,6 +1,7 @@
+import YakEmpty from '@/components/YakEmpty';
 import type { DataNode } from 'antd/es/tree';
 import type { MenuProps, TreeProps } from 'antd';
-import { Button, Dropdown, Empty, Input, Spin, Tooltip, Tree } from 'antd';
+import { Button, Dropdown, Input, Spin, Tooltip, Tree } from 'antd';
 import {
   ChevronDown,
   ChevronLeft,
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 
-export type DevelopmentTreeNodeType = 'root' | 'directory' | 'task';
+export type DevelopmentTreeNodeType = 'root' | 'directory' | 'node';
 export type DevelopmentNodeCreateType = 'SQL' | 'SHELL';
 
 export interface DevelopmentTreeNode extends DataNode {
@@ -22,8 +23,9 @@ export interface DevelopmentTreeNode extends DataNode {
   title: string;
   nodeType: DevelopmentTreeNodeType;
   directoryId?: number;
-  taskId?: number;
+  nodeId?: number;
   taskType?: string;
+  configured?: boolean;
   searchText?: string;
   children?: DevelopmentTreeNode[];
 }
@@ -84,19 +86,27 @@ const DevelopmentTreePane = ({
 
   const renderTitle: TreeProps['titleRender'] = (rawNode) => {
     const node = rawNode as DevelopmentTreeNode;
-    const isTask = node.nodeType === 'task';
+    const isNode = node.nodeType === 'node';
 
     return (
       <div
         className="flex min-w-0 flex-1 items-center gap-2"
         title={node.title}
       >
-        {isTask ? (
-          <Code2
-            size={13}
-            strokeWidth={1.8}
-            className="shrink-0 text-[#667085]"
-          />
+        {isNode ? (
+          node.taskType === 'SHELL' ? (
+            <TerminalSquare
+              size={13}
+              strokeWidth={1.8}
+              className="shrink-0 text-[#667085]"
+            />
+          ) : (
+            <Code2
+              size={13}
+              strokeWidth={1.8}
+              className="shrink-0 text-[#667085]"
+            />
+          )
         ) : (
           <Folder
             size={14}
@@ -111,13 +121,13 @@ const DevelopmentTreePane = ({
         <span
           className={[
             'min-w-0 flex-1 truncate text-[13px] leading-8',
-            isTask ? 'font-normal text-[#344054]' : 'font-medium text-[#1f2937]',
+            isNode ? 'font-normal text-[#344054]' : 'font-medium text-[#1f2937]',
           ].join(' ')}
         >
           {node.title}
         </span>
 
-        {isTask && node.taskType ? (
+        {isNode && node.taskType ? (
           <span className="shrink-0 text-[10px] text-[#98a2b3]">
             {node.taskType}
           </span>
@@ -201,10 +211,14 @@ const DevelopmentTreePane = ({
                   className="development-tree bg-transparent"
                 />
               ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={searchValue.trim() ? '未找到匹配节点' : '暂无开发节点'}
-                  className="mt-10"
+                <YakEmpty
+                  compact
+                  title={searchValue.trim() ? '未找到匹配节点' : '暂无开发节点'}
+                  description={
+                    searchValue.trim()
+                      ? '换个关键词试试'
+                      : '点击右上角 + 创建目录或节点'
+                  }
                 />
               )}
             </Spin>
