@@ -111,8 +111,9 @@ public class SqlTaskExecutor implements TaskExecutor {
     RunningControl control = new RunningControl();
     RunningControl duplicateControl = running.putIfAbsent(executionId, control);
     if (duplicateControl != null) return toTaskExecution(execution);
-    control.future = executorService.submit(
-        () -> execute(execution.id(), config.dataSourceId(), parsed, definition.parameters(), input, control));
+      Execution finalExecution = execution;
+      control.future = executorService.submit(
+        () -> execute(finalExecution.id(), config.dataSourceId(), parsed, definition.parameters(), input, control));
     return toTaskExecution(execution);
   }
 
