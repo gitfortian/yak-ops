@@ -26,12 +26,8 @@ const queryString = (params: Record<string, unknown>) => {
   return result ? `?${result}` : '';
 };
 
-export const listDevelopmentDirectories = (
-  projectId: number,
-): Promise<ApiResponse<DevelopmentDirectory[]>> =>
-  HttpUtils.get<DevelopmentDirectory[]>(
-    `${DIRECTORY_API}${queryString({ projectId })}`,
-  );
+export const listDevelopmentDirectories = (): Promise<ApiResponse<DevelopmentDirectory[]>> =>
+  HttpUtils.get<DevelopmentDirectory[]>(DIRECTORY_API);
 
 export const createDevelopmentDirectory = (
   payload: CreateDevelopmentDirectoryPayload,
