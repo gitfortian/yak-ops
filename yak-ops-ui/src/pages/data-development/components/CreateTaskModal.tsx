@@ -10,7 +10,7 @@ interface CreateTaskModalProps {
   projects: API.ProjectBrief[];
   defaultProjectId?: number;
   onCancel: () => void;
-  onNext: (type: DevelopmentTaskType, projectId: number) => void;
+  onNext: (type: DevelopmentTaskType, projectId?: number) => void;
 }
 
 const taskTypes: Array<{
@@ -71,11 +71,8 @@ export default function CreateTaskModal({
   useEffect(() => {
     if (!open) return;
     setType('SQL');
-    setProjectId(
-      defaultProjectId ??
-        (projects[0]?.id === undefined ? undefined : Number(projects[0].id)),
-    );
-  }, [defaultProjectId, open, projects]);
+    setProjectId(defaultProjectId);
+  }, [defaultProjectId, open]);
 
   return (
     <Modal
@@ -84,26 +81,24 @@ export default function CreateTaskModal({
       width={720}
       okText="下一步"
       cancelText="取消"
-      okButtonProps={{ disabled: !projectId }}
       destroyOnClose
       onCancel={onCancel}
-      onOk={() => {
-        if (projectId) onNext(type, projectId);
-      }}
+      onOk={() => onNext(type, projectId)}
     >
       <div className="pt-2">
         <div className="mb-5">
           <Typography.Text className="mb-2 block text-[13px] font-medium text-[#161823]">
-            所属项目
+            所属项目（可选）
           </Typography.Text>
           <Select
+            allowClear
             value={projectId}
             options={projectOptions}
             className="w-full"
-            placeholder="请选择项目"
+            placeholder="可选，未选择则不归属项目"
             showSearch
             optionFilterProp="label"
-            onChange={(value) => setProjectId(Number(value))}
+            onChange={(value) => setProjectId(value ? Number(value) : undefined)}
           />
         </div>
 
