@@ -1,8 +1,8 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import java.util.Optional;
 
 /** 离线同步任务定义领域仓储。 */
@@ -14,6 +14,6 @@ public interface OfflineJobDefinitionRepository {
   boolean update(OfflineJobDefinition definition);
   boolean delete(Long id);
   boolean existsByName(String jobName, Long excludeId);
-  OfflinePage<OfflineJobDefinition> page(OfflineDefinitionQuery query);
-  OfflinePage<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query);
+  PageData<OfflineJobDefinition> page(OfflineDefinitionQuery query);
+  PageData<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query);
 }
