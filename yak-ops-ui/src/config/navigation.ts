@@ -27,7 +27,8 @@ export interface NavigationGroupWithRoutes extends NavigationGroup {
 
 export const navigationGroups: readonly NavigationGroup[] = [
   { id: 'integration', title: '数据集成', iconKey: 'sync', section: 'task', order: 10 },
-  { id: 'workflow', title: '工作流', iconKey: 'workflow', section: 'task', order: 20 },
+  { id: 'development', title: '数据开发', iconKey: 'api', section: 'task', order: 20 },
+  { id: 'workflow', title: '工作流', iconKey: 'workflow', section: 'task', order: 30 },
   { id: 'resources', title: '资源管理', iconKey: 'database', section: 'management', order: 20 },
   { id: 'data-quality', title: '数据质量', iconKey: 'quality', section: 'management', order: 30 },
   { id: 'system', title: '系统管理', iconKey: 'system', section: 'system', order: 40 },
@@ -46,6 +47,9 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'batch-link-up-single', path: '/sync/batch-link-up/:id/config/single', title: '单表同步配置', component: './batch-link-up/config/single', hidden: true, parentId: 'batch-link-up' },
   { id: 'batch-link-up-multi', path: '/sync/batch-link-up/:id/config/multi', title: '多表同步配置', component: './batch-link-up/config/multi', hidden: true, parentId: 'batch-link-up' },
   { id: 'batch-link-up-script', path: '/sync/batch-link-up/:id/config/script', title: '脚本同步配置', component: './batch-link-up/config/script', hidden: true, parentId: 'batch-link-up' },
+  { id: 'data-development', mode: 'public', path: '/data-development', title: '开发任务', component: './data-development', iconKey: 'api', menuGroup: 'development', order: 10 },
+  { id: 'data-development-task-new', path: '/data-development/task/new', title: '新建开发任务', component: './data-development/task', hidden: true, parentId: 'data-development' },
+  { id: 'data-development-task', path: '/data-development/task/:id', title: '开发任务配置', component: './data-development/task', hidden: true, parentId: 'data-development' },
   { id: 'workflow-definition', mode: 'public', path: '/workflow/definitions', title: '工作流定义', component: './workflow/management', iconKey: 'workflow', menuGroup: 'workflow', order: 10 },
   { id: 'workflow-definition-editor', path: '/workflow/definition/:id', title: '工作流配置', component: './workflow/definition', hidden: true, parentId: 'workflow-definition' },
   { id: 'workflow-instances', mode: 'public', path: '/workflow/instances', title: '工作流实例', component: './workflow/instances', iconKey: 'instance', menuGroup: 'workflow', order: 20 },
