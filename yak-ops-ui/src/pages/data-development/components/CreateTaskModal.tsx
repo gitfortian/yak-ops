@@ -1,5 +1,6 @@
 import { Modal, Select, Tag, Typography } from 'antd';
 import { Braces, Code2, Globe2, TerminalSquare } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { DevelopmentTaskType } from '../types';
@@ -16,7 +17,7 @@ const taskTypes: Array<{
   type: DevelopmentTaskType;
   title: string;
   description: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   enabled: boolean;
 }> = [
   {
