@@ -1,8 +1,8 @@
 package io.yak.ops.business.job.task;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import io.yak.ops.business.sync.offline.service.OfflineJobDefinitionService;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -69,7 +69,7 @@ public class InMemoryTaskRegistry implements TaskRegistry {
     Map<String, TaskVersionSnapshot> versionSnapshot = new LinkedHashMap<>();
     int pageNo = 1;
     while (true) {
-      OfflinePage<OfflineJobDefinition> page = service.pageDomain(
+      PageData<OfflineJobDefinition> page = service.pageDomain(
           new OfflineDefinitionQuery(
               pageNo,
               PAGE_SIZE,
