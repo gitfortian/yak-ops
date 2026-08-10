@@ -14,7 +14,7 @@
     <artifactId>yak-ops-business-data-development</artifactId>
 
     <name>Yak Ops Business Data Development</name>
-    <description>SQL authoring, immutable versions and task execution integration</description>
+    <description>Data-development directory and resource-node metadata</description>
 
     <dependencies>
         <dependency>
@@ -23,15 +23,7 @@
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-job</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-business-datasource</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-datasource-api</artifactId>
         </dependency>
 
         <dependency>
@@ -49,10 +41,6 @@
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-jsqlparser-4.9</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>

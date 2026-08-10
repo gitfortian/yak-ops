@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
-/** SQL development shares the Yak business database but owns its migration history. */
+/** Data-development tree metadata shares the Yak business database and owns its migrations. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     prefix = "yak.database",
@@ -22,10 +22,10 @@ import org.springframework.context.annotation.Import;
 @MapperScan(
     basePackages = "io.yak.ops.business.development.dao.mapper",
     sqlSessionFactoryRef = "yakBusinessSqlSessionFactory")
-public class SqlDevelopmentPersistenceConfiguration {
+public class DataDevelopmentPersistenceConfiguration {
 
-  @Bean(initMethod = "migrate", name = "sqlDevelopmentFlyway")
-  public Flyway sqlDevelopmentFlyway(
+  @Bean(initMethod = "migrate", name = "dataDevelopmentFlyway")
+  public Flyway dataDevelopmentFlyway(
       @Qualifier("yakBusinessDataSource") DataSource dataSource) {
     return Flyway.configure()
         .dataSource(dataSource)

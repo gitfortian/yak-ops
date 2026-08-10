@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 
-export type DevelopmentTreeNodeType = 'root' | 'directory' | 'node';
+export type DevelopmentTreeNodeType = 'directory' | 'node';
 export type DevelopmentNodeCreateType = 'SQL' | 'SHELL';
 
 export interface DevelopmentTreeNode extends DataNode {
@@ -25,7 +25,6 @@ export interface DevelopmentTreeNode extends DataNode {
   directoryId?: number;
   nodeId?: number;
   taskType?: string;
-  configured?: boolean;
   searchText?: string;
   children?: DevelopmentTreeNode[];
 }
@@ -89,10 +88,7 @@ const DevelopmentTreePane = ({
     const isNode = node.nodeType === 'node';
 
     return (
-      <div
-        className="flex min-w-0 flex-1 items-center gap-2"
-        title={node.title}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-2" title={node.title}>
         {isNode ? (
           node.taskType === 'SHELL' ? (
             <TerminalSquare
@@ -111,10 +107,7 @@ const DevelopmentTreePane = ({
           <Folder
             size={14}
             strokeWidth={1.8}
-            className={[
-              'shrink-0',
-              node.nodeType === 'root' ? 'text-[#475467]' : 'text-[#98a2b3]',
-            ].join(' ')}
+            className="shrink-0 text-[#98a2b3]"
           />
         )}
 
@@ -194,10 +187,7 @@ const DevelopmentTreePane = ({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-[14px]">
-            <Spin
-              spinning={treeLoading}
-              wrapperClassName="block min-h-full"
-            >
+            <Spin spinning={treeLoading} wrapperClassName="block min-h-full">
               {treeData.length ? (
                 <Tree
                   blockNode
@@ -288,8 +278,7 @@ const DevelopmentTreePane = ({
         }
 
         .development-tree .ant-tree-treenode:hover,
-        .development-tree
-          .ant-tree-treenode:has(.ant-tree-node-selected) {
+        .development-tree .ant-tree-treenode:has(.ant-tree-node-selected) {
           background: #f5f5f5;
         }
 
@@ -305,8 +294,7 @@ const DevelopmentTreePane = ({
           line-height: 30px;
         }
 
-        .development-tree
-          .ant-tree-node-content-wrapper.ant-tree-node-selected {
+        .development-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
           color: #1f2937;
           background: transparent !important;
         }
