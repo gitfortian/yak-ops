@@ -40,7 +40,8 @@ public class DevelopmentNodeService {
     Long normalizedProjectId = normalizeProjectId(projectId);
     Long normalizedDirectoryId = normalizeDirectoryId(directoryId);
 
-    if (normalizedDirectoryId != null && directoryRepository.findById(normalizedDirectoryId).isEmpty()) {
+    if (normalizedDirectoryId != null
+        && directoryRepository.findById(normalizedDirectoryId).isEmpty()) {
       throw new IllegalArgumentException("数据开发目录不存在：" + normalizedDirectoryId);
     }
     if (repository.existsByName(normalizedDirectoryId, normalizedName)) {
@@ -58,9 +59,11 @@ public class DevelopmentNodeService {
   private String normalizeName(String name) {
     if (name == null || name.isBlank()) throw new IllegalArgumentException("节点名称不能为空");
     String normalized = name.trim();
-    if (normalized.length() > 200) throw new IllegalArgumentException("节点名称不能超过 200 个字符");
+    if (normalized.length() > 200) {
+      throw new IllegalArgumentException("节点名称不能超过 200 个字符");
+    }
     if (normalized.contains("/") || normalized.contains("\\")) {
-      throw new IllegalArgumentException("节点名称不能包含 / 或 \\");
+      throw new IllegalArgumentException("节点名称不能包含路径分隔符");
     }
     return normalized;
   }
