@@ -1,23 +1,7 @@
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
-import { fetchDataSourceAll } from '@/pages/data-source/service';
-import type { DataSourceRecord } from '@/pages/data-source/types';
 import { BRAND_THEME } from '@/styles/brand';
-import { history } from '@umijs/max';
-import {
-  Button,
-  ConfigProvider,
-  Empty,
-  Input,
-  Pagination,
-  Select,
-  Table,
-  Tag,
-  message,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import dayjs from 'dayjs';
-import { RefreshCw, Search } from 'lucide-react';
+import { ConfigProvider, message } from 'antd';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -32,29 +16,22 @@ import {
   createDevelopmentNode,
   listDevelopmentDirectories,
   listDevelopmentNodes,
-  listSqlTasks,
 } from './service';
-import type {
-  DevelopmentDirectory,
-  DevelopmentNode,
-  DevelopmentTaskRow,
-  DevelopmentTaskType,
-} from './types';
+import type { DevelopmentDirectory, DevelopmentNode } from './types';
 
-type TreeFilterKey = 'root' | `directory:${number}` | `node:${number}`;
-type PublishFilter = 'ALL' | 'DRAFT' | 'PUBLISHED';
+type TreeNodeKey = `directory:${number}` | `node:${number}`;
 
-const DEFAULT_LEFT_WIDTH = 272;
+const DEFAULT_LEFT_WIDTH = 300;
 const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_WIDTH = 440;
 const LEFT_WIDTH_STORAGE_KEY = 'yak-data-development.left-width';
 
-const directoryKey = (directoryId: number): TreeFilterKey =>
+const directoryKey = (directoryId: number): TreeNodeKey =>
   `directory:${directoryId}`;
-const nodeKey = (nodeId: number): TreeFilterKey => `node:${nodeId}`;
+const nodeKey = (nodeId: number): TreeNodeKey => `node:${nodeId}`;
 
-const numberFromKey = (key: string, prefix: string) => {
-  if (!key.startsWith(prefix)) return undefined;
+const numberFromKey = (key: string | undefined, prefix: string) => {
+  if (!key?.startsWith(prefix)) return undefined;
   const value = Number(key.substring(prefix.length));
   return Number.isFinite(value) && value > 0 ? value : undefined;
 };
@@ -70,9 +47,6 @@ const initialLeftWidth = () => {
     : DEFAULT_LEFT_WIDTH;
 };
 
-const formatTime = (value?: string) =>
-  value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-';
-
 const responseData = <T,>(
   response: { code?: number; data?: T; msg?: string; message?: string },
   fallback: string,
@@ -83,53 +57,21 @@ const responseData = <T,>(
   return response.data;
 };
 
-const taskTableClassName = [
-  'compact-development-task-table',
-  '[&_.ant-table]:!text-[13px]',
-  '[&_.ant-table-container]:!rounded-none',
-  '[&_.ant-table-container]:!border-[#eaecf0]',
-  '[&_.ant-table-cell]:!align-middle',
-  '[&_.ant-table-thead>tr>th]:!h-10',
-  '[&_.ant-table-thead>tr>th]:!bg-[#f8f9fb]',
-  '[&_.ant-table-thead>tr>th]:!px-4',
-  '[&_.ant-table-thead>tr>th]:!py-2',
-  '[&_.ant-table-thead>tr>th]:!text-[12px]',
-  '[&_.ant-table-thead>tr>th]:!font-medium',
-  '[&_.ant-table-thead>tr>th]:!text-[#667085]',
-  '[&_.ant-table-thead>tr>th]:!border-[#eaecf0]',
-  '[&_.ant-table-tbody>tr>td]:!px-4',
-  '[&_.ant-table-tbody>tr>td]:!py-2.5',
-  '[&_.ant-table-tbody>tr>td]:!border-[#f0f2f5]',
-  '[&_.ant-table-tbody>tr>td]:!text-[#667085]',
-  '[&_.ant-table-tbody>tr:hover>td]:!bg-[#fafbfc]',
-  '[&_.ant-table-cell-fix-right]:!bg-white',
-  '[&_.ant-table-tbody>tr:hover_.ant-table-cell-fix-right]:!bg-[#fafbfc]',
-  '[&_.ant-table-placeholder>td]:!h-[240px]',
-].join(' ');
-
 export default function DataDevelopmentPage() {
-  const { projects, currentProject } = useSecurityProject();
-  const [tasks, setTasks] = useState<DevelopmentTaskRow[]>([]);
-  const [nodes, setNodes] = useState<DevelopmentNode[]>([]);
+  const { currentProject } = useSecurityProject();
   const [directories, setDirectories] = useState<DevelopmentDirectory[]>([]);
-  const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [nodes, setNodes] = useState<DevelopmentNode[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
+  const [treeKeyword, setTreeKeyword] = useState('');
+  const [selectedNodeKey, setSelectedNodeKey] = useState<TreeNodeKey>();
+  const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [createType, setCreateType] = useState<DevelopmentNodeCreateType>('SQL');
   const [nodeSaving, setNodeSaving] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
-  const [treeKeyword, setTreeKeyword] = useState('');
-  const [keywordDraft, setKeywordDraft] = useState('');
-  const [keyword, setKeyword] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | DevelopmentTaskType>('ALL');
-  const [publishFilter, setPublishFilter] = useState<PublishFilter>('ALL');
-  const [selectedNode, setSelectedNode] = useState<TreeFilterKey>('root');
-  const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [current, setCurrent] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
 
   const loadTree = useCallback(async () => {
     setTreeLoading(true);
@@ -149,66 +91,28 @@ export default function DataDevelopmentPage() {
     }
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [taskResponse, dataSourceResponse] = await Promise.all([
-        listSqlTasks(),
-        fetchDataSourceAll(),
-      ]);
-      const taskList = responseData(taskResponse, '查询数据开发任务失败');
-      const sourceResult = responseData(dataSourceResponse, '查询数据源失败');
-      setTasks(
-        (taskList || []).map((task) => ({
-          ...task,
-          type: 'SQL' as const,
-        })),
-      );
-      setDataSources(sourceResult?.bizData || []);
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '查询数据开发任务失败');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void load();
     void loadTree();
-  }, [load, loadTree]);
+  }, [loadTree]);
 
-  const projectNameMap = useMemo(
-    () => new Map(projects.map((project) => [Number(project.id), project.projectName])),
-    [projects],
-  );
-  const dataSourceMap = useMemo(
-    () => new Map(dataSources.map((item) => [Number(item.id), item])),
-    [dataSources],
-  );
-  const directoryMap = useMemo(
-    () => new Map(directories.map((directory) => [Number(directory.id), directory])),
-    [directories],
-  );
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [Number(node.id), node])),
     [nodes],
   );
 
-  const selectedResourceNodeId = useMemo(
-    () => numberFromKey(selectedNode, 'node:'),
-    [selectedNode],
-  );
   const directoryIdForSelection = useMemo(() => {
-    const selectedDirectoryId = numberFromKey(selectedNode, 'directory:');
+    const selectedDirectoryId = numberFromKey(selectedNodeKey, 'directory:');
     if (selectedDirectoryId) return selectedDirectoryId;
+
+    const selectedResourceNodeId = numberFromKey(selectedNodeKey, 'node:');
     if (!selectedResourceNodeId) return undefined;
-    const resourceNode = nodeMap.get(selectedResourceNodeId);
-    return resourceNode?.directoryId ? Number(resourceNode.directoryId) : undefined;
-  }, [nodeMap, selectedNode, selectedResourceNodeId]);
+    const selectedResourceNode = nodeMap.get(selectedResourceNodeId);
+    return selectedResourceNode?.directoryId
+      ? Number(selectedResourceNode.directoryId)
+      : undefined;
+  }, [nodeMap, selectedNodeKey]);
 
   const fullTreeData = useMemo<DevelopmentTreeNode[]>(() => {
-    if (!directories.length && !nodes.length) return [];
-
     const resourceNodes = (directoryId?: number): DevelopmentTreeNode[] =>
       nodes
         .filter((node) => {
@@ -224,7 +128,6 @@ export default function DataDevelopmentPage() {
           nodeType: 'node',
           nodeId: Number(node.id),
           taskType: node.type,
-          configured: node.configured,
           searchText: `${node.name} ${node.type} ${node.id}`,
           isLeaf: true,
         }));
@@ -248,15 +151,8 @@ export default function DataDevelopmentPage() {
           };
         });
 
-    return [
-      {
-        key: 'root',
-        title: '/',
-        nodeType: 'root',
-        searchText: '/',
-        children: [...directoryNodes(), ...resourceNodes()],
-      },
-    ];
+    // `/` 仅作为逻辑根目录，不渲染为树节点。
+    return [...directoryNodes(), ...resourceNodes()];
   }, [directories, nodes]);
 
   const treeData = useMemo<DevelopmentTreeNode[]>(() => {
@@ -269,9 +165,7 @@ export default function DataDevelopmentPage() {
       values.flatMap((node) => {
         const children = node.children ? filterNodes(node.children) : [];
         const text = `${node.title} ${node.searchText || ''}`.toLowerCase();
-        const selfMatched = node.nodeType !== 'root' && text.includes(normalized);
-
-        if (selfMatched) {
+        if (text.includes(normalized)) {
           return [{ ...node, children: node.children }];
         }
         if (children.length) {
@@ -282,157 +176,6 @@ export default function DataDevelopmentPage() {
 
     return filterNodes(fullTreeData);
   }, [fullTreeData, treeKeyword]);
-
-  const filteredTasks = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    const selectedDirectoryId = numberFromKey(selectedNode, 'directory:');
-
-    return tasks.filter((task) => {
-      if (
-        selectedDirectoryId
-        && Number(task.directoryId) !== selectedDirectoryId
-      ) {
-        return false;
-      }
-      if (typeFilter !== 'ALL' && task.type !== typeFilter) return false;
-      if (publishFilter === 'DRAFT' && task.latestVersionNo > 0) return false;
-      if (publishFilter === 'PUBLISHED' && task.latestVersionNo <= 0) return false;
-      if (
-        normalizedKeyword
-        && !`${task.name} ${task.description || ''}`
-          .toLowerCase()
-          .includes(normalizedKeyword)
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [keyword, publishFilter, selectedNode, tasks, typeFilter]);
-
-  useEffect(() => {
-    setCurrent(1);
-  }, [keyword, publishFilter, selectedNode, typeFilter]);
-
-  useEffect(() => {
-    const lastPage = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
-    if (current > lastPage) setCurrent(lastPage);
-  }, [current, filteredTasks.length, pageSize]);
-
-  const pagedTasks = useMemo(() => {
-    const start = (current - 1) * pageSize;
-    return filteredTasks.slice(start, start + pageSize);
-  }, [current, filteredTasks, pageSize]);
-
-  const applySearch = () => {
-    setKeyword(keywordDraft.trim());
-    setCurrent(1);
-  };
-
-  const openTask = (task: DevelopmentTaskRow) => {
-    history.push(`/data-development/task/${task.id}`);
-  };
-
-  const columns: ColumnsType<DevelopmentTaskRow> = [
-    {
-      title: '任务名称',
-      dataIndex: 'name',
-      minWidth: 260,
-      fixed: 'left',
-      render: (_, task) => (
-        <button
-          type="button"
-          className="border-0 bg-transparent p-0 text-left"
-          onClick={() => openTask(task)}
-        >
-          <div className="font-medium text-[#161823] hover:text-[#fe2c55]">
-            {task.name}
-          </div>
-          <div className="mt-1 max-w-[420px] truncate text-[11px] text-[#98a2b3]">
-            {task.description || `SQL Task · ${task.id}`}
-          </div>
-        </button>
-      ),
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      width: 100,
-      render: () => (
-        <Tag className="!m-0 !border-[#e4e7ec] !bg-[#f7f7f8] !text-[#344054]">
-          SQL
-        </Tag>
-      ),
-    },
-    {
-      title: '所属项目 / 目录',
-      width: 220,
-      render: (_, task) => {
-        const projectName = task.projectId
-          ? projectNameMap.get(Number(task.projectId)) || `项目 ${task.projectId}`
-          : '未归属';
-        const path = task.directoryId
-          ? directoryMap.get(Number(task.directoryId))?.path || `目录 #${task.directoryId}`
-          : '/';
-        return (
-          <div className="min-w-0 py-0.5">
-            <div className="truncate text-[#344054]">{path}</div>
-            <div className="mt-1 truncate text-[11px] text-[#98a2b3]">
-              {projectName}
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      title: '数据源',
-      dataIndex: 'dataSourceId',
-      width: 180,
-      render: (value: number) => {
-        const source = dataSourceMap.get(Number(value));
-        return source ? (
-          <div className="min-w-0 py-0.5">
-            <div className="truncate text-[#344054]">{source.name || '-'}</div>
-            <div className="mt-1 truncate text-[11px] text-[#98a2b3]">
-              {source.dbType || '-'}
-            </div>
-          </div>
-        ) : (
-          `#${value}`
-        );
-      },
-    },
-    {
-      title: '状态 / 版本',
-      width: 140,
-      render: (_, task) =>
-        task.latestVersionNo > 0 ? (
-          <span className="text-[#344054]">已发布 · V{task.latestVersionNo}</span>
-        ) : (
-          <span className="text-[#98a2b3]">草稿</span>
-        ),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updateTime',
-      width: 170,
-      render: (value?: string) => formatTime(value),
-    },
-    {
-      title: '操作',
-      width: 90,
-      fixed: 'right',
-      render: (_, task) => (
-        <Button
-          type="link"
-          size="small"
-          className="!px-0"
-          onClick={() => openTask(task)}
-        >
-          配置
-        </Button>
-      ),
-    },
-  ];
 
   const handleResizeStart = useCallback(
     (event: ReactPointerEvent) => {
@@ -473,10 +216,10 @@ export default function DataDevelopmentPage() {
         await createDevelopmentDirectory({ parentId, name }),
         '新建目录失败',
       );
+      setDirectoryOpen(false);
       setTreeKeyword('');
       await loadTree();
-      setDirectoryOpen(false);
-      setSelectedNode(directoryKey(Number(created.id)));
+      setSelectedNodeKey(directoryKey(Number(created.id)));
       message.success('目录创建成功');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '新建目录失败');
@@ -486,7 +229,7 @@ export default function DataDevelopmentPage() {
   };
 
   const submitNode = async (
-    type: DevelopmentTaskType,
+    type: DevelopmentNodeCreateType,
     projectId: number | undefined,
     directoryId: number | undefined,
     name: string,
@@ -502,10 +245,10 @@ export default function DataDevelopmentPage() {
         }),
         '新建节点失败',
       );
+      setCreateOpen(false);
       setTreeKeyword('');
       await loadTree();
-      setCreateOpen(false);
-      setSelectedNode(nodeKey(Number(created.id)));
+      setSelectedNodeKey(nodeKey(Number(created.id)));
       message.success('节点创建成功');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '新建节点失败');
@@ -527,7 +270,7 @@ export default function DataDevelopmentPage() {
           <DevelopmentTreePane
             treeData={treeData}
             treeLoading={treeLoading}
-            selectedNodeKey={selectedNode}
+            selectedNodeKey={selectedNodeKey}
             searchValue={treeKeyword}
             leftWidth={leftWidth}
             collapsed={leftCollapsed}
@@ -541,100 +284,18 @@ export default function DataDevelopmentPage() {
             onCollapsedChange={setLeftCollapsed}
             onSelect={(keys) => {
               const key = keys[0];
-              if (!key) return;
-              setSelectedNode(String(key) as TreeFilterKey);
+              setSelectedNodeKey(key ? (String(key) as TreeNodeKey) : undefined);
             }}
           />
 
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3">
-            <div className="shrink-0 border-b border-[#eceef0] pb-2">
-              <div className="flex min-w-0 flex-nowrap items-center justify-end gap-2 overflow-x-auto">
-                <Input
-                  allowClear
-                  variant="filled"
-                  value={keywordDraft}
-                  onChange={(event) => setKeywordDraft(event.target.value)}
-                  onPressEnter={applySearch}
-                  prefix={<Search size={14} className="text-[#98a2b3]" />}
-                  placeholder="搜索任务名称或描述"
-                  className="w-[220px] shrink-0"
-                />
-
-                <Select
-                  variant="filled"
-                  value={typeFilter}
-                  className="w-[120px] shrink-0"
-                  options={[
-                    { label: '全部类型', value: 'ALL' },
-                    { label: 'SQL', value: 'SQL' },
-                  ]}
-                  onChange={setTypeFilter}
-                />
-
-                <Select
-                  variant="filled"
-                  value={publishFilter}
-                  className="w-[130px] shrink-0"
-                  options={[
-                    { label: '全部状态', value: 'ALL' },
-                    { label: '草稿', value: 'DRAFT' },
-                    { label: '已发布', value: 'PUBLISHED' },
-                  ]}
-                  onChange={setPublishFilter}
-                />
-
-                <Button onClick={applySearch}>查询</Button>
-
-                <Button
-                  aria-label="刷新"
-                  icon={<RefreshCw size={14} />}
-                  onClick={() => {
-                    void load();
-                    void loadTree();
-                  }}
-                />
+          <main className="flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-white">
+            <div className="text-center">
+              <div className="text-[14px] font-medium text-[#667085]">
+                选择左侧开发节点
               </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-auto pt-2">
-              <Table<DevelopmentTaskRow>
-                rowKey="id"
-                size="small"
-                bordered
-                loading={loading}
-                pagination={false}
-                columns={columns}
-                dataSource={pagedTasks}
-                scroll={{ x: 1180 }}
-                className={taskTableClassName}
-                locale={{
-                  emptyText: (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="当前目录暂无数据开发任务"
-                    />
-                  ),
-                }}
-              />
-            </div>
-
-            <div className="flex shrink-0 justify-end border-t border-[#f0f2f5] pt-3">
-              <Pagination
-                size="small"
-                current={current}
-                pageSize={pageSize}
-                total={filteredTasks.length}
-                showSizeChanger
-                showTotal={(value) => `共 ${value} 条`}
-                onChange={(nextCurrent, nextPageSize) => {
-                  if (nextPageSize !== pageSize) {
-                    setPageSize(nextPageSize);
-                    setCurrent(1);
-                    return;
-                  }
-                  setCurrent(nextCurrent);
-                }}
-              />
+              <div className="mt-1 text-[12px] text-[#98a2b3]">
+                节点编辑工作区将在下一阶段完善
+              </div>
             </div>
           </main>
         </div>
@@ -643,11 +304,11 @@ export default function DataDevelopmentPage() {
           open={createOpen}
           type={createType}
           directories={directories}
+          loading={nodeSaving}
           defaultProjectId={
             currentProject?.id ? Number(currentProject.id) : undefined
           }
           defaultDirectoryId={directoryIdForSelection}
-          loading={nodeSaving}
           onCancel={() => {
             if (!nodeSaving) setCreateOpen(false);
           }}
