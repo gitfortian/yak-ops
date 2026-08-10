@@ -1,12 +1,12 @@
 package io.yak.ops.business.datasource.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.datasource.dao.DataSourceDao.PageQuery;
 import io.yak.ops.business.datasource.dao.model.DataSourceSummaryRow;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
-import io.yak.ops.business.datasource.domain.DataSourcePage;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.domain.DataSourceSummary;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
@@ -52,7 +52,7 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
   }
 
   @Override
-  public DataSourcePage<DataSourceDefinition> page(DataSourceQuery query) {
+  public PageData<DataSourceDefinition> page(DataSourceQuery query) {
     DataSourceQuery condition =
         query == null ? new DataSourceQuery(1, 10, null, null, null, null, null) : query;
     IPage<DataSourcePO> page =
@@ -66,7 +66,7 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
                 condition.environment(),
                 condition.connStatus()));
     List<DataSourceDefinition> records = page.getRecords().stream().map(this::toDomain).toList();
-    return new DataSourcePage<>(
+    return new PageData<>(
         records,
         page.getTotal(),
         page.getPages(),
