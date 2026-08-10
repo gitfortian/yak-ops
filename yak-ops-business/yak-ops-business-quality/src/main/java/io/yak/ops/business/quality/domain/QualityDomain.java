@@ -1,5 +1,6 @@
 package io.yak.ops.business.quality.domain;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckMethod;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
@@ -23,7 +24,22 @@ import java.util.List;
 public final class QualityDomain {
   private QualityDomain() {}
 
-  public record Page<T>(List<T> records, long total) {}
+  /**
+   * 第一阶段兼容别名。Repository 对外统一暴露 {@link PageData}；该类型仅用于兼容现有 Adapter 实现。
+   *
+   * @deprecated 新代码直接使用 {@link PageData}
+   */
+  @Deprecated(forRemoval = false)
+  public static class Page<T> extends PageData<T> {
+    public Page(List<T> records, long total) {
+      super(
+          records,
+          total,
+          total == 0L ? 0L : 1L,
+          1L,
+          records == null ? 0L : records.size());
+    }
+  }
 
   public record Template(
       Long id, String code, String name, String description,
