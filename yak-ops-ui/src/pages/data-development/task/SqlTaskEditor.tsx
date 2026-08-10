@@ -57,6 +57,7 @@ import {
 
 interface SqlTaskEditorProps {
   taskId?: number;
+  initialName?: string;
   initialProjectId?: number;
   initialDirectoryId?: number;
 }
@@ -123,12 +124,14 @@ const executionStatusText: Record<string, string> = {
 
 export default function SqlTaskEditor({
   taskId,
+  initialName,
   initialProjectId,
   initialDirectoryId,
 }: SqlTaskEditorProps) {
   const { projects } = useSecurityProject();
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...EMPTY_DRAFT,
+    name: initialName || '',
     projectId: initialProjectId,
     directoryId: initialDirectoryId,
   }));
