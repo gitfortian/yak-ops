@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** 第一阶段任务注册表；同步任务元数据由离线同步定义服务投影。 */
+/** Workflow task registry. Concrete business domains contribute tasks through {@link TaskProvider}. */
 @Service
 public class InMemoryTaskRegistry implements TaskRegistry {
 
@@ -21,11 +21,15 @@ public class InMemoryTaskRegistry implements TaskRegistry {
   private static final String RELEASE_STATE_ONLINE = "ONLINE";
 
   private final ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider;
+  private final ObjectProvider<TaskProvider> taskProviderProvider;
   private final ConcurrentMap<String, TaskDefinition> tasks = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, TaskVersionSnapshot> snapshots = new ConcurrentHashMap<>();
 
-  public InMemoryTaskRegistry(ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider) {
+  public InMemoryTaskRegistry(
+      ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider,
+      ObjectProvider<TaskProvider> taskProviderProvider) {
     this.definitionServiceProvider = definitionServiceProvider;
+    this.taskProviderProvider = taskProviderProvider;
   }
 
   @Override
@@ -58,15 +62,23 @@ public class InMemoryTaskRegistry implements TaskRegistry {
   }
 
   private void refresh() {
-    OfflineJobDefinitionService service = definitionServiceProvider.getIfAvailable();
-    if (service == null) {
-      tasks.clear();
-      snapshots.clear();
-      return;
-    }
-
     Map<String, TaskDefinition> taskSnapshot = new LinkedHashMap<>();
     Map<String, TaskVersionSnapshot> versionSnapshot = new LinkedHashMap<>();
+    appendOfflineSyncTasks(taskSnapshot, versionSnapshot);
+    appendProvidedTasks(taskSnapshot, versionSnapshot);
+
+    tasks.clear();
+    tasks.putAll(taskSnapshot);
+    snapshots.clear();
+    snapshots.putAll(versionSnapshot);
+  }
+
+  private void appendOfflineSyncTasks(
+      Map<String, TaskDefinition> taskSnapshot,
+      Map<String, TaskVersionSnapshot> versionSnapshot) {
+    OfflineJobDefinitionService service = definitionServiceProvider.getIfAvailable();
+    if (service == null) return;
+
     int pageNo = 1;
     while (true) {
       PageData<OfflineJobDefinition> page = service.pageDomain(
@@ -89,10 +101,10 @@ public class InMemoryTaskRegistry implements TaskRegistry {
           String logicalJobSpec = service.resolveLogicalJobSpec(current);
           String id = String.valueOf(current.getId());
           String name = current.getJobName();
-          TaskDefinition task = new TaskDefinition(id, name, "SYNC");
-          taskSnapshot.put(id, task);
-          versionSnapshot.put(
-              id,
+          putTask(
+              taskSnapshot,
+              versionSnapshot,
+              new TaskDefinition(id, name, "SYNC"),
               new TaskVersionSnapshot(
                   id,
                   name,
@@ -108,11 +120,34 @@ public class InMemoryTaskRegistry implements TaskRegistry {
       if (pageNo >= page.pages()) break;
       pageNo++;
     }
+  }
 
-    tasks.clear();
-    tasks.putAll(taskSnapshot);
-    snapshots.clear();
-    snapshots.putAll(versionSnapshot);
+  private void appendProvidedTasks(
+      Map<String, TaskDefinition> taskSnapshot,
+      Map<String, TaskVersionSnapshot> versionSnapshot) {
+    for (TaskProvider provider : taskProviderProvider.orderedStream().toList()) {
+      for (TaskDefinition task : provider.list()) {
+        if (task == null || task.id() == null || task.id().isBlank()) continue;
+        TaskVersionSnapshot snapshot = provider.snapshot(task.id());
+        putTask(taskSnapshot, versionSnapshot, task, snapshot);
+      }
+    }
+  }
+
+  private void putTask(
+      Map<String, TaskDefinition> taskSnapshot,
+      Map<String, TaskVersionSnapshot> versionSnapshot,
+      TaskDefinition task,
+      TaskVersionSnapshot snapshot) {
+    if (snapshot == null || !task.id().equals(snapshot.taskId())) {
+      throw new IllegalStateException("任务定义与版本快照不匹配：" + task.id());
+    }
+    TaskDefinition existing = taskSnapshot.putIfAbsent(task.id(), task);
+    if (existing != null) {
+      throw new IllegalStateException(
+          "重复的工作流任务 ID：" + task.id() + "，类型=" + existing.type() + "/" + task.type());
+    }
+    versionSnapshot.put(task.id(), snapshot);
   }
 
   static boolean isWorkflowEligible(OfflineJobDefinition definition) {
