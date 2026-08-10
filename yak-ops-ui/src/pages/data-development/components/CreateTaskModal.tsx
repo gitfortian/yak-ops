@@ -1,145 +1,125 @@
-import { Modal, Select, Tag, Typography } from 'antd';
-import { Braces, Code2, Globe2, TerminalSquare } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Input, Modal, Select, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { DevelopmentTaskType } from '../types';
+import type { DevelopmentDirectory, DevelopmentTaskType } from '../types';
 
 interface CreateTaskModalProps {
   open: boolean;
-  projects: API.ProjectBrief[];
-  defaultProjectId?: number;
-  onCancel: () => void;
-  onNext: (type: DevelopmentTaskType, projectId?: number) => void;
-}
-
-const taskTypes: Array<{
   type: DevelopmentTaskType;
-  title: string;
-  description: string;
-  icon: ReactNode;
-  enabled: boolean;
-}> = [
-  {
-    type: 'SQL',
-    title: 'SQL',
-    description: '执行数据库 SQL，支持参数、测试运行和版本发布。',
-    icon: <Code2 size={20} strokeWidth={1.8} />,
-    enabled: true,
-  },
-  {
-    type: 'SHELL',
-    title: 'Shell',
-    description: '执行 Shell 脚本，后续通过统一执行器接入。',
-    icon: <TerminalSquare size={20} strokeWidth={1.8} />,
-    enabled: false,
-  },
-  {
-    type: 'HTTP',
-    title: 'HTTP',
-    description: '调用 HTTP API，后续通过统一执行器接入。',
-    icon: <Globe2 size={20} strokeWidth={1.8} />,
-    enabled: false,
-  },
-  {
-    type: 'PYTHON',
-    title: 'Python',
-    description: '执行 Python 脚本，后续通过统一执行器接入。',
-    icon: <Braces size={20} strokeWidth={1.8} />,
-    enabled: false,
-  },
-];
+  directories: DevelopmentDirectory[];
+  defaultProjectId?: number;
+  defaultDirectoryId?: number;
+  onCancel: () => void;
+  onNext: (
+    type: DevelopmentTaskType,
+    projectId: number | undefined,
+    directoryId: number | undefined,
+    name: string,
+  ) => void;
+}
 
 export default function CreateTaskModal({
   open,
-  projects,
+  type: initialType,
+  directories,
   defaultProjectId,
+  defaultDirectoryId,
   onCancel,
   onNext,
 }: CreateTaskModalProps) {
-  const [type, setType] = useState<DevelopmentTaskType>('SQL');
+  const [type, setType] = useState<DevelopmentTaskType>(initialType);
   const [projectId, setProjectId] = useState<number>();
+  const [directoryId, setDirectoryId] = useState<number>();
+  const [name, setName] = useState('');
 
-  const projectOptions = useMemo(
-    () => projects.map((project) => ({
-      label: project.projectName,
-      value: Number(project.id),
-    })),
-    [projects],
+  const typeOptions = useMemo(
+    () => [
+      { label: 'SQL', value: 'SQL' },
+      { label: 'Shell', value: 'SHELL' },
+    ],
+    [],
+  );
+
+  const pathOptions = useMemo(
+    () => [
+      { label: '/', value: 0 },
+      ...directories.map((directory) => ({
+        label: directory.path,
+        value: Number(directory.id),
+      })),
+    ],
+    [directories],
   );
 
   useEffect(() => {
     if (!open) return;
-    setType('SQL');
+    setType(initialType);
     setProjectId(defaultProjectId);
-  }, [defaultProjectId, open]);
+    setDirectoryId(defaultDirectoryId);
+    setName('');
+  }, [defaultDirectoryId, defaultProjectId, initialType, open]);
+
+  const normalizedName = name.trim();
+
+  const submit = () => {
+    if (!normalizedName) return;
+    onNext(
+      type,
+      projectId,
+      directoryId && directoryId > 0 ? directoryId : undefined,
+      normalizedName,
+    );
+  };
 
   return (
     <Modal
       open={open}
-      title="新建数据开发任务"
-      width={720}
-      okText="下一步"
+      title="新建节点"
+      width={600}
+      okText="确认"
       cancelText="取消"
+      okButtonProps={{ disabled: !normalizedName }}
       destroyOnClose
       onCancel={onCancel}
-      onOk={() => onNext(type, projectId)}
+      onOk={submit}
     >
-      <div className="pt-2">
-        <div className="mb-5">
-          <Typography.Text className="mb-2 block text-[13px] font-medium text-[#161823]">
-            所属项目（可选）
-          </Typography.Text>
-          <Select
-            allowClear
-            value={projectId}
-            options={projectOptions}
-            className="w-full"
-            placeholder="可选，未选择则不归属项目"
-            showSearch
-            optionFilterProp="label"
-            onChange={(value) => setProjectId(value ? Number(value) : undefined)}
-          />
-        </div>
-
-        <Typography.Text className="mb-2 block text-[13px] font-medium text-[#161823]">
-          任务类型
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-y-3 pt-2">
+        <Typography.Text className="text-[13px] text-[#344054]">
+          <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
+          类型：
         </Typography.Text>
-        <div className="grid grid-cols-2 gap-3">
-          {taskTypes.map((item) => {
-            const selected = type === item.type;
-            return (
-              <button
-                key={item.type}
-                type="button"
-                disabled={!item.enabled}
-                onClick={() => item.enabled && setType(item.type)}
-                className={[
-                  'relative min-h-[104px] rounded-xl border p-4 text-left transition-all',
-                  item.enabled
-                    ? 'cursor-pointer bg-white hover:border-[#b8bec8]'
-                    : 'cursor-not-allowed bg-[#fafafa] opacity-65',
-                  selected && item.enabled
-                    ? 'border-[#161823] shadow-[0_0_0_1px_#161823]'
-                    : 'border-[#e4e7ec]',
-                ].join(' ')}
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#161823]">
-                    {item.icon}
-                  </span>
-                  {!item.enabled && <Tag className="!m-0">后续</Tag>}
-                </div>
-                <div className="text-[14px] font-semibold text-[#161823]">
-                  {item.title}
-                </div>
-                <div className="mt-1 text-[12px] leading-5 text-[rgba(22,24,35,.5)]">
-                  {item.description}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        <Select
+          value={type}
+          options={typeOptions}
+          className="w-full"
+          onChange={(value) => setType(value as DevelopmentTaskType)}
+        />
+
+        <Typography.Text className="text-[13px] text-[#344054]">
+          <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
+          路径：
+        </Typography.Text>
+        <Select
+          value={directoryId ?? 0}
+          options={pathOptions}
+          showSearch
+          optionFilterProp="label"
+          className="w-full"
+          onChange={(value) => setDirectoryId(Number(value) || undefined)}
+        />
+
+        <Typography.Text className="text-[13px] text-[#344054]">
+          <span className="mr-1 text-[rgba(254,44,85,1)]">*</span>
+          名称：
+        </Typography.Text>
+        <Input
+          autoFocus
+          value={name}
+          maxLength={128}
+          placeholder="名称"
+          onChange={(event) => setName(event.target.value)}
+          onPressEnter={submit}
+        />
       </div>
     </Modal>
   );

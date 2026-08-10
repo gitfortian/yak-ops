@@ -10,10 +10,12 @@ import {
   FolderPlus,
   Plus,
   Search,
+  TerminalSquare,
 } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 
 export type DevelopmentTreeNodeType = 'root' | 'directory' | 'task';
+export type DevelopmentNodeCreateType = 'SQL' | 'SHELL';
 
 export interface DevelopmentTreeNode extends DataNode {
   key: string;
@@ -34,7 +36,7 @@ interface DevelopmentTreePaneProps {
   leftWidth: number;
   collapsed: boolean;
   onCreateDirectory: () => void;
-  onCreateNode: () => void;
+  onCreateNode: (type: DevelopmentNodeCreateType) => void;
   onSearchChange: (value: string) => void;
   onSelect: TreeProps['onSelect'];
   onResizeStart: (event: ReactPointerEvent) => void;
@@ -60,6 +62,18 @@ const DevelopmentTreePane = ({
       key: 'node',
       label: '新建节点',
       icon: <Code2 size={14} strokeWidth={1.8} />,
+      children: [
+        {
+          key: 'node-sql',
+          label: 'SQL 节点',
+          icon: <Code2 size={14} strokeWidth={1.8} />,
+        },
+        {
+          key: 'node-shell',
+          label: 'Shell 节点',
+          icon: <TerminalSquare size={14} strokeWidth={1.8} />,
+        },
+      ],
     },
     {
       key: 'directory',
@@ -135,9 +149,13 @@ const DevelopmentTreePane = ({
               placement="bottomRight"
               menu={{
                 items: createMenuItems,
+                triggerSubMenuAction: 'hover',
+                subMenuOpenDelay: 0.05,
+                subMenuCloseDelay: 0.1,
                 onClick: ({ key }) => {
                   if (key === 'directory') onCreateDirectory();
-                  if (key === 'node') onCreateNode();
+                  if (key === 'node-sql') onCreateNode('SQL');
+                  if (key === 'node-shell') onCreateNode('SHELL');
                 },
               }}
             >

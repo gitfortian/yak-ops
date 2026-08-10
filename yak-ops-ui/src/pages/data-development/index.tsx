@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CreateDirectoryModal from './components/CreateDirectoryModal';
 import CreateTaskModal from './components/CreateTaskModal';
 import DevelopmentTreePane, {
+  type DevelopmentNodeCreateType,
   type DevelopmentTreeNode,
 } from './components/DevelopmentTreePane';
 import {
@@ -111,6 +112,7 @@ export default function DataDevelopmentPage() {
   const [loading, setLoading] = useState(false);
   const [treeLoading, setTreeLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createType, setCreateType] = useState<DevelopmentNodeCreateType>('SQL');
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
   const [treeKeyword, setTreeKeyword] = useState('');
@@ -476,7 +478,10 @@ export default function DataDevelopmentPage() {
             leftWidth={leftWidth}
             collapsed={leftCollapsed}
             onCreateDirectory={() => setDirectoryOpen(true)}
-            onCreateNode={() => setCreateOpen(true)}
+            onCreateNode={(type) => {
+              setCreateType(type);
+              setCreateOpen(true);
+            }}
             onSearchChange={setTreeKeyword}
             onResizeStart={handleResizeStart}
             onCollapsedChange={setLeftCollapsed}
@@ -588,16 +593,19 @@ export default function DataDevelopmentPage() {
 
         <CreateTaskModal
           open={createOpen}
-          projects={projects}
+          type={createType}
+          directories={directories}
           defaultProjectId={
             currentProject?.id ? Number(currentProject.id) : undefined
           }
+          defaultDirectoryId={directoryIdForSelection}
           onCancel={() => setCreateOpen(false)}
-          onNext={(type, projectId) => {
+          onNext={(type, projectId, directoryId, name) => {
             setCreateOpen(false);
             const params = new URLSearchParams();
             params.set('type', type);
-            params.set('directoryId', String(directoryIdForSelection || 0));
+            params.set('directoryId', String(directoryId || 0));
+            params.set('name', name);
             if (projectId) params.set('projectId', String(projectId));
             history.push(`/data-development/task/new?${params.toString()}`);
           }}
