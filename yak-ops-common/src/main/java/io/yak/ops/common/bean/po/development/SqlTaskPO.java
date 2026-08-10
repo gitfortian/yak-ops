@@ -15,6 +15,7 @@ public class SqlTaskPO {
   private Long id;
   private String name;
   private String description;
+  private Long projectId;
   private Long dataSourceId;
   private String sqlText;
   private String parameterJson;
