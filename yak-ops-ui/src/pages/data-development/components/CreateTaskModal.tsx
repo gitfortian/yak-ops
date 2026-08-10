@@ -9,6 +9,7 @@ interface CreateTaskModalProps {
   directories: DevelopmentDirectory[];
   defaultProjectId?: number;
   defaultDirectoryId?: number;
+  loading?: boolean;
   onCancel: () => void;
   onNext: (
     type: DevelopmentTaskType,
@@ -24,6 +25,7 @@ export default function CreateTaskModal({
   directories,
   defaultProjectId,
   defaultDirectoryId,
+  loading = false,
   onCancel,
   onNext,
 }: CreateTaskModalProps) {
@@ -62,7 +64,7 @@ export default function CreateTaskModal({
   const normalizedName = name.trim();
 
   const submit = () => {
-    if (!normalizedName) return;
+    if (!normalizedName || loading) return;
     onNext(
       type,
       projectId,
@@ -78,8 +80,11 @@ export default function CreateTaskModal({
       width={600}
       okText="确认"
       cancelText="取消"
+      confirmLoading={loading}
       okButtonProps={{ disabled: !normalizedName }}
       destroyOnClose
+      maskClosable={!loading}
+      closable={!loading}
       onCancel={onCancel}
       onOk={submit}
     >
@@ -92,6 +97,7 @@ export default function CreateTaskModal({
           value={type}
           options={typeOptions}
           className="w-full"
+          disabled={loading}
           onChange={(value) => setType(value as DevelopmentTaskType)}
         />
 
@@ -105,6 +111,7 @@ export default function CreateTaskModal({
           showSearch
           optionFilterProp="label"
           className="w-full"
+          disabled={loading}
           onChange={(value) => setDirectoryId(Number(value) || undefined)}
         />
 
@@ -116,6 +123,7 @@ export default function CreateTaskModal({
           autoFocus
           value={name}
           maxLength={128}
+          disabled={loading}
           placeholder="名称"
           onChange={(event) => setName(event.target.value)}
           onPressEnter={submit}
