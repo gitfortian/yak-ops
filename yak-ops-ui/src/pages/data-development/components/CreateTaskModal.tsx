@@ -7,7 +7,6 @@ interface CreateTaskModalProps {
   open: boolean;
   type: DevelopmentTaskType;
   directories: DevelopmentDirectory[];
-  projects: API.ProjectBrief[];
   defaultProjectId?: number;
   defaultDirectoryId?: number;
   onCancel: () => void;
@@ -23,7 +22,6 @@ export default function CreateTaskModal({
   open,
   type: initialType,
   directories,
-  projects,
   defaultProjectId,
   defaultDirectoryId,
   onCancel,
@@ -63,6 +61,16 @@ export default function CreateTaskModal({
 
   const normalizedName = name.trim();
 
+  const submit = () => {
+    if (!normalizedName) return;
+    onNext(
+      type,
+      projectId,
+      directoryId && directoryId > 0 ? directoryId : undefined,
+      normalizedName,
+    );
+  };
+
   return (
     <Modal
       open={open}
@@ -73,15 +81,7 @@ export default function CreateTaskModal({
       okButtonProps={{ disabled: !normalizedName }}
       destroyOnClose
       onCancel={onCancel}
-      onOk={() => {
-        if (!normalizedName) return;
-        onNext(
-          type,
-          projectId,
-          directoryId && directoryId > 0 ? directoryId : undefined,
-          normalizedName,
-        );
-      }}
+      onOk={submit}
     >
       <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-y-3 pt-2">
         <Typography.Text className="text-[13px] text-[#344054]">
@@ -118,15 +118,7 @@ export default function CreateTaskModal({
           maxLength={128}
           placeholder="名称"
           onChange={(event) => setName(event.target.value)}
-          onPressEnter={() => {
-            if (!normalizedName) return;
-            onNext(
-              type,
-              projectId,
-              directoryId && directoryId > 0 ? directoryId : undefined,
-              normalizedName,
-            );
-          }}
+          onPressEnter={submit}
         />
       </div>
     </Modal>
