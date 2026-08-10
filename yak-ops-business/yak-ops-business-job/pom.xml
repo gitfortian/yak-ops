@@ -14,7 +14,7 @@
     <artifactId>yak-ops-business-job</artifactId>
 
     <name>Yak Ops Business Job</name>
-    <description>Offline synchronization scheduling aggregation</description>
+    <description>Workflow-visible task discovery and generic task execution routing</description>
 
     <dependencies>
         <dependency>
