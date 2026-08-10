@@ -56,6 +56,31 @@ public class DevelopmentNodeService {
         false);
   }
 
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DevelopmentNode rename(Long id, String name) {
+    DevelopmentNode current = repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + id));
+    String normalizedName = normalizeName(name);
+    if (current.name().equals(normalizedName)) return current;
+    if (repository.existsByName(current.directoryId(), normalizedName)) {
+      throw new IllegalStateException("当前目录下已存在同名节点：" + normalizedName);
+    }
+    if (!repository.updateName(id, normalizedName)) {
+      throw new IllegalStateException("节点重命名失败：" + id);
+    }
+    return repository.findById(id)
+        .orElseThrow(() -> new IllegalStateException("节点重命名成功但无法重新读取：" + id));
+  }
+
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public void delete(Long id) {
+    repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + id));
+    if (!repository.deleteById(id)) {
+      throw new IllegalStateException("节点删除失败：" + id);
+    }
+  }
+
   private String normalizeName(String name) {
     if (name == null || name.isBlank()) throw new IllegalArgumentException("节点名称不能为空");
     String normalized = name.trim();
