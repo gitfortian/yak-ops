@@ -18,9 +18,10 @@ DAO / Mapper             Repository / Service             HTTP
 约束：
 
 - Repository 对外分页统一使用 `io.yak.framework.common.PageData<T>`，不暴露 MyBatis `IPage`。
-- `QualityDomain.Page` 仅作为第一阶段兼容旧 Adapter 实现的废弃别名，不再作为 Repository 契约；后续清理 Adapter 时直接删除。
-- Service 继续按现有 VO 契约输出 `records/total/current/pageSize` 等质量模块接口字段，本次不修改 HTTP JSON。
+- Data Quality 不再维护 `QualityDomain.Page` 等模块私有普通分页容器。
+- Repository Adapter 负责根据 `total/current/pageSize` 计算完整的 `pages` 元数据并构造 `PageData`。
+- Service 继续按现有 VO 契约输出 `records/total/current/pageSize` 等质量模块接口字段，不修改 HTTP JSON。
 - DAO / Mapper 仍可使用持久化层自己的分页参数、limit/offset 和 MyBatis 能力。
-- 新增分页功能不得再创建模块私有 `Page/XxxPage` 类型，应直接复用 `PageData<T>`。
+- 新增分页功能不得再创建普通 `Page/XxxPage` 类型，应直接复用 `PageData<T>`；只有包含独立业务语义的分页类型才允许例外。
 
 全局分页边界规范由 Yak Framework `docs/pagination-conventions.md` 定义。
