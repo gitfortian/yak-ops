@@ -1,35 +1,14 @@
-import { Result } from 'antd';
-import { useLocation, useParams } from '@umijs/max';
+import { history } from '@umijs/max';
+import { useEffect } from 'react';
 
-import type { DevelopmentTaskType } from '../types';
-import SqlTaskEditor from './SqlTaskEditor';
-
+/**
+ * 数据开发暂时只保留左侧资源树。
+ * 专业节点编辑将在首页右侧工作区重建，不再使用独立详情页。
+ */
 export default function DataDevelopmentTaskPage() {
-  const { id } = useParams<{ id?: string }>();
-  const location = useLocation();
-  const params = new URLSearchParams(location.search);
-  const requestedType = (params.get('type') || 'SQL').toUpperCase() as DevelopmentTaskType;
-  const projectId = Number(params.get('projectId') || 0) || undefined;
-  const directoryId = Number(params.get('directoryId') || 0) || undefined;
-  const initialName = params.get('name')?.trim() || undefined;
-  const taskId = id ? Number(id) : undefined;
+  useEffect(() => {
+    history.replace('/data-development');
+  }, []);
 
-  if (requestedType !== 'SQL') {
-    return (
-      <Result
-        status="info"
-        title={`${requestedType} 任务暂未开放`}
-        subTitle="数据开发已保留统一 Editor 扩展入口，当前阶段先完成 SQL。"
-      />
-    );
-  }
-
-  return (
-    <SqlTaskEditor
-      taskId={taskId}
-      initialName={initialName}
-      initialProjectId={projectId}
-      initialDirectoryId={directoryId}
-    />
-  );
+  return null;
 }
