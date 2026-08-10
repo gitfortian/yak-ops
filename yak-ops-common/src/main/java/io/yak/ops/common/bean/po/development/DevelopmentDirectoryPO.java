@@ -12,7 +12,6 @@ import lombok.Data;
 public class DevelopmentDirectoryPO {
   @TableId(type = IdType.ASSIGN_ID)
   private Long id;
-  private Long projectId;
   private Long parentId;
   private String name;
   private Instant createTime;
