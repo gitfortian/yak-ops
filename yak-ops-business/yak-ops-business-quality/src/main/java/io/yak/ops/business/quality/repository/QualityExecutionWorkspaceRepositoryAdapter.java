@@ -1,9 +1,9 @@
 package io.yak.ops.business.quality.repository;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.dao.QualityExecutionDao;
 import io.yak.ops.business.quality.domain.QualityDomain.Execution;
-import io.yak.ops.business.quality.domain.QualityDomain.Page;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecution;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionWorkspaceItem;
 import io.yak.ops.business.quality.domain.QualityQuery;
@@ -12,7 +12,6 @@ import io.yak.ops.common.bean.po.quality.QualityQueryPO.RuleExecutionWorkspaceRo
 import io.yak.ops.common.bean.po.quality.QualityRuleExecutionPO;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.ExecutionStatus;
-import io.yak.ops.common.enums.quality.QualityEnums.RuleScope;
 import io.yak.ops.common.enums.quality.QualityEnums.RuleType;
 import io.yak.ops.common.enums.quality.QualityEnums.TriggerType;
 import java.util.ArrayList;
@@ -34,21 +33,23 @@ public class QualityExecutionWorkspaceRepositoryAdapter
   private final QualityExecutionDao executionDao;
 
   @Override
-  public Page<Execution> page(QualityQuery.ExecutionWorkspace query) {
+  public PageData<Execution> page(QualityQuery.ExecutionWorkspace query) {
     Map<String, Object> params = params(query);
     long total = executionDao.countExecutionWorkspace(params);
     paginate(params, query.current(), query.pageSize());
-    return new Page<>(executionDao.selectExecutionWorkspace(params).stream()
-        .map(po -> execution(po, List.of())).toList(), total);
+    List<Execution> records = executionDao.selectExecutionWorkspace(params).stream()
+        .map(po -> execution(po, List.of())).toList();
+    return pageData(records, total, query.current(), query.pageSize());
   }
 
   @Override
-  public Page<RuleExecutionWorkspaceItem> pageRules(QualityQuery.ExecutionWorkspace query) {
+  public PageData<RuleExecutionWorkspaceItem> pageRules(QualityQuery.ExecutionWorkspace query) {
     Map<String, Object> params = params(query);
     long total = executionDao.countRuleExecutionWorkspace(params);
     paginate(params, query.current(), query.pageSize());
-    return new Page<>(executionDao.selectRuleExecutionWorkspace(params).stream()
-        .map(this::ruleItem).toList(), total);
+    List<RuleExecutionWorkspaceItem> records = executionDao.selectRuleExecutionWorkspace(params).stream()
+        .map(this::ruleItem).toList();
+    return pageData(records, total, query.current(), query.pageSize());
   }
 
   @Override
@@ -122,6 +123,15 @@ public class QualityExecutionWorkspaceRepositoryAdapter
   private static void paginate(Map<String, Object> params, int current, int pageSize) {
     params.put("limit", pageSize);
     params.put("offset", (current - 1L) * pageSize);
+  }
+
+  private static <T> PageData<T> pageData(
+      List<T> records,
+      long total,
+      int current,
+      int pageSize) {
+    long pages = pageSize <= 0 ? 0L : (total + pageSize - 1L) / pageSize;
+    return new PageData<>(records, total, pages, current, pageSize);
   }
 
   private static void putLike(Map<String, Object> params, String key, String value) {
