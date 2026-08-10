@@ -1,12 +1,14 @@
 package io.yak.ops.business.development.service;
 
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
+import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.domain.SqlDevelopmentModel.Definition;
 import io.yak.ops.business.development.domain.SqlDevelopmentModel.Execution;
 import io.yak.ops.business.development.domain.SqlDevelopmentModel.Version;
 import io.yak.ops.business.development.domain.SqlParameterDefinition;
 import io.yak.ops.business.development.domain.SqlTaskSnapshot;
 import io.yak.ops.business.development.execution.NamedSqlParameterParser;
+import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.SqlDevelopmentRepository;
 import io.yak.ops.business.development.support.SqlDevelopmentJsonCodec;
 import io.yak.ops.business.job.task.TaskExecution;
@@ -16,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -29,16 +32,19 @@ public class SqlDevelopmentService {
       "STRING", "INTEGER", "LONG", "DOUBLE", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP");
 
   private final SqlDevelopmentRepository repository;
+  private final DevelopmentDirectoryRepository directoryRepository;
   private final DataSourceRepository dataSourceRepository;
   private final SqlDevelopmentJsonCodec jsonCodec;
   private final TaskExecutionGateway executionGateway;
 
   public SqlDevelopmentService(
       SqlDevelopmentRepository repository,
+      DevelopmentDirectoryRepository directoryRepository,
       DataSourceRepository dataSourceRepository,
       SqlDevelopmentJsonCodec jsonCodec,
       TaskExecutionGateway executionGateway) {
     this.repository = repository;
+    this.directoryRepository = directoryRepository;
     this.dataSourceRepository = dataSourceRepository;
     this.jsonCodec = jsonCodec;
     this.executionGateway = executionGateway;
@@ -49,15 +55,18 @@ public class SqlDevelopmentService {
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
     Long normalizedProjectId = normalizeProjectId(projectId);
+    Long normalizedDirectoryId = normalizeDirectoryAssignment(normalizedProjectId, directoryId);
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     return repository.insertDefinition(
         requireText(name, "任务名称"),
         trimToNull(description),
         normalizedProjectId,
+        normalizedDirectoryId,
         dataSourceId,
         sql.trim(),
         normalized);
@@ -83,11 +92,21 @@ public class SqlDevelopmentService {
       String name,
       String description,
       Long projectId,
+      Long directoryId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters) {
     Definition current = requireDefinition(id);
     Long normalizedProjectId = projectId == null ? current.projectId() : normalizeProjectId(projectId);
+    Long normalizedDirectoryId;
+    if (directoryId == null) {
+      normalizedDirectoryId = Objects.equals(normalizedProjectId, current.projectId())
+          ? current.directoryId()
+          : null;
+    } else {
+      normalizedDirectoryId = normalizeDirectoryAssignment(normalizedProjectId, directoryId);
+    }
+
     List<SqlParameterDefinition> normalized = validate(dataSourceId, sql, parameters);
     boolean updated = repository.updateDraft(
         id,
@@ -95,6 +114,7 @@ public class SqlDevelopmentService {
         requireText(name, "任务名称"),
         trimToNull(description),
         normalizedProjectId,
+        normalizedDirectoryId,
         dataSourceId,
         sql.trim(),
         normalized);
@@ -171,6 +191,19 @@ public class SqlDevelopmentService {
       executionGateway.cancel("SQL", String.valueOf(executionId));
     }
     return execution(executionId);
+  }
+
+  private Long normalizeDirectoryAssignment(Long projectId, Long directoryId) {
+    if (directoryId == null || directoryId <= 0L) return null;
+    if (projectId == null) {
+      throw new IllegalArgumentException("设置目录前必须先选择所属项目");
+    }
+    DevelopmentDirectory directory = directoryRepository.findById(directoryId)
+        .orElseThrow(() -> new IllegalArgumentException("数据开发目录不存在：" + directoryId));
+    if (!Objects.equals(directory.projectId(), projectId)) {
+      throw new IllegalArgumentException("数据开发目录不属于当前项目：" + directoryId);
+    }
+    return directoryId;
   }
 
   private List<SqlParameterDefinition> validate(
