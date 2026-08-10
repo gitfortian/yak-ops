@@ -32,8 +32,10 @@ import io.yak.framework.workflow.engine.support.InMemoryExecutionRepository;
 import io.yak.framework.workflow.engine.support.InMemoryWorkflowDefinitionRepository;
 import io.yak.framework.workflow.engine.support.LocalExecutionLock;
 import io.yak.framework.workflow.engine.support.UuidIdGenerator;
-import io.yak.ops.business.job.task.SyncTaskExecution;
+import io.yak.ops.business.job.task.SyncTaskExecutorAdapter;
 import io.yak.ops.business.job.task.SyncTaskRunner;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
@@ -80,14 +82,14 @@ public class WorkflowRuntimeService {
   private static final Logger log = LoggerFactory.getLogger(WorkflowRuntimeService.class);
   private static final long TASK_POLL_INTERVAL_MILLIS = 500L;
 
-  /** 每次远程 start/status/cancel 都是短生命周期 I/O；不会为任务全生命周期占用固定平台线程。 */
+  /** 每次 task start/status/cancel 都是短生命周期 I/O；不会为任务全生命周期占用固定平台线程。 */
   private final ExecutorService ioExecutor;
   private final ScheduledExecutorService runtimeScheduler;
   private final DefaultWorkflowEngine engine;
   private final WorkflowRecoveryCoordinator recoveryCoordinator;
   private final WorkflowEventStreamService eventStreamService;
   private final TaskRegistry taskRegistry;
-  private final SyncTaskRunner syncTaskRunner;
+  private final TaskExecutionGateway taskExecutionGateway;
   private final WorkflowRuntimePersistence runtimePersistence;
   private final long taskPollIntervalMillis;
   private final ConcurrentMap<String, ConcurrentLinkedQueue<NodeDispatch>> pendingDispatches =
@@ -103,7 +105,7 @@ public class WorkflowRuntimeService {
   public WorkflowRuntimeService(
       WorkflowEventStreamService eventStreamService,
       TaskRegistry taskRegistry,
-      SyncTaskRunner syncTaskRunner,
+      TaskExecutionGateway taskExecutionGateway,
       ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
       ObjectProvider<ExecutionRepository> executionRepository,
       ObjectProvider<WorkflowRuntimePersistence> runtimePersistence,
@@ -111,7 +113,7 @@ public class WorkflowRuntimeService {
     this(
         eventStreamService,
         taskRegistry,
-        syncTaskRunner,
+        taskExecutionGateway,
         TASK_POLL_INTERVAL_MILLIS,
         resolvePersistence(
             definitionRepository,
@@ -139,7 +141,7 @@ public class WorkflowRuntimeService {
     this(
         eventStreamService,
         taskRegistry,
-        syncTaskRunner,
+        legacyGateway(syncTaskRunner),
         taskPollIntervalMillis,
         new InMemoryWorkflowDefinitionRepository(),
         new InMemoryExecutionRepository(),
@@ -163,6 +165,7 @@ public class WorkflowRuntimeService {
             + componentName);
   }
 
+  /** Backward-compatible constructor used by existing SYNC-focused runtime tests. */
   WorkflowRuntimeService(
       WorkflowEventStreamService eventStreamService,
       TaskRegistry taskRegistry,
@@ -171,9 +174,27 @@ public class WorkflowRuntimeService {
       WorkflowDefinitionRepository definitionRepository,
       ExecutionRepository executionRepository,
       WorkflowRuntimePersistence runtimePersistence) {
+    this(
+        eventStreamService,
+        taskRegistry,
+        legacyGateway(syncTaskRunner),
+        taskPollIntervalMillis,
+        definitionRepository,
+        executionRepository,
+        runtimePersistence);
+  }
+
+  WorkflowRuntimeService(
+      WorkflowEventStreamService eventStreamService,
+      TaskRegistry taskRegistry,
+      TaskExecutionGateway taskExecutionGateway,
+      long taskPollIntervalMillis,
+      WorkflowDefinitionRepository definitionRepository,
+      ExecutionRepository executionRepository,
+      WorkflowRuntimePersistence runtimePersistence) {
     this.eventStreamService = eventStreamService;
     this.taskRegistry = taskRegistry;
-    this.syncTaskRunner = syncTaskRunner;
+    this.taskExecutionGateway = taskExecutionGateway;
     this.runtimePersistence = runtimePersistence;
     this.taskPollIntervalMillis = Math.max(1L, taskPollIntervalMillis);
     this.ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -206,6 +227,10 @@ public class WorkflowRuntimeService {
         clock);
     this.runtimeScheduler.scheduleAtFixedRate(
         this::scanTimeouts, 250L, 250L, TimeUnit.MILLISECONDS);
+  }
+
+  private static TaskExecutionGateway legacyGateway(SyncTaskRunner syncTaskRunner) {
+    return new TaskExecutionGateway(List.of(new SyncTaskExecutorAdapter(syncTaskRunner)));
   }
 
   /** 直接运行 API：DTO 只存在于接口边界，进入 Runtime 后立即转换为领域规格。 */
@@ -472,8 +497,9 @@ public class WorkflowRuntimeService {
       if (!node.taskId().equals(task.taskId())) {
         throw new IllegalArgumentException("工作流节点任务快照不匹配：" + node.id());
       }
-      if (!"SYNC".equalsIgnoreCase(task.type())) {
-        throw new IllegalArgumentException("第一阶段工作流仅支持 SYNC 任务：" + task.taskId());
+      if (!taskExecutionGateway.supports(task.type())) {
+        throw new IllegalArgumentException(
+            "工作流没有可用的任务执行器：type=" + task.type() + "，task=" + task.taskId());
       }
       result.put(node.id(), task);
     }
@@ -495,7 +521,7 @@ public class WorkflowRuntimeService {
         NodeFailurePolicy.valueOf(node.failurePolicy()),
         timeout,
         NodeInputMapping.of(node.inputMapping()),
-        Map.of("taskId", task.taskId(), "taskVersion", task.version()));
+        Map.of("taskId", task.taskId(), "taskVersion", task.version(), "taskType", task.type()));
   }
 
   private EdgeDefinition toEdgeDefinition(WorkflowEdgeSpec edge) {
@@ -630,11 +656,12 @@ public class WorkflowRuntimeService {
       if (node == null) {
         throw new IllegalStateException("工作流节点运行元数据不存在：" + dispatch.nodeId());
       }
-      SyncTaskExecution taskExecution = syncTaskRunner.start(node.task(), dispatch.attemptId());
+      TaskExecution taskExecution = taskExecutionGateway.start(
+          node.task(), dispatch.attemptId(), dispatch.nodeInput());
       runtimePersistence.bindExternalExecution(dispatch.attemptId(), taskExecution.executionId());
-      control.bindTaskExecution(taskExecution.executionId());
+      control.bindTaskExecution(node.task().type(), taskExecution.executionId());
       if (control.canceled()) {
-        cancelRemote(taskExecution.executionId());
+        cancelRemote(node.task().type(), taskExecution.executionId());
         cleanupAttempt(dispatch, control);
         return;
       }
@@ -642,11 +669,12 @@ public class WorkflowRuntimeService {
           dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId());
       publishCurrent(dispatch.workflowExecutionId());
       log.info(
-          "[workflow] sync task started workflowExecution={}, node={}, attempt={}, task={}, taskVersion={}, taskExecution={}",
+          "[workflow] task started workflowExecution={}, node={}, attempt={}, task={}, type={}, taskVersion={}, taskExecution={}",
           dispatch.workflowExecutionId(),
           dispatch.nodeId(),
           dispatch.attemptId(),
           node.task().taskId(),
+          node.task().type(),
           node.task().version(),
           taskExecution.executionId());
       handleTaskSnapshot(dispatch, control, node, taskExecution);
@@ -668,7 +696,8 @@ public class WorkflowRuntimeService {
         enqueueDispatch(dispatch);
         return;
       }
-      SyncTaskExecution taskExecution = syncTaskRunner.status(taskExecutionId);
+      TaskExecution taskExecution =
+          taskExecutionGateway.status(node.task().type(), taskExecutionId);
       if (recovery.attemptStatus() == NodeAttemptStatus.SUBMITTED && !taskExecution.terminal()) {
         engine.acknowledgeNodeStarted(
             dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId());
@@ -685,9 +714,13 @@ public class WorkflowRuntimeService {
     try {
       String taskExecutionId = control.taskExecutionId();
       if (taskExecutionId == null) {
-        throw new IllegalStateException("同步任务执行 ID 不存在");
+        throw new IllegalStateException("任务执行 ID 不存在");
       }
-      handleTaskSnapshot(dispatch, control, node, syncTaskRunner.status(taskExecutionId));
+      handleTaskSnapshot(
+          dispatch,
+          control,
+          node,
+          taskExecutionGateway.status(node.task().type(), taskExecutionId));
     } catch (RuntimeException exception) {
       failNode(dispatch, control, exception);
     }
@@ -697,7 +730,7 @@ public class WorkflowRuntimeService {
       NodeDispatch dispatch,
       NodeTaskControl control,
       NodeMetadata node,
-      SyncTaskExecution taskExecution) {
+      TaskExecution taskExecution) {
     if (control.canceled()) return;
     if (!taskExecution.terminal()) {
       runtimeScheduler.schedule(
@@ -713,8 +746,12 @@ public class WorkflowRuntimeService {
         output.put("taskName", node.task().name());
         output.put("taskType", node.task().type());
         output.put("taskVersion", node.task().version());
-        output.put("syncExecutionId", taskExecution.executionId());
-        output.put("syncStatus", taskExecution.status());
+        output.put("taskExecutionId", taskExecution.executionId());
+        output.put("taskExecutionStatus", taskExecution.status());
+        if ("SYNC".equalsIgnoreCase(node.task().type())) {
+          output.put("syncExecutionId", taskExecution.executionId());
+          output.put("syncStatus", taskExecution.status());
+        }
         output.put("receivedInput", dispatch.nodeInput());
         output.put("taskOutput", taskExecution.output());
         engine.completeNode(
@@ -722,7 +759,7 @@ public class WorkflowRuntimeService {
       } else {
         String message = taskExecution.errorMessage();
         if (message == null || message.isBlank()) {
-          message = "同步任务执行失败，状态：" + taskExecution.status();
+          message = "任务执行失败，类型=" + node.task().type() + "，状态=" + taskExecution.status();
         }
         engine.failNode(
             dispatch.workflowExecutionId(), dispatch.nodeId(), dispatch.attemptId(), message);
@@ -769,12 +806,13 @@ public class WorkflowRuntimeService {
     drainDispatches(dispatch.workflowExecutionId());
   }
 
-  private void cancelRemote(String taskExecutionId) {
+  private void cancelRemote(String taskType, String taskExecutionId) {
     try {
-      syncTaskRunner.cancel(taskExecutionId);
+      taskExecutionGateway.cancel(taskType, taskExecutionId);
     } catch (RuntimeException exception) {
       log.warn(
-          "[workflow] sync task cancel ignored taskExecution={}, message={}",
+          "[workflow] task cancel ignored type={}, taskExecution={}, message={}",
+          taskType,
           taskExecutionId,
           exception.getMessage());
     }
@@ -894,7 +932,7 @@ public class WorkflowRuntimeService {
         node.nodeId(),
         task == null ? null : task.taskId(),
         task == null ? node.nodeId() : task.name(),
-        task == null ? "SYNC" : task.type(),
+        task == null ? "UNKNOWN" : task.type(),
         node.status().name(),
         nodeMetadata == null ? TriggerRule.ALL_SUCCESS.name() : nodeMetadata.triggerRule(),
         nodeMetadata == null ? NodeFailurePolicy.FAIL_WORKFLOW.name() : nodeMetadata.failurePolicy(),
@@ -977,7 +1015,12 @@ public class WorkflowRuntimeService {
       NodeTaskControl control = taskControls.computeIfAbsent(
           dispatch.attemptId(),
           ignored -> new NodeTaskControl(dispatch.workflowExecutionId()));
-      runtimePersistence.findExternalExecution(dispatch.attemptId()).ifPresent(control::bindTaskExecution);
+      NodeMetadata node = requireMetadata(dispatch.workflowExecutionId()).nodes().get(dispatch.nodeId());
+      if (node == null) {
+        throw new IllegalStateException("工作流节点恢复元数据不存在：" + dispatch.nodeId());
+      }
+      runtimePersistence.findExternalExecution(dispatch.attemptId())
+          .ifPresent(id -> control.bindTaskExecution(node.task().type(), id));
 
       if (recovery.attemptStatus() == NodeAttemptStatus.PAUSED) {
         return;
@@ -995,15 +1038,16 @@ public class WorkflowRuntimeService {
       if (control == null) return;
       control.cancel();
       String taskExecutionId = control.taskExecutionId();
-      if (taskExecutionId != null) {
-        ioExecutor.execute(() -> cancelRemote(taskExecutionId));
+      String taskType = control.taskType();
+      if (taskExecutionId != null && taskType != null) {
+        ioExecutor.execute(() -> cancelRemote(taskType, taskExecutionId));
       }
     }
 
     @Override
     public NodeControlResult pause(NodePauseRequest request) {
       log.debug(
-          "[workflow] sync task pause unsupported; pausing scheduling only execution={}, node={}, attempt={}",
+          "[workflow] task pause unsupported by runtime adapter; pausing scheduling only execution={}, node={}, attempt={}",
           request.workflowExecutionId(),
           request.nodeId(),
           request.attemptId());
@@ -1018,6 +1062,7 @@ public class WorkflowRuntimeService {
 
   private static final class NodeTaskControl {
     private final String workflowExecutionId;
+    private volatile String taskType;
     private volatile String taskExecutionId;
     private volatile boolean canceled;
 
@@ -1029,11 +1074,16 @@ public class WorkflowRuntimeService {
       return workflowExecutionId;
     }
 
+    String taskType() {
+      return taskType;
+    }
+
     String taskExecutionId() {
       return taskExecutionId;
     }
 
-    void bindTaskExecution(String id) {
+    void bindTaskExecution(String type, String id) {
+      this.taskType = type;
       this.taskExecutionId = id;
     }
 
