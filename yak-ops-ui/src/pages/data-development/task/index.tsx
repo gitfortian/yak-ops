@@ -10,6 +10,7 @@ export default function DataDevelopmentTaskPage() {
   const params = new URLSearchParams(location.search);
   const requestedType = (params.get('type') || 'SQL').toUpperCase() as DevelopmentTaskType;
   const projectId = Number(params.get('projectId') || 0) || undefined;
+  const directoryId = Number(params.get('directoryId') || 0) || undefined;
   const taskId = id ? Number(id) : undefined;
 
   if (requestedType !== 'SQL') {
@@ -22,5 +23,11 @@ export default function DataDevelopmentTaskPage() {
     );
   }
 
-  return <SqlTaskEditor taskId={taskId} initialProjectId={projectId} />;
+  return (
+    <SqlTaskEditor
+      taskId={taskId}
+      initialProjectId={projectId}
+      initialDirectoryId={directoryId}
+    />
+  );
 }
