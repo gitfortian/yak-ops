@@ -3,18 +3,17 @@ package io.yak.ops.business.quality.repository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.dao.QualityCatalogDao;
 import io.yak.ops.business.quality.dao.QualityExecutionDao;
 import io.yak.ops.business.quality.dao.QualityMonitorDao;
-import io.yak.ops.business.quality.domain.QualityDomain;
 import io.yak.ops.business.quality.domain.QualityDomain.AlertEventSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.Execution;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettingsSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSpec;
-import io.yak.ops.business.quality.domain.QualityDomain.Page;
 import io.yak.ops.business.quality.domain.QualityDomain.Rule;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecution;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
@@ -94,12 +93,13 @@ public class QualityRepositoryAdapter implements QualityRepository {
   }
 
   @Override
-  public Page<TableAsset> pageTableAssets(QualityQuery.TableAsset query) {
+  public PageData<TableAsset> pageTableAssets(QualityQuery.TableAsset query) {
     Map<String, Object> params = tableAssetParams(query);
     long total = monitorDao.countTableAssets(params);
     params.put("limit", query.pageSize());
     params.put("offset", (query.current() - 1L) * query.pageSize());
-    return new Page<>(monitorDao.selectTableAssets(params).stream().map(this::tableAsset).toList(), total);
+    List<TableAsset> records = monitorDao.selectTableAssets(params).stream().map(this::tableAsset).toList();
+    return pageData(records, total, query.current(), query.pageSize());
   }
 
   @Override
@@ -124,12 +124,14 @@ public class QualityRepositoryAdapter implements QualityRepository {
   @Override public boolean deleteTableAsset(long assetId) { return monitorDao.softDeleteTableAsset(assetId); }
 
   @Override
-  public Page<Monitor> pageMonitors(QualityQuery.Monitor query) {
+  public PageData<Monitor> pageMonitors(QualityQuery.Monitor query) {
     Map<String, Object> params = monitorParams(query);
     long total = monitorDao.countMonitors(params);
     params.put("limit", query.pageSize());
     params.put("offset", (query.current() - 1L) * query.pageSize());
-    return new Page<>(monitorDao.selectMonitors(params).stream().map(row -> monitor(row, List.of())).toList(), total);
+    List<Monitor> records = monitorDao.selectMonitors(params).stream()
+        .map(row -> monitor(row, List.of())).toList();
+    return pageData(records, total, query.current(), query.pageSize());
   }
 
   @Override
@@ -231,11 +233,14 @@ public class QualityRepositoryAdapter implements QualityRepository {
   @Override public boolean updateMonitorResult(long monitorId, String executionNo, CheckResult result, LocalDateTime runTime) { return monitorDao.updateMonitorResult(monitorId, executionNo, result.name(), runTime); }
 
   @Override
-  public Page<Execution> pageExecutions(QualityQuery.Execution query) {
+  public PageData<Execution> pageExecutions(QualityQuery.Execution query) {
     Map<String, Object> params = executionParams(query);
     long total = executionDao.countExecutions(params);
-    params.put("limit", query.pageSize()); params.put("offset", (query.current() - 1L) * query.pageSize());
-    return new Page<>(executionDao.selectExecutions(params).stream().map(po -> execution(po, List.of())).toList(), total);
+    params.put("limit", query.pageSize());
+    params.put("offset", (query.current() - 1L) * query.pageSize());
+    List<Execution> records = executionDao.selectExecutions(params).stream()
+        .map(po -> execution(po, List.of())).toList();
+    return pageData(records, total, query.current(), query.pageSize());
   }
 
   @Override
@@ -391,6 +396,15 @@ public class QualityRepositoryAdapter implements QualityRepository {
     if (!hasText(json)) return List.of();
     try { return objectMapper.readValue(json, new TypeReference<>() {}); }
     catch (JsonProcessingException e) { throw new IllegalStateException("数据库中的枚举值配置无法解析", e); }
+  }
+
+  private static <T> PageData<T> pageData(
+      List<T> records,
+      long total,
+      int current,
+      int pageSize) {
+    long pages = pageSize <= 0 ? 0L : (total + pageSize - 1L) / pageSize;
+    return new PageData<>(records, total, pages, current, pageSize);
   }
 
   private static CheckResult checkResult(String value) { return hasText(value) ? CheckResult.valueOf(value) : CheckResult.NOT_RUN; }
