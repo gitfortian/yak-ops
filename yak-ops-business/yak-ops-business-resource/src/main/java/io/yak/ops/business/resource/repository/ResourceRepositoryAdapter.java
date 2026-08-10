@@ -1,11 +1,11 @@
 package io.yak.ops.business.resource.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.dao.ResourceDao;
 import io.yak.ops.business.resource.dao.ResourceDao.PageQuery;
 import io.yak.ops.business.resource.domain.ResourceNode;
-import io.yak.ops.business.resource.domain.ResourcePage;
 import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.common.bean.po.resource.ResourcePO;
 import java.util.List;
@@ -84,7 +84,7 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
   }
 
   @Override
-  public ResourcePage<ResourceNode> page(ResourceQuery query) {
+  public PageData<ResourceNode> page(ResourceQuery query) {
     ResourceQuery condition = query == null
         ? new ResourceQuery(1, 20, null, null, null)
         : query;
@@ -95,7 +95,7 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
             condition.parentId(),
             condition.keyword(),
             condition.nodeType()));
-    return new ResourcePage<>(
+    return new PageData<>(
         page.getRecords().stream().map(this::toDomain).toList(),
         page.getTotal(),
         page.getPages(),

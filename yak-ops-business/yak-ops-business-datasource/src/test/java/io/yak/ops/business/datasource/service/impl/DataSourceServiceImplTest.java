@@ -5,8 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
-import io.yak.ops.business.datasource.domain.DataSourcePage;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
@@ -43,7 +43,7 @@ class DataSourceServiceImplTest {
     request.setConnStatus(" connected ");
 
     when(repository.page(any(DataSourceQuery.class)))
-        .thenReturn(new DataSourcePage<>(java.util.List.of(), 0L, 0L, 2L, 50L));
+        .thenReturn(new PageData<>(java.util.List.of(), 0L, 0L, 2L, 50L));
 
     service().getDataSourcePage(request);
 

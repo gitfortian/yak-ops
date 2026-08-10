@@ -5,8 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.resource.domain.ResourceNode;
-import io.yak.ops.business.resource.domain.ResourcePage;
 import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.service.support.ResourceViewMapper;
@@ -47,7 +47,7 @@ class ResourceServiceImplTest {
 
     when(support.trimToNull("  report  ")).thenReturn("report");
     when(repository.page(any(ResourceQuery.class)))
-        .thenReturn(new ResourcePage<ResourceNode>(List.of(), 0L, 0L, 2L, 30L));
+        .thenReturn(new PageData<ResourceNode>(List.of(), 0L, 0L, 2L, 30L));
 
     service.page(request);
 

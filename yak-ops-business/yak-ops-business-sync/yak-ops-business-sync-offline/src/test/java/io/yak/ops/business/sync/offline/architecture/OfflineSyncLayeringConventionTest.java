@@ -3,12 +3,15 @@ package io.yak.ops.business.sync.offline.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobDefinitionController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobExecutionController;
 import io.yak.ops.business.sync.offline.dao.OfflineExecutionEventDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
+import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
+import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionIdempotencyRepository;
@@ -53,8 +56,25 @@ class OfflineSyncLayeringConventionTest {
         OfflineScheduleRepository.class,
         OfflineExecutionControlRepository.class,
         OfflineExecutionIdempotencyRepository.class)) {
-      assertMethodsAvoid(type, ".bean.dto.", ".bean.vo.", ".bean.po.");
+      assertMethodsAvoid(
+          type,
+          ".bean.dto.",
+          ".bean.vo.",
+          ".bean.po.",
+          "com.baomidou.mybatisplus");
     }
+  }
+
+  @Test
+  void repositoriesUseSharedPageData() throws Exception {
+    Method definitions =
+        OfflineJobDefinitionRepository.class.getMethod("page", OfflineDefinitionQuery.class);
+    Method executions =
+        OfflineJobExecutionRepository.class.getMethod("page", OfflineExecutionQuery.class);
+    assertThat(((ParameterizedType) definitions.getGenericReturnType()).getRawType())
+        .isEqualTo(PageData.class);
+    assertThat(((ParameterizedType) executions.getGenericReturnType()).getRawType())
+        .isEqualTo(PageData.class);
   }
 
   @Test

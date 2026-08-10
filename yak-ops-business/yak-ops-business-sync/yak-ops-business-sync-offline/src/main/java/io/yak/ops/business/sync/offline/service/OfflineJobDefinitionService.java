@@ -1,12 +1,12 @@
 package io.yak.ops.business.sync.offline.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
@@ -18,7 +18,6 @@ import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionQueryDTO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobDefinitionVO;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -160,8 +159,8 @@ public class OfflineJobDefinitionService {
     return support.editDetail(require(id));
   }
 
-  /** 业务模块之间使用 Domain 分页，不经过 HTTP DTO/VO。 */
-  public OfflinePage<OfflineJobDefinition> pageDomain(OfflineDefinitionQuery query) {
+  /** 业务模块之间使用框架无关分页，不经过 HTTP DTO/VO。 */
+  public PageData<OfflineJobDefinition> pageDomain(OfflineDefinitionQuery query) {
     return definitionRepository.page(query);
   }
 
@@ -171,16 +170,8 @@ public class OfflineJobDefinitionService {
         query.getCurrent(), query.getPageSize(), query.getId(), query.getJobName(), query.getStatus(),
         query.getSourceType(), query.getSinkType(), query.getSourceTable(), query.getSinkTable(),
         query.getCreateTimeStart(), query.getCreateTimeEnd());
-    OfflinePage<OfflineJobDefinition> page = definitionRepository.pageForView(domainQuery);
-    List<OfflineJobDefinitionVO> records = page.records().stream().map(viewMapper::definition).toList();
-    return new PagingData<>(
-        records,
-        PagingData.Pagination.builder()
-            .total(page.total())
-            .pages(page.pages())
-            .pageNo(page.current())
-            .pageSize(page.pageSize())
-            .build());
+    PageData<OfflineJobDefinition> page = definitionRepository.pageForView(domainQuery);
+    return PagingData.from(page.map(viewMapper::definition));
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)

@@ -38,6 +38,8 @@ Domain -> View Mapper -> VO -> Controller
 - Controller 只通过 Service 进入业务链路，不直接依赖 Repository、DAO 或 Link-Up Client。
 - Service 和执行状态机使用 Domain，不直接操作 MyBatis PO。
 - Repository 接口只暴露 Domain；PO 与 DAO 仅存在于持久化适配层。
+- 分页遵循 `DAO IPage<PO> -> Adapter PageData<Domain> -> Service PagingData<VO>`；业务模块之间也直接传递 `PageData<Domain>`，不再使用 `OfflinePage`。
+- HTTP 分页继续保持 `bizData + pagination`，第一阶段不要求前端迁移。
 - DAO 不接收 HTTP DTO；分页筛选使用 DAO 自己的查询条件。
 - 普通单表操作使用 MyBatis-Plus，只有行锁等数据库原子语义进入 Mapper XML。
 - Link-Up 协议对象只存在于 engine/service 内部，不作为 HTTP 响应模型直接暴露。

@@ -3,8 +3,10 @@ package io.yak.ops.business.resource.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.resource.controller.v1.ResourcesController;
 import io.yak.ops.business.resource.dao.ResourceDao;
+import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.service.impl.ResourceServiceImpl;
 import io.yak.ops.business.resource.storage.StorageOperatorRegistry;
@@ -22,7 +24,8 @@ class ResourceLayeringConventionTest {
       List.of(
           "io.yak.ops.common.bean.dto.",
           "io.yak.ops.common.bean.vo.",
-          "io.yak.ops.common.bean.po.");
+          "io.yak.ops.common.bean.po.",
+          "com.baomidou.mybatisplus");
 
   @Test
   void repositoryOnlyExposesDomainContracts() {
@@ -36,6 +39,12 @@ class ResourceLayeringConventionTest {
             .isFalse();
       }
     }
+  }
+
+  @Test
+  void repositoryUsesSharedPageData() throws Exception {
+    Method page = ResourceRepository.class.getMethod("page", ResourceQuery.class);
+    assertThat(((ParameterizedType) page.getGenericReturnType()).getRawType()).isEqualTo(PageData.class);
   }
 
   @Test

@@ -1,11 +1,11 @@
 package io.yak.ops.business.quality.repository;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.quality.domain.QualityDomain.AlertEventSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettingsSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSpec;
-import io.yak.ops.business.quality.domain.QualityDomain.Page;
 import io.yak.ops.business.quality.domain.QualityDomain.Rule;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleSpec;
@@ -29,14 +29,14 @@ public interface QualityRepository {
   List<Template> listTemplates(QualityQuery.Template query);
   Optional<Template> findTemplate(long id);
 
-  Page<TableAsset> pageTableAssets(QualityQuery.TableAsset query);
+  PageData<TableAsset> pageTableAssets(QualityQuery.TableAsset query);
   List<TableAssetTarget> listTableAssetTargets(long dataSourceId, String databaseName);
   boolean existsTableAssetTarget(long dataSourceId, String databaseName, String schemaName, String tableName);
   int registerTableAssets(List<TableAssetSpec> assets);
   int countMonitorsForTableAsset(long assetId);
   boolean deleteTableAsset(long assetId);
 
-  Page<Monitor> pageMonitors(QualityQuery.Monitor query);
+  PageData<Monitor> pageMonitors(QualityQuery.Monitor query);
   Optional<Monitor> findMonitor(long id);
   List<TableMonitorSummary> tableSummaries(long dataSourceId, String databaseName, String schemaName);
   boolean existsMonitorForTarget(Long excludeId, long dataSourceId, String databaseName, String schemaName, String tableName);
@@ -62,6 +62,6 @@ public interface QualityRepository {
       LocalDateTime finishedAt, long durationMs);
   boolean failExecution(long id, String errorMessage, LocalDateTime finishedAt, long durationMs);
   boolean updateMonitorResult(long monitorId, String executionNo, CheckResult result, LocalDateTime runTime);
-  Page<Execution> pageExecutions(QualityQuery.Execution query);
+  PageData<Execution> pageExecutions(QualityQuery.Execution query);
   Optional<Execution> findExecution(String executionNo);
 }

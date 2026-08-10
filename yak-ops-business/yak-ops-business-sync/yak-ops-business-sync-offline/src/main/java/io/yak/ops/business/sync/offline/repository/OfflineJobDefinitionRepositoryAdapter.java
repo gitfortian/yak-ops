@@ -1,13 +1,13 @@
 package io.yak.ops.business.sync.offline.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao.PageQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import java.util.List;
@@ -62,16 +62,16 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
   }
 
   @Override
-  public OfflinePage<OfflineJobDefinition> page(OfflineDefinitionQuery query) {
+  public PageData<OfflineJobDefinition> page(OfflineDefinitionQuery query) {
     return page(query, false);
   }
 
   @Override
-  public OfflinePage<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query) {
+  public PageData<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query) {
     return page(query, true);
   }
 
-  private OfflinePage<OfflineJobDefinition> page(
+  private PageData<OfflineJobDefinition> page(
       OfflineDefinitionQuery query,
       boolean includeDisplayNames) {
     OfflineDefinitionQuery q = query == null
@@ -85,7 +85,7 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
     List<OfflineJobDefinition> records = page.getRecords().stream()
         .map(po -> toDomain(po, includeDisplayNames))
         .toList();
-    return new OfflinePage<>(records, page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());
+    return new PageData<>(records, page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());
   }
 
   private OfflineJobDefinition toDomain(OfflineJobDefinitionPO po, boolean includeDisplayNames) {

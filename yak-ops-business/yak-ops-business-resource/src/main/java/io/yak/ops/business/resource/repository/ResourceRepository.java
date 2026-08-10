@@ -1,7 +1,7 @@
 package io.yak.ops.business.resource.repository;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.resource.domain.ResourceNode;
-import io.yak.ops.business.resource.domain.ResourcePage;
 import io.yak.ops.business.resource.domain.ResourceQuery;
 import java.util.List;
 import java.util.Optional;
@@ -29,5 +29,5 @@ public interface ResourceRepository {
 
   List<ResourceNode> findDescendants(String fullPath);
 
-  ResourcePage<ResourceNode> page(ResourceQuery query);
+  PageData<ResourceNode> page(ResourceQuery query);
 }

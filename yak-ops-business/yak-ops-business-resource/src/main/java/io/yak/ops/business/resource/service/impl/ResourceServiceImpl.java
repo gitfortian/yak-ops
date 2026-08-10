@@ -1,10 +1,10 @@
 package io.yak.ops.business.resource.service.impl;
 
+import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.domain.ResourceDownload;
 import io.yak.ops.business.resource.domain.ResourceNode;
-import io.yak.ops.business.resource.domain.ResourcePage;
 import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.business.resource.exception.ResourceException;
 import io.yak.ops.business.resource.repository.ResourceRepository;
@@ -129,9 +129,8 @@ public class ResourceServiceImpl implements ResourceService {
 
   @Override
   public PagingData<ResourceVO> page(ResourceQueryDTO queryDTO) {
-    ResourcePage<ResourceNode> page = repository.page(toQuery(queryDTO));
-    List<ResourceVO> records = page.records().stream().map(viewMapper::node).toList();
-    return pagingData(records, page);
+    PageData<ResourceNode> page = repository.page(toQuery(queryDTO));
+    return PagingData.from(page.map(viewMapper::node));
   }
 
   @Override
@@ -273,20 +272,5 @@ public class ResourceServiceImpl implements ResourceService {
         source.getParentId(),
         support.trimToNull(source.getKeyword()),
         nodeType);
-  }
-
-  private PagingData<ResourceVO> pagingData(
-      List<ResourceVO> records,
-      ResourcePage<ResourceNode> page) {
-    PagingData<ResourceVO> result = new PagingData<>();
-    result.setBizData(records);
-    result.setPagination(
-        PagingData.Pagination.builder()
-            .total(page.total())
-            .pages(page.pages())
-            .pageNo(page.pageNo())
-            .pageSize(page.pageSize())
-            .build());
-    return result;
   }
 }

@@ -2,13 +2,13 @@ package io.yak.ops.business.sync.offline.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionEvent;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
@@ -57,18 +57,10 @@ public class OfflineExecutionReadService {
 
   public PagingData<OfflineJobExecutionVO> page(OfflineJobExecutionQueryDTO queryDTO) {
     OfflineJobExecutionQueryDTO query = queryDTO == null ? new OfflineJobExecutionQueryDTO() : queryDTO;
-    OfflinePage<OfflineJobExecution> page = executionRepository.page(
+    PageData<OfflineJobExecution> page = executionRepository.page(
         new OfflineExecutionQuery(
             query.getCurrent(), query.getPageSize(), query.getJobDefinitionId(), query.getStatus()));
-    List<OfflineJobExecutionVO> records = page.records().stream().map(viewMapper::execution).toList();
-    return new PagingData<>(
-        records,
-        PagingData.Pagination.builder()
-            .total(page.total())
-            .pages(page.pages())
-            .pageNo(page.current())
-            .pageSize(page.pageSize())
-            .build());
+    return PagingData.from(page.map(viewMapper::execution));
   }
 
   public OfflineJobExecutionDetailVO detail(Long id) {

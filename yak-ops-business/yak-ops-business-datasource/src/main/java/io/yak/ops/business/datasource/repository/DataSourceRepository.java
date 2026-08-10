@@ -1,7 +1,7 @@
 package io.yak.ops.business.datasource.repository;
 
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
-import io.yak.ops.business.datasource.domain.DataSourcePage;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.domain.DataSourceSummary;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
@@ -21,7 +21,7 @@ public interface DataSourceRepository {
 
   boolean existsByName(String name, Long excludeId);
 
-  DataSourcePage<DataSourceDefinition> page(DataSourceQuery query);
+  PageData<DataSourceDefinition> page(DataSourceQuery query);
 
   List<DataSourceDefinition> findAll(DataSourceDbType dbType);
 

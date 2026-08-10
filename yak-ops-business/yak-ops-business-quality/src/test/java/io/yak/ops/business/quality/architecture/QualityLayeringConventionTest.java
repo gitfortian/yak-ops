@@ -2,10 +2,13 @@ package io.yak.ops.business.quality.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.baomidou.mybatisplus.annotation.TableName;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.quality.dao.QualityAnalyticsDao;
 import io.yak.ops.business.quality.dao.QualityCatalogDao;
 import io.yak.ops.business.quality.dao.QualityExecutionDao;
 import io.yak.ops.business.quality.dao.QualityMonitorDao;
+import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.CustomTemplateRepository;
 import io.yak.ops.business.quality.repository.QualityExecutionWorkspaceRepository;
 import io.yak.ops.business.quality.repository.QualityRepository;
@@ -19,8 +22,8 @@ import io.yak.ops.common.bean.po.quality.QualityRulePO;
 import io.yak.ops.common.bean.po.quality.QualityRuleTemplatePO;
 import io.yak.ops.common.bean.po.quality.QualityTableAssetPO;
 import io.yak.ops.common.bean.po.quality.QualityTemplateFolderPO;
-import com.baomidou.mybatisplus.annotation.TableName;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +36,19 @@ class QualityLayeringConventionTest {
         CustomTemplateRepository.class,
         QualityWorkspaceRepository.class,
         QualityExecutionWorkspaceRepository.class));
+  }
+
+  @Test
+  void repositoryPagingUsesSharedPageData() throws Exception {
+    Method monitors = QualityRepository.class.getMethod("pageMonitors", QualityQuery.Monitor.class);
+    Method executions = QualityRepository.class.getMethod("pageExecutions", QualityQuery.Execution.class);
+    Method workspace =
+        QualityExecutionWorkspaceRepository.class.getMethod("page", QualityQuery.ExecutionWorkspace.class);
+    for (Method method : List.of(monitors, executions, workspace)) {
+      assertThat(((ParameterizedType) method.getGenericReturnType()).getRawType())
+          .as(method.getName())
+          .isEqualTo(PageData.class);
+    }
   }
 
   @Test
@@ -71,7 +87,8 @@ class QualityLayeringConventionTest {
             .as("Repository boundary: %s#%s", type.getSimpleName(), method.getName())
             .doesNotContain(".bean.dto.quality")
             .doesNotContain(".bean.vo.quality")
-            .doesNotContain(".bean.po.quality");
+            .doesNotContain(".bean.po.quality")
+            .doesNotContain("com.baomidou.mybatisplus");
       }
     }
   }

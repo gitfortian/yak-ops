@@ -20,6 +20,8 @@ Domain -> ResourceFileSyncDispatcher -> ResourceFileSyncProvider SPI
 - Controller 只通过 `ResourceService` 进入业务链路，不直接依赖 Repository、DAO、Mapper 或 Storage SPI。
 - Service、`ResourceServiceSupport` 和 `ResourceFileOperations` 使用 `ResourceNode` 等 Domain，不直接操作 `ResourcePO`。
 - `ResourceRepository` 只暴露 Domain；PO 只存在于 Repository Adapter / DAO / Mapper 持久化层。
+- 分页遵循 `DAO IPage<PO> -> Adapter PageData<Domain> -> Service PagingData<VO>`；不再创建资源模块私有 `ResourcePage`。
+- HTTP 分页继续保持 `bizData + pagination`，第一阶段不要求前端迁移。
 - DAO 不接收 HTTP DTO，也不返回 HTTP VO；分页使用 DAO 自己的 `PageQuery`。
 - 当前资源元数据只有一张表，查询均为单表 CRUD/条件查询，因此继续使用 MyBatis-Plus `BaseMapper` / LambdaWrapper；只有未来真正出现复杂关联 SQL 时才放入 `mapper/resource/*.xml`。
 - `MultipartFile`、`InputStream`、Storage Operator 等文件 I/O 对象属于 Service/Storage SPI 边界，不进入 Repository。

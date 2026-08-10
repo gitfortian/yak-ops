@@ -1,12 +1,12 @@
 package io.yak.ops.business.sync.offline.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao.PageQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
-import io.yak.ops.business.sync.offline.domain.OfflinePage;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -66,11 +66,11 @@ public class OfflineJobExecutionRepositoryAdapter implements OfflineJobExecution
   }
 
   @Override
-  public OfflinePage<OfflineJobExecution> page(OfflineExecutionQuery query) {
+  public PageData<OfflineJobExecution> page(OfflineExecutionQuery query) {
     OfflineExecutionQuery q = query == null ? new OfflineExecutionQuery(1, 10, null, null) : query;
     IPage<OfflineJobExecutionPO> page = dao.selectPage(
         new PageQuery(q.current(), q.pageSize(), q.jobDefinitionId(), q.status()));
-    return new OfflinePage<>(
+    return new PageData<>(
         page.getRecords().stream().map(this::toDomain).toList(),
         page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());
   }
