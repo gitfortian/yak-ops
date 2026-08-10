@@ -14,19 +14,25 @@ public interface SqlDevelopmentRepository {
   Definition insertDefinition(
       String name,
       String description,
+      Long projectId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters);
 
   Optional<Definition> findDefinition(Long id);
 
-  List<Definition> listDefinitions();
+  default List<Definition> listDefinitions() {
+    return listDefinitions(null);
+  }
+
+  List<Definition> listDefinitions(Long projectId);
 
   boolean updateDraft(
       Long id,
       long baseRevision,
       String name,
       String description,
+      Long projectId,
       Long dataSourceId,
       String sql,
       List<SqlParameterDefinition> parameters);
