@@ -19,25 +19,26 @@ import {
 } from './service';
 import type {
   DevelopmentDirectory,
+  DevelopmentId,
   DevelopmentNode,
   DevelopmentTaskType,
 } from './types';
 
-type TreeNodeKey = `directory:${number}` | `node:${number}`;
+type TreeNodeKey = `directory:${string}` | `node:${string}`;
 
 const DEFAULT_LEFT_WIDTH = 300;
 const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_WIDTH = 440;
 const LEFT_WIDTH_STORAGE_KEY = 'yak-data-development.left-width';
 
-const directoryKey = (directoryId: number): TreeNodeKey =>
+const directoryKey = (directoryId: DevelopmentId): TreeNodeKey =>
   `directory:${directoryId}`;
-const nodeKey = (nodeId: number): TreeNodeKey => `node:${nodeId}`;
+const nodeKey = (nodeId: DevelopmentId): TreeNodeKey => `node:${nodeId}`;
 
-const numberFromKey = (key: string | undefined, prefix: string) => {
+const idFromKey = (key: string | undefined, prefix: string) => {
   if (!key?.startsWith(prefix)) return undefined;
-  const value = Number(key.substring(prefix.length));
-  return Number.isFinite(value) && value > 0 ? value : undefined;
+  const value = key.substring(prefix.length).trim();
+  return value || undefined;
 };
 
 const clampLeftWidth = (value: number) =>
@@ -100,60 +101,48 @@ export default function DataDevelopmentPage() {
   }, [loadTree]);
 
   const nodeMap = useMemo(
-    () => new Map(nodes.map((node) => [Number(node.id), node])),
+    () => new Map(nodes.map((node) => [node.id, node])),
     [nodes],
   );
 
   const directoryIdForSelection = useMemo(() => {
-    const selectedDirectoryId = numberFromKey(selectedNodeKey, 'directory:');
+    const selectedDirectoryId = idFromKey(selectedNodeKey, 'directory:');
     if (selectedDirectoryId) return selectedDirectoryId;
 
-    const selectedResourceNodeId = numberFromKey(selectedNodeKey, 'node:');
+    const selectedResourceNodeId = idFromKey(selectedNodeKey, 'node:');
     if (!selectedResourceNodeId) return undefined;
     const selectedResourceNode = nodeMap.get(selectedResourceNodeId);
-    return selectedResourceNode?.directoryId
-      ? Number(selectedResourceNode.directoryId)
-      : undefined;
+    return selectedResourceNode?.directoryId || undefined;
   }, [nodeMap, selectedNodeKey]);
 
   const fullTreeData = useMemo<DevelopmentTreeNode[]>(() => {
-    const resourceNodes = (directoryId?: number): DevelopmentTreeNode[] =>
+    const resourceNodes = (directoryId?: DevelopmentId): DevelopmentTreeNode[] =>
       nodes
-        .filter((node) => {
-          const nodeDirectoryId = node.directoryId
-            ? Number(node.directoryId)
-            : undefined;
-          return nodeDirectoryId === directoryId;
-        })
+        .filter((node) => (node.directoryId || undefined) === directoryId)
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
         .map((node) => ({
-          key: nodeKey(Number(node.id)),
+          key: nodeKey(node.id),
           title: node.name,
           nodeType: 'node',
-          nodeId: Number(node.id),
           taskType: node.type,
           searchText: `${node.name} ${node.type} ${node.id}`,
           isLeaf: true,
         }));
 
-    const directoryNodes = (parentId?: number): DevelopmentTreeNode[] =>
+    const directoryNodes = (parentId?: DevelopmentId): DevelopmentTreeNode[] =>
       directories
-        .filter((directory) => (directory.parentId ?? undefined) === parentId)
+        .filter((directory) => (directory.parentId || undefined) === parentId)
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
-        .map((directory) => {
-          const directoryId = Number(directory.id);
-          return {
-            key: directoryKey(directoryId),
-            title: directory.name,
-            nodeType: 'directory',
-            directoryId,
-            searchText: `${directory.name} ${directory.path || ''}`,
-            children: [
-              ...directoryNodes(directoryId),
-              ...resourceNodes(directoryId),
-            ],
-          };
-        });
+        .map((directory) => ({
+          key: directoryKey(directory.id),
+          title: directory.name,
+          nodeType: 'directory',
+          searchText: `${directory.name} ${directory.path || ''}`,
+          children: [
+            ...directoryNodes(directory.id),
+            ...resourceNodes(directory.id),
+          ],
+        }));
 
     // `/` 仅作为逻辑根目录，不渲染为树节点。
     return [...directoryNodes(), ...resourceNodes()];
@@ -213,7 +202,10 @@ export default function DataDevelopmentPage() {
     [leftCollapsed, leftWidth],
   );
 
-  const submitDirectory = async (parentId: number | undefined, name: string) => {
+  const submitDirectory = async (
+    parentId: DevelopmentId | undefined,
+    name: string,
+  ) => {
     setDirectorySaving(true);
     try {
       const created = responseData(
@@ -223,7 +215,7 @@ export default function DataDevelopmentPage() {
       setDirectoryOpen(false);
       setTreeKeyword('');
       await loadTree();
-      setSelectedNodeKey(directoryKey(Number(created.id)));
+      setSelectedNodeKey(directoryKey(created.id));
       message.success('目录创建成功');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '新建目录失败');
@@ -234,8 +226,8 @@ export default function DataDevelopmentPage() {
 
   const submitNode = async (
     type: DevelopmentTaskType,
-    projectId: number | undefined,
-    directoryId: number | undefined,
+    projectId: DevelopmentId | undefined,
+    directoryId: DevelopmentId | undefined,
     name: string,
   ) => {
     setNodeSaving(true);
@@ -252,7 +244,7 @@ export default function DataDevelopmentPage() {
       setCreateOpen(false);
       setTreeKeyword('');
       await loadTree();
-      setSelectedNodeKey(nodeKey(Number(created.id)));
+      setSelectedNodeKey(nodeKey(created.id));
       message.success('节点创建成功');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '新建节点失败');
@@ -310,7 +302,7 @@ export default function DataDevelopmentPage() {
           directories={directories}
           loading={nodeSaving}
           defaultProjectId={
-            currentProject?.id ? Number(currentProject.id) : undefined
+            currentProject?.id ? String(currentProject.id) : undefined
           }
           defaultDirectoryId={directoryIdForSelection}
           onCancel={() => {
