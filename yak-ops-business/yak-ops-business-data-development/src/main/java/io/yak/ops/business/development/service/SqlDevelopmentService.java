@@ -140,8 +140,14 @@ public class SqlDevelopmentService {
   }
 
   public Execution execution(Long executionId) {
-    return repository.findExecution(executionId)
+    Execution current = repository.findExecution(executionId)
         .orElseThrow(() -> new IllegalArgumentException("SQL 执行不存在：" + executionId));
+    if (!isTerminal(current.status())) {
+      executionGateway.status("SQL", String.valueOf(executionId));
+      current = repository.findExecution(executionId)
+          .orElseThrow(() -> new IllegalArgumentException("SQL 执行不存在：" + executionId));
+    }
+    return current;
   }
 
   public Execution cancel(Long executionId) {
