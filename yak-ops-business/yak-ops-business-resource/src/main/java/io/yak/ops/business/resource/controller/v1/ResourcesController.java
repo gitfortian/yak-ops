@@ -2,7 +2,7 @@ package io.yak.ops.business.resource.controller.v1;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.yak.framework.common.PagingResult;
+import io.yak.framework.common.PagingData;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
@@ -97,9 +97,9 @@ public class ResourcesController {
 
   @Operation(summary = "分页查询资源")
   @PostMapping("/page")
-  public PagingResult<ResourceVO> page(
+  public Result<PagingData<ResourceVO>> page(
       @Valid @RequestBody(required = false) ResourceQueryDTO queryDTO) {
-    return PagingResult.success(resourceService.page(queryDTO));
+    return Result.success(resourceService.page(queryDTO));
   }
 
   @Operation(summary = "查询完整资源树")
