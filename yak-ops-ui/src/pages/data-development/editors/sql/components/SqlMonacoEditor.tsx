@@ -3,11 +3,15 @@ import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 import { useEffect, useRef } from 'react';
 
 import type { DevelopmentEditorViewState } from '../../session/types';
+import { acquireSqlHoverProvider } from '../assistance/registerSqlHover';
+import { acquireSqlSignatureHelpProvider } from '../assistance/registerSqlSignatureHelp';
 import { acquireSqlBuiltinCompletionProvider } from '../completion/registerSqlBuiltinCompletion';
 import {
   acquireSqlMetadataCompletionProvider,
   bindSqlMetadataModel,
 } from '../completion/registerSqlMetadataCompletion';
+import { acquireSqlSnippetCompletionProvider } from '../completion/registerSqlSnippetCompletion';
+import { bindSqlDiagnostics } from '../diagnostics/bindSqlDiagnostics';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
 
 export interface SqlEditorPosition {
@@ -89,6 +93,9 @@ const SqlMonacoEditor = ({
     ensureYakSqlTheme();
     const builtinCompletionProvider = acquireSqlBuiltinCompletionProvider();
     const metadataCompletionProvider = acquireSqlMetadataCompletionProvider();
+    const snippetCompletionProvider = acquireSqlSnippetCompletionProvider();
+    const hoverProvider = acquireSqlHoverProvider();
+    const signatureHelpProvider = acquireSqlSignatureHelpProvider();
 
     const uri = monaco.Uri.parse(
       `inmemory://yak-ops/data-development/sql/${encodeURIComponent(id)}.sql`,
@@ -97,6 +104,7 @@ const SqlMonacoEditor = ({
 
     const model = monaco.editor.createModel(value, 'sql', uri);
     const metadataModelBinding = bindSqlMetadataModel(model.uri.toString(), id);
+    const diagnosticsBinding = bindSqlDiagnostics(model);
     const editor = monaco.editor.create(containerRef.current, {
       model,
       theme: 'yak-sql-light',
@@ -131,6 +139,8 @@ const SqlMonacoEditor = ({
       acceptSuggestionOnEnter: 'on',
       tabCompletion: 'on',
       suggestSelection: 'recentlyUsedByPrefix',
+      parameterHints: { enabled: true },
+      hover: { enabled: true, delay: 300, sticky: true },
       suggest: {
         showWords: false,
         showKeywords: true,
@@ -138,6 +148,7 @@ const SqlMonacoEditor = ({
         showFields: true,
         showStructs: true,
         showInterfaces: true,
+        showSnippets: true,
         snippetsPreventQuickSuggestions: false,
       },
       wordBasedSuggestions: 'off',
@@ -206,7 +217,11 @@ const SqlMonacoEditor = ({
       cursorDisposable.dispose();
       selectionDisposable.dispose();
       scrollDisposable.dispose();
+      diagnosticsBinding.dispose();
       metadataModelBinding.dispose();
+      signatureHelpProvider.dispose();
+      hoverProvider.dispose();
+      snippetCompletionProvider.dispose();
       metadataCompletionProvider.dispose();
       builtinCompletionProvider.dispose();
       editor.dispose();
