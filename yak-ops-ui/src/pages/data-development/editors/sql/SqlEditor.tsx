@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   updateEditorSessionContent,
@@ -9,6 +9,8 @@ import type { DevelopmentEditorContext } from '../types';
 import SqlMonacoEditor, {
   type SqlEditorPosition,
 } from './components/SqlMonacoEditor';
+import SqlMetadataContextPanel from './metadata/SqlMetadataContextPanel';
+import { useSqlMetadataContext } from './metadata/sqlMetadataContextStore';
 
 const defaultPosition: SqlEditorPosition = {
   lineNumber: 1,
@@ -18,11 +20,32 @@ const defaultPosition: SqlEditorPosition = {
 
 export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
   const session = useEditorSession(node.id, node.type);
+  const metadataContext = useSqlMetadataContext(node.id);
   const [position, setPosition] = useState<SqlEditorPosition>(() => ({
     lineNumber: session.viewState?.lineNumber || 1,
     column: session.viewState?.column || 1,
     selectionLength: 0,
   }));
+
+  const metadataPath = useMemo(
+    () =>
+      [
+        metadataContext.dataSourceName ||
+          (metadataContext.dataSourceId
+            ? `DS ${metadataContext.dataSourceId}`
+            : undefined),
+        metadataContext.database,
+        metadataContext.schema,
+      ]
+        .filter(Boolean)
+        .join(' / '),
+    [
+      metadataContext.dataSourceId,
+      metadataContext.dataSourceName,
+      metadataContext.database,
+      metadataContext.schema,
+    ],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
@@ -49,6 +72,15 @@ export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
               未保存
             </span>
           ) : null}
+          <span
+            className={[
+              'max-w-[260px] truncate',
+              metadataContext.dataSourceId ? 'text-[#667085]' : 'text-[#b0b7c3]',
+            ].join(' ')}
+            title={metadataPath || '未选择数据源'}
+          >
+            {metadataPath || '未选择数据源'}
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {position.selectionLength > 0 ? (
@@ -64,11 +96,7 @@ export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
 };
 
 export const SqlRunConfig = ({ node }: DevelopmentEditorContext) => (
-  <div className="text-[12px] leading-6 text-[#667085]">
-    <div className="font-medium text-[#344054]">SQL 运行配置</div>
-    <div className="mt-2">当前节点：{node.name}</div>
-    <div>数据源、执行参数和资源配置将在后续阶段接入。</div>
-  </div>
+  <SqlMetadataContextPanel nodeId={node.id} nodeName={node.name} />
 );
 
 export const SqlRunResult = ({ node }: DevelopmentEditorContext) => (
