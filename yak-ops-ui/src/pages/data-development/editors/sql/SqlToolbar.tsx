@@ -9,8 +9,9 @@ import {
   Undo2,
   Wand2,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
-import { persistEditorSessionsNow } from '../session/editorSessionStore';
+import { markEditorSessionSaved } from '../session/editorSessionStore';
 import type { DevelopmentEditorToolbarContext } from '../types';
 import {
   executeSqlEditorCommand,
@@ -23,7 +24,7 @@ const iconButtonClassName =
 interface ToolbarButtonProps {
   title: string;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 const ToolbarButton = ({ title, onClick, children }: ToolbarButtonProps) => (
@@ -59,7 +60,7 @@ const SqlToolbar = ({ node, onRun }: DevelopmentEditorToolbarContext) => {
       <ToolbarButton
         title="保存本地草稿"
         onClick={() => {
-          persistEditorSessionsNow();
+          markEditorSessionSaved(node.id);
           message.success('本地草稿已保存');
         }}
       >
