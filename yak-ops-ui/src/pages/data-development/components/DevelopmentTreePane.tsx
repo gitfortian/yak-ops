@@ -256,7 +256,7 @@ const DevelopmentTreePane = ({
           className="flex h-full flex-col overflow-hidden"
           style={{ width: leftWidth }}
         >
-          <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-[#f5f5f6] px-3">
+          <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-[#f7f7f8] px-3">
             <span className="text-[13px] font-semibold text-[#30323b]">
               开发目录
             </span>
@@ -288,7 +288,7 @@ const DevelopmentTreePane = ({
             </Dropdown>
           </div>
 
-          <div className="flex h-11 shrink-0 items-center border-b border-[#e8e9ec] px-3">
+          <div className="flex h-9 shrink-0 items-center border-b border-[#e8e9ec] px-2.5">
             <Input
               allowClear
               size="small"
@@ -297,6 +297,7 @@ const DevelopmentTreePane = ({
               prefix={<Search size={13} className="text-[#98a2b3]" />}
               placeholder="搜索名称 / 节点"
               onChange={(event) => onSearchChange(event.target.value)}
+              className="!h-7"
             />
           </div>
 
