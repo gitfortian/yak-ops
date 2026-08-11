@@ -5,12 +5,19 @@ import type {
   DevelopmentTaskType,
 } from '../../types';
 import type {
+  DevelopmentEditorSelection,
   DevelopmentEditorSession,
   DevelopmentEditorViewState,
 } from './types';
 
 const STORAGE_KEY = 'yak-data-development.editor-sessions.v1';
 const PERSIST_DELAY = 200;
+const TASK_TYPES = new Set<DevelopmentTaskType>([
+  'SQL',
+  'SHELL',
+  'HTTP',
+  'PYTHON',
+]);
 
 interface PersistedEditorSessions {
   version: 1;
@@ -26,6 +33,31 @@ let persistTimer: number | undefined;
 let pageHideBound = false;
 
 const isBrowser = () => typeof window !== 'undefined';
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const isSelection = (value: unknown): value is DevelopmentEditorSelection => {
+  if (!value || typeof value !== 'object') return false;
+  const selection = value as Partial<DevelopmentEditorSelection>;
+  return (
+    isFiniteNumber(selection.startLineNumber) &&
+    isFiniteNumber(selection.startColumn) &&
+    isFiniteNumber(selection.endLineNumber) &&
+    isFiniteNumber(selection.endColumn)
+  );
+};
+
+const isViewState = (value: unknown): value is DevelopmentEditorViewState => {
+  if (!value || typeof value !== 'object') return false;
+  const viewState = value as Partial<DevelopmentEditorViewState>;
+  return (
+    isFiniteNumber(viewState.lineNumber) &&
+    isFiniteNumber(viewState.column) &&
+    isFiniteNumber(viewState.scrollTop) &&
+    isFiniteNumber(viewState.scrollLeft) &&
+    (viewState.selection === undefined || isSelection(viewState.selection))
+  );
+};
 
 const sameViewState = (
   left?: DevelopmentEditorViewState,
@@ -89,10 +121,12 @@ const isPersistedSession = (
   return (
     typeof session.nodeId === 'string' &&
     typeof session.nodeType === 'string' &&
+    TASK_TYPES.has(session.nodeType as DevelopmentTaskType) &&
     typeof session.content === 'string' &&
     typeof session.originalContent === 'string' &&
     typeof session.dirty === 'boolean' &&
-    typeof session.updatedAt === 'number'
+    isFiniteNumber(session.updatedAt) &&
+    (session.viewState === undefined || isViewState(session.viewState))
   );
 };
 
@@ -112,7 +146,10 @@ const ensureHydrated = () => {
 
     parsed.sessions.forEach((session) => {
       if (!isPersistedSession(session)) return;
-      sessions.set(session.nodeId, session);
+      sessions.set(session.nodeId, {
+        ...session,
+        dirty: session.content !== session.originalContent,
+      });
     });
   } catch {
     // Ignore malformed or unavailable persisted state and start with a clean store.
