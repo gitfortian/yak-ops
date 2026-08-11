@@ -372,14 +372,8 @@ export default function DataDevelopmentPage() {
 
   return (
     <ConfigProvider theme={BRAND_THEME}>
-      <div className="flex h-[calc(100vh-64px)] min-h-[640px] flex-col overflow-hidden bg-white">
-        <header className="shrink-0 border-b border-[#e8e9ec] px-5 py-3">
-          <h1 className="m-0 text-[22px] font-semibold leading-8 text-[#161823]">
-            数据开发
-          </h1>
-        </header>
-
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex h-[calc(100vh-64px)] min-h-[640px] flex-col overflow-hidden bg-[#f5f5f6] p-3 pt-2">
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-[4px] border border-[#e4e7ec] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.03)]">
           <DevelopmentTreePane
             treeData={treeData}
             treeLoading={treeLoading}
