@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CreateDirectoryModal from './components/CreateDirectoryModal';
 import CreateTaskModal from './components/CreateTaskModal';
+import DevelopmentEditorWorkspace from './components/DevelopmentEditorWorkspace';
 import DevelopmentTreePane, {
   type DevelopmentNodeCreateType,
   type DevelopmentTreeAction,
@@ -118,16 +119,19 @@ export default function DataDevelopmentPage() {
     () => new Map(directories.map((directory) => [directory.id, directory.path])),
     [directories],
   );
+  const selectedResourceNodeId = useMemo(
+    () => idFromKey(selectedNodeKey, 'node:'),
+    [selectedNodeKey],
+  );
 
   const directoryIdForSelection = useMemo(() => {
     const selectedDirectoryId = idFromKey(selectedNodeKey, 'directory:');
     if (selectedDirectoryId) return selectedDirectoryId;
 
-    const selectedResourceNodeId = idFromKey(selectedNodeKey, 'node:');
     if (!selectedResourceNodeId) return undefined;
     const selectedResourceNode = nodeMap.get(selectedResourceNodeId);
     return selectedResourceNode?.directoryId || undefined;
-  }, [nodeMap, selectedNodeKey]);
+  }, [nodeMap, selectedNodeKey, selectedResourceNodeId]);
 
   const fullTreeData = useMemo<DevelopmentTreeNode[]>(() => {
     const resourceNodes = (directoryId?: DevelopmentId): DevelopmentTreeNode[] =>
@@ -398,16 +402,14 @@ export default function DataDevelopmentPage() {
             }}
           />
 
-          <main className="flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-white">
-            <div className="text-center">
-              <div className="text-[14px] font-medium text-[#667085]">
-                选择左侧开发节点
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a2b3]">
-                节点编辑工作区将在下一阶段完善
-              </div>
-            </div>
-          </main>
+          <DevelopmentEditorWorkspace
+            nodes={nodes}
+            directories={directories}
+            selectedNodeId={selectedResourceNodeId}
+            onNodeFocus={(nodeId) =>
+              setSelectedNodeKey(nodeId ? nodeKey(nodeId) : undefined)
+            }
+          />
         </div>
 
         <CreateTaskModal
