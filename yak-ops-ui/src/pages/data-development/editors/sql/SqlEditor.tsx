@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
+import {
+  updateEditorSessionContent,
+  updateEditorSessionViewState,
+  useEditorSession,
+} from '../session/editorSessionStore';
 import type { DevelopmentEditorContext } from '../types';
 import SqlMonacoEditor, {
   type SqlEditorPosition,
 } from './components/SqlMonacoEditor';
-
-const inMemorySqlDrafts = new Map<string, string>();
 
 const defaultPosition: SqlEditorPosition = {
   lineNumber: 1,
@@ -14,26 +17,25 @@ const defaultPosition: SqlEditorPosition = {
 };
 
 export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
-  const initialValue = useMemo(
-    () => inMemorySqlDrafts.get(String(node.id)) || '',
-    [node.id],
-  );
-  const [value, setValue] = useState(initialValue);
-  const [position, setPosition] = useState(defaultPosition);
-
-  const handleChange = (nextValue: string) => {
-    setValue(nextValue);
-    inMemorySqlDrafts.set(String(node.id), nextValue);
-  };
+  const session = useEditorSession(node.id, node.type);
+  const [position, setPosition] = useState<SqlEditorPosition>(() => ({
+    lineNumber: session.viewState?.lineNumber || 1,
+    column: session.viewState?.column || 1,
+    selectionLength: 0,
+  }));
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
       <div className="min-h-0 flex-1">
         <SqlMonacoEditor
           id={String(node.id)}
-          value={value}
-          onChange={handleChange}
+          value={session.content}
+          initialViewState={session.viewState}
+          onChange={(value) => updateEditorSessionContent(node.id, value)}
           onPositionChange={setPosition}
+          onViewStateChange={(viewState) =>
+            updateEditorSessionViewState(node.id, viewState)
+          }
         />
       </div>
 
@@ -41,6 +43,12 @@ export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
         <div className="flex min-w-0 items-center gap-3">
           <span className="font-medium text-[#667085]">SQL</span>
           <span className="truncate">{node.name}</span>
+          {session.dirty ? (
+            <span className="inline-flex shrink-0 items-center gap-1 text-[#667085]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#667085]" />
+              未保存
+            </span>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {position.selectionLength > 0 ? (
