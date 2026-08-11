@@ -2,13 +2,11 @@ import { Button, Dropdown, Tooltip, message } from 'antd';
 import {
   Check,
   Code2,
-  History,
   MoreHorizontal,
   Play,
   RefreshCw,
   Rocket,
   Save,
-  Settings2,
   Share2,
   Square,
   TerminalSquare,
@@ -29,7 +27,12 @@ interface DevelopmentEditorWorkspaceProps {
   onNodeFocus: (nodeId?: DevelopmentId) => void;
 }
 
-type RightPanelTab = 'properties' | 'versions';
+type RightPanelTab =
+  | 'properties'
+  | 'run-config'
+  | 'schedule-config'
+  | 'versions';
+
 type EditorTabAction =
   | 'close-current'
   | 'close-others'
@@ -43,6 +46,13 @@ const nodeTypeLabel: Record<string, string> = {
   HTTP: 'HTTP',
   PYTHON: 'Python',
 };
+
+const rightPanelItems: Array<{ key: RightPanelTab; label: string }> = [
+  { key: 'properties', label: '属性' },
+  { key: 'run-config', label: '运行配置' },
+  { key: 'schedule-config', label: '调度配置' },
+  { key: 'versions', label: '版本' },
+];
 
 const actionPlaceholder = (label: string) => {
   message.info(`${label}能力将在后续编辑器阶段接入`);
@@ -66,8 +76,7 @@ const DevelopmentEditorWorkspace = ({
 }: DevelopmentEditorWorkspaceProps) => {
   const [openNodeIds, setOpenNodeIds] = useState<DevelopmentId[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<DevelopmentId>();
-  const [rightPanelTab, setRightPanelTab] =
-    useState<RightPanelTab>('properties');
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>();
   const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
 
   const nodeMap = useMemo(
@@ -160,6 +169,10 @@ const DevelopmentEditorWorkspace = ({
     }
   };
 
+  const toggleRightPanel = (tab: RightPanelTab) => {
+    setRightPanelTab((current) => (current === tab ? undefined : tab));
+  };
+
   const editorMenuItems = useMemo(
     () => [
       {
@@ -177,8 +190,12 @@ const DevelopmentEditorWorkspace = ({
             ) : undefined,
             label: (
               <div className="flex min-w-[190px] items-center justify-between gap-3">
-                <span className="max-w-[220px] truncate">{node?.name || nodeId}</span>
-                {active ? <Check size={13} className="shrink-0 text-[#667085]" /> : null}
+                <span className="max-w-[220px] truncate">
+                  {node?.name || nodeId}
+                </span>
+                {active ? (
+                  <Check size={13} className="shrink-0 text-[#667085]" />
+                ) : null}
               </div>
             ),
           };
@@ -208,6 +225,73 @@ const DevelopmentEditorWorkspace = ({
     [activeNodeId, nodeMap, openNodeIds],
   );
 
+  const renderRightPanelContent = () => {
+    if (!rightPanelTab || !activeNode) return null;
+
+    if (rightPanelTab === 'properties') {
+      return (
+        <dl className="m-0 grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-4 text-[12px] leading-5">
+          <dt className="text-[#667085]">名称：</dt>
+          <dd className="m-0 break-all text-[#344054]">{activeNode.name}</dd>
+
+          <dt className="text-[#667085]">类型：</dt>
+          <dd className="m-0 text-[#344054]">
+            {nodeTypeLabel[activeNode.type] || activeNode.type}
+          </dd>
+
+          <dt className="text-[#667085]">ID：</dt>
+          <dd className="m-0 break-all font-mono text-[11px] text-[#98a2b3]">
+            {activeNode.id}
+          </dd>
+
+          <dt className="text-[#667085]">所属目录：</dt>
+          <dd className="m-0 break-all text-[#344054]">
+            {activeDirectory?.path || '/'}
+          </dd>
+
+          <dt className="text-[#667085]">配置状态：</dt>
+          <dd className="m-0 text-[#344054]">
+            {activeNode.configured ? '已配置' : '待配置'}
+          </dd>
+        </dl>
+      );
+    }
+
+    if (rightPanelTab === 'run-config') {
+      return (
+        <div className="text-[12px] leading-6 text-[#667085]">
+          <div className="font-medium text-[#344054]">运行配置</div>
+          <div className="mt-2">
+            运行参数、资源配置和执行环境将在后续编辑器阶段接入。
+          </div>
+        </div>
+      );
+    }
+
+    if (rightPanelTab === 'schedule-config') {
+      return (
+        <div className="text-[12px] leading-6 text-[#667085]">
+          <div className="font-medium text-[#344054]">调度配置</div>
+          <div className="mt-2">
+            调度周期、依赖关系和生效时间将在后续阶段接入。
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="border-b border-[#f0f1f3] pb-3 text-[12px]">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-medium text-[#475467]">当前草稿</span>
+          <span className="text-[10px] text-[#98a2b3]">v1</span>
+        </div>
+        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
+          版本管理能力将在后续阶段接入
+        </div>
+      </div>
+    );
+  };
+
   if (!openNodeIds.length || !activeNode) {
     return (
       <main className="flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-white">
@@ -222,6 +306,10 @@ const DevelopmentEditorWorkspace = ({
       </main>
     );
   }
+
+  const activeRightPanel = rightPanelItems.find(
+    (item) => item.key === rightPanelTab,
+  );
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
@@ -268,7 +356,9 @@ const DevelopmentEditorWorkspace = ({
                     <span
                       className={[
                         'min-w-0 flex-1 truncate text-[12px] leading-5',
-                        active ? 'font-medium text-[#344054]' : 'font-normal',
+                        active
+                          ? 'font-medium text-[#344054]'
+                          : 'font-normal',
                       ].join(' ')}
                     >
                       {node.name}
@@ -404,99 +494,77 @@ const DevelopmentEditorWorkspace = ({
           </div>
         </section>
 
-        <aside className="flex shrink-0 border-l border-[#e5e7eb] bg-white">
-          <div className="w-[268px] overflow-y-auto px-4 py-4">
-            {rightPanelTab === 'properties' ? (
-              <div>
-                <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-[#344054]">
-                  <Settings2 size={14} strokeWidth={1.8} />
-                  节点属性
-                </div>
-                <dl className="m-0 space-y-3 text-[12px]">
-                  <div>
-                    <dt className="text-[#98a2b3]">节点名称</dt>
-                    <dd className="m-0 mt-1 break-all text-[#475467]">
-                      {activeNode.name}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[#98a2b3]">节点类型</dt>
-                    <dd className="m-0 mt-1 text-[#475467]">
-                      {nodeTypeLabel[activeNode.type] || activeNode.type}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[#98a2b3]">节点 ID</dt>
-                    <dd className="m-0 mt-1 break-all font-mono text-[11px] text-[#667085]">
-                      {activeNode.id}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[#98a2b3]">所属目录</dt>
-                    <dd className="m-0 mt-1 break-all text-[#475467]">
-                      {activeDirectory?.path || '/'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[#98a2b3]">配置状态</dt>
-                    <dd className="m-0 mt-1 text-[#475467]">
-                      {activeNode.configured ? '已配置' : '待配置'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            ) : (
-              <div>
-                <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-[#344054]">
-                  <History size={14} strokeWidth={1.8} />
-                  版本记录
-                </div>
-                <div className="border-b border-[#f0f1f3] py-3 first:pt-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[12px] font-medium text-[#475467]">
-                      当前草稿
-                    </span>
-                    <span className="text-[10px] text-[#98a2b3]">v1</span>
-                  </div>
-                  <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-                    版本管理能力将在后续阶段接入
-                  </div>
+        <aside className="flex shrink-0 bg-white">
+          <div
+            className={[
+              'shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
+              rightPanelTab
+                ? 'w-[380px] border-l border-[#e5e7eb]'
+                : 'w-0 border-l-0',
+            ].join(' ')}
+          >
+            <div className="flex h-full w-[380px] flex-col bg-white">
+              <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
+                <span className="text-[13px] font-semibold text-[#30323b]">
+                  {activeRightPanel?.label}
+                </span>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    title="刷新"
+                    aria-label={`刷新${activeRightPanel?.label || '侧边栏'}`}
+                    onClick={() =>
+                      actionPlaceholder(`${activeRightPanel?.label || ''}刷新`)
+                    }
+                    className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
+                  >
+                    <RefreshCw size={13} strokeWidth={1.8} />
+                    刷新
+                  </button>
+                  <button
+                    type="button"
+                    title="关闭"
+                    aria-label="关闭右侧面板"
+                    onClick={() => setRightPanelTab(undefined)}
+                    className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
+                  >
+                    <X size={14} strokeWidth={1.8} />
+                  </button>
                 </div>
               </div>
-            )}
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                {renderRightPanelContent()}
+              </div>
+            </div>
           </div>
 
-          <div className="flex w-10 shrink-0 flex-col items-center border-l border-[#e5e7eb] bg-[#fafafa] py-2">
-            <Tooltip title="属性" placement="left">
-              <button
-                type="button"
-                onClick={() => setRightPanelTab('properties')}
-                className={[
-                  'mb-1 flex min-h-[58px] w-8 items-center justify-center rounded-sm px-1 text-[11px] transition-colors',
-                  rightPanelTab === 'properties'
-                    ? 'bg-white font-medium text-[#344054] shadow-[0_1px_3px_rgba(16,24,40,0.08)]'
-                    : 'text-[#98a2b3] hover:bg-white hover:text-[#667085]',
-                ].join(' ')}
-                style={{ writingMode: 'vertical-rl' }}
-              >
-                属性
-              </button>
-            </Tooltip>
-            <Tooltip title="版本" placement="left">
-              <button
-                type="button"
-                onClick={() => setRightPanelTab('versions')}
-                className={[
-                  'flex min-h-[58px] w-8 items-center justify-center rounded-sm px-1 text-[11px] transition-colors',
-                  rightPanelTab === 'versions'
-                    ? 'bg-white font-medium text-[#344054] shadow-[0_1px_3px_rgba(16,24,40,0.08)]'
-                    : 'text-[#98a2b3] hover:bg-white hover:text-[#667085]',
-                ].join(' ')}
-                style={{ writingMode: 'vertical-rl' }}
-              >
-                版本
-              </button>
-            </Tooltip>
+          <div className="flex h-full w-9 shrink-0 flex-col border-l border-[#e5e7eb] bg-white">
+            {rightPanelItems.map((item, index) => {
+              const active = rightPanelTab === item.key;
+
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  title={item.label}
+                  aria-label={`${active ? '收起' : '展开'}${item.label}`}
+                  aria-expanded={active}
+                  onClick={() => toggleRightPanel(item.key)}
+                  className={[
+                    'relative flex min-h-[72px] w-9 shrink-0 items-center justify-center border-b border-[#e5e7eb] py-3 text-[12px] leading-5 transition-[color,background-color,opacity]',
+                    '[writing-mode:vertical-rl] [letter-spacing:3px]',
+                    index === 0 ? 'border-t' : '',
+                    active
+                      ? 'text-[#245bdb] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[#245bdb]'
+                      : 'text-[#475467] opacity-70 hover:bg-[#f7f8fa] hover:text-[#344054] hover:opacity-100',
+                  ].join(' ')}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </aside>
       </div>
