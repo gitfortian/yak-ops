@@ -1,6 +1,7 @@
 package io.yak.ops.business.development.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.yak.ops.business.development.dao.mapper.DevelopmentNodeMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.common.bean.po.development.DevelopmentNodePO;
@@ -65,6 +66,30 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
                 .eq(DevelopmentNodePO::getDirectoryId, toStoredDirectoryId(directoryId))
                 .eq(DevelopmentNodePO::getName, name))
         > 0L;
+  }
+
+  @Override
+  public boolean existsInDirectory(Long directoryId) {
+    return mapper.selectCount(
+            new LambdaQueryWrapper<DevelopmentNodePO>()
+                .eq(DevelopmentNodePO::getDirectoryId, toStoredDirectoryId(directoryId)))
+        > 0L;
+  }
+
+  @Override
+  public boolean updateName(Long id, String name) {
+    return mapper.update(
+            null,
+            new LambdaUpdateWrapper<DevelopmentNodePO>()
+                .eq(DevelopmentNodePO::getId, id)
+                .set(DevelopmentNodePO::getName, name)
+                .set(DevelopmentNodePO::getUpdateTime, Instant.now()))
+        > 0;
+  }
+
+  @Override
+  public boolean deleteById(Long id) {
+    return mapper.deleteById(id) > 0;
   }
 
   private Long toStoredDirectoryId(Long directoryId) {

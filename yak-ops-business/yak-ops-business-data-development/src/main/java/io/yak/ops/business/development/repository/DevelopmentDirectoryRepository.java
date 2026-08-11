@@ -14,4 +14,10 @@ public interface DevelopmentDirectoryRepository {
   List<DevelopmentDirectory> list();
 
   boolean existsByName(Long parentId, String name);
+
+  boolean hasChildren(Long id);
+
+  boolean updateName(Long id, String name);
+
+  boolean deleteById(Long id);
 }

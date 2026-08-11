@@ -5,6 +5,7 @@ import type {
   CreateDevelopmentDirectoryPayload,
   CreateDevelopmentNodePayload,
   DevelopmentDirectory,
+  DevelopmentId,
   DevelopmentNode,
 } from './types';
 
@@ -20,6 +21,16 @@ export const createDevelopmentDirectory = (
 ): Promise<ApiResponse<DevelopmentDirectory>> =>
   HttpUtils.post<DevelopmentDirectory>(DIRECTORY_API, payload);
 
+export const renameDevelopmentDirectory = (
+  id: DevelopmentId,
+  name: string,
+): Promise<ApiResponse<DevelopmentDirectory>> =>
+  HttpUtils.put<DevelopmentDirectory>(`${DIRECTORY_API}/${id}/name`, { name });
+
+export const deleteDevelopmentDirectory = (
+  id: DevelopmentId,
+): Promise<ApiResponse<boolean>> => HttpUtils.delete<boolean>(`${DIRECTORY_API}/${id}`);
+
 export const listDevelopmentNodes = (): Promise<ApiResponse<DevelopmentNode[]>> =>
   HttpUtils.get<DevelopmentNode[]>(NODE_API);
 
@@ -27,3 +38,13 @@ export const createDevelopmentNode = (
   payload: CreateDevelopmentNodePayload,
 ): Promise<ApiResponse<DevelopmentNode>> =>
   HttpUtils.post<DevelopmentNode>(NODE_API, payload);
+
+export const renameDevelopmentNode = (
+  id: DevelopmentId,
+  name: string,
+): Promise<ApiResponse<DevelopmentNode>> =>
+  HttpUtils.put<DevelopmentNode>(`${NODE_API}/${id}/name`, { name });
+
+export const deleteDevelopmentNode = (
+  id: DevelopmentId,
+): Promise<ApiResponse<boolean>> => HttpUtils.delete<boolean>(`${NODE_API}/${id}`);

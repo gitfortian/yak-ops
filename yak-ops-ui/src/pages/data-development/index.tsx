@@ -1,7 +1,7 @@
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import { BRAND_THEME } from '@/styles/brand';
-import { ConfigProvider, message } from 'antd';
+import { ConfigProvider, Modal, message } from 'antd';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -9,13 +9,19 @@ import CreateDirectoryModal from './components/CreateDirectoryModal';
 import CreateTaskModal from './components/CreateTaskModal';
 import DevelopmentTreePane, {
   type DevelopmentNodeCreateType,
+  type DevelopmentTreeAction,
   type DevelopmentTreeNode,
 } from './components/DevelopmentTreePane';
+import RenameResourceModal from './components/RenameResourceModal';
 import {
   createDevelopmentDirectory,
   createDevelopmentNode,
+  deleteDevelopmentDirectory,
+  deleteDevelopmentNode,
   listDevelopmentDirectories,
   listDevelopmentNodes,
+  renameDevelopmentDirectory,
+  renameDevelopmentNode,
 } from './service';
 import type {
   DevelopmentDirectory,
@@ -77,6 +83,10 @@ export default function DataDevelopmentPage() {
   const [nodeSaving, setNodeSaving] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [directorySaving, setDirectorySaving] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<DevelopmentTreeNode>();
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DevelopmentTreeNode>();
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
   const loadTree = useCallback(async () => {
     setTreeLoading(true);
@@ -104,6 +114,10 @@ export default function DataDevelopmentPage() {
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes],
   );
+  const directoryPathMap = useMemo(
+    () => new Map(directories.map((directory) => [directory.id, directory.path])),
+    [directories],
+  );
 
   const directoryIdForSelection = useMemo(() => {
     const selectedDirectoryId = idFromKey(selectedNodeKey, 'directory:');
@@ -120,14 +134,19 @@ export default function DataDevelopmentPage() {
       nodes
         .filter((node) => (node.directoryId || undefined) === directoryId)
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
-        .map((node) => ({
-          key: nodeKey(node.id),
-          title: node.name,
-          nodeType: 'node',
-          taskType: node.type,
-          searchText: `${node.name} ${node.type} ${node.id}`,
-          isLeaf: true,
-        }));
+        .map((node) => {
+          const parentPath = directoryId ? directoryPathMap.get(directoryId) || '' : '';
+          return {
+            key: nodeKey(node.id),
+            title: node.name,
+            nodeType: 'node',
+            resourceId: node.id,
+            resourcePath: `${parentPath}/${node.name}`,
+            taskType: node.type,
+            searchText: `${node.name} ${node.type} ${node.id}`,
+            isLeaf: true,
+          };
+        });
 
     const directoryNodes = (parentId?: DevelopmentId): DevelopmentTreeNode[] =>
       directories
@@ -137,6 +156,8 @@ export default function DataDevelopmentPage() {
           key: directoryKey(directory.id),
           title: directory.name,
           nodeType: 'directory',
+          resourceId: directory.id,
+          resourcePath: directory.path,
           searchText: `${directory.name} ${directory.path || ''}`,
           children: [
             ...directoryNodes(directory.id),
@@ -144,9 +165,8 @@ export default function DataDevelopmentPage() {
           ],
         }));
 
-    // `/` 仅作为逻辑根目录，不渲染为树节点。
     return [...directoryNodes(), ...resourceNodes()];
-  }, [directories, nodes]);
+  }, [directories, directoryPathMap, nodes]);
 
   const treeData = useMemo<DevelopmentTreeNode[]>(() => {
     const normalized = treeKeyword.trim().toLowerCase();
@@ -253,6 +273,99 @@ export default function DataDevelopmentPage() {
     }
   };
 
+  const copyText = async (value: string, successText: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      message.success(successText);
+    } catch {
+      message.error('复制失败，请检查浏览器剪贴板权限');
+    }
+  };
+
+  const handleResourceAction = (
+    action: DevelopmentTreeAction,
+    resource: DevelopmentTreeNode,
+  ) => {
+    setSelectedNodeKey(resource.key as TreeNodeKey);
+    if (action === 'create-directory') {
+      setDirectoryOpen(true);
+      return;
+    }
+    if (action === 'create-sql' || action === 'create-shell') {
+      setCreateType(action === 'create-sql' ? 'SQL' : 'SHELL');
+      setCreateOpen(true);
+      return;
+    }
+    if (action === 'copy-name') {
+      void copyText(resource.title, '名称已复制');
+      return;
+    }
+    if (action === 'copy-path') {
+      void copyText(resource.resourcePath, '路径已复制');
+      return;
+    }
+    if (action === 'rename') {
+      setRenameTarget(resource);
+      return;
+    }
+    if (action === 'delete') {
+      setDeleteTarget(resource);
+    }
+  };
+
+  const submitRename = async (name: string) => {
+    if (!renameTarget) return;
+    setRenameSaving(true);
+    try {
+      if (renameTarget.nodeType === 'directory') {
+        responseData(
+          await renameDevelopmentDirectory(renameTarget.resourceId, name),
+          '目录重命名失败',
+        );
+      } else {
+        responseData(
+          await renameDevelopmentNode(renameTarget.resourceId, name),
+          '节点重命名失败',
+        );
+      }
+      setRenameTarget(undefined);
+      setTreeKeyword('');
+      await loadTree();
+      message.success('重命名成功');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '重命名失败');
+    } finally {
+      setRenameSaving(false);
+    }
+  };
+
+  const submitDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteSaving(true);
+    try {
+      if (deleteTarget.nodeType === 'directory') {
+        responseData(
+          await deleteDevelopmentDirectory(deleteTarget.resourceId),
+          '目录删除失败',
+        );
+      } else {
+        responseData(
+          await deleteDevelopmentNode(deleteTarget.resourceId),
+          '节点删除失败',
+        );
+      }
+      setDeleteTarget(undefined);
+      setSelectedNodeKey(undefined);
+      setTreeKeyword('');
+      await loadTree();
+      message.success('删除成功');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '删除失败');
+    } finally {
+      setDeleteSaving(false);
+    }
+  };
+
   return (
     <ConfigProvider theme={BRAND_THEME}>
       <div className="flex h-[calc(100vh-64px)] min-h-[640px] flex-col overflow-hidden bg-white">
@@ -275,6 +388,7 @@ export default function DataDevelopmentPage() {
               setCreateType(type);
               setCreateOpen(true);
             }}
+            onResourceAction={handleResourceAction}
             onSearchChange={setTreeKeyword}
             onResizeStart={handleResizeStart}
             onCollapsedChange={setLeftCollapsed}
@@ -323,6 +437,41 @@ export default function DataDevelopmentPage() {
           }}
           onSubmit={(parentId, name) => void submitDirectory(parentId, name)}
         />
+
+        <RenameResourceModal
+          open={Boolean(renameTarget)}
+          resourceLabel={renameTarget?.nodeType === 'directory' ? '目录' : '节点'}
+          initialName={renameTarget?.title || ''}
+          loading={renameSaving}
+          onCancel={() => {
+            if (!renameSaving) setRenameTarget(undefined);
+          }}
+          onSubmit={(name) => void submitRename(name)}
+        />
+
+        <Modal
+          open={Boolean(deleteTarget)}
+          title={`删除${deleteTarget?.nodeType === 'directory' ? '目录' : '节点'}`}
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          confirmLoading={deleteSaving}
+          maskClosable={!deleteSaving}
+          closable={!deleteSaving}
+          onCancel={() => {
+            if (!deleteSaving) setDeleteTarget(undefined);
+          }}
+          onOk={() => void submitDelete()}
+        >
+          <div className="pt-2 text-[13px] leading-6 text-[#475467]">
+            确认删除“{deleteTarget?.title}”吗？
+            {deleteTarget?.nodeType === 'directory' ? (
+              <div className="mt-1 text-[#98a2b3]">
+                仅空目录可以删除；存在子目录或节点时后端会拒绝本次操作。
+              </div>
+            ) : null}
+          </div>
+        </Modal>
       </div>
     </ConfigProvider>
   );
