@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 import { useEffect, useRef } from 'react';
 
+import type { DevelopmentEditorViewState } from '../../session/types';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
 
 export interface SqlEditorPosition {
@@ -13,8 +14,10 @@ export interface SqlEditorPosition {
 interface SqlMonacoEditorProps {
   id: string;
   value: string;
+  initialViewState?: DevelopmentEditorViewState;
   onChange: (value: string) => void;
   onPositionChange?: (position: SqlEditorPosition) => void;
+  onViewStateChange?: (viewState: DevelopmentEditorViewState) => void;
 }
 
 let themeRegistered = false;
@@ -50,14 +53,17 @@ const ensureYakSqlTheme = () => {
 const SqlMonacoEditor = ({
   id,
   value,
+  initialViewState,
   onChange,
   onPositionChange,
+  onViewStateChange,
 }: SqlMonacoEditorProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor>();
   const modelRef = useRef<monaco.editor.ITextModel>();
   const onChangeRef = useRef(onChange);
   const onPositionChangeRef = useRef(onPositionChange);
+  const onViewStateChangeRef = useRef(onViewStateChange);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -66,6 +72,10 @@ const SqlMonacoEditor = ({
   useEffect(() => {
     onPositionChangeRef.current = onPositionChange;
   }, [onPositionChange]);
+
+  useEffect(() => {
+    onViewStateChangeRef.current = onViewStateChange;
+  }, [onViewStateChange]);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -113,7 +123,20 @@ const SqlMonacoEditor = ({
     editorRef.current = editor;
     modelRef.current = model;
 
-    const emitPosition = () => {
+    if (initialViewState) {
+      if (initialViewState.selection) {
+        editor.setSelection(initialViewState.selection);
+      } else {
+        editor.setPosition({
+          lineNumber: initialViewState.lineNumber,
+          column: initialViewState.column,
+        });
+      }
+      editor.setScrollTop(initialViewState.scrollTop);
+      editor.setScrollLeft(initialViewState.scrollLeft);
+    }
+
+    const emitEditorState = () => {
       const position = editor.getPosition();
       const selection = editor.getSelection();
       if (!position) return;
@@ -126,20 +149,38 @@ const SqlMonacoEditor = ({
         column: position.column,
         selectionLength,
       });
+
+      onViewStateChangeRef.current?.({
+        lineNumber: position.lineNumber,
+        column: position.column,
+        selection: selection
+          ? {
+              startLineNumber: selection.startLineNumber,
+              startColumn: selection.startColumn,
+              endLineNumber: selection.endLineNumber,
+              endColumn: selection.endColumn,
+            }
+          : undefined,
+        scrollTop: editor.getScrollTop(),
+        scrollLeft: editor.getScrollLeft(),
+      });
     };
 
     const contentDisposable = model.onDidChangeContent(() => {
       onChangeRef.current(model.getValue());
     });
-    const cursorDisposable = editor.onDidChangeCursorPosition(emitPosition);
-    const selectionDisposable = editor.onDidChangeCursorSelection(emitPosition);
+    const cursorDisposable = editor.onDidChangeCursorPosition(emitEditorState);
+    const selectionDisposable = editor.onDidChangeCursorSelection(emitEditorState);
+    const scrollDisposable = editor.onDidScrollChange(emitEditorState);
 
-    emitPosition();
+    emitEditorState();
 
     return () => {
+      emitEditorState();
       contentDisposable.dispose();
       cursorDisposable.dispose();
       selectionDisposable.dispose();
+      scrollDisposable.dispose();
       editor.dispose();
       model.dispose();
       editorRef.current = undefined;
