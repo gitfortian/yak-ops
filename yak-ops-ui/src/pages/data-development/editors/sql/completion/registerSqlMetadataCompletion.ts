@@ -69,6 +69,18 @@ const getTextBeforePosition = (
     new monaco.Range(1, 1, position.lineNumber, position.column),
   );
 
+const getCurrentStatementText = (
+  model: monaco.editor.ITextModel,
+  position: monaco.Position,
+) => {
+  const sql = model.getValue();
+  const offset = model.getOffsetAt(position);
+  const start = sql.lastIndexOf(';', Math.max(0, offset - 1)) + 1;
+  const nextSeparator = sql.indexOf(';', offset);
+  const end = nextSeparator < 0 ? sql.length : nextSeparator;
+  return sql.slice(start, end);
+};
+
 const getLexicalState = (text: string): SqlLexicalState => {
   let state: SqlLexicalState = 'code';
 
@@ -329,7 +341,10 @@ const provideMetadataSuggestions = async (
 
   const range = getCompletionRange(model, position);
   const qualifier = getQualifier(model, position);
-  const references = parseTableReferences(textBeforePosition, context);
+  const references = parseTableReferences(
+    getCurrentStatementText(model, position),
+    context,
+  );
 
   try {
     if (qualifier) {
