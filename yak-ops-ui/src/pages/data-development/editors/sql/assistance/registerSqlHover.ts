@@ -50,10 +50,10 @@ const isFunctionCall = (
   return /^\s*\(/.test(line.slice(word.endColumn - 1));
 };
 
-const tablePath = (table: SqlCatalogTable | SqlTableReference) =>
-  [table.database, table.schema, table.table ?? (table as SqlCatalogTable).name]
-    .filter(Boolean)
-    .join('.');
+const tablePath = (value: SqlCatalogTable | SqlTableReference) => {
+  const tableName = 'table' in value ? value.table : value.name;
+  return [value.database, value.schema, tableName].filter(Boolean).join('.');
+};
 
 const columnHover = (
   range: monaco.Range,
