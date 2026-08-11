@@ -113,9 +113,9 @@ const EditorTabs = ({
   );
 
   return (
-    <div className="flex h-9 shrink-0 border-b border-[#e5e7eb] bg-[#f5f5f6]">
+    <div className="flex h-9 shrink-0 border-b border-[#e5e7eb] bg-[#f7f7f8]">
       <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex h-9 min-w-max items-stretch gap-1 px-1">
+        <div className="flex h-9 min-w-max items-stretch">
           {openNodeIds.map((nodeId) => {
             const node = nodeMap.get(nodeId);
             if (!node) return null;
@@ -135,10 +135,10 @@ const EditorTabs = ({
                   if (event.button === 1) onClose(nodeId);
                 }}
                 className={[
-                  'group relative flex h-9 min-w-[132px] max-w-[240px] flex-none items-center border-r border-[#eaecf0] transition-colors',
+                  'group relative flex h-9 min-w-[120px] max-w-[220px] flex-none items-center border-r border-[#e5e7eb] transition-colors',
                   active
                     ? 'bg-white text-[#344054] shadow-[inset_0_-2px_0_rgba(254,44,85,1)]'
-                    : 'bg-[#f5f5f6] text-[#667085] hover:bg-[#eeeeef] hover:text-[#344054]',
+                    : 'bg-[#f7f7f8] text-[#667085] hover:bg-[#f0f1f2] hover:text-[#344054]',
                 ].join(' ')}
               >
                 <button
@@ -146,11 +146,11 @@ const EditorTabs = ({
                   title={node.name}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => onFocus(nodeId)}
-                  className="flex h-full min-w-0 flex-1 items-center gap-2 bg-transparent pl-2.5 pr-1 text-left outline-none"
+                  className="flex h-full min-w-0 flex-1 items-center gap-2 bg-transparent pl-3 pr-1 text-left outline-none"
                 >
                   <span
                     className={[
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-white/80',
+                      'flex h-5 w-4 shrink-0 items-center justify-center',
                       definition.iconClassName,
                     ].join(' ')}
                   >
@@ -192,7 +192,7 @@ const EditorTabs = ({
         </div>
       </div>
 
-      <div className="flex h-9 w-10 shrink-0 items-center justify-center border-l border-[#e5e7eb] bg-[#f5f5f6]">
+      <div className="flex h-9 w-10 shrink-0 items-center justify-center border-l border-[#e5e7eb] bg-[#f7f7f8]">
         <Dropdown
           trigger={['click']}
           placement="bottomRight"
@@ -211,7 +211,7 @@ const EditorTabs = ({
             <button
               type="button"
               aria-label="编辑器操作"
-              className="flex h-7 w-7 items-center justify-center rounded-[4px] text-[#667085] transition-colors hover:bg-white hover:text-[#344054]"
+              className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-white hover:text-[#344054]"
             >
               <MoreHorizontal size={17} strokeWidth={1.8} />
             </button>
