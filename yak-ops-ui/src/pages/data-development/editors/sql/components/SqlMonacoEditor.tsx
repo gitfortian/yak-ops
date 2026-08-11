@@ -4,6 +4,10 @@ import { useEffect, useRef } from 'react';
 
 import type { DevelopmentEditorViewState } from '../../session/types';
 import { acquireSqlBuiltinCompletionProvider } from '../completion/registerSqlBuiltinCompletion';
+import {
+  acquireSqlMetadataCompletionProvider,
+  bindSqlMetadataModel,
+} from '../completion/registerSqlMetadataCompletion';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
 
 export interface SqlEditorPosition {
@@ -83,7 +87,8 @@ const SqlMonacoEditor = ({
 
     setupMonacoEnvironment();
     ensureYakSqlTheme();
-    const completionProvider = acquireSqlBuiltinCompletionProvider();
+    const builtinCompletionProvider = acquireSqlBuiltinCompletionProvider();
+    const metadataCompletionProvider = acquireSqlMetadataCompletionProvider();
 
     const uri = monaco.Uri.parse(
       `inmemory://yak-ops/data-development/sql/${encodeURIComponent(id)}.sql`,
@@ -91,6 +96,7 @@ const SqlMonacoEditor = ({
     monaco.editor.getModel(uri)?.dispose();
 
     const model = monaco.editor.createModel(value, 'sql', uri);
+    const metadataModelBinding = bindSqlMetadataModel(model.uri.toString(), id);
     const editor = monaco.editor.create(containerRef.current, {
       model,
       theme: 'yak-sql-light',
@@ -129,6 +135,9 @@ const SqlMonacoEditor = ({
         showWords: false,
         showKeywords: true,
         showFunctions: true,
+        showFields: true,
+        showStructs: true,
+        showInterfaces: true,
         snippetsPreventQuickSuggestions: false,
       },
       wordBasedSuggestions: 'off',
@@ -197,7 +206,9 @@ const SqlMonacoEditor = ({
       cursorDisposable.dispose();
       selectionDisposable.dispose();
       scrollDisposable.dispose();
-      completionProvider.dispose();
+      metadataModelBinding.dispose();
+      metadataCompletionProvider.dispose();
+      builtinCompletionProvider.dispose();
       editor.dispose();
       model.dispose();
       editorRef.current = undefined;
