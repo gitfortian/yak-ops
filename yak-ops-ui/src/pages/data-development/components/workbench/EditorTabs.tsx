@@ -113,7 +113,7 @@ const EditorTabs = ({
   );
 
   return (
-    <div className="flex h-9 shrink-0 border-b border-white bg-[#f7f7f8]">
+    <div className="flex h-9 shrink-0 border-b border-[#e8e9ec] bg-[#f7f7f8]">
       <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex h-9 min-w-max items-stretch">
           {openNodeIds.map((nodeId) => {
@@ -135,9 +135,9 @@ const EditorTabs = ({
                   if (event.button === 1) onClose(nodeId);
                 }}
                 className={[
-                  'group relative flex h-9 min-w-[120px] max-w-[220px] flex-none items-center border-r border-r-[#e5e7eb] border-t-2 transition-colors',
+                  'group relative flex h-9 min-w-[120px] max-w-[220px] flex-none items-center border-b border-b-transparent border-r border-r-[#e5e7eb] border-t-2 transition-colors',
                   active
-                    ? 'border-t-[rgba(254,44,85,1)] bg-white text-[#344054]'
+                    ? 'z-10 border-b-white border-t-[rgba(254,44,85,1)] bg-white text-[#344054]'
                     : 'border-t-transparent bg-[#f7f7f8] text-[#667085] hover:bg-[#f0f1f2] hover:text-[#344054]',
                 ].join(' ')}
               >
