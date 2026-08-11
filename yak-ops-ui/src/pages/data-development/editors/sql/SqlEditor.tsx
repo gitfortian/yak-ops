@@ -1,25 +1,59 @@
-import { Code2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import type { DevelopmentEditorContext } from '../types';
+import SqlMonacoEditor, {
+  type SqlEditorPosition,
+} from './components/SqlMonacoEditor';
 
-export const SqlEditor = ({ node }: DevelopmentEditorContext) => (
-  <div className="flex h-full min-h-0 items-center justify-center overflow-auto bg-white">
-    <div className="text-center">
-      <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#f5f5f6] text-[#f79009]">
-        <Code2 size={18} strokeWidth={1.8} />
+const inMemorySqlDrafts = new Map<string, string>();
+
+const defaultPosition: SqlEditorPosition = {
+  lineNumber: 1,
+  column: 1,
+  selectionLength: 0,
+};
+
+export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
+  const initialValue = useMemo(
+    () => inMemorySqlDrafts.get(String(node.id)) || '',
+    [node.id],
+  );
+  const [value, setValue] = useState(initialValue);
+  const [position, setPosition] = useState(defaultPosition);
+
+  const handleChange = (nextValue: string) => {
+    setValue(nextValue);
+    inMemorySqlDrafts.set(String(node.id), nextValue);
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
+      <div className="min-h-0 flex-1">
+        <SqlMonacoEditor
+          id={String(node.id)}
+          value={value}
+          onChange={handleChange}
+          onPositionChange={setPosition}
+        />
       </div>
-      <div className="mt-3 text-[15px] font-semibold text-[#344054]">
-        SQL 编辑器区域
-      </div>
-      <div className="mt-1 text-[12px] text-[#98a2b3]">
-        当前节点：{node.name}
-      </div>
-      <div className="mt-3 text-[12px] text-[#b0b7c3]">
-        SQL 编辑器内容将在下一阶段接入
+
+      <div className="flex h-6 shrink-0 items-center justify-between border-t border-[#eef0f2] bg-[#fafafa] px-2.5 text-[10px] text-[#7b808a]">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="font-medium text-[#667085]">SQL</span>
+          <span className="truncate">{node.name}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {position.selectionLength > 0 ? (
+            <span>已选择 {position.selectionLength} 字符</span>
+          ) : null}
+          <span>
+            Ln {position.lineNumber}, Col {position.column}
+          </span>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const SqlRunConfig = ({ node }: DevelopmentEditorContext) => (
   <div className="text-[12px] leading-6 text-[#667085]">
