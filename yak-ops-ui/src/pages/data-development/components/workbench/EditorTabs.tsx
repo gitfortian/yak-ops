@@ -3,6 +3,10 @@ import { Check, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { getEditorDefinition } from '../../editors/registry';
+import {
+  getEditorSession,
+  useEditorSessionVersion,
+} from '../../editors/session/editorSessionStore';
 import type { DevelopmentId, DevelopmentNode } from '../../types';
 
 export type EditorTabAction =
@@ -30,6 +34,7 @@ const EditorTabs = ({
   onAction,
 }: EditorTabsProps) => {
   const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
+  useEditorSessionVersion();
 
   useEffect(() => {
     if (!activeNodeId) return;
@@ -52,6 +57,7 @@ const EditorTabs = ({
           const node = nodeMap.get(nodeId);
           const active = nodeId === activeNodeId;
           const definition = node ? getEditorDefinition(node.type) : undefined;
+          const session = getEditorSession(nodeId);
           const Icon = definition?.icon;
 
           return {
@@ -63,8 +69,16 @@ const EditorTabs = ({
             ) : undefined,
             label: (
               <div className="flex min-w-[190px] items-center justify-between gap-3">
-                <span className="max-w-[220px] truncate">
-                  {node?.name || nodeId}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="max-w-[200px] truncate">
+                    {node?.name || nodeId}
+                  </span>
+                  {session?.dirty ? (
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#667085]"
+                      title="未保存"
+                    />
+                  ) : null}
                 </span>
                 {active ? (
                   <Check size={13} className="shrink-0 text-[#667085]" />
@@ -107,6 +121,7 @@ const EditorTabs = ({
             if (!node) return null;
             const active = nodeId === activeNodeId;
             const definition = getEditorDefinition(node.type);
+            const session = getEditorSession(nodeId);
             const Icon = definition.icon;
 
             return (
@@ -149,6 +164,12 @@ const EditorTabs = ({
                   >
                     {node.name}
                   </span>
+                  {session?.dirty ? (
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#667085]"
+                      title="未保存"
+                    />
+                  ) : null}
                 </button>
 
                 <button
