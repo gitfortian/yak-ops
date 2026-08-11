@@ -3,6 +3,7 @@ import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 import { useEffect, useRef } from 'react';
 
 import type { DevelopmentEditorViewState } from '../../session/types';
+import { acquireSqlBuiltinCompletionProvider } from '../completion/registerSqlBuiltinCompletion';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
 
 export interface SqlEditorPosition {
@@ -82,6 +83,7 @@ const SqlMonacoEditor = ({
 
     setupMonacoEnvironment();
     ensureYakSqlTheme();
+    const completionProvider = acquireSqlBuiltinCompletionProvider();
 
     const uri = monaco.Uri.parse(
       `inmemory://yak-ops/data-development/sql/${encodeURIComponent(id)}.sql`,
@@ -114,7 +116,21 @@ const SqlMonacoEditor = ({
       hideCursorInOverviewRuler: true,
       fixedOverflowWidgets: true,
       padding: { top: 12, bottom: 12 },
-      suggest: { showWords: false },
+      quickSuggestions: {
+        other: true,
+        comments: false,
+        strings: false,
+      },
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnEnter: 'on',
+      tabCompletion: 'on',
+      suggestSelection: 'recentlyUsedByPrefix',
+      suggest: {
+        showWords: false,
+        showKeywords: true,
+        showFunctions: true,
+        snippetsPreventQuickSuggestions: false,
+      },
       wordBasedSuggestions: 'off',
       bracketPairColorization: { enabled: true },
       guides: { bracketPairs: true, indentation: true },
@@ -181,6 +197,7 @@ const SqlMonacoEditor = ({
       cursorDisposable.dispose();
       selectionDisposable.dispose();
       scrollDisposable.dispose();
+      completionProvider.dispose();
       editor.dispose();
       model.dispose();
       editorRef.current = undefined;
