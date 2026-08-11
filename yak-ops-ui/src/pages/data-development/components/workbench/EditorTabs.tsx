@@ -34,7 +34,7 @@ const EditorTabs = ({
   onAction,
 }: EditorTabsProps) => {
   const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
-  useEditorSessionVersion();
+  const sessionVersion = useEditorSessionVersion();
 
   useEffect(() => {
     if (!activeNodeId) return;
@@ -109,7 +109,7 @@ const EditorTabs = ({
       },
       { key: 'close-all', label: '全部关闭' },
     ],
-    [activeNodeId, nodeMap, openNodeIds],
+    [activeNodeId, nodeMap, openNodeIds, sessionVersion],
   );
 
   return (
