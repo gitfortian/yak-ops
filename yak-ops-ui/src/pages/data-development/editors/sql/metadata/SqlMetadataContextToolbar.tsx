@@ -106,10 +106,8 @@ const ContextPicker = ({
                   setKeyword('');
                 }}
                 className={[
-                  'flex h-8 w-full items-center gap-2 rounded-[2px] px-2 text-left text-[12px] transition-colors',
-                  selected
-                    ? 'bg-[#f2f3f5] text-[#161823]'
-                    : 'text-[#30323b] hover:bg-[#f5f5f6]',
+                  'flex h-8 w-full items-center gap-2 rounded-[2px] px-2 text-left text-[12px] transition-colors hover:bg-[#f5f5f6]',
+                  selected ? 'text-[#161823]' : 'text-[#30323b]',
                 ].join(' ')}
               >
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center">
@@ -147,11 +145,11 @@ const ContextPicker = ({
         aria-label={ariaLabel}
         disabled={disabled}
         className={[
-          'flex h-7 max-w-[176px] items-center gap-1.5 rounded-[3px] px-2 text-[12px] outline-none transition-colors',
+          'flex h-6 max-w-[176px] items-center gap-1.5 rounded-[3px] px-1.5 text-[12px] outline-none transition-colors',
           minWidthClassName,
           disabled
             ? 'cursor-not-allowed text-[#b7bcc5]'
-            : open
+            : open || displayValue
               ? 'bg-[#f1f2f4] text-[#161823]'
               : 'text-[#30323b] hover:bg-[#f5f5f6]',
         ].join(' ')}
@@ -297,7 +295,7 @@ const SqlMetadataContextToolbar = ({
 
   return (
     <>
-      <div className="flex min-w-0 shrink-0 items-center gap-0.5">
+      <div className="flex min-w-0 shrink-0 items-center gap-1">
         <ContextPicker
           ariaLabel="选择 SQL 数据源"
           value={context.dataSourceId}
@@ -307,7 +305,7 @@ const SqlMetadataContextToolbar = ({
           items={dataSourceItems}
           loading={dataSourceLoading}
           popupWidth={210}
-          minWidthClassName="min-w-[112px]"
+          minWidthClassName="min-w-[108px]"
           onSelect={(value) => {
             const selected = dataSources.find((item) => item.value === value);
             if (!selected) return;
@@ -329,7 +327,7 @@ const SqlMetadataContextToolbar = ({
           loading={databaseLoading}
           disabled={!context.dataSourceId}
           popupWidth={210}
-          minWidthClassName="min-w-[116px]"
+          minWidthClassName="min-w-[112px]"
           onSelect={(value) => selectSqlDatabaseContext(nodeId, value)}
         />
 
@@ -344,7 +342,7 @@ const SqlMetadataContextToolbar = ({
             loading={schemaLoading}
             disabled={!context.dataSourceId}
             popupWidth={210}
-            minWidthClassName="min-w-[108px]"
+            minWidthClassName="min-w-[104px]"
             onSelect={(value) => selectSqlSchemaContext(nodeId, value)}
           />
         ) : null}
