@@ -18,6 +18,11 @@ export interface DevelopmentEditorContext {
   directory?: DevelopmentDirectory;
 }
 
+export interface DevelopmentEditorToolbarContext
+  extends DevelopmentEditorContext {
+  onRun: () => void;
+}
+
 export interface DevelopmentEditorCapabilities {
   run: boolean;
   stop: boolean;
@@ -39,6 +44,7 @@ export interface DevelopmentEditorDefinition {
   iconClassName: string;
   capabilities: DevelopmentEditorCapabilities;
   Editor: ComponentType<DevelopmentEditorContext>;
+  Toolbar?: ComponentType<DevelopmentEditorToolbarContext>;
   panels?: Partial<
     Record<DevelopmentEditorPanelKey, ComponentType<DevelopmentEditorContext>>
   >;
