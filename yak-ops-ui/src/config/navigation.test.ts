@@ -4,6 +4,7 @@ import {
   getActiveNavigationId,
   getMainNavigationGroups,
   getQuickCreateRoutes,
+  getStandaloneNavigationRoutes,
 } from './navigation';
 
 describe('permission-aware navigation', () => {
@@ -19,11 +20,46 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/sync/batch-link-up/42/detail', batchRead)).toBe('batch-link-up');
   });
 
-  it('removes empty groups and filters quick-create independently', () => {
-    expect(getMainNavigationGroups([])).toEqual([]);
-    expect(getMainNavigationGroups(batchRead).map((group) => group.id)).toEqual(['integration']);
+  it('keeps public groups while filtering permission-protected groups and quick-create independently', () => {
+    expect(getMainNavigationGroups([]).map((group) => group.id)).toEqual([
+      'development',
+      'workflow',
+    ]);
+    expect(getMainNavigationGroups(batchRead).map((group) => group.id)).toEqual([
+      'integration',
+      'development',
+      'workflow',
+    ]);
     expect(getQuickCreateRoutes(batchRead)).toEqual([]);
     expect(getQuickCreateRoutes([...batchRead, 'task:batch:create']).map((route) => route.id)).toEqual(['batch-link-up']);
+  });
+
+  it('keeps sidebar groups contiguous by navigation section', () => {
+    const groups = getMainNavigationGroups(['security:root']);
+    expect(groups.map((group) => group.id)).toEqual([
+      'integration',
+      'development',
+      'workflow',
+      'resources',
+      'data-quality',
+      'system',
+    ]);
+    expect(groups.map((group) => group.section)).toEqual([
+      'task',
+      'task',
+      'task',
+      'management',
+      'management',
+      'system',
+    ]);
+  });
+
+  it('registers home before other standalone navigation', () => {
+    expect(getStandaloneNavigationRoutes(['security:root']).map((route) => route.id)).toEqual([
+      'home',
+      'data-source',
+    ]);
+    expect(getActiveNavigationId('/home', [])).toBe('home');
   });
 
   it('registers the data-quality MVP pages and hidden monitor routes', () => {
@@ -33,8 +69,8 @@ describe('permission-aware navigation', () => {
       'quality:template:read',
     ];
     const groups = getMainNavigationGroups(qualityPermissions);
-    expect(groups.map((group) => group.id)).toEqual(['data-quality']);
-    expect(groups[0].routes.map((route) => route.id)).toEqual([
+    const qualityGroup = groups.find((group) => group.id === 'data-quality');
+    expect(qualityGroup?.routes.map((route) => route.id)).toEqual([
       'data-quality-table-config',
       'data-quality-execution',
       'data-quality-rule-template',
@@ -54,7 +90,6 @@ describe('permission-aware navigation', () => {
   });
 
   it('does not expose removed modules', () => {
-    expect(getActiveNavigationId('/home', [])).toBeUndefined();
     expect(getActiveNavigationId('/sync/realtime-link-up', ['task:realtime:read'])).toBeUndefined();
     expect(getActiveNavigationId('/data-development/workbench', batchRead)).toBeUndefined();
     expect(getActiveNavigationId('/data-quality/report', ['quality:report:read'])).toBeUndefined();

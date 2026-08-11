@@ -35,6 +35,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
 ];
 
 export const appRoutes: readonly NavigationRoute[] = [
+  { id: 'home', mode: 'public', path: '/home', title: '首页', component: './home', iconKey: 'home', order: 0 },
   { id: 'data-source', mode: 'one', permission: 'resource:data-source:read', path: '/data-source', title: '数据源管理', component: './data-source', iconKey: 'database', order: 10 },
   {
     id: 'batch-link-up', mode: 'one', permission: 'task:batch:read',
@@ -74,6 +75,14 @@ export const appRoutes: readonly NavigationRoute[] = [
 
 const sortByOrder = <T extends { order?: number }>(left: T, right: T) =>
   (left.order ?? 0) - (right.order ?? 0);
+const navigationSectionOrder: Record<NavigationSectionKey, number> = {
+  task: 10,
+  management: 20,
+  system: 30,
+};
+const sortNavigationGroups = (left: NavigationGroup, right: NavigationGroup) =>
+  navigationSectionOrder[left.section] - navigationSectionOrder[right.section]
+  || sortByOrder(left, right);
 const routeMap = new Map(appRoutes.map((route) => [route.id, route]));
 
 export const canAccessNavigationRoute = (
@@ -105,7 +114,7 @@ export const getNavigationGroups = (
         .sort(sortByOrder),
     }))
     .filter((group) => group.routes.length > 0)
-    .sort(sortByOrder);
+    .sort(sortNavigationGroups);
 export const getMainNavigationGroups = getNavigationGroups;
 export const getQuickCreateRoutes = (
   permissionCodes?: readonly string[] | null,
