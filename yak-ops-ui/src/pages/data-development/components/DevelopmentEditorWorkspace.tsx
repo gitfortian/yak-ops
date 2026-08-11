@@ -1,7 +1,9 @@
-import { Button, Tooltip, message } from 'antd';
+import { Button, Dropdown, Tooltip, message } from 'antd';
 import {
+  Check,
   Code2,
   History,
+  MoreHorizontal,
   Play,
   RefreshCw,
   Rocket,
@@ -12,7 +14,7 @@ import {
   TerminalSquare,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   DevelopmentDirectory,
@@ -28,6 +30,12 @@ interface DevelopmentEditorWorkspaceProps {
 }
 
 type RightPanelTab = 'properties' | 'versions';
+type EditorTabAction =
+  | 'close-current'
+  | 'close-others'
+  | 'close-left'
+  | 'close-right'
+  | 'close-all';
 
 const nodeTypeLabel: Record<string, string> = {
   SQL: 'SQL',
@@ -47,6 +55,9 @@ const NodeTypeIcon = ({ type, size = 14 }: { type: string; size?: number }) =>
     <Code2 size={size} strokeWidth={1.8} />
   );
 
+const nodeIconClassName = (type: string) =>
+  type === 'SHELL' ? 'text-[#6172f3]' : 'text-[#f79009]';
+
 const DevelopmentEditorWorkspace = ({
   nodes,
   directories,
@@ -57,6 +68,7 @@ const DevelopmentEditorWorkspace = ({
   const [activeNodeId, setActiveNodeId] = useState<DevelopmentId>();
   const [rightPanelTab, setRightPanelTab] =
     useState<RightPanelTab>('properties');
+  const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
 
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -82,6 +94,18 @@ const DevelopmentEditorWorkspace = ({
     );
   }, [nodeMap]);
 
+  useEffect(() => {
+    if (!activeNodeId) return;
+    const frame = window.requestAnimationFrame(() => {
+      tabRefs.current.get(activeNodeId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeNodeId]);
+
   const activeNode = activeNodeId ? nodeMap.get(activeNodeId) : undefined;
   const activeDirectory = activeNode?.directoryId
     ? directoryMap.get(activeNode.directoryId)
@@ -104,6 +128,86 @@ const DevelopmentEditorWorkspace = ({
     onNodeFocus(nextActiveId);
   };
 
+  const closeAllNodes = () => {
+    setOpenNodeIds([]);
+    setActiveNodeId(undefined);
+    onNodeFocus(undefined);
+  };
+
+  const handleTabAction = (action: EditorTabAction) => {
+    if (!activeNodeId) return;
+    const activeIndex = openNodeIds.indexOf(activeNodeId);
+    if (activeIndex < 0) return;
+
+    if (action === 'close-current') {
+      closeNode(activeNodeId);
+      return;
+    }
+    if (action === 'close-all') {
+      closeAllNodes();
+      return;
+    }
+    if (action === 'close-others') {
+      setOpenNodeIds([activeNodeId]);
+      return;
+    }
+    if (action === 'close-left') {
+      setOpenNodeIds(openNodeIds.slice(activeIndex));
+      return;
+    }
+    if (action === 'close-right') {
+      setOpenNodeIds(openNodeIds.slice(0, activeIndex + 1));
+    }
+  };
+
+  const editorMenuItems = useMemo(
+    () => [
+      {
+        key: 'opened-editors',
+        label: `已打开的编辑器（${openNodeIds.length}）`,
+        children: openNodeIds.map((nodeId) => {
+          const node = nodeMap.get(nodeId);
+          const active = nodeId === activeNodeId;
+          return {
+            key: `focus:${nodeId}`,
+            icon: node ? (
+              <span className={nodeIconClassName(node.type)}>
+                <NodeTypeIcon type={node.type} size={13} />
+              </span>
+            ) : undefined,
+            label: (
+              <div className="flex min-w-[190px] items-center justify-between gap-3">
+                <span className="max-w-[220px] truncate">{node?.name || nodeId}</span>
+                {active ? <Check size={13} className="shrink-0 text-[#667085]" /> : null}
+              </div>
+            ),
+          };
+        }),
+      },
+      { type: 'divider' as const },
+      { key: 'close-current', label: '关闭当前编辑器' },
+      {
+        key: 'close-others',
+        label: '关闭其他编辑器',
+        disabled: openNodeIds.length <= 1,
+      },
+      {
+        key: 'close-left',
+        label: '关闭左侧编辑器',
+        disabled: !activeNodeId || openNodeIds.indexOf(activeNodeId) <= 0,
+      },
+      {
+        key: 'close-right',
+        label: '关闭右侧编辑器',
+        disabled:
+          !activeNodeId ||
+          openNodeIds.indexOf(activeNodeId) >= openNodeIds.length - 1,
+      },
+      { key: 'close-all', label: '全部关闭' },
+    ],
+    [activeNodeId, nodeMap, openNodeIds],
+  );
+
   if (!openNodeIds.length || !activeNode) {
     return (
       <main className="flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-white">
@@ -121,45 +225,102 @@ const DevelopmentEditorWorkspace = ({
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-      <div className="flex h-10 shrink-0 items-end overflow-x-auto border-b border-[#e5e7eb] bg-[#fafafa] px-1.5 pt-1">
-        {openNodeIds.map((nodeId) => {
-          const node = nodeMap.get(nodeId);
-          if (!node) return null;
-          const active = nodeId === activeNodeId;
+      <div className="flex h-9 shrink-0 border-b border-[#e5e7eb] bg-[#f5f5f6]">
+        <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex h-9 min-w-max items-stretch gap-1 px-1">
+            {openNodeIds.map((nodeId) => {
+              const node = nodeMap.get(nodeId);
+              if (!node) return null;
+              const active = nodeId === activeNodeId;
 
-          return (
-            <div
-              key={nodeId}
-              className={[
-                'group flex h-9 min-w-[150px] max-w-[230px] items-center border-x border-t transition-colors',
-                active
-                  ? 'relative -mb-px border-[#dfe3e8] bg-white text-[#161823]'
-                  : 'border-transparent bg-transparent text-[#667085] hover:bg-[#f5f5f5] hover:text-[#344054]',
-              ].join(' ')}
-            >
+              return (
+                <div
+                  key={nodeId}
+                  ref={(element) => {
+                    if (element) tabRefs.current.set(nodeId, element);
+                    else tabRefs.current.delete(nodeId);
+                  }}
+                  onAuxClick={(event) => {
+                    if (event.button === 1) closeNode(nodeId);
+                  }}
+                  className={[
+                    'group relative flex h-9 min-w-[132px] max-w-[240px] flex-none items-center border-r border-[#eaecf0] transition-colors',
+                    active
+                      ? 'bg-white text-[#344054] shadow-[inset_0_-2px_0_rgba(254,44,85,1)]'
+                      : 'bg-[#f5f5f6] text-[#667085] hover:bg-[#eeeeef] hover:text-[#344054]',
+                  ].join(' ')}
+                >
+                  <button
+                    type="button"
+                    title={node.name}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => focusNode(nodeId)}
+                    className="flex h-full min-w-0 flex-1 items-center gap-2 bg-transparent pl-2.5 pr-1 text-left outline-none"
+                  >
+                    <span
+                      className={[
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-white/80',
+                        nodeIconClassName(node.type),
+                      ].join(' ')}
+                    >
+                      <NodeTypeIcon type={node.type} size={13} />
+                    </span>
+                    <span
+                      className={[
+                        'min-w-0 flex-1 truncate text-[12px] leading-5',
+                        active ? 'font-medium text-[#344054]' : 'font-normal',
+                      ].join(' ')}
+                    >
+                      {node.name}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-label={`关闭 ${node.name}`}
+                    title="关闭"
+                    onClick={() => closeNode(nodeId)}
+                    className={[
+                      'mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] text-[#98a2b3] transition-all',
+                      active
+                        ? 'opacity-100 hover:bg-[#f2f4f7] hover:text-[#475467]'
+                        : 'opacity-0 group-hover:opacity-100 hover:bg-[#e4e7ec] hover:text-[#475467]',
+                    ].join(' ')}
+                  >
+                    <X size={13} strokeWidth={1.8} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex h-9 w-10 shrink-0 items-center justify-center border-l border-[#e5e7eb] bg-[#f5f5f6]">
+          <Dropdown
+            trigger={['click']}
+            placement="bottomRight"
+            menu={{
+              items: editorMenuItems,
+              onClick: ({ key }) => {
+                if (key.startsWith('focus:')) {
+                  focusNode(key.substring('focus:'.length));
+                  return;
+                }
+                handleTabAction(key as EditorTabAction);
+              },
+            }}
+          >
+            <Tooltip title="编辑器操作" placement="bottomRight">
               <button
                 type="button"
-                onClick={() => focusNode(nodeId)}
-                className="flex h-full min-w-0 flex-1 items-center gap-2 bg-transparent px-3 text-left"
+                aria-label="编辑器操作"
+                className="flex h-7 w-7 items-center justify-center rounded-[4px] text-[#667085] transition-colors hover:bg-white hover:text-[#344054]"
               >
-                <span className="shrink-0 text-[#98a2b3]">
-                  <NodeTypeIcon type={node.type} size={13} />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-                  {node.name}
-                </span>
+                <MoreHorizontal size={17} strokeWidth={1.8} />
               </button>
-              <button
-                type="button"
-                aria-label={`关闭 ${node.name}`}
-                onClick={() => closeNode(nodeId)}
-                className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[#98a2b3] opacity-0 transition group-hover:opacity-100 hover:bg-[#eceff3] hover:text-[#475467]"
-              >
-                <X size={12} strokeWidth={1.8} />
-              </button>
-            </div>
-          );
-        })}
+            </Tooltip>
+          </Dropdown>
+        </div>
       </div>
 
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-3">
