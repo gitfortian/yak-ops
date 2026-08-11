@@ -12,6 +12,7 @@ import {
   TerminalSquare,
   X,
 } from 'lucide-react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
@@ -54,6 +55,24 @@ const rightPanelItems: Array<{ key: RightPanelTab; label: string }> = [
   { key: 'versions', label: '版本' },
 ];
 
+const DEFAULT_RIGHT_PANEL_WIDTH = 380;
+const MIN_RIGHT_PANEL_WIDTH = 280;
+const MAX_RIGHT_PANEL_WIDTH = 640;
+const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'yak-data-development.right-panel-width';
+
+const clampRightPanelWidth = (value: number) =>
+  Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, value));
+
+const initialRightPanelWidth = () => {
+  if (typeof window === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH;
+  const stored = Number(
+    window.localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY),
+  );
+  return Number.isFinite(stored) && stored > 0
+    ? clampRightPanelWidth(stored)
+    : DEFAULT_RIGHT_PANEL_WIDTH;
+};
+
 const actionPlaceholder = (label: string) => {
   message.info(`${label}能力将在后续编辑器阶段接入`);
 };
@@ -77,6 +96,8 @@ const DevelopmentEditorWorkspace = ({
   const [openNodeIds, setOpenNodeIds] = useState<DevelopmentId[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<DevelopmentId>();
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>();
+  const [rightPanelWidth, setRightPanelWidth] = useState(initialRightPanelWidth);
+  const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
 
   const nodeMap = useMemo(
@@ -171,6 +192,46 @@ const DevelopmentEditorWorkspace = ({
 
   const toggleRightPanel = (tab: RightPanelTab) => {
     setRightPanelTab((current) => (current === tab ? undefined : tab));
+  };
+
+  const handleRightPanelResizeStart = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (!rightPanelTab) return;
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = rightPanelWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setRightPanelResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const resize = (moveEvent: PointerEvent) => {
+      setRightPanelWidth(
+        clampRightPanelWidth(startWidth + startX - moveEvent.clientX),
+      );
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      const width = clampRightPanelWidth(
+        startWidth + startX - upEvent.clientX,
+      );
+      setRightPanelWidth(width);
+      setRightPanelResizing(false);
+      window.localStorage.setItem(RIGHT_PANEL_WIDTH_STORAGE_KEY, String(width));
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', resize);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+
+    window.addEventListener('pointermove', resize);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   const editorMenuItems = useMemo(
@@ -497,45 +558,70 @@ const DevelopmentEditorWorkspace = ({
         <aside className="flex shrink-0 bg-white">
           <div
             className={[
-              'shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
-              rightPanelTab
-                ? 'w-[380px] border-l border-[#e5e7eb]'
-                : 'w-0 border-l-0',
+              'relative h-full shrink-0',
+              rightPanelResizing
+                ? 'transition-none'
+                : 'transition-[width] duration-200 ease-out',
             ].join(' ')}
+            style={{ width: rightPanelTab ? rightPanelWidth : 0 }}
           >
-            <div className="flex h-full w-[380px] flex-col bg-white">
-              <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
-                <span className="text-[13px] font-semibold text-[#30323b]">
-                  {activeRightPanel?.label}
-                </span>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    title="刷新"
-                    aria-label={`刷新${activeRightPanel?.label || '侧边栏'}`}
-                    onClick={() =>
-                      actionPlaceholder(`${activeRightPanel?.label || ''}刷新`)
-                    }
-                    className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
-                  >
-                    <RefreshCw size={13} strokeWidth={1.8} />
-                    刷新
-                  </button>
-                  <button
-                    type="button"
-                    title="关闭"
-                    aria-label="关闭右侧面板"
-                    onClick={() => setRightPanelTab(undefined)}
-                    className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
-                  >
-                    <X size={14} strokeWidth={1.8} />
-                  </button>
-                </div>
+            {rightPanelTab ? (
+              <div
+                role="separator"
+                aria-label="调整右侧面板宽度"
+                aria-orientation="vertical"
+                onPointerDown={handleRightPanelResizeStart}
+                className="group absolute inset-y-0 left-0 z-30 w-3 -translate-x-1/2 cursor-col-resize touch-none"
+              >
+                <div
+                  className={[
+                    'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#e5e7eb]',
+                    'transition-[width,background-color] duration-150',
+                    'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)]',
+                    'group-active:w-[2px] group-active:bg-[rgba(254,44,85,1)]',
+                  ].join(' ')}
+                />
               </div>
+            ) : null}
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                {renderRightPanelContent()}
+            <div className="h-full overflow-hidden">
+              <div
+                className="flex h-full flex-col bg-white"
+                style={{ width: rightPanelWidth }}
+              >
+                <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
+                  <span className="text-[13px] font-semibold text-[#30323b]">
+                    {activeRightPanel?.label}
+                  </span>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      title="刷新"
+                      aria-label={`刷新${activeRightPanel?.label || '侧边栏'}`}
+                      onClick={() =>
+                        actionPlaceholder(`${activeRightPanel?.label || ''}刷新`)
+                      }
+                      className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
+                    >
+                      <RefreshCw size={13} strokeWidth={1.8} />
+                      刷新
+                    </button>
+                    <button
+                      type="button"
+                      title="关闭"
+                      aria-label="关闭右侧面板"
+                      onClick={() => setRightPanelTab(undefined)}
+                      className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
+                    >
+                      <X size={14} strokeWidth={1.8} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                  {renderRightPanelContent()}
+                </div>
               </div>
             </div>
           </div>
