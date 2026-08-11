@@ -60,6 +60,12 @@ interface DevelopmentTreePaneProps {
   onCollapsedChange: (collapsed: boolean) => void;
 }
 
+const nodeTypeIconClassName = (taskType?: string) => {
+  if (taskType === 'SHELL') return 'text-[#6172f3]';
+  if (taskType === 'SQL') return 'text-[#f79009]';
+  return 'text-[#667085]';
+};
+
 const DevelopmentTreePane = ({
   treeData,
   treeLoading,
@@ -84,12 +90,24 @@ const DevelopmentTreePane = ({
         {
           key: 'node-sql',
           label: 'SQL 节点',
-          icon: <Code2 size={14} strokeWidth={1.8} />,
+          icon: (
+            <Code2
+              size={14}
+              strokeWidth={1.8}
+              className="text-[#f79009]"
+            />
+          ),
         },
         {
           key: 'node-shell',
           label: 'Shell 节点',
-          icon: <TerminalSquare size={14} strokeWidth={1.8} />,
+          icon: (
+            <TerminalSquare
+              size={14}
+              strokeWidth={1.8}
+              className="text-[#6172f3]"
+            />
+          ),
         },
       ],
     },
@@ -136,12 +154,24 @@ const DevelopmentTreePane = ({
           {
             key: 'create-sql',
             label: 'SQL 节点',
-            icon: <Code2 size={14} strokeWidth={1.8} />,
+            icon: (
+              <Code2
+                size={14}
+                strokeWidth={1.8}
+                className="text-[#f79009]"
+              />
+            ),
           },
           {
             key: 'create-shell',
             label: 'Shell 节点',
-            icon: <TerminalSquare size={14} strokeWidth={1.8} />,
+            icon: (
+              <TerminalSquare
+                size={14}
+                strokeWidth={1.8}
+                className="text-[#6172f3]"
+              />
+            ),
           },
         ],
       },
@@ -177,13 +207,13 @@ const DevelopmentTreePane = ({
               <TerminalSquare
                 size={13}
                 strokeWidth={1.8}
-                className="shrink-0 text-[#667085]"
+                className={`shrink-0 ${nodeTypeIconClassName(node.taskType)}`}
               />
             ) : (
               <Code2
                 size={13}
                 strokeWidth={1.8}
-                className="shrink-0 text-[#667085]"
+                className={`shrink-0 ${nodeTypeIconClassName(node.taskType)}`}
               />
             )
           ) : (
