@@ -93,17 +93,15 @@ const DevelopmentEditorWorkspace = ({
   };
 
   const closeNode = (nodeId: DevelopmentId) => {
-    setOpenNodeIds((current) => {
-      const currentIndex = current.indexOf(nodeId);
-      const next = current.filter((id) => id !== nodeId);
-      if (activeNodeId !== nodeId) return next;
+    const currentIndex = openNodeIds.indexOf(nodeId);
+    const next = openNodeIds.filter((id) => id !== nodeId);
+    setOpenNodeIds(next);
 
-      const nextActiveId =
-        next[Math.min(currentIndex, next.length - 1)] || next[next.length - 1];
-      setActiveNodeId(nextActiveId);
-      onNodeFocus(nextActiveId);
-      return next;
-    });
+    if (activeNodeId !== nodeId) return;
+    const nextActiveId =
+      next[Math.min(currentIndex, next.length - 1)] || next[next.length - 1];
+    setActiveNodeId(nextActiveId);
+    onNodeFocus(nextActiveId);
   };
 
   if (!openNodeIds.length || !activeNode) {
@@ -130,42 +128,36 @@ const DevelopmentEditorWorkspace = ({
           const active = nodeId === activeNodeId;
 
           return (
-            <button
+            <div
               key={nodeId}
-              type="button"
-              onClick={() => focusNode(nodeId)}
               className={[
-                'group flex h-9 min-w-[150px] max-w-[230px] items-center gap-2 border-x border-t px-3 text-left transition-colors',
+                'group flex h-9 min-w-[150px] max-w-[230px] items-center border-x border-t transition-colors',
                 active
                   ? 'relative -mb-px border-[#dfe3e8] bg-white text-[#161823]'
                   : 'border-transparent bg-transparent text-[#667085] hover:bg-[#f5f5f5] hover:text-[#344054]',
               ].join(' ')}
             >
-              <span className="shrink-0 text-[#98a2b3]">
-                <NodeTypeIcon type={node.type} size={13} />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-                {node.name}
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
+                onClick={() => focusNode(nodeId)}
+                className="flex h-full min-w-0 flex-1 items-center gap-2 bg-transparent px-3 text-left"
+              >
+                <span className="shrink-0 text-[#98a2b3]">
+                  <NodeTypeIcon type={node.type} size={13} />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+                  {node.name}
+                </span>
+              </button>
+              <button
+                type="button"
                 aria-label={`关闭 ${node.name}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  closeNode(nodeId);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  closeNode(nodeId);
-                }}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[#98a2b3] opacity-0 transition group-hover:opacity-100 hover:bg-[#eceff3] hover:text-[#475467]"
+                onClick={() => closeNode(nodeId)}
+                className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[#98a2b3] opacity-0 transition group-hover:opacity-100 hover:bg-[#eceff3] hover:text-[#475467]"
               >
                 <X size={12} strokeWidth={1.8} />
-              </span>
-            </button>
+              </button>
+            </div>
           );
         })}
       </div>
