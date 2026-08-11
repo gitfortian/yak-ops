@@ -9,7 +9,6 @@ import type { DevelopmentEditorContext } from '../types';
 import SqlMonacoEditor, {
   type SqlEditorPosition,
 } from './components/SqlMonacoEditor';
-import SqlMetadataContextPanel from './metadata/SqlMetadataContextPanel';
 import { useSqlMetadataContext } from './metadata/sqlMetadataContextStore';
 
 const defaultPosition: SqlEditorPosition = {
@@ -96,7 +95,15 @@ export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
 };
 
 export const SqlRunConfig = ({ node }: DevelopmentEditorContext) => (
-  <SqlMetadataContextPanel nodeId={node.id} nodeName={node.name} />
+  <div className="text-[12px] leading-6 text-[#667085]">
+    <div className="font-medium text-[#344054]">SQL 运行配置</div>
+    <div className="mt-2 text-[11px] leading-5 text-[#98a2b3]">
+      {node.name} 的数据源、Database、Schema 已迁移到编辑器工具栏右侧，可直接切换真实 Catalog 上下文。
+    </div>
+    <div className="mt-3 border-t border-[#eef0f2] pt-3 text-[11px] leading-5 text-[#98a2b3]">
+      执行参数、资源配置等运行期设置将在后续阶段继续接入。
+    </div>
+  </div>
 );
 
 export const SqlRunResult = ({ node }: DevelopmentEditorContext) => (

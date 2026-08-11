@@ -1,6 +1,6 @@
-import { Select, message } from 'antd';
+import { Select, Tooltip, message } from 'antd';
 import { Database } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { DevelopmentId } from '../../../types';
 import {
@@ -16,18 +16,19 @@ import {
   type SqlDataSourceOption,
 } from './sqlMetadataService';
 
-interface SqlMetadataContextPanelProps {
+interface SqlMetadataContextToolbarProps {
   nodeId: DevelopmentId;
-  nodeName: string;
 }
 
 const errorText = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-const SqlMetadataContextPanel = ({
+const contextControlClassName =
+  'flex h-7 shrink-0 items-center rounded-[3px] border border-[#dfe3e8] bg-white transition-colors hover:border-[#cfd4dc]';
+
+const SqlMetadataContextToolbar = ({
   nodeId,
-  nodeName,
-}: SqlMetadataContextPanelProps) => {
+}: SqlMetadataContextToolbarProps) => {
   const context = useSqlMetadataContext(nodeId);
   const [dataSources, setDataSources] = useState<SqlDataSourceOption[]>([]);
   const [databases, setDatabases] = useState<string[]>([]);
@@ -49,6 +50,7 @@ const SqlMetadataContextPanel = ({
       .finally(() => {
         if (active) setDataSourceLoading(false);
       });
+
     return () => {
       active = false;
     };
@@ -117,40 +119,31 @@ const SqlMetadataContextPanel = ({
     };
   }, [context.dataSourceId, context.database, context.schema, nodeId]);
 
-  const contextPath = useMemo(
-    () =>
-      [context.dataSourceName, context.database, context.schema]
-        .filter(Boolean)
-        .join(' / '),
-    [context.dataSourceName, context.database, context.schema],
-  );
-
   return (
-    <div className="text-[12px] text-[#667085]">
-      <div className="flex items-center gap-2 font-medium text-[#344054]">
-        <Database size={14} strokeWidth={1.8} />
-        SQL 元数据上下文
-      </div>
-      <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-        为 {nodeName} 选择数据源上下文，编辑器会使用 Yak Ops Catalog 提供表和字段补全。
-      </div>
-
-      <div className="mt-4 space-y-4">
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] text-[#667085]">数据源</span>
+    <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+      <Tooltip title="SQL 数据源" mouseEnterDelay={0.35}>
+        <div className={`${contextControlClassName} w-[176px]`}>
+          <Database
+            size={13}
+            strokeWidth={1.8}
+            className="ml-2 shrink-0 text-[#667085]"
+          />
           <Select
             allowClear
             showSearch
             size="small"
+            variant="borderless"
             optionFilterProp="label"
             placeholder="选择数据源"
             loading={dataSourceLoading}
             value={context.dataSourceId}
             options={dataSources.map((item) => ({
-              label: item.dbType ? `${item.label} · ${item.dbType}` : item.label,
+              label: `@${item.label}`,
               value: item.value,
+              title: item.dbType ? `${item.label} · ${item.dbType}` : item.label,
             }))}
-            className="w-full"
+            popupMatchSelectWidth={260}
+            className="min-w-0 flex-1"
             onChange={(value) => {
               const selected = dataSources.find((item) => item.value === value);
               selectSqlDataSourceContext(
@@ -165,55 +158,54 @@ const SqlMetadataContextPanel = ({
               );
             }}
           />
-        </label>
+        </div>
+      </Tooltip>
 
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] text-[#667085]">Database</span>
+      <Tooltip title="Database" mouseEnterDelay={0.35}>
+        <div className={`${contextControlClassName} w-[140px]`}>
+          <span className="ml-2 shrink-0 text-[10px] font-medium text-[#98a2b3]">
+            DB
+          </span>
           <Select
             allowClear
             showSearch
             size="small"
-            placeholder={context.dataSourceId ? '自动 / 选择 Database' : '请先选择数据源'}
+            variant="borderless"
+            placeholder="<database>"
             disabled={!context.dataSourceId}
             loading={databaseLoading}
             value={context.database}
             options={databases.map((value) => ({ label: value, value }))}
-            className="w-full"
+            popupMatchSelectWidth={220}
+            className="min-w-0 flex-1"
             onChange={(value) => selectSqlDatabaseContext(nodeId, value)}
           />
-        </label>
+        </div>
+      </Tooltip>
 
-        <label className="block">
-          <span className="mb-1.5 block text-[11px] text-[#667085]">Schema</span>
+      <Tooltip title="Schema" mouseEnterDelay={0.35}>
+        <div className={`${contextControlClassName} w-[124px]`}>
+          <span className="ml-2 shrink-0 text-[10px] font-medium text-[#98a2b3]">
+            S
+          </span>
           <Select
             allowClear
             showSearch
             size="small"
-            placeholder={context.dataSourceId ? '自动 / 选择 Schema' : '请先选择数据源'}
+            variant="borderless"
+            placeholder="<schema>"
             disabled={!context.dataSourceId}
             loading={schemaLoading}
             value={context.schema}
             options={schemas.map((value) => ({ label: value, value }))}
-            className="w-full"
+            popupMatchSelectWidth={200}
+            className="min-w-0 flex-1"
             onChange={(value) => selectSqlSchemaContext(nodeId, value)}
           />
-        </label>
-      </div>
-
-      <div className="mt-4 border-t border-[#eef0f2] pt-3 text-[11px] leading-5 text-[#98a2b3]">
-        {context.dataSourceId ? (
-          <>
-            当前补全上下文：
-            <span className="ml-1 break-all text-[#475467]">
-              {contextPath || `数据源 ${context.dataSourceId}`}
-            </span>
-          </>
-        ) : (
-          '未选择数据源时，仅保留 SQL 关键字和内置函数补全。'
-        )}
-      </div>
+        </div>
+      </Tooltip>
     </div>
   );
 };
 
-export default SqlMetadataContextPanel;
+export default SqlMetadataContextToolbar;
