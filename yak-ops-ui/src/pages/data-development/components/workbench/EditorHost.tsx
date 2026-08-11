@@ -12,7 +12,7 @@ const EditorHost = ({ node, directory, definition }: EditorHostProps) => {
 
   return (
     <section className="min-w-0 flex-1 overflow-hidden bg-white">
-      <Editor node={node} directory={directory} />
+      <Editor key={String(node.id)} node={node} directory={directory} />
     </section>
   );
 };
