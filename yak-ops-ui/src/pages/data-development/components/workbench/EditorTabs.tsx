@@ -113,7 +113,7 @@ const EditorTabs = ({
   );
 
   return (
-    <div className="flex h-9 shrink-0 border-b border-[#e8e9ec] bg-[#f7f7f8]">
+    <div className="flex h-9 shrink-0 border-b border-white bg-[#f7f7f8]">
       <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex h-9 min-w-max items-stretch">
           {openNodeIds.map((nodeId) => {
