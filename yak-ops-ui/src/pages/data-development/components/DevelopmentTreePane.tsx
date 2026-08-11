@@ -306,14 +306,14 @@ const DevelopmentTreePane = ({
         aria-orientation="vertical"
         onPointerDown={collapsed ? undefined : onResizeStart}
         className={[
-          'group relative z-20 w-3 shrink-0 touch-none',
+          'group relative z-20 w-[14px] shrink-0 touch-none bg-white',
           collapsed ? 'cursor-default' : 'cursor-col-resize',
         ].join(' ')}
       >
         <div
           className={[
-            'pointer-events-none absolute inset-y-0 left-1/2',
-            'w-px -translate-x-1/2 bg-[#dfe3e8]',
+            'pointer-events-none absolute inset-y-0 left-0',
+            'w-px bg-[#dfe3e8]',
             'transition-[width,background-color] duration-150',
             !collapsed
               ? 'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:bg-[rgba(254,44,85,1)]'
@@ -327,18 +327,19 @@ const DevelopmentTreePane = ({
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => onCollapsedChange(!collapsed)}
           className={[
-            'absolute left-1/2 top-1/2 z-20',
-            'flex h-8 w-4 -translate-x-1/2 -translate-y-1/2',
-            'items-center justify-center rounded-[3px]',
-            'border border-[#dfe3e8] bg-white text-[#7b808a]',
-            'shadow-[0_1px_2px_rgba(16,24,40,0.05)]',
-            'transition-[color,border-color,box-shadow] duration-150',
+            'absolute left-px top-1/2 z-20',
+            'flex h-7 w-3 -translate-y-1/2',
+            'items-center justify-center rounded-r-[3px]',
+            'border border-l-0 border-[#dfe3e8] bg-white text-[#7b808a]',
+            'shadow-[0_1px_2px_rgba(16,24,40,0.04)]',
+            'opacity-0 transition-[opacity,color,border-color,box-shadow] duration-150',
+            'group-hover:opacity-100 focus:opacity-100',
             'hover:border-[#cfd4dc] hover:text-[#344054]',
             'focus:outline-none focus-visible:ring-2',
             'focus-visible:ring-[rgba(254,44,85,.16)]',
           ].join(' ')}
         >
-          {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+          {collapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
         </button>
       </div>
 
