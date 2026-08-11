@@ -306,10 +306,17 @@ const DevelopmentTreePane = ({
         aria-orientation="vertical"
         onPointerDown={collapsed ? undefined : onResizeStart}
         className={[
-          'group relative z-20 w-[14px] shrink-0 touch-none bg-white',
+          'group relative z-20 w-px shrink-0 touch-none',
           collapsed ? 'cursor-default' : 'cursor-col-resize',
         ].join(' ')}
       >
+        <div
+          className={[
+            'absolute inset-y-0 left-1/2 z-10 w-3 -translate-x-1/2',
+            collapsed ? 'cursor-default' : 'cursor-col-resize',
+          ].join(' ')}
+        />
+
         <div
           className={[
             'pointer-events-none absolute inset-y-0 left-0',
