@@ -140,7 +140,7 @@ const SqlMonacoEditor = ({
       tabCompletion: 'on',
       suggestSelection: 'recentlyUsedByPrefix',
       parameterHints: { enabled: true },
-      hover: { enabled: true, delay: 300, sticky: true },
+      hover: { enabled: 'on', delay: 300, sticky: true },
       suggest: {
         showWords: false,
         showKeywords: true,
