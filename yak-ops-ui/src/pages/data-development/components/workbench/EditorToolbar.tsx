@@ -1,13 +1,7 @@
-import { Button, message } from 'antd';
-import {
-  Play,
-  RefreshCw,
-  Rocket,
-  Save,
-  Share2,
-  Square,
-} from 'lucide-react';
+import { Tooltip, message } from 'antd';
+import { Play, Save } from 'lucide-react';
 
+import { markEditorSessionSaved } from '../../editors/session/editorSessionStore';
 import type { DevelopmentEditorDefinition } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
 
@@ -18,9 +12,8 @@ interface EditorToolbarProps {
   onRun: () => void;
 }
 
-const placeholder = (label: string) => {
-  message.info(`${label}能力将在后续编辑器阶段接入`);
-};
+const iconButtonClassName =
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)]';
 
 const EditorToolbar = ({
   node,
@@ -28,80 +21,48 @@ const EditorToolbar = ({
   definition,
   onRun,
 }: EditorToolbarProps) => {
+  const Toolbar = definition.Toolbar;
   const capabilities = definition.capabilities;
 
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-3">
-      <div className="flex items-center gap-1">
-        {capabilities.run ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<Play size={14} strokeWidth={1.8} />}
-            className="!h-8 !px-2.5"
-            onClick={onRun}
-          >
-            运行
-          </Button>
-        ) : null}
-        {capabilities.stop ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<Square size={13} strokeWidth={1.8} />}
-            className="!h-8 !px-2.5"
-            onClick={() => placeholder('停止')}
-          >
-            停止
-          </Button>
-        ) : null}
-        {capabilities.save ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<Save size={14} strokeWidth={1.8} />}
-            className="!h-8 !px-2.5"
-            onClick={() => placeholder('保存')}
-          >
-            保存
-          </Button>
-        ) : null}
-        {capabilities.refresh ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<RefreshCw size={14} strokeWidth={1.8} />}
-            className="!h-8 !px-2.5"
-            onClick={() => placeholder('刷新')}
-          >
-            刷新
-          </Button>
-        ) : null}
-        {capabilities.publish ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<Rocket size={14} strokeWidth={1.8} />}
-            className="!h-8 !px-2.5"
-            onClick={() => placeholder('发布')}
-          >
-            发布
-          </Button>
-        ) : null}
-        {capabilities.share ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<Share2 size={14} strokeWidth={1.8} />}
-            className="!h-8 !px-2.5"
-            onClick={() => placeholder('分享')}
-          >
-            分享
-          </Button>
-        ) : null}
+    <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-2">
+      <div className="flex h-full min-w-0 items-center">
+        {Toolbar ? (
+          <Toolbar node={node} directory={directory} onRun={onRun} />
+        ) : (
+          <div className="flex h-full items-center gap-0.5">
+            {capabilities.run ? (
+              <Tooltip title="运行" mouseEnterDelay={0.35}>
+                <button
+                  type="button"
+                  aria-label="运行"
+                  onClick={onRun}
+                  className={iconButtonClassName}
+                >
+                  <Play size={15} strokeWidth={1.8} />
+                </button>
+              </Tooltip>
+            ) : null}
+            {capabilities.save ? (
+              <Tooltip title="保存本地草稿" mouseEnterDelay={0.35}>
+                <button
+                  type="button"
+                  aria-label="保存本地草稿"
+                  onClick={() => {
+                    markEditorSessionSaved(node.id);
+                    message.success('本地草稿已保存');
+                  }}
+                  className={iconButtonClassName}
+                >
+                  <Save size={15} strokeWidth={1.8} />
+                </button>
+              </Tooltip>
+            ) : null}
+          </div>
+        )}
       </div>
 
-      <div className="truncate pl-4 text-[11px] text-[#98a2b3]">
+      <div className="min-w-0 truncate pl-4 text-[11px] text-[#98a2b3]">
         {directory?.path || '/'} / {node.name}
       </div>
     </div>

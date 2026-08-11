@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import type { DevelopmentEditorViewState } from '../../session/types';
 import { acquireSqlHoverProvider } from '../assistance/registerSqlHover';
 import { acquireSqlSignatureHelpProvider } from '../assistance/registerSqlSignatureHelp';
+import { registerSqlEditorCommandHandler } from '../commands/sqlEditorCommandBus';
 import { acquireSqlBuiltinCompletionProvider } from '../completion/registerSqlBuiltinCompletion';
 import {
   acquireSqlMetadataCompletionProvider,
@@ -12,6 +13,7 @@ import {
 } from '../completion/registerSqlMetadataCompletion';
 import { acquireSqlSnippetCompletionProvider } from '../completion/registerSqlSnippetCompletion';
 import { bindSqlDiagnostics } from '../diagnostics/bindSqlDiagnostics';
+import { formatSqlText } from '../formatting/formatSqlText';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
 
 export interface SqlEditorPosition {
@@ -159,6 +161,49 @@ const SqlMonacoEditor = ({
     editorRef.current = editor;
     modelRef.current = model;
 
+    let wordWrapEnabled = false;
+    let minimapEnabled = false;
+    const commandBinding = registerSqlEditorCommandHandler(id, async (command) => {
+      editor.focus();
+
+      if (command === 'undo' || command === 'redo') {
+        editor.trigger('yak-sql-toolbar', command, null);
+        return;
+      }
+      if (command === 'find') {
+        await editor.getAction('actions.find')?.run();
+        return;
+      }
+      if (command === 'suggest') {
+        await editor.getAction('editor.action.triggerSuggest')?.run();
+        return;
+      }
+      if (command === 'toggle-word-wrap') {
+        wordWrapEnabled = !wordWrapEnabled;
+        editor.updateOptions({ wordWrap: wordWrapEnabled ? 'on' : 'off' });
+        return;
+      }
+      if (command === 'toggle-minimap') {
+        minimapEnabled = !minimapEnabled;
+        editor.updateOptions({ minimap: { enabled: minimapEnabled } });
+        return;
+      }
+      if (command === 'format') {
+        const formatted = formatSqlText(model.getValue());
+        if (formatted === model.getValue()) return;
+
+        editor.pushUndoStop();
+        editor.executeEdits('yak-sql-format', [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+            forceMoveMarkers: true,
+          },
+        ]);
+        editor.pushUndoStop();
+      }
+    });
+
     if (initialViewState) {
       if (initialViewState.selection) {
         editor.setSelection(initialViewState.selection);
@@ -217,6 +262,7 @@ const SqlMonacoEditor = ({
       cursorDisposable.dispose();
       selectionDisposable.dispose();
       scrollDisposable.dispose();
+      commandBinding.dispose();
       diagnosticsBinding.dispose();
       metadataModelBinding.dispose();
       signatureHelpProvider.dispose();

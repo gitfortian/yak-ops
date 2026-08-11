@@ -3,6 +3,7 @@ import { Code2, TerminalSquare } from 'lucide-react';
 import type { DevelopmentTaskType } from '../types';
 import { ShellEditor, ShellRunConfig, ShellRunResult } from './shell/ShellEditor';
 import { SqlEditor, SqlRunConfig, SqlRunResult } from './sql/SqlEditor';
+import SqlToolbar from './sql/SqlToolbar';
 import type {
   DevelopmentEditorContext,
   DevelopmentEditorDefinition,
@@ -50,6 +51,7 @@ const editorRegistry: Partial<
     iconClassName: 'text-[#f79009]',
     capabilities: { ...commonCapabilities, format: true },
     Editor: SqlEditor,
+    Toolbar: SqlToolbar,
     panels: {
       'run-config': SqlRunConfig,
     },
