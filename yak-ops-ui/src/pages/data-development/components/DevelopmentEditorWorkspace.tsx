@@ -60,8 +60,17 @@ const MIN_RIGHT_PANEL_WIDTH = 280;
 const MAX_RIGHT_PANEL_WIDTH = 640;
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'yak-data-development.right-panel-width';
 
+const DEFAULT_BOTTOM_PANEL_HEIGHT = 280;
+const MIN_BOTTOM_PANEL_HEIGHT = 160;
+const MAX_BOTTOM_PANEL_HEIGHT = 520;
+const BOTTOM_PANEL_HEIGHT_STORAGE_KEY =
+  'yak-data-development.bottom-panel-height';
+
 const clampRightPanelWidth = (value: number) =>
   Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, value));
+
+const clampBottomPanelHeight = (value: number) =>
+  Math.min(MAX_BOTTOM_PANEL_HEIGHT, Math.max(MIN_BOTTOM_PANEL_HEIGHT, value));
 
 const initialRightPanelWidth = () => {
   if (typeof window === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH;
@@ -71,6 +80,16 @@ const initialRightPanelWidth = () => {
   return Number.isFinite(stored) && stored > 0
     ? clampRightPanelWidth(stored)
     : DEFAULT_RIGHT_PANEL_WIDTH;
+};
+
+const initialBottomPanelHeight = () => {
+  if (typeof window === 'undefined') return DEFAULT_BOTTOM_PANEL_HEIGHT;
+  const stored = Number(
+    window.localStorage.getItem(BOTTOM_PANEL_HEIGHT_STORAGE_KEY),
+  );
+  return Number.isFinite(stored) && stored > 0
+    ? clampBottomPanelHeight(stored)
+    : DEFAULT_BOTTOM_PANEL_HEIGHT;
 };
 
 const actionPlaceholder = (label: string) => {
@@ -98,6 +117,11 @@ const DevelopmentEditorWorkspace = ({
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>();
   const [rightPanelWidth, setRightPanelWidth] = useState(initialRightPanelWidth);
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(false);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(
+    initialBottomPanelHeight,
+  );
+  const [bottomPanelResizing, setBottomPanelResizing] = useState(false);
   const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
 
   const nodeMap = useMemo(
@@ -222,6 +246,49 @@ const DevelopmentEditorWorkspace = ({
       setRightPanelWidth(width);
       setRightPanelResizing(false);
       window.localStorage.setItem(RIGHT_PANEL_WIDTH_STORAGE_KEY, String(width));
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', resize);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+
+    window.addEventListener('pointermove', resize);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
+
+  const handleBottomPanelResizeStart = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (!bottomPanelOpen) return;
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = bottomPanelHeight;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setBottomPanelResizing(true);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const resize = (moveEvent: PointerEvent) => {
+      setBottomPanelHeight(
+        clampBottomPanelHeight(startHeight + startY - moveEvent.clientY),
+      );
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      const height = clampBottomPanelHeight(
+        startHeight + startY - upEvent.clientY,
+      );
+      setBottomPanelHeight(height);
+      setBottomPanelResizing(false);
+      window.localStorage.setItem(
+        BOTTOM_PANEL_HEIGHT_STORAGE_KEY,
+        String(height),
+      );
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener('pointermove', resize);
@@ -481,7 +548,7 @@ const DevelopmentEditorWorkspace = ({
             size="small"
             icon={<Play size={14} strokeWidth={1.8} />}
             className="!h-8 !px-2.5"
-            onClick={() => actionPlaceholder('运行')}
+            onClick={() => setBottomPanelOpen(true)}
           >
             运行
           </Button>
@@ -537,122 +604,191 @@ const DevelopmentEditorWorkspace = ({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <section className="flex min-w-0 flex-1 items-center justify-center overflow-auto bg-white">
-          <div className="text-center">
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#f5f5f6] text-[#667085]">
-              <NodeTypeIcon type={activeNode.type} size={18} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <section className="flex min-w-0 flex-1 items-center justify-center overflow-auto bg-white">
+            <div className="text-center">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#f5f5f6] text-[#667085]">
+                <NodeTypeIcon type={activeNode.type} size={18} />
+              </div>
+              <div className="mt-3 text-[15px] font-semibold text-[#344054]">
+                {nodeTypeLabel[activeNode.type] || activeNode.type} 编辑器区域
+              </div>
+              <div className="mt-1 text-[12px] text-[#98a2b3]">
+                当前节点：{activeNode.name}
+              </div>
+              <div className="mt-3 text-[12px] text-[#b0b7c3]">
+                编辑器内容将在下一阶段接入
+              </div>
             </div>
-            <div className="mt-3 text-[15px] font-semibold text-[#344054]">
-              {nodeTypeLabel[activeNode.type] || activeNode.type} 编辑器区域
-            </div>
-            <div className="mt-1 text-[12px] text-[#98a2b3]">
-              当前节点：{activeNode.name}
-            </div>
-            <div className="mt-3 text-[12px] text-[#b0b7c3]">
-              编辑器内容将在下一阶段接入
-            </div>
-          </div>
-        </section>
+          </section>
 
-        <aside className="flex shrink-0 bg-white">
-          <div
-            className={[
-              'relative h-full shrink-0',
-              rightPanelResizing
-                ? 'transition-none'
-                : 'transition-[width] duration-200 ease-out',
-            ].join(' ')}
-            style={{ width: rightPanelTab ? rightPanelWidth : 0 }}
-          >
-            {rightPanelTab ? (
+          <aside className="flex shrink-0 bg-white">
+            <div
+              className={[
+                'relative h-full shrink-0',
+                rightPanelResizing
+                  ? 'transition-none'
+                  : 'transition-[width] duration-200 ease-out',
+              ].join(' ')}
+              style={{ width: rightPanelTab ? rightPanelWidth : 0 }}
+            >
+              {rightPanelTab ? (
+                <div
+                  role="separator"
+                  aria-label="调整右侧面板宽度"
+                  aria-orientation="vertical"
+                  onPointerDown={handleRightPanelResizeStart}
+                  className="group absolute inset-y-0 left-0 z-30 w-3 -translate-x-1/2 cursor-col-resize touch-none"
+                >
+                  <div
+                    className={[
+                      'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#e5e7eb]',
+                      'transition-[width,background-color] duration-150',
+                      'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)]',
+                      'group-active:w-[2px] group-active:bg-[rgba(254,44,85,1)]',
+                    ].join(' ')}
+                  />
+                </div>
+              ) : null}
+
+              <div className="h-full overflow-hidden">
+                <div
+                  className="flex h-full flex-col bg-white"
+                  style={{ width: rightPanelWidth }}
+                >
+                  <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
+                    <span className="text-[13px] font-semibold text-[#30323b]">
+                      {activeRightPanel?.label}
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        title="刷新"
+                        aria-label={`刷新${activeRightPanel?.label || '侧边栏'}`}
+                        onClick={() =>
+                          actionPlaceholder(
+                            `${activeRightPanel?.label || ''}刷新`,
+                          )
+                        }
+                        className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
+                      >
+                        <RefreshCw size={13} strokeWidth={1.8} />
+                        刷新
+                      </button>
+                      <button
+                        type="button"
+                        title="关闭"
+                        aria-label="关闭右侧面板"
+                        onClick={() => setRightPanelTab(undefined)}
+                        className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
+                      >
+                        <X size={14} strokeWidth={1.8} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                    {renderRightPanelContent()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex h-full w-9 shrink-0 flex-col border-l border-[#e5e7eb] bg-white">
+              {rightPanelItems.map((item, index) => {
+                const active = rightPanelTab === item.key;
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    title={item.label}
+                    aria-label={`${active ? '收起' : '展开'}${item.label}`}
+                    aria-expanded={active}
+                    onClick={() => toggleRightPanel(item.key)}
+                    className={[
+                      'relative flex min-h-[72px] w-9 shrink-0 items-center justify-center border-b border-[#e5e7eb] py-3 text-[12px] leading-5 transition-[color,background-color,opacity]',
+                      '[writing-mode:vertical-rl] [letter-spacing:3px]',
+                      index === 0 ? 'border-t' : '',
+                      active
+                        ? 'text-[#245bdb] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[#245bdb]'
+                        : 'text-[#475467] opacity-70 hover:bg-[#f7f8fa] hover:text-[#344054] hover:opacity-100',
+                    ].join(' ')}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+        </div>
+
+        <div
+          className={[
+            'relative shrink-0 bg-white',
+            bottomPanelResizing
+              ? 'transition-none'
+              : 'transition-[height] duration-200 ease-out',
+          ].join(' ')}
+          style={{ height: bottomPanelOpen ? bottomPanelHeight : 0 }}
+        >
+          {bottomPanelOpen ? (
+            <>
               <div
                 role="separator"
-                aria-label="调整右侧面板宽度"
-                aria-orientation="vertical"
-                onPointerDown={handleRightPanelResizeStart}
-                className="group absolute inset-y-0 left-0 z-30 w-3 -translate-x-1/2 cursor-col-resize touch-none"
+                aria-label="调整运行结果面板高度"
+                aria-orientation="horizontal"
+                onPointerDown={handleBottomPanelResizeStart}
+                className="group absolute inset-x-0 top-0 z-40 h-3 -translate-y-1/2 cursor-row-resize touch-none"
               >
                 <div
                   className={[
-                    'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#e5e7eb]',
-                    'transition-[width,background-color] duration-150',
-                    'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)]',
-                    'group-active:w-[2px] group-active:bg-[rgba(254,44,85,1)]',
+                    'pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#e5e7eb]',
+                    'transition-[height,background-color] duration-150',
+                    'group-hover:h-[2px] group-hover:bg-[rgba(254,44,85,.55)]',
+                    'group-active:h-[2px] group-active:bg-[rgba(254,44,85,1)]',
                   ].join(' ')}
                 />
               </div>
-            ) : null}
 
-            <div className="h-full overflow-hidden">
-              <div
-                className="flex h-full flex-col bg-white"
-                style={{ width: rightPanelWidth }}
-              >
-                <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
-                  <span className="text-[13px] font-semibold text-[#30323b]">
-                    {activeRightPanel?.label}
-                  </span>
+              <div className="flex h-full flex-col overflow-hidden bg-white">
+                <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="shrink-0 text-[12px] font-medium text-[#344054]">
+                      运行结果
+                    </span>
+                    <span className="truncate text-[11px] text-[#98a2b3]">
+                      当前节点：{activeNode.name}
+                    </span>
+                  </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      title="刷新"
-                      aria-label={`刷新${activeRightPanel?.label || '侧边栏'}`}
-                      onClick={() =>
-                        actionPlaceholder(`${activeRightPanel?.label || ''}刷新`)
-                      }
-                      className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
-                    >
-                      <RefreshCw size={13} strokeWidth={1.8} />
-                      刷新
-                    </button>
-                    <button
-                      type="button"
-                      title="关闭"
-                      aria-label="关闭右侧面板"
-                      onClick={() => setRightPanelTab(undefined)}
-                      className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
-                    >
-                      <X size={14} strokeWidth={1.8} />
-                    </button>
+                  <button
+                    type="button"
+                    title="关闭"
+                    aria-label="关闭运行结果面板"
+                    onClick={() => setBottomPanelOpen(false)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
+                  >
+                    <X size={14} strokeWidth={1.8} />
+                  </button>
+                </div>
+
+                <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-white">
+                  <div className="text-center">
+                    <div className="text-[13px] font-medium text-[#475467]">
+                      运行结果区域
+                    </div>
+                    <div className="mt-1 text-[11px] text-[#98a2b3]">
+                      执行日志和结果内容将在后续阶段接入
+                    </div>
                   </div>
                 </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                  {renderRightPanelContent()}
-                </div>
               </div>
-            </div>
-          </div>
-
-          <div className="flex h-full w-9 shrink-0 flex-col border-l border-[#e5e7eb] bg-white">
-            {rightPanelItems.map((item, index) => {
-              const active = rightPanelTab === item.key;
-
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  title={item.label}
-                  aria-label={`${active ? '收起' : '展开'}${item.label}`}
-                  aria-expanded={active}
-                  onClick={() => toggleRightPanel(item.key)}
-                  className={[
-                    'relative flex min-h-[72px] w-9 shrink-0 items-center justify-center border-b border-[#e5e7eb] py-3 text-[12px] leading-5 transition-[color,background-color,opacity]',
-                    '[writing-mode:vertical-rl] [letter-spacing:3px]',
-                    index === 0 ? 'border-t' : '',
-                    active
-                      ? 'text-[#245bdb] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[#245bdb]'
-                      : 'text-[#475467] opacity-70 hover:bg-[#f7f8fa] hover:text-[#344054] hover:opacity-100',
-                  ].join(' ')}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
+            </>
+          ) : null}
+        </div>
       </div>
     </main>
   );
