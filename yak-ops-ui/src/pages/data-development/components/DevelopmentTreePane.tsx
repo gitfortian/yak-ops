@@ -223,10 +223,10 @@ const DevelopmentTreePane = ({
         style={{ width: collapsed ? 0 : leftWidth }}
       >
         <div
-          className="flex h-full flex-col overflow-hidden py-3"
+          className="flex h-full flex-col overflow-hidden"
           style={{ width: leftWidth }}
         >
-          <div className="flex h-7 shrink-0 items-center justify-between px-4">
+          <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-[#f5f5f6] px-3">
             <span className="text-[13px] font-semibold text-[#30323b]">
               开发目录
             </span>
@@ -251,14 +251,14 @@ const DevelopmentTreePane = ({
                   type="text"
                   size="small"
                   aria-label="新建目录或节点"
-                  icon={<Plus size={16} strokeWidth={1.8} />}
-                  className="!flex !h-7 !w-7 !items-center !justify-center !p-0"
+                  icon={<Plus size={15} strokeWidth={1.8} />}
+                  className="!flex !h-7 !w-7 !items-center !justify-center !p-0 hover:!bg-white"
                 />
               </Tooltip>
             </Dropdown>
           </div>
 
-          <div className="shrink-0 px-[14px] pb-2 pt-1">
+          <div className="flex h-11 shrink-0 items-center border-b border-[#e8e9ec] px-3">
             <Input
               allowClear
               size="small"
@@ -270,7 +270,7 @@ const DevelopmentTreePane = ({
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-[14px]">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
             <Spin spinning={treeLoading} wrapperClassName="block min-h-full">
               {treeData.length ? (
                 <Tree
