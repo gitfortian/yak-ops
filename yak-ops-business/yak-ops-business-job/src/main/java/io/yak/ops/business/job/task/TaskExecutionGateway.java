@@ -1,5 +1,6 @@
 package io.yak.ops.business.job.task;
 
+import io.yak.ops.spi.task.model.TaskExecutionTrigger;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,13 +36,23 @@ public class TaskExecutionGateway {
       TaskVersionSnapshot snapshot,
       String idempotencyKey,
       Map<String, Object> input) {
+    return start(snapshot, TaskExecutionTrigger.WORKFLOW, idempotencyKey, input);
+  }
+
+  public TaskExecution start(
+      TaskVersionSnapshot snapshot,
+      TaskExecutionTrigger trigger,
+      String idempotencyKey,
+      Map<String, Object> input) {
     if (snapshot == null) {
       throw new IllegalArgumentException("任务版本快照不能为空");
     }
+    TaskExecutionTrigger safeTrigger =
+        trigger == null ? TaskExecutionTrigger.WORKFLOW : trigger;
     Map<String, Object> safeInput = input == null
         ? Map.of()
         : Collections.unmodifiableMap(new LinkedHashMap<>(input));
-    return require(snapshot.type()).start(snapshot, idempotencyKey, safeInput);
+    return require(snapshot.type()).start(snapshot, safeTrigger, idempotencyKey, safeInput);
   }
 
   public TaskExecution status(String taskType, String executionId) {

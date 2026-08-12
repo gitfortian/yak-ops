@@ -6,41 +6,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
-import io.yak.ops.core.plugin.task.TaskPluginRegistry;
-import io.yak.ops.plugin.task.api.TaskExecutionContext;
-import io.yak.ops.plugin.task.api.TaskExecutionResult;
-import io.yak.ops.plugin.task.api.TaskExecutor;
-import io.yak.ops.plugin.task.api.TaskPlugin;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
-import io.yak.ops.plugin.task.api.TaskValidationResult;
-import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import io.yak.ops.spi.task.model.TaskExecutionStatus;
 import io.yak.ops.spi.task.model.TaskExecutionTrigger;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** Executes the current editor definition through the platform TaskPlugin contract. */
+/** Executes the current editor definition through the shared Task Runtime. */
 @Service
 public class DevelopmentTaskRunService {
 
   private final DevelopmentNodeRepository nodeRepository;
-  private final TaskPluginRegistry pluginRegistry;
-  private final ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider;
+  private final TaskExecutionGateway taskExecutionGateway;
   private final ObjectMapper objectMapper;
 
   public DevelopmentTaskRunService(
       DevelopmentNodeRepository nodeRepository,
-      TaskPluginRegistry pluginRegistry,
-      ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider,
+      TaskExecutionGateway taskExecutionGateway,
       ObjectMapper objectMapper) {
     this.nodeRepository = nodeRepository;
-    this.pluginRegistry = pluginRegistry;
-    this.dataSourceExecutionProvider = dataSourceExecutionProvider;
+    this.taskExecutionGateway = taskExecutionGateway;
     this.objectMapper = objectMapper;
   }
 
@@ -53,45 +44,41 @@ public class DevelopmentTaskRunService {
     DevelopmentNode node = requireNode(nodeId);
     TaskDefinition definition =
         normalizeDefinition(node, taskType, schemaVersion, content, configJson);
-    TaskPlugin plugin =
-        pluginRegistry
-            .find(definition.taskType())
-            .orElseThrow(
-                () ->
-                    new DevelopmentTaskValidationException(
-                        "当前未安装 " + definition.taskType() + " Task Plugin，无法运行",
-                        List.of(
-                            new TaskValidationIssue(
-                                "TASK_PLUGIN_NOT_INSTALLED",
-                                "taskType",
-                                "Task plugin is not installed: " + definition.taskType()))));
-    if (!plugin.descriptor().executable()) {
+    if (!taskExecutionGateway.supports(definition.taskType())) {
       throw new DevelopmentTaskValidationException(
-          definition.taskType() + " Task Plugin 暂不支持执行",
+          "当前未安装 " + definition.taskType() + " Task Runtime，无法运行",
           List.of(
               new TaskValidationIssue(
-                  "TASK_PLUGIN_NOT_EXECUTABLE",
+                  "TASK_RUNTIME_NOT_INSTALLED",
                   "taskType",
-                  "Task plugin is not executable: " + definition.taskType())));
+                  "Task runtime is not installed: " + definition.taskType())));
     }
-    validate(plugin, definition);
 
     long started = System.nanoTime();
     try {
-      TaskExecutor executor =
-          plugin.createExecutor(
-              definition,
-              new ManualExecutionContext(
-                  nodeId,
-                  dataSourceExecutionProvider.getIfAvailable()));
-      TaskExecutionResult result = executor.execute();
+      TaskVersionSnapshot snapshot = currentDraftSnapshot(node, definition);
+      TaskExecution execution =
+          taskExecutionGateway.start(
+              snapshot,
+              TaskExecutionTrigger.MANUAL,
+              null,
+              Map.of("nodeId", String.valueOf(nodeId)));
+      TaskExecution completed = awaitTerminal(snapshot.type(), execution);
       return new DevelopmentTaskRunResult(
-          result.status(),
-          result.message(),
+          mapStatus(completed),
+          completed.errorMessage(),
           elapsedMillis(started),
-          result.output());
+          completed.output());
     } catch (DevelopmentTaskValidationException exception) {
       throw exception;
+    } catch (IllegalArgumentException exception) {
+      throw new DevelopmentTaskValidationException(
+          safeMessage(exception),
+          List.of(
+              new TaskValidationIssue(
+                  "TASK_RUNTIME_VALIDATION_FAILED",
+                  "definition",
+                  safeMessage(exception))));
     } catch (Exception exception) {
       String message = safeMessage(exception);
       return new DevelopmentTaskRunResult(
@@ -102,16 +89,54 @@ public class DevelopmentTaskRunService {
     }
   }
 
-  private void validate(TaskPlugin plugin, TaskDefinition definition) {
-    TaskValidationResult validation = plugin.validate(definition);
-    if (validation.valid()) return;
-    String summary =
-        validation.issues().stream()
-            .map(TaskValidationIssue::message)
-            .limit(3)
-            .reduce((left, right) -> left + "；" + right)
-            .orElse("任务定义校验失败");
-    throw new DevelopmentTaskValidationException(summary, validation.issues());
+  private TaskVersionSnapshot currentDraftSnapshot(
+      DevelopmentNode node,
+      TaskDefinition definition) {
+    try {
+      return new TaskVersionSnapshot(
+          "development:" + node.id(),
+          node.name(),
+          definition.taskType(),
+          0L,
+          null,
+          objectMapper.writeValueAsString(definition),
+          definition.configJson());
+    } catch (JsonProcessingException exception) {
+      throw new IllegalArgumentException("当前任务定义无法序列化为运行时快照", exception);
+    }
+  }
+
+  private TaskExecution awaitTerminal(String taskType, TaskExecution execution) {
+    TaskExecution current = execution;
+    while (!current.terminal()) {
+      try {
+        Thread.sleep(10L);
+      } catch (InterruptedException exception) {
+        Thread.currentThread().interrupt();
+        try {
+          taskExecutionGateway.cancel(taskType, current.executionId());
+        } catch (RuntimeException ignored) {
+          // Preserve the original interruption as the manual-run result.
+        }
+        throw new IllegalStateException("等待任务执行结果时被中断", exception);
+      }
+      current = taskExecutionGateway.status(taskType, current.executionId());
+    }
+    return current;
+  }
+
+  private TaskExecutionStatus mapStatus(TaskExecution execution) {
+    String status = execution.status() == null
+        ? ""
+        : execution.status().trim().toUpperCase(Locale.ROOT);
+    return switch (status) {
+      case "PENDING" -> TaskExecutionStatus.PENDING;
+      case "RUNNING" -> TaskExecutionStatus.RUNNING;
+      case "SUCCEEDED" -> TaskExecutionStatus.SUCCESS;
+      case "CANCELED" -> TaskExecutionStatus.CANCELLED;
+      case "TIMED_OUT" -> TaskExecutionStatus.TIMEOUT;
+      default -> TaskExecutionStatus.FAILED;
+    };
   }
 
   private DevelopmentNode requireNode(Long nodeId) {
@@ -166,30 +191,5 @@ public class DevelopmentTaskRunService {
       return throwable == null ? "任务执行失败" : throwable.getClass().getSimpleName();
     }
     return message.length() > 500 ? message.substring(0, 500) : message;
-  }
-
-  private record ManualExecutionContext(
-      Long nodeId,
-      DataSourceExecutionProvider dataSourceExecutionProvider)
-      implements TaskExecutionContext {
-
-    @Override
-    public TaskExecutionTrigger trigger() {
-      return TaskExecutionTrigger.MANUAL;
-    }
-
-    @Override
-    public Map<String, Object> parameters() {
-      return Map.of("nodeId", String.valueOf(nodeId));
-    }
-
-    @Override
-    public <T> Optional<T> capability(Class<T> capabilityType) {
-      if (dataSourceExecutionProvider != null
-          && capabilityType.isInstance(dataSourceExecutionProvider)) {
-        return Optional.of(capabilityType.cast(dataSourceExecutionProvider));
-      }
-      return Optional.empty();
-    }
   }
 }

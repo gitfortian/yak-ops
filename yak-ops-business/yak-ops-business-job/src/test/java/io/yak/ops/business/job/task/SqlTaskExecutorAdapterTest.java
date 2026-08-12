@@ -16,6 +16,7 @@ import io.yak.ops.plugin.task.api.TaskPluginDescriptor;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
 import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.task.model.TaskDefinition;
+import io.yak.ops.spi.task.model.TaskExecutionTrigger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -65,6 +66,38 @@ class SqlTaskExecutorAdapterTest {
     assertEquals("v1", completed.output().get("version"));
     assertEquals("select 1 as version", plugin.definition.get().content());
     assertEquals("2026-08-12", plugin.context.get().parameters().get("bizDate"));
+    assertEquals(TaskExecutionTrigger.WORKFLOW, plugin.context.get().trigger());
+  }
+
+  @Test
+  void propagatesManualTriggerToPluginContext() throws Exception {
+    ObjectMapper objectMapper = new ObjectMapper();
+    RecordingSqlPlugin plugin = new RecordingSqlPlugin(
+        TaskExecutionResult.success(Map.of("ok", true)));
+    adapter = new SqlTaskExecutorAdapter(
+        TaskPluginRegistry.from(List.of(plugin)),
+        emptyDataSourceProvider(),
+        objectMapper);
+    TaskDefinition definition = new TaskDefinition("SQL", 1, "select 1", "{}");
+    TaskVersionSnapshot snapshot = new TaskVersionSnapshot(
+        "development:1",
+        "手动运行",
+        "SQL",
+        0L,
+        null,
+        objectMapper.writeValueAsString(definition),
+        definition.configJson());
+
+    TaskExecution started = adapter.start(
+        snapshot,
+        TaskExecutionTrigger.MANUAL,
+        null,
+        Map.of("nodeId", "1"));
+    TaskExecution completed = awaitTerminal(started.executionId());
+
+    assertTrue(completed.successful());
+    assertEquals(TaskExecutionTrigger.MANUAL, plugin.context.get().trigger());
+    assertEquals("1", plugin.context.get().parameters().get("nodeId"));
   }
 
   @Test
