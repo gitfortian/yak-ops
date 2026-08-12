@@ -221,7 +221,7 @@ const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
                 '[writing-mode:vertical-rl] [letter-spacing:3px]',
                 index === 0 ? 'border-t' : '',
                 active
-                  ? 'text-[#245bdb] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[#245bdb]'
+                  ? 'text-[#1677ff] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[#1677ff]'
                   : 'text-[#475467] opacity-70 hover:bg-[#f7f8fa] hover:text-[#344054] hover:opacity-100',
               ].join(' ')}
             >
