@@ -1,68 +1,132 @@
 # Workflow 与 Task Plugin 集成设计
 
+> 本文已按统一 Task Plugin 核心模型修订。Workflow 不再拥有一套独立的任务插件执行模型，而是通过 Task Catalog 引用已发布任务，并在运行时统一进入 Task Runtime。
+
 ## 设计目标
 
-Yak Ops 借鉴 DolphinScheduler 的任务插件职责拆分，但保持当前单进程工作流引擎的轻量定位，不引入 Master、Worker 或注册中心。
+Yak Ops 借鉴 DolphinScheduler 的任务插件职责拆分，但保持当前架构轻量，不在 Workflow 模块中复制 SQL/Shell/Python 执行逻辑，也不在当前阶段引入 Master、Worker 或注册中心。
 
-对应关系：
-
-| DolphinScheduler | Yak Ops | 职责 |
-| --- | --- | --- |
-| `TaskChannelFactory` | `WorkflowTaskPluginFactory` | 插件身份、元数据、配置校验和执行器创建 |
-| `TaskChannel` | `WorkflowTaskExecutorRegistry` | 插件发现、类型唯一性和运行时路由 |
-| `AbstractTask` | `WorkflowTaskExecutor` | 一次物理 Attempt 的执行与取消 |
-| `AbstractParameters` | 插件 `configurationSchema` 与 `validate` | 参数结构描述和发布期校验 |
-| `TaskExecutionContext` | `WorkflowTaskContext` | 工作流实例、任务实例、Attempt、参数、日志和取消信号 |
-
-## 生命周期
+统一关系：
 
 ```text
-应用启动
-  -> ServiceLoader 发现 WorkflowTaskPluginFactory
-  -> WorkflowTaskExecutorRegistry 建立插件目录
-
-设计器打开
-  -> GET /api/v1/workflows/task-plugins
-  -> 节点选择器合并后端插件目录
-  -> 未提供专属表单的插件使用通用 JSON 配置
-
-保存草稿
-  -> 保存 taskType + config
-
-发布工作流
-  -> WorkflowDagCompiler 校验 DAG
-  -> WorkflowTaskExecutorRegistry.validate(taskType, config)
-  -> 插件执行静态参数校验
-
-运行工作流
-  -> 每个物理 Attempt 调用 factory.create()
-  -> 创建独立 WorkflowTaskExecutor
-  -> 注入 WorkflowTaskContext
-  -> 执行、日志、取消、超时、重试和结果落库
+数据开发 / 数据同步 / 数据质量
+          |
+          | publish
+          v
+      Task Catalog
+          |
+          | assetId + revisionId
+          v
+       Workflow
+          |
+          v
+     Task Runtime
+          |
+          v
+  TaskPluginRegistry
 ```
 
-## 参数命名空间
+核心模型与生命周期以 [`task-plugin-core-model.md`](./task-plugin-core-model.md) 为准。
 
-任务插件统一从 `WorkflowTaskContext.parameters()` 读取参数：
+## Workflow 的职责
+
+Workflow 只负责：
+
+- 编排任务依赖关系；
+- 保存任务资产与发布版本引用；
+- 传递工作流上下文、参数和触发信息；
+- 展示运行实例、节点状态和日志入口；
+- 将节点执行请求交给统一 Task Runtime。
+
+Workflow 不负责：
+
+- 解析 SQL 数据源参数；
+- 启动 Shell/Python 进程；
+- 根据数据库类型选择 JDBC 实现；
+- 直接发现或加载具体 Task Plugin；
+- 保存一份独立于 TaskRevision 的任务正文副本。
+
+## 任务选择器
+
+工作流设计器左侧的“数据同步 / 数据开发 / 数据质量”统一查询 Task Catalog：
 
 ```text
-${name}                       兼容原有全局参数
-${global.name}                显式全局参数
-${system.workflowInstanceId}  工作流实例 ID
-${system.taskInstanceId}      任务实例 ID
-${system.attemptId}           物理尝试 ID
-${system.attemptNo}           当前尝试次数
-${system.nodeKey}             节点编码
-${system.taskType}            插件类型
+DATA_INTEGRATION
+DATA_DEVELOPMENT
+DATA_QUALITY
 ```
 
-## 插件扩展步骤
+只有 `ONLINE` 资产允许新增引用。
 
-1. 新建独立 Maven 模块，例如 `yak-ops-plugin-task-python`。
-2. 实现 `WorkflowTaskExecutor`，负责单次 Attempt 的执行和取消。
-3. 实现 `WorkflowTaskPluginFactory`，提供描述信息、配置 Schema 和执行器创建。
-4. 在 `META-INF/services/io.yak.ops.spi.workflow.WorkflowTaskPluginFactory` 声明 Factory。
-5. 将模块加入 `yak-ops-plugin-task-all`。
-6. 增加参数校验、执行、取消和 ServiceLoader 发现测试。
+拖入画布时，Workflow Node 保存：
 
-工作流业务模块不得直接依赖具体任务插件。Boot 通过 `task-all` 完成最终装配。
+```text
+taskAssetId
+taskRevisionId
+```
+
+而不是只保存业务模块自己的 `sourceId`，也不复制 SQL/Shell 内容。
+
+## 版本规则
+
+假设数据开发任务“今天统计”已经发布 v1：
+
+```text
+今天统计
+  v1 <- Workflow A
+```
+
+之后开发人员修改并发布 v2：
+
+```text
+今天统计
+  v1 <- Workflow A（保持不变）
+  v2 <- current
+```
+
+Workflow A 可以提示存在 v2，但必须由用户显式升级引用。生产 Workflow 不允许因为上游任务再次发布而静默改变行为。
+
+## 运行时规则
+
+未来统一由 Task Runtime 处理：
+
+```text
+Manual Run ----+
+Workflow Run --+--> Task Runtime --> TaskPlugin
+Schedule Run --+
+```
+
+Workflow 只提供触发上下文，例如：
+
+```text
+workflowDefinitionId
+workflowInstanceId
+workflowNodeKey
+taskAssetId
+taskRevisionId
+parameters
+```
+
+Task Runtime 再构造插件执行上下文、运行记录、取消信号、超时和日志能力。
+
+## 与旧方案的差异
+
+旧设计曾考虑由 Workflow 直接维护 `WorkflowTaskPluginFactory / WorkflowTaskExecutorRegistry / WorkflowTaskExecutor`。该方式会让 Workflow 成为任务插件的唯一宿主，后续数据开发手动运行和独立调度还需要再实现一套入口。
+
+现在统一调整为：
+
+```text
+Workflow -> Task Runtime -> Task Plugin
+```
+
+因此后续不再新增 Workflow 专属 Task Plugin SPI。插件能力属于平台级 Task Plugin，供数据开发、Workflow、Schedule 共同复用。
+
+## 实施顺序
+
+1. 固定 Task 核心模型与版本语义；
+2. 建立平台级 `yak-ops-plugin-task` 插件骨架；
+3. 完成数据开发 Draft/Revision/Publish；
+4. SQL 插件打通手动运行；
+5. Task Catalog 接入 Workflow 任务选择器；
+6. Workflow 固定绑定 TaskRevision；
+7. 三种触发方式统一进入 Task Runtime。
