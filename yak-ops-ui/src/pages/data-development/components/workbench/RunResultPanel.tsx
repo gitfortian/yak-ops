@@ -1,15 +1,20 @@
-import { X } from 'lucide-react';
+import { LoaderCircle, X } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useState } from 'react';
 
 import type { DevelopmentEditorDefinition } from '../../editors/types';
-import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
+import type {
+  DevelopmentDirectory,
+  DevelopmentNode,
+  DevelopmentTaskRunResult,
+} from '../../types';
 
 interface RunResultPanelProps {
   open: boolean;
   node: DevelopmentNode;
   directory?: DevelopmentDirectory;
   definition: DevelopmentEditorDefinition;
+  result?: DevelopmentTaskRunResult;
   onClose: () => void;
 }
 
@@ -29,11 +34,22 @@ const initialHeight = () => {
     : DEFAULT_HEIGHT;
 };
 
+const statusText = (result?: DevelopmentTaskRunResult) => {
+  if (!result) return undefined;
+  if (result.status === 'RUNNING') return '运行中';
+  if (result.status === 'SUCCESS') return `完成 · ${result.durationMs} ms`;
+  if (result.status === 'CANCELLED') return '已取消';
+  if (result.status === 'TIMEOUT') return `超时 · ${result.durationMs} ms`;
+  if (result.status === 'FAILED') return `失败 · ${result.durationMs} ms`;
+  return result.status;
+};
+
 const RunResultPanel = ({
   open,
   node,
   directory,
   definition,
+  result,
   onClose,
 }: RunResultPanelProps) => {
   const [height, setHeight] = useState(initialHeight);
@@ -104,6 +120,16 @@ const RunResultPanel = ({
                 <span className="truncate text-[11px] text-[#98a2b3]">
                   当前节点：{node.name}
                 </span>
+                {result?.status === 'RUNNING' ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-[#667085]">
+                    <LoaderCircle size={12} className="animate-spin" />
+                    运行中
+                  </span>
+                ) : statusText(result) ? (
+                  <span className="shrink-0 text-[11px] text-[#667085]">
+                    {statusText(result)}
+                  </span>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -116,16 +142,18 @@ const RunResultPanel = ({
               </button>
             </div>
 
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-white">
+            <div className="min-h-0 flex-1 overflow-hidden bg-white">
               {Result ? (
-                <Result node={node} directory={directory} />
+                <Result node={node} directory={directory} result={result} />
               ) : (
-                <div className="text-center">
-                  <div className="text-[13px] font-medium text-[#475467]">
-                    运行结果区域
-                  </div>
-                  <div className="mt-1 text-[11px] text-[#98a2b3]">
-                    执行日志和结果内容将在后续阶段接入
+                <div className="flex h-full items-center justify-center text-center">
+                  <div>
+                    <div className="text-[13px] font-medium text-[#475467]">
+                      运行结果区域
+                    </div>
+                    <div className="mt-1 text-[11px] text-[#98a2b3]">
+                      当前节点类型暂未接入执行结果渲染
+                    </div>
                   </div>
                 </div>
               )}

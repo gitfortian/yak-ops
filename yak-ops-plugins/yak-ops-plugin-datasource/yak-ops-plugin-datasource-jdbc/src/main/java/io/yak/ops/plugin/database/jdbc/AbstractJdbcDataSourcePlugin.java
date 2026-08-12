@@ -12,6 +12,7 @@ import io.yak.ops.spi.datasource.DataSourceConnection;
 import io.yak.ops.spi.datasource.DataSourcePlugin;
 import io.yak.ops.spi.datasource.DataSourcePluginException;
 import io.yak.ops.spi.datasource.DataSourcePluginException.Operation;
+import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.ArrayList;
@@ -22,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-/** JDBC 数据源插件基座，统一负责参数解析、表单配置和连接测试。 */
+/** JDBC 数据源插件基座，统一负责参数解析、表单配置、连接测试和 SQL 执行。 */
 public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -221,6 +222,15 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
   @Override
   public DataSourceCatalog createCatalog(DataSourceConnection connection, int timeoutSeconds) {
     return createJdbcCatalog(requireJdbcConnection(connection), Math.max(1, timeoutSeconds));
+  }
+
+  @Override
+  public DataSourceSqlExecutor createSqlExecutor(
+      DataSourceConnection connection,
+      int connectionTimeoutSeconds) {
+    return new JdbcDataSourceSqlExecutor(
+        requireJdbcConnection(connection),
+        Math.max(1, connectionTimeoutSeconds));
   }
 
   protected DataSourceCatalog createJdbcCatalog(

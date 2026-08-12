@@ -14,12 +14,25 @@
     <artifactId>yak-ops-plugin-task-sql</artifactId>
 
     <name>Yak Ops SQL Task Plugin</name>
-    <description>SQL task plugin skeleton; real datasource-backed execution is introduced in a later stage</description>
+    <description>Datasource-backed SQL task validation and execution plugin</description>
 
     <dependencies>
         <dependency>
             <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-plugin-task-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-plugin-datasource-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

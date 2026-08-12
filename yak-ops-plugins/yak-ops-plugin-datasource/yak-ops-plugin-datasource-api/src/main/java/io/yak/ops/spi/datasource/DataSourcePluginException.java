@@ -1,6 +1,6 @@
 package io.yak.ops.spi.datasource;
 
-/** 数据源插件参数、连接或元数据访问异常。 */
+/** 数据源插件参数、连接、元数据访问或 SQL 执行异常。 */
 public class DataSourcePluginException extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
@@ -25,6 +25,7 @@ public class DataSourcePluginException extends RuntimeException {
   public enum Operation {
     PARAMETER,
     CONNECTIVITY,
-    CATALOG
+    CATALOG,
+    EXECUTION
   }
 }

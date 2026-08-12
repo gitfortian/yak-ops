@@ -4,6 +4,7 @@ import type { ComponentType } from 'react';
 import type {
   DevelopmentDirectory,
   DevelopmentNode,
+  DevelopmentTaskRunResult,
   DevelopmentTaskType,
 } from '../types';
 
@@ -23,8 +24,14 @@ export interface DevelopmentEditorToolbarContext
   onRun: () => void;
   onSave: () => void;
   onPublish: () => void;
+  running: boolean;
   saving: boolean;
   publishing: boolean;
+}
+
+export interface DevelopmentEditorRunResultContext
+  extends DevelopmentEditorContext {
+  result?: DevelopmentTaskRunResult;
 }
 
 export interface DevelopmentEditorCapabilities {
@@ -52,5 +59,5 @@ export interface DevelopmentEditorDefinition {
   panels?: Partial<
     Record<DevelopmentEditorPanelKey, ComponentType<DevelopmentEditorContext>>
   >;
-  RunResult?: ComponentType<DevelopmentEditorContext>;
+  RunResult?: ComponentType<DevelopmentEditorRunResultContext>;
 }

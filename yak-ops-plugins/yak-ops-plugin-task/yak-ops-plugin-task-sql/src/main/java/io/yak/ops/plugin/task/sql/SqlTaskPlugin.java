@@ -1,19 +1,17 @@
 package io.yak.ops.plugin.task.sql;
 
+import io.yak.ops.plugin.task.api.TaskExecutionContext;
+import io.yak.ops.plugin.task.api.TaskExecutor;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginDescriptor;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
+import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Stage-2 SQL task plugin skeleton.
- *
- * <p>This plugin proves SPI discovery and definition validation only. Datasource-backed SQL
- * execution is deliberately deferred to the SQL execution stage.
- */
+/** Datasource-backed SQL Task Plugin. */
 public final class SqlTaskPlugin implements TaskPlugin {
 
   public static final String TYPE = "SQL";
@@ -23,11 +21,11 @@ public final class SqlTaskPlugin implements TaskPlugin {
       new TaskPluginDescriptor(
           TYPE,
           "SQL",
-          "SQL task definition",
-          "1.0.0",
+          "Execute SQL against a Yak Ops datasource reference",
+          "1.1.0",
           SCHEMA_VERSION,
-          false,
-          false);
+          true,
+          true);
 
   @Override
   public TaskPluginDescriptor descriptor() {
@@ -67,6 +65,43 @@ public final class SqlTaskPlugin implements TaskPlugin {
               "SQL content must not be blank"));
     }
 
+    try {
+      SqlTaskConfig config = SqlTaskConfig.parse(definition.configJson());
+      if (config.dataSourceId() == null || config.dataSourceId().isBlank()) {
+        issues.add(
+            new TaskValidationIssue(
+                "SQL_DATASOURCE_REQUIRED",
+                "config.dataSourceId",
+                "SQL task requires a datasource"));
+      }
+    } catch (IllegalArgumentException exception) {
+      issues.add(
+          new TaskValidationIssue(
+              "SQL_CONFIG_INVALID",
+              "configJson",
+              exception.getMessage() == null ? "SQL config is invalid" : exception.getMessage()));
+    }
+
     return issues.isEmpty() ? TaskValidationResult.ok() : TaskValidationResult.of(issues);
+  }
+
+  @Override
+  public TaskExecutor createExecutor(
+      TaskDefinition definition,
+      TaskExecutionContext context) {
+    TaskValidationResult validation = validate(definition);
+    if (!validation.valid()) {
+      String summary =
+          validation.issues().stream()
+              .map(TaskValidationIssue::message)
+              .limit(3)
+              .reduce((left, right) -> left + "; " + right)
+              .orElse("SQL task validation failed");
+      throw new IllegalArgumentException(summary);
+    }
+    SqlTaskConfig config = SqlTaskConfig.parse(definition.configJson());
+    DataSourceExecutionProvider provider =
+        context.requireCapability(DataSourceExecutionProvider.class);
+    return new SqlTaskExecutor(definition, config, provider);
   }
 }

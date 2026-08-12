@@ -4,10 +4,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.PublishRequest;
+import io.yak.ops.business.development.api.DevelopmentTaskApi.RunRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.SaveDraftRequest;
 import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
+import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
+import io.yak.ops.business.development.service.DevelopmentTaskRunService;
 import io.yak.ops.business.development.service.DevelopmentTaskService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -19,16 +22,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Draft, publish and immutable revision APIs for one development node. */
+/** Draft, publish, revision and manual-run APIs for one development node. */
 @Tag(name = "数据开发任务接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
 public class DevelopmentTaskController {
 
   private final DevelopmentTaskService service;
+  private final DevelopmentTaskRunService runService;
 
-  public DevelopmentTaskController(DevelopmentTaskService service) {
+  public DevelopmentTaskController(
+      DevelopmentTaskService service,
+      DevelopmentTaskRunService runService) {
     this.service = service;
+    this.runService = runService;
   }
 
   @Operation(summary = "读取节点草稿")
@@ -42,13 +49,28 @@ public class DevelopmentTaskController {
   public Result<DevelopmentTaskDraft> saveDraft(
       @PathVariable("nodeId") Long nodeId,
       @Valid @RequestBody SaveDraftRequest request) {
-    return Result.success(service.saveDraft(
-        nodeId,
-        request.taskType(),
-        request.schemaVersion(),
-        request.content(),
-        request.configJson(),
-        request.baseRevision()));
+    return Result.success(
+        service.saveDraft(
+            nodeId,
+            request.taskType(),
+            request.schemaVersion(),
+            request.content(),
+            request.configJson(),
+            request.baseRevision()));
+  }
+
+  @Operation(summary = "运行当前编辑器任务")
+  @PostMapping("/{nodeId}/run")
+  public Result<DevelopmentTaskRunResult> run(
+      @PathVariable("nodeId") Long nodeId,
+      @Valid @RequestBody RunRequest request) {
+    return Result.success(
+        runService.run(
+            nodeId,
+            request.taskType(),
+            request.schemaVersion(),
+            request.content(),
+            request.configJson()));
   }
 
   @Operation(summary = "发布节点版本")

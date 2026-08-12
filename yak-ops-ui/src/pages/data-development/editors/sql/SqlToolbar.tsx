@@ -51,6 +51,7 @@ const SqlToolbar = ({
   onRun,
   onSave,
   onPublish,
+  running,
   saving,
   publishing,
 }: DevelopmentEditorToolbarContext) => {
@@ -63,15 +64,23 @@ const SqlToolbar = ({
   return (
     <div className="flex h-full w-full min-w-0 items-center justify-between gap-3">
       <div className="flex shrink-0 items-center gap-0.5">
-        <ToolbarButton title="运行" onClick={onRun}>
-          <Play size={15} strokeWidth={1.8} />
+        <ToolbarButton
+          title={running ? 'SQL 运行中' : '运行当前 SQL'}
+          disabled={running}
+          onClick={onRun}
+        >
+          {running ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Play size={15} strokeWidth={1.8} />
+          )}
         </ToolbarButton>
 
         <ToolbarDivider />
 
         <ToolbarButton
           title="保存草稿"
-          disabled={saving || publishing}
+          disabled={saving || publishing || running}
           onClick={onSave}
         >
           {saving ? (
@@ -82,7 +91,7 @@ const SqlToolbar = ({
         </ToolbarButton>
         <ToolbarButton
           title="发布版本"
-          disabled={saving || publishing}
+          disabled={saving || publishing || running}
           onClick={onPublish}
         >
           {publishing ? (
@@ -93,12 +102,14 @@ const SqlToolbar = ({
         </ToolbarButton>
         <ToolbarButton
           title="撤销"
+          disabled={running}
           onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}
         >
           <Undo2 size={15} strokeWidth={1.8} />
         </ToolbarButton>
         <ToolbarButton
           title="重做"
+          disabled={running}
           onClick={() => execute('redo', 'SQL 编辑器尚未就绪')}
         >
           <Redo2 size={15} strokeWidth={1.8} />
@@ -114,6 +125,7 @@ const SqlToolbar = ({
 
         <ToolbarButton
           title="格式化 SQL"
+          disabled={running}
           onClick={() => execute('format', 'SQL 编辑器尚未就绪')}
         >
           <Wand2 size={15} strokeWidth={1.8} />
