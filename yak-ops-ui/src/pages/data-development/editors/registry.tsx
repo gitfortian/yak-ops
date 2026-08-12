@@ -10,8 +10,8 @@ import type {
 } from './types';
 
 const commonCapabilities = {
-  run: true,
-  stop: true,
+  run: false,
+  stop: false,
   save: true,
   refresh: true,
   publish: false,
@@ -49,7 +49,12 @@ const editorRegistry: Partial<
     label: 'SQL',
     icon: Code2,
     iconClassName: 'text-[#f79009]',
-    capabilities: { ...commonCapabilities, publish: true, format: true },
+    capabilities: {
+      ...commonCapabilities,
+      run: true,
+      publish: true,
+      format: true,
+    },
     Editor: SqlEditor,
     Toolbar: SqlToolbar,
     panels: {

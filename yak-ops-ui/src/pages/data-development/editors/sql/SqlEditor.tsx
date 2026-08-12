@@ -1,11 +1,19 @@
+import { LoaderCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import type {
+  DevelopmentSqlResultColumn,
+  DevelopmentSqlRunOutput,
+} from '../../types';
 import {
   updateEditorSessionContent,
   updateEditorSessionViewState,
   useEditorSession,
 } from '../session/editorSessionStore';
-import type { DevelopmentEditorContext } from '../types';
+import type {
+  DevelopmentEditorContext,
+  DevelopmentEditorRunResultContext,
+} from '../types';
 import SqlMonacoEditor, {
   type SqlEditorPosition,
 } from './components/SqlMonacoEditor';
@@ -98,19 +106,169 @@ export const SqlRunConfig = ({ node }: DevelopmentEditorContext) => (
   <div className="text-[12px] leading-6 text-[#667085]">
     <div className="font-medium text-[#344054]">SQL 运行配置</div>
     <div className="mt-2 text-[11px] leading-5 text-[#98a2b3]">
-      {node.name} 的数据源、Database、Schema 已迁移到编辑器工具栏右侧，可直接切换真实 Catalog 上下文。
+      {node.name} 的数据源、Database、Schema 由编辑器工具栏右侧选择，运行时通过数据源插件解析真实连接。
     </div>
     <div className="mt-3 border-t border-[#eef0f2] pt-3 text-[11px] leading-5 text-[#98a2b3]">
-      执行参数、资源配置等运行期设置将在后续阶段继续接入。
+      当前默认最多返回 200 行、执行超时 30 秒；Task Plugin 已预留 maxRows 和 timeoutSeconds 配置字段，后续可开放到运行配置面板。
     </div>
   </div>
 );
 
-export const SqlRunResult = ({ node }: DevelopmentEditorContext) => (
-  <div className="text-center">
-    <div className="text-[13px] font-medium text-[#475467]">SQL 运行结果区域</div>
-    <div className="mt-1 text-[11px] text-[#98a2b3]">
-      {node.name} 的结果集、执行日志将在后续阶段接入
+const asSqlOutput = (value: Record<string, unknown>): DevelopmentSqlRunOutput =>
+  value as DevelopmentSqlRunOutput;
+
+const formatCell = (value: unknown) => {
+  if (value === null) return 'NULL';
+  if (value === undefined) return '';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+};
+
+const columnTitle = (column: DevelopmentSqlResultColumn, index: number) =>
+  column.label || column.name || `Column ${index + 1}`;
+
+export const SqlRunResult = ({ result }: DevelopmentEditorRunResultContext) => {
+  if (!result) {
+    return (
+      <div className="flex h-full items-center justify-center text-center">
+        <div>
+          <div className="text-[13px] font-medium text-[#475467]">SQL 运行结果</div>
+          <div className="mt-1 text-[11px] text-[#98a2b3]">
+            点击顶部运行按钮执行当前编辑器中的 SQL
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (result.status === 'RUNNING') {
+    return (
+      <div className="flex h-full items-center justify-center text-[12px] text-[#667085]">
+        <LoaderCircle size={16} className="mr-2 animate-spin" />
+        正在执行 SQL…
+      </div>
+    );
+  }
+
+  if (result.status !== 'SUCCESS') {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div className="max-w-[680px]">
+          <div className="text-[13px] font-medium text-[#b42318]">
+            {result.status === 'CANCELLED'
+              ? 'SQL 已取消'
+              : result.status === 'TIMEOUT'
+                ? 'SQL 执行超时'
+                : 'SQL 执行失败'}
+          </div>
+          <div className="mt-2 break-words text-[11px] leading-5 text-[#667085]">
+            {result.message || '数据库未返回更多错误信息'}
+          </div>
+          <div className="mt-2 text-[10px] text-[#98a2b3]">
+            耗时 {result.durationMs} ms
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const output = asSqlOutput(result.output);
+  if (output.kind === 'UPDATE_COUNT') {
+    const affectedRows =
+      typeof output.affectedRows === 'number' && output.affectedRows >= 0
+        ? output.affectedRows
+        : '—';
+    return (
+      <div className="flex h-full items-center justify-center text-center">
+        <div>
+          <div className="text-[13px] font-medium text-[#344054]">SQL 执行完成</div>
+          <div className="mt-2 text-[12px] text-[#475467]">
+            影响行数：{affectedRows}
+          </div>
+          <div className="mt-1 text-[10px] text-[#98a2b3]">
+            耗时 {result.durationMs} ms
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const columns = Array.isArray(output.columns) ? output.columns : [];
+  const rows = Array.isArray(output.rows) ? output.rows : [];
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex h-8 shrink-0 items-center gap-4 border-b border-[#eef0f2] px-3 text-[10px] text-[#667085]">
+        <span>{output.returnedRows ?? rows.length} 行</span>
+        <span>{columns.length} 列</span>
+        <span>{result.durationMs} ms</span>
+        {output.truncated ? (
+          <span className="text-[#b54708]">结果已达到返回上限</span>
+        ) : null}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {columns.length ? (
+          <table className="min-w-full border-separate border-spacing-0 whitespace-nowrap text-[11px]">
+            <thead className="sticky top-0 z-10 bg-[#fafafa] text-[#475467]">
+              <tr>
+                <th className="sticky left-0 z-20 w-12 border-b border-r border-[#e5e7eb] bg-[#fafafa] px-2 py-1.5 text-right font-medium text-[#98a2b3]">
+                  #
+                </th>
+                {columns.map((column, index) => (
+                  <th
+                    key={`${column.name || column.label || 'column'}-${index}`}
+                    title={column.typeName || undefined}
+                    className="min-w-[120px] border-b border-r border-[#e5e7eb] px-2.5 py-1.5 text-left font-medium"
+                  >
+                    <span>{columnTitle(column, index)}</span>
+                    {column.typeName ? (
+                      <span className="ml-2 font-normal text-[#a4a9b2]">
+                        {column.typeName}
+                      </span>
+                    ) : null}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="text-[#344054]">
+              {rows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="hover:bg-[#fafafa]">
+                  <td className="sticky left-0 border-b border-r border-[#eef0f2] bg-white px-2 py-1.5 text-right text-[#98a2b3]">
+                    {rowIndex + 1}
+                  </td>
+                  {columns.map((column, columnIndex) => {
+                    const value = row?.[columnIndex];
+                    const display = formatCell(value);
+                    return (
+                      <td
+                        key={`${column.name || columnIndex}-${columnIndex}`}
+                        title={display}
+                        className={[
+                          'max-w-[420px] border-b border-r border-[#eef0f2] px-2.5 py-1.5',
+                          value === null ? 'italic text-[#98a2b3]' : '',
+                        ].join(' ')}
+                      >
+                        <div className="max-w-[400px] truncate">{display}</div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="flex h-full items-center justify-center text-[11px] text-[#98a2b3]">
+            SQL 执行成功，结果集没有可展示的字段
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};

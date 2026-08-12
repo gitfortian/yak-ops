@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
-/** HTTP request contracts for data-development task authoring. */
+/** HTTP request contracts for data-development task authoring and manual execution. */
 public final class DevelopmentTaskApi {
 
   private DevelopmentTaskApi() {
@@ -22,5 +22,13 @@ public final class DevelopmentTaskApi {
 
   public record PublishRequest(
       @NotNull @Positive Long draftRevision) {
+  }
+
+  /** Runs the current editor definition without implicitly saving or publishing it. */
+  public record RunRequest(
+      @NotBlank String taskType,
+      @Min(1) int schemaVersion,
+      String content,
+      String configJson) {
   }
 }

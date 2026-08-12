@@ -1,7 +1,6 @@
 package io.yak.ops.plugin.task.all;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
@@ -19,7 +18,15 @@ class TaskPluginAssemblyTest {
     TaskPlugin sql = registry.require("SQL");
 
     assertEquals("SQL", sql.descriptor().type());
-    assertFalse(sql.descriptor().executable());
-    assertTrue(sql.validate(new TaskDefinition("SQL", 1, "select 1", "{}")).valid());
+    assertTrue(sql.descriptor().executable());
+    assertTrue(sql.descriptor().cancellable());
+    assertTrue(
+        sql.validate(
+                new TaskDefinition(
+                    "SQL",
+                    1,
+                    "select 1",
+                    "{\"dataSourceId\":\"1\"}"))
+            .valid());
   }
 }

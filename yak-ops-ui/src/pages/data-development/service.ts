@@ -7,9 +7,11 @@ import type {
   DevelopmentDirectory,
   DevelopmentId,
   DevelopmentNode,
+  DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
   DevelopmentTaskRevision,
   DevelopmentTaskRevisionSummary,
+  DevelopmentTaskRunResult,
   SaveDevelopmentTaskDraftPayload,
 } from './types';
 
@@ -63,6 +65,13 @@ export const saveDevelopmentTaskDraft = (
   payload: SaveDevelopmentTaskDraftPayload,
 ): Promise<ApiResponse<DevelopmentTaskDraft>> =>
   HttpUtils.put<DevelopmentTaskDraft>(`${NODE_API}/${nodeId}/draft`, payload);
+
+/** Execute the current editor definition; this does not implicitly save or publish it. */
+export const runDevelopmentTask = (
+  nodeId: DevelopmentId,
+  payload: DevelopmentTaskDefinition,
+): Promise<ApiResponse<DevelopmentTaskRunResult>> =>
+  HttpUtils.post<DevelopmentTaskRunResult>(`${NODE_API}/${nodeId}/run`, payload);
 
 export const publishDevelopmentTask = (
   nodeId: DevelopmentId,

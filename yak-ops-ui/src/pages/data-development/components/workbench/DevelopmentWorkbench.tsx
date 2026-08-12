@@ -16,6 +16,7 @@ import {
 import {
   getDevelopmentTaskDraft,
   publishDevelopmentTask,
+  runDevelopmentTask,
   saveDevelopmentTaskDraft,
 } from '../../service';
 import type {
@@ -23,6 +24,7 @@ import type {
   DevelopmentId,
   DevelopmentNode,
   DevelopmentTaskDraft,
+  DevelopmentTaskRunResult,
 } from '../../types';
 import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
@@ -63,6 +65,10 @@ const DevelopmentWorkbench = ({
   const [openNodeIds, setOpenNodeIds] = useState<DevelopmentId[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<DevelopmentId>();
   const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [runResults, setRunResults] = useState<
+    Partial<Record<DevelopmentId, DevelopmentTaskRunResult>>
+  >({});
+  const [runningNodeIds, setRunningNodeIds] = useState<DevelopmentId[]>([]);
   const [pendingClose, setPendingClose] = useState<PendingCloseRequest>();
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -119,6 +125,9 @@ const DevelopmentWorkbench = ({
   const activeDirectory = activeNode?.directoryId
     ? directoryMap.get(activeNode.directoryId)
     : undefined;
+  const activeRunning = activeNode
+    ? runningNodeIds.includes(activeNode.id)
+    : false;
 
   const focusNode = (nodeId: DevelopmentId) => {
     setActiveNodeId(nodeId);
@@ -154,6 +163,49 @@ const DevelopmentWorkbench = ({
       message.error(error instanceof Error ? error.message : '保存草稿失败');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const runActiveTask = async () => {
+    if (!activeNode || runningNodeIds.includes(activeNode.id)) return;
+    const node = activeNode;
+    const startedAt = Date.now();
+    setRunPanelOpen(true);
+    setRunningNodeIds((current) => [...current, node.id]);
+    setRunResults((current) => ({
+      ...current,
+      [node.id]: {
+        status: 'RUNNING',
+        message: '',
+        durationMs: 0,
+        output: {},
+      },
+    }));
+
+    try {
+      const definition = prepareDevelopmentTaskDefinition(node);
+      const result = responseData(
+        await runDevelopmentTask(node.id, definition),
+        '运行任务失败',
+      );
+      setRunResults((current) => ({ ...current, [node.id]: result }));
+      if (result.status === 'FAILED' || result.status === 'TIMEOUT') {
+        message.error(result.message || 'SQL 执行失败');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '运行任务失败';
+      setRunResults((current) => ({
+        ...current,
+        [node.id]: {
+          status: 'FAILED',
+          message: errorMessage,
+          durationMs: Math.max(0, Date.now() - startedAt),
+          output: {},
+        },
+      }));
+      message.error(errorMessage);
+    } finally {
+      setRunningNodeIds((current) => current.filter((nodeId) => nodeId !== node.id));
     }
   };
 
@@ -314,9 +366,10 @@ const DevelopmentWorkbench = ({
         node={activeNode}
         directory={activeDirectory}
         definition={definition}
-        onRun={() => setRunPanelOpen(true)}
+        onRun={() => void runActiveTask()}
         onSave={() => void saveActiveDraft()}
         onPublish={() => void publishActiveTask()}
+        running={activeRunning}
         saving={saving}
         publishing={publishing}
       />
@@ -341,6 +394,7 @@ const DevelopmentWorkbench = ({
           node={activeNode}
           directory={activeDirectory}
           definition={definition}
+          result={runResults[activeNode.id]}
           onClose={() => setRunPanelOpen(false)}
         />
       </div>

@@ -65,3 +65,36 @@ export interface DevelopmentTaskRevisionSummary {
 export interface DevelopmentTaskRevision extends DevelopmentTaskRevisionSummary {
   definition: DevelopmentTaskDefinition;
 }
+
+export type DevelopmentTaskExecutionStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'TIMEOUT';
+
+export interface DevelopmentTaskRunResult {
+  status: DevelopmentTaskExecutionStatus;
+  message: string;
+  durationMs: number;
+  output: Record<string, unknown>;
+}
+
+export interface DevelopmentSqlResultColumn {
+  name: string;
+  label: string;
+  typeName?: string;
+  jdbcType?: number;
+  nullable?: boolean;
+}
+
+export interface DevelopmentSqlRunOutput {
+  kind?: 'RESULT_SET' | 'UPDATE_COUNT';
+  columns?: DevelopmentSqlResultColumn[];
+  rows?: unknown[][];
+  returnedRows?: number;
+  affectedRows?: number;
+  truncated?: boolean;
+  dataSourceId?: string;
+}
