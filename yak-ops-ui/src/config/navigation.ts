@@ -37,6 +37,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
 export const appRoutes: readonly NavigationRoute[] = [
   { id: 'home', mode: 'public', path: '/home', title: '首页', component: './home', iconKey: 'home', order: 0 },
   { id: 'data-source', mode: 'one', permission: 'resource:data-source:read', path: '/data-source', title: '数据源管理', component: './data-source', iconKey: 'database', order: 10 },
+  { id: 'dashboard', mode: 'public', path: '/dashboard', title: '仪表盘', component: './dashboard', iconKey: 'insight', order: 20 },
   {
     id: 'batch-link-up', mode: 'one', permission: 'task:batch:read',
     path: '/sync/batch-link-up', title: '离线同步', component: './batch-link-up',

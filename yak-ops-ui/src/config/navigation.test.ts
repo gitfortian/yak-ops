@@ -58,8 +58,10 @@ describe('permission-aware navigation', () => {
     expect(getStandaloneNavigationRoutes(['security:root']).map((route) => route.id)).toEqual([
       'home',
       'data-source',
+      'dashboard',
     ]);
     expect(getActiveNavigationId('/home', [])).toBe('home');
+    expect(getActiveNavigationId('/dashboard', [])).toBe('dashboard');
   });
 
   it('registers the data-quality MVP pages and hidden monitor routes', () => {
