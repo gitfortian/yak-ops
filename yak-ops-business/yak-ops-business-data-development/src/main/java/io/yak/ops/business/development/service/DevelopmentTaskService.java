@@ -10,10 +10,12 @@ import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskDraftRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;
+import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
+import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -25,13 +27,14 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Authoring lifecycle: mutable draft -> validated immutable published revision. */
+/** Authoring lifecycle: mutable draft -> validated immutable published revision -> Task Catalog. */
 @Service
 public class DevelopmentTaskService {
 
   private final DevelopmentNodeRepository nodeRepository;
   private final DevelopmentTaskDraftRepository draftRepository;
   private final DevelopmentTaskRevisionRepository revisionRepository;
+  private final TaskCatalogService taskCatalogService;
   private final TaskPluginRegistry pluginRegistry;
   private final ObjectMapper objectMapper;
 
@@ -39,11 +42,13 @@ public class DevelopmentTaskService {
       DevelopmentNodeRepository nodeRepository,
       DevelopmentTaskDraftRepository draftRepository,
       DevelopmentTaskRevisionRepository revisionRepository,
+      TaskCatalogService taskCatalogService,
       TaskPluginRegistry pluginRegistry,
       ObjectMapper objectMapper) {
     this.nodeRepository = nodeRepository;
     this.draftRepository = draftRepository;
     this.revisionRepository = revisionRepository;
+    this.taskCatalogService = taskCatalogService;
     this.pluginRegistry = pluginRegistry;
     this.objectMapper = objectMapper;
   }
@@ -102,20 +107,30 @@ public class DevelopmentTaskService {
 
     String checksum = checksum(definition);
     DevelopmentTaskRevision latest = revisionRepository.findLatestByNodeId(nodeId).orElse(null);
+    DevelopmentTaskRevision published;
     if (latest != null
         && latest.sourceDraftRevision() == draft.draftRevision()
         && Objects.equals(latest.checksum(), checksum)) {
-      return latest;
+      published = latest;
+    } else {
+      int revisionNo = revisionRepository.nextRevisionNo(nodeId);
+      published = revisionRepository.insert(
+          nodeId,
+          revisionNo,
+          draft.draftRevision(),
+          definition,
+          checksum);
     }
 
-    int revisionNo = revisionRepository.nextRevisionNo(nodeId);
-    DevelopmentTaskRevision published = revisionRepository.insert(
-        nodeId,
-        revisionNo,
-        draft.draftRevision(),
-        definition,
-        checksum);
     nodeRepository.updateConfigured(nodeId, true);
+    taskCatalogService.publish(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        String.valueOf(node.id()),
+        node.projectId(),
+        node.name(),
+        definition.taskType(),
+        published.id(),
+        published.revisionNo());
     return published;
   }
 

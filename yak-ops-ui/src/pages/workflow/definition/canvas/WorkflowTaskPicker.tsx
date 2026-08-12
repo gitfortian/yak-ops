@@ -1,8 +1,10 @@
-import { Input, Popover } from 'antd';
+import { API_SUCCESS_CODE, type ApiResponse } from '@/services/http/response';
+import { request } from '@umijs/max';
+import { Input, Popover, Tooltip } from 'antd';
 import type { PopoverProps } from 'antd';
 import { Search } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import WorkflowNodeIcon from './node/icons/WorkflowNodeIcon';
 import type { WorkflowCanvasTaskOption } from './types';
 
@@ -18,6 +20,28 @@ interface WorkflowTaskPickerProps {
   disabled?: boolean;
   defaultCategory?: WorkflowTaskCategory;
 }
+
+interface TaskCatalogRevisionRef {
+  taskAssetId: string | number;
+  taskRevisionId: string | number;
+  revisionNo: number;
+}
+
+interface TaskCatalogAsset {
+  id: string | number;
+  source: string;
+  sourceRef: string;
+  name: string;
+  taskType: string;
+  status: string;
+  currentRevision: TaskCatalogRevisionRef;
+}
+
+type PickerTaskOption = WorkflowCanvasTaskOption & {
+  disabled?: boolean;
+  disabledReason?: string;
+  meta?: string;
+};
 
 const CATEGORY_META: Array<{
   key: WorkflowTaskCategory;
@@ -67,6 +91,16 @@ const createSearchState = (): Record<WorkflowTaskCategory, string> => ({
   quality: '',
 });
 
+const catalogOption = (asset: TaskCatalogAsset): PickerTaskOption => ({
+  id: `task-asset:${asset.id}`,
+  label: asset.name,
+  typeLabel: '数据开发',
+  taskType: asset.taskType,
+  disabled: true,
+  disabledReason: `已发布 v${asset.currentRevision.revisionNo}；固定版本引用将在下一阶段接入后开放添加到工作流`,
+  meta: `已发布 v${asset.currentRevision.revisionNo}`,
+});
+
 const WorkflowTaskPicker = ({
   options,
   onSelect,
@@ -80,6 +114,8 @@ const WorkflowTaskPicker = ({
   const [innerOpen, setInnerOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<WorkflowTaskCategory>(defaultCategory);
   const [searchText, setSearchText] = useState(createSearchState);
+  const [catalogOptions, setCatalogOptions] = useState<PickerTaskOption[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const open = controlledOpen ?? innerOpen;
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -88,8 +124,39 @@ const WorkflowTaskPicker = ({
     onOpenChange?.(nextOpen);
   };
 
+  useEffect(() => {
+    if (!open) return undefined;
+    let active = true;
+    setCatalogLoading(true);
+
+    void request<ApiResponse<TaskCatalogAsset[]>>('/api/v1/task-catalog/assets', {
+      params: {
+        source: 'DATA_DEVELOPMENT',
+        status: 'ONLINE',
+      },
+    })
+      .then((response) => {
+        if (!active) return;
+        if (response.code !== API_SUCCESS_CODE || !Array.isArray(response.data)) {
+          setCatalogOptions([]);
+          return;
+        }
+        setCatalogOptions(response.data.map(catalogOption));
+      })
+      .catch(() => {
+        if (active) setCatalogOptions([]);
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
   const groupedOptions = useMemo(() => {
-    const grouped: Record<WorkflowTaskCategory, WorkflowCanvasTaskOption[]> = {
+    const grouped: Record<WorkflowTaskCategory, PickerTaskOption[]> = {
       sync: [],
       development: [],
       quality: [],
@@ -98,9 +165,12 @@ const WorkflowTaskPicker = ({
     options.forEach((option) => {
       grouped[resolveTaskCategory(option)].push(option);
     });
+    catalogOptions.forEach((option) => {
+      grouped[resolveTaskCategory(option)].push(option);
+    });
 
     return grouped;
-  }, [options]);
+  }, [catalogOptions, options]);
 
   const activeMeta = CATEGORY_META.find((item) => item.key === activeCategory) ?? CATEGORY_META[0];
   const keyword = searchText[activeCategory].trim().toLowerCase();
@@ -156,24 +226,59 @@ const WorkflowTaskPicker = ({
 
       <div className="border-t border-[#f0f1f3]">
         <div className="max-h-[420px] overflow-y-auto p-1">
-          {filteredOptions.length ? filteredOptions.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className="flex h-9 w-full items-center rounded-lg border-0 bg-transparent px-3 text-left transition-colors hover:bg-[#f5f6f7] focus:bg-[#f5f6f7] focus:outline-none"
-              onClick={() => {
-                onSelect(option.id);
-                handleOpenChange(false);
-              }}
-            >
-              <WorkflowNodeIcon taskType={resolveIconTaskType(option)} size="xs" />
-              <span className="ml-2 min-w-0 flex-1 truncate text-[13px] font-medium text-[#475467]">
-                {option.label}
-              </span>
-            </button>
-          )) : (
+          {filteredOptions.length ? filteredOptions.map((option) => {
+            const optionDisabled = Boolean(option.disabled);
+            const button = (
+              <button
+                type="button"
+                disabled={optionDisabled}
+                className={[
+                  'flex h-9 w-full items-center rounded-lg border-0 bg-transparent px-3 text-left transition-colors focus:outline-none',
+                  optionDisabled
+                    ? 'cursor-not-allowed text-[#98a2b3]'
+                    : 'hover:bg-[#f5f6f7] focus:bg-[#f5f6f7]',
+                ].join(' ')}
+                onClick={() => {
+                  if (optionDisabled) return;
+                  onSelect(option.id);
+                  handleOpenChange(false);
+                }}
+              >
+                <span className={optionDisabled ? 'opacity-55' : undefined}>
+                  <WorkflowNodeIcon taskType={resolveIconTaskType(option)} size="xs" />
+                </span>
+                <span
+                  className={[
+                    'ml-2 min-w-0 flex-1 truncate text-[13px] font-medium',
+                    optionDisabled ? 'text-[#667085]' : 'text-[#475467]',
+                  ].join(' ')}
+                >
+                  {option.label}
+                </span>
+                {option.meta ? (
+                  <span className="ml-2 shrink-0 text-[10px] font-medium text-[#98a2b3]">
+                    {option.meta}
+                  </span>
+                ) : null}
+              </button>
+            );
+
+            return (
+              <Tooltip
+                key={option.id}
+                title={optionDisabled ? option.disabledReason : undefined}
+                placement="right"
+              >
+                <span className="block">{button}</span>
+              </Tooltip>
+            );
+          }) : (
             <div className="flex h-16 items-center justify-center text-[11px] text-[#98a2b3]">
-              {keyword ? '没有匹配的任务' : `暂无${activeMeta.label}任务`}
+              {catalogLoading && activeCategory === 'development'
+                ? '正在加载已发布任务...'
+                : keyword
+                  ? '没有匹配的任务'
+                  : `暂无${activeMeta.label}任务`}
             </div>
           )}
         </div>
