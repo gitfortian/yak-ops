@@ -1,5 +1,7 @@
 package io.yak.ops.common.bean.vo.workflow;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,15 @@ public record WorkflowDefinitionVO(
   public record NodeVO(
       String id,
       String taskId,
+      @JsonSerialize(using = ToStringSerializer.class) Long taskAssetId,
+      @JsonSerialize(using = ToStringSerializer.class) Long taskRevisionId,
+      Integer taskRevisionNo,
+      String taskAssetName,
+      String taskType,
+      String taskAssetStatus,
+      @JsonSerialize(using = ToStringSerializer.class) Long latestTaskRevisionId,
+      Integer latestTaskRevisionNo,
+      boolean taskRevisionUpdateAvailable,
       double positionX,
       double positionY,
       int maxAttempts,

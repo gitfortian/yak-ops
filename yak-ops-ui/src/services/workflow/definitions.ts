@@ -1,4 +1,8 @@
 import type { ApiResponse } from '@/services/http/response';
+import {
+  getCachedTaskCatalogAsset,
+  getTaskCatalogAsset,
+} from '@/services/taskCatalog';
 import { request } from '@umijs/max';
 import type {
   WorkflowFailureStrategy,
@@ -11,6 +15,15 @@ export type WorkflowDefinitionStatus = 'DRAFT' | 'ONLINE' | 'OFFLINE';
 export interface WorkflowDefinitionNode {
   id: string;
   taskId: string;
+  taskAssetId?: string;
+  taskRevisionId?: string;
+  taskRevisionNo?: number;
+  taskAssetName?: string;
+  taskType?: string;
+  taskAssetStatus?: string;
+  latestTaskRevisionId?: string;
+  latestTaskRevisionNo?: number;
+  taskRevisionUpdateAvailable?: boolean;
   positionX: number;
   positionY: number;
   maxAttempts: number;
@@ -36,9 +49,7 @@ export interface WorkflowDefinition {
   edgeCount: number;
   nodes: WorkflowDefinitionNode[];
   edges: WorkflowDefinitionEdge[];
-  /** 仅运行时输入；不再包含 ReactFlow/Start/Note 编辑信息。 */
   input: Record<string, unknown>;
-  /** 仅编辑器使用；不会进入工作流运行 input。 */
   editorMeta: Record<string, unknown>;
   workflowTimeoutSeconds: number;
   failureStrategy: WorkflowFailureStrategy;
@@ -85,12 +96,58 @@ export interface WorkflowDefinitionUpdatePayload {
   failureStrategy: WorkflowFailureStrategy;
 }
 
+interface PinnedBinding {
+  taskAssetId: string;
+  taskRevisionId: string;
+  taskRevisionNo: number;
+}
+
+const bindingCache = new Map<string, PinnedBinding>();
+const bindingKey = (workflowId: string, nodeId: string) => `${workflowId}::${nodeId}`;
+const taskAssetIdFromTaskId = (taskId: string) =>
+  taskId.startsWith('task-asset:') ? taskId.slice('task-asset:'.length).trim() : undefined;
+
+const rememberDefinitionBindings = (definition: WorkflowDefinition) => {
+  definition.nodes.forEach((node) => {
+    if (!node.taskAssetId || !node.taskRevisionId || !node.taskRevisionNo) return;
+    bindingCache.set(bindingKey(definition.id, node.id), {
+      taskAssetId: node.taskAssetId,
+      taskRevisionId: node.taskRevisionId,
+      taskRevisionNo: node.taskRevisionNo,
+    });
+  });
+  return definition;
+};
+
+const pinCatalogNode = async (
+  workflowId: string,
+  node: WorkflowDefinitionNode,
+): Promise<WorkflowDefinitionNode> => {
+  if (node.taskAssetId && node.taskRevisionId && node.taskRevisionNo) return node;
+  const assetId = taskAssetIdFromTaskId(node.taskId);
+  if (!assetId) return node;
+
+  const pinned = bindingCache.get(bindingKey(workflowId, node.id));
+  if (pinned && pinned.taskAssetId === assetId) {
+    return { ...node, ...pinned, taskId: `task-asset:${assetId}` };
+  }
+
+  const asset = getCachedTaskCatalogAsset(assetId) || await getTaskCatalogAsset(assetId);
+  return {
+    ...node,
+    taskId: `task-asset:${asset.id}`,
+    taskAssetId: asset.id,
+    taskRevisionId: asset.currentRevision.taskRevisionId,
+    taskRevisionNo: asset.currentRevision.revisionNo,
+  };
+};
+
 const definitionAction = async (id: string, action: string) => {
   const response = await request<ApiResponse<WorkflowDefinition>>(
     `/api/v1/workflows/definitions/${encodeURIComponent(id)}/${action}`,
     { method: 'POST' },
   );
-  return response.data;
+  return rememberDefinitionBindings(response.data);
 };
 
 export const listWorkflowDefinitions = async (params?: {
@@ -104,32 +161,39 @@ export const listWorkflowDefinitions = async (params?: {
   return response.data || [];
 };
 
-export const createWorkflowDefinition = async (
-  payload: WorkflowDefinitionCreatePayload,
-) => {
+export const createWorkflowDefinition = async (payload: WorkflowDefinitionCreatePayload) => {
   const response = await request<ApiResponse<WorkflowDefinition>>(
     '/api/v1/workflows/definitions',
     { method: 'POST', data: payload },
   );
-  return response.data;
+  return rememberDefinitionBindings(response.data);
 };
 
 export const getWorkflowDefinition = async (id: string) => {
   const response = await request<ApiResponse<WorkflowDefinition>>(
     `/api/v1/workflows/definitions/${encodeURIComponent(id)}`,
   );
-  return response.data;
+  return rememberDefinitionBindings(response.data);
 };
 
 export const updateWorkflowDefinition = async (
   id: string,
   payload: WorkflowDefinitionUpdatePayload,
 ) => {
+  const nodes = await Promise.all(payload.nodes.map((node) => pinCatalogNode(id, node)));
   const response = await request<ApiResponse<WorkflowDefinition>>(
     `/api/v1/workflows/definitions/${encodeURIComponent(id)}`,
-    { method: 'PUT', data: payload },
+    { method: 'PUT', data: { ...payload, nodes } },
   );
-  return response.data;
+  return rememberDefinitionBindings(response.data);
+};
+
+export const upgradeWorkflowNodeTaskRevision = async (id: string, nodeId: string) => {
+  const response = await request<ApiResponse<WorkflowDefinition>>(
+    `/api/v1/workflows/definitions/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeId)}/upgrade-task-revision`,
+    { method: 'POST' },
+  );
+  return rememberDefinitionBindings(response.data);
 };
 
 export const deleteWorkflowDefinition = async (id: string) => {
@@ -137,6 +201,9 @@ export const deleteWorkflowDefinition = async (id: string) => {
     `/api/v1/workflows/definitions/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
   );
+  for (const key of Array.from(bindingCache.keys())) {
+    if (key.startsWith(`${id}::`)) bindingCache.delete(key);
+  }
 };
 
 export const onlineWorkflowDefinition = (id: string) => definitionAction(id, 'online');

@@ -30,6 +30,10 @@
             <artifactId>yak-ops-business-datasource</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-business-task-catalog</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.yak.framework</groupId>
             <artifactId>yak-workflow-engine</artifactId>
         </dependency>

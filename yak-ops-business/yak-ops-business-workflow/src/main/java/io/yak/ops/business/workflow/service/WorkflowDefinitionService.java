@@ -1,7 +1,9 @@
 package io.yak.ops.business.workflow.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
+import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
 import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
 import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
@@ -10,6 +12,7 @@ import io.yak.ops.business.workflow.persistence.NoopWorkflowDefinitionPersistenc
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence.DefinitionRecord;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence.VersionRecord;
+import io.yak.ops.business.workflow.service.WorkflowTaskBindingResolver.BindingView;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.EdgeDTO;
@@ -48,7 +51,7 @@ public class WorkflowDefinitionService {
       "CREATED", "WAITING", "READY", "SUBMITTED", "RUNNING", "PAUSING", "PAUSED", "RESUMING");
 
   private final WorkflowRuntimeService runtimeService;
-  private final TaskRegistry taskRegistry;
+  private final WorkflowTaskBindingResolver taskBindingResolver;
   private final WorkflowDefinitionPersistence persistence;
   private final ConcurrentMap<String, DefinitionState> definitions = new ConcurrentHashMap<>();
 
@@ -56,41 +59,69 @@ public class WorkflowDefinitionService {
   public WorkflowDefinitionService(
       WorkflowRuntimeService runtimeService,
       TaskRegistry taskRegistry,
+      ObjectProvider<TaskCatalogService> taskCatalogService,
+      ObjectMapper objectMapper,
       ObjectProvider<WorkflowDefinitionPersistence> persistence,
       @Value("${yak.database.enabled:true}") boolean databaseEnabled) {
-    this(runtimeService, taskRegistry, resolvePersistence(persistence, databaseEnabled));
+    this(
+        runtimeService,
+        new WorkflowTaskBindingResolver(
+            taskRegistry,
+            taskCatalogService.getIfAvailable(),
+            objectMapper),
+        resolvePersistence(persistence, databaseEnabled));
   }
 
   /** Focused tests and explicit database-disabled development retain the lightweight catalog. */
   WorkflowDefinitionService(
       WorkflowRuntimeService runtimeService,
       TaskRegistry taskRegistry) {
-    this(runtimeService, taskRegistry, NoopWorkflowDefinitionPersistence.INSTANCE);
-  }
-
-  private static WorkflowDefinitionPersistence resolvePersistence(
-      ObjectProvider<WorkflowDefinitionPersistence> provider,
-      boolean databaseEnabled) {
-    WorkflowDefinitionPersistence resolved = provider.getIfAvailable();
-    if (resolved != null) {
-      return resolved;
-    }
-    if (!databaseEnabled) {
-      return NoopWorkflowDefinitionPersistence.INSTANCE;
-    }
-    throw new IllegalStateException(
-        "Workflow durable persistence bean is missing while yak.database.enabled=true: "
-            + "WorkflowDefinitionPersistence");
+    this(
+        runtimeService,
+        new WorkflowTaskBindingResolver(taskRegistry, null, new ObjectMapper()),
+        NoopWorkflowDefinitionPersistence.INSTANCE);
   }
 
   WorkflowDefinitionService(
       WorkflowRuntimeService runtimeService,
       TaskRegistry taskRegistry,
       WorkflowDefinitionPersistence persistence) {
+    this(
+        runtimeService,
+        new WorkflowTaskBindingResolver(taskRegistry, null, new ObjectMapper()),
+        persistence);
+  }
+
+  WorkflowDefinitionService(
+      WorkflowRuntimeService runtimeService,
+      TaskRegistry taskRegistry,
+      TaskCatalogService taskCatalogService,
+      WorkflowDefinitionPersistence persistence) {
+    this(
+        runtimeService,
+        new WorkflowTaskBindingResolver(taskRegistry, taskCatalogService, new ObjectMapper()),
+        persistence);
+  }
+
+  private WorkflowDefinitionService(
+      WorkflowRuntimeService runtimeService,
+      WorkflowTaskBindingResolver taskBindingResolver,
+      WorkflowDefinitionPersistence persistence) {
     this.runtimeService = runtimeService;
-    this.taskRegistry = taskRegistry;
+    this.taskBindingResolver = taskBindingResolver;
     this.persistence = persistence;
     restoreCatalog();
+  }
+
+  private static WorkflowDefinitionPersistence resolvePersistence(
+      ObjectProvider<WorkflowDefinitionPersistence> provider,
+      boolean databaseEnabled) {
+    WorkflowDefinitionPersistence resolved = provider.getIfAvailable();
+    if (resolved != null) return resolved;
+    if (!databaseEnabled) return NoopWorkflowDefinitionPersistence.INSTANCE;
+    throw new IllegalStateException(
+        "Workflow durable persistence bean is missing while yak.database.enabled=true: "
+            + "WorkflowDefinitionPersistence");
   }
 
   public List<WorkflowDefinitionVO> list(String keyword, String status) {
@@ -176,6 +207,41 @@ public class WorkflowDefinitionService {
     }
   }
 
+  /** Explicitly advances one draft node to the TaskAsset current revision. */
+  public WorkflowDefinitionVO upgradeTaskRevision(String id, String nodeId) {
+    DefinitionState state = require(id);
+    synchronized (state) {
+      int index = -1;
+      WorkflowNodeSpec current = null;
+      for (int i = 0; i < state.nodes.size(); i++) {
+        WorkflowNodeSpec candidate = state.nodes.get(i);
+        if (candidate.id().equals(nodeId)) {
+          index = i;
+          current = candidate;
+          break;
+        }
+      }
+      if (current == null) throw new IllegalArgumentException("工作流节点不存在：" + nodeId);
+
+      WorkflowNodeSpec upgraded = taskBindingResolver.upgradeToLatest(current);
+      if (upgraded.equals(current)) return toView(state);
+
+      DefinitionStateSnapshot previous = DefinitionStateSnapshot.capture(state);
+      List<WorkflowNodeSpec> nextNodes = new ArrayList<>(state.nodes);
+      nextNodes.set(index, upgraded);
+      state.nodes = List.copyOf(nextNodes);
+      state.draftRevision++;
+      state.updateTime = Instant.now();
+      try {
+        persistence.saveDefinition(toRecord(state));
+      } catch (RuntimeException exception) {
+        previous.restore(state);
+        throw exception;
+      }
+      return toView(state);
+    }
+  }
+
   public WorkflowDefinitionVO online(String id) {
     DefinitionState state = require(id);
     synchronized (state) {
@@ -199,11 +265,8 @@ public class WorkflowDefinitionService {
         }
         state.status = "ONLINE";
         state.updateTime = Instant.now();
-        if (published == null) {
-          persistence.saveDefinition(toRecord(state));
-        } else {
-          persistence.publish(toRecord(state), toRecord(published));
-        }
+        if (published == null) persistence.saveDefinition(toRecord(state));
+        else persistence.publish(toRecord(state), toRecord(published));
       } catch (RuntimeException exception) {
         if (published != null) state.versions.remove(published);
         previous.restore(state);
@@ -217,9 +280,7 @@ public class WorkflowDefinitionService {
   public WorkflowDefinitionVO offline(String id) {
     DefinitionState state = require(id);
     synchronized (state) {
-      if (state.activeVersion == null) {
-        throw new IllegalStateException("工作流还没有已发布版本");
-      }
+      if (state.activeVersion == null) throw new IllegalStateException("工作流还没有已发布版本");
       String previousStatus = state.status;
       Instant previousUpdateTime = state.updateTime;
       state.status = "OFFLINE";
@@ -260,9 +321,7 @@ public class WorkflowDefinitionService {
     synchronized (state) {
       ensureIdle(state);
       PreparedDraft draft = prepare(state);
-      return activate(
-          state,
-          runtimeService.run(draft.spec(), draft.tasks(), null, null, true));
+      return activate(state, runtimeService.run(draft.spec(), draft.tasks(), null, null, true));
     }
   }
 
@@ -314,9 +373,7 @@ public class WorkflowDefinitionService {
     }
   }
 
-  private WorkflowDefinitionVO activate(
-      DefinitionState state,
-      WorkflowInstanceVO prepared) {
+  private WorkflowDefinitionVO activate(DefinitionState state, WorkflowInstanceVO prepared) {
     String previousExecutionId = state.latestExecutionId;
     String previousExecutionStatus = state.latestExecutionStatus;
     Instant previousUpdateTime = state.updateTime;
@@ -357,11 +414,7 @@ public class WorkflowDefinitionService {
         state.input);
     Map<String, TaskVersionSnapshot> tasks = new LinkedHashMap<>();
     for (WorkflowNodeSpec node : graph.nodes()) {
-      TaskVersionSnapshot task = taskRegistry.snapshot(node.taskId());
-      if (!"SYNC".equalsIgnoreCase(task.type())) {
-        throw new IllegalStateException("第一阶段工作流仅支持 SYNC 任务：" + node.taskId());
-      }
-      tasks.put(node.id(), task);
+      tasks.put(node.id(), taskBindingResolver.snapshot(node));
     }
     return new PreparedDraft(toRunSpec(state, graph), Map.copyOf(tasks));
   }
@@ -472,6 +525,9 @@ public class WorkflowDefinitionService {
     return new WorkflowNodeSpec(
         node.id(),
         node.taskId(),
+        node.taskAssetId(),
+        node.taskRevisionId(),
+        node.taskRevisionNo(),
         node.positionX(),
         node.positionY(),
         node.maxAttempts(),
@@ -488,9 +544,19 @@ public class WorkflowDefinitionService {
   }
 
   private NodeVO toView(WorkflowNodeSpec node) {
+    BindingView binding = taskBindingResolver.describe(node);
     return new NodeVO(
         node.id(),
         node.taskId(),
+        binding == null ? null : binding.taskAssetId(),
+        binding == null ? null : binding.taskRevisionId(),
+        binding == null ? null : binding.taskRevisionNo(),
+        binding == null ? null : binding.taskAssetName(),
+        binding == null ? null : binding.taskType(),
+        binding == null ? null : binding.taskAssetStatus(),
+        binding == null ? null : binding.latestTaskRevisionId(),
+        binding == null ? null : binding.latestTaskRevisionNo(),
+        binding != null && binding.updateAvailable(),
         node.positionX(),
         node.positionY(),
         node.maxAttempts(),

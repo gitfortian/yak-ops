@@ -2,8 +2,15 @@ import type {
   WorkflowNodeFailurePolicy,
   WorkflowTriggerRule,
 } from '@/services/workflow';
-import { Input, InputNumber, Select, Slider, Switch, Tooltip } from 'antd';
-import { ChevronDown, CircleHelp } from 'lucide-react';
+import {
+  getWorkflowDefinition,
+  upgradeWorkflowNodeTaskRevision,
+  type WorkflowDefinitionNode,
+} from '@/services/workflow/definitions';
+import { useParams } from '@umijs/max';
+import { Button, Input, InputNumber, Select, Slider, Switch, Tooltip, message } from 'antd';
+import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { Node } from 'reactflow';
 import WorkflowNextStep from './WorkflowNextStep';
 import type { WorkflowCanvasTaskOption, WorkflowNodeData } from './types';
@@ -62,6 +69,10 @@ const WorkflowNodeInspectorSettings = ({
   onChange,
   onAppend,
 }: WorkflowNodeInspectorSettingsProps) => {
+  const { id: workflowId = '' } = useParams<{ id: string }>();
+  const [boundNode, setBoundNode] = useState<WorkflowDefinitionNode>();
+  const [versionBusy, setVersionBusy] = useState(false);
+  const catalogBound = node.data.taskId.startsWith('task-asset:');
   const retryTimes = Math.max(0, (node.data.maxAttempts || 1) - 1);
   const retryEnabled = retryTimes > 0;
   const mappingText = node.data.inputMappingText?.trim() || '{}';
@@ -70,13 +81,54 @@ const WorkflowNodeInspectorSettings = ({
     || (node.data.executionTimeoutSeconds || 0) > 0
     || (mappingText !== '{}' && mappingText !== '');
 
+  const refreshVersion = async (showMessage = false) => {
+    if (!catalogBound || !workflowId) return;
+    setVersionBusy(true);
+    try {
+      const definition = await getWorkflowDefinition(workflowId);
+      const current = definition.nodes.find((item) => item.id === node.id);
+      setBoundNode(current);
+      if (showMessage) {
+        if (!current?.taskRevisionNo) message.info('请先保存工作流草稿，再检查任务版本');
+        else if (current.taskRevisionUpdateAvailable) message.info(`发现新版本 v${current.latestTaskRevisionNo}`);
+        else message.success('当前已是最新任务版本');
+      }
+    } catch (error) {
+      if (showMessage) message.error(error instanceof Error ? error.message : '检查任务版本失败');
+    } finally {
+      setVersionBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    setBoundNode(undefined);
+    if (catalogBound) void refreshVersion(false);
+    // 节点切换时读取一次服务端固定版本；不会因为 Catalog 发布新版本而自动修改草稿。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogBound, node.id, workflowId]);
+
+  const handleUpgrade = async () => {
+    if (!workflowId || !boundNode?.taskRevisionUpdateAvailable) return;
+    setVersionBusy(true);
+    try {
+      const definition = await upgradeWorkflowNodeTaskRevision(workflowId, node.id);
+      const current = definition.nodes.find((item) => item.id === node.id);
+      setBoundNode(current);
+      message.success(current?.taskRevisionNo
+        ? `已固定到任务 v${current.taskRevisionNo}，重新发布工作流后生效`
+        : '任务版本已升级');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '升级任务版本失败');
+    } finally {
+      setVersionBusy(false);
+    }
+  };
+
   const handleRetryEnabledChange = (checked: boolean) => {
     if (!checked) {
       onChange({ maxAttempts: 1 });
       return;
     }
-
-    // maxAttempts 包含首次执行；默认开启后为“首次执行 + 3 次重试”。
     onChange({ maxAttempts: Math.max(node.data.maxAttempts || 1, 4) });
   };
 
@@ -87,70 +139,90 @@ const WorkflowNodeInspectorSettings = ({
 
   return (
     <div className="pb-6">
+      {catalogBound ? (
+        <>
+          <section className="px-4 py-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <SectionTitle>任务版本</SectionTitle>
+                <div className="text-[10px] text-[rgba(22,24,35,.42)]">工作流固定不可变 Revision，不会自动追随最新版本</div>
+              </div>
+              <Tooltip title="检查最新版本">
+                <button
+                  type="button"
+                  disabled={versionBusy}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent text-[#667085] hover:bg-[#f5f6f7] disabled:opacity-50"
+                  onClick={() => void refreshVersion(true)}
+                >
+                  <RefreshCw size={13} className={versionBusy ? 'animate-spin' : undefined} />
+                </button>
+              </Tooltip>
+            </div>
+
+            <div className="rounded-lg border border-[#e4e7ec] bg-[#fafafa] px-3 py-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-[#667085]">当前固定</span>
+                <span className="font-semibold text-[#344054]">
+                  {boundNode?.taskRevisionNo ? `v${boundNode.taskRevisionNo}` : '保存草稿后固定'}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px]">
+                <span className="text-[#667085]">资产最新</span>
+                <span className={boundNode?.taskRevisionUpdateAvailable ? 'font-semibold text-[#fe2c55]' : 'font-medium text-[#475467]'}>
+                  {boundNode?.latestTaskRevisionNo ? `v${boundNode.latestTaskRevisionNo}` : '--'}
+                </span>
+              </div>
+              {boundNode?.taskAssetStatus ? (
+                <div className="mt-2 flex items-center justify-between text-[11px]">
+                  <span className="text-[#667085]">资产状态</span>
+                  <span className="font-medium text-[#475467]">{boundNode.taskAssetStatus === 'ONLINE' ? '已上线' : boundNode.taskAssetStatus}</span>
+                </div>
+              ) : null}
+            </div>
+
+            {boundNode?.taskRevisionUpdateAvailable ? (
+              <Button
+                block
+                size="small"
+                className="mt-3"
+                loading={versionBusy}
+                disabled={locked}
+                onClick={() => void handleUpgrade()}
+              >
+                升级到 v{boundNode.latestTaskRevisionNo}
+              </Button>
+            ) : boundNode?.taskRevisionNo ? (
+              <div className="mt-2 text-center text-[10px] text-[#98a2b3]">当前固定版本已是最新版本</div>
+            ) : null}
+          </section>
+          <Divider />
+        </>
+      ) : null}
+
       <section className="py-2">
         <div className="flex min-h-12 items-center justify-between px-4 py-2">
           <div className="flex items-center">
             <div className="text-[12px] font-semibold text-[#344054]">失败时重试</div>
             <HelpTip title="节点执行失败后自动再次尝试；开启后会在画布节点中实时显示重试次数。" />
           </div>
-          <Switch
-            size="small"
-            disabled={locked}
-            checked={retryEnabled}
-            onChange={handleRetryEnabledChange}
-          />
+          <Switch size="small" disabled={locked} checked={retryEnabled} onChange={handleRetryEnabledChange} />
         </div>
 
         {retryEnabled ? (
           <div className="space-y-3 px-4 pb-4 pt-1">
             <div className="flex items-center gap-3">
               <div className="w-[88px] shrink-0 text-[11px] font-medium text-[#667085]">重试次数</div>
-              <Slider
-                className="m-0 min-w-0 flex-1"
-                min={1}
-                max={MAX_RETRY_TIMES}
-                tooltip={{ open: false }}
-                disabled={locked}
-                value={retryTimes}
-                onChange={(value) => handleRetryTimesChange(value)}
-              />
+              <Slider className="m-0 min-w-0 flex-1" min={1} max={MAX_RETRY_TIMES} tooltip={{ open: false }} disabled={locked} value={retryTimes} onChange={(value) => handleRetryTimesChange(value)} />
               <div className="flex w-[82px] shrink-0 items-center gap-1">
-                <InputNumber
-                  size="small"
-                  controls={false}
-                  disabled={locked}
-                  min={1}
-                  max={MAX_RETRY_TIMES}
-                  value={retryTimes}
-                  className="!w-[58px]"
-                  onChange={handleRetryTimesChange}
-                />
+                <InputNumber size="small" controls={false} disabled={locked} min={1} max={MAX_RETRY_TIMES} value={retryTimes} className="!w-[58px]" onChange={handleRetryTimesChange} />
                 <span className="text-[10px] text-[rgba(22,24,35,.42)]">次</span>
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               <div className="w-[88px] shrink-0 text-[11px] font-medium text-[#667085]">重试间隔</div>
-              <Slider
-                className="m-0 min-w-0 flex-1"
-                min={0}
-                max={MAX_RETRY_DELAY_SECONDS}
-                tooltip={{ open: false }}
-                disabled={locked}
-                value={Math.min(node.data.retryDelaySeconds || 0, MAX_RETRY_DELAY_SECONDS)}
-                onChange={(value) => onChange({ retryDelaySeconds: value })}
-              />
+              <Slider className="m-0 min-w-0 flex-1" min={0} max={MAX_RETRY_DELAY_SECONDS} tooltip={{ open: false }} disabled={locked} value={Math.min(node.data.retryDelaySeconds || 0, MAX_RETRY_DELAY_SECONDS)} onChange={(value) => onChange({ retryDelaySeconds: value })} />
               <div className="flex w-[82px] shrink-0 items-center gap-1">
-                <InputNumber
-                  size="small"
-                  controls={false}
-                  disabled={locked}
-                  min={0}
-                  max={MAX_RETRY_DELAY_SECONDS}
-                  value={node.data.retryDelaySeconds}
-                  className="!w-[58px]"
-                  onChange={(value) => onChange({ retryDelaySeconds: Number(value || 0) })}
-                />
+                <InputNumber size="small" controls={false} disabled={locked} min={0} max={MAX_RETRY_DELAY_SECONDS} value={node.data.retryDelaySeconds} className="!w-[58px]" onChange={(value) => onChange({ retryDelaySeconds: Number(value || 0) })} />
                 <span className="text-[10px] text-[rgba(22,24,35,.42)]">秒</span>
               </div>
             </div>
@@ -165,14 +237,7 @@ const WorkflowNodeInspectorSettings = ({
           <div className="text-[12px] font-semibold text-[#344054]">异常处理</div>
           <HelpTip title="节点最终仍然失败时的处理方式。“无”表示按默认方式使工作流失败。" />
         </div>
-        <Select
-          disabled={locked}
-          size="small"
-          className="w-[142px] shrink-0"
-          value={node.data.failurePolicy}
-          options={NODE_FAILURE_OPTIONS}
-          onChange={(value) => onChange({ failurePolicy: value as WorkflowNodeFailurePolicy })}
-        />
+        <Select disabled={locked} size="small" className="w-[142px] shrink-0" value={node.data.failurePolicy} options={NODE_FAILURE_OPTIONS} onChange={(value) => onChange({ failurePolicy: value as WorkflowNodeFailurePolicy })} />
       </section>
 
       <Divider />
@@ -181,77 +246,30 @@ const WorkflowNodeInspectorSettings = ({
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-0 py-1 text-[12px] font-semibold text-[#344054] [&::-webkit-details-marker]:hidden">
           <div className="flex items-center">
             高级运行设置
-            {hasAdvancedConfig ? (
-              <span className="ml-2 rounded bg-[#fff1f3] px-1.5 py-0.5 text-[9px] font-medium text-[#d92d50]">已配置</span>
-            ) : null}
+            {hasAdvancedConfig ? <span className="ml-2 rounded bg-[#fff1f3] px-1.5 py-0.5 text-[9px] font-medium text-[#d92d50]">已配置</span> : null}
           </div>
           <ChevronDown size={14} className="text-[#98a2b3] transition-transform group-open:rotate-180" />
         </summary>
-
         <div className="mt-3 space-y-4 rounded-lg bg-[#fafafa] p-3">
           <div>
-            <div className="mb-1.5 flex items-center text-[11px] font-medium text-[#667085]">
-              触发规则
-              <HelpTip title="多个前置节点汇聚时，决定当前节点何时满足调度条件。" />
-            </div>
-            <Select
-              disabled={locked}
-              size="small"
-              className="w-full"
-              value={node.data.triggerRule}
-              options={NODE_TRIGGER_OPTIONS}
-              onChange={(value) => onChange({ triggerRule: value as WorkflowTriggerRule })}
-            />
+            <div className="mb-1.5 flex items-center text-[11px] font-medium text-[#667085]">触发规则<HelpTip title="多个前置节点汇聚时，决定当前节点何时满足调度条件。" /></div>
+            <Select disabled={locked} size="small" className="w-full" value={node.data.triggerRule} options={NODE_TRIGGER_OPTIONS} onChange={(value) => onChange({ triggerRule: value as WorkflowTriggerRule })} />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="mb-1.5 text-[11px] font-medium text-[#667085]">调度超时</div>
-              <InputNumber
-                size="small"
-                controls={false}
-                disabled={locked}
-                min={0}
-                max={MAX_TIMEOUT_SECONDS}
-                value={node.data.dispatchTimeoutSeconds}
-                className="!w-full"
-                addonAfter="秒"
-                onChange={(value) => onChange({ dispatchTimeoutSeconds: Number(value || 0) })}
-              />
+              <InputNumber size="small" controls={false} disabled={locked} min={0} max={MAX_TIMEOUT_SECONDS} value={node.data.dispatchTimeoutSeconds} className="!w-full" addonAfter="秒" onChange={(value) => onChange({ dispatchTimeoutSeconds: Number(value || 0) })} />
               <div className="mt-1 text-[9px] text-[#98a2b3]">0 表示不限制等待调度时间</div>
             </div>
-
             <div>
               <div className="mb-1.5 text-[11px] font-medium text-[#667085]">执行超时</div>
-              <InputNumber
-                size="small"
-                controls={false}
-                disabled={locked}
-                min={0}
-                max={MAX_TIMEOUT_SECONDS}
-                value={node.data.executionTimeoutSeconds}
-                className="!w-full"
-                addonAfter="秒"
-                onChange={(value) => onChange({ executionTimeoutSeconds: Number(value || 0) })}
-              />
+              <InputNumber size="small" controls={false} disabled={locked} min={0} max={MAX_TIMEOUT_SECONDS} value={node.data.executionTimeoutSeconds} className="!w-full" addonAfter="秒" onChange={(value) => onChange({ executionTimeoutSeconds: Number(value || 0) })} />
               <div className="mt-1 text-[9px] text-[#98a2b3]">0 表示不限制节点运行时间</div>
             </div>
           </div>
-
           <div>
-            <div className="mb-1.5 flex items-center text-[11px] font-medium text-[#667085]">
-              输入映射
-              <HelpTip title="JSON 对象；将工作流输入或前置节点输出映射为当前节点输入。" />
-            </div>
-            <Input.TextArea
-              disabled={locked}
-              autoSize={{ minRows: 3, maxRows: 8 }}
-              spellCheck={false}
-              value={node.data.inputMappingText}
-              placeholder={'{\n  "requestId": "$workflow.requestId"\n}'}
-              className="font-mono !text-[10px]"
-              onChange={(event) => onChange({ inputMappingText: event.target.value })}
-            />
+            <div className="mb-1.5 flex items-center text-[11px] font-medium text-[#667085]">输入映射<HelpTip title="JSON 对象；将工作流输入或前置节点输出映射为当前节点输入。" /></div>
+            <Input.TextArea disabled={locked} autoSize={{ minRows: 3, maxRows: 8 }} spellCheck={false} value={node.data.inputMappingText} placeholder={'{\n  "requestId": "$workflow.requestId"\n}'} className="font-mono !text-[10px]" onChange={(event) => onChange({ inputMappingText: event.target.value })} />
           </div>
         </div>
       </details>
@@ -261,13 +279,7 @@ const WorkflowNodeInspectorSettings = ({
       <section className="px-4 py-4">
         <SectionTitle>下一步</SectionTitle>
         <div className="mb-3 text-[10px] leading-4 text-[rgba(22,24,35,.38)]">添加此工作流程中的下一个节点</div>
-        <WorkflowNextStep
-          currentIcon={<WorkflowNodeIcon taskType={node.data.taskType} size="sm" />}
-          nextNodes={nextNodes}
-          appendOptions={appendOptions}
-          locked={locked}
-          onAppend={onAppend}
-        />
+        <WorkflowNextStep currentIcon={<WorkflowNodeIcon taskType={node.data.taskType} size="sm" />} nextNodes={nextNodes} appendOptions={appendOptions} locked={locked} onAppend={onAppend} />
       </section>
     </div>
   );

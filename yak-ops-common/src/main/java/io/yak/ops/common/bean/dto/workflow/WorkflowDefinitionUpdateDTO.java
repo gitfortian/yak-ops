@@ -49,6 +49,9 @@ public record WorkflowDefinitionUpdateDTO(
   public record NodeDTO(
       @NotBlank String id,
       @NotBlank String taskId,
+      Long taskAssetId,
+      Long taskRevisionId,
+      @Min(1) Integer taskRevisionNo,
       Double positionX,
       Double positionY,
       @Min(1) Integer maxAttempts,
@@ -66,6 +69,16 @@ public record WorkflowDefinitionUpdateDTO(
       String failurePolicy) {
 
     public NodeDTO {
+      boolean hasCatalogBinding = taskAssetId != null || taskRevisionId != null || taskRevisionNo != null;
+      if (hasCatalogBinding) {
+        if (taskAssetId == null || taskRevisionId == null || taskRevisionNo == null) {
+          throw new IllegalArgumentException("任务资产绑定必须同时包含 taskAssetId/taskRevisionId/taskRevisionNo");
+        }
+        if (taskAssetId <= 0L || taskRevisionId <= 0L || taskRevisionNo <= 0) {
+          throw new IllegalArgumentException("任务资产绑定 ID/版本号必须大于 0");
+        }
+        taskId = "task-asset:" + taskAssetId;
+      }
       positionX = positionX == null ? 0D : positionX;
       positionY = positionY == null ? 0D : positionY;
       maxAttempts = maxAttempts == null ? 1 : maxAttempts;
@@ -79,6 +92,36 @@ public record WorkflowDefinitionUpdateDTO(
       failurePolicy = failurePolicy == null || failurePolicy.isBlank()
           ? "FAIL_WORKFLOW"
           : failurePolicy;
+    }
+
+    /** Backward-compatible constructor for existing legacy task callers/tests. */
+    public NodeDTO(
+        String id,
+        String taskId,
+        Double positionX,
+        Double positionY,
+        Integer maxAttempts,
+        Long retryDelaySeconds,
+        Long dispatchTimeoutSeconds,
+        Long executionTimeoutSeconds,
+        Map<String, String> inputMapping,
+        String triggerRule,
+        String failurePolicy) {
+      this(
+          id,
+          taskId,
+          null,
+          null,
+          null,
+          positionX,
+          positionY,
+          maxAttempts,
+          retryDelaySeconds,
+          dispatchTimeoutSeconds,
+          executionTimeoutSeconds,
+          inputMapping,
+          triggerRule,
+          failurePolicy);
     }
   }
 

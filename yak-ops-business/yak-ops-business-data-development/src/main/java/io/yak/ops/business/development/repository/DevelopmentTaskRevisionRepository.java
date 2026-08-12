@@ -18,6 +18,8 @@ public interface DevelopmentTaskRevisionRepository {
       TaskDefinition definition,
       String checksum);
 
+  Optional<DevelopmentTaskRevision> findById(Long revisionId);
+
   Optional<DevelopmentTaskRevision> findLatestByNodeId(Long nodeId);
 
   Optional<DevelopmentTaskRevision> findByRevisionNo(Long nodeId, int revisionNo);
