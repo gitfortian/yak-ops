@@ -7,6 +7,11 @@ export interface SqlDataSourceOption {
   dbType?: string;
 }
 
+export interface SqlDataSourceBinding {
+  database?: string;
+  schema?: string;
+}
+
 export interface SqlCatalogTable {
   database?: string | null;
   schema?: string | null;
@@ -34,6 +39,10 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+interface SqlDataSourceDetail {
+  originalJson?: string | null;
+}
+
 const DATA_SOURCE_API = '/api/v1/data-source';
 const CATALOG_API = `${DATA_SOURCE_API}/catalog`;
 
@@ -53,11 +62,46 @@ const queryString = (params: Record<string, string | undefined>) => {
   return query ? `?${query}` : '';
 };
 
+const configString = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized || undefined;
+};
+
+const parseConnectionConfig = (originalJson?: string | null) => {
+  if (!originalJson) return {} as Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(originalJson);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {} as Record<string, unknown>;
+  }
+};
+
 export const listSqlDataSources = async (): Promise<SqlDataSourceOption[]> =>
   responseData(
     await HttpUtils.get<SqlDataSourceOption[]>(`${DATA_SOURCE_API}/option`),
     '查询数据源失败',
   );
+
+export const getSqlDataSourceBinding = async (
+  dataSourceId: string,
+): Promise<SqlDataSourceBinding> => {
+  const detail = responseData(
+    await HttpUtils.get<SqlDataSourceDetail>(`${DATA_SOURCE_API}/${dataSourceId}`),
+    '查询数据源配置失败',
+  );
+  const config = parseConnectionConfig(detail.originalJson);
+
+  return {
+    database: configString(
+      config.database ?? config.databaseName ?? config.dbName ?? config.catalog,
+    ),
+    schema: configString(config.schema ?? config.schemaName),
+  };
+};
 
 export const listSqlDatabases = async (
   dataSourceId: string,
