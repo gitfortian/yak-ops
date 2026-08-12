@@ -70,6 +70,15 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
   }
 
   @Override
+  public Optional<TaskAsset> findById(long assetId) {
+    List<TaskAsset> values = jdbcTemplate.query(
+        SELECT_COLUMNS + " WHERE id = ? LIMIT 1",
+        JdbcTaskAssetRepository::mapRow,
+        assetId);
+    return values.stream().findFirst();
+  }
+
+  @Override
   public Optional<TaskAsset> findBySource(TaskAssetSource source, String sourceRef) {
     List<TaskAsset> values = jdbcTemplate.query(
         SELECT_COLUMNS + " WHERE source = ? AND source_ref = ? LIMIT 1",

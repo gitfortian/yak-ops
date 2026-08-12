@@ -8,6 +8,7 @@ import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,5 +33,11 @@ public class TaskCatalogController {
       @RequestParam(value = "status", required = false, defaultValue = "ONLINE") String status,
       @RequestParam(value = "keyword", required = false) String keyword) {
     return Result.success(service.list(source, status, keyword));
+  }
+
+  @Operation(summary = "查询任务资产详情")
+  @GetMapping("/{assetId}")
+  public Result<TaskAsset> detail(@PathVariable("assetId") long assetId) {
+    return Result.success(service.get(assetId));
   }
 }

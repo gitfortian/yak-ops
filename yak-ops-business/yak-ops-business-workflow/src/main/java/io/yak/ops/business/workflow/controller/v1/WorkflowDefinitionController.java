@@ -61,6 +61,14 @@ public class WorkflowDefinitionController {
     return Result.success(definitionService.update(id, request));
   }
 
+  @Operation(summary = "显式升级工作流节点到任务资产最新版本")
+  @PostMapping("/{id}/nodes/{nodeId}/upgrade-task-revision")
+  public Result<WorkflowDefinitionVO> upgradeTaskRevision(
+      @PathVariable("id") String id,
+      @PathVariable("nodeId") String nodeId) {
+    return Result.success(definitionService.upgradeTaskRevision(id, nodeId));
+  }
+
   @Operation(summary = "删除工作流定义")
   @DeleteMapping("/{id}")
   public Result<Boolean> delete(@PathVariable("id") String id) {

@@ -50,6 +50,12 @@ public class DevelopmentTaskRevisionRepositoryAdapter
   }
 
   @Override
+  public Optional<DevelopmentTaskRevision> findById(Long revisionId) {
+    if (revisionId == null || revisionId <= 0L) return Optional.empty();
+    return Optional.ofNullable(mapper.selectById(revisionId)).map(this::toDomain);
+  }
+
+  @Override
   public Optional<DevelopmentTaskRevision> findLatestByNodeId(Long nodeId) {
     return Optional.ofNullable(mapper.selectOne(
             new LambdaQueryWrapper<DevelopmentTaskRevisionPO>()

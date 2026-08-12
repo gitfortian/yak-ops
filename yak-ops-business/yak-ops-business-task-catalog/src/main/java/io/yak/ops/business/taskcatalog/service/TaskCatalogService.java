@@ -2,12 +2,18 @@ package io.yak.ops.business.taskcatalog.service;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
+import io.yak.ops.business.taskcatalog.domain.TaskAssetRevision;
 import io.yak.ops.business.taskcatalog.repository.TaskAssetRepository;
+import io.yak.ops.business.taskcatalog.spi.TaskAssetRevisionProvider;
+import io.yak.ops.business.taskcatalog.spi.TaskSourceRevision;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Application service for the published task asset catalog. */
@@ -16,9 +22,29 @@ import org.springframework.stereotype.Service;
 public class TaskCatalogService {
 
   private final TaskAssetRepository repository;
+  private final Map<TaskAssetSource, TaskAssetRevisionProvider> revisionProviders;
 
-  public TaskCatalogService(TaskAssetRepository repository) {
+  @Autowired
+  public TaskCatalogService(
+      TaskAssetRepository repository,
+      List<TaskAssetRevisionProvider> revisionProviders) {
     this.repository = repository;
+    Map<TaskAssetSource, TaskAssetRevisionProvider> discovered = new LinkedHashMap<>();
+    for (TaskAssetRevisionProvider provider : revisionProviders) {
+      TaskAssetRevisionProvider existing = discovered.putIfAbsent(provider.source(), provider);
+      if (existing != null) {
+        throw new IllegalStateException(
+            "重复的 TaskAsset revision provider：" + provider.source()
+                + " -> " + existing.getClass().getName()
+                + ", " + provider.getClass().getName());
+      }
+    }
+    this.revisionProviders = Map.copyOf(discovered);
+  }
+
+  /** Backward-compatible constructor for focused unit tests. */
+  public TaskCatalogService(TaskAssetRepository repository) {
+    this(repository, List.of());
   }
 
   public TaskAsset publish(
@@ -47,6 +73,30 @@ public class TaskCatalogService {
         parseSource(source),
         parseStatus(status),
         normalizeKeyword(keyword));
+  }
+
+  public TaskAsset get(long assetId) {
+    if (assetId <= 0L) throw new IllegalArgumentException("taskAssetId 必须大于 0");
+    return repository.findById(assetId)
+        .orElseThrow(() -> new IllegalArgumentException("任务资产不存在：" + assetId));
+  }
+
+  public TaskAssetRevision resolveRevision(long assetId, long revisionId) {
+    if (revisionId <= 0L) throw new IllegalArgumentException("taskRevisionId 必须大于 0");
+    TaskAsset asset = get(assetId);
+    TaskAssetRevisionProvider provider = revisionProviders.get(asset.source());
+    if (provider == null) {
+      throw new IllegalStateException("任务资产来源尚未接入版本解析：" + asset.source());
+    }
+    TaskSourceRevision revision = provider.resolve(asset.sourceRef(), revisionId)
+        .orElseThrow(() -> new IllegalArgumentException(
+            "任务版本不存在或不属于当前资产：asset=" + assetId + "，revision=" + revisionId));
+    if (!asset.taskType().equalsIgnoreCase(revision.definition().taskType())) {
+      throw new IllegalStateException(
+          "任务资产类型与版本类型不一致：asset=" + asset.taskType()
+              + "，revision=" + revision.definition().taskType());
+    }
+    return new TaskAssetRevision(asset, revision);
   }
 
   public Optional<TaskAsset> findBySource(TaskAssetSource source, String sourceRef) {

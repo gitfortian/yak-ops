@@ -8,6 +8,10 @@ export interface WorkflowCanvasTaskOption {
   label: string;
   typeLabel: string;
   taskType?: string;
+  meta?: string;
+  taskAssetId?: string;
+  taskRevisionId?: string;
+  taskRevisionNo?: number;
 }
 
 /**
@@ -30,6 +34,13 @@ export interface WorkflowNodeData {
   taskId: string;
   taskType: string;
   typeLabel: string;
+  taskAssetId?: string;
+  taskRevisionId?: string;
+  taskRevisionNo?: number;
+  taskAssetStatus?: string;
+  latestTaskRevisionId?: string;
+  latestTaskRevisionNo?: number;
+  taskRevisionUpdateAvailable?: boolean;
   triggerRule: WorkflowTriggerRule;
   failurePolicy: WorkflowNodeFailurePolicy;
   maxAttempts: number;

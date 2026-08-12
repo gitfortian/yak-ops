@@ -1,5 +1,7 @@
 package io.yak.ops.business.taskcatalog.domain;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
 import io.yak.ops.spi.task.model.TaskRevisionRef;
@@ -8,10 +10,10 @@ import java.util.Objects;
 
 /** Published task asset discoverable by orchestration surfaces. */
 public record TaskAsset(
-    long id,
+    @JsonSerialize(using = ToStringSerializer.class) long id,
     TaskAssetSource source,
     String sourceRef,
-    Long projectId,
+    @JsonSerialize(using = ToStringSerializer.class) Long projectId,
     String name,
     String taskType,
     TaskAssetStatus status,

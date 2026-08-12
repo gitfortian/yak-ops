@@ -18,6 +18,8 @@ public interface TaskAssetRepository {
       long revisionId,
       int revisionNo);
 
+  Optional<TaskAsset> findById(long assetId);
+
   Optional<TaskAsset> findBySource(TaskAssetSource source, String sourceRef);
 
   List<TaskAsset> list(TaskAssetSource source, TaskAssetStatus status, String keyword);

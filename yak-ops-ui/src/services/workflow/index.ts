@@ -1,5 +1,6 @@
-import { request } from '@umijs/max';
 import type { ApiResponse } from '@/services/http/response';
+import { listTaskCatalogAssets } from '@/services/taskCatalog';
+import { request } from '@umijs/max';
 
 export type WorkflowFailureStrategy =
   | 'FAIL_FAST'
@@ -20,6 +21,9 @@ export interface WorkflowTaskDefinition {
   id: string;
   name: string;
   type: string;
+  taskAssetId?: string;
+  taskRevisionId?: string;
+  taskRevisionNo?: number;
 }
 
 export interface WorkflowNodePayload {
@@ -128,8 +132,21 @@ export const isWorkflowTerminal = (status?: string) =>
   Boolean(status && TERMINAL_STATUSES.has(status));
 
 export const getWorkflowTasks = async () => {
-  const response = await request<ApiResponse<WorkflowTaskDefinition[]>>('/api/v1/tasks');
-  return response.data;
+  const [response, assets] = await Promise.all([
+    request<ApiResponse<WorkflowTaskDefinition[]>>('/api/v1/tasks'),
+    listTaskCatalogAssets({ source: 'DATA_DEVELOPMENT', status: 'ONLINE' }).catch(() => []),
+  ]);
+  const merged = new Map<string, WorkflowTaskDefinition>();
+  (response.data || []).forEach((task) => merged.set(task.id, task));
+  assets.forEach((asset) => merged.set(`task-asset:${asset.id}`, {
+    id: `task-asset:${asset.id}`,
+    name: asset.name,
+    type: asset.taskType,
+    taskAssetId: asset.id,
+    taskRevisionId: asset.currentRevision.taskRevisionId,
+    taskRevisionNo: asset.currentRevision.revisionNo,
+  }));
+  return Array.from(merged.values());
 };
 
 export const runWorkflow = async (payload: WorkflowRunPayload) => {
@@ -259,10 +276,7 @@ const openWorkflowEventSubscription = (
   };
   source.addEventListener('workflow', handleWorkflowEvent);
   source.onopen = () => stopFallbackPolling();
-  source.onerror = () => {
-    // EventSource 会自行重连；重连期间用低频 authenticated request 保证状态不会停住。
-    startFallbackPolling();
-  };
+  source.onerror = () => startFallbackPolling();
 
   function cleanupActive() {
     if (activeClosed) return;
@@ -274,7 +288,6 @@ const openWorkflowEventSubscription = (
   }
 
   subscription.closeActive = cleanupActive;
-  // 首帧主动读取一次，随后以 SSE 为主；不会再在健康连接下每 500ms 打接口。
   void poll();
 };
 
