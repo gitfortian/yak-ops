@@ -1,3 +1,4 @@
+import { BRAND_CSS_VARIABLES } from '@/styles/brand';
 import { message } from 'antd';
 import { RefreshCw, X } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
@@ -151,7 +152,7 @@ const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
   };
 
   return (
-    <aside className="flex shrink-0 bg-white">
+    <aside className="flex shrink-0 bg-white" style={BRAND_CSS_VARIABLES}>
       <div
         className={[
           'relative h-full shrink-0',
@@ -221,7 +222,7 @@ const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
                 '[writing-mode:vertical-rl] [letter-spacing:3px]',
                 index === 0 ? 'border-t' : '',
                 active
-                  ? 'text-[#1677ff] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[#1677ff]'
+                  ? 'text-[var(--yak-brand-color)] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[var(--yak-brand-color)]'
                   : 'text-[#475467] opacity-70 hover:bg-[#f7f8fa] hover:text-[#344054] hover:opacity-100',
               ].join(' ')}
             >

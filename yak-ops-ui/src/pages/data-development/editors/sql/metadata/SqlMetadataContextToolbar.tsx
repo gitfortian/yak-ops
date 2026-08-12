@@ -1,3 +1,4 @@
+import { BRAND_CSS_VARIABLES } from '@/styles/brand';
 import { Popover, Spin, message } from 'antd';
 import { ChevronDown, Database, Layers3, Search, Server } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -250,7 +251,13 @@ const SqlMetadataContextToolbar = ({
     value: item.value,
     label: `@${item.label}`,
     searchText: item.dbType,
-    icon: <Server size={13} strokeWidth={1.8} className="text-[#1677ff]" />,
+    icon: (
+      <Server
+        size={13}
+        strokeWidth={1.8}
+        className="text-[var(--yak-brand-color)]"
+      />
+    ),
   }));
 
   const databasePlaceholder = !context.dataSourceId
@@ -262,13 +269,22 @@ const SqlMetadataContextToolbar = ({
 
   return (
     <>
-      <div className="flex min-w-0 shrink-0 items-center gap-1">
+      <div
+        className="flex min-w-0 shrink-0 items-center gap-1"
+        style={BRAND_CSS_VARIABLES}
+      >
         <ContextPicker
           ariaLabel="选择 SQL 数据源"
           value={context.dataSourceId}
           displayValue={context.dataSourceName ? `@${context.dataSourceName}` : undefined}
           placeholder="@datasource"
-          icon={<Server size={13} strokeWidth={1.8} className="text-[#1677ff]" />}
+          icon={
+            <Server
+              size={13}
+              strokeWidth={1.8}
+              className="text-[var(--yak-brand-color)]"
+            />
+          }
           items={dataSourceItems}
           loading={dataSourceLoading}
           popupWidth={210}
