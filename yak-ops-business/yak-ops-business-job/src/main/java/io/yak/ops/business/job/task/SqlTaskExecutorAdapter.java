@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** Executes workflow-pinned SQL revisions through the same TaskPlugin runtime as manual SQL runs. */
+/** Executes SQL revisions through the shared Task Runtime and TaskPlugin contract. */
 @Service
 public class SqlTaskExecutorAdapter implements TaskExecutor {
 
@@ -53,11 +53,22 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
   }
 
   @Override
-  public synchronized TaskExecution start(
+  public TaskExecution start(
       TaskVersionSnapshot snapshot,
       String idempotencyKey,
       Map<String, Object> input) {
+    return start(snapshot, TaskExecutionTrigger.WORKFLOW, idempotencyKey, input);
+  }
+
+  @Override
+  public synchronized TaskExecution start(
+      TaskVersionSnapshot snapshot,
+      TaskExecutionTrigger trigger,
+      String idempotencyKey,
+      Map<String, Object> input) {
     requireSqlSnapshot(snapshot);
+    TaskExecutionTrigger safeTrigger =
+        trigger == null ? TaskExecutionTrigger.WORKFLOW : trigger;
     String safeIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
     if (safeIdempotencyKey != null) {
       String existingExecutionId = idempotencyIndex.get(safeIdempotencyKey);
@@ -74,7 +85,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
     validate(plugin, definition);
 
     DataSourceExecutionProvider provider = dataSourceExecutionProvider.getIfAvailable();
-    SqlExecutionContext context = new SqlExecutionContext(input, provider);
+    SqlExecutionContext context = new SqlExecutionContext(safeTrigger, input, provider);
     io.yak.ops.plugin.task.api.TaskExecutor pluginExecutor =
         plugin.createExecutor(definition, context);
 
@@ -214,19 +225,16 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
   }
 
   private record SqlExecutionContext(
+      TaskExecutionTrigger trigger,
       Map<String, Object> input,
       DataSourceExecutionProvider dataSourceExecutionProvider)
       implements TaskExecutionContext {
 
     private SqlExecutionContext {
+      trigger = trigger == null ? TaskExecutionTrigger.WORKFLOW : trigger;
       input = input == null
           ? Map.of()
           : Collections.unmodifiableMap(new LinkedHashMap<>(input));
-    }
-
-    @Override
-    public TaskExecutionTrigger trigger() {
-      return TaskExecutionTrigger.WORKFLOW;
     }
 
     @Override
