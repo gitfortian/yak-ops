@@ -3,11 +3,15 @@ package io.yak.ops.business.development.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
+import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
+import io.yak.ops.spi.task.model.TaskAssetSource;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,7 +29,8 @@ class DevelopmentNodeServiceTest {
     DevelopmentDirectory folder = directories.insert(null, "ODS");
     DevelopmentNodeService service = new DevelopmentNodeService(
         new InMemoryNodeRepository(),
-        directories);
+        directories,
+        mock(TaskCatalogService.class));
 
     DevelopmentNode sql = service.create("用户清洗", "sql", null, folder.id());
     DevelopmentNode shell = service.create("清理临时文件", "shell", 7L, null);
@@ -42,7 +47,10 @@ class DevelopmentNodeServiceTest {
   void rejectsUnknownDirectoryAndDuplicateSiblingName() {
     InMemoryDirectoryRepository directories = new InMemoryDirectoryRepository();
     InMemoryNodeRepository nodes = new InMemoryNodeRepository();
-    DevelopmentNodeService service = new DevelopmentNodeService(nodes, directories);
+    DevelopmentNodeService service = new DevelopmentNodeService(
+        nodes,
+        directories,
+        mock(TaskCatalogService.class));
 
     assertThrows(
         IllegalArgumentException.class,
@@ -55,17 +63,30 @@ class DevelopmentNodeServiceTest {
   }
 
   @Test
-  void renamesAndDeletesNode() {
+  void renamesAndDeletesNodeWhileKeepingCatalogLifecycleAligned() {
     InMemoryDirectoryRepository directories = new InMemoryDirectoryRepository();
     InMemoryNodeRepository nodes = new InMemoryNodeRepository();
-    DevelopmentNodeService service = new DevelopmentNodeService(nodes, directories);
+    TaskCatalogService taskCatalogService = mock(TaskCatalogService.class);
+    DevelopmentNodeService service = new DevelopmentNodeService(
+        nodes,
+        directories,
+        taskCatalogService);
     DevelopmentNode node = service.create("任务", "SQL", null, null);
 
     DevelopmentNode renamed = service.rename(node.id(), "新任务");
     assertEquals("新任务", renamed.name());
+    verify(taskCatalogService).updateSourceMetadata(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        String.valueOf(node.id()),
+        null,
+        "新任务",
+        "SQL");
 
     service.delete(node.id());
     assertEquals(List.of(), service.list());
+    verify(taskCatalogService).offlineSource(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        String.valueOf(node.id()));
   }
 
   private static final class InMemoryNodeRepository implements DevelopmentNodeRepository {
@@ -129,6 +150,22 @@ class DevelopmentNodeServiceTest {
           current.projectId(),
           current.directoryId(),
           current.configured(),
+          current.createTime(),
+          Instant.now()));
+      return true;
+    }
+
+    @Override
+    public boolean updateConfigured(Long id, boolean configured) {
+      DevelopmentNode current = values.get(id);
+      if (current == null) return false;
+      values.put(id, new DevelopmentNode(
+          current.id(),
+          current.name(),
+          current.type(),
+          current.projectId(),
+          current.directoryId(),
+          configured,
           current.createTime(),
           Instant.now()));
       return true;

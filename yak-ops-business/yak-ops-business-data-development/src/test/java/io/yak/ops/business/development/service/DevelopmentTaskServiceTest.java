@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,11 +17,13 @@ import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskDraftRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;
+import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginDescriptor;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
+import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +36,7 @@ class DevelopmentTaskServiceTest {
   private DevelopmentNodeRepository nodeRepository;
   private DevelopmentTaskDraftRepository draftRepository;
   private DevelopmentTaskRevisionRepository revisionRepository;
+  private TaskCatalogService taskCatalogService;
   private DevelopmentTaskService service;
 
   @BeforeEach
@@ -40,10 +44,12 @@ class DevelopmentTaskServiceTest {
     nodeRepository = mock(DevelopmentNodeRepository.class);
     draftRepository = mock(DevelopmentTaskDraftRepository.class);
     revisionRepository = mock(DevelopmentTaskRevisionRepository.class);
+    taskCatalogService = mock(TaskCatalogService.class);
     service = new DevelopmentTaskService(
         nodeRepository,
         draftRepository,
         revisionRepository,
+        taskCatalogService,
         TaskPluginRegistry.from(List.of(new TestSqlPlugin())),
         new ObjectMapper());
 
@@ -79,7 +85,7 @@ class DevelopmentTaskServiceTest {
   }
 
   @Test
-  void publishCreatesImmutableRevisionFromLockedDraft() {
+  void publishCreatesImmutableRevisionAndReconcilesTaskCatalog() {
     TaskDefinition definition = new TaskDefinition("SQL", 1, "select 1", "{}");
     DevelopmentTaskDraft draft = new DevelopmentTaskDraft(
         1L, definition, 3L, Instant.now(), Instant.now());
@@ -102,6 +108,29 @@ class DevelopmentTaskServiceTest {
     assertEquals(3L, published.sourceDraftRevision());
     assertEquals(64, published.checksum().length());
     verify(nodeRepository).updateConfigured(1L, true);
+    verify(taskCatalogService).publish(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        "1",
+        null,
+        "今天统计",
+        "SQL",
+        100L,
+        1);
+
+    // Re-publishing the unchanged draft reuses v1 but still repairs/advances catalog state idempotently.
+    when(revisionRepository.findLatestByNodeId(1L)).thenReturn(Optional.of(published));
+    DevelopmentTaskRevision repeated = service.publish(1L, 3L);
+    assertEquals(published, repeated);
+    verify(revisionRepository, times(1))
+        .insert(eq(1L), eq(1), eq(3L), eq(definition), any(String.class));
+    verify(taskCatalogService, times(2)).publish(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        "1",
+        null,
+        "今天统计",
+        "SQL",
+        100L,
+        1);
   }
 
   @Test

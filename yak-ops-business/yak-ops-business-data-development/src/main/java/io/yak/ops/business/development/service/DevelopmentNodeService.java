@@ -3,6 +3,8 @@ package io.yak.ops.business.development.service;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
+import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
+import io.yak.ops.spi.task.model.TaskAssetSource;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -17,12 +19,15 @@ public class DevelopmentNodeService {
 
   private final DevelopmentNodeRepository repository;
   private final DevelopmentDirectoryRepository directoryRepository;
+  private final TaskCatalogService taskCatalogService;
 
   public DevelopmentNodeService(
       DevelopmentNodeRepository repository,
-      DevelopmentDirectoryRepository directoryRepository) {
+      DevelopmentDirectoryRepository directoryRepository,
+      TaskCatalogService taskCatalogService) {
     this.repository = repository;
     this.directoryRepository = directoryRepository;
+    this.taskCatalogService = taskCatalogService;
   }
 
   public List<DevelopmentNode> list() {
@@ -68,17 +73,27 @@ public class DevelopmentNodeService {
     if (!repository.updateName(id, normalizedName)) {
       throw new IllegalStateException("节点重命名失败：" + id);
     }
-    return repository.findById(id)
+    DevelopmentNode renamed = repository.findById(id)
         .orElseThrow(() -> new IllegalStateException("节点重命名成功但无法重新读取：" + id));
+    taskCatalogService.updateSourceMetadata(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        String.valueOf(renamed.id()),
+        renamed.projectId(),
+        renamed.name(),
+        renamed.type());
+    return renamed;
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void delete(Long id) {
-    repository.findById(id)
+    DevelopmentNode current = repository.findById(id)
         .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + id));
     if (!repository.deleteById(id)) {
       throw new IllegalStateException("节点删除失败：" + id);
     }
+    taskCatalogService.offlineSource(
+        TaskAssetSource.DATA_DEVELOPMENT,
+        String.valueOf(current.id()));
   }
 
   private String normalizeName(String name) {
