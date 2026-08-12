@@ -1,7 +1,6 @@
-import { Tooltip, message } from 'antd';
-import { Play, Save } from 'lucide-react';
+import { Tooltip } from 'antd';
+import { LoaderCircle, Play, Rocket, Save } from 'lucide-react';
 
-import { markEditorSessionSaved } from '../../editors/session/editorSessionStore';
 import type { DevelopmentEditorDefinition } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
 
@@ -10,16 +9,24 @@ interface EditorToolbarProps {
   directory?: DevelopmentDirectory;
   definition: DevelopmentEditorDefinition;
   onRun: () => void;
+  onSave: () => void;
+  onPublish: () => void;
+  saving: boolean;
+  publishing: boolean;
 }
 
 const iconButtonClassName =
-  'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)]';
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent';
 
 const EditorToolbar = ({
   node,
   directory,
   definition,
   onRun,
+  onSave,
+  onPublish,
+  saving,
+  publishing,
 }: EditorToolbarProps) => {
   const Toolbar = definition.Toolbar;
   const capabilities = definition.capabilities;
@@ -28,7 +35,15 @@ const EditorToolbar = ({
     <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-2">
       {Toolbar ? (
         <div className="flex h-full min-w-0 flex-1 items-center">
-          <Toolbar node={node} directory={directory} onRun={onRun} />
+          <Toolbar
+            node={node}
+            directory={directory}
+            onRun={onRun}
+            onSave={onSave}
+            onPublish={onPublish}
+            saving={saving}
+            publishing={publishing}
+          />
         </div>
       ) : (
         <>
@@ -47,17 +62,36 @@ const EditorToolbar = ({
                 </Tooltip>
               ) : null}
               {capabilities.save ? (
-                <Tooltip title="保存本地草稿" mouseEnterDelay={0.35}>
+                <Tooltip title="保存草稿" mouseEnterDelay={0.35}>
                   <button
                     type="button"
-                    aria-label="保存本地草稿"
-                    onClick={() => {
-                      markEditorSessionSaved(node.id);
-                      message.success('本地草稿已保存');
-                    }}
+                    aria-label="保存草稿"
+                    disabled={saving || publishing}
+                    onClick={onSave}
                     className={iconButtonClassName}
                   >
-                    <Save size={15} strokeWidth={1.8} />
+                    {saving ? (
+                      <LoaderCircle size={15} className="animate-spin" />
+                    ) : (
+                      <Save size={15} strokeWidth={1.8} />
+                    )}
+                  </button>
+                </Tooltip>
+              ) : null}
+              {capabilities.publish ? (
+                <Tooltip title="发布版本" mouseEnterDelay={0.35}>
+                  <button
+                    type="button"
+                    aria-label="发布版本"
+                    disabled={saving || publishing}
+                    onClick={onPublish}
+                    className={iconButtonClassName}
+                  >
+                    {publishing ? (
+                      <LoaderCircle size={15} className="animate-spin" />
+                    ) : (
+                      <Rocket size={15} strokeWidth={1.8} />
+                    )}
                   </button>
                 </Tooltip>
               ) : null}

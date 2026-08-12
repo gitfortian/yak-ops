@@ -24,5 +24,7 @@ public interface DevelopmentNodeRepository {
 
   boolean updateName(Long id, String name);
 
+  boolean updateConfigured(Long id, boolean configured);
+
   boolean deleteById(Long id);
 }

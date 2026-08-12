@@ -88,6 +88,17 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
   }
 
   @Override
+  public boolean updateConfigured(Long id, boolean configured) {
+    return mapper.update(
+            null,
+            new LambdaUpdateWrapper<DevelopmentNodePO>()
+                .eq(DevelopmentNodePO::getId, id)
+                .set(DevelopmentNodePO::getConfigured, configured)
+                .set(DevelopmentNodePO::getUpdateTime, Instant.now()))
+        > 0;
+  }
+
+  @Override
   public boolean deleteById(Long id) {
     return mapper.deleteById(id) > 0;
   }

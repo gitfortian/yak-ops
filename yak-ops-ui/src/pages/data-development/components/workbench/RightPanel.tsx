@@ -9,11 +9,13 @@ import type {
   DevelopmentEditorPanelKey,
 } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
+import TaskVersionsPanel from './TaskVersionsPanel';
 
 interface RightPanelProps {
   node: DevelopmentNode;
   directory?: DevelopmentDirectory;
   definition: DevelopmentEditorDefinition;
+  versionsRefreshKey?: number;
 }
 
 const DEFAULT_WIDTH = 380;
@@ -43,10 +45,16 @@ const allItems: Array<{
   { key: 'versions', label: '版本', capability: 'versions' },
 ];
 
-const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
+const RightPanel = ({
+  node,
+  directory,
+  definition,
+  versionsRefreshKey = 0,
+}: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<DevelopmentEditorPanelKey>();
   const [width, setWidth] = useState(initialWidth);
   const [resizing, setResizing] = useState(false);
+  const [manualRefreshKey, setManualRefreshKey] = useState(0);
 
   const items = useMemo(
     () =>
@@ -92,6 +100,15 @@ const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
   const renderContent = () => {
     if (!activeTab) return null;
 
+    if (activeTab === 'versions') {
+      return (
+        <TaskVersionsPanel
+          node={node}
+          refreshKey={versionsRefreshKey + manualRefreshKey}
+        />
+      );
+    }
+
     const CustomPanel = definition.panels?.[activeTab];
     if (CustomPanel) {
       return <CustomPanel node={node} directory={directory} />;
@@ -129,24 +146,10 @@ const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
       );
     }
 
-    if (activeTab === 'schedule-config') {
-      return (
-        <div className="text-[12px] leading-6 text-[#667085]">
-          <div className="font-medium text-[#344054]">调度配置</div>
-          <div className="mt-2">调度周期、依赖关系和生效时间将在后续阶段接入。</div>
-        </div>
-      );
-    }
-
     return (
-      <div className="border-b border-[#f0f1f3] pb-3 text-[12px]">
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-medium text-[#475467]">当前草稿</span>
-          <span className="text-[10px] text-[#98a2b3]">v1</span>
-        </div>
-        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          版本管理能力将在后续阶段接入
-        </div>
+      <div className="text-[12px] leading-6 text-[#667085]">
+        <div className="font-medium text-[#344054]">调度配置</div>
+        <div className="mt-2">调度周期、依赖关系和生效时间将在后续阶段接入。</div>
       </div>
     );
   };
@@ -182,7 +185,13 @@ const RightPanel = ({ node, directory, definition }: RightPanelProps) => {
                 <button
                   type="button"
                   title="刷新"
-                  onClick={() => message.info(`${activeItem?.label || ''}刷新能力将在后续阶段接入`)}
+                  onClick={() => {
+                    if (activeTab === 'versions') {
+                      setManualRefreshKey((current) => current + 1);
+                    } else {
+                      message.info(`${activeItem?.label || ''}刷新能力将在后续阶段接入`);
+                    }
+                  }}
                   className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
                 >
                   <RefreshCw size={13} strokeWidth={1.8} />

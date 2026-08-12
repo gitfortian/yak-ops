@@ -21,6 +21,10 @@ export interface DevelopmentEditorContext {
 export interface DevelopmentEditorToolbarContext
   extends DevelopmentEditorContext {
   onRun: () => void;
+  onSave: () => void;
+  onPublish: () => void;
+  saving: boolean;
+  publishing: boolean;
 }
 
 export interface DevelopmentEditorCapabilities {

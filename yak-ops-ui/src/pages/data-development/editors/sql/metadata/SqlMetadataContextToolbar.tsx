@@ -211,6 +211,17 @@ const SqlMetadataContextToolbar = ({
   }, []);
 
   useEffect(() => {
+    if (!context.dataSourceId || context.dataSourceName || !dataSources.length) return;
+    const selected = dataSources.find((item) => item.value === context.dataSourceId);
+    if (!selected) return;
+    selectSqlDataSourceContext(nodeId, {
+      id: selected.value,
+      name: selected.label,
+      dbType: selected.dbType,
+    });
+  }, [context.dataSourceId, context.dataSourceName, dataSources, nodeId]);
+
+  useEffect(() => {
     let active = true;
     if (!context.dataSourceId) {
       setBindingLoading(false);
