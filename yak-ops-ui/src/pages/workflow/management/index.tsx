@@ -674,7 +674,6 @@ const WorkflowManagementPage = () => {
           'group min-w-0 overflow-hidden rounded-[9px]',
           'border border-[rgba(22,24,35,.075)] bg-white',
           'transition-all duration-200',
-          'hover:-translate-y-[2px]',
           'hover:border-[rgba(22,24,35,.11)]',
           'hover:shadow-[0_10px_28px_rgba(22,24,35,.07)]',
         ].join(' ')}
@@ -869,9 +868,7 @@ const WorkflowManagementPage = () => {
           'overflow-hidden rounded-[9px]',
           'border border-[rgba(22,24,35,.075)]',
           'bg-white',
-          'transition-all duration-200',
           'hover:border-[rgba(22,24,35,.11)]',
-          'hover:shadow-[0_8px_24px_rgba(22,24,35,.055)]',
         ].join(' ')}
       >
         <div
@@ -1043,13 +1040,9 @@ const WorkflowManagementPage = () => {
                   'rounded-[7px] border-0 px-[17px]',
                   'bg-[linear-gradient(102deg,#fe516e_0%,#fe2c55_100%)]',
                   'text-[13px] font-semibold text-white',
-                  'shadow-[0_7px_18px_rgba(254,44,85,.20)]',
                   'transition-all duration-150',
-                  'hover:-translate-y-px',
-                  'hover:shadow-[0_9px_22px_rgba(254,44,85,.25)]',
                 ].join(' ')}
               >
-                <Plus size={17} strokeWidth={2.2} />
                 新建工作流
               </button>
             </header>

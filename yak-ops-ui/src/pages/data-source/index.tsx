@@ -460,7 +460,6 @@ const DataSourcePage = () => {
                   className="datasource-create-button"
                   onClick={handleCreate}
                 >
-                  <Plus size={17} strokeWidth={2.2} />
                   新建数据源
                 </button>
               )}
