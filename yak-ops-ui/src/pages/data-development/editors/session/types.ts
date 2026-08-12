@@ -21,8 +21,12 @@ export interface DevelopmentEditorViewState {
 export interface DevelopmentEditorSession {
   nodeId: DevelopmentId;
   nodeType: DevelopmentTaskType;
+  schemaVersion?: number;
   content: string;
   originalContent: string;
+  configJson?: string;
+  originalConfigJson?: string;
+  draftRevision?: number;
   dirty: boolean;
   viewState?: DevelopmentEditorViewState;
   updatedAt: number;

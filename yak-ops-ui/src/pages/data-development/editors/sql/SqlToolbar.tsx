@@ -1,7 +1,9 @@
 import { Dropdown, Tooltip, message } from 'antd';
 import {
+  LoaderCircle,
   Play,
   Redo2,
+  Rocket,
   Save,
   Search,
   Settings,
@@ -11,7 +13,6 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { markEditorSessionSaved } from '../session/editorSessionStore';
 import type { DevelopmentEditorToolbarContext } from '../types';
 import {
   executeSqlEditorCommand,
@@ -20,19 +21,21 @@ import {
 import SqlMetadataContextToolbar from './metadata/SqlMetadataContextToolbar';
 
 const iconButtonClassName =
-  'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)]';
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent';
 
 interface ToolbarButtonProps {
   title: string;
   onClick: () => void;
+  disabled?: boolean;
   children: ReactNode;
 }
 
-const ToolbarButton = ({ title, onClick, children }: ToolbarButtonProps) => (
+const ToolbarButton = ({ title, onClick, disabled, children }: ToolbarButtonProps) => (
   <Tooltip title={title} mouseEnterDelay={0.35}>
     <button
       type="button"
       aria-label={title}
+      disabled={disabled}
       onClick={onClick}
       className={iconButtonClassName}
     >
@@ -43,7 +46,14 @@ const ToolbarButton = ({ title, onClick, children }: ToolbarButtonProps) => (
 
 const ToolbarDivider = () => <span className="mx-1 h-4 w-px shrink-0 bg-[#e5e7eb]" />;
 
-const SqlToolbar = ({ node, onRun }: DevelopmentEditorToolbarContext) => {
+const SqlToolbar = ({
+  node,
+  onRun,
+  onSave,
+  onPublish,
+  saving,
+  publishing,
+}: DevelopmentEditorToolbarContext) => {
   const execute = (command: SqlEditorCommand, fallback: string) => {
     if (!executeSqlEditorCommand(node.id, command)) {
       message.info(fallback);
@@ -60,13 +70,26 @@ const SqlToolbar = ({ node, onRun }: DevelopmentEditorToolbarContext) => {
         <ToolbarDivider />
 
         <ToolbarButton
-          title="保存本地草稿"
-          onClick={() => {
-            markEditorSessionSaved(node.id);
-            message.success('本地草稿已保存');
-          }}
+          title="保存草稿"
+          disabled={saving || publishing}
+          onClick={onSave}
         >
-          <Save size={15} strokeWidth={1.8} />
+          {saving ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Save size={15} strokeWidth={1.8} />
+          )}
+        </ToolbarButton>
+        <ToolbarButton
+          title="发布版本"
+          disabled={saving || publishing}
+          onClick={onPublish}
+        >
+          {publishing ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Rocket size={15} strokeWidth={1.8} />
+          )}
         </ToolbarButton>
         <ToolbarButton
           title="撤销"

@@ -14,12 +14,24 @@
     <artifactId>yak-ops-business-data-development</artifactId>
 
     <name>Yak Ops Business Data Development</name>
-    <description>Data-development directory and resource-node metadata</description>
+    <description>Data-development directory, task authoring and immutable revision lifecycle</description>
 
     <dependencies>
         <dependency>
             <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-plugin-task-api</artifactId>
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>

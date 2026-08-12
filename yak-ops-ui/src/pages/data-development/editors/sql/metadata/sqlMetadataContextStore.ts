@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
+import { updateEditorSessionConfig } from '../../session/editorSessionStore';
 import type { DevelopmentId } from '../../../types';
 
 export interface SqlMetadataContext {
@@ -88,6 +89,9 @@ const getVersion = () => {
   return version;
 };
 
+const configJsonForDataSource = (dataSourceId?: string) =>
+  JSON.stringify(dataSourceId ? { dataSourceId } : {});
+
 export const ensureSqlMetadataContext = (
   nodeId: DevelopmentId,
 ): SqlMetadataContext => {
@@ -108,6 +112,9 @@ export const getSqlMetadataContext = (nodeId: DevelopmentId) => {
   return contexts.get(nodeId);
 };
 
+export const getSqlTaskConfigJson = (nodeId: DevelopmentId) =>
+  configJsonForDataSource(ensureSqlMetadataContext(nodeId).dataSourceId);
+
 export const updateSqlMetadataContext = (
   nodeId: DevelopmentId,
   patch: Partial<Omit<SqlMetadataContext, 'nodeId' | 'updatedAt'>>,
@@ -125,17 +132,50 @@ export const updateSqlMetadataContext = (
   return next;
 };
 
+export const hydrateSqlTaskConfig = (
+  nodeId: DevelopmentId,
+  configJson: string,
+) => {
+  let dataSourceId: string | undefined;
+  try {
+    const parsed = JSON.parse(configJson || '{}') as { dataSourceId?: unknown };
+    dataSourceId = typeof parsed.dataSourceId === 'string' ? parsed.dataSourceId : undefined;
+  } catch {
+    dataSourceId = undefined;
+  }
+
+  const current = ensureSqlMetadataContext(nodeId);
+  const sameDataSource = current.dataSourceId === dataSourceId;
+  const next: SqlMetadataContext = {
+    ...current,
+    nodeId,
+    dataSourceId,
+    dataSourceName: sameDataSource ? current.dataSourceName : undefined,
+    dbType: sameDataSource ? current.dbType : undefined,
+    database: sameDataSource ? current.database : undefined,
+    schema: sameDataSource ? current.schema : undefined,
+    updatedAt: Date.now(),
+  };
+  contexts.set(nodeId, next);
+  persist();
+  emitChange();
+  return next;
+};
+
 export const selectSqlDataSourceContext = (
   nodeId: DevelopmentId,
   dataSource?: { id: string; name?: string; dbType?: string },
-) =>
-  updateSqlMetadataContext(nodeId, {
+) => {
+  const next = updateSqlMetadataContext(nodeId, {
     dataSourceId: dataSource?.id,
     dataSourceName: dataSource?.name,
     dbType: dataSource?.dbType,
     database: undefined,
     schema: undefined,
   });
+  updateEditorSessionConfig(nodeId, configJsonForDataSource(next.dataSourceId));
+  return next;
+};
 
 export const selectSqlDatabaseContext = (
   nodeId: DevelopmentId,

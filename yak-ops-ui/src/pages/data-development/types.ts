@@ -33,3 +33,35 @@ export interface CreateDevelopmentNodePayload {
   /** 省略表示数据开发根目录。 */
   directoryId?: DevelopmentId;
 }
+
+export interface DevelopmentTaskDefinition {
+  taskType: DevelopmentTaskType;
+  schemaVersion: number;
+  content: string;
+  configJson: string;
+}
+
+export interface DevelopmentTaskDraft {
+  nodeId: DevelopmentId;
+  definition: DevelopmentTaskDefinition;
+  draftRevision: number;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface SaveDevelopmentTaskDraftPayload extends DevelopmentTaskDefinition {
+  baseRevision: number;
+}
+
+export interface DevelopmentTaskRevisionSummary {
+  id: DevelopmentId;
+  nodeId: DevelopmentId;
+  revisionNo: number;
+  sourceDraftRevision: number;
+  checksum: string;
+  createTime?: string;
+}
+
+export interface DevelopmentTaskRevision extends DevelopmentTaskRevisionSummary {
+  definition: DevelopmentTaskDefinition;
+}

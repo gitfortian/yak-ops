@@ -1,4 +1,5 @@
-import { Button, Modal } from 'antd';
+import { API_SUCCESS_CODE } from '@/services/http/response';
+import { Button, Modal, message } from 'antd';
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -6,12 +7,22 @@ import { getEditorDefinition } from '../../editors/registry';
 import {
   getEditorSession,
   markEditorSessionSaved,
-  updateEditorSessionContent,
 } from '../../editors/session/editorSessionStore';
+import {
+  hydrateDevelopmentTaskDraft,
+  prepareDevelopmentTaskDefinition,
+  restoreDevelopmentTaskOriginal,
+} from '../../editors/taskPersistence';
+import {
+  getDevelopmentTaskDraft,
+  publishDevelopmentTask,
+  saveDevelopmentTaskDraft,
+} from '../../service';
 import type {
   DevelopmentDirectory,
   DevelopmentId,
   DevelopmentNode,
+  DevelopmentTaskDraft,
 } from '../../types';
 import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
@@ -24,6 +35,7 @@ interface DevelopmentWorkbenchProps {
   directories: DevelopmentDirectory[];
   selectedNodeId?: DevelopmentId;
   onNodeFocus: (nodeId?: DevelopmentId) => void;
+  onNodesChanged?: () => void | Promise<void>;
 }
 
 interface PendingCloseRequest {
@@ -31,16 +43,31 @@ interface PendingCloseRequest {
   dirtyNodeIds: DevelopmentId[];
 }
 
+const responseData = <T,>(
+  response: { code?: number; data?: T; msg?: string; message?: string },
+  fallback: string,
+): T => {
+  if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
+    throw new Error(response?.message || response?.msg || fallback);
+  }
+  return response.data;
+};
+
 const DevelopmentWorkbench = ({
   nodes,
   directories,
   selectedNodeId,
   onNodeFocus,
+  onNodesChanged,
 }: DevelopmentWorkbenchProps) => {
   const [openNodeIds, setOpenNodeIds] = useState<DevelopmentId[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<DevelopmentId>();
   const [runPanelOpen, setRunPanelOpen] = useState(false);
   const [pendingClose, setPendingClose] = useState<PendingCloseRequest>();
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
 
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -66,6 +93,28 @@ const DevelopmentWorkbench = ({
     );
   }, [nodeMap]);
 
+  useEffect(() => {
+    if (!activeNodeId) return;
+    const node = nodeMap.get(activeNodeId);
+    if (!node) return;
+
+    let active = true;
+    getDevelopmentTaskDraft(node.id)
+      .then((response) => {
+        if (!active) return;
+        const draft = responseData(response, '加载任务草稿失败');
+        hydrateDevelopmentTaskDraft(node, draft);
+      })
+      .catch((error) => {
+        if (!active) return;
+        message.error(error instanceof Error ? error.message : '加载任务草稿失败');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeNodeId, nodeMap]);
+
   const activeNode = activeNodeId ? nodeMap.get(activeNodeId) : undefined;
   const activeDirectory = activeNode?.directoryId
     ? directoryMap.get(activeNode.directoryId)
@@ -74,6 +123,65 @@ const DevelopmentWorkbench = ({
   const focusNode = (nodeId: DevelopmentId) => {
     setActiveNodeId(nodeId);
     onNodeFocus(nodeId);
+  };
+
+  const persistDraft = async (nodeId: DevelopmentId): Promise<DevelopmentTaskDraft> => {
+    const node = nodeMap.get(nodeId);
+    if (!node) throw new Error(`节点不存在：${nodeId}`);
+
+    const definition = prepareDevelopmentTaskDefinition(node);
+    const session = getEditorSession(nodeId);
+    const draft = responseData(
+      await saveDevelopmentTaskDraft(nodeId, {
+        ...definition,
+        baseRevision: session?.draftRevision || 0,
+      }),
+      '保存草稿失败',
+    );
+
+    markEditorSessionSaved(nodeId, draft.draftRevision);
+    await onNodesChanged?.();
+    return draft;
+  };
+
+  const saveActiveDraft = async () => {
+    if (!activeNode) return;
+    setSaving(true);
+    try {
+      const draft = await persistDraft(activeNode.id);
+      message.success(`草稿已保存 · Draft #${draft.draftRevision}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存草稿失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const publishActiveTask = async () => {
+    if (!activeNode) return;
+    setPublishing(true);
+    try {
+      prepareDevelopmentTaskDefinition(activeNode);
+      let session = getEditorSession(activeNode.id);
+      if (!session || session.dirty || !session.draftRevision) {
+        await persistDraft(activeNode.id);
+        session = getEditorSession(activeNode.id);
+      }
+      if (!session?.draftRevision) {
+        throw new Error('发布前请先保存草稿');
+      }
+
+      const published = responseData(
+        await publishDevelopmentTask(activeNode.id, session.draftRevision),
+        '发布任务失败',
+      );
+      setVersionsRefreshKey((current) => current + 1);
+      message.success(`已发布 v${published.revisionNo}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '发布任务失败');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const closeNodes = (nodeIds: DevelopmentId[]) => {
@@ -113,20 +221,29 @@ const DevelopmentWorkbench = ({
     });
   };
 
-  const resolvePendingClose = (save: boolean) => {
+  const resolvePendingClose = async (save: boolean) => {
     if (!pendingClose) return;
 
-    pendingClose.dirtyNodeIds.forEach((nodeId) => {
-      const session = getEditorSession(nodeId);
-      if (!session?.dirty) return;
-
-      if (save) {
-        markEditorSessionSaved(nodeId);
+    if (save) {
+      setCloseSaving(true);
+      try {
+        for (const nodeId of pendingClose.dirtyNodeIds) {
+          if (getEditorSession(nodeId)?.dirty) {
+            await persistDraft(nodeId);
+          }
+        }
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '保存草稿失败');
+        setCloseSaving(false);
         return;
       }
-
-      updateEditorSessionContent(nodeId, session.originalContent);
-    });
+      setCloseSaving(false);
+    } else {
+      pendingClose.dirtyNodeIds.forEach((nodeId) => {
+        const node = nodeMap.get(nodeId);
+        if (node) restoreDevelopmentTaskOriginal(node);
+      });
+    }
 
     const nodeIds = pendingClose.nodeIds;
     setPendingClose(undefined);
@@ -198,6 +315,10 @@ const DevelopmentWorkbench = ({
         directory={activeDirectory}
         definition={definition}
         onRun={() => setRunPanelOpen(true)}
+        onSave={() => void saveActiveDraft()}
+        onPublish={() => void publishActiveTask()}
+        saving={saving}
+        publishing={publishing}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -211,6 +332,7 @@ const DevelopmentWorkbench = ({
             node={activeNode}
             directory={activeDirectory}
             definition={definition}
+            versionsRefreshKey={versionsRefreshKey}
           />
         </div>
 
@@ -230,7 +352,10 @@ const DevelopmentWorkbench = ({
         width={520}
         centered
         maskClosable={false}
-        onCancel={() => setPendingClose(undefined)}
+        closable={!closeSaving}
+        onCancel={() => {
+          if (!closeSaving) setPendingClose(undefined);
+        }}
       >
         <div className="flex gap-4 px-1 py-2">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center text-[#f79009]">
@@ -263,13 +388,25 @@ const DevelopmentWorkbench = ({
             ) : null}
 
             <div className="mt-6 flex justify-end gap-2">
-              <Button type="primary" onClick={() => resolvePendingClose(true)}>
+              <Button
+                type="primary"
+                loading={closeSaving}
+                onClick={() => void resolvePendingClose(true)}
+              >
                 {pendingDirtyCount > 1 ? '保存全部' : '保存'}
               </Button>
-              <Button onClick={() => resolvePendingClose(false)}>
+              <Button
+                disabled={closeSaving}
+                onClick={() => void resolvePendingClose(false)}
+              >
                 {pendingDirtyCount > 1 ? '全部不保存' : '不保存'}
               </Button>
-              <Button onClick={() => setPendingClose(undefined)}>取消</Button>
+              <Button
+                disabled={closeSaving}
+                onClick={() => setPendingClose(undefined)}
+              >
+                取消
+              </Button>
             </div>
           </div>
         </div>

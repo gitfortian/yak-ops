@@ -14,7 +14,7 @@ const commonCapabilities = {
   stop: true,
   save: true,
   refresh: true,
-  publish: true,
+  publish: false,
   share: true,
   properties: true,
   runConfig: true,
@@ -49,7 +49,7 @@ const editorRegistry: Partial<
     label: 'SQL',
     icon: Code2,
     iconClassName: 'text-[#f79009]',
-    capabilities: { ...commonCapabilities, format: true },
+    capabilities: { ...commonCapabilities, publish: true, format: true },
     Editor: SqlEditor,
     Toolbar: SqlToolbar,
     panels: {

@@ -7,6 +7,10 @@ import type {
   DevelopmentDirectory,
   DevelopmentId,
   DevelopmentNode,
+  DevelopmentTaskDraft,
+  DevelopmentTaskRevision,
+  DevelopmentTaskRevisionSummary,
+  SaveDevelopmentTaskDraftPayload,
 } from './types';
 
 const DATA_DEVELOPMENT_API = '/api/v1/data-development';
@@ -48,3 +52,35 @@ export const renameDevelopmentNode = (
 export const deleteDevelopmentNode = (
   id: DevelopmentId,
 ): Promise<ApiResponse<boolean>> => HttpUtils.delete<boolean>(`${NODE_API}/${id}`);
+
+export const getDevelopmentTaskDraft = (
+  nodeId: DevelopmentId,
+): Promise<ApiResponse<DevelopmentTaskDraft>> =>
+  HttpUtils.get<DevelopmentTaskDraft>(`${NODE_API}/${nodeId}/draft`);
+
+export const saveDevelopmentTaskDraft = (
+  nodeId: DevelopmentId,
+  payload: SaveDevelopmentTaskDraftPayload,
+): Promise<ApiResponse<DevelopmentTaskDraft>> =>
+  HttpUtils.put<DevelopmentTaskDraft>(`${NODE_API}/${nodeId}/draft`, payload);
+
+export const publishDevelopmentTask = (
+  nodeId: DevelopmentId,
+  draftRevision: number,
+): Promise<ApiResponse<DevelopmentTaskRevision>> =>
+  HttpUtils.post<DevelopmentTaskRevision>(`${NODE_API}/${nodeId}/publish`, {
+    draftRevision,
+  });
+
+export const listDevelopmentTaskRevisions = (
+  nodeId: DevelopmentId,
+): Promise<ApiResponse<DevelopmentTaskRevisionSummary[]>> =>
+  HttpUtils.get<DevelopmentTaskRevisionSummary[]>(`${NODE_API}/${nodeId}/revisions`);
+
+export const getDevelopmentTaskRevision = (
+  nodeId: DevelopmentId,
+  revisionNo: number,
+): Promise<ApiResponse<DevelopmentTaskRevision>> =>
+  HttpUtils.get<DevelopmentTaskRevision>(
+    `${NODE_API}/${nodeId}/revisions/${revisionNo}`,
+  );

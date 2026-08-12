@@ -36,6 +36,13 @@ const isBrowser = () => typeof window !== 'undefined';
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
+const normalizedConfigJson = (value?: string) => value || '{}';
+
+const calculateDirty = (session: DevelopmentEditorSession) =>
+  session.content !== session.originalContent ||
+  normalizedConfigJson(session.configJson) !==
+    normalizedConfigJson(session.originalConfigJson);
+
 const isSelection = (value: unknown): value is DevelopmentEditorSelection => {
   if (!value || typeof value !== 'object') return false;
   const selection = value as Partial<DevelopmentEditorSelection>;
@@ -126,6 +133,11 @@ const isPersistedSession = (
     typeof session.originalContent === 'string' &&
     typeof session.dirty === 'boolean' &&
     isFiniteNumber(session.updatedAt) &&
+    (session.schemaVersion === undefined || isFiniteNumber(session.schemaVersion)) &&
+    (session.configJson === undefined || typeof session.configJson === 'string') &&
+    (session.originalConfigJson === undefined ||
+      typeof session.originalConfigJson === 'string') &&
+    (session.draftRevision === undefined || isFiniteNumber(session.draftRevision)) &&
     (session.viewState === undefined || isViewState(session.viewState))
   );
 };
@@ -146,9 +158,15 @@ const ensureHydrated = () => {
 
     parsed.sessions.forEach((session) => {
       if (!isPersistedSession(session)) return;
-      sessions.set(session.nodeId, {
+      const normalized: DevelopmentEditorSession = {
         ...session,
-        dirty: session.content !== session.originalContent,
+        schemaVersion: session.schemaVersion || 1,
+        configJson: normalizedConfigJson(session.configJson),
+        originalConfigJson: normalizedConfigJson(session.originalConfigJson),
+      };
+      sessions.set(session.nodeId, {
+        ...normalized,
+        dirty: calculateDirty(normalized),
       });
     });
   } catch {
@@ -176,6 +194,7 @@ export const ensureEditorSession = (
   nodeId: DevelopmentId,
   nodeType: DevelopmentTaskType,
   initialContent = '',
+  initialConfigJson = '{}',
 ) => {
   ensureHydrated();
   const current = sessions.get(nodeId);
@@ -184,8 +203,12 @@ export const ensureEditorSession = (
   const session: DevelopmentEditorSession = {
     nodeId,
     nodeType,
+    schemaVersion: 1,
     content: initialContent,
     originalContent: initialContent,
+    configJson: initialConfigJson,
+    originalConfigJson: initialConfigJson,
+    draftRevision: 0,
     dirty: false,
     updatedAt: Date.now(),
   };
@@ -198,6 +221,37 @@ export const getEditorSession = (nodeId: DevelopmentId) => {
   return sessions.get(nodeId);
 };
 
+export const hydrateEditorSession = (
+  nodeId: DevelopmentId,
+  nodeType: DevelopmentTaskType,
+  schemaVersion: number,
+  content: string,
+  configJson: string,
+  draftRevision: number,
+) => {
+  ensureHydrated();
+  const current = sessions.get(nodeId);
+  if (current?.dirty) return current;
+
+  const next: DevelopmentEditorSession = {
+    ...(current || {}),
+    nodeId,
+    nodeType,
+    schemaVersion,
+    content,
+    originalContent: content,
+    configJson,
+    originalConfigJson: configJson,
+    draftRevision,
+    dirty: false,
+    updatedAt: Date.now(),
+  };
+  sessions.set(nodeId, next);
+  schedulePersist();
+  emitChange();
+  return next;
+};
+
 export const updateEditorSessionContent = (
   nodeId: DevelopmentId,
   content: string,
@@ -206,11 +260,37 @@ export const updateEditorSessionContent = (
   const current = sessions.get(nodeId);
   if (!current || current.content === content) return;
 
-  sessions.set(nodeId, {
+  const next: DevelopmentEditorSession = {
     ...current,
     content,
-    dirty: content !== current.originalContent,
     updatedAt: Date.now(),
+  };
+  sessions.set(nodeId, {
+    ...next,
+    dirty: calculateDirty(next),
+  });
+  schedulePersist();
+  emitChange();
+};
+
+export const updateEditorSessionConfig = (
+  nodeId: DevelopmentId,
+  configJson: string,
+) => {
+  ensureHydrated();
+  const current = sessions.get(nodeId);
+  if (!current || normalizedConfigJson(current.configJson) === normalizedConfigJson(configJson)) {
+    return;
+  }
+
+  const next: DevelopmentEditorSession = {
+    ...current,
+    configJson: normalizedConfigJson(configJson),
+    updatedAt: Date.now(),
+  };
+  sessions.set(nodeId, {
+    ...next,
+    dirty: calculateDirty(next),
   });
   schedulePersist();
   emitChange();
@@ -232,19 +312,43 @@ export const updateEditorSessionViewState = (
   schedulePersist();
 };
 
-export const markEditorSessionSaved = (nodeId: DevelopmentId) => {
+export const markEditorSessionSaved = (
+  nodeId: DevelopmentId,
+  draftRevision?: number,
+) => {
   ensureHydrated();
   const current = sessions.get(nodeId);
-  if (!current || !current.dirty) return;
+  if (!current) return;
 
   sessions.set(nodeId, {
     ...current,
     originalContent: current.content,
+    configJson: normalizedConfigJson(current.configJson),
+    originalConfigJson: normalizedConfigJson(current.configJson),
+    draftRevision: draftRevision ?? current.draftRevision,
     dirty: false,
     updatedAt: Date.now(),
   });
   schedulePersist();
   emitChange();
+};
+
+export const restoreEditorSessionOriginal = (nodeId: DevelopmentId) => {
+  ensureHydrated();
+  const current = sessions.get(nodeId);
+  if (!current) return undefined;
+
+  const restored: DevelopmentEditorSession = {
+    ...current,
+    content: current.originalContent,
+    configJson: normalizedConfigJson(current.originalConfigJson),
+    dirty: false,
+    updatedAt: Date.now(),
+  };
+  sessions.set(nodeId, restored);
+  schedulePersist();
+  emitChange();
+  return restored;
 };
 
 export const useEditorSession = (
