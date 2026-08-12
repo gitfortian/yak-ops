@@ -11,9 +11,8 @@ import {
   useSqlMetadataContext,
 } from './sqlMetadataContextStore';
 import {
-  listSqlDatabases,
+  getSqlDataSourceBinding,
   listSqlDataSources,
-  listSqlSchemas,
   type SqlDataSourceOption,
 } from './sqlMetadataService';
 
@@ -143,12 +142,13 @@ const ContextPicker = ({
       <button
         type="button"
         aria-label={ariaLabel}
+        title={disabled ? `${ariaLabel}由数据源管理中的连接配置固定` : undefined}
         disabled={disabled}
         className={[
           'flex h-6 max-w-[176px] items-center gap-1.5 rounded-[3px] px-1.5 text-[12px] outline-none transition-colors',
           minWidthClassName,
           disabled
-            ? 'cursor-not-allowed text-[#b7bcc5]'
+            ? 'cursor-not-allowed bg-[#f5f6f7] text-[#a4a9b2]'
             : open || displayValue
               ? 'bg-[#f1f2f4] text-[#161823]'
               : 'text-[#30323b] hover:bg-[#f5f5f6]',
@@ -158,19 +158,25 @@ const ContextPicker = ({
         <span
           className={[
             'min-w-0 flex-1 truncate text-left',
-            displayValue ? 'text-[#30323b]' : 'text-[#7b808a]',
+            disabled
+              ? 'text-[#8f959f]'
+              : displayValue
+                ? 'text-[#30323b]'
+                : 'text-[#7b808a]',
           ].join(' ')}
         >
           {displayValue || placeholder}
         </span>
-        <ChevronDown
-          size={12}
-          strokeWidth={1.8}
-          className={[
-            'shrink-0 transition-transform duration-150',
-            open ? 'rotate-180' : '',
-          ].join(' ')}
-        />
+        {!disabled ? (
+          <ChevronDown
+            size={12}
+            strokeWidth={1.8}
+            className={[
+              'shrink-0 transition-transform duration-150',
+              open ? 'rotate-180' : '',
+            ].join(' ')}
+          />
+        ) : null}
       </button>
     </Popover>
   );
@@ -181,11 +187,8 @@ const SqlMetadataContextToolbar = ({
 }: SqlMetadataContextToolbarProps) => {
   const context = useSqlMetadataContext(nodeId);
   const [dataSources, setDataSources] = useState<SqlDataSourceOption[]>([]);
-  const [databases, setDatabases] = useState<string[]>([]);
-  const [schemas, setSchemas] = useState<string[]>([]);
   const [dataSourceLoading, setDataSourceLoading] = useState(false);
-  const [databaseLoading, setDatabaseLoading] = useState(false);
-  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [bindingLoading, setBindingLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -209,65 +212,32 @@ const SqlMetadataContextToolbar = ({
   useEffect(() => {
     let active = true;
     if (!context.dataSourceId) {
-      setDatabases([]);
-      setSchemas([]);
+      setBindingLoading(false);
       return () => {
         active = false;
       };
     }
 
-    setDatabaseLoading(true);
-    listSqlDatabases(context.dataSourceId)
-      .then((values) => {
+    setBindingLoading(true);
+    getSqlDataSourceBinding(context.dataSourceId)
+      .then((binding) => {
         if (!active) return;
-        const next = values || [];
-        setDatabases(next);
-        if (context.database && !next.includes(context.database)) {
-          selectSqlDatabaseContext(nodeId, undefined);
-        }
+        selectSqlDatabaseContext(nodeId, binding.database);
+        selectSqlSchemaContext(nodeId, binding.schema);
       })
       .catch((error) => {
-        if (active) message.error(errorText(error, '查询数据库失败'));
+        if (!active) return;
+        selectSqlDatabaseContext(nodeId, undefined);
+        message.error(errorText(error, '读取数据源绑定库信息失败'));
       })
       .finally(() => {
-        if (active) setDatabaseLoading(false);
+        if (active) setBindingLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [context.dataSourceId, context.database, nodeId]);
-
-  useEffect(() => {
-    let active = true;
-    if (!context.dataSourceId) {
-      setSchemas([]);
-      return () => {
-        active = false;
-      };
-    }
-
-    setSchemaLoading(true);
-    listSqlSchemas(context.dataSourceId, context.database)
-      .then((values) => {
-        if (!active) return;
-        const next = values || [];
-        setSchemas(next);
-        if (context.schema && !next.includes(context.schema)) {
-          selectSqlSchemaContext(nodeId, undefined);
-        }
-      })
-      .catch((error) => {
-        if (active) message.error(errorText(error, '查询 Schema 失败'));
-      })
-      .finally(() => {
-        if (active) setSchemaLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [context.dataSourceId, context.database, context.schema, nodeId]);
+  }, [context.dataSourceId, nodeId]);
 
   const normalizedDbType = context.dbType?.trim().toUpperCase();
   const showSchemaPicker = Boolean(
@@ -282,16 +252,13 @@ const SqlMetadataContextToolbar = ({
     searchText: item.dbType,
     icon: <Server size={13} strokeWidth={1.8} className="text-[#1677ff]" />,
   }));
-  const databaseItems = databases.map((value) => ({
-    value,
-    label: value,
-    icon: <Database size={13} strokeWidth={1.8} className="text-[#475467]" />,
-  }));
-  const schemaItems = schemas.map((value) => ({
-    value,
-    label: value,
-    icon: <Layers3 size={13} strokeWidth={1.8} className="text-[#667085]" />,
-  }));
+
+  const databasePlaceholder = !context.dataSourceId
+    ? '<database>'
+    : bindingLoading
+      ? '加载中...'
+      : '默认 Database';
+  const schemaPlaceholder = bindingLoading ? '加载中...' : '默认 Schema';
 
   return (
     <>
@@ -318,32 +285,28 @@ const SqlMetadataContextToolbar = ({
         />
 
         <ContextPicker
-          ariaLabel="选择 Database"
+          ariaLabel="Database"
           value={context.database}
-          displayValue={context.database}
-          placeholder="<database>"
-          icon={<Database size={13} strokeWidth={1.8} className="text-[#475467]" />}
-          items={databaseItems}
-          loading={databaseLoading}
-          disabled={!context.dataSourceId}
-          popupWidth={210}
+          displayValue={bindingLoading ? undefined : context.database}
+          placeholder={databasePlaceholder}
+          icon={<Database size={13} strokeWidth={1.8} className="text-[#8f959f]" />}
+          items={[]}
+          disabled
           minWidthClassName="min-w-[112px]"
-          onSelect={(value) => selectSqlDatabaseContext(nodeId, value)}
+          onSelect={() => undefined}
         />
 
         {showSchemaPicker ? (
           <ContextPicker
-            ariaLabel="选择 Schema"
+            ariaLabel="Schema"
             value={context.schema}
-            displayValue={context.schema}
-            placeholder="<schema>"
-            icon={<Layers3 size={13} strokeWidth={1.8} className="text-[#667085]" />}
-            items={schemaItems}
-            loading={schemaLoading}
-            disabled={!context.dataSourceId}
-            popupWidth={210}
+            displayValue={bindingLoading ? undefined : context.schema}
+            placeholder={schemaPlaceholder}
+            icon={<Layers3 size={13} strokeWidth={1.8} className="text-[#8f959f]" />}
+            items={[]}
+            disabled
             minWidthClassName="min-w-[104px]"
-            onSelect={(value) => selectSqlSchemaContext(nodeId, value)}
+            onSelect={() => undefined}
           />
         ) : null}
       </div>
