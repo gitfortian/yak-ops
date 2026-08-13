@@ -6,6 +6,7 @@ import {
 import { useIntl } from '@umijs/max';
 import {
   Button,
+  Collapse,
   Form,
   Input,
   InputNumber,
@@ -35,12 +36,15 @@ import {
 import type {
   DynamicDataSourceFormProps,
   DynamicFormField,
+  DynamicFormSection,
 } from '../../types';
 import { DataSourceOperateType } from '../../types';
 import CustomKVList from './components/CustomKVList';
 import DriverLocationField from './components/DriverLocationField';
 import {
+  flattenFormSectionFields,
   getConfigInitialValues,
+  normalizeFormSections,
   transformRules,
 } from './utils/formUtils';
 
@@ -153,9 +157,7 @@ const DynamicDataSourceForm = ({
 }: DynamicDataSourceFormProps) => {
   const intl = useIntl();
 
-  const [formConfig, setFormConfig] = useState<
-    DynamicFormField[]
-  >([]);
+  const [formSections, setFormSections] = useState<DynamicFormSection[]>([]);
   const [loading, setLoading] = useState(false);
   const [needInstall, setNeedInstall] =
     useState(false);
@@ -224,7 +226,7 @@ const DynamicDataSourceForm = ({
       setLoading(true);
       setNeedInstall(false);
       setLoadErrMsg('');
-      setFormConfig([]);
+      setFormSections([]);
 
       configForm.resetFields();
 
@@ -266,10 +268,10 @@ const DynamicDataSourceForm = ({
           return;
         }
 
-        const fields =
-          data.formFields || [];
+        const sections = normalizeFormSections(data);
+        const fields = flattenFormSectionFields(sections);
 
-        setFormConfig(fields);
+        setFormSections(sections);
 
         const defaults =
           getConfigInitialValues(fields);
@@ -317,7 +319,7 @@ const DynamicDataSourceForm = ({
     if (!dbType) {
       requestSeqRef.current += 1;
 
-      setFormConfig([]);
+      setFormSections([]);
       setNeedInstall(false);
       setLoadErrMsg('');
       setLoading(false);
@@ -452,6 +454,101 @@ const DynamicDataSourceForm = ({
     }
   };
 
+  const renderFields = (fields: DynamicFormField[]) => (
+    <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
+      {fields.map((field) => {
+        if (field.type === 'CUSTOM_SELECT') {
+          return (
+            <div
+              key={field.key}
+              className="md:col-span-2"
+            >
+              <CustomKVList
+                intl={intl}
+                field={field}
+              />
+            </div>
+          );
+        }
+
+        const fullWidth =
+          field.type === 'TEXTAREA' ||
+          field.key === 'driverLocation';
+
+        return (
+          <Form.Item
+            key={field.key}
+            label={field.label}
+            name={field.key}
+            valuePropName={
+              field.type === 'SWITCH'
+                ? 'checked'
+                : 'value'
+            }
+            rules={transformRules(
+              field.rules,
+              field.type,
+            )}
+            validateTrigger={[
+              'onChange',
+              'onBlur',
+            ]}
+            className={[
+              '!mb-3',
+              fullWidth ? 'md:col-span-2' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {renderFormItem(field)}
+          </Form.Item>
+        );
+      })}
+    </div>
+  );
+
+  const renderSectionHeader = (section: DynamicFormSection) => (
+    <div className="min-w-0">
+      <h3 className={sectionTitleClass}>{section.title}</h3>
+      {section.description && (
+        <p className={sectionDescriptionClass}>{section.description}</p>
+      )}
+    </div>
+  );
+
+  const renderSchemaSection = (section: DynamicFormSection) => {
+    if (section.collapsible) {
+      return (
+        <Collapse
+          key={section.key}
+          className="datasource-schema-collapse"
+          bordered={false}
+          defaultActiveKey={section.defaultExpanded === false ? [] : [section.key]}
+          items={[
+            {
+              key: section.key,
+              label: renderSectionHeader(section),
+              children: renderFields(section.fields),
+              forceRender: true,
+            },
+          ]}
+        />
+      );
+    }
+
+    return (
+      <section
+        key={section.key}
+        className="datasource-schema-section"
+      >
+        <div className="mb-3">
+          {renderSectionHeader(section)}
+        </div>
+        {renderFields(section.fields)}
+      </section>
+    );
+  };
+
   if (loading) {
     return (
       <div
@@ -472,13 +569,12 @@ const DynamicDataSourceForm = ({
 
   return (
     <div className="bg-white">
-      <section>
+      <section className="datasource-editor-base-section">
         <div className="mb-3 flex items-end justify-between gap-4">
           <div>
             <h3 className={sectionTitleClass}>
               基础信息
             </h3>
-
           </div>
 
           <div className="flex items-center gap-1.5 text-xs text-[#8a8f99]">
@@ -627,14 +723,7 @@ const DynamicDataSourceForm = ({
         </div>
       )}
 
-      <section className="mt-4 border-t border-[#eef0f3] pt-4">
-        <div className="mb-3">
-          <h3 className={sectionTitleClass}>
-            连接参数
-          </h3>
-
-        </div>
-
+      {formSections.length > 0 && (
         <Form
           form={configForm}
           component={false}
@@ -642,66 +731,11 @@ const DynamicDataSourceForm = ({
           colon={false}
           requiredMark
         >
-          <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
-            {formConfig.map((field) => {
-              if (
-                field.type ===
-                'CUSTOM_SELECT'
-              ) {
-                return (
-                  <div
-                    key={field.key}
-                    className="md:col-span-2"
-                  >
-                    <CustomKVList
-                      intl={intl}
-                      field={field}
-                    />
-                  </div>
-                );
-              }
-
-              const fullWidth =
-                field.type ===
-                  'TEXTAREA' ||
-                field.key ===
-                  'driverLocation';
-
-              return (
-                <Form.Item
-                  key={field.key}
-                  label={field.label}
-                  name={field.key}
-                  valuePropName={
-                    field.type ===
-                    'SWITCH'
-                      ? 'checked'
-                      : 'value'
-                  }
-                  rules={transformRules(
-                    field.rules,
-                    field.type,
-                  )}
-                  validateTrigger={[
-                    'onChange',
-                    'onBlur',
-                  ]}
-                  className={[
-                    '!mb-3',
-                    fullWidth
-                      ? 'md:col-span-2'
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {renderFormItem(field)}
-                </Form.Item>
-              );
-            })}
+          <div className="datasource-schema-sections">
+            {formSections.map(renderSchemaSection)}
           </div>
         </Form>
-      </section>
+      )}
     </div>
   );
 };
