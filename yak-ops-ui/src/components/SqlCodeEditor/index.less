@@ -14,38 +14,77 @@
     box-shadow: 0 0 0 2px rgba(79, 107, 255, 0.08);
   }
 
-  .cm-editor {
+  &__monaco {
+    width: 100%;
     min-height: var(--sql-editor-min-height);
     max-height: var(--sql-editor-max-height);
     border-radius: 16px;
   }
 
-  .cm-scroller {
-    max-height: var(--sql-editor-max-height);
+  .monaco-editor,
+  .monaco-editor-background,
+  .monaco-editor .margin {
+    background: #fcfdff;
+  }
+
+  .monaco-editor {
     border-radius: 16px;
   }
 
-  .cm-content {
-    min-height: calc(var(--sql-editor-min-height) - 20px);
+  .monaco-editor .margin {
+    border-right: 1px solid rgba(226, 232, 240, 0.9);
   }
 
-  &--expandable {
-    .cm-line {
-      padding-right: 44px;
-    }
+  .monaco-editor .line-numbers {
+    font-size: 12px;
+  }
+
+  .monaco-editor .suggest-widget {
+    overflow: hidden;
+    min-width: 292px;
+    max-width: min(430px, calc(100vw - 16px));
+    padding: 5px;
+    border: 1px solid rgba(216, 223, 255, 0.95);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow:
+      0 16px 36px rgba(15, 23, 42, 0.12),
+      0 0 0 1px rgba(79, 107, 255, 0.04);
+  }
+
+  .monaco-editor .suggest-widget .monaco-list-row {
+    border-radius: 9px;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list-row.focused {
+    color: #244ce6;
+    background: linear-gradient(
+      90deg,
+      rgba(79, 107, 255, 0.11),
+      rgba(79, 107, 255, 0.05)
+    );
+  }
+
+  .monaco-editor .suggest-widget .monaco-highlighted-label .highlight {
+    color: #315efb;
+    font-weight: 700;
+  }
+
+  .monaco-editor .suggest-widget .details-label {
+    color: #98a2b3;
+    font-size: 12px;
   }
 
   &--fullscreen {
     border-radius: 14px;
 
-    .cm-editor {
+    .sql-code-editor__monaco {
       min-height: min(62vh, var(--sql-editor-min-height));
       max-height: min(62vh, var(--sql-editor-max-height));
       border-radius: 14px;
     }
 
-    .cm-scroller {
-      max-height: min(62vh, var(--sql-editor-max-height));
+    .monaco-editor {
       border-radius: 14px;
     }
   }
@@ -54,7 +93,7 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    z-index: 3;
+    z-index: 6;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -62,7 +101,7 @@
     height: 28px;
     border-radius: 9px;
     color: #667085;
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.82);
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
     transition:
       background-color 0.16s ease,
@@ -80,12 +119,14 @@
   &__placeholder {
     position: absolute;
     top: 10px;
-    right: 12px;
+    right: 44px;
     left: var(--sql-editor-placeholder-left);
-    z-index: 1;
+    z-index: 5;
     pointer-events: none;
     color: #b8c0cc;
-    font-family: JetBrains Mono, Fira Code, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-family:
+      JetBrains Mono, Fira Code, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", monospace;
     font-size: 13px;
     line-height: 24px;
     white-space: pre-wrap;
@@ -150,145 +191,5 @@
     padding: 12px 20px;
     border-top: 1px solid #eef2f7;
     background: #fff;
-  }
-}
-
-.cm-tooltip.cm-tooltip-autocomplete.sql-code-editor__completion-tooltip {
-  z-index: 1200;
-  overflow: hidden;
-  min-width: 292px;
-  max-width: min(430px, calc(100vw - 16px));
-  padding: 6px;
-  border: 1px solid rgba(216, 223, 255, 0.95);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow:
-    0 16px 36px rgba(15, 23, 42, 0.12),
-    0 0 0 1px rgba(79, 107, 255, 0.04);
-
-  & > ul {
-    max-height: 240px;
-    padding: 0;
-    overflow: hidden auto;
-    font-family:
-      JetBrains Mono, Fira Code, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    scrollbar-color: rgba(148, 163, 184, 0.7) transparent;
-    scrollbar-width: thin;
-
-    &::-webkit-scrollbar {
-      width: 7px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      border: 2px solid #fff;
-      border-radius: 999px;
-      background: rgba(148, 163, 184, 0.72);
-    }
-  }
-
-  & > ul > li {
-    display: flex;
-    align-items: center;
-    min-height: 32px;
-    margin: 1px 0;
-    border-radius: 10px;
-    padding: 5px 10px 5px 8px;
-    color: #334155;
-    line-height: 20px;
-    transition:
-      background-color 0.14s ease,
-      color 0.14s ease;
-  }
-
-  & > ul > li[aria-selected] {
-    background: linear-gradient(90deg, rgba(79, 107, 255, 0.11), rgba(79, 107, 255, 0.05)) !important;
-    color: #244ce6 !important;
-  }
-
-  .cm-completionIcon {
-    display: inline-flex;
-    flex: 0 0 20px;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    margin-right: 8px;
-    padding: 0;
-    border-radius: 6px;
-    background: #f1f5ff;
-    color: #4f6bff;
-    font-size: 10px;
-    font-weight: 700;
-    opacity: 1;
-  }
-
-  .cm-completionIcon-keyword::after {
-    content: "K";
-  }
-
-  .cm-completionIcon-type::after {
-    content: "T";
-  }
-
-  .cm-completionIcon-property::after {
-    content: "F";
-  }
-
-  .cm-completionIcon-variable::after {
-    content: "$";
-  }
-
-  & > ul > li[aria-selected] .cm-completionLabel {
-    color: #244ce6 !important;
-  }
-
-  & > ul > li[aria-selected] .cm-completionDetail {
-    color: #7f8ba3 !important;
-  }
-
-  & > ul > li[aria-selected] .cm-completionIcon {
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(79, 107, 255, 0.16);
-  }
-
-  .cm-completionLabel {
-    min-width: 0;
-    overflow: hidden;
-    color: inherit;
-    font-size: 12px;
-    font-weight: 650;
-    letter-spacing: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .cm-completionMatchedText {
-    color: #315efb;
-    text-decoration: none;
-  }
-
-  & > ul > li[aria-selected] .cm-completionMatchedText {
-    color: #244ce6 !important;
-  }
-
-  .cm-completionDetail {
-    flex: 0 0 auto;
-    margin-left: 10px;
-    color: #98a2b3;
-    font-size: 12px;
-    font-style: normal;
-    font-family: AlibabaSans, sans-serif;
-    white-space: nowrap;
-  }
-
-  .cm-completionListIncompleteTop::before,
-  .cm-completionListIncompleteBottom::after {
-    color: #98a2b3;
-    font-size: 12px;
-    line-height: 16px;
   }
 }
