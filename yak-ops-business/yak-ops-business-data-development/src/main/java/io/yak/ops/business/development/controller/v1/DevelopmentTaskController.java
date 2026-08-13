@@ -3,6 +3,7 @@ package io.yak.ops.business.development.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
+import io.yak.framework.security.extend.CurrentUserProvider;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.PublishRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.RunRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.SaveDraftRequest;
@@ -13,8 +14,8 @@ import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.service.DevelopmentNodeService;
 import io.yak.ops.business.development.service.DevelopmentTaskRunService;
 import io.yak.ops.business.development.service.DevelopmentTaskService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.security.Principal;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,14 +34,17 @@ public class DevelopmentTaskController {
   private final DevelopmentTaskService service;
   private final DevelopmentTaskRunService runService;
   private final DevelopmentNodeService nodeService;
+  private final CurrentUserProvider currentUserProvider;
 
   public DevelopmentTaskController(
       DevelopmentTaskService service,
       DevelopmentTaskRunService runService,
-      DevelopmentNodeService nodeService) {
+      DevelopmentNodeService nodeService,
+      CurrentUserProvider currentUserProvider) {
     this.service = service;
     this.runService = runService;
     this.nodeService = nodeService;
+    this.currentUserProvider = currentUserProvider;
   }
 
   @Operation(summary = "读取节点草稿")
@@ -54,7 +58,7 @@ public class DevelopmentTaskController {
   public Result<DevelopmentTaskDraft> saveDraft(
       @PathVariable("nodeId") Long nodeId,
       @Valid @RequestBody SaveDraftRequest request,
-      Principal principal) {
+      HttpServletRequest servletRequest) {
     DevelopmentTaskDraft saved = service.saveDraft(
         nodeId,
         request.taskType(),
@@ -62,7 +66,7 @@ public class DevelopmentTaskController {
         request.content(),
         request.configJson(),
         request.baseRevision());
-    nodeService.recordUpdater(nodeId, operatorName(principal));
+    nodeService.recordUpdater(nodeId, operatorName(servletRequest));
     return Result.success(saved);
   }
 
@@ -71,7 +75,7 @@ public class DevelopmentTaskController {
   public Result<DevelopmentTaskRunResult> run(
       @PathVariable("nodeId") Long nodeId,
       @Valid @RequestBody RunRequest request,
-      Principal principal) {
+      HttpServletRequest servletRequest) {
     return Result.success(
         runService.run(
             nodeId,
@@ -79,7 +83,7 @@ public class DevelopmentTaskController {
             request.schemaVersion(),
             request.content(),
             request.configJson(),
-            operatorName(principal)));
+            operatorName(servletRequest)));
   }
 
   @Operation(summary = "发布节点版本")
@@ -105,7 +109,8 @@ public class DevelopmentTaskController {
     return Result.success(service.getRevision(nodeId, revisionNo));
   }
 
-  private String operatorName(Principal principal) {
-    return principal == null ? "unknown" : principal.getName();
+  private String operatorName(HttpServletRequest request) {
+    String operatorName = currentUserProvider.getCurrentUser(request);
+    return operatorName == null ? "unknown" : operatorName;
   }
 }
