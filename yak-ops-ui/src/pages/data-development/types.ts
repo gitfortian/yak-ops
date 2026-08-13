@@ -24,6 +24,8 @@ export interface DevelopmentNode {
   configured: boolean;
   createTime?: string;
   updateTime?: string;
+  updatedBy?: string | null;
+  pendingPublish?: boolean;
 }
 
 export interface CreateDevelopmentNodePayload {
