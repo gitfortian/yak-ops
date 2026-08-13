@@ -49,6 +49,28 @@ class MySqlDataSourcePluginTest {
     assertThat(config.getSections().get(2).getDefaultExpanded()).isTrue();
     assertThat(config.getSections().get(3).getDefaultExpanded()).isFalse();
 
+    FormFieldVO jdbcUrlField =
+        config.getSections().get(0).getFields().stream()
+            .filter(field -> "jdbcUrl".equals(field.getKey()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(jdbcUrlField.getType()).isEqualTo("JDBC_URL");
+    assertThat(jdbcUrlField.getUrlLinkage()).isNotNull();
+    assertThat(jdbcUrlField.getUrlLinkage().getTemplate())
+        .isEqualTo("jdbc:mysql://{host}:{port}/{database}");
+    assertThat(jdbcUrlField.getUrlLinkage().getHostField()).isEqualTo("host");
+    assertThat(jdbcUrlField.getUrlLinkage().getPortField()).isEqualTo("port");
+    assertThat(jdbcUrlField.getUrlLinkage().getDatabaseField()).isEqualTo("database");
+    assertThat(jdbcUrlField.getUrlLinkage().getPreserveSuffix()).isTrue();
+    assertThat(jdbcUrlField.getDependsOn()).contains("sshTunnel");
+    assertThat(jdbcUrlField.getVisibleWhen())
+        .singleElement()
+        .satisfies(
+            condition -> {
+              assertThat(condition.getField()).isEqualTo("sshTunnel.enabled");
+              assertThat(condition.getOperator()).isEqualTo("FALSY");
+            });
+
     FormFieldVO propertiesField =
         config.getSections().get(3).getFields().stream()
             .filter(field -> "properties".equals(field.getKey()))

@@ -67,8 +67,8 @@ public class DataSourcePluginConfigVO {
     /**
      * 标准字段组件类型。
      *
-     * <p>支持 INPUT、PASSWORD、SELECT、NUMBER、SWITCH、TEXTAREA、CUSTOM_SELECT、DRIVER 和 SSH；
-     * DRIVER 与 SSH 均由前端标准组件负责渲染，不应再通过特定字段 key 触发。
+     * <p>支持 INPUT、PASSWORD、SELECT、NUMBER、SWITCH、TEXTAREA、CUSTOM_SELECT、DRIVER、SSH 和 JDBC_URL；
+     * DRIVER、SSH 与 JDBC_URL 均由前端标准组件负责渲染，不应再通过特定字段 key 触发。
      */
     private String type;
 
@@ -92,6 +92,33 @@ public class DataSourcePluginConfigVO {
      */
     @Builder.Default
     private List<VisibilityConditionVO> visibleWhen = new ArrayList<>();
+
+    /** JDBC_URL 标准组件的 Host / Port / Database 双向联动描述。 */
+    private JdbcUrlLinkageVO urlLinkage;
+  }
+
+  /** JDBC URL 联动配置。 */
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class JdbcUrlLinkageVO {
+
+    /** 例如 jdbc:mysql://{host}:{port}/{database}。 */
+    private String template;
+
+    @Builder.Default
+    private String hostField = "host";
+
+    @Builder.Default
+    private String portField = "port";
+
+    @Builder.Default
+    private String databaseField = "database";
+
+    /** 是否在结构化字段变化时保留 ?query / ;properties 尾部参数。 */
+    @Builder.Default
+    private Boolean preserveSuffix = true;
   }
 
   /** 动态字段显示条件。 */

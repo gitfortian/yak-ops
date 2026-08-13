@@ -29,6 +29,7 @@ import type {
 } from '../../types';
 import { DataSourceOperateType } from '../../types';
 import DriverManager from '../DriverManager';
+import JdbcUrlField from '../JdbcUrlField';
 import SshTunnelManager, {
   getSshTunnelValidationMessage,
 } from '../SshTunnelManager';
@@ -275,6 +276,14 @@ const DynamicDataSourceForm = ({
         return <DriverManager dbType={dbType} placeholder={field.placeholder} />;
       case 'SSH':
         return <SshTunnelManager />;
+      case 'JDBC_URL':
+        return (
+          <JdbcUrlField
+            form={configForm}
+            linkage={field.urlLinkage}
+            placeholder={field.placeholder}
+          />
+        );
       case 'PASSWORD':
         return (
           <Input.Password
@@ -354,7 +363,8 @@ const DynamicDataSourceForm = ({
             '!mb-3',
             field.type === 'TEXTAREA' ||
             field.type === 'DRIVER' ||
-            field.type === 'SSH'
+            field.type === 'SSH' ||
+            field.type === 'JDBC_URL'
               ? 'md:col-span-2'
               : '',
           ]
