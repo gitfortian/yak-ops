@@ -13,5 +13,20 @@ public record DevelopmentNode(
     @JsonSerialize(using = ToStringSerializer.class) Long directoryId,
     boolean configured,
     Instant createTime,
-    Instant updateTime) {
+    Instant updateTime,
+    String updatedBy,
+    boolean pendingPublish) {
+
+  /** Keeps existing callers source-compatible while tree metadata is populated by persistence. */
+  public DevelopmentNode(
+      Long id,
+      String name,
+      String type,
+      Long projectId,
+      Long directoryId,
+      boolean configured,
+      Instant createTime,
+      Instant updateTime) {
+    this(id, name, type, projectId, directoryId, configured, createTime, updateTime, null, false);
+  }
 }
