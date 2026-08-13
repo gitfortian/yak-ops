@@ -67,8 +67,8 @@ public class DataSourcePluginConfigVO {
     /**
      * 标准字段组件类型。
      *
-     * <p>支持 INPUT、PASSWORD、SELECT、NUMBER、SWITCH、TEXTAREA、CUSTOM_SELECT 和 DRIVER；
-     * DRIVER 由前端标准驱动管理组件负责渲染，不应再通过特定字段 key 触发。
+     * <p>支持 INPUT、PASSWORD、SELECT、NUMBER、SWITCH、TEXTAREA、CUSTOM_SELECT、DRIVER 和 SSH；
+     * DRIVER 与 SSH 均由前端标准组件负责渲染，不应再通过特定字段 key 触发。
      */
     private String type;
 

@@ -30,6 +30,7 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
 
   private final JdbcConnectionProperties connection;
   private final int connectionTimeoutSeconds;
+  private final JdbcConnectionProvider connectionProvider;
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
   private final AtomicReference<Connection> activeConnection = new AtomicReference<>();
   private final AtomicReference<Statement> activeStatement = new AtomicReference<>();
@@ -37,8 +38,16 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
   public JdbcDataSourceSqlExecutor(
       JdbcConnectionProperties connection,
       int connectionTimeoutSeconds) {
+    this(connection, connectionTimeoutSeconds, JdbcDataSourceSqlExecutor::openDirectConnection);
+  }
+
+  public JdbcDataSourceSqlExecutor(
+      JdbcConnectionProperties connection,
+      int connectionTimeoutSeconds,
+      JdbcConnectionProvider connectionProvider) {
     this.connection = connection;
     this.connectionTimeoutSeconds = Math.max(1, connectionTimeoutSeconds);
+    this.connectionProvider = connectionProvider;
   }
 
   @Override
@@ -48,10 +57,8 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
     }
 
     try {
-      Class.forName(connection.driverClassName());
-      DriverManager.setLoginTimeout(connectionTimeoutSeconds);
       try (Connection opened =
-          DriverManager.getConnection(connection.jdbcUrl(), connectionProperties())) {
+          connectionProvider.open(connection, connectionTimeoutSeconds)) {
         activeConnection.set(opened);
         if (cancelled.get()) {
           throw executionError("SQL 执行已取消", null);
@@ -105,7 +112,7 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       try {
         opened.close();
       } catch (Exception ignored) {
-        // Best effort cancellation.
+        // Best effort cancellation. SSH tunnel is also released by Connection.close().
       }
     }
   }
@@ -197,7 +204,16 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
     return value.substring(0, MAX_TEXT_CHARS) + "…";
   }
 
-  private Properties connectionProperties() {
+  private static Connection openDirectConnection(
+      JdbcConnectionProperties connection,
+      int timeoutSeconds)
+      throws Exception {
+    Class.forName(connection.driverClassName());
+    DriverManager.setLoginTimeout(Math.max(1, timeoutSeconds));
+    return DriverManager.getConnection(connection.jdbcUrl(), connectionProperties(connection));
+  }
+
+  private static Properties connectionProperties(JdbcConnectionProperties connection) {
     Properties properties = new Properties();
     properties.putAll(connection.properties());
     if (connection.username() != null && !connection.username().isBlank()) {

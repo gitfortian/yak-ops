@@ -27,7 +27,17 @@ public class DataSourceSecretCodec {
   public static final String MASKED_VALUE = "******";
 
   private static final Set<String> COMMON_SECRET_KEYS =
-      Set.of("password", "pwd", "secret", "secretkey", "accesstoken", "token");
+      Set.of(
+          "password",
+          "pwd",
+          "secret",
+          "secretkey",
+          "accesstoken",
+          "token",
+          "privatekey",
+          "privatekeycontent",
+          "passphrase",
+          "privatekeypassphrase");
 
   private final ObjectMapper objectMapper;
 
@@ -179,7 +189,9 @@ public class DataSourceSecretCodec {
         || configuredKeys.contains(normalized)
         || normalized.endsWith("password")
         || normalized.endsWith("secret")
-        || normalized.endsWith("token");
+        || normalized.endsWith("token")
+        || normalized.endsWith("privatekey")
+        || normalized.endsWith("passphrase");
   }
 
   private String normalizeKey(String key) {

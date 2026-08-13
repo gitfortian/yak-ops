@@ -113,6 +113,22 @@ export interface DynamicFormFieldRule {
   message: string;
 }
 
+export type SshAuthType = 'PASSWORD' | 'PRIVATE_KEY';
+
+/** 标准 SSH 隧道配置值，由 SSH Schema 组件统一消费。 */
+export interface SshTunnelConfigValue {
+  enabled?: boolean;
+  host?: string;
+  port?: number;
+  username?: string;
+  authType?: SshAuthType;
+  password?: string;
+  privateKey?: string;
+  passphrase?: string;
+  strictHostKeyChecking?: boolean;
+  knownHosts?: string;
+}
+
 export type DynamicFormFieldType =
   | 'INPUT'
   | 'PASSWORD'
@@ -121,7 +137,8 @@ export type DynamicFormFieldType =
   | 'SWITCH'
   | 'TEXTAREA'
   | 'CUSTOM_SELECT'
-  | 'DRIVER';
+  | 'DRIVER'
+  | 'SSH';
 
 export interface DynamicFormField {
   key: string;
