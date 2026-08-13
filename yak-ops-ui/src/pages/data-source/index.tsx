@@ -1,13 +1,11 @@
-import ClickSpark from '@/components/ClickSpark';
 import { YAK_OPS_PERMISSIONS } from '@/constants/yakOpsPermissions';
 import usePermissionAccess from '@/hooks/usePermissionAccess';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import { useIntl } from '@umijs/max';
-import { message, Modal, Pagination, Spin } from 'antd';
+import { message, Modal, Pagination, Select, Spin } from 'antd';
 import { motion } from 'framer-motion';
 import {
   CheckCircle2,
-  ChevronRight,
   Database,
   Grid2X2,
   LayoutList,
@@ -31,7 +29,9 @@ import {
 import AddOrEditDataSourceModal from './components/AddOrEditDataSourceModal';
 import DataSourceStatus from './components/DataSourceStatus';
 import {
+  COMMON_DB_OPTIONS,
   environmentTagConfigMap,
+  ENVIRONMENT_OPTIONS,
   PAGE_ANIMATION,
   PAGE_DEFAULT_PAGINATION,
 } from './constants';
@@ -47,6 +47,7 @@ import {
 import type {
   DataSourceId,
   DataSourceModalRef,
+  DataSourcePageParams,
   DataSourceRecord,
   DataSourceSummary,
   PaginationInfo,
@@ -70,18 +71,10 @@ const EMPTY_SUMMARY: DataSourceSummary = {
   environmentCount: 0,
 };
 
-const normalizeStatus = (status?: string) =>
-  String(status || 'UNKNOWN').trim().toUpperCase();
-
-const isConnectedStatus = (status?: string) =>
-  ['CONNECTED', 'CONNECTED_SUCCESS', 'SUCCESS', 'SUCCEEDED'].includes(
-    normalizeStatus(status),
-  );
-
-const isDisconnectedStatus = (status?: string) =>
-  ['DISCONNECTED', 'CONNECTED_FAILED', 'FAILED'].includes(
-    normalizeStatus(status),
-  );
+const ENVIRONMENT_FILTER_OPTIONS = ENVIRONMENT_OPTIONS.map((item) => ({
+  ...item,
+  label: environmentTagConfigMap[item.value]?.text || item.label,
+}));
 
 const statusForFilter = (filter: DataSourceFilterKey) =>
   filter === 'all' ? undefined : filter.toUpperCase();
@@ -108,21 +101,38 @@ const DataSourcePage = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [activeFilter, setActiveFilter] =
     useState<DataSourceFilterKey>('all');
+  const [dbTypeFilter, setDbTypeFilter] = useState<string | undefined>();
+  const [environmentFilter, setEnvironmentFilter] = useState<
+    string | undefined
+  >();
   const [viewMode, setViewMode] = useState<DataSourceViewMode>('grid');
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [testingId, setTestingId] = useState('');
   const [editingId, setEditingId] = useState('');
+
+  const hasActiveFilters = Boolean(
+    searchKeyword.trim() ||
+      activeFilter !== 'all' ||
+      dbTypeFilter ||
+      environmentFilter,
+  );
+
+  const resetPage = useCallback(() => {
+    setPagination((current) => ({ ...current, pageNo: 1 }));
+  }, []);
 
   const fetchList = useCallback(async () => {
     const requestSeq = requestSeqRef.current + 1;
     requestSeqRef.current = requestSeq;
     setLoading(true);
 
-    const requestParams = {
+    const requestParams: DataSourcePageParams = {
       pageNo: pagination.pageNo,
       pageSize: pagination.pageSize,
       keyword: searchKeyword.trim() || undefined,
       connStatus: statusForFilter(activeFilter),
+      dbType: dbTypeFilter,
+      environment: environmentFilter,
     };
 
     try {
@@ -165,7 +175,15 @@ const DataSourcePage = () => {
     } finally {
       if (requestSeq === requestSeqRef.current) setLoading(false);
     }
-  }, [activeFilter, pagination.pageNo, pagination.pageSize, refreshVersion, searchKeyword]);
+  }, [
+    activeFilter,
+    dbTypeFilter,
+    environmentFilter,
+    pagination.pageNo,
+    pagination.pageSize,
+    refreshVersion,
+    searchKeyword,
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -178,6 +196,14 @@ const DataSourcePage = () => {
   const handleRefresh = useCallback(() => {
     setRefreshVersion((value) => value + 1);
   }, []);
+
+  const handleResetFilters = useCallback(() => {
+    setSearchKeyword('');
+    setActiveFilter('all');
+    setDbTypeFilter(undefined);
+    setEnvironmentFilter(undefined);
+    resetPage();
+  }, [resetPage]);
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -279,8 +305,6 @@ const DataSourcePage = () => {
         backgroundColor: '#f2f4f7',
         icon: null,
       };
-    const connected = isConnectedStatus(record.connStatus);
-    const disconnected = isDisconnectedStatus(record.connStatus);
     const currentId = recordKey(record.id);
     const actionAvailable = canTest || canUpdate || canDelete;
 
@@ -288,10 +312,7 @@ const DataSourcePage = () => {
       <motion.article
         key={record.id}
         variants={PAGE_ANIMATION.fadeUp}
-        className={[
-          'datasource-item',
-          viewMode === 'list' ? 'datasource-item--list' : '',
-        ].join(' ')}
+        className="datasource-item"
       >
         <div className="datasource-item__main">
           <div className="datasource-item__identity">
@@ -380,288 +401,277 @@ const DataSourcePage = () => {
             <strong>{record.updateTime || '-'}</strong>
           </div>
         </div>
-
-        <div className="datasource-item__footer">
-          <span
-            className={[
-              'datasource-connection-indicator',
-              connected
-                ? 'is-connected'
-                : disconnected
-                  ? 'is-disconnected'
-                  : 'is-unknown',
-            ].join(' ')}
-          >
-            {connected ? (
-              <CheckCircle2 size={14} strokeWidth={2} />
-            ) : disconnected ? (
-              <XCircle size={14} strokeWidth={2} />
-            ) : (
-              <Unplug size={14} strokeWidth={2} />
-            )}
-            {connected
-              ? '当前连接可用'
-              : disconnected
-                ? '当前连接不可用'
-                : '等待连接检测'}
-          </span>
-
-          {canUpdate && (
-            <button
-              type="button"
-              className="datasource-detail-button"
-              disabled={Boolean(editingId)}
-              onClick={() => void handleEdit(record)}
-            >
-              编辑详情
-              <ChevronRight size={15} strokeWidth={2} />
-            </button>
-          )}
-        </div>
       </motion.article>
     );
   };
 
   return (
     <>
-      <ClickSpark
-        sparkColor="#fe2c55"
-        sparkSize={9}
-        sparkRadius={14}
-        sparkCount={7}
-        duration={360}
-        easing="ease-out"
-        extraScale={1}
-      >
-        <div className="datasource-page">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={PAGE_ANIMATION.sectionStagger}
-            className="datasource-page__panel"
+      <div className="datasource-page">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={PAGE_ANIMATION.sectionStagger}
+          className="datasource-page__panel"
+        >
+          <motion.header
+            variants={PAGE_ANIMATION.fadeUp}
+            className="datasource-header"
           >
-            <motion.header
-              variants={PAGE_ANIMATION.fadeUp}
-              className="datasource-header"
-            >
-              <div>
-                {/* <div className="datasource-header__eyebrow">
-                  RESOURCE CENTER
-                </div> */}
-                <h1>数据源管理</h1>
-                {/* <p>
-                  集中维护数据库连接、运行环境与连通状态，为同步任务提供统一的数据接入能力。
-                </p> */}
-              </div>
+            <div>
+              <h1>数据源管理</h1>
+            </div>
 
-              {canCreate && (
+            {canCreate && (
+              <button
+                type="button"
+                className="datasource-create-button"
+                onClick={handleCreate}
+              >
+                新建数据源
+              </button>
+            )}
+          </motion.header>
+
+          <motion.section
+            variants={PAGE_ANIMATION.fadeUp}
+            className="datasource-overview"
+          >
+            <div className="datasource-overview__item">
+              <span className="datasource-overview__icon">
+                <Database size={20} strokeWidth={1.8} />
+              </span>
+              <div>
+                <span>全部数据源</span>
+                <strong>{summary.total}</strong>
+              </div>
+            </div>
+            <div className="datasource-overview__item">
+              <span className="datasource-overview__icon is-success">
+                <CheckCircle2 size={20} strokeWidth={1.8} />
+              </span>
+              <div>
+                <span>连接正常</span>
+                <strong>{summary.connected}</strong>
+              </div>
+            </div>
+            <div className="datasource-overview__item">
+              <span className="datasource-overview__icon is-warning">
+                <XCircle size={20} strokeWidth={1.8} />
+              </span>
+              <div>
+                <span>连接异常</span>
+                <strong>{summary.disconnected}</strong>
+              </div>
+            </div>
+            <div className="datasource-overview__item">
+              <span className="datasource-overview__icon is-neutral">
+                <Server size={20} strokeWidth={1.8} />
+              </span>
+              <div>
+                <span>运行环境</span>
+                <strong>{summary.environmentCount}</strong>
+              </div>
+            </div>
+          </motion.section>
+
+          <motion.section
+            variants={PAGE_ANIMATION.fadeUp}
+            className="datasource-workbench"
+          >
+            <div className="datasource-workbench__tabs">
+              {filterTabs.map((item) => (
                 <button
                   type="button"
-                  className="datasource-create-button"
-                  onClick={handleCreate}
+                  key={item.key}
+                  className={activeFilter === item.key ? 'is-active' : ''}
+                  onClick={() => {
+                    setActiveFilter(item.key);
+                    resetPage();
+                  }}
                 >
-                  新建数据源
+                  {item.label}
+                  <span>{item.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="datasource-workbench__tools">
+              <Select
+                allowClear
+                value={dbTypeFilter}
+                style={{ width: 132 }}
+                placeholder="数据源类型"
+                options={COMMON_DB_OPTIONS}
+                popupMatchSelectWidth={180}
+                onChange={(value) => {
+                  setDbTypeFilter(value);
+                  resetPage();
+                }}
+              />
+
+              <Select
+                allowClear
+                value={environmentFilter}
+                style={{ width: 116 }}
+                placeholder="运行环境"
+                options={ENVIRONMENT_FILTER_OPTIONS}
+                popupMatchSelectWidth={140}
+                onChange={(value) => {
+                  setEnvironmentFilter(value);
+                  resetPage();
+                }}
+              />
+
+              <label className="datasource-search">
+                <Search size={16} strokeWidth={1.8} />
+                <input
+                  value={searchKeyword}
+                  onChange={(event) => {
+                    setSearchKeyword(event.target.value);
+                    resetPage();
+                  }}
+                  placeholder="搜索名称或连接地址"
+                />
+                {searchKeyword && (
+                  <button
+                    type="button"
+                    aria-label="清空搜索"
+                    onClick={() => {
+                      setSearchKeyword('');
+                      resetPage();
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </label>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  className="datasource-detail-button"
+                  onClick={handleResetFilters}
+                >
+                  重置
                 </button>
               )}
-            </motion.header>
 
-            <motion.section
-              variants={PAGE_ANIMATION.fadeUp}
-              className="datasource-overview"
-            >
-              <div className="datasource-overview__item">
-                <span className="datasource-overview__icon">
-                  <Database size={20} strokeWidth={1.8} />
-                </span>
-                <div>
-                  <span>全部数据源</span>
-                  <strong>{summary.total}</strong>
-                </div>
-              </div>
-              <div className="datasource-overview__item">
-                <span className="datasource-overview__icon is-success">
-                  <CheckCircle2 size={20} strokeWidth={1.8} />
-                </span>
-                <div>
-                  <span>连接正常</span>
-                  <strong>{summary.connected}</strong>
-                </div>
-              </div>
-              <div className="datasource-overview__item">
-                <span className="datasource-overview__icon is-warning">
-                  <XCircle size={20} strokeWidth={1.8} />
-                </span>
-                <div>
-                  <span>连接异常</span>
-                  <strong>{summary.disconnected}</strong>
-                </div>
-              </div>
-              <div className="datasource-overview__item">
-                <span className="datasource-overview__icon is-neutral">
-                  <Server size={20} strokeWidth={1.8} />
-                </span>
-                <div>
-                  <span>运行环境</span>
-                  <strong>{summary.environmentCount}</strong>
-                </div>
-              </div>
-            </motion.section>
+              <button
+                type="button"
+                className="datasource-tool-button"
+                title="刷新"
+                disabled={loading}
+                onClick={handleRefresh}
+              >
+                <RefreshCw
+                  size={16}
+                  strokeWidth={1.8}
+                  className={loading ? 'is-spinning' : ''}
+                />
+              </button>
 
-            <motion.section
-              variants={PAGE_ANIMATION.fadeUp}
-              className="datasource-workbench"
-            >
-              <div className="datasource-workbench__tabs">
-                {filterTabs.map((item) => (
-                  <button
-                    type="button"
-                    key={item.key}
-                    className={activeFilter === item.key ? 'is-active' : ''}
-                    onClick={() => {
-                      setActiveFilter(item.key);
-                      setPagination((current) => ({ ...current, pageNo: 1 }));
-                    }}
-                  >
-                    {item.label}
-                    <span>{item.count}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="datasource-workbench__tools">
-                <label className="datasource-search">
-                  <Search size={16} strokeWidth={1.8} />
-                  <input
-                    value={searchKeyword}
-                    onChange={(event) => {
-                      setSearchKeyword(event.target.value);
-                      setPagination((current) => ({ ...current, pageNo: 1 }));
-                    }}
-                    placeholder="搜索数据源名称或连接地址"
-                  />
-                  {searchKeyword && (
-                    <button
-                      type="button"
-                      aria-label="清空搜索"
-                      onClick={() => {
-                        setSearchKeyword('');
-                        setPagination((current) => ({ ...current, pageNo: 1 }));
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-                </label>
-
+              <div className="datasource-view-switch">
                 <button
                   type="button"
-                  className="datasource-tool-button"
-                  title="刷新"
-                  disabled={loading}
-                  onClick={handleRefresh}
+                  className={viewMode === 'grid' ? 'is-active' : ''}
+                  title="卡片视图"
+                  onClick={() => setViewMode('grid')}
                 >
-                  <RefreshCw
-                    size={16}
-                    strokeWidth={1.8}
-                    className={loading ? 'is-spinning' : ''}
-                  />
+                  <Grid2X2 size={16} strokeWidth={1.8} />
                 </button>
-
-                <div className="datasource-view-switch">
-                  <button
-                    type="button"
-                    className={viewMode === 'grid' ? 'is-active' : ''}
-                    title="卡片视图"
-                    onClick={() => setViewMode('grid')}
-                  >
-                    <Grid2X2 size={16} strokeWidth={1.8} />
-                  </button>
-                  <button
-                    type="button"
-                    className={viewMode === 'list' ? 'is-active' : ''}
-                    title="列表视图"
-                    onClick={() => setViewMode('list')}
-                  >
-                    <LayoutList size={17} strokeWidth={1.8} />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={viewMode === 'list' ? 'is-active' : ''}
+                  title="列表视图"
+                  onClick={() => setViewMode('list')}
+                >
+                  <LayoutList size={17} strokeWidth={1.8} />
+                </button>
               </div>
+            </div>
+          </motion.section>
+
+          <motion.div
+            variants={PAGE_ANIMATION.fadeUp}
+            className="datasource-result-summary"
+          >
+            共找到
+            <strong>{pagination.total}</strong>
+            个数据源
+            {hasActiveFilters && ' · 当前为筛选结果'}
+          </motion.div>
+
+          <Spin spinning={loading}>
+            <motion.section
+              variants={PAGE_ANIMATION.cardStagger}
+              initial="hidden"
+              animate="visible"
+              className={[
+                'datasource-list',
+                viewMode === 'list' ? 'datasource-list--list' : '',
+              ].join(' ')}
+            >
+              {dataSourceList.map(renderDataSourceCard)}
             </motion.section>
 
-            <motion.div
-              variants={PAGE_ANIMATION.fadeUp}
-              className="datasource-result-summary"
-            >
-              共找到
-              <strong>{pagination.total}</strong>
-              个数据源
-            </motion.div>
-
-            <Spin spinning={loading}>
-              <motion.section
-                variants={PAGE_ANIMATION.cardStagger}
-                initial="hidden"
-                animate="visible"
-                className={[
-                  'datasource-list',
-                  viewMode === 'list' ? 'datasource-list--list' : '',
-                ].join(' ')}
-              >
-                {dataSourceList.map(renderDataSourceCard)}
-              </motion.section>
-
-              {!loading && dataSourceList.length === 0 && (
-                <div className="datasource-empty">
-                  <div className="datasource-empty__icon">
-                    <Database size={36} strokeWidth={1.5} />
-                    <Plus size={17} strokeWidth={2.2} />
-                  </div>
-                  <h3>
-                    {searchKeyword || activeFilter !== 'all'
-                      ? '没有找到符合条件的数据源'
-                      : '还没有创建数据源'}
-                  </h3>
-                  <p>
-                    {searchKeyword || activeFilter !== 'all'
-                      ? '可以调整搜索关键词或切换筛选条件后重试。'
-                      : '创建第一个数据源，开始配置数据同步与运行任务。'}
-                  </p>
-                  {canCreate && !searchKeyword && activeFilter === 'all' && (
+            {!loading && dataSourceList.length === 0 && (
+              <div className="datasource-empty">
+                <div className="datasource-empty__icon">
+                  <Database size={36} strokeWidth={1.5} />
+                  <Plus size={17} strokeWidth={2.2} />
+                </div>
+                <h3>
+                  {hasActiveFilters
+                    ? '没有找到符合条件的数据源'
+                    : '还没有创建数据源'}
+                </h3>
+                <p>
+                  {hasActiveFilters
+                    ? '可以调整类型、环境、状态或搜索条件后重试。'
+                    : '创建第一个数据源，开始配置数据同步与运行任务。'}
+                </p>
+                {hasActiveFilters ? (
+                  <button type="button" onClick={handleResetFilters}>
+                    重置筛选
+                  </button>
+                ) : (
+                  canCreate && (
                     <button type="button" onClick={handleCreate}>
                       <Plus size={16} strokeWidth={2.2} />
                       新建数据源
                     </button>
-                  )}
-                </div>
-              )}
-            </Spin>
-
-            {pagination.total > 0 && (
-              <div className="datasource-pagination">
-                <Pagination
-                  current={pagination.pageNo}
-                  pageSize={pagination.pageSize}
-                  total={pagination.total}
-                  showSizeChanger
-                  showQuickJumper
-                  pageSizeOptions={[10, 20, 50, 100]}
-                  disabled={loading}
-                  showTotal={(total, range) =>
-                    `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
-                  }
-                  onChange={(pageNo, pageSize) =>
-                    setPagination((current) => ({
-                      ...current,
-                      pageNo,
-                      pageSize,
-                    }))
-                  }
-                />
+                  )
+                )}
               </div>
             )}
-          </motion.div>
-        </div>
-      </ClickSpark>
+          </Spin>
+
+          {pagination.total > 0 && (
+            <div className="datasource-pagination">
+              <Pagination
+                current={pagination.pageNo}
+                pageSize={pagination.pageSize}
+                total={pagination.total}
+                showSizeChanger
+                showQuickJumper
+                pageSizeOptions={[10, 20, 50, 100]}
+                disabled={loading}
+                showTotal={(total, range) =>
+                  `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+                }
+                onChange={(pageNo, pageSize) =>
+                  setPagination((current) => ({
+                    ...current,
+                    pageNo,
+                    pageSize,
+                  }))
+                }
+              />
+            </div>
+          )}
+        </motion.div>
+      </div>
 
       <AddOrEditDataSourceModal ref={modalRef} />
     </>
