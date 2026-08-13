@@ -113,6 +113,25 @@ export interface DynamicFormFieldRule {
   message: string;
 }
 
+export type DynamicFormVisibilityOperator =
+  | 'EQUALS'
+  | 'NOT_EQUALS'
+  | 'IN'
+  | 'NOT_IN'
+  | 'TRUTHY'
+  | 'FALSY';
+
+/**
+ * 动态字段显示条件。field 可省略，此时按 visibleWhen 顺序映射到 dependsOn。
+ * 多个条件默认使用 AND 语义。
+ */
+export interface DynamicFormVisibilityCondition {
+  field?: string;
+  operator?: DynamicFormVisibilityOperator;
+  value?: unknown;
+  values?: unknown[];
+}
+
 export type SshAuthType = 'PASSWORD' | 'PRIVATE_KEY';
 
 /** 标准 SSH 隧道配置值，由 SSH Schema 组件统一消费。 */
@@ -148,6 +167,12 @@ export interface DynamicFormField {
   options?: Array<{ label: string; value: string | number }>;
   defaultValue?: unknown;
   rules?: DynamicFormFieldRule[];
+  /** 声明联动依赖；条件中显式引用的字段会自动补充到此列表。 */
+  dependsOn?: string[];
+  /** 字段显示条件；支持单条件或多条件，多条件按 AND 计算。 */
+  visibleWhen?:
+    | DynamicFormVisibilityCondition
+    | DynamicFormVisibilityCondition[];
 }
 
 /**

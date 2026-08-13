@@ -7,6 +7,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormSectionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.RuleVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.VisibilityConditionVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
 import io.yak.ops.spi.datasource.DataSourceConnection;
@@ -111,14 +112,19 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             required("请输入 JDBC 驱动类")));
 
     List<FormFieldVO> advancedFields = new ArrayList<>();
-    advancedFields.add(
+    FormFieldVO propertiesField =
         field(
             "properties",
             "扩展属性",
             "TEXTAREA",
             "可选；请输入 JSON 对象，例如 {\"useSSL\":\"false\"}",
             null,
-            Collections.emptyList()));
+            Collections.emptyList());
+    propertiesField.setDependsOn(Collections.singletonList("driverClassName"));
+    propertiesField.setVisibleWhen(
+        Collections.singletonList(
+            VisibilityConditionVO.builder().operator("TRUTHY").build()));
+    advancedFields.add(propertiesField);
     appendFormFields(advancedFields);
 
     List<FormSectionVO> sections = new ArrayList<>();

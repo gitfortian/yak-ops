@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormSectionVO;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.SshTunnelConfig;
@@ -47,6 +48,20 @@ class MySqlDataSourcePluginTest {
             });
     assertThat(config.getSections().get(2).getDefaultExpanded()).isTrue();
     assertThat(config.getSections().get(3).getDefaultExpanded()).isFalse();
+
+    FormFieldVO propertiesField =
+        config.getSections().get(3).getFields().stream()
+            .filter(field -> "properties".equals(field.getKey()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(propertiesField.getDependsOn()).containsExactly("driverClassName");
+    assertThat(propertiesField.getVisibleWhen())
+        .singleElement()
+        .satisfies(
+            condition -> {
+              assertThat(condition.getField()).isNull();
+              assertThat(condition.getOperator()).isEqualTo("TRUTHY");
+            });
 
     // 旧版前端仍可继续消费扁平 formFields，SSH 复合字段只通过新版 sections 下发。
     assertThat(config.getFormFields()).hasSize(9);
