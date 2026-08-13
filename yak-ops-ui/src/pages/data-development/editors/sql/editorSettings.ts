@@ -1,3 +1,5 @@
+import type { ApiResponse } from '@/services/http/response';
+import HttpUtils from '@/utils/HttpUtils';
 import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 export type YakEditorLineHighlight = 'line' | 'none' | 'gutter' | 'all';
@@ -90,7 +92,7 @@ const dark = (background: string, foreground: string, keyword: string): monaco.e
   },
 });
 
-// Theme set follows Chat2DB's editor-setting presets; Chat2DB-specific names are branded as Yak.
+// Theme set follows the familiar SQL-editor presets from Chat2DB; Chat2DB-specific branding is replaced by Yak.
 export const YAK_EDITOR_THEMES: YakEditorTheme[] = [
   { name: 'Yak-Light', dark: false, data: light('#FFFFFF', '#344054', '#245BDB') },
   { name: 'Yak-Dark', dark: true, data: dark('#17181C', '#D0D5DD', '#7AA2F7') },
@@ -108,6 +110,7 @@ export const YAK_EDITOR_THEMES: YakEditorTheme[] = [
 
 const listeners = new Set<(settings: YakEditorSettings) => void>();
 let currentSettings = DEFAULT_YAK_EDITOR_SETTINGS;
+let loadPromise: Promise<YakEditorSettings> | undefined;
 
 export const getYakEditorSettings = () => currentSettings;
 
@@ -119,6 +122,19 @@ export const setYakEditorSettings = (settings: YakEditorSettings) => {
 export const subscribeYakEditorSettings = (listener: (settings: YakEditorSettings) => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
+};
+
+export const ensureYakEditorSettingsLoaded = () => {
+  if (!loadPromise) {
+    loadPromise = HttpUtils.get<YakEditorSettings>('/api/v1/data-development/editor-settings')
+      .then((response: ApiResponse<YakEditorSettings>) => {
+        const settings = { ...DEFAULT_YAK_EDITOR_SETTINGS, ...(response.data || {}) };
+        setYakEditorSettings(settings);
+        return settings;
+      })
+      .catch(() => currentSettings);
+  }
+  return loadPromise;
 };
 
 export const editorOptionsFromSettings = (settings: YakEditorSettings): monaco.editor.IStandaloneEditorConstructionOptions => ({
@@ -133,3 +149,5 @@ export const editorOptionsFromSettings = (settings: YakEditorSettings): monaco.e
   renderLineHighlight: settings.renderLineHighlight,
   renderWhitespace: settings.renderWhitespace,
 });
+
+void ensureYakEditorSettingsLoaded();
