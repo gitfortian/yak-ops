@@ -25,7 +25,11 @@ const defaultPosition: SqlEditorPosition = {
   selectionLength: 0,
 };
 
-export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
+export const SqlEditor = ({
+  node,
+  onRunContent,
+  running,
+}: DevelopmentEditorContext) => {
   const session = useEditorSession(node.id, node.type);
   const metadataContext = useSqlMetadataContext(node.id);
   const [position, setPosition] = useState<SqlEditorPosition>(() => ({
@@ -62,6 +66,8 @@ export const SqlEditor = ({ node }: DevelopmentEditorContext) => {
           value={session.content}
           initialViewState={session.viewState}
           onChange={(value) => updateEditorSessionContent(node.id, value)}
+          onRunStatement={onRunContent}
+          running={running}
           onPositionChange={setPosition}
           onViewStateChange={(viewState) =>
             updateEditorSessionViewState(node.id, viewState)
