@@ -46,6 +46,8 @@ export function usePluginFormConfig(params: {
         const current = configForm.getFieldsValue(true);
         const patch = patchEmptyWithDefaults(current, defaults);
         if (Object.keys(patch).length > 0) configForm.setFieldsValue(patch);
+      } catch {
+        if (!cancelled) setFormConfig([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
