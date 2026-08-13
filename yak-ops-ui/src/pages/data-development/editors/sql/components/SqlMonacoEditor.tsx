@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
+import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
 import { useEffect, useRef } from 'react';
 
 import type { DevelopmentEditorViewState } from '../../session/types';
