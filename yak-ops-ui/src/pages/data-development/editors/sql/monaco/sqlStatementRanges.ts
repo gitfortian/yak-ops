@@ -117,11 +117,6 @@ export const getSqlStatementRanges = (sql: string): SqlStatementRange[] => {
       index += 2;
       continue;
     }
-    if (current === '#') {
-      mode = 'line-comment';
-      index += 1;
-      continue;
-    }
     if (current === '/' && next === '*') {
       mode = 'block-comment';
       index += 2;
