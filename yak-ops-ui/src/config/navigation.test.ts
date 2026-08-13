@@ -69,6 +69,17 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/settings', [])).toBe('settings');
   });
 
+  it('registers development task and execution history as sibling pages', () => {
+    const development = getMainNavigationGroups([]).find((group) => group.id === 'development');
+    expect(development?.routes.map((route) => route.id)).toEqual([
+      'data-development',
+      'data-development-execution',
+    ]);
+    expect(getActiveNavigationId('/data-development/executions', [])).toBe(
+      'data-development-execution',
+    );
+  });
+
   it('registers the data-quality MVP pages and hidden monitor routes', () => {
     const qualityPermissions = [
       'quality:monitor:read',
