@@ -3,7 +3,9 @@ import {
   getConfigInitialValues,
   getFieldDependencies,
   isDynamicFieldVisible,
+  normalizeConfigValuesForForm,
   normalizeFormSections,
+  toKeyValueRows,
   transformRules,
 } from './formUtils';
 
@@ -58,6 +60,20 @@ describe('dynamic data source form utils', () => {
         },
       ]),
     ).toEqual({ port: 3306 });
+  });
+
+  it('converts object properties into key value rows for editing', () => {
+    expect(toKeyValueRows({ useSSL: false, serverTimezone: 'UTC' })).toEqual([
+      { key: 'useSSL', value: 'false' },
+      { key: 'serverTimezone', value: 'UTC' },
+    ]);
+
+    expect(
+      normalizeConfigValuesForForm(
+        [field({ key: 'properties', type: 'CUSTOM_SELECT' })],
+        { properties: { useSSL: 'false' } },
+      ),
+    ).toEqual({ properties: [{ key: 'useSSL', value: 'false' }] });
   });
 
   it('maps visibleWhen conditions to dependsOn and evaluates equals', () => {
@@ -149,5 +165,41 @@ describe('dynamic data source form utils', () => {
     expect(sections[0].fields[0].visibleWhen).toEqual([
       { field: 'enabled', operator: 'TRUTHY' },
     ]);
+  });
+
+  it('orders standard capability sections and upgrades legacy properties textarea', () => {
+    const sections = normalizeFormSections({
+      sections: [
+        {
+          key: 'connection',
+          title: '连接参数',
+          fields: [field({ key: 'host' })],
+        },
+        {
+          key: 'ssh',
+          title: 'SSH 隧道',
+          fields: [field({ key: 'sshTunnel', type: 'SSH' })],
+        },
+        {
+          key: 'driver',
+          title: '驱动配置',
+          fields: [field({ key: 'driverClassName' })],
+        },
+        {
+          key: 'advanced',
+          title: '高级配置',
+          fields: [field({ key: 'properties', type: 'TEXTAREA' })],
+        },
+      ],
+    });
+
+    expect(sections.map((section) => section.key)).toEqual([
+      'connection',
+      'driver',
+      'ssh',
+      'advanced',
+    ]);
+    expect(sections[3].fields[0].type).toBe('CUSTOM_SELECT');
+    expect(sections[3].fields[0].placeholder).toContain('useSSL = false');
   });
 });

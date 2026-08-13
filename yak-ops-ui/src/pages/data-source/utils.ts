@@ -29,6 +29,49 @@ export function filterDataSourceList(
   });
 }
 
+interface KeyValueRow {
+  key?: unknown;
+  value?: unknown;
+}
+
+/** 将高级配置编辑器的行数据恢复成后端沿用的 JSON 对象协议。 */
+export function serializeKeyValueRows(value: unknown): Record<string, string> {
+  if (!Array.isArray(value)) {
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, itemValue]) => [
+          key,
+          itemValue === undefined || itemValue === null ? '' : String(itemValue),
+        ]),
+      );
+    }
+    return {};
+  }
+
+  const result: Record<string, string> = {};
+  value.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const row = item as KeyValueRow;
+    const key = String(row.key ?? '').trim();
+    if (!key) return;
+    result[key] = row.value === undefined || row.value === null ? '' : String(row.value);
+  });
+  return result;
+}
+
+/**
+ * 动态表单内部可以使用更适合 UI 的值形态，但发给数据源插件的连接协议保持稳定。
+ */
+export function normalizeConnectionFormValues(
+  connectionValues: DataSourceConnectionFormValues,
+): DataSourceConnectionFormValues {
+  const normalized = { ...connectionValues };
+  if ('properties' in normalized) {
+    normalized.properties = serializeKeyValueRows(normalized.properties);
+  }
+  return normalized;
+}
+
 export function buildSubmitPayload(
   dbType: string,
   basicValues: DataSourceFormValues,
@@ -38,7 +81,7 @@ export function buildSubmitPayload(
     dbType,
     ...basicValues,
     connectionParams: JSON.stringify({
-      ...connectionValues,
+      ...normalizeConnectionFormValues(connectionValues),
       dbType,
     }),
   };
