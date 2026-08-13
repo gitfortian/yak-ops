@@ -113,17 +113,20 @@ export interface DynamicFormFieldRule {
   message: string;
 }
 
+export type DynamicFormFieldType =
+  | 'INPUT'
+  | 'PASSWORD'
+  | 'SELECT'
+  | 'NUMBER'
+  | 'SWITCH'
+  | 'TEXTAREA'
+  | 'CUSTOM_SELECT'
+  | 'DRIVER';
+
 export interface DynamicFormField {
   key: string;
   label: string;
-  type:
-    | 'INPUT'
-    | 'PASSWORD'
-    | 'SELECT'
-    | 'NUMBER'
-    | 'SWITCH'
-    | 'TEXTAREA'
-    | 'CUSTOM_SELECT';
+  type: DynamicFormFieldType;
   placeholder?: string;
   options?: Array<{ label: string; value: string | number }>;
   defaultValue?: unknown;
