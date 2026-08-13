@@ -64,6 +64,11 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/dashboard', [])).toBe('dashboard');
   });
 
+  it('keeps the personal settings page addressable without exposing it in the main sidebar', () => {
+    expect(getStandaloneNavigationRoutes([]).map((route) => route.id)).not.toContain('settings');
+    expect(getActiveNavigationId('/settings', [])).toBe('settings');
+  });
+
   it('registers the data-quality MVP pages and hidden monitor routes', () => {
     const qualityPermissions = [
       'quality:monitor:read',
