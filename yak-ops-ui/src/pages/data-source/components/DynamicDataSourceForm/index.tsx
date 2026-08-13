@@ -27,6 +27,9 @@ import type {
 } from '../../types';
 import { DataSourceOperateType } from '../../types';
 import DriverManager from '../DriverManager';
+import SshTunnelManager, {
+  getSshTunnelValidationMessage,
+} from '../SshTunnelManager';
 import CustomKVList from './components/CustomKVList';
 import {
   flattenFormSectionFields,
@@ -231,6 +234,8 @@ const DynamicDataSourceForm = ({
     switch (field.type) {
       case 'DRIVER':
         return <DriverManager dbType={dbType} placeholder={field.placeholder} />;
+      case 'SSH':
+        return <SshTunnelManager />;
       case 'PASSWORD':
         return (
           <Input.Password
@@ -279,6 +284,19 @@ const DynamicDataSourceForm = ({
     }
   };
 
+  const fieldRules = (field: DynamicFormField) => {
+    const rules = transformRules(field.rules, field.type);
+    if (field.type === 'SSH') {
+      rules.push({
+        validator: async (_rule, value) => {
+          const validationMessage = getSshTunnelValidationMessage(value);
+          if (validationMessage) throw new Error(validationMessage);
+        },
+      });
+    }
+    return rules;
+  };
+
   const renderFields = (fields: DynamicFormField[]) => (
     <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
       {fields.map((field) => {
@@ -290,14 +308,17 @@ const DynamicDataSourceForm = ({
           );
         }
 
-        const fullWidth = field.type === 'TEXTAREA' || field.type === 'DRIVER';
+        const fullWidth =
+          field.type === 'TEXTAREA' ||
+          field.type === 'DRIVER' ||
+          field.type === 'SSH';
         return (
           <Form.Item
             key={field.key}
             label={field.label}
             name={field.key}
             valuePropName={field.type === 'SWITCH' ? 'checked' : 'value'}
-            rules={transformRules(field.rules, field.type)}
+            rules={fieldRules(field)}
             validateTrigger={['onChange', 'onBlur']}
             className={['!mb-3', fullWidth ? 'md:col-span-2' : '']
               .filter(Boolean)

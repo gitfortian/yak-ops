@@ -62,7 +62,7 @@ public final class DorisDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   protected DataSourceCatalog createJdbcCatalog(
       JdbcConnectionProperties connection,
       int timeoutSeconds) {
-    return new DorisJdbcCatalog(connection, timeoutSeconds);
+    return new DorisJdbcCatalog(connection, timeoutSeconds, this::openJdbcConnection);
   }
 
   @Override

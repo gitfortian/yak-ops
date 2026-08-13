@@ -41,6 +41,28 @@ class DataSourceSecretCodecTest {
   }
 
   @Test
+  void shouldMaskNestedSshCredentials() throws Exception {
+    DataSourcePlugin plugin = pluginWithPasswordField();
+
+    String masked =
+        codec.maskConnectionJson(
+            plugin,
+            "{\"sshTunnel\":{\"enabled\":true,\"host\":\"bastion\","
+                + "\"password\":\"ssh-password\",\"privateKey\":\"private-key\","
+                + "\"passphrase\":\"key-passphrase\"}}"
+        );
+    JsonNode ssh = objectMapper.readTree(masked).path("sshTunnel");
+
+    assertThat(ssh.path("password").asText())
+        .isEqualTo(DataSourceSecretCodec.MASKED_VALUE);
+    assertThat(ssh.path("privateKey").asText())
+        .isEqualTo(DataSourceSecretCodec.MASKED_VALUE);
+    assertThat(ssh.path("passphrase").asText())
+        .isEqualTo(DataSourceSecretCodec.MASKED_VALUE);
+    assertThat(ssh.path("host").asText()).isEqualTo("bastion");
+  }
+
+  @Test
   void shouldReuseStoredPasswordWhenEditSubmitsMask() throws Exception {
     DataSourcePlugin plugin = pluginWithPasswordField();
 
@@ -58,6 +80,28 @@ class DataSourceSecretCodecTest {
     assertThat(root.get("password").asText()).isEqualTo("top-secret");
     assertThat(root.path("properties").path("accessToken").asText())
         .isEqualTo("nested-secret");
+  }
+
+  @Test
+  void shouldReuseStoredSshSecretsWhenEditSubmitsMask() throws Exception {
+    DataSourcePlugin plugin = pluginWithPasswordField();
+
+    String merged =
+        codec.mergeStoredSecrets(
+            plugin,
+            "{\"sshTunnel\":{\"enabled\":true,\"host\":\"new-bastion\","
+                + "\"password\":\"******\",\"privateKey\":\"******\","
+                + "\"passphrase\":\"******\"}}",
+            "{\"sshTunnel\":{\"enabled\":true,\"host\":\"old-bastion\","
+                + "\"password\":\"ssh-password\",\"privateKey\":\"private-key\","
+                + "\"passphrase\":\"key-passphrase\"}}"
+        );
+    JsonNode ssh = objectMapper.readTree(merged).path("sshTunnel");
+
+    assertThat(ssh.path("host").asText()).isEqualTo("new-bastion");
+    assertThat(ssh.path("password").asText()).isEqualTo("ssh-password");
+    assertThat(ssh.path("privateKey").asText()).isEqualTo("private-key");
+    assertThat(ssh.path("passphrase").asText()).isEqualTo("key-passphrase");
   }
 
   @Test

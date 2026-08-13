@@ -2,6 +2,7 @@ package io.yak.ops.plugin.database.doris;
 
 import io.yak.ops.plugin.database.jdbc.GenericJdbcCatalog;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
+import io.yak.ops.plugin.database.jdbc.JdbcConnectionProvider;
 import io.yak.ops.spi.datasource.catalog.DataSourceCatalogQuery;
 import io.yak.ops.spi.datasource.metadata.DataSourceTable;
 import java.sql.Connection;
@@ -14,8 +15,23 @@ import java.util.List;
 /** Doris 专用 Catalog，实现 SHOW DATABASES / SHOW FULL TABLES 元数据发现。 */
 public final class DorisJdbcCatalog extends GenericJdbcCatalog {
 
-  public DorisJdbcCatalog(JdbcConnectionProperties connection, int timeoutSeconds) {
+  private final JdbcConnectionProperties connection;
+  private final int timeoutSeconds;
+  private final JdbcConnectionProvider connectionProvider;
+
+  public DorisJdbcCatalog(
+      JdbcConnectionProperties connection,
+      int timeoutSeconds,
+      JdbcConnectionProvider connectionProvider) {
     super(connection, timeoutSeconds);
+    this.connection = connection;
+    this.timeoutSeconds = Math.max(1, timeoutSeconds);
+    this.connectionProvider = connectionProvider;
+  }
+
+  @Override
+  protected Connection openConnection() throws Exception {
+    return connectionProvider.open(connection, timeoutSeconds);
   }
 
   @Override
