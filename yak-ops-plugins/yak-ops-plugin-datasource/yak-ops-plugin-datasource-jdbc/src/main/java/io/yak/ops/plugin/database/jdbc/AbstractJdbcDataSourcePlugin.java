@@ -132,7 +132,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         section(
             "connection",
             "连接参数",
-            "配置数据库地址、认证信息与默认访问范围。",
+            "",
             false,
             true,
             connectionFields));
@@ -140,7 +140,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         section(
             "ssh",
             "SSH 隧道",
-            "数据库无法直接访问时，可通过堡垒机或跳板机建立本地端口转发。",
+            "",
             true,
             false,
             sshFields));
@@ -148,7 +148,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         section(
             "driver",
             "驱动配置",
-            "查看或调整当前数据源使用的 JDBC Driver Class。",
+            "",
             true,
             true,
             driverFields));
@@ -157,7 +157,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
           section(
               "advanced",
               "高级配置",
-              "按需补充驱动属性和插件扩展参数。",
+              "",
               true,
               false,
               advancedFields));

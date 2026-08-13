@@ -290,9 +290,9 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
             <div className="truncate text-[15px] font-semibold leading-6 text-[#161823]">
               {drawerTitle}
             </div>
-            <div className="mt-0.5 truncate text-xs font-normal leading-5 text-[#8A8F99]">
+            {/* <div className="mt-0.5 truncate text-xs font-normal leading-5 text-[#8A8F99]">
               {subtitle}
-            </div>
+            </div> */}
           </div>
         </div>
       }

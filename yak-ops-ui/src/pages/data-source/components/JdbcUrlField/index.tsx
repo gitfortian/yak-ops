@@ -153,11 +153,11 @@ const JdbcUrlField = ({
           ) : undefined
         }
       />
-      {linkage?.template && (
+      {/* {linkage?.template && (
         <div className="mt-1 text-[11px] leading-4 text-[#98a2b3]">
           修改主机、端口或数据库会自动生成 URL；修改可识别的 URL 会同步回填连接参数。
         </div>
-      )}
+      )} */}
     </div>
   );
 };
