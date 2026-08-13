@@ -16,6 +16,7 @@ import { acquireSqlSnippetCompletionProvider } from '../completion/registerSqlSn
 import { bindSqlDiagnostics } from '../diagnostics/bindSqlDiagnostics';
 import { formatSqlText } from '../formatting/formatSqlText';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
+import { getSqlStatementRanges } from '../monaco/sqlStatementRanges';
 
 export interface SqlEditorPosition {
   lineNumber: number;
@@ -28,6 +29,8 @@ interface SqlMonacoEditorProps {
   value: string;
   initialViewState?: DevelopmentEditorViewState;
   onChange: (value: string) => void;
+  onRunStatement?: (sql: string) => void;
+  running?: boolean;
   onPositionChange?: (position: SqlEditorPosition) => void;
   onViewStateChange?: (viewState: DevelopmentEditorViewState) => void;
 }
@@ -67,6 +70,8 @@ const SqlMonacoEditor = ({
   value,
   initialViewState,
   onChange,
+  onRunStatement,
+  running,
   onPositionChange,
   onViewStateChange,
 }: SqlMonacoEditorProps) => {
@@ -74,12 +79,22 @@ const SqlMonacoEditor = ({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor>();
   const modelRef = useRef<monaco.editor.ITextModel>();
   const onChangeRef = useRef(onChange);
+  const onRunStatementRef = useRef(onRunStatement);
+  const runningRef = useRef(running);
   const onPositionChangeRef = useRef(onPositionChange);
   const onViewStateChangeRef = useRef(onViewStateChange);
 
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(() => {
+    onRunStatementRef.current = onRunStatement;
+  }, [onRunStatement]);
+
+  useEffect(() => {
+    runningRef.current = running;
+  }, [running]);
 
   useEffect(() => {
     onPositionChangeRef.current = onPositionChange;
@@ -99,6 +114,15 @@ const SqlMonacoEditor = ({
     const snippetCompletionProvider = acquireSqlSnippetCompletionProvider();
     const hoverProvider = acquireSqlHoverProvider();
     const signatureHelpProvider = acquireSqlSignatureHelpProvider();
+    const foldingProvider = monaco.languages.registerFoldingRangeProvider('sql', {
+      provideFoldingRanges: (foldingModel) =>
+        getSqlStatementRanges(foldingModel.getValue())
+          .filter((statement) => statement.endLine > statement.startLine)
+          .map((statement) => ({
+            start: statement.startLine,
+            end: statement.endLine,
+          })),
+    });
 
     const uri = monaco.Uri.parse(
       `inmemory://yak-ops/data-development/sql/${encodeURIComponent(id)}.sql`,
@@ -127,7 +151,8 @@ const SqlMonacoEditor = ({
       renderWhitespace: 'selection',
       wordWrap: 'off',
       folding: true,
-      glyphMargin: false,
+      showFoldingControls: 'always',
+      glyphMargin: true,
       lineNumbersMinChars: 3,
       overviewRulerLanes: 0,
       hideCursorInOverviewRuler: true,
@@ -161,6 +186,21 @@ const SqlMonacoEditor = ({
 
     editorRef.current = editor;
     modelRef.current = model;
+
+    let statementRanges = getSqlStatementRanges(model.getValue());
+    const runDecorations = editor.createDecorationsCollection();
+    const refreshStatementDecorations = () => {
+      statementRanges = getSqlStatementRanges(model.getValue());
+      runDecorations.set(
+        statementRanges.map((statement) => ({
+          range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
+          options: {
+            glyphMarginClassName: 'yak-sql-run-glyph',
+          },
+        })),
+      );
+    };
+    refreshStatementDecorations();
 
     let wordWrapEnabled = false;
     let minimapEnabled = false;
@@ -249,7 +289,24 @@ const SqlMonacoEditor = ({
     };
 
     const contentDisposable = model.onDidChangeContent(() => {
+      refreshStatementDecorations();
       onChangeRef.current(model.getValue());
+    });
+    const gutterDisposable = editor.onMouseDown((event) => {
+      if (
+        event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+        runningRef.current ||
+        !onRunStatementRef.current
+      ) {
+        return;
+      }
+
+      const lineNumber = event.target.position?.lineNumber;
+      if (!lineNumber) return;
+      const statement = statementRanges.find(
+        (candidate) => candidate.startLine === lineNumber,
+      );
+      if (statement) onRunStatementRef.current(statement.sql);
     });
     const cursorDisposable = editor.onDidChangeCursorPosition(emitEditorState);
     const selectionDisposable = editor.onDidChangeCursorSelection(emitEditorState);
@@ -260,12 +317,14 @@ const SqlMonacoEditor = ({
     return () => {
       emitEditorState();
       contentDisposable.dispose();
+      gutterDisposable.dispose();
       cursorDisposable.dispose();
       selectionDisposable.dispose();
       scrollDisposable.dispose();
       commandBinding.dispose();
       diagnosticsBinding.dispose();
       metadataModelBinding.dispose();
+      foldingProvider.dispose();
       signatureHelpProvider.dispose();
       hoverProvider.dispose();
       snippetCompletionProvider.dispose();
