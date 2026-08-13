@@ -5,6 +5,8 @@ import type {
   DynamicFormFieldRule,
   DynamicFormSchemaResponse,
   DynamicFormSection,
+  DynamicFormVisibilityCondition,
+  DynamicFormVisibilityOperator,
 } from '../../../types';
 
 export const transformRules = (
@@ -35,12 +37,12 @@ export const transformRules = (
 export const getConfigInitialValues = (fields: DynamicFormField[]) => {
   const initialValues: Record<string, unknown> = {};
   fields.forEach((field) => {
-    initialValues[field.key] = parseDefaultValueByType(field);
+    initialValues[field.key] = getFieldDefaultValue(field);
   });
   return initialValues;
 };
 
-const parseDefaultValueByType = (field: DynamicFormField) => {
+export const getFieldDefaultValue = (field: DynamicFormField) => {
   const value = field.defaultValue;
   if (value === undefined || value === null || value === '') {
     return field.type === 'CUSTOM_SELECT' ? [] : value;
@@ -67,18 +69,117 @@ const parseDefaultValueByType = (field: DynamicFormField) => {
   }
 };
 
+const normalizeOperator = (
+  operator?: DynamicFormVisibilityOperator | string,
+  condition?: DynamicFormVisibilityCondition,
+): DynamicFormVisibilityOperator => {
+  const value = operator?.trim().toUpperCase();
+  if (
+    value === 'EQUALS' ||
+    value === 'NOT_EQUALS' ||
+    value === 'IN' ||
+    value === 'NOT_IN' ||
+    value === 'TRUTHY' ||
+    value === 'FALSY'
+  ) {
+    return value;
+  }
+  return condition && 'value' in condition ? 'EQUALS' : 'TRUTHY';
+};
+
+const normalizeVisibilityConditions = (
+  field: DynamicFormField,
+): DynamicFormVisibilityCondition[] => {
+  const raw = field.visibleWhen;
+  if (!raw) return [];
+  const conditions = Array.isArray(raw) ? raw : [raw];
+  const dependencies = field.dependsOn || [];
+
+  return conditions.map((condition, index) => ({
+    ...condition,
+    field:
+      condition.field?.trim() || dependencies[index]?.trim() || dependencies[0]?.trim(),
+    operator: normalizeOperator(condition.operator, condition),
+  }));
+};
+
+/**
+ * 归一字段联动依赖：显式 dependsOn 与 visibleWhen 中引用的字段会合并去重。
+ */
+export const getFieldDependencies = (field: DynamicFormField): string[] => {
+  const conditions = normalizeVisibilityConditions(field);
+  return Array.from(
+    new Set(
+      [...(field.dependsOn || []), ...conditions.map((condition) => condition.field)]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+};
+
+const getValueByPath = (values: Record<string, unknown>, path?: string): unknown => {
+  if (!path) return undefined;
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (!current || typeof current !== 'object') return undefined;
+    return (current as Record<string, unknown>)[segment];
+  }, values);
+};
+
+const equals = (left: unknown, right: unknown) => Object.is(left, right);
+
+const matchVisibilityCondition = (
+  condition: DynamicFormVisibilityCondition,
+  values: Record<string, unknown>,
+) => {
+  const actual = getValueByPath(values, condition.field);
+  const operator = normalizeOperator(condition.operator, condition);
+  const candidates = condition.values || (Array.isArray(condition.value) ? condition.value : []);
+
+  switch (operator) {
+    case 'NOT_EQUALS':
+      return !equals(actual, condition.value);
+    case 'IN':
+      return candidates.some((candidate) => equals(actual, candidate));
+    case 'NOT_IN':
+      return !candidates.some((candidate) => equals(actual, candidate));
+    case 'TRUTHY':
+      return Boolean(actual);
+    case 'FALSY':
+      return !actual;
+    case 'EQUALS':
+    default:
+      return equals(actual, condition.value);
+  }
+};
+
+/**
+ * 判断动态字段当前是否可见。未配置 visibleWhen 时始终显示；多条件使用 AND 语义。
+ */
+export const isDynamicFieldVisible = (
+  field: DynamicFormField,
+  values: Record<string, unknown>,
+) => {
+  const conditions = normalizeVisibilityConditions(field);
+  if (conditions.length === 0) return true;
+  return conditions.every(
+    (condition) => Boolean(condition.field) && matchVisibilityCondition(condition, values),
+  );
+};
+
 /**
  * 兼容旧插件历史约定：driverLocation 曾经以普通 INPUT 字段下发，
  * 新版统一提升为 DRIVER 标准组件。插件升级后应直接声明 type=DRIVER。
  */
 const normalizeFormField = (field: DynamicFormField): DynamicFormField => {
+  const normalized: DynamicFormField = {
+    ...field,
+    dependsOn: getFieldDependencies(field),
+    visibleWhen: normalizeVisibilityConditions(field),
+  };
   if (field.key === 'driverLocation' && field.type !== 'DRIVER') {
-    return {
-      ...field,
-      type: 'DRIVER',
-    };
+    normalized.type = 'DRIVER';
   }
-  return { ...field };
+  return normalized;
 };
 
 /**

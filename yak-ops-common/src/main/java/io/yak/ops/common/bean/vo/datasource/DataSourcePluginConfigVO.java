@@ -80,6 +80,37 @@ public class DataSourcePluginConfigVO {
 
     @Builder.Default
     private List<RuleVO> rules = new ArrayList<>();
+
+    /**
+     * 字段联动依赖。visibleWhen 中显式声明的 field 也会被前端自动加入依赖集合。
+     */
+    @Builder.Default
+    private List<String> dependsOn = new ArrayList<>();
+
+    /**
+     * 字段显示条件；多个条件使用 AND 语义。condition.field 为空时按顺序映射 dependsOn。
+     */
+    @Builder.Default
+    private List<VisibilityConditionVO> visibleWhen = new ArrayList<>();
+  }
+
+  /** 动态字段显示条件。 */
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class VisibilityConditionVO {
+
+    /** 可选；为空时使用 FormFieldVO.dependsOn 中同位置的字段。 */
+    private String field;
+
+    /** 支持 EQUALS、NOT_EQUALS、IN、NOT_IN、TRUTHY、FALSY。 */
+    private String operator;
+
+    private Object value;
+
+    @Builder.Default
+    private List<Object> values = new ArrayList<>();
   }
 
   /** 下拉选项。 */

@@ -12,7 +12,9 @@ import {
   Switch,
   Tooltip,
 } from 'antd';
+import type { FormInstance } from 'antd';
 import { Code2, FlaskConical, ShieldCheck } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import DatabaseIcons from '../../icon/DatabaseIcons';
@@ -34,6 +36,9 @@ import CustomKVList from './components/CustomKVList';
 import {
   flattenFormSectionFields,
   getConfigInitialValues,
+  getFieldDefaultValue,
+  getFieldDependencies,
+  isDynamicFieldVisible,
   normalizeFormSections,
   transformRules,
 } from './utils/formUtils';
@@ -102,6 +107,40 @@ const pickRandomPreset = (values: string[]) =>
 
 const isEmptyValue = (value: unknown) =>
   value === undefined || value === null || value === '';
+
+/** 字段进入隐藏态时清除历史值和校验错误，确保不会被提交。 */
+const HiddenFieldCleaner = ({
+  form,
+  fieldKey,
+}: {
+  form: FormInstance;
+  fieldKey: string;
+}) => {
+  useEffect(() => {
+    form.setFields([{ name: fieldKey, value: undefined, errors: [] }]);
+  }, [fieldKey, form]);
+  return null;
+};
+
+/** 字段重新显示时，如果当前没有值，则恢复 Schema 默认值。 */
+const VisibleFieldInitializer = ({
+  form,
+  field,
+  children,
+}: {
+  form: FormInstance;
+  field: DynamicFormField;
+  children: ReactNode;
+}) => {
+  useEffect(() => {
+    if (form.getFieldValue(field.key) !== undefined) return;
+    const defaultValue = getFieldDefaultValue(field);
+    if (defaultValue !== undefined) {
+      form.setFieldValue(field.key, defaultValue);
+    }
+  }, [field, form]);
+  return <>{children}</>;
+};
 
 const DynamicDataSourceForm = ({
   dbType,
@@ -297,37 +336,77 @@ const DynamicDataSourceForm = ({
     return rules;
   };
 
+  const renderVisibleField = (field: DynamicFormField) => {
+    const content =
+      field.type === 'CUSTOM_SELECT' ? (
+        <div className="md:col-span-2">
+          <CustomKVList intl={intl} field={field} />
+        </div>
+      ) : (
+        <Form.Item
+          label={field.label}
+          name={field.key}
+          preserve={false}
+          valuePropName={field.type === 'SWITCH' ? 'checked' : 'value'}
+          rules={fieldRules(field)}
+          validateTrigger={['onChange', 'onBlur']}
+          className={[
+            '!mb-3',
+            field.type === 'TEXTAREA' ||
+            field.type === 'DRIVER' ||
+            field.type === 'SSH'
+              ? 'md:col-span-2'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {renderFormControl(field)}
+        </Form.Item>
+      );
+
+    return (
+      <VisibleFieldInitializer
+        key={field.key}
+        form={configForm}
+        field={field}
+      >
+        {content}
+      </VisibleFieldInitializer>
+    );
+  };
+
+  const renderField = (field: DynamicFormField) => {
+    const hasVisibilityRule = Array.isArray(field.visibleWhen)
+      ? field.visibleWhen.length > 0
+      : Boolean(field.visibleWhen);
+    if (!hasVisibilityRule) return renderVisibleField(field);
+
+    const dependencies = getFieldDependencies(field);
+    return (
+      <Form.Item
+        key={`visibility-${field.key}`}
+        noStyle
+        dependencies={dependencies.map((dependency) => dependency.split('.'))}
+      >
+        {({ getFieldsValue }) => {
+          const visible = isDynamicFieldVisible(
+            field,
+            getFieldsValue(true) as Record<string, unknown>,
+          );
+          return visible ? (
+            renderVisibleField(field)
+          ) : (
+            <HiddenFieldCleaner form={configForm} fieldKey={field.key} />
+          );
+        }}
+      </Form.Item>
+    );
+  };
+
   const renderFields = (fields: DynamicFormField[]) => (
     <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
-      {fields.map((field) => {
-        if (field.type === 'CUSTOM_SELECT') {
-          return (
-            <div key={field.key} className="md:col-span-2">
-              <CustomKVList intl={intl} field={field} />
-            </div>
-          );
-        }
-
-        const fullWidth =
-          field.type === 'TEXTAREA' ||
-          field.type === 'DRIVER' ||
-          field.type === 'SSH';
-        return (
-          <Form.Item
-            key={field.key}
-            label={field.label}
-            name={field.key}
-            valuePropName={field.type === 'SWITCH' ? 'checked' : 'value'}
-            rules={fieldRules(field)}
-            validateTrigger={['onChange', 'onBlur']}
-            className={['!mb-3', fullWidth ? 'md:col-span-2' : '']
-              .filter(Boolean)
-              .join(' ')}
-          >
-            {renderFormControl(field)}
-          </Form.Item>
-        );
-      })}
+      {fields.map(renderField)}
     </div>
   );
 
