@@ -49,6 +49,10 @@
             <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-business-job</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.yak.framework</groupId>
+            <artifactId>yak-security-spring-boot-starter</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
