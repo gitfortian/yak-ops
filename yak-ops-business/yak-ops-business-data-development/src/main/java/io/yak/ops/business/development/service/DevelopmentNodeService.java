@@ -84,6 +84,18 @@ public class DevelopmentNodeService {
     return renamed;
   }
 
+  /** Records the human who most recently changed this node and returns refreshed tree metadata. */
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DevelopmentNode recordUpdater(Long id, String operatorName) {
+    DevelopmentNode current = repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + id));
+    String normalizedOperator = normalizeOperator(operatorName);
+    if (!repository.updateUpdatedBy(id, normalizedOperator)) {
+      return current;
+    }
+    return repository.findById(id).orElse(current);
+  }
+
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void delete(Long id) {
     DevelopmentNode current = repository.findById(id)
@@ -123,5 +135,11 @@ public class DevelopmentNodeService {
 
   private Long normalizeDirectoryId(Long directoryId) {
     return directoryId == null || directoryId <= 0L ? null : directoryId;
+  }
+
+  private String normalizeOperator(String operatorName) {
+    if (operatorName == null || operatorName.isBlank()) return "unknown";
+    String normalized = operatorName.trim();
+    return normalized.length() <= 128 ? normalized : normalized.substring(0, 128);
   }
 }
