@@ -1,4 +1,4 @@
-import { Dropdown, Tooltip, message } from 'antd';
+import { Tooltip, message } from 'antd';
 import {
   LoaderCircle,
   Play,
@@ -6,7 +6,6 @@ import {
   Rocket,
   Save,
   Search,
-  Settings,
   Sparkles,
   Undo2,
   Wand2,
@@ -64,103 +63,33 @@ const SqlToolbar = ({
   return (
     <div className="flex h-full w-full min-w-0 items-center justify-between gap-3">
       <div className="flex shrink-0 items-center gap-0.5">
-        <ToolbarButton
-          title={running ? 'SQL 运行中' : '运行当前 SQL'}
-          disabled={running}
-          onClick={onRun}
-        >
-          {running ? (
-            <LoaderCircle size={15} className="animate-spin" />
-          ) : (
-            <Play size={15} strokeWidth={1.8} />
-          )}
+        <ToolbarButton title={running ? 'SQL 运行中' : '运行当前 SQL'} disabled={running} onClick={onRun}>
+          {running ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} strokeWidth={1.8} />}
         </ToolbarButton>
-
         <ToolbarDivider />
-
-        <ToolbarButton
-          title="保存草稿"
-          disabled={saving || publishing || running}
-          onClick={onSave}
-        >
-          {saving ? (
-            <LoaderCircle size={15} className="animate-spin" />
-          ) : (
-            <Save size={15} strokeWidth={1.8} />
-          )}
+        <ToolbarButton title="保存草稿" disabled={saving || publishing || running} onClick={onSave}>
+          {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} strokeWidth={1.8} />}
         </ToolbarButton>
-        <ToolbarButton
-          title="发布版本"
-          disabled={saving || publishing || running}
-          onClick={onPublish}
-        >
-          {publishing ? (
-            <LoaderCircle size={15} className="animate-spin" />
-          ) : (
-            <Rocket size={15} strokeWidth={1.8} />
-          )}
+        <ToolbarButton title="发布版本" disabled={saving || publishing || running} onClick={onPublish}>
+          {publishing ? <LoaderCircle size={15} className="animate-spin" /> : <Rocket size={15} strokeWidth={1.8} />}
         </ToolbarButton>
-        <ToolbarButton
-          title="撤销"
-          disabled={running}
-          onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}
-        >
+        <ToolbarButton title="撤销" disabled={running} onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}>
           <Undo2 size={15} strokeWidth={1.8} />
         </ToolbarButton>
-        <ToolbarButton
-          title="重做"
-          disabled={running}
-          onClick={() => execute('redo', 'SQL 编辑器尚未就绪')}
-        >
+        <ToolbarButton title="重做" disabled={running} onClick={() => execute('redo', 'SQL 编辑器尚未就绪')}>
           <Redo2 size={15} strokeWidth={1.8} />
         </ToolbarButton>
-        <ToolbarButton
-          title="查找"
-          onClick={() => execute('find', 'SQL 编辑器尚未就绪')}
-        >
+        <ToolbarButton title="查找" onClick={() => execute('find', 'SQL 编辑器尚未就绪')}>
           <Search size={15} strokeWidth={1.8} />
         </ToolbarButton>
-
         <ToolbarDivider />
-
-        <ToolbarButton
-          title="格式化 SQL"
-          disabled={running}
-          onClick={() => execute('format', 'SQL 编辑器尚未就绪')}
-        >
+        <ToolbarButton title="格式化 SQL" disabled={running} onClick={() => execute('format', 'SQL 编辑器尚未就绪')}>
           <Wand2 size={15} strokeWidth={1.8} />
         </ToolbarButton>
-        <ToolbarButton
-          title="触发智能提示"
-          onClick={() => execute('suggest', 'SQL 编辑器尚未就绪')}
-        >
+        <ToolbarButton title="触发智能提示" onClick={() => execute('suggest', 'SQL 编辑器尚未就绪')}>
           <Sparkles size={15} strokeWidth={1.8} />
         </ToolbarButton>
-
-        <Dropdown
-          trigger={['click']}
-          placement="bottomLeft"
-          menu={{
-            items: [
-              { key: 'toggle-word-wrap', label: '切换自动换行' },
-              { key: 'toggle-minimap', label: '切换缩略图' },
-            ],
-            onClick: ({ key }) =>
-              execute(key as SqlEditorCommand, 'SQL 编辑器尚未就绪'),
-          }}
-        >
-          <Tooltip title="编辑器设置" mouseEnterDelay={0.35}>
-            <button
-              type="button"
-              aria-label="编辑器设置"
-              className={iconButtonClassName}
-            >
-              <Settings size={15} strokeWidth={1.8} />
-            </button>
-          </Tooltip>
-        </Dropdown>
       </div>
-
       <SqlMetadataContextToolbar nodeId={node.id} />
     </div>
   );
