@@ -26,7 +26,7 @@
     "start:no-mock": "cross-env CHECK_TIMEOUT=60 MOCK=none UMI_ENV=dev max dev",
     "start:mock": "cross-env CHECK_TIMEOUT=60 UMI_ENV=dev max dev",
     "start:pre": "cross-env REACT_APP_ENV=pre UMI_ENV=dev max dev",
-    "start:test": "cross-env CHECK_TIMEOUT=60 REACT_APP_ENV=test MOCK=none UMI_ENV=dev max dev",
+    "start:test": "cross-env REACT_APP_ENV=test MOCK=none UMI_ENV=dev max dev",
     "test": "jest",
     "test:coverage": "npm run jest -- --coverage",
     "test:update": "npm run jest -- -u",
@@ -62,7 +62,7 @@
     "react": "^18.3.0",
     "react-countup": "^6.5.3",
     "react-dom": "^18.3.0",
-    "react-easy-crop": "^5.8.1",
+    "react-easy-crop": "^4.0.1",
     "react-grid-layout": "^2.2.3",
     "react-json-pretty": "^2.2.0",
     "react-json-view": "^1.21.3",
@@ -100,7 +100,7 @@
     "tailwindcss": "^3",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
-    "umi-presets-pro": "^3.0.0",
+    "umi-presets-pro": "^2.0.3",
     "umi-serve": "^1.9.11"
   },
   "engines": {
