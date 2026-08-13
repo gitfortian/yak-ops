@@ -51,6 +51,7 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'batch-link-up-multi', path: '/sync/batch-link-up/:id/config/multi', title: '多表同步配置', component: './batch-link-up/config/multi', hidden: true, parentId: 'batch-link-up' },
   { id: 'batch-link-up-script', path: '/sync/batch-link-up/:id/config/script', title: '脚本同步配置', component: './batch-link-up/config/script', hidden: true, parentId: 'batch-link-up' },
   { id: 'data-development', mode: 'public', path: '/data-development', title: '开发任务', component: './data-development', iconKey: 'api', menuGroup: 'development', order: 10 },
+  { id: 'data-development-execution', mode: 'public', path: '/data-development/executions', title: '运行记录', component: './data-development/executions', iconKey: 'report', menuGroup: 'development', order: 20 },
   { id: 'data-development-task-new', path: '/data-development/task/new', title: '新建开发任务', component: './data-development/task', hidden: true, parentId: 'data-development' },
   { id: 'data-development-task', path: '/data-development/task/:id', title: '开发任务配置', component: './data-development/task', hidden: true, parentId: 'data-development' },
   { id: 'workflow-definition', mode: 'public', path: '/workflow/definitions', title: '工作流定义', component: './workflow/management', iconKey: 'workflow', menuGroup: 'workflow', order: 10 },

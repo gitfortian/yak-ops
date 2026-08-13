@@ -9,8 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/** Focused HTTP error mapping for task-authoring endpoints. */
-@RestControllerAdvice(assignableTypes = DevelopmentTaskController.class)
+/** Focused HTTP error mapping for data-development task and execution endpoints. */
+@RestControllerAdvice(
+    assignableTypes = {DevelopmentTaskController.class, DevelopmentTaskExecutionController.class})
 public class DevelopmentTaskExceptionHandler {
 
   @ExceptionHandler(DevelopmentDraftConflictException.class)

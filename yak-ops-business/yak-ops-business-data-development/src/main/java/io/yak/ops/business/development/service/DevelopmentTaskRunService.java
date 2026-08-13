@@ -24,15 +24,28 @@ public class DevelopmentTaskRunService {
 
   private final DevelopmentNodeRepository nodeRepository;
   private final TaskExecutionGateway taskExecutionGateway;
+  private final DevelopmentTaskExecutionService executionService;
   private final ObjectMapper objectMapper;
 
   public DevelopmentTaskRunService(
       DevelopmentNodeRepository nodeRepository,
       TaskExecutionGateway taskExecutionGateway,
+      DevelopmentTaskExecutionService executionService,
       ObjectMapper objectMapper) {
     this.nodeRepository = nodeRepository;
     this.taskExecutionGateway = taskExecutionGateway;
+    this.executionService = executionService;
     this.objectMapper = objectMapper;
+  }
+
+  /** Kept for source-compatible tests and internal callers. */
+  public DevelopmentTaskRunResult run(
+      Long nodeId,
+      String taskType,
+      int schemaVersion,
+      String content,
+      String configJson) {
+    return run(nodeId, taskType, schemaVersion, content, configJson, "unknown");
   }
 
   public DevelopmentTaskRunResult run(
@@ -40,7 +53,8 @@ public class DevelopmentTaskRunService {
       String taskType,
       int schemaVersion,
       String content,
-      String configJson) {
+      String configJson,
+      String operatorName) {
     DevelopmentNode node = requireNode(nodeId);
     TaskDefinition definition =
         normalizeDefinition(node, taskType, schemaVersion, content, configJson);
@@ -55,6 +69,12 @@ public class DevelopmentTaskRunService {
     }
 
     long started = System.nanoTime();
+    long historyId = executionService.createPending(
+        node,
+        definition.taskType(),
+        definition.content(),
+        definition.configJson(),
+        operatorName);
     try {
       TaskVersionSnapshot snapshot = currentDraftSnapshot(node, definition);
       TaskExecution execution =
@@ -63,28 +83,58 @@ public class DevelopmentTaskRunService {
               TaskExecutionTrigger.MANUAL,
               null,
               Map.of("nodeId", String.valueOf(nodeId)));
+      executionService.markRunning(historyId, execution.executionId());
+
       TaskExecution completed = awaitTerminal(snapshot.type(), execution);
-      return new DevelopmentTaskRunResult(
-          mapStatus(completed),
+      TaskExecutionStatus status = mapStatus(completed);
+      long durationMs = elapsedMillis(started);
+      executionService.complete(
+          historyId,
+          status.name(),
+          durationMs,
           completed.errorMessage(),
-          elapsedMillis(started),
+          completed.output());
+      return new DevelopmentTaskRunResult(
+          status,
+          completed.errorMessage(),
+          durationMs,
           completed.output());
     } catch (DevelopmentTaskValidationException exception) {
+      executionService.complete(
+          historyId,
+          TaskExecutionStatus.FAILED.name(),
+          elapsedMillis(started),
+          safeMessage(exception),
+          Map.of());
       throw exception;
     } catch (IllegalArgumentException exception) {
+      String message = safeMessage(exception);
+      executionService.complete(
+          historyId,
+          TaskExecutionStatus.FAILED.name(),
+          elapsedMillis(started),
+          message,
+          Map.of());
       throw new DevelopmentTaskValidationException(
-          safeMessage(exception),
+          message,
           List.of(
               new TaskValidationIssue(
                   "TASK_RUNTIME_VALIDATION_FAILED",
                   "definition",
-                  safeMessage(exception))));
+                  message)));
     } catch (Exception exception) {
       String message = safeMessage(exception);
+      long durationMs = elapsedMillis(started);
+      executionService.complete(
+          historyId,
+          TaskExecutionStatus.FAILED.name(),
+          durationMs,
+          message,
+          Map.of());
       return new DevelopmentTaskRunResult(
           TaskExecutionStatus.FAILED,
           message,
-          elapsedMillis(started),
+          durationMs,
           Map.of());
     }
   }

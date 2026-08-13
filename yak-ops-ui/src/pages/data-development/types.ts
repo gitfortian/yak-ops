@@ -98,3 +98,42 @@ export interface DevelopmentSqlRunOutput {
   truncated?: boolean;
   dataSourceId?: string;
 }
+
+export interface DevelopmentTaskExecutionSummary {
+  id: DevelopmentId;
+  nodeId: DevelopmentId;
+  taskName: string;
+  taskType: DevelopmentTaskType;
+  triggerType: string;
+  runtimeExecutionId?: string | null;
+  status: DevelopmentTaskExecutionStatus;
+  operatorName?: string | null;
+  durationMs?: number | null;
+  errorMessage?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+export interface DevelopmentTaskExecutionDetail extends DevelopmentTaskExecutionSummary {
+  content: string;
+  configJson: string;
+  output: Record<string, unknown>;
+}
+
+export interface DevelopmentTaskExecutionPage {
+  records: DevelopmentTaskExecutionSummary[];
+  total: number;
+  pageNo: number;
+  pageSize: number;
+}
+
+export interface DevelopmentTaskExecutionQuery {
+  pageNo?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: DevelopmentTaskExecutionStatus;
+  taskType?: DevelopmentTaskType;
+  triggerType?: string;
+  startTime?: string;
+  endTime?: string;
+}

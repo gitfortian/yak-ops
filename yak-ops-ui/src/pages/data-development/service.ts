@@ -10,6 +10,9 @@ import type {
   DevelopmentNode,
   DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
+  DevelopmentTaskExecutionDetail,
+  DevelopmentTaskExecutionPage,
+  DevelopmentTaskExecutionQuery,
   DevelopmentTaskRevision,
   DevelopmentTaskRevisionSummary,
   DevelopmentTaskRunResult,
@@ -19,6 +22,7 @@ import type {
 const DATA_DEVELOPMENT_API = '/api/v1/data-development';
 const DIRECTORY_API = `${DATA_DEVELOPMENT_API}/directories`;
 const NODE_API = `${DATA_DEVELOPMENT_API}/nodes`;
+const EXECUTION_API = `${DATA_DEVELOPMENT_API}/executions`;
 const EDITOR_SETTINGS_API = `${DATA_DEVELOPMENT_API}/editor-settings`;
 
 export const listDevelopmentDirectories = (): Promise<ApiResponse<DevelopmentDirectory[]>> =>
@@ -74,6 +78,26 @@ export const runDevelopmentTask = (
   payload: DevelopmentTaskDefinition,
 ): Promise<ApiResponse<DevelopmentTaskRunResult>> =>
   HttpUtils.post<DevelopmentTaskRunResult>(`${NODE_API}/${nodeId}/run`, payload);
+
+const executionQueryString = (query: DevelopmentTaskExecutionQuery) => {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    params.set(key, String(value));
+  });
+  const value = params.toString();
+  return value ? `?${value}` : '';
+};
+
+export const listDevelopmentTaskExecutions = (
+  query: DevelopmentTaskExecutionQuery,
+): Promise<ApiResponse<DevelopmentTaskExecutionPage>> =>
+  HttpUtils.get<DevelopmentTaskExecutionPage>(`${EXECUTION_API}${executionQueryString(query)}`);
+
+export const getDevelopmentTaskExecution = (
+  id: DevelopmentId,
+): Promise<ApiResponse<DevelopmentTaskExecutionDetail>> =>
+  HttpUtils.get<DevelopmentTaskExecutionDetail>(`${EXECUTION_API}/${id}`);
 
 export const publishDevelopmentTask = (
   nodeId: DevelopmentId,
