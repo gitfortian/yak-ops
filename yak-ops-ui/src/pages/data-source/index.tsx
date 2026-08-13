@@ -56,11 +56,6 @@ import { DataSourceOperateType } from './types';
 
 const { confirm } = Modal;
 
-type DataSourceFilterKey =
-  | 'all'
-  | 'connected'
-  | 'disconnected'
-  | 'unknown';
 type DataSourceViewMode = 'grid' | 'list';
 
 const EMPTY_SUMMARY: DataSourceSummary = {
@@ -75,9 +70,6 @@ const ENVIRONMENT_FILTER_OPTIONS = ENVIRONMENT_OPTIONS.map((item) => ({
   ...item,
   label: environmentTagConfigMap[item.value]?.text || item.label,
 }));
-
-const statusForFilter = (filter: DataSourceFilterKey) =>
-  filter === 'all' ? undefined : filter.toUpperCase();
 
 const recordKey = (id?: DataSourceId) => String(id ?? '');
 
@@ -99,8 +91,6 @@ const DataSourcePage = () => {
     PAGE_DEFAULT_PAGINATION,
   );
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [activeFilter, setActiveFilter] =
-    useState<DataSourceFilterKey>('all');
   const [dbTypeFilter, setDbTypeFilter] = useState<string | undefined>();
   const [environmentFilter, setEnvironmentFilter] = useState<
     string | undefined
@@ -111,10 +101,7 @@ const DataSourcePage = () => {
   const [editingId, setEditingId] = useState('');
 
   const hasActiveFilters = Boolean(
-    searchKeyword.trim() ||
-      activeFilter !== 'all' ||
-      dbTypeFilter ||
-      environmentFilter,
+    searchKeyword.trim() || dbTypeFilter || environmentFilter,
   );
 
   const resetPage = useCallback(() => {
@@ -130,7 +117,6 @@ const DataSourcePage = () => {
       pageNo: pagination.pageNo,
       pageSize: pagination.pageSize,
       keyword: searchKeyword.trim() || undefined,
-      connStatus: statusForFilter(activeFilter),
       dbType: dbTypeFilter,
       environment: environmentFilter,
     };
@@ -176,7 +162,6 @@ const DataSourcePage = () => {
       if (requestSeq === requestSeqRef.current) setLoading(false);
     }
   }, [
-    activeFilter,
     dbTypeFilter,
     environmentFilter,
     pagination.pageNo,
@@ -199,7 +184,6 @@ const DataSourcePage = () => {
 
   const handleResetFilters = useCallback(() => {
     setSearchKeyword('');
-    setActiveFilter('all');
     setDbTypeFilter(undefined);
     setEnvironmentFilter(undefined);
     resetPage();
@@ -283,18 +267,22 @@ const DataSourcePage = () => {
     }
   };
 
-  const filterTabs = useMemo(
+  const environmentTabs = useMemo(
     () => [
-      { key: 'all' as const, label: '全部数据源', count: summary.total },
-      { key: 'connected' as const, label: '已连接', count: summary.connected },
       {
-        key: 'disconnected' as const,
-        label: '连接异常',
-        count: summary.disconnected,
+        key: 'all',
+        label: '全部数据源',
+        value: undefined,
+        count: summary.total,
       },
-      { key: 'unknown' as const, label: '待检测', count: summary.unknown },
+      ...ENVIRONMENT_FILTER_OPTIONS.map((item) => ({
+        key: item.value,
+        label: item.label,
+        value: item.value,
+        count: undefined,
+      })),
     ],
-    [summary],
+    [summary.total],
   );
 
   const renderDataSourceCard = (record: DataSourceRecord) => {
@@ -480,20 +468,23 @@ const DataSourcePage = () => {
             className="datasource-workbench"
           >
             <div className="datasource-workbench__tabs">
-              {filterTabs.map((item) => (
-                <button
-                  type="button"
-                  key={item.key}
-                  className={activeFilter === item.key ? 'is-active' : ''}
-                  onClick={() => {
-                    setActiveFilter(item.key);
-                    resetPage();
-                  }}
-                >
-                  {item.label}
-                  <span>{item.count}</span>
-                </button>
-              ))}
+              {environmentTabs.map((item) => {
+                const isActive = (environmentFilter || 'all') === item.key;
+                return (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={isActive ? 'is-active' : ''}
+                    onClick={() => {
+                      setEnvironmentFilter(item.value);
+                      resetPage();
+                    }}
+                  >
+                    {item.label}
+                    {typeof item.count === 'number' && <span>{item.count}</span>}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="datasource-workbench__tools">
@@ -506,19 +497,6 @@ const DataSourcePage = () => {
                 popupMatchSelectWidth={180}
                 onChange={(value) => {
                   setDbTypeFilter(value);
-                  resetPage();
-                }}
-              />
-
-              <Select
-                allowClear
-                value={environmentFilter}
-                style={{ width: 116 }}
-                placeholder="运行环境"
-                options={ENVIRONMENT_FILTER_OPTIONS}
-                popupMatchSelectWidth={140}
-                onChange={(value) => {
-                  setEnvironmentFilter(value);
                   resetPage();
                 }}
               />
@@ -628,7 +606,7 @@ const DataSourcePage = () => {
                 </h3>
                 <p>
                   {hasActiveFilters
-                    ? '可以调整类型、环境、状态或搜索条件后重试。'
+                    ? '可以调整运行环境、数据源类型或搜索条件后重试。'
                     : '创建第一个数据源，开始配置数据同步与运行任务。'}
                 </p>
                 {hasActiveFilters ? (
