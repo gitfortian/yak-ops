@@ -19,6 +19,7 @@ public class DevelopmentNodePO {
   private Long directoryId;
   private Boolean configured;
   @TableLogic private Boolean deleted;
+  private String updatedBy;
   private Instant createTime;
   private Instant updateTime;
 }

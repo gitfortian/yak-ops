@@ -8,6 +8,7 @@ import io.yak.ops.business.development.api.DevelopmentNodeApi.RenameRequest;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.service.DevelopmentNodeService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,20 +39,25 @@ public class DevelopmentNodeController {
 
   @Operation(summary = "新建数据开发节点")
   @PostMapping
-  public Result<DevelopmentNode> create(@Valid @RequestBody CreateRequest request) {
-    return Result.success(service.create(
+  public Result<DevelopmentNode> create(
+      @Valid @RequestBody CreateRequest request,
+      Principal principal) {
+    DevelopmentNode created = service.create(
         request.name(),
         request.type(),
         request.projectId(),
-        request.directoryId()));
+        request.directoryId());
+    return Result.success(service.recordUpdater(created.id(), operatorName(principal)));
   }
 
   @Operation(summary = "重命名数据开发节点")
   @PutMapping("/{id}/name")
   public Result<DevelopmentNode> rename(
       @PathVariable("id") Long id,
-      @Valid @RequestBody RenameRequest request) {
-    return Result.success(service.rename(id, request.name()));
+      @Valid @RequestBody RenameRequest request,
+      Principal principal) {
+    DevelopmentNode renamed = service.rename(id, request.name());
+    return Result.success(service.recordUpdater(renamed.id(), operatorName(principal)));
   }
 
   @Operation(summary = "删除数据开发节点")
@@ -59,5 +65,9 @@ public class DevelopmentNodeController {
   public Result<Boolean> delete(@PathVariable("id") Long id) {
     service.delete(id);
     return Result.success(Boolean.TRUE);
+  }
+
+  private String operatorName(Principal principal) {
+    return principal == null ? "unknown" : principal.getName();
   }
 }
