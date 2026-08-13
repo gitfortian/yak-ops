@@ -68,6 +68,20 @@ const parseDefaultValueByType = (field: DynamicFormField) => {
 };
 
 /**
+ * 兼容旧插件历史约定：driverLocation 曾经以普通 INPUT 字段下发，
+ * 新版统一提升为 DRIVER 标准组件。插件升级后应直接声明 type=DRIVER。
+ */
+const normalizeFormField = (field: DynamicFormField): DynamicFormField => {
+  if (field.key === 'driverLocation' && field.type !== 'DRIVER') {
+    return {
+      ...field,
+      type: 'DRIVER',
+    };
+  }
+  return { ...field };
+};
+
+/**
  * 将新版 sections 和旧版 formFields 统一归一成分区结构。
  *
  * 新插件优先使用 sections；旧插件无需迁移，扁平 formFields 会自动落到
@@ -84,7 +98,7 @@ export const normalizeFormSections = (
       title: section.title?.trim() || '连接参数',
       collapsible: section.collapsible === true,
       defaultExpanded: section.defaultExpanded !== false,
-      fields: [...section.fields],
+      fields: section.fields.map(normalizeFormField),
     }));
 
   if (sections.length > 0) return sections;
@@ -98,7 +112,7 @@ export const normalizeFormSections = (
       title: '连接参数',
       collapsible: false,
       defaultExpanded: true,
-      fields: [...legacyFields],
+      fields: legacyFields.map(normalizeFormField),
     },
   ];
 };
