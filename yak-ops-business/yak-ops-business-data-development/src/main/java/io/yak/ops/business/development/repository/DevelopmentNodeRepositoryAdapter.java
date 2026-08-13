@@ -6,7 +6,9 @@ import io.yak.ops.business.development.dao.mapper.DevelopmentNodeMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.common.bean.po.development.DevelopmentNodePO;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -54,12 +56,13 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   @Override
   public List<DevelopmentNode> list() {
-    return mapper.selectList(
-            new LambdaQueryWrapper<DevelopmentNodePO>()
-                .orderByAsc(DevelopmentNodePO::getName)
-                .orderByAsc(DevelopmentNodePO::getId))
-        .stream()
-        .map(po -> toDomain(po, hasUnpublishedChanges(po.getId())))
+    List<DevelopmentNodePO> nodes = mapper.selectList(
+        new LambdaQueryWrapper<DevelopmentNodePO>()
+            .orderByAsc(DevelopmentNodePO::getName)
+            .orderByAsc(DevelopmentNodePO::getId));
+    Map<Long, Boolean> pendingPublishByNodeId = loadPendingPublishByNodeId();
+    return nodes.stream()
+        .map(po -> toDomain(po, Boolean.TRUE.equals(pendingPublishByNodeId.get(po.getId()))))
         .toList();
   }
 
@@ -119,6 +122,23 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   private Long toStoredDirectoryId(Long directoryId) {
     return directoryId == null || directoryId <= 0L ? ROOT_DIRECTORY_ID : directoryId;
+  }
+
+  private Map<Long, Boolean> loadPendingPublishByNodeId() {
+    Map<Long, Boolean> result = new HashMap<>();
+    jdbcTemplate.query(
+        "SELECT d.node_id, d.draft_revision, MAX(r.source_draft_revision) AS published_draft_revision "
+            + "FROM yak_dev_task_draft d "
+            + "LEFT JOIN yak_dev_task_revision r ON r.node_id = d.node_id "
+            + "GROUP BY d.node_id, d.draft_revision",
+        rs -> {
+          long nodeId = rs.getLong("node_id");
+          long draftRevision = rs.getLong("draft_revision");
+          long publishedDraftRevision = rs.getLong("published_draft_revision");
+          boolean hasPublishedRevision = !rs.wasNull();
+          result.put(nodeId, !hasPublishedRevision || draftRevision > publishedDraftRevision);
+        });
+    return result;
   }
 
   private boolean hasUnpublishedChanges(Long nodeId) {
