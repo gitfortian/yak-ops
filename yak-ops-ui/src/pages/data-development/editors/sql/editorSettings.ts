@@ -92,7 +92,7 @@ const dark = (background: string, foreground: string, keyword: string): monaco.e
   },
 });
 
-// Theme set follows the familiar SQL-editor presets from Chat2DB; Chat2DB-specific branding is replaced by Yak.
+// Theme set follows familiar SQL-editor presets; Chat2DB-specific branding is replaced by Yak.
 export const YAK_EDITOR_THEMES: YakEditorTheme[] = [
   { name: 'Yak-Light', dark: false, data: light('#FFFFFF', '#344054', '#245BDB') },
   { name: 'Yak-Dark', dark: true, data: dark('#17181C', '#D0D5DD', '#7AA2F7') },
@@ -112,8 +112,6 @@ const listeners = new Set<(settings: YakEditorSettings) => void>();
 let currentSettings = DEFAULT_YAK_EDITOR_SETTINGS;
 let loadPromise: Promise<YakEditorSettings> | undefined;
 
-export const getYakEditorSettings = () => currentSettings;
-
 export const setYakEditorSettings = (settings: YakEditorSettings) => {
   currentSettings = { ...DEFAULT_YAK_EDITOR_SETTINGS, ...settings };
   listeners.forEach((listener) => listener(currentSettings));
@@ -132,9 +130,17 @@ export const ensureYakEditorSettingsLoaded = () => {
         setYakEditorSettings(settings);
         return settings;
       })
-      .catch(() => currentSettings);
+      .catch(() => {
+        loadPromise = undefined;
+        return currentSettings;
+      });
   }
   return loadPromise;
+};
+
+export const getYakEditorSettings = () => {
+  if (!loadPromise) void ensureYakEditorSettingsLoaded();
+  return currentSettings;
 };
 
 export const editorOptionsFromSettings = (settings: YakEditorSettings): monaco.editor.IStandaloneEditorConstructionOptions => ({
@@ -149,5 +155,3 @@ export const editorOptionsFromSettings = (settings: YakEditorSettings): monaco.e
   renderLineHighlight: settings.renderLineHighlight,
   renderWhitespace: settings.renderWhitespace,
 });
-
-void ensureYakEditorSettingsLoaded();
