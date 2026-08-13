@@ -1,17 +1,27 @@
-import type {FormInstance} from "antd";
-import {useEffect, useState} from "react";
-import {fetchPluginConfig} from "../services/pluginConfig";
-import {getConfigInitialValues, patchEmptyWithDefaults} from "../utils/formUtils";
+import { API_SUCCESS_CODE } from '@/services/http/response';
+import type { FormInstance } from 'antd';
+import { useEffect, useState } from 'react';
 
+import { fetchDataSourcePluginConfig } from '../../../service';
+import type { DynamicFormField } from '../../../types';
+import {
+  flattenFormSectionFields,
+  getConfigInitialValues,
+  normalizeFormSections,
+  patchEmptyWithDefaults,
+} from '../utils/formUtils';
 
+/**
+ * 保留给仍在复用该 Hook 的旧表单入口。
+ * 数据源主编辑器已经自行管理 Schema 加载，这里与主流程共享同一 service 和归一化规则。
+ */
 export function usePluginFormConfig(params: {
   dbType: string;
   configForm: FormInstance;
-  intl: any;
+  intl?: unknown;
 }) {
-  const {dbType, configForm, intl} = params;
-
-  const [formConfig, setFormConfig] = useState<any[]>([]);
+  const { dbType, configForm } = params;
+  const [formConfig, setFormConfig] = useState<DynamicFormField[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -20,35 +30,32 @@ export function usePluginFormConfig(params: {
     async function run() {
       try {
         setLoading(true);
-        const response = await fetchPluginConfig(dbType);
-
+        const response = await fetchDataSourcePluginConfig(dbType);
         if (cancelled) return;
 
-        if (response?.code === 0) {
-          const fields = response?.data?.formFields || [];
-          console.log(formConfig);
-          setFormConfig(fields);
-
-          const init = getConfigInitialValues(fields);
-          const current = configForm.getFieldsValue(true);
-          const patch = patchEmptyWithDefaults(current, init);
-
-          if (Object.keys(patch).length) configForm.setFieldsValue(patch);
-        } else {
-
+        if (response?.code !== API_SUCCESS_CODE) {
+          setFormConfig([]);
+          return;
         }
-      } catch {
 
+        const sections = normalizeFormSections(response.data);
+        const fields = flattenFormSectionFields(sections);
+        setFormConfig(fields);
+
+        const defaults = getConfigInitialValues(fields);
+        const current = configForm.getFieldsValue(true);
+        const patch = patchEmptyWithDefaults(current, defaults);
+        if (Object.keys(patch).length > 0) configForm.setFieldsValue(patch);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    run();
+    if (dbType) void run();
     return () => {
       cancelled = true;
     };
-  }, [dbType]);
+  }, [configForm, dbType]);
 
-  return {formConfig, loading};
+  return { formConfig, loading };
 }
