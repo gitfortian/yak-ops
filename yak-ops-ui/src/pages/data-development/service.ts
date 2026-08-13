@@ -8,6 +8,10 @@ import type {
   DevelopmentDirectory,
   DevelopmentId,
   DevelopmentNode,
+  DevelopmentReleaseDetail,
+  DevelopmentReleasePage,
+  DevelopmentReleaseQuery,
+  DevelopmentReleaseSummary,
   DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
   DevelopmentTaskExecutionDetail,
@@ -23,6 +27,7 @@ const DATA_DEVELOPMENT_API = '/api/v1/data-development';
 const DIRECTORY_API = `${DATA_DEVELOPMENT_API}/directories`;
 const NODE_API = `${DATA_DEVELOPMENT_API}/nodes`;
 const EXECUTION_API = `${DATA_DEVELOPMENT_API}/executions`;
+const RELEASE_API = `${DATA_DEVELOPMENT_API}/releases`;
 const EDITOR_SETTINGS_API = `${DATA_DEVELOPMENT_API}/editor-settings`;
 
 export const listDevelopmentDirectories = (): Promise<ApiResponse<DevelopmentDirectory[]>> =>
@@ -79,7 +84,7 @@ export const runDevelopmentTask = (
 ): Promise<ApiResponse<DevelopmentTaskRunResult>> =>
   HttpUtils.post<DevelopmentTaskRunResult>(`${NODE_API}/${nodeId}/run`, payload);
 
-const executionQueryString = (query: DevelopmentTaskExecutionQuery) => {
+const queryString = (query: object) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') return;
@@ -92,12 +97,44 @@ const executionQueryString = (query: DevelopmentTaskExecutionQuery) => {
 export const listDevelopmentTaskExecutions = (
   query: DevelopmentTaskExecutionQuery,
 ): Promise<ApiResponse<DevelopmentTaskExecutionPage>> =>
-  HttpUtils.get<DevelopmentTaskExecutionPage>(`${EXECUTION_API}${executionQueryString(query)}`);
+  HttpUtils.get<DevelopmentTaskExecutionPage>(
+    `${EXECUTION_API}${queryString(query)}`,
+  );
 
 export const getDevelopmentTaskExecution = (
   id: DevelopmentId,
 ): Promise<ApiResponse<DevelopmentTaskExecutionDetail>> =>
   HttpUtils.get<DevelopmentTaskExecutionDetail>(`${EXECUTION_API}/${id}`);
+
+export const listDevelopmentReleases = (
+  query: DevelopmentReleaseQuery,
+): Promise<ApiResponse<DevelopmentReleasePage>> =>
+  HttpUtils.get<DevelopmentReleasePage>(
+    `${RELEASE_API}${queryString(query)}`,
+  );
+
+export const getDevelopmentRelease = (
+  assetId: DevelopmentId,
+): Promise<ApiResponse<DevelopmentReleaseDetail>> =>
+  HttpUtils.get<DevelopmentReleaseDetail>(`${RELEASE_API}/${assetId}`);
+
+export const offlineDevelopmentRelease = (
+  assetId: DevelopmentId,
+): Promise<ApiResponse<DevelopmentReleaseSummary>> =>
+  HttpUtils.post<DevelopmentReleaseSummary>(`${RELEASE_API}/${assetId}/offline`);
+
+export const onlineDevelopmentRelease = (
+  assetId: DevelopmentId,
+): Promise<ApiResponse<DevelopmentReleaseSummary>> =>
+  HttpUtils.post<DevelopmentReleaseSummary>(`${RELEASE_API}/${assetId}/online`);
+
+export const activateDevelopmentReleaseRevision = (
+  assetId: DevelopmentId,
+  revisionNo: number,
+): Promise<ApiResponse<DevelopmentReleaseSummary>> =>
+  HttpUtils.post<DevelopmentReleaseSummary>(
+    `${RELEASE_API}/${assetId}/activate/${revisionNo}`,
+  );
 
 export const publishDevelopmentTask = (
   nodeId: DevelopmentId,

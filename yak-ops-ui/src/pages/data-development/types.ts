@@ -137,3 +137,44 @@ export interface DevelopmentTaskExecutionQuery {
   startTime?: string;
   endTime?: string;
 }
+
+export type DevelopmentReleaseStatus = 'ONLINE' | 'OFFLINE' | 'DISABLED';
+
+export interface DevelopmentReleaseSummary {
+  assetId: DevelopmentId;
+  nodeId: DevelopmentId;
+  taskName: string;
+  taskType: DevelopmentTaskType;
+  status: DevelopmentReleaseStatus;
+  currentRevisionId: DevelopmentId;
+  currentRevisionNo: number;
+  latestRevisionNo: number;
+  hasNewerRevision: boolean;
+  checksum: string;
+  revisionCreateTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface DevelopmentReleasePage {
+  records: DevelopmentReleaseSummary[];
+  total: number;
+  pageNo: number;
+  pageSize: number;
+  onlineCount: number;
+  offlineCount: number;
+  disabledCount: number;
+}
+
+export interface DevelopmentReleaseDetail {
+  release: DevelopmentReleaseSummary;
+  currentRevision: DevelopmentTaskRevision;
+  revisions: DevelopmentTaskRevisionSummary[];
+}
+
+export interface DevelopmentReleaseQuery {
+  pageNo?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: DevelopmentReleaseStatus | 'ALL';
+  taskType?: DevelopmentTaskType;
+}
