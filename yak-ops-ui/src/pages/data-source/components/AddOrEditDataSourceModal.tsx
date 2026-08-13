@@ -17,7 +17,11 @@ import type {
   DataSourceRecord,
 } from "../types";
 import { DataSourceOperateType } from "../types";
-import { buildSubmitPayload, parseOriginalJson } from "../utils";
+import {
+  buildSubmitPayload,
+  normalizeConnectionFormValues,
+  parseOriginalJson,
+} from "../utils";
 import DataSourceTypeSelector from "./DataSourceTypeSelector";
 import DynamicDataSourceForm from "./DynamicDataSourceForm";
 import "./DataSourceEditorDrawer.less";
@@ -124,7 +128,9 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
 
     try {
       setTesting(true);
-      const connectionValues = await configForm.validateFields();
+      const connectionValues = normalizeConnectionFormValues(
+        await configForm.validateFields(),
+      );
       const response = await testDataSourceConnectionWithParams({
         dataSourceId: isEditMode ? currentRecord?.id : undefined,
         dbType: selectedDbType,

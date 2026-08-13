@@ -1,4 +1,9 @@
-import { buildSubmitPayload, parseOriginalJson } from './utils';
+import {
+  buildSubmitPayload,
+  normalizeConnectionFormValues,
+  parseOriginalJson,
+  serializeKeyValueRows,
+} from './utils';
 
 describe('datasource utils', () => {
   it('builds the backend connection parameter contract', () => {
@@ -27,6 +32,51 @@ describe('datasource utils', () => {
         password: '******',
         dbType: 'MYSQL',
       }),
+    });
+  });
+
+  it('serializes advanced property rows back into the plugin object contract', () => {
+    expect(
+      serializeKeyValueRows([
+        { key: ' useSSL ', value: 'false' },
+        { key: 'serverTimezone', value: 'UTC' },
+        { key: '', value: 'ignored' },
+      ]),
+    ).toEqual({
+      useSSL: 'false',
+      serverTimezone: 'UTC',
+    });
+
+    expect(
+      normalizeConnectionFormValues({
+        host: '127.0.0.1',
+        properties: [{ key: 'useSSL', value: 'false' }],
+      }),
+    ).toEqual({
+      host: '127.0.0.1',
+      properties: { useSSL: 'false' },
+    });
+  });
+
+  it('keeps advanced properties as a JSON object in submit payload', () => {
+    const payload = buildSubmitPayload(
+      'MYSQL',
+      { name: 'mysql', environment: 'DEVELOP' },
+      {
+        host: '127.0.0.1',
+        properties: [
+          { key: 'useSSL', value: 'false' },
+          { key: 'serverTimezone', value: 'UTC' },
+        ],
+      },
+    );
+
+    expect(JSON.parse(payload.connectionParams)).toMatchObject({
+      dbType: 'MYSQL',
+      properties: {
+        useSSL: 'false',
+        serverTimezone: 'UTC',
+      },
     });
   });
 

@@ -16,6 +16,7 @@ import type { DynamicFormField } from '../../../types';
 import {
   flattenFormSectionFields,
   getConfigInitialValues,
+  normalizeConfigValuesForForm,
   normalizeFormSections,
   patchEmptyWithDefaults,
 } from '../utils/formUtils';
@@ -98,12 +99,15 @@ export function usePluginFormConfig(params: {
       if (resetOnLoad) {
         configForm.setFieldsValue({
           ...defaults,
-          ...(initialConfig || {}),
+          ...normalizeConfigValuesForForm(fields, initialConfig),
         });
       } else {
-        const current = configForm.getFieldsValue(true);
+        const current = normalizeConfigValuesForForm(
+          fields,
+          configForm.getFieldsValue(true),
+        );
         const patch = patchEmptyWithDefaults(current, defaults);
-        if (Object.keys(patch).length > 0) configForm.setFieldsValue(patch);
+        configForm.setFieldsValue({ ...current, ...patch });
       }
 
       dispatch({ type: 'LOAD_SUCCESS', sections });
