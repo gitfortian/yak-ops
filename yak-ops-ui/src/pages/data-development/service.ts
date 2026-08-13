@@ -1,6 +1,7 @@
 import type { ApiResponse } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 
+import type { YakEditorSettings } from './editors/sql/editorSettings';
 import type {
   CreateDevelopmentDirectoryPayload,
   CreateDevelopmentNodePayload,
@@ -18,6 +19,7 @@ import type {
 const DATA_DEVELOPMENT_API = '/api/v1/data-development';
 const DIRECTORY_API = `${DATA_DEVELOPMENT_API}/directories`;
 const NODE_API = `${DATA_DEVELOPMENT_API}/nodes`;
+const EDITOR_SETTINGS_API = `${DATA_DEVELOPMENT_API}/editor-settings`;
 
 export const listDevelopmentDirectories = (): Promise<ApiResponse<DevelopmentDirectory[]>> =>
   HttpUtils.get<DevelopmentDirectory[]>(DIRECTORY_API);
@@ -93,3 +95,11 @@ export const getDevelopmentTaskRevision = (
   HttpUtils.get<DevelopmentTaskRevision>(
     `${NODE_API}/${nodeId}/revisions/${revisionNo}`,
   );
+
+export const getDevelopmentEditorSettings = (): Promise<ApiResponse<YakEditorSettings>> =>
+  HttpUtils.get<YakEditorSettings>(EDITOR_SETTINGS_API);
+
+export const saveDevelopmentEditorSettings = (
+  settings: YakEditorSettings,
+): Promise<ApiResponse<YakEditorSettings>> =>
+  HttpUtils.put<YakEditorSettings>(EDITOR_SETTINGS_API, settings);
