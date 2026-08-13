@@ -9,6 +9,7 @@ import type {
   DevelopmentEditorPanelKey,
 } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
+import EditorSettingsPanel from './EditorSettingsPanel';
 import TaskVersionsPanel from './TaskVersionsPanel';
 
 interface RightPanelProps {
@@ -37,12 +38,13 @@ const initialWidth = () => {
 const allItems: Array<{
   key: DevelopmentEditorPanelKey;
   label: string;
-  capability: keyof DevelopmentEditorDefinition['capabilities'];
+  capability?: keyof DevelopmentEditorDefinition['capabilities'];
 }> = [
   { key: 'properties', label: '属性', capability: 'properties' },
   { key: 'run-config', label: '运行配置', capability: 'runConfig' },
   { key: 'schedule-config', label: '调度配置', capability: 'scheduleConfig' },
   { key: 'versions', label: '版本', capability: 'versions' },
+  { key: 'editor-settings', label: '编辑器设置' },
 ];
 
 const RightPanel = ({
@@ -58,7 +60,9 @@ const RightPanel = ({
 
   const items = useMemo(
     () =>
-      allItems.filter((item) => Boolean(definition.capabilities[item.capability])),
+      allItems.filter(
+        (item) => !item.capability || Boolean(definition.capabilities[item.capability]),
+      ),
     [definition],
   );
   const activeItem = items.find((item) => item.key === activeTab);
@@ -99,6 +103,10 @@ const RightPanel = ({
 
   const renderContent = () => {
     if (!activeTab) return null;
+
+    if (activeTab === 'editor-settings') {
+      return <EditorSettingsPanel />;
+    }
 
     if (activeTab === 'versions') {
       return (
@@ -182,21 +190,23 @@ const RightPanel = ({
                 {activeItem?.label}
               </span>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title="刷新"
-                  onClick={() => {
-                    if (activeTab === 'versions') {
-                      setManualRefreshKey((current) => current + 1);
-                    } else {
-                      message.info(`${activeItem?.label || ''}刷新能力将在后续阶段接入`);
-                    }
-                  }}
-                  className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
-                >
-                  <RefreshCw size={13} strokeWidth={1.8} />
-                  刷新
-                </button>
+                {activeTab !== 'editor-settings' ? (
+                  <button
+                    type="button"
+                    title="刷新"
+                    onClick={() => {
+                      if (activeTab === 'versions') {
+                        setManualRefreshKey((current) => current + 1);
+                      } else {
+                        message.info(`${activeItem?.label || ''}刷新能力将在后续阶段接入`);
+                      }
+                    }}
+                    className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
+                  >
+                    <RefreshCw size={13} strokeWidth={1.8} />
+                    刷新
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   title="关闭"
