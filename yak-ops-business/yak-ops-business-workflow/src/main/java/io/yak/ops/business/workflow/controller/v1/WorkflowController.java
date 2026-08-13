@@ -3,6 +3,8 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
+import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
+import io.yak.ops.business.workflow.service.WorkflowLaunchService;
 import io.yak.ops.business.workflow.service.WorkflowRuntimeService;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
@@ -24,16 +26,20 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class WorkflowController {
 
   private final WorkflowRuntimeService workflowRuntimeService;
+  private final WorkflowLaunchService workflowLaunchService;
 
-  public WorkflowController(WorkflowRuntimeService workflowRuntimeService) {
+  public WorkflowController(
+      WorkflowRuntimeService workflowRuntimeService,
+      WorkflowLaunchService workflowLaunchService) {
     this.workflowRuntimeService = workflowRuntimeService;
+    this.workflowLaunchService = workflowLaunchService;
   }
 
   @Operation(summary = "创建工作流运行实例")
   @PostMapping("/run")
   public Result<WorkflowInstanceVO> run(
       @Valid @RequestBody WorkflowRunDTO request) {
-    return Result.success(workflowRuntimeService.run(request));
+    return Result.success(workflowLaunchService.runAdHoc(request, WorkflowTriggerContext.api()));
   }
 
   @Operation(summary = "激活工作流运行实例")
@@ -91,7 +97,8 @@ public class WorkflowController {
   @PostMapping("/instances/{executionId}/restart")
   public Result<WorkflowInstanceVO> restart(
       @PathVariable("executionId") String executionId) {
-    return Result.success(workflowRuntimeService.restart(executionId));
+    return Result.success(
+        workflowLaunchService.restart(executionId, WorkflowTriggerContext.manual()));
   }
 
   @Operation(summary = "从指定节点重新运行")
@@ -99,7 +106,11 @@ public class WorkflowController {
   public Result<WorkflowInstanceVO> rerunFromNode(
       @PathVariable("executionId") String executionId,
       @PathVariable("nodeId") String nodeId) {
-    return Result.success(workflowRuntimeService.rerunFromNode(executionId, nodeId));
+    return Result.success(
+        workflowLaunchService.rerunFromNode(
+            executionId,
+            nodeId,
+            WorkflowTriggerContext.manual()));
   }
 
   @Operation(summary = "查询工作流实例")
