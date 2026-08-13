@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormSectionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.RuleVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
@@ -30,8 +31,8 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
   @Override
   public DataSourcePluginConfigVO pluginConfig() {
-    List<FormFieldVO> fields = new ArrayList<>();
-    fields.add(
+    List<FormFieldVO> connectionFields = new ArrayList<>();
+    connectionFields.add(
         field(
             "host",
             "主机地址",
@@ -39,7 +40,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "请输入数据库主机地址",
             "127.0.0.1",
             required("请输入主机地址")));
-    fields.add(
+    connectionFields.add(
         field(
             "port",
             "端口",
@@ -47,7 +48,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "请输入数据库端口",
             defaultPort(),
             rangeRule(1, 65535, "端口必须在 1 到 65535 之间")));
-    fields.add(
+    connectionFields.add(
         field(
             "database",
             databaseLabel(),
@@ -55,7 +56,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "请输入数据库名称",
             null,
             required("请输入数据库名称")));
-    fields.add(
+    connectionFields.add(
         field(
             "schema",
             "Schema",
@@ -63,7 +64,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "可选；不填写时使用数据库默认 Schema",
             null,
             Collections.emptyList()));
-    fields.add(
+    connectionFields.add(
         field(
             "username",
             "用户名",
@@ -71,7 +72,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "请输入数据库用户名",
             null,
             required("请输入数据库用户名")));
-    fields.add(
+    connectionFields.add(
         field(
             "password",
             "密码",
@@ -79,7 +80,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "请输入数据库密码",
             null,
             Collections.emptyList()));
-    fields.add(
+    connectionFields.add(
         field(
             "jdbcUrl",
             "JDBC 地址",
@@ -87,7 +88,9 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "可选；留空时由插件根据主机、端口和数据库生成",
             null,
             Collections.emptyList()));
-    fields.add(
+
+    List<FormFieldVO> driverFields = new ArrayList<>();
+    driverFields.add(
         field(
             "driverClassName",
             "驱动类",
@@ -95,7 +98,9 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "请输入 JDBC Driver Class",
             defaultDriverClassName(),
             required("请输入 JDBC 驱动类")));
-    fields.add(
+
+    List<FormFieldVO> advancedFields = new ArrayList<>();
+    advancedFields.add(
         field(
             "properties",
             "扩展属性",
@@ -103,9 +108,45 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "可选；请输入 JSON 对象，例如 {\"useSSL\":\"false\"}",
             null,
             Collections.emptyList()));
-    appendFormFields(fields);
+    appendFormFields(advancedFields);
+
+    List<FormSectionVO> sections = new ArrayList<>();
+    sections.add(
+        section(
+            "connection",
+            "连接参数",
+            "配置数据库地址、认证信息与默认访问范围。",
+            false,
+            true,
+            connectionFields));
+    sections.add(
+        section(
+            "driver",
+            "驱动配置",
+            "查看或调整当前数据源使用的 JDBC Driver Class。",
+            true,
+            true,
+            driverFields));
+    if (!advancedFields.isEmpty()) {
+      sections.add(
+          section(
+              "advanced",
+              "高级配置",
+              "按需补充驱动属性和插件扩展参数。",
+              true,
+              false,
+              advancedFields));
+    }
+
+    // 同时保留 formFields，兼容尚未升级到 sections 协议的前端版本。
+    List<FormFieldVO> fields = new ArrayList<>();
+    fields.addAll(connectionFields);
+    fields.addAll(driverFields);
+    fields.addAll(advancedFields);
+
     return DataSourcePluginConfigVO.builder()
         .pluginType(dbType().name())
+        .sections(sections)
         .formFields(fields)
         .installRequired(false)
         .build();
@@ -321,6 +362,23 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
         .placeholder(placeholder)
         .defaultValue(defaultValue)
         .rules(rules)
+        .build();
+  }
+
+  protected FormSectionVO section(
+      String key,
+      String title,
+      String description,
+      boolean collapsible,
+      boolean defaultExpanded,
+      List<FormFieldVO> fields) {
+    return FormSectionVO.builder()
+        .key(key)
+        .title(title)
+        .description(description)
+        .collapsible(collapsible)
+        .defaultExpanded(defaultExpanded)
+        .fields(fields)
         .build();
   }
 
