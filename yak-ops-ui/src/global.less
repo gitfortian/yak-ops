@@ -146,3 +146,25 @@ ol {
 .ant-tree .ant-tree-switcher:before {
   display: none;
 }
+
+// SQL editor statement action: compact green play marker in Monaco's glyph margin.
+.yak-sql-run-glyph {
+  cursor: pointer;
+}
+
+.yak-sql-run-glyph::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 8px solid #22a06b;
+  content: '';
+  transform: translate(-42%, -50%);
+}
+
+.yak-sql-run-glyph:hover::before {
+  border-left-color: #138a5b;
+}
