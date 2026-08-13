@@ -132,6 +132,17 @@ export interface DynamicFormVisibilityCondition {
   values?: unknown[];
 }
 
+/** JDBC URL 与结构化 Host / Port / Database 字段之间的双向联动描述。 */
+export interface DynamicFormJdbcUrlLinkage {
+  /** 例如 jdbc:mysql://{host}:{port}/{database}。 */
+  template: string;
+  hostField?: string;
+  portField?: string;
+  databaseField?: string;
+  /** 默认保留 URL 尾部的 ?query 或 ;properties。 */
+  preserveSuffix?: boolean;
+}
+
 export type SshAuthType = 'PASSWORD' | 'PRIVATE_KEY';
 
 /** 标准 SSH 隧道配置值，由 SSH Schema 组件统一消费。 */
@@ -157,7 +168,8 @@ export type DynamicFormFieldType =
   | 'TEXTAREA'
   | 'CUSTOM_SELECT'
   | 'DRIVER'
-  | 'SSH';
+  | 'SSH'
+  | 'JDBC_URL';
 
 export interface DynamicFormField {
   key: string;
@@ -173,6 +185,8 @@ export interface DynamicFormField {
   visibleWhen?:
     | DynamicFormVisibilityCondition
     | DynamicFormVisibilityCondition[];
+  /** JDBC_URL 标准组件使用的双向联动元数据。 */
+  urlLinkage?: DynamicFormJdbcUrlLinkage;
 }
 
 /**

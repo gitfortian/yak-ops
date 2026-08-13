@@ -1,8 +1,10 @@
 package io.yak.ops.plugin.database.jdbc.oracle;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
+import io.yak.ops.plugin.database.jdbc.JdbcUrlSchemaSupport;
 
 /** Oracle JDBC 数据源插件。 */
 public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
@@ -10,6 +12,13 @@ public final class OracleDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   @Override
   public DataSourceDbType dbType() {
     return DataSourceDbType.ORACLE;
+  }
+
+  @Override
+  public DataSourcePluginConfigVO pluginConfig() {
+    return JdbcUrlSchemaSupport.apply(
+        super.pluginConfig(),
+        "jdbc:oracle:thin:@//{host}:{port}/{database}");
   }
 
   @Override

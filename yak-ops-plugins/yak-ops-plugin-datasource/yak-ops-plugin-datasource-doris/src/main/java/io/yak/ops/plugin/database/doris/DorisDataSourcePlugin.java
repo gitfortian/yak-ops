@@ -2,10 +2,12 @@ package io.yak.ops.plugin.database.doris;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
+import io.yak.ops.plugin.database.jdbc.JdbcUrlSchemaSupport;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
 import java.util.Collections;
 import java.util.List;
@@ -16,6 +18,13 @@ public final class DorisDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   @Override
   public DataSourceDbType dbType() {
     return DataSourceDbType.DORIS;
+  }
+
+  @Override
+  public DataSourcePluginConfigVO pluginConfig() {
+    return JdbcUrlSchemaSupport.apply(
+        super.pluginConfig(),
+        "jdbc:mysql://{host}:{port}/{database}");
   }
 
   @Override
