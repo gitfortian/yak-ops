@@ -1,6 +1,7 @@
 package io.yak.ops.business.workflow.persistence;
 
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,10 +34,39 @@ public interface WorkflowRuntimePersistence {
       String workflowVersionId,
       Integer workflowVersionNo,
       boolean testRun,
-      Map<String, NodeMetadataRecord> nodes) {
+      Map<String, NodeMetadataRecord> nodes,
+      String triggerType,
+      String triggerId,
+      String scheduleId,
+      Instant plannedFireTime) {
 
     public RuntimeMetadataRecord {
       nodes = nodes == null ? Map.of() : Map.copyOf(nodes);
+    }
+
+    /** 兼容现有 Runtime 调用；Trigger 会在统一 Launch 边界创建实例后补充。 */
+    public RuntimeMetadataRecord(
+        String name,
+        int edgeCount,
+        long workflowTimeoutSeconds,
+        String failureStrategy,
+        String workflowVersionId,
+        Integer workflowVersionNo,
+        boolean testRun,
+        Map<String, NodeMetadataRecord> nodes) {
+      this(
+          name,
+          edgeCount,
+          workflowTimeoutSeconds,
+          failureStrategy,
+          workflowVersionId,
+          workflowVersionNo,
+          testRun,
+          nodes,
+          null,
+          null,
+          null,
+          null);
     }
   }
 

@@ -3,7 +3,9 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
+import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
 import io.yak.ops.business.workflow.service.WorkflowDefinitionService;
+import io.yak.ops.business.workflow.service.WorkflowLaunchService;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
@@ -27,9 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkflowDefinitionController {
 
   private final WorkflowDefinitionService definitionService;
+  private final WorkflowLaunchService launchService;
 
-  public WorkflowDefinitionController(WorkflowDefinitionService definitionService) {
+  public WorkflowDefinitionController(
+      WorkflowDefinitionService definitionService,
+      WorkflowLaunchService launchService) {
     this.definitionService = definitionService;
+    this.launchService = launchService;
   }
 
   @Operation(summary = "查询工作流定义")
@@ -91,13 +97,13 @@ public class WorkflowDefinitionController {
   @Operation(summary = "执行当前启用的已发布版本")
   @PostMapping("/{id}/run")
   public Result<WorkflowDefinitionVO> run(@PathVariable("id") String id) {
-    return Result.success(definitionService.run(id));
+    return Result.success(launchService.runPublished(id, WorkflowTriggerContext.manual()));
   }
 
   @Operation(summary = "测试运行当前工作流草稿")
   @PostMapping("/{id}/test-run")
   public Result<WorkflowDefinitionVO> testRun(@PathVariable("id") String id) {
-    return Result.success(definitionService.testRun(id));
+    return Result.success(launchService.testRunDraft(id, WorkflowTriggerContext.manual()));
   }
 
   @Operation(summary = "查询工作流发布版本")
