@@ -16,8 +16,12 @@ import {
   Search,
   TerminalSquare,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useState } from 'react';
+
+import { listDevelopmentNodes } from '../service';
 
 export type DevelopmentTreeNodeType = 'directory' | 'node';
 export type DevelopmentNodeCreateType = 'SQL' | 'SHELL';
@@ -60,10 +64,28 @@ interface DevelopmentTreePaneProps {
   onCollapsedChange: (collapsed: boolean) => void;
 }
 
+type NodeMetadata = {
+  updatedBy?: string | null;
+  updateTime?: string;
+  pendingPublish?: boolean;
+};
+
 const nodeTypeIconClassName = (taskType?: string) => {
   if (taskType === 'SHELL') return 'text-[#6172f3]';
   if (taskType === 'SQL') return 'text-[#f79009]';
   return 'text-[#667085]';
+};
+
+const padTimePart = (value: number) => String(value).padStart(2, '0');
+
+const formatUpdateTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return [
+    `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())}`,
+    `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`,
+  ].join(' ');
 };
 
 const DevelopmentTreePane = ({
@@ -81,6 +103,34 @@ const DevelopmentTreePane = ({
   onResizeStart,
   onCollapsedChange,
 }: DevelopmentTreePaneProps) => {
+  const [metadataById, setMetadataById] = useState<Map<string, NodeMetadata>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+    void listDevelopmentNodes()
+      .then((response) => {
+        if (!active || !Array.isArray(response.data)) return;
+        setMetadataById(
+          new Map(
+            response.data.map((node) => [
+              node.id,
+              {
+                updatedBy: node.updatedBy,
+                updateTime: node.updateTime,
+                pendingPublish: node.pendingPublish,
+              },
+            ]),
+          ),
+        );
+      })
+      .catch(() => {
+        // The parent tree request already owns page-level error feedback.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const createMenuItems: MenuProps['items'] = [
     {
       key: 'node',
@@ -90,24 +140,12 @@ const DevelopmentTreePane = ({
         {
           key: 'node-sql',
           label: 'SQL 节点',
-          icon: (
-            <Code2
-              size={14}
-              strokeWidth={1.8}
-              className="text-[#f79009]"
-            />
-          ),
+          icon: <Code2 size={14} strokeWidth={1.8} className="text-[#f79009]" />,
         },
         {
           key: 'node-shell',
           label: 'Shell 节点',
-          icon: (
-            <TerminalSquare
-              size={14}
-              strokeWidth={1.8}
-              className="text-[#6172f3]"
-            />
-          ),
+          icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
         },
       ],
     },
@@ -154,24 +192,12 @@ const DevelopmentTreePane = ({
           {
             key: 'create-sql',
             label: 'SQL 节点',
-            icon: (
-              <Code2
-                size={14}
-                strokeWidth={1.8}
-                className="text-[#f79009]"
-              />
-            ),
+            icon: <Code2 size={14} strokeWidth={1.8} className="text-[#f79009]" />,
           },
           {
             key: 'create-shell',
             label: 'Shell 节点',
-            icon: (
-              <TerminalSquare
-                size={14}
-                strokeWidth={1.8}
-                className="text-[#6172f3]"
-              />
-            ),
+            icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
           },
         ],
       },
@@ -188,6 +214,12 @@ const DevelopmentTreePane = ({
   const renderTitle: TreeProps['titleRender'] = (rawNode) => {
     const node = rawNode as DevelopmentTreeNode;
     const isNode = node.nodeType === 'node';
+    const metadata = isNode ? metadataById.get(node.resourceId) : undefined;
+    const updateTime = formatUpdateTime(metadata?.updateTime);
+    const modifier = metadata?.updatedBy && metadata.updatedBy !== 'unknown'
+      ? metadata.updatedBy
+      : '';
+    const updateMeta = [modifier ? `${modifier}修改` : '', updateTime].filter(Boolean).join(' ');
 
     return (
       <Dropdown
@@ -197,11 +229,21 @@ const DevelopmentTreePane = ({
           triggerSubMenuAction: 'hover',
           subMenuOpenDelay: 0.05,
           subMenuCloseDelay: 0.1,
-          onClick: ({ key }) =>
-            onResourceAction(key as DevelopmentTreeAction, node),
+          onClick: ({ key }) => onResourceAction(key as DevelopmentTreeAction, node),
         }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2" title={node.title}>
+        <div
+          className="flex min-w-0 flex-1 items-center gap-1.5"
+          title={[node.title, updateMeta].filter(Boolean).join('  ')}
+        >
+          {isNode && metadata?.pendingPublish ? (
+            <Tooltip title="待发布">
+              <span className="inline-flex shrink-0 items-center text-[#98a2b3]">
+                <Upload size={12} strokeWidth={1.8} />
+              </span>
+            </Tooltip>
+          ) : null}
+
           {isNode ? (
             node.taskType === 'SHELL' ? (
               <TerminalSquare
@@ -217,26 +259,26 @@ const DevelopmentTreePane = ({
               />
             )
           ) : (
-            <Folder
-              size={14}
-              strokeWidth={1.8}
-              className="shrink-0 text-[#98a2b3]"
-            />
+            <Folder size={14} strokeWidth={1.8} className="shrink-0 text-[#98a2b3]" />
           )}
 
           <span
             className={[
-              'min-w-0 flex-1 truncate text-[13px] leading-8',
-              isNode ? 'font-normal text-[#344054]' : 'font-medium text-[#1f2937]',
+              'min-w-[36px] truncate text-[13px] leading-8',
+              isNode ? 'font-normal text-[#344054]' : 'flex-1 font-medium text-[#1f2937]',
             ].join(' ')}
           >
             {node.title}
           </span>
 
-          {isNode && node.taskType ? (
-            <span className="shrink-0 text-[10px] text-[#98a2b3]">
-              {node.taskType}
+          {isNode && updateMeta ? (
+            <span className="min-w-0 flex-1 truncate text-[11px] text-[#98a2b3]">
+              {updateMeta}
             </span>
+          ) : null}
+
+          {isNode && node.taskType ? (
+            <span className="shrink-0 text-[10px] text-[#98a2b3]">{node.taskType}</span>
           ) : null}
         </div>
       </Dropdown>
@@ -246,21 +288,12 @@ const DevelopmentTreePane = ({
   return (
     <>
       <aside
-        className={[
-          'group relative shrink-0 overflow-hidden bg-white',
-          'transition-[width] duration-200 ease-out',
-        ].join(' ')}
+        className="group relative shrink-0 overflow-hidden bg-white transition-[width] duration-200 ease-out"
         style={{ width: collapsed ? 0 : leftWidth }}
       >
-        <div
-          className="flex h-full flex-col overflow-hidden"
-          style={{ width: leftWidth }}
-        >
+        <div className="flex h-full flex-col overflow-hidden" style={{ width: leftWidth }}>
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-[#f7f7f8] px-3">
-            <span className="text-[13px] font-semibold text-[#30323b]">
-              开发目录
-            </span>
-
+            <span className="text-[13px] font-semibold text-[#30323b]">开发目录</span>
             <Dropdown
               trigger={['click']}
               placement="bottomRight"
@@ -319,11 +352,7 @@ const DevelopmentTreePane = ({
                 <YakEmpty
                   compact
                   title={searchValue.trim() ? '未找到匹配节点' : '暂无开发节点'}
-                  description={
-                    searchValue.trim()
-                      ? '换个关键词试试'
-                      : '点击右上角 + 创建目录或节点'
-                  }
+                  description={searchValue.trim() ? '换个关键词试试' : '点击右上角 + 创建目录或节点'}
                 />
               )}
             </Spin>
@@ -347,34 +376,25 @@ const DevelopmentTreePane = ({
             collapsed ? 'cursor-default' : 'cursor-col-resize',
           ].join(' ')}
         />
-
         <div
           className={[
-            'pointer-events-none absolute inset-y-0 left-0',
-            'w-px bg-[#dfe3e8]',
+            'pointer-events-none absolute inset-y-0 left-0 w-px bg-[#dfe3e8]',
             'transition-[width,background-color] duration-150',
             !collapsed
               ? 'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:bg-[rgba(254,44,85,1)]'
               : '',
           ].join(' ')}
         />
-
         <button
           type="button"
           aria-label={collapsed ? '展开开发目录面板' : '收起开发目录面板'}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => onCollapsedChange(!collapsed)}
           className={[
-            'absolute left-px top-1/2 z-20',
-            'flex h-7 w-3 -translate-y-1/2',
-            'items-center justify-center rounded-r-[3px]',
-            'border border-l-0 border-[#dfe3e8] bg-white text-[#7b808a]',
-            'shadow-[0_1px_2px_rgba(16,24,40,0.04)]',
-            'opacity-0 transition-[opacity,color,border-color,box-shadow] duration-150',
-            'group-hover:opacity-100 focus:opacity-100',
-            'hover:border-[#cfd4dc] hover:text-[#344054]',
-            'focus:outline-none focus-visible:ring-2',
-            'focus-visible:ring-[rgba(254,44,85,.16)]',
+            'absolute left-px top-1/2 z-20 flex h-7 w-3 -translate-y-1/2 items-center justify-center rounded-r-[3px]',
+            'border border-l-0 border-[#dfe3e8] bg-white text-[#7b808a] shadow-[0_1px_2px_rgba(16,24,40,0.04)]',
+            'opacity-0 transition-[opacity,color,border-color,box-shadow] duration-150 group-hover:opacity-100 focus:opacity-100',
+            'hover:border-[#cfd4dc] hover:text-[#344054] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)]',
           ].join(' ')}
         >
           {collapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
