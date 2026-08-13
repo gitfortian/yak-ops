@@ -1,4 +1,3 @@
-import { API_SUCCESS_CODE } from '@/services/http/response';
 import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useIntl } from '@umijs/max';
 import {
@@ -15,13 +14,9 @@ import {
 import type { FormInstance } from 'antd';
 import { Code2, FlaskConical, ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 
 import DatabaseIcons from '../../icon/DatabaseIcons';
-import {
-  fetchDataSourcePluginConfig,
-  installDataSourcePlugin,
-} from '../../service';
 import type {
   DynamicDataSourceFormProps,
   DynamicFormField,
@@ -34,13 +29,12 @@ import SshTunnelManager, {
   getSshTunnelValidationMessage,
 } from '../SshTunnelManager';
 import CustomKVList from './components/CustomKVList';
+import { PLUGIN_CONFIG_STATUS } from './hooks/pluginConfigState';
+import { usePluginFormConfig } from './hooks/usePluginFormConfig';
 import {
-  flattenFormSectionFields,
-  getConfigInitialValues,
   getFieldDefaultValue,
   getFieldDependencies,
   isDynamicFieldVisible,
-  normalizeFormSections,
   transformRules,
 } from './utils/formUtils';
 
@@ -127,12 +121,18 @@ const DynamicDataSourceForm = ({
   initialConfig,
 }: DynamicDataSourceFormProps) => {
   const intl = useIntl();
-  const [formSections, setFormSections] = useState<DynamicFormSection[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [needInstall, setNeedInstall] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [loadErrMsg, setLoadErrMsg] = useState('');
-  const requestSeqRef = useRef(0);
+  const {
+    formSections,
+    status: pluginStatus,
+    message: pluginMessage,
+    reload: reloadPluginConfig,
+    installPlugin,
+  } = usePluginFormConfig({
+    dbType,
+    configForm,
+    initialConfig,
+    resetOnLoad: true,
+  });
 
   useEffect(() => {
     if (operateType !== DataSourceOperateType.Create) return;
@@ -141,90 +141,6 @@ const DynamicDataSourceForm = ({
       form.setFieldValue('environment', DEFAULT_ENVIRONMENT);
     }
   }, [form, operateType]);
-
-  const loadFormConfig = useCallback(
-    async (currentDbType: string) => {
-      const requestSeq = requestSeqRef.current + 1;
-      requestSeqRef.current = requestSeq;
-      setLoading(true);
-      setNeedInstall(false);
-      setLoadErrMsg('');
-      setFormSections([]);
-      configForm.resetFields();
-
-      try {
-        const response = await fetchDataSourcePluginConfig(currentDbType);
-        if (requestSeq !== requestSeqRef.current) return;
-
-        if (response.code !== API_SUCCESS_CODE) {
-          setNeedInstall(true);
-          setLoadErrMsg(
-            response.msg || response.message || '数据源插件配置暂不可用',
-          );
-          return;
-        }
-
-        const data = response.data || { formFields: [] };
-        if (data.installRequired) {
-          setNeedInstall(true);
-          setLoadErrMsg(data.installHint || '请先安装数据源插件');
-          return;
-        }
-
-        const sections = normalizeFormSections(data);
-        const fields = flattenFormSectionFields(sections);
-        setFormSections(sections);
-        configForm.setFieldsValue({
-          ...getConfigInitialValues(fields),
-          ...(initialConfig || {}),
-        });
-      } catch (error) {
-        if (requestSeq !== requestSeqRef.current) return;
-        setNeedInstall(true);
-        setLoadErrMsg(
-          error instanceof Error
-            ? error.message
-            : intl.formatMessage({
-                id: 'pages.datasource.form.loadConfigFail',
-                defaultMessage: '数据源配置加载失败',
-              }),
-        );
-      } finally {
-        if (requestSeq === requestSeqRef.current) setLoading(false);
-      }
-    },
-    [configForm, initialConfig, intl],
-  );
-
-  useEffect(() => {
-    if (!dbType) {
-      requestSeqRef.current += 1;
-      setFormSections([]);
-      setNeedInstall(false);
-      setLoadErrMsg('');
-      setLoading(false);
-      configForm.resetFields();
-      return undefined;
-    }
-
-    void loadFormConfig(dbType);
-    return () => {
-      requestSeqRef.current += 1;
-    };
-  }, [configForm, dbType, loadFormConfig]);
-
-  const installPlugin = async () => {
-    if (!dbType || installing) return;
-    try {
-      setInstalling(true);
-      const response = await installDataSourcePlugin(dbType);
-      if (response.code !== API_SUCCESS_CODE) return;
-      message.success('插件安装成功');
-      await loadFormConfig(dbType);
-    } finally {
-      setInstalling(false);
-    }
-  };
 
   const validateField = (key: string) => {
     window.setTimeout(() => {
@@ -419,16 +335,72 @@ const DynamicDataSourceForm = ({
     );
   };
 
-  if (loading) {
+  const renderPluginState = () => {
+    if (
+      pluginStatus === PLUGIN_CONFIG_STATUS.IDLE ||
+      pluginStatus === PLUGIN_CONFIG_STATUS.READY
+    ) {
+      return null;
+    }
+
+    if (
+      pluginStatus === PLUGIN_CONFIG_STATUS.LOADING ||
+      pluginStatus === PLUGIN_CONFIG_STATUS.INSTALLING
+    ) {
+      return (
+        <div className="mt-4 flex min-h-[96px] items-center justify-center rounded-lg border border-[#eef0f3] bg-[#fafbfc]">
+          <div className="flex items-center gap-2 text-sm text-[#667085]">
+            <LoadingOutlined />
+            <span>
+              {pluginStatus === PLUGIN_CONFIG_STATUS.INSTALLING
+                ? '正在安装数据源插件...'
+                : '正在加载数据源配置...'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    const installRequired =
+      pluginStatus === PLUGIN_CONFIG_STATUS.INSTALL_REQUIRED;
     return (
-      <div className="flex min-h-[160px] items-center justify-center rounded-lg border border-[#eef0f3] bg-[#fafbfc]">
-        <div className="flex items-center gap-2 text-sm text-[#8a8f99]">
-          <LoadingOutlined />
-          <span>正在加载数据源配置...</span>
+      <div className="mt-4 rounded-lg border border-[#e4e7ec] bg-[#fafafa] px-3.5 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[13px] font-medium leading-5 text-[#344054]">
+              {installRequired
+                ? '当前数据源插件尚未安装'
+                : '数据源插件配置加载失败'}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-[#98a2b3]">
+              {pluginMessage ||
+                (installRequired
+                  ? '安装插件后即可继续配置当前数据源。'
+                  : '请检查服务状态或网络后重新加载。')}
+            </div>
+          </div>
+          <Button
+            size="small"
+            className="shrink-0"
+            onClick={() => {
+              if (installRequired) {
+                void installPlugin().then((installed) => {
+                  if (installed) message.success('插件安装成功');
+                });
+                return;
+              }
+              void reloadPluginConfig();
+            }}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              {installRequired ? '安装插件' : '重新加载'}
+              <DatabaseIcons dbType={dbType} height="15" width="15" />
+            </span>
+          </Button>
         </div>
       </div>
     );
-  }
+  };
 
   return (
     <div className="bg-white">
@@ -511,33 +483,7 @@ const DynamicDataSourceForm = ({
         </Form>
       </section>
 
-      {needInstall && (
-        <div className="mt-4 rounded-lg border border-dashed border-[#d6e4ff] bg-[#f7faff] px-3.5 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="text-[13px] leading-5 text-[#475467]">
-                当前插件配置暂不可用，请确认对应插件已经随服务部署。
-              </div>
-              {loadErrMsg && (
-                <div className="mt-1 truncate text-xs text-[#98a2b3]">
-                  {loadErrMsg}
-                </div>
-              )}
-            </div>
-            <Button
-              size="small"
-              loading={installing}
-              className="shrink-0"
-              onClick={() => void installPlugin()}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                重新检测
-                <DatabaseIcons dbType={dbType} height="15" width="15" />
-              </span>
-            </Button>
-          </div>
-        </div>
-      )}
+      {renderPluginState()}
 
       {formSections.length > 0 && (
         <Form
