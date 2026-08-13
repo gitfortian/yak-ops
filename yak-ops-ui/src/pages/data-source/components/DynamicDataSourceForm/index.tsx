@@ -15,7 +15,7 @@ import {
 import type { FormInstance } from 'antd';
 import { Code2, FlaskConical, ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import DatabaseIcons from '../../icon/DatabaseIcons';
 import {
@@ -45,24 +45,6 @@ import {
 } from './utils/formUtils';
 
 const DEFAULT_ENVIRONMENT = 'DEVELOP';
-
-const DATASOURCE_NAME_PRESETS = [
-  '认真搬砖的数据源',
-  '稳稳接住数据的同学',
-  '准点上班的数据源',
-  '连接世界的小桥',
-  '数据同步小能手',
-  '稳定发挥的数据源',
-];
-
-const DATASOURCE_REMARK_PRESETS = [
-  '负责把数据稳稳接住，偶尔也想早点下班。',
-  '一个朴素但可靠的数据入口，主打稳定发挥。',
-  '数据从这里出发，去往更需要它的地方。',
-  '主打一个稳定、清晰、少出幺蛾子。',
-  '用于承载当前业务数据连接配置。',
-  '连接参数准备好后，就可以开始认真干活了。',
-];
 
 const ENV_OPTIONS = [
   {
@@ -102,12 +84,6 @@ const ENV_OPTIONS = [
 
 const sectionTitleClass = 'm-0 text-sm font-semibold leading-6 text-[#161823]';
 const sectionDescriptionClass = 'm-0 text-xs leading-5 text-[#8a8f99]';
-
-const pickRandomPreset = (values: string[]) =>
-  values[Math.floor(Math.random() * values.length)];
-
-const isEmptyValue = (value: unknown) =>
-  value === undefined || value === null || value === '';
 
 /** 字段进入隐藏态时清除历史值和校验错误，确保不会被提交。 */
 const HiddenFieldCleaner = ({
@@ -158,27 +134,13 @@ const DynamicDataSourceForm = ({
   const [loadErrMsg, setLoadErrMsg] = useState('');
   const requestSeqRef = useRef(0);
 
-  const defaultBaseInfo = useMemo(
-    () => ({
-      name: pickRandomPreset(DATASOURCE_NAME_PRESETS),
-      environment: DEFAULT_ENVIRONMENT,
-      remark: pickRandomPreset(DATASOURCE_REMARK_PRESETS),
-    }),
-    [],
-  );
-
   useEffect(() => {
     if (operateType !== DataSourceOperateType.Create) return;
-
-    const current = form.getFieldsValue(true);
-    const patch: Record<string, unknown> = {};
-    if (isEmptyValue(current?.name)) patch.name = defaultBaseInfo.name;
-    if (isEmptyValue(current?.environment)) {
-      patch.environment = defaultBaseInfo.environment;
+    const environment = form.getFieldValue('environment');
+    if (environment === undefined || environment === null || environment === '') {
+      form.setFieldValue('environment', DEFAULT_ENVIRONMENT);
     }
-    if (isEmptyValue(current?.remark)) patch.remark = defaultBaseInfo.remark;
-    if (Object.keys(patch).length > 0) form.setFieldsValue(patch);
-  }, [defaultBaseInfo, form, operateType]);
+  }, [form, operateType]);
 
   const loadFormConfig = useCallback(
     async (currentDbType: string) => {
