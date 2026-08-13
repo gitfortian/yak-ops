@@ -166,7 +166,7 @@ const DevelopmentWorkbench = ({
     }
   };
 
-  const runActiveTask = async () => {
+  const runActiveTask = async (contentOverride?: string) => {
     if (!activeNode || runningNodeIds.includes(activeNode.id)) return;
     const node = activeNode;
     const startedAt = Date.now();
@@ -184,8 +184,12 @@ const DevelopmentWorkbench = ({
 
     try {
       const definition = prepareDevelopmentTaskDefinition(node);
+      const runDefinition =
+        contentOverride === undefined
+          ? definition
+          : { ...definition, content: contentOverride };
       const result = responseData(
-        await runDevelopmentTask(node.id, definition),
+        await runDevelopmentTask(node.id, runDefinition),
         '运行任务失败',
       );
       setRunResults((current) => ({ ...current, [node.id]: result }));
@@ -380,6 +384,8 @@ const DevelopmentWorkbench = ({
             node={activeNode}
             directory={activeDirectory}
             definition={definition}
+            onRunContent={(content) => void runActiveTask(content)}
+            running={activeRunning}
           />
           <RightPanel
             node={activeNode}

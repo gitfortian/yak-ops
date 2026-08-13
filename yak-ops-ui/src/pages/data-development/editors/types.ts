@@ -17,6 +17,8 @@ export type DevelopmentEditorPanelKey =
 export interface DevelopmentEditorContext {
   node: DevelopmentNode;
   directory?: DevelopmentDirectory;
+  onRunContent?: (content: string) => void;
+  running?: boolean;
 }
 
 export interface DevelopmentEditorToolbarContext
