@@ -330,6 +330,13 @@ function SiteLayoutContent() {
     },
     { type: "divider" },
     {
+      key: "settings",
+      icon: <Settings className="h-4 w-4" />,
+      label: "设置",
+      onClick: () => history.push("/settings"),
+    },
+    { type: "divider" },
+    {
       key: "logout",
       danger: true,
       icon: <LogOut className="h-4 w-4" />,
