@@ -10,6 +10,7 @@ import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
 import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
+import io.yak.ops.business.development.service.DevelopmentNodeService;
 import io.yak.ops.business.development.service.DevelopmentTaskRunService;
 import io.yak.ops.business.development.service.DevelopmentTaskService;
 import jakarta.validation.Valid;
@@ -31,12 +32,15 @@ public class DevelopmentTaskController {
 
   private final DevelopmentTaskService service;
   private final DevelopmentTaskRunService runService;
+  private final DevelopmentNodeService nodeService;
 
   public DevelopmentTaskController(
       DevelopmentTaskService service,
-      DevelopmentTaskRunService runService) {
+      DevelopmentTaskRunService runService,
+      DevelopmentNodeService nodeService) {
     this.service = service;
     this.runService = runService;
+    this.nodeService = nodeService;
   }
 
   @Operation(summary = "读取节点草稿")
@@ -49,15 +53,17 @@ public class DevelopmentTaskController {
   @PutMapping("/{nodeId}/draft")
   public Result<DevelopmentTaskDraft> saveDraft(
       @PathVariable("nodeId") Long nodeId,
-      @Valid @RequestBody SaveDraftRequest request) {
-    return Result.success(
-        service.saveDraft(
-            nodeId,
-            request.taskType(),
-            request.schemaVersion(),
-            request.content(),
-            request.configJson(),
-            request.baseRevision()));
+      @Valid @RequestBody SaveDraftRequest request,
+      Principal principal) {
+    DevelopmentTaskDraft saved = service.saveDraft(
+        nodeId,
+        request.taskType(),
+        request.schemaVersion(),
+        request.content(),
+        request.configJson(),
+        request.baseRevision());
+    nodeService.recordUpdater(nodeId, operatorName(principal));
+    return Result.success(saved);
   }
 
   @Operation(summary = "运行当前编辑器任务")
@@ -73,7 +79,7 @@ public class DevelopmentTaskController {
             request.schemaVersion(),
             request.content(),
             request.configJson(),
-            principal == null ? "unknown" : principal.getName()));
+            operatorName(principal)));
   }
 
   @Operation(summary = "发布节点版本")
@@ -97,5 +103,9 @@ public class DevelopmentTaskController {
       @PathVariable("nodeId") Long nodeId,
       @PathVariable("revisionNo") int revisionNo) {
     return Result.success(service.getRevision(nodeId, revisionNo));
+  }
+
+  private String operatorName(Principal principal) {
+    return principal == null ? "unknown" : principal.getName();
   }
 }
