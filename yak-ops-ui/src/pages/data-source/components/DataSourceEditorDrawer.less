@@ -32,18 +32,55 @@
     background: transparent !important;
   }
 
-  > .bg-white > section {
-    position: relative;
-  }
-
-  > .bg-white > section:first-child {
+  .datasource-editor-base-section {
     padding-bottom: 20px;
   }
 
-  > .bg-white > section:last-child {
-    margin-top: 0 !important;
-    padding-top: 20px !important;
-    border-top: 1px solid #eef0f3 !important;
+  .datasource-schema-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 18px;
+    border-top: 1px solid #eef0f3;
+  }
+
+  .datasource-schema-section {
+    min-width: 0;
+  }
+
+  .datasource-schema-collapse {
+    overflow: hidden;
+    border: 1px solid #e9ebef;
+    border-radius: 9px;
+    background: #fff;
+
+    > .ant-collapse-item {
+      border-bottom: 0;
+    }
+
+    .ant-collapse-header {
+      min-height: 42px;
+      padding: 9px 12px !important;
+      align-items: center !important;
+      background: #fbfbfc;
+    }
+
+    .ant-collapse-expand-icon {
+      color: #667085;
+    }
+
+    .ant-collapse-header-text {
+      min-width: 0;
+    }
+
+    .ant-collapse-content {
+      border-top: 1px solid #eef0f3;
+      background: #fff;
+    }
+
+    .ant-collapse-content-box {
+      padding: 12px 12px 0 !important;
+    }
   }
 
   .ant-form-item-label {
