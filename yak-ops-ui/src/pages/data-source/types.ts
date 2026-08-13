@@ -130,9 +130,27 @@ export interface DynamicFormField {
   rules?: DynamicFormFieldRule[];
 }
 
+/**
+ * 插件动态表单分区。
+ *
+ * collapsible=false 时直接展示；collapsible=true 时由前端渲染为 Collapse。
+ * defaultExpanded 仅对可折叠分区生效，未配置时默认展开，避免必填字段被静默隐藏。
+ */
+export interface DynamicFormSection {
+  key: string;
+  title: string;
+  description?: string;
+  collapsible?: boolean;
+  defaultExpanded?: boolean;
+  fields: DynamicFormField[];
+}
+
 export interface DynamicFormSchemaResponse {
   pluginType?: string;
-  formFields: DynamicFormField[];
+  /** 新版分区 Schema，存在有效分区时优先使用。 */
+  sections?: DynamicFormSection[];
+  /** 兼容旧插件的扁平字段列表。 */
+  formFields?: DynamicFormField[];
   installRequired?: boolean;
   installHint?: string;
 }

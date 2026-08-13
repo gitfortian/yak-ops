@@ -16,6 +16,15 @@ public class DataSourcePluginConfigVO {
 
   private String pluginType;
 
+  /**
+   * 新版分区表单配置。
+   *
+   * <p>存在有效 sections 时前端优先按分区渲染；formFields 保留用于兼容旧插件。
+   */
+  @Builder.Default
+  private List<FormSectionVO> sections = new ArrayList<>();
+
+  /** 旧版扁平动态表单字段，保留兼容能力。 */
   @Builder.Default
   private List<FormFieldVO> formFields = new ArrayList<>();
 
@@ -23,6 +32,27 @@ public class DataSourcePluginConfigVO {
   private Boolean installRequired = false;
 
   private String installHint;
+
+  /** 动态表单分区。 */
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class FormSectionVO {
+
+    private String key;
+    private String title;
+    private String description;
+
+    @Builder.Default
+    private Boolean collapsible = false;
+
+    @Builder.Default
+    private Boolean defaultExpanded = true;
+
+    @Builder.Default
+    private List<FormFieldVO> fields = new ArrayList<>();
+  }
 
   /** 动态表单字段。 */
   @Data

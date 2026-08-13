@@ -1,6 +1,11 @@
 import type { Rule } from 'antd/es/form';
 
-import type { DynamicFormField, DynamicFormFieldRule } from '../../../types';
+import type {
+  DynamicFormField,
+  DynamicFormFieldRule,
+  DynamicFormSchemaResponse,
+  DynamicFormSection,
+} from '../../../types';
 
 export const transformRules = (
   rules: DynamicFormFieldRule[] | undefined,
@@ -61,6 +66,46 @@ const parseDefaultValueByType = (field: DynamicFormField) => {
       return value;
   }
 };
+
+/**
+ * 将新版 sections 和旧版 formFields 统一归一成分区结构。
+ *
+ * 新插件优先使用 sections；旧插件无需迁移，扁平 formFields 会自动落到
+ * 一个始终展开的“连接参数”分区中。
+ */
+export const normalizeFormSections = (
+  schema?: Pick<DynamicFormSchemaResponse, 'sections' | 'formFields'>,
+): DynamicFormSection[] => {
+  const sections = (schema?.sections || [])
+    .filter((section) => Array.isArray(section?.fields) && section.fields.length > 0)
+    .map((section, index) => ({
+      ...section,
+      key: section.key?.trim() || `section-${index + 1}`,
+      title: section.title?.trim() || '连接参数',
+      collapsible: section.collapsible === true,
+      defaultExpanded: section.defaultExpanded !== false,
+      fields: [...section.fields],
+    }));
+
+  if (sections.length > 0) return sections;
+
+  const legacyFields = schema?.formFields || [];
+  if (legacyFields.length === 0) return [];
+
+  return [
+    {
+      key: 'connection',
+      title: '连接参数',
+      collapsible: false,
+      defaultExpanded: true,
+      fields: [...legacyFields],
+    },
+  ];
+};
+
+export const flattenFormSectionFields = (
+  sections: DynamicFormSection[],
+): DynamicFormField[] => sections.flatMap((section) => section.fields || []);
 
 /** 只给当前为空的字段补默认值。 */
 export const patchEmptyWithDefaults = (
