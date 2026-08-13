@@ -26,5 +26,10 @@ public interface DevelopmentNodeRepository {
 
   boolean updateConfigured(Long id, boolean configured);
 
+  /** Stores the last editor without forcing all existing repository test doubles to implement it. */
+  default boolean updateUpdatedBy(Long id, String updatedBy) {
+    return false;
+  }
+
   boolean deleteById(Long id);
 }
