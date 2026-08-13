@@ -1,35 +1,13 @@
-import {
-  autocompletion,
-  closeCompletion,
-  completionKeymap,
-  completionStatus,
-  startCompletion,
-  type Completion,
-  type CompletionContext,
-} from '@codemirror/autocomplete';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { HighlightStyle, bracketMatching, foldGutter, indentOnInput, syntaxHighlighting } from '@codemirror/language';
-import { type Extension, Compartment, EditorState } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, tooltips } from '@codemirror/view';
-import {
-  MSSQL,
-  MariaSQL,
-  MySQL,
-  PLSQL,
-  PostgreSQL,
-  SQLite,
-  StandardSQL,
-  sql,
-  type SQLConfig,
-  type SQLDialect,
-  type SQLNamespace,
-} from '@codemirror/lang-sql';
-import { tags } from '@lezer/highlight';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
+import 'monaco-editor/esm/vs/editor/contrib/folding/browser/folding';
+import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
 import { Button, Modal } from 'antd';
 import classNames from 'classnames';
 import { Maximize2 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { setupMonacoEnvironment } from './setupMonacoEnvironment';
 import './index.less';
 
 type SqlSchemaField = {
@@ -61,6 +39,30 @@ interface SqlCodeEditorProps {
   fullscreenTitle?: string;
 }
 
+type SqlLexicalState =
+  | 'code'
+  | 'single-quote'
+  | 'double-quote'
+  | 'backtick'
+  | 'bracket-identifier'
+  | 'line-comment'
+  | 'block-comment';
+
+type SqlCompletionCandidate = {
+  label: string;
+  insertText?: string;
+  kind: monaco.languages.CompletionItemKind;
+  detail: string;
+  documentation?: string;
+  sortGroup: number;
+};
+
+type CompletionConfig = {
+  schemaFields: SqlSchemaField[];
+  tableOptions: SqlTableOption[];
+  variables: string[];
+};
+
 const DEFAULT_MIN_ROWS = 5;
 const DEFAULT_MAX_ROWS = 12;
 const FULLSCREEN_MIN_ROWS = 18;
@@ -69,7 +71,7 @@ const LINE_HEIGHT = 24;
 const VERTICAL_PADDING = 20;
 const SQL_COMPLETION_TOKEN_PATTERN = /(?:\$\{var:)?[A-Za-z_$][\w$:{.-]*$/;
 
-const SQL_KEYWORD_COMPLETIONS: Completion[] = [
+const SQL_KEYWORDS = [
   'SELECT',
   'FROM',
   'WHERE',
@@ -107,399 +109,312 @@ const SQL_KEYWORD_COMPLETIONS: Completion[] = [
   'MAX',
   'COALESCE',
   'DATE_FORMAT',
-].map((label) => ({
-  label,
-  type: 'keyword',
-  detail: 'SQL 关键字',
-}));
+] as const;
 
-const SQL_SNIPPET_COMPLETIONS: Completion[] = [
+const SQL_SNIPPETS: Array<Pick<SqlCompletionCandidate, 'label' | 'insertText' | 'detail'>> = [
   {
     label: 'SELECT * FROM',
-    type: 'keyword',
     detail: '查询模板',
-    apply: 'SELECT *\nFROM ',
+    insertText: 'SELECT *\nFROM ',
   },
   {
     label: 'SELECT FROM WHERE',
-    type: 'keyword',
     detail: '过滤查询模板',
-    apply: 'SELECT \nFROM \nWHERE ',
+    insertText: 'SELECT \nFROM \nWHERE ',
   },
   {
     label: 'INSERT INTO SELECT',
-    type: 'keyword',
     detail: '写入模板',
-    apply: 'INSERT INTO  ()\nSELECT \nFROM ',
+    insertText: 'INSERT INTO  ()\nSELECT \nFROM ',
   },
   {
     label: 'LEFT JOIN',
-    type: 'keyword',
     detail: '关联查询',
-    apply: 'LEFT JOIN  ON ',
+    insertText: 'LEFT JOIN  ON ',
   },
   {
     label: 'GROUP BY',
-    type: 'keyword',
     detail: '分组',
-    apply: 'GROUP BY ',
+    insertText: 'GROUP BY ',
   },
   {
     label: 'ORDER BY',
-    type: 'keyword',
     detail: '排序',
-    apply: 'ORDER BY ',
+    insertText: 'ORDER BY ',
   },
   {
     label: 'LIMIT',
-    type: 'keyword',
     detail: '限制行数',
-    apply: 'LIMIT ',
+    insertText: 'LIMIT ',
   },
   {
     label: '${var:today_start}',
-    type: 'variable',
     detail: '时间变量',
-    apply: '${var:today_start}',
+    insertText: '${var:today_start}',
   },
 ];
 
-const sqlHighlightStyle = HighlightStyle.define([
-  {
-    tag: tags.keyword,
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-  {
-    tag: tags.comment,
-    color: '#94a3b8',
-    fontStyle: 'italic',
-  },
-  {
-    tag: tags.string,
-    color: '#0f766e',
-  },
-  {
-    tag: tags.number,
-    color: '#d97706',
-    fontWeight: '500',
-  },
-  {
-    tag: tags.operator,
-    color: '#64748b',
-  },
-  {
-    tag: tags.bool,
-    color: '#7c3aed',
-    fontWeight: '600',
-  },
-  {
-    tag: tags.variableName,
-    color: '#4f46e5',
-    fontWeight: '600',
-  },
-  {
-    tag: tags.propertyName,
-    color: '#334155',
-  },
-  {
-    tag: [tags.brace, tags.paren, tags.squareBracket],
-    color: '#64748b',
-  },
-]);
+let themeRegistered = false;
+let editorSequence = 0;
 
-function resolveSqlDialect(dbType?: string): SQLDialect {
+const ensureSqlCodeEditorTheme = () => {
+  if (themeRegistered) return;
+  themeRegistered = true;
+
+  monaco.editor.defineTheme('yak-sql-code-editor', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'keyword', foreground: '2563EB', fontStyle: 'bold' },
+      { token: 'comment', foreground: '94A3B8', fontStyle: 'italic' },
+      { token: 'string', foreground: '0F766E' },
+      { token: 'number', foreground: 'D97706' },
+      { token: 'operator', foreground: '64748B' },
+      { token: 'identifier', foreground: '334155' },
+    ],
+    colors: {
+      'editor.background': '#FCFDFF',
+      'editor.foreground': '#334155',
+      'editorGutter.background': '#F8FAFC',
+      'editorLineNumber.foreground': '#94A3B8',
+      'editorLineNumber.activeForeground': '#64748B',
+      'editor.lineHighlightBackground': '#F1F5F9B3',
+      'editor.selectionBackground': '#4F6BFF29',
+      'editor.inactiveSelectionBackground': '#4F6BFF1F',
+      'editorCursor.foreground': '#0F172A',
+      'editorIndentGuide.background1': '#EEF2F7',
+      'editorIndentGuide.activeBackground1': '#CBD5E1',
+      'editorSuggestWidget.background': '#FFFFFF',
+      'editorSuggestWidget.border': '#D8DFFF',
+      'editorSuggestWidget.foreground': '#334155',
+      'editorSuggestWidget.selectedBackground': '#EEF2FF',
+      'editorSuggestWidget.highlightForeground': '#315EFB',
+      'editorWidget.border': '#D8DFFF',
+      'editorWidget.background': '#FFFFFF',
+      'scrollbarSlider.background': '#94A3B866',
+      'scrollbarSlider.hoverBackground': '#94A3B399',
+      'scrollbarSlider.activeBackground': '#64748B99',
+    },
+  });
+};
+
+const normalizeName = (value?: string | number) => String(value ?? '').trim();
+
+const resolveDialectLabel = (dbType?: string) => {
   const normalized = String(dbType || '')
     .trim()
     .toUpperCase()
     .replace(/[\s-]+/g, '_');
 
-  if (normalized.includes('MARIADB')) {
-    return MariaSQL;
+  if (normalized.includes('MARIADB')) return 'MariaDB';
+  if (normalized.includes('MYSQL')) return 'MySQL';
+  if (normalized.includes('POSTGRES') || normalized.includes('PGSQL')) return 'PostgreSQL';
+  if (
+    normalized.includes('SQLSERVER') ||
+    normalized.includes('SQL_SERVER') ||
+    normalized.includes('MSSQL')
+  ) {
+    return 'SQL Server';
   }
+  if (normalized.includes('SQLITE')) return 'SQLite';
+  if (normalized.includes('ORACLE')) return 'Oracle';
+  return 'SQL';
+};
 
-  if (normalized.includes('MYSQL')) {
-    return MySQL;
-  }
+const getTextBeforePosition = (
+  model: monaco.editor.ITextModel,
+  position: monaco.Position,
+) =>
+  model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, position.column));
 
-  if (normalized.includes('POSTGRES') || normalized.includes('PGSQL')) {
-    return PostgreSQL;
-  }
+const getLexicalState = (text: string): SqlLexicalState => {
+  let state: SqlLexicalState = 'code';
 
-  if (normalized.includes('SQLSERVER') || normalized.includes('SQL_SERVER') || normalized.includes('MSSQL')) {
-    return MSSQL;
-  }
+  for (let index = 0; index < text.length; index += 1) {
+    const current = text[index];
+    const next = text[index + 1];
 
-  if (normalized.includes('SQLITE')) {
-    return SQLite;
-  }
-
-  if (normalized.includes('ORACLE')) {
-    return PLSQL;
-  }
-
-  return StandardSQL;
-}
-
-function normalizeName(value?: string | number): string {
-  return String(value ?? '').trim();
-}
-
-function buildFieldCompletion(field: SqlSchemaField): Completion | null {
-  const fieldName = normalizeName(field.originFieldName || field.name);
-
-  if (!fieldName) {
-    return null;
-  }
-
-  return {
-    label: fieldName,
-    type: 'property',
-    detail: field.type || '字段',
-    info: field.comment || undefined,
-  };
-}
-
-function buildSchemaNamespace(
-  schemaFields: SqlSchemaField[] = [],
-  tableOptions: SqlTableOption[] = [],
-): {
-  schema?: SQLNamespace;
-  defaultTable?: string;
-} {
-  const fieldCompletions = schemaFields.map(buildFieldCompletion).filter(Boolean) as Completion[];
-
-  if (fieldCompletions.length) {
-    return {
-      schema: {
-        input: fieldCompletions,
-      },
-      defaultTable: 'input',
-    };
-  }
-
-  const tableSchema = tableOptions.reduce<Record<string, readonly string[]>>((schema, option) => {
-    const tableName = normalizeName(option.rawLabel || option.value);
-
-    if (!tableName) {
-      return schema;
+    if (state === 'line-comment') {
+      if (current === '\n') state = 'code';
+      continue;
     }
 
-    schema[tableName] = [];
-    return schema;
-  }, {});
-
-  if (!Object.keys(tableSchema).length) {
-    return {};
-  }
-
-  return {
-    schema: tableSchema,
-  };
-}
-
-function buildTableCompletion(option: SqlTableOption): Completion | null {
-  const tableName = normalizeName(option.rawLabel || option.value);
-
-  if (!tableName) {
-    return null;
-  }
-
-  return {
-    label: tableName,
-    type: 'type',
-    detail: '数据表',
-    info: option.description || undefined,
-  };
-}
-
-function createSqlCompletionSource({
-  schemaFields = [],
-  tableOptions = [],
-  variables = [],
-}: {
-  schemaFields?: SqlSchemaField[];
-  tableOptions?: SqlTableOption[];
-  variables?: string[];
-}) {
-  const fieldCompletions = schemaFields.map(buildFieldCompletion).filter(Boolean) as Completion[];
-  const tableCompletions = tableOptions.map(buildTableCompletion).filter(Boolean) as Completion[];
-  const variableCompletions = Array.from(new Set(variables.map(normalizeName).filter(Boolean))).map<Completion>(
-    (name) => ({
-      label: `\${var:${name}}`,
-      type: 'variable',
-      detail: '时间变量',
-      apply: `\${var:${name}}`,
-    }),
-  );
-
-  const options = [
-    ...SQL_KEYWORD_COMPLETIONS,
-    ...SQL_SNIPPET_COMPLETIONS,
-    ...tableCompletions,
-    ...fieldCompletions,
-    ...variableCompletions,
-  ];
-
-  return (context: CompletionContext) => {
-    const word = context.matchBefore(SQL_COMPLETION_TOKEN_PATTERN);
-    const token = word?.text || '';
-
-    if (!context.explicit && !word) {
-      return null;
-    }
-
-    const normalizedToken = token.toLowerCase();
-    const matchedOptions = normalizedToken
-      ? options.filter((option) => {
-          const label = option.label.toLowerCase();
-
-          return (
-            label.startsWith(normalizedToken) || label.split(/\s+/).some((part) => part.startsWith(normalizedToken))
-          );
-        })
-      : options;
-
-    if (!matchedOptions.length) {
-      return null;
-    }
-
-    return {
-      from: word?.from ?? context.pos,
-      options: matchedOptions,
-      filter: false,
-    };
-  };
-}
-
-function buildSqlExtensions(props: {
-  dbType?: string;
-  schemaFields?: SqlSchemaField[];
-  tableOptions?: SqlTableOption[];
-  variables?: string[];
-}): Extension {
-  const dialect = resolveSqlDialect(props.dbType);
-  const schemaConfig = buildSchemaNamespace(props.schemaFields, props.tableOptions);
-  const sqlConfig: SQLConfig = {
-    dialect,
-    upperCaseKeywords: true,
-    ...schemaConfig,
-  };
-
-  return [
-    sql(sqlConfig),
-    autocompletion({
-      activateOnTyping: true,
-      activateOnTypingDelay: 0,
-      maxRenderedOptions: 12,
-      tooltipClass: () => 'sql-code-editor__completion-tooltip',
-      override: [createSqlCompletionSource(props)],
-    }),
-  ];
-}
-
-function getSqlCompletionToken(view: EditorView): string {
-  const head = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(head);
-  const beforeCursor = view.state.sliceDoc(line.from, head);
-
-  return beforeCursor.match(SQL_COMPLETION_TOKEN_PATTERN)?.[0] || '';
-}
-
-function syncSqlCompletion(view: EditorView): void {
-  window.setTimeout(() => {
-    if (!view.dom.isConnected || !view.hasFocus || view.composing) {
-      return;
-    }
-
-    const token = getSqlCompletionToken(view);
-    const status = completionStatus(view.state);
-
-    if (!token) {
-      if (status) {
-        closeCompletion(view);
+    if (state === 'block-comment') {
+      if (current === '*' && next === '/') {
+        state = 'code';
+        index += 1;
       }
-
-      return;
+      continue;
     }
 
-    if (!status) {
-      startCompletion(view);
+    if (state === 'single-quote') {
+      if (current === '\\') {
+        index += 1;
+        continue;
+      }
+      if (current === "'" && next === "'") {
+        index += 1;
+        continue;
+      }
+      if (current === "'") state = 'code';
+      continue;
     }
-  }, 0);
-}
 
-const editorBaseTheme = EditorView.theme({
-  '&': {
-    fontSize: '13px',
-    backgroundColor: '#FCFDFF',
-    color: '#334155',
-    outline: 'none !important',
-  },
+    if (state === 'double-quote') {
+      if (current === '\\') {
+        index += 1;
+        continue;
+      }
+      if (current === '"' && next === '"') {
+        index += 1;
+        continue;
+      }
+      if (current === '"') state = 'code';
+      continue;
+    }
 
-  '&.cm-focused': {
-    outline: 'none !important',
-  },
+    if (state === 'backtick') {
+      if (current === '\\') {
+        index += 1;
+        continue;
+      }
+      if (current === '`' && next === '`') {
+        index += 1;
+        continue;
+      }
+      if (current === '`') state = 'code';
+      continue;
+    }
 
-  '.cm-scroller': {
-    overflow: 'auto',
-    fontFamily: 'JetBrains Mono, Fira Code, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-    lineHeight: `${LINE_HEIGHT}px`,
-    outline: 'none !important',
-  },
+    if (state === 'bracket-identifier') {
+      if (current === ']' && next === ']') {
+        index += 1;
+        continue;
+      }
+      if (current === ']') state = 'code';
+      continue;
+    }
 
-  '.cm-content': {
-    padding: '10px 0',
-    caretColor: '#0f172a',
-    outline: 'none !important',
-  },
+    if (current === '-' && next === '-') {
+      state = 'line-comment';
+      index += 1;
+      continue;
+    }
+    if (current === '#') {
+      state = 'line-comment';
+      continue;
+    }
+    if (current === '/' && next === '*') {
+      state = 'block-comment';
+      index += 1;
+      continue;
+    }
+    if (current === "'") {
+      state = 'single-quote';
+      continue;
+    }
+    if (current === '"') {
+      state = 'double-quote';
+      continue;
+    }
+    if (current === '`') {
+      state = 'backtick';
+      continue;
+    }
+    if (current === '[') state = 'bracket-identifier';
+  }
 
-  '.cm-line': {
-    padding: '0 12px',
-  },
+  return state;
+};
 
-  '.cm-gutters': {
-    backgroundColor: '#F8FAFC',
-    color: '#94A3B8',
-    borderRight: '1px solid rgba(226, 232, 240, 0.9)',
-  },
+const buildCompletionCandidates = ({
+  schemaFields,
+  tableOptions,
+  variables,
+}: CompletionConfig): SqlCompletionCandidate[] => {
+  const keywords = SQL_KEYWORDS.map<SqlCompletionCandidate>((label) => ({
+    label,
+    kind: monaco.languages.CompletionItemKind.Keyword,
+    detail: 'SQL 关键字',
+    sortGroup: 1,
+  }));
 
-  '.cm-lineNumbers .cm-gutterElement': {
-    padding: '0 10px 0 12px',
-    fontSize: '12px',
-    lineHeight: `${LINE_HEIGHT}px`,
-  },
+  const snippets = SQL_SNIPPETS.map<SqlCompletionCandidate>((snippet) => ({
+    ...snippet,
+    kind:
+      snippet.detail === '时间变量'
+        ? monaco.languages.CompletionItemKind.Variable
+        : monaco.languages.CompletionItemKind.Snippet,
+    sortGroup: snippet.detail === '时间变量' ? 5 : 2,
+  }));
 
-  '.cm-activeLine': {
-    backgroundColor: 'rgba(241, 245, 249, 0.7)',
-  },
+  const tables = tableOptions
+    .map<SqlCompletionCandidate | null>((option) => {
+      const tableName = normalizeName(option.rawLabel || option.value);
+      if (!tableName) return null;
+      return {
+        label: tableName,
+        kind: monaco.languages.CompletionItemKind.Struct,
+        detail: '数据表',
+        documentation: option.description || undefined,
+        sortGroup: 3,
+      };
+    })
+    .filter((candidate): candidate is SqlCompletionCandidate => Boolean(candidate));
 
-  '.cm-activeLineGutter': {
-    backgroundColor: '#F1F5F9',
-    color: '#64748B',
-  },
+  const fields = schemaFields
+    .map<SqlCompletionCandidate | null>((field) => {
+      const fieldName = normalizeName(field.originFieldName || field.name);
+      if (!fieldName) return null;
+      return {
+        label: fieldName,
+        kind: monaco.languages.CompletionItemKind.Field,
+        detail: field.type || '字段',
+        documentation: field.comment || undefined,
+        sortGroup: 4,
+      };
+    })
+    .filter((candidate): candidate is SqlCompletionCandidate => Boolean(candidate));
 
-  '.cm-selectionBackground': {
-    backgroundColor: 'rgba(79, 107, 255, 0.16) !important',
-  },
+  const variableNames = Array.from(new Set(variables.map(normalizeName).filter(Boolean)));
+  const variableCandidates = variableNames.map<SqlCompletionCandidate>((name) => ({
+    label: `\${var:${name}}`,
+    insertText: `\${var:${name}}`,
+    kind: monaco.languages.CompletionItemKind.Variable,
+    detail: '时间变量',
+    sortGroup: 5,
+  }));
 
-  '&.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(79, 107, 255, 0.16) !important',
-  },
+  return [...keywords, ...snippets, ...tables, ...fields, ...variableCandidates];
+};
 
-  '.cm-cursor': {
-    borderLeftColor: '#0f172a',
-  },
-});
+const getCompletionContext = (
+  model: monaco.editor.ITextModel,
+  position: monaco.Position,
+) => {
+  const lineText = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+  const token = lineText.match(SQL_COMPLETION_TOKEN_PATTERN)?.[0] || '';
+  const startColumn = Math.max(1, position.column - token.length);
+
+  return {
+    token,
+    range: new monaco.Range(
+      position.lineNumber,
+      startColumn,
+      position.lineNumber,
+      position.column,
+    ),
+  };
+};
 
 export default function SqlCodeEditor({
   value = '',
   onChange,
   placeholder = '请输入 SQL',
   dbType,
-  schemaFields,
-  tableOptions,
-  variables,
+  schemaFields = [],
+  tableOptions = [],
+  variables = [],
   minRows = DEFAULT_MIN_ROWS,
   maxRows = DEFAULT_MAX_ROWS,
   className,
@@ -508,15 +423,27 @@ export default function SqlCodeEditor({
   fullscreenTitle = '编辑 SQL',
 }: SqlCodeEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const viewRef = useRef<EditorView | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor>();
+  const modelRef = useRef<monaco.editor.ITextModel>();
   const onChangeRef = useRef(onChange);
-  const sqlCompartmentRef = useRef(new Compartment());
+  const completionConfigRef = useRef<CompletionConfig>({
+    schemaFields,
+    tableOptions,
+    variables,
+  });
+  const applyingExternalValueRef = useRef(false);
+  const minHeightRef = useRef(0);
+  const maxHeightRef = useRef(0);
+  const resizeToContentRef = useRef<() => void>();
+  const [editorEmpty, setEditorEmpty] = useState(!value);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [fullscreenValue, setFullscreenValue] = useState(value || '');
 
   const minHeight = Math.max(minRows, 1) * LINE_HEIGHT + VERTICAL_PADDING;
   const maxHeight = Math.max(maxRows, minRows) * LINE_HEIGHT + VERTICAL_PADDING;
-  const showPlaceholder = !value;
+
+  minHeightRef.current = minHeight;
+  maxHeightRef.current = maxHeight;
 
   const editorStyle = useMemo(
     () =>
@@ -533,10 +460,190 @@ export default function SqlCodeEditor({
   }, [onChange]);
 
   useEffect(() => {
-    if (!fullscreenOpen) {
-      setFullscreenValue(value || '');
-    }
+    completionConfigRef.current = { schemaFields, tableOptions, variables };
+  }, [schemaFields, tableOptions, variables]);
+
+  useEffect(() => {
+    if (!fullscreenOpen) setFullscreenValue(value || '');
   }, [fullscreenOpen, value]);
+
+  useEffect(() => {
+    if (!containerRef.current) return undefined;
+
+    setupMonacoEnvironment();
+    ensureSqlCodeEditorTheme();
+
+    const uri = monaco.Uri.parse(
+      `inmemory://yak-ops/sql-code-editor/${++editorSequence}.sql`,
+    );
+    monaco.editor.getModel(uri)?.dispose();
+
+    const model = monaco.editor.createModel(value || '', 'sql', uri);
+    const editor = monaco.editor.create(containerRef.current, {
+      model,
+      theme: 'yak-sql-code-editor',
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontSize: 13,
+      lineHeight: LINE_HEIGHT,
+      fontFamily:
+        "'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
+      tabSize: 2,
+      insertSpaces: true,
+      lineNumbers: showLineNumbers ? 'on' : 'off',
+      lineNumbersMinChars: 3,
+      glyphMargin: false,
+      folding: true,
+      showFoldingControls: 'mouseover',
+      scrollBeyondLastLine: false,
+      smoothScrolling: true,
+      wordWrap: 'on',
+      wrappingIndent: 'same',
+      renderLineHighlight: 'all',
+      renderWhitespace: 'selection',
+      cursorBlinking: 'smooth',
+      cursorSmoothCaretAnimation: 'on',
+      overviewRulerLanes: 0,
+      hideCursorInOverviewRuler: true,
+      fixedOverflowWidgets: true,
+      padding: { top: 10, bottom: 10 },
+      quickSuggestions: {
+        other: true,
+        comments: false,
+        strings: false,
+      },
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnEnter: 'on',
+      tabCompletion: 'on',
+      wordBasedSuggestions: 'off',
+      parameterHints: { enabled: false },
+      bracketPairColorization: { enabled: true },
+      guides: { bracketPairs: true, indentation: true },
+      ariaLabel: `${resolveDialectLabel(dbType)} editor`,
+      suggest: {
+        showWords: false,
+        showKeywords: true,
+        showSnippets: true,
+        showFields: true,
+        showStructs: true,
+        showVariables: true,
+        snippetsPreventQuickSuggestions: false,
+      },
+    });
+
+    editorRef.current = editor;
+    modelRef.current = model;
+
+    const resizeToContent = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const contentHeight = editor.getContentHeight();
+      const nextHeight = Math.min(
+        maxHeightRef.current,
+        Math.max(minHeightRef.current, contentHeight),
+      );
+      const nextHeightPx = `${nextHeight}px`;
+      if (container.style.height === nextHeightPx) return;
+      container.style.height = nextHeightPx;
+      editor.layout();
+    };
+    resizeToContentRef.current = resizeToContent;
+
+    const completionProvider = monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.', '$', '{'],
+      provideCompletionItems: (completionModel, position) => {
+        if (completionModel.uri.toString() !== model.uri.toString()) {
+          return { suggestions: [] };
+        }
+
+        if (getLexicalState(getTextBeforePosition(completionModel, position)) !== 'code') {
+          return { suggestions: [] };
+        }
+
+        const { token, range } = getCompletionContext(completionModel, position);
+        const normalizedToken = token.toLowerCase();
+        const candidates = buildCompletionCandidates(completionConfigRef.current);
+        const matchedCandidates = normalizedToken
+          ? candidates.filter((candidate) => {
+              const label = candidate.label.toLowerCase();
+              return (
+                label.startsWith(normalizedToken) ||
+                label.split(/\s+/).some((part) => part.startsWith(normalizedToken))
+              );
+            })
+          : candidates;
+
+        return {
+          suggestions: matchedCandidates.map<monaco.languages.CompletionItem>((candidate) => ({
+            label: candidate.label,
+            kind: candidate.kind,
+            insertText: candidate.insertText || candidate.label,
+            detail: candidate.detail,
+            documentation: candidate.documentation,
+            filterText: candidate.label,
+            sortText: `${candidate.sortGroup}-${candidate.label}`,
+            range,
+          })),
+        };
+      },
+    });
+
+    const contentDisposable = model.onDidChangeContent(() => {
+      const nextValue = model.getValue();
+      setEditorEmpty(nextValue.length === 0);
+      resizeToContent();
+      if (!applyingExternalValueRef.current) onChangeRef.current(nextValue);
+    });
+    const sizeDisposable = editor.onDidContentSizeChange(resizeToContent);
+    const animationFrame = window.requestAnimationFrame(resizeToContent);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeToContentRef.current = undefined;
+      sizeDisposable.dispose();
+      contentDisposable.dispose();
+      completionProvider.dispose();
+      editor.dispose();
+      model.dispose();
+      editorRef.current = undefined;
+      modelRef.current = undefined;
+    };
+  }, []);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.updateOptions({
+      lineNumbers: showLineNumbers ? 'on' : 'off',
+      ariaLabel: `${resolveDialectLabel(dbType)} editor`,
+    });
+  }, [dbType, showLineNumbers]);
+
+  useEffect(() => {
+    resizeToContentRef.current?.();
+  }, [minHeight, maxHeight]);
+
+  useEffect(() => {
+    const model = modelRef.current;
+    if (!model) return;
+
+    const nextValue = value || '';
+    if (model.getValue() === nextValue) {
+      setEditorEmpty(nextValue.length === 0);
+      return;
+    }
+
+    applyingExternalValueRef.current = true;
+    model.pushEditOperations(
+      [],
+      [{ range: model.getFullModelRange(), text: nextValue }],
+      () => null,
+    );
+    applyingExternalValueRef.current = false;
+    setEditorEmpty(nextValue.length === 0);
+    resizeToContentRef.current?.();
+  }, [value]);
 
   const handleOpenFullscreen = () => {
     setFullscreenValue(value || '');
@@ -553,111 +660,6 @@ export default function SqlCodeEditor({
     setFullscreenOpen(false);
   };
 
-  useEffect(() => {
-    if (!containerRef.current || viewRef.current) {
-      return;
-    }
-
-    const tooltipParent = containerRef.current.ownerDocument.body;
-
-    const state = EditorState.create({
-      doc: value || '',
-      extensions: [
-        keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
-        history(),
-        indentOnInput(),
-        bracketMatching(),
-        foldGutter(),
-        syntaxHighlighting(sqlHighlightStyle),
-        showLineNumbers ? lineNumbers() : [],
-        editorBaseTheme,
-        EditorView.lineWrapping,
-        tooltips({
-          parent: tooltipParent,
-          position: 'fixed',
-          tooltipSpace: (view) => {
-            const doc = view.dom.ownerDocument.documentElement;
-
-            return {
-              top: 8,
-              right: doc.clientWidth - 8,
-              bottom: doc.clientHeight - 8,
-              left: 8,
-            };
-          },
-        }),
-        sqlCompartmentRef.current.of(
-          buildSqlExtensions({
-            dbType,
-            schemaFields,
-            tableOptions,
-            variables,
-          }),
-        ),
-        EditorView.updateListener.of((update) => {
-          if (!update.docChanged) {
-            return;
-          }
-
-          onChangeRef.current(update.state.doc.toString());
-          syncSqlCompletion(update.view);
-        }),
-      ],
-    });
-
-    viewRef.current = new EditorView({
-      state,
-      parent: containerRef.current,
-    });
-
-    return () => {
-      viewRef.current?.destroy();
-      viewRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const view = viewRef.current;
-
-    if (!view) {
-      return;
-    }
-
-    view.dispatch({
-      effects: sqlCompartmentRef.current.reconfigure(
-        buildSqlExtensions({
-          dbType,
-          schemaFields,
-          tableOptions,
-          variables,
-        }),
-      ),
-    });
-  }, [dbType, schemaFields, tableOptions, variables]);
-
-  useEffect(() => {
-    const view = viewRef.current;
-
-    if (!view) {
-      return;
-    }
-
-    const currentValue = view.state.doc.toString();
-    const nextValue = value || '';
-
-    if (nextValue === currentValue) {
-      return;
-    }
-
-    view.dispatch({
-      changes: {
-        from: 0,
-        to: currentValue.length,
-        insert: nextValue,
-      },
-    });
-  }, [value]);
-
   return (
     <>
       <div
@@ -670,8 +672,10 @@ export default function SqlCodeEditor({
         )}
         style={editorStyle}
       >
-        <div ref={containerRef} />
-        {showPlaceholder && <div className="sql-code-editor__placeholder">{placeholder}</div>}
+        <div ref={containerRef} className="sql-code-editor__monaco" />
+        {editorEmpty ? (
+          <div className="sql-code-editor__placeholder">{placeholder}</div>
+        ) : null}
         {expandable ? (
           <Button
             type="text"
@@ -707,7 +711,7 @@ export default function SqlCodeEditor({
           <div className="sql-code-editor-modal__body">
             <SqlCodeEditor
               value={fullscreenValue}
-              onChange={(nextValue) => setFullscreenValue(nextValue)}
+              onChange={setFullscreenValue}
               placeholder={placeholder}
               dbType={dbType}
               schemaFields={schemaFields}
