@@ -2,7 +2,12 @@ package io.yak.ops.business.development.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +31,7 @@ class DevelopmentTaskRunServiceTest {
 
   private DevelopmentTaskRunService service;
   private RecordingRuntimeExecutor runtimeExecutor;
+  private DevelopmentTaskExecutionService executionService;
 
   @BeforeEach
   void setUp() {
@@ -37,17 +43,21 @@ class DevelopmentTaskRunServiceTest {
                 new DevelopmentNode(1L, "今天统计", "SQL", null, null, true, now, now)));
 
     runtimeExecutor = new RecordingRuntimeExecutor();
+    executionService = mock(DevelopmentTaskExecutionService.class);
+    when(executionService.createPending(any(), anyString(), anyString(), anyString(), anyString()))
+        .thenReturn(99L);
     service =
         new DevelopmentTaskRunService(
             nodeRepository,
             new TaskExecutionGateway(List.of(runtimeExecutor)),
+            executionService,
             new ObjectMapper());
   }
 
   @Test
   void runsCurrentDefinitionThroughSharedRuntimeWithManualTrigger() {
     DevelopmentTaskRunResult result =
-        service.run(1L, "sql", 1, "select 42", "{\"dataSourceId\":\"7\"}");
+        service.run(1L, "sql", 1, "select 42", "{\"dataSourceId\":\"7\"}", "bruce");
 
     assertEquals(TaskExecutionStatus.SUCCESS, result.status());
     assertEquals("MANUAL", result.output().get("trigger"));
@@ -56,6 +66,8 @@ class DevelopmentTaskRunServiceTest {
     assertEquals("development:1", runtimeExecutor.lastSnapshot.taskId());
     assertEquals(0L, runtimeExecutor.lastSnapshot.version());
     assertTrue(result.durationMs() >= 0L);
+    verify(executionService).markRunning(99L, "manual-1");
+    verify(executionService).complete(eq(99L), eq("SUCCESS"), anyLong(), eq(null), any());
   }
 
   private static final class RecordingRuntimeExecutor implements TaskExecutor {

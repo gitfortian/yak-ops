@@ -13,6 +13,7 @@ import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.service.DevelopmentTaskRunService;
 import io.yak.ops.business.development.service.DevelopmentTaskService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,14 +64,16 @@ public class DevelopmentTaskController {
   @PostMapping("/{nodeId}/run")
   public Result<DevelopmentTaskRunResult> run(
       @PathVariable("nodeId") Long nodeId,
-      @Valid @RequestBody RunRequest request) {
+      @Valid @RequestBody RunRequest request,
+      Principal principal) {
     return Result.success(
         runService.run(
             nodeId,
             request.taskType(),
             request.schemaVersion(),
             request.content(),
-            request.configJson()));
+            request.configJson(),
+            principal == null ? "unknown" : principal.getName()));
   }
 
   @Operation(summary = "发布节点版本")
