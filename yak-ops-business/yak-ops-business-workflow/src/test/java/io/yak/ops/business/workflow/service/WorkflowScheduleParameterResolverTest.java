@@ -73,4 +73,35 @@ class WorkflowScheduleParameterResolverTest {
     assertThat(input.get("workflowVersionId")).isEqualTo("workflow-version-5");
     assertThat(input.get("workflowVersionNo")).isEqualTo(5);
   }
+
+  @Test
+  void shouldExposeBusinessDateRerunOperationLineageAsReservedParameters() {
+    WorkflowBackfillPO rerun = new WorkflowBackfillPO();
+    rerun.setId("rerun-batch-1");
+    rerun.setScheduleId("schedule-1");
+    rerun.setTimezone("Asia/Shanghai");
+    rerun.setCronExpression("0 0 2 * * ?");
+    rerun.setWorkflowVersionId("workflow-version-5");
+    rerun.setWorkflowVersionNo(5);
+    rerun.setOperationType("BUSINESS_DATE_RERUN");
+    rerun.setSourceExecutionId("execution-source");
+    rerun.setScheduleInputJson("{\"sourceExecutionId\":\"wrong\"}");
+    rerun.setInputJson("{\"operationType\":\"wrong\"}");
+    WorkflowTriggerContext context = WorkflowTriggerContext.rerun(
+        "rerun-trigger-1",
+        "schedule-1",
+        "rerun-batch-1",
+        Instant.parse("2026-08-09T18:00:00Z"),
+        "Asia/Shanghai");
+
+    Map<String, Object> input = resolver.forBackfill(rerun, context);
+
+    assertThat(input.get("triggerType")).isEqualTo("RERUN");
+    assertThat(input.get("operationType")).isEqualTo("BUSINESS_DATE_RERUN");
+    assertThat(input.get("sourceExecutionId")).isEqualTo("execution-source");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> system = (Map<String, Object>) input.get(WorkflowScheduleParameterResolver.NAMESPACE);
+    assertThat(system).containsEntry("operationType", "BUSINESS_DATE_RERUN");
+    assertThat(system).containsEntry("sourceExecutionId", "execution-source");
+  }
 }
