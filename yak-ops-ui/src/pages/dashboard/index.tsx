@@ -23,6 +23,15 @@ export default function DashboardPage() {
     minW: widget.minW,
     minH: widget.minH,
   })), [designer.widgets]);
+  const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
+  let canvasMinHeight = 'min-h-[calc(100vh-120px)]';
+  if (designer.preview) {
+    canvasMinHeight = hasGlobalFilters
+      ? 'min-h-[calc(100vh-172px)]'
+      : 'min-h-[calc(100vh-136px)]';
+  } else if (hasGlobalFilters) {
+    canvasMinHeight = 'min-h-[calc(100vh-156px)]';
+  }
 
   const syncLayout = (nextLayout: readonly { i: string; x: number; y: number; w: number; h: number }[]) => {
     const nextMap = new Map(nextLayout.map((item) => [item.i, item]));
@@ -36,7 +45,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f4f6f8]" style={BRAND_CSS_VARIABLES}>
+    <div
+      className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f4f6f8]"
+      style={BRAND_CSS_VARIABLES}
+    >
       <DashboardToolbar
         name={designer.dashboard.name}
         dashboardId={designer.dashboard.id}
@@ -50,20 +62,16 @@ export default function DashboardPage() {
         onDashboard={(dashboardId) => void designer.openDashboard(dashboardId)}
         onNew={designer.newDashboard}
         onVersion={(versionNo) => void designer.activateVersion(versionNo)}
-        onPreview={() => { designer.setPreview((current) => !current); designer.setSelectedId(undefined); }}
+        onPreview={() => {
+          designer.setPreview((current) => !current);
+          designer.setSelectedId(undefined);
+        }}
         onSave={() => void designer.save()}
       />
 
       <DashboardGlobalFilterBar
         filters={designer.dashboard.globalFilters}
-        interactions={designer.dashboard.interactions}
-        widgets={designer.widgets}
-        analyses={designer.analyses}
-        datasets={designer.datasets}
         runtimeValues={designer.runtimeFilterValues}
-        preview={designer.preview}
-        onFiltersChange={designer.setGlobalFilters}
-        onInteractionsChange={designer.setInteractions}
         onRuntimeValue={designer.setRuntimeFilterValue}
         onReset={designer.resetRuntimeFilters}
       />
@@ -75,16 +83,10 @@ export default function DashboardPage() {
             activeDataset={designer.activeDataset}
             datasetsLoading={designer.datasetsLoading}
             datasetsError={designer.datasetsError}
-            analyses={designer.analyses}
-            analysesLoading={designer.analysesLoading}
-            analysesError={designer.analysesError}
-            selectedWidget={designer.selectedWidget}
-            onDatasetChange={(activeDatasetId) => designer.setDashboard((current) => ({ ...current, activeDatasetId }))}
+            onDatasetChange={(activeDatasetId) =>
+              designer.setDashboard((current) => ({ ...current, activeDatasetId }))}
             onRefreshDatasets={() => void designer.refreshDatasets()}
-            onRefreshAnalyses={() => void designer.refreshAnalyses()}
             onAddChart={designer.addWidget}
-            onAddAnalysis={designer.addAnalysis}
-            onAddField={designer.addField}
           />
         ) : null}
 
@@ -93,17 +95,30 @@ export default function DashboardPage() {
             <div
               ref={containerRef}
               className={[
-                'mx-auto min-h-[calc(100vh-132px)] min-w-[760px] bg-white',
-                designer.preview ? 'max-w-[1500px] shadow-[0_1px_5px_rgba(16,24,40,.08)]' : 'dashboard-grid-canvas border border-[#dfe3e8]',
+                'mx-auto min-w-[760px] bg-white',
+                canvasMinHeight,
+                designer.preview
+                  ? 'max-w-[1500px] shadow-[0_1px_5px_rgba(16,24,40,.08)]'
+                  : 'dashboard-grid-canvas border border-[#dfe3e8]',
               ].join(' ')}
-              onMouseDown={(event) => { if (event.target === event.currentTarget) designer.setSelectedId(undefined); }}
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) designer.setSelectedId(undefined);
+              }}
             >
               {mounted && width > 0 ? (
                 <ReactGridLayout
                   width={width}
                   layout={layout}
-                  gridConfig={{ cols: GRID_COLUMNS, rowHeight: GRID_ROW_HEIGHT, margin: [8, 8], containerPadding: [8, 8] }}
-                  dragConfig={{ enabled: !designer.preview, handle: '.dashboard-widget__drag-handle' }}
+                  gridConfig={{
+                    cols: GRID_COLUMNS,
+                    rowHeight: GRID_ROW_HEIGHT,
+                    margin: [8, 8],
+                    containerPadding: [8, 8],
+                  }}
+                  dragConfig={{
+                    enabled: !designer.preview,
+                    handle: '.dashboard-widget__drag-handle',
+                  }}
                   resizeConfig={{ enabled: !designer.preview }}
                   onLayoutChange={syncLayout}
                 >
@@ -115,6 +130,7 @@ export default function DashboardPage() {
                     const dataset = spec
                       ? designer.datasets.find((item) => item.id === spec.datasetId)
                       : undefined;
+
                     return (
                       <div key={widget.id}>
                         <WidgetShell
@@ -124,9 +140,11 @@ export default function DashboardPage() {
                           runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
                           selected={designer.selectedId === widget.id}
                           preview={designer.preview}
-                          onSelect={() => { if (!designer.preview) designer.setSelectedId(widget.id); }}
-                          onDataSelect={(selection) => designer.handleWidgetSelection(widget.id, selection)}
-                          onSaveAsAnalysis={() => void designer.saveWidgetAsAnalysis(widget.id)}
+                          onSelect={() => {
+                            if (!designer.preview) designer.setSelectedId(widget.id);
+                          }}
+                          onDataSelect={(selection) =>
+                            designer.handleWidgetSelection(widget.id, selection)}
                           onDuplicate={() => designer.duplicateWidget(widget.id)}
                           onDelete={() => designer.deleteWidget(widget.id)}
                         />
@@ -135,11 +153,19 @@ export default function DashboardPage() {
                   })}
                 </ReactGridLayout>
               ) : null}
+
               {!designer.widgets.length && !designer.datasetsLoading ? (
-                <div className="flex min-h-[360px] items-center justify-center px-6 text-center text-[12px] text-[#98a2b3]">
-                  {designer.activeDataset
-                    ? '从左侧复用 Analysis，或新建图表开始分析；可在顶部配置全局筛选与组件联动'
-                    : '暂无可用 Dataset，请先在数据开发发布中心发布数据集'}
+                <div className="flex min-h-[360px] items-center justify-center px-6 text-center">
+                  <div>
+                    <div className="text-[14px] font-medium text-[#475467]">
+                      {designer.activeDataset ? '添加第一个图表' : '暂无可用数据集'}
+                    </div>
+                    <div className="mt-1 text-[12px] text-[#98a2b3]">
+                      {designer.activeDataset
+                        ? '从左侧选择图表类型，添加后在右侧完成数据与样式配置'
+                        : '请先在数据开发发布中心发布并上线 Dataset'}
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -151,21 +177,46 @@ export default function DashboardPage() {
             widget={designer.selectedWidget}
             datasets={designer.datasets}
             analyses={designer.analyses}
-            updateWidget={(patch) => designer.updateWidget(designer.selectedWidget!.id, patch)}
-            updateInlineAnalysis={(patch) => designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
-            changeDataset={(datasetId) => designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
-            detachAnalysis={() => designer.detachAnalysis(designer.selectedWidget!.id)}
+            updateWidget={(patch) =>
+              designer.updateWidget(designer.selectedWidget!.id, patch)}
+            updateInlineAnalysis={(patch) =>
+              designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
+            changeDataset={(datasetId) =>
+              designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
+            detachAnalysis={() =>
+              designer.detachAnalysis(designer.selectedWidget!.id)}
             close={() => designer.setSelectedId(undefined)}
           />
         ) : null}
       </div>
 
       <style>{`
-        .dashboard-grid-canvas { background-color: #fff; background-image: linear-gradient(to right, rgba(15,23,42,.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,.035) 1px, transparent 1px); background-size: calc(100% / 24) 36px; }
-        .react-grid-item.react-grid-placeholder { background: var(--yak-brand-color-soft) !important; border: 1px dashed var(--yak-brand-color) !important; opacity: 1 !important; }
-        .react-grid-item > .react-resizable-handle::after { border-color: #98a2b3 !important; border-width: 0 1px 1px 0 !important; height: 6px !important; width: 6px !important; }
-        .dashboard-config-tabs > .ant-tabs-nav { margin: 0 !important; padding: 0 12px; }
-        .dashboard-config-tabs .ant-tabs-tab { padding: 9px 0 !important; font-size: 12px; }
+        .dashboard-grid-canvas {
+          background-color: #fff;
+          background-image:
+            linear-gradient(to right, rgba(15,23,42,.035) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(15,23,42,.035) 1px, transparent 1px);
+          background-size: calc(100% / 24) 36px;
+        }
+        .react-grid-item.react-grid-placeholder {
+          background: var(--yak-brand-color-soft) !important;
+          border: 1px dashed var(--yak-brand-color) !important;
+          opacity: 1 !important;
+        }
+        .react-grid-item > .react-resizable-handle::after {
+          border-color: #98a2b3 !important;
+          border-width: 0 1px 1px 0 !important;
+          height: 6px !important;
+          width: 6px !important;
+        }
+        .dashboard-config-tabs > .ant-tabs-nav {
+          margin: 0 !important;
+          padding: 0 12px;
+        }
+        .dashboard-config-tabs .ant-tabs-tab {
+          padding: 9px 0 !important;
+          font-size: 12px;
+        }
       `}</style>
     </div>
   );

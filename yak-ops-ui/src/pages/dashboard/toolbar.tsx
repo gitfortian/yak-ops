@@ -1,3 +1,4 @@
+import { history } from '@umijs/max';
 import { Button, Input, Select, Tooltip } from 'antd';
 import { ChevronLeft, Eye, History, Plus, Save, X } from 'lucide-react';
 import type { DashboardSummary, DashboardVersionSummary } from './model';
@@ -34,10 +35,19 @@ export function DashboardToolbar({
   onSave: () => void;
 }) {
   const persisted = /^\d+$/.test(dashboardId);
+
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#dfe3e8] bg-white px-3">
       <div className="flex min-w-0 items-center gap-2">
-        <Button size="small" type="text" icon={<ChevronLeft size={14} />} disabled={preview}>数据分析</Button>
+        <Button
+          size="small"
+          type="text"
+          icon={<ChevronLeft size={14} />}
+          disabled={preview}
+          onClick={() => history.push('/data-analysis/data-catalog')}
+        >
+          数据目录
+        </Button>
         <span className="h-5 w-px bg-[#e5e7eb]" />
         <Select
           size="small"
@@ -50,7 +60,13 @@ export function DashboardToolbar({
           onChange={onDashboard}
         />
         <Tooltip title="新建仪表盘">
-          <Button size="small" type="text" icon={<Plus size={13} />} disabled={preview} onClick={onNew} />
+          <Button
+            size="small"
+            type="text"
+            icon={<Plus size={13} />}
+            disabled={preview}
+            onClick={onNew}
+          />
         </Tooltip>
         <span className="h-5 w-px bg-[#e5e7eb]" />
         <Input
@@ -64,6 +80,7 @@ export function DashboardToolbar({
           {currentVersionNo ? `V${currentVersionNo}` : '未保存'}
         </span>
       </div>
+
       <div className="flex items-center gap-2">
         {persisted && versions.length ? (
           <Select
@@ -72,15 +89,28 @@ export function DashboardToolbar({
             suffixIcon={<History size={12} />}
             disabled={preview || saving}
             value={currentVersionNo}
-            options={versions.map((item) => ({ label: `版本 V${item.versionNo}`, value: item.versionNo }))}
+            options={versions.map((item) => ({
+              label: `版本 V${item.versionNo}`,
+              value: item.versionNo,
+            }))}
             onChange={onVersion}
           />
         ) : null}
-        <Button size="small" icon={preview ? <X size={13} /> : <Eye size={13} />} onClick={onPreview}>
+        <Button
+          size="small"
+          icon={preview ? <X size={13} /> : <Eye size={13} />}
+          onClick={onPreview}
+        >
           {preview ? '退出预览' : '预览'}
         </Button>
         {!preview ? (
-          <Button size="small" type="primary" loading={saving} icon={<Save size={13} />} onClick={onSave}>
+          <Button
+            size="small"
+            type="primary"
+            loading={saving}
+            icon={<Save size={13} />}
+            onClick={onSave}
+          >
             保存
           </Button>
         ) : null}
