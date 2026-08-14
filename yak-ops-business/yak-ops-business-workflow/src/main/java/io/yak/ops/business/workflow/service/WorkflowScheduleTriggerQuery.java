@@ -23,14 +23,24 @@ public class WorkflowScheduleTriggerQuery {
   }
 
   public List<WorkflowScheduleTriggerVO> list(
-      String scheduleId, String workflowId, String status, Integer limit) {
+      String scheduleId,
+      String workflowId,
+      String backfillId,
+      String status,
+      Integer limit) {
     String state = normalize(status);
     if (state != null && !STATUSES.contains(state)) {
       throw new IllegalArgumentException("不支持的 Trigger 状态：" + state);
     }
     int safeLimit = limit == null ? 100 : limit;
-    return dao.selectTriggers(scheduleId, workflowId, state, safeLimit)
+    return dao.selectTriggers(scheduleId, workflowId, backfillId, state, safeLimit)
         .stream().map(this::view).toList();
+  }
+
+  /** Stage 4 兼容入口。 */
+  public List<WorkflowScheduleTriggerVO> list(
+      String scheduleId, String workflowId, String status, Integer limit) {
+    return list(scheduleId, workflowId, null, status, limit);
   }
 
   WorkflowScheduleTriggerVO view(WorkflowScheduleTriggerPO value) {
@@ -38,8 +48,10 @@ public class WorkflowScheduleTriggerQuery {
         value.getId(),
         value.getScheduleId(),
         value.getWorkflowId(),
+        value.getBackfillId(),
         value.getTriggerId(),
         value.getTriggerSource(),
+        value.getBusinessDate(),
         value.getPlannedFireTime(),
         value.getActualFireTime(),
         value.getExecutionStrategy(),
