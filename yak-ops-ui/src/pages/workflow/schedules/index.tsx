@@ -8,9 +8,10 @@ import {
 } from '@/services/workflow/schedules';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { Button, ConfigProvider, Input, Modal, Select, Table, Tooltip, message } from 'antd';
-import { CalendarClock, Pencil, Power, PowerOff, Trash2 } from 'lucide-react';
+import { CalendarClock, History, Pencil, Power, PowerOff, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ScheduleEditorDrawer from './ScheduleEditorDrawer';
+import TriggerLedgerDrawer from './TriggerLedgerDrawer';
 
 type StatusFilter = 'ALL' | 'ONLINE' | 'OFFLINE';
 
@@ -35,6 +36,8 @@ const WorkflowSchedulesPage = () => {
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowSchedule>();
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerSchedule, setLedgerSchedule] = useState<WorkflowSchedule>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,7 +95,7 @@ const WorkflowSchedulesPage = () => {
     Modal.confirm({
       centered: true,
       title: '确认删除调度吗？',
-      content: `即将删除「${schedule.name}」，删除后无法恢复。`,
+      content: `即将删除「${schedule.name}」。调度定义会删除，历史 Trigger Ledger 会保留用于审计。`,
       okText: '删除',
       cancelText: '取消',
       okButtonProps: { danger: true },
@@ -167,12 +170,20 @@ const WorkflowSchedulesPage = () => {
       render: (value?: string) => <span className="text-[12px] text-[#98a2b3]">{formatTime(value)}</span>,
     },
     {
-      title: '操作', dataIndex: 'operate', width: 220, fixed: 'right' as const,
+      title: '操作', dataIndex: 'operate', width: 300, fixed: 'right' as const,
       render: (_: unknown, record: WorkflowSchedule) => {
         const workflowOnline = workflowMap.get(record.workflowId)?.status === 'ONLINE';
         const online = record.status === 'ONLINE';
         return (
           <div className="flex items-center gap-0.5 whitespace-nowrap">
+            <Button
+              type="text"
+              size="small"
+              icon={<History size={13} />}
+              onClick={() => { setLedgerSchedule(record); setLedgerOpen(true); }}
+            >
+              触发记录
+            </Button>
             <Tooltip title={online ? '已启用调度请先停用后再修改配置' : undefined}>
               <span>
                 <Button
@@ -214,7 +225,7 @@ const WorkflowSchedulesPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="m-0 text-[17px] font-semibold leading-8">调度管理</h1>
-            <div className="text-[11px] text-[#98a2b3]">Yak Schedule / Quartz · Cron、时区、生效区间与实例策略</div>
+            <div className="text-[11px] text-[#98a2b3]">Yak Schedule / Quartz · Trigger Ledger、并发策略与恢复</div>
           </div>
           <Button danger type="primary" size="small" icon={<CalendarClock size={14} />} onClick={() => { setEditing(undefined); setEditorOpen(true); }}>
             新建调度
@@ -248,9 +259,8 @@ const WorkflowSchedulesPage = () => {
           </div>
         </div>
 
-        <div className="mt-3 flex min-h-9 items-center rounded-sm bg-[#fff7e6] px-3 text-[12px] text-[#475467]">
-          <span className="mr-2 text-[#faad14]">▲</span>
-          <span><b>【提示】</b> 启用后计划会注册到 Yak Schedule，并由 Quartz 按 Cron 与时区自动触发；应用重启后会从工作流调度表自动恢复 ONLINE 计划。</span>
+        <div className="mt-3 flex min-h-9 items-center rounded-sm bg-[#f8f9fb] px-3 text-[12px] text-[#475467]">
+          <span><b>【生产调度】</b> Trigger Ledger 保证同一计划时间幂等；串行等待/跳过、并行执行与 Misfire 恢复均保留可审计记录。</span>
         </div>
 
         <div className="mt-4 flex-1">
@@ -261,7 +271,7 @@ const WorkflowSchedulesPage = () => {
             loading={loading}
             columns={columns as any}
             dataSource={filtered}
-            scroll={{ x: 1550 }}
+            scroll={{ x: 1630 }}
             pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50], showTotal: (total) => `共 ${total} 条` }}
             className="[&_.ant-table-thead>tr>th]:!bg-[#f8f9fb] [&_.ant-table-thead>tr>th]:!text-[12px] [&_.ant-table-thead>tr>th]:!text-[#667085] [&_.ant-table-tbody>tr>td]:!py-2.5"
           />
@@ -274,6 +284,11 @@ const WorkflowSchedulesPage = () => {
           workflowId={workflowId}
           onClose={() => { setEditorOpen(false); setEditing(undefined); }}
           onSaved={load}
+        />
+        <TriggerLedgerDrawer
+          open={ledgerOpen}
+          schedule={ledgerSchedule}
+          onClose={() => { setLedgerOpen(false); setLedgerSchedule(undefined); }}
         />
       </div>
     </ConfigProvider>
