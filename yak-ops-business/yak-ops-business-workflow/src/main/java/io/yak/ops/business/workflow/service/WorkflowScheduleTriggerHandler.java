@@ -43,6 +43,7 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
     Instant plannedFireTime = context.scheduledFireTime() == null
         ? context.actualFireTime()
         : context.scheduledFireTime();
+    Instant actualFireTime = context.actualFireTime();
 
     if (!"ONLINE".equals(schedule.getStatus())) {
       engine.pauseIfPresent(scheduleId);
@@ -51,12 +52,12 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
     }
 
     if (schedule.getStartTime() != null && plannedFireTime.isBefore(schedule.getStartTime())) {
-      refreshFireState(schedule, plannedFireTime);
+      refreshFireState(schedule, actualFireTime);
       return ScheduleExecutionResult.accepted(null, "尚未进入调度生效时间，本次触发忽略");
     }
 
     if (schedule.getEndTime() != null && plannedFireTime.isAfter(schedule.getEndTime())) {
-      lifecycle.expire(scheduleId, plannedFireTime);
+      lifecycle.expire(scheduleId, actualFireTime);
       return ScheduleExecutionResult.accepted(null, "调度已超过生效时间并自动停用");
     }
 
@@ -77,14 +78,14 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
           launched.latestExecutionId(),
           "工作流调度触发已提交");
     } finally {
-      refreshFireState(schedule, plannedFireTime);
+      refreshFireState(schedule, actualFireTime);
     }
   }
 
-  private void refreshFireState(WorkflowSchedulePO schedule, Instant plannedFireTime) {
+  private void refreshFireState(WorkflowSchedulePO schedule, Instant actualFireTime) {
     Instant next = engine.snapshot(schedule.getId())
         .map(snapshot -> snapshot.nextFireTime())
         .orElse(null);
-    runtimeState.recordFire(schedule.getId(), plannedFireTime, next);
+    runtimeState.recordFire(schedule.getId(), actualFireTime, next);
   }
 }
