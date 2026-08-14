@@ -22,6 +22,7 @@
         <module>yak-ops-business-job</module>
         <module>yak-ops-business-task-catalog</module>
         <module>yak-ops-business-data-development</module>
+        <module>yak-ops-business-dataset</module>
         <module>yak-ops-business-resource</module>
         <module>yak-ops-business-sync</module>
         <module>yak-ops-business-quality</module>
