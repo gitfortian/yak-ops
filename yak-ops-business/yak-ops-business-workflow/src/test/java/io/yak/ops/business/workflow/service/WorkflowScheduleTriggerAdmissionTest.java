@@ -1,12 +1,14 @@
 package io.yak.ops.business.workflow.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
 import io.yak.ops.business.workflow.dao.WorkflowScheduleTriggerDao;
+import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import java.time.Instant;
@@ -159,6 +161,78 @@ class WorkflowScheduleTriggerAdmissionTest {
     assertThat(waiting.getStatus()).isEqualTo("LAUNCHING");
   }
 
+  @Test
+  void shouldReserveSerialExecutionBeforeReactivatingTerminalInstance() {
+    WorkflowScheduleTriggerPO trigger = trigger("FAILED");
+    trigger.setWorkflowExecutionId("execution-1");
+    WorkflowExecutionPO execution = execution("execution-1", "FAILED");
+    when(ledger.selectByExecutionId("execution-1")).thenReturn(trigger, trigger);
+    when(executions.selectExecution("execution-1")).thenReturn(execution);
+    when(ledger.countActiveExecutions("workflow-1")).thenReturn(0L);
+    when(ledger.countLaunchingTriggers("workflow-1")).thenReturn(0L);
+    when(ledger.countWaitingTriggers("workflow-1")).thenReturn(0L);
+    when(ledger.update(trigger)).thenReturn(1);
+
+    boolean reserved = admission.reserveReactivation("execution-1", "RETRY_FAILED_NODES");
+
+    assertThat(reserved).isTrue();
+    assertThat(trigger.getStatus()).isEqualTo("REACTIVATING");
+    assertThat(trigger.getCompletedAt()).isNull();
+    assertThat(trigger.getMessage()).contains("RETRY_FAILED_NODES");
+  }
+
+  @Test
+  void shouldRejectSerialReactivationAfterSlotMovedToLaterExecution() {
+    WorkflowScheduleTriggerPO trigger = trigger("FAILED");
+    trigger.setWorkflowExecutionId("execution-1");
+    WorkflowExecutionPO execution = execution("execution-1", "FAILED");
+    when(ledger.selectByExecutionId("execution-1")).thenReturn(trigger, trigger);
+    when(executions.selectExecution("execution-1")).thenReturn(execution);
+    when(ledger.countActiveExecutions("workflow-1")).thenReturn(1L);
+    when(ledger.countLaunchingTriggers("workflow-1")).thenReturn(0L);
+    when(ledger.countWaitingTriggers("workflow-1")).thenReturn(0L);
+
+    assertThatThrownBy(() -> admission.reserveReactivation("execution-1", "RETRY_FAILED_NODES"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("串行槽位");
+
+    verify(ledger, never()).update(trigger);
+  }
+
+  @Test
+  void shouldAllowParallelReactivationEvenWhenOtherExecutionsAreActive() {
+    WorkflowScheduleTriggerPO trigger = trigger("FAILED");
+    trigger.setExecutionStrategy("PARALLEL");
+    trigger.setWorkflowExecutionId("execution-1");
+    WorkflowExecutionPO execution = execution("execution-1", "FAILED");
+    when(ledger.selectByExecutionId("execution-1")).thenReturn(trigger, trigger);
+    when(executions.selectExecution("execution-1")).thenReturn(execution);
+    when(ledger.update(trigger)).thenReturn(1);
+
+    boolean reserved = admission.reserveReactivation("execution-1", "RETRY_FAILED_NODE");
+
+    assertThat(reserved).isTrue();
+    assertThat(trigger.getStatus()).isEqualTo("REACTIVATING");
+    verify(ledger, never()).countActiveExecutions("workflow-1");
+  }
+
+  @Test
+  void shouldReturnReactivatedLedgerToRunningUsingDurableExecutionStatus() {
+    WorkflowScheduleTriggerPO trigger = trigger("REACTIVATING");
+    trigger.setWorkflowExecutionId("execution-1");
+    WorkflowExecutionPO execution = execution("execution-1", "RUNNING");
+    when(ledger.selectByExecutionId("execution-1")).thenReturn(trigger, trigger);
+    when(executions.selectExecution("execution-1")).thenReturn(execution);
+    when(ledger.update(trigger)).thenReturn(1);
+
+    var result = admission.finishReactivation("execution-1");
+
+    assertThat(result.launchNow()).isFalse();
+    assertThat(trigger.getStatus()).isEqualTo("RUNNING");
+    assertThat(trigger.getExecutionStatus()).isEqualTo("RUNNING");
+    assertThat(trigger.getCompletedAt()).isNull();
+  }
+
   private WorkflowSchedulePO schedule(String strategy) {
     WorkflowSchedulePO value = new WorkflowSchedulePO();
     value.setId("schedule-1");
@@ -175,6 +249,7 @@ class WorkflowScheduleTriggerAdmissionTest {
     value.setScheduleId("schedule-1");
     value.setWorkflowId("workflow-1");
     value.setTriggerId("trigger-1");
+    value.setDedupeKey("schedule-1|SCHEDULE|1786672800000");
     value.setPlannedFireTime(Instant.parse("2026-08-14T02:00:00Z"));
     value.setActualFireTime(Instant.parse("2026-08-14T02:00:01Z"));
     value.setExecutionStrategy("SERIAL_WAIT");
@@ -182,6 +257,15 @@ class WorkflowScheduleTriggerAdmissionTest {
     value.setStatus(status);
     value.setCreateTime(Instant.parse("2026-08-14T02:00:01Z"));
     value.setUpdateTime(Instant.parse("2026-08-14T02:00:01Z"));
+    value.setCompletedAt(Instant.parse("2026-08-14T02:10:00Z"));
+    return value;
+  }
+
+  private WorkflowExecutionPO execution(String id, String status) {
+    WorkflowExecutionPO value = new WorkflowExecutionPO();
+    value.setId(id);
+    value.setStatus(status);
+    value.setEndedAt(status.equals("RUNNING") ? null : Instant.parse("2026-08-14T02:10:00Z"));
     return value;
   }
 }
