@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 /**
  * 将调度/补数上下文转换为 Workflow input。
  *
- * <p>合并优先级：WorkflowVersion input &lt; Schedule input &lt; Backfill input &lt; 系统保留参数。</p>
+ * <p>合并优先级：WorkflowVersion input &lt; Schedule input &lt; Backfill/运维补跑 input &lt; 系统保留参数。</p>
  */
 @Component
 public class WorkflowScheduleParameterResolver {
@@ -38,6 +38,8 @@ public class WorkflowScheduleParameterResolver {
         schedule.getTimezone(),
         schedule.getCronExpression(),
         null,
+        null,
+        null,
         null);
     return Map.copyOf(result);
   }
@@ -54,7 +56,9 @@ public class WorkflowScheduleParameterResolver {
         backfill.getTimezone(),
         backfill.getCronExpression(),
         backfill.getWorkflowVersionId(),
-        backfill.getWorkflowVersionNo());
+        backfill.getWorkflowVersionNo(),
+        backfill.getOperationType(),
+        backfill.getSourceExecutionId());
     return Map.copyOf(result);
   }
 
@@ -64,7 +68,9 @@ public class WorkflowScheduleParameterResolver {
       String timezone,
       String cronExpression,
       String workflowVersionId,
-      Integer workflowVersionNo) {
+      Integer workflowVersionNo,
+      String operationType,
+      String sourceExecutionId) {
     if (context == null || context.plannedFireTime() == null) {
       throw new IllegalArgumentException("调度参数缺少逻辑计划时间");
     }
@@ -84,6 +90,10 @@ public class WorkflowScheduleParameterResolver {
     if (cronExpression != null) system.put("cronExpression", cronExpression);
     if (workflowVersionId != null) system.put("workflowVersionId", workflowVersionId);
     if (workflowVersionNo != null) system.put("workflowVersionNo", workflowVersionNo);
+    if (operationType != null && !operationType.isBlank()) system.put("operationType", operationType);
+    if (sourceExecutionId != null && !sourceExecutionId.isBlank()) {
+      system.put("sourceExecutionId", sourceExecutionId);
+    }
 
     // 顶层别名方便 SQL/同步任务直接使用；系统参数始终覆盖用户同名参数。
     system.forEach(target::put);
