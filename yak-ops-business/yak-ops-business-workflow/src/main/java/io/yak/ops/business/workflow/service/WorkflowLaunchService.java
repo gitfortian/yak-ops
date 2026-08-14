@@ -1,11 +1,13 @@
 package io.yak.ops.business.workflow.service;
 
+import io.yak.ops.business.workflow.domain.WorkflowRunInputScope;
 import io.yak.ops.business.workflow.domain.WorkflowScheduleLaunchBindingScope;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
 import io.yak.ops.business.workflow.persistence.WorkflowExecutionTriggerRecorder;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -44,20 +46,55 @@ public class WorkflowLaunchService {
         WorkflowDefinitionVO::latestExecutionId);
   }
 
-  /**
-   * 调度协调器专用的发布版本启动入口。
-   *
-   * <p>并发准入已经由 Trigger Ledger + workflow 行锁完成。作用域会让 ExecutionRepository
-   * 在 engine.start 首次持久化 CREATED 实例时就把 executionId 写回 Ledger，随后才进入 activate，
-   * 从而让宕机恢复能够识别“已经创建但尚未完成 Launch 返回”的实例。</p>
-   */
   public WorkflowDefinitionVO runScheduledPublished(
       String workflowId,
       WorkflowTriggerContext triggerContext) {
+    return runScheduledPublished(workflowId, triggerContext, Map.of());
+  }
+
+  /**
+   * 调度协调器专用的发布版本启动入口。
+   *
+   * <p>Trigger Ledger 负责并发准入；WorkflowRunInputScope 只覆盖本次 engine.start 的 input，
+   * 不修改不可变发布版本。Execution 创建时仍通过 binding scope 提前绑定 Ledger。</p>
+   */
+  public WorkflowDefinitionVO runScheduledPublished(
+      String workflowId,
+      WorkflowTriggerContext triggerContext,
+      Map<String, Object> runtimeInput) {
     String id = required(workflowId, "工作流 ID 不能为空");
-    try (var ignored = WorkflowScheduleLaunchBindingScope.open(triggerContext.triggerId())) {
+    try (var binding = WorkflowScheduleLaunchBindingScope.open(triggerContext.triggerId());
+         var input = WorkflowRunInputScope.open(runtimeInput)) {
       return launch(
           "SCHEDULED_PUBLISHED",
+          id,
+          triggerContext,
+          () -> definitionService.runConcurrent(id),
+          WorkflowDefinitionVO::latestExecutionId);
+    }
+  }
+
+  /**
+   * Backfill 运行入口。批次保存创建时 activeVersion 快照；若发布版本已经切换则拒绝继续，
+   * 防止同一补数批次前后使用不同版本。
+   */
+  public WorkflowDefinitionVO runBackfillPublished(
+      String workflowId,
+      String expectedWorkflowVersionId,
+      WorkflowTriggerContext triggerContext,
+      Map<String, Object> runtimeInput) {
+    String id = required(workflowId, "工作流 ID 不能为空");
+    String versionId = required(expectedWorkflowVersionId, "Backfill workflowVersionId 不能为空");
+    WorkflowDefinitionVO current = definitionService.get(id);
+    if (!versionId.equals(current.activeVersionId())) {
+      throw new IllegalStateException(
+          "Backfill 固定的工作流版本已不是当前激活版本：expected="
+              + versionId + ", active=" + current.activeVersionId());
+    }
+    try (var binding = WorkflowScheduleLaunchBindingScope.open(triggerContext.triggerId());
+         var input = WorkflowRunInputScope.open(runtimeInput)) {
+      return launch(
+          "BACKFILL_PUBLISHED",
           id,
           triggerContext,
           () -> definitionService.runConcurrent(id),
@@ -127,17 +164,17 @@ public class WorkflowLaunchService {
       Function<T, String> executionIdExtractor) {
     Objects.requireNonNull(triggerContext, "workflow trigger context");
     log.info(
-        "[workflow-launch] start mode={}, target={}, triggerType={}, triggerId={}, scheduleId={}, plannedFireTime={}",
+        "[workflow-launch] start mode={}, target={}, triggerType={}, triggerId={}, scheduleId={}, backfillId={}, plannedFireTime={}",
         mode,
         target,
         triggerContext.triggerType(),
         triggerContext.triggerId(),
         triggerContext.scheduleId(),
+        triggerContext.backfillId(),
         triggerContext.plannedFireTime());
     try {
       T result = action.get();
       String executionId = result == null ? null : executionIdExtractor.apply(result);
-      // Ledger 的 executionId 已在首次 CREATED 持久化时提前绑定；这里继续记录通用 runtime trigger metadata。
       triggerRecorder.record(executionId, triggerContext);
       log.info(
           "[workflow-launch] created mode={}, target={}, triggerType={}, triggerId={}, execution={}",
