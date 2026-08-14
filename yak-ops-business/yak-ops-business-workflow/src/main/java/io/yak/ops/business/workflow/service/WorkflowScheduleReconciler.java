@@ -11,12 +11,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 应用启动后以 yak_workflow_schedule 为事实来源，对 Yak Schedule/Quartz 做一次对账恢复。
+ * 应用启动后以 yak_workflow_schedule 为事实来源，对 Yak Schedule/Quartz 与 Trigger Ledger 做对账恢复。
  *
- * <p>因此即便 Quartz 使用 memory store，Yak Ops 重启后 ONLINE 计划也会自动恢复。</p>
+ * <p>即便 Quartz 使用 memory store，ONLINE 计划、错过触发和串行等待队列都可从业务数据库恢复。</p>
  */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -27,18 +28,25 @@ public class WorkflowScheduleReconciler {
   private final WorkflowDefinitionService definitions;
   private final WorkflowScheduleEngineBridge engine;
   private final WorkflowScheduleRuntimeState runtimeState;
+  private final WorkflowScheduleMisfireRecovery misfireRecovery;
+  private final WorkflowScheduleTriggerCoordinator coordinator;
 
   public WorkflowScheduleReconciler(
       WorkflowScheduleDao dao,
       WorkflowDefinitionService definitions,
       WorkflowScheduleEngineBridge engine,
-      WorkflowScheduleRuntimeState runtimeState) {
+      WorkflowScheduleRuntimeState runtimeState,
+      WorkflowScheduleMisfireRecovery misfireRecovery,
+      WorkflowScheduleTriggerCoordinator coordinator) {
     this.dao = dao;
     this.definitions = definitions;
     this.engine = engine;
     this.runtimeState = runtimeState;
+    this.misfireRecovery = misfireRecovery;
+    this.coordinator = coordinator;
   }
 
+  @Order(20)
   @EventListener(ApplicationReadyEvent.class)
   public void reconcile() {
     if (!engine.available()) {
@@ -78,8 +86,21 @@ public class WorkflowScheduleReconciler {
           continue;
         }
 
+        Instant persistedNextFireTime = schedule.getNextFireTime();
+        Instant missedFireTime = persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)
+            ? persistedNextFireTime
+            : null;
+
         var snapshot = engine.save(schedule);
         runtimeState.syncSnapshot(schedule, snapshot);
+
+        if (missedFireTime != null) {
+          misfireRecovery.recover(schedule, missedFireTime, now);
+          log.info(
+              "[workflow-schedule] recovered misfire schedule={}, planned={}, policy={}",
+              schedule.getId(), missedFireTime, schedule.getMisfireStrategy());
+        }
+
         log.info(
             "[workflow-schedule] reconciled schedule={}, workflow={}, nextFireTime={}",
             schedule.getId(),
@@ -94,6 +115,15 @@ public class WorkflowScheduleReconciler {
             exception.getMessage(),
             exception);
       }
+    }
+
+    try {
+      coordinator.recoverPending();
+    } catch (RuntimeException exception) {
+      log.error(
+          "[workflow-schedule] trigger ledger recovery failed message={}",
+          exception.getMessage(),
+          exception);
     }
   }
 
