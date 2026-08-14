@@ -54,6 +54,13 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
         .orderByAsc(WorkflowScheduleTriggerPO::getPlannedFireTime));
   }
 
+  @Override public List<WorkflowScheduleTriggerPO> selectQueuedBySchedule(String scheduleId) {
+    return mapper.selectList(Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
+        .eq(WorkflowScheduleTriggerPO::getScheduleId, scheduleId)
+        .in(WorkflowScheduleTriggerPO::getStatus, List.of("RECEIVED", "WAITING"))
+        .orderByAsc(WorkflowScheduleTriggerPO::getPlannedFireTime));
+  }
+
   @Override public List<WorkflowScheduleTriggerPO> selectTriggers(
       String scheduleId, String workflowId, String status, int limit) {
     var query = Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery();
