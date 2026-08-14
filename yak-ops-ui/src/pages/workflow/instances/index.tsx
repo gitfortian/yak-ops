@@ -17,6 +17,7 @@ import {
   Input,
   Modal,
   Pagination,
+  Popover,
   Select,
   Table,
   Tooltip,
@@ -25,8 +26,8 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
 import InstanceDetailDrawer from './InstanceDetailDrawer';
 
 const { RangePicker } = DatePicker;
@@ -51,6 +52,7 @@ const FAILED_STATUSES = new Set(['FAILED', 'TIMED_OUT']);
 const RETRYABLE_NODE_STATUSES = new Set(['FAILED', 'UPSTREAM_FAILED', 'SKIPPED', 'CANCELED']);
 
 type StatusGroup = 'ALL' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+type TestRunFilter = 'ALL' | 'TRUE' | 'FALSE';
 
 const statusTabs: Array<{ label: string; value: StatusGroup }> = [
   { label: '全部实例', value: 'ALL' },
@@ -87,9 +89,12 @@ const WorkflowInstancesPage = () => {
   const [statusGroup, setStatusGroup] = useState<StatusGroup>('ALL');
   const [keyword, setKeyword] = useState('');
   const [dateRange, setDateRange] = useState<Dayjs[]>();
+  const [instanceIdFilter, setInstanceIdFilter] = useState('');
+  const [definitionIdFilter, setDefinitionIdFilter] = useState('');
+  const [testRunFilter, setTestRunFilter] = useState<TestRunFilter>('ALL');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Key[]>([]);
   const [detailId, setDetailId] = useState<string>();
   const [detailInitial, setDetailInitial] = useState<WorkflowInstance>();
   const [batchLoading, setBatchLoading] = useState(false);
@@ -120,16 +125,22 @@ const WorkflowInstancesPage = () => {
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase();
+    const instanceId = instanceIdFilter.trim().toLowerCase();
+    const definitionId = definitionIdFilter.trim().toLowerCase();
     const [start, end] = dateRange || [];
     return instances.filter((record) => {
       if (!matchesGroup(record.status)) return false;
       if (q && ![record.name, record.id, record.definitionId, String(record.input?.businessDate || '')]
         .some((value) => value?.toLowerCase().includes(q))) return false;
+      if (instanceId && !record.id.toLowerCase().includes(instanceId)) return false;
+      if (definitionId && !record.definitionId?.toLowerCase().includes(definitionId)) return false;
+      if (testRunFilter === 'TRUE' && !record.testRun) return false;
+      if (testRunFilter === 'FALSE' && record.testRun) return false;
       if (start && dayjs(record.startedAt).isBefore(start.startOf('day'))) return false;
       if (end && dayjs(record.startedAt).isAfter(end.endOf('day'))) return false;
       return true;
     });
-  }, [dateRange, instances, keyword, statusGroup]);
+  }, [dateRange, definitionIdFilter, instanceIdFilter, instances, keyword, statusGroup, testRunFilter]);
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -140,6 +151,19 @@ const WorkflowInstancesPage = () => {
     const offset = (page - 1) * pageSize;
     return filtered.slice(offset, offset + pageSize);
   }, [filtered, page, pageSize]);
+
+  const advancedFilterCount = [
+    instanceIdFilter.trim(),
+    definitionIdFilter.trim(),
+    testRunFilter === 'ALL' ? '' : testRunFilter,
+  ].filter(Boolean).length;
+
+  const resetAdvancedFilters = () => {
+    setInstanceIdFilter('');
+    setDefinitionIdFilter('');
+    setTestRunFilter('ALL');
+    setPage(1);
+  };
 
   const openDetail = (record: WorkflowInstance) => {
     setDetailInitial(record);
@@ -182,7 +206,7 @@ const WorkflowInstancesPage = () => {
           title: `批量重试完成：成功 ${result.acceptedCount}，失败 ${result.failedCount}`,
           width: 680,
           content: (
-            <div className="mt-3 max-h-[320px] overflow-auto space-y-2">
+            <div className="mt-3 max-h-[320px] space-y-2 overflow-auto">
               {result.items.filter((item) => !item.accepted).map((item) => (
                 <div key={item.executionId} className="rounded-md border border-[#fecdca] bg-[#fff6f5] px-3 py-2 text-[12px]">
                   <div className="font-mono text-[#b42318]">{item.executionId}</div>
@@ -251,6 +275,36 @@ const WorkflowInstancesPage = () => {
     },
   ], []);
 
+  const advancedFilters = (
+    <div className="w-[310px] space-y-3">
+      <div>
+        <div className="mb-1 text-[11px] text-[#667085]">实例 ID</div>
+        <Input allowClear size="small" value={instanceIdFilter} onChange={(event) => { setInstanceIdFilter(event.target.value); setPage(1); }} placeholder="精确定位运行实例" />
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] text-[#667085]">Definition ID</div>
+        <Input allowClear size="small" value={definitionIdFilter} onChange={(event) => { setDefinitionIdFilter(event.target.value); setPage(1); }} placeholder="Workflow Version / Runtime Definition" />
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] text-[#667085]">运行类型</div>
+        <Select
+          size="small"
+          className="w-full"
+          value={testRunFilter}
+          onChange={(value) => { setTestRunFilter(value); setPage(1); }}
+          options={[
+            { value: 'ALL', label: '全部' },
+            { value: 'FALSE', label: '正式运行' },
+            { value: 'TRUE', label: '测试运行' },
+          ]}
+        />
+      </div>
+      <div className="flex justify-end border-t border-[#f0f0f0] pt-2">
+        <Button size="small" disabled={advancedFilterCount === 0} onClick={resetAdvancedFilters}>重置</Button>
+      </div>
+    </div>
+  );
+
   return (
     <ConfigProvider theme={{ token: { borderRadius: 9, colorBorder: '#eaecf0' }, components: { Input: { activeShadow: 'none' } } }}>
       <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4 text-[#161823]">
@@ -288,7 +342,7 @@ const WorkflowInstancesPage = () => {
               variant="filled"
               prefix={<SearchOutlined className="text-[#98a2b3]" />}
               placeholder="名称 / 实例 ID / businessDate"
-              className="!w-[280px]"
+              className="!w-[260px]"
               value={keyword}
               onChange={(event) => { setKeyword(event.target.value); setPage(1); }}
             />
@@ -298,6 +352,11 @@ const WorkflowInstancesPage = () => {
               value={dateRange as any}
               onChange={(value) => { setDateRange(value ? value as unknown as Dayjs[] : undefined); setPage(1); }}
             />
+            <Popover placement="bottomRight" trigger="click" content={advancedFilters}>
+              <Button icon={<SlidersHorizontal size={13} />}>
+                高级筛选{advancedFilterCount > 0 ? ` · ${advancedFilterCount}` : ''}
+              </Button>
+            </Popover>
           </div>
         </div>
 
