@@ -1,5 +1,10 @@
 import { createAnalysis, fetchAnalyses } from '@/components/analysis/analysis-service';
-import type { AnalysisSpec } from '@/components/analysis/model';
+import type {
+  AnalysisFilter,
+  AnalysisSelection,
+  AnalysisSpec,
+  Scalar,
+} from '@/components/analysis/model';
 import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
@@ -25,6 +30,8 @@ import type {
   AnalysisAsset,
   ChartType,
   DashboardDocument,
+  DashboardGlobalFilter,
+  DashboardInteraction,
   DashboardSummary,
   DashboardVersionSummary,
   DashboardWidget,
@@ -56,6 +63,13 @@ const assetSpec = (analysis: AnalysisAsset): AnalysisSpec => ({
   timeoutSeconds: analysis.timeoutSeconds,
 });
 
+const runtimeDefaults = (filters: DashboardGlobalFilter[]) => Object.fromEntries(
+  filters.map((filter) => [filter.id, filter.defaultValue]),
+) as Record<string, Scalar | undefined>;
+
+const hasOwn = (value: Record<string, Scalar | undefined>, key: string) =>
+  Object.prototype.hasOwnProperty.call(value, key);
+
 export function useDashboardDesigner() {
   const [dashboard, setDashboard] = useState<DashboardDocument>(loadDashboard);
   const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
@@ -68,6 +82,7 @@ export function useDashboardDesigner() {
   const [dashboardVersions, setDashboardVersions] = useState<DashboardVersionSummary[]>([]);
   const [dashboardsLoading, setDashboardsLoading] = useState(true);
   const [dashboardSaving, setDashboardSaving] = useState(false);
+  const [runtimeFilterValues, setRuntimeFilterValues] = useState<Record<string, Scalar | undefined>>({});
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState(false);
   const didAutoOpen = useRef(false);
@@ -149,6 +164,11 @@ export function useDashboardDesigner() {
     setDashboard((current) => reconcileDashboard(current, datasets));
   }, [datasets]);
 
+  /** Switching/opening a persisted DashboardVersion resets runtime values to its saved defaults. */
+  useEffect(() => {
+    setRuntimeFilterValues(runtimeDefaults(dashboard.globalFilters));
+  }, [dashboard.id, dashboard.currentVersionId]);
+
   const updateWidget = (id: string, patch: Partial<DashboardWidget>) => setDashboard((current) => ({
     ...current,
     widgets: current.widgets.map((widget) => widget.id === id ? { ...widget, ...patch } : widget),
@@ -161,6 +181,66 @@ export function useDashboardDesigner() {
       return { ...widget, inlineAnalysis: { ...widget.inlineAnalysis, ...patch } };
     }),
   }));
+
+  const setGlobalFilters = (filters: DashboardGlobalFilter[]) => {
+    const filterIds = new Set(filters.map((filter) => filter.id));
+    setDashboard((current) => ({
+      ...current,
+      globalFilters: filters,
+      interactions: current.interactions.filter((item) => filterIds.has(item.targetFilterId)),
+    }));
+    setRuntimeFilterValues((current) => {
+      const next: Record<string, Scalar | undefined> = {};
+      filters.forEach((filter) => {
+        next[filter.id] = hasOwn(current, filter.id) ? current[filter.id] : filter.defaultValue;
+      });
+      return next;
+    });
+  };
+
+  const setInteractions = (interactions: DashboardInteraction[]) => setDashboard((current) => ({
+    ...current,
+    interactions,
+  }));
+
+  const setRuntimeFilterValue = (filterId: string, value: Scalar | undefined) => {
+    setRuntimeFilterValues((current) => ({ ...current, [filterId]: value }));
+  };
+
+  const resetRuntimeFilters = () => setRuntimeFilterValues(runtimeDefaults(dashboard.globalFilters));
+
+  const runtimeFiltersForWidget = useCallback((widgetId: string): AnalysisFilter[] => (
+    dashboard.globalFilters.flatMap((filter) => {
+      const binding = filter.bindings.find((item) => item.widgetId === widgetId);
+      if (!binding) return [];
+      const value = hasOwn(runtimeFilterValues, filter.id)
+        ? runtimeFilterValues[filter.id]
+        : filter.defaultValue;
+      if (value === undefined || value === null || value === '') return [];
+      return [{
+        id: `dashboard-${filter.id}`,
+        field: binding.field,
+        operator: filter.operator,
+        value: String(value),
+      }];
+    })
+  ), [dashboard.globalFilters, runtimeFilterValues]);
+
+  const handleWidgetSelection = useCallback((widgetId: string, selection: AnalysisSelection) => {
+    const matched = dashboard.interactions.filter((interaction) => (
+      interaction.event === 'select'
+      && interaction.sourceWidgetId === widgetId
+      && interaction.sourceField === selection.fieldId
+    ));
+    if (!matched.length) return;
+    setRuntimeFilterValues((current) => {
+      const next = { ...current };
+      matched.forEach((interaction) => {
+        next[interaction.targetFilterId] = selection.value;
+      });
+      return next;
+    });
+  }, [dashboard.interactions]);
 
   const maxY = () => widgets.reduce((value, widget) => Math.max(value, widget.y + widget.h), 0);
 
@@ -225,7 +305,15 @@ export function useDashboardDesigner() {
   };
 
   const deleteWidget = (id: string) => {
-    setDashboard((current) => ({ ...current, widgets: current.widgets.filter((widget) => widget.id !== id) }));
+    setDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.filter((widget) => widget.id !== id),
+      globalFilters: current.globalFilters.map((filter) => ({
+        ...filter,
+        bindings: filter.bindings.filter((binding) => binding.widgetId !== id),
+      })),
+      interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
+    }));
     setSelectedId((current) => current === id ? undefined : current);
   };
 
@@ -235,7 +323,17 @@ export function useDashboardDesigner() {
     if (!widget?.inlineAnalysis) return;
     const dataset = findDataset(datasets, datasetId);
     if (!dataset) return;
-    updateWidget(id, { inlineAnalysis: createInlineAnalysis(widget.inlineAnalysis.type, dataset) });
+    setDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.map((item) => item.id === id
+        ? { ...item, inlineAnalysis: createInlineAnalysis(item.inlineAnalysis!.type, dataset) }
+        : item),
+      globalFilters: current.globalFilters.map((filter) => ({
+        ...filter,
+        bindings: filter.bindings.filter((binding) => binding.widgetId !== id),
+      })),
+      interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
+    }));
   };
 
   const addField = (field: DatasetField) => {
@@ -309,6 +407,7 @@ export function useDashboardDesigner() {
     setDashboard(next);
     setDashboardVersions([]);
     setSelectedId(undefined);
+    setRuntimeFilterValues({});
     window.localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -325,6 +424,7 @@ export function useDashboardDesigner() {
     dashboardVersions,
     dashboardsLoading,
     dashboardSaving,
+    runtimeFilterValues,
     selectedWidget,
     activeDataset,
     selectedId,
@@ -334,6 +434,12 @@ export function useDashboardDesigner() {
     setPreview,
     updateWidget,
     updateInlineAnalysis,
+    setGlobalFilters,
+    setInteractions,
+    setRuntimeFilterValue,
+    resetRuntimeFilters,
+    runtimeFiltersForWidget,
+    handleWidgetSelection,
     addWidget,
     addAnalysis,
     saveWidgetAsAnalysis,

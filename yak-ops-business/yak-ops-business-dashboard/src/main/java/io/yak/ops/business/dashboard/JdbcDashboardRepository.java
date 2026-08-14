@@ -95,6 +95,46 @@ class JdbcDashboardRepository implements DashboardRepository {
   }
 
   @Override
+  public void insertGlobalFilters(
+      long versionId,
+      List<DashboardService.GlobalFilterSpec> filters,
+      List<String> defaultValueJson) {
+    for (int index = 0; index < filters.size(); index++) {
+      DashboardService.GlobalFilterSpec filter = filters.get(index);
+      jdbcTemplate.update(
+          "INSERT INTO yak_dashboard_filter (dashboard_version_id, filter_key, name, operator, default_value_json, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+          versionId,
+          filter.filterKey(),
+          filter.name(),
+          filter.operator().name(),
+          defaultValueJson.get(index),
+          index + 1);
+      for (int bindingIndex = 0; bindingIndex < filter.bindings().size(); bindingIndex++) {
+        DashboardService.FilterBindingSpec binding = filter.bindings().get(bindingIndex);
+        jdbcTemplate.update(
+            "INSERT INTO yak_dashboard_filter_binding (dashboard_version_id, filter_key, widget_key, field_id, sort_order) VALUES (?, ?, ?, ?, ?)",
+            versionId, filter.filterKey(), binding.widgetKey(), binding.fieldId(), bindingIndex + 1);
+      }
+    }
+  }
+
+  @Override
+  public void insertInteractions(long versionId, List<DashboardService.InteractionSpec> interactions) {
+    for (int index = 0; index < interactions.size(); index++) {
+      DashboardService.InteractionSpec interaction = interactions.get(index);
+      jdbcTemplate.update(
+          "INSERT INTO yak_dashboard_interaction (dashboard_version_id, interaction_key, event_type, source_widget_key, source_field_id, target_filter_key, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          versionId,
+          interaction.interactionKey(),
+          interaction.event().name(),
+          interaction.sourceWidgetKey(),
+          interaction.sourceFieldId(),
+          interaction.targetFilterKey(),
+          index + 1);
+    }
+  }
+
+  @Override
   public void updateCurrentVersion(long dashboardId, long versionId, int versionNo, String name, String description) {
     int updated = jdbcTemplate.update(
         "UPDATE yak_dashboard SET current_version_id = ?, current_version_no = ?, name = ?, description = ?, update_time = NOW(6) WHERE id = ?",
@@ -146,6 +186,44 @@ class JdbcDashboardRepository implements DashboardRepository {
   }
 
   @Override
+  public List<DashboardGlobalFilterSnapshot> listGlobalFilters(long versionId) {
+    List<FilterHeader> headers = jdbcTemplate.query(
+        "SELECT filter_key, name, operator, default_value_json, sort_order FROM yak_dashboard_filter WHERE dashboard_version_id = ? ORDER BY sort_order ASC, id ASC",
+        (rs, rowNum) -> new FilterHeader(
+            rs.getString("filter_key"),
+            rs.getString("name"),
+            DashboardGlobalFilterOperator.valueOf(rs.getString("operator")),
+            rs.getString("default_value_json"),
+            rs.getInt("sort_order")),
+        versionId);
+    return headers.stream().map(header -> new DashboardGlobalFilterSnapshot(
+        header.filterKey(),
+        header.name(),
+        header.operator(),
+        parseJson(header.defaultValueJson()),
+        jdbcTemplate.query(
+            "SELECT widget_key, field_id, sort_order FROM yak_dashboard_filter_binding WHERE dashboard_version_id = ? AND filter_key = ? ORDER BY sort_order ASC",
+            (rs, rowNum) -> new DashboardGlobalFilterBindingSnapshot(
+                rs.getString("widget_key"), rs.getString("field_id"), rs.getInt("sort_order")),
+            versionId, header.filterKey()),
+        header.sortOrder())).toList();
+  }
+
+  @Override
+  public List<DashboardInteractionSnapshot> listInteractions(long versionId) {
+    return jdbcTemplate.query(
+        "SELECT interaction_key, event_type, source_widget_key, source_field_id, target_filter_key, sort_order FROM yak_dashboard_interaction WHERE dashboard_version_id = ? ORDER BY sort_order ASC, id ASC",
+        (rs, rowNum) -> new DashboardInteractionSnapshot(
+            rs.getString("interaction_key"),
+            DashboardInteractionEvent.valueOf(rs.getString("event_type")),
+            rs.getString("source_widget_key"),
+            rs.getString("source_field_id"),
+            rs.getString("target_filter_key"),
+            rs.getInt("sort_order")),
+        versionId);
+  }
+
+  @Override
   public int nextVersionNo(long dashboardId) {
     Integer value = jdbcTemplate.queryForObject(
         "SELECT COALESCE(MAX(version_no), 0) + 1 FROM yak_dashboard_version WHERE dashboard_id = ?",
@@ -190,11 +268,19 @@ class JdbcDashboardRepository implements DashboardRepository {
     try {
       return objectMapper.readValue(value, Object.class);
     } catch (JsonProcessingException exception) {
-      throw new IllegalStateException("Dashboard inlineAnalysis 反序列化失败", exception);
+      throw new IllegalStateException("Dashboard JSON 反序列化失败", exception);
     }
   }
 
   private static Instant instant(Timestamp value) {
     return value == null ? null : value.toInstant();
+  }
+
+  private record FilterHeader(
+      String filterKey,
+      String name,
+      DashboardGlobalFilterOperator operator,
+      String defaultValueJson,
+      int sortOrder) {
   }
 }

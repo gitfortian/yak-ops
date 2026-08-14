@@ -3,6 +3,7 @@ import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { useMemo } from 'react';
+import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import { LeftPanel } from './left-panel';
 import { SelectedConfig } from './selected-config';
@@ -53,6 +54,20 @@ export default function DashboardPage() {
         onSave={() => void designer.save()}
       />
 
+      <DashboardGlobalFilterBar
+        filters={designer.dashboard.globalFilters}
+        interactions={designer.dashboard.interactions}
+        widgets={designer.widgets}
+        analyses={designer.analyses}
+        datasets={designer.datasets}
+        runtimeValues={designer.runtimeFilterValues}
+        preview={designer.preview}
+        onFiltersChange={designer.setGlobalFilters}
+        onInteractionsChange={designer.setInteractions}
+        onRuntimeValue={designer.setRuntimeFilterValue}
+        onReset={designer.resetRuntimeFilters}
+      />
+
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {!designer.preview ? (
           <LeftPanel
@@ -78,7 +93,7 @@ export default function DashboardPage() {
             <div
               ref={containerRef}
               className={[
-                'mx-auto min-h-[calc(100vh-92px)] min-w-[760px] bg-white',
+                'mx-auto min-h-[calc(100vh-132px)] min-w-[760px] bg-white',
                 designer.preview ? 'max-w-[1500px] shadow-[0_1px_5px_rgba(16,24,40,.08)]' : 'dashboard-grid-canvas border border-[#dfe3e8]',
               ].join(' ')}
               onMouseDown={(event) => { if (event.target === event.currentTarget) designer.setSelectedId(undefined); }}
@@ -106,9 +121,11 @@ export default function DashboardPage() {
                           widget={widget}
                           analysis={analysis}
                           dataset={dataset}
+                          runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
                           selected={designer.selectedId === widget.id}
                           preview={designer.preview}
                           onSelect={() => { if (!designer.preview) designer.setSelectedId(widget.id); }}
+                          onDataSelect={(selection) => designer.handleWidgetSelection(widget.id, selection)}
                           onSaveAsAnalysis={() => void designer.saveWidgetAsAnalysis(widget.id)}
                           onDuplicate={() => designer.duplicateWidget(widget.id)}
                           onDelete={() => designer.deleteWidget(widget.id)}
@@ -121,7 +138,7 @@ export default function DashboardPage() {
               {!designer.widgets.length && !designer.datasetsLoading ? (
                 <div className="flex min-h-[360px] items-center justify-center px-6 text-center text-[12px] text-[#98a2b3]">
                   {designer.activeDataset
-                    ? '从左侧复用 Analysis，或新建图表开始分析；点击保存后会生成服务端 DashboardVersion'
+                    ? '从左侧复用 Analysis，或新建图表开始分析；可在顶部配置全局筛选与组件联动'
                     : '暂无可用 Dataset，请先在数据开发发布中心发布数据集'}
                 </div>
               ) : null}

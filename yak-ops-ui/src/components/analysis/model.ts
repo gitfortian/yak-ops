@@ -74,6 +74,14 @@ export interface AnalysisAsset extends AnalysisSpec {
   updatedAt?: string;
 }
 
+/** Semantic selection emitted by a chart/table for Dashboard interaction routing. */
+export interface AnalysisSelection {
+  fieldId: string;
+  value: Scalar;
+  label: string;
+  rowIndex: number;
+}
+
 export interface DatasetQueryMetric {
   fieldId: string;
   aggregation: Aggregation;

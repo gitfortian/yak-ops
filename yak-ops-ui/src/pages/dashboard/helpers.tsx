@@ -88,6 +88,8 @@ export const loadDashboard = (): DashboardDocument => {
       currentVersionId: undefined,
       currentVersionNo: undefined,
       widgets: parsed.widgets.map(legacyWidgetToCurrent),
+      globalFilters: Array.isArray(parsed.globalFilters) ? parsed.globalFilters : [],
+      interactions: Array.isArray(parsed.interactions) ? parsed.interactions : [],
     };
   } catch {
     return cloneDashboard(DEFAULT_DASHBOARD);

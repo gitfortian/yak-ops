@@ -77,20 +77,37 @@ public class DashboardController {
   }
 
   private DashboardService.SaveCommand toCommand(SaveDashboardRequest request) {
+    List<DashboardService.WidgetSpec> widgets = request.widgets() == null ? List.of() : request.widgets().stream()
+        .map(widget -> new DashboardService.WidgetSpec(
+            widget.widgetKey(), widget.analysisId(), widget.title(), widget.inlineAnalysis(),
+            widget.x(), widget.y(), widget.w(), widget.h(), widget.minW(), widget.minH()))
+        .toList();
+    List<DashboardService.GlobalFilterSpec> filters = request.globalFilters() == null ? List.of()
+        : request.globalFilters().stream()
+            .map(filter -> new DashboardService.GlobalFilterSpec(
+                filter.filterKey(), filter.name(), filter.operator(), filter.defaultValue(),
+                filter.bindings() == null ? List.of() : filter.bindings().stream()
+                    .map(binding -> new DashboardService.FilterBindingSpec(binding.widgetKey(), binding.fieldId()))
+                    .toList()))
+            .toList();
+    List<DashboardService.InteractionSpec> interactions = request.interactions() == null ? List.of()
+        : request.interactions().stream()
+            .map(interaction -> new DashboardService.InteractionSpec(
+                interaction.interactionKey(), interaction.event(), interaction.sourceWidgetKey(),
+                interaction.sourceFieldId(), interaction.targetFilterKey()))
+            .toList();
     return new DashboardService.SaveCommand(
-        request.name(), request.description(), request.activeDatasetId(),
-        request.widgets() == null ? List.of() : request.widgets().stream()
-            .map(widget -> new DashboardService.WidgetSpec(
-                widget.widgetKey(), widget.analysisId(), widget.title(), widget.inlineAnalysis(),
-                widget.x(), widget.y(), widget.w(), widget.h(), widget.minW(), widget.minH()))
-            .toList());
+        request.name(), request.description(), request.activeDatasetId(), widgets, filters, interactions);
   }
 
   public record SaveDashboardRequest(
       @NotBlank @Size(max = 200) String name,
       @Size(max = 2000) String description,
       @Min(1) Long activeDatasetId,
-      @Size(max = 200) List<@Valid WidgetRequest> widgets) {}
+      @Size(max = 200) List<@Valid WidgetRequest> widgets,
+      @Size(max = 20) List<@Valid GlobalFilterRequest> globalFilters,
+      @Size(max = 100) List<@Valid InteractionRequest> interactions) {
+  }
 
   public record WidgetRequest(
       @NotBlank @Size(max = 64) String widgetKey,
@@ -102,5 +119,27 @@ public class DashboardController {
       @Min(1) @Max(24) int w,
       @Min(1) @Max(60) int h,
       @Min(1) @Max(24) Integer minW,
-      @Min(1) @Max(60) Integer minH) {}
+      @Min(1) @Max(60) Integer minH) {
+  }
+
+  public record GlobalFilterRequest(
+      @NotBlank @Size(max = 64) String filterKey,
+      @NotBlank @Size(max = 200) String name,
+      @NotNull DashboardGlobalFilterOperator operator,
+      Object defaultValue,
+      @Size(max = 200) List<@Valid FilterBindingRequest> bindings) {
+  }
+
+  public record FilterBindingRequest(
+      @NotBlank @Size(max = 64) String widgetKey,
+      @NotBlank @Size(max = 64) String fieldId) {
+  }
+
+  public record InteractionRequest(
+      @NotBlank @Size(max = 64) String interactionKey,
+      @NotNull DashboardInteractionEvent event,
+      @NotBlank @Size(max = 64) String sourceWidgetKey,
+      @NotBlank @Size(max = 64) String sourceFieldId,
+      @NotBlank @Size(max = 64) String targetFilterKey) {
+  }
 }

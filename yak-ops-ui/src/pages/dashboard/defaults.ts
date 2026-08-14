@@ -8,4 +8,6 @@ export const DEFAULT_DASHBOARD: DashboardDocument = {
   description: '',
   activeDatasetId: '',
   widgets: [],
+  globalFilters: [],
+  interactions: [],
 };
