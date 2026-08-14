@@ -72,6 +72,9 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   }
 
   @Override public int update(WorkflowScheduleTriggerPO trigger) { return mapper.updateById(trigger); }
+  @Override public int bindPreparedExecution(String triggerId, String executionId) {
+    return mapper.bindPreparedExecution(triggerId, executionId);
+  }
 
   @Override public void lockWorkflow(String workflowId) {
     String locked = mapper.lockWorkflow(workflowId);
