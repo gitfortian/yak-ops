@@ -20,6 +20,8 @@ public class WorkflowBackfillPO {
   private String scheduleName;
   private String name;
   private String status;
+  private String operationType;
+  private String sourceExecutionId;
   private LocalDate startBusinessDate;
   private LocalDate endBusinessDate;
   private String cronExpression;

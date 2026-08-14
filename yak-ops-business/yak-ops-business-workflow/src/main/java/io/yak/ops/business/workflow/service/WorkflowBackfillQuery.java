@@ -66,6 +66,8 @@ public class WorkflowBackfillQuery {
         value.getScheduleName(),
         value.getName(),
         status,
+        value.getOperationType() == null ? "BACKFILL" : value.getOperationType(),
+        value.getSourceExecutionId(),
         value.getStartBusinessDate(),
         value.getEndBusinessDate(),
         value.getCronExpression(),

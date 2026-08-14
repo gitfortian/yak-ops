@@ -26,6 +26,11 @@ const STATUS_LABEL: Record<WorkflowBackfillStatus, string> = {
   CANCELED: '已取消',
 };
 
+const OPERATION_LABEL: Record<string, string> = {
+  BACKFILL: '历史补数',
+  BUSINESS_DATE_RERUN: '实例运维补跑',
+};
+
 const formatTime = (value?: string) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -49,7 +54,7 @@ const BackfillHistoryDrawer = ({
     try {
       setRecords(await listWorkflowBackfills({ workflowId, scheduleId, status }));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '补数批次加载失败');
+      message.error(error instanceof Error ? error.message : '补数/补跑批次加载失败');
     } finally {
       setLoading(false);
     }
@@ -62,18 +67,18 @@ const BackfillHistoryDrawer = ({
   const cancel = (record: WorkflowBackfill) => {
     Modal.confirm({
       centered: true,
-      title: '确认取消补数批次吗？',
-      content: '尚未启动的补数实例会被标记为已跳过；已经运行中的 WorkflowExecution 会继续完成。',
-      okText: '取消补数',
+      title: '确认取消批次吗？',
+      content: '尚未启动的计划会被标记为已跳过；已经运行中的 WorkflowExecution 会继续完成。',
+      okText: '取消批次',
       cancelText: '关闭',
       okButtonProps: { danger: true },
       async onOk() {
         try {
           await cancelWorkflowBackfill(record.id);
-          message.success('补数批次已取消');
+          message.success('批次已取消');
           await load();
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '取消补数失败');
+          message.error(error instanceof Error ? error.message : '取消批次失败');
         }
       },
     });
@@ -82,15 +87,15 @@ const BackfillHistoryDrawer = ({
   return (
     <Drawer
       open={open}
-      width={1160}
+      width={1240}
       destroyOnClose
       title={
         <div>
           <div className="flex items-center gap-2 text-[14px] font-semibold text-[#344054]">
-            <History size={15} /> 补数记录
+            <History size={15} /> 补数 / 运维补跑记录
           </div>
           <div className="mt-0.5 text-[11px] font-normal text-[#98a2b3]">
-            Backfill 批次、固定工作流版本与 Trigger Ledger 运行进度
+            Backfill 与指定 businessDate 重跑共享 Trigger Ledger，但保留独立 operationType 和来源实例血缘
           </div>
         </div>
       }
@@ -115,18 +120,35 @@ const BackfillHistoryDrawer = ({
         bordered
         loading={loading}
         dataSource={records}
-        scroll={{ x: 1500 }}
+        scroll={{ x: 1710 }}
         pagination={{ pageSize: 15, showSizeChanger: false, showTotal: (total) => `共 ${total} 个批次` }}
         columns={[
           {
-            title: '补数批次',
+            title: '批次',
             dataIndex: 'name',
-            width: 220,
+            width: 235,
             fixed: 'left',
             render: (value: string, record: WorkflowBackfill) => (
               <div>
                 <div className="font-medium text-[#344054]">{value}</div>
                 <div className="mt-1 text-[10px] text-[#98a2b3]">{record.id}</div>
+              </div>
+            ),
+          },
+          {
+            title: '类型 / 来源',
+            width: 215,
+            render: (_: unknown, record: WorkflowBackfill) => (
+              <div>
+                <div className="text-[12px] font-medium text-[#475467]">
+                  {OPERATION_LABEL[record.operationType] || record.operationType}
+                </div>
+                <div
+                  className="mt-1 max-w-[190px] truncate font-mono text-[10px] text-[#98a2b3]"
+                  title={record.sourceExecutionId}
+                >
+                  {record.sourceExecutionId ? `source: ${record.sourceExecutionId}` : '普通 Backfill'}
+                </div>
               </div>
             ),
           },

@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * 工作流启动上下文。
  *
- * <p>Definition、调度、补数和 API 最终都通过同一个 Launch 入口进入 Runtime，
+ * <p>Definition、调度、补数、运维补跑和 API 最终都通过同一个 Launch 入口进入 Runtime，
  * 该上下文只描述“为什么启动”，不参与 DAG 本身的编排语义。</p>
  */
 public record WorkflowTriggerContext(
@@ -106,6 +106,22 @@ public record WorkflowTriggerContext(
         required(scheduleId, "补数 scheduleId 不能为空"),
         required(backfillId, "补数 backfillId 不能为空"),
         required(plannedFireTime, "补数 plannedFireTime 不能为空"),
+        timezone);
+  }
+
+  /** Stage 6：指定 businessDate 的人工运维补跑。 */
+  public static WorkflowTriggerContext rerun(
+      String triggerId,
+      String scheduleId,
+      String backfillId,
+      Instant plannedFireTime,
+      String timezone) {
+    return new WorkflowTriggerContext(
+        WorkflowTriggerType.RERUN,
+        triggerId,
+        required(scheduleId, "补跑 scheduleId 不能为空"),
+        required(backfillId, "补跑 batchId 不能为空"),
+        required(plannedFireTime, "补跑 plannedFireTime 不能为空"),
         timezone);
   }
 

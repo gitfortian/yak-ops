@@ -1,6 +1,10 @@
 import type { ApiResponse } from '@/services/http/response';
 import { listTaskCatalogAssets } from '@/services/taskCatalog';
 import { request } from '@umijs/max';
+import type {
+  WorkflowBackfill,
+  WorkflowBackfillExecutionStrategy,
+} from './schedules';
 
 export type WorkflowFailureStrategy =
   | 'FAIL_FAST'
@@ -110,6 +114,48 @@ export interface WorkflowInstance {
   testRun: boolean;
 }
 
+export interface WorkflowInstanceEdge {
+  source: string;
+  target: string;
+}
+
+export interface WorkflowInstanceOperations {
+  executionId: string;
+  workflowId?: string;
+  triggerType?: string;
+  triggerId?: string;
+  scheduleId?: string;
+  backfillId?: string;
+  businessDate?: string;
+  scheduleTime?: string;
+  scheduleTimezone?: string;
+  plannedFireTime?: string;
+  cronExpression?: string;
+  businessDateRerunSupported: boolean;
+  businessDateRerunUnavailableReason?: string;
+  edges: WorkflowInstanceEdge[];
+}
+
+export interface WorkflowBusinessDateRerunPayload {
+  businessDate: string;
+  executionStrategy: WorkflowBackfillExecutionStrategy;
+  input: Record<string, unknown>;
+}
+
+export interface WorkflowBatchRetryItem {
+  executionId: string;
+  accepted: boolean;
+  status?: string;
+  message?: string;
+}
+
+export interface WorkflowBatchRetryResult {
+  requestedCount: number;
+  acceptedCount: number;
+  failedCount: number;
+  items: WorkflowBatchRetryItem[];
+}
+
 interface WorkflowEventSubscription {
   onSnapshot: (instance: WorkflowInstance) => void;
   lastSignature: string;
@@ -195,6 +241,32 @@ export const rerunWorkflowFromNode = async (executionId: string, nodeId: string)
   const response = await request<ApiResponse<WorkflowInstance>>(
     `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/nodes/${encodeURIComponent(nodeId)}/rerun`,
     { method: 'POST' },
+  );
+  return response.data;
+};
+
+export const getWorkflowInstanceOperations = async (executionId: string) => {
+  const response = await request<ApiResponse<WorkflowInstanceOperations>>(
+    `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/operations`,
+  );
+  return response.data;
+};
+
+export const rerunWorkflowBusinessDate = async (
+  executionId: string,
+  payload: WorkflowBusinessDateRerunPayload,
+) => {
+  const response = await request<ApiResponse<WorkflowBackfill>>(
+    `/api/v1/workflows/instances/${encodeURIComponent(executionId)}/rerun-business-date`,
+    { method: 'POST', data: payload },
+  );
+  return response.data;
+};
+
+export const batchRetryWorkflowInstances = async (executionIds: string[]) => {
+  const response = await request<ApiResponse<WorkflowBatchRetryResult>>(
+    '/api/v1/workflows/instances/batch-retry-failed',
+    { method: 'POST', data: { executionIds } },
   );
   return response.data;
 };

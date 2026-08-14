@@ -65,9 +65,7 @@ public class WorkflowLaunchService {
     return runScheduledPublished(workflowId, triggerContext, Map.of());
   }
 
-  /**
-   * 正常调度始终 FOLLOW_ACTIVE；运行参数只覆盖本次 engine.start，不修改发布版本。
-   */
+  /** 正常调度始终 FOLLOW_ACTIVE；运行参数只覆盖本次 engine.start，不修改发布版本。 */
   public WorkflowDefinitionVO runScheduledPublished(
       String workflowId,
       WorkflowTriggerContext triggerContext,
@@ -86,7 +84,7 @@ public class WorkflowLaunchService {
 
   /**
    * Backfill 执行创建批次时固定的不可变发布版本，而不是跟随之后变更的 activeVersion。
-   * 工作流下线仍阻止新的补数实例启动，但重新发布 V6 不会把 V5 补数批次切换到 V6。
+   * 工作流下线仍阻止新的普通补数实例启动。
    */
   public WorkflowInstanceVO runBackfillPublished(
       String workflowId,
@@ -99,16 +97,39 @@ public class WorkflowLaunchService {
     if (!"ONLINE".equals(current.status())) {
       throw new IllegalStateException("工作流已下线，不能启动新的 Backfill 实例");
     }
+    return runPinnedVersion("BACKFILL_PUBLISHED", id, versionId, triggerContext, runtimeInput);
+  }
+
+  /**
+   * Stage 6 运维补跑：显式人工操作允许执行来源实例固定的不可变版本。
+   * 与正常 Cron/Backfill 不同，这里不跟随当前 activeVersion，也不以当前 ONLINE 状态作为历史恢复门槛。
+   */
+  public WorkflowInstanceVO runOperationalPublished(
+      String workflowId,
+      String workflowVersionId,
+      WorkflowTriggerContext triggerContext,
+      Map<String, Object> runtimeInput) {
+    String id = required(workflowId, "工作流 ID 不能为空");
+    String versionId = required(workflowVersionId, "运维补跑 workflowVersionId 不能为空");
+    return runPinnedVersion("OPERATIONAL_RERUN", id, versionId, triggerContext, runtimeInput);
+  }
+
+  private WorkflowInstanceVO runPinnedVersion(
+      String mode,
+      String workflowId,
+      String workflowVersionId,
+      WorkflowTriggerContext triggerContext,
+      Map<String, Object> runtimeInput) {
     if (publishedVersionRunner == null) {
       throw new IllegalStateException("WorkflowPublishedVersionRunner 不可用");
     }
     try (var binding = WorkflowScheduleLaunchBindingScope.open(triggerContext.triggerId());
          var input = WorkflowRunInputScope.open(runtimeInput)) {
       return launch(
-          "BACKFILL_PUBLISHED",
-          id + "@" + versionId,
+          mode,
+          workflowId + "@" + workflowVersionId,
           triggerContext,
-          () -> publishedVersionRunner.run(id, versionId),
+          () -> publishedVersionRunner.run(workflowId, workflowVersionId),
           WorkflowInstanceVO::id);
     }
   }

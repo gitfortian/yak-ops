@@ -5,5 +5,6 @@ public enum WorkflowTriggerType {
   MANUAL,
   SCHEDULE,
   BACKFILL,
+  RERUN,
   API
 }
