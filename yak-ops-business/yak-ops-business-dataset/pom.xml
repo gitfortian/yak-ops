@@ -14,7 +14,7 @@
     <artifactId>yak-ops-business-dataset</artifactId>
 
     <name>Yak Ops Business Dataset</name>
-    <description>BI dataset contracts, immutable versions and publication lifecycle</description>
+    <description>BI dataset contracts, immutable versions, publication lifecycle and query runtime</description>
 
     <dependencies>
         <dependency>
@@ -28,6 +28,10 @@
         <dependency>
             <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-business-datasource</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-plugin-datasource-api</artifactId>
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
