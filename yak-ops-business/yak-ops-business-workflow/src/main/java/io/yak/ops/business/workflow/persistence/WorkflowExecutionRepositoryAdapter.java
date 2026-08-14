@@ -11,7 +11,9 @@ import io.yak.framework.workflow.engine.state.NodeAttemptStatus;
 import io.yak.framework.workflow.engine.state.NodeExecutionStatus;
 import io.yak.framework.workflow.engine.state.WorkflowExecutionStatus;
 import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
+import io.yak.ops.business.workflow.dao.WorkflowScheduleTriggerDao;
 import io.yak.ops.business.workflow.domain.WorkflowExecutionTerminalEvent;
+import io.yak.ops.business.workflow.domain.WorkflowScheduleLaunchBindingScope;
 import io.yak.ops.business.workflow.persistence.support.WorkflowJsonCodec;
 import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowNodeAttemptPO;
@@ -21,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
     matchIfMissing = true)
 public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
   private final WorkflowExecutionDao executionDao;
+  private final WorkflowScheduleTriggerDao scheduleTriggerDao;
   private final WorkflowJsonCodec json;
   private final ApplicationEventPublisher eventPublisher;
 
@@ -48,6 +52,7 @@ public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
   public void save(WorkflowExecution execution) {
     WorkflowExecutionSnapshot snapshot = execution.snapshot();
     executionDao.upsertExecution(toPO(snapshot));
+    bindPreparedScheduledExecution(snapshot);
     for (NodeExecutionSnapshot node : snapshot.nodes()) {
       executionDao.upsertNodeExecution(toPO(node));
       for (NodeAttemptSnapshot attempt : node.attempts()) {
@@ -57,6 +62,22 @@ public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
     if (snapshot.status().isTerminal()) {
       eventPublisher.publishEvent(new WorkflowExecutionTerminalEvent(
           snapshot.id(), snapshot.status().name(), snapshot.endedAt()));
+    }
+  }
+
+  private void bindPreparedScheduledExecution(WorkflowExecutionSnapshot snapshot) {
+    if (snapshot.status() != WorkflowExecutionStatus.CREATED) return;
+    String triggerId = WorkflowScheduleLaunchBindingScope.currentTriggerId();
+    if (triggerId == null) return;
+
+    int bound = scheduleTriggerDao.bindPreparedExecution(triggerId, snapshot.id());
+    if (bound == 1) return;
+
+    String existingExecutionId = scheduleTriggerDao.selectExecutionIdByTrigger(triggerId);
+    if (!Objects.equals(existingExecutionId, snapshot.id())) {
+      throw new IllegalStateException(
+          "调度 Trigger 无法原子绑定 WorkflowExecution：triggerId="
+              + triggerId + ", executionId=" + snapshot.id());
     }
   }
 
