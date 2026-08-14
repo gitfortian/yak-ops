@@ -54,6 +54,16 @@ export interface DevelopmentDatasetField {
   sortOrder: number;
 }
 
+export interface DevelopmentDatasetFieldDraft {
+  fieldId?: string | null;
+  physicalName: string;
+  displayName: string;
+  dataType: DevelopmentDatasetFieldType;
+  nullable: boolean;
+  description?: string | null;
+  defaultRole: DevelopmentDatasetFieldRole;
+}
+
 export interface DevelopmentDatasetDetail {
   dataset: DevelopmentDatasetSummary;
   currentVersion?: DevelopmentDatasetVersion | null;
@@ -71,6 +81,12 @@ export interface DevelopmentDatasetContext {
   datasetState?: DevelopmentReleaseDatasetState;
 }
 
+export interface PublishDevelopmentDatasetPayload {
+  name?: string;
+  description?: string;
+  fields?: DevelopmentDatasetFieldDraft[];
+}
+
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
     throw new Error(response?.message || response?.msg || fallback);
@@ -85,9 +101,16 @@ export const getDevelopmentReleaseDataset = async (
   '查询 Dataset 状态失败',
 );
 
+export const previewDevelopmentReleaseDataset = async (
+  assetId: DevelopmentId,
+): Promise<DevelopmentDatasetFieldDraft[]> => unwrap(
+  await HttpUtils.post<DevelopmentDatasetFieldDraft[]>(`${RELEASE_API}/${assetId}/dataset/preview`, {}),
+  '发现 Dataset 字段失败',
+);
+
 export const publishDevelopmentReleaseDataset = async (
   assetId: DevelopmentId,
-  payload: { name?: string; description?: string },
+  payload: PublishDevelopmentDatasetPayload,
 ): Promise<DevelopmentDatasetDetail> => unwrap(
   await HttpUtils.post<DevelopmentDatasetDetail>(`${RELEASE_API}/${assetId}/dataset`, payload),
   '发布 Dataset 失败',
