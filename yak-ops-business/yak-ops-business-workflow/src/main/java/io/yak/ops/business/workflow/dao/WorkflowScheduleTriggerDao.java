@@ -25,6 +25,8 @@ public interface WorkflowScheduleTriggerDao {
 
   long countActiveExecutions(String workflowId);
 
+  long countLaunchingTriggers(String workflowId);
+
   String selectWorkflowIdByExecution(String executionId);
 
   String selectExecutionIdByTrigger(String triggerId);
