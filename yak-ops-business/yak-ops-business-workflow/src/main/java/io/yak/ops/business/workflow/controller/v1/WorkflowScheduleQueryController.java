@@ -44,9 +44,10 @@ public class WorkflowScheduleQueryController {
   public Result<List<WorkflowScheduleTriggerVO>> triggers(
       @RequestParam(value = "scheduleId", required = false) String scheduleId,
       @RequestParam(value = "workflowId", required = false) String workflowId,
+      @RequestParam(value = "backfillId", required = false) String backfillId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "100") Integer limit) {
-    return Result.success(triggerQuery.list(scheduleId, workflowId, status, limit));
+    return Result.success(triggerQuery.list(scheduleId, workflowId, backfillId, status, limit));
   }
 
   @Operation(summary = "查询工作流调度详情")
