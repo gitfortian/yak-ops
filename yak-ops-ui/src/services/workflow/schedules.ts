@@ -24,6 +24,7 @@ export type WorkflowBackfillStatus =
   | 'FAILED'
   | 'CANCELED';
 export type WorkflowBackfillExecutionStrategy = 'SERIAL_WAIT' | 'PARALLEL';
+export type WorkflowBackfillOperationType = 'BACKFILL' | 'BUSINESS_DATE_RERUN';
 
 export interface WorkflowSchedule {
   id: string;
@@ -50,7 +51,13 @@ export interface WorkflowScheduleTrigger {
   workflowId: string;
   backfillId?: string;
   triggerId: string;
-  triggerSource: 'CRON' | 'MANUAL' | 'MISFIRE_RECOVERY' | 'BACKFILL' | string;
+  triggerSource:
+    | 'CRON'
+    | 'MANUAL'
+    | 'MISFIRE_RECOVERY'
+    | 'BACKFILL'
+    | 'BUSINESS_DATE_RERUN'
+    | string;
   businessDate?: string;
   plannedFireTime: string;
   actualFireTime: string;
@@ -102,6 +109,8 @@ export interface WorkflowBackfill {
   scheduleName: string;
   name: string;
   status: WorkflowBackfillStatus;
+  operationType: WorkflowBackfillOperationType;
+  sourceExecutionId?: string;
   startBusinessDate: string;
   endBusinessDate: string;
   cronExpression: string;
