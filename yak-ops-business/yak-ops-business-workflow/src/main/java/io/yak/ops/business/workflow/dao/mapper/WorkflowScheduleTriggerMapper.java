@@ -76,13 +76,19 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
   String selectWorkflowIdByExecution(@Param("executionId") String executionId);
 
   @Select("""
-      SELECT e.id
-      FROM yak_workflow_execution e
-      WHERE e.runtime_metadata_json IS NOT NULL
-        AND JSON_VALID(e.runtime_metadata_json)
-        AND JSON_UNQUOTE(JSON_EXTRACT(e.runtime_metadata_json, '$.triggerId')) = #{triggerId}
-      ORDER BY e.created_at DESC
-      LIMIT 1
+      SELECT COALESCE(
+        (SELECT t.workflow_execution_id
+         FROM yak_workflow_schedule_trigger t
+         WHERE t.trigger_id = #{triggerId}
+         LIMIT 1),
+        (SELECT e.id
+         FROM yak_workflow_execution e
+         WHERE e.runtime_metadata_json IS NOT NULL
+           AND JSON_VALID(e.runtime_metadata_json)
+           AND JSON_UNQUOTE(JSON_EXTRACT(e.runtime_metadata_json, '$.triggerId')) = #{triggerId}
+         ORDER BY e.created_at DESC
+         LIMIT 1)
+      )
       """)
   String selectExecutionIdByTrigger(@Param("triggerId") String triggerId);
 }
