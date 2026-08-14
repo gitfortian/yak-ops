@@ -21,6 +21,12 @@ export default [
         path: '/',
         redirect: '/home',
       },
+      {
+        path: '/workflow/schedules',
+        component: './workflow/schedules',
+        access: 'isAuthenticated',
+        wrappers: ['@/components/security/RouteAccessBoundary'],
+      },
       ...appRoutes.map(({ path, component, hidden }) => ({
         path,
         component,
