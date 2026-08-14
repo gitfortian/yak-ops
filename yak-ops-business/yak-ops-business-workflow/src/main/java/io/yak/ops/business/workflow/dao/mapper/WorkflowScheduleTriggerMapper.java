@@ -51,11 +51,12 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
       """)
   long countActiveExecutions(@Param("workflowId") String workflowId);
 
+  /** LAUNCHING 与 REACTIVATING 都是尚未由 Execution DB 完整体现的 durable 并发占位。 */
   @Select("""
       SELECT COUNT(*)
       FROM yak_workflow_schedule_trigger
       WHERE workflow_id = #{workflowId}
-        AND status = 'LAUNCHING'
+        AND status IN ('LAUNCHING', 'REACTIVATING')
       """)
   long countLaunchingTriggers(@Param("workflowId") String workflowId);
 
