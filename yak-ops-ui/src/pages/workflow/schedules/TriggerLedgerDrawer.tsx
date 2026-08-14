@@ -20,6 +20,7 @@ const STATUS_LABEL: Record<WorkflowScheduleTriggerStatus, string> = {
   RECEIVED: '已接收',
   WAITING: '等待中',
   LAUNCHING: '启动中',
+  REACTIVATING: '恢复中',
   RUNNING: '运行中',
   SUCCEEDED: '成功',
   FAILED: '失败',
@@ -109,8 +110,8 @@ const TriggerLedgerDrawer = ({
     >
       <div className="mb-3 rounded-sm bg-[#f8f9fb] px-3 py-2 text-[11px] leading-5 text-[#667085]">
         {backfillId
-          ? 'Backfill / businessDate 运维补跑都使用逻辑计划时间；不同批次可重新执行同一天，同一批次仍由 dedupeKey 保证幂等。'
-          : 'SERIAL_WAIT 会先进入 WAITING，前序 WorkflowExecution 终态提交后自动推进；SERIAL_DISCARD 会记为 SKIPPED；Misfire 同样保留审计记录。'}
+          ? 'Backfill / businessDate 运维补跑都使用逻辑计划时间；不同批次可重新执行同一天，同一批次仍由 dedupeKey 保证幂等。人工恢复终态实例时会短暂进入 REACTIVATING，并继续占用串行槽位。'
+          : 'SERIAL_WAIT 会先进入 WAITING，前序 WorkflowExecution 终态提交后自动推进；人工 retry/continue 会先进入 REACTIVATING 重新占住串行槽位；SERIAL_DISCARD 会记为 SKIPPED；Misfire 同样保留审计记录。'}
       </div>
       <Table
         rowKey="id"
