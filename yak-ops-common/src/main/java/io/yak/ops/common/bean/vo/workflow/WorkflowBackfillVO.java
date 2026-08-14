@@ -14,6 +14,8 @@ public record WorkflowBackfillVO(
     String scheduleName,
     String name,
     String status,
+    String operationType,
+    String sourceExecutionId,
     LocalDate startBusinessDate,
     LocalDate endBusinessDate,
     String cronExpression,
