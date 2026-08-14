@@ -29,21 +29,32 @@ class WorkflowBackfillPlannerTest {
   }
 
   @Test
-  void shouldNormalizeFiveFieldCronToQuartzSecondsField() {
+  void shouldNormalizeFiveFieldCronToQuartzDaySemantics() {
     var plan = planner.plan(
         "0 2 * * *",
         "Asia/Shanghai",
         LocalDate.of(2026, 8, 1),
         LocalDate.of(2026, 8, 1));
 
-    assertThat(plan.cronExpression()).isEqualTo("0 0 2 * * *");
+    assertThat(plan.cronExpression()).isEqualTo("0 0 2 * * ?");
     assertThat(plan.occurrences()).hasSize(1);
+  }
+
+  @Test
+  void shouldRejectAmbiguousFiveFieldDayAndWeekCombination() {
+    assertThatThrownBy(() -> planner.plan(
+        "0 2 1 * MON",
+        "Asia/Shanghai",
+        LocalDate.of(2026, 8, 1),
+        LocalDate.of(2026, 8, 31)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("语义不等价");
   }
 
   @Test
   void shouldRejectRangesThatProduceTooManyOccurrences() {
     assertThatThrownBy(() -> planner.plan(
-        "0 * * * * ?",
+        "* * * * * ?",
         "UTC",
         LocalDate.of(2026, 8, 1),
         LocalDate.of(2026, 8, 2)))
