@@ -11,6 +11,7 @@ import io.yak.framework.workflow.engine.state.NodeAttemptStatus;
 import io.yak.framework.workflow.engine.state.NodeExecutionStatus;
 import io.yak.framework.workflow.engine.state.WorkflowExecutionStatus;
 import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
+import io.yak.ops.business.workflow.domain.WorkflowExecutionTerminalEvent;
 import io.yak.ops.business.workflow.persistence.support.WorkflowJsonCodec;
 import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowNodeAttemptPO;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
   private final WorkflowExecutionDao executionDao;
   private final WorkflowJsonCodec json;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Override
   @Transactional(transactionManager = "yakBusinessTransactionManager")
@@ -50,6 +53,10 @@ public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
       for (NodeAttemptSnapshot attempt : node.attempts()) {
         executionDao.upsertNodeAttempt(toPO(snapshot.id(), node, attempt));
       }
+    }
+    if (snapshot.status().isTerminal()) {
+      eventPublisher.publishEvent(new WorkflowExecutionTerminalEvent(
+          snapshot.id(), snapshot.status().name(), snapshot.endedAt()));
     }
   }
 
