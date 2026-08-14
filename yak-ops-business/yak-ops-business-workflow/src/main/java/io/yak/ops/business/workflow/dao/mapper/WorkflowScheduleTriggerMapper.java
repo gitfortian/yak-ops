@@ -5,6 +5,7 @@ import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /** 工作流调度 Trigger Ledger Mapper。 */
 public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowScheduleTriggerPO> {
@@ -22,6 +23,20 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
          #{launchedAt}, #{completedAt}, #{createTime}, #{updateTime})
       """)
   int insertIgnore(WorkflowScheduleTriggerPO trigger);
+
+  @Update("""
+      UPDATE yak_workflow_schedule_trigger
+      SET workflow_execution_id = #{executionId},
+          execution_status = 'CREATED',
+          message = 'WorkflowExecution 已持久化，等待激活',
+          update_time = CURRENT_TIMESTAMP(3)
+      WHERE trigger_id = #{triggerId}
+        AND status = 'LAUNCHING'
+        AND workflow_execution_id IS NULL
+      """)
+  int bindPreparedExecution(
+      @Param("triggerId") String triggerId,
+      @Param("executionId") String executionId);
 
   @Select("SELECT id FROM yak_workflow_definition WHERE id = #{workflowId} FOR UPDATE")
   String lockWorkflow(@Param("workflowId") String workflowId);
