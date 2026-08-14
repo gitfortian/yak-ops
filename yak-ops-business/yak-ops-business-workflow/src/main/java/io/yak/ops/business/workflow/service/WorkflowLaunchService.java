@@ -13,6 +13,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** 工作流统一启动入口：Trigger -> Launch -> Definition/Runtime。 */
@@ -23,14 +24,26 @@ public class WorkflowLaunchService {
   private final WorkflowDefinitionService definitionService;
   private final WorkflowRuntimeService runtimeService;
   private final WorkflowExecutionTriggerRecorder triggerRecorder;
+  private final WorkflowPublishedVersionRunner publishedVersionRunner;
 
+  @Autowired
   public WorkflowLaunchService(
       WorkflowDefinitionService definitionService,
       WorkflowRuntimeService runtimeService,
-      WorkflowExecutionTriggerRecorder triggerRecorder) {
+      WorkflowExecutionTriggerRecorder triggerRecorder,
+      WorkflowPublishedVersionRunner publishedVersionRunner) {
     this.definitionService = definitionService;
     this.runtimeService = runtimeService;
     this.triggerRecorder = triggerRecorder;
+    this.publishedVersionRunner = publishedVersionRunner;
+  }
+
+  /** Focused tests retain the Stage 4 constructor. */
+  WorkflowLaunchService(
+      WorkflowDefinitionService definitionService,
+      WorkflowRuntimeService runtimeService,
+      WorkflowExecutionTriggerRecorder triggerRecorder) {
+    this(definitionService, runtimeService, triggerRecorder, null);
   }
 
   /** 正式执行当前启用的已发布版本；手工/API 启动仍保持单实例安全默认。 */
@@ -53,10 +66,7 @@ public class WorkflowLaunchService {
   }
 
   /**
-   * 调度协调器专用的发布版本启动入口。
-   *
-   * <p>Trigger Ledger 负责并发准入；WorkflowRunInputScope 只覆盖本次 engine.start 的 input，
-   * 不修改不可变发布版本。Execution 创建时仍通过 binding scope 提前绑定 Ledger。</p>
+   * 正常调度始终 FOLLOW_ACTIVE；运行参数只覆盖本次 engine.start，不修改发布版本。
    */
   public WorkflowDefinitionVO runScheduledPublished(
       String workflowId,
@@ -75,30 +85,31 @@ public class WorkflowLaunchService {
   }
 
   /**
-   * Backfill 运行入口。批次保存创建时 activeVersion 快照；若发布版本已经切换则拒绝继续，
-   * 防止同一补数批次前后使用不同版本。
+   * Backfill 执行创建批次时固定的不可变发布版本，而不是跟随之后变更的 activeVersion。
+   * 工作流下线仍阻止新的补数实例启动，但重新发布 V6 不会把 V5 补数批次切换到 V6。
    */
-  public WorkflowDefinitionVO runBackfillPublished(
+  public WorkflowInstanceVO runBackfillPublished(
       String workflowId,
-      String expectedWorkflowVersionId,
+      String workflowVersionId,
       WorkflowTriggerContext triggerContext,
       Map<String, Object> runtimeInput) {
     String id = required(workflowId, "工作流 ID 不能为空");
-    String versionId = required(expectedWorkflowVersionId, "Backfill workflowVersionId 不能为空");
+    String versionId = required(workflowVersionId, "Backfill workflowVersionId 不能为空");
     WorkflowDefinitionVO current = definitionService.get(id);
-    if (!versionId.equals(current.activeVersionId())) {
-      throw new IllegalStateException(
-          "Backfill 固定的工作流版本已不是当前激活版本：expected="
-              + versionId + ", active=" + current.activeVersionId());
+    if (!"ONLINE".equals(current.status())) {
+      throw new IllegalStateException("工作流已下线，不能启动新的 Backfill 实例");
+    }
+    if (publishedVersionRunner == null) {
+      throw new IllegalStateException("WorkflowPublishedVersionRunner 不可用");
     }
     try (var binding = WorkflowScheduleLaunchBindingScope.open(triggerContext.triggerId());
          var input = WorkflowRunInputScope.open(runtimeInput)) {
       return launch(
           "BACKFILL_PUBLISHED",
-          id,
+          id + "@" + versionId,
           triggerContext,
-          () -> definitionService.runConcurrent(id),
-          WorkflowDefinitionVO::latestExecutionId);
+          () -> publishedVersionRunner.run(id, versionId),
+          WorkflowInstanceVO::id);
     }
   }
 
