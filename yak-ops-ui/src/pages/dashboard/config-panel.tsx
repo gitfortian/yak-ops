@@ -1,3 +1,4 @@
+import type { AnalysisSpec } from '@/components/analysis/model';
 import { Select, Tabs } from 'antd';
 import { PanelRight, X } from 'lucide-react';
 import { ConfigData } from './config-data';
@@ -8,6 +9,8 @@ import type { Aggregation, ChartType, DashboardWidget, FilterOperator, SortDirec
 import { StyleConfigPanel } from './style-config';
 
 export function ConfigPanel({
+  spec,
+  title,
   widget,
   datasetOptions,
   dimensionOptions,
@@ -15,7 +18,9 @@ export function ConfigPanel({
   sortOptions,
   filterOptions,
   metricLabels,
-  onWidget,
+  onSpec,
+  onTitle,
+  onLayout,
   onDataset,
   onDimensions,
   onMetrics,
@@ -27,6 +32,8 @@ export function ConfigPanel({
   onFilterValue,
   onClose,
 }: {
+  spec: AnalysisSpec;
+  title: string;
   widget: DashboardWidget;
   datasetOptions: Array<{ label: string; value: string }>;
   dimensionOptions: Array<{ label: string; value: string }>;
@@ -34,7 +41,9 @@ export function ConfigPanel({
   sortOptions: Array<{ label: string; value: string }>;
   filterOptions: Array<{ label: string; value: string }>;
   metricLabels: Record<string, string>;
-  onWidget: (patch: Partial<DashboardWidget>) => void;
+  onSpec: (patch: Partial<AnalysisSpec>) => void;
+  onTitle: (title: string) => void;
+  onLayout: (patch: Partial<DashboardWidget>) => void;
   onDataset: (value: string) => void;
   onDimensions: (value: string[]) => void;
   onMetrics: (value: string[]) => void;
@@ -46,7 +55,7 @@ export function ConfigPanel({
   onFilterValue: (value: string) => void;
   onClose: () => void;
 }) {
-  const filter = widget.filters[0];
+  const filter = spec.filters[0];
   return (
     <aside className="flex w-[320px] shrink-0 flex-col border-l border-[#e5e7eb] bg-white">
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#edf0f3] px-3">
@@ -68,22 +77,34 @@ export function ConfigPanel({
               children: (
                 <div className="p-3">
                   <div className="mb-3 text-[11px] text-[#667085]">数据集</div>
-                  <Select size="small" className="mb-4 w-full" value={widget.datasetId} options={datasetOptions} onChange={onDataset} />
+                  <Select size="small" className="mb-4 w-full" value={spec.datasetId} options={datasetOptions} onChange={onDataset} />
                   <div className="mb-1 text-[11px] text-[#667085]">图表</div>
                   <Select
                     size="small"
                     className="mb-4 w-full"
-                    value={widget.type}
+                    value={spec.type}
                     options={(Object.keys(CHART_META) as ChartType[]).map((type) => ({ label: CHART_META[type].label, value: type }))}
-                    onChange={(type: ChartType) => onWidget({ type, dimensions: type === 'metric' ? [] : widget.dimensions })}
+                    onChange={(type: ChartType) => onSpec({
+                      type,
+                      dimensions: type === 'metric' ? [] : spec.dimensions.slice(0, type === 'pie' ? 1 : undefined),
+                      metrics: type === 'metric' || type === 'pie' ? spec.metrics.slice(0, 1) : spec.metrics,
+                      sort: undefined,
+                      style: {
+                        ...spec.style,
+                        showLegend: type === 'pie' ? spec.style.showLegend : spec.style.showLegend,
+                        smooth: type === 'line' ? spec.style.smooth : false,
+                        showGrid: type === 'line' || type === 'bar' ? spec.style.showGrid : false,
+                      },
+                      limit: type === 'table' ? 200 : 500,
+                    })}
                   />
-                  <ConfigData widget={widget} dimensionOptions={dimensionOptions} metricOptions={metricOptions} onDimensions={onDimensions} onMetrics={onMetrics} />
-                  <MetricAggregations metrics={widget.metrics} labels={metricLabels} onChange={onAggregation} />
+                  <ConfigData spec={spec} dimensionOptions={dimensionOptions} metricOptions={metricOptions} onDimensions={onDimensions} onMetrics={onMetrics} />
+                  <MetricAggregations metrics={spec.metrics} labels={metricLabels} onChange={onAggregation} />
                   <QueryControls
                     sortOptions={sortOptions}
                     filterOptions={filterOptions}
-                    sortField={widget.sort?.field}
-                    sortDirection={widget.sort?.direction ?? 'asc'}
+                    sortField={spec.sort?.field}
+                    sortDirection={spec.sort?.direction ?? 'asc'}
                     filterField={filter?.field}
                     filterOperator={filter?.operator ?? 'eq'}
                     filterValue={filter?.value ?? ''}
@@ -96,7 +117,20 @@ export function ConfigPanel({
                 </div>
               ),
             },
-            { key: 'style', label: '样式', children: <StyleConfigPanel widget={widget} onChange={onWidget} /> },
+            {
+              key: 'style',
+              label: '样式',
+              children: (
+                <StyleConfigPanel
+                  spec={spec}
+                  title={title}
+                  widget={widget}
+                  onSpec={onSpec}
+                  onTitle={onTitle}
+                  onLayout={onLayout}
+                />
+              ),
+            },
           ]}
           className="dashboard-config-tabs"
         />

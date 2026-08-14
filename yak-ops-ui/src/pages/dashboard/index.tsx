@@ -52,10 +52,15 @@ export default function DashboardPage() {
             activeDataset={designer.activeDataset}
             datasetsLoading={designer.datasetsLoading}
             datasetsError={designer.datasetsError}
+            analyses={designer.analyses}
+            analysesLoading={designer.analysesLoading}
+            analysesError={designer.analysesError}
             selectedWidget={designer.selectedWidget}
             onDatasetChange={(activeDatasetId) => designer.setDashboard((current) => ({ ...current, activeDatasetId }))}
             onRefreshDatasets={() => void designer.refreshDatasets()}
+            onRefreshAnalyses={() => void designer.refreshAnalyses()}
             onAddChart={designer.addWidget}
+            onAddAnalysis={designer.addAnalysis}
             onAddField={designer.addField}
           />
         ) : null}
@@ -79,25 +84,36 @@ export default function DashboardPage() {
                   resizeConfig={{ enabled: !designer.preview }}
                   onLayoutChange={syncLayout}
                 >
-                  {designer.widgets.map((widget) => (
-                    <div key={widget.id}>
-                      <WidgetShell
-                        widget={widget}
-                        dataset={designer.datasets.find((dataset) => dataset.id === widget.datasetId)}
-                        selected={designer.selectedId === widget.id}
-                        preview={designer.preview}
-                        onSelect={() => { if (!designer.preview) designer.setSelectedId(widget.id); }}
-                        onDuplicate={() => designer.duplicateWidget(widget.id)}
-                        onDelete={() => designer.deleteWidget(widget.id)}
-                      />
-                    </div>
-                  ))}
+                  {designer.widgets.map((widget) => {
+                    const analysis = widget.analysisId
+                      ? designer.analyses.find((item) => item.id === widget.analysisId)
+                      : undefined;
+                    const spec = analysis ?? widget.inlineAnalysis;
+                    const dataset = spec
+                      ? designer.datasets.find((item) => item.id === spec.datasetId)
+                      : undefined;
+                    return (
+                      <div key={widget.id}>
+                        <WidgetShell
+                          widget={widget}
+                          analysis={analysis}
+                          dataset={dataset}
+                          selected={designer.selectedId === widget.id}
+                          preview={designer.preview}
+                          onSelect={() => { if (!designer.preview) designer.setSelectedId(widget.id); }}
+                          onSaveAsAnalysis={() => void designer.saveWidgetAsAnalysis(widget.id)}
+                          onDuplicate={() => designer.duplicateWidget(widget.id)}
+                          onDelete={() => designer.deleteWidget(widget.id)}
+                        />
+                      </div>
+                    );
+                  })}
                 </ReactGridLayout>
               ) : null}
               {!designer.widgets.length && !designer.datasetsLoading ? (
                 <div className="flex min-h-[360px] items-center justify-center px-6 text-center text-[12px] text-[#98a2b3]">
                   {designer.activeDataset
-                    ? '从左侧选择图表类型，开始使用真实 Dataset 构建仪表盘'
+                    ? '从左侧复用 Analysis，或新建图表开始分析'
                     : '暂无可用 Dataset，请先在数据开发发布中心发布数据集'}
                 </div>
               ) : null}
@@ -109,8 +125,11 @@ export default function DashboardPage() {
           <SelectedConfig
             widget={designer.selectedWidget}
             datasets={designer.datasets}
-            update={(patch) => designer.updateWidget(designer.selectedWidget!.id, patch)}
+            analyses={designer.analyses}
+            updateWidget={(patch) => designer.updateWidget(designer.selectedWidget!.id, patch)}
+            updateInlineAnalysis={(patch) => designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
             changeDataset={(datasetId) => designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
+            detachAnalysis={() => designer.detachAnalysis(designer.selectedWidget!.id)}
             close={() => designer.setSelectedId(undefined)}
           />
         ) : null}

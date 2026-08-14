@@ -1,3 +1,4 @@
+import type { AnalysisSpec } from '@/components/analysis/model';
 import { BarChart3, ChartLine, ChartPie, Sigma, Table2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
@@ -45,15 +46,46 @@ export const FILTER_OPERATOR_OPTIONS: Array<{ label: string; value: FilterOperat
 export const cloneDashboard = (dashboard: DashboardDocument): DashboardDocument =>
   JSON.parse(JSON.stringify(dashboard)) as DashboardDocument;
 
+const legacyWidgetToCurrent = (value: any): DashboardWidget => {
+  if (value?.inlineAnalysis || (value?.analysisId && !value?.type)) return value as DashboardWidget;
+  if (!value?.type || !value?.datasetId) return value as DashboardWidget;
+  const inlineAnalysis: AnalysisSpec = {
+    type: value.type,
+    datasetId: String(value.datasetId),
+    dimensions: Array.isArray(value.dimensions) ? value.dimensions : [],
+    metrics: Array.isArray(value.metrics) ? value.metrics : [],
+    filters: Array.isArray(value.filters) ? value.filters : [],
+    sort: value.sort,
+    style: value.style ?? {
+      showLegend: false,
+      showDataLabels: false,
+      smooth: false,
+      showGrid: false,
+    },
+    limit: value.limit,
+    timeoutSeconds: value.timeoutSeconds,
+  };
+  return {
+    id: value.id,
+    title: value.title || '未命名图表',
+    inlineAnalysis,
+    x: Number(value.x ?? 0),
+    y: Number(value.y ?? 0),
+    w: Number(value.w ?? 10),
+    h: Number(value.h ?? 7),
+    minW: value.minW,
+    minH: value.minH,
+  };
+};
+
 export const loadDashboard = (): DashboardDocument => {
   if (typeof window === 'undefined') return cloneDashboard(DEFAULT_DASHBOARD);
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (!stored) return cloneDashboard(DEFAULT_DASHBOARD);
     const parsed = JSON.parse(stored) as DashboardDocument;
-    return parsed?.version === 1 && Array.isArray(parsed.widgets)
-      ? parsed
-      : cloneDashboard(DEFAULT_DASHBOARD);
+    if (parsed?.version !== 1 || !Array.isArray(parsed.widgets)) return cloneDashboard(DEFAULT_DASHBOARD);
+    return { ...parsed, widgets: parsed.widgets.map(legacyWidgetToCurrent) };
   } catch {
     return cloneDashboard(DEFAULT_DASHBOARD);
   }
@@ -73,12 +105,10 @@ export const defaultBindings = (dataset: PublishedDataset) => ({
     .map((field) => ({ field: field.key, aggregation: 'SUM' as Aggregation })),
 });
 
-export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => {
+export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset): AnalysisSpec => {
   const bindings = defaultBindings(dataset);
-  const base = {
-    id: `${type}-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+  return {
     type,
-    title: `新增${CHART_META[type].label}`,
     datasetId: dataset.id,
     dimensions: type === 'metric' ? [] : bindings.dimensions,
     metrics: bindings.metrics,
@@ -89,41 +119,50 @@ export const createWidget = (type: ChartType, dataset: PublishedDataset, y: numb
       smooth: type === 'line',
       showGrid: type === 'bar' || type === 'line',
     },
-    x: 0,
-    y,
-    minW: 4,
-    minH: 3,
-  } satisfies Omit<DashboardWidget, 'w' | 'h'>;
-
-  if (type === 'metric') return { ...base, w: 6, h: 4 };
-  if (type === 'table') return { ...base, w: 16, h: 8, minW: 8, minH: 6 };
-  return { ...base, w: 10, h: 7, minW: 6, minH: 5 };
+    limit: type === 'table' ? 200 : 500,
+    timeoutSeconds: 30,
+  };
 };
 
-const rebindWidget = (widget: DashboardWidget, dataset: PublishedDataset): DashboardWidget => {
+export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => {
+  const base: DashboardWidget = {
+    id: `${type}-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+    title: `新增${CHART_META[type].label}`,
+    inlineAnalysis: createInlineAnalysis(type, dataset),
+    x: 0,
+    y,
+    w: type === 'metric' ? 6 : type === 'table' ? 16 : 10,
+    h: type === 'metric' ? 4 : type === 'table' ? 8 : 7,
+    minW: type === 'metric' ? 4 : type === 'table' ? 8 : 6,
+    minH: type === 'metric' ? 3 : type === 'table' ? 6 : 5,
+  };
+  return base;
+};
+
+const rebindInlineAnalysis = (spec: AnalysisSpec, dataset: PublishedDataset): AnalysisSpec => {
   const bindings = defaultBindings(dataset);
   const fieldMap = new Map(dataset.fields.map((field) => [field.key, field]));
-  const sameDataset = widget.datasetId === dataset.id;
+  const sameDataset = spec.datasetId === dataset.id;
   const validDimensions = sameDataset
-    ? widget.dimensions.filter((field) => fieldMap.get(field)?.role === 'dimension')
+    ? spec.dimensions.filter((field) => fieldMap.get(field)?.role === 'dimension')
     : [];
   const validMetrics = sameDataset
-    ? widget.metrics.filter((metric) => fieldMap.get(metric.field)?.role === 'metric')
+    ? spec.metrics.filter((metric) => fieldMap.get(metric.field)?.role === 'metric')
     : [];
-  const dimensions = widget.type === 'metric'
+  const dimensions = spec.type === 'metric'
     ? []
     : validDimensions.length ? validDimensions : bindings.dimensions;
   const metrics = validMetrics.length ? validMetrics : bindings.metrics;
   const filters = sameDataset
-    ? widget.filters.filter((filter) => fieldMap.has(filter.field))
+    ? spec.filters.filter((filter) => fieldMap.has(filter.field))
     : [];
-  const sort = sameDataset && widget.sort && fieldMap.has(widget.sort.field)
-    ? widget.sort
+  const sort = sameDataset && spec.sort && fieldMap.has(spec.sort.field)
+    ? spec.sort
     : undefined;
-  return { ...widget, datasetId: dataset.id, dimensions, metrics, filters, sort };
+  return { ...spec, datasetId: dataset.id, dimensions, metrics, filters, sort };
 };
 
-/** Migrates old mock-backed/localStorage dashboards onto real Dataset IDs and stable fieldIds. */
+/** Migrates/reconciles temporary inline analyses only. Linked widgets are resolved from Analysis API. */
 export const reconcileDashboard = (
   dashboard: DashboardDocument,
   datasets: PublishedDataset[],
@@ -134,8 +173,9 @@ export const reconcileDashboard = (
     ...dashboard,
     activeDatasetId: activeDataset.id,
     widgets: dashboard.widgets.map((widget) => {
-      const widgetDataset = datasets.find((dataset) => dataset.id === widget.datasetId) ?? activeDataset;
-      return rebindWidget(widget, widgetDataset);
+      if (widget.analysisId || !widget.inlineAnalysis) return widget;
+      const widgetDataset = datasets.find((dataset) => dataset.id === widget.inlineAnalysis?.datasetId) ?? activeDataset;
+      return { ...widget, inlineAnalysis: rebindInlineAnalysis(widget.inlineAnalysis, widgetDataset) };
     }),
   };
 };
