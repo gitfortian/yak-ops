@@ -42,6 +42,7 @@ class WorkflowScheduleTriggerHandlerTest {
   @Test
   void shouldConvertQuartzFireIntoScheduledWorkflowLaunch() {
     Instant planned = Instant.parse("2026-08-14T02:00:00Z");
+    Instant actual = planned.plusSeconds(1);
     WorkflowSchedulePO schedule = schedule();
     WorkflowDefinitionVO workflow = org.mockito.Mockito.mock(WorkflowDefinitionVO.class);
     WorkflowDefinitionVO launched = org.mockito.Mockito.mock(WorkflowDefinitionVO.class);
@@ -63,12 +64,13 @@ class WorkflowScheduleTriggerHandlerTest {
     assertThat(trigger.getValue().triggerId()).isEqualTo("trigger-1");
     assertThat(trigger.getValue().scheduleId()).isEqualTo("schedule-1");
     assertThat(trigger.getValue().plannedFireTime()).isEqualTo(planned);
-    verify(runtimeState).recordFire("schedule-1", planned, null);
+    verify(runtimeState).recordFire("schedule-1", actual, null);
   }
 
   @Test
   void shouldIgnoreFireBeforeScheduleStartTime() {
     Instant planned = Instant.parse("2026-08-14T02:00:00Z");
+    Instant actual = planned.plusSeconds(1);
     WorkflowSchedulePO schedule = schedule();
     schedule.setStartTime(Instant.parse("2026-08-15T00:00:00Z"));
     when(schedules.require("schedule-1")).thenReturn(schedule);
@@ -79,7 +81,7 @@ class WorkflowScheduleTriggerHandlerTest {
     assertThat(result.accepted()).isTrue();
     assertThat(result.businessExecutionId()).isNull();
     verify(launchService, never()).runPublished(any(), any());
-    verify(runtimeState).recordFire("schedule-1", planned, null);
+    verify(runtimeState).recordFire("schedule-1", actual, null);
   }
 
   private WorkflowSchedulePO schedule() {
