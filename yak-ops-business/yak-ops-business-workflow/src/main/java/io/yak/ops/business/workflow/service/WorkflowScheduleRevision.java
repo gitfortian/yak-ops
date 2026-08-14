@@ -9,7 +9,7 @@ import java.time.Instant;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** 保存工作流调度配置修订；不改变启停状态。 */
+/** 保存工作流调度配置修订；在线计划需先停用，避免数据库与调度引擎配置短暂分叉。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleRevision {
@@ -31,6 +31,9 @@ public class WorkflowScheduleRevision {
 
   public WorkflowScheduleVO save(String id, WorkflowScheduleUpdateDTO request) {
     WorkflowSchedulePO value = query.require(id);
+    if ("ONLINE".equals(value.getStatus())) {
+      throw new IllegalStateException("已启用的调度请先停用后再修改配置");
+    }
     var config = validator.normalize(
         request.name(), request.cronExpression(), request.timezone(), request.startTime(),
         request.endTime(), request.executionStrategy(), request.misfireStrategy(), request.input());
