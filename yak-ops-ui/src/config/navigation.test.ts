@@ -24,11 +24,13 @@ describe('permission-aware navigation', () => {
     expect(getMainNavigationGroups([]).map((group) => group.id)).toEqual([
       'development',
       'workflow',
+      'data-analysis',
     ]);
     expect(getMainNavigationGroups(batchRead).map((group) => group.id)).toEqual([
       'integration',
       'development',
       'workflow',
+      'data-analysis',
     ]);
     expect(getQuickCreateRoutes(batchRead)).toEqual([]);
     expect(getQuickCreateRoutes([...batchRead, 'task:batch:create']).map((route) => route.id)).toEqual(['batch-link-up']);
@@ -42,6 +44,7 @@ describe('permission-aware navigation', () => {
       'workflow',
       'resources',
       'data-quality',
+      'data-analysis',
       'system',
     ]);
     expect(groups.map((group) => group.section)).toEqual([
@@ -50,18 +53,30 @@ describe('permission-aware navigation', () => {
       'task',
       'management',
       'management',
+      'management',
       'system',
     ]);
+  });
+
+  it('keeps data consumption focused on dashboard and catalog while preserving the legacy chart route', () => {
+    const dataConsumption = getMainNavigationGroups([]).find(
+      (group) => group.id === 'data-analysis',
+    );
+    expect(dataConsumption?.title).toBe('数据消费');
+    expect(dataConsumption?.routes.map((route) => route.id)).toEqual([
+      'dashboard',
+      'data-analysis-catalog',
+    ]);
+    expect(getActiveNavigationId('/dashboard', [])).toBe('dashboard');
+    expect(getActiveNavigationId('/data-analysis/chart-analysis', [])).toBe('dashboard');
   });
 
   it('registers home before other standalone navigation', () => {
     expect(getStandaloneNavigationRoutes(['security:root']).map((route) => route.id)).toEqual([
       'home',
       'data-source',
-      'dashboard',
     ]);
     expect(getActiveNavigationId('/home', [])).toBe('home');
-    expect(getActiveNavigationId('/dashboard', [])).toBe('dashboard');
   });
 
   it('keeps the personal settings page addressable without exposing it in the main sidebar', () => {

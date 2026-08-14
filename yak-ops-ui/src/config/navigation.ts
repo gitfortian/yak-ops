@@ -31,7 +31,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
   { id: 'workflow', title: '工作流', iconKey: 'workflow', section: 'task', order: 30 },
   { id: 'resources', title: '资源管理', iconKey: 'database', section: 'management', order: 20 },
   { id: 'data-quality', title: '数据质量', iconKey: 'quality', section: 'management', order: 30 },
-  { id: 'data-analysis', title: '数据分析', iconKey: 'insight', section: 'management', order: 40 },
+  { id: 'data-analysis', title: '数据消费', iconKey: 'insight', section: 'management', order: 40 },
   { id: 'system', title: '系统管理', iconKey: 'system', section: 'system', order: 40 },
 ];
 
@@ -39,8 +39,8 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'home', mode: 'public', path: '/home', title: '首页', component: './home', iconKey: 'home', order: 0 },
   { id: 'data-source', mode: 'one', permission: 'resource:data-source:read', path: '/data-source', title: '数据源管理', component: './data-source', iconKey: 'database', order: 10 },
   { id: 'dashboard', mode: 'public', path: '/dashboard', title: '仪表盘', component: './dashboard', iconKey: 'insight', menuGroup: 'data-analysis', order: 10 },
-  { id: 'data-analysis-chart', mode: 'public', path: '/data-analysis/chart-analysis', title: '图表分析', component: './data-analysis/chart-analysis', iconKey: 'report', menuGroup: 'data-analysis', order: 20 },
-  { id: 'data-analysis-catalog', mode: 'public', path: '/data-analysis/data-catalog', title: '数据目录', component: './data-analysis/data-catalog', iconKey: 'database', menuGroup: 'data-analysis', order: 30 },
+  { id: 'data-analysis-catalog', mode: 'public', path: '/data-analysis/data-catalog', title: '数据目录', component: './data-analysis/data-catalog', iconKey: 'database', menuGroup: 'data-analysis', order: 20 },
+  { id: 'data-analysis-chart', path: '/data-analysis/chart-analysis', title: '图表分析', component: './data-analysis/chart-analysis-redirect', hidden: true, parentId: 'dashboard' },
   { id: 'settings', mode: 'public', path: '/settings', title: '设置', component: './settings', hidden: true, order: 30 },
   {
     id: 'batch-link-up', mode: 'one', permission: 'task:batch:read',
