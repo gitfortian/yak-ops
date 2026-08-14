@@ -1,13 +1,22 @@
 import { createAnalysis, fetchAnalyses } from '@/components/analysis/analysis-service';
 import type { AnalysisSpec } from '@/components/analysis/model';
 import { message } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
+import {
+  activateDashboardVersion,
+  createDashboard,
+  fetchDashboard,
+  fetchDashboards,
+  saveDashboardVersion,
+  toDashboardDocument,
+} from './dashboard-service';
 import {
   cloneDashboard,
   createInlineAnalysis,
   createWidget,
   findDataset,
+  isPersistedDashboard,
   loadDashboard,
   reconcileDashboard,
   STORAGE_KEY,
@@ -16,6 +25,8 @@ import type {
   AnalysisAsset,
   ChartType,
   DashboardDocument,
+  DashboardSummary,
+  DashboardVersionSummary,
   DashboardWidget,
   DatasetField,
   PublishedDataset,
@@ -38,10 +49,7 @@ const assetSpec = (analysis: AnalysisAsset): AnalysisSpec => ({
   datasetId: analysis.datasetId,
   dimensions: [...analysis.dimensions],
   metrics: analysis.metrics.map((metric) => ({ ...metric })),
-  filters: analysis.filters.map((filter, index) => ({
-    ...filter,
-    id: `detached-${analysis.id}-${index}`,
-  })),
+  filters: analysis.filters.map((filter, index) => ({ ...filter, id: `detached-${analysis.id}-${index}` })),
   sort: analysis.sort ? { ...analysis.sort } : undefined,
   style: { ...analysis.style },
   limit: analysis.limit,
@@ -56,8 +64,13 @@ export function useDashboardDesigner() {
   const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
   const [analysesLoading, setAnalysesLoading] = useState(true);
   const [analysesError, setAnalysesError] = useState('');
+  const [dashboardAssets, setDashboardAssets] = useState<DashboardSummary[]>([]);
+  const [dashboardVersions, setDashboardVersions] = useState<DashboardVersionSummary[]>([]);
+  const [dashboardsLoading, setDashboardsLoading] = useState(true);
+  const [dashboardSaving, setDashboardSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState(false);
+  const didAutoOpen = useRef(false);
   const widgets = dashboard.widgets;
   const selectedWidget = widgets.find((widget) => widget.id === selectedId);
   const activeDataset = useMemo(
@@ -84,8 +97,7 @@ export function useDashboardDesigner() {
     setAnalysesLoading(true);
     setAnalysesError('');
     try {
-      const values = await fetchAnalyses();
-      setAnalyses(values);
+      setAnalyses(await fetchAnalyses());
     } catch (error) {
       setAnalyses([]);
       setAnalysesError(error instanceof Error ? error.message : '加载 Analysis 失败');
@@ -94,10 +106,43 @@ export function useDashboardDesigner() {
     }
   }, []);
 
+  const refreshDashboardAssets = useCallback(async () => {
+    setDashboardsLoading(true);
+    try {
+      setDashboardAssets(await fetchDashboards());
+    } catch (error) {
+      setDashboardAssets([]);
+      message.error(error instanceof Error ? error.message : '加载 Dashboard 列表失败');
+    } finally {
+      setDashboardsLoading(false);
+    }
+  }, []);
+
+  const openDashboard = useCallback(async (dashboardId: string) => {
+    try {
+      const detail = await fetchDashboard(dashboardId);
+      setDashboard(toDashboardDocument(detail));
+      setDashboardVersions(detail.versions);
+      setSelectedId(undefined);
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载 Dashboard 失败');
+    }
+  }, []);
+
   useEffect(() => {
     void refreshDatasets();
     void refreshAnalyses();
-  }, [refreshDatasets, refreshAnalyses]);
+    void refreshDashboardAssets();
+  }, [refreshDatasets, refreshAnalyses, refreshDashboardAssets]);
+
+  useEffect(() => {
+    if (didAutoOpen.current || dashboardsLoading) return;
+    didAutoOpen.current = true;
+    const hasLegacyDraft = !isPersistedDashboard(dashboard.id)
+      && (dashboard.widgets.length > 0 || dashboard.name !== DEFAULT_DASHBOARD.name);
+    if (!hasLegacyDraft && dashboardAssets.length) void openDashboard(dashboardAssets[0].id);
+  }, [dashboard.id, dashboard.name, dashboard.widgets.length, dashboardAssets, dashboardsLoading, openDashboard]);
 
   useEffect(() => {
     if (!datasets.length) return;
@@ -133,11 +178,7 @@ export function useDashboardDesigner() {
     if (!dataset) return void message.warning('Analysis 依赖的 Dataset 已下线或不可用');
     const base = createWidget(analysis.type, dataset, maxY());
     const next = linkWidget(base, analysis.id);
-    setDashboard((current) => ({
-      ...current,
-      activeDatasetId: analysis.datasetId,
-      widgets: [...current.widgets, next],
-    }));
+    setDashboard((current) => ({ ...current, activeDatasetId: analysis.datasetId, widgets: [...current.widgets, next] }));
     setSelectedId(next.id);
   };
 
@@ -164,12 +205,8 @@ export function useDashboardDesigner() {
     if (!widget?.analysisId) return;
     const analysis = analyses.find((item) => item.id === widget.analysisId);
     if (!analysis) return void message.warning('引用的 Analysis 已不可用，无法生成独立副本');
-    updateWidget(id, {
-      analysisId: undefined,
-      title: analysis.name,
-      inlineAnalysis: assetSpec(analysis),
-    });
-    message.success('已解除 Analysis 引用，当前组件已复制为独立分析');
+    updateWidget(id, { analysisId: undefined, title: analysis.name, inlineAnalysis: assetSpec(analysis) });
+    message.success('已解除 Analysis 引用，当前组件已复制为 Dashboard 本地分析');
   };
 
   const duplicateWidget = (id: string) => {
@@ -198,8 +235,7 @@ export function useDashboardDesigner() {
     if (!widget?.inlineAnalysis) return;
     const dataset = findDataset(datasets, datasetId);
     if (!dataset) return;
-    const nextSpec = createInlineAnalysis(widget.inlineAnalysis.type, dataset);
-    updateWidget(id, { inlineAnalysis: nextSpec });
+    updateWidget(id, { inlineAnalysis: createInlineAnalysis(widget.inlineAnalysis.type, dataset) });
   };
 
   const addField = (field: DatasetField) => {
@@ -228,19 +264,52 @@ export function useDashboardDesigner() {
     }
   };
 
-  const save = () => {
-    const next = { ...dashboard, updatedAt: new Date().toISOString() };
-    setDashboard(next);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    message.success('仪表盘草稿已保存');
+  const save = async () => {
+    if (!dashboard.name.trim()) return void message.warning('请输入仪表盘名称');
+    setDashboardSaving(true);
+    try {
+      const detail = isPersistedDashboard(dashboard.id)
+        ? await saveDashboardVersion(dashboard.id, dashboard)
+        : await createDashboard(dashboard);
+      const document = toDashboardDocument(detail);
+      setDashboard(document);
+      setDashboardVersions(detail.versions);
+      setDashboardAssets((current) => [
+        detail.dashboard,
+        ...current.filter((item) => item.id !== detail.dashboard.id),
+      ]);
+      window.localStorage.removeItem(STORAGE_KEY);
+      message.success(`仪表盘已保存为 V${detail.dashboard.currentVersionNo}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存 Dashboard 失败');
+    } finally {
+      setDashboardSaving(false);
+    }
   };
 
-  const reset = () => {
+  const activateVersion = async (versionNo: number) => {
+    if (!isPersistedDashboard(dashboard.id) || versionNo === dashboard.currentVersionNo) return;
+    setDashboardSaving(true);
+    try {
+      const detail = await activateDashboardVersion(dashboard.id, versionNo);
+      setDashboard(toDashboardDocument(detail));
+      setDashboardVersions(detail.versions);
+      setDashboardAssets((current) => current.map((item) => item.id === detail.dashboard.id ? detail.dashboard : item));
+      setSelectedId(undefined);
+      message.success(`已切换到 Dashboard V${versionNo}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '切换 DashboardVersion 失败');
+    } finally {
+      setDashboardSaving(false);
+    }
+  };
+
+  const newDashboard = () => {
     const next = reconcileDashboard(cloneDashboard(DEFAULT_DASHBOARD), datasets);
     setDashboard(next);
+    setDashboardVersions([]);
     setSelectedId(undefined);
     window.localStorage.removeItem(STORAGE_KEY);
-    message.success('已恢复空白仪表盘');
   };
 
   return {
@@ -252,6 +321,10 @@ export function useDashboardDesigner() {
     analyses,
     analysesLoading,
     analysesError,
+    dashboardAssets,
+    dashboardVersions,
+    dashboardsLoading,
+    dashboardSaving,
     selectedWidget,
     activeDataset,
     selectedId,
@@ -270,8 +343,11 @@ export function useDashboardDesigner() {
     changeWidgetDataset,
     addField,
     save,
-    reset,
+    activateVersion,
+    newDashboard,
+    openDashboard,
     refreshDatasets,
     refreshAnalyses,
+    refreshDashboardAssets,
   };
 }

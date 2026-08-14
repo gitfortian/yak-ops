@@ -24,10 +24,7 @@ export type {
   SortDirection,
 } from '@/components/analysis/model';
 
-/**
- * Dashboard only owns placement and a reference (or a temporary inline analysis draft).
- * Reusable query/visual definitions live in Analysis assets.
- */
+/** Dashboard owns placement plus an Analysis reference or a dashboard-local inline analysis. */
 export interface DashboardWidget {
   id: string;
   analysisId?: string;
@@ -41,14 +38,43 @@ export interface DashboardWidget {
   minH?: number;
 }
 
-/** UI-only flattened view used by the legacy Dashboard configuration controls. */
 export type DashboardWidgetEditorModel = DashboardWidget & AnalysisSpec & { title: string };
 
 export interface DashboardDocument {
   version: 1;
   id: string;
   name: string;
+  description?: string;
   activeDatasetId: string;
   widgets: DashboardWidget[];
+  currentVersionNo?: number;
+  currentVersionId?: string;
   updatedAt?: string;
+}
+
+export interface DashboardSummary {
+  id: string;
+  name: string;
+  description: string;
+  currentVersionId?: string;
+  currentVersionNo: number;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface DashboardVersionSummary {
+  id: string;
+  dashboardId: string;
+  versionNo: number;
+  name: string;
+  description: string;
+  activeDatasetId?: string;
+  createTime?: string;
+}
+
+export interface DashboardServerDetail {
+  dashboard: DashboardSummary;
+  currentVersion?: DashboardVersionSummary;
+  versions: DashboardVersionSummary[];
+  widgets: DashboardWidget[];
 }

@@ -24,6 +24,7 @@
         <module>yak-ops-business-data-development</module>
         <module>yak-ops-business-dataset</module>
         <module>yak-ops-business-analysis</module>
+        <module>yak-ops-business-dashboard</module>
         <module>yak-ops-business-resource</module>
         <module>yak-ops-business-sync</module>
         <module>yak-ops-business-quality</module>
