@@ -12,7 +12,8 @@ export function ConfigPanel({
   datasetOptions,
   dimensionOptions,
   metricOptions,
-  fieldOptions,
+  sortOptions,
+  filterOptions,
   metricLabels,
   onWidget,
   onDataset,
@@ -30,7 +31,8 @@ export function ConfigPanel({
   datasetOptions: Array<{ label: string; value: string }>;
   dimensionOptions: Array<{ label: string; value: string }>;
   metricOptions: Array<{ label: string; value: string }>;
-  fieldOptions: Array<{ label: string; value: string }>;
+  sortOptions: Array<{ label: string; value: string }>;
+  filterOptions: Array<{ label: string; value: string }>;
   metricLabels: Record<string, string>;
   onWidget: (patch: Partial<DashboardWidget>) => void;
   onDataset: (value: string) => void;
@@ -78,7 +80,8 @@ export function ConfigPanel({
                   <ConfigData widget={widget} dimensionOptions={dimensionOptions} metricOptions={metricOptions} onDimensions={onDimensions} onMetrics={onMetrics} />
                   <MetricAggregations metrics={widget.metrics} labels={metricLabels} onChange={onAggregation} />
                   <QueryControls
-                    fieldOptions={fieldOptions}
+                    sortOptions={sortOptions}
+                    filterOptions={filterOptions}
                     sortField={widget.sort?.field}
                     sortDirection={widget.sort?.direction ?? 'asc'}
                     filterField={filter?.field}

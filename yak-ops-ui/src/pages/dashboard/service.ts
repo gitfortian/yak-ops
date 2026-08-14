@@ -103,13 +103,21 @@ export const fetchDashboardDatasets = async (): Promise<PublishedDataset[]> => {
     '查询 Dataset 列表失败',
   );
   const online = (list || []).filter((dataset) => dataset.status === 'ONLINE' && dataset.currentVersionId);
-  const details = await Promise.all(
+  if (!online.length) return [];
+  const details = await Promise.allSettled(
     online.map(async (dataset) => unwrap(
       await HttpUtils.get<DatasetDetailWire>(`${DATASET_API}/${dataset.id}`),
       `查询 Dataset ${dataset.name} 详情失败`,
     )),
   );
-  return details.map(toDataset);
+  const available = details
+    .filter((item): item is PromiseFulfilledResult<DatasetDetailWire> => item.status === 'fulfilled')
+    .map((item) => toDataset(item.value));
+  if (!available.length) {
+    const rejected = details.find((item): item is PromiseRejectedResult => item.status === 'rejected');
+    throw rejected?.reason instanceof Error ? rejected.reason : new Error('读取 Dataset 详情失败');
+  }
+  return available;
 };
 
 export const queryDashboardDataset = async (
