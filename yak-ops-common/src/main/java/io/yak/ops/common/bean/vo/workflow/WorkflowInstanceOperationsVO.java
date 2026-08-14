@@ -12,6 +12,8 @@ public record WorkflowInstanceOperationsVO(
     String triggerId,
     String scheduleId,
     String backfillId,
+    String operationType,
+    String sourceExecutionId,
     LocalDate businessDate,
     String scheduleTime,
     String scheduleTimezone,
