@@ -1,20 +1,29 @@
 import { ConfigPanel } from './config-panel';
 import { findDataset } from './helpers';
-import { PUBLISHED_DATASETS } from './mock';
-import type { Aggregation, DashboardWidget, FilterOperator, MetricBinding, SortDirection } from './model';
+import type {
+  Aggregation,
+  DashboardWidget,
+  FilterOperator,
+  MetricBinding,
+  PublishedDataset,
+  SortDirection,
+} from './model';
 
 export function SelectedConfig({
   widget,
+  datasets,
   update,
   changeDataset,
   close,
 }: {
   widget: DashboardWidget;
+  datasets: PublishedDataset[];
   update: (patch: Partial<DashboardWidget>) => void;
   changeDataset: (datasetId: string) => void;
   close: () => void;
 }) {
-  const dataset = findDataset(widget.datasetId);
+  const dataset = findDataset(datasets, widget.datasetId);
+  if (!dataset) return null;
   const dimensionOptions = dataset.fields.filter((field) => field.role === 'dimension').map((field) => ({ label: field.label, value: field.key }));
   const metricOptions = dataset.fields.filter((field) => field.role === 'metric').map((field) => ({ label: field.label, value: field.key }));
   const fieldOptions = dataset.fields.map((field) => ({ label: field.label, value: field.key }));
@@ -24,7 +33,7 @@ export function SelectedConfig({
   return (
     <ConfigPanel
       widget={widget}
-      datasetOptions={PUBLISHED_DATASETS.map((item) => ({ label: item.name, value: item.id }))}
+      datasetOptions={datasets.map((item) => ({ label: item.name, value: item.id }))}
       dimensionOptions={dimensionOptions}
       metricOptions={metricOptions}
       fieldOptions={fieldOptions}
