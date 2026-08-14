@@ -11,7 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Trigger Ledger 的短事务准入、绑定和队首预留。实际 Workflow 启动不在这里执行。 */
+/** Trigger Ledger 的短事务准入、绑定、人工恢复预留和队首推进。实际 Workflow 启动不在这里执行。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleTriggerAdmission {
@@ -109,6 +109,132 @@ public class WorkflowScheduleTriggerAdmission {
     return reserveNextLocked(trigger.getWorkflowId());
   }
 
+  /**
+   * 对同一个终态 WorkflowExecution 做 retry/continue 前先占住工作流串行槽位。
+   *
+   * <p>终态提交时 SERIAL_WAIT 可能已经推进了后续 Trigger，因此人工恢复不能直接把旧 Execution
+   * 拉回 RUNNING。REACTIVATING 是一个 durable reservation：新 Cron/Backfill 会把它视为启动占位，
+   * 应用在 Runtime 真正恢复之前宕机时也能由 recoverPending 根据 Execution 的 durable 状态收敛。</p>
+   *
+   * @return true 表示本次操作持有 Trigger Ledger 恢复预留；false 表示实例没有 Ledger，或实例本来就非终态。
+   */
+  @Transactional(transactionManager = "yakBusinessTransactionManager")
+  public boolean reserveReactivation(String executionId, String operation) {
+    WorkflowScheduleTriggerPO trigger = ledger.selectByExecutionId(executionId);
+    if (trigger == null) return false;
+
+    ledger.lockWorkflow(trigger.getWorkflowId());
+    trigger = ledger.selectByExecutionId(executionId);
+    if (trigger == null) return false;
+
+    WorkflowExecutionPO execution = executions.selectExecution(executionId);
+    if (execution == null) {
+      throw new IllegalArgumentException("WorkflowExecution 不存在：" + executionId);
+    }
+    if (!isExecutionTerminal(execution.getStatus())) {
+      return false;
+    }
+
+    String strategy = trigger.getExecutionStrategy();
+    if (!"PARALLEL".equals(strategy)) {
+      long active = ledger.countActiveExecutions(trigger.getWorkflowId());
+      long launching = ledger.countLaunchingTriggers(trigger.getWorkflowId());
+      long waiting = ledger.countWaitingTriggers(trigger.getWorkflowId());
+      if (active > 0L || launching > 0L || waiting > 0L) {
+        throw new IllegalStateException(
+            "工作流串行槽位已由后续实例占用或排队，不能原地恢复旧 WorkflowExecution；"
+                + "请等待队列清空后重试，或使用重新运行创建新实例");
+      }
+    }
+
+    trigger.setStatus("REACTIVATING");
+    trigger.setExecutionStatus(execution.getStatus());
+    trigger.setMessage("WorkflowExecution 人工恢复已获得执行准入：" + safeOperation(operation));
+    trigger.setErrorMessage(null);
+    trigger.setCompletedAt(null);
+    touch(trigger);
+    save(trigger);
+    return true;
+  }
+
+  /** Runtime 人工恢复调用返回后，以 durable Execution 状态收敛 Ledger。 */
+  @Transactional(transactionManager = "yakBusinessTransactionManager")
+  public AdmissionResult finishReactivation(String executionId) {
+    WorkflowScheduleTriggerPO trigger = ledger.selectByExecutionId(executionId);
+    if (trigger == null) return AdmissionResult.none();
+
+    ledger.lockWorkflow(trigger.getWorkflowId());
+    trigger = ledger.selectByExecutionId(executionId);
+    if (trigger == null || !"REACTIVATING".equals(trigger.getStatus())) {
+      // 极快工作流可能已在 Runtime 调用内部再次进入终态，并由 AFTER_COMMIT listener 完成 Ledger。
+      return AdmissionResult.none();
+    }
+
+    WorkflowExecutionPO execution = executions.selectExecution(executionId);
+    if (execution == null) {
+      trigger.setStatus("FAILED");
+      trigger.setExecutionStatus(null);
+      trigger.setMessage("人工恢复完成检查时 WorkflowExecution 已不存在");
+      trigger.setCompletedAt(Instant.now());
+      touch(trigger);
+      save(trigger);
+      return reserveNextLocked(trigger.getWorkflowId());
+    }
+
+    trigger.setExecutionStatus(execution.getStatus());
+    if (isExecutionTerminal(execution.getStatus())) {
+      markTerminal(trigger, execution.getStatus(), execution.getEndedAt());
+      return reserveNextLocked(trigger.getWorkflowId());
+    }
+
+    trigger.setStatus("RUNNING");
+    trigger.setMessage("WorkflowExecution 已通过人工恢复重新进入运行态");
+    trigger.setErrorMessage(null);
+    trigger.setCompletedAt(null);
+    touch(trigger);
+    save(trigger);
+    return AdmissionResult.none();
+  }
+
+  /** Runtime 人工恢复抛错时释放 REACTIVATING；若 Execution 已恢复成功，则仍以真实状态为准。 */
+  @Transactional(transactionManager = "yakBusinessTransactionManager")
+  public AdmissionResult failReactivation(String executionId, Throwable error) {
+    WorkflowScheduleTriggerPO trigger = ledger.selectByExecutionId(executionId);
+    if (trigger == null) return AdmissionResult.none();
+
+    ledger.lockWorkflow(trigger.getWorkflowId());
+    trigger = ledger.selectByExecutionId(executionId);
+    if (trigger == null || !"REACTIVATING".equals(trigger.getStatus())) {
+      return AdmissionResult.none();
+    }
+
+    WorkflowExecutionPO execution = executions.selectExecution(executionId);
+    if (execution != null && !isExecutionTerminal(execution.getStatus())) {
+      trigger.setStatus("RUNNING");
+      trigger.setExecutionStatus(execution.getStatus());
+      trigger.setMessage("人工恢复调用抛错，但 WorkflowExecution 已进入活动状态，以 durable 状态为准");
+      trigger.setErrorMessage(safeMessage(error));
+      trigger.setCompletedAt(null);
+      touch(trigger);
+      save(trigger);
+      return AdmissionResult.none();
+    }
+
+    if (execution != null) {
+      trigger.setErrorMessage(safeMessage(error));
+      markTerminal(trigger, execution.getStatus(), execution.getEndedAt());
+    } else {
+      trigger.setStatus("FAILED");
+      trigger.setExecutionStatus(null);
+      trigger.setMessage("人工恢复失败且 WorkflowExecution 已不存在");
+      trigger.setErrorMessage(safeMessage(error));
+      trigger.setCompletedAt(Instant.now());
+      touch(trigger);
+      save(trigger);
+    }
+    return reserveNextLocked(trigger.getWorkflowId());
+  }
+
   /** WorkflowExecution 终态提交后，完成 Ledger 并在同一短事务中预留下一条等待 Trigger。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public AdmissionResult completeExecution(String executionId, String executionStatus, Instant endedAt) {
@@ -128,7 +254,7 @@ public class WorkflowScheduleTriggerAdmission {
     return reserveNextLocked(workflowId);
   }
 
-  /** 恢复已绑定的 RUNNING/LAUNCHING Ledger；返回值可能是新预留的队首。 */
+  /** 恢复已绑定的 RUNNING/LAUNCHING/REACTIVATING Ledger；返回值可能是新预留的队首。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public AdmissionResult recoverBound(WorkflowScheduleTriggerPO candidate, String executionId) {
     WorkflowScheduleTriggerPO trigger = current(candidate);
@@ -153,6 +279,7 @@ public class WorkflowScheduleTriggerAdmission {
     }
     trigger.setStatus("RUNNING");
     trigger.setMessage("启动恢复已重新绑定 WorkflowExecution");
+    trigger.setCompletedAt(null);
     touch(trigger);
     save(trigger);
     return new AdmissionResult(trigger, false, false);
@@ -182,12 +309,12 @@ public class WorkflowScheduleTriggerAdmission {
     boolean busy = active > 0L || launching > 0L || waiting > 0L;
 
     if ("SERIAL_DISCARD".equals(strategy) && busy) {
-      markSkipped(trigger, "已有运行、启动或排队中的 WorkflowExecution，按 SERIAL_DISCARD 跳过");
+      markSkipped(trigger, "已有运行、启动、恢复或排队中的 WorkflowExecution，按 SERIAL_DISCARD 跳过");
       return new AdmissionResult(trigger, false, false);
     }
     if ("SERIAL_WAIT".equals(strategy) && busy) {
       trigger.setStatus("WAITING");
-      trigger.setMessage("已有运行、启动或排队中的 WorkflowExecution，进入串行等待队列");
+      trigger.setMessage("已有运行、启动、恢复或排队中的 WorkflowExecution，进入串行等待队列");
       touch(trigger);
       save(trigger);
       return new AdmissionResult(trigger, false, false);
@@ -282,6 +409,12 @@ public class WorkflowScheduleTriggerAdmission {
 
   private void save(WorkflowScheduleTriggerPO trigger) {
     if (ledger.update(trigger) != 1) throw new IllegalStateException("更新 Trigger Ledger 失败：" + trigger.getId());
+  }
+
+  private String safeOperation(String operation) {
+    if (operation == null || operation.isBlank()) return "MANUAL_REACTIVATION";
+    String value = operation.trim();
+    return value.length() <= 80 ? value : value.substring(0, 80);
   }
 
   private String safeMessage(Throwable error) {
