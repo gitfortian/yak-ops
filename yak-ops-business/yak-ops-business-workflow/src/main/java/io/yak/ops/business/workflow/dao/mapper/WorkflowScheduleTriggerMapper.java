@@ -36,6 +36,14 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
   long countActiveExecutions(@Param("workflowId") String workflowId);
 
   @Select("""
+      SELECT COUNT(*)
+      FROM yak_workflow_schedule_trigger
+      WHERE workflow_id = #{workflowId}
+        AND status = 'LAUNCHING'
+      """)
+  long countLaunchingTriggers(@Param("workflowId") String workflowId);
+
+  @Select("""
       SELECT v.workflow_id
       FROM yak_workflow_execution e
       INNER JOIN yak_workflow_version v ON v.id = e.definition_id
