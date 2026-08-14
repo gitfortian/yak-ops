@@ -103,7 +103,7 @@ public class WorkflowScheduleEngineBridge {
     ScheduleManager manager = scheduleManagers.getIfAvailable();
     if (manager == null) {
       throw new IllegalStateException(
-          "Yak ScheduleManager 不可用，请确认 yak-schedule-spring-boot-starter 与 yak.schedule.enabled 配置");
+          "Yak ScheduleManager 不可用，请确认 yak-schedule-core、Quartz 插件与 yak.schedule.enabled 配置");
     }
     return manager;
   }
