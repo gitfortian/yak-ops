@@ -12,7 +12,7 @@ import type {
 
 const ANALYSIS_API = '/api/v1/analyses';
 
-type AnalysisFilterWireOperator = 'EQ' | 'NE' | 'GT' | 'GTE' | 'LT' | 'LTE' | 'LIKE';
+type AnalysisFilterWireOperator = 'EQ' | 'NE' | 'GT' | 'GTE' | 'LT' | 'LTE' | 'CONTAINS';
 
 interface AnalysisFilterWire {
   fieldId: string;
@@ -64,7 +64,7 @@ const toFilterOperator = (value: AnalysisFilterWireOperator): FilterOperator => 
     case 'GTE': return 'gte';
     case 'LT': return 'lt';
     case 'LTE': return 'lte';
-    case 'LIKE': return 'contains';
+    case 'CONTAINS': return 'contains';
     default: return 'eq';
   }
 };
@@ -112,7 +112,7 @@ const filterOperatorWire = (operator: FilterOperator): AnalysisFilterWireOperato
     case 'gte': return 'GTE';
     case 'lt': return 'LT';
     case 'lte': return 'LTE';
-    case 'contains': return 'LIKE';
+    case 'contains': return 'CONTAINS';
     default: return 'EQ';
   }
 };

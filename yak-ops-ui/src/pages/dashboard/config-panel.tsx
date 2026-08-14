@@ -84,7 +84,19 @@ export function ConfigPanel({
                     className="mb-4 w-full"
                     value={spec.type}
                     options={(Object.keys(CHART_META) as ChartType[]).map((type) => ({ label: CHART_META[type].label, value: type }))}
-                    onChange={(type: ChartType) => onSpec({ type, dimensions: type === 'metric' ? [] : spec.dimensions })}
+                    onChange={(type: ChartType) => onSpec({
+                      type,
+                      dimensions: type === 'metric' ? [] : spec.dimensions.slice(0, type === 'pie' ? 1 : undefined),
+                      metrics: type === 'metric' || type === 'pie' ? spec.metrics.slice(0, 1) : spec.metrics,
+                      sort: undefined,
+                      style: {
+                        ...spec.style,
+                        showLegend: type === 'pie' ? spec.style.showLegend : spec.style.showLegend,
+                        smooth: type === 'line' ? spec.style.smooth : false,
+                        showGrid: type === 'line' || type === 'bar' ? spec.style.showGrid : false,
+                      },
+                      limit: type === 'table' ? 200 : 500,
+                    })}
                   />
                   <ConfigData spec={spec} dimensionOptions={dimensionOptions} metricOptions={metricOptions} onDimensions={onDimensions} onMetrics={onMetrics} />
                   <MetricAggregations metrics={spec.metrics} labels={metricLabels} onChange={onAggregation} />

@@ -35,6 +35,7 @@ enum AnalysisAggregation {
   MIN
 }
 
+/** Analysis keeps semantic operators; SQL-specific LIKE remains an implementation detail of Dataset Runtime. */
 enum AnalysisFilterOperator {
   EQ,
   NE,
@@ -42,7 +43,7 @@ enum AnalysisFilterOperator {
   GTE,
   LT,
   LTE,
-  LIKE
+  CONTAINS
 }
 
 enum AnalysisSortDirection {
