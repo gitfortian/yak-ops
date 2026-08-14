@@ -51,6 +51,7 @@ class WorkflowScheduleTriggerAdmissionTest {
     when(ledger.claim(trigger)).thenReturn(trigger);
     when(ledger.countActiveExecutions("workflow-1")).thenReturn(1L);
     when(ledger.countLaunchingTriggers("workflow-1")).thenReturn(0L);
+    when(ledger.countWaitingTriggers("workflow-1")).thenReturn(0L);
     when(ledger.update(trigger)).thenReturn(1);
 
     var result = admission.admitNew(schedule, trigger);
@@ -61,12 +62,30 @@ class WorkflowScheduleTriggerAdmissionTest {
   }
 
   @Test
+  void shouldNotLetNewSerialWaitJumpAheadOfExistingBacklog() {
+    WorkflowSchedulePO schedule = schedule("SERIAL_WAIT");
+    WorkflowScheduleTriggerPO trigger = trigger("RECEIVED");
+    when(ledger.claim(trigger)).thenReturn(trigger);
+    when(ledger.countActiveExecutions("workflow-1")).thenReturn(0L);
+    when(ledger.countLaunchingTriggers("workflow-1")).thenReturn(0L);
+    when(ledger.countWaitingTriggers("workflow-1")).thenReturn(2L);
+    when(ledger.update(trigger)).thenReturn(1);
+
+    var result = admission.admitNew(schedule, trigger);
+
+    assertThat(result.launchNow()).isFalse();
+    assertThat(trigger.getStatus()).isEqualTo("WAITING");
+    assertThat(trigger.getMessage()).contains("排队");
+  }
+
+  @Test
   void shouldSkipSerialDiscardWhenWorkflowIsBusy() {
     WorkflowSchedulePO schedule = schedule("SERIAL_DISCARD");
     WorkflowScheduleTriggerPO trigger = trigger("RECEIVED");
     when(ledger.claim(trigger)).thenReturn(trigger);
     when(ledger.countActiveExecutions("workflow-1")).thenReturn(1L);
     when(ledger.countLaunchingTriggers("workflow-1")).thenReturn(0L);
+    when(ledger.countWaitingTriggers("workflow-1")).thenReturn(0L);
     when(ledger.update(trigger)).thenReturn(1);
 
     var result = admission.admitNew(schedule, trigger);
@@ -83,6 +102,7 @@ class WorkflowScheduleTriggerAdmissionTest {
     when(ledger.claim(trigger)).thenReturn(trigger);
     when(ledger.countActiveExecutions("workflow-1")).thenReturn(3L);
     when(ledger.countLaunchingTriggers("workflow-1")).thenReturn(2L);
+    when(ledger.countWaitingTriggers("workflow-1")).thenReturn(4L);
     when(ledger.update(trigger)).thenReturn(1);
 
     var result = admission.admitNew(schedule, trigger);
