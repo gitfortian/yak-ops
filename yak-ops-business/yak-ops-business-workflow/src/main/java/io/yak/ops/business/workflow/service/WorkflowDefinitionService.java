@@ -297,12 +297,21 @@ public class WorkflowDefinitionService {
   }
 
   public WorkflowDefinitionVO run(String id) {
+    return runPublished(id, false);
+  }
+
+  /** 调度并行策略专用：并发准入由 Trigger Ledger 协调器负责。 */
+  WorkflowDefinitionVO runConcurrent(String id) {
+    return runPublished(id, true);
+  }
+
+  private WorkflowDefinitionVO runPublished(String id, boolean allowConcurrent) {
     DefinitionState state = require(id);
     synchronized (state) {
       if (!"ONLINE".equals(state.status) || state.activeVersion == null) {
         throw new IllegalStateException("工作流没有启用的发布版本，不能正式执行");
       }
-      ensureIdle(state);
+      if (!allowConcurrent) ensureIdle(state);
       WorkflowVersion version = state.activeVersion;
       return activate(
           state,
