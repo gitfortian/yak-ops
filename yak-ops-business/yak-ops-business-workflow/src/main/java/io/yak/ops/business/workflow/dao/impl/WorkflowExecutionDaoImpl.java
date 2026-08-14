@@ -81,6 +81,11 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
   }
 
   @Override
+  public long countActiveExecutions(String workflowId) {
+    return executionMapper.countActiveExecutions(workflowId);
+  }
+
+  @Override
   public String selectEffectiveRuntimeMetadata(String executionId) {
     return executionMapper.selectEffectiveRuntimeMetadata(executionId);
   }
