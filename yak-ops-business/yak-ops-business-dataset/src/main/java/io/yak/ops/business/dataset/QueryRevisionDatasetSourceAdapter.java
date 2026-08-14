@@ -1,0 +1,124 @@
+package io.yak.ops.business.dataset;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.taskcatalog.domain.TaskAssetRevision;
+import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
+import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
+import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
+import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
+import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
+import io.yak.ops.spi.task.model.TaskDefinition;
+import java.util.List;
+import org.springframework.stereotype.Component;
+
+/** Executes QUERY_REVISION Dataset versions without invoking DevelopmentTask execution semantics. */
+@Component
+final class QueryRevisionDatasetSourceAdapter implements DatasetSourceQueryAdapter {
+
+  private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+  private static final int MAX_TIMEOUT_SECONDS = 120;
+
+  private final TaskCatalogService taskCatalogService;
+  private final DataSourceExecutionProvider dataSourceExecutionProvider;
+  private final ObjectMapper objectMapper;
+  private final DatasetQueryCompiler compiler;
+
+  QueryRevisionDatasetSourceAdapter(
+      TaskCatalogService taskCatalogService,
+      DataSourceExecutionProvider dataSourceExecutionProvider,
+      ObjectMapper objectMapper,
+      DatasetQueryCompiler compiler) {
+    this.taskCatalogService = taskCatalogService;
+    this.dataSourceExecutionProvider = dataSourceExecutionProvider;
+    this.objectMapper = objectMapper;
+    this.compiler = compiler;
+  }
+
+  @Override
+  public DatasetSourceType sourceType() {
+    return DatasetSourceType.QUERY_REVISION;
+  }
+
+  @Override
+  public DatasetQueryResult execute(
+      Dataset dataset,
+      DatasetVersion version,
+      List<DatasetField> fields,
+      DatasetQueryRequest request) {
+    TaskAssetRevision resolved = taskCatalogService.resolveRevision(
+        version.sourceTaskAssetId(), version.sourceTaskRevisionId());
+    if (resolved.revision().revisionId() != version.sourceTaskRevisionId()
+        || resolved.revision().revisionNo() != version.sourceTaskRevisionNo()) {
+      throw new IllegalStateException("DatasetVersion 与来源 TaskRevision 快照不一致");
+    }
+
+    TaskDefinition definition = resolved.revision().definition();
+    if (!"SQL".equalsIgnoreCase(definition.taskType())) {
+      throw new IllegalStateException("QUERY_REVISION Dataset 来源必须是 SQL TaskRevision");
+    }
+
+    SourceConfig sourceConfig = sourceConfig(definition.configJson());
+    DatasetQueryCompiler.CompiledQuery compiled = compiler.compile(definition.content(), fields, request);
+    int timeoutSeconds = queryTimeout(request, sourceConfig.timeoutSeconds());
+    long startedAt = System.nanoTime();
+
+    DataSourceSqlResult result;
+    try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(sourceConfig.dataSourceId())) {
+      result = executor.execute(new DataSourceSqlRequest(
+          compiled.sql(), compiled.fetchRows(), timeoutSeconds));
+    }
+    if (!result.resultSet()) {
+      throw new IllegalStateException("Dataset Query Runtime 只接受结果集查询");
+    }
+
+    boolean overflow = result.rows().size() > compiled.limit();
+    List<List<Object>> rows = overflow
+        ? result.rows().subList(0, compiled.limit())
+        : result.rows();
+    long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+    return new DatasetQueryResult(
+        dataset.id(),
+        version.id(),
+        version.versionNo(),
+        compiled.bindings(),
+        result.columns(),
+        rows,
+        rows.size(),
+        result.truncated() || overflow,
+        elapsedMillis);
+  }
+
+  private SourceConfig sourceConfig(String configJson) {
+    String raw = configJson == null || configJson.isBlank() ? "{}" : configJson.trim();
+    try {
+      JsonNode root = objectMapper.readTree(raw);
+      if (root == null || !root.isObject()) throw new IllegalArgumentException("SQL configJson 必须是 JSON 对象");
+      JsonNode dataSourceNode = root.get("dataSourceId");
+      String dataSourceId = dataSourceNode == null || dataSourceNode.isNull()
+          ? null : dataSourceNode.asText();
+      if (dataSourceId == null || dataSourceId.isBlank()) {
+        throw new IllegalArgumentException("SQL TaskRevision 缺少 dataSourceId，无法执行 Dataset 查询");
+      }
+      int sourceTimeout = root.path("timeoutSeconds").asInt(DEFAULT_TIMEOUT_SECONDS);
+      if (sourceTimeout < 1) sourceTimeout = DEFAULT_TIMEOUT_SECONDS;
+      return new SourceConfig(dataSourceId.trim(), Math.min(sourceTimeout, MAX_TIMEOUT_SECONDS));
+    } catch (IllegalArgumentException exception) {
+      throw exception;
+    } catch (Exception exception) {
+      throw new IllegalArgumentException("SQL TaskRevision configJson 非法", exception);
+    }
+  }
+
+  private int queryTimeout(DatasetQueryRequest request, int sourceTimeout) {
+    Integer requested = request == null ? null : request.timeoutSeconds();
+    if (requested == null) return Math.max(1, Math.min(sourceTimeout, MAX_TIMEOUT_SECONDS));
+    if (requested < 1 || requested > MAX_TIMEOUT_SECONDS) {
+      throw new IllegalArgumentException("timeoutSeconds 必须在 1~120 之间");
+    }
+    return requested;
+  }
+
+  private record SourceConfig(String dataSourceId, int timeoutSeconds) {
+  }
+}
