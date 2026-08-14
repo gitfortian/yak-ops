@@ -80,7 +80,7 @@ const WorkflowSchedulesPage = () => {
         message.success('调度已停用');
       } else {
         await onlineWorkflowSchedule(schedule.id);
-        message.success('调度定义已启用');
+        message.success('调度已注册到 Yak Schedule');
       }
       await load();
     } catch (error) {
@@ -150,36 +150,56 @@ const WorkflowSchedulesPage = () => {
       ),
     },
     {
-      title: '下次运行', dataIndex: 'nextFireTime', width: 165,
-      render: (value?: string) => value
-        ? <span className="text-[12px] text-[#667085]">{formatTime(value)}</span>
-        : <span className="text-[11px] text-[#98a2b3]">Stage 3 接入后计算</span>,
+      title: '最近 / 下次运行', dataIndex: 'nextFireTime', width: 215,
+      render: (_: unknown, record: WorkflowSchedule) => (
+        <div className="text-[11px] leading-5 text-[#667085]">
+          <div>最近：{record.lastFireTime ? formatTime(record.lastFireTime) : '尚未触发'}</div>
+          <div className={record.nextFireTime ? 'text-[#475467]' : 'text-[#98a2b3]'}>
+            下次：{record.nextFireTime
+              ? formatTime(record.nextFireTime)
+              : record.status === 'ONLINE' ? '暂无可执行时间' : '未启用'}
+          </div>
+        </div>
+      ),
     },
     {
       title: '更新时间', dataIndex: 'updateTime', width: 165,
       render: (value?: string) => <span className="text-[12px] text-[#98a2b3]">{formatTime(value)}</span>,
     },
     {
-      title: '操作', dataIndex: 'operate', width: 210, fixed: 'right' as const,
+      title: '操作', dataIndex: 'operate', width: 220, fixed: 'right' as const,
       render: (_: unknown, record: WorkflowSchedule) => {
         const workflowOnline = workflowMap.get(record.workflowId)?.status === 'ONLINE';
+        const online = record.status === 'ONLINE';
         return (
           <div className="flex items-center gap-0.5 whitespace-nowrap">
-            <Button type="text" size="small" icon={<Pencil size={13} />} onClick={() => { setEditing(record); setEditorOpen(true); }}>编辑</Button>
-            <Tooltip title={!workflowOnline && record.status !== 'ONLINE' ? '工作流需先上线' : undefined}>
+            <Tooltip title={online ? '已启用调度请先停用后再修改配置' : undefined}>
               <span>
                 <Button
                   type="text"
                   size="small"
-                  disabled={!workflowOnline && record.status !== 'ONLINE'}
-                  icon={record.status === 'ONLINE' ? <PowerOff size={13} /> : <Power size={13} />}
-                  onClick={() => void changeStatus(record)}
+                  disabled={online}
+                  icon={<Pencil size={13} />}
+                  onClick={() => { setEditing(record); setEditorOpen(true); }}
                 >
-                  {record.status === 'ONLINE' ? '停用' : '启用'}
+                  编辑
                 </Button>
               </span>
             </Tooltip>
-            {record.status === 'OFFLINE' && (
+            <Tooltip title={!workflowOnline && !online ? '工作流需先上线' : undefined}>
+              <span>
+                <Button
+                  type="text"
+                  size="small"
+                  disabled={!workflowOnline && !online}
+                  icon={online ? <PowerOff size={13} /> : <Power size={13} />}
+                  onClick={() => void changeStatus(record)}
+                >
+                  {online ? '停用' : '启用'}
+                </Button>
+              </span>
+            </Tooltip>
+            {!online && (
               <Button danger type="text" size="small" icon={<Trash2 size={13} />} onClick={() => removeSchedule(record)}>删除</Button>
             )}
           </div>
@@ -194,7 +214,7 @@ const WorkflowSchedulesPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="m-0 text-[17px] font-semibold leading-8">调度管理</h1>
-            <div className="text-[11px] text-[#98a2b3]">管理工作流 Cron、时区、生效区间与实例策略</div>
+            <div className="text-[11px] text-[#98a2b3]">Yak Schedule / Quartz · Cron、时区、生效区间与实例策略</div>
           </div>
           <Button danger type="primary" size="small" icon={<CalendarClock size={14} />} onClick={() => { setEditing(undefined); setEditorOpen(true); }}>
             新建调度
@@ -222,13 +242,15 @@ const WorkflowSchedulesPage = () => {
           </div>
           <div className="flex items-center gap-2">
             <Input allowClear variant="filled" prefix={<SearchOutlined className="text-[#98a2b3]" />} placeholder="搜索名称、Cron、时区" className="!w-[260px]" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-            <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void load()} />
+            <Tooltip title="刷新调度运行时间">
+              <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void load()} />
+            </Tooltip>
           </div>
         </div>
 
         <div className="mt-3 flex min-h-9 items-center rounded-sm bg-[#fff7e6] px-3 text-[12px] text-[#475467]">
           <span className="mr-2 text-[#faad14]">▲</span>
-          <span><b>【Stage 2】</b> 当前启用/停用仅管理调度定义；自动触发、nextFireTime 与 Misfire 执行在 Stage 3 接入 Scheduler 后生效。</span>
+          <span><b>【提示】</b> 启用后计划会注册到 Yak Schedule，并由 Quartz 按 Cron 与时区自动触发；应用重启后会从工作流调度表自动恢复 ONLINE 计划。</span>
         </div>
 
         <div className="mt-4 flex-1">
@@ -239,7 +261,7 @@ const WorkflowSchedulesPage = () => {
             loading={loading}
             columns={columns as any}
             dataSource={filtered}
-            scroll={{ x: 1480 }}
+            scroll={{ x: 1550 }}
             pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50], showTotal: (total) => `共 ${total} 条` }}
             className="[&_.ant-table-thead>tr>th]:!bg-[#f8f9fb] [&_.ant-table-thead>tr>th]:!text-[12px] [&_.ant-table-thead>tr>th]:!text-[#667085] [&_.ant-table-tbody>tr>td]:!py-2.5"
           />

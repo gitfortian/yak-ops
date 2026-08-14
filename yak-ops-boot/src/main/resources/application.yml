@@ -126,6 +126,7 @@ yak:
 
   schedule:
     enabled: true
+    engine: quartz
     web-enabled: false
 
 logging:
