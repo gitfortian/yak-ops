@@ -24,11 +24,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** Trigger Ledger、幂等、Backfill 与 WorkflowExecution 并发策略统一协调器。 */
+/** Trigger Ledger、幂等、Backfill、运维补跑与 WorkflowExecution 并发策略统一协调器。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleTriggerCoordinator {
   private static final Logger log = LoggerFactory.getLogger(WorkflowScheduleTriggerCoordinator.class);
+  private static final String BUSINESS_DATE_RERUN = "BUSINESS_DATE_RERUN";
 
   private final WorkflowScheduleTriggerDao ledger;
   private final WorkflowScheduleQuery schedules;
@@ -78,7 +79,11 @@ public class WorkflowScheduleTriggerCoordinator {
       WorkflowBackfillPO backfill,
       Occurrence occurrence) {
     AdmissionResult result = admission.admitNew(newBackfillTrigger(backfill, occurrence));
-    return handleAdmission(result, "Backfill Trigger 已获得执行准入");
+    return handleAdmission(
+        result,
+        isOperationalRerun(backfill)
+            ? "businessDate 运维补跑 Trigger 已获得执行准入"
+            : "Backfill Trigger 已获得执行准入");
   }
 
   private ScheduleExecutionResult handleAdmission(AdmissionResult result, String acceptedMessage) {
@@ -99,7 +104,7 @@ public class WorkflowScheduleTriggerCoordinator {
     return submit(schedule, triggerId, plannedFireTime, actualFireTime, "MISFIRE_RECOVERY");
   }
 
-  /** 应用重启后修复 Ledger 中间态，并恢复 SERIAL_WAIT / Backfill 队列。 */
+  /** 应用重启后修复 Ledger 中间态，并恢复 SERIAL_WAIT / Backfill / 运维补跑队列。 */
   public void recoverPending() {
     List<WorkflowScheduleTriggerPO> pending = ledger.selectPending();
     Set<String> waitingWorkflows = new LinkedHashSet<>();
@@ -132,7 +137,7 @@ public class WorkflowScheduleTriggerCoordinator {
       }
 
       if (!runnable(trigger)) {
-        admission.skip(trigger, "调度/Backfill 已不可继续，启动恢复时跳过未启动 Trigger");
+        admission.skip(trigger, "调度/Backfill/运维补跑已不可继续，启动恢复时跳过未启动 Trigger");
         continue;
       }
       if ("WAITING".equals(trigger.getStatus())) {
@@ -165,7 +170,7 @@ public class WorkflowScheduleTriggerCoordinator {
     while (current != null && current.launchNow() && current.trigger() != null) {
       WorkflowScheduleTriggerPO trigger = current.trigger();
       if (!runnable(trigger)) {
-        admission.skip(trigger, "获得执行准入后调度/Backfill 已不可继续，本次 Trigger 跳过");
+        admission.skip(trigger, "获得执行准入后调度/Backfill/运维补跑已不可继续，本次 Trigger 跳过");
         current = admission.reserveNext(trigger.getWorkflowId());
         continue;
       }
@@ -225,18 +230,26 @@ public class WorkflowScheduleTriggerCoordinator {
   private WorkflowInstanceVO launchBackfill(WorkflowScheduleTriggerPO trigger) {
     if (backfills == null) throw new IllegalStateException("Backfill 查询服务不可用");
     WorkflowBackfillPO backfill = backfills.require(trigger.getBackfillId());
-    WorkflowTriggerContext context = WorkflowTriggerContext.backfill(
-        trigger.getTriggerId(),
-        backfill.getScheduleId(),
-        backfill.getId(),
-        trigger.getPlannedFireTime(),
-        backfill.getTimezone());
+    boolean operational = isOperationalRerun(backfill);
+    WorkflowTriggerContext context = operational
+        ? WorkflowTriggerContext.rerun(
+            trigger.getTriggerId(),
+            backfill.getScheduleId(),
+            backfill.getId(),
+            trigger.getPlannedFireTime(),
+            backfill.getTimezone())
+        : WorkflowTriggerContext.backfill(
+            trigger.getTriggerId(),
+            backfill.getScheduleId(),
+            backfill.getId(),
+            trigger.getPlannedFireTime(),
+            backfill.getTimezone());
     Map<String, Object> input = parameters == null ? Map.of() : parameters.forBackfill(backfill, context);
-    return launchService.runBackfillPublished(
-        backfill.getWorkflowId(),
-        backfill.getWorkflowVersionId(),
-        context,
-        input);
+    return operational
+        ? launchService.runOperationalPublished(
+            backfill.getWorkflowId(), backfill.getWorkflowVersionId(), context, input)
+        : launchService.runBackfillPublished(
+            backfill.getWorkflowId(), backfill.getWorkflowVersionId(), context, input);
   }
 
   private WorkflowScheduleTriggerPO newScheduleTrigger(
@@ -273,15 +286,17 @@ public class WorkflowScheduleTriggerCoordinator {
     if (backfill == null || occurrence == null) throw new IllegalArgumentException("Backfill Trigger 参数不能为空");
     Instant planned = occurrence.scheduleInstant();
     Instant now = Instant.now();
+    boolean operational = isOperationalRerun(backfill);
     WorkflowScheduleTriggerPO value = new WorkflowScheduleTriggerPO();
     value.setId("workflow-trigger-ledger-" + UUID.randomUUID());
     value.setScheduleId(backfill.getScheduleId());
     value.setWorkflowId(backfill.getWorkflowId());
     value.setBackfillId(backfill.getId());
-    value.setTriggerId("workflow-backfill-" + backfill.getId() + "-" + planned.toEpochMilli());
+    value.setTriggerId((operational ? "workflow-rerun-" : "workflow-backfill-")
+        + backfill.getId() + "-" + planned.toEpochMilli());
     value.setDedupeKey(WorkflowScheduleTriggerIdentity.backfill(
         backfill.getScheduleId(), backfill.getId(), planned));
-    value.setTriggerSource("BACKFILL");
+    value.setTriggerSource(operational ? BUSINESS_DATE_RERUN : "BACKFILL");
     value.setPlannedFireTime(planned);
     value.setActualFireTime(now);
     value.setBusinessDate(occurrence.businessDate());
@@ -310,6 +325,10 @@ public class WorkflowScheduleTriggerCoordinator {
 
   private boolean isBackfill(WorkflowScheduleTriggerPO trigger) {
     return trigger.getBackfillId() != null && !trigger.getBackfillId().isBlank();
+  }
+
+  private boolean isOperationalRerun(WorkflowBackfillPO backfill) {
+    return backfill != null && BUSINESS_DATE_RERUN.equals(backfill.getOperationType());
   }
 
   private WorkflowSchedulePO safeSchedule(String scheduleId) {
