@@ -3,7 +3,7 @@ package io.yak.ops.business.dashboard;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.analysis.AnalysisService;
+import io.yak.ops.business.analysis.AnalysisReferenceService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -21,12 +21,15 @@ public class DashboardService {
   private static final int MAX_INLINE_JSON = 65535;
 
   private final DashboardRepository repository;
-  private final AnalysisService analysisService;
+  private final AnalysisReferenceService analysisReferences;
   private final ObjectMapper objectMapper;
 
-  public DashboardService(DashboardRepository repository, AnalysisService analysisService, ObjectMapper objectMapper) {
+  public DashboardService(
+      DashboardRepository repository,
+      AnalysisReferenceService analysisReferences,
+      ObjectMapper objectMapper) {
     this.repository = repository;
-    this.analysisService = analysisService;
+    this.analysisReferences = analysisReferences;
     this.objectMapper = objectMapper;
   }
 
@@ -121,7 +124,7 @@ public class DashboardService {
       }
       if (linked) {
         if (value.analysisId() <= 0L) throw new IllegalArgumentException("analysisId 必须大于 0");
-        analysisService.get(value.analysisId());
+        analysisReferences.requireExists(value.analysisId());
       }
 
       validateLayout(value, widgetKey);

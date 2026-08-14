@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.analysis.AnalysisService;
+import io.yak.ops.business.analysis.AnalysisReferenceService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -20,8 +20,8 @@ class DashboardServiceTest {
   @Test
   void createPersistsV1AndValidatesAnalysisReference() {
     FakeRepository repository = new FakeRepository();
-    AnalysisService analysisService = mock(AnalysisService.class);
-    DashboardService service = new DashboardService(repository, analysisService, new ObjectMapper());
+    AnalysisReferenceService analysisReferences = mock(AnalysisReferenceService.class);
+    DashboardService service = new DashboardService(repository, analysisReferences, new ObjectMapper());
 
     DashboardDetail detail = service.create(new DashboardService.SaveCommand(
         "销售驾驶舱", "核心销售分析", 12L,
@@ -30,13 +30,13 @@ class DashboardServiceTest {
     assertEquals(1, detail.dashboard().currentVersionNo());
     assertEquals(1, detail.versions().size());
     assertEquals(1, detail.widgets().size());
-    verify(analysisService).get(99L);
+    verify(analysisReferences).requireExists(99L);
   }
 
   @Test
   void manualSaveCreatesImmutableNextVersion() {
     FakeRepository repository = new FakeRepository();
-    DashboardService service = new DashboardService(repository, mock(AnalysisService.class), new ObjectMapper());
+    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
     DashboardDetail created = service.create(new DashboardService.SaveCommand(
         "A", null, null,
         List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
@@ -52,7 +52,8 @@ class DashboardServiceTest {
 
   @Test
   void widgetCannotCarryLinkedAndInlineDefinitionsTogether() {
-    DashboardService service = new DashboardService(new FakeRepository(), mock(AnalysisService.class), new ObjectMapper());
+    DashboardService service = new DashboardService(
+        new FakeRepository(), mock(AnalysisReferenceService.class), new ObjectMapper());
     assertThrows(IllegalArgumentException.class, () -> service.create(new DashboardService.SaveCommand(
         "bad", null, null,
         List.of(new DashboardService.WidgetSpec("w1", 9L, null, Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)))));
