@@ -13,30 +13,40 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Dataset publication service.
- *
- * <p>A Dataset is a BI data contract, not an executable development task. Stage 1 only accepts
- * the immutable current revision of an ONLINE SQL TaskAsset and snapshots that reference into an
- * immutable DatasetVersion.</p>
- */
+/** Dataset publication/lifecycle service. Dataset is a data contract, not an executable task. */
 @Service
 public class DatasetService {
 
   private final DatasetRepository repository;
   private final TaskCatalogService taskCatalogService;
   private final ObjectMapper objectMapper;
+  private final DatasetSchemaDiscoveryService schemaDiscoveryService;
 
+  @Autowired
   public DatasetService(
+      DatasetRepository repository,
+      TaskCatalogService taskCatalogService,
+      ObjectMapper objectMapper,
+      DatasetSchemaDiscoveryService schemaDiscoveryService) {
+    this.repository = repository;
+    this.taskCatalogService = taskCatalogService;
+    this.objectMapper = objectMapper;
+    this.schemaDiscoveryService = schemaDiscoveryService;
+  }
+
+  /** Backward-compatible constructor for focused unit tests that do not need live schema discovery. */
+  DatasetService(
       DatasetRepository repository,
       TaskCatalogService taskCatalogService,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.taskCatalogService = taskCatalogService;
     this.objectMapper = objectMapper;
+    this.schemaDiscoveryService = null;
   }
 
   @Transactional("yakBusinessTransactionManager")
@@ -45,9 +55,10 @@ public class DatasetService {
     TaskAsset asset = requirePublishableAsset(command.sourceTaskAssetId());
     String name = normalizeName(command.name(), asset.name());
     String description = normalizeDescription(command.description());
-    List<FieldSpec> fields = normalizeFields(command.fields());
+    List<FieldSpec> requestedFields = normalizeFields(command.fields());
 
     long datasetId = repository.insertDataset(name, description);
+    List<FieldSpec> fields = resolveFields(datasetId, asset, requestedFields);
     long versionId = appendVersion(datasetId, asset, fields, false);
     repository.updateCurrentVersion(datasetId, versionId);
     return get(datasetId);
@@ -68,6 +79,7 @@ public class DatasetService {
     }
 
     List<FieldSpec> normalizedFields = normalizeFields(fields);
+    normalizedFields = resolveFields(datasetId, asset, normalizedFields);
     long versionId = appendVersion(datasetId, asset, normalizedFields, true);
     repository.updateCurrentVersion(datasetId, versionId);
     return get(datasetId);
@@ -112,6 +124,15 @@ public class DatasetService {
     return get(datasetId);
   }
 
+  private List<FieldSpec> resolveFields(
+      long datasetId,
+      TaskAsset asset,
+      List<FieldSpec> requestedFields) {
+    if (requestedFields != null && !requestedFields.isEmpty()) return requestedFields;
+    if (schemaDiscoveryService == null) return List.of();
+    return normalizeFields(schemaDiscoveryService.discover(datasetId, asset));
+  }
+
   private long appendVersion(
       long datasetId,
       TaskAsset asset,
@@ -145,7 +166,7 @@ public class DatasetService {
       throw new IllegalArgumentException("只有 ONLINE 的 TaskAsset 可以发布/更新 Dataset：" + assetId);
     }
     if (!"SQL".equalsIgnoreCase(asset.taskType())) {
-      throw new IllegalArgumentException("Stage 1 仅支持 SQL TaskAsset 发布为 QUERY_REVISION Dataset");
+      throw new IllegalArgumentException("当前仅支持 SQL TaskAsset 发布为 QUERY_REVISION Dataset");
     }
     if (asset.currentRevision() == null
         || asset.currentRevision().taskRevisionId() <= 0L

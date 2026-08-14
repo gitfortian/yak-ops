@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -20,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class DatasetController {
 
   private final DatasetService service;
+  private final DatasetQueryService queryService;
 
-  public DatasetController(DatasetService service) {
+  public DatasetController(DatasetService service, DatasetQueryService queryService) {
     this.service = service;
+    this.queryService = queryService;
   }
 
   @Operation(summary = "查询 Dataset 列表")
@@ -57,6 +61,14 @@ public class DatasetController {
         request == null ? List.of() : toFieldSpecs(request.fields())));
   }
 
+  @Operation(summary = "通过 Dataset Query Runtime 查询当前或指定不可变版本")
+  @PostMapping("/{datasetId}/query")
+  public Result<DatasetQueryResult> query(
+      @PathVariable("datasetId") long datasetId,
+      @Valid @RequestBody(required = false) QueryDatasetRequest request) {
+    return Result.success(queryService.query(datasetId, toQueryRequest(request)));
+  }
+
   @Operation(summary = "上线 Dataset")
   @PostMapping("/{datasetId}/online")
   public Result<DatasetDetail> online(@PathVariable("datasetId") long datasetId) {
@@ -67,6 +79,27 @@ public class DatasetController {
   @PostMapping("/{datasetId}/offline")
   public Result<DatasetDetail> offline(@PathVariable("datasetId") long datasetId) {
     return Result.success(service.offline(datasetId));
+  }
+
+  private static DatasetQueryRequest toQueryRequest(QueryDatasetRequest request) {
+    if (request == null) return null;
+    List<DatasetMetricBinding> metrics = request.metrics() == null ? List.of() : request.metrics().stream()
+        .map(value -> new DatasetMetricBinding(value.fieldId(), value.aggregation()))
+        .toList();
+    List<DatasetFilter> filters = request.filters() == null ? List.of() : request.filters().stream()
+        .map(value -> new DatasetFilter(value.fieldId(), value.operator(), value.value(), value.values()))
+        .toList();
+    List<DatasetSort> sorts = request.sorts() == null ? List.of() : request.sorts().stream()
+        .map(value -> new DatasetSort(value.fieldId(), value.aggregation(), value.direction()))
+        .toList();
+    return new DatasetQueryRequest(
+        request.versionNo(),
+        request.dimensions(),
+        metrics,
+        filters,
+        sorts,
+        request.limit(),
+        request.timeoutSeconds());
   }
 
   private static List<DatasetService.FieldSpec> toFieldSpecs(List<DatasetFieldRequest> fields) {
@@ -101,5 +134,33 @@ public class DatasetController {
       boolean nullable,
       @Size(max = 1000) String description,
       DatasetFieldRole defaultRole) {
+  }
+
+  public record QueryDatasetRequest(
+      @Min(1) Integer versionNo,
+      List<@Size(max = 64) String> dimensions,
+      List<@Valid QueryMetricRequest> metrics,
+      List<@Valid QueryFilterRequest> filters,
+      List<@Valid QuerySortRequest> sorts,
+      @Min(1) @Max(1000) Integer limit,
+      @Min(1) @Max(120) Integer timeoutSeconds) {
+  }
+
+  public record QueryMetricRequest(
+      @NotNull @Size(max = 64) String fieldId,
+      @NotNull DatasetAggregation aggregation) {
+  }
+
+  public record QueryFilterRequest(
+      @NotNull @Size(max = 64) String fieldId,
+      @NotNull DatasetFilterOperator operator,
+      Object value,
+      @Size(max = 100) List<Object> values) {
+  }
+
+  public record QuerySortRequest(
+      @NotNull @Size(max = 64) String fieldId,
+      DatasetAggregation aggregation,
+      DatasetSortDirection direction) {
   }
 }
