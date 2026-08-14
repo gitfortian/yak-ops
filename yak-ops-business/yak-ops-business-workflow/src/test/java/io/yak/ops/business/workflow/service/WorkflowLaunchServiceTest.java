@@ -1,6 +1,7 @@
 package io.yak.ops.business.workflow.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -78,7 +80,7 @@ class WorkflowLaunchServiceTest {
         Instant.parse("2026-08-14T02:00:00Z"),
         "Asia/Shanghai");
     WorkflowDefinitionVO current = definition("latest-normal", "workflow-version-6", 6);
-    WorkflowInstanceVO expected = instance("execution-v5");
+    WorkflowInstanceVO expected = instance("execution-v5", "RUNNING");
     when(definitionService.get("workflow-1")).thenReturn(current);
     when(publishedVersionRunner.run("workflow-1", "workflow-version-5")).thenReturn(expected);
 
@@ -94,21 +96,59 @@ class WorkflowLaunchServiceTest {
   }
 
   @Test
-  void shouldRouteAdHocApiRunAndRecordTriggerContext() {
+  void shouldRecordAdHocTriggerBeforeActivatingPreparedExecution() {
     WorkflowRunDTO request = new WorkflowRunDTO(
         "临时工作流",
         List.of(new NodeDTO("node-1", "task-1")),
         List.of(),
         Map.of());
     WorkflowTriggerContext trigger = WorkflowTriggerContext.api();
-    WorkflowInstanceVO expected = instance("execution-api");
-    when(runtimeService.run(request)).thenReturn(expected);
+    WorkflowInstanceVO prepared = instance("execution-api", "RUNNING");
+    WorkflowInstanceVO activated = instance("execution-api", "RUNNING");
+    when(runtimeService.run(request)).thenReturn(prepared);
+    when(runtimeService.activate("execution-api")).thenReturn(activated);
 
     WorkflowInstanceVO actual = service.runAdHoc(request, trigger);
 
-    assertThat(actual).isSameAs(expected);
-    verify(runtimeService).run(request);
-    verify(triggerRecorder).record("execution-api", trigger);
+    assertThat(actual).isSameAs(activated);
+    InOrder order = inOrder(runtimeService, triggerRecorder);
+    order.verify(runtimeService).run(request);
+    order.verify(triggerRecorder).record("execution-api", trigger);
+    order.verify(runtimeService).activate("execution-api");
+  }
+
+  @Test
+  void shouldActivateRestartBeforeReturningRunningInstance() {
+    WorkflowTriggerContext trigger = WorkflowTriggerContext.manual();
+    WorkflowInstanceVO prepared = instance("execution-restart", "RUNNING");
+    WorkflowInstanceVO activated = instance("execution-restart", "RUNNING");
+    when(runtimeService.restart("execution-source")).thenReturn(prepared);
+    when(runtimeService.activate("execution-restart")).thenReturn(activated);
+
+    WorkflowInstanceVO actual = service.restart("execution-source", trigger);
+
+    assertThat(actual).isSameAs(activated);
+    InOrder order = inOrder(runtimeService, triggerRecorder);
+    order.verify(runtimeService).restart("execution-source");
+    order.verify(triggerRecorder).record("execution-restart", trigger);
+    order.verify(runtimeService).activate("execution-restart");
+  }
+
+  @Test
+  void shouldActivateNodeRerunBeforeReturningRunningInstance() {
+    WorkflowTriggerContext trigger = WorkflowTriggerContext.manual();
+    WorkflowInstanceVO prepared = instance("execution-rerun", "RUNNING");
+    WorkflowInstanceVO activated = instance("execution-rerun", "RUNNING");
+    when(runtimeService.rerunFromNode("execution-source", "node-2")).thenReturn(prepared);
+    when(runtimeService.activate("execution-rerun")).thenReturn(activated);
+
+    WorkflowInstanceVO actual = service.rerunFromNode("execution-source", "node-2", trigger);
+
+    assertThat(actual).isSameAs(activated);
+    InOrder order = inOrder(runtimeService, triggerRecorder);
+    order.verify(runtimeService).rerunFromNode("execution-source", "node-2");
+    order.verify(triggerRecorder).record("execution-rerun", trigger);
+    order.verify(runtimeService).activate("execution-rerun");
   }
 
   private WorkflowDefinitionVO definition(
@@ -139,14 +179,14 @@ class WorkflowLaunchServiceTest {
         now);
   }
 
-  private WorkflowInstanceVO instance(String executionId) {
+  private WorkflowInstanceVO instance(String executionId, String status) {
     Instant now = Instant.parse("2026-08-13T12:00:00Z");
     return new WorkflowInstanceVO(
         executionId,
         "runtime-definition",
         null,
         "临时工作流",
-        "CREATED",
+        status,
         "CONTINUE_INDEPENDENT_BRANCHES",
         now,
         null,
