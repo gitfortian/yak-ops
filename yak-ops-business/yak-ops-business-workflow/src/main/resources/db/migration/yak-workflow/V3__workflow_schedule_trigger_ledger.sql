@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS yak_workflow_schedule_trigger (
     UNIQUE KEY uk_yak_workflow_schedule_trigger_id (trigger_id),
     KEY idx_yak_workflow_schedule_trigger_workflow (workflow_id, status, planned_fire_time),
     KEY idx_yak_workflow_schedule_trigger_execution (workflow_execution_id),
-    KEY idx_yak_workflow_schedule_trigger_schedule (schedule_id, create_time),
-    CONSTRAINT fk_yak_workflow_schedule_trigger_schedule
-      FOREIGN KEY (schedule_id) REFERENCES yak_workflow_schedule(id) ON DELETE CASCADE
+    KEY idx_yak_workflow_schedule_trigger_schedule (schedule_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Trigger Ledger 是审计事实，Schedule 删除后仍保留历史记录，因此不建立级联外键。
+-- Published WorkflowExecution 通过 definition_id -> yak_workflow_version.workflow_id 查询工作流归属。
 ALTER TABLE yak_workflow_execution
     ADD KEY idx_yak_workflow_execution_definition_status (definition_id, status, created_at);
