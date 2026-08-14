@@ -25,6 +25,7 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class WorkflowInstanceOperationsServiceTest {
   @Mock private WorkflowRuntimeService runtime;
+  @Mock private WorkflowExecutionReactivationService reactivation;
   @Mock private ObjectProvider<WorkflowRuntimePersistence> runtimePersistence;
   @Mock private ObjectProvider<WorkflowDefinitionRepository> definitionProvider;
   @Mock private ObjectProvider<WorkflowScheduleTriggerDao> triggerProvider;
@@ -39,6 +40,7 @@ class WorkflowInstanceOperationsServiceTest {
   void setUp() {
     service = new WorkflowInstanceOperationsService(
         runtime,
+        reactivation,
         runtimePersistence,
         definitionProvider,
         triggerProvider,
@@ -76,8 +78,9 @@ class WorkflowInstanceOperationsServiceTest {
   @Test
   void shouldIsolateFailuresWhenBatchRetryingInstances() {
     WorkflowInstanceVO accepted = instance("execution-a", "RUNNING");
-    when(runtime.retryFailedNodes("execution-a")).thenReturn(accepted);
-    when(runtime.retryFailedNodes("execution-b")).thenThrow(new IllegalStateException("no retryable nodes"));
+    when(reactivation.retryFailedNodes("execution-a")).thenReturn(accepted);
+    when(reactivation.retryFailedNodes("execution-b"))
+        .thenThrow(new IllegalStateException("serial slot already occupied"));
 
     var result = service.batchRetryFailed(new WorkflowBatchRetryDTO(
         List.of("execution-a", "execution-b", "execution-a")));
@@ -87,7 +90,7 @@ class WorkflowInstanceOperationsServiceTest {
     assertThat(result.failedCount()).isEqualTo(1);
     assertThat(result.items()).hasSize(2);
     assertThat(result.items().get(0).accepted()).isTrue();
-    assertThat(result.items().get(1).message()).contains("no retryable nodes");
+    assertThat(result.items().get(1).message()).contains("serial slot already occupied");
   }
 
   private WorkflowInstanceVO instance(String id, String status) {
