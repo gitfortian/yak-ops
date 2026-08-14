@@ -52,10 +52,13 @@ public class WorkflowInstanceOperationsService {
     RuntimeMetadataRecord metadata = metadata(instance.id());
 
     String workflowId = workflowId(instance.id());
-    String triggerType = first(text(input.get("triggerType")), metadata == null ? null : metadata.triggerType());
-    String triggerId = first(text(input.get("triggerId")), metadata == null ? null : metadata.triggerId());
+    // Launch metadata 描述“本次为什么启动”；input 保留原调度血缘，两者不能混淆。
+    String triggerType = first(metadata == null ? null : metadata.triggerType(), text(input.get("triggerType")));
+    String triggerId = first(metadata == null ? null : metadata.triggerId(), text(input.get("triggerId")));
     String scheduleId = first(text(input.get("scheduleId")), metadata == null ? null : metadata.scheduleId());
     String backfillId = text(input.get("backfillId"));
+    String operationType = text(input.get("operationType"));
+    String sourceExecutionId = first(text(input.get("sourceExecutionId")), instance.sourceExecutionId());
     String scheduleTimezone = text(input.get("scheduleTimezone"));
     String scheduleTime = text(input.get("scheduleTime"));
     String cronExpression = text(input.get("cronExpression"));
@@ -72,6 +75,8 @@ public class WorkflowInstanceOperationsService {
         triggerId,
         scheduleId,
         backfillId,
+        operationType,
+        sourceExecutionId,
         businessDate,
         scheduleTime,
         scheduleTimezone,
