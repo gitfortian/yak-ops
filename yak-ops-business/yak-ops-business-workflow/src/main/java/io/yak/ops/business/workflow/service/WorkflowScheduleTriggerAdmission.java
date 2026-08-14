@@ -6,7 +6,6 @@ import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import java.time.Instant;
-import java.util.List;
 import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -35,22 +34,18 @@ public class WorkflowScheduleTriggerAdmission {
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult admitNew(
-      WorkflowSchedulePO schedule,
-      WorkflowScheduleTriggerPO candidate) {
+  public AdmissionResult admitNew(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO candidate) {
     WorkflowScheduleTriggerPO trigger = ledger.claim(candidate);
     if (!"RECEIVED".equals(trigger.getStatus())) {
       return new AdmissionResult(trigger, false, true);
     }
     ledger.lockWorkflow(schedule.getWorkflowId());
-    return decideLocked(schedule, trigger, false);
+    return decideLocked(schedule, trigger);
   }
 
   /** 启动恢复时重新处理 RECEIVED/无绑定 LAUNCHING 中间态。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult readmit(
-      WorkflowSchedulePO schedule,
-      WorkflowScheduleTriggerPO candidate) {
+  public AdmissionResult readmit(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO candidate) {
     ledger.lockWorkflow(schedule.getWorkflowId());
     WorkflowScheduleTriggerPO trigger = current(candidate);
     if (LEDGER_TERMINAL.contains(trigger.getStatus()) || "RUNNING".equals(trigger.getStatus())) {
@@ -63,14 +58,12 @@ public class WorkflowScheduleTriggerAdmission {
     trigger.setErrorMessage(null);
     touch(trigger);
     save(trigger);
-    return decideLocked(schedule, trigger, true);
+    return decideLocked(schedule, trigger);
   }
 
   /** 启动完成后绑定业务实例；若实例已同步终态，同时预留下一条 SERIAL_WAIT。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult bindLaunch(
-      WorkflowScheduleTriggerPO candidate,
-      String executionId) {
+  public AdmissionResult bindLaunch(WorkflowScheduleTriggerPO candidate, String executionId) {
     WorkflowScheduleTriggerPO trigger = current(candidate);
     ledger.lockWorkflow(trigger.getWorkflowId());
     trigger = current(trigger);
@@ -91,9 +84,7 @@ public class WorkflowScheduleTriggerAdmission {
 
   /** 启动失败释放 LAUNCHING 占位，并立即尝试推进等待队列。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult failLaunch(
-      WorkflowScheduleTriggerPO candidate,
-      Throwable error) {
+  public AdmissionResult failLaunch(WorkflowScheduleTriggerPO candidate, Throwable error) {
     WorkflowScheduleTriggerPO trigger = current(candidate);
     ledger.lockWorkflow(trigger.getWorkflowId());
     trigger = current(trigger);
@@ -108,10 +99,7 @@ public class WorkflowScheduleTriggerAdmission {
 
   /** WorkflowExecution 终态提交后，完成 Ledger 并在同一短事务中预留下一条等待 Trigger。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult completeExecution(
-      String executionId,
-      String executionStatus,
-      Instant endedAt) {
+  public AdmissionResult completeExecution(String executionId, String executionStatus, Instant endedAt) {
     WorkflowScheduleTriggerPO trigger = ledger.selectByExecutionId(executionId);
     String workflowId = trigger == null
         ? ledger.selectWorkflowIdByExecution(executionId)
@@ -130,14 +118,20 @@ public class WorkflowScheduleTriggerAdmission {
 
   /** 恢复已绑定的 RUNNING/LAUNCHING Ledger；返回值可能是新预留的队首。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult recoverBound(
-      WorkflowScheduleTriggerPO candidate,
-      String executionId) {
+  public AdmissionResult recoverBound(WorkflowScheduleTriggerPO candidate, String executionId) {
     WorkflowScheduleTriggerPO trigger = current(candidate);
     ledger.lockWorkflow(trigger.getWorkflowId());
     trigger = current(trigger);
     WorkflowExecutionPO execution = executionId == null ? null : executions.selectExecution(executionId);
-    if (execution == null) return new AdmissionResult(trigger, false, false);
+    if (execution == null) {
+      trigger.setStatus("RECEIVED");
+      trigger.setWorkflowExecutionId(null);
+      trigger.setExecutionStatus(null);
+      trigger.setMessage("启动恢复未找到原 WorkflowExecution，等待重新准入");
+      touch(trigger);
+      save(trigger);
+      return new AdmissionResult(trigger, false, false);
+    }
 
     trigger.setWorkflowExecutionId(executionId);
     trigger.setExecutionStatus(execution.getStatus());
@@ -168,26 +162,20 @@ public class WorkflowScheduleTriggerAdmission {
     markSkipped(trigger, message);
   }
 
-  private AdmissionResult decideLocked(
-      WorkflowSchedulePO schedule,
-      WorkflowScheduleTriggerPO trigger,
-      boolean recoveringCurrentLaunchReservation) {
+  private AdmissionResult decideLocked(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO trigger) {
     String strategy = schedule.getExecutionStrategy();
     long active = ledger.countActiveExecutions(schedule.getWorkflowId());
     long launching = ledger.countLaunchingTriggers(schedule.getWorkflowId());
-    if (recoveringCurrentLaunchReservation && "LAUNCHING".equals(trigger.getStatus())) {
-      launching = Math.max(0L, launching - 1L);
-    }
-    boolean busy = active > 0L || launching > 0L;
+    long waiting = ledger.countWaitingTriggers(schedule.getWorkflowId());
+    boolean busy = active > 0L || launching > 0L || waiting > 0L;
 
     if ("SERIAL_DISCARD".equals(strategy) && busy) {
-      markSkipped(trigger, "已有运行或启动中的 WorkflowExecution，按 SERIAL_DISCARD 跳过");
+      markSkipped(trigger, "已有运行、启动或排队中的 WorkflowExecution，按 SERIAL_DISCARD 跳过");
       return new AdmissionResult(trigger, false, false);
     }
-
     if ("SERIAL_WAIT".equals(strategy) && busy) {
       trigger.setStatus("WAITING");
-      trigger.setMessage("已有运行或启动中的 WorkflowExecution，进入串行等待队列");
+      trigger.setMessage("已有运行、启动或排队中的 WorkflowExecution，进入串行等待队列");
       touch(trigger);
       save(trigger);
       return new AdmissionResult(trigger, false, false);
@@ -202,7 +190,6 @@ public class WorkflowScheduleTriggerAdmission {
         || ledger.countLaunchingTriggers(workflowId) > 0L) {
       return AdmissionResult.none();
     }
-
     while (true) {
       WorkflowScheduleTriggerPO waiting = ledger.selectNextWaiting(workflowId);
       if (waiting == null) return AdmissionResult.none();
@@ -237,10 +224,7 @@ public class WorkflowScheduleTriggerAdmission {
     save(trigger);
   }
 
-  private void markTerminal(
-      WorkflowScheduleTriggerPO trigger,
-      String executionStatus,
-      Instant endedAt) {
+  private void markTerminal(WorkflowScheduleTriggerPO trigger, String executionStatus, Instant endedAt) {
     trigger.setExecutionStatus(executionStatus);
     trigger.setStatus(ledgerStatus(executionStatus));
     trigger.setMessage("WorkflowExecution 已进入终态：" + executionStatus);
@@ -250,9 +234,7 @@ public class WorkflowScheduleTriggerAdmission {
   }
 
   private String ledgerStatus(String executionStatus) {
-    if ("SUCCESS".equals(executionStatus) || "SUCCESS_WITH_WARNINGS".equals(executionStatus)) {
-      return "SUCCEEDED";
-    }
+    if ("SUCCESS".equals(executionStatus) || "SUCCESS_WITH_WARNINGS".equals(executionStatus)) return "SUCCEEDED";
     if ("CANCELED".equals(executionStatus)) return "CANCELED";
     return "FAILED";
   }
@@ -262,8 +244,7 @@ public class WorkflowScheduleTriggerAdmission {
   }
 
   private WorkflowScheduleTriggerPO current(WorkflowScheduleTriggerPO candidate) {
-    WorkflowScheduleTriggerPO current = ledger.selectBySchedulePlan(
-        candidate.getScheduleId(), candidate.getPlannedFireTime());
+    WorkflowScheduleTriggerPO current = ledger.selectBySchedulePlan(candidate.getScheduleId(), candidate.getPlannedFireTime());
     if (current == null) throw new IllegalArgumentException("Trigger Ledger 不存在：" + candidate.getId());
     return current;
   }
@@ -276,14 +257,10 @@ public class WorkflowScheduleTriggerAdmission {
     }
   }
 
-  private void touch(WorkflowScheduleTriggerPO trigger) {
-    trigger.setUpdateTime(Instant.now());
-  }
+  private void touch(WorkflowScheduleTriggerPO trigger) { trigger.setUpdateTime(Instant.now()); }
 
   private void save(WorkflowScheduleTriggerPO trigger) {
-    if (ledger.update(trigger) != 1) {
-      throw new IllegalStateException("更新 Trigger Ledger 失败：" + trigger.getId());
-    }
+    if (ledger.update(trigger) != 1) throw new IllegalStateException("更新 Trigger Ledger 失败：" + trigger.getId());
   }
 
   private String safeMessage(Throwable error) {
@@ -296,12 +273,7 @@ public class WorkflowScheduleTriggerAdmission {
     return value.length() <= 2000 ? value : value.substring(0, 2000);
   }
 
-  public record AdmissionResult(
-      WorkflowScheduleTriggerPO trigger,
-      boolean launchNow,
-      boolean duplicate) {
-    static AdmissionResult none() {
-      return new AdmissionResult(null, false, false);
-    }
+  public record AdmissionResult(WorkflowScheduleTriggerPO trigger, boolean launchNow, boolean duplicate) {
+    static AdmissionResult none() { return new AdmissionResult(null, false, false); }
   }
 }
