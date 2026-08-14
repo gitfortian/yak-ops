@@ -16,6 +16,7 @@ export type DevelopmentEditorPanelKey =
 
 export interface DevelopmentDatasetToolbarState {
   releaseRevisionNo: number;
+  releaseStatus: 'ONLINE' | 'OFFLINE' | 'DISABLED';
   datasetId?: string;
   datasetVersionNo?: number;
   datasetSourceRevisionNo?: number;
