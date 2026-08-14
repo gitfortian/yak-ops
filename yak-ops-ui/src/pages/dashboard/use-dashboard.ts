@@ -6,13 +6,12 @@ import type {
   Scalar,
 } from '@/components/analysis/model';
 import { message } from 'antd';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
 import {
   activateDashboardVersion,
   createDashboard,
   fetchDashboard,
-  fetchDashboards,
   saveDashboardVersion,
   toDashboardDocument,
 } from './dashboard-service';
@@ -22,7 +21,6 @@ import {
   createWidget,
   findDataset,
   isPersistedDashboard,
-  loadDashboard,
   reconcileDashboard,
   STORAGE_KEY,
 } from './helpers';
@@ -31,7 +29,6 @@ import type {
   ChartType,
   DashboardDocument,
   DashboardGlobalFilter,
-  DashboardSummary,
   DashboardVersionSummary,
   DashboardWidget,
   PublishedDataset,
@@ -60,19 +57,16 @@ const runtimeDefaults = (filters: DashboardGlobalFilter[]) => Object.fromEntries
 const hasOwn = (value: Record<string, Scalar | undefined>, key: string) =>
   Object.prototype.hasOwnProperty.call(value, key);
 
-export function useDashboardDesigner() {
-  const [dashboard, setDashboard] = useState<DashboardDocument>(loadDashboard);
+export function useDashboardDesigner(dashboardId?: string) {
+  const [dashboard, setDashboard] = useState<DashboardDocument>(() => cloneDashboard(DEFAULT_DASHBOARD));
   const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
-  const [dashboardAssets, setDashboardAssets] = useState<DashboardSummary[]>([]);
   const [dashboardVersions, setDashboardVersions] = useState<DashboardVersionSummary[]>([]);
-  const [dashboardsLoading, setDashboardsLoading] = useState(true);
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [runtimeFilterValues, setRuntimeFilterValues] = useState<Record<string, Scalar | undefined>>({});
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState(false);
-  const didAutoOpen = useRef(false);
 
   const widgets = dashboard.widgets;
   const selectedWidget = widgets.find((widget) => widget.id === selectedId);
@@ -100,21 +94,9 @@ export function useDashboardDesigner() {
     }
   }, []);
 
-  const loadDashboardAssets = useCallback(async () => {
-    setDashboardsLoading(true);
+  const openDashboard = useCallback(async (targetDashboardId: string) => {
     try {
-      setDashboardAssets(await fetchDashboards());
-    } catch (error) {
-      setDashboardAssets([]);
-      message.error(error instanceof Error ? error.message : '加载 Dashboard 列表失败');
-    } finally {
-      setDashboardsLoading(false);
-    }
-  }, []);
-
-  const openDashboard = useCallback(async (dashboardId: string) => {
-    try {
-      const detail = await fetchDashboard(dashboardId);
+      const detail = await fetchDashboard(targetDashboardId);
       setDashboard(toDashboardDocument(detail));
       setDashboardVersions(detail.versions);
       setSelectedId(undefined);
@@ -127,23 +109,18 @@ export function useDashboardDesigner() {
   useEffect(() => {
     void loadDatasets();
     void loadAnalyses();
-    void loadDashboardAssets();
-  }, [loadDatasets, loadAnalyses, loadDashboardAssets]);
+  }, [loadDatasets, loadAnalyses]);
 
   useEffect(() => {
-    if (didAutoOpen.current || dashboardsLoading) return;
-    didAutoOpen.current = true;
-    const hasLegacyDraft = !isPersistedDashboard(dashboard.id)
-      && (dashboard.widgets.length > 0 || dashboard.name !== DEFAULT_DASHBOARD.name);
-    if (!hasLegacyDraft && dashboardAssets.length) void openDashboard(dashboardAssets[0].id);
-  }, [
-    dashboard.id,
-    dashboard.name,
-    dashboard.widgets.length,
-    dashboardAssets,
-    dashboardsLoading,
-    openDashboard,
-  ]);
+    if (dashboardId) {
+      void openDashboard(dashboardId);
+      return;
+    }
+    setDashboard(cloneDashboard(DEFAULT_DASHBOARD));
+    setDashboardVersions([]);
+    setSelectedId(undefined);
+    setRuntimeFilterValues({});
+  }, [dashboardId, openDashboard]);
 
   useEffect(() => {
     if (!datasets.length) return;
@@ -275,8 +252,11 @@ export function useDashboardDesigner() {
     }));
   };
 
-  const save = async () => {
-    if (!dashboard.name.trim()) return void message.warning('请输入仪表盘名称');
+  const save = async (): Promise<string | undefined> => {
+    if (!dashboard.name.trim()) {
+      message.warning('请输入仪表盘名称');
+      return undefined;
+    }
     setDashboardSaving(true);
     try {
       const detail = isPersistedDashboard(dashboard.id)
@@ -285,14 +265,12 @@ export function useDashboardDesigner() {
       const document = toDashboardDocument(detail);
       setDashboard(document);
       setDashboardVersions(detail.versions);
-      setDashboardAssets((current) => [
-        detail.dashboard,
-        ...current.filter((item) => item.id !== detail.dashboard.id),
-      ]);
       window.localStorage.removeItem(STORAGE_KEY);
       message.success(`仪表盘已保存为 V${detail.dashboard.currentVersionNo}`);
+      return detail.dashboard.id;
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存 Dashboard 失败');
+      return undefined;
     } finally {
       setDashboardSaving(false);
     }
@@ -305,9 +283,6 @@ export function useDashboardDesigner() {
       const detail = await activateDashboardVersion(dashboard.id, versionNo);
       setDashboard(toDashboardDocument(detail));
       setDashboardVersions(detail.versions);
-      setDashboardAssets((current) => current.map((item) => (
-        item.id === detail.dashboard.id ? detail.dashboard : item
-      )));
       setSelectedId(undefined);
       message.success(`已切换到 Dashboard V${versionNo}`);
     } catch (error) {
@@ -317,24 +292,13 @@ export function useDashboardDesigner() {
     }
   };
 
-  const newDashboard = () => {
-    const next = reconcileDashboard(cloneDashboard(DEFAULT_DASHBOARD), datasets);
-    setDashboard(next);
-    setDashboardVersions([]);
-    setSelectedId(undefined);
-    setRuntimeFilterValues({});
-    window.localStorage.removeItem(STORAGE_KEY);
-  };
-
   return {
     dashboard,
     widgets,
     datasets,
     datasetsLoading,
     analyses,
-    dashboardAssets,
     dashboardVersions,
-    dashboardsLoading,
     dashboardSaving,
     runtimeFilterValues,
     selectedWidget,
@@ -357,7 +321,5 @@ export function useDashboardDesigner() {
     changeWidgetDataset,
     save,
     activateVersion,
-    newDashboard,
-    openDashboard,
   };
 }
