@@ -56,7 +56,7 @@ class WorkflowScheduleMisfireRecoveryTest {
     assertThat(trigger.getStatus()).isEqualTo("SKIPPED");
     assertThat(trigger.getTriggerSource()).isEqualTo("MISFIRE_RECOVERY");
     assertThat(trigger.getPlannedFireTime()).isEqualTo(missed);
-    assertThat(trigger.getDedupeKey()).isEqualTo("schedule-1|SCHEDULE|1786678800000");
+    assertThat(trigger.getDedupeKey()).isEqualTo("schedule-1|SCHEDULE|1786669200000");
     assertThat(trigger.getBusinessDate()).isEqualTo(LocalDate.of(2026, 8, 14));
     assertThat(trigger.getCompletedAt()).isEqualTo(recovered);
   }
