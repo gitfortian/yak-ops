@@ -1,13 +1,16 @@
+import type { AnalysisSpec, Scalar } from '@/components/analysis/model';
 import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
-import type { AnalysisSpec } from '@/components/analysis/model';
 import type {
   DashboardDocument,
+  DashboardGlobalFilter,
+  DashboardInteraction,
   DashboardServerDetail,
   DashboardSummary,
   DashboardVersionSummary,
   DashboardWidget,
+  FilterOperator,
 } from './model';
 
 const DASHBOARD_API = '/api/v1/dashboards';
@@ -48,11 +51,31 @@ interface DashboardWidgetWire {
   sortOrder: number;
 }
 
+interface DashboardGlobalFilterWire {
+  filterKey: string;
+  name: string;
+  operator: 'EQ' | 'NE' | 'CONTAINS' | 'GT' | 'GTE' | 'LT' | 'LTE';
+  defaultValue?: Scalar;
+  bindings: Array<{ widgetKey: string; fieldId: string; sortOrder: number }>;
+  sortOrder: number;
+}
+
+interface DashboardInteractionWire {
+  interactionKey: string;
+  event: 'SELECT';
+  sourceWidgetKey: string;
+  sourceFieldId: string;
+  targetFilterKey: string;
+  sortOrder: number;
+}
+
 interface DashboardDetailWire {
   dashboard: DashboardAssetWire;
   currentVersion?: DashboardVersionWire | null;
   versions: DashboardVersionWire[];
   widgets: DashboardWidgetWire[];
+  globalFilters?: DashboardGlobalFilterWire[];
+  interactions?: DashboardInteractionWire[];
 }
 
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
@@ -95,11 +118,52 @@ const widget = (value: DashboardWidgetWire): DashboardWidget => ({
   minH: value.minH ?? undefined,
 });
 
+const operatorFromWire = (value: DashboardGlobalFilterWire['operator']): FilterOperator => ({
+  EQ: 'eq',
+  NE: 'neq',
+  CONTAINS: 'contains',
+  GT: 'gt',
+  GTE: 'gte',
+  LT: 'lt',
+  LTE: 'lte',
+}[value] as FilterOperator);
+
+const operatorToWire = (value: FilterOperator): DashboardGlobalFilterWire['operator'] => ({
+  eq: 'EQ',
+  neq: 'NE',
+  contains: 'CONTAINS',
+  gt: 'GT',
+  gte: 'GTE',
+  lt: 'LT',
+  lte: 'LTE',
+}[value] as DashboardGlobalFilterWire['operator']);
+
+const globalFilter = (value: DashboardGlobalFilterWire): DashboardGlobalFilter => ({
+  id: value.filterKey,
+  name: value.name,
+  operator: operatorFromWire(value.operator),
+  defaultValue: value.defaultValue,
+  bindings: (value.bindings || []).map((binding) => ({
+    widgetId: binding.widgetKey,
+    field: binding.fieldId,
+  })),
+});
+
+const interaction = (value: DashboardInteractionWire): DashboardInteraction => ({
+  id: value.interactionKey,
+  event: 'select',
+  sourceWidgetId: value.sourceWidgetKey,
+  sourceField: value.sourceFieldId,
+  targetFilterId: value.targetFilterKey,
+});
+
 export const toDashboardServerDetail = (value: DashboardDetailWire): DashboardServerDetail => ({
   dashboard: summary(value.dashboard),
   currentVersion: value.currentVersion ? version(value.currentVersion) : undefined,
   versions: (value.versions || []).map(version),
   widgets: (value.widgets || []).map(widget),
+  globalFilters: (value.globalFilters || []).map(globalFilter),
+  interactions: (value.interactions || []).map(interaction),
 });
 
 export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDocument => ({
@@ -109,6 +173,8 @@ export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDoc
   description: detail.currentVersion?.description || detail.dashboard.description,
   activeDatasetId: detail.currentVersion?.activeDatasetId || '',
   widgets: detail.widgets,
+  globalFilters: detail.globalFilters,
+  interactions: detail.interactions,
   currentVersionNo: detail.dashboard.currentVersionNo,
   currentVersionId: detail.dashboard.currentVersionId,
   updatedAt: detail.dashboard.updateTime,
@@ -129,6 +195,23 @@ const payload = (document: DashboardDocument) => ({
     h: item.h,
     minW: item.minW,
     minH: item.minH,
+  })),
+  globalFilters: document.globalFilters.map((filter) => ({
+    filterKey: filter.id,
+    name: filter.name,
+    operator: operatorToWire(filter.operator),
+    defaultValue: filter.defaultValue,
+    bindings: filter.bindings.map((binding) => ({
+      widgetKey: binding.widgetId,
+      fieldId: binding.field,
+    })),
+  })),
+  interactions: document.interactions.map((item) => ({
+    interactionKey: item.id,
+    event: 'SELECT',
+    sourceWidgetKey: item.sourceWidgetId,
+    sourceFieldId: item.sourceField,
+    targetFilterKey: item.targetFilterId,
   })),
 });
 

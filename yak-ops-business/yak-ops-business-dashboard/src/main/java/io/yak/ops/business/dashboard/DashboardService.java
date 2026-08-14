@@ -13,12 +13,16 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Owns Dashboard identity, immutable versions and layout. Analysis owns reusable ChartSpec definitions. */
+/** Owns Dashboard identity, immutable versions, layout and dashboard-level interaction definitions. */
 @Service
 public class DashboardService {
 
   private static final int MAX_WIDGETS = 200;
   private static final int MAX_INLINE_JSON = 65535;
+  private static final int MAX_GLOBAL_FILTERS = 20;
+  private static final int MAX_FILTER_BINDINGS = 200;
+  private static final int MAX_INTERACTIONS = 100;
+  private static final int MAX_DEFAULT_VALUE_JSON = 4000;
 
   private final DashboardRepository repository;
   private final AnalysisReferenceService analysisReferences;
@@ -43,12 +47,22 @@ public class DashboardService {
         .orElseThrow(() -> new IllegalArgumentException("Dashboard 不存在：" + dashboardId));
     DashboardVersion currentVersion = null;
     List<DashboardWidgetSnapshot> widgets = List.of();
+    List<DashboardGlobalFilterSnapshot> filters = List.of();
+    List<DashboardInteractionSnapshot> interactions = List.of();
     if (dashboard.currentVersionId() != null) {
       currentVersion = repository.findVersion(dashboard.currentVersionId())
           .orElseThrow(() -> new IllegalStateException("Dashboard 当前版本不存在：" + dashboard.currentVersionId()));
       widgets = repository.listWidgets(currentVersion.id());
+      filters = repository.listGlobalFilters(currentVersion.id());
+      interactions = repository.listInteractions(currentVersion.id());
     }
-    return new DashboardDetail(dashboard, currentVersion, repository.listVersions(dashboardId), widgets);
+    return new DashboardDetail(
+        dashboard,
+        currentVersion,
+        repository.listVersions(dashboardId),
+        widgets,
+        filters,
+        interactions);
   }
 
   public List<DashboardVersion> versions(long dashboardId) {
@@ -94,6 +108,8 @@ public class DashboardService {
     long versionId = repository.insertVersion(
         dashboardId, versionNo, normalized.name(), normalized.description(), normalized.activeDatasetId());
     repository.insertWidgets(versionId, normalized.widgets(), normalized.inlineJson());
+    repository.insertGlobalFilters(versionId, normalized.globalFilters(), normalized.defaultValueJson());
+    repository.insertInteractions(versionId, normalized.interactions());
     repository.updateCurrentVersion(
         dashboardId, versionId, versionNo, normalized.name(), normalized.description());
   }
@@ -105,8 +121,28 @@ public class DashboardService {
     Long activeDatasetId = command.activeDatasetId();
     if (activeDatasetId != null && activeDatasetId <= 0L) activeDatasetId = null;
 
-    List<WidgetSpec> source = command.widgets() == null ? List.of() : command.widgets();
-    if (source.size() > MAX_WIDGETS) throw new IllegalArgumentException("Dashboard 组件不能超过 " + MAX_WIDGETS + " 个");
+    WidgetNormalization widgetNormalization = normalizeWidgets(command.widgets());
+    FilterNormalization filterNormalization = normalizeGlobalFilters(
+        command.globalFilters(), widgetNormalization.widgetKeys());
+    List<InteractionSpec> interactions = normalizeInteractions(
+        command.interactions(), widgetNormalization.widgetKeys(), filterNormalization.filterKeys());
+
+    return new Normalized(
+        name,
+        description,
+        activeDatasetId,
+        widgetNormalization.widgets(),
+        widgetNormalization.inlineJson(),
+        filterNormalization.filters(),
+        filterNormalization.defaultValueJson(),
+        interactions);
+  }
+
+  private WidgetNormalization normalizeWidgets(List<WidgetSpec> values) {
+    List<WidgetSpec> source = values == null ? List.of() : values;
+    if (source.size() > MAX_WIDGETS) {
+      throw new IllegalArgumentException("Dashboard 组件不能超过 " + MAX_WIDGETS + " 个");
+    }
     List<WidgetSpec> widgets = new ArrayList<>(source.size());
     List<String> inlineJson = new ArrayList<>(source.size());
     Set<String> widgetKeys = new HashSet<>();
@@ -134,12 +170,93 @@ public class DashboardService {
           value.x(), value.y(), value.w(), value.h(), value.minW(), value.minH()));
       inlineJson.add(json);
     }
-    return new Normalized(
-        name,
-        description,
-        activeDatasetId,
+    return new WidgetNormalization(
         List.copyOf(widgets),
-        Collections.unmodifiableList(new ArrayList<>(inlineJson)));
+        Collections.unmodifiableList(new ArrayList<>(inlineJson)),
+        Set.copyOf(widgetKeys));
+  }
+
+  private FilterNormalization normalizeGlobalFilters(
+      List<GlobalFilterSpec> values,
+      Set<String> widgetKeys) {
+    List<GlobalFilterSpec> source = values == null ? List.of() : values;
+    if (source.size() > MAX_GLOBAL_FILTERS) {
+      throw new IllegalArgumentException("Dashboard 全局筛选器不能超过 " + MAX_GLOBAL_FILTERS + " 个");
+    }
+
+    List<GlobalFilterSpec> filters = new ArrayList<>(source.size());
+    List<String> defaultValueJson = new ArrayList<>(source.size());
+    Set<String> filterKeys = new HashSet<>();
+    int bindingCount = 0;
+
+    for (GlobalFilterSpec value : source) {
+      if (value == null) throw new IllegalArgumentException("Dashboard 全局筛选器不能为空");
+      String filterKey = required(value.filterKey(), "filterKey", 64);
+      if (!filterKeys.add(filterKey)) throw new IllegalArgumentException("filterKey 重复：" + filterKey);
+      String filterName = required(value.name(), "筛选器名称", 200);
+      DashboardGlobalFilterOperator operator = Objects.requireNonNull(value.operator(), "筛选器 operator");
+
+      List<FilterBindingSpec> sourceBindings = value.bindings() == null ? List.of() : value.bindings();
+      List<FilterBindingSpec> bindings = new ArrayList<>(sourceBindings.size());
+      Set<String> boundWidgets = new HashSet<>();
+      for (FilterBindingSpec binding : sourceBindings) {
+        if (binding == null) throw new IllegalArgumentException("筛选器绑定不能为空：" + filterKey);
+        String widgetKey = required(binding.widgetKey(), "筛选器 widgetKey", 64);
+        if (!widgetKeys.contains(widgetKey)) {
+          throw new IllegalArgumentException("筛选器绑定的 Widget 不存在：" + widgetKey);
+        }
+        if (!boundWidgets.add(widgetKey)) {
+          throw new IllegalArgumentException("同一筛选器对单个 Widget 只能绑定一个字段：" + widgetKey);
+        }
+        String fieldId = required(binding.fieldId(), "筛选器 fieldId", 64);
+        bindings.add(new FilterBindingSpec(widgetKey, fieldId));
+        bindingCount++;
+        if (bindingCount > MAX_FILTER_BINDINGS) {
+          throw new IllegalArgumentException("Dashboard 筛选器字段映射不能超过 " + MAX_FILTER_BINDINGS + " 个");
+        }
+      }
+
+      filters.add(new GlobalFilterSpec(
+          filterKey, filterName, operator, value.defaultValue(), List.copyOf(bindings)));
+      defaultValueJson.add(scalarJson(value.defaultValue(), filterKey));
+    }
+
+    return new FilterNormalization(
+        List.copyOf(filters),
+        Collections.unmodifiableList(new ArrayList<>(defaultValueJson)),
+        Set.copyOf(filterKeys));
+  }
+
+  private List<InteractionSpec> normalizeInteractions(
+      List<InteractionSpec> values,
+      Set<String> widgetKeys,
+      Set<String> filterKeys) {
+    List<InteractionSpec> source = values == null ? List.of() : values;
+    if (source.size() > MAX_INTERACTIONS) {
+      throw new IllegalArgumentException("Dashboard 联动规则不能超过 " + MAX_INTERACTIONS + " 个");
+    }
+    List<InteractionSpec> result = new ArrayList<>(source.size());
+    Set<String> interactionKeys = new HashSet<>();
+    for (InteractionSpec value : source) {
+      if (value == null) throw new IllegalArgumentException("Dashboard 联动规则不能为空");
+      String interactionKey = required(value.interactionKey(), "interactionKey", 64);
+      if (!interactionKeys.add(interactionKey)) {
+        throw new IllegalArgumentException("interactionKey 重复：" + interactionKey);
+      }
+      DashboardInteractionEvent event = Objects.requireNonNull(value.event(), "联动 event");
+      String sourceWidgetKey = required(value.sourceWidgetKey(), "联动 sourceWidgetKey", 64);
+      if (!widgetKeys.contains(sourceWidgetKey)) {
+        throw new IllegalArgumentException("联动来源 Widget 不存在：" + sourceWidgetKey);
+      }
+      String sourceFieldId = required(value.sourceFieldId(), "联动 sourceFieldId", 64);
+      String targetFilterKey = required(value.targetFilterKey(), "联动 targetFilterKey", 64);
+      if (!filterKeys.contains(targetFilterKey)) {
+        throw new IllegalArgumentException("联动目标筛选器不存在：" + targetFilterKey);
+      }
+      result.add(new InteractionSpec(
+          interactionKey, event, sourceWidgetKey, sourceFieldId, targetFilterKey));
+    }
+    return List.copyOf(result);
   }
 
   private void validateLayout(WidgetSpec value, String widgetKey) {
@@ -168,6 +285,23 @@ public class DashboardService {
     }
   }
 
+  private String scalarJson(Object value, String filterKey) {
+    if (value == null) return null;
+    JsonNode node = objectMapper.valueToTree(value);
+    if (!node.isValueNode()) {
+      throw new IllegalArgumentException("全局筛选器默认值必须是标量：" + filterKey);
+    }
+    try {
+      String json = objectMapper.writeValueAsString(value);
+      if (json.length() > MAX_DEFAULT_VALUE_JSON) {
+        throw new IllegalArgumentException("全局筛选器默认值过大：" + filterKey);
+      }
+      return json;
+    } catch (JsonProcessingException exception) {
+      throw new IllegalArgumentException("全局筛选器默认值无法序列化：" + filterKey, exception);
+    }
+  }
+
   private String required(String value, String label, int maxLength) {
     if (value == null || value.isBlank()) throw new IllegalArgumentException(label + "不能为空");
     String normalized = value.trim();
@@ -182,7 +316,14 @@ public class DashboardService {
     return normalized;
   }
 
-  public record SaveCommand(String name, String description, Long activeDatasetId, List<WidgetSpec> widgets) {}
+  public record SaveCommand(
+      String name,
+      String description,
+      Long activeDatasetId,
+      List<WidgetSpec> widgets,
+      List<GlobalFilterSpec> globalFilters,
+      List<InteractionSpec> interactions) {
+  }
 
   public record WidgetSpec(
       String widgetKey,
@@ -190,12 +331,48 @@ public class DashboardService {
       String title,
       Object inlineAnalysis,
       int x, int y, int w, int h,
-      Integer minW, Integer minH) {}
+      Integer minW, Integer minH) {
+  }
+
+  public record GlobalFilterSpec(
+      String filterKey,
+      String name,
+      DashboardGlobalFilterOperator operator,
+      Object defaultValue,
+      List<FilterBindingSpec> bindings) {
+  }
+
+  public record FilterBindingSpec(String widgetKey, String fieldId) {
+  }
+
+  public record InteractionSpec(
+      String interactionKey,
+      DashboardInteractionEvent event,
+      String sourceWidgetKey,
+      String sourceFieldId,
+      String targetFilterKey) {
+  }
+
+  private record WidgetNormalization(
+      List<WidgetSpec> widgets,
+      List<String> inlineJson,
+      Set<String> widgetKeys) {
+  }
+
+  private record FilterNormalization(
+      List<GlobalFilterSpec> filters,
+      List<String> defaultValueJson,
+      Set<String> filterKeys) {
+  }
 
   private record Normalized(
       String name,
       String description,
       Long activeDatasetId,
       List<WidgetSpec> widgets,
-      List<String> inlineJson) {}
+      List<String> inlineJson,
+      List<GlobalFilterSpec> globalFilters,
+      List<String> defaultValueJson,
+      List<InteractionSpec> interactions) {
+  }
 }

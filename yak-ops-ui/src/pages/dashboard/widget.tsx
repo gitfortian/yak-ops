@@ -1,15 +1,23 @@
 import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
 import { Empty, Tooltip } from 'antd';
 import { Copy, GripVertical, Link2, Save, Trash2 } from 'lucide-react';
-import type { AnalysisAsset, DashboardWidget, PublishedDataset } from './model';
+import type {
+  AnalysisAsset,
+  AnalysisSelection,
+  DashboardFilter,
+  DashboardWidget,
+  PublishedDataset,
+} from './model';
 
 export function WidgetShell({
   widget,
   analysis,
   dataset,
+  runtimeFilters,
   selected,
   preview,
   onSelect,
+  onDataSelect,
   onDuplicate,
   onDelete,
   onSaveAsAnalysis,
@@ -17,9 +25,11 @@ export function WidgetShell({
   widget: DashboardWidget;
   analysis?: AnalysisAsset;
   dataset?: PublishedDataset;
+  runtimeFilters: DashboardFilter[];
   selected: boolean;
   preview: boolean;
   onSelect: () => void;
+  onDataSelect: (selection: AnalysisSelection) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onSaveAsAnalysis: () => void;
@@ -47,6 +57,7 @@ export function WidgetShell({
           </Tooltip>
         ) : null}
         <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[#344054]">{title}</span>
+        {runtimeFilters.length ? <span className="mr-2 text-[9px] text-[#667085]">筛选 {runtimeFilters.length}</span> : null}
         {dataset ? <span className="mr-2 text-[9px] text-[#b0b7c3]">DV{dataset.currentVersionNo ?? '-'}</span> : null}
         {!preview ? (
           <div className={['flex items-center gap-0.5 transition-opacity', selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'].join(' ')}>
@@ -87,7 +98,12 @@ export function WidgetShell({
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {spec ? (
-          <AnalysisPreview spec={spec} dataset={dataset} />
+          <AnalysisPreview
+            spec={spec}
+            dataset={dataset}
+            runtimeFilters={runtimeFilters}
+            onSelect={onDataSelect}
+          />
         ) : (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Analysis 引用已失效" className="mt-8" />
         )}

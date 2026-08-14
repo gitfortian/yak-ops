@@ -1,9 +1,14 @@
-import type { AnalysisSpec } from '@/components/analysis/model';
+import type {
+  AnalysisSpec,
+  FilterOperator,
+  Scalar,
+} from '@/components/analysis/model';
 
 export type {
   Aggregation,
   AnalysisAsset,
   AnalysisFilter as DashboardFilter,
+  AnalysisSelection,
   AnalysisSort as DashboardSort,
   AnalysisVisualConfig as DashboardWidgetStyle,
   ChartType,
@@ -40,6 +45,29 @@ export interface DashboardWidget {
 
 export type DashboardWidgetEditorModel = DashboardWidget & AnalysisSpec & { title: string };
 
+export interface DashboardGlobalFilterBinding {
+  widgetId: string;
+  field: string;
+}
+
+/** Versioned Dashboard filter definition. Current user-entered values are runtime-only. */
+export interface DashboardGlobalFilter {
+  id: string;
+  name: string;
+  operator: FilterOperator;
+  defaultValue?: Scalar;
+  bindings: DashboardGlobalFilterBinding[];
+}
+
+/** Versioned routing rule: selecting a source dimension writes into a global filter. */
+export interface DashboardInteraction {
+  id: string;
+  event: 'select';
+  sourceWidgetId: string;
+  sourceField: string;
+  targetFilterId: string;
+}
+
 export interface DashboardDocument {
   version: 1;
   id: string;
@@ -47,6 +75,8 @@ export interface DashboardDocument {
   description?: string;
   activeDatasetId: string;
   widgets: DashboardWidget[];
+  globalFilters: DashboardGlobalFilter[];
+  interactions: DashboardInteraction[];
   currentVersionNo?: number;
   currentVersionId?: string;
   updatedAt?: string;
@@ -77,4 +107,6 @@ export interface DashboardServerDetail {
   currentVersion?: DashboardVersionSummary;
   versions: DashboardVersionSummary[];
   widgets: DashboardWidget[];
+  globalFilters: DashboardGlobalFilter[];
+  interactions: DashboardInteraction[];
 }

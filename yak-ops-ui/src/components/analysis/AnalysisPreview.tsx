@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { queryAnalysisDataset } from './dataset-service';
 import type {
   Aggregation,
+  AnalysisFilter,
+  AnalysisSelection,
   AnalysisSpec,
   DatasetField,
   DatasetQueryPayload,
@@ -49,9 +51,10 @@ const filterValue = (field: DatasetField | undefined, value: string): Scalar => 
 export const buildDatasetQueryPayload = (
   spec: AnalysisSpec,
   dataset: PublishedDataset,
+  runtimeFilters: AnalysisFilter[] = [],
 ): DatasetQueryPayload => {
   const operators: Record<
-    AnalysisSpec['filters'][number]['operator'],
+    AnalysisFilter['operator'],
     DatasetQueryPayload['filters'][number]['operator']
   > = {
     eq: 'EQ',
@@ -62,7 +65,7 @@ export const buildDatasetQueryPayload = (
     lt: 'LT',
     lte: 'LTE',
   };
-  const filters = spec.filters
+  const filters = [...spec.filters, ...runtimeFilters]
     .filter((filter) => filter.field && filter.value !== '')
     .map((filter) => {
       const field = getAnalysisField(dataset, filter.field);
@@ -101,14 +104,19 @@ export const canQueryAnalysis = (spec: AnalysisSpec) => {
   return spec.dimensions.length > 0 && spec.metrics.length > 0;
 };
 
-function useAnalysisQuery(spec: AnalysisSpec, dataset?: PublishedDataset) {
+function useAnalysisQuery(
+  spec: AnalysisSpec,
+  dataset?: PublishedDataset,
+  runtimeFilters: AnalysisFilter[] = [],
+) {
   const [result, setResult] = useState<DatasetQueryResult>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const sequence = useRef(0);
+  const runtimeFilterKey = useMemo(() => JSON.stringify(runtimeFilters), [runtimeFilters]);
   const payload = useMemo(
-    () => dataset ? buildDatasetQueryPayload(spec, dataset) : undefined,
-    [dataset, spec],
+    () => dataset ? buildDatasetQueryPayload(spec, dataset, runtimeFilters) : undefined,
+    [dataset, spec, runtimeFilterKey],
   );
   const payloadKey = useMemo(() => JSON.stringify(payload), [payload]);
 
@@ -175,6 +183,25 @@ const numericCell = (
 
 const rowLabel = (result: DatasetQueryResult, row: Scalar[], dimensions: string[]) =>
   dimensions.map((fieldId) => String(cell(result, row, fieldId) ?? '')).join(' / ');
+
+const selectionForRow = (
+  spec: AnalysisSpec,
+  dataset: PublishedDataset,
+  result: DatasetQueryResult,
+  rowIndex: number,
+): AnalysisSelection | undefined => {
+  const fieldId = spec.dimensions[0];
+  const row = result.rows[rowIndex];
+  if (!fieldId || !row) return undefined;
+  const value = cell(result, row, fieldId);
+  if (value === null) return undefined;
+  return {
+    fieldId,
+    value,
+    label: `${getAnalysisField(dataset, fieldId)?.label ?? fieldId}: ${String(value)}`,
+    rowIndex,
+  };
+};
 
 const chartOptionFor = (
   spec: AnalysisSpec,
@@ -254,10 +281,12 @@ function EChartAnalysis({
   spec,
   dataset,
   result,
+  onSelect,
 }: {
   spec: AnalysisSpec;
   dataset: PublishedDataset;
   result: DatasetQueryResult;
+  onSelect?: (selection: AnalysisSelection) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const option = useMemo(() => chartOptionFor(spec, dataset, result), [spec, dataset, result]);
@@ -266,13 +295,19 @@ function EChartAnalysis({
     if (!containerRef.current || !option) return undefined;
     const chart = echarts.init(containerRef.current);
     chart.setOption(option, true);
+    const click = (params: any) => {
+      const selection = selectionForRow(spec, dataset, result, Number(params?.dataIndex));
+      if (selection) onSelect?.(selection);
+    };
+    chart.on('click', click);
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(containerRef.current);
     return () => {
       observer.disconnect();
+      chart.off('click', click);
       chart.dispose();
     };
-  }, [option]);
+  }, [option, onSelect, spec, dataset, result]);
 
   if (!option) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置维度和指标" className="mt-8" />;
@@ -311,10 +346,12 @@ function TableAnalysis({
   spec,
   dataset,
   result,
+  onSelect,
 }: {
   spec: AnalysisSpec;
   dataset: PublishedDataset;
   result: DatasetQueryResult;
+  onSelect?: (selection: AnalysisSelection) => void;
 }) {
   const dimensions = spec.dimensions.map((field) => getAnalysisField(dataset, field)).filter(Boolean);
   return (
@@ -336,7 +373,14 @@ function TableAnalysis({
         </thead>
         <tbody>
           {result.rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="hover:bg-[#fafbfc]">
+            <tr
+              key={rowIndex}
+              className={onSelect && spec.dimensions.length ? 'cursor-pointer hover:bg-[#f7f8fa]' : 'hover:bg-[#fafbfc]'}
+              onClick={() => {
+                const selection = selectionForRow(spec, dataset, result, rowIndex);
+                if (selection) onSelect?.(selection);
+              }}
+            >
               {spec.dimensions.map((field) => (
                 <td key={field} className="border-b border-[#f0f2f5] px-3 py-2 text-[#344054]">
                   {String(cell(result, row, field) ?? '')}
@@ -361,13 +405,17 @@ function TableAnalysis({
 export function AnalysisPreview({
   spec,
   dataset,
+  runtimeFilters = [],
+  onSelect,
   className = 'h-full min-h-0',
 }: {
   spec: AnalysisSpec;
   dataset?: PublishedDataset;
+  runtimeFilters?: AnalysisFilter[];
+  onSelect?: (selection: AnalysisSelection) => void;
   className?: string;
 }) {
-  const { result, loading, error } = useAnalysisQuery(spec, dataset);
+  const { result, loading, error } = useAnalysisQuery(spec, dataset, runtimeFilters);
   if (!dataset) {
     return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Dataset 不存在或已下线" className="mt-8" /></div>;
   }
@@ -386,9 +434,9 @@ export function AnalysisPreview({
     <div className={`relative ${className}`}>
       {loading ? <Spin size="small" className="absolute right-3 top-3 z-20" /> : null}
       {spec.type === 'metric' ? <MetricAnalysis spec={spec} dataset={dataset} result={result} /> : null}
-      {spec.type === 'table' ? <TableAnalysis spec={spec} dataset={dataset} result={result} /> : null}
+      {spec.type === 'table' ? <TableAnalysis spec={spec} dataset={dataset} result={result} onSelect={onSelect} /> : null}
       {spec.type !== 'metric' && spec.type !== 'table'
-        ? <EChartAnalysis spec={spec} dataset={dataset} result={result} />
+        ? <EChartAnalysis spec={spec} dataset={dataset} result={result} onSelect={onSelect} />
         : null}
     </div>
   );
