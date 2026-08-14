@@ -22,6 +22,14 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
 
   @Override
   public WorkflowScheduleTriggerPO claim(WorkflowScheduleTriggerPO trigger) {
+    // Stage 4 历史记录没有原生 dedupeKey 语义；先按旧事实键匹配，避免迁移时数据库时区
+    // 影响 DATETIME -> epoch 的字符串结果。Backfill 必须跳过此兼容查询，才能重补同一逻辑时间。
+    if (trigger.getBackfillId() == null || trigger.getBackfillId().isBlank()) {
+      WorkflowScheduleTriggerPO legacy = selectBySchedulePlan(
+          trigger.getScheduleId(), trigger.getPlannedFireTime());
+      if (legacy != null) return legacy;
+    }
+
     mapper.insertIgnore(trigger);
     WorkflowScheduleTriggerPO stored = selectByDedupeKey(trigger.getDedupeKey());
     if (stored == null) {
