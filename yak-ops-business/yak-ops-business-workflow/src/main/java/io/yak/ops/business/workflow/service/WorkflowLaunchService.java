@@ -147,45 +147,60 @@ public class WorkflowLaunchService {
         WorkflowDefinitionVO::latestExecutionId);
   }
 
-  /** 兼容直接提交 DAG 的底层运行接口，同时纳入统一 Trigger 入口。 */
+  /** 兼容直接提交 DAG 的底层运行接口，同时纳入统一 Trigger 入口并真正激活实例。 */
   public WorkflowInstanceVO runAdHoc(
       WorkflowRunDTO request,
       WorkflowTriggerContext triggerContext) {
     Objects.requireNonNull(request, "workflow run request");
-    return launch(
+    return launchPrepared(
         "AD_HOC",
         request.name(),
         triggerContext,
-        () -> runtimeService.run(request),
-        WorkflowInstanceVO::id);
+        () -> runtimeService.run(request));
   }
 
-  /** 整实例重新运行会创建新的 WorkflowExecution，因此也经过 Launch。 */
+  /** 整实例重新运行会创建并激活新的 WorkflowExecution，因此也经过 Launch。 */
   public WorkflowInstanceVO restart(
       String executionId,
       WorkflowTriggerContext triggerContext) {
     String id = required(executionId, "工作流实例 ID 不能为空");
-    return launch(
+    return launchPrepared(
         "RESTART",
         id,
         triggerContext,
-        () -> runtimeService.restart(id),
-        WorkflowInstanceVO::id);
+        () -> runtimeService.restart(id));
   }
 
-  /** 从指定节点重跑会创建新的 WorkflowExecution，因此也经过 Launch。 */
+  /** 从指定节点重跑会创建并激活新的 WorkflowExecution，因此也经过 Launch。 */
   public WorkflowInstanceVO rerunFromNode(
       String executionId,
       String nodeId,
       WorkflowTriggerContext triggerContext) {
     String safeExecutionId = required(executionId, "工作流实例 ID 不能为空");
     String safeNodeId = required(nodeId, "工作流节点 ID 不能为空");
-    return launch(
+    return launchPrepared(
         "RERUN_FROM_NODE",
         safeExecutionId + "/" + safeNodeId,
         triggerContext,
-        () -> runtimeService.rerunFromNode(safeExecutionId, safeNodeId),
-        WorkflowInstanceVO::id);
+        () -> runtimeService.rerunFromNode(safeExecutionId, safeNodeId));
+  }
+
+  /**
+   * Runtime 的 engine.start 会先生成 RUNNING 快照，但 Yak Ops 仍需 activate 才会 drain NodeDispatch。
+   * 先记录 Trigger，再激活，保证任何对外返回的 RUNNING 实例都已经进入真实执行生命周期。
+   */
+  private WorkflowInstanceVO launchPrepared(
+      String mode,
+      String target,
+      WorkflowTriggerContext triggerContext,
+      Supplier<WorkflowInstanceVO> prepare) {
+    return launch(
+        mode,
+        target,
+        triggerContext,
+        prepare,
+        WorkflowInstanceVO::id,
+        prepared -> runtimeService.activate(prepared.id()));
   }
 
   private <T> T launch(
@@ -194,6 +209,16 @@ public class WorkflowLaunchService {
       WorkflowTriggerContext triggerContext,
       Supplier<T> action,
       Function<T, String> executionIdExtractor) {
+    return launch(mode, target, triggerContext, action, executionIdExtractor, Function.identity());
+  }
+
+  private <T> T launch(
+      String mode,
+      String target,
+      WorkflowTriggerContext triggerContext,
+      Supplier<T> action,
+      Function<T, String> executionIdExtractor,
+      Function<T, T> afterRecord) {
     Objects.requireNonNull(triggerContext, "workflow trigger context");
     log.info(
         "[workflow-launch] start mode={}, target={}, triggerType={}, triggerId={}, scheduleId={}, backfillId={}, plannedFireTime={}",
@@ -205,8 +230,8 @@ public class WorkflowLaunchService {
         triggerContext.backfillId(),
         triggerContext.plannedFireTime());
     try {
-      T result = action.get();
-      String executionId = result == null ? null : executionIdExtractor.apply(result);
+      T prepared = action.get();
+      String executionId = prepared == null ? null : executionIdExtractor.apply(prepared);
       triggerRecorder.record(executionId, triggerContext);
       log.info(
           "[workflow-launch] created mode={}, target={}, triggerType={}, triggerId={}, execution={}",
@@ -215,7 +240,7 @@ public class WorkflowLaunchService {
           triggerContext.triggerType(),
           triggerContext.triggerId(),
           executionId);
-      return result;
+      return prepared == null ? null : afterRecord.apply(prepared);
     } catch (RuntimeException exception) {
       log.warn(
           "[workflow-launch] failed mode={}, target={}, triggerType={}, triggerId={}, message={}",
