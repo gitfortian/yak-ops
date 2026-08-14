@@ -16,6 +16,14 @@ export type WorkflowScheduleTriggerStatus =
   | 'FAILED'
   | 'CANCELED'
   | 'SKIPPED';
+export type WorkflowBackfillStatus =
+  | 'CREATED'
+  | 'RUNNING'
+  | 'SUCCEEDED'
+  | 'PARTIAL_SUCCESS'
+  | 'FAILED'
+  | 'CANCELED';
+export type WorkflowBackfillExecutionStrategy = 'SERIAL_WAIT' | 'PARALLEL';
 
 export interface WorkflowSchedule {
   id: string;
@@ -40,8 +48,10 @@ export interface WorkflowScheduleTrigger {
   id: string;
   scheduleId: string;
   workflowId: string;
+  backfillId?: string;
   triggerId: string;
-  triggerSource: 'CRON' | 'MANUAL' | 'MISFIRE_RECOVERY' | string;
+  triggerSource: 'CRON' | 'MANUAL' | 'MISFIRE_RECOVERY' | 'BACKFILL' | string;
+  businessDate?: string;
   plannedFireTime: string;
   actualFireTime: string;
   executionStrategy: WorkflowScheduleExecutionStrategy;
@@ -53,6 +63,58 @@ export interface WorkflowScheduleTrigger {
   errorMessage?: string;
   launchedAt?: string;
   completedAt?: string;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface WorkflowBackfillPayload {
+  scheduleId: string;
+  name?: string;
+  startBusinessDate: string;
+  endBusinessDate: string;
+  executionStrategy: WorkflowBackfillExecutionStrategy;
+  input: Record<string, unknown>;
+}
+
+export interface WorkflowBackfillPreviewOccurrence {
+  businessDate: string;
+  scheduleInstant: string;
+  scheduleTime: string;
+}
+
+export interface WorkflowBackfillPreview {
+  scheduleId: string;
+  cronExpression: string;
+  timezone: string;
+  startBusinessDate: string;
+  endBusinessDate: string;
+  totalCount: number;
+  truncated: boolean;
+  occurrences: WorkflowBackfillPreviewOccurrence[];
+}
+
+export interface WorkflowBackfill {
+  id: string;
+  workflowId: string;
+  workflowVersionId: string;
+  workflowVersionNo: number;
+  scheduleId: string;
+  scheduleName: string;
+  name: string;
+  status: WorkflowBackfillStatus;
+  startBusinessDate: string;
+  endBusinessDate: string;
+  cronExpression: string;
+  timezone: string;
+  executionStrategy: WorkflowBackfillExecutionStrategy;
+  input: Record<string, unknown>;
+  totalCount: number;
+  waitingCount: number;
+  runningCount: number;
+  succeededCount: number;
+  failedCount: number;
+  canceledCount: number;
+  skippedCount: number;
   createTime: string;
   updateTime: string;
 }
@@ -82,6 +144,7 @@ export const listWorkflowSchedules = async (params?: {
 export const listWorkflowScheduleTriggers = async (params?: {
   scheduleId?: string;
   workflowId?: string;
+  backfillId?: string;
   status?: WorkflowScheduleTriggerStatus;
   limit?: number;
 }) => {
@@ -90,6 +153,49 @@ export const listWorkflowScheduleTriggers = async (params?: {
     { params },
   );
   return response.data || [];
+};
+
+export const previewWorkflowBackfill = async (payload: WorkflowBackfillPayload) => {
+  const response = await request<ApiResponse<WorkflowBackfillPreview>>(
+    '/api/v1/workflows/backfills/preview',
+    { method: 'POST', data: payload },
+  );
+  return response.data;
+};
+
+export const createWorkflowBackfill = async (payload: WorkflowBackfillPayload) => {
+  const response = await request<ApiResponse<WorkflowBackfill>>(
+    '/api/v1/workflows/backfills',
+    { method: 'POST', data: payload },
+  );
+  return response.data;
+};
+
+export const listWorkflowBackfills = async (params?: {
+  workflowId?: string;
+  scheduleId?: string;
+  status?: WorkflowBackfillStatus;
+}) => {
+  const response = await request<ApiResponse<WorkflowBackfill[]>>(
+    '/api/v1/workflows/backfills',
+    { params },
+  );
+  return response.data || [];
+};
+
+export const getWorkflowBackfill = async (id: string) => {
+  const response = await request<ApiResponse<WorkflowBackfill>>(
+    `/api/v1/workflows/backfills/${encodeURIComponent(id)}`,
+  );
+  return response.data;
+};
+
+export const cancelWorkflowBackfill = async (id: string) => {
+  const response = await request<ApiResponse<WorkflowBackfill>>(
+    `/api/v1/workflows/backfills/${encodeURIComponent(id)}/cancel`,
+    { method: 'POST' },
+  );
+  return response.data;
 };
 
 export const createWorkflowSchedule = async (
