@@ -58,7 +58,7 @@ describe('permission-aware navigation', () => {
     ]);
   });
 
-  it('keeps data consumption focused on dashboard and catalog while preserving the legacy chart route', () => {
+  it('keeps data consumption focused on dashboard and catalog while preserving dashboard editor routes', () => {
     const dataConsumption = getMainNavigationGroups([]).find(
       (group) => group.id === 'data-analysis',
     );
@@ -68,6 +68,8 @@ describe('permission-aware navigation', () => {
       'data-analysis-catalog',
     ]);
     expect(getActiveNavigationId('/dashboard', [])).toBe('dashboard');
+    expect(getActiveNavigationId('/dashboard/new', [])).toBe('dashboard');
+    expect(getActiveNavigationId('/dashboard/42', [])).toBe('dashboard');
     expect(getActiveNavigationId('/data-analysis/chart-analysis', [])).toBe('dashboard');
   });
 

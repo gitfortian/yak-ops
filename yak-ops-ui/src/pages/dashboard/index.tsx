@@ -1,231 +1,275 @@
-import { BRAND_CSS_VARIABLES } from '@/styles/brand';
-import { Button } from 'antd';
-import { BarChart3 } from 'lucide-react';
-import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
-import 'react-resizable/css/styles.css';
-import { useMemo } from 'react';
-import { ChartEditor } from './chart-editor';
-import { DashboardGlobalFilterBar } from './global-filter-bar';
-import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
-import { DashboardToolbar } from './toolbar';
-import { useDashboardDesigner } from './use-dashboard';
-import { WidgetShell } from './widget';
+import { history } from '@umijs/max';
+import {
+  Button,
+  Input,
+  Modal,
+  Pagination,
+  Popconfirm,
+  Table,
+  message,
+  type TableColumnsType,
+} from 'antd';
+import { LayoutDashboard, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  deleteDashboard,
+  fetchDashboard,
+  fetchDashboards,
+  saveDashboardVersion,
+  toDashboardDocument,
+} from './dashboard-service';
+import type { DashboardSummary } from './model';
 
-export default function DashboardPage() {
-  const designer = useDashboardDesigner();
-  const { width, containerRef, mounted } = useContainerWidth();
-  const layout = useMemo(() => designer.widgets.map((widget) => ({
-    i: widget.id,
-    x: widget.x,
-    y: widget.y,
-    w: widget.w,
-    h: widget.h,
-    minW: widget.minW,
-    minH: widget.minH,
-  })), [designer.widgets]);
-  const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
-  let canvasMinHeight = 'min-h-[calc(100vh-120px)]';
-  if (designer.preview) {
-    canvasMinHeight = hasGlobalFilters
-      ? 'min-h-[calc(100vh-172px)]'
-      : 'min-h-[calc(100vh-136px)]';
-  } else if (hasGlobalFilters) {
-    canvasMinHeight = 'min-h-[calc(100vh-156px)]';
-  }
+const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 19) : '-';
 
-  const syncLayout = (
-    nextLayout: readonly { i: string; x: number; y: number; w: number; h: number }[],
-  ) => {
-    const nextMap = new Map(nextLayout.map((item) => [item.i, item]));
-    designer.setDashboard((current) => ({
-      ...current,
-      widgets: current.widgets.map((widget) => {
-        const next = nextMap.get(widget.id);
-        return next ? { ...widget, x: next.x, y: next.y, w: next.w, h: next.h } : widget;
-      }),
-    }));
+export default function DashboardListPage() {
+  const [dashboards, setDashboards] = useState<DashboardSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [renameTarget, setRenameTarget] = useState<DashboardSummary>();
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
+
+  const loadDashboards = useCallback(async () => {
+    setLoading(true);
+    try {
+      setDashboards(await fetchDashboards());
+    } catch (error) {
+      setDashboards([]);
+      message.error(error instanceof Error ? error.message : '加载仪表盘失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDashboards();
+  }, [loadDashboards]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword]);
+
+  const filteredDashboards = useMemo(() => {
+    const value = keyword.trim().toLowerCase();
+    if (!value) return dashboards;
+    return dashboards.filter((dashboard) => [dashboard.name, dashboard.description, dashboard.id]
+      .some((field) => String(field || '').toLowerCase().includes(value)));
+  }, [dashboards, keyword]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredDashboards.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredDashboards.slice(start, start + pageSize);
+  }, [currentPage, filteredDashboards, pageSize]);
+
+  const openRename = (dashboard: DashboardSummary) => {
+    setRenameTarget(dashboard);
+    setRenameValue(dashboard.name);
   };
 
-  const addChart = () => designer.addWidget('bar');
+  const renameDashboard = async () => {
+    const name = renameValue.trim();
+    if (!renameTarget || !name) return void message.warning('请输入仪表盘名称');
+    if (name === renameTarget.name) {
+      setRenameTarget(undefined);
+      return;
+    }
+
+    setRenaming(true);
+    try {
+      const detail = await fetchDashboard(renameTarget.id);
+      const document = toDashboardDocument(detail);
+      await saveDashboardVersion(renameTarget.id, { ...document, name });
+      message.success('仪表盘名称已更新');
+      setRenameTarget(undefined);
+      await loadDashboards();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '重命名仪表盘失败');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const removeDashboard = async (dashboard: DashboardSummary) => {
+    try {
+      await deleteDashboard(dashboard.id);
+      message.success('仪表盘已删除');
+      await loadDashboards();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '删除仪表盘失败');
+    }
+  };
+
+  const columns: TableColumnsType<DashboardSummary> = [
+    {
+      title: '仪表盘',
+      dataIndex: 'name',
+      minWidth: 320,
+      render: (_, record) => (
+        <div className="min-w-0 py-0.5">
+          <button
+            type="button"
+            className="max-w-full truncate border-0 bg-transparent p-0 text-left text-[13px] font-medium text-[#161823] hover:underline"
+            onClick={() => history.push(`/dashboard/${record.id}`)}
+          >
+            {record.name}
+          </button>
+          <div className="mt-1 max-w-[520px] truncate text-[11px] text-[#98a2b3]">
+            {record.description || '暂无描述'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '当前版本',
+      dataIndex: 'currentVersionNo',
+      width: 120,
+      render: (value: number) => (
+        <span className="rounded-[3px] bg-[#f5f6f7] px-2 py-0.5 text-[11px] text-[#667085]">
+          {value ? `V${value}` : '未保存'}
+        </span>
+      ),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updateTime',
+      width: 180,
+      render: (value?: string) => <span className="text-[12px] text-[#667085]">{formatTime(value)}</span>,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createTime',
+      width: 180,
+      render: (value?: string) => <span className="text-[12px] text-[#667085]">{formatTime(value)}</span>,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 220,
+      fixed: 'right',
+      render: (_, record) => (
+        <div className="flex items-center gap-1">
+          <Button
+            size="small"
+            type="text"
+            icon={<Pencil size={12} />}
+            onClick={() => history.push(`/dashboard/${record.id}`)}
+          >
+            编辑
+          </Button>
+          <Button size="small" type="text" onClick={() => openRename(record)}>
+            重命名
+          </Button>
+          <Popconfirm
+            title="删除仪表盘"
+            description={`确认删除“${record.name}”？此操作不可恢复。`}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => void removeDashboard(record)}
+          >
+            <Button size="small" type="text" danger icon={<Trash2 size={12} />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div
-      className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f4f6f8]"
-      style={BRAND_CSS_VARIABLES}
-    >
-      <DashboardToolbar
-        name={designer.dashboard.name}
-        dashboardId={designer.dashboard.id}
-        currentVersionNo={designer.dashboard.currentVersionNo}
-        dashboards={designer.dashboardAssets}
-        versions={designer.dashboardVersions}
-        loading={designer.dashboardsLoading}
-        saving={designer.dashboardSaving}
-        preview={designer.preview}
-        canAddChart={Boolean(designer.activeDataset) && !designer.datasetsLoading}
-        onName={(name) => designer.setDashboard((current) => ({ ...current, name }))}
-        onDashboard={(dashboardId) => void designer.openDashboard(dashboardId)}
-        onNew={designer.newDashboard}
-        onAddChart={addChart}
-        onVersion={(versionNo) => void designer.activateVersion(versionNo)}
-        onPreview={() => {
-          designer.setPreview((current) => !current);
-          designer.setSelectedId(undefined);
-        }}
-        onSave={() => void designer.save()}
-      />
-
-      <DashboardGlobalFilterBar
-        filters={designer.dashboard.globalFilters}
-        runtimeValues={designer.runtimeFilterValues}
-        onRuntimeValue={designer.setRuntimeFilterValue}
-        onReset={designer.resetRuntimeFilters}
-      />
-
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <main className="min-w-0 flex-1 overflow-auto">
-          <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-3'}>
-            <div
-              ref={containerRef}
-              className={[
-                'mx-auto min-w-[760px] bg-white',
-                canvasMinHeight,
-                designer.preview
-                  ? 'max-w-[1500px] shadow-[0_1px_5px_rgba(16,24,40,.08)]'
-                  : 'dashboard-grid-canvas border border-[#dfe3e8]',
-              ].join(' ')}
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget) designer.setSelectedId(undefined);
-              }}
-            >
-              {mounted && width > 0 ? (
-                <ReactGridLayout
-                  width={width}
-                  layout={layout}
-                  gridConfig={{
-                    cols: GRID_COLUMNS,
-                    rowHeight: GRID_ROW_HEIGHT,
-                    margin: [8, 8],
-                    containerPadding: [8, 8],
-                  }}
-                  dragConfig={{
-                    enabled: !designer.preview,
-                    handle: '.dashboard-widget__drag-handle',
-                  }}
-                  resizeConfig={{ enabled: !designer.preview }}
-                  onLayoutChange={syncLayout}
-                >
-                  {designer.widgets.map((widget) => {
-                    const analysis = widget.analysisId
-                      ? designer.analyses.find((item) => item.id === widget.analysisId)
-                      : undefined;
-                    const spec = analysis ?? widget.inlineAnalysis;
-                    const dataset = spec
-                      ? designer.datasets.find((item) => item.id === spec.datasetId)
-                      : undefined;
-
-                    return (
-                      <div key={widget.id}>
-                        <WidgetShell
-                          widget={widget}
-                          analysis={analysis}
-                          dataset={dataset}
-                          runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
-                          selected={designer.selectedId === widget.id}
-                          preview={designer.preview}
-                          onSelect={() => {
-                            if (!designer.preview) designer.setSelectedId(widget.id);
-                          }}
-                          onDataSelect={(selection) =>
-                            designer.handleWidgetSelection(widget.id, selection)}
-                          onDuplicate={() => designer.duplicateWidget(widget.id)}
-                          onDelete={() => designer.deleteWidget(widget.id)}
-                        />
-                      </div>
-                    );
-                  })}
-                </ReactGridLayout>
-              ) : null}
-
-              {!designer.widgets.length && !designer.datasetsLoading ? (
-                <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
-                  <div className="max-w-[340px]">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#f5f6f7] text-[#667085]">
-                      <BarChart3 size={18} />
-                    </div>
-                    <div className="mt-3 text-[14px] font-medium text-[#344054]">
-                      {designer.activeDataset ? '从一个图表开始' : '暂无可用数据集'}
-                    </div>
-                    <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-                      {designer.activeDataset
-                        ? '添加图表后，在右侧选择数据集、维度和指标即可完成配置。'
-                        : '请先在数据开发发布中心发布并上线 Dataset。'}
-                    </div>
-                    {designer.activeDataset ? (
-                      <Button
-                        size="small"
-                        type="primary"
-                        className="mt-4"
-                        icon={<BarChart3 size={13} />}
-                        onClick={addChart}
-                      >
-                        添加图表
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+    <div className="min-h-[calc(100vh-48px)] bg-white px-5 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-[16px] font-semibold text-[#161823]">
+            <LayoutDashboard size={17} />
+            仪表盘
           </div>
-        </main>
-
-        {!designer.preview && designer.selectedWidget ? (
-          <ChartEditor
-            widget={designer.selectedWidget}
-            datasets={designer.datasets}
-            analyses={designer.analyses}
-            updateWidget={(patch) =>
-              designer.updateWidget(designer.selectedWidget!.id, patch)}
-            updateInlineAnalysis={(patch) =>
-              designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
-            changeDataset={(datasetId) => {
-              designer.setDashboard((current) => ({ ...current, activeDatasetId: datasetId }));
-              designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId);
-            }}
-            detachAnalysis={() =>
-              designer.detachAnalysis(designer.selectedWidget!.id)}
-            close={() => designer.setSelectedId(undefined)}
-          />
-        ) : null}
+          <div className="mt-1 text-[11px] text-[#98a2b3]">
+            管理数据消费仪表盘，进入画布后完成图表配置与排版。
+          </div>
+        </div>
+        <Button
+          type="primary"
+          size="small"
+          icon={<Plus size={13} />}
+          onClick={() => history.push('/dashboard/new')}
+        >
+          新建仪表盘
+        </Button>
       </div>
 
-      <style>{`
-        .dashboard-grid-canvas {
-          background-color: #fff;
-          background-image:
-            linear-gradient(to right, rgba(15,23,42,.035) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(15,23,42,.035) 1px, transparent 1px);
-          background-size: calc(100% / 24) 36px;
-        }
-        .react-grid-item.react-grid-placeholder {
-          background: var(--yak-brand-color-soft) !important;
-          border: 1px dashed var(--yak-brand-color) !important;
-          opacity: 1 !important;
-        }
-        .react-grid-item > .react-resizable-handle::after {
-          border-color: #98a2b3 !important;
-          border-width: 0 1px 1px 0 !important;
-          height: 6px !important;
-          width: 6px !important;
-        }
-        .chart-editor-more > .ant-collapse-item > .ant-collapse-header {
-          padding: 10px 0 !important;
-        }
-        .chart-editor-more .ant-collapse-content-box {
-          padding: 2px 0 0 !important;
-        }
-      `}</style>
+      <div className="mt-4 flex items-center justify-between gap-3 border-y border-[#edf0f3] py-2.5">
+        <Input
+          allowClear
+          size="small"
+          className="w-[320px]"
+          prefix={<Search size={13} className="text-[#98a2b3]" />}
+          placeholder="搜索仪表盘名称、描述或 ID"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+        <Button
+          size="small"
+          type="text"
+          icon={<RefreshCw size={13} />}
+          loading={loading}
+          onClick={() => void loadDashboards()}
+        >
+          刷新
+        </Button>
+      </div>
+
+      <Table<DashboardSummary>
+        rowKey="id"
+        size="small"
+        pagination={false}
+        loading={loading}
+        dataSource={pageItems}
+        columns={columns}
+        scroll={{ x: 1050 }}
+        className="mt-3"
+        locale={{ emptyText: keyword ? '没有匹配的仪表盘' : '暂无仪表盘，点击右上角新建' }}
+      />
+
+      <div className="mt-3 flex items-center justify-between border-t border-[#edf0f3] pt-3">
+        <span className="text-[11px] text-[#98a2b3]">共 {filteredDashboards.length} 个仪表盘</span>
+        <Pagination
+          size="small"
+          current={currentPage}
+          pageSize={pageSize}
+          total={filteredDashboards.length}
+          showSizeChanger
+          pageSizeOptions={[10, 20, 50]}
+          onChange={(nextPage, nextPageSize) => {
+            setPage(nextPageSize === pageSize ? nextPage : 1);
+            setPageSize(nextPageSize);
+          }}
+        />
+      </div>
+
+      <Modal
+        title="重命名仪表盘"
+        open={Boolean(renameTarget)}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={renaming}
+        onOk={() => void renameDashboard()}
+        onCancel={() => !renaming && setRenameTarget(undefined)}
+      >
+        <Input
+          autoFocus
+          maxLength={128}
+          value={renameValue}
+          placeholder="请输入仪表盘名称"
+          onChange={(event) => setRenameValue(event.target.value)}
+          onPressEnter={() => void renameDashboard()}
+        />
+      </Modal>
     </div>
   );
 }

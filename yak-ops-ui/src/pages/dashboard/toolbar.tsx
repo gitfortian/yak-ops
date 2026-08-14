@@ -1,21 +1,17 @@
 import { history } from '@umijs/max';
-import { Button, Input, Select, Tooltip } from 'antd';
-import { BarChart3, ChevronLeft, Eye, History, Plus, Save, X } from 'lucide-react';
-import type { DashboardSummary, DashboardVersionSummary } from './model';
+import { Button, Input, Select } from 'antd';
+import { BarChart3, ChevronLeft, Eye, History, Save, X } from 'lucide-react';
+import type { DashboardVersionSummary } from './model';
 
 export function DashboardToolbar({
   name,
   dashboardId,
   currentVersionNo,
-  dashboards,
   versions,
-  loading,
   saving,
   preview,
   canAddChart,
   onName,
-  onDashboard,
-  onNew,
   onAddChart,
   onVersion,
   onPreview,
@@ -24,15 +20,11 @@ export function DashboardToolbar({
   name: string;
   dashboardId: string;
   currentVersionNo?: number;
-  dashboards: DashboardSummary[];
   versions: DashboardVersionSummary[];
-  loading: boolean;
   saving: boolean;
   preview: boolean;
   canAddChart: boolean;
   onName: (name: string) => void;
-  onDashboard: (dashboardId: string) => void;
-  onNew: () => void;
   onAddChart: () => void;
   onVersion: (versionNo: number) => void;
   onPreview: () => void;
@@ -48,37 +40,17 @@ export function DashboardToolbar({
           type="text"
           icon={<ChevronLeft size={14} />}
           disabled={preview}
-          onClick={() => history.push('/data-analysis/data-catalog')}
+          onClick={() => history.push('/dashboard')}
         >
-          数据目录
+          仪表盘
         </Button>
-        <span className="h-5 w-px bg-[#e5e7eb]" />
-        <Select
-          size="small"
-          className="w-[190px]"
-          loading={loading}
-          disabled={preview}
-          placeholder="选择仪表盘"
-          value={persisted ? dashboardId : undefined}
-          options={dashboards.map((item) => ({ label: item.name, value: item.id }))}
-          onChange={onDashboard}
-        />
-        <Tooltip title="新建仪表盘">
-          <Button
-            size="small"
-            type="text"
-            icon={<Plus size={13} />}
-            disabled={preview}
-            onClick={onNew}
-          />
-        </Tooltip>
         <span className="h-5 w-px bg-[#e5e7eb]" />
         <Input
           variant="borderless"
           value={name}
           disabled={preview}
           onChange={(event) => onName(event.target.value)}
-          className="w-[220px] px-1 text-[13px] font-semibold text-[#161823]"
+          className="w-[260px] px-1 text-[13px] font-semibold text-[#161823]"
         />
         <span className="rounded-[3px] bg-[#f5f6f7] px-2 py-0.5 text-[10px] text-[#667085]">
           {currentVersionNo ? `V${currentVersionNo}` : '未保存'}

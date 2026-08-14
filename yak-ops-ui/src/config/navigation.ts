@@ -39,6 +39,7 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'home', mode: 'public', path: '/home', title: '首页', component: './home', iconKey: 'home', order: 0 },
   { id: 'data-source', mode: 'one', permission: 'resource:data-source:read', path: '/data-source', title: '数据源管理', component: './data-source', iconKey: 'database', order: 10 },
   { id: 'dashboard', mode: 'public', path: '/dashboard', title: '仪表盘', component: './dashboard', iconKey: 'insight', menuGroup: 'data-analysis', order: 10 },
+  { id: 'dashboard-editor', path: '/dashboard/:id', title: '仪表盘编辑', component: './dashboard/editor', hidden: true, parentId: 'dashboard' },
   { id: 'data-analysis-catalog', mode: 'public', path: '/data-analysis/data-catalog', title: '数据目录', component: './data-analysis/data-catalog', iconKey: 'database', menuGroup: 'data-analysis', order: 20 },
   { id: 'data-analysis-chart', path: '/data-analysis/chart-analysis', title: '图表分析', component: './data-analysis/chart-analysis-redirect', hidden: true, parentId: 'dashboard' },
   { id: 'settings', mode: 'public', path: '/settings', title: '设置', component: './settings', hidden: true, order: 30 },
