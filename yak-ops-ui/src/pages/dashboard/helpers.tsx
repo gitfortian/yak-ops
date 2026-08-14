@@ -11,6 +11,7 @@ import type {
   PublishedDataset,
 } from './model';
 
+/** Legacy key is read only for one-time migration into the server-side Dashboard domain. */
 export const STORAGE_KEY = 'yak-dashboard-designer.v2';
 export const GRID_COLUMNS = 24;
 export const GRID_ROW_HEIGHT = 28;
@@ -56,12 +57,7 @@ const legacyWidgetToCurrent = (value: any): DashboardWidget => {
     metrics: Array.isArray(value.metrics) ? value.metrics : [],
     filters: Array.isArray(value.filters) ? value.filters : [],
     sort: value.sort,
-    style: value.style ?? {
-      showLegend: false,
-      showDataLabels: false,
-      smooth: false,
-      showGrid: false,
-    },
+    style: value.style ?? { showLegend: false, showDataLabels: false, smooth: false, showGrid: false },
     limit: value.limit,
     timeoutSeconds: value.timeoutSeconds,
   };
@@ -85,24 +81,30 @@ export const loadDashboard = (): DashboardDocument => {
     if (!stored) return cloneDashboard(DEFAULT_DASHBOARD);
     const parsed = JSON.parse(stored) as DashboardDocument;
     if (parsed?.version !== 1 || !Array.isArray(parsed.widgets)) return cloneDashboard(DEFAULT_DASHBOARD);
-    return { ...parsed, widgets: parsed.widgets.map(legacyWidgetToCurrent) };
+    return {
+      ...cloneDashboard(DEFAULT_DASHBOARD),
+      ...parsed,
+      id: 'dashboard-new',
+      currentVersionId: undefined,
+      currentVersionNo: undefined,
+      widgets: parsed.widgets.map(legacyWidgetToCurrent),
+    };
   } catch {
     return cloneDashboard(DEFAULT_DASHBOARD);
   }
 };
 
+export const isPersistedDashboard = (value?: string) => Boolean(value && /^\d+$/.test(value));
+
 export const findDataset = (datasets: PublishedDataset[], id?: string) =>
   datasets.find((dataset) => dataset.id === id) ?? datasets[0];
 
 export const defaultBindings = (dataset: PublishedDataset) => ({
-  dimensions: dataset.fields
-    .filter((field) => field.role === 'dimension')
-    .slice(0, 1)
-    .map((field) => field.key),
-  metrics: dataset.fields
-    .filter((field) => field.role === 'metric')
-    .slice(0, 1)
-    .map((field) => ({ field: field.key, aggregation: 'SUM' as Aggregation })),
+  dimensions: dataset.fields.filter((field) => field.role === 'dimension').slice(0, 1).map((field) => field.key),
+  metrics: dataset.fields.filter((field) => field.role === 'metric').slice(0, 1).map((field) => ({
+    field: field.key,
+    aggregation: 'SUM' as Aggregation,
+  })),
 });
 
 export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset): AnalysisSpec => {
@@ -124,45 +126,31 @@ export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset)
   };
 };
 
-export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => {
-  const base: DashboardWidget = {
-    id: `${type}-${Date.now()}-${Math.round(Math.random() * 1000)}`,
-    title: `新增${CHART_META[type].label}`,
-    inlineAnalysis: createInlineAnalysis(type, dataset),
-    x: 0,
-    y,
-    w: type === 'metric' ? 6 : type === 'table' ? 16 : 10,
-    h: type === 'metric' ? 4 : type === 'table' ? 8 : 7,
-    minW: type === 'metric' ? 4 : type === 'table' ? 8 : 6,
-    minH: type === 'metric' ? 3 : type === 'table' ? 6 : 5,
-  };
-  return base;
-};
+export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => ({
+  id: `widget-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+  title: `新增${CHART_META[type].label}`,
+  inlineAnalysis: createInlineAnalysis(type, dataset),
+  x: 0,
+  y,
+  w: type === 'metric' ? 6 : type === 'table' ? 16 : 10,
+  h: type === 'metric' ? 4 : type === 'table' ? 8 : 7,
+  minW: type === 'metric' ? 4 : type === 'table' ? 8 : 6,
+  minH: type === 'metric' ? 3 : type === 'table' ? 6 : 5,
+});
 
 const rebindInlineAnalysis = (spec: AnalysisSpec, dataset: PublishedDataset): AnalysisSpec => {
   const bindings = defaultBindings(dataset);
   const fieldMap = new Map(dataset.fields.map((field) => [field.key, field]));
   const sameDataset = spec.datasetId === dataset.id;
-  const validDimensions = sameDataset
-    ? spec.dimensions.filter((field) => fieldMap.get(field)?.role === 'dimension')
-    : [];
-  const validMetrics = sameDataset
-    ? spec.metrics.filter((metric) => fieldMap.get(metric.field)?.role === 'metric')
-    : [];
-  const dimensions = spec.type === 'metric'
-    ? []
-    : validDimensions.length ? validDimensions : bindings.dimensions;
+  const validDimensions = sameDataset ? spec.dimensions.filter((field) => fieldMap.get(field)?.role === 'dimension') : [];
+  const validMetrics = sameDataset ? spec.metrics.filter((metric) => fieldMap.get(metric.field)?.role === 'metric') : [];
+  const dimensions = spec.type === 'metric' ? [] : validDimensions.length ? validDimensions : bindings.dimensions;
   const metrics = validMetrics.length ? validMetrics : bindings.metrics;
-  const filters = sameDataset
-    ? spec.filters.filter((filter) => fieldMap.has(filter.field))
-    : [];
-  const sort = sameDataset && spec.sort && fieldMap.has(spec.sort.field)
-    ? spec.sort
-    : undefined;
+  const filters = sameDataset ? spec.filters.filter((filter) => fieldMap.has(filter.field)) : [];
+  const sort = sameDataset && spec.sort && fieldMap.has(spec.sort.field) ? spec.sort : undefined;
   return { ...spec, datasetId: dataset.id, dimensions, metrics, filters, sort };
 };
 
-/** Migrates/reconciles temporary inline analyses only. Linked widgets are resolved from Analysis API. */
 export const reconcileDashboard = (
   dashboard: DashboardDocument,
   datasets: PublishedDataset[],
@@ -172,10 +160,10 @@ export const reconcileDashboard = (
   return {
     ...dashboard,
     activeDatasetId: activeDataset.id,
-    widgets: dashboard.widgets.map((widget) => {
-      if (widget.analysisId || !widget.inlineAnalysis) return widget;
-      const widgetDataset = datasets.find((dataset) => dataset.id === widget.inlineAnalysis?.datasetId) ?? activeDataset;
-      return { ...widget, inlineAnalysis: rebindInlineAnalysis(widget.inlineAnalysis, widgetDataset) };
+    widgets: dashboard.widgets.map((item) => {
+      if (item.analysisId || !item.inlineAnalysis) return item;
+      const widgetDataset = datasets.find((dataset) => dataset.id === item.inlineAnalysis?.datasetId) ?? activeDataset;
+      return { ...item, inlineAnalysis: rebindInlineAnalysis(item.inlineAnalysis, widgetDataset) };
     }),
   };
 };

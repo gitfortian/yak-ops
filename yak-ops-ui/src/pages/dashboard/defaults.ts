@@ -1,10 +1,11 @@
 import type { DashboardDocument } from './model';
 
-/** Dashboard V1 shell with no fake dataset IDs. Real Dataset assets are attached after loading. */
+/** Unsaved shell. The first explicit save creates a server-side Dashboard V1. */
 export const DEFAULT_DASHBOARD: DashboardDocument = {
   version: 1,
-  id: 'dashboard-local',
+  id: 'dashboard-new',
   name: '未命名仪表盘',
+  description: '',
   activeDatasetId: '',
   widgets: [],
 };

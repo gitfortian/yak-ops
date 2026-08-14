@@ -38,11 +38,19 @@ export default function DashboardPage() {
     <div className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f4f6f8]" style={BRAND_CSS_VARIABLES}>
       <DashboardToolbar
         name={designer.dashboard.name}
+        dashboardId={designer.dashboard.id}
+        currentVersionNo={designer.dashboard.currentVersionNo}
+        dashboards={designer.dashboardAssets}
+        versions={designer.dashboardVersions}
+        loading={designer.dashboardsLoading}
+        saving={designer.dashboardSaving}
         preview={designer.preview}
         onName={(name) => designer.setDashboard((current) => ({ ...current, name }))}
-        onReset={designer.reset}
+        onDashboard={(dashboardId) => void designer.openDashboard(dashboardId)}
+        onNew={designer.newDashboard}
+        onVersion={(versionNo) => void designer.activateVersion(versionNo)}
         onPreview={() => { designer.setPreview((current) => !current); designer.setSelectedId(undefined); }}
-        onSave={designer.save}
+        onSave={() => void designer.save()}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -113,7 +121,7 @@ export default function DashboardPage() {
               {!designer.widgets.length && !designer.datasetsLoading ? (
                 <div className="flex min-h-[360px] items-center justify-center px-6 text-center text-[12px] text-[#98a2b3]">
                   {designer.activeDataset
-                    ? '从左侧复用 Analysis，或新建图表开始分析'
+                    ? '从左侧复用 Analysis，或新建图表开始分析；点击保存后会生成服务端 DashboardVersion'
                     : '暂无可用 Dataset，请先在数据开发发布中心发布数据集'}
                 </div>
               ) : null}
