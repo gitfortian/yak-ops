@@ -36,7 +36,9 @@ public class WorkflowScheduleTriggerAdmission {
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public AdmissionResult admitNew(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO candidate) {
     WorkflowScheduleTriggerPO trigger = ledger.claim(candidate);
-    if (!"RECEIVED".equals(trigger.getStatus())) {
+    // INSERT IGNORE 后只有 candidate 自己的 id 与落库行一致时才拥有首次准入权。
+    // 即使两个相同 plannedFireTime 并发请求都读到 RECEIVED，第二个也会作为 duplicate 返回。
+    if (!candidate.getId().equals(trigger.getId()) || !"RECEIVED".equals(trigger.getStatus())) {
       return new AdmissionResult(trigger, false, true);
     }
     ledger.lockWorkflow(schedule.getWorkflowId());
