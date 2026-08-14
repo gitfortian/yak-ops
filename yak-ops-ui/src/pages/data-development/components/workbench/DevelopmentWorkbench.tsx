@@ -5,8 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import {
   fetchDevelopmentDatasetContext,
+  previewDevelopmentReleaseDataset,
   publishDevelopmentReleaseDataset,
   type DevelopmentDatasetContext,
+  type DevelopmentDatasetFieldDraft,
+  type PublishDevelopmentDatasetPayload,
 } from '../../dataset-service';
 import { getEditorDefinition } from '../../editors/registry';
 import {
@@ -85,6 +88,9 @@ const DevelopmentWorkbench = ({
   const [datasetLoading, setDatasetLoading] = useState(false);
   const [datasetPublishing, setDatasetPublishing] = useState(false);
   const [datasetModalOpen, setDatasetModalOpen] = useState(false);
+  const [datasetPreviewFields, setDatasetPreviewFields] = useState<DevelopmentDatasetFieldDraft[]>([]);
+  const [datasetPreviewLoading, setDatasetPreviewLoading] = useState(false);
+  const [datasetPreviewError, setDatasetPreviewError] = useState('');
 
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -145,6 +151,8 @@ const DevelopmentWorkbench = ({
       setDatasetContext({});
       setDatasetLoading(false);
       setDatasetModalOpen(false);
+      setDatasetPreviewFields([]);
+      setDatasetPreviewError('');
       return;
     }
 
@@ -294,7 +302,23 @@ const DevelopmentWorkbench = ({
     }
   };
 
-  const publishActiveDataset = async (payload: { name?: string; description?: string }) => {
+  const openDatasetModal = async () => {
+    const release = datasetContext.release;
+    if (!activeNode || activeNode.type !== 'SQL' || !release) return;
+    setDatasetModalOpen(true);
+    setDatasetPreviewFields([]);
+    setDatasetPreviewError('');
+    setDatasetPreviewLoading(true);
+    try {
+      setDatasetPreviewFields(await previewDevelopmentReleaseDataset(release.assetId));
+    } catch (error) {
+      setDatasetPreviewError(error instanceof Error ? error.message : '发现 Dataset 字段失败');
+    } finally {
+      setDatasetPreviewLoading(false);
+    }
+  };
+
+  const publishActiveDataset = async (payload: PublishDevelopmentDatasetPayload) => {
     const release = datasetContext.release;
     if (!activeNode || activeNode.type !== 'SQL' || !release) return;
     const wasPublished = Boolean(datasetContext.datasetState?.published);
@@ -306,6 +330,7 @@ const DevelopmentWorkbench = ({
         datasetState: { published: true, detail },
       }));
       setDatasetModalOpen(false);
+      setDatasetPreviewFields([]);
       setDatasetRefreshKey((current) => current + 1);
       message.success(
         wasPublished
@@ -452,7 +477,7 @@ const DevelopmentWorkbench = ({
         onRun={() => void runActiveTask()}
         onSave={() => void saveActiveDraft()}
         onPublish={() => void publishActiveTask()}
-        onPublishDataset={activeNode.type === 'SQL' ? () => setDatasetModalOpen(true) : undefined}
+        onPublishDataset={activeNode.type === 'SQL' ? () => void openDatasetModal() : undefined}
         datasetState={activeNode.type === 'SQL' ? datasetToolbarState : undefined}
         datasetLoading={activeNode.type === 'SQL' && datasetLoading}
         datasetPublishing={activeNode.type === 'SQL' && datasetPublishing}
@@ -494,6 +519,9 @@ const DevelopmentWorkbench = ({
           nodeName={activeNode.name}
           release={datasetContext.release}
           datasetState={datasetContext.datasetState}
+          previewFields={datasetPreviewFields}
+          previewLoading={datasetPreviewLoading}
+          previewError={datasetPreviewError}
           publishing={datasetPublishing}
           onCancel={() => {
             if (!datasetPublishing) setDatasetModalOpen(false);
