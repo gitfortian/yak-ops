@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 基于业务表中持久化 nextFireTime 的启动期 Misfire 恢复。
@@ -36,7 +35,6 @@ public class WorkflowScheduleMisfireRecovery {
     coordinator.recoverMisfire(schedule, missedFireTime, recoveredAt);
   }
 
-  @Transactional(transactionManager = "yakBusinessTransactionManager")
   public void recordSkipped(
       WorkflowSchedulePO schedule,
       Instant missedFireTime,
