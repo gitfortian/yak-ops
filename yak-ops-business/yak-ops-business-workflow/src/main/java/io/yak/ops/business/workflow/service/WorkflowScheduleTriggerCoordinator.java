@@ -10,6 +10,7 @@ import io.yak.ops.common.bean.po.workflow.WorkflowBackfillPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.LinkedHashSet;
@@ -170,10 +171,14 @@ public class WorkflowScheduleTriggerCoordinator {
       }
 
       try {
-        WorkflowDefinitionVO launched = isBackfill(trigger)
-            ? launchBackfill(trigger)
-            : launchSchedule(trigger);
-        String executionId = launched.latestExecutionId();
+        String executionId;
+        if (isBackfill(trigger)) {
+          WorkflowInstanceVO launched = launchBackfill(trigger);
+          executionId = launched.id();
+        } else {
+          WorkflowDefinitionVO launched = launchSchedule(trigger);
+          executionId = launched.latestExecutionId();
+        }
         if (executionId == null || executionId.isBlank()) {
           throw new IllegalStateException("工作流启动成功但未返回 WorkflowExecution ID");
         }
@@ -217,7 +222,7 @@ public class WorkflowScheduleTriggerCoordinator {
     return launchService.runScheduledPublished(schedule.getWorkflowId(), context, input);
   }
 
-  private WorkflowDefinitionVO launchBackfill(WorkflowScheduleTriggerPO trigger) {
+  private WorkflowInstanceVO launchBackfill(WorkflowScheduleTriggerPO trigger) {
     if (backfills == null) throw new IllegalStateException("Backfill 查询服务不可用");
     WorkflowBackfillPO backfill = backfills.require(trigger.getBackfillId());
     WorkflowTriggerContext context = WorkflowTriggerContext.backfill(
