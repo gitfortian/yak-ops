@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.yak.ops.business.workflow.dao.WorkflowScheduleDao;
 import io.yak.ops.business.workflow.dao.mapper.WorkflowScheduleMapper;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -47,6 +48,16 @@ public class WorkflowScheduleDaoImpl implements WorkflowScheduleDao {
   @Override
   public int updateSchedule(WorkflowSchedulePO schedule) {
     return mapper.updateById(schedule);
+  }
+
+  @Override
+  public int updateRuntimeState(String id, Instant lastFireTime, Instant nextFireTime) {
+    return mapper.update(
+        null,
+        Wrappers.<WorkflowSchedulePO>lambdaUpdate()
+            .eq(WorkflowSchedulePO::getId, id)
+            .set(WorkflowSchedulePO::getLastFireTime, lastFireTime)
+            .set(WorkflowSchedulePO::getNextFireTime, nextFireTime));
   }
 
   @Override
