@@ -3,6 +3,8 @@ package io.yak.ops.business.dataset;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlColumn;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** Result returned to Dashboard/Chart consumers by the Dataset query runtime. */
@@ -20,7 +22,17 @@ public record DatasetQueryResult(
   public DatasetQueryResult {
     bindings = bindings == null ? List.of() : List.copyOf(bindings);
     columns = columns == null ? List.of() : List.copyOf(columns);
-    rows = rows == null ? List.of() : rows.stream().map(List::copyOf).toList();
+    rows = immutableRows(rows);
+  }
+
+  private static List<List<Object>> immutableRows(List<List<Object>> values) {
+    if (values == null || values.isEmpty()) return List.of();
+    List<List<Object>> copied = new ArrayList<>(values.size());
+    for (List<Object> row : values) {
+      List<Object> cells = row == null ? new ArrayList<>() : new ArrayList<>(row);
+      copied.add(Collections.unmodifiableList(cells));
+    }
+    return Collections.unmodifiableList(copied);
   }
 }
 
