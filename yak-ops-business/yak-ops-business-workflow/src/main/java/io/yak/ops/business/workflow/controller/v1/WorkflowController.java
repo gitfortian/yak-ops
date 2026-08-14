@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
+import io.yak.ops.business.workflow.service.WorkflowExecutionReactivationService;
 import io.yak.ops.business.workflow.service.WorkflowLaunchService;
 import io.yak.ops.business.workflow.service.WorkflowRuntimeService;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
@@ -27,12 +28,15 @@ public class WorkflowController {
 
   private final WorkflowRuntimeService workflowRuntimeService;
   private final WorkflowLaunchService workflowLaunchService;
+  private final WorkflowExecutionReactivationService workflowReactivationService;
 
   public WorkflowController(
       WorkflowRuntimeService workflowRuntimeService,
-      WorkflowLaunchService workflowLaunchService) {
+      WorkflowLaunchService workflowLaunchService,
+      WorkflowExecutionReactivationService workflowReactivationService) {
     this.workflowRuntimeService = workflowRuntimeService;
     this.workflowLaunchService = workflowLaunchService;
+    this.workflowReactivationService = workflowReactivationService;
   }
 
   @Operation(summary = "创建工作流运行实例")
@@ -75,7 +79,7 @@ public class WorkflowController {
   public Result<WorkflowInstanceVO> continueAfterFailure(
       @PathVariable("executionId") String executionId,
       @PathVariable("nodeId") String nodeId) {
-    return Result.success(workflowRuntimeService.continueAfterFailure(executionId, nodeId));
+    return Result.success(workflowReactivationService.continueAfterFailure(executionId, nodeId));
   }
 
   @Operation(summary = "重新执行当前失败节点")
@@ -83,14 +87,14 @@ public class WorkflowController {
   public Result<WorkflowInstanceVO> retryFailedNode(
       @PathVariable("executionId") String executionId,
       @PathVariable("nodeId") String nodeId) {
-    return Result.success(workflowRuntimeService.retryFailedNode(executionId, nodeId));
+    return Result.success(workflowReactivationService.retryFailedNode(executionId, nodeId));
   }
 
   @Operation(summary = "重试实例中的失败节点")
   @PostMapping("/instances/{executionId}/retry-failed")
   public Result<WorkflowInstanceVO> retryFailedNodes(
       @PathVariable("executionId") String executionId) {
-    return Result.success(workflowRuntimeService.retryFailedNodes(executionId));
+    return Result.success(workflowReactivationService.retryFailedNodes(executionId));
   }
 
   @Operation(summary = "重新运行整个工作流")

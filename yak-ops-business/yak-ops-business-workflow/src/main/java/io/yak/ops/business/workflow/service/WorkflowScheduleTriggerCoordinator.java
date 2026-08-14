@@ -16,8 +16,10 @@ import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -112,7 +114,9 @@ public class WorkflowScheduleTriggerCoordinator {
     for (WorkflowScheduleTriggerPO trigger : pending) {
       String executionId = trigger.getWorkflowExecutionId();
       if ((executionId == null || executionId.isBlank())
-          && ("LAUNCHING".equals(trigger.getStatus()) || "RUNNING".equals(trigger.getStatus()))) {
+          && ("LAUNCHING".equals(trigger.getStatus())
+              || "REACTIVATING".equals(trigger.getStatus())
+              || "RUNNING".equals(trigger.getStatus()))) {
         executionId = ledger.selectExecutionIdByTrigger(trigger.getTriggerId());
       }
 
@@ -160,6 +164,57 @@ public class WorkflowScheduleTriggerCoordinator {
   /** WorkflowExecution 终态事务提交后调用，完成 Ledger 并推进 SERIAL_WAIT。 */
   public void completeExecution(String executionId, String executionStatus, Instant endedAt) {
     launchReserved(admission.completeExecution(executionId, executionStatus, endedAt));
+  }
+
+  /**
+   * 对同一个 Execution 做人工 retry/continue：先持久化 REACTIVATING 占位，再调用 Runtime。
+   *
+   * <p>如果该实例没有 Trigger Ledger（例如 AdHoc / 草稿测试），直接执行 Runtime 操作；如果它原本就是
+   * 非终态，也不需要重新占位。对于 SERIAL_WAIT / SERIAL_DISCARD，终态后如果串行槽位已经交给后续
+   * 实例或队列，本次原地恢复会被明确拒绝，不允许悄悄制造并发。</p>
+   */
+  public WorkflowInstanceVO reactivateExecution(
+      String executionId,
+      String operation,
+      Supplier<WorkflowInstanceVO> action) {
+    Objects.requireNonNull(action, "workflow reactivation action");
+    boolean reserved = admission.reserveReactivation(executionId, operation);
+    if (!reserved) return action.get();
+
+    log.info(
+        "[workflow-schedule-ledger] reactivation reserved execution={}, operation={}",
+        executionId,
+        operation);
+    try {
+      WorkflowInstanceVO result = action.get();
+      advanceAfterReactivation(admission.finishReactivation(executionId), executionId, operation);
+      return result;
+    } catch (RuntimeException exception) {
+      AdmissionResult next = admission.failReactivation(executionId, exception);
+      try {
+        advanceAfterReactivation(next, executionId, operation);
+      } catch (RuntimeException queueFailure) {
+        exception.addSuppressed(queueFailure);
+      }
+      throw exception;
+    }
+  }
+
+  private void advanceAfterReactivation(
+      AdmissionResult result,
+      String executionId,
+      String operation) {
+    if (result == null || !result.launchNow()) return;
+    try {
+      launchReserved(result);
+    } catch (RuntimeException exception) {
+      // 人工恢复本身已经完成；后续 SERIAL_WAIT 启动失败会由其 Ledger 记录，不反向污染本次 API 结果。
+      log.warn(
+          "[workflow-schedule-ledger] post-reactivation queue advance failed execution={}, operation={}, message={}",
+          executionId,
+          operation,
+          exception.getMessage());
+    }
   }
 
   private String launchReserved(AdmissionResult initial) {

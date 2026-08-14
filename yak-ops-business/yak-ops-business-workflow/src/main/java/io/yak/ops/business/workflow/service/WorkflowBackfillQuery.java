@@ -50,7 +50,7 @@ public class WorkflowBackfillQuery {
   public WorkflowBackfillVO view(WorkflowBackfillPO value) {
     List<WorkflowScheduleTriggerPO> items = triggers.selectByBackfillId(value.getId());
     int waiting = count(items, "RECEIVED") + count(items, "WAITING");
-    int running = count(items, "LAUNCHING") + count(items, "RUNNING");
+    int running = count(items, "LAUNCHING") + count(items, "REACTIVATING") + count(items, "RUNNING");
     int succeeded = count(items, "SUCCEEDED");
     int failed = count(items, "FAILED");
     int canceled = count(items, "CANCELED");

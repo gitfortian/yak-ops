@@ -1,6 +1,7 @@
 package io.yak.ops.business.workflow.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import io.yak.ops.business.workflow.service.WorkflowScheduleTriggerAdmission.Adm
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,6 +83,40 @@ class WorkflowScheduleTriggerCoordinatorTest {
     verify(launchService).runScheduledPublished(
         eq("workflow-1"), any(WorkflowTriggerContext.class), eq(Map.of()));
     verify(admission).bindLaunch(reserved, "execution-1");
+  }
+
+  @Test
+  void shouldReserveLedgerBeforeInPlaceReactivationAndSettleAfterRuntimeReturns() {
+    WorkflowInstanceVO expected = org.mockito.Mockito.mock(WorkflowInstanceVO.class);
+    when(admission.reserveReactivation("execution-1", "RETRY_FAILED_NODES")).thenReturn(true);
+    when(admission.finishReactivation("execution-1"))
+        .thenReturn(new AdmissionResult(null, false, false));
+
+    WorkflowInstanceVO result = coordinator.reactivateExecution(
+        "execution-1",
+        "RETRY_FAILED_NODES",
+        () -> expected);
+
+    assertThat(result).isSameAs(expected);
+    verify(admission).reserveReactivation("execution-1", "RETRY_FAILED_NODES");
+    verify(admission).finishReactivation("execution-1");
+  }
+
+  @Test
+  void shouldReleaseReactivationReservationWhenRuntimeRejectsRetry() {
+    RuntimeException failure = new IllegalStateException("no retryable nodes");
+    when(admission.reserveReactivation("execution-1", "RETRY_FAILED_NODES")).thenReturn(true);
+    when(admission.failReactivation("execution-1", failure))
+        .thenReturn(new AdmissionResult(null, false, false));
+
+    assertThatThrownBy(() -> coordinator.reactivateExecution(
+        "execution-1",
+        "RETRY_FAILED_NODES",
+        () -> { throw failure; }))
+        .isSameAs(failure);
+
+    verify(admission).failReactivation("execution-1", failure);
+    verify(admission, never()).finishReactivation("execution-1");
   }
 
   private WorkflowSchedulePO schedule() {

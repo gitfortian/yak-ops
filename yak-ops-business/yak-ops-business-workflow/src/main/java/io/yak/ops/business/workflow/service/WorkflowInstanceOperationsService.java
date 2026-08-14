@@ -28,6 +28,7 @@ public class WorkflowInstanceOperationsService {
   private static final int MAX_BATCH_RETRY = 100;
 
   private final WorkflowRuntimeService runtime;
+  private final WorkflowExecutionReactivationService reactivation;
   private final ObjectProvider<WorkflowRuntimePersistence> runtimePersistence;
   private final ObjectProvider<WorkflowDefinitionRepository> definitionRepository;
   private final ObjectProvider<WorkflowScheduleTriggerDao> triggerDao;
@@ -35,11 +36,13 @@ public class WorkflowInstanceOperationsService {
 
   public WorkflowInstanceOperationsService(
       WorkflowRuntimeService runtime,
+      WorkflowExecutionReactivationService reactivation,
       ObjectProvider<WorkflowRuntimePersistence> runtimePersistence,
       ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
       ObjectProvider<WorkflowScheduleTriggerDao> triggerDao,
       ObjectProvider<WorkflowBackfillService> backfillService) {
     this.runtime = runtime;
+    this.reactivation = reactivation;
     this.runtimePersistence = runtimePersistence;
     this.definitionRepository = definitionRepository;
     this.triggerDao = triggerDao;
@@ -119,7 +122,7 @@ public class WorkflowInstanceOperationsService {
     int accepted = 0;
     for (String id : ids) {
       try {
-        WorkflowInstanceVO result = runtime.retryFailedNodes(id);
+        WorkflowInstanceVO result = reactivation.retryFailedNodes(id);
         accepted++;
         items.add(new ItemVO(id, true, result.status(), "已重新调度失败/阻断节点"));
       } catch (RuntimeException exception) {

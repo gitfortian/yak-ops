@@ -11,6 +11,7 @@ export type WorkflowScheduleTriggerStatus =
   | 'RECEIVED'
   | 'WAITING'
   | 'LAUNCHING'
+  | 'REACTIVATING'
   | 'RUNNING'
   | 'SUCCEEDED'
   | 'FAILED'
