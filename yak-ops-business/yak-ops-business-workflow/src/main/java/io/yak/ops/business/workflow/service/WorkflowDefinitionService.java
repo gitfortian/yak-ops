@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
+import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
 import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
 import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
 import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
@@ -53,6 +54,7 @@ public class WorkflowDefinitionService {
   private final WorkflowRuntimeService runtimeService;
   private final WorkflowTaskBindingResolver taskBindingResolver;
   private final WorkflowDefinitionPersistence persistence;
+  private final WorkflowExecutionDao executionDao;
   private final ConcurrentMap<String, DefinitionState> definitions = new ConcurrentHashMap<>();
 
   @Autowired
@@ -62,6 +64,7 @@ public class WorkflowDefinitionService {
       ObjectProvider<TaskCatalogService> taskCatalogService,
       ObjectMapper objectMapper,
       ObjectProvider<WorkflowDefinitionPersistence> persistence,
+      ObjectProvider<WorkflowExecutionDao> executionDao,
       @Value("${yak.database.enabled:true}") boolean databaseEnabled) {
     this(
         runtimeService,
@@ -69,7 +72,8 @@ public class WorkflowDefinitionService {
             taskRegistry,
             taskCatalogService.getIfAvailable(),
             objectMapper),
-        resolvePersistence(persistence, databaseEnabled));
+        resolvePersistence(persistence, databaseEnabled),
+        resolveExecutionDao(executionDao, databaseEnabled));
   }
 
   /** Focused tests and explicit database-disabled development retain the lightweight catalog. */
@@ -79,7 +83,8 @@ public class WorkflowDefinitionService {
     this(
         runtimeService,
         new WorkflowTaskBindingResolver(taskRegistry, null, new ObjectMapper()),
-        NoopWorkflowDefinitionPersistence.INSTANCE);
+        NoopWorkflowDefinitionPersistence.INSTANCE,
+        null);
   }
 
   WorkflowDefinitionService(
@@ -89,7 +94,20 @@ public class WorkflowDefinitionService {
     this(
         runtimeService,
         new WorkflowTaskBindingResolver(taskRegistry, null, new ObjectMapper()),
-        persistence);
+        persistence,
+        null);
+  }
+
+  WorkflowDefinitionService(
+      WorkflowRuntimeService runtimeService,
+      TaskRegistry taskRegistry,
+      WorkflowDefinitionPersistence persistence,
+      WorkflowExecutionDao executionDao) {
+    this(
+        runtimeService,
+        new WorkflowTaskBindingResolver(taskRegistry, null, new ObjectMapper()),
+        persistence,
+        executionDao);
   }
 
   WorkflowDefinitionService(
@@ -100,16 +118,19 @@ public class WorkflowDefinitionService {
     this(
         runtimeService,
         new WorkflowTaskBindingResolver(taskRegistry, taskCatalogService, new ObjectMapper()),
-        persistence);
+        persistence,
+        null);
   }
 
   private WorkflowDefinitionService(
       WorkflowRuntimeService runtimeService,
       WorkflowTaskBindingResolver taskBindingResolver,
-      WorkflowDefinitionPersistence persistence) {
+      WorkflowDefinitionPersistence persistence,
+      WorkflowExecutionDao executionDao) {
     this.runtimeService = runtimeService;
     this.taskBindingResolver = taskBindingResolver;
     this.persistence = persistence;
+    this.executionDao = executionDao;
     restoreCatalog();
   }
 
@@ -122,6 +143,16 @@ public class WorkflowDefinitionService {
     throw new IllegalStateException(
         "Workflow durable persistence bean is missing while yak.database.enabled=true: "
             + "WorkflowDefinitionPersistence");
+  }
+
+  private static WorkflowExecutionDao resolveExecutionDao(
+      ObjectProvider<WorkflowExecutionDao> provider,
+      boolean databaseEnabled) {
+    WorkflowExecutionDao resolved = provider.getIfAvailable();
+    if (resolved != null) return resolved;
+    if (!databaseEnabled) return null;
+    throw new IllegalStateException(
+        "Workflow durable execution DAO is missing while yak.database.enabled=true: WorkflowExecutionDao");
   }
 
   public List<WorkflowDefinitionVO> list(String keyword, String status) {
@@ -370,8 +401,7 @@ public class WorkflowDefinitionService {
   public void delete(String id) {
     DefinitionState state = require(id);
     synchronized (state) {
-      refresh(state);
-      if (isActive(state.latestExecutionStatus)) {
+      if (hasActiveExecution(state)) {
         throw new IllegalStateException("工作流正在运行，不能删除");
       }
       if ("ONLINE".equals(state.status)) {
@@ -408,10 +438,21 @@ public class WorkflowDefinitionService {
   }
 
   private void ensureIdle(DefinitionState state) {
-    refresh(state);
-    if (isActive(state.latestExecutionStatus)) {
+    if (hasActiveExecution(state)) {
       throw new IllegalStateException("工作流已有运行中的执行实例");
     }
+  }
+
+  /**
+   * 生产环境以 durable WorkflowExecution 为并发事实源；latestExecution 只保留最近实例展示语义。
+   * database-disabled 的 focused test/development 才回退到历史 latest 状态判断。
+   */
+  private boolean hasActiveExecution(DefinitionState state) {
+    if (executionDao != null) {
+      return executionDao.countActiveExecutions(state.id) > 0L;
+    }
+    refresh(state);
+    return isActive(state.latestExecutionStatus);
   }
 
   private PreparedDraft prepare(DefinitionState state) {
