@@ -6,12 +6,16 @@ import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,15 +58,55 @@ public class DatasetService {
   public DatasetDetail publish(PublishCommand command) {
     Objects.requireNonNull(command, "command");
     TaskAsset asset = requirePublishableAsset(command.sourceTaskAssetId());
-    String name = normalizeName(command.name(), asset.name());
-    String description = normalizeDescription(command.description());
-    List<FieldSpec> requestedFields = normalizeFields(command.fields());
+    return createDataset(asset, command);
+  }
 
-    long datasetId = repository.insertDataset(name, description);
-    List<FieldSpec> fields = resolveFields(datasetId, asset, requestedFields);
-    long versionId = appendVersion(datasetId, asset, fields, false);
-    repository.updateCurrentVersion(datasetId, versionId);
-    return get(datasetId);
+  /**
+   * Data-development release shortcut.
+   *
+   * <p>The first publish creates a stable Dataset identity. Later SQL TaskRevision publishes append
+   * a new DatasetVersion to that same Dataset. Re-publishing an already-bound TaskRevision is
+   * idempotent after the first Dataset has been committed.
+   */
+  @Transactional("yakBusinessTransactionManager")
+  public DatasetDetail publishFromRelease(PublishCommand command) {
+    Objects.requireNonNull(command, "command");
+    TaskAsset asset = requirePublishableAsset(command.sourceTaskAssetId());
+    Optional<Dataset> existing = repository.findDatasetBySourceTaskAssetId(asset.id());
+    if (existing.isEmpty()) {
+      return createDataset(asset, command);
+    }
+
+    DatasetDetail current = get(existing.get().id());
+    DatasetVersion currentVersion = current.currentVersion();
+    if (currentVersion == null) {
+      List<FieldSpec> fields = resolveFields(existing.get().id(), asset, command.fields());
+      long versionId = appendVersion(existing.get().id(), asset, fields, true);
+      repository.updateCurrentVersion(existing.get().id(), versionId);
+      return get(existing.get().id());
+    }
+    if (currentVersion.sourceTaskAssetId() != asset.id()) {
+      throw new IllegalStateException(
+          "Dataset 来源 TaskAsset 不一致：datasetId=" + existing.get().id()
+              + ", expected=" + currentVersion.sourceTaskAssetId()
+              + ", actual=" + asset.id());
+    }
+    if (currentVersion.sourceTaskRevisionId() == asset.currentRevision().taskRevisionId()) {
+      return current;
+    }
+
+    List<FieldSpec> fields = resolveFields(existing.get().id(), asset, command.fields());
+    long versionId = appendVersion(existing.get().id(), asset, fields, true);
+    repository.updateCurrentVersion(existing.get().id(), versionId);
+    return get(existing.get().id());
+  }
+
+  public List<FieldSpec> previewReleaseFields(long sourceTaskAssetId) {
+    TaskAsset asset = requirePublishableAsset(sourceTaskAssetId);
+    if (schemaDiscoveryService == null) {
+      throw new IllegalStateException("Dataset schema discovery 未启用");
+    }
+    return schemaDiscoveryService.preview(asset);
   }
 
   @Transactional("yakBusinessTransactionManager")
@@ -79,8 +123,7 @@ public class DatasetService {
           "当前 TaskRevision 已经是 Dataset 的当前版本：V" + currentVersion.versionNo());
     }
 
-    List<FieldSpec> normalizedFields = normalizeFields(fields);
-    normalizedFields = resolveFields(datasetId, asset, normalizedFields);
+    List<FieldSpec> normalizedFields = resolveFields(datasetId, asset, fields);
     long versionId = appendVersion(datasetId, asset, normalizedFields, true);
     repository.updateCurrentVersion(datasetId, versionId);
     return get(datasetId);
@@ -105,6 +148,14 @@ public class DatasetService {
       fields = repository.listFields(currentVersion.id());
     }
     return new DatasetDetail(dataset, currentVersion, repository.listVersions(datasetId), fields);
+  }
+
+  public Optional<DatasetDetail> findBySourceTaskAssetId(long sourceTaskAssetId) {
+    if (sourceTaskAssetId <= 0L) {
+      throw new IllegalArgumentException("sourceTaskAssetId 必须大于 0");
+    }
+    return repository.findDatasetBySourceTaskAssetId(sourceTaskAssetId)
+        .map(dataset -> get(dataset.id()));
   }
 
   /**
@@ -150,13 +201,26 @@ public class DatasetService {
     return get(datasetId);
   }
 
+  private DatasetDetail createDataset(TaskAsset asset, PublishCommand command) {
+    String name = normalizeName(command.name(), asset.name());
+    String description = normalizeDescription(command.description());
+
+    long datasetId = repository.insertDataset(name, description);
+    List<FieldSpec> fields = resolveFields(datasetId, asset, command.fields());
+    long versionId = appendVersion(datasetId, asset, fields, false);
+    repository.updateCurrentVersion(datasetId, versionId);
+    return get(datasetId);
+  }
+
   private List<FieldSpec> resolveFields(
       long datasetId,
       TaskAsset asset,
       List<FieldSpec> requestedFields) {
-    if (requestedFields != null && !requestedFields.isEmpty()) return requestedFields;
+    if (requestedFields != null && !requestedFields.isEmpty()) {
+      return normalizeFields(datasetId, requestedFields);
+    }
     if (schemaDiscoveryService == null) return List.of();
-    return normalizeFields(schemaDiscoveryService.discover(datasetId, asset));
+    return normalizeFields(datasetId, schemaDiscoveryService.discover(datasetId, asset));
   }
 
   private long appendVersion(
@@ -216,9 +280,10 @@ public class DatasetService {
     return normalized;
   }
 
-  private List<FieldSpec> normalizeFields(List<FieldSpec> values) {
+  private List<FieldSpec> normalizeFields(long datasetId, List<FieldSpec> values) {
     if (values == null || values.isEmpty()) return List.of();
 
+    Map<String, String> existingFieldIds = existingFieldIds(datasetId);
     List<FieldSpec> normalized = new ArrayList<>(values.size());
     Set<String> physicalNames = new HashSet<>();
     Set<String> fieldIds = new HashSet<>();
@@ -231,7 +296,9 @@ public class DatasetService {
       }
 
       String fieldId = value.fieldId();
-      if (fieldId == null || fieldId.isBlank()) fieldId = UUID.randomUUID().toString();
+      if (fieldId == null || fieldId.isBlank()) {
+        fieldId = existingFieldIds.getOrDefault(physicalKey, stableFieldId(datasetId, physicalKey));
+      }
       fieldId = fieldId.trim();
       if (fieldId.length() > 64) throw new IllegalArgumentException("fieldId 不能超过 64 个字符");
       if (!fieldIds.add(fieldId)) throw new IllegalArgumentException("fieldId 重复：" + fieldId);
@@ -260,6 +327,21 @@ public class DatasetService {
           value.defaultRole() == null ? DatasetFieldRole.DIMENSION : value.defaultRole()));
     }
     return List.copyOf(normalized);
+  }
+
+  private Map<String, String> existingFieldIds(long datasetId) {
+    Map<String, String> result = new HashMap<>();
+    repository.findDataset(datasetId).ifPresent(dataset -> {
+      if (dataset.currentVersionId() == null) return;
+      repository.listFields(dataset.currentVersionId()).forEach(field ->
+          result.put(field.physicalName().toLowerCase(Locale.ROOT), field.fieldId()));
+    });
+    return result;
+  }
+
+  private String stableFieldId(long datasetId, String physicalKey) {
+    return UUID.nameUUIDFromBytes(
+        ("dataset:" + datasetId + ":" + physicalKey).getBytes(StandardCharsets.UTF_8)).toString();
   }
 
   private String schemaSnapshot(List<FieldSpec> fields) {

@@ -44,6 +44,15 @@ final class DatasetSchemaDiscoveryService {
   }
 
   List<DatasetService.FieldSpec> discover(long datasetId, TaskAsset asset) {
+    return toFields(datasetId, discoverColumns(asset));
+  }
+
+  /** Preview uses no persistent fieldId; DatasetService assigns stable ids when the version is saved. */
+  List<DatasetService.FieldSpec> preview(TaskAsset asset) {
+    return toPreviewFields(discoverColumns(asset));
+  }
+
+  private List<DataSourceSqlColumn> discoverColumns(TaskAsset asset) {
     TaskAssetRevision resolved = taskCatalogService.resolveRevision(
         asset.id(), asset.currentRevision().taskRevisionId());
     if (resolved.revision().revisionId() != asset.currentRevision().taskRevisionId()
@@ -70,10 +79,24 @@ final class DatasetSchemaDiscoveryService {
     if (result.columns().isEmpty()) {
       throw new IllegalArgumentException("Dataset 来源查询没有可发现的输出字段");
     }
-    return toFields(datasetId, result.columns());
+    return result.columns();
   }
 
   private List<DatasetService.FieldSpec> toFields(long datasetId, List<DataSourceSqlColumn> columns) {
+    List<DatasetService.FieldSpec> preview = toPreviewFields(columns);
+    return preview.stream()
+        .map(field -> new DatasetService.FieldSpec(
+            stableFieldId(datasetId, field.physicalName()),
+            field.physicalName(),
+            field.displayName(),
+            field.dataType(),
+            field.nullable(),
+            field.description(),
+            field.defaultRole()))
+        .toList();
+  }
+
+  private List<DatasetService.FieldSpec> toPreviewFields(List<DataSourceSqlColumn> columns) {
     List<DatasetService.FieldSpec> fields = new ArrayList<>(columns.size());
     Set<String> names = new HashSet<>();
     for (DataSourceSqlColumn column : columns) {
@@ -95,10 +118,8 @@ final class DatasetSchemaDiscoveryService {
       DatasetFieldDataType dataType = dataType(column.jdbcType());
       DatasetFieldRole role = dataType == DatasetFieldDataType.NUMBER
           ? DatasetFieldRole.MEASURE : DatasetFieldRole.DIMENSION;
-      String fieldId = UUID.nameUUIDFromBytes(
-          ("dataset:" + datasetId + ":" + normalized).getBytes(StandardCharsets.UTF_8)).toString();
       fields.add(new DatasetService.FieldSpec(
-          fieldId,
+          null,
           physicalName,
           physicalName,
           dataType,
@@ -107,6 +128,12 @@ final class DatasetSchemaDiscoveryService {
           role));
     }
     return List.copyOf(fields);
+  }
+
+  private String stableFieldId(long datasetId, String physicalName) {
+    String normalized = physicalName.trim().toLowerCase(Locale.ROOT);
+    return UUID.nameUUIDFromBytes(
+        ("dataset:" + datasetId + ":" + normalized).getBytes(StandardCharsets.UTF_8)).toString();
   }
 
   private DatasetFieldDataType dataType(int jdbcType) {

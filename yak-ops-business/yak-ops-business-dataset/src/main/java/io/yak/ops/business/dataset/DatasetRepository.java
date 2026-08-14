@@ -24,6 +24,8 @@ interface DatasetRepository {
 
   Optional<Dataset> findDataset(long datasetId);
 
+  Optional<Dataset> findDatasetBySourceTaskAssetId(long sourceTaskAssetId);
+
   List<Dataset> listDatasets();
 
   Optional<DatasetVersion> findVersion(long versionId);

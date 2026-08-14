@@ -140,6 +140,22 @@ class JdbcDatasetRepository implements DatasetRepository {
   }
 
   @Override
+  public Optional<Dataset> findDatasetBySourceTaskAssetId(long sourceTaskAssetId) {
+    return jdbcTemplate.query(
+        """
+        SELECT DISTINCT d.id, d.name, d.description, d.status, d.current_version_id,
+               d.create_time, d.update_time
+        FROM yak_dataset d
+        INNER JOIN yak_dataset_version v ON v.dataset_id = d.id
+        WHERE v.source_task_asset_id = ?
+        ORDER BY d.update_time DESC, d.id DESC
+        LIMIT 1
+        """,
+        JdbcDatasetRepository::mapDataset,
+        sourceTaskAssetId).stream().findFirst();
+  }
+
+  @Override
   public List<Dataset> listDatasets() {
     return jdbcTemplate.query(
         DATASET_COLUMNS + " ORDER BY update_time DESC, id DESC",

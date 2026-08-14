@@ -1,5 +1,6 @@
 import { Tooltip, message } from 'antd';
 import {
+  Database,
   LoaderCircle,
   Play,
   Redo2,
@@ -45,11 +46,32 @@ const ToolbarButton = ({ title, onClick, disabled, children }: ToolbarButtonProp
 
 const ToolbarDivider = () => <span className="mx-1 h-4 w-px shrink-0 bg-[#e5e7eb]" />;
 
+const datasetTooltip = (
+  state: DevelopmentEditorToolbarContext['datasetState'],
+  loading?: boolean,
+) => {
+  if (loading) return '正在读取 Dataset 状态';
+  if (!state) return '请先发布 SQL 版本，再发布为 Dataset';
+  if (state.releaseStatus !== 'ONLINE') {
+    return 'SQL 发布任务当前未上线，请先在发布中心上线后再发布 Dataset';
+  }
+  if (!state.datasetId || !state.datasetVersionNo) return `发布 SQL v${state.releaseRevisionNo} 为 Dataset`;
+  if (state.datasetSourceRevisionNo !== state.releaseRevisionNo) {
+    return `更新 Dataset · DV${state.datasetVersionNo} → SQL v${state.releaseRevisionNo}`;
+  }
+  const status = state.datasetStatus === 'OFFLINE' ? ' · 已下线' : '';
+  return `Dataset DV${state.datasetVersionNo} 已同步 SQL v${state.releaseRevisionNo}${status}`;
+};
+
 const SqlToolbar = ({
   node,
   onRun,
   onSave,
   onPublish,
+  onPublishDataset,
+  datasetState,
+  datasetLoading,
+  datasetPublishing,
   running,
   saving,
   publishing,
@@ -59,6 +81,16 @@ const SqlToolbar = ({
       message.info(fallback);
     }
   };
+  const datasetNeedsUpdate = Boolean(
+    datasetState?.datasetId
+      && datasetState.datasetSourceRevisionNo !== datasetState.releaseRevisionNo,
+  );
+  const datasetReleaseUnavailable = Boolean(
+    datasetState && datasetState.releaseStatus !== 'ONLINE',
+  );
+  const datasetStateLabel = datasetState?.datasetVersionNo
+    ? `DV${datasetState.datasetVersionNo}${datasetNeedsUpdate ? ' · 待更新' : datasetState.datasetStatus === 'OFFLINE' ? ' · 已下线' : ''}`
+    : undefined;
 
   return (
     <div className="flex h-full w-full min-w-0 items-center justify-between gap-3">
@@ -73,6 +105,36 @@ const SqlToolbar = ({
         <ToolbarButton title="发布版本" disabled={saving || publishing || running} onClick={onPublish}>
           {publishing ? <LoaderCircle size={15} className="animate-spin" /> : <Rocket size={15} strokeWidth={1.8} />}
         </ToolbarButton>
+        <ToolbarButton
+          title={datasetTooltip(datasetState, datasetLoading)}
+          disabled={!onPublishDataset || !datasetState || datasetReleaseUnavailable || datasetLoading || datasetPublishing || saving || publishing || running}
+          onClick={() => onPublishDataset?.()}
+        >
+          {datasetLoading || datasetPublishing ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Database
+              size={15}
+              strokeWidth={1.8}
+              className={datasetNeedsUpdate ? 'text-[var(--yak-brand-color)]' : undefined}
+            />
+          )}
+        </ToolbarButton>
+        {datasetStateLabel ? (
+          <span
+            className={[
+              'mr-1 text-[10px] font-medium',
+              datasetNeedsUpdate
+                ? 'text-[var(--yak-brand-color)]'
+                : datasetState?.datasetStatus === 'OFFLINE'
+                  ? 'text-[#b54708]'
+                  : 'text-[#667085]',
+            ].join(' ')}
+          >
+            {datasetStateLabel}
+          </span>
+        ) : null}
+        <ToolbarDivider />
         <ToolbarButton title="撤销" disabled={running} onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}>
           <Undo2 size={15} strokeWidth={1.8} />
         </ToolbarButton>

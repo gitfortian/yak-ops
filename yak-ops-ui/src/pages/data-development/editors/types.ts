@@ -14,6 +14,15 @@ export type DevelopmentEditorPanelKey =
   | 'schedule-config'
   | 'versions';
 
+export interface DevelopmentDatasetToolbarState {
+  releaseRevisionNo: number;
+  releaseStatus: 'ONLINE' | 'OFFLINE' | 'DISABLED';
+  datasetId?: string;
+  datasetVersionNo?: number;
+  datasetSourceRevisionNo?: number;
+  datasetStatus?: 'ONLINE' | 'OFFLINE';
+}
+
 export interface DevelopmentEditorContext {
   node: DevelopmentNode;
   directory?: DevelopmentDirectory;
@@ -26,6 +35,10 @@ export interface DevelopmentEditorToolbarContext
   onRun: () => void;
   onSave: () => void;
   onPublish: () => void;
+  onPublishDataset?: () => void;
+  datasetState?: DevelopmentDatasetToolbarState;
+  datasetLoading?: boolean;
+  datasetPublishing?: boolean;
   running: boolean;
   saving: boolean;
   publishing: boolean;
