@@ -76,6 +76,7 @@ public class WorkflowScheduleReconciler {
     Instant now = Instant.now();
     for (WorkflowSchedulePO schedule : schedules) {
       if (!"ONLINE".equals(schedule.getStatus())) continue;
+      Instant missedFireTime = null;
       try {
         var workflow = definitions.get(schedule.getWorkflowId());
         boolean workflowReady = "ONLINE".equals(workflow.status()) && workflow.activeVersionId() != null;
@@ -87,20 +88,12 @@ public class WorkflowScheduleReconciler {
         }
 
         Instant persistedNextFireTime = schedule.getNextFireTime();
-        Instant missedFireTime = persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)
+        missedFireTime = persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)
             ? persistedNextFireTime
             : null;
 
         var snapshot = engine.save(schedule);
         runtimeState.syncSnapshot(schedule, snapshot);
-
-        if (missedFireTime != null) {
-          misfireRecovery.recover(schedule, missedFireTime, now);
-          log.info(
-              "[workflow-schedule] recovered misfire schedule={}, planned={}, policy={}",
-              schedule.getId(), missedFireTime, schedule.getMisfireStrategy());
-        }
-
         log.info(
             "[workflow-schedule] reconciled schedule={}, workflow={}, nextFireTime={}",
             schedule.getId(),
@@ -114,6 +107,24 @@ public class WorkflowScheduleReconciler {
             schedule.getWorkflowId(),
             exception.getMessage(),
             exception);
+        continue;
+      }
+
+      if (missedFireTime != null) {
+        try {
+          misfireRecovery.recover(schedule, missedFireTime, now);
+          log.info(
+              "[workflow-schedule] recovered misfire schedule={}, planned={}, policy={}",
+              schedule.getId(), missedFireTime, schedule.getMisfireStrategy());
+        } catch (RuntimeException exception) {
+          log.error(
+              "[workflow-schedule] misfire recovery failed schedule={}, planned={}, policy={}, message={}",
+              schedule.getId(),
+              missedFireTime,
+              schedule.getMisfireStrategy(),
+              exception.getMessage(),
+              exception);
+        }
       }
     }
 
