@@ -1,4 +1,5 @@
 import { BRAND_THEME } from '@/styles/brand';
+import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
 import {
   Button,
@@ -12,30 +13,44 @@ import {
   Table,
   Tag,
   Tooltip,
+  Tree,
 } from 'antd';
 import {
   BarChart3,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Database,
+  Folder,
   GitBranch,
   History,
-  Layers3,
   RefreshCw,
   Rows3,
   Search,
+  Sigma,
   TableProperties,
 } from 'lucide-react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  fetchCatalogDatasets,
+  fetchCatalogWorkspace,
   offlineCatalogDataset,
   onlineCatalogDataset,
   type CatalogDataset,
   type CatalogDatasetFieldRole,
   type CatalogDatasetSourceType,
   type CatalogDatasetStatus,
+  type CatalogDirectory,
 } from './service';
+
+const DEFAULT_LEFT_WIDTH = 286;
+const MIN_LEFT_WIDTH = 220;
+const MAX_LEFT_WIDTH = 480;
+const LEFT_WIDTH_STORAGE_KEY = 'yak-data-catalog.left-width';
+const ROOT_KEY = 'catalog:root';
+const UNGROUPED_KEY = 'catalog:ungrouped';
 
 const sourceTypeLabel: Record<CatalogDatasetSourceType, string> = {
   QUERY_REVISION: 'SQL 查询',
@@ -46,6 +61,39 @@ const sourceTypeLabel: Record<CatalogDatasetSourceType, string> = {
 const roleLabel: Record<CatalogDatasetFieldRole, string> = {
   DIMENSION: '维度',
   MEASURE: '指标',
+};
+
+const fieldTypeLabel: Record<string, string> = {
+  STRING: '文本',
+  NUMBER: '数值',
+  DATE: '日期',
+  DATETIME: '时间',
+  BOOLEAN: '布尔',
+  UNKNOWN: '未知',
+};
+
+type CatalogTreeNodeKind = 'root' | 'directory' | 'dataset' | 'ungrouped';
+
+interface CatalogTreeNode extends DataNode {
+  key: string;
+  title: string;
+  kind: CatalogTreeNodeKind;
+  datasetId?: string;
+  directoryId?: string;
+  datasetCount?: number;
+  searchText?: string;
+  children?: CatalogTreeNode[];
+}
+
+const clampLeftWidth = (value: number) =>
+  Math.min(MAX_LEFT_WIDTH, Math.max(MIN_LEFT_WIDTH, value));
+
+const initialLeftWidth = () => {
+  if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
+  const stored = Number(window.localStorage.getItem(LEFT_WIDTH_STORAGE_KEY));
+  return Number.isFinite(stored) && stored > 0
+    ? clampLeftWidth(stored)
+    : DEFAULT_LEFT_WIDTH;
 };
 
 const formatTime = (value?: string) => {
@@ -68,32 +116,165 @@ const schemaSummary = (dataset: CatalogDataset) => {
   return { fields: dataset.fields.length, dimensions, metrics };
 };
 
+const directoryAncestors = (
+  directoryId: string | undefined,
+  directoryMap: Map<string, CatalogDirectory>,
+) => {
+  const values: CatalogDirectory[] = [];
+  const visited = new Set<string>();
+  let current = directoryId ? directoryMap.get(directoryId) : undefined;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    values.unshift(current);
+    current = current.parentId ? directoryMap.get(current.parentId) : undefined;
+  }
+  return values;
+};
+
+const buildCatalogTree = (
+  datasets: CatalogDataset[],
+  directories: CatalogDirectory[],
+): CatalogTreeNode[] => {
+  const directoryMap = new Map(directories.map((directory) => [directory.id, directory]));
+  const relevantDirectoryIds = new Set<string>();
+
+  datasets.forEach((dataset) => {
+    directoryAncestors(dataset.directoryId, directoryMap).forEach((directory) => {
+      relevantDirectoryIds.add(directory.id);
+    });
+  });
+
+  const datasetNode = (dataset: CatalogDataset): CatalogTreeNode => ({
+    key: `dataset:${dataset.id}`,
+    title: dataset.name,
+    kind: 'dataset',
+    datasetId: dataset.id,
+    isLeaf: true,
+    searchText: [
+      dataset.name,
+      dataset.description,
+      dataset.sourceTaskName || '',
+      dataset.directoryPath || '',
+      ...dataset.fields.flatMap((field) => [field.displayName, field.physicalName]),
+    ].join(' '),
+  });
+
+  const buildDirectory = (directory: CatalogDirectory): CatalogTreeNode => {
+    const childDirectories = directories
+      .filter((candidate) => candidate.parentId === directory.id && relevantDirectoryIds.has(candidate.id))
+      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+      .map(buildDirectory);
+    const directDatasets = datasets
+      .filter((dataset) => dataset.directoryId === directory.id)
+      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+      .map(datasetNode);
+    const children = [...childDirectories, ...directDatasets];
+    const datasetCount = children.reduce(
+      (total, child) => total + (child.kind === 'dataset' ? 1 : child.datasetCount || 0),
+      0,
+    );
+    return {
+      key: `directory:${directory.id}`,
+      title: directory.name,
+      kind: 'directory',
+      directoryId: directory.id,
+      datasetCount,
+      searchText: `${directory.name} ${directory.path}`,
+      children,
+    };
+  };
+
+  const topDirectories = directories
+    .filter((directory) => !directory.parentId && relevantDirectoryIds.has(directory.id))
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .map(buildDirectory);
+  const rootDatasets = datasets
+    .filter((dataset) => dataset.sourceNodeId && !dataset.directoryId)
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .map(datasetNode);
+  const unmappedDatasets = datasets
+    .filter((dataset) => !dataset.sourceNodeId)
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .map(datasetNode);
+
+  const children: CatalogTreeNode[] = [...topDirectories, ...rootDatasets];
+  if (unmappedDatasets.length) {
+    children.push({
+      key: UNGROUPED_KEY,
+      title: '未分组',
+      kind: 'ungrouped',
+      datasetCount: unmappedDatasets.length,
+      searchText: '未分组',
+      children: unmappedDatasets,
+    });
+  }
+
+  return [{
+    key: ROOT_KEY,
+    title: '全部数据集',
+    kind: 'root',
+    datasetCount: datasets.length,
+    searchText: '全部数据集',
+    children,
+  }];
+};
+
+const filterTree = (nodes: CatalogTreeNode[], keyword: string): CatalogTreeNode[] => {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) return nodes;
+
+  return nodes.flatMap((node) => {
+    const selfMatches = `${node.title} ${node.searchText || ''}`.toLowerCase().includes(normalized);
+    if (selfMatches) return [node];
+    const children = node.children ? filterTree(node.children, normalized) : [];
+    return children.length ? [{ ...node, children }] : [];
+  });
+};
+
+const flattenTree = (nodes: CatalogTreeNode[]) => {
+  const map = new Map<string, CatalogTreeNode>();
+  const visit = (values: CatalogTreeNode[]) => values.forEach((value) => {
+    map.set(String(value.key), value);
+    if (value.children) visit(value.children);
+  });
+  visit(nodes);
+  return map;
+};
+
 const DataCatalogPage = () => {
   const [datasets, setDatasets] = useState<CatalogDataset[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [keyword, setKeyword] = useState('');
+  const [directories, setDirectories] = useState<CatalogDirectory[]>([]);
+  const [selectedKey, setSelectedKey] = useState(ROOT_KEY);
+  const [treeKeyword, setTreeKeyword] = useState('');
+  const [listKeyword, setListKeyword] = useState('');
   const [status, setStatus] = useState<'ALL' | CatalogDatasetStatus>('ALL');
   const [sourceType, setSourceType] = useState<'ALL' | CatalogDatasetSourceType>('ALL');
+  const [detailTab, setDetailTab] = useState<'fields' | 'versions' | 'overview'>('fields');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [statusUpdatingId, setStatusUpdatingId] = useState('');
+  const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const values = await fetchCatalogDatasets();
-      setDatasets(values);
-      setSelectedId((current) => (
-        current && values.some((item) => item.id === current)
-          ? current
-          : values[0]?.id || ''
+      const workspace = await fetchCatalogWorkspace();
+      setDatasets(workspace.datasets);
+      setDirectories(workspace.directories);
+      setSelectedKey((current) => (
+        current.startsWith('dataset:')
+          && !workspace.datasets.some((item) => `dataset:${item.id}` === current)
+          ? ROOT_KEY
+          : current
       ));
     } catch (error) {
       const text = error instanceof Error ? error.message : '加载数据目录失败';
       setLoadError(text);
       setDatasets([]);
-      setSelectedId('');
+      setDirectories([]);
+      setSelectedKey(ROOT_KEY);
     } finally {
       setLoading(false);
     }
@@ -103,30 +284,75 @@ const DataCatalogPage = () => {
     void load();
   }, [load]);
 
-  const filteredData = useMemo(() => {
-    const normalized = keyword.trim().toLowerCase();
-    return datasets.filter((dataset) => {
+  const treeData = useMemo(
+    () => buildCatalogTree(datasets, directories),
+    [datasets, directories],
+  );
+  const visibleTreeData = useMemo(
+    () => filterTree(treeData, treeKeyword),
+    [treeData, treeKeyword],
+  );
+  const treeNodeMap = useMemo(() => flattenTree(treeData), [treeData]);
+  const selectedNode = treeNodeMap.get(selectedKey) ?? treeNodeMap.get(ROOT_KEY);
+  const directoryMap = useMemo(
+    () => new Map(directories.map((directory) => [directory.id, directory])),
+    [directories],
+  );
+  const selectedDataset = selectedNode?.kind === 'dataset'
+    ? datasets.find((dataset) => dataset.id === selectedNode.datasetId)
+    : undefined;
+
+  const scopeDatasets = useMemo(() => {
+    if (!selectedNode || selectedNode.kind === 'root') return datasets;
+    if (selectedNode.kind === 'ungrouped') return datasets.filter((dataset) => !dataset.sourceNodeId);
+    if (selectedNode.kind !== 'directory' || !selectedNode.directoryId) return [];
+
+    const includedDirectoryIds = new Set<string>([selectedNode.directoryId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      directories.forEach((directory) => {
+        if (directory.parentId && includedDirectoryIds.has(directory.parentId)
+          && !includedDirectoryIds.has(directory.id)) {
+          includedDirectoryIds.add(directory.id);
+          changed = true;
+        }
+      });
+    }
+    return datasets.filter((dataset) => (
+      dataset.directoryId ? includedDirectoryIds.has(dataset.directoryId) : false
+    ));
+  }, [datasets, directories, selectedNode]);
+
+  const filteredDatasets = useMemo(() => {
+    const normalized = listKeyword.trim().toLowerCase();
+    return scopeDatasets.filter((dataset) => {
       if (status !== 'ALL' && dataset.status !== status) return false;
       if (sourceType !== 'ALL' && dataset.currentVersion?.sourceType !== sourceType) return false;
       if (!normalized) return true;
       return [
         dataset.name,
         dataset.description,
+        dataset.sourceTaskName || '',
+        dataset.directoryPath || '',
         dataset.currentVersion?.sourceTaskAssetId || '',
-        dataset.currentVersion ? String(dataset.currentVersion.sourceTaskRevisionNo) : '',
         ...dataset.fields.flatMap((field) => [field.displayName, field.physicalName, field.description || '']),
       ].some((value) => value.toLowerCase().includes(normalized));
     });
-  }, [datasets, keyword, sourceType, status]);
+  }, [listKeyword, scopeDatasets, sourceType, status]);
 
-  const selectedDataset = datasets.find((item) => item.id === selectedId)
-    ?? filteredData[0];
-
-  const statusCount = useMemo(() => ({
-    all: datasets.length,
-    online: datasets.filter((item) => item.status === 'ONLINE').length,
-    offline: datasets.filter((item) => item.status === 'OFFLINE').length,
-  }), [datasets]);
+  const breadcrumb = useMemo(() => {
+    if (!selectedNode || selectedNode.kind === 'root') return ['全部数据集'];
+    if (selectedNode.kind === 'ungrouped') return ['全部数据集', '未分组'];
+    if (selectedNode.kind === 'directory' && selectedNode.directoryId) {
+      return ['全部数据集', ...directoryAncestors(selectedNode.directoryId, directoryMap).map((item) => item.name)];
+    }
+    if (selectedDataset) {
+      const directoryPath = directoryAncestors(selectedDataset.directoryId, directoryMap).map((item) => item.name);
+      return ['全部数据集', ...(directoryPath.length ? directoryPath : selectedDataset.sourceNodeId ? [] : ['未分组']), selectedDataset.name];
+    }
+    return ['全部数据集'];
+  }, [directoryMap, selectedDataset, selectedNode]);
 
   const updateDatasetStatus = async (dataset: CatalogDataset) => {
     setStatusUpdatingId(dataset.id);
@@ -146,27 +372,63 @@ const DataCatalogPage = () => {
     }
   };
 
-  const columns: ColumnsType<CatalogDataset> = [
+  const selectDataset = (dataset: CatalogDataset) => {
+    setSelectedKey(`dataset:${dataset.id}`);
+    setDetailTab('fields');
+  };
+
+  const handleResizeStart = useCallback((event: ReactPointerEvent) => {
+    if (leftCollapsed) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = leftWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setLeftWidth(clampLeftWidth(startWidth + moveEvent.clientX - startX));
+    };
+    const finish = (upEvent: PointerEvent) => {
+      const width = clampLeftWidth(startWidth + upEvent.clientX - startX);
+      setLeftWidth(width);
+      window.localStorage.setItem(LEFT_WIDTH_STORAGE_KEY, String(width));
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  }, [leftCollapsed, leftWidth]);
+
+  const columns: ColumnsType<CatalogDataset> = useMemo(() => [
     {
       title: '数据集',
       dataIndex: 'name',
-      width: 300,
+      width: 290,
       render: (_, record) => (
-        <div className="min-w-0 py-1">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#f4f5f7] text-[#5b616e]">
-              <TableProperties size={14} />
-            </div>
+        <div className="flex min-w-0 items-center gap-2 py-1">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] bg-[#f4f5f7] text-[#667085]">
+            <TableProperties size={15} />
+          </div>
+          <div className="min-w-0 flex-1">
             <button
               type="button"
-              className="truncate border-0 bg-transparent p-0 text-left text-[14px] font-medium text-[#161823] hover:underline"
-              onClick={() => setSelectedId(record.id)}
+              className="max-w-full truncate border-0 bg-transparent p-0 text-left text-[13px] font-medium text-[#344054] hover:text-[#161823] hover:underline"
+              onClick={(event) => {
+                event.stopPropagation();
+                selectDataset(record);
+              }}
             >
               {record.name}
             </button>
-          </div>
-          <div className="ml-9 mt-1 truncate text-[12px] text-[#8a8f99]">
-            {record.description || '暂无描述'}
+            <div className="mt-0.5 truncate text-[11px] text-[#98a2b3]">
+              {record.description || record.sourceTaskName || '暂无描述'}
+            </div>
           </div>
         </div>
       ),
@@ -176,31 +438,26 @@ const DataCatalogPage = () => {
       dataIndex: 'status',
       width: 90,
       render: (value: CatalogDatasetStatus) => (
-        <Tag
-          bordered={false}
-          className={value === 'ONLINE'
-            ? 'm-0 bg-[#f1f3f5] text-[#30343b]'
-            : 'm-0 bg-[#f5f5f6] text-[#8a8f99]'}
-        >
+        <Tag bordered={false} className={value === 'ONLINE'
+          ? 'm-0 bg-[#f1f3f5] text-[#344054]'
+          : 'm-0 bg-[#f6f6f7] text-[#98a2b3]'}>
           {value === 'ONLINE' ? '已上线' : '已下线'}
         </Tag>
       ),
     },
     {
       title: '来源',
-      width: 190,
-      render: (_, record) => {
-        const version = record.currentVersion;
-        if (!version) return <span className="text-[12px] text-[#a0a4ac]">尚无当前版本</span>;
-        return (
-          <div>
-            <div className="text-[13px] text-[#30343b]">{sourceTypeLabel[version.sourceType]}</div>
-            <div className="mt-1 text-[12px] text-[#90949c]">
-              TaskAsset #{version.sourceTaskAssetId} · SQL V{version.sourceTaskRevisionNo}
-            </div>
+      width: 210,
+      render: (_, record) => record.currentVersion ? (
+        <div className="min-w-0">
+          <div className="truncate text-[12px] text-[#475467]">
+            {record.sourceTaskName || `TaskAsset #${record.currentVersion.sourceTaskAssetId}`}
           </div>
-        );
-      },
+          <div className="mt-0.5 text-[11px] text-[#98a2b3]">
+            {sourceTypeLabel[record.currentVersion.sourceType]} · SQL V{record.currentVersion.sourceTaskRevisionNo}
+          </div>
+        </div>
+      ) : <span className="text-[11px] text-[#98a2b3]">尚无当前版本</span>,
     },
     {
       title: 'Schema',
@@ -208,50 +465,50 @@ const DataCatalogPage = () => {
       render: (_, record) => {
         const summary = schemaSummary(record);
         return (
-          <div className="space-y-1 text-[12px] text-[#676d78]">
+          <div className="text-[11px] text-[#667085]">
             <div>{summary.fields} 个字段</div>
-            <div>{summary.dimensions} 维度 · {summary.metrics} 指标</div>
+            <div className="mt-0.5 text-[#98a2b3]">{summary.dimensions} 维度 · {summary.metrics} 指标</div>
           </div>
         );
       },
     },
     {
       title: '版本',
-      width: 105,
+      width: 92,
       render: (_, record) => (
         <div>
-          <div className="text-[13px] font-medium text-[#30343b]">
+          <div className="text-[12px] font-medium text-[#344054]">
             {record.currentVersion ? `DV${record.currentVersion.versionNo}` : '-'}
           </div>
-          <div className="mt-1 text-[11px] text-[#92969f]">共 {record.versions.length} 个版本</div>
+          <div className="mt-0.5 text-[10px] text-[#98a2b3]">{record.versions.length} 个版本</div>
         </div>
       ),
     },
     {
       title: '消费',
-      width: 95,
+      width: 105,
       render: (_, record) => (
-        <div className="flex items-center gap-1.5 text-[12px] text-[#4f5661]">
-          <BarChart3 size={13} /> {record.analysisCount} Analysis
+        <div className="flex items-center gap-1 text-[11px] text-[#667085]">
+          <BarChart3 size={12} /> {record.analysisCount} Analysis
         </div>
       ),
     },
     {
       title: '更新时间',
-      width: 155,
+      width: 150,
       render: (_, record) => (
-        <div className="flex items-center gap-1.5 text-[12px] text-[#676d78]">
-          <Clock3 size={12} /> {formatTime(record.updateTime || record.createTime)}
+        <div className="flex items-center gap-1 text-[11px] text-[#667085]">
+          <Clock3 size={11} /> {formatTime(record.updateTime || record.createTime)}
         </div>
       ),
     },
     {
       title: '操作',
       fixed: 'right',
-      width: 180,
+      width: 170,
       render: (_, record) => (
         <div className="flex items-center gap-1">
-          <Tooltip title={record.status === 'ONLINE' ? '使用当前 Dataset 创建图表分析' : 'Dataset 上线后才能创建 Analysis'}>
+          <Tooltip title={record.status === 'ONLINE' ? '使用当前 Dataset 创建分析' : 'Dataset 上线后才能创建 Analysis'}>
             <Button
               type="link"
               size="small"
@@ -267,7 +524,7 @@ const DataCatalogPage = () => {
           <Popconfirm
             title={record.status === 'ONLINE' ? '确认下线这个 Dataset？' : '确认上线这个 Dataset？'}
             description={record.status === 'ONLINE'
-              ? '下线后现有 Analysis 将无法继续查询这个 Dataset。'
+              ? '下线后现有 Analysis 将无法继续查询。'
               : '上线后可继续用于图表分析和仪表盘。'}
             okText="确认"
             cancelText="取消"
@@ -285,301 +542,556 @@ const DataCatalogPage = () => {
         </div>
       ),
     },
-  ];
+  ], [statusUpdatingId]);
 
-  return (
-    <ConfigProvider theme={BRAND_THEME}>
-      <div className="flex h-[calc(100vh-64px)] min-h-[650px] flex-col overflow-hidden bg-white text-[#161823]">
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#e8e9ec] px-5">
-          <div>
-            <h1 className="m-0 text-[20px] font-semibold">数据目录</h1>
-            <div className="mt-0.5 text-[12px] text-[#8a8f99]">发现、理解并消费数据开发发布的 Dataset</div>
+  const renderTreeTitle = (rawNode: DataNode) => {
+    const node = rawNode as CatalogTreeNode;
+    const dataset = node.datasetId
+      ? datasets.find((item) => item.id === node.datasetId)
+      : undefined;
+    const icon = node.kind === 'dataset'
+      ? <TableProperties size={13} className="shrink-0 text-[#667085]" />
+      : node.kind === 'root'
+        ? <Database size={13} className="shrink-0 text-[#667085]" />
+        : <Folder size={13} className="shrink-0 text-[#98a2b3]" />;
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-1.5" title={node.title}>
+        {icon}
+        <span className={[
+          'min-w-0 flex-1 truncate text-[12px]',
+          node.kind === 'dataset' ? 'font-normal text-[#475467]' : 'font-medium text-[#344054]',
+        ].join(' ')}>
+          {node.title}
+        </span>
+        {dataset ? (
+          <span className={[
+            'h-1.5 w-1.5 shrink-0 rounded-full',
+            dataset.status === 'ONLINE' ? 'bg-[#667085]' : 'bg-[#d0d5dd]',
+          ].join(' ')} />
+        ) : typeof node.datasetCount === 'number' ? (
+          <span className="shrink-0 text-[10px] text-[#a0a4ac]">{node.datasetCount}</span>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderBreadcrumb = () => (
+    <div className="flex min-w-0 items-center gap-1 text-[11px] text-[#98a2b3]">
+      {breadcrumb.map((item, index) => (
+        <span key={`${item}-${index}`} className="flex min-w-0 items-center gap-1">
+          {index ? <ChevronRight size={10} className="shrink-0" /> : null}
+          <span className={index === breadcrumb.length - 1 ? 'truncate text-[#667085]' : 'truncate'}>{item}</span>
+        </span>
+      ))}
+    </div>
+  );
+
+  const renderDirectoryView = () => {
+    const title = selectedNode?.kind === 'directory' || selectedNode?.kind === 'ungrouped'
+      ? selectedNode.title
+      : '全部数据集';
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-white">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
+          <div className="min-w-0">
+            {renderBreadcrumb()}
+            <div className="mt-0.5 flex items-center gap-2">
+              <span className="truncate text-[14px] font-semibold text-[#30323b]">{title}</span>
+              <span className="text-[11px] text-[#98a2b3]">{scopeDatasets.length} 个 Dataset</span>
+            </div>
+          </div>
+          <Button
+            size="small"
+            icon={<RefreshCw size={12} className={loading ? 'animate-spin' : undefined} />}
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            刷新
+          </Button>
+        </div>
+
+        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-[#edf0f3] px-4">
+          <div className="text-[11px] text-[#98a2b3]">
+            当前目录包含 <span className="font-medium text-[#475467]">{filteredDatasets.length}</span> 个匹配数据集
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] text-[#8a8f99]">共 {datasets.length} 个 Dataset</span>
+            <Input
+              allowClear
+              size="small"
+              value={listKeyword}
+              prefix={<Search size={12} className="text-[#98a2b3]" />}
+              placeholder="搜索名称、字段、来源"
+              className="w-[260px]"
+              onChange={(event) => setListKeyword(event.target.value)}
+            />
+            <Select
+              size="small"
+              value={status}
+              className="w-[110px]"
+              onChange={setStatus}
+              options={[
+                { label: '全部状态', value: 'ALL' },
+                { label: '已上线', value: 'ONLINE' },
+                { label: '已下线', value: 'OFFLINE' },
+              ]}
+            />
+            <Select
+              size="small"
+              value={sourceType}
+              className="w-[116px]"
+              onChange={setSourceType}
+              options={[
+                { label: '全部来源', value: 'ALL' },
+                { label: 'SQL 查询', value: 'QUERY_REVISION' },
+                { label: '数据表', value: 'TABLE' },
+                { label: '视图', value: 'VIEW' },
+              ]}
+            />
             <Button
-              icon={<RefreshCw size={14} className={loading ? 'animate-spin' : undefined} />}
-              disabled={loading}
-              onClick={() => void load()}
+              size="small"
+              onClick={() => {
+                setListKeyword('');
+                setStatus('ALL');
+                setSourceType('ALL');
+              }}
             >
-              刷新
+              重置
             </Button>
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className="flex w-[210px] shrink-0 flex-col border-r border-[#e8e9ec] bg-[#fbfbfc]">
-            <div className="border-b border-[#eceef1] p-3">
-              <Input
-                allowClear
-                value={keyword}
-                prefix={<Search size={14} className="text-[#a0a4ac]" />}
-                placeholder="搜索 Dataset"
-                onChange={(event) => setKeyword(event.target.value)}
-              />
+        <div className="min-h-0 flex-1 p-3">
+          {loadError ? (
+            <div className="flex h-full items-center justify-center">
+              <Empty description={loadError}>
+                <Button size="small" onClick={() => void load()}>重新加载</Button>
+              </Empty>
             </div>
-            <div className="p-2">
-              <div className="px-2 pb-2 pt-1 text-[12px] font-medium text-[#8a8f99]">生命周期</div>
-              {[
-                { key: 'ALL', label: '全部 Dataset', count: statusCount.all, icon: Layers3 },
-                { key: 'ONLINE', label: '已上线', count: statusCount.online, icon: Database },
-                { key: 'OFFLINE', label: '已下线', count: statusCount.offline, icon: Database },
-              ].map((item) => {
-                const Icon = item.icon;
-                const active = status === item.key;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setStatus(item.key as 'ALL' | CatalogDatasetStatus)}
-                    className={`mb-0.5 flex h-9 w-full items-center rounded-md border-0 px-2.5 text-left text-[13px] transition-colors ${
-                      active ? 'bg-white font-medium text-[#161823] shadow-sm' : 'bg-transparent text-[#5f6570] hover:bg-white'
-                    }`}
-                  >
-                    <Icon size={14} className="mr-2" />
-                    <span className="flex-1">{item.label}</span>
-                    <span className="text-[11px] text-[#a0a4ac]">{item.count}</span>
-                  </button>
-                );
+          ) : (
+            <Table<CatalogDataset>
+              rowKey="id"
+              size="small"
+              bordered
+              loading={loading}
+              columns={columns}
+              dataSource={filteredDatasets}
+              scroll={{ x: 1200, y: 'calc(100vh - 190px)' }}
+              pagination={{
+                pageSize: 12,
+                showSizeChanger: false,
+                showTotal: (total) => `共 ${total} 条`,
+              }}
+              locale={{ emptyText: '当前目录暂无 Dataset' }}
+              onRow={(record) => ({
+                onClick: () => selectDataset(record),
+                style: { cursor: 'pointer' },
               })}
-            </div>
-          </aside>
-
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[#e8e9ec] px-4">
-              <div className="text-[12px] text-[#8a8f99]">
-                找到 <span className="font-medium text-[#30343b]">{filteredData.length}</span> 个 Dataset
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  allowClear
-                  value={keyword}
-                  prefix={<Search size={14} className="text-[#a0a4ac]" />}
-                  placeholder="搜索名称、描述、字段、来源资产"
-                  className="w-[320px]"
-                  onChange={(event) => setKeyword(event.target.value)}
-                />
-                <Select
-                  value={sourceType}
-                  className="w-[132px]"
-                  onChange={setSourceType}
-                  options={[
-                    { label: '全部来源', value: 'ALL' },
-                    { label: 'SQL 查询', value: 'QUERY_REVISION' },
-                    { label: '数据表', value: 'TABLE' },
-                    { label: '视图', value: 'VIEW' },
-                  ]}
-                />
-                <Button
-                  onClick={() => {
-                    setKeyword('');
-                    setStatus('ALL');
-                    setSourceType('ALL');
-                  }}
-                >
-                  重置
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <section className="min-w-0 flex-1 overflow-hidden p-4 pr-3">
-                {loadError ? (
-                  <div className="flex h-full items-center justify-center">
-                    <Empty description={loadError}>
-                      <Button onClick={() => void load()}>重新加载</Button>
-                    </Empty>
-                  </div>
-                ) : (
-                  <Table<CatalogDataset>
-                    rowKey="id"
-                    size="small"
-                    bordered
-                    loading={loading}
-                    columns={columns}
-                    dataSource={filteredData}
-                    scroll={{ x: 1170, y: 'calc(100vh - 226px)' }}
-                    pagination={{
-                      pageSize: 10,
-                      showSizeChanger: false,
-                      showTotal: (total) => `共 ${total} 条`,
-                    }}
-                    locale={{ emptyText: '暂无已发布的 Dataset' }}
-                    onRow={(record) => ({
-                      onClick: () => setSelectedId(record.id),
-                      style: { cursor: 'pointer' },
-                    })}
-                  />
-                )}
-              </section>
-
-              <aside className="w-[320px] shrink-0 overflow-y-auto border-l border-[#e8e9ec] bg-[#fcfcfd]">
-                {loading && !selectedDataset ? (
-                  <div className="flex h-full items-center justify-center"><Spin /></div>
-                ) : selectedDataset ? (
-                  <>
-                    <div className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#59606c]">
-                          <TableProperties size={19} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="truncate text-[15px] font-semibold text-[#161823]">{selectedDataset.name}</div>
-                            <Tag bordered={false} className="m-0 shrink-0 bg-[#f1f3f5] text-[11px] text-[#5f6570]">
-                              {selectedDataset.status === 'ONLINE' ? '已上线' : '已下线'}
-                            </Tag>
-                          </div>
-                          <div className="mt-1 text-[12px] leading-5 text-[#8a8f99]">
-                            {selectedDataset.description || '暂无描述'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        <Tooltip title={selectedDataset.status === 'ONLINE' ? '' : 'Dataset 上线后才能创建 Analysis'}>
-                          <Button
-                            type="primary"
-                            block
-                            icon={<BarChart3 size={14} />}
-                            disabled={selectedDataset.status !== 'ONLINE' || !selectedDataset.currentVersion}
-                            href={selectedDataset.status === 'ONLINE' && selectedDataset.currentVersion
-                              ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(selectedDataset.id)}`
-                              : undefined}
-                          >
-                            创建分析
-                          </Button>
-                        </Tooltip>
-                        <Button icon={<GitBranch size={14} />} href="/data-development/releases">
-                          发布中心
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[#eceef1] p-4">
-                      <div className="mb-3 text-[13px] font-medium text-[#30343b]">数据概况</div>
-                      {(() => {
-                        const summary = schemaSummary(selectedDataset);
-                        return (
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                            <div>
-                              <div className="text-[11px] text-[#9a9fa8]">当前版本</div>
-                              <div className="mt-1 text-[13px] font-medium text-[#30343b]">
-                                {selectedDataset.currentVersion ? `DV${selectedDataset.currentVersion.versionNo}` : '-'}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] text-[#9a9fa8]">历史版本</div>
-                              <div className="mt-1 text-[13px] font-medium text-[#30343b]">{selectedDataset.versions.length}</div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] text-[#9a9fa8]">字段</div>
-                              <div className="mt-1 flex items-center gap-1 text-[13px] font-medium text-[#30343b]">
-                                <Rows3 size={13} /> {summary.fields}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] text-[#9a9fa8]">维度 / 指标</div>
-                              <div className="mt-1 text-[13px] font-medium text-[#30343b]">
-                                {summary.dimensions} / {summary.metrics}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div className="border-t border-[#eceef1] p-4">
-                      <div className="mb-3 text-[13px] font-medium text-[#30343b]">来源</div>
-                      {selectedDataset.currentVersion ? (
-                        <div className="space-y-2 text-[12px]">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[#9a9fa8]">来源类型</span>
-                            <span className="text-[#4f5661]">{sourceTypeLabel[selectedDataset.currentVersion.sourceType]}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[#9a9fa8]">TaskAsset</span>
-                            <span className="text-[#4f5661]">#{selectedDataset.currentVersion.sourceTaskAssetId}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[#9a9fa8]">SQL 版本</span>
-                            <span className="text-[#4f5661]">V{selectedDataset.currentVersion.sourceTaskRevisionNo}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[#9a9fa8]">更新时间</span>
-                            <span className="text-[#4f5661]">{formatTime(selectedDataset.updateTime || selectedDataset.createTime)}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-[12px] text-[#9a9fa8]">尚未建立当前 DatasetVersion</div>
-                      )}
-                    </div>
-
-                    <div className="border-t border-[#eceef1] p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="text-[13px] font-medium text-[#30343b]">字段</span>
-                        <span className="text-[11px] text-[#9a9fa8]">{selectedDataset.fields.length} 个</span>
-                      </div>
-                      <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1">
-                        {selectedDataset.fields.length ? selectedDataset.fields.map((field) => (
-                          <div key={field.fieldId} className="border border-[#eceef1] bg-white px-2.5 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[#4f5661]" title={field.physicalName}>
-                                {field.displayName}
-                              </span>
-                              <Tag bordered={false} className="m-0 bg-[#f5f6f7] text-[10px] text-[#737984]">
-                                {roleLabel[field.defaultRole]}
-                              </Tag>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[#a0a4ac]">
-                              <span className="truncate" title={field.physicalName}>{field.physicalName}</span>
-                              <span>{field.dataType}</span>
-                            </div>
-                          </div>
-                        )) : (
-                          <div className="text-[12px] text-[#9a9fa8]">当前版本没有字段信息</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[#eceef1] p-4">
-                      <div className="mb-3 flex items-center gap-1.5 text-[13px] font-medium text-[#30343b]">
-                        <History size={14} /> 版本历史
-                      </div>
-                      <div className="space-y-2">
-                        {selectedDataset.versions.map((version) => (
-                          <div key={version.id} className="flex items-center justify-between gap-3 text-[12px]">
-                            <div>
-                              <span className="font-medium text-[#4f5661]">DV{version.versionNo}</span>
-                              <span className="ml-2 text-[#9a9fa8]">SQL V{version.sourceTaskRevisionNo}</span>
-                            </div>
-                            <span className="text-[11px] text-[#a0a4ac]">{formatTime(version.createTime)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[#eceef1] p-4">
-                      <div className="mb-3 text-[13px] font-medium text-[#30343b]">消费情况</div>
-                      <div className="flex items-center justify-between border border-[#e7e9ec] bg-white p-3">
-                        <div>
-                          <div className="text-[18px] font-semibold text-[#30343b]">{selectedDataset.analysisCount}</div>
-                          <div className="mt-1 text-[11px] text-[#969ba4]">关联 Analysis</div>
-                        </div>
-                        <BarChart3 size={18} className="text-[#8a8f99]" />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex h-full items-center justify-center px-4">
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Dataset" />
-                  </div>
-                )}
-              </aside>
-            </div>
-          </main>
+            />
+          )}
         </div>
       </div>
+    );
+  };
+
+  const renderDatasetDetail = (dataset: CatalogDataset) => {
+    const summary = schemaSummary(dataset);
+    const detailTabs = [
+      { key: 'fields', label: `字段信息 ${summary.fields}` },
+      { key: 'versions', label: `版本历史 ${dataset.versions.length}` },
+      { key: 'overview', label: '基本信息' },
+    ] as const;
+    const fieldColumns: ColumnsType<CatalogDataset['fields'][number]> = [
+      {
+        title: '字段名称',
+        dataIndex: 'displayName',
+        width: 180,
+        render: (value: string, record) => (
+          <div>
+            <div className="text-[12px] font-medium text-[#344054]">{value}</div>
+            <div className="mt-0.5 text-[10px] text-[#98a2b3]">{record.physicalName}</div>
+          </div>
+        ),
+      },
+      {
+        title: '类型',
+        dataIndex: 'dataType',
+        width: 90,
+        render: (value: string) => <span className="text-[11px] text-[#667085]">{fieldTypeLabel[value] || value}</span>,
+      },
+      {
+        title: '角色',
+        dataIndex: 'defaultRole',
+        width: 90,
+        render: (value: CatalogDatasetFieldRole) => (
+          <span className="inline-flex items-center gap-1 text-[11px] text-[#667085]">
+            {value === 'MEASURE' ? <Sigma size={11} /> : <Rows3 size={11} />}
+            {roleLabel[value]}
+          </span>
+        ),
+      },
+      {
+        title: '可空',
+        dataIndex: 'nullable',
+        width: 70,
+        render: (value: boolean) => <span className="text-[11px] text-[#667085]">{value ? '是' : '否'}</span>,
+      },
+      {
+        title: '描述',
+        dataIndex: 'description',
+        render: (value?: string) => <span className="text-[11px] text-[#667085]">{value || '-'}</span>,
+      },
+    ];
+    const versionColumns: ColumnsType<CatalogDataset['versions'][number]> = [
+      {
+        title: 'Dataset 版本',
+        dataIndex: 'versionNo',
+        width: 120,
+        render: (value: number) => (
+          <span className="text-[12px] font-medium text-[#344054]">DV{value}</span>
+        ),
+      },
+      {
+        title: '来源类型',
+        dataIndex: 'sourceType',
+        width: 120,
+        render: (value: CatalogDatasetSourceType) => <span className="text-[11px] text-[#667085]">{sourceTypeLabel[value]}</span>,
+      },
+      {
+        title: '来源任务',
+        render: (_, record) => (
+          <div>
+            <div className="text-[11px] text-[#475467]">{dataset.sourceTaskName || `TaskAsset #${record.sourceTaskAssetId}`}</div>
+            <div className="mt-0.5 text-[10px] text-[#98a2b3]">SQL V{record.sourceTaskRevisionNo}</div>
+          </div>
+        ),
+      },
+      {
+        title: '发布时间',
+        dataIndex: 'createTime',
+        width: 165,
+        render: (value?: string) => <span className="text-[11px] text-[#667085]">{formatTime(value)}</span>,
+      },
+      {
+        title: '状态',
+        width: 90,
+        render: (_, record) => (
+          record.id === dataset.currentVersionId
+            ? <Tag bordered={false} className="m-0 bg-[#f1f3f5] text-[10px] text-[#475467]">当前版本</Tag>
+            : <span className="text-[10px] text-[#98a2b3]">历史版本</span>
+        ),
+      },
+    ];
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-white">
+        <div className="flex h-10 shrink-0 items-center border-b border-[#edf0f3] px-4">
+          {renderBreadcrumb()}
+        </div>
+        <div className="flex h-[66px] shrink-0 items-center gap-3 border-b border-[#e5e7eb] px-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-[#f4f5f7] text-[#667085]">
+            <TableProperties size={17} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[15px] font-semibold text-[#30323b]">{dataset.name}</span>
+              <Tag bordered={false} className="m-0 bg-[#f1f3f5] text-[10px] text-[#667085]">
+                {dataset.status === 'ONLINE' ? '已上线' : '已下线'}
+              </Tag>
+              {dataset.currentVersion ? (
+                <span className="text-[10px] text-[#98a2b3]">DV{dataset.currentVersion.versionNo}</span>
+              ) : null}
+            </div>
+            <div className="mt-1 truncate text-[11px] text-[#98a2b3]">
+              {dataset.description || dataset.sourceTaskName || '暂无描述'}
+            </div>
+          </div>
+          <Button size="small" href="/data-development/releases" icon={<GitBranch size={12} />}>发布中心</Button>
+          <Popconfirm
+            title={dataset.status === 'ONLINE' ? '确认下线这个 Dataset？' : '确认上线这个 Dataset？'}
+            description={dataset.status === 'ONLINE'
+              ? '下线后现有 Analysis 将无法继续查询。'
+              : '上线后可继续用于图表分析和仪表盘。'}
+            okText="确认"
+            cancelText="取消"
+            onConfirm={() => void updateDatasetStatus(dataset)}
+          >
+            <Button size="small" loading={statusUpdatingId === dataset.id}>
+              {dataset.status === 'ONLINE' ? '下线' : '上线'}
+            </Button>
+          </Popconfirm>
+          <Button
+            size="small"
+            type="primary"
+            icon={<BarChart3 size={12} />}
+            disabled={dataset.status !== 'ONLINE' || !dataset.currentVersion}
+            href={dataset.status === 'ONLINE' && dataset.currentVersion
+              ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(dataset.id)}`
+              : undefined}
+          >
+            创建分析
+          </Button>
+        </div>
+
+        <div className="flex h-9 shrink-0 items-end border-b border-[#e5e7eb] px-4">
+          {detailTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setDetailTab(tab.key)}
+              className={[
+                'relative h-9 border-0 bg-transparent px-3 text-[11px]',
+                detailTab === tab.key ? 'font-medium text-[#30323b]' : 'text-[#7b808a] hover:text-[#475467]',
+              ].join(' ')}
+            >
+              {tab.label}
+              {detailTab === tab.key ? (
+                <span className="absolute inset-x-3 bottom-0 h-[2px] bg-[#30323b]" />
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <main className="min-w-0 flex-1 overflow-auto p-3">
+            {detailTab === 'fields' ? (
+              <Table
+                rowKey="fieldId"
+                size="small"
+                bordered
+                pagination={false}
+                columns={fieldColumns}
+                dataSource={dataset.fields}
+                scroll={{ x: 760, y: 'calc(100vh - 240px)' }}
+                locale={{ emptyText: '当前 Dataset 暂无字段' }}
+              />
+            ) : detailTab === 'versions' ? (
+              <Table
+                rowKey="id"
+                size="small"
+                bordered
+                pagination={false}
+                columns={versionColumns}
+                dataSource={[...dataset.versions].sort((left, right) => right.versionNo - left.versionNo)}
+                scroll={{ x: 760, y: 'calc(100vh - 240px)' }}
+                locale={{ emptyText: '暂无 DatasetVersion' }}
+              />
+            ) : (
+              <div className="mx-auto max-w-[980px] p-2">
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: '字段', value: summary.fields, icon: Rows3 },
+                    { label: '维度', value: summary.dimensions, icon: Rows3 },
+                    { label: '指标', value: summary.metrics, icon: Sigma },
+                    { label: 'Analysis', value: dataset.analysisCount, icon: BarChart3 },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div key={item.label} className="border border-[#e5e7eb] bg-white p-3">
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#98a2b3]"><Icon size={11} />{item.label}</div>
+                        <div className="mt-2 text-[20px] font-semibold text-[#344054]">{item.value}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 border border-[#e5e7eb] p-4">
+                  <div className="text-[12px] font-medium text-[#344054]">Dataset 描述</div>
+                  <div className="mt-2 text-[11px] leading-5 text-[#667085]">{dataset.description || '暂无描述'}</div>
+                </div>
+              </div>
+            )}
+          </main>
+
+          <aside className="w-[248px] shrink-0 overflow-y-auto border-l border-[#e5e7eb] bg-[#fcfcfd] p-4">
+            <div className="text-[12px] font-medium text-[#344054]">Dataset 信息</div>
+            <div className="mt-4 space-y-4 text-[11px]">
+              <div>
+                <div className="text-[#98a2b3]">状态</div>
+                <div className="mt-1 text-[#475467]">{dataset.status === 'ONLINE' ? '已上线' : '已下线'}</div>
+              </div>
+              <div>
+                <div className="text-[#98a2b3]">所属目录</div>
+                <div className="mt-1 break-all text-[#475467]">{dataset.directoryPath || (dataset.sourceNodeId ? '根目录' : '未分组')}</div>
+              </div>
+              <div>
+                <div className="text-[#98a2b3]">来源任务</div>
+                <div className="mt-1 break-all text-[#475467]">{dataset.sourceTaskName || '-'}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[#98a2b3]">TaskAsset</div>
+                  <div className="mt-1 text-[#475467]">{dataset.currentVersion ? `#${dataset.currentVersion.sourceTaskAssetId}` : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-[#98a2b3]">SQL 版本</div>
+                  <div className="mt-1 text-[#475467]">{dataset.currentVersion ? `V${dataset.currentVersion.sourceTaskRevisionNo}` : '-'}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[#98a2b3]">当前版本</div>
+                  <div className="mt-1 text-[#475467]">{dataset.currentVersion ? `DV${dataset.currentVersion.versionNo}` : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-[#98a2b3]">版本数</div>
+                  <div className="mt-1 text-[#475467]">{dataset.versions.length}</div>
+                </div>
+              </div>
+              <div>
+                <div className="text-[#98a2b3]">更新时间</div>
+                <div className="mt-1 text-[#475467]">{formatTime(dataset.updateTime || dataset.createTime)}</div>
+              </div>
+              <div>
+                <div className="text-[#98a2b3]">创建时间</div>
+                <div className="mt-1 text-[#475467]">{formatTime(dataset.createTime)}</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <ConfigProvider theme={BRAND_THEME}>
+      <div className="flex h-[calc(100vh-48px)] min-h-[620px] overflow-hidden bg-white text-[#161823]">
+        <aside
+          className="relative shrink-0 overflow-hidden bg-white transition-[width] duration-200 ease-out"
+          style={{ width: leftCollapsed ? 0 : leftWidth }}
+        >
+          <div className="flex h-full flex-col overflow-hidden" style={{ width: leftWidth }}>
+            <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-[#f7f7f8] px-3">
+              <div className="flex items-center gap-2">
+                <Database size={14} className="text-[#667085]" />
+                <span className="text-[13px] font-semibold text-[#30323b]">数据目录</span>
+              </div>
+              <span className="text-[10px] text-[#98a2b3]">{datasets.length}</span>
+            </div>
+            <div className="flex h-10 shrink-0 items-center border-b border-[#edf0f3] px-2.5">
+              <Input
+                allowClear
+                size="small"
+                variant="filled"
+                value={treeKeyword}
+                prefix={<Search size={12} className="text-[#98a2b3]" />}
+                placeholder="搜索目录 / Dataset"
+                onChange={(event) => setTreeKeyword(event.target.value)}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+              <Spin spinning={loading} wrapperClassName="block min-h-full">
+                {visibleTreeData.length ? (
+                  <Tree
+                    blockNode
+                    defaultExpandAll
+                    autoExpandParent={Boolean(treeKeyword.trim())}
+                    selectedKeys={[selectedKey]}
+                    treeData={visibleTreeData}
+                    titleRender={renderTreeTitle}
+                    switcherIcon={<ChevronDown size={11} />}
+                    onSelect={(keys) => {
+                      const key = String(keys[0] || '');
+                      if (!key) return;
+                      setSelectedKey(key);
+                      setDetailTab('fields');
+                    }}
+                    className="catalog-tree bg-transparent"
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={treeKeyword.trim() ? '未找到匹配 Dataset' : '暂无已发布 Dataset'}
+                    className="mt-10"
+                  />
+                )}
+              </Spin>
+            </div>
+          </div>
+        </aside>
+
+        <div
+          role="separator"
+          aria-label="调整数据目录宽度"
+          aria-orientation="vertical"
+          onPointerDown={leftCollapsed ? undefined : handleResizeStart}
+          className={[
+            'group relative z-20 w-px shrink-0 touch-none',
+            leftCollapsed ? 'cursor-default' : 'cursor-col-resize',
+          ].join(' ')}
+        >
+          <div className={[
+            'absolute inset-y-0 left-1/2 z-10 w-3 -translate-x-1/2',
+            leftCollapsed ? 'cursor-default' : 'cursor-col-resize',
+          ].join(' ')} />
+          <div className={[
+            'pointer-events-none absolute inset-y-0 left-0 w-px bg-[#dfe3e8] transition-[width,background-color] duration-150',
+            !leftCollapsed
+              ? 'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.45)] group-active:bg-[rgba(254,44,85,1)]'
+              : '',
+          ].join(' ')} />
+          <button
+            type="button"
+            aria-label={leftCollapsed ? '展开数据目录' : '收起数据目录'}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => setLeftCollapsed((value) => !value)}
+            className={[
+              'absolute left-px top-1/2 z-20 flex h-7 w-3 -translate-y-1/2 items-center justify-center rounded-r-[3px]',
+              'border border-l-0 border-[#dfe3e8] bg-white text-[#7b808a] shadow-[0_1px_2px_rgba(16,24,40,0.04)]',
+              'opacity-0 transition-[opacity,color,border-color] duration-150 group-hover:opacity-100 focus:opacity-100',
+              'hover:border-[#cfd4dc] hover:text-[#344054] focus:outline-none',
+            ].join(' ')}
+          >
+            {leftCollapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
+          </button>
+        </div>
+
+        {selectedDataset ? renderDatasetDetail(selectedDataset) : renderDirectoryView()}
+      </div>
+
+      <style>{`
+        .catalog-tree.ant-tree { color: #344054; }
+        .catalog-tree .ant-tree-list-holder-inner { gap: 1px; }
+        .catalog-tree .ant-tree-treenode {
+          box-sizing: border-box;
+          width: 100%;
+          min-height: 30px;
+          padding: 0 6px !important;
+          align-items: center;
+          border-radius: 0;
+          transition: background-color 0.15s ease;
+        }
+        .catalog-tree .ant-tree-treenode:hover,
+        .catalog-tree .ant-tree-treenode:has(.ant-tree-node-selected) { background: #f5f5f5; }
+        .catalog-tree .ant-tree-node-content-wrapper {
+          display: flex;
+          min-width: 0;
+          height: 30px;
+          flex: 1;
+          align-items: center;
+          padding: 0 !important;
+          border-radius: 0 !important;
+          background: transparent !important;
+          line-height: 30px;
+        }
+        .catalog-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+          color: #1f2937;
+          background: transparent !important;
+        }
+        .catalog-tree .ant-tree-title { display: flex; min-width: 0; flex: 1; }
+        .catalog-tree .ant-tree-indent-unit { width: 17px; }
+        .catalog-tree .ant-tree-switcher {
+          display: inline-flex;
+          width: 18px;
+          height: 30px;
+          flex: none;
+          align-items: center;
+          justify-content: center;
+          color: #98a2b3;
+          line-height: 30px;
+        }
+        .catalog-tree .ant-tree-switcher svg { transition: transform 0.15s ease; }
+        .catalog-tree .ant-tree-switcher_close svg { transform: rotate(-90deg); }
+        .catalog-tree .ant-tree-switcher-noop { width: 18px; }
+      `}</style>
     </ConfigProvider>
   );
 };

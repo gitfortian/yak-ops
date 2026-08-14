@@ -1,10 +1,21 @@
 import type { AnalysisAsset } from '@/components/analysis/model';
 import { fetchAnalyses } from '@/components/analysis/analysis-service';
+import {
+  listDevelopmentDirectories,
+  listDevelopmentNodes,
+  listDevelopmentReleases,
+} from '@/pages/data-development/service';
+import type {
+  DevelopmentDirectory,
+  DevelopmentNode,
+  DevelopmentReleaseSummary,
+} from '@/pages/data-development/types';
 import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 
 const DATASET_API = '/api/v1/datasets';
+const RELEASE_PAGE_SIZE = 100;
 
 type WireId = string | number;
 
@@ -60,6 +71,13 @@ interface DatasetDetailWire {
   fields?: DatasetFieldWire[];
 }
 
+export interface CatalogDirectory {
+  id: string;
+  parentId?: string;
+  name: string;
+  path: string;
+}
+
 export interface CatalogDatasetVersion {
   id: string;
   versionNo: number;
@@ -93,6 +111,21 @@ export interface CatalogDataset {
   createTime?: string;
   updateTime?: string;
   analysisCount: number;
+  sourceTaskName?: string;
+  sourceNodeId?: string;
+  directoryId?: string;
+  directoryPath?: string;
+}
+
+export interface CatalogWorkspace {
+  datasets: CatalogDataset[];
+  directories: CatalogDirectory[];
+}
+
+interface DevelopmentTopology {
+  directories: DevelopmentDirectory[];
+  nodes: DevelopmentNode[];
+  releases: DevelopmentReleaseSummary[];
 }
 
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
@@ -132,37 +165,109 @@ const analysisCounts = (analyses: AnalysisAsset[]) => {
   return counts;
 };
 
+const fetchAllSqlReleases = async (): Promise<DevelopmentReleaseSummary[]> => {
+  const first = unwrap(
+    await listDevelopmentReleases({
+      pageNo: 1,
+      pageSize: RELEASE_PAGE_SIZE,
+      status: 'ALL',
+      taskType: 'SQL',
+    }),
+    '查询 SQL 发布资产失败',
+  );
+  const firstRecords = first.records || [];
+  const pageSize = first.pageSize || RELEASE_PAGE_SIZE;
+  const pages = Math.ceil((first.total || firstRecords.length) / pageSize);
+  if (pages <= 1) return firstRecords;
+
+  const remaining = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, index) => index + 2).map(async (pageNo) => {
+      const page = unwrap(
+        await listDevelopmentReleases({
+          pageNo,
+          pageSize,
+          status: 'ALL',
+          taskType: 'SQL',
+        }),
+        `查询 SQL 发布资产第 ${pageNo} 页失败`,
+      );
+      return page.records || [];
+    }),
+  );
+  return [firstRecords, ...remaining].flat();
+};
+
+const fetchDevelopmentTopology = async (): Promise<DevelopmentTopology> => {
+  const [directoryResponse, nodeResponse, releases] = await Promise.all([
+    listDevelopmentDirectories(),
+    listDevelopmentNodes(),
+    fetchAllSqlReleases(),
+  ]);
+  return {
+    directories: unwrap(directoryResponse, '查询数据开发目录失败') || [],
+    nodes: unwrap(nodeResponse, '查询数据开发节点失败') || [],
+    releases,
+  };
+};
+
+const catalogDirectories = (values: DevelopmentDirectory[]): CatalogDirectory[] => values.map((value) => ({
+  id: String(value.id),
+  parentId: value.parentId == null ? undefined : String(value.parentId),
+  name: value.name,
+  path: value.path,
+}));
+
 const toDataset = (
   detail: DatasetDetailWire,
   counts: Map<string, number>,
-): CatalogDataset => ({
-  id: String(detail.dataset.id),
-  name: detail.dataset.name,
-  description: detail.dataset.description || '',
-  status: detail.dataset.status,
-  currentVersionId: detail.dataset.currentVersionId == null
-    ? undefined
-    : String(detail.dataset.currentVersionId),
-  currentVersion: detail.currentVersion ? toVersion(detail.currentVersion) : undefined,
-  versions: (detail.versions || []).map(toVersion),
-  fields: (detail.fields || []).map(toField),
-  createTime: detail.dataset.createTime,
-  updateTime: detail.dataset.updateTime,
-  analysisCount: counts.get(String(detail.dataset.id)) || 0,
-});
+  topology?: DevelopmentTopology,
+): CatalogDataset => {
+  const currentVersion = detail.currentVersion ? toVersion(detail.currentVersion) : undefined;
+  const assetId = currentVersion?.sourceTaskAssetId;
+  const release = assetId
+    ? topology?.releases.find((item) => String(item.assetId) === assetId)
+    : undefined;
+  const node = release
+    ? topology?.nodes.find((item) => String(item.id) === String(release.nodeId))
+    : undefined;
+  const directoryId = node?.directoryId == null ? undefined : String(node.directoryId);
+  const directory = directoryId
+    ? topology?.directories.find((item) => String(item.id) === directoryId)
+    : undefined;
 
-export const fetchCatalogDatasets = async (): Promise<CatalogDataset[]> => {
+  return {
+    id: String(detail.dataset.id),
+    name: detail.dataset.name,
+    description: detail.dataset.description || '',
+    status: detail.dataset.status,
+    currentVersionId: detail.dataset.currentVersionId == null
+      ? undefined
+      : String(detail.dataset.currentVersionId),
+    currentVersion,
+    versions: (detail.versions || []).map(toVersion),
+    fields: (detail.fields || []).map(toField),
+    createTime: detail.dataset.createTime,
+    updateTime: detail.dataset.updateTime,
+    analysisCount: counts.get(String(detail.dataset.id)) || 0,
+    sourceTaskName: release?.taskName,
+    sourceNodeId: release ? String(release.nodeId) : undefined,
+    directoryId,
+    directoryPath: directory?.path,
+  };
+};
+
+export const fetchCatalogWorkspace = async (): Promise<CatalogWorkspace> => {
   const summaries = unwrap(
     await HttpUtils.get<DatasetSummaryWire[]>(DATASET_API),
     '查询 Dataset 列表失败',
   ) || [];
-  if (!summaries.length) return [];
 
-  const [detailResults, analysesResult] = await Promise.all([
+  const [detailResults, analysesResult, topologyResult] = await Promise.all([
     Promise.allSettled(
       summaries.map((dataset) => HttpUtils.get<DatasetDetailWire>(`${DATASET_API}/${dataset.id}`)),
     ),
     fetchAnalyses().catch(() => []),
+    fetchDevelopmentTopology().catch(() => undefined),
   ]);
   const counts = analysisCounts(analysesResult);
 
@@ -178,8 +283,16 @@ export const fetchCatalogDatasets = async (): Promise<CatalogDataset[]> => {
   if (!details.length && summaries.length) {
     throw new Error('Dataset 列表已返回，但详情读取失败');
   }
-  return details.map((detail) => toDataset(detail, counts));
+
+  return {
+    datasets: details.map((detail) => toDataset(detail, counts, topologyResult)),
+    directories: catalogDirectories(topologyResult?.directories || []),
+  };
 };
+
+export const fetchCatalogDatasets = async (): Promise<CatalogDataset[]> => (
+  await fetchCatalogWorkspace()
+).datasets;
 
 export const onlineCatalogDataset = async (datasetId: string): Promise<void> => {
   unwrap(
