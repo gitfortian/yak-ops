@@ -39,7 +39,7 @@ import {
   RotateCcw,
   Square,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Key } from 'react';
 import WorkflowDagView from './WorkflowDagView';
 
 interface Props {
@@ -83,8 +83,12 @@ const statusClassName = (status: string) => {
   return 'text-[#667085]';
 };
 
-const formatTime = (value?: string) =>
-  value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-';
+const formatTime = (value?: string) => value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-';
+
+const formatScheduleTime = (value?: string) => {
+  if (!value) return '-';
+  return value.replace('T', ' ');
+};
 
 const JsonBlock = ({ value }: { value?: unknown }) => (
   <pre className="m-0 max-h-[220px] overflow-auto rounded-md bg-[#f7f7f8] p-2.5 text-[11px] leading-5 text-[rgba(22,24,35,.72)]">
@@ -92,19 +96,14 @@ const JsonBlock = ({ value }: { value?: unknown }) => (
   </pre>
 );
 
-const InstanceDetailDrawer = ({
-  open,
-  executionId,
-  initial,
-  onClose,
-  onChanged,
-}: Props) => {
+const InstanceDetailDrawer = ({ open, executionId, initial, onClose, onChanged }: Props) => {
   const streamRef = useRef<(() => void) | null>(null);
   const [detail, setDetail] = useState<WorkflowInstance>();
   const [operations, setOperations] = useState<WorkflowInstanceOperations>();
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string>();
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Key[]>([]);
   const [rerunOpen, setRerunOpen] = useState(false);
   const [rerunDate, setRerunDate] = useState(dayjs());
   const [rerunStrategy, setRerunStrategy] = useState<'SERIAL_WAIT' | 'PARALLEL'>('SERIAL_WAIT');
@@ -147,6 +146,7 @@ const InstanceDetailDrawer = ({
     setDetail(initial);
     setOperations(undefined);
     setSelectedNodeId(undefined);
+    setExpandedNodeIds([]);
     void load();
     return () => {
       streamRef.current?.();
@@ -173,10 +173,10 @@ const InstanceDetailDrawer = ({
     }
   }, [actionLoading, applySnapshot, attachStream]);
 
-  const activatePrepared = useCallback(async (prepared: WorkflowInstance, messageText: string) => {
+  const activatePrepared = useCallback(async (prepared: WorkflowInstance, success: string) => {
     const activated = await activateWorkflowInstance(prepared.id);
     onChanged?.(activated);
-    message.success(`${messageText}：${activated.id}`);
+    message.success(`${success}：${activated.id}`);
   }, [onChanged]);
 
   const handleRestart = async () => {
@@ -238,6 +238,11 @@ const InstanceDetailDrawer = ({
     } finally {
       setActionLoading(undefined);
     }
+  };
+
+  const selectDagNode = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setExpandedNodeIds((current) => current.includes(nodeId) ? current : [...current, nodeId]);
   };
 
   const attemptColumns = useMemo<ColumnsType<WorkflowAttempt>>(() => [
@@ -343,11 +348,15 @@ const InstanceDetailDrawer = ({
   ], [actionLoading, detail]);
 
   const canRetryFailed = Boolean(
-    detail &&
-    isWorkflowTerminal(detail.status) &&
-    detail.status !== 'SUCCESS' &&
-    detail.nodes.some((node) => ['FAILED', 'UPSTREAM_FAILED', 'CANCELED', 'SKIPPED'].includes(node.status)),
+    detail
+    && isWorkflowTerminal(detail.status)
+    && detail.status !== 'SUCCESS'
+    && detail.nodes.some((node) => ['FAILED', 'UPSTREAM_FAILED', 'CANCELED', 'SKIPPED'].includes(node.status)),
   );
+
+  const sourceExecutionId = detail
+    ? String(detail.input?.sourceExecutionId || detail.sourceExecutionId || '')
+    : '';
 
   return (
     <>
@@ -404,25 +413,25 @@ const InstanceDetailDrawer = ({
               <div><span className="text-[#98a2b3]">版本：</span><span>V{detail.workflowVersionNo || '-'}</span></div>
               <div><span className="text-[#98a2b3]">触发来源：</span><span>{operations?.triggerType || '-'}</span></div>
               <div><span className="text-[#98a2b3]">businessDate：</span><span>{operations?.businessDate || '-'}</span></div>
-              <div><span className="text-[#98a2b3]">scheduleTime：</span><span>{operations?.scheduleTime ? formatTime(operations.scheduleTime) : '-'}</span></div>
+              <div><span className="text-[#98a2b3]">scheduleTime：</span><span>{formatScheduleTime(operations?.scheduleTime)}</span></div>
               <div><span className="text-[#98a2b3]">时区：</span><span>{operations?.scheduleTimezone || '-'}</span></div>
               <div><span className="text-[#98a2b3]">创建：</span><span>{formatTime(detail.startedAt)}</span></div>
               <div><span className="text-[#98a2b3]">结束：</span><span>{formatTime(detail.endedAt)}</span></div>
-              {detail.sourceExecutionId ? (
-                <div className="col-span-2"><span className="text-[#98a2b3]">来源实例：</span><span className="font-mono text-[#667085]">{detail.sourceExecutionId}</span></div>
+              {sourceExecutionId ? (
+                <div className="col-span-2"><span className="text-[#98a2b3]">来源实例：</span><span className="font-mono text-[#667085]">{sourceExecutionId}</span></div>
               ) : null}
             </div>
 
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[13px] font-medium text-[#344054]">运行实例 DAG</div>
-                <div className="text-[11px] text-[#98a2b3]">点击节点可定位下方节点详情</div>
+                <div className="text-[11px] text-[#98a2b3]">点击节点会定位并展开下方运行明细</div>
               </div>
               <WorkflowDagView
                 instance={detail}
                 operations={operations}
                 selectedNodeId={selectedNodeId}
-                onSelectNode={setSelectedNodeId}
+                onSelectNode={selectDagNode}
               />
             </div>
 
@@ -436,7 +445,12 @@ const InstanceDetailDrawer = ({
                 dataSource={detail.nodes}
                 columns={nodeColumns}
                 rowClassName={(record) => record.id === selectedNodeId ? '!bg-[#f8f9fb]' : ''}
-                expandable={{ expandedRowRender: renderNodeDetail, rowExpandable: () => true }}
+                expandable={{
+                  expandedRowRender: renderNodeDetail,
+                  rowExpandable: () => true,
+                  expandedRowKeys: expandedNodeIds,
+                  onExpandedRowsChange: (keys) => setExpandedNodeIds([...keys]),
+                }}
                 scroll={{ x: 820 }}
               />
             </div>
