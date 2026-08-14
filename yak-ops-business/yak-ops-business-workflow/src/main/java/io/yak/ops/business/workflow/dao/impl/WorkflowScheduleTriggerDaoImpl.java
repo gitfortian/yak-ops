@@ -111,6 +111,11 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   }
 
   @Override
+  public long countLaunchingTriggers(String workflowId) {
+    return mapper.countLaunchingTriggers(workflowId);
+  }
+
+  @Override
   public String selectWorkflowIdByExecution(String executionId) {
     return mapper.selectWorkflowIdByExecution(executionId);
   }
