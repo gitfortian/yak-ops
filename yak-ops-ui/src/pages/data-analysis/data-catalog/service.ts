@@ -176,7 +176,8 @@ const fetchAllSqlReleases = async (): Promise<DevelopmentReleaseSummary[]> => {
     '查询 SQL 发布资产失败',
   );
   const firstRecords = first.records || [];
-  const pages = Math.ceil((first.total || firstRecords.length) / RELEASE_PAGE_SIZE);
+  const pageSize = first.pageSize || RELEASE_PAGE_SIZE;
+  const pages = Math.ceil((first.total || firstRecords.length) / pageSize);
   if (pages <= 1) return firstRecords;
 
   const remaining = await Promise.all(
@@ -184,7 +185,7 @@ const fetchAllSqlReleases = async (): Promise<DevelopmentReleaseSummary[]> => {
       const page = unwrap(
         await listDevelopmentReleases({
           pageNo,
-          pageSize: RELEASE_PAGE_SIZE,
+          pageSize,
           status: 'ALL',
           taskType: 'SQL',
         }),
