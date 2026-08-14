@@ -25,7 +25,7 @@ public interface WorkflowExecutionDao {
 
   List<String> selectRecoverableExecutionIds();
 
-  long countActiveExecutions(String workflowId, String latestExecutionId);
+  long countActiveExecutions(String workflowId);
 
   String selectEffectiveRuntimeMetadata(String executionId);
 
