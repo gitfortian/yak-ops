@@ -3,6 +3,7 @@ package io.yak.ops.business.workflow.service;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence;
 import io.yak.ops.business.workflow.persistence.WorkflowDefinitionPersistence.VersionRecord;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -14,11 +15,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class WorkflowPublishedVersionRunner {
   private final WorkflowRuntimeService runtimeService;
-  private final WorkflowDefinitionPersistence persistence;
+  private final ObjectProvider<WorkflowDefinitionPersistence> persistence;
 
   public WorkflowPublishedVersionRunner(
       WorkflowRuntimeService runtimeService,
-      WorkflowDefinitionPersistence persistence) {
+      ObjectProvider<WorkflowDefinitionPersistence> persistence) {
     this.runtimeService = runtimeService;
     this.persistence = persistence;
   }
@@ -26,7 +27,11 @@ public class WorkflowPublishedVersionRunner {
   public WorkflowInstanceVO run(String workflowId, String workflowVersionId) {
     String id = required(workflowId, "工作流 ID 不能为空");
     String versionId = required(workflowVersionId, "工作流版本 ID 不能为空");
-    VersionRecord version = persistence.loadVersions(id).stream()
+    WorkflowDefinitionPersistence catalog = persistence.getIfAvailable();
+    if (catalog == null) {
+      throw new IllegalStateException("Backfill 固定版本执行需要 durable WorkflowDefinitionPersistence");
+    }
+    VersionRecord version = catalog.loadVersions(id).stream()
         .filter(candidate -> versionId.equals(candidate.id()))
         .findFirst()
         .orElseThrow(() -> new IllegalArgumentException(
