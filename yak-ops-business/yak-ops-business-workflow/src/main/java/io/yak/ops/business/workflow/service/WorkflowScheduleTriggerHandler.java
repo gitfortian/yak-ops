@@ -3,20 +3,19 @@ package io.yak.ops.business.workflow.service;
 import io.yak.framework.schedule.api.ScheduleExecutionContext;
 import io.yak.framework.schedule.api.ScheduleExecutionResult;
 import io.yak.framework.schedule.api.ScheduleHandler;
-import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
 import java.time.Instant;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** Yak Schedule 的工作流业务 Handler：只负责把时间触发转换成统一 Workflow Launch。 */
+/** Yak Schedule 工作流 Handler：校验调度窗口后统一进入 Trigger Ledger 协调器。 */
 @Component(WorkflowScheduleEngineBridge.HANDLER)
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
   private final WorkflowScheduleQuery schedules;
   private final WorkflowDefinitionService definitions;
-  private final WorkflowLaunchService launchService;
+  private final WorkflowScheduleTriggerCoordinator coordinator;
   private final WorkflowScheduleLifecycle lifecycle;
   private final WorkflowScheduleEngineBridge engine;
   private final WorkflowScheduleRuntimeState runtimeState;
@@ -24,13 +23,13 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
   public WorkflowScheduleTriggerHandler(
       WorkflowScheduleQuery schedules,
       WorkflowDefinitionService definitions,
-      WorkflowLaunchService launchService,
+      WorkflowScheduleTriggerCoordinator coordinator,
       WorkflowScheduleLifecycle lifecycle,
       WorkflowScheduleEngineBridge engine,
       WorkflowScheduleRuntimeState runtimeState) {
     this.schedules = schedules;
     this.definitions = definitions;
-    this.launchService = launchService;
+    this.coordinator = coordinator;
     this.lifecycle = lifecycle;
     this.engine = engine;
     this.runtimeState = runtimeState;
@@ -81,15 +80,12 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
     }
 
     try {
-      WorkflowDefinitionVO launched = launchService.runPublished(
-          schedule.getWorkflowId(),
-          WorkflowTriggerContext.scheduled(
-              context.triggerId(),
-              scheduleId,
-              plannedFireTime));
-      return ScheduleExecutionResult.accepted(
-          launched.latestExecutionId(),
-          "工作流调度触发已提交");
+      return coordinator.submit(
+          schedule,
+          context.triggerId(),
+          plannedFireTime,
+          actualFireTime,
+          context.manual() ? "MANUAL" : "CRON");
     } finally {
       refreshFireState(schedule, actualFireTime);
     }
