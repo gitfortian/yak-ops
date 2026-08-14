@@ -26,7 +26,7 @@ spring:
     auto-startup: true
     job-store-type: memory
 
-tspringdoc:
+springdoc:
   api-docs:
     enabled: true
     path: /v3/api-docs
