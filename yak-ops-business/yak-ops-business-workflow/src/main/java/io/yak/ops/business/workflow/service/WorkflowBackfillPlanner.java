@@ -37,7 +37,8 @@ public class WorkflowBackfillPlanner {
     }
 
     ZoneId zone = ZoneId.of(required(timezone, "补数时区不能为空"));
-    CronExpression cron = parseCron(cronExpression, zone);
+    String normalizedCron = normalizeCron(cronExpression);
+    CronExpression cron = parseCron(normalizedCron, zone);
     Instant rangeStart = startBusinessDate.atStartOfDay(zone).toInstant();
     Instant rangeEndExclusive = endBusinessDate.plusDays(1).atStartOfDay(zone).toInstant();
 
@@ -65,11 +66,10 @@ public class WorkflowBackfillPlanner {
     if (occurrences.isEmpty()) {
       throw new IllegalArgumentException("当前 Cron 在所选业务日期范围内没有可执行计划时间");
     }
-    return new Plan(zone.getId(), normalizeCron(cronExpression), List.copyOf(occurrences));
+    return new Plan(zone.getId(), normalizedCron, List.copyOf(occurrences));
   }
 
-  private CronExpression parseCron(String expression, ZoneId zone) {
-    String normalized = normalizeCron(expression);
+  private CronExpression parseCron(String normalized, ZoneId zone) {
     try {
       CronExpression cron = new CronExpression(normalized);
       cron.setTimeZone(TimeZone.getTimeZone(zone));
@@ -82,7 +82,22 @@ public class WorkflowBackfillPlanner {
   private String normalizeCron(String expression) {
     String cron = required(expression, "Cron 表达式不能为空").replaceAll("\\s+", " ");
     String[] fields = cron.split(" ");
-    if (fields.length == 5) return "0 " + cron;
+    if (fields.length == 5) {
+      String minute = fields[0];
+      String hour = fields[1];
+      String dayOfMonth = fields[2];
+      String month = fields[3];
+      String dayOfWeek = fields[4];
+      boolean monthDaySpecified = !"*".equals(dayOfMonth) && !"?".equals(dayOfMonth);
+      boolean weekDaySpecified = !"*".equals(dayOfWeek) && !"?".equals(dayOfWeek);
+      if (monthDaySpecified && weekDaySpecified) {
+        throw new IllegalArgumentException(
+            "5 字段 Cron 同时指定日和周时与 Quartz 语义不等价，请改为 6/7 字段 Quartz Cron");
+      }
+      if (weekDaySpecified) dayOfMonth = "?";
+      else dayOfWeek = "?";
+      return String.join(" ", "0", minute, hour, dayOfMonth, month, dayOfWeek);
+    }
     if (fields.length == 6 || fields.length == 7) return cron;
     throw new IllegalArgumentException("Backfill 仅支持 5、6 或 7 字段 Cron 表达式");
   }
