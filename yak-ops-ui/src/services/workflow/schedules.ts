@@ -140,120 +140,56 @@ export interface WorkflowSchedulePayload {
   input: Record<string, unknown>;
 }
 
-export interface WorkflowScheduleTriggerQuery {
+export const listWorkflowSchedules = async (params?: {
+  workflowId?: string;
+  status?: WorkflowScheduleStatus;
+}) => {
+  const response = await request<ApiResponse<WorkflowSchedule[]>>(
+    '/api/v1/workflows/schedules',
+    { params },
+  );
+  return response.data || [];
+};
+
+export const listWorkflowScheduleTriggers = async (params?: {
   scheduleId?: string;
   workflowId?: string;
   backfillId?: string;
   status?: WorkflowScheduleTriggerStatus;
   limit?: number;
-}
+}) => {
+  const response = await request<ApiResponse<WorkflowScheduleTrigger[]>>(
+    '/api/v1/workflows/schedules/triggers',
+    { params },
+  );
+  return response.data || [];
+};
 
-export interface WorkflowBackfillQuery {
+export const previewWorkflowBackfill = async (payload: WorkflowBackfillPayload) => {
+  const response = await request<ApiResponse<WorkflowBackfillPreview>>(
+    '/api/v1/workflows/backfills/preview',
+    { method: 'POST', data: payload },
+  );
+  return response.data;
+};
+
+export const createWorkflowBackfill = async (payload: WorkflowBackfillPayload) => {
+  const response = await request<ApiResponse<WorkflowBackfill>>(
+    '/api/v1/workflows/backfills',
+    { method: 'POST', data: payload },
+  );
+  return response.data;
+};
+
+export const listWorkflowBackfills = async (params?: {
   workflowId?: string;
   scheduleId?: string;
   status?: WorkflowBackfillStatus;
-}
-
-export const listWorkflowSchedules = async (workflowId?: string) => {
-  const response = await request<ApiResponse<WorkflowSchedule[]>>('/api/v1/workflows/schedules', {
-    params: workflowId ? { workflowId } : undefined,
-  });
-  return response.data || [];
-};
-
-export const getWorkflowSchedule = async (id: string) => {
-  const response = await request<ApiResponse<WorkflowSchedule>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(id)}`,
+}) => {
+  const response = await request<ApiResponse<WorkflowBackfill[]>>(
+    '/api/v1/workflows/backfills',
+    { params },
   );
-  return response.data;
-};
-
-export const createWorkflowSchedule = async (
-  workflowId: string,
-  payload: WorkflowSchedulePayload,
-) => {
-  const response = await request<ApiResponse<WorkflowSchedule>>(
-    `/api/v1/workflows/${encodeURIComponent(workflowId)}/schedules`,
-    { method: 'POST', data: payload },
-  );
-  return response.data;
-};
-
-export const updateWorkflowSchedule = async (
-  id: string,
-  payload: WorkflowSchedulePayload,
-) => {
-  const response = await request<ApiResponse<WorkflowSchedule>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(id)}`,
-    { method: 'PUT', data: payload },
-  );
-  return response.data;
-};
-
-export const onlineWorkflowSchedule = async (id: string) => {
-  const response = await request<ApiResponse<WorkflowSchedule>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(id)}/online`,
-    { method: 'POST' },
-  );
-  return response.data;
-};
-
-export const offlineWorkflowSchedule = async (id: string) => {
-  const response = await request<ApiResponse<WorkflowSchedule>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(id)}/offline`,
-    { method: 'POST' },
-  );
-  return response.data;
-};
-
-export const runWorkflowScheduleNow = async (id: string) => {
-  const response = await request<ApiResponse<WorkflowSchedule>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(id)}/run`,
-    { method: 'POST' },
-  );
-  return response.data;
-};
-
-export const removeWorkflowSchedule = async (id: string) => {
-  await request<ApiResponse<void>>(`/api/v1/workflows/schedules/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-};
-
-export const listWorkflowScheduleTriggers = async (query: WorkflowScheduleTriggerQuery = {}) => {
-  const response = await request<ApiResponse<WorkflowScheduleTrigger[]>>(
-    '/api/v1/workflows/schedules/triggers',
-    { params: query },
-  );
-  return response.data || [];
-};
-
-export const previewWorkflowBackfill = async (
-  scheduleId: string,
-  payload: Pick<WorkflowBackfillPayload, 'startBusinessDate' | 'endBusinessDate'>,
-) => {
-  const response = await request<ApiResponse<WorkflowBackfillPreview>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(scheduleId)}/backfills/preview`,
-    { method: 'POST', data: payload },
-  );
-  return response.data;
-};
-
-export const createWorkflowBackfill = async (
-  scheduleId: string,
-  payload: WorkflowBackfillPayload,
-) => {
-  const response = await request<ApiResponse<WorkflowBackfill>>(
-    `/api/v1/workflows/schedules/${encodeURIComponent(scheduleId)}/backfills`,
-    { method: 'POST', data: payload },
-  );
-  return response.data;
-};
-
-export const listWorkflowBackfills = async (query: WorkflowBackfillQuery = {}) => {
-  const response = await request<ApiResponse<WorkflowBackfill[]>>('/api/v1/workflows/backfills', {
-    params: query,
-  });
   return response.data || [];
 };
 
@@ -270,4 +206,44 @@ export const cancelWorkflowBackfill = async (id: string) => {
     { method: 'POST' },
   );
   return response.data;
+};
+
+export const createWorkflowSchedule = async (
+  workflowId: string,
+  payload: WorkflowSchedulePayload,
+) => {
+  const response = await request<ApiResponse<WorkflowSchedule>>(
+    '/api/v1/workflows/schedules',
+    { method: 'POST', data: { workflowId, ...payload } },
+  );
+  return response.data;
+};
+
+export const updateWorkflowSchedule = async (
+  id: string,
+  payload: WorkflowSchedulePayload,
+) => {
+  const response = await request<ApiResponse<WorkflowSchedule>>(
+    `/api/v1/workflows/schedules/${encodeURIComponent(id)}`,
+    { method: 'PUT', data: payload },
+  );
+  return response.data;
+};
+
+const scheduleAction = async (id: string, action: 'online' | 'offline') => {
+  const response = await request<ApiResponse<WorkflowSchedule>>(
+    `/api/v1/workflows/schedules/${encodeURIComponent(id)}/${action}`,
+    { method: 'POST' },
+  );
+  return response.data;
+};
+
+export const onlineWorkflowSchedule = (id: string) => scheduleAction(id, 'online');
+export const offlineWorkflowSchedule = (id: string) => scheduleAction(id, 'offline');
+
+export const deleteWorkflowSchedule = async (id: string) => {
+  await request<ApiResponse<boolean>>(
+    `/api/v1/workflows/schedules/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
 };
