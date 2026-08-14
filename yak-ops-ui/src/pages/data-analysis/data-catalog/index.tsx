@@ -12,6 +12,7 @@ import {
   Select,
   Spin,
   Table,
+  Tabs,
   Tag,
   Tooltip,
   Tree,
@@ -890,36 +891,52 @@ const DataCatalogPage = () => {
       },
     ];
 
+    const datasetType = dataset.currentVersion
+      ? dataset.currentVersion.sourceType === 'QUERY_REVISION'
+        ? 'SQL 数据集'
+        : `${sourceTypeLabel[dataset.currentVersion.sourceType]}数据集`
+      : '-';
+
+    const detailItems = [
+      { label: '类型', value: datasetType },
+      {
+        label: '所属目录',
+        value:
+          dataset.directoryPath || (dataset.sourceNodeId ? '根目录' : '未分组'),
+      },
+      { label: '来源任务', value: dataset.sourceTaskName || '-' },
+      { label: '数据描述', value: dataset.description || '无' },
+      {
+        label: '更新时间',
+        value: formatTime(dataset.updateTime || dataset.createTime),
+      },
+      { label: '创建时间', value: formatTime(dataset.createTime) },
+    ];
+
     return (
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3">
-        <div className="flex shrink-0 items-center gap-3 border-b border-[#e4e7ec] pb-2">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        <div className="flex min-h-[74px] shrink-0 items-center gap-3  px-5 py-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-[#f4f5f7] text-[#667085]">
             <TableProperties size={17} />
           </div>
+
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-[14px] font-semibold text-[#161823]">
-                {dataset.name}
-              </span>
-              <Tag
-                bordered={false}
-                className="m-0 bg-[#f1f3f5] text-[12px] text-[#344054]"
-              >
-                {dataset.status === 'ONLINE' ? '已上线' : '已下线'}
-              </Tag>
-              {dataset.currentVersion ? (
-                <span className="text-[12px] text-[#8a8f99]">
-                  DV{dataset.currentVersion.versionNo}
-                </span>
-              ) : null}
+            <div className="truncate text-[15px] font-semibold leading-6 text-[#161823]">
+              {dataset.name}
             </div>
-            <div className="mt-0.5 truncate text-[12px] text-[#8a8f99]">
-              {dataset.description || dataset.sourceTaskName || '暂无描述'}
+            <div className="mt-0.5 flex min-w-0 items-center gap-3 overflow-hidden text-[12px] text-[#667085]">
+              <span className="shrink-0">
+                最近更新：{formatTime(dataset.updateTime || dataset.createTime)}
+              </span>
+              <span className="h-3 w-px shrink-0 bg-[#dfe3e8]" />
+              <span className="shrink-0">
+                创建时间：{formatTime(dataset.createTime)}
+              </span>
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <Button href="/data-development/releases" icon={<GitBranch size={13} />}>
+            <Button href="/data-development/releases" icon={<GitBranch size={13} />} variant='filled'>
               发布中心
             </Button>
             <Popconfirm
@@ -956,29 +973,22 @@ const DataCatalogPage = () => {
           </div>
         </div>
 
-        <div className="flex h-10 shrink-0 items-end border-b border-[#e4e7ec]">
-          {detailTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setDetailTab(tab.key)}
-              className={[
-                'relative h-10 border-0 bg-transparent px-3 text-[14px]',
-                detailTab === tab.key
-                  ? 'font-medium text-[#161823]'
-                  : 'text-[#667085] hover:text-[#344054]',
-              ].join(' ')}
-            >
-              {tab.label}
-              {detailTab === tab.key ? (
-                <span className="absolute inset-x-3 bottom-0 h-[2px] bg-[#161823]" />
-              ) : null}
-            </button>
-          ))}
+        <div className="shrink-0 border-b border-[#e4e7ec] px-2">
+          <Tabs
+            activeKey={detailTab}
+            items={detailTabs.map((tab) => ({
+              key: tab.key,
+              label: tab.label,
+            }))}
+            onChange={(key) =>
+              setDetailTab(key as 'fields' | 'versions' | 'overview')
+            }
+            className="dataset-detail-tabs"
+          />
         </div>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden pt-2">
-          <section className="min-w-0 flex-1 overflow-auto pr-3">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <section className="min-w-0 flex-1 overflow-auto px-3 py-3">
             {detailTab === 'fields' ? (
               <Table
                 rowKey="fieldId"
@@ -1004,7 +1014,7 @@ const DataCatalogPage = () => {
                 locale={{ emptyText: '暂无 DatasetVersion' }}
               />
             ) : (
-              <div className="max-w-[980px] py-1">
+              <div className="max-w-[980px]">
                 <div className="grid grid-cols-4 gap-3">
                   {[
                     { label: '字段', value: summary.fields, icon: Rows3 },
@@ -1041,76 +1051,19 @@ const DataCatalogPage = () => {
             )}
           </section>
 
-          <aside className="w-[248px] shrink-0 overflow-y-auto border-l border-[#e4e7ec] pl-4">
-            <div className="text-[14px] font-medium text-[#161823]">
-              Dataset 信息
-            </div>
-            <div className="mt-4 space-y-4 text-[13px]">
-              <div>
-                <div className="text-[12px] text-[#8a8f99]">状态</div>
-                <div className="mt-1 text-[#344054]">
-                  {dataset.status === 'ONLINE' ? '已上线' : '已下线'}
-                </div>
-              </div>
-              <div>
-                <div className="text-[12px] text-[#8a8f99]">所属目录</div>
-                <div className="mt-1 break-all text-[#344054]">
-                  {dataset.directoryPath
-                    || (dataset.sourceNodeId ? '根目录' : '未分组')}
-                </div>
-              </div>
-              <div>
-                <div className="text-[12px] text-[#8a8f99]">来源任务</div>
-                <div className="mt-1 break-all text-[#344054]">
-                  {dataset.sourceTaskName || '-'}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-[12px] text-[#8a8f99]">TaskAsset</div>
-                  <div className="mt-1 text-[#344054]">
-                    {dataset.currentVersion
-                      ? `#${dataset.currentVersion.sourceTaskAssetId}`
-                      : '-'}
+          <aside className="w-[272px] shrink-0 overflow-y-auto border-l border-[#dfe3e8] bg-[#fafbfc] px-5 py-4">
+            <div className="text-[14px] font-semibold text-[#161823]">数据详情</div>
+            <div className="mt-4 space-y-4">
+              {detailItems.map((item) => (
+                <div key={item.label}>
+                  <div className="text-[12px] leading-5 text-[#667085]">
+                    {item.label}
+                  </div>
+                  <div className="mt-0.5 break-words text-[13px] leading-5 text-[#161823]">
+                    {item.value}
                   </div>
                 </div>
-                <div>
-                  <div className="text-[12px] text-[#8a8f99]">SQL 版本</div>
-                  <div className="mt-1 text-[#344054]">
-                    {dataset.currentVersion
-                      ? `V${dataset.currentVersion.sourceTaskRevisionNo}`
-                      : '-'}
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-[12px] text-[#8a8f99]">当前版本</div>
-                  <div className="mt-1 text-[#344054]">
-                    {dataset.currentVersion
-                      ? `DV${dataset.currentVersion.versionNo}`
-                      : '-'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[12px] text-[#8a8f99]">版本数</div>
-                  <div className="mt-1 text-[#344054]">
-                    {dataset.versions.length}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <div className="text-[12px] text-[#8a8f99]">更新时间</div>
-                <div className="mt-1 text-[#344054]">
-                  {formatTime(dataset.updateTime || dataset.createTime)}
-                </div>
-              </div>
-              <div>
-                <div className="text-[12px] text-[#8a8f99]">创建时间</div>
-                <div className="mt-1 text-[#344054]">
-                  {formatTime(dataset.createTime)}
-                </div>
-              </div>
+              ))}
             </div>
           </aside>
         </div>
@@ -1238,6 +1191,22 @@ const DataCatalogPage = () => {
       </div>
 
       <style>{`
+        .dataset-detail-tabs > .ant-tabs-nav {
+          margin: 0;
+        }
+        .dataset-detail-tabs > .ant-tabs-nav::before {
+          border-bottom: 0;
+        }
+        .dataset-detail-tabs .ant-tabs-tab {
+          padding: 9px 12px;
+          font-size: 14px;
+        }
+        .dataset-detail-tabs .ant-tabs-tab + .ant-tabs-tab {
+          margin-left: 4px;
+        }
+        
+      
+
         .catalog-tree.ant-tree {
           color: #344054;
           font-size: 14px;
