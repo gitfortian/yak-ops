@@ -1,6 +1,6 @@
 import { history } from '@umijs/max';
 import { Button, Input, Select, Tooltip } from 'antd';
-import { ChevronLeft, Eye, History, Plus, Save, X } from 'lucide-react';
+import { BarChart3, ChevronLeft, Eye, History, Plus, Save, X } from 'lucide-react';
 import type { DashboardSummary, DashboardVersionSummary } from './model';
 
 export function DashboardToolbar({
@@ -12,9 +12,11 @@ export function DashboardToolbar({
   loading,
   saving,
   preview,
+  canAddChart,
   onName,
   onDashboard,
   onNew,
+  onAddChart,
   onVersion,
   onPreview,
   onSave,
@@ -27,9 +29,11 @@ export function DashboardToolbar({
   loading: boolean;
   saving: boolean;
   preview: boolean;
+  canAddChart: boolean;
   onName: (name: string) => void;
   onDashboard: (dashboardId: string) => void;
   onNew: () => void;
+  onAddChart: () => void;
   onVersion: (versionNo: number) => void;
   onPreview: () => void;
   onSave: () => void;
@@ -82,6 +86,16 @@ export function DashboardToolbar({
       </div>
 
       <div className="flex items-center gap-2">
+        {!preview ? (
+          <Button
+            size="small"
+            disabled={!canAddChart}
+            icon={<BarChart3 size={13} />}
+            onClick={onAddChart}
+          >
+            添加图表
+          </Button>
+        ) : null}
         {persisted && versions.length ? (
           <Select
             size="small"

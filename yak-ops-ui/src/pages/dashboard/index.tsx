@@ -1,12 +1,13 @@
 import { BRAND_CSS_VARIABLES } from '@/styles/brand';
+import { Button } from 'antd';
+import { BarChart3 } from 'lucide-react';
 import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { useMemo } from 'react';
+import { ChartEditor } from './chart-editor';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
-import { LeftPanel } from './left-panel';
-import { SelectedConfig } from './selected-config';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
 import { WidgetShell } from './widget';
@@ -33,7 +34,9 @@ export default function DashboardPage() {
     canvasMinHeight = 'min-h-[calc(100vh-156px)]';
   }
 
-  const syncLayout = (nextLayout: readonly { i: string; x: number; y: number; w: number; h: number }[]) => {
+  const syncLayout = (
+    nextLayout: readonly { i: string; x: number; y: number; w: number; h: number }[],
+  ) => {
     const nextMap = new Map(nextLayout.map((item) => [item.i, item]));
     designer.setDashboard((current) => ({
       ...current,
@@ -43,6 +46,8 @@ export default function DashboardPage() {
       }),
     }));
   };
+
+  const addChart = () => designer.addWidget('bar');
 
   return (
     <div
@@ -58,9 +63,11 @@ export default function DashboardPage() {
         loading={designer.dashboardsLoading}
         saving={designer.dashboardSaving}
         preview={designer.preview}
+        canAddChart={Boolean(designer.activeDataset) && !designer.datasetsLoading}
         onName={(name) => designer.setDashboard((current) => ({ ...current, name }))}
         onDashboard={(dashboardId) => void designer.openDashboard(dashboardId)}
         onNew={designer.newDashboard}
+        onAddChart={addChart}
         onVersion={(versionNo) => void designer.activateVersion(versionNo)}
         onPreview={() => {
           designer.setPreview((current) => !current);
@@ -77,19 +84,6 @@ export default function DashboardPage() {
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {!designer.preview ? (
-          <LeftPanel
-            datasets={designer.datasets}
-            activeDataset={designer.activeDataset}
-            datasetsLoading={designer.datasetsLoading}
-            datasetsError={designer.datasetsError}
-            onDatasetChange={(activeDatasetId) =>
-              designer.setDashboard((current) => ({ ...current, activeDatasetId }))}
-            onRefreshDatasets={() => void designer.refreshDatasets()}
-            onAddChart={designer.addWidget}
-          />
-        ) : null}
-
         <main className="min-w-0 flex-1 overflow-auto">
           <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-3'}>
             <div
@@ -155,16 +149,30 @@ export default function DashboardPage() {
               ) : null}
 
               {!designer.widgets.length && !designer.datasetsLoading ? (
-                <div className="flex min-h-[360px] items-center justify-center px-6 text-center">
-                  <div>
-                    <div className="text-[14px] font-medium text-[#475467]">
-                      {designer.activeDataset ? '添加第一个图表' : '暂无可用数据集'}
+                <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
+                  <div className="max-w-[340px]">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#f5f6f7] text-[#667085]">
+                      <BarChart3 size={18} />
                     </div>
-                    <div className="mt-1 text-[12px] text-[#98a2b3]">
+                    <div className="mt-3 text-[14px] font-medium text-[#344054]">
+                      {designer.activeDataset ? '从一个图表开始' : '暂无可用数据集'}
+                    </div>
+                    <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
                       {designer.activeDataset
-                        ? '从左侧选择图表类型，添加后在右侧完成数据与样式配置'
-                        : '请先在数据开发发布中心发布并上线 Dataset'}
+                        ? '添加图表后，在右侧选择数据集、维度和指标即可完成配置。'
+                        : '请先在数据开发发布中心发布并上线 Dataset。'}
                     </div>
+                    {designer.activeDataset ? (
+                      <Button
+                        size="small"
+                        type="primary"
+                        className="mt-4"
+                        icon={<BarChart3 size={13} />}
+                        onClick={addChart}
+                      >
+                        添加图表
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -173,7 +181,7 @@ export default function DashboardPage() {
         </main>
 
         {!designer.preview && designer.selectedWidget ? (
-          <SelectedConfig
+          <ChartEditor
             widget={designer.selectedWidget}
             datasets={designer.datasets}
             analyses={designer.analyses}
@@ -181,8 +189,10 @@ export default function DashboardPage() {
               designer.updateWidget(designer.selectedWidget!.id, patch)}
             updateInlineAnalysis={(patch) =>
               designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
-            changeDataset={(datasetId) =>
-              designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
+            changeDataset={(datasetId) => {
+              designer.setDashboard((current) => ({ ...current, activeDatasetId: datasetId }));
+              designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId);
+            }}
             detachAnalysis={() =>
               designer.detachAnalysis(designer.selectedWidget!.id)}
             close={() => designer.setSelectedId(undefined)}
@@ -209,13 +219,11 @@ export default function DashboardPage() {
           height: 6px !important;
           width: 6px !important;
         }
-        .dashboard-config-tabs > .ant-tabs-nav {
-          margin: 0 !important;
-          padding: 0 12px;
+        .chart-editor-more > .ant-collapse-item > .ant-collapse-header {
+          padding: 10px 0 !important;
         }
-        .dashboard-config-tabs .ant-tabs-tab {
-          padding: 9px 0 !important;
-          font-size: 12px;
+        .chart-editor-more .ant-collapse-content-box {
+          padding: 2px 0 0 !important;
         }
       `}</style>
     </div>
