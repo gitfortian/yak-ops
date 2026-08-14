@@ -16,83 +16,25 @@
     <description>Yak Ops application assembly and Spring Boot entry module</description>
 
     <dependencies>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-datasource</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-job</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-task-catalog</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-data-development</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-dataset</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-analysis</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-resource</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-sync-offline</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-quality</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-business-workflow</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-datasource-all</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-storage-all</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-task-all</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.framework</groupId>
-            <artifactId>yak-security-spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.framework</groupId>
-            <artifactId>yak-schedule-core</artifactId>
-            <version>${yak-framework.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.framework</groupId>
-            <artifactId>yak-schedule-plugin-quartz</artifactId>
-            <version>${yak-framework.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-datasource</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-job</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-task-catalog</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-data-development</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-dataset</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-analysis</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-dashboard</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-resource</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-sync-offline</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-quality</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-business-workflow</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-datasource-all</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-storage-all</artifactId></dependency>
+        <dependency><groupId>io.yak.ops</groupId><artifactId>yak-ops-plugin-task-all</artifactId></dependency>
+        <dependency><groupId>io.yak.framework</groupId><artifactId>yak-security-spring-boot-starter</artifactId></dependency>
+        <dependency><groupId>io.yak.framework</groupId><artifactId>yak-schedule-core</artifactId><version>${yak-framework.version}</version></dependency>
+        <dependency><groupId>io.yak.framework</groupId><artifactId>yak-schedule-plugin-quartz</artifactId><version>${yak-framework.version}</version></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     </dependencies>
 
     <build>
@@ -100,9 +42,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>io.yak.ops.boot.YakOpsApplication</mainClass>
-                </configuration>
+                <configuration><mainClass>io.yak.ops.boot.YakOpsApplication</mainClass></configuration>
             </plugin>
         </plugins>
     </build>
