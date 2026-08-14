@@ -32,15 +32,34 @@ class WorkflowScheduleTriggerAdmissionTest {
   @Test
   void shouldReturnExistingLedgerWithoutSecondAdmission() {
     WorkflowSchedulePO schedule = schedule("SERIAL_WAIT");
+    WorkflowScheduleTriggerPO candidate = trigger("RECEIVED");
+    candidate.setId("candidate-ledger");
     WorkflowScheduleTriggerPO existing = trigger("RUNNING");
+    existing.setId("existing-ledger");
     existing.setWorkflowExecutionId("execution-1");
-    when(ledger.claim(existing)).thenReturn(existing);
+    when(ledger.claim(candidate)).thenReturn(existing);
 
-    var result = admission.admitNew(schedule, existing);
+    var result = admission.admitNew(schedule, candidate);
 
     assertThat(result.duplicate()).isTrue();
     assertThat(result.launchNow()).isFalse();
     assertThat(result.trigger().getWorkflowExecutionId()).isEqualTo("execution-1");
+    verify(ledger, never()).lockWorkflow("workflow-1");
+  }
+
+  @Test
+  void shouldRejectConcurrentDuplicateEvenWhileStoredRowIsStillReceived() {
+    WorkflowSchedulePO schedule = schedule("PARALLEL");
+    WorkflowScheduleTriggerPO candidate = trigger("RECEIVED");
+    candidate.setId("candidate-ledger");
+    WorkflowScheduleTriggerPO existing = trigger("RECEIVED");
+    existing.setId("existing-ledger");
+    when(ledger.claim(candidate)).thenReturn(existing);
+
+    var result = admission.admitNew(schedule, candidate);
+
+    assertThat(result.duplicate()).isTrue();
+    assertThat(result.launchNow()).isFalse();
     verify(ledger, never()).lockWorkflow("workflow-1");
   }
 
