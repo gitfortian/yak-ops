@@ -39,7 +39,14 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
   @Override
   public ScheduleExecutionResult execute(ScheduleExecutionContext context) {
     String scheduleId = context.requiredString("scheduleId");
-    WorkflowSchedulePO schedule = schedules.require(scheduleId);
+    WorkflowSchedulePO schedule;
+    try {
+      schedule = schedules.require(scheduleId);
+    } catch (IllegalArgumentException missing) {
+      engine.deleteIfPresent(scheduleId);
+      return ScheduleExecutionResult.accepted(null, "调度定义已删除，清理残留引擎计划");
+    }
+
     Instant plannedFireTime = context.scheduledFireTime() == null
         ? context.actualFireTime()
         : context.scheduledFireTime();
@@ -61,7 +68,13 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
       return ScheduleExecutionResult.accepted(null, "调度已超过生效时间并自动停用");
     }
 
-    WorkflowDefinitionVO workflow = definitions.get(schedule.getWorkflowId());
+    WorkflowDefinitionVO workflow;
+    try {
+      workflow = definitions.get(schedule.getWorkflowId());
+    } catch (IllegalArgumentException missing) {
+      lifecycle.offline(scheduleId);
+      return ScheduleExecutionResult.accepted(null, "工作流定义已删除，调度自动停用");
+    }
     if (!"ONLINE".equals(workflow.status()) || workflow.activeVersionId() == null) {
       lifecycle.offline(scheduleId);
       return ScheduleExecutionResult.accepted(null, "工作流已下线，调度自动停用");
