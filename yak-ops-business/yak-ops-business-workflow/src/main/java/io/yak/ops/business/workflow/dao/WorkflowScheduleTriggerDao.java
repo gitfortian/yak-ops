@@ -11,6 +11,7 @@ public interface WorkflowScheduleTriggerDao {
   WorkflowScheduleTriggerPO selectByExecutionId(String executionId);
   WorkflowScheduleTriggerPO selectNextWaiting(String workflowId);
   List<WorkflowScheduleTriggerPO> selectPending();
+  List<WorkflowScheduleTriggerPO> selectQueuedBySchedule(String scheduleId);
   List<WorkflowScheduleTriggerPO> selectTriggers(String scheduleId, String workflowId, String status, int limit);
   int update(WorkflowScheduleTriggerPO trigger);
   void lockWorkflow(String workflowId);
