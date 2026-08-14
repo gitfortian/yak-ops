@@ -88,6 +88,9 @@ const SqlToolbar = ({
   const datasetReleaseUnavailable = Boolean(
     datasetState && datasetState.releaseStatus !== 'ONLINE',
   );
+  const datasetStateLabel = datasetState?.datasetVersionNo
+    ? `DV${datasetState.datasetVersionNo}${datasetNeedsUpdate ? ' · 待更新' : datasetState.datasetStatus === 'OFFLINE' ? ' · 已下线' : ''}`
+    : undefined;
 
   return (
     <div className="flex h-full w-full min-w-0 items-center justify-between gap-3">
@@ -117,6 +120,20 @@ const SqlToolbar = ({
             />
           )}
         </ToolbarButton>
+        {datasetStateLabel ? (
+          <span
+            className={[
+              'mr-1 text-[10px] font-medium',
+              datasetNeedsUpdate
+                ? 'text-[var(--yak-brand-color)]'
+                : datasetState?.datasetStatus === 'OFFLINE'
+                  ? 'text-[#b54708]'
+                  : 'text-[#667085]',
+            ].join(' ')}
+          >
+            {datasetStateLabel}
+          </span>
+        ) : null}
         <ToolbarDivider />
         <ToolbarButton title="撤销" disabled={running} onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}>
           <Undo2 size={15} strokeWidth={1.8} />
