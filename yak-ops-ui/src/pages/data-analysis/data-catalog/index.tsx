@@ -467,7 +467,7 @@ const DataCatalogPage = () => {
           <div className="min-w-0 flex-1">
             <button
               type="button"
-              className="max-w-full truncate border-0 bg-transparent p-0 text-left text-[13px] font-medium text-[#344054] hover:text-[#161823] hover:underline"
+              className="max-w-full truncate border-0 bg-transparent p-0 text-left text-[14px] font-medium text-[#161823] hover:underline"
               onClick={(event) => {
                 event.stopPropagation();
                 selectDataset(record);
@@ -475,7 +475,7 @@ const DataCatalogPage = () => {
             >
               {record.name}
             </button>
-            <div className="mt-0.5 truncate text-[11px] text-[#98a2b3]">
+            <div className="mt-0.5 truncate text-[12px] text-[#8a8f99]">
               {record.description || record.sourceTaskName || '暂无描述'}
             </div>
           </div>
@@ -491,8 +491,8 @@ const DataCatalogPage = () => {
           bordered={false}
           className={
             value === 'ONLINE'
-              ? 'm-0 bg-[#f1f3f5] text-[#344054]'
-              : 'm-0 bg-[#f6f6f7] text-[#98a2b3]'
+              ? 'm-0 bg-[#f1f3f5] text-[12px] text-[#344054]'
+              : 'm-0 bg-[#f5f5f6] text-[12px] text-[#8a8f99]'
           }
         >
           {value === 'ONLINE' ? '已上线' : '已下线'}
@@ -505,17 +505,17 @@ const DataCatalogPage = () => {
       render: (_, record) =>
         record.currentVersion ? (
           <div className="min-w-0">
-            <div className="truncate text-[12px] text-[#475467]">
+            <div className="truncate text-[14px] text-[#344054]">
               {record.sourceTaskName
                 || `TaskAsset #${record.currentVersion.sourceTaskAssetId}`}
             </div>
-            <div className="mt-0.5 text-[11px] text-[#98a2b3]">
+            <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               {sourceTypeLabel[record.currentVersion.sourceType]} · SQL V
               {record.currentVersion.sourceTaskRevisionNo}
             </div>
           </div>
         ) : (
-          <span className="text-[11px] text-[#98a2b3]">尚无当前版本</span>
+          <span className="text-[12px] text-[#8a8f99]">尚无当前版本</span>
         ),
     },
     {
@@ -524,9 +524,9 @@ const DataCatalogPage = () => {
       render: (_, record) => {
         const summary = schemaSummary(record);
         return (
-          <div className="text-[11px] text-[#667085]">
+          <div className="text-[14px] text-[#344054]">
             <div>{summary.fields} 个字段</div>
-            <div className="mt-0.5 text-[#98a2b3]">
+            <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               {summary.dimensions} 维度 · {summary.metrics} 指标
             </div>
           </div>
@@ -538,10 +538,10 @@ const DataCatalogPage = () => {
       width: 92,
       render: (_, record) => (
         <div>
-          <div className="text-[12px] font-medium text-[#344054]">
+          <div className="text-[14px] font-medium text-[#344054]">
             {record.currentVersion ? `DV${record.currentVersion.versionNo}` : '-'}
           </div>
-          <div className="mt-0.5 text-[10px] text-[#98a2b3]">
+          <div className="mt-0.5 text-[12px] text-[#8a8f99]">
             {record.versions.length} 个版本
           </div>
         </div>
@@ -549,19 +549,19 @@ const DataCatalogPage = () => {
     },
     {
       title: '消费',
-      width: 105,
+      width: 115,
       render: (_, record) => (
-        <div className="flex items-center gap-1 text-[11px] text-[#667085]">
-          <BarChart3 size={12} /> {record.analysisCount} Analysis
+        <div className="flex items-center gap-1.5 text-[14px] text-[#344054]">
+          <BarChart3 size={13} className="text-[#667085]" /> {record.analysisCount} Analysis
         </div>
       ),
     },
     {
       title: '更新时间',
-      width: 150,
+      width: 160,
       render: (_, record) => (
-        <div className="flex items-center gap-1 text-[11px] text-[#667085]">
-          <Clock3 size={11} /> {formatTime(record.updateTime || record.createTime)}
+        <div className="flex items-center gap-1.5 text-[13px] text-[#667085]">
+          <Clock3 size={12} className="text-[#8a8f99]" /> {formatTime(record.updateTime || record.createTime)}
         </div>
       ),
     },
@@ -628,11 +628,11 @@ const DataCatalogPage = () => {
       : undefined;
     const icon =
       node.kind === 'dataset' ? (
-        <TableProperties size={13} className="shrink-0 text-[#98a2b3]" />
+        <TableProperties size={14} className="shrink-0 text-[#667085]" />
       ) : node.kind === 'root' ? (
-        <Database size={13} className="shrink-0 text-[#667085]" />
+        <Database size={14} className="shrink-0 text-[#475467]" />
       ) : (
-        <Folder size={13} className="shrink-0 text-[#98a2b3]" />
+        <Folder size={14} className="shrink-0 text-[#667085]" />
       );
 
     return (
@@ -640,10 +640,10 @@ const DataCatalogPage = () => {
         {icon}
         <span
           className={[
-            'min-w-0 flex-1 truncate text-[13px] leading-8',
+            'min-w-0 flex-1 truncate text-[14px] leading-8',
             node.kind === 'dataset'
               ? 'font-normal text-[#344054]'
-              : 'font-medium text-[#1f2937]',
+              : 'font-medium text-[#161823]',
           ].join(' ')}
         >
           {node.title}
@@ -652,11 +652,11 @@ const DataCatalogPage = () => {
           <span
             className={[
               'h-1.5 w-1.5 shrink-0 rounded-full',
-              dataset.status === 'ONLINE' ? 'bg-[#667085]' : 'bg-[#d0d5dd]',
+              dataset.status === 'ONLINE' ? 'bg-[#667085]' : 'bg-[#c7cbd1]',
             ].join(' ')}
           />
         ) : typeof node.datasetCount === 'number' ? (
-          <span className="shrink-0 text-[10px] text-[#98a2b3]">
+          <span className="shrink-0 text-[12px] text-[#8a8f99]">
             {node.datasetCount}
           </span>
         ) : null}
@@ -666,13 +666,13 @@ const DataCatalogPage = () => {
 
   const renderDirectoryView = () => (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3">
-      <div className="shrink-0 border-b border-[#eceef0] pb-2">
+      <div className="shrink-0 border-b border-[#e4e7ec] pb-2">
         <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto">
           <div className="flex min-w-0 shrink-0 items-center gap-2">
-            <span className="max-w-[260px] truncate text-[13px] font-semibold text-[#30323b]">
+            <span className="max-w-[260px] truncate text-[14px] font-semibold text-[#161823]">
               {scopeTitle}
             </span>
-            <span className="text-[11px] text-[#98a2b3]">
+            <span className="text-[12px] text-[#8a8f99]">
               {scopeDatasets.length} 个 Dataset
             </span>
           </div>
@@ -682,7 +682,7 @@ const DataCatalogPage = () => {
               allowClear
               variant="filled"
               value={listKeyword}
-              prefix={<Search size={14} className="text-[#98a2b3]" />}
+              prefix={<Search size={14} className="text-[#8a8f99]" />}
               placeholder="搜索名称、字段、来源"
               className="w-[220px]"
               onChange={(event) => {
@@ -788,8 +788,8 @@ const DataCatalogPage = () => {
         width: 180,
         render: (value: string, record) => (
           <div>
-            <div className="text-[12px] font-medium text-[#344054]">{value}</div>
-            <div className="mt-0.5 text-[10px] text-[#98a2b3]">
+            <div className="text-[14px] font-medium text-[#161823]">{value}</div>
+            <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               {record.physicalName}
             </div>
           </div>
@@ -800,7 +800,7 @@ const DataCatalogPage = () => {
         dataIndex: 'dataType',
         width: 90,
         render: (value: string) => (
-          <span className="text-[11px] text-[#667085]">
+          <span className="text-[14px] text-[#344054]">
             {fieldTypeLabel[value] || value}
           </span>
         ),
@@ -810,8 +810,8 @@ const DataCatalogPage = () => {
         dataIndex: 'defaultRole',
         width: 90,
         render: (value: CatalogDatasetFieldRole) => (
-          <span className="inline-flex items-center gap-1 text-[11px] text-[#667085]">
-            {value === 'MEASURE' ? <Sigma size={11} /> : <Rows3 size={11} />}
+          <span className="inline-flex items-center gap-1 text-[14px] text-[#344054]">
+            {value === 'MEASURE' ? <Sigma size={13} /> : <Rows3 size={13} />}
             {roleLabel[value]}
           </span>
         ),
@@ -821,14 +821,14 @@ const DataCatalogPage = () => {
         dataIndex: 'nullable',
         width: 70,
         render: (value: boolean) => (
-          <span className="text-[11px] text-[#667085]">{value ? '是' : '否'}</span>
+          <span className="text-[14px] text-[#344054]">{value ? '是' : '否'}</span>
         ),
       },
       {
         title: '描述',
         dataIndex: 'description',
         render: (value?: string) => (
-          <span className="text-[11px] text-[#667085]">{value || '-'}</span>
+          <span className="text-[13px] text-[#667085]">{value || '-'}</span>
         ),
       },
     ];
@@ -839,7 +839,7 @@ const DataCatalogPage = () => {
         dataIndex: 'versionNo',
         width: 120,
         render: (value: number) => (
-          <span className="text-[12px] font-medium text-[#344054]">DV{value}</span>
+          <span className="text-[14px] font-medium text-[#161823]">DV{value}</span>
         ),
       },
       {
@@ -847,7 +847,7 @@ const DataCatalogPage = () => {
         dataIndex: 'sourceType',
         width: 120,
         render: (value: CatalogDatasetSourceType) => (
-          <span className="text-[11px] text-[#667085]">
+          <span className="text-[14px] text-[#344054]">
             {sourceTypeLabel[value]}
           </span>
         ),
@@ -856,10 +856,10 @@ const DataCatalogPage = () => {
         title: '来源任务',
         render: (_, record) => (
           <div>
-            <div className="text-[11px] text-[#475467]">
+            <div className="text-[14px] text-[#344054]">
               {dataset.sourceTaskName || `TaskAsset #${record.sourceTaskAssetId}`}
             </div>
-            <div className="mt-0.5 text-[10px] text-[#98a2b3]">
+            <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               SQL V{record.sourceTaskRevisionNo}
             </div>
           </div>
@@ -870,7 +870,7 @@ const DataCatalogPage = () => {
         dataIndex: 'createTime',
         width: 165,
         render: (value?: string) => (
-          <span className="text-[11px] text-[#667085]">{formatTime(value)}</span>
+          <span className="text-[13px] text-[#667085]">{formatTime(value)}</span>
         ),
       },
       {
@@ -880,40 +880,40 @@ const DataCatalogPage = () => {
           record.id === dataset.currentVersionId ? (
             <Tag
               bordered={false}
-              className="m-0 bg-[#f1f3f5] text-[10px] text-[#475467]"
+              className="m-0 bg-[#f1f3f5] text-[12px] text-[#344054]"
             >
               当前版本
             </Tag>
           ) : (
-            <span className="text-[10px] text-[#98a2b3]">历史版本</span>
+            <span className="text-[12px] text-[#8a8f99]">历史版本</span>
           ),
       },
     ];
 
     return (
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3">
-        <div className="flex shrink-0 items-center gap-3 border-b border-[#eceef0] pb-2">
+        <div className="flex shrink-0 items-center gap-3 border-b border-[#e4e7ec] pb-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-[#f4f5f7] text-[#667085]">
             <TableProperties size={17} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="truncate text-[14px] font-semibold text-[#30323b]">
+              <span className="truncate text-[14px] font-semibold text-[#161823]">
                 {dataset.name}
               </span>
               <Tag
                 bordered={false}
-                className="m-0 bg-[#f1f3f5] text-[10px] text-[#667085]"
+                className="m-0 bg-[#f1f3f5] text-[12px] text-[#344054]"
               >
                 {dataset.status === 'ONLINE' ? '已上线' : '已下线'}
               </Tag>
               {dataset.currentVersion ? (
-                <span className="text-[10px] text-[#98a2b3]">
+                <span className="text-[12px] text-[#8a8f99]">
                   DV{dataset.currentVersion.versionNo}
                 </span>
               ) : null}
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-[#98a2b3]">
+            <div className="mt-0.5 truncate text-[12px] text-[#8a8f99]">
               {dataset.description || dataset.sourceTaskName || '暂无描述'}
             </div>
           </div>
@@ -956,22 +956,22 @@ const DataCatalogPage = () => {
           </div>
         </div>
 
-        <div className="flex h-10 shrink-0 items-end border-b border-[#eceef0]">
+        <div className="flex h-10 shrink-0 items-end border-b border-[#e4e7ec]">
           {detailTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setDetailTab(tab.key)}
               className={[
-                'relative h-10 border-0 bg-transparent px-3 text-[12px]',
+                'relative h-10 border-0 bg-transparent px-3 text-[14px]',
                 detailTab === tab.key
-                  ? 'font-medium text-[#30323b]'
-                  : 'text-[#7b808a] hover:text-[#475467]',
+                  ? 'font-medium text-[#161823]'
+                  : 'text-[#667085] hover:text-[#344054]',
               ].join(' ')}
             >
               {tab.label}
               {detailTab === tab.key ? (
-                <span className="absolute inset-x-3 bottom-0 h-[2px] bg-[#30323b]" />
+                <span className="absolute inset-x-3 bottom-0 h-[2px] bg-[#161823]" />
               ) : null}
             </button>
           ))}
@@ -1018,22 +1018,22 @@ const DataCatalogPage = () => {
                   ].map((item) => {
                     const Icon = item.icon;
                     return (
-                      <div key={item.label} className="border border-[#e5e7eb] p-3">
-                        <div className="flex items-center gap-1.5 text-[10px] text-[#98a2b3]">
-                          <Icon size={11} /> {item.label}
+                      <div key={item.label} className="border border-[#e4e7ec] p-3">
+                        <div className="flex items-center gap-1.5 text-[12px] text-[#667085]">
+                          <Icon size={12} /> {item.label}
                         </div>
-                        <div className="mt-2 text-[20px] font-semibold text-[#344054]">
+                        <div className="mt-2 text-[22px] font-semibold text-[#161823]">
                           {item.value}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-                <div className="mt-3 border border-[#e5e7eb] p-4">
-                  <div className="text-[12px] font-medium text-[#344054]">
+                <div className="mt-3 border border-[#e4e7ec] p-4">
+                  <div className="text-[14px] font-medium text-[#161823]">
                     Dataset 描述
                   </div>
-                  <div className="mt-2 text-[11px] leading-5 text-[#667085]">
+                  <div className="mt-2 text-[13px] leading-5 text-[#667085]">
                     {dataset.description || '暂无描述'}
                   </div>
                 </div>
@@ -1041,42 +1041,42 @@ const DataCatalogPage = () => {
             )}
           </section>
 
-          <aside className="w-[248px] shrink-0 overflow-y-auto border-l border-[#e5e7eb] pl-4">
-            <div className="text-[12px] font-medium text-[#344054]">
+          <aside className="w-[248px] shrink-0 overflow-y-auto border-l border-[#e4e7ec] pl-4">
+            <div className="text-[14px] font-medium text-[#161823]">
               Dataset 信息
             </div>
-            <div className="mt-4 space-y-4 text-[11px]">
+            <div className="mt-4 space-y-4 text-[13px]">
               <div>
-                <div className="text-[#98a2b3]">状态</div>
-                <div className="mt-1 text-[#475467]">
+                <div className="text-[12px] text-[#8a8f99]">状态</div>
+                <div className="mt-1 text-[#344054]">
                   {dataset.status === 'ONLINE' ? '已上线' : '已下线'}
                 </div>
               </div>
               <div>
-                <div className="text-[#98a2b3]">所属目录</div>
-                <div className="mt-1 break-all text-[#475467]">
+                <div className="text-[12px] text-[#8a8f99]">所属目录</div>
+                <div className="mt-1 break-all text-[#344054]">
                   {dataset.directoryPath
                     || (dataset.sourceNodeId ? '根目录' : '未分组')}
                 </div>
               </div>
               <div>
-                <div className="text-[#98a2b3]">来源任务</div>
-                <div className="mt-1 break-all text-[#475467]">
+                <div className="text-[12px] text-[#8a8f99]">来源任务</div>
+                <div className="mt-1 break-all text-[#344054]">
                   {dataset.sourceTaskName || '-'}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-[#98a2b3]">TaskAsset</div>
-                  <div className="mt-1 text-[#475467]">
+                  <div className="text-[12px] text-[#8a8f99]">TaskAsset</div>
+                  <div className="mt-1 text-[#344054]">
                     {dataset.currentVersion
                       ? `#${dataset.currentVersion.sourceTaskAssetId}`
                       : '-'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[#98a2b3]">SQL 版本</div>
-                  <div className="mt-1 text-[#475467]">
+                  <div className="text-[12px] text-[#8a8f99]">SQL 版本</div>
+                  <div className="mt-1 text-[#344054]">
                     {dataset.currentVersion
                       ? `V${dataset.currentVersion.sourceTaskRevisionNo}`
                       : '-'}
@@ -1085,29 +1085,29 @@ const DataCatalogPage = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-[#98a2b3]">当前版本</div>
-                  <div className="mt-1 text-[#475467]">
+                  <div className="text-[12px] text-[#8a8f99]">当前版本</div>
+                  <div className="mt-1 text-[#344054]">
                     {dataset.currentVersion
                       ? `DV${dataset.currentVersion.versionNo}`
                       : '-'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[#98a2b3]">版本数</div>
-                  <div className="mt-1 text-[#475467]">
+                  <div className="text-[12px] text-[#8a8f99]">版本数</div>
+                  <div className="mt-1 text-[#344054]">
                     {dataset.versions.length}
                   </div>
                 </div>
               </div>
               <div>
-                <div className="text-[#98a2b3]">更新时间</div>
-                <div className="mt-1 text-[#475467]">
+                <div className="text-[12px] text-[#8a8f99]">更新时间</div>
+                <div className="mt-1 text-[#344054]">
                   {formatTime(dataset.updateTime || dataset.createTime)}
                 </div>
               </div>
               <div>
-                <div className="text-[#98a2b3]">创建时间</div>
-                <div className="mt-1 text-[#475467]">
+                <div className="text-[12px] text-[#8a8f99]">创建时间</div>
+                <div className="mt-1 text-[#344054]">
                   {formatTime(dataset.createTime)}
                 </div>
               </div>
@@ -1121,7 +1121,7 @@ const DataCatalogPage = () => {
   return (
     <ConfigProvider theme={BRAND_THEME}>
       <div className="flex h-[calc(100vh-64px)] min-h-[640px] flex-col overflow-hidden bg-white text-[#161823]">
-        <header className="shrink-0 border-b border-[#e8e9ec] px-5 py-3">
+        <header className="shrink-0 border-b border-[#e4e7ec] px-5 py-3">
           <h1 className="m-0 text-[22px] font-semibold leading-8 text-[#161823]">
             数据目录
           </h1>
@@ -1137,10 +1137,10 @@ const DataCatalogPage = () => {
               style={{ width: leftWidth }}
             >
               <div className="flex h-7 shrink-0 items-center justify-between px-4">
-                <span className="text-[13px] font-semibold text-[#30323b]">
+                <span className="text-[14px] font-semibold text-[#161823]">
                   目录
                 </span>
-                <span className="text-[10px] text-[#98a2b3]">
+                <span className="text-[12px] text-[#8a8f99]">
                   {datasets.length}
                 </span>
               </div>
@@ -1151,7 +1151,7 @@ const DataCatalogPage = () => {
                   size="small"
                   variant="filled"
                   value={treeKeyword}
-                  prefix={<Search size={13} className="text-[#98a2b3]" />}
+                  prefix={<Search size={14} className="text-[#8a8f99]" />}
                   placeholder="搜索目录 / Dataset"
                   onChange={(event) => setTreeKeyword(event.target.value)}
                 />
@@ -1219,9 +1219,9 @@ const DataCatalogPage = () => {
               onClick={() => setLeftCollapsed((value) => !value)}
               className={[
                 'absolute left-1/2 top-1/2 z-20 flex h-8 w-4 -translate-x-1/2 -translate-y-1/2',
-                'items-center justify-center rounded-[3px] border border-[#dfe3e8] bg-white text-[#7b808a]',
+                'items-center justify-center rounded-[3px] border border-[#dfe3e8] bg-white text-[#667085]',
                 'shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[color,border-color,box-shadow] duration-150',
-                'hover:border-[#cfd4dc] hover:text-[#344054] focus:outline-none focus-visible:ring-2',
+                'hover:border-[#cfd4dc] hover:text-[#161823] focus:outline-none focus-visible:ring-2',
                 'focus-visible:ring-[rgba(254,44,85,.16)]',
               ].join(' ')}
             >
@@ -1240,6 +1240,7 @@ const DataCatalogPage = () => {
       <style>{`
         .catalog-tree.ant-tree {
           color: #344054;
+          font-size: 14px;
         }
         .catalog-tree .ant-tree-list-holder-inner {
           gap: 2px;
@@ -1253,9 +1254,11 @@ const DataCatalogPage = () => {
           border-radius: 0;
           transition: background-color 0.15s ease;
         }
-        .catalog-tree .ant-tree-treenode:hover,
+        .catalog-tree .ant-tree-treenode:hover {
+          background: rgba(22, 24, 35, 0.035);
+        }
         .catalog-tree .ant-tree-treenode:has(.ant-tree-node-selected) {
-          background: #f5f5f5;
+          background: rgba(22, 24, 35, 0.06);
         }
         .catalog-tree .ant-tree-node-content-wrapper {
           display: flex;
@@ -1269,7 +1272,7 @@ const DataCatalogPage = () => {
           line-height: 32px;
         }
         .catalog-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
-          color: #1f2937;
+          color: #161823;
           background: transparent !important;
         }
         .catalog-tree .ant-tree-title {
@@ -1287,7 +1290,7 @@ const DataCatalogPage = () => {
           flex: none;
           align-items: center;
           justify-content: center;
-          color: #98a2b3;
+          color: #8a8f99;
           line-height: 32px;
         }
         .catalog-tree .ant-tree-switcher svg {
