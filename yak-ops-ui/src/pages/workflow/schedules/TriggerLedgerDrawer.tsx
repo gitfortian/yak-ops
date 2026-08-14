@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from 'react';
 interface TriggerLedgerDrawerProps {
   open: boolean;
   schedule?: WorkflowSchedule;
+  backfillId?: string;
+  backfillName?: string;
   onClose: () => void;
 }
 
@@ -29,6 +31,7 @@ const SOURCE_LABEL: Record<string, string> = {
   CRON: 'Cron',
   MANUAL: '手动触发',
   MISFIRE_RECOVERY: 'Misfire 恢复',
+  BACKFILL: 'Backfill',
 };
 
 const formatTime = (value?: string) => {
@@ -37,40 +40,52 @@ const formatTime = (value?: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
-const TriggerLedgerDrawer = ({ open, schedule, onClose }: TriggerLedgerDrawerProps) => {
+const TriggerLedgerDrawer = ({
+  open,
+  schedule,
+  backfillId,
+  backfillName,
+  onClose,
+}: TriggerLedgerDrawerProps) => {
   const [records, setRecords] = useState<WorkflowScheduleTrigger[]>([]);
   const [status, setStatus] = useState<WorkflowScheduleTriggerStatus>();
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    if (!open || !schedule?.id) return;
+    if (!open || (!schedule?.id && !backfillId)) return;
     setLoading(true);
     try {
       setRecords(await listWorkflowScheduleTriggers({
-        scheduleId: schedule.id,
+        scheduleId: schedule?.id,
+        backfillId,
         status,
-        limit: 200,
+        limit: backfillId ? 1000 : 200,
       }));
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Trigger Ledger 加载失败');
     } finally {
       setLoading(false);
     }
-  }, [open, schedule?.id, status]);
+  }, [backfillId, open, schedule?.id, status]);
 
   useEffect(() => {
-    if (open) void load();
+    if (open) {
+      setStatus(undefined);
+      void load();
+    }
   }, [load, open]);
 
   return (
     <Drawer
       open={open}
-      width={980}
+      width={1040}
       title={
         <div>
-          <div className="text-[14px] font-semibold text-[#344054]">Trigger 记录</div>
+          <div className="text-[14px] font-semibold text-[#344054]">
+            {backfillId ? 'Backfill Trigger 明细' : 'Trigger 记录'}
+          </div>
           <div className="mt-0.5 text-[11px] font-normal text-[#98a2b3]">
-            {schedule?.name || '-'} · 每个计划时间最多产生一条 Ledger 记录
+            {backfillName || schedule?.name || '-'} · {backfillId ? '按补数批次隔离幂等' : '每个正常计划时间最多产生一条 Ledger 记录'}
           </div>
         </div>
       }
@@ -91,8 +106,9 @@ const TriggerLedgerDrawer = ({ open, schedule, onClose }: TriggerLedgerDrawerPro
       }
     >
       <div className="mb-3 rounded-sm bg-[#f8f9fb] px-3 py-2 text-[11px] leading-5 text-[#667085]">
-        SERIAL_WAIT 会先进入 WAITING，前序 WorkflowExecution 终态提交后自动推进；
-        SERIAL_DISCARD 会记为 SKIPPED；Misfire 的 FIRE_ONCE / SKIP 同样保留审计记录。
+        {backfillId
+          ? 'Backfill 的 businessDate / scheduleTime 来自历史逻辑计划时间；不同 Backfill 批次可重新执行同一天，同一批次仍由 dedupeKey 保证幂等。'
+          : 'SERIAL_WAIT 会先进入 WAITING，前序 WorkflowExecution 终态提交后自动推进；SERIAL_DISCARD 会记为 SKIPPED；Misfire 同样保留审计记录。'}
       </div>
       <Table
         rowKey="id"
@@ -100,7 +116,7 @@ const TriggerLedgerDrawer = ({ open, schedule, onClose }: TriggerLedgerDrawerPro
         bordered
         loading={loading}
         dataSource={records}
-        scroll={{ x: 1280 }}
+        scroll={{ x: 1430 }}
         pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (total) => `共 ${total} 条` }}
         columns={[
           {
@@ -110,6 +126,14 @@ const TriggerLedgerDrawer = ({ open, schedule, onClose }: TriggerLedgerDrawerPro
             fixed: 'left',
             render: (value: WorkflowScheduleTriggerStatus) => (
               <span className="text-[12px] font-medium text-[#475467]">{STATUS_LABEL[value] || value}</span>
+            ),
+          },
+          {
+            title: 'businessDate',
+            dataIndex: 'businessDate',
+            width: 115,
+            render: (value?: string) => (
+              <code className="text-[11px] text-[#475467]">{value || '-'}</code>
             ),
           },
           {
