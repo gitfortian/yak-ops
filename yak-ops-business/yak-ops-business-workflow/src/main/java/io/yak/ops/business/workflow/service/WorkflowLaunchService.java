@@ -30,7 +30,7 @@ public class WorkflowLaunchService {
     this.triggerRecorder = triggerRecorder;
   }
 
-  /** 正式执行当前启用的已发布版本。 */
+  /** 正式执行当前启用的已发布版本；手工/API 启动仍保持单实例安全默认。 */
   public WorkflowDefinitionVO runPublished(
       String workflowId,
       WorkflowTriggerContext triggerContext) {
@@ -40,6 +40,24 @@ public class WorkflowLaunchService {
         id,
         triggerContext,
         () -> definitionService.run(id),
+        WorkflowDefinitionVO::latestExecutionId);
+  }
+
+  /**
+   * 调度协调器专用的发布版本启动入口。
+   *
+   * <p>并发准入已经由 Trigger Ledger + workflow 行锁完成，因此这里允许创建并行
+   * WorkflowExecution；普通手工运行不会调用该入口。</p>
+   */
+  public WorkflowDefinitionVO runScheduledPublished(
+      String workflowId,
+      WorkflowTriggerContext triggerContext) {
+    String id = required(workflowId, "工作流 ID 不能为空");
+    return launch(
+        "SCHEDULED_PUBLISHED",
+        id,
+        triggerContext,
+        () -> definitionService.runConcurrent(id),
         WorkflowDefinitionVO::latestExecutionId);
   }
 
