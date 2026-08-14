@@ -171,6 +171,7 @@ const DevelopmentWorkbench = ({
   const datasetVersion = datasetContext.datasetState?.detail?.currentVersion || undefined;
   const datasetToolbarState = datasetContext.release ? {
     releaseRevisionNo: datasetContext.release.currentRevisionNo,
+    releaseStatus: datasetContext.release.status,
     datasetId: datasetContext.datasetState?.detail?.dataset.id,
     datasetVersionNo: datasetVersion?.versionNo,
     datasetSourceRevisionNo: datasetVersion?.sourceTaskRevisionNo,
