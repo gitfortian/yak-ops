@@ -52,6 +52,9 @@ const datasetTooltip = (
 ) => {
   if (loading) return '正在读取 Dataset 状态';
   if (!state) return '请先发布 SQL 版本，再发布为 Dataset';
+  if (state.releaseStatus !== 'ONLINE') {
+    return 'SQL 发布任务当前未上线，请先在发布中心上线后再发布 Dataset';
+  }
   if (!state.datasetId || !state.datasetVersionNo) return `发布 SQL v${state.releaseRevisionNo} 为 Dataset`;
   if (state.datasetSourceRevisionNo !== state.releaseRevisionNo) {
     return `更新 Dataset · DV${state.datasetVersionNo} → SQL v${state.releaseRevisionNo}`;
@@ -82,6 +85,9 @@ const SqlToolbar = ({
     datasetState?.datasetId
       && datasetState.datasetSourceRevisionNo !== datasetState.releaseRevisionNo,
   );
+  const datasetReleaseUnavailable = Boolean(
+    datasetState && datasetState.releaseStatus !== 'ONLINE',
+  );
 
   return (
     <div className="flex h-full w-full min-w-0 items-center justify-between gap-3">
@@ -98,7 +104,7 @@ const SqlToolbar = ({
         </ToolbarButton>
         <ToolbarButton
           title={datasetTooltip(datasetState, datasetLoading)}
-          disabled={!onPublishDataset || !datasetState || datasetLoading || datasetPublishing || saving || publishing || running}
+          disabled={!onPublishDataset || !datasetState || datasetReleaseUnavailable || datasetLoading || datasetPublishing || saving || publishing || running}
           onClick={() => onPublishDataset?.()}
         >
           {datasetLoading || datasetPublishing ? (
