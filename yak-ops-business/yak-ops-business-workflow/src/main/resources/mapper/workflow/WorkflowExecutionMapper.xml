@@ -38,8 +38,11 @@
   <select id="countActiveExecutions" resultType="long">
     SELECT COUNT(*)
     FROM yak_workflow_execution e
-    INNER JOIN yak_workflow_version v ON v.id = e.definition_id
-    WHERE v.workflow_id = #{workflowId}
+    LEFT JOIN yak_workflow_version v ON v.id = e.definition_id
+    WHERE (
+        v.workflow_id = #{workflowId}
+        OR (#{latestExecutionId} IS NOT NULL AND e.id = #{latestExecutionId})
+      )
       AND e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
   </select>
 
