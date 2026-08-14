@@ -48,7 +48,10 @@ const filterValue = (field: DatasetField | undefined, value: string): Scalar => 
 };
 
 const queryPayload = (widget: DashboardWidget, dataset: PublishedDataset): DatasetQueryPayload => {
-  const operators: Record<DashboardWidget['filters'][number]['operator'], DatasetQueryPayload['filters'][number]['operator']> = {
+  const operators: Record<
+    DashboardWidget['filters'][number]['operator'],
+    DatasetQueryPayload['filters'][number]['operator']
+  > = {
     eq: 'EQ',
     neq: 'NE',
     contains: 'LIKE',
@@ -66,17 +69,20 @@ const queryPayload = (widget: DashboardWidget, dataset: PublishedDataset): Datas
         : filterValue(field, filter.value);
       return { fieldId: filter.field, operator: operators[filter.operator], value };
     });
-  const sorts = widget.sort?.field
-    ? (() => {
-      const metric = widget.metrics.find((item) => item.field === widget.sort?.field);
-      if (!metric && !widget.dimensions.includes(widget.sort.field)) return [];
-      return [{
-        fieldId: widget.sort.field,
+
+  const sort = widget.sort;
+  let sorts: DatasetQueryPayload['sorts'] = [];
+  if (sort?.field) {
+    const metric = widget.metrics.find((item) => item.field === sort.field);
+    if (metric || widget.dimensions.includes(sort.field)) {
+      sorts = [{
+        fieldId: sort.field,
         aggregation: metric?.aggregation,
-        direction: widget.sort.direction === 'desc' ? 'DESC' as const : 'ASC' as const,
+        direction: sort.direction === 'desc' ? 'DESC' : 'ASC',
       }];
-    })()
-    : [];
+    }
+  }
+
   return {
     dimensions: widget.type === 'metric' ? [] : widget.dimensions,
     metrics: widget.metrics.map((metric) => ({ fieldId: metric.field, aggregation: metric.aggregation })),
@@ -126,8 +132,11 @@ function useWidgetQuery(widget: DashboardWidget, dataset?: PublishedDataset) {
         if (requestId === sequence.current) setLoading(false);
       }
     }, 180);
-    return () => window.clearTimeout(timer);
-  }, [dataset?.id, payloadKey, widget]);
+    return () => {
+      window.clearTimeout(timer);
+      if (sequence.current === requestId) sequence.current += 1;
+    };
+  }, [dataset?.id, dataset?.currentVersionNo, payloadKey, widget]);
 
   return { result, loading, error };
 }
