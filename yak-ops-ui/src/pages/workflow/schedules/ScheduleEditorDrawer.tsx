@@ -183,7 +183,11 @@ const ScheduleEditorDrawer = ({
           </Form.Item>
         </div>
 
-        <Form.Item name="inputJson" label="运行参数 JSON">
+        <Form.Item
+          name="inputJson"
+          label="调度运行参数 JSON"
+          extra="运行时合并顺序：工作流版本参数 < 调度参数 < Backfill 参数 < 系统参数。系统会按逻辑计划时间注入 businessDate、scheduleTime、scheduleTimezone、triggerType、scheduleId，并在 __schedule 中保留完整副本。"
+        >
           <Input.TextArea rows={7} spellCheck={false} className="font-mono text-[12px]" />
         </Form.Item>
       </Form>
