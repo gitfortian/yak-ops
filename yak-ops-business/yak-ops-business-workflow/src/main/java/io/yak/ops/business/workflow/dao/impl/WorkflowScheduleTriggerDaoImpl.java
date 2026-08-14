@@ -17,7 +17,8 @@ import org.springframework.stereotype.Repository;
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDao {
-  private static final List<String> PENDING = List.of("RECEIVED", "WAITING", "LAUNCHING", "RUNNING");
+  private static final List<String> PENDING =
+      List.of("RECEIVED", "WAITING", "LAUNCHING", "REACTIVATING", "RUNNING");
   private final WorkflowScheduleTriggerMapper mapper;
 
   @Override
