@@ -31,8 +31,6 @@
   <select id="selectRecoverableExecutionIds" resultType="java.lang.String">
     SELECT e.id
     FROM yak_workflow_execution e
-    INNER JOIN yak_workflow_definition d
-      ON d.latest_execution_id = e.id
     WHERE e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
     ORDER BY e.created_at
   </select>
