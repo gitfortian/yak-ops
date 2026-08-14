@@ -32,7 +32,8 @@ public class WorkflowRecoveryService {
   @Order(10)
   @EventListener(ApplicationReadyEvent.class)
   public void recover() {
-    // 先恢复全部非终态 WorkflowExecution，再由 Schedule Reconciler 恢复 Trigger Ledger。
+    // Register executions as active before reconciliation. This does not execute a node by itself;
+    // it only guarantees that a recovered SUBMITTED dispatch drains immediately when reconstructed.
     for (String executionId : runtimePersistence.findRecoverableExecutionIds()) {
       try {
         runtimeService.activate(executionId);
