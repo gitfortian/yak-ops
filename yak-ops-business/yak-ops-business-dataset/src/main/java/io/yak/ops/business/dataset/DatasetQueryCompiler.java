@@ -23,10 +23,7 @@ final class DatasetQueryCompiler {
   private static final int MAX_VALUE_LENGTH = 4000;
   private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_$]*");
 
-  CompiledQuery compile(
-      String baseSql,
-      List<DatasetField> fields,
-      DatasetQueryRequest request) {
+  CompiledQuery compile(String baseSql, List<DatasetField> fields, DatasetQueryRequest request) {
     String safeBaseSql = DatasetSqlSafety.requireReadOnlyQuery(baseSql);
     DatasetQueryRequest normalized = request == null
         ? new DatasetQueryRequest(null, List.of(), List.of(), List.of(), List.of(), null, null)
@@ -38,7 +35,6 @@ final class DatasetQueryCompiler {
     List<DatasetSort> sorts = copy(normalized.sorts());
     int limit = normalizeLimit(normalized.limit());
     int fetchRows = Math.min(MAX_LIMIT + 1, limit + 1);
-
     if (filters.size() > MAX_FILTERS) throw new IllegalArgumentException("Dataset 查询过滤条件不能超过 50 个");
 
     Map<String, DatasetField> fieldMap = new LinkedHashMap<>();
@@ -91,7 +87,7 @@ final class DatasetQueryCompiler {
         projections.add(metricExpression(field, metric.aggregation()) + " AS " + alias);
         metricAliases.put(metricKey, alias);
         bindings.add(new DatasetQueryColumnBinding(
-            alias, field.fieldId(), field.displayName(), field.dataType(), metric.aggregation()));
+            alias, field.fieldId(), field.displayName(), metricResultType(field, metric.aggregation()), metric.aggregation()));
       }
     }
 
@@ -99,9 +95,7 @@ final class DatasetQueryCompiler {
         .append(String.join(", ", projections))
         .append(" FROM (").append(safeBaseSql).append(") yak_dataset_source");
 
-    List<String> where = filters.stream()
-        .map(filter -> compileFilter(fieldMap, filter))
-        .toList();
+    List<String> where = filters.stream().map(filter -> compileFilter(fieldMap, filter)).toList();
     if (!where.isEmpty()) sql.append(" WHERE ").append(String.join(" AND ", where));
     if (!groupBy.isEmpty()) sql.append(" GROUP BY ").append(String.join(", ", groupBy));
 
@@ -141,12 +135,8 @@ final class DatasetQueryCompiler {
     return switch (filter.operator()) {
       case IS_NULL -> expression + " IS NULL";
       case IS_NOT_NULL -> expression + " IS NOT NULL";
-      case EQ -> filter.value() == null
-          ? expression + " IS NULL"
-          : expression + " = " + literal(filter.value());
-      case NE -> filter.value() == null
-          ? expression + " IS NOT NULL"
-          : expression + " <> " + literal(filter.value());
+      case EQ -> filter.value() == null ? expression + " IS NULL" : expression + " = " + literal(filter.value());
+      case NE -> filter.value() == null ? expression + " IS NOT NULL" : expression + " <> " + literal(filter.value());
       case GT -> expression + " > " + literalRequired(filter.value());
       case GTE -> expression + " >= " + literalRequired(filter.value());
       case LT -> expression + " < " + literalRequired(filter.value());
@@ -158,8 +148,7 @@ final class DatasetQueryCompiler {
       case BETWEEN -> {
         List<Object> values = filter.values() == null ? List.of() : filter.values();
         if (values.size() != 2) throw new IllegalArgumentException("BETWEEN 必须提供两个 values");
-        yield expression + " BETWEEN " + literalRequired(values.get(0))
-            + " AND " + literalRequired(values.get(1));
+        yield expression + " BETWEEN " + literalRequired(values.get(0)) + " AND " + literalRequired(values.get(1));
       }
     };
   }
@@ -180,8 +169,8 @@ final class DatasetQueryCompiler {
     if (value == null) return "NULL";
     if (value instanceof Boolean bool) return bool ? "TRUE" : "FALSE";
     if (value instanceof Number number) {
-      if (number instanceof Double d && (!Double.isFinite(d))) throw new IllegalArgumentException("过滤数值非法");
-      if (number instanceof Float f && (!Float.isFinite(f))) throw new IllegalArgumentException("过滤数值非法");
+      if (number instanceof Double d && !Double.isFinite(d)) throw new IllegalArgumentException("过滤数值非法");
+      if (number instanceof Float f && !Float.isFinite(f)) throw new IllegalArgumentException("过滤数值非法");
       try {
         return new BigDecimal(number.toString()).toPlainString();
       } catch (NumberFormatException exception) {
@@ -190,7 +179,8 @@ final class DatasetQueryCompiler {
     }
     if (value instanceof String text) {
       if (text.length() > MAX_VALUE_LENGTH) throw new IllegalArgumentException("单个过滤值不能超过 4000 个字符");
-      return "'" + text.replace("'", "''") + "'";
+      String escaped = text.replace("\\", "\\\\").replace("'", "''");
+      return "'" + escaped + "'";
     }
     throw new IllegalArgumentException("过滤值仅支持 string / number / boolean / null");
   }
@@ -204,6 +194,13 @@ final class DatasetQueryCompiler {
       case COUNT_DISTINCT -> "COUNT(DISTINCT " + value + ")";
       case MAX -> "MAX(" + value + ")";
       case MIN -> "MIN(" + value + ")";
+    };
+  }
+
+  private DatasetFieldDataType metricResultType(DatasetField field, DatasetAggregation aggregation) {
+    return switch (aggregation) {
+      case SUM, AVG, COUNT, COUNT_DISTINCT -> DatasetFieldDataType.NUMBER;
+      case MAX, MIN -> field.dataType();
     };
   }
 
@@ -239,10 +236,6 @@ final class DatasetQueryCompiler {
     return values == null ? List.of() : List.copyOf(values);
   }
 
-  record CompiledQuery(
-      String sql,
-      List<DatasetQueryColumnBinding> bindings,
-      int limit,
-      int fetchRows) {
+  record CompiledQuery(String sql, List<DatasetQueryColumnBinding> bindings, int limit, int fetchRows) {
   }
 }
