@@ -1,4 +1,4 @@
-import { createAnalysis, fetchAnalyses } from '@/components/analysis/analysis-service';
+import { fetchAnalyses } from '@/components/analysis/analysis-service';
 import type {
   AnalysisFilter,
   AnalysisSelection,
@@ -31,32 +31,22 @@ import type {
   ChartType,
   DashboardDocument,
   DashboardGlobalFilter,
-  DashboardInteraction,
   DashboardSummary,
   DashboardVersionSummary,
   DashboardWidget,
-  DatasetField,
   PublishedDataset,
 } from './model';
 import { fetchDashboardDatasets } from './service';
-
-const linkWidget = (widget: DashboardWidget, analysisId: string): DashboardWidget => ({
-  id: widget.id,
-  analysisId,
-  x: widget.x,
-  y: widget.y,
-  w: widget.w,
-  h: widget.h,
-  minW: widget.minW,
-  minH: widget.minH,
-});
 
 const assetSpec = (analysis: AnalysisAsset): AnalysisSpec => ({
   type: analysis.type,
   datasetId: analysis.datasetId,
   dimensions: [...analysis.dimensions],
   metrics: analysis.metrics.map((metric) => ({ ...metric })),
-  filters: analysis.filters.map((filter, index) => ({ ...filter, id: `detached-${analysis.id}-${index}` })),
+  filters: analysis.filters.map((filter, index) => ({
+    ...filter,
+    id: `detached-${analysis.id}-${index}`,
+  })),
   sort: analysis.sort ? { ...analysis.sort } : undefined,
   style: { ...analysis.style },
   limit: analysis.limit,
@@ -74,10 +64,7 @@ export function useDashboardDesigner() {
   const [dashboard, setDashboard] = useState<DashboardDocument>(loadDashboard);
   const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
-  const [datasetsError, setDatasetsError] = useState('');
   const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
-  const [analysesLoading, setAnalysesLoading] = useState(true);
-  const [analysesError, setAnalysesError] = useState('');
   const [dashboardAssets, setDashboardAssets] = useState<DashboardSummary[]>([]);
   const [dashboardVersions, setDashboardVersions] = useState<DashboardVersionSummary[]>([]);
   const [dashboardsLoading, setDashboardsLoading] = useState(true);
@@ -86,6 +73,7 @@ export function useDashboardDesigner() {
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState(false);
   const didAutoOpen = useRef(false);
+
   const widgets = dashboard.widgets;
   const selectedWidget = widgets.find((widget) => widget.id === selectedId);
   const activeDataset = useMemo(
@@ -93,35 +81,26 @@ export function useDashboardDesigner() {
     [dashboard.activeDatasetId, datasets],
   );
 
-  const refreshDatasets = useCallback(async () => {
+  const loadDatasets = useCallback(async () => {
     setDatasetsLoading(true);
-    setDatasetsError('');
     try {
-      const values = await fetchDashboardDatasets();
-      setDatasets(values);
-      if (!values.length) setDatasetsError('暂无可用于分析的 ONLINE Dataset');
-    } catch (error) {
+      setDatasets(await fetchDashboardDatasets());
+    } catch {
       setDatasets([]);
-      setDatasetsError(error instanceof Error ? error.message : '加载 Dataset 失败');
     } finally {
       setDatasetsLoading(false);
     }
   }, []);
 
-  const refreshAnalyses = useCallback(async () => {
-    setAnalysesLoading(true);
-    setAnalysesError('');
+  const loadAnalyses = useCallback(async () => {
     try {
       setAnalyses(await fetchAnalyses());
-    } catch (error) {
+    } catch {
       setAnalyses([]);
-      setAnalysesError(error instanceof Error ? error.message : '加载 Analysis 失败');
-    } finally {
-      setAnalysesLoading(false);
     }
   }, []);
 
-  const refreshDashboardAssets = useCallback(async () => {
+  const loadDashboardAssets = useCallback(async () => {
     setDashboardsLoading(true);
     try {
       setDashboardAssets(await fetchDashboards());
@@ -146,10 +125,10 @@ export function useDashboardDesigner() {
   }, []);
 
   useEffect(() => {
-    void refreshDatasets();
-    void refreshAnalyses();
-    void refreshDashboardAssets();
-  }, [refreshDatasets, refreshAnalyses, refreshDashboardAssets]);
+    void loadDatasets();
+    void loadAnalyses();
+    void loadDashboardAssets();
+  }, [loadDatasets, loadAnalyses, loadDashboardAssets]);
 
   useEffect(() => {
     if (didAutoOpen.current || dashboardsLoading) return;
@@ -157,14 +136,20 @@ export function useDashboardDesigner() {
     const hasLegacyDraft = !isPersistedDashboard(dashboard.id)
       && (dashboard.widgets.length > 0 || dashboard.name !== DEFAULT_DASHBOARD.name);
     if (!hasLegacyDraft && dashboardAssets.length) void openDashboard(dashboardAssets[0].id);
-  }, [dashboard.id, dashboard.name, dashboard.widgets.length, dashboardAssets, dashboardsLoading, openDashboard]);
+  }, [
+    dashboard.id,
+    dashboard.name,
+    dashboard.widgets.length,
+    dashboardAssets,
+    dashboardsLoading,
+    openDashboard,
+  ]);
 
   useEffect(() => {
     if (!datasets.length) return;
     setDashboard((current) => reconcileDashboard(current, datasets));
   }, [datasets]);
 
-  /** Switching/opening a persisted DashboardVersion resets runtime values to its saved defaults. */
   useEffect(() => {
     setRuntimeFilterValues(runtimeDefaults(dashboard.globalFilters));
   }, [dashboard.id, dashboard.currentVersionId]);
@@ -180,27 +165,6 @@ export function useDashboardDesigner() {
       if (widget.id !== id || widget.analysisId || !widget.inlineAnalysis) return widget;
       return { ...widget, inlineAnalysis: { ...widget.inlineAnalysis, ...patch } };
     }),
-  }));
-
-  const setGlobalFilters = (filters: DashboardGlobalFilter[]) => {
-    const filterIds = new Set(filters.map((filter) => filter.id));
-    setDashboard((current) => ({
-      ...current,
-      globalFilters: filters,
-      interactions: current.interactions.filter((item) => filterIds.has(item.targetFilterId)),
-    }));
-    setRuntimeFilterValues((current) => {
-      const next: Record<string, Scalar | undefined> = {};
-      filters.forEach((filter) => {
-        next[filter.id] = hasOwn(current, filter.id) ? current[filter.id] : filter.defaultValue;
-      });
-      return next;
-    });
-  };
-
-  const setInteractions = (interactions: DashboardInteraction[]) => setDashboard((current) => ({
-    ...current,
-    interactions,
   }));
 
   const setRuntimeFilterValue = (filterId: string, value: Scalar | undefined) => {
@@ -251,42 +215,17 @@ export function useDashboardDesigner() {
     setSelectedId(next.id);
   };
 
-  const addAnalysis = (analysisId: string) => {
-    const analysis = analyses.find((item) => item.id === analysisId);
-    if (!analysis) return void message.warning('Analysis 不存在或已删除');
-    const dataset = datasets.find((item) => item.id === analysis.datasetId);
-    if (!dataset) return void message.warning('Analysis 依赖的 Dataset 已下线或不可用');
-    const base = createWidget(analysis.type, dataset, maxY());
-    const next = linkWidget(base, analysis.id);
-    setDashboard((current) => ({ ...current, activeDatasetId: analysis.datasetId, widgets: [...current.widgets, next] }));
-    setSelectedId(next.id);
-  };
-
-  const saveWidgetAsAnalysis = async (id: string) => {
-    const source = widgets.find((widget) => widget.id === id);
-    if (!source) return;
-    if (source.analysisId) return void message.info('该组件已经引用 Analysis');
-    if (!source.inlineAnalysis) return void message.warning('当前组件缺少可保存的分析定义');
-    try {
-      const analysis = await createAnalysis(source.title || '未命名分析', '', source.inlineAnalysis);
-      setAnalyses((current) => [analysis, ...current.filter((item) => item.id !== analysis.id)]);
-      setDashboard((current) => ({
-        ...current,
-        widgets: current.widgets.map((widget) => widget.id === id ? linkWidget(widget, analysis.id) : widget),
-      }));
-      message.success('已保存为可复用 Analysis，Dashboard 已切换为引用模式');
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存 Analysis 失败');
-    }
-  };
-
   const detachAnalysis = (id: string) => {
     const widget = widgets.find((item) => item.id === id);
     if (!widget?.analysisId) return;
     const analysis = analyses.find((item) => item.id === widget.analysisId);
     if (!analysis) return void message.warning('引用的 Analysis 已不可用，无法生成独立副本');
-    updateWidget(id, { analysisId: undefined, title: analysis.name, inlineAnalysis: assetSpec(analysis) });
-    message.success('已解除 Analysis 引用，当前组件已复制为 Dashboard 本地分析');
+    updateWidget(id, {
+      analysisId: undefined,
+      title: analysis.name,
+      inlineAnalysis: assetSpec(analysis),
+    });
+    message.success('已解除 Analysis 引用，当前组件已复制为 Dashboard 本地图表');
   };
 
   const duplicateWidget = (id: string) => {
@@ -319,7 +258,7 @@ export function useDashboardDesigner() {
 
   const changeWidgetDataset = (id: string, datasetId: string) => {
     const widget = widgets.find((item) => item.id === id);
-    if (widget?.analysisId) return void message.info('该组件引用 Analysis，请先解除引用后再编辑');
+    if (widget?.analysisId) return void message.info('该组件引用历史共享图表，请先复制为可编辑图表');
     if (!widget?.inlineAnalysis) return;
     const dataset = findDataset(datasets, datasetId);
     if (!dataset) return;
@@ -334,32 +273,6 @@ export function useDashboardDesigner() {
       })),
       interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
     }));
-  };
-
-  const addField = (field: DatasetField) => {
-    if (!selectedWidget) return void message.info('请先选择一个图表组件');
-    if (selectedWidget.analysisId) return void message.info('该组件引用 Analysis，请先解除引用后再编辑');
-    const spec = selectedWidget.inlineAnalysis;
-    if (!spec) return;
-    if (!activeDataset) return void message.info('当前没有可用 Dataset');
-    if (spec.datasetId !== activeDataset.id) {
-      changeWidgetDataset(selectedWidget.id, activeDataset.id);
-      return void message.info('已切换图表数据集，请再次添加字段');
-    }
-    if (field.role === 'dimension') {
-      if (spec.type === 'metric') return void message.info('指标卡不需要维度');
-      const limit = spec.type === 'table' ? 3 : 1;
-      if (!spec.dimensions.includes(field.key)) {
-        updateInlineAnalysis(selectedWidget.id, { dimensions: [...spec.dimensions, field.key].slice(0, limit) });
-      }
-      return;
-    }
-    const limit = ['table', 'line', 'bar'].includes(spec.type) ? 3 : 1;
-    if (!spec.metrics.some((metric) => metric.field === field.key)) {
-      updateInlineAnalysis(selectedWidget.id, {
-        metrics: [...spec.metrics, { field: field.key, aggregation: 'SUM' }].slice(0, limit),
-      });
-    }
   };
 
   const save = async () => {
@@ -392,7 +305,9 @@ export function useDashboardDesigner() {
       const detail = await activateDashboardVersion(dashboard.id, versionNo);
       setDashboard(toDashboardDocument(detail));
       setDashboardVersions(detail.versions);
-      setDashboardAssets((current) => current.map((item) => item.id === detail.dashboard.id ? detail.dashboard : item));
+      setDashboardAssets((current) => current.map((item) => (
+        item.id === detail.dashboard.id ? detail.dashboard : item
+      )));
       setSelectedId(undefined);
       message.success(`已切换到 Dashboard V${versionNo}`);
     } catch (error) {
@@ -416,10 +331,7 @@ export function useDashboardDesigner() {
     widgets,
     datasets,
     datasetsLoading,
-    datasetsError,
     analyses,
-    analysesLoading,
-    analysesError,
     dashboardAssets,
     dashboardVersions,
     dashboardsLoading,
@@ -434,26 +346,18 @@ export function useDashboardDesigner() {
     setPreview,
     updateWidget,
     updateInlineAnalysis,
-    setGlobalFilters,
-    setInteractions,
     setRuntimeFilterValue,
     resetRuntimeFilters,
     runtimeFiltersForWidget,
     handleWidgetSelection,
     addWidget,
-    addAnalysis,
-    saveWidgetAsAnalysis,
     detachAnalysis,
     duplicateWidget,
     deleteWidget,
     changeWidgetDataset,
-    addField,
     save,
     activateVersion,
     newDashboard,
     openDashboard,
-    refreshDatasets,
-    refreshAnalyses,
-    refreshDashboardAssets,
   };
 }
