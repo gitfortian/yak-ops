@@ -1,5 +1,6 @@
 package io.yak.ops.business.workflow.service;
 
+import io.yak.ops.business.workflow.domain.WorkflowScheduleLaunchBindingScope;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
 import io.yak.ops.business.workflow.persistence.WorkflowExecutionTriggerRecorder;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
@@ -46,19 +47,22 @@ public class WorkflowLaunchService {
   /**
    * 调度协调器专用的发布版本启动入口。
    *
-   * <p>并发准入已经由 Trigger Ledger + workflow 行锁完成，因此这里允许创建并行
-   * WorkflowExecution；普通手工运行不会调用该入口。</p>
+   * <p>并发准入已经由 Trigger Ledger + workflow 行锁完成。作用域会让 ExecutionRepository
+   * 在 engine.start 首次持久化 CREATED 实例时就把 executionId 写回 Ledger，随后才进入 activate，
+   * 从而让宕机恢复能够识别“已经创建但尚未完成 Launch 返回”的实例。</p>
    */
   public WorkflowDefinitionVO runScheduledPublished(
       String workflowId,
       WorkflowTriggerContext triggerContext) {
     String id = required(workflowId, "工作流 ID 不能为空");
-    return launch(
-        "SCHEDULED_PUBLISHED",
-        id,
-        triggerContext,
-        () -> definitionService.runConcurrent(id),
-        WorkflowDefinitionVO::latestExecutionId);
+    try (var ignored = WorkflowScheduleLaunchBindingScope.open(triggerContext.triggerId())) {
+      return launch(
+          "SCHEDULED_PUBLISHED",
+          id,
+          triggerContext,
+          () -> definitionService.runConcurrent(id),
+          WorkflowDefinitionVO::latestExecutionId);
+    }
   }
 
   /** 测试执行当前草稿，不改变已发布版本。 */
@@ -133,6 +137,7 @@ public class WorkflowLaunchService {
     try {
       T result = action.get();
       String executionId = result == null ? null : executionIdExtractor.apply(result);
+      // Ledger 的 executionId 已在首次 CREATED 持久化时提前绑定；这里继续记录通用 runtime trigger metadata。
       triggerRecorder.record(executionId, triggerContext);
       log.info(
           "[workflow-launch] created mode={}, target={}, triggerType={}, triggerId={}, execution={}",
