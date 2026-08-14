@@ -13,5 +13,7 @@ public interface WorkflowExecutionMapper extends BaseMapper<WorkflowExecutionPO>
 
   List<String> selectRecoverableExecutionIds();
 
+  long countActiveExecutions(@Param("workflowId") String workflowId);
+
   String selectEffectiveRuntimeMetadata(@Param("executionId") String executionId);
 }

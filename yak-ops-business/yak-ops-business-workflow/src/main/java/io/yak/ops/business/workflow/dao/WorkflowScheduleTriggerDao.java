@@ -23,7 +23,7 @@ public interface WorkflowScheduleTriggerDao {
   }
 
   int update(WorkflowScheduleTriggerPO trigger);
-  int bindPreparedExecution(String triggerId, String executionId);
+  int bindPreparedExecution(String triggerId, String executionId, String executionStatus);
   void lockWorkflow(String workflowId);
   long countActiveExecutions(String workflowId);
   long countLaunchingTriggers(String workflowId);

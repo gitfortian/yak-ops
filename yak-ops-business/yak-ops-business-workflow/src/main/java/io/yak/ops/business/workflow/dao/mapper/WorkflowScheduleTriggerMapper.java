@@ -27,8 +27,8 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
   @Update("""
       UPDATE yak_workflow_schedule_trigger
       SET workflow_execution_id = #{executionId},
-          execution_status = 'CREATED',
-          message = 'WorkflowExecution 已持久化，等待激活',
+          execution_status = #{executionStatus},
+          message = 'WorkflowExecution 已首次持久化',
           update_time = CURRENT_TIMESTAMP(3)
       WHERE trigger_id = #{triggerId}
         AND status = 'LAUNCHING'
@@ -36,7 +36,8 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
       """)
   int bindPreparedExecution(
       @Param("triggerId") String triggerId,
-      @Param("executionId") String executionId);
+      @Param("executionId") String executionId,
+      @Param("executionStatus") String executionStatus);
 
   @Select("SELECT id FROM yak_workflow_definition WHERE id = #{workflowId} FOR UPDATE")
   String lockWorkflow(@Param("workflowId") String workflowId);

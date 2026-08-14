@@ -25,6 +25,8 @@ public interface WorkflowExecutionDao {
 
   List<String> selectRecoverableExecutionIds();
 
+  long countActiveExecutions(String workflowId);
+
   String selectEffectiveRuntimeMetadata(String executionId);
 
   WorkflowNodeAttemptPO selectAttempt(String attemptId);

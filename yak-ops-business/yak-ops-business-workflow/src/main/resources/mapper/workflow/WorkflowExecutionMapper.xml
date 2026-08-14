@@ -35,6 +35,18 @@
     ORDER BY e.created_at
   </select>
 
+  <select id="countActiveExecutions" resultType="long">
+    SELECT COUNT(*)
+    FROM yak_workflow_execution e
+    LEFT JOIN yak_workflow_version v ON v.id = e.definition_id
+    LEFT JOIN yak_workflow_definition d ON d.id = #{workflowId}
+    WHERE (
+        v.workflow_id = #{workflowId}
+        OR e.id = d.latest_execution_id
+      )
+      AND e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
+  </select>
+
   <select id="selectEffectiveRuntimeMetadata" resultType="java.lang.String">
     SELECT COALESCE(e.runtime_metadata_json, v.runtime_metadata_json)
     FROM yak_workflow_execution e
