@@ -124,15 +124,12 @@ class WorkflowDefinitionActiveExecutionAdmissionTest {
         status,
         "CONTINUE_INDEPENDENT_BRANCHES",
         now,
-        now,
+        null,
         null,
         0L,
         Map.of(),
         1,
         0,
-        List.of(),
-        "workflow-version-1",
-        1,
-        false);
+        List.of());
   }
 }
