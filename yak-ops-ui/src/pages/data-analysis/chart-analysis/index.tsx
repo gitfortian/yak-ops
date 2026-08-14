@@ -121,11 +121,14 @@ const cloneAsset = (asset: AnalysisAsset): AnalysisAsset =>
   JSON.parse(JSON.stringify(asset)) as AnalysisAsset;
 
 const navigationContext = () => {
-  if (typeof window === 'undefined') return { datasetId: '', analysisId: '' };
+  if (typeof window === 'undefined') {
+    return { datasetId: '', analysisId: '', mode: '' };
+  }
   const params = new URLSearchParams(window.location.search);
   return {
     datasetId: params.get('datasetId')?.trim() || '',
     analysisId: params.get('analysisId')?.trim() || '',
+    mode: params.get('mode')?.trim() || '',
   };
 };
 
@@ -155,6 +158,26 @@ const fieldTypeLabel = (field: DatasetField) => {
   if (field.dataType === 'boolean') return '布尔';
   if (field.dataType === 'string') return '文本';
   return '未知';
+};
+
+const validateDraft = (draft: AnalysisAsset): string | undefined => {
+  if (draft.type === 'metric') {
+    return draft.metrics.length === 1 ? undefined : '指标卡需要且只能配置 1 个指标';
+  }
+  if (draft.type === 'pie') {
+    if (draft.dimensions.length !== 1) return '饼图需要且只能配置 1 个维度';
+    if (draft.metrics.length !== 1) return '饼图需要且只能配置 1 个指标';
+    return undefined;
+  }
+  if (draft.type === 'bar' || draft.type === 'line') {
+    if (!draft.dimensions.length) return '柱状图 / 折线图至少需要 1 个维度';
+    if (!draft.metrics.length) return '柱状图 / 折线图至少需要 1 个指标';
+    return undefined;
+  }
+  if (!draft.dimensions.length && !draft.metrics.length) {
+    return '表格至少需要 1 个维度或指标';
+  }
+  return undefined;
 };
 
 export default function ChartAnalysisPage() {
@@ -187,7 +210,7 @@ export default function ChartAnalysisPage() {
       setAnalyses(analysisValues);
 
       if (navigation.datasetId) {
-        setCatalogContextDatasetId(navigation.datasetId);
+        setCatalogContextDatasetId(navigation.mode === 'create' ? '' : navigation.datasetId);
         if (!requestedDataset) {
           setLoadError(`Dataset #${navigation.datasetId} 当前不可用于分析，请确认它已上线且存在当前版本。`);
         }
@@ -254,7 +277,9 @@ export default function ChartAnalysisPage() {
     const source = dataset ?? datasets[0];
     setCatalogContextDatasetId('');
     setDraft(defaultDraft(source));
-    replaceLocation(source ? `datasetId=${encodeURIComponent(source.id)}` : '');
+    replaceLocation(source
+      ? `mode=create&datasetId=${encodeURIComponent(source.id)}`
+      : 'mode=create');
   };
 
   const changeDataset = (datasetId: string) => {
@@ -271,7 +296,11 @@ export default function ChartAnalysisPage() {
       sort: undefined,
       style: next.style,
     }));
-    if (!draft.id) replaceLocation(`datasetId=${encodeURIComponent(datasetId)}`);
+    if (!draft.id) {
+      replaceLocation(catalogContextDatasetId
+        ? `datasetId=${encodeURIComponent(datasetId)}`
+        : `mode=create&datasetId=${encodeURIComponent(datasetId)}`);
+    }
   };
 
   const changeType = (type: ChartType) => {
@@ -344,11 +373,6 @@ export default function ChartAnalysisPage() {
     updateMetricFields([...draft.metrics.map((item) => item.field), fieldId]);
   };
 
-  const addField = (field: DatasetField) => {
-    if (field.role === 'metric') addMetric(field.key);
-    else addDimension(field.key);
-  };
-
   const beginFieldDrag = (event: DragEvent<HTMLButtonElement>, field: DatasetField) => {
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(FIELD_DRAG_TYPE, field.key);
@@ -364,6 +388,8 @@ export default function ChartAnalysisPage() {
   const save = async () => {
     if (!draft.name.trim()) return void message.warning('请填写 Analysis 名称');
     if (!draft.datasetId) return void message.warning('请选择 Dataset');
+    const validationMessage = validateDraft(draft);
+    if (validationMessage) return void message.warning(validationMessage);
     setSaving(true);
     try {
       const saved = draft.id
@@ -398,8 +424,8 @@ export default function ChartAnalysisPage() {
       replaceLocation(nextDraft.id
         ? `analysisId=${encodeURIComponent(nextDraft.id)}`
         : nextDraft.datasetId
-          ? `datasetId=${encodeURIComponent(nextDraft.datasetId)}`
-          : '');
+          ? `mode=create&datasetId=${encodeURIComponent(nextDraft.datasetId)}`
+          : 'mode=create');
       message.success('Analysis 已删除');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '删除 Analysis 失败');
@@ -543,27 +569,14 @@ export default function ChartAnalysisPage() {
                       type="button"
                       draggable
                       onDragStart={(event) => beginFieldDrag(event, field)}
-                      onDoubleClick={() => addDimension(field.key)}
+                      onClick={() => addDimension(field.key)}
                       className="group mb-0.5 flex h-8 w-full items-center gap-1.5 rounded-[4px] border-0 bg-transparent px-1.5 text-left hover:bg-white"
                     >
                       <GripVertical size={12} className="shrink-0 text-[#c0c4cc]" />
                       <Layers3 size={12} className="shrink-0 text-[#667085]" />
                       <span className="min-w-0 flex-1 truncate text-[11px] text-[#475467]">{field.label}</span>
                       <span className="text-[9px] text-[#a0a4ac]">{fieldTypeLabel(field)}</span>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className="hidden h-5 w-5 items-center justify-center text-[#667085] group-hover:flex"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          addDimension(field.key);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') addDimension(field.key);
-                        }}
-                      >
-                        <Plus size={12} />
-                      </span>
+                      <Plus size={11} className="shrink-0 text-[#a0a4ac] opacity-0 group-hover:opacity-100" />
                     </button>
                   </Tooltip>
                 ))}
@@ -578,27 +591,14 @@ export default function ChartAnalysisPage() {
                       type="button"
                       draggable
                       onDragStart={(event) => beginFieldDrag(event, field)}
-                      onDoubleClick={() => addMetric(field.key)}
+                      onClick={() => addMetric(field.key)}
                       className="group mb-0.5 flex h-8 w-full items-center gap-1.5 rounded-[4px] border-0 bg-transparent px-1.5 text-left hover:bg-white"
                     >
                       <GripVertical size={12} className="shrink-0 text-[#c0c4cc]" />
                       <Sigma size={12} className="shrink-0 text-[#667085]" />
                       <span className="min-w-0 flex-1 truncate text-[11px] text-[#475467]">{field.label}</span>
                       <span className="text-[9px] text-[#a0a4ac]">{fieldTypeLabel(field)}</span>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className="hidden h-5 w-5 items-center justify-center text-[#667085] group-hover:flex"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          addMetric(field.key);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') addMetric(field.key);
-                        }}
-                      >
-                        <Plus size={12} />
-                      </span>
+                      <Plus size={11} className="shrink-0 text-[#a0a4ac] opacity-0 group-hover:opacity-100" />
                     </button>
                   </Tooltip>
                 ))}
@@ -607,7 +607,7 @@ export default function ChartAnalysisPage() {
                   <div className="py-8 text-center text-[10px] text-[#98a2b3]">没有匹配字段</div>
                 ) : null}
                 <div className="mt-4 border-t border-[#edf0f3] px-1 pt-3 text-[9px] leading-4 text-[#98a2b3]">
-                  拖拽字段到右侧维度 / 指标区域；双击字段也可以快速添加。
+                  拖拽字段到右侧维度 / 指标区域；点击字段也可以快速添加。
                 </div>
               </>
             )}
