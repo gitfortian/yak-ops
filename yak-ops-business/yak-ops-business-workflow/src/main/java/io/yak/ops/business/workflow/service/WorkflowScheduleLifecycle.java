@@ -66,12 +66,12 @@ public class WorkflowScheduleLifecycle {
   public WorkflowScheduleVO offline(String id) {
     WorkflowSchedulePO value = query.require(id);
     engine.pauseIfPresent(value.getId());
-    pendingCancellation.cancel(
-        value.getId(), value.getWorkflowId(), "调度已停用，取消尚未启动的等待 Trigger");
     value.setStatus("OFFLINE");
     value.setNextFireTime(null);
     value.setUpdateTime(Instant.now());
     save(value);
+    pendingCancellation.cancel(
+        value.getId(), value.getWorkflowId(), "调度已停用，取消尚未启动的等待 Trigger");
     return query.view(value);
   }
 
@@ -79,13 +79,13 @@ public class WorkflowScheduleLifecycle {
   WorkflowScheduleVO expire(String id, Instant fireTime) {
     WorkflowSchedulePO value = query.require(id);
     engine.pauseIfPresent(value.getId());
-    pendingCancellation.cancel(
-        value.getId(), value.getWorkflowId(), "调度已超过生效时间，取消尚未启动的等待 Trigger");
     value.setStatus("OFFLINE");
     value.setLastFireTime(fireTime);
     value.setNextFireTime(null);
     value.setUpdateTime(Instant.now());
     save(value);
+    pendingCancellation.cancel(
+        value.getId(), value.getWorkflowId(), "调度已超过生效时间，取消尚未启动的等待 Trigger");
     return query.view(value);
   }
 
