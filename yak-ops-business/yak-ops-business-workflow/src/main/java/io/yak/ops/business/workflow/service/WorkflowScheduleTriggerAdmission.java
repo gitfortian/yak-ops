@@ -33,22 +33,32 @@ public class WorkflowScheduleTriggerAdmission {
     this.executions = executions;
   }
 
+  /** Stage 4 兼容入口；策略事实已经固化到 candidate，不再依赖当前 Schedule 配置。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public AdmissionResult admitNew(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO candidate) {
+    return admitNew(candidate);
+  }
+
+  @Transactional(transactionManager = "yakBusinessTransactionManager")
+  public AdmissionResult admitNew(WorkflowScheduleTriggerPO candidate) {
     WorkflowScheduleTriggerPO trigger = ledger.claim(candidate);
-    // INSERT IGNORE 后只有 candidate 自己的 id 与落库行一致时才拥有首次准入权。
-    // 即使两个相同 plannedFireTime 并发请求都读到 RECEIVED，第二个也会作为 duplicate 返回。
     if (!candidate.getId().equals(trigger.getId()) || !"RECEIVED".equals(trigger.getStatus())) {
       return new AdmissionResult(trigger, false, true);
     }
-    ledger.lockWorkflow(schedule.getWorkflowId());
-    return decideLocked(schedule, trigger);
+    ledger.lockWorkflow(trigger.getWorkflowId());
+    return decideLocked(trigger);
+  }
+
+  /** Stage 4 兼容入口。 */
+  @Transactional(transactionManager = "yakBusinessTransactionManager")
+  public AdmissionResult readmit(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO candidate) {
+    return readmit(candidate);
   }
 
   /** 启动恢复时重新处理 RECEIVED/无绑定 LAUNCHING 中间态。 */
   @Transactional(transactionManager = "yakBusinessTransactionManager")
-  public AdmissionResult readmit(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO candidate) {
-    ledger.lockWorkflow(schedule.getWorkflowId());
+  public AdmissionResult readmit(WorkflowScheduleTriggerPO candidate) {
+    ledger.lockWorkflow(candidate.getWorkflowId());
     WorkflowScheduleTriggerPO trigger = current(candidate);
     if (LEDGER_TERMINAL.contains(trigger.getStatus()) || "RUNNING".equals(trigger.getStatus())) {
       return new AdmissionResult(trigger, false, true);
@@ -60,7 +70,7 @@ public class WorkflowScheduleTriggerAdmission {
     trigger.setErrorMessage(null);
     touch(trigger);
     save(trigger);
-    return decideLocked(schedule, trigger);
+    return decideLocked(trigger);
   }
 
   /** 启动完成后绑定业务实例；若实例已同步终态，同时预留下一条 SERIAL_WAIT。 */
@@ -164,11 +174,11 @@ public class WorkflowScheduleTriggerAdmission {
     markSkipped(trigger, message);
   }
 
-  private AdmissionResult decideLocked(WorkflowSchedulePO schedule, WorkflowScheduleTriggerPO trigger) {
-    String strategy = schedule.getExecutionStrategy();
-    long active = ledger.countActiveExecutions(schedule.getWorkflowId());
-    long launching = ledger.countLaunchingTriggers(schedule.getWorkflowId());
-    long waiting = ledger.countWaitingTriggers(schedule.getWorkflowId());
+  private AdmissionResult decideLocked(WorkflowScheduleTriggerPO trigger) {
+    String strategy = trigger.getExecutionStrategy();
+    long active = ledger.countActiveExecutions(trigger.getWorkflowId());
+    long launching = ledger.countLaunchingTriggers(trigger.getWorkflowId());
+    long waiting = ledger.countWaitingTriggers(trigger.getWorkflowId());
     boolean busy = active > 0L || launching > 0L || waiting > 0L;
 
     if ("SERIAL_DISCARD".equals(strategy) && busy) {
@@ -195,18 +205,25 @@ public class WorkflowScheduleTriggerAdmission {
     while (true) {
       WorkflowScheduleTriggerPO waiting = ledger.selectNextWaiting(workflowId);
       if (waiting == null) return AdmissionResult.none();
-      WorkflowSchedulePO schedule = safeSchedule(waiting.getScheduleId());
-      if (schedule == null || !"ONLINE".equals(schedule.getStatus())) {
-        markSkipped(waiting, "等待期间调度已停用或删除");
-        continue;
+
+      if (!isBackfill(waiting)) {
+        WorkflowSchedulePO schedule = safeSchedule(waiting.getScheduleId());
+        if (schedule == null || !"ONLINE".equals(schedule.getStatus())) {
+          markSkipped(waiting, "等待期间调度已停用或删除");
+          continue;
+        }
       }
-      if (!"SERIAL_WAIT".equals(schedule.getExecutionStrategy())) {
-        markSkipped(waiting, "等待期间执行策略已变更，旧 Trigger 不再推进");
+      if (!"SERIAL_WAIT".equals(waiting.getExecutionStrategy())) {
+        markSkipped(waiting, "等待期间执行策略不是 SERIAL_WAIT，旧 Trigger 不再推进");
         continue;
       }
       reserveLaunch(waiting);
       return new AdmissionResult(waiting, true, false);
     }
+  }
+
+  private boolean isBackfill(WorkflowScheduleTriggerPO trigger) {
+    return trigger.getBackfillId() != null && !trigger.getBackfillId().isBlank();
   }
 
   private void reserveLaunch(WorkflowScheduleTriggerPO trigger) {
@@ -246,7 +263,7 @@ public class WorkflowScheduleTriggerAdmission {
   }
 
   private WorkflowScheduleTriggerPO current(WorkflowScheduleTriggerPO candidate) {
-    WorkflowScheduleTriggerPO current = ledger.selectBySchedulePlan(candidate.getScheduleId(), candidate.getPlannedFireTime());
+    WorkflowScheduleTriggerPO current = ledger.selectByDedupeKey(candidate.getDedupeKey());
     if (current == null) throw new IllegalArgumentException("Trigger Ledger 不存在：" + candidate.getId());
     return current;
   }
@@ -259,7 +276,9 @@ public class WorkflowScheduleTriggerAdmission {
     }
   }
 
-  private void touch(WorkflowScheduleTriggerPO trigger) { trigger.setUpdateTime(Instant.now()); }
+  private void touch(WorkflowScheduleTriggerPO trigger) {
+    trigger.setUpdateTime(Instant.now());
+  }
 
   private void save(WorkflowScheduleTriggerPO trigger) {
     if (ledger.update(trigger) != 1) throw new IllegalStateException("更新 Trigger Ledger 失败：" + trigger.getId());
@@ -276,6 +295,8 @@ public class WorkflowScheduleTriggerAdmission {
   }
 
   public record AdmissionResult(WorkflowScheduleTriggerPO trigger, boolean launchNow, boolean duplicate) {
-    static AdmissionResult none() { return new AdmissionResult(null, false, false); }
+    static AdmissionResult none() {
+      return new AdmissionResult(null, false, false);
+    }
   }
 }

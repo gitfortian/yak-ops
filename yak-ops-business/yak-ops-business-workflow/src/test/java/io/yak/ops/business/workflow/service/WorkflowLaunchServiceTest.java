@@ -26,12 +26,14 @@ class WorkflowLaunchServiceTest {
   @Mock private WorkflowDefinitionService definitionService;
   @Mock private WorkflowRuntimeService runtimeService;
   @Mock private WorkflowExecutionTriggerRecorder triggerRecorder;
+  @Mock private WorkflowPublishedVersionRunner publishedVersionRunner;
 
   private WorkflowLaunchService service;
 
   @BeforeEach
   void setUp() {
-    service = new WorkflowLaunchService(definitionService, runtimeService, triggerRecorder);
+    service = new WorkflowLaunchService(
+        definitionService, runtimeService, triggerRecorder, publishedVersionRunner);
   }
 
   @Test
@@ -41,7 +43,7 @@ class WorkflowLaunchServiceTest {
         "schedule-trigger-20260814T020000",
         "schedule-1",
         Instant.parse("2026-08-14T02:00:00Z"));
-    WorkflowDefinitionVO expected = definition("execution-1");
+    WorkflowDefinitionVO expected = definition("execution-1", "workflow-version-1", 1);
     when(definitionService.run("workflow-1")).thenReturn(expected);
 
     WorkflowDefinitionVO actual = service.runPublished("workflow-1", trigger);
@@ -57,7 +59,7 @@ class WorkflowLaunchServiceTest {
         "trigger-parallel",
         "schedule-1",
         Instant.parse("2026-08-14T02:00:00Z"));
-    WorkflowDefinitionVO expected = definition("execution-parallel");
+    WorkflowDefinitionVO expected = definition("execution-parallel", "workflow-version-1", 1);
     when(definitionService.runConcurrent("workflow-1")).thenReturn(expected);
 
     WorkflowDefinitionVO actual = service.runScheduledPublished("workflow-1", trigger);
@@ -65,6 +67,30 @@ class WorkflowLaunchServiceTest {
     assertThat(actual).isSameAs(expected);
     verify(definitionService).runConcurrent("workflow-1");
     verify(triggerRecorder).record("execution-parallel", trigger);
+  }
+
+  @Test
+  void shouldKeepBackfillPinnedToRequestedVersionAfterActiveVersionChanges() {
+    WorkflowTriggerContext trigger = WorkflowTriggerContext.backfill(
+        "backfill-trigger-1",
+        "schedule-1",
+        "backfill-1",
+        Instant.parse("2026-08-14T02:00:00Z"),
+        "Asia/Shanghai");
+    WorkflowDefinitionVO current = definition("latest-normal", "workflow-version-6", 6);
+    WorkflowInstanceVO expected = instance("execution-v5");
+    when(definitionService.get("workflow-1")).thenReturn(current);
+    when(publishedVersionRunner.run("workflow-1", "workflow-version-5")).thenReturn(expected);
+
+    WorkflowInstanceVO actual = service.runBackfillPublished(
+        "workflow-1",
+        "workflow-version-5",
+        trigger,
+        Map.of("businessDate", "2026-08-14"));
+
+    assertThat(actual).isSameAs(expected);
+    verify(publishedVersionRunner).run("workflow-1", "workflow-version-5");
+    verify(triggerRecorder).record("execution-v5", trigger);
   }
 
   @Test
@@ -85,7 +111,10 @@ class WorkflowLaunchServiceTest {
     verify(triggerRecorder).record("execution-api", trigger);
   }
 
-  private WorkflowDefinitionVO definition(String executionId) {
+  private WorkflowDefinitionVO definition(
+      String executionId,
+      String activeVersionId,
+      int activeVersionNo) {
     Instant now = Instant.parse("2026-08-13T12:00:00Z");
     return new WorkflowDefinitionVO(
         "workflow-1",
@@ -100,9 +129,9 @@ class WorkflowLaunchServiceTest {
         Map.of(),
         0L,
         "CONTINUE_INDEPENDENT_BRANCHES",
-        "workflow-version-1",
-        1,
-        1,
+        activeVersionId,
+        activeVersionNo,
+        activeVersionNo,
         false,
         executionId,
         "RUNNING",

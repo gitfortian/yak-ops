@@ -12,13 +12,13 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
 
   @Insert("""
       INSERT IGNORE INTO yak_workflow_schedule_trigger
-        (id, schedule_id, workflow_id, trigger_id, trigger_source,
-         planned_fire_time, actual_fire_time, execution_strategy, misfire_strategy,
+        (id, schedule_id, workflow_id, backfill_id, trigger_id, dedupe_key, trigger_source,
+         planned_fire_time, actual_fire_time, business_date, execution_strategy, misfire_strategy,
          status, workflow_execution_id, execution_status, message, error_message,
          launched_at, completed_at, create_time, update_time)
       VALUES
-        (#{id}, #{scheduleId}, #{workflowId}, #{triggerId}, #{triggerSource},
-         #{plannedFireTime}, #{actualFireTime}, #{executionStrategy}, #{misfireStrategy},
+        (#{id}, #{scheduleId}, #{workflowId}, #{backfillId}, #{triggerId}, #{dedupeKey}, #{triggerSource},
+         #{plannedFireTime}, #{actualFireTime}, #{businessDate}, #{executionStrategy}, #{misfireStrategy},
          #{status}, #{workflowExecutionId}, #{executionStatus}, #{message}, #{errorMessage},
          #{launchedAt}, #{completedAt}, #{createTime}, #{updateTime})
       """)

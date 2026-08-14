@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Data;
 
 /** 工作流调度 Trigger Ledger 持久化对象。 */
@@ -14,10 +15,13 @@ public class WorkflowScheduleTriggerPO {
   private String id;
   private String scheduleId;
   private String workflowId;
+  private String backfillId;
   private String triggerId;
+  private String dedupeKey;
   private String triggerSource;
   private Instant plannedFireTime;
   private Instant actualFireTime;
+  private LocalDate businessDate;
   private String executionStrategy;
   private String misfireStrategy;
   private String status;

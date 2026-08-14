@@ -14,6 +14,7 @@ import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
 import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,7 +52,7 @@ class WorkflowScheduleTriggerCoordinatorTest {
 
     assertThat(result.businessExecutionId()).isEqualTo("execution-existing");
     assertThat(result.message()).contains("幂等拦截");
-    verify(launchService, never()).runScheduledPublished(any(), any());
+    verify(launchService, never()).runScheduledPublished(any(), any(), any());
   }
 
   @Test
@@ -62,7 +63,8 @@ class WorkflowScheduleTriggerCoordinatorTest {
     when(admission.admitNew(eq(schedule), any()))
         .thenReturn(new AdmissionResult(reserved, true, false));
     when(schedules.require("schedule-1")).thenReturn(schedule);
-    when(launchService.runScheduledPublished(eq("workflow-1"), any(WorkflowTriggerContext.class)))
+    when(launchService.runScheduledPublished(
+        eq("workflow-1"), any(WorkflowTriggerContext.class), eq(Map.of())))
         .thenReturn(launched);
     when(launched.latestExecutionId()).thenReturn("execution-1");
     when(admission.bindLaunch(reserved, "execution-1"))
@@ -76,7 +78,8 @@ class WorkflowScheduleTriggerCoordinatorTest {
         "CRON");
 
     assertThat(result.businessExecutionId()).isEqualTo("execution-1");
-    verify(launchService).runScheduledPublished(eq("workflow-1"), any(WorkflowTriggerContext.class));
+    verify(launchService).runScheduledPublished(
+        eq("workflow-1"), any(WorkflowTriggerContext.class), eq(Map.of()));
     verify(admission).bindLaunch(reserved, "execution-1");
   }
 
@@ -85,6 +88,7 @@ class WorkflowScheduleTriggerCoordinatorTest {
     value.setId("schedule-1");
     value.setWorkflowId("workflow-1");
     value.setStatus("ONLINE");
+    value.setTimezone("Asia/Shanghai");
     value.setExecutionStrategy("SERIAL_WAIT");
     value.setMisfireStrategy("FIRE_ONCE");
     return value;
@@ -96,6 +100,7 @@ class WorkflowScheduleTriggerCoordinatorTest {
     value.setScheduleId("schedule-1");
     value.setWorkflowId("workflow-1");
     value.setTriggerId("quartz-trigger-1");
+    value.setDedupeKey("schedule-1|SCHEDULE|1786672800000");
     value.setPlannedFireTime(Instant.parse("2026-08-14T02:00:00Z"));
     value.setActualFireTime(Instant.parse("2026-08-14T02:00:01Z"));
     value.setExecutionStrategy("SERIAL_WAIT");

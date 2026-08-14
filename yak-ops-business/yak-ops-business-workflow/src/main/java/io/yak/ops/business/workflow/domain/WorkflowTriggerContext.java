@@ -13,7 +13,9 @@ public record WorkflowTriggerContext(
     WorkflowTriggerType triggerType,
     String triggerId,
     String scheduleId,
-    Instant plannedFireTime) {
+    String backfillId,
+    Instant plannedFireTime,
+    String timezone) {
 
   public WorkflowTriggerContext {
     if (triggerType == null) {
@@ -21,12 +23,25 @@ public record WorkflowTriggerContext(
     }
     triggerId = required(triggerId, "工作流 triggerId 不能为空");
     scheduleId = trimToNull(scheduleId);
+    backfillId = trimToNull(backfillId);
+    timezone = trimToNull(timezone);
+  }
+
+  /** Stage 1-4 兼容构造器。 */
+  public WorkflowTriggerContext(
+      WorkflowTriggerType triggerType,
+      String triggerId,
+      String scheduleId,
+      Instant plannedFireTime) {
+    this(triggerType, triggerId, scheduleId, null, plannedFireTime, null);
   }
 
   public static WorkflowTriggerContext manual() {
     return new WorkflowTriggerContext(
         WorkflowTriggerType.MANUAL,
         generatedId("manual"),
+        null,
+        null,
         null,
         null);
   }
@@ -36,6 +51,8 @@ public record WorkflowTriggerContext(
         WorkflowTriggerType.API,
         generatedId("api"),
         null,
+        null,
+        null,
         null);
   }
 
@@ -43,6 +60,14 @@ public record WorkflowTriggerContext(
       String triggerId,
       String scheduleId,
       Instant plannedFireTime) {
+    return scheduled(triggerId, scheduleId, plannedFireTime, null);
+  }
+
+  public static WorkflowTriggerContext scheduled(
+      String triggerId,
+      String scheduleId,
+      Instant plannedFireTime,
+      String timezone) {
     String safeScheduleId = required(scheduleId, "工作流 scheduleId 不能为空");
     if (plannedFireTime == null) {
       throw new IllegalArgumentException("调度 plannedFireTime 不能为空");
@@ -51,21 +76,37 @@ public record WorkflowTriggerContext(
         WorkflowTriggerType.SCHEDULE,
         triggerId,
         safeScheduleId,
-        plannedFireTime);
+        null,
+        plannedFireTime,
+        timezone);
   }
 
   public static WorkflowTriggerContext backfill(
       String triggerId,
       String scheduleId,
       Instant plannedFireTime) {
-    if (plannedFireTime == null) {
-      throw new IllegalArgumentException("补数 plannedFireTime 不能为空");
-    }
     return new WorkflowTriggerContext(
         WorkflowTriggerType.BACKFILL,
         triggerId,
         scheduleId,
-        plannedFireTime);
+        null,
+        required(plannedFireTime, "补数 plannedFireTime 不能为空"),
+        null);
+  }
+
+  public static WorkflowTriggerContext backfill(
+      String triggerId,
+      String scheduleId,
+      String backfillId,
+      Instant plannedFireTime,
+      String timezone) {
+    return new WorkflowTriggerContext(
+        WorkflowTriggerType.BACKFILL,
+        triggerId,
+        required(scheduleId, "补数 scheduleId 不能为空"),
+        required(backfillId, "补数 backfillId 不能为空"),
+        required(plannedFireTime, "补数 plannedFireTime 不能为空"),
+        timezone);
   }
 
   private static String generatedId(String prefix) {
@@ -76,6 +117,11 @@ public record WorkflowTriggerContext(
     String normalized = trimToNull(value);
     if (normalized == null) throw new IllegalArgumentException(message);
     return normalized;
+  }
+
+  private static Instant required(Instant value, String message) {
+    if (value == null) throw new IllegalArgumentException(message);
+    return value;
   }
 
   private static String trimToNull(String value) {
