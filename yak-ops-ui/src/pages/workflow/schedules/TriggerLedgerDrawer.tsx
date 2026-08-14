@@ -69,10 +69,11 @@ const TriggerLedgerDrawer = ({
   }, [backfillId, open, schedule?.id, status]);
 
   useEffect(() => {
-    if (open) {
-      setStatus(undefined);
-      void load();
-    }
+    if (open) setStatus(undefined);
+  }, [backfillId, open, schedule?.id]);
+
+  useEffect(() => {
+    if (open) void load();
   }, [load, open]);
 
   return (
