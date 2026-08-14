@@ -52,10 +52,12 @@ public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
   public void save(WorkflowExecution execution) {
     WorkflowExecutionSnapshot snapshot = execution.snapshot();
     // Yak Framework transitions a new execution to RUNNING before its first repository save.
-    // Detect the first durable write from database existence instead of relying on CREATED.
-    boolean firstPersistence = executionDao.selectExecution(snapshot.id()) == null;
+    // Only scheduled launches need the existence lookup; normal runtime saves stay on the hot upsert path.
+    String launchTriggerId = WorkflowScheduleLaunchBindingScope.currentTriggerId();
+    boolean firstScheduledPersistence = launchTriggerId != null
+        && executionDao.selectExecution(snapshot.id()) == null;
     executionDao.upsertExecution(toPO(snapshot));
-    bindFirstScheduledExecution(snapshot, firstPersistence);
+    bindFirstScheduledExecution(snapshot, launchTriggerId, firstScheduledPersistence);
     for (NodeExecutionSnapshot node : snapshot.nodes()) {
       executionDao.upsertNodeExecution(toPO(node));
       for (NodeAttemptSnapshot attempt : node.attempts()) {
@@ -70,10 +72,9 @@ public class WorkflowExecutionRepositoryAdapter implements ExecutionRepository {
 
   private void bindFirstScheduledExecution(
       WorkflowExecutionSnapshot snapshot,
-      boolean firstPersistence) {
-    if (!firstPersistence) return;
-    String triggerId = WorkflowScheduleLaunchBindingScope.currentTriggerId();
-    if (triggerId == null) return;
+      String triggerId,
+      boolean firstScheduledPersistence) {
+    if (!firstScheduledPersistence || triggerId == null) return;
 
     int bound = scheduleTriggerDao.bindPreparedExecution(
         triggerId,
