@@ -3,7 +3,8 @@ import { FILTER_OPERATOR_OPTIONS } from './helpers';
 import type { FilterOperator, SortDirection } from './model';
 
 export function QueryControls({
-  fieldOptions,
+  sortOptions,
+  filterOptions,
   sortField,
   sortDirection,
   filterField,
@@ -15,7 +16,8 @@ export function QueryControls({
   onFilterOperator,
   onFilterValue,
 }: {
-  fieldOptions: Array<{ label: string; value: string }>;
+  sortOptions: Array<{ label: string; value: string }>;
+  filterOptions: Array<{ label: string; value: string }>;
   sortField?: string;
   sortDirection: SortDirection;
   filterField?: string;
@@ -32,17 +34,52 @@ export function QueryControls({
       <div>
         <div className="mb-1 text-[11px] text-[#667085]">排序</div>
         <div className="flex gap-2">
-          <Select allowClear size="small" className="min-w-0 flex-1" placeholder="排序字段" value={sortField} options={fieldOptions} onChange={onSortField} />
-          <Select size="small" className="w-[76px]" disabled={!sortField} value={sortDirection} options={[{ label: '升序', value: 'asc' }, { label: '降序', value: 'desc' }]} onChange={onSortDirection} />
+          <Select
+            allowClear
+            size="small"
+            className="min-w-0 flex-1"
+            placeholder="已选维度 / 指标"
+            value={sortField}
+            options={sortOptions}
+            onChange={onSortField}
+          />
+          <Select
+            size="small"
+            className="w-[76px]"
+            disabled={!sortField}
+            value={sortDirection}
+            options={[{ label: '升序', value: 'asc' }, { label: '降序', value: 'desc' }]}
+            onChange={onSortDirection}
+          />
         </div>
       </div>
       <div>
         <div className="mb-1 text-[11px] text-[#667085]">过滤</div>
         <div className="grid grid-cols-[1fr_90px] gap-2">
-          <Select allowClear size="small" placeholder="字段" value={filterField} options={fieldOptions} onChange={onFilterField} />
-          <Select size="small" disabled={!filterField} value={filterOperator} options={FILTER_OPERATOR_OPTIONS} onChange={onFilterOperator} />
+          <Select
+            allowClear
+            size="small"
+            placeholder="字段"
+            value={filterField}
+            options={filterOptions}
+            onChange={onFilterField}
+          />
+          <Select
+            size="small"
+            disabled={!filterField}
+            value={filterOperator}
+            options={FILTER_OPERATOR_OPTIONS}
+            onChange={onFilterOperator}
+          />
         </div>
-        <Input size="small" className="mt-2" disabled={!filterField} placeholder="过滤值" value={filterValue} onChange={(event) => onFilterValue(event.target.value)} />
+        <Input
+          size="small"
+          className="mt-2"
+          disabled={!filterField}
+          placeholder="过滤值"
+          value={filterValue}
+          onChange={(event) => onFilterValue(event.target.value)}
+        />
       </div>
     </div>
   );

@@ -48,9 +48,13 @@ export default function DashboardPage() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {!designer.preview ? (
           <LeftPanel
-            activeDatasetId={designer.activeDataset.id}
+            datasets={designer.datasets}
+            activeDataset={designer.activeDataset}
+            datasetsLoading={designer.datasetsLoading}
+            datasetsError={designer.datasetsError}
             selectedWidget={designer.selectedWidget}
             onDatasetChange={(activeDatasetId) => designer.setDashboard((current) => ({ ...current, activeDatasetId }))}
+            onRefreshDatasets={() => void designer.refreshDatasets()}
             onAddChart={designer.addWidget}
             onAddField={designer.addField}
           />
@@ -79,6 +83,7 @@ export default function DashboardPage() {
                     <div key={widget.id}>
                       <WidgetShell
                         widget={widget}
+                        dataset={designer.datasets.find((dataset) => dataset.id === widget.datasetId)}
                         selected={designer.selectedId === widget.id}
                         preview={designer.preview}
                         onSelect={() => { if (!designer.preview) designer.setSelectedId(widget.id); }}
@@ -89,6 +94,13 @@ export default function DashboardPage() {
                   ))}
                 </ReactGridLayout>
               ) : null}
+              {!designer.widgets.length && !designer.datasetsLoading ? (
+                <div className="flex min-h-[360px] items-center justify-center px-6 text-center text-[12px] text-[#98a2b3]">
+                  {designer.activeDataset
+                    ? '从左侧选择图表类型，开始使用真实 Dataset 构建仪表盘'
+                    : '暂无可用 Dataset，请先在数据开发发布中心发布数据集'}
+                </div>
+              ) : null}
             </div>
           </div>
         </main>
@@ -96,6 +108,7 @@ export default function DashboardPage() {
         {!designer.preview && designer.selectedWidget ? (
           <SelectedConfig
             widget={designer.selectedWidget}
+            datasets={designer.datasets}
             update={(patch) => designer.updateWidget(designer.selectedWidget!.id, patch)}
             changeDataset={(datasetId) => designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
             close={() => designer.setSelectedId(undefined)}

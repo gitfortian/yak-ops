@@ -1,7 +1,14 @@
 import { BarChart3, ChartLine, ChartPie, Sigma, Table2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { DEFAULT_DASHBOARD, PUBLISHED_DATASETS } from './mock';
-import type { Aggregation, ChartType, DashboardDocument, DashboardWidget, FilterOperator, PublishedDataset } from './model';
+import { DEFAULT_DASHBOARD } from './defaults';
+import type {
+  Aggregation,
+  ChartType,
+  DashboardDocument,
+  DashboardWidget,
+  FilterOperator,
+  PublishedDataset,
+} from './model';
 
 export const STORAGE_KEY = 'yak-dashboard-designer.v2';
 export const GRID_COLUMNS = 24;
@@ -20,6 +27,7 @@ export const AGGREGATION_OPTIONS: Array<{ label: string; value: Aggregation }> =
   { label: '求和', value: 'SUM' },
   { label: '平均', value: 'AVG' },
   { label: '计数', value: 'COUNT' },
+  { label: '去重计数', value: 'COUNT_DISTINCT' },
   { label: '最大值', value: 'MAX' },
   { label: '最小值', value: 'MIN' },
 ];
@@ -51,12 +59,18 @@ export const loadDashboard = (): DashboardDocument => {
   }
 };
 
+export const findDataset = (datasets: PublishedDataset[], id?: string) =>
+  datasets.find((dataset) => dataset.id === id) ?? datasets[0];
+
 export const defaultBindings = (dataset: PublishedDataset) => ({
-  dimensions: dataset.fields.filter((field) => field.role === 'dimension').slice(0, 1).map((field) => field.key),
-  metrics: dataset.fields.filter((field) => field.role === 'metric').slice(0, 1).map((field) => ({
-    field: field.key,
-    aggregation: 'SUM' as Aggregation,
-  })),
+  dimensions: dataset.fields
+    .filter((field) => field.role === 'dimension')
+    .slice(0, 1)
+    .map((field) => field.key),
+  metrics: dataset.fields
+    .filter((field) => field.role === 'metric')
+    .slice(0, 1)
+    .map((field) => ({ field: field.key, aggregation: 'SUM' as Aggregation })),
 });
 
 export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => {
@@ -86,5 +100,42 @@ export const createWidget = (type: ChartType, dataset: PublishedDataset, y: numb
   return { ...base, w: 10, h: 7, minW: 6, minH: 5 };
 };
 
-export const findDataset = (id: string) =>
-  PUBLISHED_DATASETS.find((dataset) => dataset.id === id) ?? PUBLISHED_DATASETS[0];
+const rebindWidget = (widget: DashboardWidget, dataset: PublishedDataset): DashboardWidget => {
+  const bindings = defaultBindings(dataset);
+  const fieldMap = new Map(dataset.fields.map((field) => [field.key, field]));
+  const sameDataset = widget.datasetId === dataset.id;
+  const validDimensions = sameDataset
+    ? widget.dimensions.filter((field) => fieldMap.get(field)?.role === 'dimension')
+    : [];
+  const validMetrics = sameDataset
+    ? widget.metrics.filter((metric) => fieldMap.get(metric.field)?.role === 'metric')
+    : [];
+  const dimensions = widget.type === 'metric'
+    ? []
+    : validDimensions.length ? validDimensions : bindings.dimensions;
+  const metrics = validMetrics.length ? validMetrics : bindings.metrics;
+  const filters = sameDataset
+    ? widget.filters.filter((filter) => fieldMap.has(filter.field))
+    : [];
+  const sort = sameDataset && widget.sort && fieldMap.has(widget.sort.field)
+    ? widget.sort
+    : undefined;
+  return { ...widget, datasetId: dataset.id, dimensions, metrics, filters, sort };
+};
+
+/** Migrates old mock-backed/localStorage dashboards onto real Dataset IDs and stable fieldIds. */
+export const reconcileDashboard = (
+  dashboard: DashboardDocument,
+  datasets: PublishedDataset[],
+): DashboardDocument => {
+  if (!datasets.length) return dashboard;
+  const activeDataset = findDataset(datasets, dashboard.activeDatasetId) ?? datasets[0];
+  return {
+    ...dashboard,
+    activeDatasetId: activeDataset.id,
+    widgets: dashboard.widgets.map((widget) => {
+      const widgetDataset = datasets.find((dataset) => dataset.id === widget.datasetId) ?? activeDataset;
+      return rebindWidget(widget, widgetDataset);
+    }),
+  };
+};

@@ -1,8 +1,7 @@
-import { Button, Select, Tooltip } from 'antd';
-import { Database, Hash, Layers3, Plus, Sigma } from 'lucide-react';
-import { CHART_META, FIELD_DRAG_MIME, findDataset } from './helpers';
-import { PUBLISHED_DATASETS } from './mock';
-import type { ChartType, DashboardWidget, DatasetField } from './model';
+import { Button, Empty, Select, Spin } from 'antd';
+import { Database, Hash, Layers3, Plus, RefreshCw } from 'lucide-react';
+import { CHART_META, FIELD_DRAG_MIME } from './helpers';
+import type { ChartType, DashboardWidget, DatasetField, PublishedDataset } from './model';
 
 function FieldRow({ field, onAdd }: { field: DatasetField; onAdd: () => void }) {
   const isMetric = field.role === 'metric';
@@ -34,54 +33,85 @@ function FieldRow({ field, onAdd }: { field: DatasetField; onAdd: () => void }) 
 }
 
 export function LeftPanel({
-  activeDatasetId,
+  datasets,
+  activeDataset,
+  datasetsLoading,
+  datasetsError,
   selectedWidget,
   onDatasetChange,
+  onRefreshDatasets,
   onAddChart,
   onAddField,
 }: {
-  activeDatasetId: string;
+  datasets: PublishedDataset[];
+  activeDataset?: PublishedDataset;
+  datasetsLoading: boolean;
+  datasetsError: string;
   selectedWidget?: DashboardWidget;
   onDatasetChange: (datasetId: string) => void;
+  onRefreshDatasets: () => void;
   onAddChart: (type: ChartType) => void;
   onAddField: (field: DatasetField) => void;
 }) {
-  const dataset = findDataset(activeDatasetId);
-  const dimensions = dataset.fields.filter((field) => field.role === 'dimension');
-  const metrics = dataset.fields.filter((field) => field.role === 'metric');
+  const dimensions = activeDataset?.fields.filter((field) => field.role === 'dimension') ?? [];
+  const metrics = activeDataset?.fields.filter((field) => field.role === 'metric') ?? [];
 
   return (
     <aside className="flex w-[276px] shrink-0 flex-col border-r border-[#e5e7eb] bg-white">
       <div className="border-b border-[#edf0f3] p-3">
-        <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold text-[#344054]">
-          <Database size={14} /> 数据集
+        <div className="mb-2 flex items-center justify-between gap-2 text-[12px] font-semibold text-[#344054]">
+          <span className="flex items-center gap-2"><Database size={14} /> 数据集</span>
+          <Button
+            type="text"
+            size="small"
+            icon={<RefreshCw size={12} />}
+            loading={datasetsLoading}
+            onClick={onRefreshDatasets}
+          />
         </div>
         <Select
           size="small"
           className="w-full"
-          value={dataset.id}
+          loading={datasetsLoading}
+          placeholder="选择已发布 Dataset"
+          value={activeDataset?.id}
           onChange={onDatasetChange}
-          options={PUBLISHED_DATASETS.map((item) => ({ label: item.name, value: item.id }))}
+          options={datasets.map((item) => ({ label: item.name, value: item.id }))}
+          notFoundContent={datasetsLoading ? <Spin size="small" /> : '暂无 ONLINE Dataset'}
         />
-        <div className="mt-2 rounded-[4px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#667085]">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate">来源：{dataset.sourceTaskName}</span>
-            <span className="shrink-0 text-[#98a2b3]">已发布</span>
+        {activeDataset ? (
+          <div className="mt-2 rounded-[4px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#667085]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate">来源：{activeDataset.sourceTaskName}</span>
+              <span className="shrink-0 text-[#98a2b3]">DV{activeDataset.currentVersionNo ?? '-'}</span>
+            </div>
+            <div className="mt-0.5 truncate text-[#98a2b3]">
+              {activeDataset.fields.length} 个字段 · {activeDataset.updatedAt || '暂无更新时间'}
+            </div>
           </div>
-          <div className="mt-0.5 text-[#98a2b3]">更新于 {dataset.updatedAt}</div>
-        </div>
+        ) : datasetsError ? (
+          <div className="mt-2 rounded-[4px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#98a2b3]">
+            {datasetsError}
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        <div className="mb-1 mt-1 flex items-center justify-between px-1 text-[10px] font-medium uppercase tracking-wide text-[#98a2b3]">
-          <span>维度</span><span>{dimensions.length}</span>
-        </div>
-        {dimensions.map((field) => <FieldRow key={field.key} field={field} onAdd={() => onAddField(field)} />)}
+        {!activeDataset && !datasetsLoading ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先在发布中心发布一个 Dataset" className="mt-8" />
+        ) : (
+          <>
+            <div className="mb-1 mt-1 flex items-center justify-between px-1 text-[10px] font-medium uppercase tracking-wide text-[#98a2b3]">
+              <span>维度</span><span>{dimensions.length}</span>
+            </div>
+            {dimensions.map((field) => <FieldRow key={field.key} field={field} onAdd={() => onAddField(field)} />)}
 
-        <div className="mb-1 mt-4 flex items-center justify-between px-1 text-[10px] font-medium uppercase tracking-wide text-[#98a2b3]">
-          <span>指标</span><span>{metrics.length}</span>
-        </div>
-        {metrics.map((field) => <FieldRow key={field.key} field={field} onAdd={() => onAddField(field)} />)}
+            <div className="mb-1 mt-4 flex items-center justify-between px-1 text-[10px] font-medium uppercase tracking-wide text-[#98a2b3]">
+              <span>指标</span><span>{metrics.length}</span>
+            </div>
+            {metrics.map((field) => <FieldRow key={field.key} field={field} onAdd={() => onAddField(field)} />)}
+          </>
+        )}
 
         <div className="mb-2 mt-5 border-t border-[#edf0f3] pt-4 text-[10px] font-medium uppercase tracking-wide text-[#98a2b3]">
           图表
@@ -91,17 +121,18 @@ export function LeftPanel({
             <button
               key={type}
               type="button"
+              disabled={!activeDataset}
               onClick={() => onAddChart(type)}
-              className="flex min-h-[62px] flex-col items-start justify-center rounded-[5px] border border-[#e5e7eb] bg-white px-3 text-left hover:border-[#cbd2dc] hover:bg-[#fafbfc]"
+              className="flex min-h-[62px] flex-col items-start justify-center rounded-[5px] border border-[#e5e7eb] bg-white px-3 text-left enabled:hover:border-[#cbd2dc] enabled:hover:bg-[#fafbfc] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="mb-1 text-[#475467]">{CHART_META[type].icon}</span>
               <span className="text-[11px] font-medium text-[#344054]">{CHART_META[type].label}</span>
             </button>
           ))}
         </div>
-        {!selectedWidget ? (
+        {!selectedWidget && activeDataset ? (
           <div className="mt-4 rounded-[4px] border border-dashed border-[#d8dde6] px-3 py-2 text-[10px] leading-4 text-[#98a2b3]">
-            选择画布中的图表后，可点击字段快速加入；也可以把字段拖到右侧配置槽位。
+            选择画布中的图表后，可点击字段快速加入；图表数据会实时查询 Dataset Runtime。
           </div>
         ) : null}
       </div>
