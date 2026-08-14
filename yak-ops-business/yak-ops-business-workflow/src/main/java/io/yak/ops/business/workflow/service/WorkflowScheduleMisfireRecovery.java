@@ -1,9 +1,11 @@
 package io.yak.ops.business.workflow.service;
 
 import io.yak.ops.business.workflow.dao.WorkflowScheduleTriggerDao;
+import io.yak.ops.business.workflow.domain.WorkflowScheduleTriggerIdentity;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -46,9 +48,12 @@ public class WorkflowScheduleMisfireRecovery {
     value.setWorkflowId(schedule.getWorkflowId());
     value.setTriggerId(
         "workflow-misfire-skip-" + schedule.getId() + "-" + missedFireTime.toEpochMilli());
+    value.setDedupeKey(WorkflowScheduleTriggerIdentity.scheduled(schedule.getId(), missedFireTime));
     value.setTriggerSource("MISFIRE_RECOVERY");
     value.setPlannedFireTime(missedFireTime);
     value.setActualFireTime(now);
+    value.setBusinessDate(
+        missedFireTime.atZone(ZoneId.of(schedule.getTimezone())).toLocalDate());
     value.setExecutionStrategy(schedule.getExecutionStrategy());
     value.setMisfireStrategy(schedule.getMisfireStrategy());
     value.setStatus("SKIPPED");
