@@ -32,6 +32,7 @@ const SOURCE_LABEL: Record<string, string> = {
   MANUAL: '手动触发',
   MISFIRE_RECOVERY: 'Misfire 恢复',
   BACKFILL: 'Backfill',
+  BUSINESS_DATE_RERUN: 'businessDate 补跑',
 };
 
 const formatTime = (value?: string) => {
@@ -83,10 +84,10 @@ const TriggerLedgerDrawer = ({
       title={
         <div>
           <div className="text-[14px] font-semibold text-[#344054]">
-            {backfillId ? 'Backfill Trigger 明细' : 'Trigger 记录'}
+            {backfillId ? '补数 / 运维补跑 Trigger 明细' : 'Trigger 记录'}
           </div>
           <div className="mt-0.5 text-[11px] font-normal text-[#98a2b3]">
-            {backfillName || schedule?.name || '-'} · {backfillId ? '按补数批次隔离幂等' : '每个正常计划时间最多产生一条 Ledger 记录'}
+            {backfillName || schedule?.name || '-'} · {backfillId ? '按批次隔离幂等' : '每个正常计划时间最多产生一条 Ledger 记录'}
           </div>
         </div>
       }
@@ -108,7 +109,7 @@ const TriggerLedgerDrawer = ({
     >
       <div className="mb-3 rounded-sm bg-[#f8f9fb] px-3 py-2 text-[11px] leading-5 text-[#667085]">
         {backfillId
-          ? 'Backfill 的 businessDate / scheduleTime 来自历史逻辑计划时间；不同 Backfill 批次可重新执行同一天，同一批次仍由 dedupeKey 保证幂等。'
+          ? 'Backfill / businessDate 运维补跑都使用逻辑计划时间；不同批次可重新执行同一天，同一批次仍由 dedupeKey 保证幂等。'
           : 'SERIAL_WAIT 会先进入 WAITING，前序 WorkflowExecution 终态提交后自动推进；SERIAL_DISCARD 会记为 SKIPPED；Misfire 同样保留审计记录。'}
       </div>
       <Table
@@ -150,7 +151,7 @@ const TriggerLedgerDrawer = ({
           {
             title: '来源',
             dataIndex: 'triggerSource',
-            width: 105,
+            width: 135,
             render: (value: string) => (
               <span className="text-[12px] text-[#667085]">{SOURCE_LABEL[value] || value}</span>
             ),
