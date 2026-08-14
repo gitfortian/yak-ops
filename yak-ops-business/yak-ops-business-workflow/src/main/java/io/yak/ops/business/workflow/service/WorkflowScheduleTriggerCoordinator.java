@@ -17,11 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/**
- * Trigger Ledger、幂等与 WorkflowExecution 并发策略的统一协调器。
- *
- * <p>准入由短事务完成；真正创建 WorkflowExecution 时不持有工作流行锁。</p>
- */
+/** Trigger Ledger、幂等与 WorkflowExecution 并发策略统一协调器。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleTriggerCoordinator {
@@ -54,11 +50,8 @@ public class WorkflowScheduleTriggerCoordinator {
         newTrigger(schedule, triggerId, plannedFireTime, actualFireTime, triggerSource));
     if (result.duplicate()) return duplicateResult(result.trigger());
     if (!result.launchNow()) {
-      return ScheduleExecutionResult.accepted(
-          result.trigger().getWorkflowExecutionId(),
-          result.trigger().getMessage());
+      return ScheduleExecutionResult.accepted(result.trigger().getWorkflowExecutionId(), result.trigger().getMessage());
     }
-
     String executionId = launchReserved(result);
     return ScheduleExecutionResult.accepted(executionId, "工作流调度 Trigger 已获得执行准入");
   }
@@ -68,12 +61,7 @@ public class WorkflowScheduleTriggerCoordinator {
       Instant plannedFireTime,
       Instant actualFireTime) {
     String triggerId = "workflow-misfire-" + schedule.getId() + "-" + plannedFireTime.toEpochMilli();
-    return submit(
-        schedule,
-        triggerId,
-        plannedFireTime,
-        actualFireTime,
-        "MISFIRE_RECOVERY");
+    return submit(schedule, triggerId, plannedFireTime, actualFireTime, "MISFIRE_RECOVERY");
   }
 
   /** 应用重启后修复 Ledger 中间态，并恢复 SERIAL_WAIT 队列。 */
@@ -89,8 +77,23 @@ public class WorkflowScheduleTriggerCoordinator {
       }
 
       if (executionId != null && !executionId.isBlank()) {
-        AdmissionResult next = admission.recoverBound(trigger, executionId);
-        launchReserved(next);
+        AdmissionResult recovered = admission.recoverBound(trigger, executionId);
+        if (recovered.launchNow()) {
+          launchReserved(recovered);
+          continue;
+        }
+        if (recovered.trigger() != null && "RECEIVED".equals(recovered.trigger().getStatus())) {
+          WorkflowSchedulePO schedule = safeSchedule(trigger.getScheduleId());
+          if (schedule == null || !"ONLINE".equals(schedule.getStatus())) {
+            admission.skip(recovered.trigger(), "原 WorkflowExecution 已不存在且调度已停用，恢复时跳过");
+          } else {
+            AdmissionResult readmitted = admission.readmit(schedule, recovered.trigger());
+            if (readmitted.launchNow()) launchReserved(readmitted);
+            else if (readmitted.trigger() != null && "WAITING".equals(readmitted.trigger().getStatus())) {
+              waitingWorkflows.add(trigger.getWorkflowId());
+            }
+          }
+        }
         continue;
       }
 
@@ -99,16 +102,14 @@ public class WorkflowScheduleTriggerCoordinator {
         admission.skip(trigger, "调度已停用或删除，启动恢复时跳过未启动 Trigger");
         continue;
       }
-
       if ("WAITING".equals(trigger.getStatus())) {
         waitingWorkflows.add(trigger.getWorkflowId());
         continue;
       }
 
       AdmissionResult readmitted = admission.readmit(schedule, trigger);
-      if (readmitted.launchNow()) {
-        launchReserved(readmitted);
-      } else if ("WAITING".equals(readmitted.trigger().getStatus())) {
+      if (readmitted.launchNow()) launchReserved(readmitted);
+      else if (readmitted.trigger() != null && "WAITING".equals(readmitted.trigger().getStatus())) {
         waitingWorkflows.add(trigger.getWorkflowId());
       }
     }
@@ -141,27 +142,21 @@ public class WorkflowScheduleTriggerCoordinator {
         WorkflowDefinitionVO launched = launchService.runScheduledPublished(
             schedule.getWorkflowId(),
             WorkflowTriggerContext.scheduled(
-                trigger.getTriggerId(),
-                schedule.getId(),
-                trigger.getPlannedFireTime()));
+                trigger.getTriggerId(), schedule.getId(), trigger.getPlannedFireTime()));
         String executionId = launched.latestExecutionId();
+        if (executionId == null || executionId.isBlank()) {
+          throw new IllegalStateException("工作流启动成功但未返回 WorkflowExecution ID");
+        }
         if (firstExecutionId == null) firstExecutionId = executionId;
         log.info(
             "[workflow-schedule-ledger] launched trigger={}, schedule={}, workflow={}, execution={}, strategy={}",
-            trigger.getId(),
-            schedule.getId(),
-            schedule.getWorkflowId(),
-            executionId,
-            schedule.getExecutionStrategy());
+            trigger.getId(), schedule.getId(), schedule.getWorkflowId(), executionId, schedule.getExecutionStrategy());
         current = admission.bindLaunch(trigger, executionId);
       } catch (RuntimeException exception) {
         if (firstFailure == null) firstFailure = exception;
         log.warn(
             "[workflow-schedule-ledger] launch failed trigger={}, schedule={}, workflow={}, message={}",
-            trigger.getId(),
-            trigger.getScheduleId(),
-            trigger.getWorkflowId(),
-            exception.getMessage());
+            trigger.getId(), trigger.getScheduleId(), trigger.getWorkflowId(), exception.getMessage());
         current = admission.failLaunch(trigger, exception);
       }
     }
@@ -197,8 +192,9 @@ public class WorkflowScheduleTriggerCoordinator {
   }
 
   private ScheduleExecutionResult duplicateResult(WorkflowScheduleTriggerPO trigger) {
-    String message = "重复计划触发已由 Trigger Ledger 幂等拦截，复用状态 " + trigger.getStatus();
-    return ScheduleExecutionResult.accepted(trigger.getWorkflowExecutionId(), message);
+    return ScheduleExecutionResult.accepted(
+        trigger.getWorkflowExecutionId(),
+        "重复计划触发已由 Trigger Ledger 幂等拦截，复用状态 " + trigger.getStatus());
   }
 
   private WorkflowSchedulePO safeSchedule(String scheduleId) {
