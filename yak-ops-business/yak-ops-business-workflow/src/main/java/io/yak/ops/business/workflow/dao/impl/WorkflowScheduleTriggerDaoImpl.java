@@ -127,8 +127,11 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   }
 
   @Override
-  public int bindPreparedExecution(String triggerId, String executionId) {
-    return mapper.bindPreparedExecution(triggerId, executionId);
+  public int bindPreparedExecution(
+      String triggerId,
+      String executionId,
+      String executionStatus) {
+    return mapper.bindPreparedExecution(triggerId, executionId, executionStatus);
   }
 
   @Override
