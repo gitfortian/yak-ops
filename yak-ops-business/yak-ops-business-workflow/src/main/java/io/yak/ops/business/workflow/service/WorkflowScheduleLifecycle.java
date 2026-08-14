@@ -8,7 +8,7 @@ import java.time.Instant;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** 工作流调度定义启停生命周期，并同步 Yak Schedule 引擎状态。 */
+/** 工作流调度定义启停生命周期，并同步 Yak Schedule 引擎与 Trigger Ledger 状态。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleLifecycle {
@@ -17,18 +17,21 @@ public class WorkflowScheduleLifecycle {
   private final WorkflowScheduleDao dao;
   private final WorkflowScheduleEngineBridge engine;
   private final WorkflowScheduleRuntimeState runtimeState;
+  private final WorkflowSchedulePendingTriggerCancellation pendingCancellation;
 
   public WorkflowScheduleLifecycle(
       WorkflowDefinitionService definitions,
       WorkflowScheduleQuery query,
       WorkflowScheduleDao dao,
       WorkflowScheduleEngineBridge engine,
-      WorkflowScheduleRuntimeState runtimeState) {
+      WorkflowScheduleRuntimeState runtimeState,
+      WorkflowSchedulePendingTriggerCancellation pendingCancellation) {
     this.definitions = definitions;
     this.query = query;
     this.dao = dao;
     this.engine = engine;
     this.runtimeState = runtimeState;
+    this.pendingCancellation = pendingCancellation;
   }
 
   public WorkflowScheduleVO online(String id) {
@@ -67,6 +70,8 @@ public class WorkflowScheduleLifecycle {
     value.setNextFireTime(null);
     value.setUpdateTime(Instant.now());
     save(value);
+    pendingCancellation.cancel(
+        value.getId(), value.getWorkflowId(), "调度已停用，取消尚未启动的等待 Trigger");
     return query.view(value);
   }
 
@@ -79,6 +84,8 @@ public class WorkflowScheduleLifecycle {
     value.setNextFireTime(null);
     value.setUpdateTime(Instant.now());
     save(value);
+    pendingCancellation.cancel(
+        value.getId(), value.getWorkflowId(), "调度已超过生效时间，取消尚未启动的等待 Trigger");
     return query.view(value);
   }
 
@@ -87,6 +94,8 @@ public class WorkflowScheduleLifecycle {
     if ("ONLINE".equals(value.getStatus())) {
       throw new IllegalStateException("已启用的调度请先下线后再删除");
     }
+    pendingCancellation.cancel(
+        value.getId(), value.getWorkflowId(), "调度定义已删除，取消尚未启动的等待 Trigger");
     engine.deleteIfPresent(value.getId());
     if (dao.deleteSchedule(value.getId()) != 1) {
       throw new IllegalStateException("删除工作流调度失败：" + value.getId());

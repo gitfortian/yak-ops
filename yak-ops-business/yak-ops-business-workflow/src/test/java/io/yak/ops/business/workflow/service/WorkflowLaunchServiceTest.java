@@ -52,6 +52,22 @@ class WorkflowLaunchServiceTest {
   }
 
   @Test
+  void shouldUseConcurrentDefinitionEntryForScheduledAdmission() {
+    WorkflowTriggerContext trigger = WorkflowTriggerContext.scheduled(
+        "trigger-parallel",
+        "schedule-1",
+        Instant.parse("2026-08-14T02:00:00Z"));
+    WorkflowDefinitionVO expected = definition("execution-parallel");
+    when(definitionService.runConcurrent("workflow-1")).thenReturn(expected);
+
+    WorkflowDefinitionVO actual = service.runScheduledPublished("workflow-1", trigger);
+
+    assertThat(actual).isSameAs(expected);
+    verify(definitionService).runConcurrent("workflow-1");
+    verify(triggerRecorder).record("execution-parallel", trigger);
+  }
+
+  @Test
   void shouldRouteAdHocApiRunAndRecordTriggerContext() {
     WorkflowRunDTO request = new WorkflowRunDTO(
         "临时工作流",

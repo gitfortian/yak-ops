@@ -7,6 +7,15 @@ export type WorkflowScheduleExecutionStrategy =
   | 'SERIAL_WAIT'
   | 'SERIAL_DISCARD';
 export type WorkflowScheduleMisfireStrategy = 'SKIP' | 'FIRE_ONCE';
+export type WorkflowScheduleTriggerStatus =
+  | 'RECEIVED'
+  | 'WAITING'
+  | 'LAUNCHING'
+  | 'RUNNING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELED'
+  | 'SKIPPED';
 
 export interface WorkflowSchedule {
   id: string;
@@ -23,6 +32,27 @@ export interface WorkflowSchedule {
   input: Record<string, unknown>;
   lastFireTime?: string;
   nextFireTime?: string;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface WorkflowScheduleTrigger {
+  id: string;
+  scheduleId: string;
+  workflowId: string;
+  triggerId: string;
+  triggerSource: 'CRON' | 'MANUAL' | 'MISFIRE_RECOVERY' | string;
+  plannedFireTime: string;
+  actualFireTime: string;
+  executionStrategy: WorkflowScheduleExecutionStrategy;
+  misfireStrategy: WorkflowScheduleMisfireStrategy;
+  status: WorkflowScheduleTriggerStatus;
+  workflowExecutionId?: string;
+  executionStatus?: string;
+  message?: string;
+  errorMessage?: string;
+  launchedAt?: string;
+  completedAt?: string;
   createTime: string;
   updateTime: string;
 }
@@ -44,6 +74,19 @@ export const listWorkflowSchedules = async (params?: {
 }) => {
   const response = await request<ApiResponse<WorkflowSchedule[]>>(
     '/api/v1/workflows/schedules',
+    { params },
+  );
+  return response.data || [];
+};
+
+export const listWorkflowScheduleTriggers = async (params?: {
+  scheduleId?: string;
+  workflowId?: string;
+  status?: WorkflowScheduleTriggerStatus;
+  limit?: number;
+}) => {
+  const response = await request<ApiResponse<WorkflowScheduleTrigger[]>>(
+    '/api/v1/workflows/schedules/triggers',
     { params },
   );
   return response.data || [];

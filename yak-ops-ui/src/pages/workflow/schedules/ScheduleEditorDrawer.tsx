@@ -132,7 +132,7 @@ const ScheduleEditorDrawer = ({
         <Form.Item
           name="cronExpression"
           label="Cron 表达式"
-          extra="Stage 2 保存调度定义；Stage 3 接入 Scheduler 后才会按表达式自动触发。"
+          extra="调度启用后由 Yak Schedule / Quartz 按 Cron 与时区触发；每次计划时间都会进入 Trigger Ledger。"
           rules={[{ required: true, message: '请输入 Cron 表达式' }]}
         >
           <Input variant="filled" placeholder="0 0 2 * * ?" />
@@ -154,7 +154,12 @@ const ScheduleEditorDrawer = ({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Form.Item name="executionStrategy" label="实例并发策略" rules={[{ required: true }]}>
+          <Form.Item
+            name="executionStrategy"
+            label="实例并发策略"
+            extra="等待：排队到前序终态；跳过：已有实例时记为 SKIPPED；并行：允许同时创建实例。"
+            rules={[{ required: true }]}
+          >
             <Select
               options={[
                 { value: 'SERIAL_WAIT', label: '等待上一次完成（推荐）' },
@@ -163,7 +168,12 @@ const ScheduleEditorDrawer = ({
               ]}
             />
           </Form.Item>
-          <Form.Item name="misfireStrategy" label="错过调度策略" rules={[{ required: true }]}>
+          <Form.Item
+            name="misfireStrategy"
+            label="错过调度策略"
+            extra="服务恢复时 FIRE_ONCE 合并补跑一次；SKIP 会跳过并保留 Ledger 审计记录。"
+            rules={[{ required: true }]}
+          >
             <Select
               options={[
                 { value: 'FIRE_ONCE', label: '恢复后补跑一次' },

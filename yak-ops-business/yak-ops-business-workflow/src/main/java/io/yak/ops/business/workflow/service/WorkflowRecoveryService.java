@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 
 /** Rebuilds non-terminal workflow runtime state after Yak Ops has fully started. */
@@ -28,6 +29,7 @@ public class WorkflowRecoveryService {
     this.runtimePersistence = runtimePersistence;
   }
 
+  @Order(10)
   @EventListener(ApplicationReadyEvent.class)
   public void recover() {
     // Register executions as active before reconciliation. This does not execute a node by itself;
