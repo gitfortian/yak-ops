@@ -45,6 +45,8 @@ public class WorkflowBackfillService {
       "cronExpression",
       "workflowVersionId",
       "workflowVersionNo",
+      "operationType",
+      "sourceExecutionId",
       WorkflowScheduleParameterResolver.NAMESPACE);
 
   private final WorkflowScheduleQuery schedules;
@@ -138,7 +140,7 @@ public class WorkflowBackfillService {
 
   /**
    * Stage 6：按来源实例的不可变发布版本与调度语义，对指定 businessDate 创建运维补跑。
-   * 旧实例的系统调度参数会被剥离，再由 Stage 5 参数解析器根据新的逻辑计划时间重新注入。
+   * 旧实例的系统调度参数和旧运维血缘会被剥离，再根据新的逻辑计划时间重新注入。
    */
   public WorkflowBackfillVO createBusinessDateRerun(
       String sourceExecutionId,
