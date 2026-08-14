@@ -81,8 +81,8 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
   }
 
   @Override
-  public long countActiveExecutions(String workflowId, String latestExecutionId) {
-    return executionMapper.countActiveExecutions(workflowId, latestExecutionId);
+  public long countActiveExecutions(String workflowId) {
+    return executionMapper.countActiveExecutions(workflowId);
   }
 
   @Override
