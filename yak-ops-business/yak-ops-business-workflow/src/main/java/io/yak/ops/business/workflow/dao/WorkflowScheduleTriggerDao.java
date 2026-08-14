@@ -14,6 +14,7 @@ public interface WorkflowScheduleTriggerDao {
   List<WorkflowScheduleTriggerPO> selectQueuedBySchedule(String scheduleId);
   List<WorkflowScheduleTriggerPO> selectTriggers(String scheduleId, String workflowId, String status, int limit);
   int update(WorkflowScheduleTriggerPO trigger);
+  int bindPreparedExecution(String triggerId, String executionId);
   void lockWorkflow(String workflowId);
   long countActiveExecutions(String workflowId);
   long countLaunchingTriggers(String workflowId);
