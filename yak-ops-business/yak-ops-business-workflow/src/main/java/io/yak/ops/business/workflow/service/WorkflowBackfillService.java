@@ -6,14 +6,18 @@ import io.yak.ops.business.workflow.persistence.support.WorkflowJsonCodec;
 import io.yak.ops.business.workflow.service.WorkflowBackfillPlanner.Occurrence;
 import io.yak.ops.business.workflow.service.WorkflowBackfillPlanner.Plan;
 import io.yak.ops.common.bean.dto.workflow.WorkflowBackfillCreateDTO;
+import io.yak.ops.common.bean.dto.workflow.WorkflowBusinessDateRerunDTO;
 import io.yak.ops.common.bean.po.workflow.WorkflowBackfillPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillPreviewVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillVO;
+import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -21,12 +25,27 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-/** Backfill 批次创建、预览、取消与 Trigger Ledger 分发。 */
+/** Backfill 批次创建、运维补跑、预览、取消与 Trigger Ledger 分发。 */
 @Service
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowBackfillService {
   private static final Logger log = LoggerFactory.getLogger(WorkflowBackfillService.class);
   private static final Set<String> STRATEGIES = Set.of("SERIAL_WAIT", "PARALLEL");
+  private static final Set<String> TERMINAL = Set.of(
+      "SUCCESS", "SUCCESS_WITH_WARNINGS", "FAILED", "WARNING", "CANCELED", "TIMED_OUT");
+  private static final Set<String> SYSTEM_INPUT_KEYS = Set.of(
+      "businessDate",
+      "scheduleTime",
+      "scheduleTimezone",
+      "plannedFireTime",
+      "triggerType",
+      "triggerId",
+      "scheduleId",
+      "backfillId",
+      "cronExpression",
+      "workflowVersionId",
+      "workflowVersionNo",
+      WorkflowScheduleParameterResolver.NAMESPACE);
 
   private final WorkflowScheduleQuery schedules;
   private final WorkflowDefinitionService definitions;
@@ -91,48 +110,82 @@ public class WorkflowBackfillService {
       throw new IllegalStateException("工作流需要先发布并上线，才能执行 Backfill");
     }
 
-    String strategy = strategy(request.executionStrategy());
+    String executionStrategy = strategy(request.executionStrategy());
     Plan plan = planner.plan(
         schedule.getCronExpression(),
         schedule.getTimezone(),
         request.startBusinessDate(),
         request.endBusinessDate());
 
-    Instant now = Instant.now();
-    WorkflowBackfillPO backfill = new WorkflowBackfillPO();
-    backfill.setId("workflow-backfill-" + UUID.randomUUID());
-    backfill.setWorkflowId(schedule.getWorkflowId());
-    backfill.setWorkflowVersionId(workflow.activeVersionId());
-    backfill.setWorkflowVersionNo(workflow.activeVersionNo());
-    backfill.setScheduleId(schedule.getId());
-    backfill.setScheduleName(schedule.getName());
-    backfill.setName(name(request, schedule));
-    backfill.setStatus("RUNNING");
-    backfill.setStartBusinessDate(request.startBusinessDate());
-    backfill.setEndBusinessDate(request.endBusinessDate());
-    backfill.setCronExpression(plan.cronExpression());
-    backfill.setTimezone(plan.timezone());
-    backfill.setExecutionStrategy(strategy);
-    backfill.setScheduleInputJson(schedule.getInputJson());
-    backfill.setInputJson(json.write(request.input()));
-    backfill.setTotalCount(plan.occurrences().size());
-    backfill.setCreateTime(now);
-    backfill.setUpdateTime(now);
-    if (dao.insert(backfill) != 1) throw new IllegalStateException("创建 Backfill 批次失败");
+    WorkflowBackfillPO backfill = base(
+        schedule.getWorkflowId(),
+        workflow.activeVersionId(),
+        workflow.activeVersionNo(),
+        schedule.getId(),
+        schedule.getName(),
+        name(request, schedule),
+        "BACKFILL",
+        null,
+        request.startBusinessDate(),
+        request.endBusinessDate(),
+        plan,
+        executionStrategy,
+        schedule.getInputJson(),
+        json.write(request.input()));
+    persistAndDispatch(backfill, plan.occurrences());
+    return query.get(backfill.getId());
+  }
 
-    for (Occurrence occurrence : plan.occurrences()) {
-      try {
-        coordinator.submitBackfill(backfill, occurrence);
-      } catch (RuntimeException exception) {
-        // 单个逻辑日期启动失败已经写入 Ledger；批次继续创建其余日期，最终由汇总状态反映失败。
-        log.warn(
-            "[workflow-backfill] dispatch failed backfill={}, businessDate={}, scheduleTime={}, message={}",
-            backfill.getId(),
-            occurrence.businessDate(),
-            occurrence.scheduleTime(),
-            exception.getMessage());
-      }
+  /**
+   * Stage 6：按来源实例的不可变发布版本与调度语义，对指定 businessDate 创建运维补跑。
+   * 旧实例的系统调度参数会被剥离，再由 Stage 5 参数解析器根据新的逻辑计划时间重新注入。
+   */
+  public WorkflowBackfillVO createBusinessDateRerun(
+      String sourceExecutionId,
+      WorkflowInstanceVO source,
+      WorkflowBusinessDateRerunDTO request) {
+    if (source == null || request == null) throw new IllegalArgumentException("指定日期补跑参数不能为空");
+    if (!source.id().equals(sourceExecutionId)) throw new IllegalArgumentException("来源实例 ID 不匹配");
+    if (!TERMINAL.contains(source.status())) throw new IllegalStateException("仅终态实例支持指定 businessDate 重跑");
+    if (source.workflowVersionId() == null || source.workflowVersionNo() == null) {
+      throw new IllegalStateException("来源实例没有不可变发布版本，不能执行 businessDate 重跑");
     }
+
+    Map<String, Object> sourceInput = source.input() == null ? Map.of() : source.input();
+    String scheduleId = text(sourceInput.get("scheduleId"));
+    String cron = text(sourceInput.get("cronExpression"));
+    String timezone = text(sourceInput.get("scheduleTimezone"));
+    if (scheduleId == null || cron == null || timezone == null) {
+      throw new IllegalStateException("来源实例缺少 scheduleId / cronExpression / scheduleTimezone 调度血缘");
+    }
+
+    String workflowId = triggers.selectWorkflowIdByExecution(sourceExecutionId);
+    if (workflowId == null || workflowId.isBlank()) {
+      throw new IllegalStateException("无法从来源实例解析工作流 ID：" + sourceExecutionId);
+    }
+
+    Plan plan = planner.plan(cron, timezone, request.businessDate(), request.businessDate());
+    Map<String, Object> inheritedInput = userInput(sourceInput);
+    String scheduleName = scheduleName(scheduleId);
+    String executionStrategy = strategy(request.executionStrategy());
+    String batchName = scheduleName + " · 运维补跑 " + request.businessDate();
+
+    WorkflowBackfillPO backfill = base(
+        workflowId,
+        source.workflowVersionId(),
+        source.workflowVersionNo(),
+        scheduleId,
+        scheduleName,
+        batchName,
+        "BUSINESS_DATE_RERUN",
+        sourceExecutionId,
+        request.businessDate(),
+        request.businessDate(),
+        plan,
+        executionStrategy,
+        json.write(inheritedInput),
+        json.write(request.input()));
+    persistAndDispatch(backfill, plan.occurrences());
     return query.get(backfill.getId());
   }
 
@@ -146,10 +199,90 @@ public class WorkflowBackfillService {
     }
     for (WorkflowScheduleTriggerPO trigger : triggers.selectByBackfillId(backfill.getId())) {
       if ("RECEIVED".equals(trigger.getStatus()) || "WAITING".equals(trigger.getStatus())) {
-        admission.skip(trigger, "Backfill 批次已取消，尚未启动的 Trigger 跳过");
+        admission.skip(trigger, "Backfill/运维补跑批次已取消，尚未启动的 Trigger 跳过");
       }
     }
     return query.get(backfill.getId());
+  }
+
+  private WorkflowBackfillPO base(
+      String workflowId,
+      String workflowVersionId,
+      Integer workflowVersionNo,
+      String scheduleId,
+      String scheduleName,
+      String name,
+      String operationType,
+      String sourceExecutionId,
+      java.time.LocalDate startBusinessDate,
+      java.time.LocalDate endBusinessDate,
+      Plan plan,
+      String executionStrategy,
+      String scheduleInputJson,
+      String inputJson) {
+    Instant now = Instant.now();
+    WorkflowBackfillPO backfill = new WorkflowBackfillPO();
+    backfill.setId("workflow-backfill-" + UUID.randomUUID());
+    backfill.setWorkflowId(workflowId);
+    backfill.setWorkflowVersionId(workflowVersionId);
+    backfill.setWorkflowVersionNo(workflowVersionNo);
+    backfill.setScheduleId(scheduleId);
+    backfill.setScheduleName(scheduleName);
+    backfill.setName(name);
+    backfill.setStatus("RUNNING");
+    backfill.setOperationType(operationType);
+    backfill.setSourceExecutionId(sourceExecutionId);
+    backfill.setStartBusinessDate(startBusinessDate);
+    backfill.setEndBusinessDate(endBusinessDate);
+    backfill.setCronExpression(plan.cronExpression());
+    backfill.setTimezone(plan.timezone());
+    backfill.setExecutionStrategy(executionStrategy);
+    backfill.setScheduleInputJson(scheduleInputJson);
+    backfill.setInputJson(inputJson);
+    backfill.setTotalCount(plan.occurrences().size());
+    backfill.setCreateTime(now);
+    backfill.setUpdateTime(now);
+    return backfill;
+  }
+
+  private void persistAndDispatch(WorkflowBackfillPO backfill, List<Occurrence> occurrences) {
+    if (dao.insert(backfill) != 1) throw new IllegalStateException("创建 Backfill/补跑批次失败");
+    for (Occurrence occurrence : occurrences) {
+      try {
+        coordinator.submitBackfill(backfill, occurrence);
+      } catch (RuntimeException exception) {
+        log.warn(
+            "[workflow-backfill] dispatch failed batch={}, operation={}, businessDate={}, scheduleTime={}, message={}",
+            backfill.getId(),
+            backfill.getOperationType(),
+            occurrence.businessDate(),
+            occurrence.scheduleTime(),
+            exception.getMessage());
+      }
+    }
+  }
+
+  private Map<String, Object> userInput(Map<String, Object> sourceInput) {
+    Map<String, Object> result = new LinkedHashMap<>();
+    sourceInput.forEach((key, value) -> {
+      if (!SYSTEM_INPUT_KEYS.contains(key)) result.put(key, value);
+    });
+    return Map.copyOf(result);
+  }
+
+  private String scheduleName(String scheduleId) {
+    try {
+      WorkflowSchedulePO schedule = schedules.require(scheduleId);
+      return schedule.getName();
+    } catch (IllegalArgumentException missing) {
+      return scheduleId;
+    }
+  }
+
+  private String text(Object value) {
+    if (value == null) return null;
+    String result = String.valueOf(value).trim();
+    return result.isEmpty() ? null : result;
   }
 
   private String strategy(String value) {
@@ -157,7 +290,7 @@ public class WorkflowBackfillService {
         ? "SERIAL_WAIT"
         : value.trim().toUpperCase(Locale.ROOT);
     if (!STRATEGIES.contains(normalized)) {
-      throw new IllegalArgumentException("Backfill 仅支持 SERIAL_WAIT 或 PARALLEL：" + normalized);
+      throw new IllegalArgumentException("补数/补跑仅支持 SERIAL_WAIT 或 PARALLEL：" + normalized);
     }
     return normalized;
   }
