@@ -21,6 +21,10 @@ public class DataServiceApiPO {
   private Integer timeoutSeconds;
   private Boolean enabled;
   private String description;
+  private String sourceType;
+  private String sourceRef;
+  private Long sourceRevisionId;
+  private Integer sourceRevisionNo;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
 }
