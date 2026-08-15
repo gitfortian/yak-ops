@@ -6,7 +6,7 @@ import type {
   Scalar,
 } from '@/components/analysis/model';
 import { message } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
 import {
   activateDashboardVersion,
@@ -35,6 +35,9 @@ import type {
 } from './model';
 import { fetchDashboardDatasets } from './service';
 
+const HISTORY_LIMIT = 50;
+const HISTORY_MERGE_WINDOW = 500;
+
 const assetSpec = (analysis: AnalysisAsset): AnalysisSpec => ({
   type: analysis.type,
   datasetId: analysis.datasetId,
@@ -57,8 +60,28 @@ const runtimeDefaults = (filters: DashboardGlobalFilter[]) => Object.fromEntries
 const hasOwn = (value: Record<string, Scalar | undefined>, key: string) =>
   Object.prototype.hasOwnProperty.call(value, key);
 
+const dashboardFingerprint = (dashboard: DashboardDocument) => JSON.stringify({
+  name: dashboard.name,
+  description: dashboard.description,
+  activeDatasetId: dashboard.activeDatasetId,
+  widgets: dashboard.widgets,
+  globalFilters: dashboard.globalFilters,
+  interactions: dashboard.interactions,
+});
+
+const trimHistory = (items: DashboardDocument[]) => (
+  items.length > HISTORY_LIMIT ? items.slice(items.length - HISTORY_LIMIT) : items
+);
+
 export function useDashboardDesigner(dashboardId?: string) {
-  const [dashboard, setDashboard] = useState<DashboardDocument>(() => cloneDashboard(DEFAULT_DASHBOARD));
+  const initialDashboard = useMemo(() => cloneDashboard(DEFAULT_DASHBOARD), []);
+  const [dashboard, setDashboardState] = useState<DashboardDocument>(initialDashboard);
+  const dashboardRef = useRef<DashboardDocument>(initialDashboard);
+  const savedFingerprintRef = useRef(dashboardFingerprint(initialDashboard));
+  const undoStackRef = useRef<DashboardDocument[]>([]);
+  const redoStackRef = useRef<DashboardDocument[]>([]);
+  const lastHistoryRef = useRef<{ key: string; at: number }>();
+
   const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
@@ -74,6 +97,80 @@ export function useDashboardDesigner(dashboardId?: string) {
     () => findDataset(datasets, dashboard.activeDatasetId),
     [dashboard.activeDatasetId, datasets],
   );
+  const dirty = dashboardFingerprint(dashboard) !== savedFingerprintRef.current;
+  const canUndo = undoStackRef.current.length > 0;
+  const canRedo = redoStackRef.current.length > 0;
+
+  const setDashboardWithoutHistory = useCallback((next: DashboardDocument) => {
+    const cloned = cloneDashboard(next);
+    dashboardRef.current = cloned;
+    setDashboardState(cloned);
+    setSelectedId((current) => (
+      current && cloned.widgets.some((widget) => widget.id === current) ? current : undefined
+    ));
+  }, []);
+
+  const resetDashboardState = useCallback((next: DashboardDocument, markSaved = true) => {
+    const cloned = cloneDashboard(next);
+    dashboardRef.current = cloned;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    lastHistoryRef.current = undefined;
+    if (markSaved) savedFingerprintRef.current = dashboardFingerprint(cloned);
+    setDashboardState(cloned);
+    setSelectedId(undefined);
+  }, []);
+
+  const commitDashboard = useCallback((
+    updater: DashboardDocument | ((current: DashboardDocument) => DashboardDocument),
+    historyKey: string,
+  ) => {
+    const current = dashboardRef.current;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    if (dashboardFingerprint(current) === dashboardFingerprint(next)) return;
+
+    const now = Date.now();
+    const last = lastHistoryRef.current;
+    const mergeWithPrevious = Boolean(
+      last
+      && last.key === historyKey
+      && now - last.at <= HISTORY_MERGE_WINDOW,
+    );
+
+    if (!mergeWithPrevious) {
+      undoStackRef.current = trimHistory([
+        ...undoStackRef.current,
+        cloneDashboard(current),
+      ]);
+    }
+    redoStackRef.current = [];
+    lastHistoryRef.current = { key: historyKey, at: now };
+    setDashboardWithoutHistory(next);
+  }, [setDashboardWithoutHistory]);
+
+  const undo = useCallback(() => {
+    const previous = undoStackRef.current.at(-1);
+    if (!previous) return;
+    undoStackRef.current = undoStackRef.current.slice(0, -1);
+    redoStackRef.current = trimHistory([
+      ...redoStackRef.current,
+      cloneDashboard(dashboardRef.current),
+    ]);
+    lastHistoryRef.current = undefined;
+    setDashboardWithoutHistory(previous);
+  }, [setDashboardWithoutHistory]);
+
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.at(-1);
+    if (!next) return;
+    redoStackRef.current = redoStackRef.current.slice(0, -1);
+    undoStackRef.current = trimHistory([
+      ...undoStackRef.current,
+      cloneDashboard(dashboardRef.current),
+    ]);
+    lastHistoryRef.current = undefined;
+    setDashboardWithoutHistory(next);
+  }, [setDashboardWithoutHistory]);
 
   const loadDatasets = useCallback(async () => {
     setDatasetsLoading(true);
@@ -97,14 +194,13 @@ export function useDashboardDesigner(dashboardId?: string) {
   const openDashboard = useCallback(async (targetDashboardId: string) => {
     try {
       const detail = await fetchDashboard(targetDashboardId);
-      setDashboard(toDashboardDocument(detail));
+      resetDashboardState(toDashboardDocument(detail));
       setDashboardVersions(detail.versions);
-      setSelectedId(undefined);
       window.localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 Dashboard 失败');
     }
-  }, []);
+  }, [resetDashboardState]);
 
   useEffect(() => {
     void loadDatasets();
@@ -116,33 +212,72 @@ export function useDashboardDesigner(dashboardId?: string) {
       void openDashboard(dashboardId);
       return;
     }
-    setDashboard(cloneDashboard(DEFAULT_DASHBOARD));
+    resetDashboardState(cloneDashboard(DEFAULT_DASHBOARD));
     setDashboardVersions([]);
-    setSelectedId(undefined);
     setRuntimeFilterValues({});
-  }, [dashboardId, openDashboard]);
+  }, [dashboardId, openDashboard, resetDashboardState]);
 
   useEffect(() => {
     if (!datasets.length) return;
-    setDashboard((current) => reconcileDashboard(current, datasets));
-  }, [datasets]);
+    const current = dashboardRef.current;
+    const next = reconcileDashboard(current, datasets);
+    if (dashboardFingerprint(current) === dashboardFingerprint(next)) return;
+
+    const wasClean = dashboardFingerprint(current) === savedFingerprintRef.current;
+    if (wasClean) savedFingerprintRef.current = dashboardFingerprint(next);
+    setDashboardWithoutHistory(next);
+  }, [datasets, setDashboardWithoutHistory]);
 
   useEffect(() => {
     setRuntimeFilterValues(runtimeDefaults(dashboard.globalFilters));
   }, [dashboard.id, dashboard.currentVersionId]);
 
-  const updateWidget = (id: string, patch: Partial<DashboardWidget>) => setDashboard((current) => ({
-    ...current,
-    widgets: current.widgets.map((widget) => widget.id === id ? { ...widget, ...patch } : widget),
-  }));
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
 
-  const updateInlineAnalysis = (id: string, patch: Partial<AnalysisSpec>) => setDashboard((current) => ({
-    ...current,
-    widgets: current.widgets.map((widget) => {
-      if (widget.id !== id || widget.analysisId || !widget.inlineAnalysis) return widget;
-      return { ...widget, inlineAnalysis: { ...widget.inlineAnalysis, ...patch } };
+  const updateDashboardName = (name: string) => commitDashboard(
+    (current) => ({ ...current, name }),
+    'dashboard:name',
+  );
+
+  const updateLayout = (
+    nextLayout: readonly { i: string; x: number; y: number; w: number; h: number }[],
+  ) => {
+    const nextMap = new Map(nextLayout.map((item) => [item.i, item]));
+    commitDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) => {
+        const next = nextMap.get(widget.id);
+        return next ? { ...widget, x: next.x, y: next.y, w: next.w, h: next.h } : widget;
+      }),
+    }), 'dashboard:layout');
+  };
+
+  const updateWidget = (id: string, patch: Partial<DashboardWidget>) => commitDashboard(
+    (current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) => widget.id === id ? { ...widget, ...patch } : widget),
     }),
-  }));
+    `widget:${id}:${Object.keys(patch).sort().join(',')}`,
+  );
+
+  const updateInlineAnalysis = (id: string, patch: Partial<AnalysisSpec>) => commitDashboard(
+    (current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) => {
+        if (widget.id !== id || widget.analysisId || !widget.inlineAnalysis) return widget;
+        return { ...widget, inlineAnalysis: { ...widget.inlineAnalysis, ...patch } };
+      }),
+    }),
+    `widget:${id}:analysis:${Object.keys(patch).sort().join(',')}`,
+  );
 
   const setRuntimeFilterValue = (filterId: string, value: Scalar | undefined) => {
     setRuntimeFilterValues((current) => ({ ...current, [filterId]: value }));
@@ -183,30 +318,40 @@ export function useDashboardDesigner(dashboardId?: string) {
     });
   }, [dashboard.interactions]);
 
-  const maxY = () => widgets.reduce((value, widget) => Math.max(value, widget.y + widget.h), 0);
+  const maxY = () => dashboardRef.current.widgets.reduce(
+    (value, widget) => Math.max(value, widget.y + widget.h),
+    0,
+  );
 
   const addWidget = (type: ChartType) => {
     if (!activeDataset) return void message.info('请先发布一个 ONLINE Dataset');
     const next = createWidget(type, activeDataset, maxY());
-    setDashboard((current) => ({ ...current, widgets: [...current.widgets, next] }));
+    commitDashboard(
+      (current) => ({ ...current, widgets: [...current.widgets, next] }),
+      `widget:add:${next.id}`,
+    );
     setSelectedId(next.id);
   };
 
   const detachAnalysis = (id: string) => {
-    const widget = widgets.find((item) => item.id === id);
+    const widget = dashboardRef.current.widgets.find((item) => item.id === id);
     if (!widget?.analysisId) return;
     const analysis = analyses.find((item) => item.id === widget.analysisId);
     if (!analysis) return void message.warning('引用的 Analysis 已不可用，无法生成独立副本');
-    updateWidget(id, {
-      analysisId: undefined,
-      title: analysis.name,
-      inlineAnalysis: assetSpec(analysis),
-    });
+    commitDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.map((item) => item.id === id ? {
+        ...item,
+        analysisId: undefined,
+        title: analysis.name,
+        inlineAnalysis: assetSpec(analysis),
+      } : item),
+    }), `widget:${id}:detach`);
     message.success('已解除 Analysis 引用，当前组件已复制为 Dashboard 本地图表');
   };
 
   const duplicateWidget = (id: string) => {
-    const source = widgets.find((widget) => widget.id === id);
+    const source = dashboardRef.current.widgets.find((widget) => widget.id === id);
     if (!source) return;
     const next: DashboardWidget = {
       ...source,
@@ -216,12 +361,15 @@ export function useDashboardDesigner(dashboardId?: string) {
         ? JSON.parse(JSON.stringify(source.inlineAnalysis)) as AnalysisSpec
         : undefined,
     };
-    setDashboard((current) => ({ ...current, widgets: [...current.widgets, next] }));
+    commitDashboard(
+      (current) => ({ ...current, widgets: [...current.widgets, next] }),
+      `widget:duplicate:${id}`,
+    );
     setSelectedId(next.id);
   };
 
   const deleteWidget = (id: string) => {
-    setDashboard((current) => ({
+    commitDashboard((current) => ({
       ...current,
       widgets: current.widgets.filter((widget) => widget.id !== id),
       globalFilters: current.globalFilters.map((filter) => ({
@@ -229,18 +377,19 @@ export function useDashboardDesigner(dashboardId?: string) {
         bindings: filter.bindings.filter((binding) => binding.widgetId !== id),
       })),
       interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
-    }));
+    }), `widget:delete:${id}`);
     setSelectedId((current) => current === id ? undefined : current);
   };
 
   const changeWidgetDataset = (id: string, datasetId: string) => {
-    const widget = widgets.find((item) => item.id === id);
+    const widget = dashboardRef.current.widgets.find((item) => item.id === id);
     if (widget?.analysisId) return void message.info('该组件引用历史共享图表，请先复制为可编辑图表');
     if (!widget?.inlineAnalysis) return;
     const dataset = findDataset(datasets, datasetId);
     if (!dataset) return;
-    setDashboard((current) => ({
+    commitDashboard((current) => ({
       ...current,
+      activeDatasetId: datasetId,
       widgets: current.widgets.map((item) => item.id === id
         ? { ...item, inlineAnalysis: createInlineAnalysis(item.inlineAnalysis!.type, dataset) }
         : item),
@@ -249,21 +398,22 @@ export function useDashboardDesigner(dashboardId?: string) {
         bindings: filter.bindings.filter((binding) => binding.widgetId !== id),
       })),
       interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
-    }));
+    }), `widget:${id}:dataset`);
   };
 
   const save = async (): Promise<string | undefined> => {
-    if (!dashboard.name.trim()) {
+    const currentDashboard = dashboardRef.current;
+    if (!currentDashboard.name.trim()) {
       message.warning('请输入仪表盘名称');
       return undefined;
     }
     setDashboardSaving(true);
     try {
-      const detail = isPersistedDashboard(dashboard.id)
-        ? await saveDashboardVersion(dashboard.id, dashboard)
-        : await createDashboard(dashboard);
+      const detail = isPersistedDashboard(currentDashboard.id)
+        ? await saveDashboardVersion(currentDashboard.id, currentDashboard)
+        : await createDashboard(currentDashboard);
       const document = toDashboardDocument(detail);
-      setDashboard(document);
+      resetDashboardState(document);
       setDashboardVersions(detail.versions);
       window.localStorage.removeItem(STORAGE_KEY);
       message.success(`仪表盘已保存为 V${detail.dashboard.currentVersionNo}`);
@@ -277,13 +427,13 @@ export function useDashboardDesigner(dashboardId?: string) {
   };
 
   const activateVersion = async (versionNo: number) => {
-    if (!isPersistedDashboard(dashboard.id) || versionNo === dashboard.currentVersionNo) return;
+    const currentDashboard = dashboardRef.current;
+    if (!isPersistedDashboard(currentDashboard.id) || versionNo === currentDashboard.currentVersionNo) return;
     setDashboardSaving(true);
     try {
-      const detail = await activateDashboardVersion(dashboard.id, versionNo);
-      setDashboard(toDashboardDocument(detail));
+      const detail = await activateDashboardVersion(currentDashboard.id, versionNo);
+      resetDashboardState(toDashboardDocument(detail));
       setDashboardVersions(detail.versions);
-      setSelectedId(undefined);
       message.success(`已切换到 Dashboard V${versionNo}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '切换 DashboardVersion 失败');
@@ -305,9 +455,13 @@ export function useDashboardDesigner(dashboardId?: string) {
     activeDataset,
     selectedId,
     preview,
-    setDashboard,
+    dirty,
+    canUndo,
+    canRedo,
     setSelectedId,
     setPreview,
+    updateDashboardName,
+    updateLayout,
     updateWidget,
     updateInlineAnalysis,
     setRuntimeFilterValue,
@@ -319,6 +473,8 @@ export function useDashboardDesigner(dashboardId?: string) {
     duplicateWidget,
     deleteWidget,
     changeWidgetDataset,
+    undo,
+    redo,
     save,
     activateVersion,
   };

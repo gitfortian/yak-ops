@@ -1,17 +1,24 @@
 import { history, useParams } from '@umijs/max';
 import { BRAND_CSS_VARIABLES } from '@/styles/brand';
-import { Button } from 'antd';
+import { Button, Modal } from 'antd';
 import { BarChart3 } from 'lucide-react';
 import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { ChartEditor } from './chart-editor';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
 import { WidgetShell } from './widget';
+
+const isEditableTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+    || Boolean(target.closest('.monaco-editor'));
+};
 
 export default function DashboardEditorPage() {
   const { id } = useParams<{ id?: string }>();
@@ -37,25 +44,98 @@ export default function DashboardEditorPage() {
     canvasMinHeight = 'min-h-[calc(100vh-156px)]';
   }
 
-  const syncLayout = (
-    nextLayout: readonly { i: string; x: number; y: number; w: number; h: number }[],
-  ) => {
-    const nextMap = new Map(nextLayout.map((item) => [item.i, item]));
-    designer.setDashboard((current) => ({
-      ...current,
-      widgets: current.widgets.map((widget) => {
-        const next = nextMap.get(widget.id);
-        return next ? { ...widget, x: next.x, y: next.y, w: next.w, h: next.h } : widget;
-      }),
-    }));
-  };
-
   const addChart = () => designer.addWidget('bar');
 
-  const saveDashboard = async () => {
+  const saveDashboard = useCallback(async () => {
+    const persisted = /^\d+$/.test(designer.dashboard.id);
+    if (designer.dashboardSaving || (persisted && !designer.dirty)) return;
     const persistedId = await designer.save();
     if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}`);
+  }, [dashboardId, designer]);
+
+  const leaveDashboard = () => {
+    if (!designer.dirty) {
+      history.push('/dashboard');
+      return;
+    }
+    Modal.confirm({
+      title: '有未保存修改',
+      content: '当前仪表盘还有未保存的修改，离开后这些修改会丢失。',
+      okText: '放弃修改并离开',
+      cancelText: '继续编辑',
+      okButtonProps: { danger: true },
+      onOk: () => history.push('/dashboard'),
+    });
   };
+
+  const changeVersion = (versionNo: number) => {
+    if (!designer.dirty) {
+      void designer.activateVersion(versionNo);
+      return;
+    }
+    Modal.confirm({
+      title: '切换历史版本？',
+      content: '当前修改尚未保存。切换版本会放弃这些修改并加载所选版本。',
+      okText: '放弃修改并切换',
+      cancelText: '继续编辑',
+      onOk: () => designer.activateVersion(versionNo),
+    });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (designer.preview) return;
+      const key = event.key.toLowerCase();
+      const modifier = event.metaKey || event.ctrlKey;
+
+      if (modifier && key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) designer.redo();
+        else designer.undo();
+        return;
+      }
+
+      if (modifier && key === 'y') {
+        event.preventDefault();
+        designer.redo();
+        return;
+      }
+
+      if (modifier && key === 's') {
+        event.preventDefault();
+        void saveDashboard();
+        return;
+      }
+
+      if (
+        modifier
+        && key === 'd'
+        && designer.selectedId
+        && !isEditableTarget(event.target)
+      ) {
+        event.preventDefault();
+        designer.duplicateWidget(designer.selectedId);
+        return;
+      }
+
+      if (event.key === 'Escape' && designer.selectedId) {
+        designer.setSelectedId(undefined);
+        return;
+      }
+
+      if (
+        (event.key === 'Delete' || event.key === 'Backspace')
+        && designer.selectedId
+        && !isEditableTarget(event.target)
+      ) {
+        event.preventDefault();
+        designer.deleteWidget(designer.selectedId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [designer, saveDashboard]);
 
   return (
     <div
@@ -69,10 +149,16 @@ export default function DashboardEditorPage() {
         versions={designer.dashboardVersions}
         saving={designer.dashboardSaving}
         preview={designer.preview}
+        dirty={designer.dirty}
+        canUndo={designer.canUndo}
+        canRedo={designer.canRedo}
         canAddChart={Boolean(designer.activeDataset) && !designer.datasetsLoading}
-        onName={(name) => designer.setDashboard((current) => ({ ...current, name }))}
+        onBack={leaveDashboard}
+        onName={designer.updateDashboardName}
+        onUndo={designer.undo}
+        onRedo={designer.redo}
         onAddChart={addChart}
-        onVersion={(versionNo) => void designer.activateVersion(versionNo)}
+        onVersion={changeVersion}
         onPreview={() => {
           designer.setPreview((current) => !current);
           designer.setSelectedId(undefined);
@@ -118,7 +204,7 @@ export default function DashboardEditorPage() {
                     handle: '.dashboard-widget__drag-handle',
                   }}
                   resizeConfig={{ enabled: !designer.preview }}
-                  onLayoutChange={syncLayout}
+                  onLayoutChange={designer.updateLayout}
                 >
                   {designer.widgets.map((widget) => {
                     const analysis = widget.analysisId
@@ -193,10 +279,8 @@ export default function DashboardEditorPage() {
               designer.updateWidget(designer.selectedWidget!.id, patch)}
             updateInlineAnalysis={(patch) =>
               designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
-            changeDataset={(datasetId) => {
-              designer.setDashboard((current) => ({ ...current, activeDatasetId: datasetId }));
-              designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId);
-            }}
+            changeDataset={(datasetId) =>
+              designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
             detachAnalysis={() =>
               designer.detachAnalysis(designer.selectedWidget!.id)}
             close={() => designer.setSelectedId(undefined)}
