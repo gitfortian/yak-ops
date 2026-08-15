@@ -1,6 +1,7 @@
 -- 数据服务第五阶段：参数/响应 Schema 与 OpenAPI 文档元数据。
 CREATE TABLE IF NOT EXISTS yak_ops_data_service_documentation (
     api_id BIGINT UNSIGNED NOT NULL COMMENT '数据服务 API ID',
+    sql_hash CHAR(64) DEFAULT NULL COMMENT '保存文档时的 SQL SHA-256，用于识别 Schema 漂移',
     parameter_schema_json MEDIUMTEXT DEFAULT NULL COMMENT '请求参数文档 JSON',
     response_schema_json MEDIUMTEXT DEFAULT NULL COMMENT '响应行字段文档 JSON',
     update_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
