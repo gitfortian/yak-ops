@@ -45,6 +45,7 @@ export default function DataServicePage() {
   const [testResult, setTestResult] = useState<DataServiceQueryResult>();
   const [form] = Form.useForm<DataServiceSavePayload>();
   const [testForm] = Form.useForm<Record<string, string>>();
+  const sourceManaged = Boolean(editing?.sourceType);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,12 +166,15 @@ export default function DataServicePage() {
     {
       title: 'API 服务',
       dataIndex: 'name',
-      minWidth: 260,
+      minWidth: 280,
       render: (_, record) => (
         <div className="py-1">
           <div className="flex items-center gap-2">
             <span className="font-medium text-[#161823]">{record.name}</span>
             <Tag bordered={false}>GET</Tag>
+            {record.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
+              <Tag bordered={false}>数据开发 v{record.sourceRevisionNo || '-'}</Tag>
+            ) : null}
           </div>
           <div className="mt-1 flex items-center gap-1 text-xs text-black/45">
             <span className="font-mono">{record.runtimePath}</span>
@@ -274,7 +278,7 @@ export default function DataServicePage() {
         dataSource={filtered}
         columns={columns}
         pagination={false}
-        scroll={{ x: 1180 }}
+        scroll={{ x: 1200 }}
       />
 
       <Modal
@@ -288,6 +292,11 @@ export default function DataServicePage() {
         destroyOnHidden
       >
         <Form form={form} layout="vertical" className="pt-3">
+          {sourceManaged ? (
+            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-3 py-2.5 text-[12px] leading-5 text-[#667085]">
+              来源：数据开发 SQL v{editing?.sourceRevisionNo || '-'}。SQL 与数据源由来源版本管理；如需更新执行逻辑，请回到数据开发重新发布数据服务。
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-x-4">
             <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
               <Input placeholder="例如：用户查询 API" />
@@ -296,8 +305,14 @@ export default function DataServicePage() {
               <Input addonBefore="GET" placeholder="/users" />
             </Form.Item>
           </div>
-          <Form.Item name="dataSourceId" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
+          <Form.Item
+            name="dataSourceId"
+            label="数据源"
+            extra={sourceManaged ? '由数据开发 SQL 发布版本继承，不支持在这里修改。' : undefined}
+            rules={[{ required: true, message: '请选择数据源' }]}
+          >
             <Select
+              disabled={sourceManaged}
               showSearch
               optionFilterProp="label"
               placeholder="选择已有数据源"
@@ -307,10 +322,13 @@ export default function DataServicePage() {
           <Form.Item
             name="sql"
             label="SELECT SQL"
-            extra="使用 :参数名 声明请求参数，例如 WHERE department = :department。第一阶段仅允许单条 SELECT。"
+            extra={sourceManaged
+              ? 'SQL 固定继承数据开发的发布版本；新 SQL 版本发布后，请从数据开发执行“发布为数据服务”完成更新。'
+              : '使用 :参数名 声明请求参数，例如 WHERE department = :department。仅允许单条 SELECT。'}
             rules={[{ required: true, message: '请输入 SQL' }]}
           >
             <Input.TextArea
+              disabled={sourceManaged}
               rows={10}
               spellCheck={false}
               placeholder={'SELECT id, username\nFROM sys_user\nWHERE department = :department'}

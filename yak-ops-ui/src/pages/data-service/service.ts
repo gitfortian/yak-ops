@@ -25,6 +25,10 @@ export interface DataServiceApi {
   timeoutSeconds: number;
   enabled: boolean;
   description?: string;
+  sourceType?: string;
+  sourceRef?: string;
+  sourceRevisionId?: number;
+  sourceRevisionNo?: number;
   createTime?: string;
   updateTime?: string;
 }
