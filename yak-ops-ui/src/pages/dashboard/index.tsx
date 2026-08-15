@@ -296,6 +296,9 @@ export default function DashboardListPage() {
               <div>
                 {pageItems.map((dashboard) => {
                   const lifecycle = lifecycleOf(dashboard);
+                  const openPath = lifecycle.published
+                    ? `/dashboard/${dashboard.id}`
+                    : `/dashboard/${dashboard.id}/edit`;
                   const statusLabel = lifecycle.state === 'published'
                     ? `已发布 V${dashboard.publishedVersionNo}`
                     : lifecycle.state === 'draft'
@@ -314,7 +317,7 @@ export default function DashboardListPage() {
                     >
                       <button
                         type="button"
-                        onClick={() => history.push(`/dashboard/${dashboard.id}`)}
+                        onClick={() => history.push(openPath)}
                         className="relative h-[160px] w-[120px] shrink-0 overflow-hidden rounded-[6px] border border-[#e6e8eb] bg-gradient-to-b from-[#fafafa] to-[#eceef1] p-0 text-left transition-[border-color,box-shadow] duration-150 ease-out group-hover:border-[#d9dce1] group-hover:shadow-[0_2px_8px_rgba(22,24,35,0.05)]"
                       >
                         <div className="absolute left-3 right-3 top-4 flex h-[62px] items-end gap-1.5">
@@ -336,7 +339,7 @@ export default function DashboardListPage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => history.push(`/dashboard/${dashboard.id}`)}
+                            onClick={() => history.push(openPath)}
                             className="max-w-[620px] truncate border-0 bg-transparent p-0 text-left text-[14px] font-semibold leading-5 text-[#161823] transition-colors hover:text-[#111318] hover:underline"
                           >
                             {dashboard.name}
@@ -395,7 +398,7 @@ export default function DashboardListPage() {
                           size="small"
                           icon={<Pencil size={12} />}
                           className="h-7 px-1.5 text-[#667085]"
-                          onClick={() => history.push(`/dashboard/${dashboard.id}`)}
+                          onClick={() => history.push(`/dashboard/${dashboard.id}/edit`)}
                         >
                           编辑仪表盘
                         </Button>
