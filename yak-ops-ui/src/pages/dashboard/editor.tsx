@@ -276,11 +276,8 @@ export default function DashboardEditorPage() {
                             if (!designer.preview) designer.setSelectedId(widget.id);
                           }}
                           onDataSelect={(selection) => {
-                            const target = designer.handleWidgetSelection(
-                              widget.id,
-                              selection,
-                              designer.preview,
-                            );
+                            if (!designer.preview) return;
+                            const target = designer.handleWidgetSelection(widget.id, selection);
                             if (target) history.push(target);
                           }}
                           onDrillBack={(depth) => designer.drillBack(widget.id, depth)}
