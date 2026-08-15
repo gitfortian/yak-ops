@@ -14,8 +14,9 @@ import {
   message,
   type TableColumnsType,
 } from 'antd';
-import { Copy, Pencil, Play, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Play, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import DataServiceAccessModal from './DataServiceAccessModal';
 import {
   createDataService,
   deleteDataService,
@@ -41,6 +42,7 @@ export default function DataServicePage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<DataServiceApi>();
+  const [accessTarget, setAccessTarget] = useState<DataServiceApi>();
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<DataServiceQueryResult>();
   const [form] = Form.useForm<DataServiceSavePayload>();
@@ -54,8 +56,12 @@ export default function DataServicePage() {
         fetchDataServices(),
         fetchDataSourceOptions(),
       ]);
-      setServices(serviceResponse.data || []);
+      const nextServices = serviceResponse.data || [];
+      setServices(nextServices);
       setDataSources(dataSourceResponse.data || []);
+      setAccessTarget((current) => current
+        ? nextServices.find((item) => item.id === current.id) || current
+        : undefined);
     } catch (error: any) {
       message.error(error?.message || '加载数据服务失败');
     } finally {
@@ -194,14 +200,22 @@ export default function DataServicePage() {
     {
       title: '参数',
       dataIndex: 'parameterNames',
-      width: 190,
+      width: 180,
       render: (values: string[]) => values?.length
         ? <span className="text-black/65">{values.map((item) => `:${item}`).join(' · ')}</span>
         : <span className="text-black/35">无参数</span>,
     },
     {
+      title: '访问控制',
+      dataIndex: 'authMode',
+      width: 120,
+      render: (value) => value === 'API_KEY'
+        ? <Tag bordered={false}>API Key</Tag>
+        : <span className="text-black/40">公开</span>,
+    },
+    {
       title: '运行限制',
-      width: 160,
+      width: 150,
       render: (_, record) => (
         <span className="text-black/55">{record.maxRows} 行 · {record.timeoutSeconds}s</span>
       ),
@@ -215,7 +229,7 @@ export default function DataServicePage() {
     {
       title: '状态',
       dataIndex: 'enabled',
-      width: 100,
+      width: 90,
       render: (_, record) => (
         <Switch size="small" checked={record.enabled} onChange={(checked) => void toggleEnabled(record, checked)} />
       ),
@@ -223,12 +237,15 @@ export default function DataServicePage() {
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 190,
       fixed: 'right',
       render: (_, record) => (
         <Space size={2}>
           <Tooltip title="测试">
             <Button type="text" size="small" icon={<Play size={15} />} onClick={() => openTest(record)} />
+          </Tooltip>
+          <Tooltip title="访问控制">
+            <Button type="text" size="small" icon={<ShieldCheck size={15} />} onClick={() => setAccessTarget(record)} />
           </Tooltip>
           <Tooltip title="编辑">
             <Button type="text" size="small" icon={<Pencil size={15} />} onClick={() => openEdit(record)} />
@@ -254,7 +271,7 @@ export default function DataServicePage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">将只读 SQL 发布为可调用的 GET REST API。</p>
+          <p className="mb-0 mt-1 text-sm text-black/45">将只读 SQL 发布为可调用、可鉴权、可审计的 GET REST API。</p>
         </div>
         <Button type="primary" icon={<Plus size={16} />} onClick={openCreate}>新建 API</Button>
       </div>
@@ -278,7 +295,14 @@ export default function DataServicePage() {
         dataSource={filtered}
         columns={columns}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1320 }}
+      />
+
+      <DataServiceAccessModal
+        open={Boolean(accessTarget)}
+        service={accessTarget}
+        onCancel={() => setAccessTarget(undefined)}
+        onChanged={load}
       />
 
       <Modal
@@ -365,6 +389,11 @@ export default function DataServicePage() {
             <div className="mb-4 rounded-md bg-black/[0.025] px-3 py-2 font-mono text-sm text-black/65">
               GET {testing.runtimePath}
             </div>
+            {testing.authMode === 'API_KEY' ? (
+              <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-3 py-2 text-[11px] text-[#667085]">
+                当前 Runtime 已启用 API Key。这里属于管理控制台测试，会绕过外部鉴权；真实调用请携带 <span className="font-mono">X-API-Key</span>。
+              </div>
+            ) : null}
             <Form form={testForm} layout="vertical">
               {testing.parameterNames.length > 0 ? (
                 <div className="grid grid-cols-2 gap-x-4">
