@@ -21,6 +21,12 @@ public class DataServiceApiPO {
   private Integer timeoutSeconds;
   private Boolean enabled;
   private String authMode;
+  private Boolean cacheEnabled;
+  private Integer cacheTtlSeconds;
+  private Integer cacheMaxEntries;
+  private Boolean circuitBreakerEnabled;
+  private Integer circuitFailureThreshold;
+  private Integer circuitRecoverySeconds;
   private String description;
   private String sourceType;
   private String sourceRef;
