@@ -25,7 +25,10 @@ const isEditableTarget = (target: EventTarget | null) => {
 export default function DashboardEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const dashboardId = id && id !== 'new' ? id : undefined;
-  const designer = useDashboardDesigner(dashboardId);
+  const routeParams = new URLSearchParams(window.location.search);
+  const publishedView = routeParams.get('published') === '1';
+  const initialPreview = publishedView || routeParams.get('preview') === '1';
+  const designer = useDashboardDesigner(dashboardId, initialPreview, publishedView);
   const { width, containerRef, mounted } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [filterConfigOpen, setFilterConfigOpen] = useState(false);
@@ -78,7 +81,7 @@ export default function DashboardEditorPage() {
   }, [dashboardId, designer]);
 
   const leaveDashboard = () => {
-    if (!designer.dirty) {
+    if (!designer.dirty || designer.publishedView) {
       history.push('/dashboard');
       return;
     }
@@ -192,6 +195,10 @@ export default function DashboardEditorPage() {
         onAddChart={addChart}
         onHistory={() => setHistoryOpen(true)}
         onPreview={() => {
+          if (designer.publishedView) {
+            history.push(`/dashboard/${designer.dashboard.id}`);
+            return;
+          }
           designer.setPreview((current) => !current);
           designer.setSelectedId(undefined);
         }}
@@ -248,25 +255,32 @@ export default function DashboardEditorPage() {
                     const analysis = widget.analysisId
                       ? designer.analyses.find((item) => item.id === widget.analysisId)
                       : undefined;
-                    const spec = analysis ?? widget.inlineAnalysis;
-                    const dataset = spec
-                      ? designer.datasets.find((item) => item.id === spec.datasetId)
+                    const runtimeSpec = designer.runtimeSpecForWidget(widget.id);
+                    const dataset = runtimeSpec
+                      ? designer.datasets.find((item) => item.id === runtimeSpec.datasetId)
                       : undefined;
+                    const drillPath = designer.drillPathForWidget(widget.id);
 
                     return (
                       <div key={widget.id}>
                         <WidgetShell
                           widget={widget}
                           analysis={analysis}
+                          runtimeSpec={runtimeSpec}
                           dataset={dataset}
                           runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
+                          drillPath={drillPath}
                           selected={designer.selectedId === widget.id}
                           preview={designer.preview}
                           onSelect={() => {
                             if (!designer.preview) designer.setSelectedId(widget.id);
                           }}
-                          onDataSelect={(selection) =>
-                            designer.handleWidgetSelection(widget.id, selection)}
+                          onDataSelect={(selection) => {
+                            if (!designer.preview) return;
+                            const target = designer.handleWidgetSelection(widget.id, selection);
+                            if (target) history.push(target);
+                          }}
+                          onDrillBack={(depth) => designer.drillBack(widget.id, depth)}
                           onDuplicate={() => designer.duplicateWidget(widget.id)}
                           onDelete={() => designer.deleteWidget(widget.id)}
                         />
@@ -310,6 +324,7 @@ export default function DashboardEditorPage() {
 
         {!designer.preview && designer.selectedWidget ? (
           <ChartEditor
+            currentDashboardId={designer.dashboard.id}
             widget={designer.selectedWidget}
             datasets={designer.datasets}
             analyses={designer.analyses}
@@ -339,7 +354,7 @@ export default function DashboardEditorPage() {
         onClose={() => setFilterConfigOpen(false)}
       />
 
-      {designer.persisted ? (
+      {designer.persisted && !designer.publishedView ? (
         <DashboardVersionHistoryDrawer
           open={historyOpen}
           dashboardId={designer.dashboard.id}

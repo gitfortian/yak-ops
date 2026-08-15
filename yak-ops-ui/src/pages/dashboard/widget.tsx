@@ -1,10 +1,19 @@
 import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
 import { Dropdown, Empty, Tooltip } from 'antd';
-import { Copy, GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
+import {
+  ChevronRight,
+  Copy,
+  GripVertical,
+  MoreHorizontal,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import type {
   AnalysisAsset,
   AnalysisSelection,
+  DashboardDrillStep,
   DashboardFilter,
+  DashboardInlineAnalysisSpec,
   DashboardWidget,
   PublishedDataset,
 } from './model';
@@ -12,27 +21,33 @@ import type {
 export function WidgetShell({
   widget,
   analysis,
+  runtimeSpec,
   dataset,
   runtimeFilters,
+  drillPath,
   selected,
   preview,
   onSelect,
   onDataSelect,
+  onDrillBack,
   onDuplicate,
   onDelete,
 }: {
   widget: DashboardWidget;
   analysis?: AnalysisAsset;
+  runtimeSpec?: DashboardInlineAnalysisSpec | AnalysisAsset;
   dataset?: PublishedDataset;
   runtimeFilters: DashboardFilter[];
+  drillPath: DashboardDrillStep[];
   selected: boolean;
   preview: boolean;
   onSelect: () => void;
   onDataSelect: (selection: AnalysisSelection) => void;
+  onDrillBack: (depth: number) => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const spec = widget.analysisId ? analysis : widget.inlineAnalysis;
+  const spec = runtimeSpec ?? (widget.analysisId ? analysis : widget.inlineAnalysis);
   const title = widget.analysisId
     ? analysis?.name ?? '历史图表'
     : widget.title ?? '未命名图表';
@@ -110,6 +125,41 @@ export function WidgetShell({
           </div>
         ) : null}
       </div>
+
+      {drillPath.length ? (
+        <div
+          className="flex h-7 shrink-0 items-center gap-0.5 border-b border-[#f0f2f5] bg-[#fafbfc] px-2.5 text-[9px] text-[#667085]"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1 text-[#667085] hover:bg-[#f0f2f5] hover:text-[#344054]"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDrillBack(0);
+            }}
+          >
+            <RotateCcw size={9} />
+            全部
+          </button>
+          {drillPath.map((step, index) => (
+            <span key={`${step.field}-${index}`} className="flex min-w-0 items-center gap-0.5">
+              <ChevronRight size={9} className="shrink-0 text-[#b1b6bf]" />
+              <button
+                type="button"
+                className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5 text-[#475467] hover:bg-[#f0f2f5]"
+                title={step.label}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDrillBack(index + 1);
+                }}
+              >
+                {step.label}
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {spec ? (

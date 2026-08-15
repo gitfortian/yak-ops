@@ -2,7 +2,6 @@ import { fetchAnalyses } from '@/components/analysis/analysis-service';
 import type {
   AnalysisFilter,
   AnalysisSelection,
-  AnalysisSpec,
   Scalar,
 } from '@/components/analysis/model';
 import { message } from 'antd';
@@ -11,6 +10,7 @@ import { DEFAULT_DASHBOARD } from './defaults';
 import {
   createDashboard,
   fetchDashboard,
+  fetchPublishedDashboard,
   publishDashboard,
   restoreDashboardVersion,
   saveDashboardVersion,
@@ -29,9 +29,12 @@ import type {
   AnalysisAsset,
   ChartType,
   DashboardDocument,
+  DashboardDrillStep,
   DashboardGlobalFilter,
+  DashboardInlineAnalysisSpec,
   DashboardInteraction,
   DashboardServerDetail,
+  DashboardVersionDetail,
   DashboardVersionSummary,
   DashboardWidget,
   PublishedDataset,
@@ -41,7 +44,7 @@ import { fetchDashboardDatasets } from './service';
 const HISTORY_LIMIT = 50;
 const HISTORY_MERGE_WINDOW = 500;
 
-const assetSpec = (analysis: AnalysisAsset): AnalysisSpec => ({
+const assetSpec = (analysis: AnalysisAsset): DashboardInlineAnalysisSpec => ({
   type: analysis.type,
   datasetId: analysis.datasetId,
   dimensions: [...analysis.dimensions],
@@ -76,7 +79,28 @@ const trimHistory = (items: DashboardDocument[]) => (
   items.length > HISTORY_LIMIT ? items.slice(items.length - HISTORY_LIMIT) : items
 );
 
-export function useDashboardDesigner(dashboardId?: string) {
+const publishedDocument = (detail: DashboardVersionDetail): DashboardDocument => ({
+  version: 1,
+  id: detail.dashboard.id,
+  name: detail.version.name,
+  description: detail.version.description,
+  activeDatasetId: detail.version.activeDatasetId || '',
+  widgets: detail.widgets,
+  globalFilters: detail.globalFilters,
+  interactions: detail.interactions,
+  currentVersionNo: detail.version.versionNo,
+  currentVersionId: detail.version.id,
+  publishedVersionNo: detail.dashboard.publishedVersionNo,
+  publishedVersionId: detail.dashboard.publishedVersionId,
+  publishedAt: detail.dashboard.publishedTime,
+  updatedAt: detail.dashboard.updateTime,
+});
+
+export function useDashboardDesigner(
+  dashboardId?: string,
+  initialPreview = false,
+  publishedView = false,
+) {
   const initialDashboard = useMemo(() => cloneDashboard(DEFAULT_DASHBOARD), []);
   const [dashboard, setDashboardState] = useState<DashboardDocument>(initialDashboard);
   const dashboardRef = useRef<DashboardDocument>(initialDashboard);
@@ -92,8 +116,9 @@ export function useDashboardDesigner(dashboardId?: string) {
   const [dashboardSaving, setDashboardSaving] = useState(false);
   const [dashboardPublishing, setDashboardPublishing] = useState(false);
   const [runtimeFilterValues, setRuntimeFilterValues] = useState<Record<string, Scalar | undefined>>({});
+  const [drillPaths, setDrillPaths] = useState<Record<string, DashboardDrillStep[]>>({});
   const [selectedId, setSelectedId] = useState<string>();
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(initialPreview || publishedView);
 
   const widgets = dashboard.widgets;
   const selectedWidget = widgets.find((widget) => widget.id === selectedId);
@@ -130,6 +155,7 @@ export function useDashboardDesigner(dashboardId?: string) {
     if (markSaved) savedFingerprintRef.current = dashboardFingerprint(cloned);
     setDashboardState(cloned);
     setSelectedId(undefined);
+    setDrillPaths({});
   }, []);
 
   const applyServerDetail = useCallback((detail: DashboardServerDetail) => {
@@ -212,11 +238,18 @@ export function useDashboardDesigner(dashboardId?: string) {
 
   const openDashboard = useCallback(async (targetDashboardId: string) => {
     try {
+      if (publishedView) {
+        const detail = await fetchPublishedDashboard(targetDashboardId);
+        resetDashboardState(publishedDocument(detail));
+        setDashboardVersions([]);
+        window.localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
       applyServerDetail(await fetchDashboard(targetDashboardId));
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 Dashboard 失败');
     }
-  }, [applyServerDetail]);
+  }, [applyServerDetail, publishedView, resetDashboardState]);
 
   useEffect(() => {
     void loadDatasets();
@@ -224,6 +257,7 @@ export function useDashboardDesigner(dashboardId?: string) {
   }, [loadDatasets, loadAnalyses]);
 
   useEffect(() => {
+    setPreview(initialPreview || publishedView);
     if (dashboardId) {
       void openDashboard(dashboardId);
       return;
@@ -231,7 +265,7 @@ export function useDashboardDesigner(dashboardId?: string) {
     resetDashboardState(cloneDashboard(DEFAULT_DASHBOARD));
     setDashboardVersions([]);
     setRuntimeFilterValues({});
-  }, [dashboardId, openDashboard, resetDashboardState]);
+  }, [dashboardId, initialPreview, openDashboard, publishedView, resetDashboardState]);
 
   useEffect(() => {
     if (!datasets.length) return;
@@ -246,17 +280,36 @@ export function useDashboardDesigner(dashboardId?: string) {
 
   useEffect(() => {
     setRuntimeFilterValues(runtimeDefaults(dashboard.globalFilters));
+    setDrillPaths({});
   }, [dashboard.id, dashboard.currentVersionId]);
 
   useEffect(() => {
-    if (!dirty) return undefined;
+    const params = new URLSearchParams(window.location.search);
+    const field = params.get('df');
+    const value = params.get('dv');
+    if (!field || value === null) return;
+    const targetIds = dashboard.globalFilters
+      .filter((filter) => filter.bindings.some((binding) => binding.field === field))
+      .map((filter) => filter.id);
+    if (!targetIds.length) return;
+    setRuntimeFilterValues((current) => {
+      const next = { ...current };
+      targetIds.forEach((filterId) => {
+        next[filterId] = value;
+      });
+      return next;
+    });
+  }, [dashboard.id, dashboard.currentVersionId, dashboard.globalFilters]);
+
+  useEffect(() => {
+    if (!dirty || publishedView) return undefined;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty]);
+  }, [dirty, publishedView]);
 
   const updateDashboardName = (name: string) => commitDashboard(
     (current) => ({ ...current, name }),
@@ -284,7 +337,7 @@ export function useDashboardDesigner(dashboardId?: string) {
     `widget:${id}:${Object.keys(patch).sort().join(',')}`,
   );
 
-  const updateInlineAnalysis = (id: string, patch: Partial<AnalysisSpec>) => commitDashboard(
+  const updateInlineAnalysis = (id: string, patch: Partial<DashboardInlineAnalysisSpec>) => commitDashboard(
     (current) => ({
       ...current,
       widgets: current.widgets.map((widget) => {
@@ -321,8 +374,42 @@ export function useDashboardDesigner(dashboardId?: string) {
 
   const resetRuntimeFilters = () => setRuntimeFilterValues(runtimeDefaults(dashboard.globalFilters));
 
-  const runtimeFiltersForWidget = useCallback((widgetId: string): AnalysisFilter[] => (
-    dashboard.globalFilters.flatMap((filter) => {
+  const runtimeSpecForWidget = useCallback((widgetId: string): DashboardInlineAnalysisSpec | AnalysisAsset | undefined => {
+    const widget = dashboard.widgets.find((item) => item.id === widgetId);
+    if (!widget) return undefined;
+    const base = widget.analysisId
+      ? analyses.find((analysis) => analysis.id === widget.analysisId)
+      : widget.inlineAnalysis;
+    if (!base || widget.analysisId) return base;
+    const behavior = widget.inlineAnalysis?.dashboardBehavior;
+    const hierarchy = behavior?.clickAction === 'drill' ? behavior.drillFields || [] : [];
+    if (hierarchy.length < 2 || hierarchy[0] !== base.dimensions[0]) return base;
+    const path = drillPaths[widgetId] || [];
+    const currentField = hierarchy[Math.min(path.length, hierarchy.length - 1)];
+    if (!currentField) return base;
+    const otherDimensions = base.dimensions.filter((field) => !hierarchy.includes(field));
+    return {
+      ...base,
+      dimensions: [currentField, ...otherDimensions],
+    };
+  }, [analyses, dashboard.widgets, drillPaths]);
+
+  const drillPathForWidget = useCallback(
+    (widgetId: string) => drillPaths[widgetId] || [],
+    [drillPaths],
+  );
+
+  const drillBack = useCallback((widgetId: string, depth: number) => {
+    setDrillPaths((current) => {
+      const path = current[widgetId] || [];
+      const nextPath = path.slice(0, Math.max(0, depth));
+      if (nextPath.length === path.length) return current;
+      return { ...current, [widgetId]: nextPath };
+    });
+  }, []);
+
+  const runtimeFiltersForWidget = useCallback((widgetId: string): AnalysisFilter[] => {
+    const globalFilters = dashboard.globalFilters.flatMap((filter) => {
       const binding = filter.bindings.find((item) => item.widgetId === widgetId);
       if (!binding) return [];
       const value = hasOwn(runtimeFilterValues, filter.id)
@@ -334,9 +421,19 @@ export function useDashboardDesigner(dashboardId?: string) {
         field: binding.field,
         operator: filter.operator,
         value: String(value),
-      }];
-    })
-  ), [dashboard.globalFilters, runtimeFilterValues]);
+      } satisfies AnalysisFilter];
+    });
+    const drillFilters = (drillPaths[widgetId] || []).flatMap((step, index) => {
+      if (step.value === undefined || step.value === null || step.value === '') return [];
+      return [{
+        id: `dashboard-drill-${widgetId}-${index}`,
+        field: step.field,
+        operator: 'eq',
+        value: String(step.value),
+      } satisfies AnalysisFilter];
+    });
+    return [...globalFilters, ...drillFilters];
+  }, [dashboard.globalFilters, drillPaths, runtimeFilterValues]);
 
   const handleWidgetSelection = useCallback((widgetId: string, selection: AnalysisSelection) => {
     const matched = dashboard.interactions.filter((interaction) => (
@@ -344,15 +441,60 @@ export function useDashboardDesigner(dashboardId?: string) {
       && interaction.sourceWidgetId === widgetId
       && interaction.sourceField === selection.fieldId
     ));
-    if (!matched.length) return;
-    setRuntimeFilterValues((current) => {
-      const next = { ...current };
-      matched.forEach((interaction) => {
-        next[interaction.targetFilterId] = selection.value;
+    if (matched.length) {
+      setRuntimeFilterValues((current) => {
+        const next = { ...current };
+        matched.forEach((interaction) => {
+          next[interaction.targetFilterId] = selection.value;
+        });
+        return next;
       });
-      return next;
-    });
-  }, [dashboard.interactions]);
+    }
+
+    const widget = dashboard.widgets.find((item) => item.id === widgetId);
+    const behavior = widget?.inlineAnalysis?.dashboardBehavior;
+    if (!behavior || !behavior.clickAction || behavior.clickAction === 'none') return undefined;
+
+    if (behavior.clickAction === 'drill') {
+      const hierarchy = behavior.drillFields || [];
+      if (hierarchy.length < 2 || hierarchy[0] !== widget.inlineAnalysis?.dimensions[0]) return undefined;
+      setDrillPaths((current) => {
+        const path = current[widgetId] || [];
+        const currentField = hierarchy[path.length];
+        if (selection.fieldId !== currentField || path.length >= hierarchy.length - 1) return current;
+        return {
+          ...current,
+          [widgetId]: [
+            ...path,
+            {
+              field: selection.fieldId,
+              value: selection.value,
+              label: String(selection.value),
+            },
+          ],
+        };
+      });
+      return undefined;
+    }
+
+    if (behavior.clickAction === 'dashboard' && behavior.targetDashboardId) {
+      const params = new URLSearchParams({
+        preview: '1',
+        published: '1',
+        df: selection.fieldId,
+        dv: String(selection.value),
+      });
+      return `/dashboard/${behavior.targetDashboardId}?${params.toString()}`;
+    }
+
+    if (behavior.clickAction === 'yak' && behavior.targetPath) {
+      const params = new URLSearchParams();
+      params.set(behavior.queryParam?.trim() || selection.fieldId, String(selection.value));
+      return `${behavior.targetPath}?${params.toString()}`;
+    }
+
+    return undefined;
+  }, [dashboard.interactions, dashboard.widgets]);
 
   const maxY = () => dashboardRef.current.widgets.reduce(
     (value, widget) => Math.max(value, widget.y + widget.h),
@@ -394,7 +536,7 @@ export function useDashboardDesigner(dashboardId?: string) {
       id: `widget-${Date.now()}-${Math.round(Math.random() * 1000)}`,
       y: maxY(),
       inlineAnalysis: source.inlineAnalysis
-        ? JSON.parse(JSON.stringify(source.inlineAnalysis)) as AnalysisSpec
+        ? JSON.parse(JSON.stringify(source.inlineAnalysis)) as DashboardInlineAnalysisSpec
         : undefined,
     };
     commitDashboard(
@@ -415,6 +557,11 @@ export function useDashboardDesigner(dashboardId?: string) {
       interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
     }), `widget:delete:${id}`);
     setSelectedId((current) => current === id ? undefined : current);
+    setDrillPaths((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   };
 
   const changeWidgetDataset = (id: string, datasetId: string) => {
@@ -435,6 +582,7 @@ export function useDashboardDesigner(dashboardId?: string) {
       })),
       interactions: current.interactions.filter((interaction) => interaction.sourceWidgetId !== id),
     }), `widget:${id}:dataset`);
+    setDrillPaths((current) => ({ ...current, [id]: [] }));
   };
 
   const persistCurrentDraft = async (): Promise<DashboardServerDetail | undefined> => {
@@ -514,6 +662,7 @@ export function useDashboardDesigner(dashboardId?: string) {
     dashboardSaving,
     dashboardPublishing,
     runtimeFilterValues,
+    drillPaths,
     selectedWidget,
     activeDataset,
     selectedId,
@@ -522,6 +671,7 @@ export function useDashboardDesigner(dashboardId?: string) {
     canUndo,
     canRedo,
     persisted,
+    publishedView,
     hasPublishedVersion,
     hasUnpublishedDraft,
     canPublish,
@@ -535,7 +685,10 @@ export function useDashboardDesigner(dashboardId?: string) {
     updateInteractions,
     setRuntimeFilterValue,
     resetRuntimeFilters,
+    runtimeSpecForWidget,
     runtimeFiltersForWidget,
+    drillPathForWidget,
+    drillBack,
     handleWidgetSelection,
     addWidget,
     detachAnalysis,
