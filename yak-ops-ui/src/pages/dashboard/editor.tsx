@@ -8,6 +8,7 @@ import 'react-resizable/css/styles.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChartEditor } from './chart-editor';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
+import { DashboardGlobalFilterConfig } from './global-filter-config';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
@@ -27,6 +28,7 @@ export default function DashboardEditorPage() {
   const designer = useDashboardDesigner(dashboardId);
   const { width, containerRef, mounted } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [filterConfigOpen, setFilterConfigOpen] = useState(false);
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
     x: widget.x,
@@ -37,12 +39,13 @@ export default function DashboardEditorPage() {
     minH: widget.minH,
   })), [designer.widgets]);
   const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
+  const hasFilterBar = !designer.preview || hasGlobalFilters;
   let canvasMinHeight = 'min-h-[calc(100vh-120px)]';
   if (designer.preview) {
-    canvasMinHeight = hasGlobalFilters
+    canvasMinHeight = hasFilterBar
       ? 'min-h-[calc(100vh-172px)]'
       : 'min-h-[calc(100vh-136px)]';
-  } else if (hasGlobalFilters) {
+  } else if (hasFilterBar) {
     canvasMinHeight = 'min-h-[calc(100vh-156px)]';
   }
 
@@ -199,8 +202,13 @@ export default function DashboardEditorPage() {
       <DashboardGlobalFilterBar
         filters={designer.dashboard.globalFilters}
         runtimeValues={designer.runtimeFilterValues}
+        widgets={designer.widgets}
+        datasets={designer.datasets}
+        analyses={designer.analyses}
+        editable={!designer.preview}
         onRuntimeValue={designer.setRuntimeFilterValue}
         onReset={designer.resetRuntimeFilters}
+        onManage={() => setFilterConfigOpen(true)}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -305,10 +313,13 @@ export default function DashboardEditorPage() {
             widget={designer.selectedWidget}
             datasets={designer.datasets}
             analyses={designer.analyses}
+            globalFilters={designer.dashboard.globalFilters}
+            interactions={designer.dashboard.interactions}
             updateWidget={(patch) =>
               designer.updateWidget(designer.selectedWidget!.id, patch)}
             updateInlineAnalysis={(patch) =>
               designer.updateInlineAnalysis(designer.selectedWidget!.id, patch)}
+            updateInteractions={designer.updateInteractions}
             changeDataset={(datasetId) =>
               designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
             detachAnalysis={() =>
@@ -317,6 +328,16 @@ export default function DashboardEditorPage() {
           />
         ) : null}
       </div>
+
+      <DashboardGlobalFilterConfig
+        open={filterConfigOpen}
+        filters={designer.dashboard.globalFilters}
+        widgets={designer.widgets}
+        datasets={designer.datasets}
+        analyses={designer.analyses}
+        onChange={designer.updateGlobalFilters}
+        onClose={() => setFilterConfigOpen(false)}
+      />
 
       {designer.persisted ? (
         <DashboardVersionHistoryDrawer

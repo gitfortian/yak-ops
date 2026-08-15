@@ -5,10 +5,13 @@ import { ConfigData } from './config-data';
 import { MetricAggregations } from './config-metrics';
 import { QueryControls } from './config-query';
 import { CHART_META, findDataset } from './helpers';
+import { DashboardInteractionEditor } from './interaction-editor';
 import type {
   Aggregation,
   AnalysisAsset,
   ChartType,
+  DashboardGlobalFilter,
+  DashboardInteraction,
   DashboardWidget,
   FilterOperator,
   MetricBinding,
@@ -20,8 +23,11 @@ export function ChartEditor({
   widget,
   datasets,
   analyses,
+  globalFilters,
+  interactions,
   updateWidget,
   updateInlineAnalysis,
+  updateInteractions,
   changeDataset,
   detachAnalysis,
   close,
@@ -29,8 +35,11 @@ export function ChartEditor({
   widget: DashboardWidget;
   datasets: PublishedDataset[];
   analyses: AnalysisAsset[];
+  globalFilters: DashboardGlobalFilter[];
+  interactions: DashboardInteraction[];
   updateWidget: (patch: Partial<DashboardWidget>) => void;
   updateInlineAnalysis: (patch: Partial<AnalysisSpec>) => void;
+  updateInteractions: (interactions: DashboardInteraction[]) => void;
   changeDataset: (datasetId: string) => void;
   detachAnalysis: () => void;
   close: () => void;
@@ -215,6 +224,17 @@ export function ChartEditor({
                 metrics: spec.metrics.map((metric) =>
                   metric.field === field ? { ...metric, aggregation } : metric),
               })}
+          />
+        </div>
+
+        <div className="mt-4 border-t border-[#edf0f3] pt-4">
+          <DashboardInteractionEditor
+            widget={widget}
+            spec={spec}
+            dataset={dataset}
+            filters={globalFilters}
+            interactions={interactions}
+            onChange={updateInteractions}
           />
         </div>
 
