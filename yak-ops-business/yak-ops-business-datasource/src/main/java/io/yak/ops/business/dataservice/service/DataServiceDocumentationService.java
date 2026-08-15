@@ -97,12 +97,13 @@ public class DataServiceDocumentationService {
     Map<String, Object> operation = new LinkedHashMap<>();
     operation.put("summary", doc.name());
     operation.put("operationId", "dataService_" + doc.apiId());
+    operation.put("x-yak-schema-stale", doc.schemaStale());
     if (StringUtils.hasText(doc.description())) operation.put("description", doc.description());
     operation.put("parameters", parameters);
     if ("API_KEY".equals(doc.authMode())) {
       operation.put("security", List.of(Map.of("ApiKeyAuth", List.of())));
     }
-    operation.put("responses", responses(doc.responseFields()));
+    operation.put("responses", responses(doc.schemaStale() ? List.of() : doc.responseFields()));
     root.put("paths", Map.of(doc.runtimePath(), Map.of("get", operation)));
 
     if ("API_KEY".equals(doc.authMode())) {
