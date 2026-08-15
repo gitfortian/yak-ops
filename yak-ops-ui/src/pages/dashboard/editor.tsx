@@ -43,13 +43,11 @@ export default function DashboardEditorPage() {
   })), [designer.widgets]);
   const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
   const hasFilterBar = !designer.preview || hasGlobalFilters;
-  let canvasMinHeight = 'min-h-[calc(100vh-120px)]';
+  let canvasMinHeight = 'min-h-[calc(100vh-154px)]';
   if (designer.preview) {
     canvasMinHeight = hasFilterBar
-      ? 'min-h-[calc(100vh-172px)]'
-      : 'min-h-[calc(100vh-136px)]';
-  } else if (hasFilterBar) {
-    canvasMinHeight = 'min-h-[calc(100vh-156px)]';
+      ? 'min-h-[calc(100vh-184px)]'
+      : 'min-h-[calc(100vh-132px)]';
   }
 
   const addChart = () => designer.addWidget('bar');
@@ -170,7 +168,7 @@ export default function DashboardEditorPage() {
 
   return (
     <div
-      className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f4f6f8]"
+      className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f6f7f9]"
       style={BRAND_CSS_VARIABLES}
     >
       <DashboardToolbar
@@ -219,16 +217,16 @@ export default function DashboardEditorPage() {
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <main className="min-w-0 flex-1 overflow-auto">
-          <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-3'}>
+        <main className="min-w-0 flex-1 overflow-auto bg-[#f6f7f9]">
+          <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4'}>
             <div
               ref={containerRef}
               className={[
-                'mx-auto min-w-[760px] bg-white',
+                'mx-auto min-w-[760px] rounded-[10px] bg-white',
                 canvasMinHeight,
                 designer.preview
-                  ? 'max-w-[1500px] shadow-[0_1px_5px_rgba(16,24,40,.08)]'
-                  : 'dashboard-grid-canvas border border-[#dfe3e8]',
+                  ? 'max-w-[1480px] border border-[#e7e9ed] shadow-[0_6px_24px_rgba(16,24,40,.055)]'
+                  : 'dashboard-grid-canvas max-w-[1540px] border border-[#e3e6ea] shadow-[0_2px_8px_rgba(16,24,40,.035)]',
               ].join(' ')}
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) designer.setSelectedId(undefined);
@@ -241,8 +239,8 @@ export default function DashboardEditorPage() {
                   gridConfig={{
                     cols: GRID_COLUMNS,
                     rowHeight: GRID_ROW_HEIGHT,
-                    margin: [8, 8],
-                    containerPadding: [8, 8],
+                    margin: [10, 10],
+                    containerPadding: [10, 10],
                   }}
                   dragConfig={{
                     enabled: !designer.preview,
@@ -293,10 +291,10 @@ export default function DashboardEditorPage() {
               {!designer.widgets.length && !designer.datasetsLoading ? (
                 <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
                   <div className="max-w-[340px]">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#f5f6f7] text-[#667085]">
+                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[10px] bg-[#f4f5f6] text-[#7a818c]">
                       <BarChart3 size={18} />
                     </div>
-                    <div className="mt-3 text-[14px] font-medium text-[#344054]">
+                    <div className="mt-3 text-[14px] font-semibold text-[#344054]">
                       {designer.activeDataset ? '从一个图表开始' : '暂无可用数据集'}
                     </div>
                     <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
@@ -307,8 +305,7 @@ export default function DashboardEditorPage() {
                     {designer.activeDataset ? (
                       <Button
                         size="small"
-                        type="primary"
-                        className="mt-4"
+                        className="mt-4 !h-8 !rounded-[7px] !px-3"
                         icon={<BarChart3 size={13} />}
                         onClick={addChart}
                       >
@@ -370,27 +367,30 @@ export default function DashboardEditorPage() {
       <style>{`
         .dashboard-grid-canvas {
           background-color: #fff;
-          background-image:
-            linear-gradient(to right, rgba(15,23,42,.035) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(15,23,42,.035) 1px, transparent 1px);
+          background-image: radial-gradient(circle, rgba(15, 23, 42, .075) 1px, transparent 1px);
           background-size: calc(100% / 24) 36px;
+          background-position: 10px 10px;
         }
         .react-grid-item.react-grid-placeholder {
           background: var(--yak-brand-color-soft) !important;
           border: 1px dashed var(--yak-brand-color) !important;
+          border-radius: 9px !important;
           opacity: 1 !important;
         }
         .react-grid-item > .react-resizable-handle::after {
-          border-color: #98a2b3 !important;
+          border-color: #8e95a0 !important;
           border-width: 0 1px 1px 0 !important;
           height: 6px !important;
           width: 6px !important;
         }
+        .chart-editor-more > .ant-collapse-item {
+          border-bottom: 1px solid #eceef1 !important;
+        }
         .chart-editor-more > .ant-collapse-item > .ant-collapse-header {
-          padding: 10px 0 !important;
+          padding: 12px 0 !important;
         }
         .chart-editor-more .ant-collapse-content-box {
-          padding: 2px 0 0 !important;
+          padding: 2px 0 10px !important;
         }
       `}</style>
     </div>

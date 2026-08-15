@@ -48,13 +48,20 @@ export function DashboardGlobalFilterBar({
   if (!filters.length && !editable) return null;
 
   return (
-    <div className="flex min-h-9 shrink-0 items-center gap-2 border-b border-[#e5e7eb] bg-white px-3 py-1">
-      <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-medium text-[#667085]">
-        <SlidersHorizontal size={12} />
-        筛选
+    <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-[#eceef1] bg-[#fbfcfd] px-4 py-1.5">
+      <div className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-[#475467]">
+        <SlidersHorizontal size={13} />
+        筛选条件
+        {filters.length ? (
+          <span className="rounded-full bg-[#eef0f2] px-1.5 py-px text-[9px] font-normal text-[#7a818c]">
+            {filters.length}
+          </span>
+        ) : null}
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+      <div className="mx-1 h-5 w-px shrink-0 bg-[#eceef1]" />
+
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-0.5">
         {filters.length ? filters.map((filter) => {
           const current = own(runtimeValues, filter.id)
             ? runtimeValues[filter.id]
@@ -78,12 +85,12 @@ export function DashboardGlobalFilterBar({
           return (
             <div
               key={filter.id}
-              className="flex h-7 shrink-0 items-center rounded-[4px] bg-[#f7f8fa] pl-2"
+              className="flex h-8 shrink-0 items-center rounded-[7px] border border-[#e7e9ed] bg-white pl-2.5 shadow-[0_1px_2px_rgba(16,24,40,.025)]"
             >
-              <span className="mr-1.5 text-[10px] text-[#667085]">
+              <span className="mr-1.5 max-w-[120px] truncate text-[10px] font-medium text-[#475467]">
                 {filter.name}
               </span>
-              <span className="mr-1 text-[9px] text-[#98a2b3]">
+              <span className="mr-0.5 text-[9px] text-[#a0a6af]">
                 {OPERATOR_LABELS[filter.operator]}
               </span>
               {dateFilter ? (
@@ -93,7 +100,7 @@ export function DashboardGlobalFilterBar({
                   allowClear
                   showTime={dateTime ? { format: 'HH:mm:ss' } : false}
                   format={dateTime ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD'}
-                  className="w-[156px] text-[10px]"
+                  className="!h-7 w-[158px] text-[10px]"
                   placeholder="全部"
                   value={dateValue?.isValid() ? dateValue : null}
                   onChange={(value) => onRuntimeValue(
@@ -108,7 +115,7 @@ export function DashboardGlobalFilterBar({
                   variant="borderless"
                   size="small"
                   allowClear
-                  className="w-[112px] text-[10px]"
+                  className="!h-7 w-[116px] text-[10px]"
                   placeholder="全部"
                   value={current === undefined || current === null ? '' : String(current)}
                   onChange={(event) => onRuntimeValue(filter.id, event.target.value || undefined)}
@@ -117,15 +124,15 @@ export function DashboardGlobalFilterBar({
             </div>
           );
         }) : (
-          <span className="text-[10px] text-[#98a2b3]">暂无筛选条件</span>
+          <span className="text-[10px] text-[#a0a6af]">还没有筛选条件，可在这里添加全局筛选</span>
         )}
       </div>
 
       {filters.length ? (
         <Tooltip title="恢复默认筛选">
           <Button
-            size="small"
             type="text"
+            className="!h-7 !w-7 !min-w-0 !rounded-[6px] !p-0 !text-[#667085]"
             icon={<RefreshCw size={12} />}
             onClick={onReset}
           />
@@ -135,11 +142,11 @@ export function DashboardGlobalFilterBar({
       {editable ? (
         <Button
           size="small"
-          type="text"
+          className="!h-7 !rounded-[6px] !border-[#e4e7ec] !px-2.5 !text-[11px]"
           icon={filters.length ? <Settings2 size={12} /> : <Plus size={12} />}
           onClick={onManage}
         >
-          {filters.length ? '管理' : '添加筛选'}
+          {filters.length ? '管理筛选' : '添加筛选'}
         </Button>
       ) : null}
     </div>
