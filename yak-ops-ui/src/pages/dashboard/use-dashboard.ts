@@ -30,6 +30,7 @@ import type {
   ChartType,
   DashboardDocument,
   DashboardGlobalFilter,
+  DashboardInteraction,
   DashboardServerDetail,
   DashboardVersionSummary,
   DashboardWidget,
@@ -294,6 +295,26 @@ export function useDashboardDesigner(dashboardId?: string) {
     `widget:${id}:analysis:${Object.keys(patch).sort().join(',')}`,
   );
 
+  const updateGlobalFilters = (filters: DashboardGlobalFilter[]) => {
+    const filterIds = new Set(filters.map((filter) => filter.id));
+    commitDashboard((current) => ({
+      ...current,
+      globalFilters: filters,
+      interactions: current.interactions.filter((interaction) => filterIds.has(interaction.targetFilterId)),
+    }), 'dashboard:global-filters');
+    setRuntimeFilterValues((current) => Object.fromEntries(
+      filters.map((filter) => [
+        filter.id,
+        hasOwn(current, filter.id) ? current[filter.id] : filter.defaultValue,
+      ]),
+    ));
+  };
+
+  const updateInteractions = (interactions: DashboardInteraction[]) => commitDashboard(
+    (current) => ({ ...current, interactions }),
+    'dashboard:interactions',
+  );
+
   const setRuntimeFilterValue = (filterId: string, value: Scalar | undefined) => {
     setRuntimeFilterValues((current) => ({ ...current, [filterId]: value }));
   };
@@ -510,6 +531,8 @@ export function useDashboardDesigner(dashboardId?: string) {
     updateLayout,
     updateWidget,
     updateInlineAnalysis,
+    updateGlobalFilters,
+    updateInteractions,
     setRuntimeFilterValue,
     resetRuntimeFilters,
     runtimeFiltersForWidget,
