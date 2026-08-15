@@ -6,6 +6,7 @@ import io.yak.ops.business.dataservice.dao.mapper.DataServiceApiMapper;
 import io.yak.ops.business.dataservice.dao.mapper.DataServiceCallLogMapper;
 import io.yak.ops.business.dataservice.dao.model.DataServiceApiPO;
 import io.yak.ops.business.dataservice.dao.model.DataServiceCallLogPO;
+import io.yak.ops.business.dataservice.service.DataServiceAccessService.AccessContext;
 import io.yak.ops.business.dataservice.service.support.DataServiceSqlCompiler;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.service.support.BusinessDataSourceExecutionProvider;
@@ -25,7 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** Data Service definition and read-only SQL runtime. */
+/** Data Service definition, protected read-only SQL runtime and invocation audit. */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -40,6 +41,7 @@ public class DataServiceService {
   private final BusinessDataSourceExecutionProvider executionProvider;
   private final DataServiceSqlCompiler sqlCompiler;
   private final ObjectMapper objectMapper;
+  private final DataServiceAccessService accessService;
 
   public List<ApiView> list() {
     return apiMapper.selectList(
@@ -74,7 +76,8 @@ public class DataServiceService {
    * Creates or updates the stable Data Service bound to one upstream asset.
    *
    * <p>The executable SQL/dataSource values are copied into the service definition, so runtime calls
-   * remain a snapshot and never follow mutable authoring state implicitly.
+   * remain a snapshot and never follow mutable authoring state implicitly. Access-control settings are
+   * intentionally preserved across source refreshes.
    */
   @Transactional
   public ApiView saveFromSource(SourceSnapshot source, ApiInput input) {
@@ -94,6 +97,8 @@ public class DataServiceService {
 
   @Transactional
   public void delete(Long id) {
+    requireApi(id);
+    accessService.deleteKeysForApi(id);
     if (apiMapper.deleteById(id) == 0) {
       throw new IllegalArgumentException("数据服务不存在：" + id);
     }
@@ -108,11 +113,20 @@ public class DataServiceService {
     return toView(api);
   }
 
+  /** Console tests bypass external API-Key auth, but are still marked distinctly in the audit log. */
   public QueryResponse test(Long id, Map<String, String> parameters) {
-    return execute(requireApi(id), parameters, true);
+    return execute(requireApi(id), parameters, true, AccessContext.console());
   }
 
+  /** Backward-compatible call path; API_KEY services will reject because no key is supplied. */
   public QueryResponse invoke(String servicePath, Map<String, String> parameters) {
+    return invoke(servicePath, parameters, null);
+  }
+
+  public QueryResponse invoke(
+      String servicePath,
+      Map<String, String> parameters,
+      String rawApiKey) {
     String normalizedPath = normalizePath(servicePath);
     DataServiceApiPO api = apiMapper.selectOne(
         Wrappers.<DataServiceApiPO>lambdaQuery()
@@ -124,7 +138,22 @@ public class DataServiceService {
     if (!Boolean.TRUE.equals(api.getEnabled())) {
       throw new IllegalStateException("数据服务未启用：" + normalizedPath);
     }
-    return execute(api, parameters, true);
+
+    AccessContext access;
+    try {
+      access = accessService.authorize(api, rawApiKey);
+    } catch (DataServiceUnauthorizedException | DataServiceRateLimitException exception) {
+      saveLog(
+          api,
+          parameters,
+          false,
+          0L,
+          0,
+          safeMessage(exception),
+          AccessContext.rejectedApiKey());
+      throw exception;
+    }
+    return execute(api, parameters, true, access);
   }
 
   public List<DataServiceCallLogPO> logs() {
@@ -164,6 +193,7 @@ public class DataServiceService {
     api.setMaxRows(normalizeMaxRows(input.maxRows()));
     api.setTimeoutSeconds(normalizeTimeout(input.timeoutSeconds()));
     api.setEnabled(input.enabled() == null ? Boolean.FALSE : input.enabled());
+    if (!StringUtils.hasText(api.getAuthMode())) api.setAuthMode("NONE");
     api.setDescription(StringUtils.hasText(input.description()) ? input.description().trim() : null);
     api.setUpdateTime(now);
     if (id == null) {
@@ -176,7 +206,10 @@ public class DataServiceService {
   }
 
   private QueryResponse execute(
-      DataServiceApiPO api, Map<String, String> parameters, boolean writeLog) {
+      DataServiceApiPO api,
+      Map<String, String> parameters,
+      boolean writeLog,
+      AccessContext access) {
     long started = System.nanoTime();
     try {
       DataServiceSqlCompiler.CompiledSql compiled = sqlCompiler.compile(api.getSqlText(), parameters);
@@ -191,11 +224,11 @@ public class DataServiceService {
       }
       long durationMs = elapsedMs(started);
       QueryResponse response = toResponse(result, durationMs);
-      if (writeLog) saveLog(api, parameters, true, durationMs, response.rowCount(), null);
+      if (writeLog) saveLog(api, parameters, true, durationMs, response.rowCount(), null, access);
       return response;
     } catch (RuntimeException exception) {
       long durationMs = elapsedMs(started);
-      if (writeLog) saveLog(api, parameters, false, durationMs, 0, safeMessage(exception));
+      if (writeLog) saveLog(api, parameters, false, durationMs, 0, safeMessage(exception), access);
       throw exception;
     }
   }
@@ -219,11 +252,17 @@ public class DataServiceService {
       boolean success,
       long durationMs,
       int rowCount,
-      String errorMessage) {
+      String errorMessage,
+      AccessContext access) {
+    AccessContext caller = access == null ? AccessContext.publicAccess() : access;
     DataServiceCallLogPO log = new DataServiceCallLogPO();
     log.setApiId(api.getId());
     log.setServiceName(api.getName());
     log.setServicePath(api.getPath());
+    log.setCallerType(caller.callerType());
+    log.setApiKeyId(caller.apiKeyId());
+    log.setApiKeyName(caller.apiKeyName());
+    log.setApiKeyPrefix(caller.apiKeyPrefix());
     log.setParamsJson(limit(json(parameters == null ? Map.of() : parameters), 4_000));
     log.setSuccess(success);
     log.setDurationMs(durationMs);
@@ -239,6 +278,7 @@ public class DataServiceService {
         api.getId(), api.getName(), api.getPath(), RUNTIME_PREFIX + api.getPath(),
         api.getDataSourceId(), api.getSqlText(), sqlCompiler.parameterNames(api.getSqlText()),
         api.getMaxRows(), api.getTimeoutSeconds(), Boolean.TRUE.equals(api.getEnabled()),
+        StringUtils.hasText(api.getAuthMode()) ? api.getAuthMode() : "NONE",
         api.getDescription(), api.getSourceType(), api.getSourceRef(), api.getSourceRevisionId(),
         api.getSourceRevisionNo(), api.getCreateTime(), api.getUpdateTime());
   }
@@ -357,6 +397,7 @@ public class DataServiceService {
       Integer maxRows,
       Integer timeoutSeconds,
       Boolean enabled,
+      String authMode,
       String description,
       String sourceType,
       String sourceRef,

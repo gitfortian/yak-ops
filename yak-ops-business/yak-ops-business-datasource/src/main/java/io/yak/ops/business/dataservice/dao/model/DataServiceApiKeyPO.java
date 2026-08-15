@@ -6,26 +6,21 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 import lombok.Data;
 
-/** 数据服务 API 持久化对象。 */
+/** 数据服务 API Key 持久化对象。明文 Key 永不落库。 */
 @Data
-@TableName("yak_ops_data_service_api")
-public class DataServiceApiPO {
+@TableName("yak_ops_data_service_api_key")
+public class DataServiceApiKeyPO {
 
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long apiId;
   private String name;
-  private String path;
-  private Long dataSourceId;
-  private String sqlText;
-  private Integer maxRows;
-  private Integer timeoutSeconds;
+  private String keyPrefix;
+  private String keyHash;
   private Boolean enabled;
-  private String authMode;
-  private String description;
-  private String sourceType;
-  private String sourceRef;
-  private Long sourceRevisionId;
-  private Integer sourceRevisionNo;
+  private Integer rateLimitPerMinute;
+  private LocalDateTime expiresAt;
+  private LocalDateTime lastUsedAt;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
 }

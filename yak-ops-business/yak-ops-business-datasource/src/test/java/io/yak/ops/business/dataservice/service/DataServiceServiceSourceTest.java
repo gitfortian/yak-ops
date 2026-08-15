@@ -33,7 +33,8 @@ class DataServiceServiceSourceTest {
         mock(DataServiceCallLogMapper.class),
         mock(BusinessDataSourceExecutionProvider.class),
         new DataServiceSqlCompiler(),
-        new ObjectMapper());
+        new ObjectMapper(),
+        mock(DataServiceAccessService.class));
 
     sourceManaged = new DataServiceApiPO();
     sourceManaged.setId(9L);
@@ -44,6 +45,7 @@ class DataServiceServiceSourceTest {
     sourceManaged.setMaxRows(1000);
     sourceManaged.setTimeoutSeconds(30);
     sourceManaged.setEnabled(true);
+    sourceManaged.setAuthMode("NONE");
     sourceManaged.setSourceType("DATA_DEVELOPMENT_RELEASE");
     sourceManaged.setSourceRef("88");
     sourceManaged.setSourceRevisionId(102L);
@@ -107,6 +109,7 @@ class DataServiceServiceSourceTest {
     assertThat(updated.path()).isEqualTo("/orders/v1");
     assertThat(updated.maxRows()).isEqualTo(500);
     assertThat(updated.enabled()).isFalse();
+    assertThat(updated.authMode()).isEqualTo("NONE");
     assertThat(updated.sourceRevisionNo()).isEqualTo(2);
     verify(apiMapper).updateById(sourceManaged);
   }

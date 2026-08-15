@@ -13,6 +13,8 @@ export interface DataSourceOption {
   dbType?: string;
 }
 
+export type DataServiceAuthMode = 'NONE' | 'API_KEY';
+
 export interface DataServiceApi {
   id: number;
   name: string;
@@ -24,6 +26,7 @@ export interface DataServiceApi {
   maxRows: number;
   timeoutSeconds: number;
   enabled: boolean;
+  authMode: DataServiceAuthMode;
   description?: string;
   sourceType?: string;
   sourceRef?: string;
@@ -44,6 +47,34 @@ export interface DataServiceSavePayload {
   description?: string;
 }
 
+export interface DataServiceApiKey {
+  id: number;
+  apiId: number;
+  name: string;
+  keyPrefix: string;
+  enabled: boolean;
+  rateLimitPerMinute: number;
+  expiresAt?: string | null;
+  lastUsedAt?: string | null;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface DataServiceApiKeyInput {
+  name: string;
+  rateLimitPerMinute?: number;
+  expiresAt?: string | null;
+}
+
+export interface DataServiceApiKeyUpdate extends DataServiceApiKeyInput {
+  expiresAtSet: boolean;
+}
+
+export interface CreatedDataServiceApiKey {
+  key: DataServiceApiKey;
+  secret: string;
+}
+
 export interface DataServiceQueryResult {
   columns: string[];
   rows: Record<string, unknown>[];
@@ -57,6 +88,10 @@ export interface DataServiceCallLog {
   apiId: number;
   serviceName: string;
   servicePath: string;
+  callerType: 'LEGACY' | 'PUBLIC' | 'API_KEY' | 'CONSOLE';
+  apiKeyId?: number | null;
+  apiKeyName?: string | null;
+  apiKeyPrefix?: string | null;
   paramsJson?: string;
   success: boolean;
   durationMs: number;
@@ -81,6 +116,30 @@ export const deleteDataService = (id: number) =>
 
 export const setDataServiceEnabled = (id: number, enabled: boolean) =>
   HttpUtils.put<DataServiceApi>(`${PREFIX}/${id}/enabled?enabled=${enabled}`, {}) as Promise<CommonApiResponse<DataServiceApi>>;
+
+export const setDataServiceAuthMode = (id: number, mode: DataServiceAuthMode) =>
+  HttpUtils.put<DataServiceAuthMode>(`${PREFIX}/${id}/auth-mode?mode=${mode}`, {}) as Promise<CommonApiResponse<DataServiceAuthMode>>;
+
+export const fetchDataServiceKeys = (id: number) =>
+  HttpUtils.get<DataServiceApiKey[]>(`${PREFIX}/${id}/keys`) as Promise<CommonApiResponse<DataServiceApiKey[]>>;
+
+export const createDataServiceKey = (id: number, payload: DataServiceApiKeyInput) =>
+  HttpUtils.post<CreatedDataServiceApiKey>(`${PREFIX}/${id}/keys`, payload) as Promise<CommonApiResponse<CreatedDataServiceApiKey>>;
+
+export const updateDataServiceKey = (
+  id: number,
+  keyId: number,
+  payload: DataServiceApiKeyUpdate,
+) => HttpUtils.put<DataServiceApiKey>(`${PREFIX}/${id}/keys/${keyId}`, payload) as Promise<CommonApiResponse<DataServiceApiKey>>;
+
+export const setDataServiceKeyEnabled = (id: number, keyId: number, enabled: boolean) =>
+  HttpUtils.put<DataServiceApiKey>(`${PREFIX}/${id}/keys/${keyId}/enabled?enabled=${enabled}`, {}) as Promise<CommonApiResponse<DataServiceApiKey>>;
+
+export const rotateDataServiceKey = (id: number, keyId: number) =>
+  HttpUtils.post<CreatedDataServiceApiKey>(`${PREFIX}/${id}/keys/${keyId}/rotate`, {}) as Promise<CommonApiResponse<CreatedDataServiceApiKey>>;
+
+export const deleteDataServiceKey = (id: number, keyId: number) =>
+  HttpUtils.delete<boolean>(`${PREFIX}/${id}/keys/${keyId}`) as Promise<CommonApiResponse<boolean>>;
 
 export const testDataService = (id: number, parameters: Record<string, string>) =>
   HttpUtils.post<DataServiceQueryResult>(`${PREFIX}/${id}/test`, parameters) as Promise<CommonApiResponse<DataServiceQueryResult>>;
