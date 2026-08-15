@@ -367,7 +367,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
                 aria-label="更多发布操作"
                 disabled={testing || busy}
                 icon={<ChevronDown size={12} />}
-                className="!-ml-px !h-8 !w-7 !min-w-0 !rounded-[4px] !rounded-r-[7px] !border-l-[rgba(255,255,255,.28)] !p-0 !shadow-none"
+                className="!-ml-px !h-8 !w-7 !min-w-0 !rounded-[4px] !rounded-r-[7px] !border-l-white/30 !p-0 !shadow-none"
               />
             </Dropdown>
           ) : null}
