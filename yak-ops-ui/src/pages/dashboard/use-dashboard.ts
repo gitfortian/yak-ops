@@ -10,6 +10,7 @@ import { DEFAULT_DASHBOARD } from './defaults';
 import {
   createDashboard,
   fetchDashboard,
+  fetchPublishedDashboard,
   publishDashboard,
   restoreDashboardVersion,
   saveDashboardVersion,
@@ -33,6 +34,7 @@ import type {
   DashboardInlineAnalysisSpec,
   DashboardInteraction,
   DashboardServerDetail,
+  DashboardVersionDetail,
   DashboardVersionSummary,
   DashboardWidget,
   PublishedDataset,
@@ -77,7 +79,28 @@ const trimHistory = (items: DashboardDocument[]) => (
   items.length > HISTORY_LIMIT ? items.slice(items.length - HISTORY_LIMIT) : items
 );
 
-export function useDashboardDesigner(dashboardId?: string, initialPreview = false) {
+const publishedDocument = (detail: DashboardVersionDetail): DashboardDocument => ({
+  version: 1,
+  id: detail.dashboard.id,
+  name: detail.version.name,
+  description: detail.version.description,
+  activeDatasetId: detail.version.activeDatasetId || '',
+  widgets: detail.widgets,
+  globalFilters: detail.globalFilters,
+  interactions: detail.interactions,
+  currentVersionNo: detail.version.versionNo,
+  currentVersionId: detail.version.id,
+  publishedVersionNo: detail.dashboard.publishedVersionNo,
+  publishedVersionId: detail.dashboard.publishedVersionId,
+  publishedAt: detail.dashboard.publishedTime,
+  updatedAt: detail.dashboard.updateTime,
+});
+
+export function useDashboardDesigner(
+  dashboardId?: string,
+  initialPreview = false,
+  publishedView = false,
+) {
   const initialDashboard = useMemo(() => cloneDashboard(DEFAULT_DASHBOARD), []);
   const [dashboard, setDashboardState] = useState<DashboardDocument>(initialDashboard);
   const dashboardRef = useRef<DashboardDocument>(initialDashboard);
@@ -95,7 +118,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
   const [runtimeFilterValues, setRuntimeFilterValues] = useState<Record<string, Scalar | undefined>>({});
   const [drillPaths, setDrillPaths] = useState<Record<string, DashboardDrillStep[]>>({});
   const [selectedId, setSelectedId] = useState<string>();
-  const [preview, setPreview] = useState(initialPreview);
+  const [preview, setPreview] = useState(initialPreview || publishedView);
 
   const widgets = dashboard.widgets;
   const selectedWidget = widgets.find((widget) => widget.id === selectedId);
@@ -215,11 +238,18 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
 
   const openDashboard = useCallback(async (targetDashboardId: string) => {
     try {
+      if (publishedView) {
+        const detail = await fetchPublishedDashboard(targetDashboardId);
+        resetDashboardState(publishedDocument(detail));
+        setDashboardVersions([]);
+        window.localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
       applyServerDetail(await fetchDashboard(targetDashboardId));
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 Dashboard 失败');
     }
-  }, [applyServerDetail]);
+  }, [applyServerDetail, publishedView, resetDashboardState]);
 
   useEffect(() => {
     void loadDatasets();
@@ -227,7 +257,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
   }, [loadDatasets, loadAnalyses]);
 
   useEffect(() => {
-    setPreview(initialPreview);
+    setPreview(initialPreview || publishedView);
     if (dashboardId) {
       void openDashboard(dashboardId);
       return;
@@ -235,7 +265,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
     resetDashboardState(cloneDashboard(DEFAULT_DASHBOARD));
     setDashboardVersions([]);
     setRuntimeFilterValues({});
-  }, [dashboardId, initialPreview, openDashboard, resetDashboardState]);
+  }, [dashboardId, initialPreview, openDashboard, publishedView, resetDashboardState]);
 
   useEffect(() => {
     if (!datasets.length) return;
@@ -272,14 +302,14 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
   }, [dashboard.id, dashboard.currentVersionId, dashboard.globalFilters]);
 
   useEffect(() => {
-    if (!dirty) return undefined;
+    if (!dirty || publishedView) return undefined;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty]);
+  }, [dirty, publishedView]);
 
   const updateDashboardName = (name: string) => commitDashboard(
     (current) => ({ ...current, name }),
@@ -353,7 +383,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
     if (!base || widget.analysisId) return base;
     const behavior = widget.inlineAnalysis?.dashboardBehavior;
     const hierarchy = behavior?.clickAction === 'drill' ? behavior.drillFields || [] : [];
-    if (hierarchy.length < 2) return base;
+    if (hierarchy.length < 2 || hierarchy[0] !== base.dimensions[0]) return base;
     const path = drillPaths[widgetId] || [];
     const currentField = hierarchy[Math.min(path.length, hierarchy.length - 1)];
     if (!currentField) return base;
@@ -427,7 +457,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
 
     if (behavior.clickAction === 'drill') {
       const hierarchy = behavior.drillFields || [];
-      if (hierarchy.length < 2) return undefined;
+      if (hierarchy.length < 2 || hierarchy[0] !== widget.inlineAnalysis?.dimensions[0]) return undefined;
       setDrillPaths((current) => {
         const path = current[widgetId] || [];
         const currentField = hierarchy[path.length];
@@ -450,6 +480,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
     if (behavior.clickAction === 'dashboard' && behavior.targetDashboardId) {
       const params = new URLSearchParams({
         preview: '1',
+        published: '1',
         df: selection.fieldId,
         dv: String(selection.value),
       });
@@ -640,6 +671,7 @@ export function useDashboardDesigner(dashboardId?: string, initialPreview = fals
     canUndo,
     canRedo,
     persisted,
+    publishedView,
     hasPublishedVersion,
     hasUnpublishedDraft,
     canPublish,
