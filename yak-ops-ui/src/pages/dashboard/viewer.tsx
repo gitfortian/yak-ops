@@ -110,6 +110,15 @@ export default function DashboardViewerPage() {
   }
 
   const publishedReady = designer.dashboard.id === dashboardId;
+  const viewerName = publishedReady
+    ? designer.dashboard.name
+    : summary?.name || '仪表盘';
+  const viewerDescription = publishedReady
+    ? designer.dashboard.description
+    : summary?.description;
+  const viewerVersionNo = publishedReady
+    ? designer.dashboard.publishedVersionNo
+    : summary?.publishedVersionNo;
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] flex-col overflow-hidden bg-white">
@@ -117,17 +126,17 @@ export default function DashboardViewerPage() {
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="m-0 max-w-[720px] truncate text-[15px] font-semibold text-[#161823]">
-              {summary?.name || '仪表盘'}
+              {viewerName}
             </h1>
             <span className="shrink-0 rounded-[5px] bg-[#f4f5f6] px-2 py-0.5 text-[10px] text-[#667085]">
-              已发布 V{summary?.publishedVersionNo}
+              已发布 V{viewerVersionNo}
             </span>
             {summary?.currentVersionId !== summary?.publishedVersionId ? (
               <span className="shrink-0 text-[10px] text-[#98a2b3]">有未发布草稿</span>
             ) : null}
           </div>
           <div className="mt-0.5 max-w-[760px] truncate text-[10px] text-[#98a2b3]">
-            {summary?.description || '查看当前已发布版本'}
+            {viewerDescription || '查看当前已发布版本'}
           </div>
         </div>
 
