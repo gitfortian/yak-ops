@@ -247,7 +247,7 @@ export default function DashboardListPage() {
   ];
 
   return (
-    <div className="min-h-[calc(100vh-48px)] bg-[#f6f7f8] p-2">
+    <div className="min-h-[calc(100vh-48px)] bg-[#f6f7f8]">
       <div className="min-h-[calc(100vh-64px)] rounded-[10px] bg-white px-6 py-5">
         {/* 页面标题 */}
         <div className="text-[18px] font-semibold leading-7 text-[#161823]">
