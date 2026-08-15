@@ -13,6 +13,7 @@ public class DataServiceDocumentationPO {
 
   @TableId(value = "api_id", type = IdType.INPUT)
   private Long apiId;
+  private String sqlHash;
   private String parameterSchemaJson;
   private String responseSchemaJson;
   private LocalDateTime updateTime;
