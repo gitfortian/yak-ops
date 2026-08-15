@@ -11,6 +11,7 @@ import type {
   AnalysisAsset,
   ChartType,
   DashboardGlobalFilter,
+  DashboardInlineAnalysisSpec,
   DashboardInteraction,
   DashboardWidget,
   FilterOperator,
@@ -18,8 +19,10 @@ import type {
   PublishedDataset,
   SortDirection,
 } from './model';
+import { DashboardWidgetActionEditor } from './widget-action-editor';
 
 export function ChartEditor({
+  currentDashboardId,
   widget,
   datasets,
   analyses,
@@ -32,13 +35,14 @@ export function ChartEditor({
   detachAnalysis,
   close,
 }: {
+  currentDashboardId: string;
   widget: DashboardWidget;
   datasets: PublishedDataset[];
   analyses: AnalysisAsset[];
   globalFilters: DashboardGlobalFilter[];
   interactions: DashboardInteraction[];
   updateWidget: (patch: Partial<DashboardWidget>) => void;
-  updateInlineAnalysis: (patch: Partial<AnalysisSpec>) => void;
+  updateInlineAnalysis: (patch: Partial<DashboardInlineAnalysisSpec>) => void;
   updateInteractions: (interactions: DashboardInteraction[]) => void;
   changeDataset: (datasetId: string) => void;
   detachAnalysis: () => void;
@@ -63,7 +67,7 @@ export function ChartEditor({
             </div>
           </div>
           <div className="mt-3 text-[11px] leading-5 text-[#667085]">
-            这个图表来自旧版共享资产。复制为当前仪表盘图表后，即可使用新的 Chart Editor 编辑数据和样式。
+            这个图表来自旧版共享资产。复制为当前仪表盘图表后，即可使用新的 Chart Editor 编辑数据、样式与交互。
           </div>
           {!analysis ? (
             <div className="mt-3 rounded-[4px] border border-[#fecdca] bg-[#fffbfa] px-2.5 py-2 text-[10px] text-[#b42318]">
@@ -235,6 +239,15 @@ export function ChartEditor({
             filters={globalFilters}
             interactions={interactions}
             onChange={updateInteractions}
+          />
+        </div>
+
+        <div className="mt-4 border-t border-[#edf0f3] pt-4">
+          <DashboardWidgetActionEditor
+            currentDashboardId={currentDashboardId}
+            spec={spec}
+            dataset={dataset}
+            onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
           />
         </div>
 
