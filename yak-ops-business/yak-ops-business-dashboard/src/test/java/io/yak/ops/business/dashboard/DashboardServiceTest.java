@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 class DashboardServiceTest {
 
   @Test
-  void createPersistsV1AndValidatesAnalysisReference() {
+  void createPersistsDraftV1AndValidatesAnalysisReference() {
     FakeRepository repository = new FakeRepository();
     AnalysisReferenceService analysisReferences = mock(AnalysisReferenceService.class);
     DashboardService service = new DashboardService(repository, analysisReferences, new ObjectMapper());
@@ -33,6 +33,7 @@ class DashboardServiceTest {
             "link-region", DashboardInteractionEvent.SELECT, "w1", "region-field", "region"))));
 
     assertEquals(1, detail.dashboard().currentVersionNo());
+    assertEquals(0, detail.dashboard().publishedVersionNo());
     assertEquals(1, detail.versions().size());
     assertEquals(1, detail.widgets().size());
     assertEquals(1, detail.globalFilters().size());
@@ -42,20 +43,79 @@ class DashboardServiceTest {
   }
 
   @Test
-  void manualSaveCreatesImmutableNextVersion() {
+  void publishPointsToCurrentDraftWithoutCreatingAnotherVersion() {
     FakeRepository repository = new FakeRepository();
     DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
     DashboardDetail created = service.create(command(
         "A",
         List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
 
+    DashboardDetail published = service.publish(created.dashboard().id());
+
+    assertEquals(1, published.dashboard().currentVersionNo());
+    assertEquals(1, published.dashboard().publishedVersionNo());
+    assertEquals(published.dashboard().currentVersionId(), published.dashboard().publishedVersionId());
+    assertEquals(1, published.versions().size());
+    assertEquals(1, service.published(created.dashboard().id()).version().versionNo());
+  }
+
+  @Test
+  void savingDraftAfterPublishDoesNotMovePublishedPointer() {
+    FakeRepository repository = new FakeRepository();
+    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardDetail created = service.create(command(
+        "A",
+        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+    service.publish(created.dashboard().id());
+
     DashboardDetail saved = service.saveVersion(created.dashboard().id(), command(
         "A2",
         List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "line"), 1, 1, 10, 7, 6, 5))));
 
     assertEquals(2, saved.dashboard().currentVersionNo());
+    assertEquals(1, saved.dashboard().publishedVersionNo());
     assertEquals(2, saved.versions().size());
-    assertEquals("A", saved.versions().get(1).name());
+    assertEquals("A", service.published(created.dashboard().id()).version().name());
+  }
+
+  @Test
+  void restoreHistoricalVersionCreatesNewDraftAndKeepsPublishedVersion() {
+    FakeRepository repository = new FakeRepository();
+    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardDetail created = service.create(command(
+        "A",
+        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+    service.publish(created.dashboard().id());
+    service.saveVersion(created.dashboard().id(), command(
+        "A2",
+        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "line"), 1, 1, 10, 7, 6, 5))));
+
+    DashboardDetail restored = service.restoreVersion(created.dashboard().id(), 1);
+
+    assertEquals(3, restored.dashboard().currentVersionNo());
+    assertEquals(1, restored.dashboard().publishedVersionNo());
+    assertEquals("A", restored.currentVersion().name());
+    assertEquals("bar", ((Map<?, ?>) restored.widgets().get(0).inlineAnalysis()).get("type"));
+    assertEquals(3, restored.versions().size());
+  }
+
+  @Test
+  void versionDetailReadsHistoricalSnapshotWithoutChangingDraftPointer() {
+    FakeRepository repository = new FakeRepository();
+    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardDetail created = service.create(command(
+        "A",
+        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+    service.saveVersion(created.dashboard().id(), command(
+        "A2",
+        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "line"), 2, 3, 10, 7, 6, 5))));
+
+    DashboardVersionDetail v1 = service.version(created.dashboard().id(), 1);
+
+    assertEquals(1, v1.version().versionNo());
+    assertEquals("A", v1.version().name());
+    assertEquals(0, v1.widgets().get(0).x());
+    assertEquals(2, service.get(created.dashboard().id()).dashboard().currentVersionNo());
   }
 
   @Test
@@ -107,7 +167,8 @@ class DashboardServiceTest {
 
     @Override public long insertDashboard(String name, String description) {
       long id = nextDashboardId++;
-      dashboards.put(id, new DashboardAsset(id, name, description, null, 0, Instant.now(), Instant.now()));
+      dashboards.put(id, new DashboardAsset(
+          id, name, description, null, 0, null, 0, null, Instant.now(), Instant.now()));
       return id;
     }
 
@@ -157,7 +218,31 @@ class DashboardServiceTest {
     @Override public void updateCurrentVersion(long dashboardId, long versionId, int versionNo, String name, String description) {
       DashboardAsset old = dashboards.get(dashboardId);
       dashboards.put(dashboardId, new DashboardAsset(
-          dashboardId, name, description, versionId, versionNo, old.createTime(), Instant.now()));
+          dashboardId,
+          name,
+          description,
+          versionId,
+          versionNo,
+          old.publishedVersionId(),
+          old.publishedVersionNo(),
+          old.publishedTime(),
+          old.createTime(),
+          Instant.now()));
+    }
+
+    @Override public void updatePublishedVersion(long dashboardId, long versionId, int versionNo) {
+      DashboardAsset old = dashboards.get(dashboardId);
+      dashboards.put(dashboardId, new DashboardAsset(
+          dashboardId,
+          old.name(),
+          old.description(),
+          old.currentVersionId(),
+          old.currentVersionNo(),
+          versionId,
+          versionNo,
+          Instant.now(),
+          old.createTime(),
+          Instant.now()));
     }
 
     @Override public Optional<DashboardAsset> findDashboard(long id) { return Optional.ofNullable(dashboards.get(id)); }
