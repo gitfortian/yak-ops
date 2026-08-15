@@ -9,9 +9,10 @@ import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
 import {
-  activateDashboardVersion,
   createDashboard,
   fetchDashboard,
+  publishDashboard,
+  restoreDashboardVersion,
   saveDashboardVersion,
   toDashboardDocument,
 } from './dashboard-service';
@@ -29,6 +30,7 @@ import type {
   ChartType,
   DashboardDocument,
   DashboardGlobalFilter,
+  DashboardServerDetail,
   DashboardVersionSummary,
   DashboardWidget,
   PublishedDataset,
@@ -87,6 +89,7 @@ export function useDashboardDesigner(dashboardId?: string) {
   const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
   const [dashboardVersions, setDashboardVersions] = useState<DashboardVersionSummary[]>([]);
   const [dashboardSaving, setDashboardSaving] = useState(false);
+  const [dashboardPublishing, setDashboardPublishing] = useState(false);
   const [runtimeFilterValues, setRuntimeFilterValues] = useState<Record<string, Scalar | undefined>>({});
   const [selectedId, setSelectedId] = useState<string>();
   const [preview, setPreview] = useState(false);
@@ -100,6 +103,13 @@ export function useDashboardDesigner(dashboardId?: string) {
   const dirty = dashboardFingerprint(dashboard) !== savedFingerprintRef.current;
   const canUndo = undoStackRef.current.length > 0;
   const canRedo = redoStackRef.current.length > 0;
+  const persisted = isPersistedDashboard(dashboard.id);
+  const hasPublishedVersion = Boolean(dashboard.publishedVersionId);
+  const hasUnpublishedDraft = Boolean(
+    dashboard.currentVersionId
+    && dashboard.currentVersionId !== dashboard.publishedVersionId,
+  );
+  const canPublish = !persisted || dirty || hasUnpublishedDraft || !hasPublishedVersion;
 
   const setDashboardWithoutHistory = useCallback((next: DashboardDocument) => {
     const cloned = cloneDashboard(next);
@@ -120,6 +130,14 @@ export function useDashboardDesigner(dashboardId?: string) {
     setDashboardState(cloned);
     setSelectedId(undefined);
   }, []);
+
+  const applyServerDetail = useCallback((detail: DashboardServerDetail) => {
+    const document = toDashboardDocument(detail);
+    resetDashboardState(document);
+    setDashboardVersions(detail.versions);
+    window.localStorage.removeItem(STORAGE_KEY);
+    return document;
+  }, [resetDashboardState]);
 
   const commitDashboard = useCallback((
     updater: DashboardDocument | ((current: DashboardDocument) => DashboardDocument),
@@ -193,14 +211,11 @@ export function useDashboardDesigner(dashboardId?: string) {
 
   const openDashboard = useCallback(async (targetDashboardId: string) => {
     try {
-      const detail = await fetchDashboard(targetDashboardId);
-      resetDashboardState(toDashboardDocument(detail));
-      setDashboardVersions(detail.versions);
-      window.localStorage.removeItem(STORAGE_KEY);
+      applyServerDetail(await fetchDashboard(targetDashboardId));
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 Dashboard 失败');
     }
-  }, [resetDashboardState]);
+  }, [applyServerDetail]);
 
   useEffect(() => {
     void loadDatasets();
@@ -401,42 +416,68 @@ export function useDashboardDesigner(dashboardId?: string) {
     }), `widget:${id}:dataset`);
   };
 
-  const save = async (): Promise<string | undefined> => {
+  const persistCurrentDraft = async (): Promise<DashboardServerDetail | undefined> => {
     const currentDashboard = dashboardRef.current;
     if (!currentDashboard.name.trim()) {
       message.warning('请输入仪表盘名称');
       return undefined;
     }
+    return isPersistedDashboard(currentDashboard.id)
+      ? saveDashboardVersion(currentDashboard.id, currentDashboard)
+      : createDashboard(currentDashboard);
+  };
+
+  const saveDraft = async (): Promise<string | undefined> => {
+    const currentDashboard = dashboardRef.current;
+    if (isPersistedDashboard(currentDashboard.id) && !dirty) return currentDashboard.id;
     setDashboardSaving(true);
     try {
-      const detail = isPersistedDashboard(currentDashboard.id)
-        ? await saveDashboardVersion(currentDashboard.id, currentDashboard)
-        : await createDashboard(currentDashboard);
-      const document = toDashboardDocument(detail);
-      resetDashboardState(document);
-      setDashboardVersions(detail.versions);
-      window.localStorage.removeItem(STORAGE_KEY);
-      message.success(`仪表盘已保存为 V${detail.dashboard.currentVersionNo}`);
+      const detail = await persistCurrentDraft();
+      if (!detail) return undefined;
+      applyServerDetail(detail);
+      message.success(`草稿已保存为 V${detail.dashboard.currentVersionNo}`);
       return detail.dashboard.id;
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存 Dashboard 失败');
+      message.error(error instanceof Error ? error.message : '保存 Dashboard 草稿失败');
       return undefined;
     } finally {
       setDashboardSaving(false);
     }
   };
 
-  const activateVersion = async (versionNo: number) => {
+  const publish = async (): Promise<string | undefined> => {
+    if (!canPublish || dashboardPublishing) return dashboardRef.current.id;
+    setDashboardPublishing(true);
+    try {
+      let dashboardIdToPublish = dashboardRef.current.id;
+      if (!isPersistedDashboard(dashboardIdToPublish) || dirty) {
+        const draftDetail = await persistCurrentDraft();
+        if (!draftDetail) return undefined;
+        applyServerDetail(draftDetail);
+        dashboardIdToPublish = draftDetail.dashboard.id;
+      }
+      const detail = await publishDashboard(dashboardIdToPublish);
+      applyServerDetail(detail);
+      message.success(`仪表盘已发布 V${detail.dashboard.publishedVersionNo}`);
+      return detail.dashboard.id;
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '发布 Dashboard 失败');
+      return undefined;
+    } finally {
+      setDashboardPublishing(false);
+    }
+  };
+
+  const restoreVersion = async (versionNo: number) => {
     const currentDashboard = dashboardRef.current;
-    if (!isPersistedDashboard(currentDashboard.id) || versionNo === currentDashboard.currentVersionNo) return;
+    if (!isPersistedDashboard(currentDashboard.id)) return;
     setDashboardSaving(true);
     try {
-      const detail = await activateDashboardVersion(currentDashboard.id, versionNo);
-      resetDashboardState(toDashboardDocument(detail));
-      setDashboardVersions(detail.versions);
-      message.success(`已切换到 Dashboard V${versionNo}`);
+      const detail = await restoreDashboardVersion(currentDashboard.id, versionNo);
+      applyServerDetail(detail);
+      message.success(`V${versionNo} 已恢复为草稿 V${detail.dashboard.currentVersionNo}`);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '切换 DashboardVersion 失败');
+      message.error(error instanceof Error ? error.message : '恢复 DashboardVersion 失败');
     } finally {
       setDashboardSaving(false);
     }
@@ -450,6 +491,7 @@ export function useDashboardDesigner(dashboardId?: string) {
     analyses,
     dashboardVersions,
     dashboardSaving,
+    dashboardPublishing,
     runtimeFilterValues,
     selectedWidget,
     activeDataset,
@@ -458,6 +500,10 @@ export function useDashboardDesigner(dashboardId?: string) {
     dirty,
     canUndo,
     canRedo,
+    persisted,
+    hasPublishedVersion,
+    hasUnpublishedDraft,
+    canPublish,
     setSelectedId,
     setPreview,
     updateDashboardName,
@@ -475,7 +521,8 @@ export function useDashboardDesigner(dashboardId?: string) {
     changeWidgetDataset,
     undo,
     redo,
-    save,
-    activateVersion,
+    saveDraft,
+    publish,
+    restoreVersion,
   };
 }
