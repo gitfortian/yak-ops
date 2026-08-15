@@ -3,6 +3,7 @@ import { appRoutes } from '../src/config/navigation';
 const fullscreenRouteIds = new Set([
   'dashboard-new',
   'dashboard-editor',
+  'workflow-definition-editor',
 ]);
 
 const toProtectedRoute = ({
@@ -29,8 +30,8 @@ const siteRoutes = appRoutes
   .map(toProtectedRoute);
 
 /**
- * 普通业务页面进入自定义 SiteLayout；Dashboard Editor 则使用独立的
- * fullscreen workspace，不继承 Yak 左侧菜单和全局 Header。
+ * 普通业务页面进入自定义 SiteLayout；需要沉浸式创作空间的编辑器则使用
+ * 独立 fullscreen workspace，不继承 Yak 左侧菜单和全局 Header。
  */
 export default [
   {
