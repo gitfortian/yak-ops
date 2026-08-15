@@ -22,6 +22,10 @@
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-business-data-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-business-job</artifactId>
         </dependency>
         <dependency>
