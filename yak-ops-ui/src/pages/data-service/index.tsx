@@ -14,9 +14,10 @@ import {
   message,
   type TableColumnsType,
 } from 'antd';
-import { Activity, Copy, Pencil, Play, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { Activity, Copy, FileText, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import DataServiceAccessModal from './DataServiceAccessModal';
+import DataServiceDocsModal from './DataServiceDocsModal';
 import DataServiceRuntimeModal from './DataServiceRuntimeModal';
 import {
   createDataService,
@@ -24,10 +25,8 @@ import {
   fetchDataServices,
   fetchDataSourceOptions,
   setDataServiceEnabled,
-  testDataService,
   updateDataService,
   type DataServiceApi,
-  type DataServiceQueryResult,
   type DataServiceSavePayload,
   type DataSourceOption,
 } from './service';
@@ -42,13 +41,10 @@ export default function DataServicePage() {
   const [editing, setEditing] = useState<DataServiceApi>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState<DataServiceApi>();
+  const [docsTarget, setDocsTarget] = useState<DataServiceApi>();
   const [accessTarget, setAccessTarget] = useState<DataServiceApi>();
   const [runtimeTarget, setRuntimeTarget] = useState<DataServiceApi>();
-  const [testLoading, setTestLoading] = useState(false);
-  const [testResult, setTestResult] = useState<DataServiceQueryResult>();
   const [form] = Form.useForm<DataServiceSavePayload>();
-  const [testForm] = Form.useForm<Record<string, string>>();
   const sourceManaged = Boolean(editing?.sourceType);
 
   const load = useCallback(async () => {
@@ -61,12 +57,12 @@ export default function DataServicePage() {
       const nextServices = serviceResponse.data || [];
       setServices(nextServices);
       setDataSources(dataSourceResponse.data || []);
-      setAccessTarget((current) => current
+      const refreshTarget = (current?: DataServiceApi) => current
         ? nextServices.find((item) => item.id === current.id) || current
-        : undefined);
-      setRuntimeTarget((current) => current
-        ? nextServices.find((item) => item.id === current.id) || current
-        : undefined);
+        : undefined;
+      setDocsTarget(refreshTarget);
+      setAccessTarget(refreshTarget);
+      setRuntimeTarget(refreshTarget);
     } catch (error: any) {
       message.error(error?.message || '加载数据服务失败');
     } finally {
@@ -141,26 +137,6 @@ export default function DataServicePage() {
       message.success(enabled ? '服务已启用' : '服务已停用');
     } catch (error: any) {
       message.error(error?.message || '状态更新失败');
-    }
-  };
-
-  const openTest = (record: DataServiceApi) => {
-    setTesting(record);
-    setTestResult(undefined);
-    testForm.resetFields();
-  };
-
-  const runTest = async () => {
-    if (!testing) return;
-    const parameters = await testForm.validateFields();
-    setTestLoading(true);
-    try {
-      const response = await testDataService(testing.id, parameters);
-      setTestResult(response.data);
-    } catch (error: any) {
-      message.error(error?.message || '测试调用失败');
-    } finally {
-      setTestLoading(false);
     }
   };
 
@@ -246,8 +222,8 @@ export default function DataServicePage() {
       fixed: 'right',
       render: (_, record) => (
         <Space size={2}>
-          <Tooltip title="测试">
-            <Button type="text" size="small" icon={<Play size={15} />} onClick={() => openTest(record)} />
+          <Tooltip title="API 文档 / 在线调试">
+            <Button type="text" size="small" icon={<FileText size={15} />} onClick={() => setDocsTarget(record)} />
           </Tooltip>
           <Tooltip title="Runtime">
             <Button type="text" size="small" icon={<Activity size={15} />} onClick={() => setRuntimeTarget(record)} />
@@ -266,20 +242,12 @@ export default function DataServicePage() {
     },
   ];
 
-  const resultColumns = (testResult?.columns || []).map((name) => ({
-    title: name,
-    dataIndex: name,
-    key: name,
-    minWidth: 140,
-    ellipsis: true,
-  }));
-
   return (
     <div className="h-full bg-white px-6 py-5">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">将只读 SQL 发布为可调用、可鉴权、可缓存、可熔断、可审计的 GET REST API。</p>
+          <p className="mb-0 mt-1 text-sm text-black/45">将只读 SQL 发布为可调用、可鉴权、可缓存、可熔断、可文档化的 GET REST API。</p>
         </div>
         <Button type="primary" icon={<Plus size={16} />} onClick={openCreate}>新建 API</Button>
       </div>
@@ -304,6 +272,12 @@ export default function DataServicePage() {
         columns={columns}
         pagination={false}
         scroll={{ x: 1360 }}
+      />
+
+      <DataServiceDocsModal
+        open={Boolean(docsTarget)}
+        service={docsTarget}
+        onCancel={() => setDocsTarget(undefined)}
       />
 
       <DataServiceAccessModal
@@ -388,60 +362,6 @@ export default function DataServicePage() {
             <Input.TextArea rows={2} maxLength={500} placeholder="可选" />
           </Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        title={testing ? `测试 · ${testing.name}` : '测试 API'}
-        open={Boolean(testing)}
-        onCancel={() => { setTesting(undefined); setTestResult(undefined); }}
-        footer={null}
-        width={900}
-        destroyOnHidden
-      >
-        {testing && (
-          <div className="pt-3">
-            <div className="mb-4 rounded-md bg-black/[0.025] px-3 py-2 font-mono text-sm text-black/65">
-              GET {testing.runtimePath}
-            </div>
-            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-3 py-2 text-[11px] text-[#667085]">
-              管理控制台测试始终直连真实数据源，不读取 Runtime 结果缓存，也不受熔断状态影响，便于确认当前 SQL 与数据源是否真实可用。
-              {testing.authMode === 'API_KEY' ? (
-                <> 真实外部调用仍需携带 <span className="font-mono">X-API-Key</span>。</>
-              ) : null}
-            </div>
-            <Form form={testForm} layout="vertical">
-              {testing.parameterNames.length > 0 ? (
-                <div className="grid grid-cols-2 gap-x-4">
-                  {testing.parameterNames.map((name) => (
-                    <Form.Item key={name} name={name} label={name} rules={[{ required: true, message: `请输入 ${name}` }]}>
-                      <Input placeholder={`:${name}`} />
-                    </Form.Item>
-                  ))}
-                </div>
-              ) : <div className="mb-4 text-sm text-black/40">当前 SQL 没有请求参数。</div>}
-              <Button type="primary" icon={<Play size={15} />} loading={testLoading} onClick={() => void runTest()}>发送请求</Button>
-            </Form>
-
-            {testResult && (
-              <div className="mt-5 border-t border-black/[0.06] pt-4">
-                <div className="mb-3 flex items-center gap-4 text-sm text-black/55">
-                  <span>200 OK</span>
-                  <span>{testResult.durationMs} ms</span>
-                  <span>{testResult.rowCount} 行</span>
-                  {testResult.truncated && <Tag>结果已截断</Tag>}
-                </div>
-                <Table
-                  rowKey={(_, index) => String(index)}
-                  size="small"
-                  dataSource={testResult.rows}
-                  columns={resultColumns}
-                  pagination={false}
-                  scroll={{ x: 'max-content', y: 360 }}
-                />
-              </div>
-            )}
-          </div>
-        )}
       </Modal>
     </div>
   );

@@ -14,6 +14,14 @@ export interface DataSourceOption {
 }
 
 export type DataServiceAuthMode = 'NONE' | 'API_KEY';
+export type DataServiceSchemaType =
+  | 'STRING'
+  | 'INTEGER'
+  | 'NUMBER'
+  | 'BOOLEAN'
+  | 'DATE'
+  | 'DATETIME'
+  | 'OBJECT';
 
 export interface DataServiceApi {
   id: number;
@@ -72,6 +80,40 @@ export interface DataServiceRuntimeStatus extends DataServiceRuntimeConfig {
   p95DurationMs: number;
   lastSuccessAt?: string | null;
   lastFailureAt?: string | null;
+}
+
+export interface DataServiceParameterDoc {
+  name: string;
+  type: Exclude<DataServiceSchemaType, 'OBJECT'>;
+  required: boolean;
+  description?: string | null;
+  example?: string | null;
+}
+
+export interface DataServiceResponseFieldDoc {
+  name: string;
+  type: DataServiceSchemaType;
+  nullable: boolean;
+  description?: string | null;
+  example?: string | null;
+}
+
+export interface DataServiceDocumentation {
+  apiId: number;
+  name: string;
+  runtimePath: string;
+  authMode: DataServiceAuthMode;
+  description?: string | null;
+  documented: boolean;
+  schemaStale: boolean;
+  parameters: DataServiceParameterDoc[];
+  responseFields: DataServiceResponseFieldDoc[];
+  updateTime?: string | null;
+}
+
+export interface DataServiceDocumentationInput {
+  parameters: DataServiceParameterDoc[];
+  responseFields: DataServiceResponseFieldDoc[];
 }
 
 export interface DataServiceApiKey {
@@ -143,6 +185,15 @@ export const deleteDataService = (id: number) =>
 
 export const setDataServiceEnabled = (id: number, enabled: boolean) =>
   HttpUtils.put<DataServiceApi>(`${PREFIX}/${id}/enabled?enabled=${enabled}`, {}) as Promise<CommonApiResponse<DataServiceApi>>;
+
+export const fetchDataServiceDocumentation = (id: number) =>
+  HttpUtils.get<DataServiceDocumentation>(`${PREFIX}/${id}/documentation`) as Promise<CommonApiResponse<DataServiceDocumentation>>;
+
+export const saveDataServiceDocumentation = (id: number, payload: DataServiceDocumentationInput) =>
+  HttpUtils.put<DataServiceDocumentation>(`${PREFIX}/${id}/documentation`, payload) as Promise<CommonApiResponse<DataServiceDocumentation>>;
+
+export const fetchDataServiceOpenApi = (id: number) =>
+  HttpUtils.get<Record<string, unknown>>(`${PREFIX}/${id}/openapi`) as Promise<CommonApiResponse<Record<string, unknown>>>;
 
 export const fetchDataServiceRuntime = (id: number) =>
   HttpUtils.get<DataServiceRuntimeStatus>(`${PREFIX}/${id}/runtime`) as Promise<CommonApiResponse<DataServiceRuntimeStatus>>;
