@@ -5,12 +5,13 @@ import { BarChart3 } from 'lucide-react';
 import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChartEditor } from './chart-editor';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
+import { DashboardVersionHistoryDrawer } from './version-history-drawer';
 import { WidgetShell } from './widget';
 
 const isEditableTarget = (target: EventTarget | null) => {
@@ -25,6 +26,7 @@ export default function DashboardEditorPage() {
   const dashboardId = id && id !== 'new' ? id : undefined;
   const designer = useDashboardDesigner(dashboardId);
   const { width, containerRef, mounted } = useContainerWidth();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
     x: widget.x,
@@ -48,9 +50,28 @@ export default function DashboardEditorPage() {
 
   const saveDashboard = useCallback(async () => {
     const persisted = /^\d+$/.test(designer.dashboard.id);
-    if (designer.dashboardSaving || (persisted && !designer.dirty)) return;
-    const persistedId = await designer.save();
+    if (designer.dashboardSaving || designer.dashboardPublishing || (persisted && !designer.dirty)) return;
+    const persistedId = await designer.saveDraft();
     if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}`);
+  }, [dashboardId, designer]);
+
+  const publishDashboard = useCallback(() => {
+    if (!designer.canPublish || designer.dashboardSaving || designer.dashboardPublishing) return;
+    const firstPublish = !designer.hasPublishedVersion;
+    Modal.confirm({
+      title: firstPublish ? '发布仪表盘？' : '发布当前草稿？',
+      content: designer.dirty
+        ? '当前还有未保存修改。系统会先保存为新的草稿版本，再将该版本发布。'
+        : firstPublish
+          ? `草稿 V${designer.dashboard.currentVersionNo || 1} 将成为首个正式发布版本。`
+          : `草稿 V${designer.dashboard.currentVersionNo} 将替换当前已发布的 V${designer.dashboard.publishedVersionNo}。`,
+      okText: firstPublish ? '发布' : '发布更新',
+      cancelText: '取消',
+      onOk: async () => {
+        const persistedId = await designer.publish();
+        if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}`);
+      },
+    });
   }, [dashboardId, designer]);
 
   const leaveDashboard = () => {
@@ -60,7 +81,7 @@ export default function DashboardEditorPage() {
     }
     Modal.confirm({
       title: '有未保存修改',
-      content: '当前仪表盘还有未保存的修改，离开后这些修改会丢失。',
+      content: '当前仪表盘还有未保存到草稿的修改，离开后这些本地修改会丢失。',
       okText: '放弃修改并离开',
       cancelText: '继续编辑',
       okButtonProps: { danger: true },
@@ -68,17 +89,21 @@ export default function DashboardEditorPage() {
     });
   };
 
-  const changeVersion = (versionNo: number) => {
+  const restoreVersion = (versionNo: number) => {
+    const restore = async () => {
+      await designer.restoreVersion(versionNo);
+      setHistoryOpen(false);
+    };
     if (!designer.dirty) {
-      void designer.activateVersion(versionNo);
+      void restore();
       return;
     }
     Modal.confirm({
-      title: '切换历史版本？',
-      content: '当前修改尚未保存。切换版本会放弃这些修改并加载所选版本。',
-      okText: '放弃修改并切换',
+      title: `恢复 V${versionNo} 为草稿？`,
+      content: '当前还有未保存到草稿的修改。继续恢复会放弃这些本地修改，并基于历史版本生成一个新的草稿版本。',
+      okText: '放弃修改并恢复',
       cancelText: '继续编辑',
-      onOk: () => designer.activateVersion(versionNo),
+      onOk: restore,
     });
   };
 
@@ -146,24 +171,29 @@ export default function DashboardEditorPage() {
         name={designer.dashboard.name}
         dashboardId={designer.dashboard.id}
         currentVersionNo={designer.dashboard.currentVersionNo}
-        versions={designer.dashboardVersions}
+        publishedVersionNo={designer.dashboard.publishedVersionNo}
         saving={designer.dashboardSaving}
+        publishing={designer.dashboardPublishing}
         preview={designer.preview}
         dirty={designer.dirty}
         canUndo={designer.canUndo}
         canRedo={designer.canRedo}
         canAddChart={Boolean(designer.activeDataset) && !designer.datasetsLoading}
+        canPublish={designer.canPublish}
+        hasPublishedVersion={designer.hasPublishedVersion}
+        hasUnpublishedDraft={designer.hasUnpublishedDraft}
         onBack={leaveDashboard}
         onName={designer.updateDashboardName}
         onUndo={designer.undo}
         onRedo={designer.redo}
         onAddChart={addChart}
-        onVersion={changeVersion}
+        onHistory={() => setHistoryOpen(true)}
         onPreview={() => {
           designer.setPreview((current) => !current);
           designer.setSelectedId(undefined);
         }}
-        onSave={() => void saveDashboard()}
+        onSaveDraft={() => void saveDashboard()}
+        onPublish={publishDashboard}
       />
 
       <DashboardGlobalFilterBar
@@ -287,6 +317,19 @@ export default function DashboardEditorPage() {
           />
         ) : null}
       </div>
+
+      {designer.persisted ? (
+        <DashboardVersionHistoryDrawer
+          open={historyOpen}
+          dashboardId={designer.dashboard.id}
+          versions={designer.dashboardVersions}
+          currentVersionNo={designer.dashboard.currentVersionNo}
+          publishedVersionNo={designer.dashboard.publishedVersionNo}
+          busy={designer.dashboardSaving || designer.dashboardPublishing}
+          onClose={() => setHistoryOpen(false)}
+          onRestore={restoreVersion}
+        />
+      ) : null}
 
       <style>{`
         .dashboard-grid-canvas {
