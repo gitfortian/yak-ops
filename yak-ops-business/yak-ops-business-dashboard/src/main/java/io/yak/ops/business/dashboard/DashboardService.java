@@ -13,7 +13,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Owns Dashboard identity, immutable versions, layout and dashboard-level interaction definitions. */
+/** Owns Dashboard identity, immutable draft versions, published pointer, layout and dashboard interactions. */
 @Service
 public class DashboardService {
 
@@ -42,16 +42,14 @@ public class DashboardService {
   }
 
   public DashboardDetail get(long dashboardId) {
-    if (dashboardId <= 0L) throw new IllegalArgumentException("dashboardId 必须大于 0");
-    DashboardAsset dashboard = repository.findDashboard(dashboardId)
-        .orElseThrow(() -> new IllegalArgumentException("Dashboard 不存在：" + dashboardId));
+    DashboardAsset dashboard = requireDashboard(dashboardId);
     DashboardVersion currentVersion = null;
     List<DashboardWidgetSnapshot> widgets = List.of();
     List<DashboardGlobalFilterSnapshot> filters = List.of();
     List<DashboardInteractionSnapshot> interactions = List.of();
     if (dashboard.currentVersionId() != null) {
       currentVersion = repository.findVersion(dashboard.currentVersionId())
-          .orElseThrow(() -> new IllegalStateException("Dashboard 当前版本不存在：" + dashboard.currentVersionId()));
+          .orElseThrow(() -> new IllegalStateException("Dashboard 当前草稿版本不存在：" + dashboard.currentVersionId()));
       widgets = repository.listWidgets(currentVersion.id());
       filters = repository.listGlobalFilters(currentVersion.id());
       interactions = repository.listInteractions(currentVersion.id());
@@ -66,8 +64,29 @@ public class DashboardService {
   }
 
   public List<DashboardVersion> versions(long dashboardId) {
-    get(dashboardId);
+    requireDashboard(dashboardId);
     return repository.listVersions(dashboardId);
+  }
+
+  /** Reads one exact immutable historical snapshot without changing the editable draft pointer. */
+  public DashboardVersionDetail version(long dashboardId, int versionNo) {
+    DashboardAsset dashboard = requireDashboard(dashboardId);
+    if (versionNo <= 0) throw new IllegalArgumentException("versionNo 必须大于 0");
+    DashboardVersion version = repository.findVersionByNo(dashboardId, versionNo)
+        .orElseThrow(() -> new IllegalArgumentException("DashboardVersion 不存在：V" + versionNo));
+    return versionDetail(dashboard, version);
+  }
+
+  /** Reader-facing snapshot. Editing and saving drafts never changes this result until publish is called. */
+  public DashboardVersionDetail published(long dashboardId) {
+    DashboardAsset dashboard = requireDashboard(dashboardId);
+    if (dashboard.publishedVersionId() == null) {
+      throw new IllegalStateException("Dashboard 尚未发布：" + dashboardId);
+    }
+    DashboardVersion version = repository.findVersion(dashboard.publishedVersionId())
+        .orElseThrow(() -> new IllegalStateException(
+            "Dashboard 已发布版本不存在：" + dashboard.publishedVersionId()));
+    return versionDetail(dashboard, version);
   }
 
   @Transactional("yakBusinessTransactionManager")
@@ -78,30 +97,97 @@ public class DashboardService {
     return get(dashboardId);
   }
 
+  /** Saves an immutable draft snapshot only. It does not affect the published pointer. */
   @Transactional("yakBusinessTransactionManager")
   public DashboardDetail saveVersion(long dashboardId, SaveCommand command) {
-    get(dashboardId);
+    requireDashboard(dashboardId);
     Normalized normalized = normalize(command);
     int versionNo = repository.nextVersionNo(dashboardId);
     appendVersion(dashboardId, versionNo, normalized);
     return get(dashboardId);
   }
 
+  /** Publishes the current saved draft. Publishing is idempotent and does not create another version. */
+  @Transactional("yakBusinessTransactionManager")
+  public DashboardDetail publish(long dashboardId) {
+    DashboardAsset dashboard = requireDashboard(dashboardId);
+    if (dashboard.currentVersionId() == null || dashboard.currentVersionNo() <= 0) {
+      throw new IllegalStateException("Dashboard 没有可发布的草稿：" + dashboardId);
+    }
+    if (Objects.equals(dashboard.currentVersionId(), dashboard.publishedVersionId())) {
+      return get(dashboardId);
+    }
+    DashboardVersion draft = repository.findVersion(dashboard.currentVersionId())
+        .orElseThrow(() -> new IllegalStateException("Dashboard 当前草稿版本不存在：" + dashboard.currentVersionId()));
+    repository.updatePublishedVersion(dashboardId, draft.id(), draft.versionNo());
+    return get(dashboardId);
+  }
+
+  /**
+   * Restores an historical snapshot as a new editable draft version.
+   * The historical version remains immutable and the published pointer is deliberately unchanged.
+   */
+  @Transactional("yakBusinessTransactionManager")
+  public DashboardDetail restoreVersion(long dashboardId, int versionNo) {
+    DashboardVersionDetail source = version(dashboardId, versionNo);
+    Normalized normalized = normalize(commandFromVersion(source));
+    appendVersion(dashboardId, repository.nextVersionNo(dashboardId), normalized);
+    return get(dashboardId);
+  }
+
+  /** @deprecated Historical activation now restores the snapshot as a new draft instead of moving a pointer backwards. */
+  @Deprecated
   @Transactional("yakBusinessTransactionManager")
   public DashboardDetail activateVersion(long dashboardId, int versionNo) {
-    get(dashboardId);
-    if (versionNo <= 0) throw new IllegalArgumentException("versionNo 必须大于 0");
-    DashboardVersion version = repository.findVersionByNo(dashboardId, versionNo)
-        .orElseThrow(() -> new IllegalArgumentException("DashboardVersion 不存在：V" + versionNo));
-    repository.updateCurrentVersion(
-        dashboardId, version.id(), version.versionNo(), version.name(), version.description());
-    return get(dashboardId);
+    return restoreVersion(dashboardId, versionNo);
   }
 
   @Transactional("yakBusinessTransactionManager")
   public void delete(long dashboardId) {
-    get(dashboardId);
+    requireDashboard(dashboardId);
     repository.deleteDashboard(dashboardId);
+  }
+
+  private DashboardAsset requireDashboard(long dashboardId) {
+    if (dashboardId <= 0L) throw new IllegalArgumentException("dashboardId 必须大于 0");
+    return repository.findDashboard(dashboardId)
+        .orElseThrow(() -> new IllegalArgumentException("Dashboard 不存在：" + dashboardId));
+  }
+
+  private DashboardVersionDetail versionDetail(DashboardAsset dashboard, DashboardVersion version) {
+    return new DashboardVersionDetail(
+        dashboard,
+        version,
+        repository.listWidgets(version.id()),
+        repository.listGlobalFilters(version.id()),
+        repository.listInteractions(version.id()));
+  }
+
+  private SaveCommand commandFromVersion(DashboardVersionDetail detail) {
+    List<WidgetSpec> widgets = detail.widgets().stream()
+        .map(widget -> new WidgetSpec(
+            widget.widgetKey(), widget.analysisId(), widget.title(), widget.inlineAnalysis(),
+            widget.x(), widget.y(), widget.w(), widget.h(), widget.minW(), widget.minH()))
+        .toList();
+    List<GlobalFilterSpec> filters = detail.globalFilters().stream()
+        .map(filter -> new GlobalFilterSpec(
+            filter.filterKey(), filter.name(), filter.operator(), filter.defaultValue(),
+            filter.bindings().stream()
+                .map(binding -> new FilterBindingSpec(binding.widgetKey(), binding.fieldId()))
+                .toList()))
+        .toList();
+    List<InteractionSpec> interactions = detail.interactions().stream()
+        .map(interaction -> new InteractionSpec(
+            interaction.interactionKey(), interaction.event(), interaction.sourceWidgetKey(),
+            interaction.sourceFieldId(), interaction.targetFilterKey()))
+        .toList();
+    return new SaveCommand(
+        detail.version().name(),
+        detail.version().description(),
+        detail.version().activeDatasetId(),
+        widgets,
+        filters,
+        interactions);
   }
 
   private void appendVersion(long dashboardId, int versionNo, Normalized normalized) {
