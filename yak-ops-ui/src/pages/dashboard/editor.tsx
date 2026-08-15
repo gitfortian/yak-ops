@@ -25,11 +25,19 @@ const isEditableTarget = (target: EventTarget | null) => {
 export default function DashboardEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const dashboardId = id && id !== 'new' ? id : undefined;
-  const initialPreview = useMemo(
-    () => new URLSearchParams(window.location.search).get('preview') === '1',
-    [dashboardId],
+  const routeMode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const publishedView = params.get('published') === '1';
+    return {
+      publishedView,
+      initialPreview: publishedView || params.get('preview') === '1',
+    };
+  }, [dashboardId]);
+  const designer = useDashboardDesigner(
+    dashboardId,
+    routeMode.initialPreview,
+    routeMode.publishedView,
   );
-  const designer = useDashboardDesigner(dashboardId, initialPreview);
   const { width, containerRef, mounted } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [filterConfigOpen, setFilterConfigOpen] = useState(false);
@@ -82,7 +90,7 @@ export default function DashboardEditorPage() {
   }, [dashboardId, designer]);
 
   const leaveDashboard = () => {
-    if (!designer.dirty) {
+    if (!designer.dirty || designer.publishedView) {
       history.push('/dashboard');
       return;
     }
@@ -196,6 +204,10 @@ export default function DashboardEditorPage() {
         onAddChart={addChart}
         onHistory={() => setHistoryOpen(true)}
         onPreview={() => {
+          if (designer.publishedView) {
+            history.push(`/dashboard/${designer.dashboard.id}`);
+            return;
+          }
           designer.setPreview((current) => !current);
           designer.setSelectedId(undefined);
         }}
@@ -350,7 +362,7 @@ export default function DashboardEditorPage() {
         onClose={() => setFilterConfigOpen(false)}
       />
 
-      {designer.persisted ? (
+      {designer.persisted && !designer.publishedView ? (
         <DashboardVersionHistoryDrawer
           open={historyOpen}
           dashboardId={designer.dashboard.id}
