@@ -9,10 +9,12 @@ import io.yak.ops.business.dataservice.service.DataServiceAccessService.ApiKeyIn
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.ApiKeyUpdate;
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.ApiKeyView;
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.CreatedApiKey;
+import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.DataServiceService;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
 import io.yak.ops.business.dataservice.service.DataServiceService.QueryResponse;
+import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeConfigInput;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 数据服务管理、访问控制与 Runtime 接口。 */
+/** 数据服务管理、访问控制、Runtime 策略与调用接口。 */
 @Tag(name = "数据服务")
 @RestController
 @ConditionalOnDataSourceEnabled
@@ -76,6 +78,20 @@ public class DataServiceController {
       @PathVariable("id") Long id,
       @RequestParam("enabled") boolean enabled) {
     return Result.success(dataServiceService.setEnabled(id, enabled));
+  }
+
+  @Operation(summary = "查询数据服务 Runtime 状态与指标")
+  @GetMapping("/{id}/runtime")
+  public Result<RuntimeSnapshot> runtimeStatus(@PathVariable("id") Long id) {
+    return Result.success(dataServiceService.runtimeStatus(id));
+  }
+
+  @Operation(summary = "更新数据服务 Runtime 缓存与熔断策略")
+  @PutMapping("/{id}/runtime")
+  public Result<RuntimeSnapshot> updateRuntime(
+      @PathVariable("id") Long id,
+      @RequestBody RuntimeConfigInput input) {
+    return Result.success(dataServiceService.updateRuntimeConfig(id, input));
   }
 
   @Operation(summary = "设置数据服务访问控制模式")
