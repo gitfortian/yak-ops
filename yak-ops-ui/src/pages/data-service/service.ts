@@ -88,7 +88,7 @@ export interface DataServiceCallLog {
   apiId: number;
   serviceName: string;
   servicePath: string;
-  callerType: 'PUBLIC' | 'API_KEY' | 'CONSOLE';
+  callerType: 'LEGACY' | 'PUBLIC' | 'API_KEY' | 'CONSOLE';
   apiKeyId?: number | null;
   apiKeyName?: string | null;
   apiKeyPrefix?: string | null;
