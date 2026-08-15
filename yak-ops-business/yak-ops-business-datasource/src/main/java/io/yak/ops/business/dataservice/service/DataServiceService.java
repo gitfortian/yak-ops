@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -66,34 +67,7 @@ public class DataServiceService {
 
   @Transactional
   public ApiView save(Long id, ApiInput input) {
-    validateInput(input);
-    String path = normalizePath(input.path());
-    Long duplicateCount = apiMapper.selectCount(
-        Wrappers.<DataServiceApiPO>lambdaQuery()
-            .eq(DataServiceApiPO::getPath, path)
-            .ne(id != null, DataServiceApiPO::getId, id));
-    if (duplicateCount != null && duplicateCount > 0) {
-      throw new IllegalArgumentException("服务路径已存在：" + path);
-    }
-
-    LocalDateTime now = LocalDateTime.now();
-    DataServiceApiPO api = id == null ? new DataServiceApiPO() : requireApi(id);
-    api.setName(input.name().trim());
-    api.setPath(path);
-    api.setDataSourceId(input.dataSourceId());
-    api.setSqlText(input.sql().trim());
-    api.setMaxRows(normalizeMaxRows(input.maxRows()));
-    api.setTimeoutSeconds(normalizeTimeout(input.timeoutSeconds()));
-    api.setEnabled(input.enabled() == null ? Boolean.FALSE : input.enabled());
-    api.setDescription(StringUtils.hasText(input.description()) ? input.description().trim() : null);
-    api.setUpdateTime(now);
-    if (id == null) {
-      api.setCreateTime(now);
-      apiMapper.insert(api);
-    } else {
-      apiMapper.updateById(api);
-    }
-    return toView(api);
+    return saveInternal(id, input, false);
   }
 
   /**
@@ -106,7 +80,7 @@ public class DataServiceService {
   public ApiView saveFromSource(SourceSnapshot source, ApiInput input) {
     SourceSnapshot normalized = normalizeSource(source);
     Optional<ApiView> existing = findBySource(normalized.sourceType(), normalized.sourceRef());
-    ApiView saved = save(existing.map(ApiView::id).orElse(null), input);
+    ApiView saved = saveInternal(existing.map(ApiView::id).orElse(null), input, true);
 
     DataServiceApiPO api = requireApi(saved.id());
     api.setSourceType(normalized.sourceType());
@@ -159,6 +133,46 @@ public class DataServiceService {
             .orderByDesc(DataServiceCallLogPO::getCreateTime)
             .orderByDesc(DataServiceCallLogPO::getId)
             .last("LIMIT 200"));
+  }
+
+  private ApiView saveInternal(Long id, ApiInput input, boolean sourceRefresh) {
+    validateInput(input);
+    String path = normalizePath(input.path());
+    Long duplicateCount = apiMapper.selectCount(
+        Wrappers.<DataServiceApiPO>lambdaQuery()
+            .eq(DataServiceApiPO::getPath, path)
+            .ne(id != null, DataServiceApiPO::getId, id));
+    if (duplicateCount != null && duplicateCount > 0) {
+      throw new IllegalArgumentException("服务路径已存在：" + path);
+    }
+
+    LocalDateTime now = LocalDateTime.now();
+    DataServiceApiPO api = id == null ? new DataServiceApiPO() : requireApi(id);
+    if (!sourceRefresh && StringUtils.hasText(api.getSourceType())) {
+      String sql = input.sql().trim();
+      if (!Objects.equals(api.getDataSourceId(), input.dataSourceId())
+          || !Objects.equals(api.getSqlText(), sql)) {
+        throw new IllegalArgumentException(
+            "来源数据服务的 SQL 和数据源由发布来源管理，请从来源版本重新发布");
+      }
+    }
+
+    api.setName(input.name().trim());
+    api.setPath(path);
+    api.setDataSourceId(input.dataSourceId());
+    api.setSqlText(input.sql().trim());
+    api.setMaxRows(normalizeMaxRows(input.maxRows()));
+    api.setTimeoutSeconds(normalizeTimeout(input.timeoutSeconds()));
+    api.setEnabled(input.enabled() == null ? Boolean.FALSE : input.enabled());
+    api.setDescription(StringUtils.hasText(input.description()) ? input.description().trim() : null);
+    api.setUpdateTime(now);
+    if (id == null) {
+      api.setCreateTime(now);
+      apiMapper.insert(api);
+    } else {
+      apiMapper.updateById(api);
+    }
+    return toView(api);
   }
 
   private QueryResponse execute(
