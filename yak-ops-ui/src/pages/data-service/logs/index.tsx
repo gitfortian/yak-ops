@@ -8,7 +8,8 @@ const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 
 const callerLabel = (record: DataServiceCallLog) => {
   if (record.callerType === 'CONSOLE') return '控制台测试';
   if (record.callerType === 'API_KEY') return record.apiKeyName || 'API Key';
-  return '公开调用';
+  if (record.callerType === 'PUBLIC') return '公开调用';
+  return '历史调用';
 };
 
 export default function DataServiceLogsPage() {
