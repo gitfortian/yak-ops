@@ -75,7 +75,7 @@ export function DashboardToolbar({
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e8eaee] bg-white px-4">
       <div className="flex min-w-0 items-center gap-3">
-        <Tooltip title="返回仪表盘列表">
+        <Tooltip title="退出编辑器">
           <Button
             type="text"
             className="!flex !h-8 !w-8 !min-w-0 !items-center !justify-center !rounded-[7px] !p-0 !text-[#667085] hover:!bg-[#f5f6f7] hover:!text-[#344054]"
