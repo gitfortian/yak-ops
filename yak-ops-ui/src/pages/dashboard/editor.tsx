@@ -47,7 +47,8 @@ export default function DashboardEditorPage() {
   const addChart = () => designer.addWidget('bar');
 
   const saveDashboard = useCallback(async () => {
-    if (designer.dashboardSaving) return;
+    const persisted = /^\d+$/.test(designer.dashboard.id);
+    if (designer.dashboardSaving || (persisted && !designer.dirty)) return;
     const persistedId = await designer.save();
     if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}`);
   }, [dashboardId, designer]);
@@ -102,7 +103,18 @@ export default function DashboardEditorPage() {
 
       if (modifier && key === 's') {
         event.preventDefault();
-        if (!designer.dashboardSaving) void saveDashboard();
+        void saveDashboard();
+        return;
+      }
+
+      if (
+        modifier
+        && key === 'd'
+        && designer.selectedId
+        && !isEditableTarget(event.target)
+      ) {
+        event.preventDefault();
+        designer.duplicateWidget(designer.selectedId);
         return;
       }
 
