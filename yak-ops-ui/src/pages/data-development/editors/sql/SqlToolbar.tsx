@@ -10,6 +10,7 @@ import {
   Sparkles,
   Undo2,
   Wand2,
+  Webhook,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -63,6 +64,20 @@ const datasetTooltip = (
   return `Dataset DV${state.datasetVersionNo} 已同步 SQL v${state.releaseRevisionNo}${status}`;
 };
 
+const dataServiceTooltip = (
+  state: DevelopmentEditorToolbarContext['dataServiceState'],
+  loading?: boolean,
+) => {
+  if (loading) return '正在读取数据服务状态';
+  if (!state) return '请先发布 SQL 版本，再发布为数据服务';
+  if (state.releaseStatus !== 'ONLINE') {
+    return 'SQL 发布任务当前未上线，请先在发布中心上线后再发布数据服务';
+  }
+  if (!state.published) return `发布 SQL v${state.releaseRevisionNo} 为数据服务`;
+  if (state.updateAvailable) return `更新数据服务到 SQL v${state.releaseRevisionNo}`;
+  return `数据服务已同步 SQL v${state.releaseRevisionNo}${state.enabled === false ? ' · 已停用' : ''}`;
+};
+
 const SqlToolbar = ({
   node,
   onRun,
@@ -72,6 +87,10 @@ const SqlToolbar = ({
   datasetState,
   datasetLoading,
   datasetPublishing,
+  onPublishDataService,
+  dataServiceState,
+  dataServiceLoading,
+  dataServicePublishing,
   running,
   saving,
   publishing,
@@ -90,6 +109,12 @@ const SqlToolbar = ({
   );
   const datasetStateLabel = datasetState?.datasetVersionNo
     ? `DV${datasetState.datasetVersionNo}${datasetNeedsUpdate ? ' · 待更新' : datasetState.datasetStatus === 'OFFLINE' ? ' · 已下线' : ''}`
+    : undefined;
+  const dataServiceReleaseUnavailable = Boolean(
+    dataServiceState && dataServiceState.releaseStatus !== 'ONLINE',
+  );
+  const dataServiceStateLabel = dataServiceState?.published
+    ? `API${dataServiceState.updateAvailable ? ' · 待更新' : dataServiceState.enabled === false ? ' · 已停用' : ' · 已同步'}`
     : undefined;
 
   return (
@@ -132,6 +157,35 @@ const SqlToolbar = ({
             ].join(' ')}
           >
             {datasetStateLabel}
+          </span>
+        ) : null}
+        <ToolbarButton
+          title={dataServiceTooltip(dataServiceState, dataServiceLoading)}
+          disabled={!onPublishDataService || !dataServiceState || dataServiceReleaseUnavailable || dataServiceLoading || dataServicePublishing || saving || publishing || running}
+          onClick={() => onPublishDataService?.()}
+        >
+          {dataServiceLoading || dataServicePublishing ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Webhook
+              size={15}
+              strokeWidth={1.8}
+              className={dataServiceState?.updateAvailable ? 'text-[var(--yak-brand-color)]' : undefined}
+            />
+          )}
+        </ToolbarButton>
+        {dataServiceStateLabel ? (
+          <span
+            className={[
+              'mr-1 text-[10px] font-medium',
+              dataServiceState?.updateAvailable
+                ? 'text-[var(--yak-brand-color)]'
+                : dataServiceState?.enabled === false
+                  ? 'text-[#b54708]'
+                  : 'text-[#667085]',
+            ].join(' ')}
+          >
+            {dataServiceStateLabel}
           </span>
         ) : null}
         <ToolbarDivider />
