@@ -39,6 +39,14 @@ export function DashboardInteractionEditor({
       label: `${filter.name} · ${filter.bindings.length} 个图表`,
       value: filter.id,
     }));
+  const nextPair = sourceOptions.flatMap((source) =>
+    targetOptions.map((target) => ({
+      sourceField: source.value,
+      targetFilterId: target.value,
+    })))
+    .find((pair) => !rules.some((rule) =>
+      rule.sourceField === pair.sourceField
+      && rule.targetFilterId === pair.targetFilterId));
 
   const updateRule = (id: string, patch: Partial<DashboardInteraction>) => {
     onChange(interactions.map((item) => item.id === id ? { ...item, ...patch } : item));
@@ -49,17 +57,15 @@ export function DashboardInteractionEditor({
   };
 
   const addRule = () => {
-    const sourceField = sourceOptions[0]?.value;
-    const targetFilterId = targetOptions[0]?.value;
-    if (!sourceField || !targetFilterId) return;
+    if (!nextPair) return;
     onChange([
       ...interactions,
       {
         id: createInteractionId(),
         event: 'select',
         sourceWidgetId: widget.id,
-        sourceField,
-        targetFilterId,
+        sourceField: nextPair.sourceField,
+        targetFilterId: nextPair.targetFilterId,
       },
     ]);
   };
@@ -80,7 +86,7 @@ export function DashboardInteractionEditor({
           size="small"
           type="text"
           icon={<Plus size={12} />}
-          disabled={!sourceOptions.length || !targetOptions.length}
+          disabled={!nextPair}
           onClick={addRule}
         >
           添加
