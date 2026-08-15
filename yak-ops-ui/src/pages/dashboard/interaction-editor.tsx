@@ -1,7 +1,7 @@
+import type { AnalysisSpec } from '@/components/analysis/model';
 import { Button, Select, Tooltip } from 'antd';
 import { Link2, Plus, Trash2 } from 'lucide-react';
 import type {
-  AnalysisSpec,
   DashboardGlobalFilter,
   DashboardInteraction,
   DashboardWidget,
