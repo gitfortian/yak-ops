@@ -1,0 +1,26 @@
+package io.yak.ops.business.dataservice.dao.model;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import java.time.LocalDateTime;
+import lombok.Data;
+
+/** 数据服务 API 持久化对象。 */
+@Data
+@TableName("yak_ops_data_service_api")
+public class DataServiceApiPO {
+
+  @TableId(type = IdType.AUTO)
+  private Long id;
+  private String name;
+  private String path;
+  private Long dataSourceId;
+  private String sqlText;
+  private Integer maxRows;
+  private Integer timeoutSeconds;
+  private Boolean enabled;
+  private String description;
+  private LocalDateTime createTime;
+  private LocalDateTime updateTime;
+}
