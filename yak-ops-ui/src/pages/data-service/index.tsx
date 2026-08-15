@@ -1,0 +1,386 @@
+import {
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  message,
+  type TableColumnsType,
+} from 'antd';
+import { Copy, Pencil, Play, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  createDataService,
+  deleteDataService,
+  fetchDataServices,
+  fetchDataSourceOptions,
+  setDataServiceEnabled,
+  testDataService,
+  updateDataService,
+  type DataServiceApi,
+  type DataServiceQueryResult,
+  type DataServiceSavePayload,
+  type DataSourceOption,
+} from './service';
+
+const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 19) : '-';
+
+export default function DataServicePage() {
+  const [services, setServices] = useState<DataServiceApi[]>([]);
+  const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [editing, setEditing] = useState<DataServiceApi>();
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<DataServiceApi>();
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<DataServiceQueryResult>();
+  const [form] = Form.useForm<DataServiceSavePayload>();
+  const [testForm] = Form.useForm<Record<string, string>>();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [serviceResponse, dataSourceResponse] = await Promise.all([
+        fetchDataServices(),
+        fetchDataSourceOptions(),
+      ]);
+      setServices(serviceResponse.data || []);
+      setDataSources(dataSourceResponse.data || []);
+    } catch (error: any) {
+      message.error(error?.message || '加载数据服务失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const value = keyword.trim().toLowerCase();
+    if (!value) return services;
+    return services.filter((item) =>
+      [item.name, item.path, item.runtimePath, item.description]
+        .filter(Boolean)
+        .some((text) => String(text).toLowerCase().includes(value)));
+  }, [keyword, services]);
+
+  const openCreate = () => {
+    setEditing(undefined);
+    form.resetFields();
+    form.setFieldsValue({ maxRows: 1000, timeoutSeconds: 30, enabled: false });
+    setEditorOpen(true);
+  };
+
+  const openEdit = (record: DataServiceApi) => {
+    setEditing(record);
+    form.setFieldsValue({
+      name: record.name,
+      path: record.path,
+      dataSourceId: record.dataSourceId,
+      sql: record.sql,
+      maxRows: record.maxRows,
+      timeoutSeconds: record.timeoutSeconds,
+      enabled: record.enabled,
+      description: record.description,
+    });
+    setEditorOpen(true);
+  };
+
+  const save = async () => {
+    const values = await form.validateFields();
+    setSaving(true);
+    try {
+      if (editing) await updateDataService(editing.id, values);
+      else await createDataService(values);
+      message.success(editing ? '数据服务已更新' : '数据服务已创建');
+      setEditorOpen(false);
+      await load();
+    } catch (error: any) {
+      message.error(error?.message || '保存数据服务失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: number) => {
+    try {
+      await deleteDataService(id);
+      message.success('已删除');
+      await load();
+    } catch (error: any) {
+      message.error(error?.message || '删除失败');
+    }
+  };
+
+  const toggleEnabled = async (record: DataServiceApi, enabled: boolean) => {
+    try {
+      await setDataServiceEnabled(record.id, enabled);
+      setServices((items) => items.map((item) =>
+        item.id === record.id ? { ...item, enabled } : item));
+      message.success(enabled ? '服务已启用' : '服务已停用');
+    } catch (error: any) {
+      message.error(error?.message || '状态更新失败');
+    }
+  };
+
+  const openTest = (record: DataServiceApi) => {
+    setTesting(record);
+    setTestResult(undefined);
+    testForm.resetFields();
+  };
+
+  const runTest = async () => {
+    if (!testing) return;
+    const parameters = await testForm.validateFields();
+    setTestLoading(true);
+    try {
+      const response = await testDataService(testing.id, parameters);
+      setTestResult(response.data);
+    } catch (error: any) {
+      message.error(error?.message || '测试调用失败');
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const copyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      message.success('调用路径已复制');
+    } catch {
+      message.warning('复制失败，请手动复制');
+    }
+  };
+
+  const columns: TableColumnsType<DataServiceApi> = [
+    {
+      title: 'API 服务',
+      dataIndex: 'name',
+      minWidth: 260,
+      render: (_, record) => (
+        <div className="py-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-[#161823]">{record.name}</span>
+            <Tag bordered={false}>GET</Tag>
+          </div>
+          <div className="mt-1 flex items-center gap-1 text-xs text-black/45">
+            <span className="font-mono">{record.runtimePath}</span>
+            <Tooltip title="复制调用路径">
+              <Button type="text" size="small" icon={<Copy size={13} />} onClick={() => void copyPath(record.runtimePath)} />
+            </Tooltip>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '数据源',
+      dataIndex: 'dataSourceId',
+      width: 190,
+      render: (value) => dataSources.find((item) => String(item.value) === String(value))?.label || `#${value}`,
+    },
+    {
+      title: '参数',
+      dataIndex: 'parameterNames',
+      width: 190,
+      render: (values: string[]) => values?.length
+        ? <span className="text-black/65">{values.map((item) => `:${item}`).join(' · ')}</span>
+        : <span className="text-black/35">无参数</span>,
+    },
+    {
+      title: '运行限制',
+      width: 160,
+      render: (_, record) => (
+        <span className="text-black/55">{record.maxRows} 行 · {record.timeoutSeconds}s</span>
+      ),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updateTime',
+      width: 170,
+      render: formatTime,
+    },
+    {
+      title: '状态',
+      dataIndex: 'enabled',
+      width: 100,
+      render: (_, record) => (
+        <Switch size="small" checked={record.enabled} onChange={(checked) => void toggleEnabled(record, checked)} />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 160,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space size={2}>
+          <Tooltip title="测试">
+            <Button type="text" size="small" icon={<Play size={15} />} onClick={() => openTest(record)} />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button type="text" size="small" icon={<Pencil size={15} />} onClick={() => openEdit(record)} />
+          </Tooltip>
+          <Popconfirm title="确认删除这个数据服务？" onConfirm={() => void remove(record.id)}>
+            <Tooltip title="删除"><Button type="text" size="small" danger icon={<Trash2 size={15} />} /></Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const resultColumns = (testResult?.columns || []).map((name) => ({
+    title: name,
+    dataIndex: name,
+    key: name,
+    minWidth: 140,
+    ellipsis: true,
+  }));
+
+  return (
+    <div className="h-full bg-white px-6 py-5">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
+          <p className="mb-0 mt-1 text-sm text-black/45">将只读 SQL 发布为可调用的 GET REST API。</p>
+        </div>
+        <Button type="primary" icon={<Plus size={16} />} onClick={openCreate}>新建 API</Button>
+      </div>
+
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <Input
+          allowClear
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          prefix={<Search size={15} className="text-black/30" />}
+          placeholder="搜索名称或路径"
+          className="max-w-[320px]"
+        />
+        <Button icon={<RefreshCw size={15} />} onClick={() => void load()}>刷新</Button>
+      </div>
+
+      <Table<DataServiceApi>
+        rowKey="id"
+        size="small"
+        loading={loading}
+        dataSource={filtered}
+        columns={columns}
+        pagination={false}
+        scroll={{ x: 1180 }}
+      />
+
+      <Modal
+        title={editing ? '编辑 API 服务' : '新建 API 服务'}
+        open={editorOpen}
+        onCancel={() => setEditorOpen(false)}
+        onOk={() => void save()}
+        okText="保存"
+        confirmLoading={saving}
+        width={760}
+        destroyOnHidden
+      >
+        <Form form={form} layout="vertical" className="pt-3">
+          <div className="grid grid-cols-2 gap-x-4">
+            <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
+              <Input placeholder="例如：用户查询 API" />
+            </Form.Item>
+            <Form.Item name="path" label="服务路径" rules={[{ required: true, message: '请输入服务路径' }]}>
+              <Input addonBefore="GET" placeholder="/users" />
+            </Form.Item>
+          </div>
+          <Form.Item name="dataSourceId" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="选择已有数据源"
+              options={dataSources.map((item) => ({ ...item, value: Number(item.value) || item.value }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="sql"
+            label="SELECT SQL"
+            extra="使用 :参数名 声明请求参数，例如 WHERE department = :department。第一阶段仅允许单条 SELECT。"
+            rules={[{ required: true, message: '请输入 SQL' }]}
+          >
+            <Input.TextArea
+              rows={10}
+              spellCheck={false}
+              placeholder={'SELECT id, username\nFROM sys_user\nWHERE department = :department'}
+              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
+            />
+          </Form.Item>
+          <div className="grid grid-cols-3 gap-x-4">
+            <Form.Item name="maxRows" label="最大返回行数" rules={[{ required: true }]}>
+              <InputNumber min={1} max={10000} className="w-full" />
+            </Form.Item>
+            <Form.Item name="timeoutSeconds" label="超时时间（秒）" rules={[{ required: true }]}>
+              <InputNumber min={1} max={3600} className="w-full" />
+            </Form.Item>
+            <Form.Item name="enabled" label="发布状态" valuePropName="checked">
+              <Switch checkedChildren="启用" unCheckedChildren="停用" />
+            </Form.Item>
+          </div>
+          <Form.Item name="description" label="说明">
+            <Input.TextArea rows={2} maxLength={500} placeholder="可选" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={testing ? `测试 · ${testing.name}` : '测试 API'}
+        open={Boolean(testing)}
+        onCancel={() => { setTesting(undefined); setTestResult(undefined); }}
+        footer={null}
+        width={900}
+        destroyOnHidden
+      >
+        {testing && (
+          <div className="pt-3">
+            <div className="mb-4 rounded-md bg-black/[0.025] px-3 py-2 font-mono text-sm text-black/65">
+              GET {testing.runtimePath}
+            </div>
+            <Form form={testForm} layout="vertical">
+              {testing.parameterNames.length > 0 ? (
+                <div className="grid grid-cols-2 gap-x-4">
+                  {testing.parameterNames.map((name) => (
+                    <Form.Item key={name} name={name} label={name} rules={[{ required: true, message: `请输入 ${name}` }]}>
+                      <Input placeholder={`:${name}`} />
+                    </Form.Item>
+                  ))}
+                </div>
+              ) : <div className="mb-4 text-sm text-black/40">当前 SQL 没有请求参数。</div>}
+              <Button type="primary" icon={<Play size={15} />} loading={testLoading} onClick={() => void runTest()}>发送请求</Button>
+            </Form>
+
+            {testResult && (
+              <div className="mt-5 border-t border-black/[0.06] pt-4">
+                <div className="mb-3 flex items-center gap-4 text-sm text-black/55">
+                  <span>200 OK</span>
+                  <span>{testResult.durationMs} ms</span>
+                  <span>{testResult.rowCount} 行</span>
+                  {testResult.truncated && <Tag>结果已截断</Tag>}
+                </div>
+                <Table
+                  rowKey={(_, index) => String(index)}
+                  size="small"
+                  dataSource={testResult.rows}
+                  columns={resultColumns}
+                  pagination={false}
+                  scroll={{ x: 'max-content', y: 360 }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
