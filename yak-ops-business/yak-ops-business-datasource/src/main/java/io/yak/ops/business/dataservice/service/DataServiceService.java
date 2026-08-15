@@ -7,6 +7,7 @@ import io.yak.ops.business.dataservice.dao.mapper.DataServiceCallLogMapper;
 import io.yak.ops.business.dataservice.dao.model.DataServiceApiPO;
 import io.yak.ops.business.dataservice.dao.model.DataServiceCallLogPO;
 import io.yak.ops.business.dataservice.service.support.DataServiceSqlCompiler;
+import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.service.support.BusinessDataSourceExecutionProvider;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlColumn;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
@@ -24,6 +25,7 @@ import org.springframework.util.StringUtils;
 
 /** Phase-1 data service: persist SELECT definitions and expose them through a safe REST runtime. */
 @Service
+@ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataServiceService {
 
