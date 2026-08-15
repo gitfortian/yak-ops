@@ -19,6 +19,7 @@
 
     <modules>
         <module>yak-ops-business-datasource</module>
+        <module>yak-ops-business-data-service</module>
         <module>yak-ops-business-job</module>
         <module>yak-ops-business-task-catalog</module>
         <module>yak-ops-business-data-development</module>
