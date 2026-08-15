@@ -128,7 +128,7 @@ public class DataServiceAccessService {
   @Transactional
   public ApiKeyView setKeyEnabled(Long apiId, Long keyId, boolean enabled) {
     DataServiceApiKeyPO key = requireKey(apiId, keyId);
-    if (!enabled && Boolean.TRUE.equals(key.getEnabled())) {
+    if (!enabled && Boolean.TRUE.equals(key.getEnabled()) && !isExpired(key)) {
       ensureAnotherValidKey(apiId, keyId);
     }
     key.setEnabled(enabled);
@@ -199,7 +199,10 @@ public class DataServiceAccessService {
     }
     if (used > limit) {
       throw new DataServiceRateLimitException(
-          "API Key 已超过每分钟 " + limit + " 次调用限制");
+          "API Key 已超过每分钟 " + limit + " 次调用限制",
+          key.getId(),
+          key.getName(),
+          key.getKeyPrefix());
     }
   }
 
@@ -232,7 +235,7 @@ public class DataServiceAccessService {
   private DataServiceApiKeyPO requireKey(Long apiId, Long keyId) {
     if (keyId == null) throw new IllegalArgumentException("API Key ID 不能为空");
     DataServiceApiKeyPO key = apiKeyMapper.selectById(keyId);
-    if (key == null || !apiId.equals(key.getApiId())) {
+    if (key == null || apiId == null || !apiId.equals(key.getApiId())) {
       throw new IllegalArgumentException("API Key 不存在：" + keyId);
     }
     return key;
