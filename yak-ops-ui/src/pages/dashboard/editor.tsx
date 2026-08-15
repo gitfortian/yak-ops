@@ -25,10 +25,8 @@ const isEditableTarget = (target: EventTarget | null) => {
 export default function DashboardEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const dashboardId = id && id !== 'new' ? id : undefined;
-  const routeParams = new URLSearchParams(window.location.search);
-  const publishedView = routeParams.get('published') === '1';
-  const initialPreview = publishedView || routeParams.get('preview') === '1';
-  const designer = useDashboardDesigner(dashboardId, initialPreview, publishedView);
+  const initialPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+  const designer = useDashboardDesigner(dashboardId, initialPreview, false);
   const { width, containerRef, mounted } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [filterConfigOpen, setFilterConfigOpen] = useState(false);
@@ -43,11 +41,11 @@ export default function DashboardEditorPage() {
   })), [designer.widgets]);
   const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
   const hasFilterBar = !designer.preview || hasGlobalFilters;
-  let canvasMinHeight = 'min-h-[calc(100vh-154px)]';
+  let canvasMinHeight = 'min-h-[calc(100vh-132px)]';
   if (designer.preview) {
     canvasMinHeight = hasFilterBar
-      ? 'min-h-[calc(100vh-184px)]'
-      : 'min-h-[calc(100vh-132px)]';
+      ? 'min-h-[calc(100vh-140px)]'
+      : 'min-h-[calc(100vh-96px)]';
   }
 
   const addChart = () => designer.addWidget('bar');
@@ -56,7 +54,7 @@ export default function DashboardEditorPage() {
     const persisted = /^\d+$/.test(designer.dashboard.id);
     if (designer.dashboardSaving || designer.dashboardPublishing || (persisted && !designer.dirty)) return;
     const persistedId = await designer.saveDraft();
-    if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}`);
+    if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}/edit`);
   }, [dashboardId, designer]);
 
   const publishDashboard = useCallback(() => {
@@ -73,14 +71,17 @@ export default function DashboardEditorPage() {
       cancelText: '取消',
       onOk: async () => {
         const persistedId = await designer.publish();
-        if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}`);
+        if (!dashboardId && persistedId) history.replace(`/dashboard/${persistedId}/edit`);
       },
     });
   }, [dashboardId, designer]);
 
   const leaveDashboard = () => {
-    if (!designer.dirty || designer.publishedView) {
-      history.push('/dashboard');
+    const target = dashboardId && designer.hasPublishedVersion
+      ? `/dashboard/${dashboardId}`
+      : '/dashboard';
+    if (!designer.dirty) {
+      history.push(target);
       return;
     }
     Modal.confirm({
@@ -89,7 +90,7 @@ export default function DashboardEditorPage() {
       okText: '放弃修改并离开',
       cancelText: '继续编辑',
       okButtonProps: { danger: true },
-      onOk: () => history.push('/dashboard'),
+      onOk: () => history.push(target),
     });
   };
 
@@ -168,7 +169,7 @@ export default function DashboardEditorPage() {
 
   return (
     <div
-      className="flex h-[calc(100vh-48px)] min-h-[640px] flex-col overflow-hidden bg-[#f6f7f9]"
+      className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#f6f7f9]"
       style={BRAND_CSS_VARIABLES}
     >
       <DashboardToolbar
@@ -193,10 +194,6 @@ export default function DashboardEditorPage() {
         onAddChart={addChart}
         onHistory={() => setHistoryOpen(true)}
         onPreview={() => {
-          if (designer.publishedView) {
-            history.push(`/dashboard/${designer.dashboard.id}`);
-            return;
-          }
           designer.setPreview((current) => !current);
           designer.setSelectedId(undefined);
         }}
@@ -351,7 +348,7 @@ export default function DashboardEditorPage() {
         onClose={() => setFilterConfigOpen(false)}
       />
 
-      {designer.persisted && !designer.publishedView ? (
+      {designer.persisted ? (
         <DashboardVersionHistoryDrawer
           open={historyOpen}
           dashboardId={designer.dashboard.id}
