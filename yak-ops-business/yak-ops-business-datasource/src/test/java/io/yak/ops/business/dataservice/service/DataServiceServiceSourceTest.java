@@ -22,19 +22,22 @@ import org.junit.jupiter.api.Test;
 class DataServiceServiceSourceTest {
 
   private DataServiceApiMapper apiMapper;
+  private DataServiceRuntimeService runtimeService;
   private DataServiceService service;
   private DataServiceApiPO sourceManaged;
 
   @BeforeEach
   void setUp() {
     apiMapper = mock(DataServiceApiMapper.class);
+    runtimeService = mock(DataServiceRuntimeService.class);
     service = new DataServiceService(
         apiMapper,
         mock(DataServiceCallLogMapper.class),
         mock(BusinessDataSourceExecutionProvider.class),
         new DataServiceSqlCompiler(),
         new ObjectMapper(),
-        mock(DataServiceAccessService.class));
+        mock(DataServiceAccessService.class),
+        runtimeService);
 
     sourceManaged = new DataServiceApiPO();
     sourceManaged.setId(9L);
@@ -46,6 +49,12 @@ class DataServiceServiceSourceTest {
     sourceManaged.setTimeoutSeconds(30);
     sourceManaged.setEnabled(true);
     sourceManaged.setAuthMode("NONE");
+    sourceManaged.setCacheEnabled(false);
+    sourceManaged.setCacheTtlSeconds(60);
+    sourceManaged.setCacheMaxEntries(200);
+    sourceManaged.setCircuitBreakerEnabled(false);
+    sourceManaged.setCircuitFailureThreshold(5);
+    sourceManaged.setCircuitRecoverySeconds(30);
     sourceManaged.setSourceType("DATA_DEVELOPMENT_RELEASE");
     sourceManaged.setSourceRef("88");
     sourceManaged.setSourceRevisionId(102L);
@@ -92,7 +101,7 @@ class DataServiceServiceSourceTest {
   }
 
   @Test
-  void manualEditMayChangeOperationalMetadata() {
+  void manualEditMayChangeOperationalMetadataWithoutLosingRuntimePolicy() {
     ApiView updated = service.save(
         9L,
         new ApiInput(
@@ -111,6 +120,9 @@ class DataServiceServiceSourceTest {
     assertThat(updated.enabled()).isFalse();
     assertThat(updated.authMode()).isEqualTo("NONE");
     assertThat(updated.sourceRevisionNo()).isEqualTo(2);
+    assertThat(sourceManaged.getCacheEnabled()).isFalse();
+    assertThat(sourceManaged.getCircuitBreakerEnabled()).isFalse();
     verify(apiMapper).updateById(sourceManaged);
+    verify(runtimeService).invalidate(9L);
   }
 }

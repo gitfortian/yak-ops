@@ -7,6 +7,7 @@ import io.yak.ops.business.dataservice.dao.mapper.DataServiceCallLogMapper;
 import io.yak.ops.business.dataservice.dao.model.DataServiceApiPO;
 import io.yak.ops.business.dataservice.dao.model.DataServiceCallLogPO;
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.AccessContext;
+import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.support.DataServiceSqlCompiler;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.service.support.BusinessDataSourceExecutionProvider;
@@ -34,6 +35,10 @@ public class DataServiceService {
 
   private static final int DEFAULT_MAX_ROWS = 1_000;
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+  private static final int DEFAULT_CACHE_TTL_SECONDS = 60;
+  private static final int DEFAULT_CACHE_MAX_ENTRIES = 200;
+  private static final int DEFAULT_CIRCUIT_FAILURE_THRESHOLD = 5;
+  private static final int DEFAULT_CIRCUIT_RECOVERY_SECONDS = 30;
   private static final String RUNTIME_PREFIX = "/api/v1/data-service/runtime";
 
   private final DataServiceApiMapper apiMapper;
@@ -42,6 +47,7 @@ public class DataServiceService {
   private final DataServiceSqlCompiler sqlCompiler;
   private final ObjectMapper objectMapper;
   private final DataServiceAccessService accessService;
+  private final DataServiceRuntimeService runtimeService;
 
   public List<ApiView> list() {
     return apiMapper.selectList(
@@ -76,8 +82,8 @@ public class DataServiceService {
    * Creates or updates the stable Data Service bound to one upstream asset.
    *
    * <p>The executable SQL/dataSource values are copied into the service definition, so runtime calls
-   * remain a snapshot and never follow mutable authoring state implicitly. Access-control settings are
-   * intentionally preserved across source refreshes.
+   * remain a snapshot and never follow mutable authoring state implicitly. Access-control and Runtime
+   * policies are intentionally preserved across source refreshes.
    */
   @Transactional
   public ApiView saveFromSource(SourceSnapshot source, ApiInput input) {
@@ -92,6 +98,7 @@ public class DataServiceService {
     api.setSourceRevisionNo(normalized.sourceRevisionNo());
     api.setUpdateTime(LocalDateTime.now());
     apiMapper.updateById(api);
+    runtimeService.invalidate(api.getId());
     return toView(api);
   }
 
@@ -102,6 +109,7 @@ public class DataServiceService {
     if (apiMapper.deleteById(id) == 0) {
       throw new IllegalArgumentException("数据服务不存在：" + id);
     }
+    runtimeService.remove(id);
   }
 
   @Transactional
@@ -110,12 +118,33 @@ public class DataServiceService {
     api.setEnabled(enabled);
     api.setUpdateTime(LocalDateTime.now());
     apiMapper.updateById(api);
+    if (!enabled) runtimeService.invalidate(id);
     return toView(api);
   }
 
-  /** Console tests bypass external API-Key auth, but are still marked distinctly in the audit log. */
+  public RuntimeSnapshot runtimeStatus(Long id) {
+    return runtimeService.snapshot(requireApi(id));
+  }
+
+  @Transactional
+  public RuntimeSnapshot updateRuntimeConfig(Long id, RuntimeConfigInput input) {
+    DataServiceApiPO api = requireApi(id);
+    RuntimeConfigInput normalized = normalizeRuntimeConfig(input);
+    api.setCacheEnabled(normalized.cacheEnabled());
+    api.setCacheTtlSeconds(normalized.cacheTtlSeconds());
+    api.setCacheMaxEntries(normalized.cacheMaxEntries());
+    api.setCircuitBreakerEnabled(normalized.circuitBreakerEnabled());
+    api.setCircuitFailureThreshold(normalized.failureThreshold());
+    api.setCircuitRecoverySeconds(normalized.recoverySeconds());
+    api.setUpdateTime(LocalDateTime.now());
+    apiMapper.updateById(api);
+    runtimeService.invalidate(id);
+    return runtimeService.snapshot(api);
+  }
+
+  /** Console tests intentionally bypass external cache/circuit behavior to validate the live datasource. */
   public QueryResponse test(Long id, Map<String, String> parameters) {
-    return execute(requireApi(id), parameters, true, AccessContext.console());
+    return execute(requireApi(id), parameters, true, AccessContext.console(), false);
   }
 
   /** Backward-compatible call path; API_KEY services will reject because no key is supplied. */
@@ -153,7 +182,7 @@ public class DataServiceService {
           AccessContext.rejectedApiKey());
       throw exception;
     }
-    return execute(api, parameters, true, access);
+    return execute(api, parameters, true, access, true);
   }
 
   public List<DataServiceCallLogPO> logs() {
@@ -176,7 +205,8 @@ public class DataServiceService {
     }
 
     LocalDateTime now = LocalDateTime.now();
-    DataServiceApiPO api = id == null ? new DataServiceApiPO() : requireApi(id);
+    boolean creating = id == null;
+    DataServiceApiPO api = creating ? new DataServiceApiPO() : requireApi(id);
     if (!sourceRefresh && StringUtils.hasText(api.getSourceType())) {
       String sql = input.sql().trim();
       if (!Objects.equals(api.getDataSourceId(), input.dataSourceId())
@@ -194,14 +224,16 @@ public class DataServiceService {
     api.setTimeoutSeconds(normalizeTimeout(input.timeoutSeconds()));
     api.setEnabled(input.enabled() == null ? Boolean.FALSE : input.enabled());
     if (!StringUtils.hasText(api.getAuthMode())) api.setAuthMode("NONE");
+    initializeRuntimeDefaults(api, creating);
     api.setDescription(StringUtils.hasText(input.description()) ? input.description().trim() : null);
     api.setUpdateTime(now);
-    if (id == null) {
+    if (creating) {
       api.setCreateTime(now);
       apiMapper.insert(api);
     } else {
       apiMapper.updateById(api);
     }
+    runtimeService.invalidate(api.getId());
     return toView(api);
   }
 
@@ -209,28 +241,43 @@ public class DataServiceService {
       DataServiceApiPO api,
       Map<String, String> parameters,
       boolean writeLog,
-      AccessContext access) {
+      AccessContext access,
+      boolean resilientRuntime) {
     long started = System.nanoTime();
     try {
       DataServiceSqlCompiler.CompiledSql compiled = sqlCompiler.compile(api.getSqlText(), parameters);
-      DataSourceSqlResult result;
-      try (DataSourceSqlExecutor executor = executionProvider.open(String.valueOf(api.getDataSourceId()))) {
-        result = executor.execute(
-            new DataSourceSqlRequest(
-                compiled.sql(), api.getMaxRows(), api.getTimeoutSeconds(), compiled.parameters()));
+      QueryResponse response;
+      if (resilientRuntime) {
+        String cacheKey = runtimeService.cacheKey(compiled.sql(), compiled.parameters());
+        response = runtimeService.execute(api, cacheKey, () -> executeDatabase(api, compiled));
+      } else {
+        response = executeDatabase(api, compiled);
       }
-      if (!result.resultSet()) {
-        throw new IllegalStateException("数据服务仅允许返回 SELECT 查询结果");
+      if (writeLog) {
+        saveLog(api, parameters, true, response.durationMs(), response.rowCount(), null, access);
       }
-      long durationMs = elapsedMs(started);
-      QueryResponse response = toResponse(result, durationMs);
-      if (writeLog) saveLog(api, parameters, true, durationMs, response.rowCount(), null, access);
       return response;
     } catch (RuntimeException exception) {
       long durationMs = elapsedMs(started);
       if (writeLog) saveLog(api, parameters, false, durationMs, 0, safeMessage(exception), access);
       throw exception;
     }
+  }
+
+  private QueryResponse executeDatabase(
+      DataServiceApiPO api,
+      DataServiceSqlCompiler.CompiledSql compiled) {
+    long started = System.nanoTime();
+    DataSourceSqlResult result;
+    try (DataSourceSqlExecutor executor = executionProvider.open(String.valueOf(api.getDataSourceId()))) {
+      result = executor.execute(
+          new DataSourceSqlRequest(
+              compiled.sql(), api.getMaxRows(), api.getTimeoutSeconds(), compiled.parameters()));
+    }
+    if (!result.resultSet()) {
+      throw new IllegalStateException("数据服务仅允许返回 SELECT 查询结果");
+    }
+    return toResponse(result, elapsedMs(started));
   }
 
   private QueryResponse toResponse(DataSourceSqlResult result, long durationMs) {
@@ -299,6 +346,41 @@ public class DataServiceService {
     normalizePath(input.path());
     normalizeMaxRows(input.maxRows());
     normalizeTimeout(input.timeoutSeconds());
+  }
+
+  private void initializeRuntimeDefaults(DataServiceApiPO api, boolean creating) {
+    if (api.getCacheEnabled() == null) api.setCacheEnabled(Boolean.FALSE);
+    if (api.getCacheTtlSeconds() == null) api.setCacheTtlSeconds(DEFAULT_CACHE_TTL_SECONDS);
+    if (api.getCacheMaxEntries() == null) api.setCacheMaxEntries(DEFAULT_CACHE_MAX_ENTRIES);
+    if (api.getCircuitBreakerEnabled() == null) api.setCircuitBreakerEnabled(creating);
+    if (api.getCircuitFailureThreshold() == null) {
+      api.setCircuitFailureThreshold(DEFAULT_CIRCUIT_FAILURE_THRESHOLD);
+    }
+    if (api.getCircuitRecoverySeconds() == null) {
+      api.setCircuitRecoverySeconds(DEFAULT_CIRCUIT_RECOVERY_SECONDS);
+    }
+  }
+
+  private RuntimeConfigInput normalizeRuntimeConfig(RuntimeConfigInput input) {
+    if (input == null) throw new IllegalArgumentException("Runtime 配置不能为空");
+    boolean cacheEnabled = Boolean.TRUE.equals(input.cacheEnabled());
+    boolean circuitEnabled = Boolean.TRUE.equals(input.circuitBreakerEnabled());
+    int ttl = range(input.cacheTtlSeconds(), DEFAULT_CACHE_TTL_SECONDS, 1, 3_600, "缓存 TTL");
+    int maxEntries = range(input.cacheMaxEntries(), DEFAULT_CACHE_MAX_ENTRIES, 1, 5_000, "缓存最大条目数");
+    int failureThreshold = range(
+        input.failureThreshold(), DEFAULT_CIRCUIT_FAILURE_THRESHOLD, 1, 20, "熔断失败阈值");
+    int recoverySeconds = range(
+        input.recoverySeconds(), DEFAULT_CIRCUIT_RECOVERY_SECONDS, 1, 300, "熔断恢复时间");
+    return new RuntimeConfigInput(
+        cacheEnabled, ttl, maxEntries, circuitEnabled, failureThreshold, recoverySeconds);
+  }
+
+  private int range(Integer value, int fallback, int min, int max, String name) {
+    int normalized = value == null ? fallback : value;
+    if (normalized < min || normalized > max) {
+      throw new IllegalArgumentException(name + " 必须在 " + min + "~" + max + " 之间");
+    }
+    return normalized;
   }
 
   private SourceSnapshot normalizeSource(SourceSnapshot source) {
@@ -379,6 +461,14 @@ public class DataServiceService {
       Integer timeoutSeconds,
       Boolean enabled,
       String description) {}
+
+  public record RuntimeConfigInput(
+      Boolean cacheEnabled,
+      Integer cacheTtlSeconds,
+      Integer cacheMaxEntries,
+      Boolean circuitBreakerEnabled,
+      Integer failureThreshold,
+      Integer recoverySeconds) {}
 
   public record SourceSnapshot(
       String sourceType,

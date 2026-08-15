@@ -47,6 +47,33 @@ export interface DataServiceSavePayload {
   description?: string;
 }
 
+export interface DataServiceRuntimeConfig {
+  cacheEnabled: boolean;
+  cacheTtlSeconds: number;
+  cacheMaxEntries: number;
+  circuitBreakerEnabled: boolean;
+  failureThreshold: number;
+  recoverySeconds: number;
+}
+
+export interface DataServiceRuntimeStatus extends DataServiceRuntimeConfig {
+  apiId: number;
+  cacheEntries: number;
+  circuitState: 'DISABLED' | 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  circuitOpenUntil?: string | null;
+  totalCalls: number;
+  successCalls: number;
+  failureCalls: number;
+  cacheHits: number;
+  circuitRejected: number;
+  successRate: number;
+  cacheHitRate: number;
+  averageDurationMs: number;
+  p95DurationMs: number;
+  lastSuccessAt?: string | null;
+  lastFailureAt?: string | null;
+}
+
 export interface DataServiceApiKey {
   id: number;
   apiId: number;
@@ -116,6 +143,12 @@ export const deleteDataService = (id: number) =>
 
 export const setDataServiceEnabled = (id: number, enabled: boolean) =>
   HttpUtils.put<DataServiceApi>(`${PREFIX}/${id}/enabled?enabled=${enabled}`, {}) as Promise<CommonApiResponse<DataServiceApi>>;
+
+export const fetchDataServiceRuntime = (id: number) =>
+  HttpUtils.get<DataServiceRuntimeStatus>(`${PREFIX}/${id}/runtime`) as Promise<CommonApiResponse<DataServiceRuntimeStatus>>;
+
+export const updateDataServiceRuntime = (id: number, payload: DataServiceRuntimeConfig) =>
+  HttpUtils.put<DataServiceRuntimeStatus>(`${PREFIX}/${id}/runtime`, payload) as Promise<CommonApiResponse<DataServiceRuntimeStatus>>;
 
 export const setDataServiceAuthMode = (id: number, mode: DataServiceAuthMode) =>
   HttpUtils.put<DataServiceAuthMode>(`${PREFIX}/${id}/auth-mode?mode=${mode}`, {}) as Promise<CommonApiResponse<DataServiceAuthMode>>;
