@@ -25,7 +25,7 @@ import org.springframework.stereotype.Repository;
 class JdbcDashboardRepository implements DashboardRepository {
 
   private static final String DASHBOARD_COLUMNS =
-      "SELECT id, name, description, current_version_id, current_version_no, create_time, update_time FROM yak_dashboard";
+      "SELECT id, name, description, current_version_id, current_version_no, published_version_id, published_version_no, published_time, create_time, update_time FROM yak_dashboard";
   private static final String VERSION_COLUMNS =
       "SELECT id, dashboard_id, version_no, name_snapshot, description_snapshot, active_dataset_id, create_time FROM yak_dashboard_version";
 
@@ -44,7 +44,7 @@ class JdbcDashboardRepository implements DashboardRepository {
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement statement = connection.prepareStatement(
-          "INSERT INTO yak_dashboard (name, description, current_version_id, current_version_no, create_time, update_time) VALUES (?, ?, NULL, 0, NOW(6), NOW(6))",
+          "INSERT INTO yak_dashboard (name, description, current_version_id, current_version_no, published_version_id, published_version_no, published_time, create_time, update_time) VALUES (?, ?, NULL, 0, NULL, 0, NULL, NOW(6), NOW(6))",
           Statement.RETURN_GENERATED_KEYS);
       statement.setString(1, name);
       statement.setString(2, description);
@@ -139,6 +139,14 @@ class JdbcDashboardRepository implements DashboardRepository {
     int updated = jdbcTemplate.update(
         "UPDATE yak_dashboard SET current_version_id = ?, current_version_no = ?, name = ?, description = ?, update_time = NOW(6) WHERE id = ?",
         versionId, versionNo, name, description, dashboardId);
+    if (updated != 1) throw new IllegalArgumentException("Dashboard 不存在：" + dashboardId);
+  }
+
+  @Override
+  public void updatePublishedVersion(long dashboardId, long versionId, int versionNo) {
+    int updated = jdbcTemplate.update(
+        "UPDATE yak_dashboard SET published_version_id = ?, published_version_no = ?, published_time = NOW(6), update_time = NOW(6) WHERE id = ?",
+        versionId, versionNo, dashboardId);
     if (updated != 1) throw new IllegalArgumentException("Dashboard 不存在：" + dashboardId);
   }
 
@@ -239,9 +247,18 @@ class JdbcDashboardRepository implements DashboardRepository {
 
   private static DashboardAsset mapDashboard(ResultSet rs, int rowNum) throws SQLException {
     Long currentVersionId = rs.getObject("current_version_id") == null ? null : rs.getLong("current_version_id");
+    Long publishedVersionId = rs.getObject("published_version_id") == null ? null : rs.getLong("published_version_id");
     return new DashboardAsset(
-        rs.getLong("id"), rs.getString("name"), rs.getString("description"), currentVersionId,
-        rs.getInt("current_version_no"), instant(rs.getTimestamp("create_time")), instant(rs.getTimestamp("update_time")));
+        rs.getLong("id"),
+        rs.getString("name"),
+        rs.getString("description"),
+        currentVersionId,
+        rs.getInt("current_version_no"),
+        publishedVersionId,
+        rs.getInt("published_version_no"),
+        instant(rs.getTimestamp("published_time")),
+        instant(rs.getTimestamp("create_time")),
+        instant(rs.getTimestamp("update_time")));
   }
 
   private static DashboardVersion mapVersion(ResultSet rs, int rowNum) throws SQLException {
