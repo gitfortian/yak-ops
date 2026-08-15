@@ -64,7 +64,7 @@ public class DevelopmentDataServiceService {
     String name = firstText(
         request.name(),
         existing.map(ApiView::name).orElse(null),
-        release.release().name());
+        release.release().taskName());
     String path = firstText(
         request.path(),
         existing.map(ApiView::path).orElse(null),
@@ -126,8 +126,15 @@ public class DevelopmentDataServiceService {
       if (!StringUtils.hasText(reference)) {
         throw new IllegalArgumentException("SQL 发布版本缺少 dataSourceId，无法发布数据服务");
       }
-      long dataSourceId = Long.parseLong(reference.trim());
-      if (dataSourceId <= 0L) throw new NumberFormatException("non-positive");
+      long dataSourceId;
+      try {
+        dataSourceId = Long.parseLong(reference.trim());
+      } catch (NumberFormatException exception) {
+        throw new IllegalArgumentException("SQL 发布版本 dataSourceId 非法：" + reference, exception);
+      }
+      if (dataSourceId <= 0L) {
+        throw new IllegalArgumentException("SQL 发布版本 dataSourceId 必须大于 0");
+      }
 
       int timeoutSeconds = root.path("timeoutSeconds").asInt(DEFAULT_TIMEOUT_SECONDS);
       if (timeoutSeconds < 1 || timeoutSeconds > 3_600) {
