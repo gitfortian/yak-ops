@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS yak_ops_data_service_api_key (
   COMMENT='Yak Ops 数据服务 API Key';
 
 ALTER TABLE yak_ops_data_service_call_log
-    ADD COLUMN caller_type VARCHAR(32) NOT NULL DEFAULT 'PUBLIC' COMMENT '调用方类型：PUBLIC/API_KEY/CONSOLE' AFTER service_path,
+    ADD COLUMN caller_type VARCHAR(32) NOT NULL DEFAULT 'LEGACY' COMMENT '调用方类型：LEGACY/PUBLIC/API_KEY/CONSOLE' AFTER service_path,
     ADD COLUMN api_key_id BIGINT UNSIGNED DEFAULT NULL COMMENT '调用 API Key ID' AFTER caller_type,
     ADD COLUMN api_key_name VARCHAR(128) DEFAULT NULL COMMENT '调用方名称快照' AFTER api_key_id,
     ADD COLUMN api_key_prefix VARCHAR(24) DEFAULT NULL COMMENT 'API Key 前缀快照' AFTER api_key_name,
