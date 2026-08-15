@@ -29,12 +29,43 @@ export type {
   SortDirection,
 } from '@/components/analysis/model';
 
+export type DashboardWidgetClickAction = 'none' | 'drill' | 'dashboard' | 'yak';
+
+/** Dashboard-only behavior persisted together with the inline Analysis snapshot. */
+export interface DashboardWidgetBehavior {
+  clickAction?: DashboardWidgetClickAction;
+  /** Ordered hierarchy, e.g. province -> city -> store. */
+  drillFields?: string[];
+  /** Dashboard asset id used by dashboard-to-dashboard navigation. */
+  targetDashboardId?: string;
+  /** Yak internal route such as /workflow/instances. */
+  targetPath?: string;
+  /** Query-string key used by Yak page navigation. */
+  queryParam?: string;
+}
+
+/**
+ * Dashboard inline analyses intentionally extend the reusable AnalysisSpec with
+ * dashboard-local interaction metadata. The backend already versions this JSON
+ * blob as part of the immutable DashboardWidget snapshot.
+ */
+export interface DashboardInlineAnalysisSpec extends AnalysisSpec {
+  dashboardBehavior?: DashboardWidgetBehavior;
+}
+
+/** Runtime-only drill breadcrumb entry. It never participates in Dirty state. */
+export interface DashboardDrillStep {
+  field: string;
+  value: Scalar;
+  label: string;
+}
+
 /** Dashboard owns placement plus an Analysis reference or a dashboard-local inline analysis. */
 export interface DashboardWidget {
   id: string;
   analysisId?: string;
   title?: string;
-  inlineAnalysis?: AnalysisSpec;
+  inlineAnalysis?: DashboardInlineAnalysisSpec;
   x: number;
   y: number;
   w: number;
