@@ -9,6 +9,9 @@ import io.yak.ops.business.dataservice.service.DataServiceAccessService.ApiKeyIn
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.ApiKeyUpdate;
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.ApiKeyView;
 import io.yak.ops.business.dataservice.service.DataServiceAccessService.CreatedApiKey;
+import io.yak.ops.business.dataservice.service.DataServiceDocumentationService;
+import io.yak.ops.business.dataservice.service.DataServiceDocumentationService.ApiDocumentation;
+import io.yak.ops.business.dataservice.service.DataServiceDocumentationService.DocumentationInput;
 import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.DataServiceService;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
@@ -30,7 +33,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 数据服务管理、访问控制、Runtime 策略与调用接口。 */
+/** 数据服务管理、文档、访问控制、Runtime 策略与调用接口。 */
 @Tag(name = "数据服务")
 @RestController
 @ConditionalOnDataSourceEnabled
@@ -40,6 +43,7 @@ public class DataServiceController {
 
   private final DataServiceService dataServiceService;
   private final DataServiceAccessService accessService;
+  private final DataServiceDocumentationService documentationService;
 
   @Operation(summary = "查询 API 服务列表")
   @GetMapping
@@ -69,6 +73,7 @@ public class DataServiceController {
   @DeleteMapping("/{id}")
   public Result<Boolean> delete(@PathVariable("id") Long id) {
     dataServiceService.delete(id);
+    documentationService.deleteForApi(id);
     return Result.success(Boolean.TRUE);
   }
 
@@ -78,6 +83,26 @@ public class DataServiceController {
       @PathVariable("id") Long id,
       @RequestParam("enabled") boolean enabled) {
     return Result.success(dataServiceService.setEnabled(id, enabled));
+  }
+
+  @Operation(summary = "查询 API 参数与响应文档")
+  @GetMapping("/{id}/documentation")
+  public Result<ApiDocumentation> documentation(@PathVariable("id") Long id) {
+    return Result.success(documentationService.get(id));
+  }
+
+  @Operation(summary = "保存 API 参数与响应文档")
+  @PutMapping("/{id}/documentation")
+  public Result<ApiDocumentation> saveDocumentation(
+      @PathVariable("id") Long id,
+      @RequestBody DocumentationInput input) {
+    return Result.success(documentationService.save(id, input));
+  }
+
+  @Operation(summary = "生成单个数据服务 OpenAPI 3 文档")
+  @GetMapping("/{id}/openapi")
+  public Result<Map<String, Object>> openApi(@PathVariable("id") Long id) {
+    return Result.success(documentationService.openApi(id));
   }
 
   @Operation(summary = "查询数据服务 Runtime 状态与指标")
