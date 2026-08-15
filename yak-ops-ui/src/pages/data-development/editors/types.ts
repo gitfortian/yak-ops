@@ -23,15 +23,6 @@ export interface DevelopmentDatasetToolbarState {
   datasetStatus?: 'ONLINE' | 'OFFLINE';
 }
 
-export interface DevelopmentDataServiceToolbarState {
-  releaseRevisionNo: number;
-  releaseStatus: 'ONLINE' | 'OFFLINE' | 'DISABLED';
-  published: boolean;
-  updateAvailable: boolean;
-  enabled?: boolean;
-  path?: string;
-}
-
 export interface DevelopmentEditorContext {
   node: DevelopmentNode;
   directory?: DevelopmentDirectory;
@@ -48,10 +39,6 @@ export interface DevelopmentEditorToolbarContext
   datasetState?: DevelopmentDatasetToolbarState;
   datasetLoading?: boolean;
   datasetPublishing?: boolean;
-  onPublishDataService?: () => void;
-  dataServiceState?: DevelopmentDataServiceToolbarState;
-  dataServiceLoading?: boolean;
-  dataServicePublishing?: boolean;
   running: boolean;
   saving: boolean;
   publishing: boolean;
