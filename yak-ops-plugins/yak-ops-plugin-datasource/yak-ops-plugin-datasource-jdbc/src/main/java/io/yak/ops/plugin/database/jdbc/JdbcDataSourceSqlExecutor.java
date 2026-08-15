@@ -10,6 +10,7 @@ import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLFeatureNotSupportedException;
@@ -57,33 +58,14 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
     }
 
     try {
-      try (Connection opened =
-          connectionProvider.open(connection, connectionTimeoutSeconds)) {
+      try (Connection opened = connectionProvider.open(connection, connectionTimeoutSeconds)) {
         activeConnection.set(opened);
         if (cancelled.get()) {
           throw executionError("SQL 执行已取消", null);
         }
-
-        try (Statement statement = opened.createStatement()) {
-          activeStatement.set(statement);
-          try {
-            statement.setQueryTimeout(request.timeoutSeconds());
-          } catch (SQLFeatureNotSupportedException ignored) {
-            // Some JDBC drivers do not implement query timeout. Cancellation still remains available.
-          }
-          statement.setMaxRows(Math.min(Integer.MAX_VALUE - 1, request.maxRows() + 1));
-
-          boolean hasResultSet = statement.execute(request.sql());
-          if (!hasResultSet) {
-            return DataSourceSqlResult.update(statement.getUpdateCount());
-          }
-
-          try (ResultSet resultSet = statement.getResultSet()) {
-            return readResultSet(resultSet, request.maxRows());
-          }
-        } finally {
-          activeStatement.set(null);
-        }
+        return request.parameters().isEmpty()
+            ? executePlain(opened, request)
+            : executePrepared(opened, request);
       } finally {
         activeConnection.set(null);
       }
@@ -93,6 +75,53 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       throw executionError("数据库驱动未安装：" + connection.driverClassName(), exception);
     } catch (Exception exception) {
       throw executionError(safeMessage(exception), exception);
+    }
+  }
+
+  private DataSourceSqlResult executePlain(Connection connection, DataSourceSqlRequest request)
+      throws Exception {
+    try (Statement statement = connection.createStatement()) {
+      activeStatement.set(statement);
+      configureStatement(statement, request);
+      boolean hasResultSet = statement.execute(request.sql());
+      return readStatementResult(statement, hasResultSet, request.maxRows());
+    } finally {
+      activeStatement.set(null);
+    }
+  }
+
+  private DataSourceSqlResult executePrepared(Connection connection, DataSourceSqlRequest request)
+      throws Exception {
+    try (PreparedStatement statement = connection.prepareStatement(request.sql())) {
+      activeStatement.set(statement);
+      configureStatement(statement, request);
+      for (int index = 0; index < request.parameters().size(); index++) {
+        statement.setObject(index + 1, request.parameters().get(index));
+      }
+      boolean hasResultSet = statement.execute();
+      return readStatementResult(statement, hasResultSet, request.maxRows());
+    } finally {
+      activeStatement.set(null);
+    }
+  }
+
+  private void configureStatement(Statement statement, DataSourceSqlRequest request)
+      throws Exception {
+    try {
+      statement.setQueryTimeout(request.timeoutSeconds());
+    } catch (SQLFeatureNotSupportedException ignored) {
+      // Some JDBC drivers do not implement query timeout. Cancellation still remains available.
+    }
+    statement.setMaxRows(Math.min(Integer.MAX_VALUE - 1, request.maxRows() + 1));
+  }
+
+  private DataSourceSqlResult readStatementResult(
+      Statement statement, boolean hasResultSet, int maxRows) throws Exception {
+    if (!hasResultSet) {
+      return DataSourceSqlResult.update(statement.getUpdateCount());
+    }
+    try (ResultSet resultSet = statement.getResultSet()) {
+      return readResultSet(resultSet, maxRows);
     }
   }
 
@@ -237,8 +266,7 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
     if (message == null || message.isBlank()) {
       return throwable == null ? "SQL 执行失败" : throwable.getClass().getSimpleName();
     }
-    String sanitized =
-        message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
+    String sanitized = message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
     return sanitized.length() > 500 ? sanitized.substring(0, 500) : sanitized;
   }
 }
