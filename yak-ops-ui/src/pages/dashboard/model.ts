@@ -77,8 +77,13 @@ export interface DashboardDocument {
   widgets: DashboardWidget[];
   globalFilters: DashboardGlobalFilter[];
   interactions: DashboardInteraction[];
+  /** Current immutable server-side draft snapshot. */
   currentVersionNo?: number;
   currentVersionId?: string;
+  /** Reader-facing published snapshot. It changes only when Publish is invoked. */
+  publishedVersionNo?: number;
+  publishedVersionId?: string;
+  publishedAt?: string;
   updatedAt?: string;
 }
 
@@ -88,6 +93,9 @@ export interface DashboardSummary {
   description: string;
   currentVersionId?: string;
   currentVersionNo: number;
+  publishedVersionId?: string;
+  publishedVersionNo: number;
+  publishedTime?: string;
   createTime?: string;
   updateTime?: string;
 }
@@ -106,6 +114,14 @@ export interface DashboardServerDetail {
   dashboard: DashboardSummary;
   currentVersion?: DashboardVersionSummary;
   versions: DashboardVersionSummary[];
+  widgets: DashboardWidget[];
+  globalFilters: DashboardGlobalFilter[];
+  interactions: DashboardInteraction[];
+}
+
+export interface DashboardVersionDetail {
+  dashboard: DashboardSummary;
+  version: DashboardVersionSummary;
   widgets: DashboardWidget[];
   globalFilters: DashboardGlobalFilter[];
   interactions: DashboardInteraction[];

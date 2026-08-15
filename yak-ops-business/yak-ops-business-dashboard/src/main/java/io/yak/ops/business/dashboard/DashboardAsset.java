@@ -5,13 +5,16 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.Instant;
 import java.util.List;
 
-/** Stable Dashboard identity. Layout/query composition lives in immutable versions. */
+/** Stable Dashboard identity. The current version is the editable draft; published version is reader-facing. */
 public record DashboardAsset(
     @JsonSerialize(using = ToStringSerializer.class) long id,
     String name,
     String description,
     @JsonSerialize(using = ToStringSerializer.class) Long currentVersionId,
     int currentVersionNo,
+    @JsonSerialize(using = ToStringSerializer.class) Long publishedVersionId,
+    int publishedVersionNo,
+    Instant publishedTime,
     Instant createTime,
     Instant updateTime) {
 }
@@ -84,6 +87,15 @@ record DashboardDetail(
     DashboardAsset dashboard,
     DashboardVersion currentVersion,
     List<DashboardVersion> versions,
+    List<DashboardWidgetSnapshot> widgets,
+    List<DashboardGlobalFilterSnapshot> globalFilters,
+    List<DashboardInteractionSnapshot> interactions) {
+}
+
+/** Exact immutable version snapshot, used for history preview and published reads. */
+record DashboardVersionDetail(
+    DashboardAsset dashboard,
+    DashboardVersion version,
     List<DashboardWidgetSnapshot> widgets,
     List<DashboardGlobalFilterSnapshot> globalFilters,
     List<DashboardInteractionSnapshot> interactions) {

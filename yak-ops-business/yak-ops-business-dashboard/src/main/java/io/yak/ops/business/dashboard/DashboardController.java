@@ -35,7 +35,7 @@ public class DashboardController {
     return Result.success(service.list());
   }
 
-  @Operation(summary = "查询 Dashboard 当前版本和历史版本")
+  @Operation(summary = "查询 Dashboard 当前草稿和历史版本")
   @GetMapping("/{dashboardId}")
   public Result<DashboardDetail> get(@PathVariable("dashboardId") long dashboardId) {
     return Result.success(service.get(dashboardId));
@@ -47,13 +47,27 @@ public class DashboardController {
     return Result.success(service.versions(dashboardId));
   }
 
-  @Operation(summary = "创建 Dashboard，并产生 V1")
+  @Operation(summary = "查看指定 DashboardVersion 快照")
+  @GetMapping("/{dashboardId}/versions/{versionNo}")
+  public Result<DashboardVersionDetail> version(
+      @PathVariable("dashboardId") long dashboardId,
+      @PathVariable("versionNo") int versionNo) {
+    return Result.success(service.version(dashboardId, versionNo));
+  }
+
+  @Operation(summary = "查询 Dashboard 当前已发布快照")
+  @GetMapping("/{dashboardId}/published")
+  public Result<DashboardVersionDetail> published(@PathVariable("dashboardId") long dashboardId) {
+    return Result.success(service.published(dashboardId));
+  }
+
+  @Operation(summary = "创建 Dashboard，并保存草稿 V1")
   @PostMapping
   public Result<DashboardDetail> create(@Valid @RequestBody SaveDashboardRequest request) {
     return Result.success(service.create(toCommand(request)));
   }
 
-  @Operation(summary = "保存 Dashboard 新版本")
+  @Operation(summary = "保存 Dashboard 新草稿版本")
   @PostMapping("/{dashboardId}/versions")
   public Result<DashboardDetail> saveVersion(
       @PathVariable("dashboardId") long dashboardId,
@@ -61,7 +75,22 @@ public class DashboardController {
     return Result.success(service.saveVersion(dashboardId, toCommand(request)));
   }
 
-  @Operation(summary = "激活历史 DashboardVersion")
+  @Operation(summary = "发布当前 Dashboard 草稿")
+  @PostMapping("/{dashboardId}/publish")
+  public Result<DashboardDetail> publish(@PathVariable("dashboardId") long dashboardId) {
+    return Result.success(service.publish(dashboardId));
+  }
+
+  @Operation(summary = "将历史 DashboardVersion 恢复为新的草稿版本")
+  @PostMapping("/{dashboardId}/restore/{versionNo}")
+  public Result<DashboardDetail> restoreVersion(
+      @PathVariable("dashboardId") long dashboardId,
+      @PathVariable("versionNo") int versionNo) {
+    return Result.success(service.restoreVersion(dashboardId, versionNo));
+  }
+
+  @Deprecated
+  @Operation(summary = "兼容旧版激活接口：恢复历史版本为新草稿")
   @PostMapping("/{dashboardId}/activate/{versionNo}")
   public Result<DashboardDetail> activateVersion(
       @PathVariable("dashboardId") long dashboardId,
