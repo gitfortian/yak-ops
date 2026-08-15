@@ -32,6 +32,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
   { id: 'resources', title: '资源管理', iconKey: 'database', section: 'management', order: 20 },
   { id: 'data-quality', title: '数据质量', iconKey: 'quality', section: 'management', order: 30 },
   { id: 'data-analysis', title: '数据消费', iconKey: 'insight', section: 'management', order: 40 },
+  { id: 'data-service', title: '数据服务', iconKey: 'api', section: 'management', order: 50 },
   { id: 'system', title: '系统管理', iconKey: 'system', section: 'system', order: 40 },
 ];
 
@@ -42,6 +43,8 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'dashboard-editor', path: '/dashboard/:id', title: '仪表盘编辑', component: './dashboard/editor', hidden: true, parentId: 'dashboard' },
   { id: 'data-analysis-catalog', mode: 'public', path: '/data-analysis/data-catalog', title: '数据目录', component: './data-analysis/data-catalog', iconKey: 'database', menuGroup: 'data-analysis', order: 20 },
   { id: 'data-analysis-chart', path: '/data-analysis/chart-analysis', title: '图表分析', component: './data-analysis/chart-analysis-redirect', hidden: true, parentId: 'dashboard' },
+  { id: 'data-service-api', mode: 'public', path: '/data-service', title: 'API 服务', component: './data-service', iconKey: 'api', menuGroup: 'data-service', order: 10 },
+  { id: 'data-service-logs', mode: 'public', path: '/data-service/logs', title: '调用记录', component: './data-service/logs', iconKey: 'report', menuGroup: 'data-service', order: 20 },
   { id: 'settings', mode: 'public', path: '/settings', title: '设置', component: './settings', hidden: true, order: 30 },
   {
     id: 'batch-link-up', mode: 'one', permission: 'task:batch:read',
