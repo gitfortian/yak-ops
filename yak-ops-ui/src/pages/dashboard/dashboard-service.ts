@@ -8,6 +8,7 @@ import type {
   DashboardInteraction,
   DashboardServerDetail,
   DashboardSummary,
+  DashboardVersionDetail,
   DashboardVersionSummary,
   DashboardWidget,
   FilterOperator,
@@ -21,6 +22,9 @@ interface DashboardAssetWire {
   description?: string | null;
   currentVersionId?: string | null;
   currentVersionNo: number;
+  publishedVersionId?: string | null;
+  publishedVersionNo?: number;
+  publishedTime?: string | null;
   createTime?: string;
   updateTime?: string;
 }
@@ -78,6 +82,14 @@ interface DashboardDetailWire {
   interactions?: DashboardInteractionWire[];
 }
 
+interface DashboardVersionDetailWire {
+  dashboard: DashboardAssetWire;
+  version: DashboardVersionWire;
+  widgets: DashboardWidgetWire[];
+  globalFilters?: DashboardGlobalFilterWire[];
+  interactions?: DashboardInteractionWire[];
+}
+
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
     throw new Error(response?.message || response?.msg || fallback);
@@ -91,6 +103,9 @@ const summary = (value: DashboardAssetWire): DashboardSummary => ({
   description: value.description || '',
   currentVersionId: value.currentVersionId ? String(value.currentVersionId) : undefined,
   currentVersionNo: value.currentVersionNo || 0,
+  publishedVersionId: value.publishedVersionId ? String(value.publishedVersionId) : undefined,
+  publishedVersionNo: value.publishedVersionNo || 0,
+  publishedTime: value.publishedTime || undefined,
   createTime: value.createTime,
   updateTime: value.updateTime,
 });
@@ -166,6 +181,14 @@ export const toDashboardServerDetail = (value: DashboardDetailWire): DashboardSe
   interactions: (value.interactions || []).map(interaction),
 });
 
+const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardVersionDetail => ({
+  dashboard: summary(value.dashboard),
+  version: version(value.version),
+  widgets: (value.widgets || []).map(widget),
+  globalFilters: (value.globalFilters || []).map(globalFilter),
+  interactions: (value.interactions || []).map(interaction),
+});
+
 export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDocument => ({
   version: 1,
   id: detail.dashboard.id,
@@ -177,6 +200,9 @@ export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDoc
   interactions: detail.interactions,
   currentVersionNo: detail.dashboard.currentVersionNo,
   currentVersionId: detail.dashboard.currentVersionId,
+  publishedVersionNo: detail.dashboard.publishedVersionNo,
+  publishedVersionId: detail.dashboard.publishedVersionId,
+  publishedAt: detail.dashboard.publishedTime,
   updatedAt: detail.dashboard.updateTime,
 });
 
@@ -226,6 +252,21 @@ export const fetchDashboard = async (dashboardId: string): Promise<DashboardServ
     '查询 Dashboard 详情失败',
   ));
 
+export const fetchDashboardVersion = async (
+  dashboardId: string,
+  versionNo: number,
+): Promise<DashboardVersionDetail> => toDashboardVersionDetail(unwrap(
+  await HttpUtils.get<DashboardVersionDetailWire>(`${DASHBOARD_API}/${dashboardId}/versions/${versionNo}`),
+  '查询 DashboardVersion 详情失败',
+));
+
+export const fetchPublishedDashboard = async (
+  dashboardId: string,
+): Promise<DashboardVersionDetail> => toDashboardVersionDetail(unwrap(
+  await HttpUtils.get<DashboardVersionDetailWire>(`${DASHBOARD_API}/${dashboardId}/published`),
+  '查询已发布 Dashboard 失败',
+));
+
 export const createDashboard = async (document: DashboardDocument): Promise<DashboardServerDetail> =>
   toDashboardServerDetail(unwrap(
     await HttpUtils.post<DashboardDetailWire>(DASHBOARD_API, payload(document)),
@@ -237,16 +278,26 @@ export const saveDashboardVersion = async (
   document: DashboardDocument,
 ): Promise<DashboardServerDetail> => toDashboardServerDetail(unwrap(
   await HttpUtils.post<DashboardDetailWire>(`${DASHBOARD_API}/${dashboardId}/versions`, payload(document)),
-  '保存 DashboardVersion 失败',
+  '保存 Dashboard 草稿失败',
 ));
 
-export const activateDashboardVersion = async (
+export const publishDashboard = async (
+  dashboardId: string,
+): Promise<DashboardServerDetail> => toDashboardServerDetail(unwrap(
+  await HttpUtils.post<DashboardDetailWire>(`${DASHBOARD_API}/${dashboardId}/publish`, {}),
+  '发布 Dashboard 失败',
+));
+
+export const restoreDashboardVersion = async (
   dashboardId: string,
   versionNo: number,
 ): Promise<DashboardServerDetail> => toDashboardServerDetail(unwrap(
-  await HttpUtils.post<DashboardDetailWire>(`${DASHBOARD_API}/${dashboardId}/activate/${versionNo}`, {}),
-  '切换 DashboardVersion 失败',
+  await HttpUtils.post<DashboardDetailWire>(`${DASHBOARD_API}/${dashboardId}/restore/${versionNo}`, {}),
+  '恢复 DashboardVersion 失败',
 ));
+
+/** Compatibility helper for callers that still reference the old API name. */
+export const activateDashboardVersion = restoreDashboardVersion;
 
 export const deleteDashboard = async (dashboardId: string): Promise<void> => {
   unwrap(await HttpUtils.delete<boolean>(`${DASHBOARD_API}/${dashboardId}`), '删除 Dashboard 失败');
