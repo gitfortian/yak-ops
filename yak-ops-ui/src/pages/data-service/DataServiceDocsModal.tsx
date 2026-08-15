@@ -65,14 +65,15 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
         fetchDataServiceDocumentation(service.id),
         fetchDataServiceOpenApi(service.id),
       ]);
-      if (!docResponse.data) throw new Error(docResponse.message || docResponse.msg || '加载 API 文档失败');
-      setDocumentation(docResponse.data);
-      setParameters(docResponse.data.parameters || []);
-      setResponseFields(docResponse.data.responseFields || []);
+      const doc = docResponse.data;
+      if (!doc) throw new Error(docResponse.message || docResponse.msg || '加载 API 文档失败');
+      setDocumentation(doc);
+      setParameters(doc.parameters || []);
+      setResponseFields(doc.responseFields || []);
       setOpenApi(openApiResponse.data || {});
       setDebugValues((current) => {
         const next: Record<string, string> = {};
-        for (const parameter of docResponse.data.parameters || []) {
+        for (const parameter of doc.parameters || []) {
           next[parameter.name] = current[parameter.name] || parameter.example || '';
         }
         return next;
@@ -96,10 +97,11 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
     setSaving(true);
     try {
       const response = await saveDataServiceDocumentation(service.id, { parameters, responseFields });
-      if (!response.data) throw new Error(response.message || response.msg || '保存 API 文档失败');
-      setDocumentation(response.data);
-      setParameters(response.data.parameters || []);
-      setResponseFields(response.data.responseFields || []);
+      const doc = response.data;
+      if (!doc) throw new Error(response.message || response.msg || '保存 API 文档失败');
+      setDocumentation(doc);
+      setParameters(doc.parameters || []);
+      setResponseFields(doc.responseFields || []);
       const openApiResponse = await fetchDataServiceOpenApi(service.id);
       setOpenApi(openApiResponse.data || {});
       message.success('API 文档与 OpenAPI 已更新');
@@ -120,9 +122,10 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
     setTesting(true);
     try {
       const response = await testDataService(service.id, debugValues);
-      if (!response.data) throw new Error(response.message || response.msg || '在线调试失败');
-      setTestResult(response.data);
-      setResponseFields((current) => inferResponseFields(response.data, current));
+      const result = response.data;
+      if (!result) throw new Error(response.message || response.msg || '在线调试失败');
+      setTestResult(result);
+      setResponseFields((current) => inferResponseFields(result, current));
       message.success('调试成功，已根据真实结果识别响应 Schema；保存文档后生效');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '在线调试失败');
@@ -142,11 +145,14 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
 
   const curl = useMemo(() => {
     if (!service) return '';
+    const lineBreak = ' ' + '\\' + '\n';
     const query = parameters
       .map((item) => `  --data-urlencode '${item.name}=${item.example || `<${item.name}>`}'`)
-      .join(' \\\n');
-    const auth = service.authMode === 'API_KEY' ? " \\\n  -H 'X-API-Key: <your-api-key>'" : '';
-    return `curl -G '${service.runtimePath}'${query ? ` \\\n${query}` : ''}${auth}`;
+      .join(lineBreak);
+    const auth = service.authMode === 'API_KEY'
+      ? `${lineBreak}  -H 'X-API-Key: <your-api-key>'`
+      : '';
+    return `curl -G '${service.runtimePath}'${query ? `${lineBreak}${query}` : ''}${auth}`;
   }, [parameters, service]);
 
   const resultColumns = (testResult?.columns || []).map((name) => ({
@@ -206,16 +212,16 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
             { title: '参数名', dataIndex: 'name', width: 150, render: (value) => <span className="font-mono text-[12px]">{value}</span> },
             {
               title: '类型', dataIndex: 'type', width: 130,
-              render: (_, row, index) => <Select size="small" className="w-full" value={row.type} options={parameterTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setParameters((items) => items.map((item, i) => i === index ? { ...item, type: type as DataServiceParameterDoc['type'] } : item))} />,
+              render: (_, row, index) => <Select size="small" className="w-full" value={row.type} options={parameterTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setParameters((values) => values.map((item, i) => i === index ? { ...item, type: type as DataServiceParameterDoc['type'] } : item))} />,
             },
             { title: '必填', dataIndex: 'required', width: 70, render: () => <Tag bordered={false}>是</Tag> },
             {
               title: '说明', dataIndex: 'description', minWidth: 180,
-              render: (_, row, index) => <Input size="small" value={row.description || ''} placeholder="业务含义" onChange={(event) => setParameters((items) => items.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
+              render: (_, row, index) => <Input size="small" value={row.description || ''} placeholder="业务含义" onChange={(event) => setParameters((values) => values.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
             },
             {
               title: '示例', dataIndex: 'example', width: 160,
-              render: (_, row, index) => <Input size="small" value={row.example || ''} placeholder="示例值" onChange={(event) => setParameters((items) => items.map((item, i) => i === index ? { ...item, example: event.target.value } : item))} />,
+              render: (_, row, index) => <Input size="small" value={row.example || ''} placeholder="示例值" onChange={(event) => setParameters((values) => values.map((item, i) => i === index ? { ...item, example: event.target.value } : item))} />,
             },
           ]}
           scroll={{ x: 780 }}
@@ -237,12 +243,12 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
               { title: '字段', dataIndex: 'name', width: 150, render: (value) => <span className="font-mono text-[12px]">{value}</span> },
               {
                 title: '类型', dataIndex: 'type', width: 130,
-                render: (_, row, index) => <Select size="small" className="w-full" value={row.type} options={responseTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setResponseFields((items) => items.map((item, i) => i === index ? { ...item, type } : item))} />,
+                render: (_, row, index) => <Select size="small" className="w-full" value={row.type} options={responseTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setResponseFields((values) => values.map((item, i) => i === index ? { ...item, type: type as DataServiceSchemaType } : item))} />,
               },
               { title: '可空', dataIndex: 'nullable', width: 70, render: (value) => value ? '是' : '否' },
               {
                 title: '说明', dataIndex: 'description', minWidth: 180,
-                render: (_, row, index) => <Input size="small" value={row.description || ''} placeholder="字段含义" onChange={(event) => setResponseFields((items) => items.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
+                render: (_, row, index) => <Input size="small" value={row.description || ''} placeholder="字段含义" onChange={(event) => setResponseFields((values) => values.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
               },
               { title: '示例', dataIndex: 'example', width: 160, ellipsis: true },
             ]}
