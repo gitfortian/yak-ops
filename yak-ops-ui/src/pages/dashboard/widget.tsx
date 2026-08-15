@@ -56,25 +56,25 @@ export function WidgetShell({
     <div
       onMouseDown={onSelect}
       className={[
-        'group relative flex h-full min-h-0 flex-col overflow-hidden bg-white transition-[border-color,box-shadow] duration-150',
+        'group relative flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] bg-white transition-[border-color,box-shadow,transform] duration-150',
         preview
-          ? 'border border-[#e7eaf0]'
+          ? 'border border-[#e7e9ed] shadow-[0_1px_2px_rgba(16,24,40,.03)]'
           : selected
-            ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_1px_var(--yak-brand-color-soft)]'
-            : 'border border-[#e3e7ed] hover:border-[#d2d7df] hover:shadow-[0_2px_8px_rgba(16,24,40,.06)]',
+            ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
+            : 'border border-[#e4e7ec] shadow-[0_1px_2px_rgba(16,24,40,.025)] hover:border-[#d6dae0] hover:shadow-[0_4px_12px_rgba(16,24,40,.055)]',
       ].join(' ')}
     >
-      <div className="dashboard-widget__drag-handle flex h-9 shrink-0 cursor-move items-center border-b border-[#f0f2f5] px-3">
+      <div className="dashboard-widget__drag-handle flex h-10 shrink-0 cursor-move items-center px-3.5">
         {!preview ? (
           <GripVertical
             size={13}
             className={[
-              'mr-1 text-[#98a2b3] transition-opacity duration-150',
-              selected ? 'opacity-100' : 'opacity-45 group-hover:opacity-100',
+              'mr-1.5 text-[#a8adb5] transition-opacity duration-150',
+              selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             ].join(' ')}
           />
         ) : null}
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[#344054]">
+        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344054]">
           {title}
         </span>
 
@@ -116,9 +116,9 @@ export function WidgetShell({
                   aria-label="组件操作"
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
-                  className="flex h-6 w-6 items-center justify-center rounded-[4px] border-0 bg-transparent text-[#667085] transition-colors hover:bg-[#f5f6f7] hover:text-[#344054]"
+                  className="flex h-7 w-7 items-center justify-center rounded-[6px] border-0 bg-transparent text-[#7a818c] transition-colors hover:bg-[#f5f6f7] hover:text-[#344054]"
                 >
-                  <MoreHorizontal size={13} />
+                  <MoreHorizontal size={14} />
                 </button>
               </Tooltip>
             </Dropdown>
@@ -128,12 +128,12 @@ export function WidgetShell({
 
       {drillPath.length ? (
         <div
-          className="flex h-7 shrink-0 items-center gap-0.5 border-b border-[#f0f2f5] bg-[#fafbfc] px-2.5 text-[9px] text-[#667085]"
+          className="mx-3 flex h-7 shrink-0 items-center gap-0.5 rounded-[6px] bg-[#f7f8fa] px-2 text-[9px] text-[#667085]"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <button
             type="button"
-            className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1 text-[#667085] hover:bg-[#f0f2f5] hover:text-[#344054]"
+            className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1 text-[#667085] hover:bg-[#eceef1] hover:text-[#344054]"
             onClick={(event) => {
               event.stopPropagation();
               onDrillBack(0);
@@ -147,7 +147,7 @@ export function WidgetShell({
               <ChevronRight size={9} className="shrink-0 text-[#b1b6bf]" />
               <button
                 type="button"
-                className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5 text-[#475467] hover:bg-[#f0f2f5]"
+                className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5 text-[#475467] hover:bg-[#eceef1]"
                 title={step.label}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -161,7 +161,7 @@ export function WidgetShell({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1">
         {spec ? (
           <AnalysisPreview
             spec={spec}
