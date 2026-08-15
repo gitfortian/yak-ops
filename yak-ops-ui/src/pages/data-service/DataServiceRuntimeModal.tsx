@@ -1,6 +1,6 @@
 import { Button, InputNumber, Modal, Spin, Switch, Tag, message } from 'antd';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import {
   fetchDataServiceRuntime,
@@ -213,7 +213,7 @@ const Metric = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <div>
     <div className="mb-1.5 text-[11px] font-medium text-[#475467]">{label}</div>
     {children}
