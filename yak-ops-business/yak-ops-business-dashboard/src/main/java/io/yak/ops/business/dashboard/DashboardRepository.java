@@ -10,6 +10,7 @@ interface DashboardRepository {
   void insertGlobalFilters(long versionId, List<DashboardService.GlobalFilterSpec> filters, List<String> defaultValueJson);
   void insertInteractions(long versionId, List<DashboardService.InteractionSpec> interactions);
   void updateCurrentVersion(long dashboardId, long versionId, int versionNo, String name, String description);
+  void updatePublishedVersion(long dashboardId, long versionId, int versionNo);
   Optional<DashboardAsset> findDashboard(long dashboardId);
   List<DashboardAsset> listDashboards();
   Optional<DashboardVersion> findVersion(long versionId);
