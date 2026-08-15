@@ -15,6 +15,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -55,14 +56,37 @@ public class DataServiceRuntimeService {
     RuntimeState state = states.computeIfAbsent(api.getId(), ignored -> new RuntimeState());
     state.ensurePolicy(policy);
 
-    if (policy.cacheEnabled()) {
-      QueryResponse cached = state.cache().getIfPresent(cacheKey);
-      if (cached != null) {
-        state.metrics.recordSuccess(0L, true, clock.instant());
-        return copyWithDuration(cached, 0L);
-      }
+    if (!policy.cacheEnabled()) {
+      return executeProtected(state, policy, loader);
     }
 
+    long requestStarted = System.nanoTime();
+    QueryResponse cached = state.cache().getIfPresent(cacheKey);
+    if (cached != null) {
+      long durationMs = elapsedMs(requestStarted);
+      state.metrics.recordSuccess(durationMs, true, clock.instant());
+      return copyWithDuration(cached, durationMs);
+    }
+
+    // Caffeine get(key, loader) coalesces concurrent misses for the same parameter set. Only the
+    // thread whose mapping function actually runs reaches the datasource; followers reuse that value.
+    AtomicBoolean loadedByThisCall = new AtomicBoolean(false);
+    QueryResponse response = state.cache().get(cacheKey, ignored -> {
+      loadedByThisCall.set(true);
+      return executeProtected(state, policy, loader);
+    });
+    if (!loadedByThisCall.get()) {
+      long durationMs = elapsedMs(requestStarted);
+      state.metrics.recordSuccess(durationMs, true, clock.instant());
+      return copyWithDuration(response, durationMs);
+    }
+    return response;
+  }
+
+  private QueryResponse executeProtected(
+      RuntimeState state,
+      RuntimePolicy policy,
+      Supplier<QueryResponse> loader) {
     CircuitDecision decision = state.circuit.beforeCall(policy, clock.instant());
     if (!decision.allowed()) {
       state.metrics.recordCircuitRejected(clock.instant());
@@ -76,9 +100,6 @@ public class DataServiceRuntimeService {
       long durationMs = elapsedMs(started);
       state.circuit.onSuccess();
       state.metrics.recordSuccess(durationMs, false, clock.instant());
-      if (policy.cacheEnabled()) {
-        state.cache().put(cacheKey, copyWithDuration(response, durationMs));
-      }
       return copyWithDuration(response, durationMs);
     } catch (RuntimeException exception) {
       long durationMs = elapsedMs(started);
