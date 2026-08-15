@@ -71,11 +71,10 @@ export function DashboardWidgetActionEditor({
     .filter((field) => field.role === 'dimension')
     .map((field) => ({ label: `${field.label} · ${field.dataType}`, value: field.key }));
   const firstDimension = spec.dimensions[0];
-  const drillFields = behavior.drillFields?.length
-    ? behavior.drillFields
-    : firstDimension
-      ? [firstDimension]
-      : [];
+  const configuredDrillFields = behavior.drillFields || [];
+  const drillFields = firstDimension
+    ? [firstDimension, ...configuredDrillFields.filter((field) => field !== firstDimension)]
+    : configuredDrillFields;
   const dashboardOptions = dashboards
     .filter((item) => item.id !== currentDashboardId && item.publishedVersionNo > 0)
     .map((item) => ({
