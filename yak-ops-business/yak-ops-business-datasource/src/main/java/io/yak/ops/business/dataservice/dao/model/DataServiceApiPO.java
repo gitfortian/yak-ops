@@ -20,6 +20,7 @@ public class DataServiceApiPO {
   private Integer maxRows;
   private Integer timeoutSeconds;
   private Boolean enabled;
+  private String authMode;
   private String description;
   private String sourceType;
   private String sourceRef;
