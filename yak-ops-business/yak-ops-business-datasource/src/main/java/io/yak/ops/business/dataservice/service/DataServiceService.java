@@ -18,12 +18,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** Phase-1 data service: persist SELECT definitions and expose them through a safe REST runtime. */
+/** Data Service definition and read-only SQL runtime. */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -51,6 +52,16 @@ public class DataServiceService {
 
   public ApiView get(Long id) {
     return toView(requireApi(id));
+  }
+
+  public Optional<ApiView> findBySource(String sourceType, String sourceRef) {
+    SourceKey source = normalizeSourceKey(sourceType, sourceRef);
+    DataServiceApiPO api = apiMapper.selectOne(
+        Wrappers.<DataServiceApiPO>lambdaQuery()
+            .eq(DataServiceApiPO::getSourceType, source.sourceType())
+            .eq(DataServiceApiPO::getSourceRef, source.sourceRef())
+            .last("LIMIT 1"));
+    return Optional.ofNullable(api).map(this::toView);
   }
 
   @Transactional
@@ -82,6 +93,28 @@ public class DataServiceService {
     } else {
       apiMapper.updateById(api);
     }
+    return toView(api);
+  }
+
+  /**
+   * Creates or updates the stable Data Service bound to one upstream asset.
+   *
+   * <p>The executable SQL/dataSource values are copied into the service definition, so runtime calls
+   * remain a snapshot and never follow mutable authoring state implicitly.
+   */
+  @Transactional
+  public ApiView saveFromSource(SourceSnapshot source, ApiInput input) {
+    SourceSnapshot normalized = normalizeSource(source);
+    Optional<ApiView> existing = findBySource(normalized.sourceType(), normalized.sourceRef());
+    ApiView saved = save(existing.map(ApiView::id).orElse(null), input);
+
+    DataServiceApiPO api = requireApi(saved.id());
+    api.setSourceType(normalized.sourceType());
+    api.setSourceRef(normalized.sourceRef());
+    api.setSourceRevisionId(normalized.sourceRevisionId());
+    api.setSourceRevisionNo(normalized.sourceRevisionNo());
+    api.setUpdateTime(LocalDateTime.now());
+    apiMapper.updateById(api);
     return toView(api);
   }
 
@@ -192,7 +225,8 @@ public class DataServiceService {
         api.getId(), api.getName(), api.getPath(), RUNTIME_PREFIX + api.getPath(),
         api.getDataSourceId(), api.getSqlText(), sqlCompiler.parameterNames(api.getSqlText()),
         api.getMaxRows(), api.getTimeoutSeconds(), Boolean.TRUE.equals(api.getEnabled()),
-        api.getDescription(), api.getCreateTime(), api.getUpdateTime());
+        api.getDescription(), api.getSourceType(), api.getSourceRef(), api.getSourceRevisionId(),
+        api.getSourceRevisionNo(), api.getCreateTime(), api.getUpdateTime());
   }
 
   private DataServiceApiPO requireApi(Long id) {
@@ -211,6 +245,29 @@ public class DataServiceService {
     normalizePath(input.path());
     normalizeMaxRows(input.maxRows());
     normalizeTimeout(input.timeoutSeconds());
+  }
+
+  private SourceSnapshot normalizeSource(SourceSnapshot source) {
+    if (source == null) throw new IllegalArgumentException("发布来源不能为空");
+    SourceKey key = normalizeSourceKey(source.sourceType(), source.sourceRef());
+    if (source.sourceRevisionId() == null || source.sourceRevisionId() <= 0L) {
+      throw new IllegalArgumentException("来源版本 ID 非法");
+    }
+    if (source.sourceRevisionNo() == null || source.sourceRevisionNo() <= 0) {
+      throw new IllegalArgumentException("来源版本号非法");
+    }
+    return new SourceSnapshot(
+        key.sourceType(), key.sourceRef(), source.sourceRevisionId(), source.sourceRevisionNo());
+  }
+
+  private SourceKey normalizeSourceKey(String sourceType, String sourceRef) {
+    if (!StringUtils.hasText(sourceType)) throw new IllegalArgumentException("发布来源类型不能为空");
+    if (!StringUtils.hasText(sourceRef)) throw new IllegalArgumentException("发布来源引用不能为空");
+    String type = sourceType.trim().toUpperCase();
+    String ref = sourceRef.trim();
+    if (type.length() > 64) throw new IllegalArgumentException("发布来源类型不能超过 64 个字符");
+    if (ref.length() > 128) throw new IllegalArgumentException("发布来源引用不能超过 128 个字符");
+    return new SourceKey(type, ref);
   }
 
   private String normalizePath(String path) {
@@ -269,6 +326,12 @@ public class DataServiceService {
       Boolean enabled,
       String description) {}
 
+  public record SourceSnapshot(
+      String sourceType,
+      String sourceRef,
+      Long sourceRevisionId,
+      Integer sourceRevisionNo) {}
+
   public record ApiView(
       Long id,
       String name,
@@ -281,6 +344,10 @@ public class DataServiceService {
       Integer timeoutSeconds,
       Boolean enabled,
       String description,
+      String sourceType,
+      String sourceRef,
+      Long sourceRevisionId,
+      Integer sourceRevisionNo,
       LocalDateTime createTime,
       LocalDateTime updateTime) {}
 
@@ -290,4 +357,6 @@ public class DataServiceService {
       boolean truncated,
       int rowCount,
       long durationMs) {}
+
+  private record SourceKey(String sourceType, String sourceRef) {}
 }
