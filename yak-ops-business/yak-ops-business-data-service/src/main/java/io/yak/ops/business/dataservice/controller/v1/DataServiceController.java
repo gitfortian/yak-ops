@@ -12,12 +12,16 @@ import io.yak.ops.business.dataservice.service.DataServiceAccessService.CreatedA
 import io.yak.ops.business.dataservice.service.DataServiceDocumentationService;
 import io.yak.ops.business.dataservice.service.DataServiceDocumentationService.ApiDocumentation;
 import io.yak.ops.business.dataservice.service.DataServiceDocumentationService.DocumentationInput;
+import io.yak.ops.business.dataservice.service.DataServicePublicationService;
+import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublicationSettings;
+import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublishRequest;
 import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.DataServiceService;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
 import io.yak.ops.business.dataservice.service.DataServiceService.QueryResponse;
 import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeConfigInput;
+import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourcePage;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +37,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 数据服务管理、文档、访问控制、Runtime 策略与调用接口。 */
+/** 数据服务管理、发布、文档、访问控制、Runtime 策略与调用接口。 */
 @Tag(name = "数据服务")
 @RestController
 @ConditionalOnDataSourceEnabled
@@ -42,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DataServiceController {
 
   private final DataServiceService dataServiceService;
+  private final DataServicePublicationService publicationService;
   private final DataServiceAccessService accessService;
   private final DataServiceDocumentationService documentationService;
 
@@ -51,13 +56,37 @@ public class DataServiceController {
     return Result.success(dataServiceService.list());
   }
 
+  @Operation(summary = "查询可发布的数据服务来源")
+  @GetMapping("/sources")
+  public Result<SourcePage> sources(
+      @RequestParam("sourceType") String sourceType,
+      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+      @RequestParam(value = "pageSize", defaultValue = "50") int pageSize,
+      @RequestParam(value = "keyword", required = false) String keyword) {
+    return Result.success(publicationService.sources(sourceType, pageNo, pageSize, keyword));
+  }
+
+  @Operation(summary = "从已发布来源创建或更新数据服务")
+  @PostMapping("/publish")
+  public Result<ApiView> publish(@RequestBody PublishDataServiceRequest request) {
+    return Result.success(publicationService.publish(new PublishRequest(
+        request.sourceType(),
+        request.sourceRef(),
+        request.name(),
+        request.path(),
+        request.maxRows(),
+        request.timeoutSeconds(),
+        request.enabled(),
+        request.description())));
+  }
+
   @Operation(summary = "查询 API 服务详情")
   @GetMapping("/{id}")
   public Result<ApiView> detail(@PathVariable("id") Long id) {
     return Result.success(dataServiceService.get(id));
   }
 
-  @Operation(summary = "创建 API 服务")
+  @Operation(summary = "创建 API 服务（兼容旧版手工模式）")
   @PostMapping
   public Result<ApiView> create(@RequestBody ApiInput input) {
     return Result.success(dataServiceService.save(null, input));
@@ -67,6 +96,25 @@ public class DataServiceController {
   @PutMapping("/{id}")
   public Result<ApiView> update(@PathVariable("id") Long id, @RequestBody ApiInput input) {
     return Result.success(dataServiceService.save(id, input));
+  }
+
+  @Operation(summary = "按当前上游 Revision 重新发布数据服务")
+  @PostMapping("/{id}/republish")
+  public Result<ApiView> republish(
+      @PathVariable("id") Long id,
+      @RequestBody(required = false) RepublishDataServiceRequest request) {
+    RepublishDataServiceRequest values = request == null
+        ? new RepublishDataServiceRequest(null, null, null, null, null, null)
+        : request;
+    return Result.success(publicationService.republish(
+        id,
+        new PublicationSettings(
+            values.name(),
+            values.path(),
+            values.maxRows(),
+            values.timeoutSeconds(),
+            values.enabled(),
+            values.description())));
   }
 
   @Operation(summary = "删除 API 服务")
@@ -198,4 +246,22 @@ public class DataServiceController {
       @RequestParam Map<String, String> parameters) {
     return Result.success(dataServiceService.invoke(servicePath, parameters, apiKey));
   }
+
+  public record PublishDataServiceRequest(
+      String sourceType,
+      String sourceRef,
+      String name,
+      String path,
+      Integer maxRows,
+      Integer timeoutSeconds,
+      Boolean enabled,
+      String description) {}
+
+  public record RepublishDataServiceRequest(
+      String name,
+      String path,
+      Integer maxRows,
+      Integer timeoutSeconds,
+      Boolean enabled,
+      String description) {}
 }
