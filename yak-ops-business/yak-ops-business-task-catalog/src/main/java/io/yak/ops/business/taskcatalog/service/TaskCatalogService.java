@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,12 @@ import org.springframework.stereotype.Service;
 @Service
 @ConditionalOnDataSourceEnabled
 public class TaskCatalogService {
+
+  private static final Set<String> DATA_DEVELOPMENT_TASK_TYPES = Set.of(
+      "SQL",
+      "SHELL",
+      "HTTP",
+      "PYTHON");
 
   private final TaskAssetRepository repository;
   private final Map<TaskAssetSource, TaskAssetRevisionProvider> revisionProviders;
@@ -58,12 +65,14 @@ public class TaskCatalogService {
     if (source == null) throw new IllegalArgumentException("任务资产来源不能为空");
     if (revisionId <= 0L) throw new IllegalArgumentException("任务版本 ID 必须大于 0");
     if (revisionNo <= 0) throw new IllegalArgumentException("任务版本号必须大于 0");
+    String normalizedTaskType = normalizeTaskType(taskType);
+    requirePublishableTaskType(source, normalizedTaskType);
     return repository.upsertPublished(
         source,
         normalizeSourceRef(sourceRef),
         normalizeProjectId(projectId),
         normalizeName(name),
-        normalizeTaskType(taskType),
+        normalizedTaskType,
         revisionId,
         revisionNo);
   }
@@ -177,5 +186,12 @@ public class TaskCatalogService {
     String normalized = value.trim();
     if (normalized.length() > 200) throw new IllegalArgumentException("搜索关键字不能超过 200 个字符");
     return normalized;
+  }
+
+  private void requirePublishableTaskType(TaskAssetSource source, String taskType) {
+    if (source != TaskAssetSource.DATA_DEVELOPMENT) return;
+    if (DATA_DEVELOPMENT_TASK_TYPES.contains(taskType)) return;
+    throw new IllegalArgumentException(
+        "数据开发输出资源不能发布到 Task Catalog：taskType=" + taskType);
   }
 }

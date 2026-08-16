@@ -5,7 +5,10 @@ import { Search } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import WorkflowNodeIcon from './node/icons/WorkflowNodeIcon';
-import { taskCatalogOption } from './taskOptions';
+import {
+  isWorkflowEligibleTaskCatalogAsset,
+  taskCatalogOption,
+} from './taskOptions';
 import type { WorkflowCanvasTaskOption } from './types';
 
 export type WorkflowTaskCategory = 'sync' | 'development' | 'quality';
@@ -88,7 +91,11 @@ const WorkflowTaskPicker = ({
     setCatalogLoading(true);
     void listTaskCatalogAssets({ source: 'DATA_DEVELOPMENT', status: 'ONLINE' })
       .then((assets) => {
-        if (active) setCatalogOptions(assets.map(taskCatalogOption));
+        if (active) {
+          setCatalogOptions(
+            assets.filter(isWorkflowEligibleTaskCatalogAsset).map(taskCatalogOption),
+          );
+        }
       })
       .catch(() => {
         if (active) setCatalogOptions([]);

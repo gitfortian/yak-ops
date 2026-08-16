@@ -19,6 +19,16 @@ class DevelopmentNodeModelTest {
   }
 
   @Test
+  void taskLifecycleIsAnExplicitCapability() {
+    assertTrue(DevelopmentNodeType.SQL.supportsTaskLifecycle());
+    assertTrue(DevelopmentNodeType.SHELL.supportsTaskLifecycle());
+    assertTrue(DevelopmentNodeType.HTTP.supportsTaskLifecycle());
+    assertTrue(DevelopmentNodeType.PYTHON.supportsTaskLifecycle());
+    assertFalse(DevelopmentNodeType.DATASET.supportsTaskLifecycle());
+    assertFalse(DevelopmentNodeType.DATA_SERVICE.supportsTaskLifecycle());
+  }
+
+  @Test
   void keepsOutputNodesOutsideProcessingLifecycle() {
     assertTrue(DevelopmentNodeType.SQL.isProcessing());
     assertTrue(DevelopmentNodeType.SHELL.isProcessing());

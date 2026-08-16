@@ -1,6 +1,8 @@
 package io.yak.ops.business.taskcatalog.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,6 +44,26 @@ class TaskCatalogServiceTest {
 
     assertEquals(expected, result);
     assertEquals(2, result.currentRevision().revisionNo());
+  }
+
+  @Test
+  void dataDevelopmentOutputResourcesCannotEnterTaskCatalog() {
+    TaskAssetRepository repository = mock(TaskAssetRepository.class);
+    TaskCatalogService service = new TaskCatalogService(repository);
+
+    for (String taskType : List.of("DATASET", "DATA_SERVICE")) {
+      IllegalArgumentException exception = assertThrows(
+          IllegalArgumentException.class,
+          () -> service.publish(
+              TaskAssetSource.DATA_DEVELOPMENT,
+              "12",
+              7L,
+              "输出资源",
+              taskType,
+              101L,
+              1));
+      assertTrue(exception.getMessage().contains("不能发布到 Task Catalog"));
+    }
   }
 
   @Test
