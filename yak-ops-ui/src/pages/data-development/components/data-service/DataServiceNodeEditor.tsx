@@ -212,7 +212,7 @@ export default function DataServiceNodeEditor({
   const activeSource = useMemo(
     () => availableSources.find((source) => source.taskAssetId === selectedSourceId)
       || (context?.selectedSource?.taskAssetId === selectedSourceId
-        ? context.selectedSource
+        ? context?.selectedSource
         : undefined),
     [availableSources, context?.selectedSource, selectedSourceId],
   );
@@ -717,7 +717,6 @@ export default function DataServiceNodeEditor({
                 <span className="text-[#b42318]">{publicationError}</span>
               ) : null}
             </div>
-
             <div className="flex shrink-0 items-center gap-2">
               {showDeployAction ? (
                 <Button
