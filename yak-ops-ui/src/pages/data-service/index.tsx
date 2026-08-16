@@ -55,12 +55,7 @@ const ApiMethod = () => (
 );
 
 const ApiMarketplaceIllustration = () => (
-  <svg
-    viewBox="0 0 244 154"
-    className="h-[128px] w-[205px]"
-    fill="none"
-    aria-hidden="true"
-  >
+  <svg viewBox="0 0 244 154" className="h-[128px] w-[205px]" fill="none" aria-hidden="true">
     <path d="M32 77H77" stroke="#d9dee5" strokeWidth="1.5" strokeLinecap="round" />
     <path d="M102 50H137C157 50 157 75 177 75H211" stroke="#d9dee5" strokeWidth="1.5" strokeLinecap="round" />
     <path d="M102 104H137C157 104 157 82 177 82H211" stroke="#f2a6b7" strokeWidth="1.5" strokeLinecap="round" />
@@ -90,17 +85,11 @@ const ApiMarketplaceIllustration = () => (
   </svg>
 );
 
-const ApiListItem = ({
-  service,
-  dataSourceName,
-  calls,
-  rank,
-  onOpen,
-}: ApiListItemProps) => (
+const ApiListItem = ({ service, dataSourceName, calls, rank, onOpen }: ApiListItemProps) => (
   <button
     type="button"
     onClick={onOpen}
-    className="group flex min-h-[82px] w-full items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-3 text-left transition-colors hover:bg-white"
+    className="group flex min-h-[82px] w-full items-center gap-3 rounded-lg border-0 bg-[#fafbfc] px-3 py-3 text-left transition-colors hover:bg-[#f5f6f7]"
   >
     {rank ? (
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white font-mono text-[10px] font-medium text-[#98a2b3] shadow-[0_0_0_1px_rgba(16,24,40,.04)]">
@@ -110,13 +99,9 @@ const ApiListItem = ({
 
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
-        <span className="truncate text-[13px] font-medium text-[#161823]">
-          {service.name}
-        </span>
+        <span className="truncate text-[13px] font-medium text-[#161823]">{service.name}</span>
         <ApiMethod />
-        {!service.enabled ? (
-          <span className="text-[10px] text-[#98a2b3]">已停用</span>
-        ) : null}
+        {!service.enabled ? <span className="text-[10px] text-[#98a2b3]">已停用</span> : null}
       </div>
       <div className="mt-1 truncate text-[11px] leading-5 text-[#8a9099]">
         {service.description || '暂无描述'}
@@ -126,12 +111,12 @@ const ApiListItem = ({
       </div>
     </div>
 
-    <div className="w-[118px] shrink-0 text-right">
+    <div className={rank ? 'w-[72px] shrink-0 text-right' : 'w-[118px] shrink-0 text-right'}>
       <div className="truncate text-[11px] font-medium text-[#667085]">
-        {calls !== undefined ? `${calls} 次调用` : dataSourceName}
+        {calls !== undefined ? `${calls} 次` : dataSourceName}
       </div>
       <div className="mt-1 text-[10px] text-[#b0b5bd]">
-        {calls !== undefined ? dataSourceName : service.enabled ? '运行中' : '已停用'}
+        {calls !== undefined ? '近期调用' : service.enabled ? '运行中' : '已停用'}
       </div>
     </div>
   </button>
@@ -172,8 +157,7 @@ export default function DataServicePage() {
 
   const dataSourceName = useCallback((dataSourceId?: number) => {
     if (!dataSourceId) return '-';
-    return dataSources.find((item) => String(item.value) === String(dataSourceId))?.label
-      || `#${dataSourceId}`;
+    return dataSources.find((item) => String(item.value) === String(dataSourceId))?.label || `#${dataSourceId}`;
   }, [dataSources]);
 
   const callsByApiId = useMemo(() => {
@@ -182,38 +166,33 @@ export default function DataServicePage() {
     return result;
   }, [logs]);
 
-  const runningServices = useMemo(
-    () => services.filter((item) => item.enabled),
-    [services],
-  );
+  const runningServices = useMemo(() => services.filter((item) => item.enabled), [services]);
 
   const recommendedServices = useMemo(() => {
     const source = runningServices.length ? runningServices : services;
     return [...source]
-      .sort((left, right) => timeValue(right.updateTime || right.createTime)
-        - timeValue(left.updateTime || left.createTime))
-      .slice(0, 6);
+      .sort((left, right) => timeValue(right.updateTime || right.createTime) - timeValue(left.updateTime || left.createTime))
+      .slice(0, 8);
   }, [runningServices, services]);
 
   const hotServices = useMemo(() => services
     .filter((item) => (callsByApiId.get(item.id) || 0) > 0)
     .sort((left, right) => (callsByApiId.get(right.id) || 0) - (callsByApiId.get(left.id) || 0))
-    .slice(0, 6), [callsByApiId, services]);
+    .slice(0, 5), [callsByApiId, services]);
 
   const searchResults = useMemo(() => {
     const value = submittedKeyword.trim().toLowerCase();
     if (!value) return [];
-    return services.filter((item) =>
-      [
-        item.name,
-        item.path,
-        item.runtimePath,
-        item.description,
-        item.sourceRef,
-        dataSourceName(item.dataSourceId),
-      ]
-        .filter(Boolean)
-        .some((text) => String(text).toLowerCase().includes(value)));
+    return services.filter((item) => [
+      item.name,
+      item.path,
+      item.runtimePath,
+      item.description,
+      item.sourceRef,
+      dataSourceName(item.dataSourceId),
+    ]
+      .filter(Boolean)
+      .some((text) => String(text).toLowerCase().includes(value)));
   }, [dataSourceName, services, submittedKeyword]);
 
   const remove = async (record: DataServiceApi) => {
@@ -288,9 +267,7 @@ export default function DataServicePage() {
             </button>
             <ApiMethod />
           </div>
-          <div className="mt-0.5 line-clamp-1 text-[11px] text-[#98a2b3]">
-            {record.description || '暂无描述'}
-          </div>
+          <div className="mt-0.5 line-clamp-1 text-[11px] text-[#98a2b3]">{record.description || '暂无描述'}</div>
         </div>
       ),
     },
@@ -302,12 +279,7 @@ export default function DataServicePage() {
         <div className="flex items-center gap-1">
           <span className="truncate font-mono text-[11px] text-[#667085]">{value}</span>
           <Tooltip title="复制 Endpoint">
-            <Button
-              type="text"
-              size="small"
-              icon={<Copy size={13} />}
-              onClick={() => void copyPath(value)}
-            />
+            <Button type="text" size="small" icon={<Copy size={13} />} onClick={() => void copyPath(value)} />
           </Tooltip>
         </div>
       ),
@@ -348,11 +320,7 @@ export default function DataServicePage() {
       width: 135,
       render: (enabled: boolean, record) => (
         <div className="flex items-center gap-2">
-          <Switch
-            size="small"
-            checked={enabled}
-            onChange={(next) => void toggleEnabled(record, next)}
-          />
+          <Switch size="small" checked={enabled} onChange={(next) => void toggleEnabled(record, next)} />
           <span className={enabled ? 'text-[12px] text-[#344054]' : 'text-[12px] text-[#98a2b3]'}>
             {enabled ? '运行中' : '已停用'}
           </span>
@@ -377,9 +345,7 @@ export default function DataServicePage() {
           <Dropdown
             trigger={['click']}
             menu={{
-              items: [
-                { key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除 API' },
-              ],
+              items: [{ key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除 API' }],
               onClick: ({ key }) => {
                 if (key === 'delete') confirmRemove(record);
               },
@@ -409,36 +375,29 @@ export default function DataServicePage() {
         onChange={(event) => handleKeywordChange(event.target.value)}
         onPressEnter={submitSearch}
       />
-      <Button type="primary" loading={loading} className="!h-8 !px-4" onClick={submitSearch}>
-        搜索
-      </Button>
+      <Button type="primary" loading={loading} className="!h-8 !px-4" onClick={submitSearch}>搜索</Button>
     </div>
   ) : (
-    <div className="w-full max-w-[720px] rounded-xl bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,.045)] ring-1 ring-[#e6e9ee]">
+    <div className="w-full max-w-[720px] rounded-xl bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,.04)] ring-1 ring-[#e4e7ec]">
       <div className="flex items-center gap-2">
         <Search size={17} className="ml-2 shrink-0 text-[#98a2b3]" />
         <Input
           allowClear
           variant="borderless"
           value={keyword}
-          placeholder="搜索 API 名称、Endpoint、描述或数据源"
+          placeholder="输入 API 名称、描述或 Endpoint"
           className="!h-11 !bg-white !px-1 !text-[13px]"
           onChange={(event) => handleKeywordChange(event.target.value)}
           onPressEnter={submitSearch}
         />
-        <Button type="primary" loading={loading} className="!h-9 !px-5" onClick={submitSearch}>
-          搜索
-        </Button>
+        <Button type="primary" loading={loading} className="!h-9 !px-5" onClick={submitSearch}>搜索</Button>
       </div>
-      <div className="flex items-center gap-4 px-3 pb-1 pt-1 text-[10px] text-[#a0a6af]">
-        <span>API 名称</span>
-        <span>Endpoint</span>
-        <span>数据源</span>
-      </div>
+      <div className="px-3 pb-1 pt-1 text-[10px] text-[#a0a6af]">支持 API 名称、Endpoint、描述和数据源</div>
     </div>
   );
 
   const searching = Boolean(submittedKeyword.trim());
+  const totalCalls = logs.length;
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-white">
@@ -446,17 +405,10 @@ export default function DataServicePage() {
         <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-2">
-              <Button
-                type="text"
-                icon={<ArrowLeft size={15} />}
-                onClick={resetSearch}
-                className="!-ml-2 !px-2"
-              />
+              <Button type="text" icon={<ArrowLeft size={15} />} onClick={resetSearch} className="!-ml-2 !px-2" />
               <div className="min-w-0">
                 <h1 className="m-0 text-[17px] font-semibold text-[#161823]">API 集市</h1>
-                <div className="mt-1 truncate text-[12px] text-[#98a2b3]">
-                  搜索 “{submittedKeyword}”
-                </div>
+                <div className="mt-1 truncate text-[12px] text-[#98a2b3]">搜索 “{submittedKeyword}”</div>
               </div>
             </div>
             <Button
@@ -491,23 +443,18 @@ export default function DataServicePage() {
       ) : (
         <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white">
           <div
-            className="relative overflow-hidden px-5 py-8"
-            style={{
-              background: 'linear-gradient(180deg, #f8fafc 0%, #fbfcfd 62%, #ffffff 100%)',
-            }}
+            className="relative overflow-hidden px-5 py-9"
+            style={{ background: 'linear-gradient(180deg, #f7f9fc 0%, #fbfcfd 66%, #ffffff 100%)' }}
           >
             <div className="pointer-events-none absolute left-[4.5%] top-1/2 hidden -translate-y-1/2 opacity-90 lg:block">
               <ApiMarketplaceIllustration />
             </div>
-            <div className="pointer-events-none absolute -left-14 bottom-[-92px] h-[190px] w-[190px] rounded-full bg-[rgba(254,44,85,.028)]" />
-            <div className="pointer-events-none absolute left-[18%] top-[-90px] h-[160px] w-[160px] rounded-full border border-[rgba(254,44,85,.045)]" />
+            <div className="pointer-events-none absolute -left-14 bottom-[-92px] h-[190px] w-[190px] rounded-full bg-[rgba(254,44,85,.025)]" />
+            <div className="pointer-events-none absolute left-[18%] top-[-90px] h-[160px] w-[160px] rounded-full border border-[rgba(254,44,85,.04)]" />
 
             <div className="relative mx-auto flex max-w-[820px] flex-col items-center">
               <h1 className="m-0 mb-4 text-[20px] font-semibold tracking-[-.01em] text-[#161823]">API 集市</h1>
               {searchControls()}
-              <div className="mt-3 text-[11px] text-[#a0a6af]">
-                {services.length} 个 API · {runningServices.length} 个运行中
-              </div>
             </div>
 
             <Button
@@ -521,18 +468,19 @@ export default function DataServicePage() {
             </Button>
           </div>
 
-          <div className="px-5 pb-8 pt-3">
-            <div className="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-2">
-              <section className="min-w-0 rounded-xl bg-[#f7f8fa] p-3">
-                <div className="flex items-center justify-between px-2 pb-2 pt-1">
+          <div className="mx-auto w-full max-w-[1480px] px-5 pb-10 pt-7">
+            <div className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <section className="min-w-0">
+                <div className="mb-3 flex items-end justify-between px-1">
                   <div>
-                    <div className="text-[13px] font-semibold text-[#30323b]">推荐 API</div>
-                    <div className="mt-1 text-[10px] text-[#a0a6af]">最近更新的可用服务</div>
+                    <h2 className="m-0 text-[15px] font-semibold text-[#161823]">推荐 API</h2>
+                    <div className="mt-1 text-[11px] text-[#98a2b3]">最近更新的可用服务</div>
                   </div>
-                  <span className="text-[10px] text-[#a0a6af]">{recommendedServices.length} 个</span>
+                  <span className="text-[11px] text-[#98a2b3]">{recommendedServices.length} 个</span>
                 </div>
+
                 {recommendedServices.length ? (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {recommendedServices.map((service) => (
                       <ApiListItem
                         key={service.id}
@@ -543,39 +491,60 @@ export default function DataServicePage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex h-[260px] items-center justify-center">
+                  <div className="flex h-[300px] items-center justify-center rounded-xl bg-[#fafbfc]">
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已上线 API" />
                   </div>
                 )}
               </section>
 
-              <section className="min-w-0 rounded-xl bg-[#f7f8fa] p-3">
-                <div className="flex items-center justify-between px-2 pb-2 pt-1">
-                  <div>
-                    <div className="text-[13px] font-semibold text-[#30323b]">热门调用</div>
-                    <div className="mt-1 text-[10px] text-[#a0a6af]">按近期调用次数排序</div>
+              <aside className="space-y-4">
+                <section className="rounded-xl bg-[#f7f8fa] p-4">
+                  <div className="text-[13px] font-semibold text-[#30323b]">API 概览</div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-white px-3 py-3">
+                      <div className="text-[10px] text-[#98a2b3]">API 总数</div>
+                      <div className="mt-1 text-[21px] font-semibold tabular-nums text-[#161823]">{services.length}</div>
+                    </div>
+                    <div className="rounded-lg bg-white px-3 py-3">
+                      <div className="text-[10px] text-[#98a2b3]">运行中</div>
+                      <div className="mt-1 text-[21px] font-semibold tabular-nums text-[#161823]">{runningServices.length}</div>
+                    </div>
+                    <div className="rounded-lg bg-white px-3 py-3">
+                      <div className="text-[10px] text-[#98a2b3]">近期调用</div>
+                      <div className="mt-1 text-[21px] font-semibold tabular-nums text-[#161823]">{totalCalls}</div>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-[#a0a6af]">Top {hotServices.length}</span>
-                </div>
-                {hotServices.length ? (
-                  <div className="space-y-1">
-                    {hotServices.map((service, index) => (
-                      <ApiListItem
-                        key={service.id}
-                        rank={index + 1}
-                        service={service}
-                        dataSourceName={dataSourceName(service.dataSourceId)}
-                        calls={callsByApiId.get(service.id) || 0}
-                        onOpen={() => setDetailTarget(service)}
-                      />
-                    ))}
+                </section>
+
+                <section className="rounded-xl bg-[#f7f8fa] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-[13px] font-semibold text-[#30323b]">热门调用</div>
+                      <div className="mt-1 text-[10px] text-[#98a2b3]">按近期调用次数排序</div>
+                    </div>
+                    <span className="text-[10px] text-[#98a2b3]">Top {hotServices.length}</span>
                   </div>
-                ) : (
-                  <div className="flex h-[260px] items-center justify-center">
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用记录" />
-                  </div>
-                )}
-              </section>
+
+                  {hotServices.length ? (
+                    <div className="space-y-2">
+                      {hotServices.map((service, index) => (
+                        <ApiListItem
+                          key={service.id}
+                          rank={index + 1}
+                          service={service}
+                          dataSourceName={dataSourceName(service.dataSourceId)}
+                          calls={callsByApiId.get(service.id) || 0}
+                          onOpen={() => setDetailTarget(service)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-[190px] items-center justify-center rounded-lg bg-white">
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用记录" />
+                    </div>
+                  )}
+                </section>
+              </aside>
             </div>
           </div>
         </div>
