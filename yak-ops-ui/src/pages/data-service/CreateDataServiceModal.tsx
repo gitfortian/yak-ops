@@ -4,6 +4,7 @@ import {
   DATA_DEVELOPMENT_RELEASE_SOURCE,
   fetchDataServiceSources,
   publishDataService,
+  type DataServiceApi,
   type DataServicePublishPayload,
   type DataServiceSource,
   type DataSourceOption,
@@ -11,6 +12,7 @@ import {
 
 interface CreateDataServiceModalProps {
   open: boolean;
+  services: DataServiceApi[];
   dataSources: DataSourceOption[];
   onCancel: () => void;
   onCreated: () => Promise<void> | void;
@@ -22,6 +24,7 @@ const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 
 
 export default function CreateDataServiceModal({
   open,
+  services,
   dataSources,
   onCancel,
   onCreated,
@@ -31,6 +34,12 @@ export default function CreateDataServiceModal({
   const [sourceLoading, setSourceLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedRef, setSelectedRef] = useState<string>();
+
+  const publishedRefs = useMemo(() => new Set(
+    services
+      .filter((item) => item.sourceType === DATA_DEVELOPMENT_RELEASE_SOURCE && item.sourceRef)
+      .map((item) => item.sourceRef as string),
+  ), [services]);
 
   const selectedSource = useMemo(
     () => sources.find((item) => item.sourceRef === selectedRef),
@@ -72,7 +81,7 @@ export default function CreateDataServiceModal({
     setSelectedRef(sourceRef);
     if (!sourceRef) return;
     const source = sources.find((item) => item.sourceRef === sourceRef);
-    if (!source) return;
+    if (!source || publishedRefs.has(sourceRef)) return;
     form.setFieldsValue({
       sourceRef,
       name: `${source.name} API`,
@@ -85,6 +94,10 @@ export default function CreateDataServiceModal({
 
   const save = async () => {
     const values = await form.validateFields();
+    if (publishedRefs.has(values.sourceRef)) {
+      message.warning('该 SQL 已发布为数据服务，请从已有 API 或数据开发执行更新');
+      return;
+    }
     setSaving(true);
     try {
       await publishDataService({
@@ -121,7 +134,7 @@ export default function CreateDataServiceModal({
           name="sourceRef"
           label="来源 SQL"
           rules={[{ required: true, message: '请选择已发布 SQL' }]}
-          extra="仅展示数据开发中 ONLINE 的 SQL 发布版本。"
+          extra="仅展示数据开发中 ONLINE 的 SQL 发布版本；已创建 API 的来源会保留展示但不可重复选择。"
         >
           <Select
             allowClear
@@ -132,10 +145,14 @@ export default function CreateDataServiceModal({
             notFoundContent={sourceLoading ? '加载中...' : '暂无可发布 SQL，请先在数据开发完成 SQL 发布'}
             onSearch={(value) => void loadSources(value)}
             onChange={selectSource}
-            options={sources.map((item) => ({
-              value: item.sourceRef,
-              label: `${item.name} · v${item.sourceRevisionNo || '-'}`,
-            }))}
+            options={sources.map((item) => {
+              const published = publishedRefs.has(item.sourceRef);
+              return {
+                value: item.sourceRef,
+                disabled: published,
+                label: `${item.name} · v${item.sourceRevisionNo || '-'}${published ? ' · 已发布' : ''}`,
+              };
+            })}
           />
         </Form.Item>
 
