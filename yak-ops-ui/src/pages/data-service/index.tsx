@@ -15,13 +15,11 @@ import {
   Copy,
   Eye,
   MoreHorizontal,
-  Plus,
   RefreshCw,
   Search,
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import CreateDataServiceModal from './CreateDataServiceModal';
 import DataServiceDetailDrawer from './DataServiceDetailDrawer';
 import {
   DATA_SERVICE_NODE_SOURCE,
@@ -39,7 +37,6 @@ export default function DataServicePage() {
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DataServiceApi>();
 
   const load = useCallback(async () => {
@@ -238,16 +235,11 @@ export default function DataServicePage() {
 
   return (
     <div className="h-full bg-white px-6 py-5">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">
-            运行已发布的 Data Service，管理启停、API Key、Runtime、OpenAPI 和调用记录。
-          </p>
-        </div>
-        <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>
-          部署 API
-        </Button>
+      <div className="mb-5">
+        <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
+        <p className="mb-0 mt-1 text-sm text-black/45">
+          管理已上线的 Data Service，查看启停、API Key、Runtime、OpenAPI 和调用记录。
+        </p>
       </div>
 
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -270,13 +262,6 @@ export default function DataServicePage() {
         columns={columns}
         pagination={false}
         scroll={{ x: 1050 }}
-      />
-
-      <CreateDataServiceModal
-        open={createOpen}
-        dataSources={dataSources}
-        onCancel={() => setCreateOpen(false)}
-        onCreated={load}
       />
 
       <DataServiceDetailDrawer

@@ -55,26 +55,53 @@ export const fetchDataServicePublicationState = async (
   await HttpUtils.get<DataServicePublicationState>(
     `${DATA_SERVICE_API}/publication/state?sourceType=${encodeURIComponent(DATA_SERVICE_NODE_SOURCE)}&sourceRef=${encodeURIComponent(nodeId)}`,
   ),
-  '查询 Data Service Runtime 同步状态失败',
+  '查询 Data Service 服务状态失败',
 );
 
-export const deployDataServiceRuntime = async (
+/**
+ * Product-level "online" action.
+ *
+ * Runtime publish / republish / enable stay as implementation details so the
+ * Data Development UI only needs to expose 上线 / 更新上线.
+ */
+export const bringDataServiceOnline = async (
   nodeId: DevelopmentId,
-): Promise<DataServiceRuntimeApiSnapshot> => unwrap(
-  await HttpUtils.post<DataServiceRuntimeApiSnapshot>(`${DATA_SERVICE_API}/publish`, {
-    sourceType: DATA_SERVICE_NODE_SOURCE,
-    sourceRef: nodeId,
-    enabled: false,
-  }),
-  '部署 Data Service Runtime 失败',
-);
+  state?: DataServicePublicationState,
+): Promise<DataServiceRuntimeApiSnapshot> => {
+  if (!state?.published) {
+    return unwrap(
+      await HttpUtils.post<DataServiceRuntimeApiSnapshot>(`${DATA_SERVICE_API}/publish`, {
+        sourceType: DATA_SERVICE_NODE_SOURCE,
+        sourceRef: nodeId,
+        enabled: true,
+      }),
+      '上线 Data Service API 失败',
+    );
+  }
 
-export const syncDataServiceRuntime = async (
-  apiId: number | string,
-): Promise<DataServiceRuntimeApiSnapshot> => unwrap(
-  await HttpUtils.post<DataServiceRuntimeApiSnapshot>(
-    `${DATA_SERVICE_API}/${apiId}/republish`,
-    {},
-  ),
-  '同步 Data Service Runtime 失败',
-);
+  const apiId = state.detail?.id;
+  if (!apiId) throw new Error('线上 API 身份缺失，请刷新服务状态后重试');
+
+  let detail = state.detail;
+  if (state.updateAvailable) {
+    detail = unwrap(
+      await HttpUtils.post<DataServiceRuntimeApiSnapshot>(
+        `${DATA_SERVICE_API}/${apiId}/republish`,
+        {},
+      ),
+      '更新上线失败',
+    );
+  }
+
+  if (!detail?.enabled) {
+    detail = unwrap(
+      await HttpUtils.put<DataServiceRuntimeApiSnapshot>(
+        `${DATA_SERVICE_API}/${apiId}/enabled?enabled=true`,
+        {},
+      ),
+      '启用 Data Service API 失败',
+    );
+  }
+
+  return detail;
+};

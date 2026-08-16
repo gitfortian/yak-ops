@@ -42,9 +42,8 @@ import {
   type DevelopmentDataServiceResponseField,
 } from '../../data-service-node-service';
 import {
-  deployDataServiceRuntime,
+  bringDataServiceOnline,
   fetchDataServicePublicationState,
-  syncDataServiceRuntime,
   type DataServicePublicationState,
 } from '../../data-service-runtime-publication';
 import {
@@ -69,7 +68,7 @@ interface DataServiceNodeEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
-type RightPanelKey = 'properties' | 'request' | 'response' | 'versions' | 'deployment';
+type RightPanelKey = 'properties' | 'request' | 'response' | 'versions' | 'online';
 
 const requestTypeOptions: { label: string; value: DataServiceContractType }[] = [
   { label: 'STRING', value: 'STRING' },
@@ -90,7 +89,7 @@ const panelItems: Array<{ key: RightPanelKey; label: string }> = [
   { key: 'request', label: '请求参数' },
   { key: 'response', label: '返回参数' },
   { key: 'versions', label: '版本' },
-  { key: 'deployment', label: '部署' },
+  { key: 'online', label: '上线' },
 ];
 
 const DEFAULT_PANEL_WIDTH = 380;
@@ -227,7 +226,7 @@ export default function DataServiceNodeEditor({
   const [publicationState, setPublicationState] = useState<DataServicePublicationState>();
   const [publicationError, setPublicationError] = useState<string>();
   const [publicationLoading, setPublicationLoading] = useState(false);
-  const [deploying, setDeploying] = useState(false);
+  const [goingOnline, setGoingOnline] = useState(false);
   const [activePanel, setActivePanel] = useState<RightPanelKey>();
   const [panelWidth, setPanelWidth] = useState(initialPanelWidth);
   const [resizing, setResizing] = useState(false);
@@ -287,7 +286,7 @@ export default function DataServiceNodeEditor({
     try {
       setPublicationState(await fetchDataServicePublicationState(node.id));
     } catch (error) {
-      const text = error instanceof Error ? error.message : '查询 Runtime 同步状态失败';
+      const text = error instanceof Error ? error.message : '查询服务状态失败';
       setPublicationState(undefined);
       setPublicationError(text);
       if (notifyOnError) message.error(text);
@@ -457,7 +456,8 @@ export default function DataServiceNodeEditor({
       const revision = await publishDevelopmentDataServiceNode(node.id, draftRevision);
       await load();
       await onSaved?.();
-      message.success(`已发布 DS R${revision.revisionNo}`);
+      setActivePanel('online');
+      message.success(`已发布 DS R${revision.revisionNo} · 可继续上线 API`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '发布 Data Service Node 失败');
     } finally {
@@ -465,26 +465,56 @@ export default function DataServiceNodeEditor({
     }
   };
 
-  const deployOrSync = async () => {
-    const latestPublished = context?.latestPublishedRevision;
-    if (!latestPublished || deploying) return;
+  const latestPublished = context?.latestPublishedRevision;
+  const onlineRevisionNo = publicationState?.detail?.sourceRevisionNo;
+  const serviceStatus = !latestPublished
+    ? '等待发布版本'
+    : publicationLoading
+      ? '正在查询服务状态'
+      : publicationError
+        ? '服务状态不可用'
+        : !publicationState?.published
+          ? '尚未上线'
+          : publicationState.updateAvailable
+            ? `线上 DS R${onlineRevisionNo || '-'} · 有新版本待上线`
+            : publicationState.detail?.enabled
+              ? `DS R${onlineRevisionNo || '-'} · 运行中`
+              : `DS R${onlineRevisionNo || '-'} · 已停用`;
 
-    setDeploying(true);
+  const onlineActionLabel = !publicationState?.published
+    ? '上线 API'
+    : publicationState.updateAvailable
+      ? '更新上线'
+      : publicationState.detail?.enabled
+        ? '已上线'
+        : '重新上线';
+
+  const onlineActionDisabled = !latestPublished
+    || publicationLoading
+    || Boolean(publicationError)
+    || Boolean(
+      publicationState?.published
+      && !publicationState.updateAvailable
+      && publicationState.detail?.enabled,
+    );
+
+  const goOnline = async () => {
+    if (!latestPublished || goingOnline || publicationError) return;
+
+    const updating = Boolean(publicationState?.published && publicationState.updateAvailable);
+    setGoingOnline(true);
     try {
-      if (publicationState?.published) {
-        const apiId = publicationState.detail?.id;
-        if (!apiId) throw new Error('Runtime API 身份缺失，请刷新同步状态后重试');
-        await syncDataServiceRuntime(apiId);
-        message.success(`Runtime 已同步到 DS R${latestPublished.revisionNo}`);
-      } else {
-        await deployDataServiceRuntime(node.id);
-        message.success(`Runtime 已部署 · DS R${latestPublished.revisionNo} · 默认停用`);
-      }
+      await bringDataServiceOnline(node.id, publicationState);
       await loadPublicationState(true, true);
+      message.success(
+        updating
+          ? `DS R${latestPublished.revisionNo} 已更新上线`
+          : `API 已上线 · DS R${latestPublished.revisionNo}`,
+      );
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '部署 Data Service Runtime 失败');
+      message.error(error instanceof Error ? error.message : 'Data Service API 上线失败');
     } finally {
-      setDeploying(false);
+      setGoingOnline(false);
     }
   };
 
@@ -618,22 +648,6 @@ export default function DataServiceNodeEditor({
     },
   ], []);
 
-  const latestPublished = context?.latestPublishedRevision;
-  const runtimeRevisionNo = publicationState?.detail?.sourceRevisionNo;
-  const runtimeStatus = !latestPublished
-    ? '等待发布 DS Revision'
-    : publicationLoading
-      ? '正在查询 Runtime'
-      : publicationError
-        ? 'Runtime 状态不可用'
-        : !publicationState?.published
-          ? '尚未部署'
-          : publicationState.updateAvailable
-            ? `Runtime DS R${runtimeRevisionNo || '-'} · 待同步`
-            : publicationState.detail?.enabled
-              ? `Runtime DS R${runtimeRevisionNo || '-'} · 运行中`
-              : `Runtime DS R${runtimeRevisionNo || '-'} · 已停用`;
-
   const propertiesPanel = (
     <div className="text-[12px] leading-5">
       <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-4 gap-y-4">
@@ -761,15 +775,25 @@ export default function DataServiceNodeEditor({
     </div>
   );
 
-  const deploymentPanel = (
+  const onlinePanel = (
     <div className="text-[12px] leading-5">
+      <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
+        发布用于生成稳定版本；需要对外提供服务时点击“上线”。后续发布新版本后使用“更新上线”。
+      </div>
+
       <dl className="m-0 grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-4">
-        <dt className="text-[#667085]">最新发布：</dt>
+        <dt className="text-[#667085]">最新版本：</dt>
         <dd className="m-0 text-[#344054]">{latestPublished ? `DS R${latestPublished.revisionNo}` : '尚未发布'}</dd>
-        <dt className="text-[#667085]">Runtime：</dt>
-        <dd className="m-0 text-[#344054]">{runtimeStatus}</dd>
+        <dt className="text-[#667085]">线上版本：</dt>
+        <dd className="m-0 text-[#344054]">
+          {publicationState?.published ? `DS R${onlineRevisionNo || '-'}` : '-'}
+        </dd>
+        <dt className="text-[#667085]">服务状态：</dt>
+        <dd className="m-0 text-[#344054]">{serviceStatus}</dd>
         <dt className="text-[#667085]">Endpoint：</dt>
-        <dd className="m-0 break-all font-mono text-[11px] text-[#344054]">{publicationState?.detail?.runtimePath || '-'}</dd>
+        <dd className="m-0 break-all font-mono text-[11px] text-[#344054]">
+          {publicationState?.detail?.runtimePath || '-'}
+        </dd>
       </dl>
 
       <div className="mt-5 border-t border-[#eef0f2] pt-4">
@@ -777,11 +801,11 @@ export default function DataServiceNodeEditor({
           block
           type="primary"
           icon={<Rocket size={14} />}
-          disabled={!latestPublished}
-          loading={deploying}
-          onClick={() => void deployOrSync()}
+          disabled={onlineActionDisabled}
+          loading={goingOnline}
+          onClick={() => void goOnline()}
         >
-          {publicationState?.published ? '同步最新 Revision' : '部署 Runtime'}
+          {onlineActionLabel}
         </Button>
         {publicationState?.published ? (
           <Button
@@ -805,11 +829,11 @@ export default function DataServiceNodeEditor({
     request: requestPanel,
     response: responsePanel,
     versions: versionsPanel,
-    deployment: deploymentPanel,
+    online: onlinePanel,
   };
 
   const refreshActivePanel = () => {
-    if (activePanel === 'deployment') {
+    if (activePanel === 'online') {
       void loadPublicationState(Boolean(latestPublished), true);
       return;
     }
