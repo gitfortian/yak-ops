@@ -77,20 +77,23 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/data-analysis/chart-analysis', [])).toBe('dashboard');
   });
 
-  it('registers api marketplace, runtime overview and call logs as data-service pages', () => {
+  it('registers api marketplace, debug, runtime overview and call logs as data-service pages', () => {
     const dataService = getMainNavigationGroups([]).find((group) => group.id === 'data-service');
     expect(dataService?.title).toBe('数据服务');
     expect(dataService?.routes.map((route) => route.id)).toEqual([
       'data-service-api',
+      'data-service-debug',
       'data-service-overview',
       'data-service-logs',
     ]);
     expect(dataService?.routes.map((route) => route.title)).toEqual([
       'API 集市',
+      'API 调试',
       '运行概览',
       '调用记录',
     ]);
     expect(getActiveNavigationId('/data-service', [])).toBe('data-service-api');
+    expect(getActiveNavigationId('/data-service/debug', [])).toBe('data-service-debug');
     expect(getActiveNavigationId('/data-service/overview', [])).toBe('data-service-overview');
     expect(getActiveNavigationId('/data-service/logs', [])).toBe('data-service-logs');
   });
