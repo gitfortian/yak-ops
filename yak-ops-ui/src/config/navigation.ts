@@ -45,8 +45,9 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'dashboard-viewer', path: '/dashboard/:id', title: '仪表盘查看', component: './dashboard/viewer', hidden: true, parentId: 'dashboard' },
   { id: 'data-analysis-catalog', mode: 'public', path: '/data-analysis/data-catalog', title: '数据目录', component: './data-analysis/data-catalog', iconKey: 'database', menuGroup: 'data-analysis', order: 20 },
   { id: 'data-analysis-chart', path: '/data-analysis/chart-analysis', title: '图表分析', component: './data-analysis/chart-analysis-redirect', hidden: true, parentId: 'dashboard' },
-  { id: 'data-service-api', mode: 'public', path: '/data-service', title: 'API 服务', component: './data-service', iconKey: 'api', menuGroup: 'data-service', order: 10 },
-  { id: 'data-service-logs', mode: 'public', path: '/data-service/logs', title: '调用记录', component: './data-service/logs', iconKey: 'report', menuGroup: 'data-service', order: 20 },
+  { id: 'data-service-api', mode: 'public', path: '/data-service', title: 'API 集市', component: './data-service', iconKey: 'api', menuGroup: 'data-service', order: 10 },
+  { id: 'data-service-overview', mode: 'public', path: '/data-service/overview', title: '运行概览', component: './data-service/overview', iconKey: 'monitor', menuGroup: 'data-service', order: 20 },
+  { id: 'data-service-logs', mode: 'public', path: '/data-service/logs', title: '调用记录', component: './data-service/logs', iconKey: 'report', menuGroup: 'data-service', order: 30 },
   { id: 'settings', mode: 'public', path: '/settings', title: '设置', component: './settings', hidden: true, order: 30 },
   {
     id: 'batch-link-up', mode: 'one', permission: 'task:batch:read',

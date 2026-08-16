@@ -25,12 +25,14 @@ describe('permission-aware navigation', () => {
       'development',
       'workflow',
       'data-analysis',
+      'data-service',
     ]);
     expect(getMainNavigationGroups(batchRead).map((group) => group.id)).toEqual([
       'integration',
       'development',
       'workflow',
       'data-analysis',
+      'data-service',
     ]);
     expect(getQuickCreateRoutes(batchRead)).toEqual([]);
     expect(getQuickCreateRoutes([...batchRead, 'task:batch:create']).map((route) => route.id)).toEqual(['batch-link-up']);
@@ -45,12 +47,14 @@ describe('permission-aware navigation', () => {
       'resources',
       'data-quality',
       'data-analysis',
+      'data-service',
       'system',
     ]);
     expect(groups.map((group) => group.section)).toEqual([
       'task',
       'task',
       'task',
+      'management',
       'management',
       'management',
       'management',
@@ -71,6 +75,24 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/dashboard/new', [])).toBe('dashboard');
     expect(getActiveNavigationId('/dashboard/42', [])).toBe('dashboard');
     expect(getActiveNavigationId('/data-analysis/chart-analysis', [])).toBe('dashboard');
+  });
+
+  it('registers api marketplace, runtime overview and call logs as data-service pages', () => {
+    const dataService = getMainNavigationGroups([]).find((group) => group.id === 'data-service');
+    expect(dataService?.title).toBe('数据服务');
+    expect(dataService?.routes.map((route) => route.id)).toEqual([
+      'data-service-api',
+      'data-service-overview',
+      'data-service-logs',
+    ]);
+    expect(dataService?.routes.map((route) => route.title)).toEqual([
+      'API 集市',
+      '运行概览',
+      '调用记录',
+    ]);
+    expect(getActiveNavigationId('/data-service', [])).toBe('data-service-api');
+    expect(getActiveNavigationId('/data-service/overview', [])).toBe('data-service-overview');
+    expect(getActiveNavigationId('/data-service/logs', [])).toBe('data-service-logs');
   });
 
   it('registers home before other standalone navigation', () => {
