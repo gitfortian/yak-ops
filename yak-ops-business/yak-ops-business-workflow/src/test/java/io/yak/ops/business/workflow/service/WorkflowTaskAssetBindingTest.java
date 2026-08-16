@@ -2,6 +2,7 @@ package io.yak.ops.business.workflow.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -103,6 +104,32 @@ class WorkflowTaskAssetBindingTest {
     assertEquals("task-asset:12", latestVersion.taskBindings().getFirst().taskId());
   }
 
+  @Test
+  void rejectsDataDevelopmentOutputAssetsAtWorkflowPublishBoundary() {
+    WorkflowRuntimeService runtimeService = mock(WorkflowRuntimeService.class);
+    TaskRegistry taskRegistry = mock(TaskRegistry.class);
+    TaskCatalogService taskCatalogService = mock(TaskCatalogService.class);
+    WorkflowDefinitionService service = new WorkflowDefinitionService(
+        runtimeService,
+        taskRegistry,
+        taskCatalogService,
+        NoopWorkflowDefinitionPersistence.INSTANCE);
+
+    WorkflowDefinitionVO created = service.create(
+        new WorkflowDefinitionCreateDTO("边界工作流", "输出资源不能参与编排"));
+
+    for (String taskType : List.of("DATASET", "DATA_SERVICE")) {
+      when(taskCatalogService.get(12L)).thenReturn(asset(taskType, 101L, 1));
+      service.update(created.id(), updateRequest(101L, 1));
+
+      IllegalArgumentException exception = assertThrows(
+          IllegalArgumentException.class,
+          () -> service.online(created.id()));
+
+      assertTrue(exception.getMessage().contains("不能进入工作流编排"));
+    }
+  }
+
   private static WorkflowDefinitionUpdateDTO updateRequest(long revisionId, int revisionNo) {
     WorkflowDefinitionUpdateDTO.NodeDTO node = new WorkflowDefinitionUpdateDTO.NodeDTO(
         "task-node-1",
@@ -131,6 +158,10 @@ class WorkflowTaskAssetBindingTest {
   }
 
   private static TaskAsset asset(long revisionId, int revisionNo) {
+    return asset("SQL", revisionId, revisionNo);
+  }
+
+  private static TaskAsset asset(String taskType, long revisionId, int revisionNo) {
     Instant now = Instant.parse("2026-08-12T00:00:00Z");
     return new TaskAsset(
         12L,
@@ -138,7 +169,7 @@ class WorkflowTaskAssetBindingTest {
         "10001",
         7L,
         "今天统计",
-        "SQL",
+        taskType,
         TaskAssetStatus.ONLINE,
         new TaskRevisionRef(12L, revisionId, revisionNo),
         now,

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.domain.DevelopmentNodeType;
 import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
@@ -54,7 +55,7 @@ public class DevelopmentTaskService {
   }
 
   public DevelopmentTaskDraft getDraft(Long nodeId) {
-    DevelopmentNode node = requireNode(nodeId);
+    DevelopmentNode node = requireTaskNode(nodeId);
     return draftRepository.findByNodeId(nodeId)
         .orElseGet(() -> emptyDraft(node));
   }
@@ -67,7 +68,7 @@ public class DevelopmentTaskService {
       String content,
       String configJson,
       Long baseRevision) {
-    DevelopmentNode node = requireNode(nodeId);
+    DevelopmentNode node = requireTaskNode(nodeId);
     TaskDefinition definition = normalizeDefinition(
         node,
         taskType,
@@ -85,7 +86,7 @@ public class DevelopmentTaskService {
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public DevelopmentTaskRevision publish(Long nodeId, long expectedDraftRevision) {
-    DevelopmentNode node = requireNode(nodeId);
+    DevelopmentNode node = requireTaskNode(nodeId);
     DevelopmentTaskDraft draft = draftRepository.findByNodeIdForUpdate(nodeId)
         .orElseThrow(() -> new IllegalArgumentException("节点尚未保存草稿：" + nodeId));
 
@@ -135,22 +136,29 @@ public class DevelopmentTaskService {
   }
 
   public List<DevelopmentTaskRevisionSummary> listRevisions(Long nodeId) {
-    requireNode(nodeId);
+    requireTaskNode(nodeId);
     return revisionRepository.listByNodeId(nodeId);
   }
 
   public DevelopmentTaskRevision getRevision(Long nodeId, int revisionNo) {
-    requireNode(nodeId);
+    requireTaskNode(nodeId);
     if (revisionNo <= 0) throw new IllegalArgumentException("revisionNo 必须大于 0");
     return revisionRepository.findByRevisionNo(nodeId, revisionNo)
         .orElseThrow(() -> new IllegalArgumentException(
             "发布版本不存在：nodeId=" + nodeId + ", revisionNo=" + revisionNo));
   }
 
-  private DevelopmentNode requireNode(Long nodeId) {
+  private DevelopmentNode requireTaskNode(Long nodeId) {
     if (nodeId == null || nodeId <= 0L) throw new IllegalArgumentException("节点 ID 非法");
-    return nodeRepository.findById(nodeId)
+    DevelopmentNode node = nodeRepository.findById(nodeId)
         .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + nodeId));
+    DevelopmentNodeType nodeType = DevelopmentNodeType.tryParse(node.type())
+        .orElseThrow(() -> new IllegalArgumentException("未知数据开发节点类型：" + node.type()));
+    if (!nodeType.supportsTaskLifecycle()) {
+      throw new IllegalArgumentException(
+          "当前节点不是可执行开发任务，不能进入草稿/发布生命周期：" + node.type());
+    }
+    return node;
   }
 
   private DevelopmentTaskDraft emptyDraft(DevelopmentNode node) {

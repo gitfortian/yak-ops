@@ -30,6 +30,19 @@ public enum DevelopmentNodeType {
     return category == DevelopmentNodeCategory.OUTPUT;
   }
 
+  /**
+   * Explicit authoring boundary for mutable draft -> immutable task revision -> Task Catalog.
+   *
+   * <p>Do not derive this from PROCESSING/OUTPUT at call sites. New node types must opt in here
+   * before they can enter the executable task lifecycle.
+   */
+  public boolean supportsTaskLifecycle() {
+    return switch (this) {
+      case SQL, SHELL, HTTP, PYTHON -> true;
+      case DATASET, DATA_SERVICE -> false;
+    };
+  }
+
   public static Optional<DevelopmentNodeType> tryParse(String value) {
     if (value == null || value.isBlank()) return Optional.empty();
     try {

@@ -37,6 +37,8 @@ final class WorkflowTaskBindingResolver {
       return snapshot;
     }
 
+    TaskAsset asset = requireCatalog().get(node.taskAssetId());
+    WorkflowTaskEligibilityPolicy.requireEligible(asset);
     TaskAssetRevision resolved = requireCatalog().resolveRevision(
         node.taskAssetId(),
         node.taskRevisionId());
@@ -86,6 +88,7 @@ final class WorkflowTaskBindingResolver {
       throw new IllegalStateException("当前节点不是 TaskAsset 节点，不能升级任务版本");
     }
     TaskAsset asset = requireCatalog().get(node.taskAssetId());
+    WorkflowTaskEligibilityPolicy.requireEligible(asset);
     if (asset.status() != TaskAssetStatus.ONLINE) {
       throw new IllegalStateException("任务资产已下线，不能升级到新版本：" + asset.name());
     }

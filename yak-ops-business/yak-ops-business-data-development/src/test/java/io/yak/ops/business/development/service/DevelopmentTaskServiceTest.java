@@ -56,6 +56,10 @@ class DevelopmentTaskServiceTest {
     Instant now = Instant.parse("2026-08-12T00:00:00Z");
     when(nodeRepository.findById(1L)).thenReturn(Optional.of(
         new DevelopmentNode(1L, "今天统计", "SQL", null, null, false, now, now)));
+    when(nodeRepository.findById(2L)).thenReturn(Optional.of(
+        new DevelopmentNode(2L, "销售数据集", "DATASET", null, null, false, now, now)));
+    when(nodeRepository.findById(3L)).thenReturn(Optional.of(
+        new DevelopmentNode(3L, "订单查询 API", "DATA_SERVICE", null, null, false, now, now)));
   }
 
   @Test
@@ -82,6 +86,21 @@ class DevelopmentTaskServiceTest {
     assertThrows(
         DevelopmentDraftConflictException.class,
         () -> service.saveDraft(1L, "SQL", 1, "select 2", "{}", 2L));
+  }
+
+  @Test
+  void outputResourcesCannotEnterTaskDraftOrPublishLifecycle() {
+    for (long nodeId : List.of(2L, 3L)) {
+      IllegalArgumentException draftException = assertThrows(
+          IllegalArgumentException.class,
+          () -> service.getDraft(nodeId));
+      assertTrue(draftException.getMessage().contains("不是可执行开发任务"));
+
+      IllegalArgumentException publishException = assertThrows(
+          IllegalArgumentException.class,
+          () -> service.publish(nodeId, 1L));
+      assertTrue(publishException.getMessage().contains("不是可执行开发任务"));
+    }
   }
 
   @Test
