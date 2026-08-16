@@ -7,7 +7,6 @@ import {
   Space,
   Switch,
   Table,
-  Tag,
   Tooltip,
   message,
   type TableColumnsType,
@@ -15,12 +14,9 @@ import {
 import {
   ArrowLeft,
   Copy,
-  Eye,
-  Flame,
   MoreHorizontal,
   RefreshCw,
   Search,
-  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -44,46 +40,63 @@ const timeValue = (value?: string) => {
   return Number.isNaN(result) ? 0 : result;
 };
 
-interface ApiCardProps {
+interface ApiListItemProps {
   service: DataServiceApi;
   dataSourceName: string;
   calls?: number;
-  hot?: boolean;
+  rank?: number;
   onOpen: () => void;
 }
 
-const ApiCard = ({ service, dataSourceName, calls, hot, onOpen }: ApiCardProps) => (
+const ApiMethod = () => (
+  <span className="inline-flex h-5 items-center rounded-[4px] bg-[#f2f4f7] px-1.5 font-mono text-[10px] font-medium text-[#667085]">
+    GET
+  </span>
+);
+
+const ApiListItem = ({
+  service,
+  dataSourceName,
+  calls,
+  rank,
+  onOpen,
+}: ApiListItemProps) => (
   <button
     type="button"
     onClick={onOpen}
-    className="group min-h-[148px] rounded-[6px] border border-[#e6e8eb] bg-white p-4 text-left transition-all hover:-translate-y-px hover:border-[#d9dde3] hover:shadow-[0_5px_18px_rgba(16,24,40,.06)]"
+    className="group flex min-h-[78px] w-full items-center gap-3 border-0 border-b border-solid border-[#f0f1f2] bg-transparent px-2 py-3 text-left transition-colors last:border-b-0 hover:bg-[#f8f9fa]"
   >
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[14px] font-semibold text-[#161823]">{service.name}</span>
-          <Tag bordered={false}>GET</Tag>
-        </div>
-        <div className="mt-1.5 line-clamp-2 min-h-[36px] text-[12px] leading-[18px] text-[#7b808a]">
-          {service.description || '暂无能力说明'}
-        </div>
+    {rank ? (
+      <span className="w-6 shrink-0 text-center font-mono text-[11px] text-[#b0b5bd]">
+        {String(rank).padStart(2, '0')}
+      </span>
+    ) : null}
+
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <span className="truncate text-[13px] font-medium text-[#161823] group-hover:text-[#111318]">
+          {service.name}
+        </span>
+        <ApiMethod />
+        {!service.enabled ? (
+          <span className="shrink-0 text-[10px] text-[#98a2b3]">已停用</span>
+        ) : null}
       </div>
-      {hot ? (
-        <Flame size={16} strokeWidth={1.8} className="mt-0.5 shrink-0 text-[#98a2b3]" />
-      ) : (
-        <Sparkles size={16} strokeWidth={1.8} className="mt-0.5 shrink-0 text-[#98a2b3]" />
-      )}
+      <div className="mt-1 truncate text-[11px] text-[#8a9099]">
+        {service.description || '暂无描述'}
+      </div>
+      <div className="mt-1 truncate font-mono text-[10px] text-[#a3a8b0]" title={service.runtimePath}>
+        {service.runtimePath}
+      </div>
     </div>
 
-    <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#f0f1f3] pt-3 text-[11px] text-[#98a2b3]">
-      <span className="min-w-0 flex-1 truncate font-mono" title={service.runtimePath}>
-        {service.runtimePath}
-      </span>
-      {calls !== undefined ? (
-        <span className="shrink-0">{calls} 次调用</span>
-      ) : (
-        <span className="max-w-[120px] shrink-0 truncate" title={dataSourceName}>{dataSourceName}</span>
-      )}
+    <div className="w-[118px] shrink-0 text-right">
+      <div className="truncate text-[11px] font-medium text-[#667085]" title={calls !== undefined ? undefined : dataSourceName}>
+        {calls !== undefined ? `${calls} 次调用` : dataSourceName}
+      </div>
+      <div className="mt-1 text-[10px] text-[#b0b5bd]">
+        {calls !== undefined ? dataSourceName : service.enabled ? '运行中' : '已停用'}
+      </div>
     </div>
   </button>
 );
@@ -228,13 +241,19 @@ export default function DataServicePage() {
       dataIndex: 'name',
       minWidth: 230,
       render: (_, record) => (
-        <div className="py-1.5">
+        <div className="py-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-[#161823]">{record.name}</span>
-            <Tag bordered={false}>GET</Tag>
+            <button
+              type="button"
+              onClick={() => setDetailTarget(record)}
+              className="max-w-[220px] truncate border-0 bg-transparent p-0 text-left text-[13px] font-medium text-[#344054] hover:text-[#161823]"
+            >
+              {record.name}
+            </button>
+            <ApiMethod />
           </div>
-          <div className="mt-1 line-clamp-1 text-xs text-black/40">
-            {record.description || '暂无说明'}
+          <div className="mt-0.5 line-clamp-1 text-[11px] text-[#98a2b3]">
+            {record.description || '暂无描述'}
           </div>
         </div>
       ),
@@ -245,7 +264,7 @@ export default function DataServicePage() {
       minWidth: 280,
       render: (value: string) => (
         <div className="flex items-center gap-1">
-          <span className="truncate font-mono text-xs text-black/55">{value}</span>
+          <span className="truncate font-mono text-[11px] text-[#667085]">{value}</span>
           <Tooltip title="复制 Endpoint">
             <Button
               type="text"
@@ -265,27 +284,27 @@ export default function DataServicePage() {
         if (record.sourceType === DATA_SERVICE_NODE_SOURCE) {
           return (
             <div>
-              <div className="font-medium text-[#475467]">Data Service · DS R{record.sourceRevisionNo || '-'}</div>
-              <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)}</div>
+              <div className="text-[12px] font-medium text-[#475467]">Data Service · DS R{record.sourceRevisionNo || '-'}</div>
+              <div className="mt-0.5 text-[11px] text-[#98a2b3]">{dataSourceName(record.dataSourceId)}</div>
             </div>
           );
         }
         if (record.sourceType === LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE) {
           return (
             <div>
-              <div className="font-medium text-[#667085]">Legacy · SQL v{record.sourceRevisionNo || '-'}</div>
-              <div className="mt-1 text-[11px] text-black/35">冻结来源 · {dataSourceName(record.dataSourceId)}</div>
+              <div className="text-[12px] font-medium text-[#667085]">Legacy · SQL v{record.sourceRevisionNo || '-'}</div>
+              <div className="mt-0.5 text-[11px] text-[#98a2b3]">冻结来源 · {dataSourceName(record.dataSourceId)}</div>
             </div>
           );
         }
-        return <span className="text-black/45">{dataSourceName(record.dataSourceId)}</span>;
+        return <span className="text-[12px] text-[#667085]">{dataSourceName(record.dataSourceId)}</span>;
       },
     },
     {
       title: '近期调用',
       key: 'calls',
       width: 100,
-      render: (_, record) => <span className="text-[#475467]">{callsByApiId.get(record.id) || 0}</span>,
+      render: (_, record) => <span className="text-[12px] text-[#475467]">{callsByApiId.get(record.id) || 0}</span>,
     },
     {
       title: '状态',
@@ -298,7 +317,7 @@ export default function DataServicePage() {
             checked={enabled}
             onChange={(next) => void toggleEnabled(record, next)}
           />
-          <span className={enabled ? 'text-[#344054]' : 'text-black/35'}>
+          <span className={enabled ? 'text-[12px] text-[#344054]' : 'text-[12px] text-[#98a2b3]'}>
             {enabled ? '运行中' : '已停用'}
           </span>
         </div>
@@ -307,14 +326,14 @@ export default function DataServicePage() {
     {
       title: '操作',
       key: 'actions',
-      width: 130,
+      width: 120,
       fixed: 'right',
       render: (_, record) => (
-        <Space size={4}>
+        <Space size={8}>
           <Button
             type="link"
             size="small"
-            icon={<Eye size={14} />}
+            className="!px-0 !text-[12px] !text-[#475467]"
             onClick={() => setDetailTarget(record)}
           >
             查看
@@ -337,133 +356,158 @@ export default function DataServicePage() {
     },
   ];
 
-  const searchBox = (compact = false) => (
-    <Input.Search
-      allowClear
-      value={keyword}
-      loading={loading}
-      enterButton="搜索"
-      size={compact ? 'middle' : 'large'}
-      prefix={<Search size={compact ? 15 : 17} className="text-black/25" />}
-      placeholder="搜索 API 名称、Endpoint、能力描述或数据源"
-      onChange={(event) => {
-        setKeyword(event.target.value);
-        if (!event.target.value) setSubmittedKeyword('');
-      }}
-      onSearch={submitSearch}
-      className={compact ? 'max-w-[620px]' : 'w-full max-w-[680px]'}
-    />
+  const searchControls = (compact = false) => (
+    <div className={compact
+      ? 'flex min-w-0 flex-1 items-center gap-2'
+      : 'flex w-full max-w-[640px] items-center gap-2'}>
+      <Input
+        allowClear
+        variant="filled"
+        value={keyword}
+        prefix={<Search size={15} className="text-[#98a2b3]" />}
+        placeholder="搜索 API 名称、Endpoint、描述或数据源"
+        className={compact ? '!h-9' : '!h-10'}
+        onChange={(event) => {
+          setKeyword(event.target.value);
+          if (!event.target.value) setSubmittedKeyword('');
+        }}
+        onPressEnter={submitSearch}
+      />
+      <Button
+        type="primary"
+        loading={loading}
+        className={compact ? '!h-9 !px-4' : '!h-10 !px-5'}
+        onClick={submitSearch}
+      >
+        搜索
+      </Button>
+    </div>
   );
 
   const searching = Boolean(submittedKeyword.trim());
 
   return (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="min-h-[calc(100vh-64px)] bg-white">
       {searching ? (
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3 border-b border-[#eef0f2] pb-5">
+        <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <Button
+                type="text"
+                icon={<ArrowLeft size={15} />}
+                onClick={resetSearch}
+                className="!-ml-2 !px-2"
+              />
+              <div className="min-w-0">
+                <h1 className="m-0 text-[17px] font-semibold text-[#161823]">API 集市</h1>
+                <div className="mt-1 truncate text-[12px] text-[#98a2b3]">
+                  搜索 “{submittedKeyword}”
+                </div>
+              </div>
+            </div>
             <Button
               type="text"
-              icon={<ArrowLeft size={16} />}
-              onClick={resetSearch}
+              icon={<RefreshCw size={14} />}
+              loading={loading}
+              onClick={() => void load()}
+              className="bg-[#f5f6f7]"
             >
-              API 集市
+              刷新
             </Button>
-            <div className="min-w-0 flex-1">{searchBox(true)}</div>
-            <Button icon={<RefreshCw size={15} />} onClick={() => void load()}>刷新</Button>
           </div>
 
-          <div className="mb-3 mt-5 flex items-center justify-between gap-3">
-            <div>
-              <h1 className="m-0 text-[18px] font-semibold text-[#161823]">搜索结果</h1>
-              <div className="mt-1 text-[12px] text-[#98a2b3]">
-                “{submittedKeyword}” · 找到 {searchResults.length} 个 API
-              </div>
-            </div>
+          <div className="mt-3 flex min-h-[54px] items-center justify-between gap-4 border-b border-[#f0f0f0] py-2">
+            <div className="w-full max-w-[680px]">{searchControls(true)}</div>
+            <span className="shrink-0 text-[12px] text-[#98a2b3]">共 {searchResults.length} 个结果</span>
           </div>
 
-          <Table<DataServiceApi>
-            rowKey="id"
-            size="small"
-            loading={loading}
-            dataSource={searchResults}
-            columns={columns}
-            pagination={false}
-            scroll={{ x: 1080 }}
-            locale={{ emptyText: '没有找到匹配的 API' }}
-          />
+          <div className="min-h-0 flex-1 pt-4">
+            <Table<DataServiceApi>
+              rowKey="id"
+              size="small"
+              bordered
+              loading={loading}
+              dataSource={searchResults}
+              columns={columns}
+              pagination={false}
+              scroll={{ x: 1080, y: 'calc(100vh - 245px)' }}
+              locale={{ emptyText: '没有找到匹配的 API' }}
+            />
+          </div>
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-[1240px] px-8 pb-12 pt-[9vh]">
-          <section className="flex flex-col items-center text-center">
-            <div className="text-[12px] font-medium tracking-[.18em] text-[#98a2b3]">YAK DATA SERVICE</div>
-            <h1 className="mb-0 mt-3 text-[28px] font-semibold tracking-[-.02em] text-[#161823]">API 集市</h1>
-            <p className="mb-0 mt-2 max-w-[560px] text-[13px] leading-6 text-[#7b808a]">
-              发现已经上线的数据 API，搜索能力、查看契约，并快速进入调试与调用配置。
-            </p>
-            <div className="mt-7 flex w-full justify-center">{searchBox()}</div>
-            <div className="mt-3 flex items-center gap-4 text-[11px] text-[#98a2b3]">
-              <span>{services.length} 个 API</span>
-              <span className="h-3 w-px bg-[#e4e7ec]" />
-              <span>{runningServices.length} 个运行中</span>
-              <span className="h-3 w-px bg-[#e4e7ec]" />
-              <button type="button" onClick={() => void load()} className="hover:text-[#475467]">刷新集市</button>
+        <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="m-0 text-[17px] font-semibold text-[#161823]">API 集市</h1>
+              <div className="mt-1 text-[12px] text-[#98a2b3]">
+                共 {services.length} 个 API · {runningServices.length} 个运行中
+              </div>
             </div>
-          </section>
+            <Button
+              type="text"
+              icon={<RefreshCw size={14} />}
+              loading={loading}
+              onClick={() => void load()}
+              className="bg-[#f5f6f7]"
+            >
+              刷新
+            </Button>
+          </div>
 
-          <section className="mt-14">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-[14px] font-semibold text-[#30323b]">
-                  <Sparkles size={15} strokeWidth={1.8} className="text-[#667085]" />
-                  推荐 API
+          <div className="mt-4 flex min-h-[76px] items-center justify-center rounded-[8px] border border-[#f0f0f0] bg-[#fafafa] px-6 py-4">
+            {searchControls()}
+          </div>
+
+          <div className="mt-6 grid min-h-0 grid-cols-1 gap-x-8 gap-y-8 xl:grid-cols-2">
+            <section className="min-w-0">
+              <div className="flex h-9 items-center justify-between border-b border-[#e9ebee]">
+                <div className="text-[13px] font-semibold text-[#30323b]">推荐 API</div>
+                <div className="text-[11px] text-[#98a2b3]">最近更新</div>
+              </div>
+              {recommendedServices.length ? (
+                <div>
+                  {recommendedServices.map((service) => (
+                    <ApiListItem
+                      key={service.id}
+                      service={service}
+                      dataSourceName={dataSourceName(service.dataSourceId)}
+                      onOpen={() => setDetailTarget(service)}
+                    />
+                  ))}
                 </div>
-                <div className="mt-1 text-[11px] text-[#98a2b3]">优先展示当前运行中的近期服务</div>
-              </div>
-            </div>
-            {recommendedServices.length ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {recommendedServices.map((service) => (
-                  <ApiCard
-                    key={service.id}
-                    service={service}
-                    dataSourceName={dataSourceName(service.dataSourceId)}
-                    onOpen={() => setDetailTarget(service)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已上线 API" />
-            )}
-          </section>
+              ) : (
+                <div className="flex h-[260px] items-center justify-center">
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已上线 API" />
+                </div>
+              )}
+            </section>
 
-          <section className="mt-12">
-            <div className="mb-4">
-              <div className="flex items-center gap-2 text-[14px] font-semibold text-[#30323b]">
-                <Flame size={15} strokeWidth={1.8} className="text-[#667085]" />
-                热门调用
+            <section className="min-w-0">
+              <div className="flex h-9 items-center justify-between border-b border-[#e9ebee]">
+                <div className="text-[13px] font-semibold text-[#30323b]">热门调用</div>
+                <div className="text-[11px] text-[#98a2b3]">最近调用</div>
               </div>
-              <div className="mt-1 text-[11px] text-[#98a2b3]">基于最近调用记录统计，不额外引入计量服务</div>
-            </div>
-            {hotServices.length ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {hotServices.map((service) => (
-                  <ApiCard
-                    key={service.id}
-                    hot
-                    service={service}
-                    dataSourceName={dataSourceName(service.dataSourceId)}
-                    calls={callsByApiId.get(service.id) || 0}
-                    onOpen={() => setDetailTarget(service)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-[6px] border border-dashed border-[#e4e7ec] px-5 py-8 text-center text-[12px] text-[#98a2b3]">
-                暂无调用数据，API 被调用后这里会自动形成热门排行
-              </div>
-            )}
-          </section>
+              {hotServices.length ? (
+                <div>
+                  {hotServices.map((service, index) => (
+                    <ApiListItem
+                      key={service.id}
+                      rank={index + 1}
+                      service={service}
+                      dataSourceName={dataSourceName(service.dataSourceId)}
+                      calls={callsByApiId.get(service.id) || 0}
+                      onOpen={() => setDetailTarget(service)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-[260px] items-center justify-center">
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用记录" />
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       )}
 
