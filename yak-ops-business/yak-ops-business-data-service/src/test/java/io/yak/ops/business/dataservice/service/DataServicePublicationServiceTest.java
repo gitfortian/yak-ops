@@ -9,8 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublishRequest;
-import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
+import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeDefinition;
+import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.SourceSnapshot;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ResolvedSource;
@@ -42,10 +43,14 @@ class DataServicePublicationServiceTest {
   void publishAlwaysCopiesSqlAndDatasourceFromResolvedSource() {
     when(provider.resolve("88")).thenReturn(resolved("ONLINE", 102L, 2));
     when(dataServiceService.findBySource(SOURCE_TYPE, "88")).thenReturn(Optional.empty());
-    when(dataServiceService.saveFromSource(any(SourceSnapshot.class), any(ApiInput.class)))
+    when(dataServiceService.saveFromSource(
+        any(SourceSnapshot.class),
+        any(RuntimeDefinition.class),
+        any(ServiceSettingsInput.class)))
         .thenAnswer(invocation -> view(
             9L,
             invocation.getArgument(1),
+            invocation.getArgument(2),
             invocation.getArgument(0)));
 
     ApiView result = service.publish(new PublishRequest(
@@ -59,16 +64,24 @@ class DataServicePublicationServiceTest {
         "供运营系统查询"));
 
     ArgumentCaptor<SourceSnapshot> sourceCaptor = ArgumentCaptor.forClass(SourceSnapshot.class);
-    ArgumentCaptor<ApiInput> inputCaptor = ArgumentCaptor.forClass(ApiInput.class);
-    verify(dataServiceService).saveFromSource(sourceCaptor.capture(), inputCaptor.capture());
+    ArgumentCaptor<RuntimeDefinition> runtimeCaptor =
+        ArgumentCaptor.forClass(RuntimeDefinition.class);
+    ArgumentCaptor<ServiceSettingsInput> settingsCaptor =
+        ArgumentCaptor.forClass(ServiceSettingsInput.class);
+    verify(dataServiceService).saveFromSource(
+        sourceCaptor.capture(),
+        runtimeCaptor.capture(),
+        settingsCaptor.capture());
 
     assertThat(sourceCaptor.getValue().sourceType()).isEqualTo(SOURCE_TYPE);
     assertThat(sourceCaptor.getValue().sourceRef()).isEqualTo("88");
     assertThat(sourceCaptor.getValue().sourceRevisionId()).isEqualTo(102L);
     assertThat(sourceCaptor.getValue().sourceRevisionNo()).isEqualTo(2);
-    assertThat(inputCaptor.getValue().dataSourceId()).isEqualTo(42L);
-    assertThat(inputCaptor.getValue().sql())
+    assertThat(runtimeCaptor.getValue().dataSourceId()).isEqualTo(42L);
+    assertThat(runtimeCaptor.getValue().sql())
         .isEqualTo("select id, amount from orders where status = :status");
+    assertThat(settingsCaptor.getValue().name()).isEqualTo("订单查询 API");
+    assertThat(settingsCaptor.getValue().path()).isEqualTo("/orders");
     assertThat(result.id()).isEqualTo(9L);
   }
 
@@ -81,18 +94,17 @@ class DataServicePublicationServiceTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("ONLINE");
 
-    verify(dataServiceService, never()).saveFromSource(any(), any());
+    verify(dataServiceService, never()).saveFromSource(any(), any(), any());
   }
 
   @Test
   void republishRefreshesSameServiceIdentityAndPreservesOperationalSettings() {
     ApiView existing = view(
         9L,
-        new ApiInput(
+        new RuntimeDefinition(42L, "select old_sql from orders"),
+        new ServiceSettingsInput(
             "订单查询 API",
             "/orders",
-            42L,
-            "select old_sql from orders",
             500,
             20,
             false,
@@ -101,10 +113,14 @@ class DataServicePublicationServiceTest {
     when(dataServiceService.get(9L)).thenReturn(existing);
     when(provider.resolve("88")).thenReturn(resolved("ONLINE", 103L, 3));
     when(dataServiceService.findBySource(SOURCE_TYPE, "88")).thenReturn(Optional.of(existing));
-    when(dataServiceService.saveFromSource(any(SourceSnapshot.class), any(ApiInput.class)))
+    when(dataServiceService.saveFromSource(
+        any(SourceSnapshot.class),
+        any(RuntimeDefinition.class),
+        any(ServiceSettingsInput.class)))
         .thenAnswer(invocation -> view(
             9L,
             invocation.getArgument(1),
+            invocation.getArgument(2),
             invocation.getArgument(0)));
 
     ApiView refreshed = service.republish(9L, null);
@@ -117,6 +133,9 @@ class DataServicePublicationServiceTest {
     assertThat(refreshed.timeoutSeconds()).isEqualTo(20);
     assertThat(refreshed.enabled()).isFalse();
     assertThat(refreshed.description()).isEqualTo("运营查询");
+    assertThat(refreshed.dataSourceId()).isEqualTo(42L);
+    assertThat(refreshed.sql())
+        .isEqualTo("select id, amount from orders where status = :status");
   }
 
   private ResolvedSource resolved(String status, Long revisionId, int revisionNo) {
@@ -137,20 +156,24 @@ class DataServicePublicationServiceTest {
         "select id, amount from orders where status = :status");
   }
 
-  private ApiView view(Long id, ApiInput input, SourceSnapshot source) {
+  private ApiView view(
+      Long id,
+      RuntimeDefinition runtime,
+      ServiceSettingsInput settings,
+      SourceSnapshot source) {
     return new ApiView(
         id,
-        input.name(),
-        input.path(),
-        "/api/v1/data-service/runtime" + input.path(),
-        input.dataSourceId(),
-        input.sql(),
+        settings.name(),
+        settings.path(),
+        "/api/v1/data-service/runtime" + settings.path(),
+        runtime.dataSourceId(),
+        runtime.sql(),
         List.of("status"),
-        input.maxRows(),
-        input.timeoutSeconds(),
-        Boolean.TRUE.equals(input.enabled()),
+        settings.maxRows(),
+        settings.timeoutSeconds(),
+        Boolean.TRUE.equals(settings.enabled()),
         "NONE",
-        input.description(),
+        settings.description(),
         source.sourceType(),
         source.sourceRef(),
         source.sourceRevisionId(),
