@@ -49,61 +49,44 @@ interface ApiListItemProps {
 }
 
 const ApiMethod = () => (
-  <span className="inline-flex h-5 items-center rounded-[4px] bg-[#f2f4f7] px-1.5 font-mono text-[10px] font-medium text-[#667085]">
+  <span className="inline-flex h-5 items-center rounded-[4px] bg-[#f1f3f5] px-1.5 font-mono text-[10px] font-medium text-[#667085]">
     GET
   </span>
 );
 
 const ApiMarketplaceIllustration = () => (
   <svg
-    viewBox="0 0 240 150"
-    className="h-[132px] w-[210px]"
+    viewBox="0 0 244 154"
+    className="h-[128px] w-[205px]"
     fill="none"
     aria-hidden="true"
   >
-    <defs>
-      <linearGradient id="api-marketplace-node-fill" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#fff" />
-        <stop offset="1" stopColor="#fff4f6" />
-      </linearGradient>
-    </defs>
+    <path d="M32 77H77" stroke="#d9dee5" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M102 50H137C157 50 157 75 177 75H211" stroke="#d9dee5" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M102 104H137C157 104 157 82 177 82H211" stroke="#f2a6b7" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M88 65V89" stroke="#e4e7ec" strokeWidth="1.25" strokeDasharray="3 5" />
 
-    <path
-      d="M40 76C64 76 68 42 93 42H120C143 42 146 72 169 72H199"
-      stroke="#d9dde4"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-    <path
-      d="M40 76C64 76 68 111 93 111H121C144 111 148 87 170 87H199"
-      stroke="#f5a2b5"
-      strokeOpacity=".72"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-    <path d="M112 42V111" stroke="#e8eaee" strokeWidth="1.2" strokeDasharray="3 5" />
+    <rect x="20" y="59" width="36" height="36" rx="9" fill="#fff" stroke="#efc7d0" />
+    <path d="M31 70L26.5 77L31 84" stroke="#fe2c55" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M45 70L49.5 77L45 84" stroke="#fe2c55" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M41 67L35 87" stroke="#8c94a1" strokeWidth="1.5" strokeLinecap="round" />
 
-    <rect x="22" y="58" width="38" height="36" rx="9" fill="url(#api-marketplace-node-fill)" stroke="#f0c8d2" />
-    <path d="M33 70L28 76L33 82" stroke="#fe2c55" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M49 70L54 76L49 82" stroke="#fe2c55" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M44 67L38 85" stroke="#98a2b3" strokeWidth="1.5" strokeLinecap="round" />
+    <rect x="76" y="35" width="40" height="32" rx="8" fill="#fff" stroke="#dfe3e8" />
+    <circle cx="88" cy="51" r="3.5" fill="#fff0f3" stroke="#fe2c55" strokeWidth="1.2" />
+    <path d="M96 47H106M96 52H108M86 58H108" stroke="#a4abb5" strokeWidth="1.3" strokeLinecap="round" />
 
-    <rect x="92" y="25" width="42" height="34" rx="9" fill="#fff" stroke="#dfe3e8" />
-    <circle cx="106" cy="42" r="4" fill="#f8d1da" stroke="#fe2c55" strokeWidth="1.2" />
-    <path d="M114 38H125M114 43H125M104 50H125" stroke="#98a2b3" strokeWidth="1.3" strokeLinecap="round" />
+    <rect x="76" y="88" width="40" height="32" rx="8" fill="#fff" stroke="#dfe3e8" />
+    <path d="M87 99H105M87 105H102M87 111H108" stroke="#a4abb5" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="107" cy="99" r="2.2" fill="#fe2c55" fillOpacity=".7" />
 
-    <rect x="92" y="94" width="42" height="34" rx="9" fill="#fff" stroke="#dfe3e8" />
-    <path d="M103 106H123M103 112H118M103 118H125" stroke="#98a2b3" strokeWidth="1.3" strokeLinecap="round" />
-    <circle cx="126" cy="106" r="2.5" fill="#fe2c55" fillOpacity=".65" />
+    <rect x="192" y="57" width="34" height="42" rx="9" fill="#fff" stroke="#efc7d0" />
+    <rect x="200" y="67" width="18" height="4" rx="2" fill="#d9dee5" />
+    <rect x="200" y="76" width="18" height="4" rx="2" fill="#f2a6b7" />
+    <rect x="200" y="85" width="12" height="4" rx="2" fill="#d9dee5" />
 
-    <rect x="180" y="57" width="38" height="44" rx="10" fill="url(#api-marketplace-node-fill)" stroke="#f0c8d2" />
-    <rect x="189" y="67" width="20" height="5" rx="2.5" fill="#d9dde4" />
-    <rect x="189" y="76" width="20" height="5" rx="2.5" fill="#f6b8c6" />
-    <rect x="189" y="85" width="14" height="5" rx="2.5" fill="#d9dde4" />
-
-    <circle cx="40" cy="76" r="3" fill="#fe2c55" />
-    <circle cx="199" cy="72" r="3" fill="#667085" />
-    <circle cx="199" cy="87" r="3" fill="#fe2c55" fillOpacity=".72" />
+    <circle cx="32" cy="77" r="2.5" fill="#fe2c55" />
+    <circle cx="211" cy="75" r="2.5" fill="#667085" />
+    <circle cx="211" cy="82" r="2.5" fill="#fe2c55" fillOpacity=".7" />
   </svg>
 );
 
@@ -117,37 +100,34 @@ const ApiListItem = ({
   <button
     type="button"
     onClick={onOpen}
-    className="group flex min-h-[78px] w-full items-center gap-3 border-0 border-b border-solid border-[#f0f1f2] bg-transparent px-2 py-3 text-left transition-colors last:border-b-0 hover:bg-[#f8f9fa]"
+    className="group flex min-h-[82px] w-full items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-3 text-left transition-colors hover:bg-white"
   >
     {rank ? (
-      <span className="w-6 shrink-0 text-center font-mono text-[11px] text-[#b0b5bd]">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white font-mono text-[10px] font-medium text-[#98a2b3] shadow-[0_0_0_1px_rgba(16,24,40,.04)]">
         {String(rank).padStart(2, '0')}
       </span>
     ) : null}
 
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
-        <span className="truncate text-[13px] font-medium text-[#161823] group-hover:text-[#111318]">
+        <span className="truncate text-[13px] font-medium text-[#161823]">
           {service.name}
         </span>
         <ApiMethod />
         {!service.enabled ? (
-          <span className="shrink-0 text-[10px] text-[#98a2b3]">已停用</span>
+          <span className="text-[10px] text-[#98a2b3]">已停用</span>
         ) : null}
       </div>
-      <div className="mt-1 truncate text-[11px] text-[#8a9099]">
+      <div className="mt-1 truncate text-[11px] leading-5 text-[#8a9099]">
         {service.description || '暂无描述'}
       </div>
-      <div className="mt-1 truncate font-mono text-[10px] text-[#a3a8b0]" title={service.runtimePath}>
+      <div className="mt-0.5 truncate font-mono text-[10px] text-[#a3a8b0]" title={service.runtimePath}>
         {service.runtimePath}
       </div>
     </div>
 
     <div className="w-[118px] shrink-0 text-right">
-      <div
-        className="truncate text-[11px] font-medium text-[#667085]"
-        title={calls !== undefined ? undefined : dataSourceName}
-      >
+      <div className="truncate text-[11px] font-medium text-[#667085]">
         {calls !== undefined ? `${calls} 次调用` : dataSourceName}
       </div>
       <div className="mt-1 text-[10px] text-[#b0b5bd]">
@@ -412,55 +392,49 @@ export default function DataServicePage() {
     },
   ];
 
-  const searchControls = (compact = false) => (
-    <div className={compact
-      ? 'flex min-w-0 flex-1 items-center gap-2'
-      : 'w-full max-w-[760px] rounded-[10px] border border-[#dfe3e8] bg-white px-3 pb-2.5 pt-2 shadow-[0_8px_30px_rgba(16,24,40,.03)]'}>
-      {compact ? (
-        <>
-          <Input
-            allowClear
-            variant="filled"
-            value={keyword}
-            prefix={<Search size={15} className="text-[#98a2b3]" />}
-            placeholder="搜索 API 名称、Endpoint、描述或数据源"
-            className="!h-9"
-            onChange={(event) => {
-              setKeyword(event.target.value);
-              if (!event.target.value) setSubmittedKeyword('');
-            }}
-            onPressEnter={submitSearch}
-          />
-          <Button type="primary" loading={loading} className="!h-9 !px-4" onClick={submitSearch}>
-            搜索
-          </Button>
-        </>
-      ) : (
-        <>
-          <Input
-            allowClear
-            variant="borderless"
-            value={keyword}
-            placeholder="输入 API 名称、Endpoint、描述或数据源，按 Enter 搜索"
-            className="!h-10 !px-1 !text-[13px]"
-            onChange={(event) => {
-              setKeyword(event.target.value);
-              if (!event.target.value) setSubmittedKeyword('');
-            }}
-            onPressEnter={submitSearch}
-          />
-          <div className="mt-1 flex min-h-9 items-center justify-between gap-4 border-t border-[#f0f1f2] pt-2">
-            <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#98a2b3]">
-              <span className="rounded-[5px] bg-[#f6f7f8] px-2 py-1">API 名称</span>
-              <span className="rounded-[5px] bg-[#f6f7f8] px-2 py-1">Endpoint</span>
-              <span className="rounded-[5px] bg-[#f6f7f8] px-2 py-1">数据源</span>
-            </div>
-            <Button type="primary" loading={loading} className="!h-8 !px-5" onClick={submitSearch}>
-              搜索
-            </Button>
-          </div>
-        </>
-      )}
+  const handleKeywordChange = (value: string) => {
+    setKeyword(value);
+    if (!value) setSubmittedKeyword('');
+  };
+
+  const searchControls = (compact = false) => compact ? (
+    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-[#f6f7f8] p-1.5">
+      <Input
+        allowClear
+        variant="borderless"
+        value={keyword}
+        prefix={<Search size={15} className="text-[#98a2b3]" />}
+        placeholder="搜索 API 名称、Endpoint、描述或数据源"
+        className="!h-8 !bg-transparent !px-2"
+        onChange={(event) => handleKeywordChange(event.target.value)}
+        onPressEnter={submitSearch}
+      />
+      <Button type="primary" loading={loading} className="!h-8 !px-4" onClick={submitSearch}>
+        搜索
+      </Button>
+    </div>
+  ) : (
+    <div className="w-full max-w-[720px] rounded-xl bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,.045)] ring-1 ring-[#e6e9ee]">
+      <div className="flex items-center gap-2">
+        <Search size={17} className="ml-2 shrink-0 text-[#98a2b3]" />
+        <Input
+          allowClear
+          variant="borderless"
+          value={keyword}
+          placeholder="搜索 API 名称、Endpoint、描述或数据源"
+          className="!h-11 !bg-white !px-1 !text-[13px]"
+          onChange={(event) => handleKeywordChange(event.target.value)}
+          onPressEnter={submitSearch}
+        />
+        <Button type="primary" loading={loading} className="!h-9 !px-5" onClick={submitSearch}>
+          搜索
+        </Button>
+      </div>
+      <div className="flex items-center gap-4 px-3 pb-1 pt-1 text-[10px] text-[#a0a6af]">
+        <span>API 名称</span>
+        <span>Endpoint</span>
+        <span>数据源</span>
+      </div>
     </div>
   );
 
@@ -496,7 +470,7 @@ export default function DataServicePage() {
             </Button>
           </div>
 
-          <div className="mt-3 flex min-h-[54px] items-center justify-between gap-4 border-b border-[#f0f0f0] py-2">
+          <div className="mt-4 flex items-center justify-between gap-4">
             <div className="w-full max-w-[680px]">{searchControls(true)}</div>
             <span className="shrink-0 text-[12px] text-[#98a2b3]">共 {searchResults.length} 个结果</span>
           </div>
@@ -505,12 +479,11 @@ export default function DataServicePage() {
             <Table<DataServiceApi>
               rowKey="id"
               size="small"
-              bordered
               loading={loading}
               dataSource={searchResults}
               columns={columns}
               pagination={false}
-              scroll={{ x: 1080, y: 'calc(100vh - 245px)' }}
+              scroll={{ x: 1080, y: 'calc(100vh - 235px)' }}
               locale={{ emptyText: '没有找到匹配的 API' }}
             />
           </div>
@@ -518,29 +491,23 @@ export default function DataServicePage() {
       ) : (
         <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white">
           <div
-            className="relative overflow-hidden border-b border-[#eef0f3] px-5 py-7"
+            className="relative overflow-hidden px-5 py-8"
             style={{
-              background: 'linear-gradient(180deg, #f7f9fc 0%, #fbfcfd 72%, #ffffff 100%)',
+              background: 'linear-gradient(180deg, #f8fafc 0%, #fbfcfd 62%, #ffffff 100%)',
             }}
           >
-            <div className="pointer-events-none absolute left-[4%] top-1/2 hidden -translate-y-1/2 opacity-90 lg:block">
+            <div className="pointer-events-none absolute left-[4.5%] top-1/2 hidden -translate-y-1/2 opacity-90 lg:block">
               <ApiMarketplaceIllustration />
             </div>
-            <div className="pointer-events-none absolute -left-12 bottom-[-82px] h-[180px] w-[180px] rounded-full bg-[rgba(254,44,85,.035)]" />
-            <div className="pointer-events-none absolute left-[18%] top-[-78px] h-[150px] w-[150px] rounded-full border border-[rgba(254,44,85,.055)]" />
+            <div className="pointer-events-none absolute -left-14 bottom-[-92px] h-[190px] w-[190px] rounded-full bg-[rgba(254,44,85,.028)]" />
+            <div className="pointer-events-none absolute left-[18%] top-[-90px] h-[160px] w-[160px] rounded-full border border-[rgba(254,44,85,.045)]" />
 
-            <div className="relative mx-auto flex max-w-[840px] flex-col items-center">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-[7px] border border-[#e3e6eb] bg-white shadow-[0_2px_8px_rgba(16,24,40,.04)]">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
-                    <path d="M6 8.5L3.5 12L6 15.5" stroke="#fe2c55" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M18 8.5L20.5 12L18 15.5" stroke="#fe2c55" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M14.5 5.5L9.5 18.5" stroke="#667085" strokeWidth="1.7" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <h1 className="m-0 text-[19px] font-semibold tracking-[-.01em] text-[#161823]">API 集市</h1>
-              </div>
+            <div className="relative mx-auto flex max-w-[820px] flex-col items-center">
+              <h1 className="m-0 mb-4 text-[20px] font-semibold tracking-[-.01em] text-[#161823]">API 集市</h1>
               {searchControls()}
+              <div className="mt-3 text-[11px] text-[#a0a6af]">
+                {services.length} 个 API · {runningServices.length} 个运行中
+              </div>
             </div>
 
             <Button
@@ -548,30 +515,24 @@ export default function DataServicePage() {
               icon={<RefreshCw size={14} />}
               loading={loading}
               onClick={() => void load()}
-              className="!absolute !right-5 !top-4 !bg-white/70 !text-[#667085]"
+              className="!absolute !right-5 !top-4 !bg-white/75 !text-[#667085]"
             >
               刷新
             </Button>
           </div>
 
-          <div className="px-5 pb-6 pt-4">
-            <div className="flex items-center justify-between border-b border-[#f0f0f0] pb-3">
-              <div className="text-[12px] text-[#98a2b3]">
-                共 <span className="font-medium text-[#667085]">{services.length}</span> 个 API
-                <span className="mx-2 text-[#d0d5dd]">·</span>
-                <span className="font-medium text-[#667085]">{runningServices.length}</span> 个运行中
-              </div>
-              <div className="text-[11px] text-[#b0b5bd]">点击 API 可查看文档、密钥和调用信息</div>
-            </div>
-
-            <div className="mt-4 grid min-h-0 grid-cols-1 gap-x-8 gap-y-8 xl:grid-cols-2">
-              <section className="min-w-0">
-                <div className="flex h-9 items-center justify-between border-b border-[#e9ebee]">
-                  <div className="text-[13px] font-semibold text-[#30323b]">推荐 API</div>
-                  <div className="text-[11px] text-[#98a2b3]">最近更新</div>
+          <div className="px-5 pb-8 pt-3">
+            <div className="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-2">
+              <section className="min-w-0 rounded-xl bg-[#f7f8fa] p-3">
+                <div className="flex items-center justify-between px-2 pb-2 pt-1">
+                  <div>
+                    <div className="text-[13px] font-semibold text-[#30323b]">推荐 API</div>
+                    <div className="mt-1 text-[10px] text-[#a0a6af]">最近更新的可用服务</div>
+                  </div>
+                  <span className="text-[10px] text-[#a0a6af]">{recommendedServices.length} 个</span>
                 </div>
                 {recommendedServices.length ? (
-                  <div>
+                  <div className="space-y-1">
                     {recommendedServices.map((service) => (
                       <ApiListItem
                         key={service.id}
@@ -588,13 +549,16 @@ export default function DataServicePage() {
                 )}
               </section>
 
-              <section className="min-w-0">
-                <div className="flex h-9 items-center justify-between border-b border-[#e9ebee]">
-                  <div className="text-[13px] font-semibold text-[#30323b]">热门调用</div>
-                  <div className="text-[11px] text-[#98a2b3]">最近调用</div>
+              <section className="min-w-0 rounded-xl bg-[#f7f8fa] p-3">
+                <div className="flex items-center justify-between px-2 pb-2 pt-1">
+                  <div>
+                    <div className="text-[13px] font-semibold text-[#30323b]">热门调用</div>
+                    <div className="mt-1 text-[10px] text-[#a0a6af]">按近期调用次数排序</div>
+                  </div>
+                  <span className="text-[10px] text-[#a0a6af]">Top {hotServices.length}</span>
                 </div>
                 {hotServices.length ? (
-                  <div>
+                  <div className="space-y-1">
                     {hotServices.map((service, index) => (
                       <ApiListItem
                         key={service.id}
