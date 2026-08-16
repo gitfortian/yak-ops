@@ -86,16 +86,30 @@ public class DataServiceController {
     return Result.success(dataServiceService.get(id));
   }
 
-  @Operation(summary = "创建 API 服务（兼容旧版手工模式）")
-  @PostMapping
-  public Result<ApiView> create(@RequestBody ApiInput input) {
-    return Result.success(dataServiceService.save(null, input));
-  }
-
-  @Operation(summary = "更新 API 服务")
+  /**
+   * Updates only service-facing settings.
+   *
+   * <p>SQL and datasource identity are server-owned Runtime snapshot fields. They are deliberately
+   * absent from the public update contract and can only change through source publication/republish.
+   * This also freezes execution logic for historical Legacy services while keeping them runnable.
+   */
+  @Operation(summary = "更新 API 服务侧配置")
   @PutMapping("/{id}")
-  public Result<ApiView> update(@PathVariable("id") Long id, @RequestBody ApiInput input) {
-    return Result.success(dataServiceService.save(id, input));
+  public Result<ApiView> update(
+      @PathVariable("id") Long id,
+      @RequestBody UpdateDataServiceRequest input) {
+    ApiView current = dataServiceService.get(id);
+    return Result.success(dataServiceService.save(
+        id,
+        new ApiInput(
+            input.name(),
+            input.path(),
+            current.dataSourceId(),
+            current.sql(),
+            input.maxRows(),
+            input.timeoutSeconds(),
+            input.enabled(),
+            input.description())));
   }
 
   @Operation(summary = "按当前上游 Revision 重新发布数据服务")
@@ -250,6 +264,14 @@ public class DataServiceController {
   public record PublishDataServiceRequest(
       String sourceType,
       String sourceRef,
+      String name,
+      String path,
+      Integer maxRows,
+      Integer timeoutSeconds,
+      Boolean enabled,
+      String description) {}
+
+  public record UpdateDataServiceRequest(
       String name,
       String path,
       Integer maxRows,
