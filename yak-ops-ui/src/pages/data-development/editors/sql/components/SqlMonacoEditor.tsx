@@ -38,6 +38,7 @@ interface SqlMonacoEditorProps {
   onChange: (value: string) => void;
   onRunStatement?: (sql: string) => void;
   running?: boolean;
+  readOnly?: boolean;
   onPositionChange?: (position: SqlEditorPosition) => void;
   onViewStateChange?: (viewState: DevelopmentEditorViewState) => void;
 }
@@ -57,6 +58,7 @@ const SqlMonacoEditor = ({
   onChange,
   onRunStatement,
   running,
+  readOnly = false,
   onPositionChange,
   onViewStateChange,
 }: SqlMonacoEditorProps) => {
@@ -102,6 +104,8 @@ const SqlMonacoEditor = ({
     const editor = monaco.editor.create(containerRef.current, {
       model,
       ...editorOptionsFromSettings(initialSettings),
+      readOnly,
+      domReadOnly: readOnly,
       automaticLayout: true,
       tabSize: 2,
       insertSpaces: true,
@@ -110,7 +114,7 @@ const SqlMonacoEditor = ({
       cursorSmoothCaretAnimation: 'on',
       cursorBlinking: 'smooth',
       showFoldingControls: 'always',
-      glyphMargin: true,
+      glyphMargin: !readOnly,
       lineNumbersMinChars: 3,
       overviewRulerLanes: 0,
       hideCursorInOverviewRuler: true,
@@ -151,10 +155,12 @@ const SqlMonacoEditor = ({
     const refreshStatementDecorations = () => {
       statementRanges = getSqlStatementRanges(model.getValue());
       runDecorations.set(
-        statementRanges.map((statement) => ({
-          range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
-          options: { glyphMarginClassName: 'yak-sql-run-glyph' },
-        })),
+        readOnly
+          ? []
+          : statementRanges.map((statement) => ({
+              range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
+              options: { glyphMarginClassName: 'yak-sql-run-glyph' },
+            })),
       );
     };
     refreshStatementDecorations();
@@ -164,7 +170,7 @@ const SqlMonacoEditor = ({
     const commandBinding = registerSqlEditorCommandHandler(id, async (command) => {
       editor.focus();
       if (command === 'undo' || command === 'redo') {
-        editor.trigger('yak-sql-toolbar', command, null);
+        if (!readOnly) editor.trigger('yak-sql-toolbar', command, null);
         return;
       }
       if (command === 'find') {
@@ -172,7 +178,7 @@ const SqlMonacoEditor = ({
         return;
       }
       if (command === 'suggest') {
-        await editor.getAction('editor.action.triggerSuggest')?.run();
+        if (!readOnly) await editor.getAction('editor.action.triggerSuggest')?.run();
         return;
       }
       if (command === 'toggle-word-wrap') {
@@ -185,7 +191,7 @@ const SqlMonacoEditor = ({
         editor.updateOptions({ minimap: { enabled: minimapEnabled } });
         return;
       }
-      if (command === 'format') {
+      if (command === 'format' && !readOnly) {
         const formatted = formatSqlText(model.getValue());
         if (formatted === model.getValue()) return;
         editor.pushUndoStop();
@@ -223,10 +229,11 @@ const SqlMonacoEditor = ({
 
     const contentDisposable = model.onDidChangeContent(() => {
       refreshStatementDecorations();
-      onChangeRef.current(model.getValue());
+      if (!readOnly) onChangeRef.current(model.getValue());
     });
     const gutterDisposable = editor.onMouseDown((event) => {
       if (
+        readOnly ||
         event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
         runningRef.current ||
         !onRunStatementRef.current
@@ -264,7 +271,7 @@ const SqlMonacoEditor = ({
       editorRef.current = undefined;
       modelRef.current = undefined;
     };
-  }, [id]);
+  }, [id, readOnly]);
 
   useEffect(() => {
     const model = modelRef.current;

@@ -13,6 +13,7 @@ import {
   prepareDevelopmentTaskDefinition,
   restoreDevelopmentTaskOriginal,
 } from '../../editors/taskPersistence';
+import { isDevelopmentTaskNode } from '../../node-model';
 import {
   getDevelopmentTaskDraft,
   publishDevelopmentTask,
@@ -23,9 +24,11 @@ import type {
   DevelopmentDirectory,
   DevelopmentId,
   DevelopmentNode,
+  DevelopmentResourceNode,
   DevelopmentTaskDraft,
   DevelopmentTaskRunResult,
 } from '../../types';
+import DataServiceNodeEditor from '../data-service/DataServiceNodeEditor';
 import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
 import EditorToolbar from './EditorToolbar';
@@ -33,7 +36,7 @@ import RightPanel from './RightPanel';
 import RunResultPanel from './RunResultPanel';
 
 interface DevelopmentWorkbenchProps {
-  nodes: DevelopmentNode[];
+  nodes: DevelopmentResourceNode[];
   directories: DevelopmentDirectory[];
   selectedNodeId?: DevelopmentId;
   onNodeFocus: (nodeId?: DevelopmentId) => void;
@@ -44,6 +47,48 @@ interface PendingCloseRequest {
   nodeIds: DevelopmentId[];
   dirtyNodeIds: DevelopmentId[];
 }
+
+interface DataServiceWorkbenchEditorProps {
+  node: DevelopmentResourceNode;
+  active: boolean;
+  onSaved?: () => void | Promise<void>;
+  onOpenSourceNode: (nodeId: DevelopmentId) => void;
+  onDirtyChange: (dirty: boolean) => void;
+}
+
+/**
+ * Keep the authoring node identity stable while the directory tree refreshes. A save in another tab
+ * may recreate the node list; that must not force a hidden Data Service editor to reload and discard
+ * its unsaved local form state.
+ */
+const DataServiceWorkbenchEditor = ({
+  node,
+  active,
+  onSaved,
+  onOpenSourceNode,
+  onDirtyChange,
+}: DataServiceWorkbenchEditorProps) => {
+  const stableNode = useMemo(
+    () => node,
+    [node.id, node.name],
+  );
+
+  return (
+    <div
+      className={[
+        'min-h-0 flex-1 overflow-hidden',
+        active ? 'flex' : 'hidden',
+      ].join(' ')}
+    >
+      <DataServiceNodeEditor
+        node={stableNode}
+        onSaved={onSaved}
+        onOpenSourceNode={onOpenSourceNode}
+        onDirtyChange={onDirtyChange}
+      />
+    </div>
+  );
+};
 
 const responseData = <T,>(
   response: { code?: number; data?: T; msg?: string; message?: string },
@@ -74,6 +119,7 @@ const DevelopmentWorkbench = ({
   const [publishing, setPublishing] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
+  const [dataServiceDirtyNodeIds, setDataServiceDirtyNodeIds] = useState<DevelopmentId[]>([]);
 
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -97,12 +143,13 @@ const DevelopmentWorkbench = ({
     setActiveNodeId((current) =>
       current && nodeMap.has(current) ? current : undefined,
     );
+    setDataServiceDirtyNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
   }, [nodeMap]);
 
   useEffect(() => {
     if (!activeNodeId) return;
     const node = nodeMap.get(activeNodeId);
-    if (!node) return;
+    if (!node || !isDevelopmentTaskNode(node)) return;
 
     let active = true;
     getDevelopmentTaskDraft(node.id)
@@ -121,24 +168,46 @@ const DevelopmentWorkbench = ({
     };
   }, [activeNodeId, nodeMap]);
 
-  const activeNode = activeNodeId ? nodeMap.get(activeNodeId) : undefined;
-  const activeDirectory = activeNode?.directoryId
-    ? directoryMap.get(activeNode.directoryId)
+  const activeResource = activeNodeId ? nodeMap.get(activeNodeId) : undefined;
+  const activeTaskNode = activeResource && isDevelopmentTaskNode(activeResource)
+    ? activeResource
     : undefined;
-  const activeRunning = activeNode
-    ? runningNodeIds.includes(activeNode.id)
+  const activeDirectory = activeResource?.directoryId
+    ? directoryMap.get(activeResource.directoryId)
+    : undefined;
+  const activeRunning = activeTaskNode
+    ? runningNodeIds.includes(activeTaskNode.id)
     : false;
+  const openDataServiceNodes = useMemo(
+    () => openNodeIds
+      .map((nodeId) => nodeMap.get(nodeId))
+      .filter((node): node is DevelopmentResourceNode => Boolean(node && node.type === 'DATA_SERVICE')),
+    [nodeMap, openNodeIds],
+  );
 
   const focusNode = (nodeId: DevelopmentId) => {
+    const target = nodeMap.get(nodeId);
+    if (!target) return;
+    setOpenNodeIds((current) => current.includes(nodeId) ? current : [...current, nodeId]);
     setActiveNodeId(nodeId);
+    if (target.type === 'DATA_SERVICE') setRunPanelOpen(false);
     onNodeFocus(nodeId);
   };
 
-  const persistDraft = async (nodeId: DevelopmentId): Promise<DevelopmentTaskDraft> => {
-    const node = nodeMap.get(nodeId);
-    if (!node) throw new Error(`节点不存在：${nodeId}`);
+  const updateDataServiceDirty = (nodeId: DevelopmentId, dirty: boolean) => {
+    setDataServiceDirtyNodeIds((current) => {
+      if (dirty) return current.includes(nodeId) ? current : [...current, nodeId];
+      return current.filter((id) => id !== nodeId);
+    });
+  };
 
-    const definition = prepareDevelopmentTaskDefinition(node);
+  const persistDraft = async (nodeId: DevelopmentId): Promise<DevelopmentTaskDraft> => {
+    const resource = nodeMap.get(nodeId);
+    if (!resource || !isDevelopmentTaskNode(resource)) {
+      throw new Error(`当前节点不是可执行任务：${nodeId}`);
+    }
+
+    const definition = prepareDevelopmentTaskDefinition(resource);
     const session = getEditorSession(nodeId);
     const draft = responseData(
       await saveDevelopmentTaskDraft(nodeId, {
@@ -154,10 +223,10 @@ const DevelopmentWorkbench = ({
   };
 
   const saveActiveDraft = async () => {
-    if (!activeNode) return;
+    if (!activeTaskNode) return;
     setSaving(true);
     try {
-      const draft = await persistDraft(activeNode.id);
+      const draft = await persistDraft(activeTaskNode.id);
       message.success(`草稿已保存 · Draft #${draft.draftRevision}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存草稿失败');
@@ -167,8 +236,8 @@ const DevelopmentWorkbench = ({
   };
 
   const runActiveTask = async (contentOverride?: string) => {
-    if (!activeNode || runningNodeIds.includes(activeNode.id)) return;
-    const node = activeNode;
+    if (!activeTaskNode || runningNodeIds.includes(activeTaskNode.id)) return;
+    const node = activeTaskNode;
     const startedAt = Date.now();
     setRunPanelOpen(true);
     setRunningNodeIds((current) => [...current, node.id]);
@@ -214,21 +283,21 @@ const DevelopmentWorkbench = ({
   };
 
   const publishActiveTask = async () => {
-    if (!activeNode) return;
+    if (!activeTaskNode) return;
     setPublishing(true);
     try {
-      prepareDevelopmentTaskDefinition(activeNode);
-      let session = getEditorSession(activeNode.id);
+      prepareDevelopmentTaskDefinition(activeTaskNode);
+      let session = getEditorSession(activeTaskNode.id);
       if (!session || session.dirty || !session.draftRevision) {
-        await persistDraft(activeNode.id);
-        session = getEditorSession(activeNode.id);
+        await persistDraft(activeTaskNode.id);
+        session = getEditorSession(activeTaskNode.id);
       }
       if (!session?.draftRevision) {
         throw new Error('发布前请先保存草稿');
       }
 
       const published = responseData(
-        await publishDevelopmentTask(activeNode.id, session.draftRevision),
+        await publishDevelopmentTask(activeTaskNode.id, session.draftRevision),
         '发布任务失败',
       );
       setVersionsRefreshKey((current) => current + 1);
@@ -247,6 +316,7 @@ const DevelopmentWorkbench = ({
     const currentIndex = activeNodeId ? openNodeIds.indexOf(activeNodeId) : -1;
     const next = openNodeIds.filter((id) => !closeSet.has(id));
     setOpenNodeIds(next);
+    setDataServiceDirtyNodeIds((current) => current.filter((id) => !closeSet.has(id)));
 
     if (!activeNodeId || !closeSet.has(activeNodeId)) return;
 
@@ -255,16 +325,33 @@ const DevelopmentWorkbench = ({
       next[next.length - 1];
     setActiveNodeId(nextActiveId);
     onNodeFocus(nextActiveId);
-    if (!nextActiveId) setRunPanelOpen(false);
+    if (!nextActiveId || nodeMap.get(nextActiveId)?.type === 'DATA_SERVICE') {
+      setRunPanelOpen(false);
+    }
   };
 
   const requestCloseNodes = (nodeIds: DevelopmentId[]) => {
     const targetNodeIds = openNodeIds.filter((nodeId) => nodeIds.includes(nodeId));
     if (!targetNodeIds.length) return;
 
-    const dirtyNodeIds = targetNodeIds.filter(
-      (nodeId) => getEditorSession(nodeId)?.dirty,
-    );
+    const dirtyDataServiceNodes = targetNodeIds
+      .filter((nodeId) => dataServiceDirtyNodeIds.includes(nodeId))
+      .map((nodeId) => nodeMap.get(nodeId))
+      .filter((node): node is DevelopmentResourceNode => Boolean(node));
+    if (dirtyDataServiceNodes.length) {
+      const firstName = dirtyDataServiceNodes[0]?.name || 'Data Service';
+      message.warning(
+        dirtyDataServiceNodes.length === 1
+          ? `「${firstName}」有未保存修改，请先保存草稿后再关闭`
+          : `有 ${dirtyDataServiceNodes.length} 个 Data Service 编辑器尚未保存，请先保存草稿`,
+      );
+      return;
+    }
+
+    const dirtyNodeIds = targetNodeIds.filter((nodeId) => {
+      const node = nodeMap.get(nodeId);
+      return Boolean(node && isDevelopmentTaskNode(node) && getEditorSession(nodeId)?.dirty);
+    });
 
     if (!dirtyNodeIds.length) {
       closeNodes(targetNodeIds);
@@ -297,7 +384,7 @@ const DevelopmentWorkbench = ({
     } else {
       pendingClose.dirtyNodeIds.forEach((nodeId) => {
         const node = nodeMap.get(nodeId);
-        if (node) restoreDevelopmentTaskOriginal(node);
+        if (node && isDevelopmentTaskNode(node)) restoreDevelopmentTaskOriginal(node);
       });
     }
 
@@ -334,11 +421,11 @@ const DevelopmentWorkbench = ({
 
   const pendingDirtyNodes = pendingClose?.dirtyNodeIds
     .map((nodeId) => nodeMap.get(nodeId))
-    .filter((node): node is DevelopmentNode => Boolean(node));
+    .filter((node): node is DevelopmentNode => Boolean(node && isDevelopmentTaskNode(node)));
   const pendingDirtyCount = pendingDirtyNodes?.length || 0;
   const pendingDirtyName = pendingDirtyNodes?.[0]?.name || '当前编辑器';
 
-  if (!openNodeIds.length || !activeNode) {
+  if (!openNodeIds.length || !activeResource) {
     return (
       <main className="flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-white">
         <div className="text-center">
@@ -346,14 +433,14 @@ const DevelopmentWorkbench = ({
             选择左侧开发节点
           </div>
           <div className="mt-1 text-[12px] text-[#98a2b3]">
-            点击 SQL 或 Shell 节点后进入编辑工作区
+            SQL、Shell 和 Data Service 会在同一个开发工作台中打开
           </div>
         </div>
       </main>
     );
   }
 
-  const definition = getEditorDefinition(activeNode.type);
+  const definition = activeTaskNode ? getEditorDefinition(activeTaskNode.type) : undefined;
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
@@ -361,48 +448,66 @@ const DevelopmentWorkbench = ({
         nodeMap={nodeMap}
         openNodeIds={openNodeIds}
         activeNodeId={activeNodeId}
+        dirtyNodeIds={dataServiceDirtyNodeIds}
         onFocus={focusNode}
         onClose={(nodeId) => requestCloseNodes([nodeId])}
         onAction={handleTabAction}
       />
 
-      <EditorToolbar
-        node={activeNode}
-        directory={activeDirectory}
-        definition={definition}
-        onRun={() => void runActiveTask()}
-        onSave={() => void saveActiveDraft()}
-        onPublish={() => void publishActiveTask()}
-        running={activeRunning}
-        saving={saving}
-        publishing={publishing}
-      />
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <EditorHost
-            node={activeNode}
-            directory={activeDirectory}
-            definition={definition}
-            onRunContent={(content) => void runActiveTask(content)}
-            running={activeRunning}
-          />
-          <RightPanel
-            node={activeNode}
-            directory={activeDirectory}
-            definition={definition}
-            versionsRefreshKey={versionsRefreshKey}
-          />
-        </div>
+        {activeTaskNode && definition ? (
+          <>
+            <EditorToolbar
+              node={activeTaskNode}
+              directory={activeDirectory}
+              definition={definition}
+              onRun={() => void runActiveTask()}
+              onSave={() => void saveActiveDraft()}
+              onPublish={() => void publishActiveTask()}
+              running={activeRunning}
+              saving={saving}
+              publishing={publishing}
+            />
 
-        <RunResultPanel
-          open={runPanelOpen}
-          node={activeNode}
-          directory={activeDirectory}
-          definition={definition}
-          result={runResults[activeNode.id]}
-          onClose={() => setRunPanelOpen(false)}
-        />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <EditorHost
+                  node={activeTaskNode}
+                  directory={activeDirectory}
+                  definition={definition}
+                  onRunContent={(content) => void runActiveTask(content)}
+                  running={activeRunning}
+                />
+                <RightPanel
+                  node={activeTaskNode}
+                  directory={activeDirectory}
+                  definition={definition}
+                  versionsRefreshKey={versionsRefreshKey}
+                />
+              </div>
+
+              <RunResultPanel
+                open={runPanelOpen}
+                node={activeTaskNode}
+                directory={activeDirectory}
+                definition={definition}
+                result={runResults[activeTaskNode.id]}
+                onClose={() => setRunPanelOpen(false)}
+              />
+            </div>
+          </>
+        ) : null}
+
+        {openDataServiceNodes.map((dataServiceNode) => (
+          <DataServiceWorkbenchEditor
+            key={dataServiceNode.id}
+            node={dataServiceNode}
+            active={activeNodeId === dataServiceNode.id}
+            onSaved={onNodesChanged}
+            onOpenSourceNode={focusNode}
+            onDirtyChange={(dirty) => updateDataServiceDirty(dataServiceNode.id, dirty)}
+          />
+        ))}
       </div>
 
       <Modal

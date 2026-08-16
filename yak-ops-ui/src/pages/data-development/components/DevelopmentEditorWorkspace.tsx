@@ -8,7 +8,6 @@ import type {
   DevelopmentId,
   DevelopmentResourceNode,
 } from '../types';
-import DataServiceNodeEditor from './data-service/DataServiceNodeEditor';
 import DatasetNodeEditor from './dataset/DatasetNodeEditor';
 import DevelopmentWorkbench from './workbench/DevelopmentWorkbench';
 
@@ -29,7 +28,7 @@ interface ResourceEditorBoundaryState {
   error?: string;
 }
 
-/** Prevents one standalone resource editor from blanking the whole Data Development workspace. */
+/** Prevents one resource editor from blanking the whole Data Development workspace. */
 class ResourceEditorBoundary extends Component<
   ResourceEditorBoundaryProps,
   ResourceEditorBoundaryState
@@ -83,7 +82,10 @@ export default function DevelopmentEditorWorkspace({
     () => nodes.find((node) => node.id === selectedNodeId),
     [nodes, selectedNodeId],
   );
-  const taskNodes = useMemo(() => nodes.filter(isDevelopmentTaskNode), [nodes]);
+  const workbenchNodes = useMemo(
+    () => nodes.filter((node) => isDevelopmentTaskNode(node) || node.type === 'DATA_SERVICE'),
+    [nodes],
+  );
 
   if (!selectedResource) {
     return (
@@ -111,27 +113,17 @@ export default function DevelopmentEditorWorkspace({
     );
   }
 
-  if (selectedResource.type === 'DATA_SERVICE') {
+  if (isDevelopmentTaskNode(selectedResource) || selectedResource.type === 'DATA_SERVICE') {
     return (
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <ResourceEditorBoundary resourceKey={selectedResource.id}>
-          <DataServiceNodeEditor node={selectedResource} onSaved={onNodesChanged} />
-        </ResourceEditorBoundary>
-      </main>
-    );
-  }
-
-  if (isDevelopmentTaskNode(selectedResource)) {
-    return (
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+      <ResourceEditorBoundary resourceKey={selectedResource.id}>
         <DevelopmentWorkbench
-          nodes={taskNodes}
+          nodes={workbenchNodes}
           directories={directories}
           selectedNodeId={selectedResource.id}
           onNodeFocus={onNodeFocus}
           onNodesChanged={onNodesChanged}
         />
-      </main>
+      </ResourceEditorBoundary>
     );
   }
 

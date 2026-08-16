@@ -2,12 +2,15 @@ import { Dropdown, Tooltip } from 'antd';
 import { Check, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 
-import { getEditorDefinition } from '../../editors/registry';
+import { getEditorAppearance } from '../../editors/registry';
 import {
   getEditorSession,
   useEditorSessionVersion,
 } from '../../editors/session/editorSessionStore';
-import type { DevelopmentId, DevelopmentNode } from '../../types';
+import type {
+  DevelopmentId,
+  DevelopmentResourceNode,
+} from '../../types';
 
 export type EditorTabAction =
   | 'close-current'
@@ -17,9 +20,10 @@ export type EditorTabAction =
   | 'close-all';
 
 interface EditorTabsProps {
-  nodeMap: Map<DevelopmentId, DevelopmentNode>;
+  nodeMap: Map<DevelopmentId, DevelopmentResourceNode>;
   openNodeIds: DevelopmentId[];
   activeNodeId?: DevelopmentId;
+  dirtyNodeIds?: DevelopmentId[];
   onFocus: (nodeId: DevelopmentId) => void;
   onClose: (nodeId: DevelopmentId) => void;
   onAction: (action: EditorTabAction) => void;
@@ -29,12 +33,14 @@ const EditorTabs = ({
   nodeMap,
   openNodeIds,
   activeNodeId,
+  dirtyNodeIds = [],
   onFocus,
   onClose,
   onAction,
 }: EditorTabsProps) => {
   const tabRefs = useRef(new Map<DevelopmentId, HTMLDivElement>());
   const sessionVersion = useEditorSessionVersion();
+  const dirtySet = useMemo(() => new Set(dirtyNodeIds), [dirtyNodeIds]);
 
   useEffect(() => {
     if (!activeNodeId) return;
@@ -48,6 +54,9 @@ const EditorTabs = ({
     return () => window.cancelAnimationFrame(frame);
   }, [activeNodeId]);
 
+  const isDirty = (nodeId: DevelopmentId) =>
+    Boolean(getEditorSession(nodeId)?.dirty || dirtySet.has(nodeId));
+
   const menuItems = useMemo(
     () => [
       {
@@ -56,14 +65,13 @@ const EditorTabs = ({
         children: openNodeIds.map((nodeId) => {
           const node = nodeMap.get(nodeId);
           const active = nodeId === activeNodeId;
-          const definition = node ? getEditorDefinition(node.type) : undefined;
-          const session = getEditorSession(nodeId);
-          const Icon = definition?.icon;
+          const appearance = node ? getEditorAppearance(node.type) : undefined;
+          const Icon = appearance?.icon;
 
           return {
             key: `focus:${nodeId}`,
             icon: Icon ? (
-              <span className={definition?.iconClassName}>
+              <span className={appearance?.iconClassName}>
                 <Icon size={13} strokeWidth={1.8} />
               </span>
             ) : undefined,
@@ -73,7 +81,7 @@ const EditorTabs = ({
                   <span className="max-w-[200px] truncate">
                     {node?.name || nodeId}
                   </span>
-                  {session?.dirty ? (
+                  {isDirty(nodeId) ? (
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#667085]"
                       title="未保存"
@@ -109,7 +117,7 @@ const EditorTabs = ({
       },
       { key: 'close-all', label: '全部关闭' },
     ],
-    [activeNodeId, nodeMap, openNodeIds, sessionVersion],
+    [activeNodeId, dirtySet, nodeMap, openNodeIds, sessionVersion],
   );
 
   return (
@@ -120,9 +128,8 @@ const EditorTabs = ({
             const node = nodeMap.get(nodeId);
             if (!node) return null;
             const active = nodeId === activeNodeId;
-            const definition = getEditorDefinition(node.type);
-            const session = getEditorSession(nodeId);
-            const Icon = definition.icon;
+            const appearance = getEditorAppearance(node.type);
+            const Icon = appearance.icon;
 
             return (
               <div
@@ -143,7 +150,7 @@ const EditorTabs = ({
               >
                 <button
                   type="button"
-                  title={node.name}
+                  title={`${appearance.label} · ${node.name}`}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => onFocus(nodeId)}
                   className="flex h-full min-w-0 flex-1 items-center gap-2 bg-transparent pl-3 pr-1 text-left outline-none"
@@ -151,7 +158,7 @@ const EditorTabs = ({
                   <span
                     className={[
                       'flex h-5 w-4 shrink-0 items-center justify-center',
-                      definition.iconClassName,
+                      appearance.iconClassName,
                     ].join(' ')}
                   >
                     <Icon size={13} strokeWidth={1.8} />
@@ -164,7 +171,7 @@ const EditorTabs = ({
                   >
                     {node.name}
                   </span>
-                  {session?.dirty ? (
+                  {isDirty(nodeId) ? (
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#667085]"
                       title="未保存"
