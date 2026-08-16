@@ -1,10 +1,7 @@
 import { Tooltip } from 'antd';
 import { LoaderCircle, Play, Rocket, Save } from 'lucide-react';
 
-import type {
-  DevelopmentDatasetToolbarState,
-  DevelopmentEditorDefinition,
-} from '../../editors/types';
+import type { DevelopmentEditorDefinition } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
 
 interface EditorToolbarProps {
@@ -14,10 +11,6 @@ interface EditorToolbarProps {
   onRun: () => void;
   onSave: () => void;
   onPublish: () => void;
-  onPublishDataset?: () => void;
-  datasetState?: DevelopmentDatasetToolbarState;
-  datasetLoading?: boolean;
-  datasetPublishing?: boolean;
   running: boolean;
   saving: boolean;
   publishing: boolean;
@@ -33,10 +26,6 @@ const EditorToolbar = ({
   onRun,
   onSave,
   onPublish,
-  onPublishDataset,
-  datasetState,
-  datasetLoading,
-  datasetPublishing,
   running,
   saving,
   publishing,
@@ -54,10 +43,6 @@ const EditorToolbar = ({
             onRun={onRun}
             onSave={onSave}
             onPublish={onPublish}
-            onPublishDataset={onPublishDataset}
-            datasetState={datasetState}
-            datasetLoading={datasetLoading}
-            datasetPublishing={datasetPublishing}
             running={running}
             saving={saving}
             publishing={publishing}
