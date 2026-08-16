@@ -1,226 +1,436 @@
-import { Button, Empty, Table, Tag, Tooltip, message, type TableColumnsType } from 'antd';
-import {
-  Activity,
-  AlertCircle,
-  CheckCircle2,
-  Gauge,
-  RefreshCw,
-  Server,
-} from 'lucide-react';
+import { Button, Empty, Table, Tooltip, message, type TableColumnsType } from 'antd';
+import type { EChartsOption } from 'echarts';
+import ReactECharts from 'echarts-for-react';
+import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  fetchDataServiceLogs,
-  fetchDataServices,
-  type DataServiceApi,
-  type DataServiceCallLog,
-} from '../service';
+  fetchDataServiceOverview,
+  type DataServiceOverview,
+  type DataServiceOverviewFailure,
+  type DataServiceOverviewRange,
+} from './overview-service';
 
-const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 19) : '-';
+const BRAND_COLOR = 'rgba(254,44,85,1)';
+const TEXT_PRIMARY = '#161823';
+const TEXT_SECONDARY = '#667085';
+const TEXT_WEAK = '#98a2b3';
+const BORDER = '#f0f0f0';
 
-const MetricCard = ({
-  label,
-  value,
-  note,
-  icon,
+const formatTime = (value?: string | null) => value ? value.replace('T', ' ').slice(0, 19) : '-';
+const formatNumber = (value?: number) => new Intl.NumberFormat('zh-CN').format(value || 0);
+
+const RANGE_ITEMS: Array<{ value: DataServiceOverviewRange; label: string }> = [
+  { value: '24h', label: '24 小时' },
+  { value: '7d', label: '7 天' },
+  { value: '30d', label: '30 天' },
+];
+
+const emptyOverview = (range: DataServiceOverviewRange): DataServiceOverview => ({
+  range,
+  startTime: '',
+  endTime: '',
+  apiTotal: 0,
+  runningApis: 0,
+  stoppedApis: 0,
+  totalCalls: 0,
+  successCalls: 0,
+  failureCalls: 0,
+  successRate: 0,
+  averageDurationMs: 0,
+  totalRows: 0,
+  trend: [],
+  hotApis: [],
+  recentFailures: [],
+});
+
+const Panel = ({
+  title,
+  subtitle,
+  children,
+  className = '',
 }: {
-  label: string;
-  value: string | number;
-  note: string;
-  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  className?: string;
 }) => (
-  <div className="rounded-[6px] border border-[#e6e8eb] bg-white px-4 py-4">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <div className="text-[11px] text-[#98a2b3]">{label}</div>
-        <div className="mt-2 text-[24px] font-semibold tracking-[-.02em] text-[#1d2939]">{value}</div>
-      </div>
-      <div className="flex h-8 w-8 items-center justify-center rounded-[5px] bg-[#f6f7f8] text-[#667085]">
-        {icon}
+  <section className={`rounded-[8px] border border-[#f0f0f0] bg-white ${className}`}>
+    <div className="flex min-h-[48px] items-center justify-between border-b border-[#f3f4f5] px-4">
+      <div className="min-w-0">
+        <div className="text-[13px] font-semibold text-[#30323b]">{title}</div>
+        {subtitle ? <div className="mt-0.5 text-[10px] text-[#a0a5ad]">{subtitle}</div> : null}
       </div>
     </div>
-    <div className="mt-2 text-[11px] text-[#98a2b3]">{note}</div>
+    {children}
+  </section>
+);
+
+const DonutPanel = ({
+  title,
+  subtitle,
+  total,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  total: number;
+  items: Array<{ name: string; value: number; color: string }>;
+}) => {
+  const option: EChartsOption = {
+    animationDuration: 350,
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: '#fff',
+      borderColor: '#e4e7ec',
+      textStyle: { color: '#475467', fontSize: 11 },
+      formatter: '{b}<br/>{c} ({d}%)',
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['60%', '78%'],
+        center: ['50%', '49%'],
+        silent: false,
+        avoidLabelOverlap: true,
+        label: { show: false },
+        labelLine: { show: false },
+        emphasis: { scale: false },
+        itemStyle: { borderColor: '#fff', borderWidth: 2 },
+        data: items.map((item) => ({
+          name: item.name,
+          value: item.value,
+          itemStyle: { color: item.color },
+        })),
+      },
+    ],
+  };
+
+  return (
+    <Panel title={title} subtitle={subtitle}>
+      <div className="px-4 pb-3 pt-2">
+        <div className="relative h-[148px]">
+          <ReactECharts option={option} style={{ height: 148 }} notMerge lazyUpdate />
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-1">
+            <div className="text-[22px] font-semibold tracking-[-.02em] text-[#161823]">{formatNumber(total)}</div>
+            <div className="mt-0.5 text-[10px] text-[#98a2b3]">总计</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 border-t border-[#f3f4f5] pt-3">
+          {items.map((item) => (
+            <div key={item.name} className="flex min-w-0 items-center justify-between gap-2 text-[11px]">
+              <div className="flex min-w-0 items-center gap-1.5 text-[#667085]">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                <span className="truncate">{item.name}</span>
+              </div>
+              <span className="shrink-0 font-medium text-[#344054]">{formatNumber(item.value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+};
+
+const MetricCell = ({ label, value, note }: { label: string; value: string; note: string }) => (
+  <div className="min-w-0 px-4 py-4">
+    <div className="text-[10px] text-[#98a2b3]">{label}</div>
+    <div className="mt-1.5 truncate text-[22px] font-semibold tracking-[-.02em] text-[#161823]">{value}</div>
+    <div className="mt-1 truncate text-[10px] text-[#a0a5ad]">{note}</div>
   </div>
 );
 
 export default function DataServiceOverviewPage() {
-  const [services, setServices] = useState<DataServiceApi[]>([]);
-  const [logs, setLogs] = useState<DataServiceCallLog[]>([]);
+  const [range, setRange] = useState<DataServiceOverviewRange>('24h');
+  const [overview, setOverview] = useState<DataServiceOverview>(() => emptyOverview('24h'));
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [serviceResponse, logResponse] = await Promise.all([
-        fetchDataServices(),
-        fetchDataServiceLogs(),
-      ]);
-      setServices(serviceResponse.data || []);
-      setLogs(logResponse.data || []);
+      const response = await fetchDataServiceOverview(range);
+      setOverview(response.data || emptyOverview(range));
     } catch (error: any) {
       message.error(error?.message || '加载数据服务运行概览失败');
+      setOverview(emptyOverview(range));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [range]);
 
   useEffect(() => { void load(); }, [load]);
 
-  const successCalls = useMemo(() => logs.filter((item) => item.success).length, [logs]);
-  const failureCalls = logs.length - successCalls;
-  const successRate = logs.length ? Math.round((successCalls / logs.length) * 1000) / 10 : 0;
-  const averageDuration = logs.length
-    ? Math.round(logs.reduce((sum, item) => sum + (item.durationMs || 0), 0) / logs.length)
-    : 0;
-  const runningServices = services.filter((item) => item.enabled).length;
+  const trendOption = useMemo<EChartsOption>(() => ({
+    animationDuration: 350,
+    color: ['#344054', BRAND_COLOR, '#98a2b3'],
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#fff',
+      borderColor: '#e4e7ec',
+      padding: [8, 10],
+      textStyle: { color: '#475467', fontSize: 11 },
+    },
+    legend: {
+      top: 0,
+      right: 4,
+      itemWidth: 14,
+      itemHeight: 7,
+      textStyle: { color: TEXT_SECONDARY, fontSize: 10 },
+      data: ['总调用', '失败调用', '平均耗时'],
+    },
+    grid: { left: 44, right: 54, top: 44, bottom: 30, containLabel: false },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: overview.trend.map((item) => item.time),
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: '#e4e7ec' } },
+      axisLabel: { color: TEXT_WEAK, fontSize: 9, hideOverlap: true, margin: 11 },
+    },
+    yAxis: [
+      {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: TEXT_WEAK, fontSize: 9 },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: '#f2f4f7' } },
+      },
+      {
+        type: 'value',
+        axisLabel: { color: TEXT_WEAK, fontSize: 9, formatter: '{value} ms' },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+      },
+    ],
+    series: [
+      {
+        name: '总调用',
+        type: 'line',
+        smooth: 0.25,
+        symbol: 'none',
+        lineStyle: { width: 2, color: '#344054' },
+        areaStyle: { color: 'rgba(52,64,84,.06)' },
+        data: overview.trend.map((item) => item.calls),
+      },
+      {
+        name: '失败调用',
+        type: 'line',
+        smooth: 0.25,
+        symbol: 'none',
+        lineStyle: { width: 1.6, color: BRAND_COLOR },
+        data: overview.trend.map((item) => item.failureCalls),
+      },
+      {
+        name: '平均耗时',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: 0.25,
+        symbol: 'none',
+        lineStyle: { width: 1.4, type: 'dashed', color: '#98a2b3' },
+        data: overview.trend.map((item) => item.averageDurationMs),
+      },
+    ],
+  }), [overview.trend]);
 
-  const hotApis = useMemo(() => {
-    const counts = new Map<number, { calls: number; success: number; duration: number }>();
-    logs.forEach((item) => {
-      const current = counts.get(item.apiId) || { calls: 0, success: 0, duration: 0 };
-      current.calls += 1;
-      current.success += item.success ? 1 : 0;
-      current.duration += item.durationMs || 0;
-      counts.set(item.apiId, current);
-    });
+  const hotApiOption = useMemo<EChartsOption>(() => {
+    const records = [...overview.hotApis].reverse();
+    return {
+      animationDuration: 350,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        backgroundColor: '#fff',
+        borderColor: '#e4e7ec',
+        textStyle: { color: '#475467', fontSize: 11 },
+      },
+      grid: { left: 12, right: 42, top: 8, bottom: 8, containLabel: true },
+      xAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: 'category',
+        data: records.map((item) => item.name),
+        axisTick: { show: false },
+        axisLine: { show: false },
+        axisLabel: {
+          color: TEXT_SECONDARY,
+          fontSize: 10,
+          width: 110,
+          overflow: 'truncate',
+        },
+      },
+      series: [
+        {
+          type: 'bar',
+          barWidth: 10,
+          data: records.map((item) => item.calls),
+          itemStyle: { color: '#667085', borderRadius: [0, 3, 3, 0] },
+          label: {
+            show: true,
+            position: 'right',
+            color: TEXT_WEAK,
+            fontSize: 9,
+            formatter: '{c}',
+          },
+        },
+      ],
+    };
+  }, [overview.hotApis]);
 
-    return services
-      .map((service) => ({ service, stats: counts.get(service.id) }))
-      .filter((item): item is { service: DataServiceApi; stats: { calls: number; success: number; duration: number } } => Boolean(item.stats))
-      .sort((left, right) => right.stats.calls - left.stats.calls)
-      .slice(0, 8);
-  }, [logs, services]);
-
-  const maxCalls = hotApis[0]?.stats.calls || 1;
-  const recentFailures = useMemo(
-    () => logs.filter((item) => !item.success).slice(0, 8),
-    [logs],
-  );
-
-  const failureColumns: TableColumnsType<DataServiceCallLog> = [
+  const failureColumns: TableColumnsType<DataServiceOverviewFailure> = [
     {
       title: 'API',
       dataIndex: 'serviceName',
-      minWidth: 180,
+      minWidth: 170,
       render: (_, record) => (
-        <div>
-          <div className="font-medium text-[#344054]">{record.serviceName}</div>
+        <div className="min-w-0 py-0.5">
+          <div className="truncate text-[12px] font-medium text-[#344054]">{record.serviceName}</div>
           <div className="mt-0.5 truncate font-mono text-[10px] text-[#98a2b3]">{record.servicePath}</div>
         </div>
       ),
     },
-    { title: '耗时', dataIndex: 'durationMs', width: 90, render: (value) => `${value || 0} ms` },
     {
       title: '错误',
       dataIndex: 'errorMessage',
       ellipsis: true,
-      render: (value) => value
-        ? <Tooltip title={value}><span className="text-[#b42318]">{value}</span></Tooltip>
-        : <span className="text-[#98a2b3]">未知错误</span>,
+      render: (value?: string | null) => value
+        ? <Tooltip title={value}><span className="text-[11px] text-[#b42318]">{value}</span></Tooltip>
+        : <span className="text-[11px] text-[#98a2b3]">未知错误</span>,
     },
-    { title: '时间', dataIndex: 'createTime', width: 160, render: formatTime },
+    {
+      title: '耗时',
+      dataIndex: 'durationMs',
+      width: 82,
+      render: (value: number) => <span className="text-[11px] text-[#667085]">{value || 0} ms</span>,
+    },
+    {
+      title: '时间',
+      dataIndex: 'createTime',
+      width: 150,
+      render: (value?: string | null) => <span className="text-[10px] text-[#98a2b3]">{formatTime(value)}</span>,
+    },
   ];
 
   return (
-    <div className="h-full overflow-y-auto bg-[#fafafa] px-6 py-5">
-      <div className="mx-auto max-w-[1280px]">
-        <div className="mb-5 flex items-start justify-between gap-4">
+    <div className="h-full overflow-y-auto bg-[#f6f7f8] p-3">
+      <div className="min-h-full rounded-[10px] bg-white px-5 pb-5 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="m-0 text-xl font-semibold text-[#161823]">运行概览</h1>
-            <p className="mb-0 mt-1 text-sm text-black/45">
-              基于当前 API 状态和最近 200 条调用记录做轻量统计，不额外引入计量平台。
-            </p>
-          </div>
-          <Button loading={loading} icon={<RefreshCw size={15} />} onClick={() => void load()}>刷新</Button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <MetricCard
-            label="API 总数"
-            value={services.length}
-            note={`${runningServices} 个运行中`}
-            icon={<Server size={16} strokeWidth={1.8} />}
-          />
-          <MetricCard
-            label="近期调用"
-            value={logs.length}
-            note="最近调用记录窗口"
-            icon={<Activity size={16} strokeWidth={1.8} />}
-          />
-          <MetricCard
-            label="成功率"
-            value={`${successRate}%`}
-            note={`${successCalls} 成功 / ${failureCalls} 失败`}
-            icon={<CheckCircle2 size={16} strokeWidth={1.8} />}
-          />
-          <MetricCard
-            label="平均耗时"
-            value={`${averageDuration} ms`}
-            note="基于近期调用计算"
-            icon={<Gauge size={16} strokeWidth={1.8} />}
-          />
-          <MetricCard
-            label="失败调用"
-            value={failureCalls}
-            note="建议优先查看异常 API"
-            icon={<AlertCircle size={16} strokeWidth={1.8} />}
-          />
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,1.25fr)]">
-          <section className="rounded-[6px] border border-[#e6e8eb] bg-white p-5">
-            <div className="mb-4">
-              <div className="text-[14px] font-semibold text-[#30323b]">热门 API</div>
-              <div className="mt-1 text-[11px] text-[#98a2b3]">按最近调用次数排序</div>
+            <h1 className="m-0 text-[17px] font-semibold text-[#161823]">运行概览</h1>
+            <div className="mt-1 text-[12px] text-[#98a2b3]">
+              API 运行状态、调用趋势与近期异常
             </div>
+          </div>
 
-            {hotApis.length ? (
-              <div className="space-y-4">
-                {hotApis.map(({ service, stats }, index) => {
-                  const rate = stats.calls ? Math.round((stats.success / stats.calls) * 1000) / 10 : 0;
-                  const average = stats.calls ? Math.round(stats.duration / stats.calls) : 0;
-                  return (
-                    <div key={service.id}>
-                      <div className="flex items-center justify-between gap-4 text-[12px]">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="w-4 shrink-0 text-[10px] text-[#98a2b3]">{index + 1}</span>
-                          <span className="truncate font-medium text-[#344054]">{service.name}</span>
-                          {!service.enabled ? <Tag bordered={false}>已停用</Tag> : null}
-                        </div>
-                        <div className="shrink-0 text-[11px] text-[#98a2b3]">
-                          {stats.calls} 次 · {rate}% · {average} ms
-                        </div>
-                      </div>
-                      <div className="ml-6 mt-2 h-1.5 overflow-hidden rounded-full bg-[#f0f2f4]">
-                        <div
-                          className="h-full rounded-full bg-[#667085]"
-                          style={{ width: `${Math.max(4, (stats.calls / maxCalls) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 rounded-[8px] bg-[#f5f5f6] p-1">
+              {RANGE_ITEMS.map((item) => {
+                const active = range === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setRange(item.value)}
+                    className={[
+                      'h-7 rounded-[6px] border-0 px-3 text-[12px] transition-all',
+                      active
+                        ? 'bg-white font-medium text-[#161823] shadow-[0_1px_3px_rgba(16,24,40,.06)]'
+                        : 'bg-transparent text-[#7b808a] hover:text-[#344054]',
+                    ].join(' ')}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              type="text"
+              size="middle"
+              loading={loading}
+              icon={<RefreshCw size={14} />}
+              onClick={() => void load()}
+              className="bg-[#f5f6f7]"
+            >
+              刷新
+            </Button>
+          </div>
+        </div>
+
+        <div className="my-4 border-t border-[#f0f0f0]" />
+
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(360px,1.2fr)]">
+          <DonutPanel
+            title="API 状态分布"
+            subtitle="当前已上线的数据服务"
+            total={overview.apiTotal}
+            items={[
+              { name: '运行中', value: overview.runningApis, color: '#475467' },
+              { name: '已停用', value: overview.stoppedApis, color: '#d0d5dd' },
+            ]}
+          />
+          <DonutPanel
+            title="调用结果分布"
+            subtitle={`统计范围：${RANGE_ITEMS.find((item) => item.value === range)?.label || range}`}
+            total={overview.totalCalls}
+            items={[
+              { name: '成功', value: overview.successCalls, color: '#475467' },
+              { name: '失败', value: overview.failureCalls, color: BRAND_COLOR },
+            ]}
+          />
+          <Panel title="总体指标" subtitle="当前时间范围内的调用汇总">
+            <div className="grid grid-cols-2 divide-x divide-y divide-[#f3f4f5]">
+              <MetricCell label="调用次数" value={formatNumber(overview.totalCalls)} note="全部 API 调用" />
+              <MetricCell label="成功率" value={`${overview.successRate}%`} note={`${overview.failureCalls} 次失败`} />
+              <MetricCell label="平均耗时" value={`${formatNumber(overview.averageDurationMs)} ms`} note="按全部调用计算" />
+              <MetricCell label="返回行数" value={formatNumber(overview.totalRows)} note="成功查询返回数据量" />
+            </div>
+          </Panel>
+        </div>
+
+        <Panel
+          title="调用趋势"
+          subtitle="总调用、失败调用与平均耗时"
+          className="mt-3"
+        >
+          <div className="h-[330px] px-3 pb-2 pt-3">
+            <ReactECharts option={trendOption} style={{ height: 310 }} notMerge lazyUpdate />
+          </div>
+        </Panel>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(360px,.8fr)_minmax(0,1.4fr)]">
+          <Panel title="热门 API" subtitle="按当前时间范围内调用次数排序">
+            {overview.hotApis.length ? (
+              <div className="h-[300px] px-2 py-3">
+                <ReactECharts option={hotApiOption} style={{ height: 276 }} notMerge lazyUpdate />
               </div>
             ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用数据" />
+              <div className="flex h-[300px] items-center justify-center">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用数据" />
+              </div>
             )}
-          </section>
+          </Panel>
 
-          <section className="rounded-[6px] border border-[#e6e8eb] bg-white p-5">
-            <div className="mb-4">
-              <div className="text-[14px] font-semibold text-[#30323b]">最近失败</div>
-              <div className="mt-1 text-[11px] text-[#98a2b3]">快速发现需要处理的调用异常</div>
+          <Panel title="最近失败" subtitle="优先关注最近的异常调用">
+            <div className="p-3">
+              <Table<DataServiceOverviewFailure>
+                rowKey="id"
+                size="small"
+                bordered
+                loading={loading}
+                pagination={false}
+                dataSource={overview.recentFailures}
+                columns={failureColumns}
+                scroll={{ x: 700, y: 240 }}
+                locale={{ emptyText: '当前时间范围内没有失败调用' }}
+              />
             </div>
-            <Table<DataServiceCallLog>
-              rowKey="id"
-              size="small"
-              loading={loading}
-              pagination={false}
-              dataSource={recentFailures}
-              columns={failureColumns}
-              scroll={{ x: 680 }}
-              locale={{ emptyText: '近期没有失败调用' }}
-            />
-          </section>
+          </Panel>
         </div>
       </div>
     </div>
