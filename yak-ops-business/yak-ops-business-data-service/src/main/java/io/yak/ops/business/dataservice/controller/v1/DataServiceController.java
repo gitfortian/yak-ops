@@ -14,7 +14,6 @@ import io.yak.ops.business.dataservice.service.DataServiceDocumentationService.A
 import io.yak.ops.business.dataservice.service.DataServiceDocumentationService.DocumentationInput;
 import io.yak.ops.business.dataservice.service.DataServicePublicationService;
 import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublicationSettings;
-import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublicationState;
 import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublishRequest;
 import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.DataServiceService;
@@ -24,10 +23,6 @@ import io.yak.ops.business.dataservice.service.DataServiceService.QueryResponse;
 import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeConfigInput;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourcePage;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -73,7 +68,7 @@ public class DataServiceController {
 
   @Operation(summary = "从已发布来源创建或更新数据服务")
   @PostMapping("/publish")
-  public Result<ApiView> publish(@Valid @RequestBody PublishDataServiceRequest request) {
+  public Result<ApiView> publish(@RequestBody PublishDataServiceRequest request) {
     return Result.success(publicationService.publish(new PublishRequest(
         request.sourceType(),
         request.sourceRef(),
@@ -107,7 +102,7 @@ public class DataServiceController {
   @PostMapping("/{id}/republish")
   public Result<ApiView> republish(
       @PathVariable("id") Long id,
-      @Valid @RequestBody(required = false) RepublishDataServiceRequest request) {
+      @RequestBody(required = false) RepublishDataServiceRequest request) {
     RepublishDataServiceRequest values = request == null
         ? new RepublishDataServiceRequest(null, null, null, null, null, null)
         : request;
@@ -253,20 +248,20 @@ public class DataServiceController {
   }
 
   public record PublishDataServiceRequest(
-      @Size(max = 64) String sourceType,
-      @Size(max = 255) String sourceRef,
-      @Size(max = 200) String name,
-      @Size(max = 255) String path,
-      @Min(1) @Max(10_000) Integer maxRows,
-      @Min(1) @Max(3_600) Integer timeoutSeconds,
+      String sourceType,
+      String sourceRef,
+      String name,
+      String path,
+      Integer maxRows,
+      Integer timeoutSeconds,
       Boolean enabled,
-      @Size(max = 2000) String description) {}
+      String description) {}
 
   public record RepublishDataServiceRequest(
-      @Size(max = 200) String name,
-      @Size(max = 255) String path,
-      @Min(1) @Max(10_000) Integer maxRows,
-      @Min(1) @Max(3_600) Integer timeoutSeconds,
+      String name,
+      String path,
+      Integer maxRows,
+      Integer timeoutSeconds,
       Boolean enabled,
-      @Size(max = 2000) String description) {}
+      String description) {}
 }
