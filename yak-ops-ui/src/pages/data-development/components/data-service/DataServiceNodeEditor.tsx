@@ -26,10 +26,10 @@ export default function DataServiceNodeEditor({ node }: DataServiceNodeEditorPro
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#f5f5f6] text-[#667085]">
             <Network size={19} />
           </div>
-          <div className="text-[13px] font-semibold text-[#344054]">数据服务已经是独立节点</div>
+          <div className="text-[13px] font-semibold text-[#344054]">数据服务配置归属于当前节点</div>
           <div className="mt-2 text-[11px] leading-6 text-[#98a2b3]">
-            数据开发只负责数据服务资源本身，不在这里维护节点连线或工作流关系。
-            当前发布能力仍保留在原有 SQL 发布入口，后续再单独迁移到这个节点。
+            SQL 节点只负责 SQL 的开发与发布，不再直接创建 API。
+            数据服务的来源、接口配置与发布生命周期将在这个节点内统一管理。
           </div>
         </div>
       </div>

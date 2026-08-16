@@ -3,14 +3,6 @@ import { Button, Modal, message } from 'antd';
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import {
-  fetchDevelopmentDatasetContext,
-  previewDevelopmentReleaseDataset,
-  publishDevelopmentReleaseDataset,
-  type DevelopmentDatasetContext,
-  type DevelopmentDatasetFieldDraft,
-  type PublishDevelopmentDatasetPayload,
-} from '../../dataset-service';
 import { getEditorDefinition } from '../../editors/registry';
 import {
   getEditorSession,
@@ -37,7 +29,6 @@ import type {
 import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
 import EditorToolbar from './EditorToolbar';
-import PublishDatasetModal from './PublishDatasetModal';
 import RightPanel from './RightPanel';
 import RunResultPanel from './RunResultPanel';
 
@@ -83,14 +74,6 @@ const DevelopmentWorkbench = ({
   const [publishing, setPublishing] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
-  const [datasetRefreshKey, setDatasetRefreshKey] = useState(0);
-  const [datasetContext, setDatasetContext] = useState<DevelopmentDatasetContext>({});
-  const [datasetLoading, setDatasetLoading] = useState(false);
-  const [datasetPublishing, setDatasetPublishing] = useState(false);
-  const [datasetModalOpen, setDatasetModalOpen] = useState(false);
-  const [datasetPreviewFields, setDatasetPreviewFields] = useState<DevelopmentDatasetFieldDraft[]>([]);
-  const [datasetPreviewLoading, setDatasetPreviewLoading] = useState(false);
-  const [datasetPreviewError, setDatasetPreviewError] = useState('');
 
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -145,46 +128,6 @@ const DevelopmentWorkbench = ({
   const activeRunning = activeNode
     ? runningNodeIds.includes(activeNode.id)
     : false;
-
-  useEffect(() => {
-    if (!activeNode || activeNode.type !== 'SQL') {
-      setDatasetContext({});
-      setDatasetLoading(false);
-      setDatasetModalOpen(false);
-      setDatasetPreviewFields([]);
-      setDatasetPreviewError('');
-      return;
-    }
-
-    let active = true;
-    setDatasetLoading(true);
-    fetchDevelopmentDatasetContext(activeNode.id, activeNode.name)
-      .then((context) => {
-        if (active) setDatasetContext(context);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setDatasetContext({});
-        message.error(error instanceof Error ? error.message : '加载 Dataset 状态失败');
-      })
-      .finally(() => {
-        if (active) setDatasetLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [activeNode?.id, activeNode?.name, activeNode?.type, datasetRefreshKey]);
-
-  const datasetVersion = datasetContext.datasetState?.detail?.currentVersion || undefined;
-  const datasetToolbarState = datasetContext.release ? {
-    releaseRevisionNo: datasetContext.release.currentRevisionNo,
-    releaseStatus: datasetContext.release.status,
-    datasetId: datasetContext.datasetState?.detail?.dataset.id,
-    datasetVersionNo: datasetVersion?.versionNo,
-    datasetSourceRevisionNo: datasetVersion?.sourceTaskRevisionNo,
-    datasetStatus: datasetContext.datasetState?.detail?.dataset.status,
-  } : undefined;
 
   const focusNode = (nodeId: DevelopmentId) => {
     setActiveNodeId(nodeId);
@@ -289,58 +232,11 @@ const DevelopmentWorkbench = ({
         '发布任务失败',
       );
       setVersionsRefreshKey((current) => current + 1);
-      if (activeNode.type === 'SQL') setDatasetRefreshKey((current) => current + 1);
-      message.success(
-        activeNode.type === 'SQL'
-          ? `已发布 v${published.revisionNo} · 可继续发布/更新 Dataset`
-          : `已发布 v${published.revisionNo}`,
-      );
+      message.success(`已发布 v${published.revisionNo}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '发布任务失败');
     } finally {
       setPublishing(false);
-    }
-  };
-
-  const openDatasetModal = async () => {
-    const release = datasetContext.release;
-    if (!activeNode || activeNode.type !== 'SQL' || !release) return;
-    setDatasetModalOpen(true);
-    setDatasetPreviewFields([]);
-    setDatasetPreviewError('');
-    setDatasetPreviewLoading(true);
-    try {
-      setDatasetPreviewFields(await previewDevelopmentReleaseDataset(release.assetId));
-    } catch (error) {
-      setDatasetPreviewError(error instanceof Error ? error.message : '发现 Dataset 字段失败');
-    } finally {
-      setDatasetPreviewLoading(false);
-    }
-  };
-
-  const publishActiveDataset = async (payload: PublishDevelopmentDatasetPayload) => {
-    const release = datasetContext.release;
-    if (!activeNode || activeNode.type !== 'SQL' || !release) return;
-    const wasPublished = Boolean(datasetContext.datasetState?.published);
-    setDatasetPublishing(true);
-    try {
-      const detail = await publishDevelopmentReleaseDataset(release.assetId, payload);
-      setDatasetContext((current) => ({
-        ...current,
-        datasetState: { published: true, detail },
-      }));
-      setDatasetModalOpen(false);
-      setDatasetPreviewFields([]);
-      setDatasetRefreshKey((current) => current + 1);
-      message.success(
-        wasPublished
-          ? `Dataset 已更新至 DV${detail.currentVersion?.versionNo || '-'}`
-          : `Dataset 已发布 · DV${detail.currentVersion?.versionNo || 1}`,
-      );
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '发布 Dataset 失败');
-    } finally {
-      setDatasetPublishing(false);
     }
   };
 
@@ -477,10 +373,6 @@ const DevelopmentWorkbench = ({
         onRun={() => void runActiveTask()}
         onSave={() => void saveActiveDraft()}
         onPublish={() => void publishActiveTask()}
-        onPublishDataset={activeNode.type === 'SQL' ? () => void openDatasetModal() : undefined}
-        datasetState={activeNode.type === 'SQL' ? datasetToolbarState : undefined}
-        datasetLoading={activeNode.type === 'SQL' && datasetLoading}
-        datasetPublishing={activeNode.type === 'SQL' && datasetPublishing}
         running={activeRunning}
         saving={saving}
         publishing={publishing}
@@ -512,23 +404,6 @@ const DevelopmentWorkbench = ({
           onClose={() => setRunPanelOpen(false)}
         />
       </div>
-
-      {activeNode.type === 'SQL' ? (
-        <PublishDatasetModal
-          open={datasetModalOpen}
-          nodeName={activeNode.name}
-          release={datasetContext.release}
-          datasetState={datasetContext.datasetState}
-          previewFields={datasetPreviewFields}
-          previewLoading={datasetPreviewLoading}
-          previewError={datasetPreviewError}
-          publishing={datasetPublishing}
-          onCancel={() => {
-            if (!datasetPublishing) setDatasetModalOpen(false);
-          }}
-          onPublish={(payload) => void publishActiveDataset(payload)}
-        />
-      ) : null}
 
       <Modal
         open={Boolean(pendingClose)}
