@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -73,31 +72,58 @@ public class DataServiceService {
     return Optional.ofNullable(api).map(this::toView);
   }
 
+  /** Updates only service-facing settings; executable SQL and datasource are never accepted here. */
   @Transactional
-  public ApiView save(Long id, ApiInput input) {
-    return saveInternal(id, input, false);
+  public ApiView updateSettings(Long id, ServiceSettingsInput input) {
+    DataServiceApiPO api = requireApi(id);
+    ServiceSettingsInput normalized = normalizeSettings(input, api);
+    ensurePathAvailable(id, normalized.path());
+    applySettings(api, normalized);
+    api.setUpdateTime(LocalDateTime.now());
+    apiMapper.updateById(api);
+    runtimeService.invalidate(api.getId());
+    return toView(api);
   }
 
   /**
-   * Creates or updates the stable Data Service bound to one upstream asset.
+   * Creates or refreshes the stable Data Service bound to one upstream asset.
    *
-   * <p>The executable SQL/dataSource values are copied into the service definition, so runtime calls
-   * remain a snapshot and never follow mutable authoring state implicitly. Access-control and Runtime
-   * policies are intentionally preserved across source refreshes.
+   * <p>This is the only write path that accepts executable SQL and datasource identity. Those values
+   * are copied from a server-resolved immutable source release and become the Runtime snapshot. Access
+   * control and Runtime policies are intentionally preserved across source refreshes.
    */
   @Transactional
-  public ApiView saveFromSource(SourceSnapshot source, ApiInput input) {
-    SourceSnapshot normalized = normalizeSource(source);
-    Optional<ApiView> existing = findBySource(normalized.sourceType(), normalized.sourceRef());
-    ApiView saved = saveInternal(existing.map(ApiView::id).orElse(null), input, true);
+  public ApiView saveFromSource(
+      SourceSnapshot source,
+      RuntimeDefinition runtimeDefinition,
+      ServiceSettingsInput settings) {
+    SourceSnapshot normalizedSource = normalizeSource(source);
+    RuntimeDefinition normalizedRuntime = normalizeRuntimeDefinition(runtimeDefinition);
+    Optional<ApiView> existing = findBySource(
+        normalizedSource.sourceType(), normalizedSource.sourceRef());
+    Long id = existing.map(ApiView::id).orElse(null);
+    boolean creating = id == null;
+    DataServiceApiPO api = creating ? new DataServiceApiPO() : requireApi(id);
+    ServiceSettingsInput normalizedSettings = normalizeSettings(settings, creating ? null : api);
+    ensurePathAvailable(id, normalizedSettings.path());
 
-    DataServiceApiPO api = requireApi(saved.id());
-    api.setSourceType(normalized.sourceType());
-    api.setSourceRef(normalized.sourceRef());
-    api.setSourceRevisionId(normalized.sourceRevisionId());
-    api.setSourceRevisionNo(normalized.sourceRevisionNo());
+    applySettings(api, normalizedSettings);
+    api.setDataSourceId(normalizedRuntime.dataSourceId());
+    api.setSqlText(normalizedRuntime.sql());
+    if (!StringUtils.hasText(api.getAuthMode())) api.setAuthMode("NONE");
+    initializeRuntimeDefaults(api, creating);
+    api.setSourceType(normalizedSource.sourceType());
+    api.setSourceRef(normalizedSource.sourceRef());
+    api.setSourceRevisionId(normalizedSource.sourceRevisionId());
+    api.setSourceRevisionNo(normalizedSource.sourceRevisionNo());
     api.setUpdateTime(LocalDateTime.now());
-    apiMapper.updateById(api);
+
+    if (creating) {
+      api.setCreateTime(api.getUpdateTime());
+      apiMapper.insert(api);
+    } else {
+      apiMapper.updateById(api);
+    }
     runtimeService.invalidate(api.getId());
     return toView(api);
   }
@@ -193,9 +219,7 @@ public class DataServiceService {
             .last("LIMIT 200"));
   }
 
-  private ApiView saveInternal(Long id, ApiInput input, boolean sourceRefresh) {
-    validateInput(input);
-    String path = normalizePath(input.path());
+  private void ensurePathAvailable(Long id, String path) {
     Long duplicateCount = apiMapper.selectCount(
         Wrappers.<DataServiceApiPO>lambdaQuery()
             .eq(DataServiceApiPO::getPath, path)
@@ -203,38 +227,49 @@ public class DataServiceService {
     if (duplicateCount != null && duplicateCount > 0) {
       throw new IllegalArgumentException("服务路径已存在：" + path);
     }
+  }
 
-    LocalDateTime now = LocalDateTime.now();
-    boolean creating = id == null;
-    DataServiceApiPO api = creating ? new DataServiceApiPO() : requireApi(id);
-    if (!sourceRefresh && StringUtils.hasText(api.getSourceType())) {
-      String sql = input.sql().trim();
-      if (!Objects.equals(api.getDataSourceId(), input.dataSourceId())
-          || !Objects.equals(api.getSqlText(), sql)) {
-        throw new IllegalArgumentException(
-            "来源数据服务的 SQL 和数据源由发布来源管理，请从来源版本重新发布");
-      }
-    }
+  private void applySettings(DataServiceApiPO api, ServiceSettingsInput input) {
+    api.setName(input.name());
+    api.setPath(input.path());
+    api.setMaxRows(input.maxRows());
+    api.setTimeoutSeconds(input.timeoutSeconds());
+    api.setEnabled(input.enabled());
+    api.setDescription(input.description());
+  }
 
-    api.setName(input.name().trim());
-    api.setPath(path);
-    api.setDataSourceId(input.dataSourceId());
-    api.setSqlText(input.sql().trim());
-    api.setMaxRows(normalizeMaxRows(input.maxRows()));
-    api.setTimeoutSeconds(normalizeTimeout(input.timeoutSeconds()));
-    api.setEnabled(input.enabled() == null ? Boolean.FALSE : input.enabled());
-    if (!StringUtils.hasText(api.getAuthMode())) api.setAuthMode("NONE");
-    initializeRuntimeDefaults(api, creating);
-    api.setDescription(StringUtils.hasText(input.description()) ? input.description().trim() : null);
-    api.setUpdateTime(now);
-    if (creating) {
-      api.setCreateTime(now);
-      apiMapper.insert(api);
-    } else {
-      apiMapper.updateById(api);
+  private ServiceSettingsInput normalizeSettings(
+      ServiceSettingsInput input,
+      DataServiceApiPO existing) {
+    if (input == null) throw new IllegalArgumentException("数据服务配置不能为空");
+    if (!StringUtils.hasText(input.name())) throw new IllegalArgumentException("服务名称不能为空");
+    String path = normalizePath(input.path());
+    int maxRows = input.maxRows() == null && existing != null && existing.getMaxRows() != null
+        ? existing.getMaxRows()
+        : normalizeMaxRows(input.maxRows());
+    int timeoutSeconds = input.timeoutSeconds() == null
+        && existing != null
+        && existing.getTimeoutSeconds() != null
+            ? existing.getTimeoutSeconds()
+            : normalizeTimeout(input.timeoutSeconds());
+    boolean enabled = input.enabled() == null
+        ? existing != null && Boolean.TRUE.equals(existing.getEnabled())
+        : input.enabled();
+    String description = StringUtils.hasText(input.description()) ? input.description().trim() : null;
+    return new ServiceSettingsInput(
+        input.name().trim(), path, maxRows, timeoutSeconds, enabled, description);
+  }
+
+  private RuntimeDefinition normalizeRuntimeDefinition(RuntimeDefinition runtimeDefinition) {
+    if (runtimeDefinition == null) throw new IllegalArgumentException("Runtime 定义不能为空");
+    if (runtimeDefinition.dataSourceId() == null || runtimeDefinition.dataSourceId() <= 0) {
+      throw new IllegalArgumentException("发布来源缺少有效的数据源");
     }
-    runtimeService.invalidate(api.getId());
-    return toView(api);
+    if (!StringUtils.hasText(runtimeDefinition.sql())) {
+      throw new IllegalArgumentException("发布来源 SQL 不能为空");
+    }
+    sqlCompiler.validateSelectOnly(runtimeDefinition.sql());
+    return new RuntimeDefinition(runtimeDefinition.dataSourceId(), runtimeDefinition.sql().trim());
   }
 
   private QueryResponse execute(
@@ -334,18 +369,6 @@ public class DataServiceService {
     DataServiceApiPO api = id == null ? null : apiMapper.selectById(id);
     if (api == null) throw new IllegalArgumentException("数据服务不存在：" + id);
     return api;
-  }
-
-  private void validateInput(ApiInput input) {
-    if (input == null) throw new IllegalArgumentException("数据服务配置不能为空");
-    if (!StringUtils.hasText(input.name())) throw new IllegalArgumentException("服务名称不能为空");
-    if (input.dataSourceId() == null || input.dataSourceId() <= 0) {
-      throw new IllegalArgumentException("请选择数据源");
-    }
-    sqlCompiler.validateSelectOnly(input.sql());
-    normalizePath(input.path());
-    normalizeMaxRows(input.maxRows());
-    normalizeTimeout(input.timeoutSeconds());
   }
 
   private void initializeRuntimeDefaults(DataServiceApiPO api, boolean creating) {
@@ -452,15 +475,15 @@ public class DataServiceService {
     return value.substring(0, maxLength);
   }
 
-  public record ApiInput(
+  public record ServiceSettingsInput(
       String name,
       String path,
-      Long dataSourceId,
-      String sql,
       Integer maxRows,
       Integer timeoutSeconds,
       Boolean enabled,
       String description) {}
+
+  public record RuntimeDefinition(Long dataSourceId, String sql) {}
 
   public record RuntimeConfigInput(
       Boolean cacheEnabled,
