@@ -59,7 +59,7 @@ export default function DevelopmentEditorWorkspace({
   if (selectedResource.type === 'DATA_SERVICE') {
     return (
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <DataServiceNodeEditor node={selectedResource} />
+        <DataServiceNodeEditor node={selectedResource} onSaved={onNodesChanged} />
       </main>
     );
   }
