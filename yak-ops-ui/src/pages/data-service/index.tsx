@@ -1,9 +1,7 @@
 import {
   Button,
   Dropdown,
-  Form,
   Input,
-  InputNumber,
   Modal,
   Space,
   Switch,
@@ -17,9 +15,7 @@ import {
   Copy,
   Eye,
   MoreHorizontal,
-  Pencil,
   Plus,
-  Power,
   RefreshCw,
   Search,
   Trash2,
@@ -34,13 +30,9 @@ import {
   fetchDataServices,
   fetchDataSourceOptions,
   setDataServiceEnabled,
-  updateDataService,
   type DataServiceApi,
-  type DataServiceUpdatePayload,
   type DataSourceOption,
 } from './service';
-
-const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 19) : '-';
 
 export default function DataServicePage() {
   const [services, setServices] = useState<DataServiceApi[]>([]);
@@ -49,10 +41,6 @@ export default function DataServicePage() {
   const [keyword, setKeyword] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DataServiceApi>();
-  const [editing, setEditing] = useState<DataServiceApi>();
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form] = Form.useForm<DataServiceUpdatePayload>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,43 +75,9 @@ export default function DataServicePage() {
 
   const dataSourceName = useCallback((dataSourceId?: number) => {
     if (!dataSourceId) return '-';
-    return dataSources.find((item) => String(item.value) === String(dataSourceId))?.label || `#${dataSourceId}`;
+    return dataSources.find((item) => String(item.value) === String(dataSourceId))?.label
+      || `#${dataSourceId}`;
   }, [dataSources]);
-
-  const openEdit = (record: DataServiceApi) => {
-    if (record.sourceType === DATA_SERVICE_NODE_SOURCE) {
-      message.info('接口定义由数据开发 Data Service Node 管理，请发布新 DS Revision 后在详情中同步 Runtime');
-      return;
-    }
-    setEditing(record);
-    form.resetFields();
-    form.setFieldsValue({
-      name: record.name,
-      path: record.path,
-      maxRows: record.maxRows,
-      timeoutSeconds: record.timeoutSeconds,
-      enabled: record.enabled,
-      description: record.description,
-    });
-    setEditorOpen(true);
-  };
-
-  const saveEdit = async () => {
-    if (!editing) return;
-    const values = await form.validateFields();
-    setSaving(true);
-    try {
-      await updateDataService(editing.id, values);
-      message.success('数据服务配置已更新');
-      setEditorOpen(false);
-      setEditing(undefined);
-      await load();
-    } catch (error: any) {
-      message.error(error?.message || '保存数据服务失败');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const remove = async (record: DataServiceApi) => {
     try {
@@ -138,8 +92,8 @@ export default function DataServicePage() {
 
   const confirmRemove = (record: DataServiceApi) => {
     Modal.confirm({
-      title: '删除 API 服务',
-      content: `确认删除「${record.name}」？API Key、Runtime 状态和相关文档也会随服务一起移除。`,
+      title: '删除 API',
+      content: `确认删除「${record.name}」？API Key、Runtime 状态和相关文档也会一起移除。`,
       okText: '删除',
       okButtonProps: { danger: true },
       cancelText: '取消',
@@ -147,11 +101,10 @@ export default function DataServicePage() {
     });
   };
 
-  const toggleEnabled = async (record: DataServiceApi) => {
-    const enabled = !record.enabled;
+  const toggleEnabled = async (record: DataServiceApi, enabled: boolean) => {
     try {
       await setDataServiceEnabled(record.id, enabled);
-      message.success(enabled ? '服务已启用' : '服务已停用');
+      message.success(enabled ? 'API 已启用' : 'API 已停用');
       await load();
     } catch (error: any) {
       message.error(error?.message || '状态更新失败');
@@ -161,7 +114,7 @@ export default function DataServicePage() {
   const copyPath = async (path: string) => {
     try {
       await navigator.clipboard.writeText(path);
-      message.success('调用路径已复制');
+      message.success('Endpoint 已复制');
     } catch {
       message.warning('复制失败，请手动复制');
     }
@@ -169,9 +122,9 @@ export default function DataServicePage() {
 
   const columns: TableColumnsType<DataServiceApi> = [
     {
-      title: 'API 服务',
+      title: 'API',
       dataIndex: 'name',
-      minWidth: 240,
+      minWidth: 230,
       render: (_, record) => (
         <div className="py-1.5">
           <div className="flex items-center gap-2">
@@ -187,12 +140,17 @@ export default function DataServicePage() {
     {
       title: 'Endpoint',
       dataIndex: 'runtimePath',
-      minWidth: 290,
+      minWidth: 300,
       render: (value: string) => (
         <div className="flex items-center gap-1">
           <span className="truncate font-mono text-xs text-black/55">{value}</span>
           <Tooltip title="复制 Endpoint">
-            <Button type="text" size="small" icon={<Copy size={13} />} onClick={() => void copyPath(value)} />
+            <Button
+              type="text"
+              size="small"
+              icon={<Copy size={13} />}
+              onClick={() => void copyPath(value)}
+            />
           </Tooltip>
         </div>
       ),
@@ -206,7 +164,9 @@ export default function DataServicePage() {
           return (
             <div>
               <div className="font-medium text-[#475467]">Data Service · DS R{record.sourceRevisionNo || '-'}</div>
-              <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)} · Node #{record.sourceRef}</div>
+              <div className="mt-1 text-[11px] text-black/35">
+                {dataSourceName(record.dataSourceId)} · Node #{record.sourceRef}
+              </div>
             </div>
           );
         }
@@ -227,69 +187,52 @@ export default function DataServicePage() {
       },
     },
     {
-      title: '访问控制',
-      dataIndex: 'authMode',
-      width: 110,
-      render: (value) => value === 'API_KEY'
-        ? <span className="text-black/65">API Key</span>
-        : <span className="text-black/40">Public</span>,
-    },
-    {
       title: '状态',
       dataIndex: 'enabled',
-      width: 90,
-      render: (value: boolean) => value
-        ? <Tag bordered={false}>运行中</Tag>
-        : <Tag bordered={false}>已停用</Tag>,
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updateTime',
-      width: 160,
-      render: formatTime,
+      width: 145,
+      render: (enabled: boolean, record) => (
+        <div className="flex items-center gap-2">
+          <Switch
+            size="small"
+            checked={enabled}
+            onChange={(next) => void toggleEnabled(record, next)}
+          />
+          <span className={enabled ? 'text-[#344054]' : 'text-black/35'}>
+            {enabled ? '运行中' : '已停用'}
+          </span>
+        </div>
+      ),
     },
     {
       title: '操作',
       key: 'actions',
-      width: 140,
+      width: 130,
       fixed: 'right',
-      render: (_, record) => {
-        const sourceManaged = record.sourceType === DATA_SERVICE_NODE_SOURCE;
-        return (
-          <Space size={4}>
-            <Button
-              type="link"
-              size="small"
-              icon={<Eye size={14} />}
-              onClick={() => setDetailTarget(record)}
-            >
-              查看
-            </Button>
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: [
-                  ...(!sourceManaged ? [{ key: 'edit', icon: <Pencil size={14} />, label: '编辑服务配置' }] : []),
-                  {
-                    key: 'toggle',
-                    icon: <Power size={14} />,
-                    label: record.enabled ? '停用服务' : '启用服务',
-                  },
-                  { type: 'divider' as const },
-                  { key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除服务' },
-                ],
-                onClick: ({ key }) => {
-                  if (key === 'edit') openEdit(record);
-                  if (key === 'toggle') void toggleEnabled(record);
-                  if (key === 'delete') confirmRemove(record);
-                },
-              }}
-            >
-              <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
-            </Dropdown>
-          </Space>
-        );
-      },
+      render: (_, record) => (
+        <Space size={4}>
+          <Button
+            type="link"
+            size="small"
+            icon={<Eye size={14} />}
+            onClick={() => setDetailTarget(record)}
+          >
+            查看
+          </Button>
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除 API' },
+              ],
+              onClick: ({ key }) => {
+                if (key === 'delete') confirmRemove(record);
+              },
+            }}
+          >
+            <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
+          </Dropdown>
+        </Space>
+      ),
     },
   ];
 
@@ -298,9 +241,13 @@ export default function DataServicePage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">部署数据开发已发布的 Data Service 资产，并管理启停、访问控制、Runtime 策略、文档投影和调用审计。</p>
+          <p className="mb-0 mt-1 text-sm text-black/45">
+            运行已发布的 Data Service，管理启停、API Key、Runtime、OpenAPI 和调用记录。
+          </p>
         </div>
-        <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>部署 API</Button>
+        <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>
+          部署 API
+        </Button>
       </div>
 
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -322,7 +269,7 @@ export default function DataServicePage() {
         dataSource={filtered}
         columns={columns}
         pagination={false}
-        scroll={{ x: 1240 }}
+        scroll={{ x: 1050 }}
       />
 
       <CreateDataServiceModal
@@ -337,57 +284,8 @@ export default function DataServicePage() {
         service={detailTarget}
         dataSources={dataSources}
         onClose={() => setDetailTarget(undefined)}
-        onEdit={openEdit}
         onChanged={load}
       />
-
-      <Modal
-        title="编辑 Legacy API 服务"
-        open={editorOpen}
-        onCancel={() => {
-          setEditorOpen(false);
-          setEditing(undefined);
-        }}
-        onOk={() => void saveEdit()}
-        okText="保存"
-        confirmLoading={saving}
-        width={680}
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical" className="pt-3">
-          <div className="mb-4 border border-[#fecdca] bg-[#fffbfa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-            <div className="font-medium text-[#b42318]">Legacy Runtime Snapshot</div>
-            <div className="mt-1">
-              该 API 不属于新的 Data Service Node 发布链路，仅保留兼容编辑。新的 API 定义请在数据开发 Data Service Node 中维护。
-            </div>
-            <div className="mt-1">当前数据源：{dataSourceName(editing?.dataSourceId)}</div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4">
-            <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
-              <Input placeholder="例如：用户查询 API" />
-            </Form.Item>
-            <Form.Item name="path" label="服务路径" rules={[{ required: true, message: '请输入服务路径' }]}>
-              <Input addonBefore="GET" placeholder="/users" />
-            </Form.Item>
-          </div>
-
-          <div className="grid grid-cols-3 gap-x-4">
-            <Form.Item name="maxRows" label="最大返回行数" rules={[{ required: true }]}>
-              <InputNumber min={1} max={10000} className="w-full" />
-            </Form.Item>
-            <Form.Item name="timeoutSeconds" label="超时时间（秒）" rules={[{ required: true }]}>
-              <InputNumber min={1} max={3600} className="w-full" />
-            </Form.Item>
-            <Form.Item name="enabled" label="发布状态" valuePropName="checked">
-              <Switch checkedChildren="启用" unCheckedChildren="停用" />
-            </Form.Item>
-          </div>
-          <Form.Item name="description" label="说明">
-            <Input.TextArea rows={2} maxLength={500} placeholder="可选" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 }
