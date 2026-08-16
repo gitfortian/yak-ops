@@ -10,22 +10,11 @@ import {
   message,
   type TableColumnsType,
 } from 'antd';
-import {
-  ArrowLeft,
-  Copy,
-  FileText,
-  Gauge,
-  KeyRound,
-  RefreshCw,
-  ServerCog,
-} from 'lucide-react';
+import { ArrowLeft, PlayCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { BRAND_THEME } from '@/styles/brand';
 
-import DataServiceAccessModal from '../DataServiceAccessModal';
-import DataServiceDocsModal from '../DataServiceDocsModal';
-import DataServiceRuntimeModal from '../DataServiceRuntimeModal';
 import {
   DATA_SERVICE_NODE_SOURCE,
   LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE,
@@ -34,7 +23,6 @@ import {
   fetchDataServiceRuntime,
   fetchDataServices,
   fetchDataSourceOptions,
-  republishDataService,
   type DataServiceApi,
   type DataServiceApiKey,
   type DataServiceCallLog,
@@ -66,13 +54,7 @@ const latestActivity = (runtime?: DataServiceRuntimeStatus) => {
   );
 };
 
-const MetricTile = ({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) => (
+const MetricTile = ({ label, value }: { label: string; value: ReactNode }) => (
   <div className="rounded-md bg-[#f7f7f8] px-4 py-4">
     <div className="text-[12px] leading-4 text-[#7c828c]">{label}</div>
     <div className="mt-2 truncate text-[20px] font-semibold leading-7 tracking-[-0.02em] text-[#161823]">
@@ -100,19 +82,16 @@ const InfoField = ({
 
 const SectionCard = ({
   title,
-  extra,
   children,
   className = '',
 }: {
   title: ReactNode;
-  extra?: ReactNode;
   children: ReactNode;
   className?: string;
 }) => (
   <section className={`min-w-0 rounded-lg bg-white ${className}`}>
-    <div className="flex min-h-[52px] items-center justify-between gap-4 px-5">
+    <div className="flex min-h-[52px] items-center px-5">
       <div className="text-[15px] font-semibold text-[#161823]">{title}</div>
-      {extra}
     </div>
     {children}
   </section>
@@ -133,33 +112,26 @@ const ApiIllustration = () => (
       <rect x="12" y="18" width="4" height="4" fill="#161823" />
       <rect x="20" y="18" width="4" height="4" fill="#161823" />
       <rect x="16" y="22" width="4" height="4" fill="#161823" />
-
       <rect x="58" y="18" width="4" height="4" fill="#FE2C55" />
       <rect x="54" y="22" width="4" height="4" fill="#FE2C55" />
       <rect x="62" y="22" width="4" height="4" fill="#FE2C55" />
       <rect x="58" y="26" width="4" height="4" fill="#FE2C55" />
-
       <rect x="23" y="29" width="32" height="4" fill="#161823" />
       <rect x="19" y="33" width="4" height="27" fill="#161823" />
       <rect x="55" y="33" width="4" height="27" fill="#161823" />
       <rect x="23" y="60" width="32" height="4" fill="#161823" />
-
       <rect x="23" y="33" width="32" height="27" fill="#F5F6F8" />
       <rect x="23" y="33" width="32" height="8" fill="#FFFFFF" />
       <rect x="23" y="41" width="32" height="4" fill="#E3E7EC" />
       <rect x="23" y="49" width="32" height="11" fill="#E8EBEF" />
-
       <rect x="27" y="36" width="4" height="4" fill="#FE2C55" />
       <rect x="34" y="36" width="4" height="4" fill="#AEB4BF" />
       <rect x="41" y="36" width="4" height="4" fill="#AEB4BF" />
-
       <rect x="29" y="52" width="20" height="4" fill="#161823" />
       <rect x="33" y="56" width="12" height="4" fill="#FE2C55" />
-
       <rect x="25" y="64" width="8" height="3" fill="#161823" />
       <rect x="45" y="64" width="8" height="3" fill="#161823" />
     </svg>
-
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[46px] bg-gradient-to-b from-transparent via-black/10 to-black/25" />
   </div>
 );
@@ -174,39 +146,24 @@ export default function DataServiceDetailPage() {
   const [keys, setKeys] = useState<DataServiceApiKey[]>([]);
   const [logs, setLogs] = useState<DataServiceCallLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [updating, setUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTabKey>('overview');
-  const [docsOpen, setDocsOpen] = useState(false);
-  const [accessOpen, setAccessOpen] = useState(false);
-  const [runtimeOpen, setRuntimeOpen] = useState(false);
 
-  const load = useCallback(async (quiet = false) => {
+  const load = useCallback(async () => {
     if (!Number.isFinite(apiId) || apiId <= 0) {
       setLoading(false);
       return;
     }
 
-    quiet ? setRefreshing(true) : setLoading(true);
-
+    setLoading(true);
     try {
-      const [
-        servicesResponse,
-        dataSourceResponse,
-        runtimeResponse,
-        keyResponse,
-        logResponse,
-      ] = await Promise.all([
+      const [servicesResponse, dataSourceResponse, runtimeResponse, keyResponse, logResponse] = await Promise.all([
         fetchDataServices(),
         fetchDataSourceOptions(),
         fetchDataServiceRuntime(apiId),
         fetchDataServiceKeys(apiId),
         fetchDataServiceLogs(),
       ]);
-
-      setService(
-        (servicesResponse.data || []).find((item) => Number(item.id) === apiId),
-      );
+      setService((servicesResponse.data || []).find((item) => Number(item.id) === apiId));
       setDataSources(dataSourceResponse.data || []);
       setRuntime(runtimeResponse.data);
       setKeys(keyResponse.data || []);
@@ -215,7 +172,6 @@ export default function DataServiceDetailPage() {
       message.error(error?.message || '加载 API 详情失败');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [apiId]);
 
@@ -228,15 +184,12 @@ export default function DataServiceDetailPage() {
 
   const dataSourceName = useMemo(() => {
     if (!service?.dataSourceId) return '-';
-    return dataSources.find(
-      (item) => String(item.value) === String(service.dataSourceId),
-    )?.label || `#${service.dataSourceId}`;
+    return dataSources.find((item) => String(item.value) === String(service.dataSourceId))?.label
+      || `#${service.dataSourceId}`;
   }, [dataSources, service?.dataSourceId]);
 
   const serviceLogs = useMemo(
-    () => logs
-      .filter((item) => Number(item.apiId) === apiId)
-      .slice(0, 50),
+    () => logs.filter((item) => Number(item.apiId) === apiId).slice(0, 50),
     [apiId, logs],
   );
 
@@ -244,35 +197,6 @@ export default function DataServiceDetailPage() {
     () => keys.filter((item) => item.enabled).length,
     [keys],
   );
-
-  const copyEndpoint = async () => {
-    if (!service?.runtimePath) return;
-
-    try {
-      await navigator.clipboard.writeText(service.runtimePath);
-      message.success('Endpoint 已复制');
-    } catch {
-      message.warning('复制失败，请手动复制');
-    }
-  };
-
-  const updateOnline = async () => {
-    if (!service || !sourceManaged) return;
-
-    setUpdating(true);
-    try {
-      const response = await republishDataService(service.id);
-      const revisionNo = response.data?.sourceRevisionNo;
-      message.success(
-        revisionNo ? `已更新上线到 DS R${revisionNo}` : '已更新上线',
-      );
-      await load(true);
-    } catch (error: any) {
-      message.error(error?.message || '更新上线失败');
-    } finally {
-      setUpdating(false);
-    }
-  };
 
   const logColumns: TableColumnsType<DataServiceCallLog> = [
     {
@@ -312,19 +236,10 @@ export default function DataServiceDetailPage() {
       dataIndex: 'errorMessage',
       ellipsis: true,
       render: (value) => value
-        ? (
-          <Tooltip title={value}>
-            <span className="text-[#b42318]">{value}</span>
-          </Tooltip>
-        )
+        ? <Tooltip title={value}><span className="text-[#b42318]">{value}</span></Tooltip>
         : <span className="text-black/20">-</span>,
     },
-    {
-      title: '时间',
-      dataIndex: 'createTime',
-      width: 150,
-      render: formatTime,
-    },
+    { title: '时间', dataIndex: 'createTime', width: 150, render: formatTime },
   ];
 
   if (loading) {
@@ -350,7 +265,6 @@ export default function DataServiceDetailPage() {
     : legacySqlRelease
       ? 'Legacy SQL Release'
       : 'Legacy';
-
   const sourceRevisionLabel = sourceManaged
     ? `DS R${service.sourceRevisionNo || '-'}`
     : legacySqlRelease
@@ -395,29 +309,12 @@ export default function DataServiceDetailPage() {
             </InfoField>
           ) : null}
         </div>
-
-        {legacySqlRelease ? (
-          <div className="mx-5 mb-5 rounded-md bg-[#fffaeb] px-4 py-3 text-[12px] text-[#93370d]">
-            历史来源已冻结
-          </div>
-        ) : null}
       </SectionCard>
     </div>
   );
 
   const accessContent = (
-    <SectionCard
-      title="API Key"
-      extra={(
-        <Button
-          size="small"
-          icon={<KeyRound size={13} />}
-          onClick={() => setAccessOpen(true)}
-        >
-          管理 API Key
-        </Button>
-      )}
-    >
+    <SectionCard title="API Key">
       <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3">
         <MetricTile
           label="访问模式"
@@ -431,18 +328,7 @@ export default function DataServiceDetailPage() {
 
   const runtimeContent = (
     <div className="grid gap-3 xl:grid-cols-2">
-      <SectionCard
-        title="运行指标"
-        extra={(
-          <Button
-            size="small"
-            icon={<Gauge size={13} />}
-            onClick={() => setRuntimeOpen(true)}
-          >
-            Runtime 配置
-          </Button>
-        )}
-      >
+      <SectionCard title="运行指标">
         <div className="grid grid-cols-2 gap-3 p-5">
           <MetricTile label="调用总数" value={runtime?.totalCalls || 0} />
           <MetricTile label="成功率" value={percent(runtime?.successRate)} />
@@ -454,21 +340,16 @@ export default function DataServiceDetailPage() {
       <SectionCard title="运行保护">
         <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2">
           <div className="rounded-md bg-[#f7f7f8] px-4 py-4">
-            <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
-              <RefreshCw size={13} /> 结果缓存
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-[12px]">
+            <div className="text-[12px] font-medium text-[#344054]">结果缓存</div>
+            <div className="mt-4 grid grid-cols-3 gap-3">
               <InfoField label="状态">{runtime?.cacheEnabled ? '启用' : '关闭'}</InfoField>
               <InfoField label="命中率">{percent(runtime?.cacheHitRate)}</InfoField>
               <InfoField label="条目">{runtime?.cacheEntries || 0}</InfoField>
             </div>
           </div>
-
           <div className="rounded-md bg-[#f7f7f8] px-4 py-4">
-            <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
-              <ServerCog size={13} /> 熔断器
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-[12px]">
+            <div className="text-[12px] font-medium text-[#344054]">熔断器</div>
+            <div className="mt-4 grid grid-cols-3 gap-3">
               <InfoField label="状态">{runtime?.circuitState || 'DISABLED'}</InfoField>
               <InfoField label="拒绝">{runtime?.circuitRejected || 0}</InfoField>
               <InfoField label="最近失败">{formatTime(runtime?.lastFailureAt)}</InfoField>
@@ -480,21 +361,7 @@ export default function DataServiceDetailPage() {
   );
 
   const logsContent = (
-    <SectionCard
-      title="调用记录"
-      extra={(
-        <Button
-          size="small"
-          type="text"
-          icon={<RefreshCw size={13} />}
-          loading={refreshing}
-          className="!text-[#667085]"
-          onClick={() => void load(true)}
-        >
-          刷新
-        </Button>
-      )}
-    >
+    <SectionCard title="调用记录">
       <div className="p-5">
         {serviceLogs.length ? (
           <Table<DataServiceCallLog>
@@ -542,34 +409,27 @@ export default function DataServiceDetailPage() {
           </div>
 
           <section className="rounded-lg bg-white">
-            <div className="grid min-h-[176px] gap-6 px-5 py-6 lg:px-6 xl:grid-cols-[116px_minmax(0,1fr)_340px] xl:items-center">
+            <div className="grid min-h-[176px] gap-6 px-5 py-6 lg:px-6 xl:grid-cols-[116px_minmax(0,1fr)_180px] xl:items-center">
               <ApiIllustration />
-
               <div className="min-w-0">
                 <div className="max-w-[620px] truncate text-[14px] font-medium leading-5 text-[#161823]">
                   {service.name}
                 </div>
-
                 <div className="mt-1 text-[12px] leading-4 text-[#8a8f98]">
                   {formatTime(service.updateTime || service.createTime)}
                 </div>
-
                 <div className="mt-1 flex items-center gap-1 text-[11px] leading-4 text-[#667085]">
-                  <span
-                    className={[
-                      'inline-block h-[10px] w-[10px] rounded-full',
-                      service.enabled ? 'bg-[#20c77a]' : 'bg-[#b0b5bd]',
-                    ].join(' ')}
-                  />
+                  <span className={[
+                    'inline-block h-[10px] w-[10px] rounded-full',
+                    service.enabled ? 'bg-[#20c77a]' : 'bg-[#b0b5bd]',
+                  ].join(' ')} />
                   <span>{service.enabled ? '运行中' : '已停用'}</span>
                 </div>
-
                 <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px] leading-4 text-[#8a8f98]">
                   <span className="font-mono">GET</span>
                   <span className="text-[#d0d5dd]">·</span>
                   <span className="truncate font-mono">{service.runtimePath}</span>
                 </div>
-
                 <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-[#8a8f98]">
                   <span>{sourceTypeLabel}</span>
                   <span className="text-[#d0d5dd]">·</span>
@@ -578,41 +438,14 @@ export default function DataServiceDetailPage() {
                   <span className="truncate">{dataSourceName}</span>
                 </div>
               </div>
-
               <div className="min-w-0 xl:justify-self-end">
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    icon={<FileText size={14} />}
-                    onClick={() => setDocsOpen(true)}
-                  >
-                    OpenAPI / 调试
-                  </Button>
-                  <Button
-                    icon={<Copy size={14} />}
-                    onClick={() => void copyEndpoint()}
-                  >
-                    复制 Endpoint
-                  </Button>
-                  <Tooltip title="刷新">
-                    <Button
-                      icon={<RefreshCw size={14} />}
-                      loading={refreshing}
-                      onClick={() => void load(true)}
-                    />
-                  </Tooltip>
-                </div>
-
-                {sourceManaged ? (
-                  <div className="mt-2 flex justify-end">
-                    <Button
-                      type="primary"
-                      loading={updating}
-                      onClick={() => void updateOnline()}
-                    >
-                      更新上线
-                    </Button>
-                  </div>
-                ) : null}
+                <Button
+                  type="primary"
+                  icon={<PlayCircle size={14} />}
+                  onClick={() => history.push(`/data-service/debug?apiId=${service.id}`)}
+                >
+                  调试
+                </Button>
               </div>
             </div>
           </section>
@@ -631,31 +464,6 @@ export default function DataServiceDetailPage() {
           </div>
         </div>
       </div>
-
-      <DataServiceDocsModal
-        open={docsOpen}
-        service={service}
-        readOnly={sourceManaged}
-        onCancel={() => setDocsOpen(false)}
-      />
-
-      <DataServiceAccessModal
-        open={accessOpen}
-        service={service}
-        onCancel={() => setAccessOpen(false)}
-        onChanged={async () => {
-          await load(true);
-        }}
-      />
-
-      <DataServiceRuntimeModal
-        open={runtimeOpen}
-        service={service}
-        onCancel={() => {
-          setRuntimeOpen(false);
-          void load(true);
-        }}
-      />
     </ConfigProvider>
   );
 }
