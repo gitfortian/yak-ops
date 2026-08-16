@@ -215,15 +215,15 @@ export default function DashboardEditorPage() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <main className="min-w-0 flex-1 overflow-auto bg-[#f6f7f9]">
-          <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4'}>
+          <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4 2xl:p-0'}>
             <div
               ref={containerRef}
               className={[
-                'mx-auto min-w-[760px] rounded-[10px] bg-white',
+                'min-w-[760px] bg-white',
                 canvasMinHeight,
                 designer.preview
-                  ? 'max-w-[1480px] border border-[#e7e9ed] shadow-[0_6px_24px_rgba(16,24,40,.055)]'
-                  : 'dashboard-grid-canvas max-w-[1540px] border border-[#e3e6ea] shadow-[0_2px_8px_rgba(16,24,40,.035)]',
+                  ? 'mx-auto max-w-[1480px] rounded-[10px] border border-[#e7e9ed] shadow-[0_6px_24px_rgba(16,24,40,.055)]'
+                  : 'dashboard-grid-canvas mx-auto max-w-[1540px] rounded-[10px] border border-[#e3e6ea] shadow-[0_2px_8px_rgba(16,24,40,.035)] 2xl:mx-0 2xl:max-w-none 2xl:rounded-none 2xl:border-0 2xl:shadow-none',
               ].join(' ')}
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) designer.setSelectedId(undefined);
