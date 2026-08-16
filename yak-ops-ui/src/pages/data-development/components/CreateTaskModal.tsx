@@ -4,19 +4,19 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
   DevelopmentDirectory,
   DevelopmentId,
-  DevelopmentTaskType,
+  DevelopmentNodeType,
 } from '../types';
 
 interface CreateTaskModalProps {
   open: boolean;
-  type: DevelopmentTaskType;
+  type: DevelopmentNodeType;
   directories: DevelopmentDirectory[];
   defaultProjectId?: DevelopmentId;
   defaultDirectoryId?: DevelopmentId;
   loading?: boolean;
   onCancel: () => void;
   onNext: (
-    type: DevelopmentTaskType,
+    type: DevelopmentNodeType,
     projectId: DevelopmentId | undefined,
     directoryId: DevelopmentId | undefined,
     name: string,
@@ -35,7 +35,7 @@ export default function CreateTaskModal({
   onCancel,
   onNext,
 }: CreateTaskModalProps) {
-  const [type, setType] = useState<DevelopmentTaskType>(initialType);
+  const [type, setType] = useState<DevelopmentNodeType>(initialType);
   const [projectId, setProjectId] = useState<DevelopmentId>();
   const [directoryId, setDirectoryId] = useState<DevelopmentId>();
   const [name, setName] = useState('');
@@ -44,6 +44,8 @@ export default function CreateTaskModal({
     () => [
       { label: 'SQL', value: 'SQL' },
       { label: 'Shell', value: 'SHELL' },
+      { label: '数据集', value: 'DATASET' },
+      { label: '数据服务', value: 'DATA_SERVICE' },
     ],
     [],
   );
@@ -99,7 +101,7 @@ export default function CreateTaskModal({
           options={typeOptions}
           className="w-full"
           disabled={loading}
-          onChange={(value) => setType(value as DevelopmentTaskType)}
+          onChange={(value) => setType(value as DevelopmentNodeType)}
         />
 
         <Typography.Text className="text-[13px] text-[#344054]">

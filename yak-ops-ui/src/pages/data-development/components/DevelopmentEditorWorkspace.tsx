@@ -1,6 +1,5 @@
-import { Button, Segmented } from 'antd';
-import { GitFork, PanelTop } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Boxes } from 'lucide-react';
+import { useMemo } from 'react';
 
 import { isDevelopmentTaskNode } from '../node-model';
 import type {
@@ -8,7 +7,8 @@ import type {
   DevelopmentId,
   DevelopmentResourceNode,
 } from '../types';
-import DevelopmentDagCanvas from './dag/DevelopmentDagCanvas';
+import DataServiceNodeEditor from './data-service/DataServiceNodeEditor';
+import DatasetNodeEditor from './dataset/DatasetNodeEditor';
 import DevelopmentWorkbench from './workbench/DevelopmentWorkbench';
 
 interface DevelopmentEditorWorkspaceProps {
@@ -19,8 +19,6 @@ interface DevelopmentEditorWorkspaceProps {
   onNodesChanged?: () => void | Promise<void>;
 }
 
-type WorkspaceView = 'dag' | 'editor';
-
 export default function DevelopmentEditorWorkspace({
   nodes,
   directories,
@@ -28,83 +26,57 @@ export default function DevelopmentEditorWorkspace({
   onNodeFocus,
   onNodesChanged,
 }: DevelopmentEditorWorkspaceProps) {
-  const [view, setView] = useState<WorkspaceView>('dag');
   const selectedResource = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
     [nodes, selectedNodeId],
   );
   const taskNodes = useMemo(() => nodes.filter(isDevelopmentTaskNode), [nodes]);
-  const selectedTaskId = selectedResource && isDevelopmentTaskNode(selectedResource)
-    ? selectedResource.id
-    : undefined;
 
-  useEffect(() => {
-    if (!selectedResource) return;
-    setView(isDevelopmentTaskNode(selectedResource) ? 'editor' : 'dag');
-  }, [selectedResource]);
+  if (!selectedResource) {
+    return (
+      <main className="flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-white">
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#f5f5f6] text-[#98a2b3]">
+            <Boxes size={19} />
+          </div>
+          <div className="text-[13px] font-medium text-[#475467]">选择一个开发节点</div>
+          <div className="mt-1 text-[11px] text-[#98a2b3]">
+            SQL、Shell、数据集和数据服务都是独立节点；执行关系请在工作流模块配置。
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-  const openEditor = (nodeId: DevelopmentId) => {
-    onNodeFocus(nodeId);
-    setView('editor');
-  };
+  if (selectedResource.type === 'DATASET') {
+    return (
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        <DatasetNodeEditor node={selectedResource} onSaved={onNodesChanged} />
+      </main>
+    );
+  }
 
-  return (
-    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e4e7ec] bg-[#fafafa] px-2.5">
-        <Segmented
-          size="small"
-          value={view}
-          options={[
-            {
-              label: (
-                <span className="inline-flex items-center gap-1.5">
-                  <GitFork size={12} /> DAG 画布
-                </span>
-              ),
-              value: 'dag',
-            },
-            {
-              label: (
-                <span className="inline-flex items-center gap-1.5">
-                  <PanelTop size={12} /> 节点编辑
-                </span>
-              ),
-              value: 'editor',
-              disabled: !selectedTaskId,
-            },
-          ]}
-          onChange={(value) => setView(value as WorkspaceView)}
-        />
-        {view === 'editor' && selectedTaskId ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<GitFork size={12} />}
-            onClick={() => setView('dag')}
-            className="!text-[11px] !text-[#667085]"
-          >
-            返回 DAG
-          </Button>
-        ) : null}
-      </div>
+  if (selectedResource.type === 'DATA_SERVICE') {
+    return (
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        <DataServiceNodeEditor node={selectedResource} />
+      </main>
+    );
+  }
 
-      {view === 'dag' ? (
-        <DevelopmentDagCanvas
-          resources={nodes}
-          directories={directories}
-          selectedNodeId={selectedNodeId}
-          onNodeOpen={openEditor}
-          onResourcesChanged={onNodesChanged}
-        />
-      ) : (
+  if (isDevelopmentTaskNode(selectedResource)) {
+    return (
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
         <DevelopmentWorkbench
           nodes={taskNodes}
           directories={directories}
-          selectedNodeId={selectedTaskId}
+          selectedNodeId={selectedResource.id}
           onNodeFocus={onNodeFocus}
           onNodesChanged={onNodesChanged}
         />
-      )}
-    </main>
-  );
+      </main>
+    );
+  }
+
+  return null;
 }

@@ -34,7 +34,7 @@ export interface DevelopmentNode extends DevelopmentResourceNodeBase {
   type: DevelopmentTaskType;
 }
 
-/** Phase-2 output node shell. Business configuration arrives in later phases. */
+/** Standalone output resource edited inside data development. */
 export interface DevelopmentOutputNode extends DevelopmentResourceNodeBase {
   type: DevelopmentOutputNodeType;
 }
@@ -47,30 +47,6 @@ export interface CreateDevelopmentNodePayload {
   projectId?: DevelopmentId;
   /** 省略表示数据开发根目录。 */
   directoryId?: DevelopmentId;
-}
-
-export interface DevelopmentGraphNodeLayout {
-  nodeId: DevelopmentId;
-  x: number;
-  y: number;
-}
-
-export interface DevelopmentGraphEdge {
-  sourceNodeId: DevelopmentId;
-  targetNodeId: DevelopmentId;
-}
-
-export interface DevelopmentGraph {
-  projectId?: DevelopmentId | null;
-  nodes: DevelopmentGraphNodeLayout[];
-  edges: DevelopmentGraphEdge[];
-  updateTime?: string | null;
-}
-
-export interface SaveDevelopmentGraphPayload {
-  projectId?: DevelopmentId;
-  nodes: DevelopmentGraphNodeLayout[];
-  edges: DevelopmentGraphEdge[];
 }
 
 export interface DevelopmentTaskDefinition {

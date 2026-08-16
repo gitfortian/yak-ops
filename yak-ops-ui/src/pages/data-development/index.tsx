@@ -27,8 +27,8 @@ import {
 import type {
   DevelopmentDirectory,
   DevelopmentId,
+  DevelopmentNodeType,
   DevelopmentResourceNode,
-  DevelopmentTaskType,
 } from './types';
 
 type TreeNodeKey = `directory:${string}` | `node:${string}`;
@@ -38,8 +38,7 @@ const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_WIDTH = 440;
 const LEFT_WIDTH_STORAGE_KEY = 'yak-data-development.left-width';
 
-const directoryKey = (directoryId: DevelopmentId): TreeNodeKey =>
-  `directory:${directoryId}`;
+const directoryKey = (directoryId: DevelopmentId): TreeNodeKey => `directory:${directoryId}`;
 const nodeKey = (nodeId: DevelopmentId): TreeNodeKey => `node:${nodeId}`;
 
 const idFromKey = (key: string | undefined, prefix: string) => {
@@ -54,9 +53,7 @@ const clampLeftWidth = (value: number) =>
 const initialLeftWidth = () => {
   if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
   const stored = Number(window.localStorage.getItem(LEFT_WIDTH_STORAGE_KEY));
-  return Number.isFinite(stored) && stored > 0
-    ? clampLeftWidth(stored)
-    : DEFAULT_LEFT_WIDTH;
+  return Number.isFinite(stored) && stored > 0 ? clampLeftWidth(stored) : DEFAULT_LEFT_WIDTH;
 };
 
 const responseData = <T,>(
@@ -67,6 +64,14 @@ const responseData = <T,>(
     throw new Error(response?.message || response?.msg || fallback);
   }
   return response.data;
+};
+
+const createTypeForAction = (action: DevelopmentTreeAction): DevelopmentNodeType | undefined => {
+  if (action === 'create-sql') return 'SQL';
+  if (action === 'create-shell') return 'SHELL';
+  if (action === 'create-dataset') return 'DATASET';
+  if (action === 'create-data-service') return 'DATA_SERVICE';
+  return undefined;
 };
 
 export default function DataDevelopmentPage() {
@@ -111,10 +116,7 @@ export default function DataDevelopmentPage() {
     void loadTree();
   }, [loadTree]);
 
-  const nodeMap = useMemo(
-    () => new Map(nodes.map((node) => [node.id, node])),
-    [nodes],
-  );
+  const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const directoryPathMap = useMemo(
     () => new Map(directories.map((directory) => [directory.id, directory.path])),
     [directories],
@@ -127,10 +129,8 @@ export default function DataDevelopmentPage() {
   const directoryIdForSelection = useMemo(() => {
     const selectedDirectoryId = idFromKey(selectedNodeKey, 'directory:');
     if (selectedDirectoryId) return selectedDirectoryId;
-
     if (!selectedResourceNodeId) return undefined;
-    const selectedResourceNode = nodeMap.get(selectedResourceNodeId);
-    return selectedResourceNode?.directoryId || undefined;
+    return nodeMap.get(selectedResourceNodeId)?.directoryId || undefined;
   }, [nodeMap, selectedNodeKey, selectedResourceNodeId]);
 
   const fullTreeData = useMemo<DevelopmentTreeNode[]>(() => {
@@ -176,60 +176,47 @@ export default function DataDevelopmentPage() {
     const normalized = treeKeyword.trim().toLowerCase();
     if (!normalized) return fullTreeData;
 
-    const filterNodes = (
-      values: DevelopmentTreeNode[],
-    ): DevelopmentTreeNode[] =>
+    const filterNodes = (values: DevelopmentTreeNode[]): DevelopmentTreeNode[] =>
       values.flatMap((node) => {
         const children = node.children ? filterNodes(node.children) : [];
         const text = `${node.title} ${node.searchText || ''}`.toLowerCase();
-        if (text.includes(normalized)) {
-          return [{ ...node, children: node.children }];
-        }
-        if (children.length) {
-          return [{ ...node, children }];
-        }
-        return [];
+        if (text.includes(normalized)) return [{ ...node, children: node.children }];
+        return children.length ? [{ ...node, children }] : [];
       });
 
     return filterNodes(fullTreeData);
   }, [fullTreeData, treeKeyword]);
 
-  const handleResizeStart = useCallback(
-    (event: ReactPointerEvent) => {
-      if (leftCollapsed) return;
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = leftWidth;
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+  const handleResizeStart = useCallback((event: ReactPointerEvent) => {
+    if (leftCollapsed) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = leftWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        setLeftWidth(clampLeftWidth(startWidth + moveEvent.clientX - startX));
-      };
-      const finish = (upEvent: PointerEvent) => {
-        const width = clampLeftWidth(startWidth + upEvent.clientX - startX);
-        setLeftWidth(width);
-        window.localStorage.setItem(LEFT_WIDTH_STORAGE_KEY, String(width));
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', finish);
-        window.removeEventListener('pointercancel', finish);
-      };
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setLeftWidth(clampLeftWidth(startWidth + moveEvent.clientX - startX));
+    };
+    const finish = (upEvent: PointerEvent) => {
+      const width = clampLeftWidth(startWidth + upEvent.clientX - startX);
+      setLeftWidth(width);
+      window.localStorage.setItem(LEFT_WIDTH_STORAGE_KEY, String(width));
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
 
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', finish);
-      window.addEventListener('pointercancel', finish);
-    },
-    [leftCollapsed, leftWidth],
-  );
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  }, [leftCollapsed, leftWidth]);
 
-  const submitDirectory = async (
-    parentId: DevelopmentId | undefined,
-    name: string,
-  ) => {
+  const submitDirectory = async (parentId: DevelopmentId | undefined, name: string) => {
     setDirectorySaving(true);
     try {
       const created = responseData(
@@ -249,7 +236,7 @@ export default function DataDevelopmentPage() {
   };
 
   const submitNode = async (
-    type: DevelopmentTaskType,
+    type: DevelopmentNodeType,
     projectId: DevelopmentId | undefined,
     directoryId: DevelopmentId | undefined,
     name: string,
@@ -257,12 +244,7 @@ export default function DataDevelopmentPage() {
     setNodeSaving(true);
     try {
       const created = responseData(
-        await createDevelopmentNode({
-          name,
-          type,
-          projectId,
-          directoryId,
-        }),
+        await createDevelopmentNode({ name, type, projectId, directoryId }),
         '新建节点失败',
       );
       setCreateOpen(false);
@@ -295,8 +277,9 @@ export default function DataDevelopmentPage() {
       setDirectoryOpen(true);
       return;
     }
-    if (action === 'create-sql' || action === 'create-shell') {
-      setCreateType(action === 'create-sql' ? 'SQL' : 'SHELL');
+    const type = createTypeForAction(action);
+    if (type) {
+      setCreateType(type);
       setCreateOpen(true);
       return;
     }
@@ -312,9 +295,7 @@ export default function DataDevelopmentPage() {
       setRenameTarget(resource);
       return;
     }
-    if (action === 'delete') {
-      setDeleteTarget(resource);
-    }
+    if (action === 'delete') setDeleteTarget(resource);
   };
 
   const submitRename = async (name: string) => {
@@ -322,15 +303,9 @@ export default function DataDevelopmentPage() {
     setRenameSaving(true);
     try {
       if (renameTarget.nodeType === 'directory') {
-        responseData(
-          await renameDevelopmentDirectory(renameTarget.resourceId, name),
-          '目录重命名失败',
-        );
+        responseData(await renameDevelopmentDirectory(renameTarget.resourceId, name), '目录重命名失败');
       } else {
-        responseData(
-          await renameDevelopmentNode(renameTarget.resourceId, name),
-          '节点重命名失败',
-        );
+        responseData(await renameDevelopmentNode(renameTarget.resourceId, name), '节点重命名失败');
       }
       setRenameTarget(undefined);
       setTreeKeyword('');
@@ -348,15 +323,9 @@ export default function DataDevelopmentPage() {
     setDeleteSaving(true);
     try {
       if (deleteTarget.nodeType === 'directory') {
-        responseData(
-          await deleteDevelopmentDirectory(deleteTarget.resourceId),
-          '目录删除失败',
-        );
+        responseData(await deleteDevelopmentDirectory(deleteTarget.resourceId), '目录删除失败');
       } else {
-        responseData(
-          await deleteDevelopmentNode(deleteTarget.resourceId),
-          '节点删除失败',
-        );
+        responseData(await deleteDevelopmentNode(deleteTarget.resourceId), '节点删除失败');
       }
       setDeleteTarget(undefined);
       setSelectedNodeKey(undefined);
@@ -400,9 +369,7 @@ export default function DataDevelopmentPage() {
             nodes={nodes}
             directories={directories}
             selectedNodeId={selectedResourceNodeId}
-            onNodeFocus={(nodeId) =>
-              setSelectedNodeKey(nodeId ? nodeKey(nodeId) : undefined)
-            }
+            onNodeFocus={(nodeId) => setSelectedNodeKey(nodeId ? nodeKey(nodeId) : undefined)}
             onNodesChanged={loadTree}
           />
         </div>
@@ -412,9 +379,7 @@ export default function DataDevelopmentPage() {
           type={createType}
           directories={directories}
           loading={nodeSaving}
-          defaultProjectId={
-            currentProject?.id ? String(currentProject.id) : undefined
-          }
+          defaultProjectId={currentProject?.id ? String(currentProject.id) : undefined}
           defaultDirectoryId={directoryIdForSelection}
           onCancel={() => {
             if (!nodeSaving) setCreateOpen(false);

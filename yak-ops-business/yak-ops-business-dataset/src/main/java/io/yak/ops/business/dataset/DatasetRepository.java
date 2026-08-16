@@ -7,6 +7,14 @@ interface DatasetRepository {
 
   long insertDataset(String name, String description);
 
+  /** Creates a Dataset identity owned by a data-development Dataset node. */
+  default long insertDevelopmentNodeDataset(
+      long developmentNodeId,
+      String name,
+      String description) {
+    throw new UnsupportedOperationException("Development Dataset node binding is not supported");
+  }
+
   long insertVersion(
       long datasetId,
       int versionNo,
@@ -22,9 +30,19 @@ interface DatasetRepository {
 
   void updateStatus(long datasetId, DatasetStatus status);
 
+  /** Metadata is mutable while DatasetVersion schema/source snapshots remain immutable. */
+  default void updateMetadata(long datasetId, String name, String description) {
+    // Focused repository test doubles do not need to implement node-owned Dataset metadata.
+  }
+
   Optional<Dataset> findDataset(long datasetId);
 
+  /** Legacy SQL release publication lookup. Node-owned Datasets are deliberately excluded. */
   Optional<Dataset> findDatasetBySourceTaskAssetId(long sourceTaskAssetId);
+
+  default Optional<Dataset> findDatasetByDevelopmentNodeId(long developmentNodeId) {
+    return Optional.empty();
+  }
 
   List<Dataset> listDatasets();
 
