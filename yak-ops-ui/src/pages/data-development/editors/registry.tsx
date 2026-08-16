@@ -1,6 +1,6 @@
-import { Code2, TerminalSquare } from 'lucide-react';
+import { Braces, Code2, DatabaseZap, Network, TerminalSquare } from 'lucide-react';
 
-import type { DevelopmentTaskType } from '../types';
+import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
 import { ShellEditor, ShellRunConfig, ShellRunResult } from './shell/ShellEditor';
 import { SqlEditor, SqlRunConfig, SqlRunResult } from './sql/SqlEditor';
 import SqlToolbar from './sql/SqlToolbar';
@@ -94,5 +94,48 @@ export const getEditorDefinition = (
     iconClassName: 'text-[#667085]',
     capabilities: commonCapabilities,
     Editor: UnsupportedEditor,
+  };
+};
+
+/**
+ * Visual metadata for every resource that may appear in the shared development tab strip.
+ * This is deliberately broader than the task editor registry: DATA_SERVICE can share the
+ * workbench UI without entering the task Draft / TaskRevision lifecycle.
+ */
+export const getEditorAppearance = (type: DevelopmentNodeType) => {
+  if (type === 'DATA_SERVICE') {
+    return {
+      label: 'Data Service',
+      icon: Network,
+      iconClassName: 'text-[#7f56d9]',
+    };
+  }
+  if (type === 'DATASET') {
+    return {
+      label: 'Dataset',
+      icon: DatabaseZap,
+      iconClassName: 'text-[#12b76a]',
+    };
+  }
+  if (type === 'HTTP') {
+    return {
+      label: 'HTTP',
+      icon: Braces,
+      iconClassName: 'text-[#2e90fa]',
+    };
+  }
+  if (type === 'PYTHON') {
+    return {
+      label: 'Python',
+      icon: Code2,
+      iconClassName: 'text-[#667085]',
+    };
+  }
+
+  const definition = getEditorDefinition(type);
+  return {
+    label: definition.label,
+    icon: definition.icon,
+    iconClassName: definition.iconClassName,
   };
 };
