@@ -77,9 +77,7 @@ export default function DashboardEditorPage() {
   }, [dashboardId, designer]);
 
   const leaveDashboard = () => {
-    const target = dashboardId && designer.hasPublishedVersion
-      ? `/dashboard/${dashboardId}`
-      : '/dashboard';
+    const target = '/dashboard';
     if (!designer.dirty) {
       history.push(target);
       return;
