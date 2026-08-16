@@ -20,7 +20,6 @@ import io.yak.ops.business.dataservice.service.DataServiceService;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
 import io.yak.ops.business.dataservice.service.DataServiceService.QueryResponse;
 import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeConfigInput;
-import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourcePage;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.util.List;
@@ -91,9 +90,9 @@ public class DataServiceController {
   public Result<ApiView> update(
       @PathVariable("id") Long id,
       @RequestBody UpdateDataServiceRequest input) {
-    return Result.success(dataServiceService.updateSettings(
+    return Result.success(publicationService.updateSettings(
         id,
-        new ServiceSettingsInput(
+        new PublicationSettings(
             input.name(),
             input.path(),
             input.maxRows(),
@@ -148,6 +147,10 @@ public class DataServiceController {
   public Result<ApiDocumentation> saveDocumentation(
       @PathVariable("id") Long id,
       @RequestBody DocumentationInput input) {
+    if (publicationService.managesServiceDefinition(id)) {
+      throw new IllegalStateException(
+          "当前 API Contract 由数据开发 Data Service Node Revision 管理，请回到数据开发修改并重新发布");
+    }
     return Result.success(documentationService.save(id, input));
   }
 

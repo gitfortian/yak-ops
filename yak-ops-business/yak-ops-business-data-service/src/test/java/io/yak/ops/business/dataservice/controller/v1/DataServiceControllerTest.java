@@ -11,9 +11,9 @@ import io.yak.ops.business.dataservice.controller.v1.DataServiceController.Updat
 import io.yak.ops.business.dataservice.service.DataServiceAccessService;
 import io.yak.ops.business.dataservice.service.DataServiceDocumentationService;
 import io.yak.ops.business.dataservice.service.DataServicePublicationService;
+import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublicationSettings;
 import io.yak.ops.business.dataservice.service.DataServiceService;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
-import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -38,14 +38,15 @@ class DataServiceControllerTest {
   }
 
   @Test
-  void updateDelegatesOnlyServiceFacingSettings() {
+  void updateDelegatesThroughPublicationBoundary() {
     DataServiceService dataServiceService = mock(DataServiceService.class);
+    DataServicePublicationService publicationService = mock(DataServicePublicationService.class);
     DataServiceController controller = new DataServiceController(
         dataServiceService,
-        mock(DataServicePublicationService.class),
+        publicationService,
         mock(DataServiceAccessService.class),
         mock(DataServiceDocumentationService.class));
-    when(dataServiceService.updateSettings(eq(9L), any(ServiceSettingsInput.class)))
+    when(publicationService.updateSettings(eq(9L), any(PublicationSettings.class)))
         .thenReturn(mock(ApiView.class));
 
     controller.update(
@@ -58,10 +59,10 @@ class DataServiceControllerTest {
             false,
             "只修改服务侧配置"));
 
-    ArgumentCaptor<ServiceSettingsInput> inputCaptor =
-        ArgumentCaptor.forClass(ServiceSettingsInput.class);
-    verify(dataServiceService).updateSettings(eq(9L), inputCaptor.capture());
-    ServiceSettingsInput input = inputCaptor.getValue();
+    ArgumentCaptor<PublicationSettings> inputCaptor =
+        ArgumentCaptor.forClass(PublicationSettings.class);
+    verify(publicationService).updateSettings(eq(9L), inputCaptor.capture());
+    PublicationSettings input = inputCaptor.getValue();
 
     assertThat(input.name()).isEqualTo("订单查询 API");
     assertThat(input.path()).isEqualTo("/orders");

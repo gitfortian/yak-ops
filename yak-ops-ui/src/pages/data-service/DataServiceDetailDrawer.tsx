@@ -27,10 +27,13 @@ import DataServiceAccessModal from './DataServiceAccessModal';
 import DataServiceDocsModal from './DataServiceDocsModal';
 import DataServiceRuntimeModal from './DataServiceRuntimeModal';
 import {
+  DATA_SERVICE_NODE_SOURCE,
+  LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE,
   fetchDataServiceDocumentation,
   fetchDataServiceKeys,
   fetchDataServiceLogs,
   fetchDataServiceRuntime,
+  republishDataService,
   type DataServiceApi,
   type DataServiceApiKey,
   type DataServiceCallLog,
@@ -79,6 +82,7 @@ export default function DataServiceDetailDrawer({
 }: DataServiceDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
+  const [republishing, setRepublishing] = useState(false);
   const [documentation, setDocumentation] = useState<DataServiceDocumentation>();
   const [runtime, setRuntime] = useState<DataServiceRuntimeStatus>();
   const [keys, setKeys] = useState<DataServiceApiKey[]>([]);
@@ -86,6 +90,9 @@ export default function DataServiceDetailDrawer({
   const [docsOpen, setDocsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
+
+  const sourceManaged = service?.sourceType === DATA_SERVICE_NODE_SOURCE;
+  const legacySqlRelease = service?.sourceType === LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE;
 
   const dataSourceName = useMemo(() => {
     if (!service?.dataSourceId) return '-';
@@ -139,7 +146,34 @@ export default function DataServiceDetailDrawer({
     }
   };
 
+  const syncLatestRevision = async () => {
+    if (!service || !sourceManaged) return;
+    setRepublishing(true);
+    try {
+      const response = await republishDataService(service.id);
+      const revisionNo = response.data?.sourceRevisionNo;
+      message.success(revisionNo ? `Runtime 已同步到 DS R${revisionNo}` : 'Runtime 已同步最新 DS Revision');
+      await onChanged();
+      await loadDetail();
+    } catch (error: any) {
+      message.error(error?.message || '同步最新 Data Service Revision 失败');
+    } finally {
+      setRepublishing(false);
+    }
+  };
+
   if (!service) return null;
+
+  const sourceTypeLabel = sourceManaged
+    ? '数据开发 · Data Service Node'
+    : legacySqlRelease
+      ? 'Legacy · SQL Release（冻结）'
+      : 'Legacy 手工服务';
+  const sourceRevisionLabel = sourceManaged
+    ? `DS R${service.sourceRevisionNo || '-'}`
+    : legacySqlRelease
+      ? `SQL v${service.sourceRevisionNo || '-'}`
+      : '-';
 
   const logColumns: TableColumnsType<DataServiceCallLog> = [
     {
@@ -201,27 +235,35 @@ export default function DataServiceDetailDrawer({
         <div className="grid grid-cols-2 border border-[#e5e7eb] text-[12px]">
           <div className="border-b border-r border-[#edf0f2] px-4 py-3">
             <div className="text-[#98a2b3]">来源类型</div>
-            <div className="mt-1 font-medium text-[#344054]">
-              {service.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? '数据开发 · SQL' : 'Legacy 手工服务'}
-            </div>
+            <div className="mt-1 font-medium text-[#344054]">{sourceTypeLabel}</div>
           </div>
           <div className="border-b border-[#edf0f2] px-4 py-3">
             <div className="text-[#98a2b3]">来源版本</div>
-            <div className="mt-1 font-medium text-[#344054]">
-              {service.sourceType ? `SQL v${service.sourceRevisionNo || '-'}` : '-'}
-            </div>
+            <div className="mt-1 font-medium text-[#344054]">{sourceRevisionLabel}</div>
           </div>
           <div className="border-r border-[#edf0f2] px-4 py-3">
             <div className="text-[#98a2b3]">数据源</div>
             <div className="mt-1 font-medium text-[#344054]">{dataSourceName}</div>
           </div>
           <div className="px-4 py-3">
-            <div className="text-[#98a2b3]">Source / Revision</div>
+            <div className="text-[#98a2b3]">{sourceManaged ? 'Node / DS Revision' : 'Source / Revision'}</div>
             <div className="mt-1 font-mono text-[11px] text-[#475467]">
               {service.sourceType ? `#${service.sourceRef || '-'} / #${service.sourceRevisionId || '-'}` : '-'}
             </div>
           </div>
         </div>
+        {sourceManaged ? (
+          <div className="mt-3 flex items-center justify-between border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] text-[#667085]">
+            <div>接口定义与 Contract 来自数据开发的不可变 DS Revision；Runtime 只保存运行快照。</div>
+            <Button size="small" icon={<RefreshCw size={13} />} loading={republishing} onClick={() => void syncLatestRevision()}>
+              同步最新 Revision
+            </Button>
+          </div>
+        ) : legacySqlRelease ? (
+          <div className="mt-3 border border-[#fedf89] bg-[#fffaeb] px-4 py-3 text-[12px] leading-5 text-[#93370d]">
+            历史 SQL Release 来源已冻结：现有 Runtime Snapshot 可以继续运行，但不再支持从原 SQL 来源重新发布。新的服务请通过 Data Service Node 部署。
+          </div>
+        ) : null}
       </div>
 
       <div>
@@ -236,7 +278,11 @@ export default function DataServiceDetailDrawer({
 
       <div className="flex items-center justify-between border-t border-[#edf0f2] pt-4 text-[12px] text-[#667085]">
         <div>创建 {formatTime(service.createTime)} · 更新 {formatTime(service.updateTime)}</div>
-        <Button icon={<Pencil size={14} />} onClick={() => onEdit(service)}>编辑服务配置</Button>
+        {sourceManaged ? (
+          <span>定义修改请回到数据开发 Data Service Node</span>
+        ) : (
+          <Button icon={<Pencil size={14} />} onClick={() => onEdit(service)}>编辑 Legacy 配置</Button>
+        )}
       </div>
     </div>
   );
@@ -246,18 +292,22 @@ export default function DataServiceDetailDrawer({
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[13px] font-medium text-[#344054]">API 文档与在线调试</div>
-          <div className="mt-1 text-[12px] text-[#667085]">维护请求参数、响应 Schema、OpenAPI，并使用真实数据源调试。</div>
+          <div className="mt-1 text-[12px] text-[#667085]">
+            {sourceManaged
+              ? '参数与响应 Contract 来自 DS Revision，在 Runtime 中只读；可查看 OpenAPI 并在线调试。'
+              : '维护请求参数、响应 Schema、OpenAPI，并使用真实数据源调试。'}
+          </div>
         </div>
-        <Button icon={<FileText size={14} />} onClick={() => setDocsOpen(true)}>打开文档</Button>
+        <Button icon={<FileText size={14} />} onClick={() => setDocsOpen(true)}>{sourceManaged ? '查看文档' : '打开文档'}</Button>
       </div>
       <div className="grid grid-cols-3 border-y border-[#edf0f2] py-3">
-        <Metric label="文档状态" value={documentation?.documented ? '已维护' : '未维护'} />
+        <Metric label="文档状态" value={documentation?.documented ? '已同步' : '未维护'} />
         <Metric label="请求参数" value={documentation?.parameters?.length || service.parameterNames?.length || 0} />
         <Metric label="响应字段" value={documentation?.responseFields?.length || 0} />
       </div>
       {documentation?.schemaStale ? (
         <div className="border border-[#fecdca] bg-[#fffbfa] px-3 py-2.5 text-[12px] leading-5 text-[#b42318]">
-          SQL 已发生变化，当前响应 Schema 已过期。请重新在线调试并保存文档后再对外使用最新契约。
+          当前 Runtime SQL 与已同步 Contract 不一致，请从最新 Data Service Revision 重新发布 Runtime。
         </div>
       ) : null}
       <div className="border border-[#e5e7eb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
@@ -367,11 +417,16 @@ export default function DataServiceDetailDrawer({
               <span className="truncate text-[15px] font-semibold text-[#161823]">{service.name}</span>
               <Tag bordered={false}>GET</Tag>
               <Tag bordered={false}>{service.enabled ? '运行中' : '已停用'}</Tag>
+              {sourceManaged ? <Tag bordered={false}>DS R{service.sourceRevisionNo || '-'}</Tag> : null}
             </div>
             <div className="mt-1 truncate font-mono text-[11px] font-normal text-[#98a2b3]">{service.runtimePath}</div>
           </div>
         )}
-        extra={<Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(service)}>编辑</Button>}
+        extra={sourceManaged ? (
+          <Button size="small" icon={<RefreshCw size={13} />} loading={republishing} onClick={() => void syncLatestRevision()}>同步 Revision</Button>
+        ) : (
+          <Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(service)}>编辑</Button>
+        )}
       >
         <Spin spinning={loading}>
           <Tabs
@@ -391,6 +446,7 @@ export default function DataServiceDetailDrawer({
       <DataServiceDocsModal
         open={docsOpen}
         service={service}
+        readOnly={sourceManaged}
         onCancel={() => {
           setDocsOpen(false);
           void loadDetail();

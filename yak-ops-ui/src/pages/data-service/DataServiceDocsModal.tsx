@@ -28,6 +28,7 @@ import {
 interface DataServiceDocsModalProps {
   open: boolean;
   service?: DataServiceApi;
+  readOnly?: boolean;
   onCancel: () => void;
 }
 
@@ -46,7 +47,7 @@ const typeLabel: Record<DataServiceSchemaType, string> = {
   OBJECT: 'Object',
 };
 
-const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalProps) => {
+const DataServiceDocsModal = ({ open, service, readOnly = false, onCancel }: DataServiceDocsModalProps) => {
   const [documentation, setDocumentation] = useState<DataServiceDocumentation>();
   const [parameters, setParameters] = useState<DataServiceParameterDoc[]>([]);
   const [responseFields, setResponseFields] = useState<DataServiceResponseFieldDoc[]>([]);
@@ -93,7 +94,7 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
   }, [load, open]);
 
   const save = async () => {
-    if (!service) return;
+    if (!service || readOnly) return;
     setSaving(true);
     try {
       const response = await saveDataServiceDocumentation(service.id, { parameters, responseFields });
@@ -125,8 +126,8 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
       const result = response.data;
       if (!result) throw new Error(response.message || response.msg || '在线调试失败');
       setTestResult(result);
-      setResponseFields((current) => inferResponseFields(result, current));
-      message.success('调试成功，已根据真实结果识别响应 Schema；保存文档后生效');
+      if (!readOnly) setResponseFields((current) => inferResponseFields(result, current));
+      message.success(readOnly ? '调试成功' : '调试成功，已根据真实结果识别响应 Schema；保存文档后生效');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '在线调试失败');
     } finally {
@@ -169,6 +170,11 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
       label: '概览',
       children: (
         <div className="space-y-4">
+          {readOnly ? (
+            <div className="border border-[#e5e7eb] bg-[#fafafa] px-3 py-2.5 text-[11px] leading-5 text-[#667085]">
+              当前 API 的名称、Path、参数与响应 Contract 来自数据开发已发布的 Data Service Revision，在 Runtime 中只读。修改后请发布新的 DS Revision 并重新同步 Runtime。
+            </div>
+          ) : null}
           <div className="border border-[#e5e7eb] bg-[#fafbfc] px-3 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -186,7 +192,7 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
           </div>
           {documentation?.schemaStale ? (
             <div className="border border-[#fedf89] bg-[#fffaeb] px-3 py-2.5 text-[11px] leading-5 text-[#93370d]">
-              当前 SQL 已经变化，已保存的响应 Schema 可能对应旧版本。建议重新在线调试并保存文档。
+              当前 Runtime SQL 与已保存 Contract 不一致，请同步最新 Data Service Revision。
             </div>
           ) : null}
           <div>
@@ -212,16 +218,16 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
             { title: '参数名', dataIndex: 'name', width: 150, render: (value) => <span className="font-mono text-[12px]">{value}</span> },
             {
               title: '类型', dataIndex: 'type', width: 130,
-              render: (_, row, index) => <Select size="small" className="w-full" value={row.type} options={parameterTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setParameters((values) => values.map((item, i) => i === index ? { ...item, type: type as DataServiceParameterDoc['type'] } : item))} />,
+              render: (_, row, index) => <Select disabled={readOnly} size="small" className="w-full" value={row.type} options={parameterTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setParameters((values) => values.map((item, i) => i === index ? { ...item, type: type as DataServiceParameterDoc['type'] } : item))} />,
             },
-            { title: '必填', dataIndex: 'required', width: 70, render: () => <Tag bordered={false}>是</Tag> },
+            { title: '必填', dataIndex: 'required', width: 70, render: (value) => <Tag bordered={false}>{value ? '是' : '否'}</Tag> },
             {
               title: '说明', dataIndex: 'description', minWidth: 180,
-              render: (_, row, index) => <Input size="small" value={row.description || ''} placeholder="业务含义" onChange={(event) => setParameters((values) => values.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
+              render: (_, row, index) => <Input disabled={readOnly} size="small" value={row.description || ''} placeholder="业务含义" onChange={(event) => setParameters((values) => values.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
             },
             {
               title: '示例', dataIndex: 'example', width: 160,
-              render: (_, row, index) => <Input size="small" value={row.example || ''} placeholder="示例值" onChange={(event) => setParameters((values) => values.map((item, i) => i === index ? { ...item, example: event.target.value } : item))} />,
+              render: (_, row, index) => <Input disabled={readOnly} size="small" value={row.example || ''} placeholder="示例值" onChange={(event) => setParameters((values) => values.map((item, i) => i === index ? { ...item, example: event.target.value } : item))} />,
             },
           ]}
           scroll={{ x: 780 }}
@@ -233,7 +239,9 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
       label: `响应 ${responseFields.length || ''}`,
       children: responseFields.length ? (
         <div className="space-y-3">
-          <div className="text-[11px] text-[#667085]">字段来自最近一次在线调试结果识别；类型和业务说明可以在保存前调整。</div>
+          <div className="text-[11px] text-[#667085]">
+            {readOnly ? '响应 Contract 来自当前 DS Revision。' : '字段来自最近一次在线调试结果识别；类型和业务说明可以在保存前调整。'}
+          </div>
           <Table
             rowKey="name"
             size="small"
@@ -243,19 +251,19 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
               { title: '字段', dataIndex: 'name', width: 150, render: (value) => <span className="font-mono text-[12px]">{value}</span> },
               {
                 title: '类型', dataIndex: 'type', width: 130,
-                render: (_, row, index) => <Select size="small" className="w-full" value={row.type} options={responseTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setResponseFields((values) => values.map((item, i) => i === index ? { ...item, type: type as DataServiceSchemaType } : item))} />,
+                render: (_, row, index) => <Select disabled={readOnly} size="small" className="w-full" value={row.type} options={responseTypes.map((type) => ({ value: type, label: typeLabel[type] }))} onChange={(type) => setResponseFields((values) => values.map((item, i) => i === index ? { ...item, type: type as DataServiceSchemaType } : item))} />,
               },
               { title: '可空', dataIndex: 'nullable', width: 70, render: (value) => value ? '是' : '否' },
               {
                 title: '说明', dataIndex: 'description', minWidth: 180,
-                render: (_, row, index) => <Input size="small" value={row.description || ''} placeholder="字段含义" onChange={(event) => setResponseFields((values) => values.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
+                render: (_, row, index) => <Input disabled={readOnly} size="small" value={row.description || ''} placeholder="字段含义" onChange={(event) => setResponseFields((values) => values.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} />,
               },
               { title: '示例', dataIndex: 'example', width: 160, ellipsis: true },
             ]}
             scroll={{ x: 780 }}
           />
         </div>
-      ) : <EmptyHint text="还没有响应 Schema。进入“在线调试”执行一次真实查询即可自动识别。" />,
+      ) : <EmptyHint text={readOnly ? '当前 DS Revision 没有响应 Contract。' : '还没有响应 Schema。进入“在线调试”执行一次真实查询即可自动识别。'} />,
     },
     {
       key: 'debug',
@@ -263,7 +271,7 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
       children: (
         <div>
           <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-3 py-2 text-[11px] leading-5 text-[#667085]">
-            管理控制台调试始终直连真实数据源，不读取 Runtime 缓存，也不受熔断状态影响。外部 API Key 鉴权同样不会在这里阻断调试。
+            管理控制台调试始终直连当前 Runtime Snapshot 的真实数据源，不读取 Runtime 缓存，也不受熔断状态影响。
           </div>
           {parameters.length ? (
             <div className="mb-3 grid grid-cols-2 gap-x-3">
@@ -293,7 +301,7 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
       children: (
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-[11px] text-[#667085]">OpenAPI 3.0.3 · 根据当前 SQL 参数、访问控制和已保存响应 Schema 动态生成。</div>
+            <div className="text-[11px] text-[#667085]">OpenAPI 3.0.3 · 根据当前 Runtime Contract 与访问控制动态生成。</div>
             <Button size="small" icon={<Copy size={13} />} onClick={() => void copy(JSON.stringify(openApi || {}, null, 2), 'OpenAPI JSON 已复制')}>复制 JSON</Button>
           </div>
           <pre className="m-0 max-h-[430px] overflow-auto bg-[#111827] p-3 text-[11px] leading-5 text-white/85">{JSON.stringify(openApi || {}, null, 2)}</pre>
@@ -302,26 +310,31 @@ const DataServiceDocsModal = ({ open, service, onCancel }: DataServiceDocsModalP
     },
   ];
 
+  const footer = [
+    <Button key="refresh" icon={<RefreshCw size={14} />} disabled={loading || saving} onClick={() => void load()}>刷新</Button>,
+    <Button key="close" onClick={onCancel}>关闭</Button>,
+  ];
+  if (!readOnly) {
+    footer.push(<Button key="save" type="primary" loading={saving} onClick={() => void save()}>保存文档</Button>);
+  }
+
   return (
     <Modal
       open={open}
       width={980}
       centered
       destroyOnHidden
-      title={service ? `API 文档 · ${service.name}` : 'API 文档'}
+      title={service ? `${readOnly ? 'API Contract' : 'API 文档'} · ${service.name}` : 'API 文档'}
       onCancel={onCancel}
-      footer={[
-        <Button key="refresh" icon={<RefreshCw size={14} />} disabled={loading || saving} onClick={() => void load()}>刷新</Button>,
-        <Button key="close" onClick={onCancel}>关闭</Button>,
-        <Button key="save" type="primary" loading={saving} onClick={() => void save()}>保存文档</Button>,
-      ]}
+      footer={footer}
     >
       <Spin spinning={loading}>
         <div className="min-h-[500px] pt-1">
           <div className="mb-3 flex items-center gap-2 text-[11px] text-[#667085]">
             <Tag bordered={false}>GET</Tag>
             {service?.authMode === 'API_KEY' ? <Tag bordered={false}>API Key</Tag> : <Tag bordered={false}>Public</Tag>}
-            {documentation?.schemaStale ? <Tag color="warning">Schema 待更新</Tag> : documentation?.documented ? <Tag bordered={false}>已文档化</Tag> : <Tag bordered={false}>未保存</Tag>}
+            {readOnly ? <Tag bordered={false}>DS Revision · 只读</Tag> : null}
+            {documentation?.schemaStale ? <Tag color="warning">Schema 待同步</Tag> : documentation?.documented ? <Tag bordered={false}>已同步</Tag> : <Tag bordered={false}>未保存</Tag>}
           </div>
           <Tabs items={items} />
         </div>

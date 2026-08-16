@@ -4,16 +4,27 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Supplies immutable, publishable query sources to Data Service without coupling the module to a
- * concrete authoring domain such as Data Development.
+ * Supplies immutable, publishable query sources to Data Service without coupling the runtime module
+ * to a concrete authoring domain such as Data Development.
  */
 public interface DataServiceSourceProvider {
 
   String sourceType();
 
+  /**
+   * Whether service-facing definition fields are owned by the upstream authoring revision.
+   *
+   * <p>When true, Data Service treats name/path/contracts/maxRows/timeout/description as immutable
+   * source definition and only owns runtime concerns such as enablement, auth, rate limits, cache,
+   * circuit breaking and observability.
+   */
+  default boolean managesServiceDefinition() {
+    return false;
+  }
+
   SourcePage list(int pageNo, int pageSize, String keyword);
 
-  /** Resolves the source currently selected by its upstream release/catalog pointer. */
+  /** Resolves the latest published immutable revision for one stable source identity. */
   ResolvedSource resolve(String sourceRef);
 
   record SourcePage(
@@ -36,10 +47,76 @@ public interface DataServiceSourceProvider {
       Long sourceRevisionId,
       Integer sourceRevisionNo,
       Long dataSourceId,
+      Integer maxRows,
       Integer timeoutSeconds,
       String defaultPath,
-      Instant updateTime) {}
+      String description,
+      Instant updateTime) {
+
+    /** Keeps existing unmanaged providers source-compatible while definition ownership evolves. */
+    public SourceDescriptor(
+        String sourceType,
+        String sourceRef,
+        String name,
+        String sourceKind,
+        String status,
+        Long sourceRevisionId,
+        Integer sourceRevisionNo,
+        Long dataSourceId,
+        Integer timeoutSeconds,
+        String defaultPath,
+        Instant updateTime) {
+      this(
+          sourceType,
+          sourceRef,
+          name,
+          sourceKind,
+          status,
+          sourceRevisionId,
+          sourceRevisionNo,
+          dataSourceId,
+          null,
+          timeoutSeconds,
+          defaultPath,
+          null,
+          updateTime);
+    }
+  }
+
+  record ParameterContract(
+      String name,
+      String type,
+      boolean required,
+      String description,
+      String example) {}
+
+  record ResponseFieldContract(
+      String name,
+      String type,
+      boolean nullable,
+      String description,
+      String example) {}
+
+  record SourceContract(
+      List<ParameterContract> parameters,
+      List<ResponseFieldContract> responseFields) {
+    public SourceContract {
+      parameters = parameters == null ? List.of() : List.copyOf(parameters);
+      responseFields = responseFields == null ? List.of() : List.copyOf(responseFields);
+    }
+
+    public static SourceContract empty() {
+      return new SourceContract(List.of(), List.of());
+    }
+  }
 
   /** Server-only material used to create the immutable Data Service runtime snapshot. */
-  record ResolvedSource(SourceDescriptor descriptor, String sql) {}
+  record ResolvedSource(
+      SourceDescriptor descriptor,
+      String sql,
+      SourceContract contract) {
+    public ResolvedSource(SourceDescriptor descriptor, String sql) {
+      this(descriptor, sql, SourceContract.empty());
+    }
+  }
 }
