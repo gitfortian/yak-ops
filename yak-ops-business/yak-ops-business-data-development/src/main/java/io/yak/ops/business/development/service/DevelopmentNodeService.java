@@ -1,21 +1,18 @@
 package io.yak.ops.business.development.service;
 
 import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.domain.DevelopmentNodeType;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Application service for lightweight data-development resource nodes. */
 @Service
 public class DevelopmentNodeService {
-
-  private static final Set<String> SUPPORTED_TYPES = Set.of("SQL", "SHELL", "HTTP", "PYTHON");
 
   private final DevelopmentNodeRepository repository;
   private final DevelopmentDirectoryRepository directoryRepository;
@@ -122,11 +119,11 @@ public class DevelopmentNodeService {
 
   private String normalizeType(String type) {
     if (type == null || type.isBlank()) throw new IllegalArgumentException("节点类型不能为空");
-    String normalized = type.trim().toUpperCase(Locale.ROOT);
-    if (!SUPPORTED_TYPES.contains(normalized)) {
-      throw new IllegalArgumentException("不支持的数据开发节点类型：" + normalized);
-    }
-    return normalized;
+    String normalized = type.trim().toUpperCase(java.util.Locale.ROOT);
+    DevelopmentNodeType nodeType = DevelopmentNodeType.tryParse(normalized)
+        .filter(DevelopmentNodeType::isProcessing)
+        .orElseThrow(() -> new IllegalArgumentException("不支持的数据开发节点类型：" + normalized));
+    return nodeType.name();
   }
 
   private Long normalizeProjectId(Long projectId) {
