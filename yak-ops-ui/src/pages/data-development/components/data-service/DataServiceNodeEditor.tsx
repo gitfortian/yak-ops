@@ -1,3 +1,4 @@
+import { history } from '@umijs/max';
 import {
   Button,
   Input,
@@ -10,7 +11,7 @@ import {
   message,
   type TableColumnsType,
 } from 'antd';
-import { Network, RefreshCw, Rocket, Save } from 'lucide-react';
+import { ExternalLink, Network, RefreshCw, Rocket, Save } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -19,12 +20,19 @@ import {
   publishDevelopmentDataServiceNode,
   saveDevelopmentDataServiceDraft,
   type DataServiceContractType,
+  type DevelopmentDataServiceDefinition,
   type DevelopmentDataServiceNodeContext,
   type DevelopmentDataServiceParameter,
   type DevelopmentDataServiceResponseField,
   type DevelopmentDataServiceRevisionSummary,
   type DevelopmentDataServiceSource,
 } from '../../data-service-node-service';
+import {
+  deployDataServiceRuntime,
+  fetchDataServicePublicationState,
+  syncDataServiceRuntime,
+  type DataServicePublicationState,
+} from '../../data-service-runtime-publication';
 import type { DevelopmentId, DevelopmentResourceNode } from '../../types';
 
 interface DataServiceNodeEditorProps {
@@ -42,7 +50,57 @@ const contractTypeOptions: { label: string; value: DataServiceContractType }[] =
   { label: 'OBJECT', value: 'OBJECT' },
 ];
 
-const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 19) : '-';
+const formatTime = (value?: string | null) => value ? value.replace('T', ' ').slice(0, 19) : '-';
+const normalizeId = (value: unknown): DevelopmentId => {
+  if (value === undefined || value === null || String(value).trim() === '') return '0';
+  return String(value);
+};
+const safeArray = <T,>(value: T[] | null | undefined): T[] =>
+  Array.isArray(value) ? value.filter(Boolean) : [];
+
+/**
+ * Data Service Node is a resource editor, so one malformed/older API payload must never crash the
+ * whole Data Development workspace. Keep a complete local authoring shape even while wire contracts
+ * evolve across releases.
+ */
+const normalizeContext = (
+  raw: DevelopmentDataServiceNodeContext,
+  node: DevelopmentResourceNode,
+): DevelopmentDataServiceNodeContext => {
+  const rawDraft = raw?.draft;
+  const rawDefinition = rawDraft?.definition;
+  const nodeId = normalizeId(raw?.nodeId || node.id);
+  const definition: DevelopmentDataServiceDefinition = {
+    sourceTaskAssetId: normalizeId(rawDefinition?.sourceTaskAssetId),
+    sourceTaskRevisionId: normalizeId(rawDefinition?.sourceTaskRevisionId),
+    sourceTaskRevisionNo: Number(rawDefinition?.sourceTaskRevisionNo || 0),
+    serviceName: rawDefinition?.serviceName || raw?.nodeName || node.name,
+    path: rawDefinition?.path || `/query/${nodeId}`,
+    method: 'GET',
+    parameters: safeArray(rawDefinition?.parameters),
+    responseFields: safeArray(rawDefinition?.responseFields),
+    maxRows: Number(rawDefinition?.maxRows || 1000),
+    timeoutSeconds: Number(rawDefinition?.timeoutSeconds || 30),
+    description: rawDefinition?.description || undefined,
+  };
+
+  return {
+    nodeId,
+    nodeName: raw?.nodeName || node.name,
+    configured: Boolean(raw?.configured),
+    availableSources: safeArray(raw?.availableSources),
+    selectedSource: raw?.selectedSource || null,
+    draft: {
+      nodeId: normalizeId(rawDraft?.nodeId || nodeId),
+      definition,
+      draftRevision: Number(rawDraft?.draftRevision || 0),
+      createTime: rawDraft?.createTime,
+      updateTime: rawDraft?.updateTime,
+    },
+    latestPublishedRevision: raw?.latestPublishedRevision || null,
+    revisions: safeArray(raw?.revisions),
+  };
+};
 
 export default function DataServiceNodeEditor({
   node,
@@ -60,44 +118,76 @@ export default function DataServiceNodeEditor({
   const [responseFields, setResponseFields] = useState<DevelopmentDataServiceResponseField[]>([]);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string>();
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publicationState, setPublicationState] = useState<DataServicePublicationState>();
+  const [publicationError, setPublicationError] = useState<string>();
+  const [publicationLoading, setPublicationLoading] = useState(false);
+  const [deploying, setDeploying] = useState(false);
 
-  const applyContext = useCallback((next: DevelopmentDataServiceNodeContext) => {
+  const applyContext = useCallback((raw: DevelopmentDataServiceNodeContext) => {
+    const next = normalizeContext(raw, node);
     const definition = next.draft.definition;
     setContext(next);
     setSelectedSourceId(
-      definition.sourceTaskAssetId && definition.sourceTaskAssetId !== '0'
-        ? definition.sourceTaskAssetId
-        : undefined,
+      definition.sourceTaskAssetId !== '0' ? definition.sourceTaskAssetId : undefined,
     );
     setSelectedRevisionId(
-      definition.sourceTaskRevisionId && definition.sourceTaskRevisionId !== '0'
-        ? definition.sourceTaskRevisionId
-        : undefined,
+      definition.sourceTaskRevisionId !== '0' ? definition.sourceTaskRevisionId : undefined,
     );
     setServiceName(definition.serviceName || next.nodeName);
     setPath(definition.path || `/query/${next.nodeId}`);
     setMaxRows(definition.maxRows || 1000);
     setTimeoutSeconds(definition.timeoutSeconds || 30);
     setDescription(definition.description || '');
-    setParameters(definition.parameters || []);
-    setResponseFields(definition.responseFields || []);
+    setParameters(safeArray(definition.parameters));
+    setResponseFields(safeArray(definition.responseFields));
     setDirty(false);
-  }, []);
+    return next;
+  }, [node]);
+
+  const loadPublicationState = useCallback(async (
+    hasPublishedRevision: boolean,
+    notifyOnError = false,
+  ) => {
+    if (!hasPublishedRevision) {
+      setPublicationState(undefined);
+      setPublicationError(undefined);
+      return;
+    }
+    setPublicationLoading(true);
+    setPublicationError(undefined);
+    try {
+      setPublicationState(await fetchDataServicePublicationState(node.id));
+    } catch (error) {
+      const text = error instanceof Error ? error.message : '查询 Runtime 同步状态失败';
+      setPublicationState(undefined);
+      setPublicationError(text);
+      if (notifyOnError) message.error(text);
+    } finally {
+      setPublicationLoading(false);
+    }
+  }, [node.id]);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(undefined);
+    setPublicationState(undefined);
+    setPublicationError(undefined);
     try {
-      applyContext(await getDevelopmentDataServiceNode(node.id));
+      const next = applyContext(await getDevelopmentDataServiceNode(node.id));
+      await loadPublicationState(Boolean(next.latestPublishedRevision));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载 Data Service Node 失败');
+      const text = error instanceof Error ? error.message : '加载 Data Service Node 失败';
+      setLoadError(text);
       setContext(undefined);
+      message.error(text);
     } finally {
       setLoading(false);
     }
-  }, [applyContext, node.id]);
+  }, [applyContext, loadPublicationState, node.id]);
 
   useEffect(() => {
     void load();
@@ -110,11 +200,13 @@ export default function DataServiceNodeEditor({
     if (pinned && !values.some((source) => source.taskAssetId === pinned.taskAssetId)) {
       values.unshift(pinned);
     }
-    return values.map((source) => ({
-      value: source.taskAssetId,
-      disabled: source.status !== 'ONLINE',
-      label: `${source.nodeName} · SQL R${source.currentRevisionNo || source.revisionNo} · ${source.status}`,
-    }));
+    return values
+      .filter((source) => source && source.taskAssetId)
+      .map((source) => ({
+        value: source.taskAssetId,
+        disabled: source.status !== 'ONLINE',
+        label: `${source.nodeName || 'SQL'} · SQL R${source.currentRevisionNo || source.revisionNo || '-'} · ${source.status || 'UNKNOWN'}`,
+      }));
   }, [availableSources, context?.selectedSource]);
 
   const activeSource = useMemo(
@@ -171,15 +263,16 @@ export default function DataServiceNodeEditor({
         selectedSourceId,
         selectedRevisionId,
       );
-
+      const nextParameters = safeArray(result?.parameters);
+      const nextResponses = safeArray(result?.responseFields);
       const oldParameters = new Map(
-        parameters.map((item) => [item.name.toLowerCase(), item]),
+        parameters.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
       );
       const oldResponses = new Map(
-        responseFields.map((item) => [item.name.toLowerCase(), item]),
+        responseFields.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
       );
 
-      setParameters(result.parameters.map((item) => {
+      setParameters(nextParameters.map((item) => {
         const previous = oldParameters.get(item.name.toLowerCase());
         return previous ? {
           ...item,
@@ -189,7 +282,7 @@ export default function DataServiceNodeEditor({
           example: previous.example,
         } : item;
       }));
-      setResponseFields(result.responseFields.map((item) => {
+      setResponseFields(nextResponses.map((item) => {
         const previous = oldResponses.get(item.name.toLowerCase());
         return previous ? {
           ...item,
@@ -198,11 +291,13 @@ export default function DataServiceNodeEditor({
           example: previous.example,
         } : item;
       }));
-      setSelectedSourceId(result.source.taskAssetId);
-      setSelectedRevisionId(result.source.revisionId);
+      if (result?.source) {
+        setSelectedSourceId(normalizeId(result.source.taskAssetId));
+        setSelectedRevisionId(normalizeId(result.source.revisionId));
+      }
       markDirty();
       message.success(
-        `Contract 已发现 · ${result.parameters.length} 个参数 / ${result.responseFields.length} 个响应字段`,
+        `Contract 已发现 · ${nextParameters.length} 个参数 / ${nextResponses.length} 个响应字段`,
       );
     } catch (error) {
       message.error(error instanceof Error ? error.message : '预览 Data Service Contract 失败');
@@ -234,11 +329,11 @@ export default function DataServiceNodeEditor({
         maxRows,
         timeoutSeconds,
         description: description.trim() || undefined,
-        baseRevision: context?.draft.draftRevision || 0,
+        baseRevision: context?.draft?.draftRevision || 0,
       });
       applyContext(next);
       await onSaved?.();
-      message.success(`Data Service 草稿已保存 · Draft #${next.draft.draftRevision}`);
+      message.success(`Data Service 草稿已保存 · Draft #${next?.draft?.draftRevision || '-'}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存 Data Service Node 草稿失败');
     } finally {
@@ -247,7 +342,7 @@ export default function DataServiceNodeEditor({
   };
 
   const publish = async () => {
-    const draftRevision = context?.draft.draftRevision || 0;
+    const draftRevision = context?.draft?.draftRevision || 0;
     if (!draftRevision || dirty || publishing) {
       if (dirty) message.warning('请先保存当前 Data Service Node 草稿');
       return;
@@ -262,6 +357,28 @@ export default function DataServiceNodeEditor({
       message.error(error instanceof Error ? error.message : '发布 Data Service Node 失败');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const deployOrSync = async () => {
+    const latestPublished = context?.latestPublishedRevision;
+    if (!latestPublished || !publicationState || deploying) return;
+    setDeploying(true);
+    try {
+      if (publicationState.published) {
+        const apiId = publicationState.detail?.id;
+        if (!apiId) throw new Error('Runtime API 身份缺失，请刷新同步状态后重试');
+        await syncDataServiceRuntime(apiId);
+        message.success(`Runtime 已同步到 DS R${latestPublished.revisionNo}`);
+      } else {
+        await deployDataServiceRuntime(node.id);
+        message.success(`Runtime 已部署 · DS R${latestPublished.revisionNo} · 默认停用`);
+      }
+      await loadPublicationState(true, true);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '部署 Data Service Runtime 失败');
+    } finally {
+      setDeploying(false);
     }
   };
 
@@ -443,7 +560,26 @@ export default function DataServiceNodeEditor({
     );
   }
 
-  const draftRevision = context?.draft.draftRevision || 0;
+  if (!context) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-white px-6">
+        <div className="max-w-[520px] text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[#f5f5f6] text-[#667085]">
+            <Network size={18} />
+          </div>
+          <div className="mt-3 text-[14px] font-semibold text-[#344054]">Data Service Node 加载失败</div>
+          <div className="mt-1 text-[12px] leading-5 text-[#98a2b3]">
+            {loadError || '节点上下文暂时不可用。编辑器已阻止异常数据继续渲染，避免工作区白屏。'}
+          </div>
+          <Button className="mt-4" size="small" icon={<RefreshCw size={13} />} onClick={() => void load()}>
+            重新加载
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const draftRevision = context?.draft?.draftRevision || 0;
   const latestPublished = context?.latestPublishedRevision;
   const canSave = Boolean(
     selectedSourceId
@@ -455,6 +591,27 @@ export default function DataServiceNodeEditor({
     draftRevision > 0
       && !dirty
       && responseFields.length > 0,
+  );
+  const runtimeRevisionNo = publicationState?.detail?.sourceRevisionNo;
+  const runtimeStatusLabel = !latestPublished
+    ? '等待发布 DS Revision'
+    : publicationError
+      ? 'Runtime 状态不可用'
+      : publicationLoading && !publicationState
+        ? '正在查询 Runtime'
+        : !publicationState
+          ? 'Runtime 状态未知'
+          : !publicationState.published
+            ? '未部署'
+            : publicationState.updateAvailable
+              ? '待同步'
+              : publicationState.detail?.enabled
+                ? '已同步 · 运行中'
+                : '已同步 · 已停用';
+  const showDeployAction = Boolean(
+    latestPublished
+      && publicationState
+      && (!publicationState.published || publicationState.updateAvailable),
   );
 
   return (
@@ -508,6 +665,90 @@ export default function DataServiceNodeEditor({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        <section className="border-b border-[#eef0f2] px-4 py-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold text-[#344054]">Runtime 部署</div>
+              <div className="mt-0.5 text-[10px] text-[#98a2b3]">
+                Data Development 负责发布不可变 DS Revision；这里仅显式部署/同步，运行策略仍在“数据服务”模块管理。
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Tag className="!m-0" bordered={false}>{runtimeStatusLabel}</Tag>
+              {latestPublished ? (
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<RefreshCw size={12} />}
+                  loading={publicationLoading}
+                  onClick={() => void loadPublicationState(true, true)}
+                >
+                  刷新
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex max-w-[980px] flex-wrap items-center justify-between gap-3 border border-[#e5e7eb] bg-[#fafafa] px-3 py-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-[#667085]">
+              <span>
+                最新发布：
+                <b className="font-medium text-[#344054]">
+                  {latestPublished ? `DS R${latestPublished.revisionNo}` : '尚未发布'}
+                </b>
+              </span>
+              <span>
+                Runtime：
+                <b className="font-medium text-[#344054]">
+                  {publicationState?.published ? `DS R${runtimeRevisionNo || '-'}` : '未部署'}
+                </b>
+              </span>
+              {publicationState?.detail?.runtimePath ? (
+                <span className="max-w-[360px] truncate font-mono text-[#475467]">
+                  {publicationState.detail.runtimePath}
+                </span>
+              ) : null}
+              {publicationState?.updateAvailable ? (
+                <span className="font-medium text-[#b54708]">
+                  Runtime 仍为 DS R{runtimeRevisionNo || '-'}，需显式同步到 DS R{latestPublished?.revisionNo}
+                </span>
+              ) : null}
+              {publicationError ? (
+                <span className="text-[#b42318]">{publicationError}</span>
+              ) : null}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {showDeployAction ? (
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<Rocket size={13} />}
+                  loading={deploying}
+                  onClick={() => void deployOrSync()}
+                >
+                  {publicationState?.published ? '同步最新 Revision' : '部署 Runtime'}
+                </Button>
+              ) : null}
+              {publicationState?.published ? (
+                <Button
+                  size="small"
+                  icon={<ExternalLink size={13} />}
+                  onClick={() => history.push('/data-service')}
+                >
+                  打开 API 服务
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {latestPublished && publicationState && !publicationState.published ? (
+            <div className="mt-1.5 text-[10px] text-[#98a2b3]">
+              首次部署默认保持停用，部署完成后请到“数据服务”配置访问控制并显式启用。
+            </div>
+          ) : null}
+        </section>
+
         <section className="border-b border-[#eef0f2] px-4 py-3">
           <div className="mb-2 text-[11px] font-semibold text-[#344054]">来源 SQL Revision</div>
           <div className="grid max-w-[980px] grid-cols-[110px_minmax(0,1fr)] items-start gap-y-2">
@@ -677,7 +918,7 @@ export default function DataServiceNodeEditor({
             <div>
               <div className="text-[11px] font-semibold text-[#344054]">发布历史</div>
               <div className="mt-0.5 text-[10px] text-[#98a2b3]">
-                这里发布的是数据开发域内的不可变 Data Service Node Revision，不会创建 Runtime API。
+                发布只生成不可变 DS Revision；新版本不会自动改变线上 Runtime，需要在上方显式部署或同步。
               </div>
             </div>
             <Tag className="!m-0">

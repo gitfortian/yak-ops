@@ -1,5 +1,6 @@
-import { Boxes } from 'lucide-react';
-import { useMemo } from 'react';
+import { Button } from 'antd';
+import { Boxes, RefreshCw } from 'lucide-react';
+import { Component, type ReactNode, useMemo } from 'react';
 
 import { isDevelopmentTaskNode } from '../node-model';
 import type {
@@ -17,6 +18,58 @@ interface DevelopmentEditorWorkspaceProps {
   selectedNodeId?: DevelopmentId;
   onNodeFocus: (nodeId?: DevelopmentId) => void;
   onNodesChanged?: () => void | Promise<void>;
+}
+
+interface ResourceEditorBoundaryProps {
+  resourceKey: DevelopmentId;
+  children: ReactNode;
+}
+
+interface ResourceEditorBoundaryState {
+  error?: string;
+}
+
+/** Prevents one standalone resource editor from blanking the whole Data Development workspace. */
+class ResourceEditorBoundary extends Component<
+  ResourceEditorBoundaryProps,
+  ResourceEditorBoundaryState
+> {
+  state: ResourceEditorBoundaryState = {};
+
+  static getDerivedStateFromError(error: unknown): ResourceEditorBoundaryState {
+    return {
+      error: error instanceof Error ? error.message : '资源编辑器发生未知错误',
+    };
+  }
+
+  componentDidUpdate(previous: ResourceEditorBoundaryProps) {
+    if (previous.resourceKey !== this.props.resourceKey && this.state.error) {
+      this.setState({ error: undefined });
+    }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-white px-6">
+        <div className="max-w-[520px] text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[#f5f5f6] text-[#98a2b3]">
+            <Boxes size={18} />
+          </div>
+          <div className="mt-3 text-[14px] font-semibold text-[#344054]">资源编辑器加载异常</div>
+          <div className="mt-1 text-[12px] leading-5 text-[#98a2b3]">{this.state.error}</div>
+          <Button
+            className="mt-4"
+            size="small"
+            icon={<RefreshCw size={13} />}
+            onClick={() => this.setState({ error: undefined })}
+          >
+            重新渲染
+          </Button>
+        </div>
+      </div>
+    );
+  }
 }
 
 export default function DevelopmentEditorWorkspace({
@@ -51,7 +104,9 @@ export default function DevelopmentEditorWorkspace({
   if (selectedResource.type === 'DATASET') {
     return (
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <DatasetNodeEditor node={selectedResource} onSaved={onNodesChanged} />
+        <ResourceEditorBoundary resourceKey={selectedResource.id}>
+          <DatasetNodeEditor node={selectedResource} onSaved={onNodesChanged} />
+        </ResourceEditorBoundary>
       </main>
     );
   }
@@ -59,7 +114,9 @@ export default function DevelopmentEditorWorkspace({
   if (selectedResource.type === 'DATA_SERVICE') {
     return (
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <DataServiceNodeEditor node={selectedResource} onSaved={onNodesChanged} />
+        <ResourceEditorBoundary resourceKey={selectedResource.id}>
+          <DataServiceNodeEditor node={selectedResource} onSaved={onNodesChanged} />
+        </ResourceEditorBoundary>
       </main>
     );
   }
