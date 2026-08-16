@@ -51,5 +51,4 @@ export interface DataServiceOverview {
 const PREFIX = '/api/v1/data-service/overview';
 
 export const fetchDataServiceOverview = (range: DataServiceOverviewRange) =>
-  HttpUtils.get<DataServiceOverview>(`${PREFIX}?range=${encodeURIComponent(range)}`)
-    as Promise<CommonApiResponse<DataServiceOverview>>;
+  HttpUtils.get<DataServiceOverview>(`${PREFIX}?range=${encodeURIComponent(range)}`);
