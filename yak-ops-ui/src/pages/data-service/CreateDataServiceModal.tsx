@@ -2,9 +2,9 @@ import { Form, Input, InputNumber, Modal, Select, Switch, Tag, message } from 'a
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DATA_DEVELOPMENT_RELEASE_SOURCE,
+  fetchDataServices,
   fetchDataServiceSources,
   publishDataService,
-  type DataServiceApi,
   type DataServicePublishPayload,
   type DataServiceSource,
   type DataSourceOption,
@@ -12,7 +12,6 @@ import {
 
 interface CreateDataServiceModalProps {
   open: boolean;
-  services: DataServiceApi[];
   dataSources: DataSourceOption[];
   onCancel: () => void;
   onCreated: () => Promise<void> | void;
@@ -24,22 +23,16 @@ const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 
 
 export default function CreateDataServiceModal({
   open,
-  services,
   dataSources,
   onCancel,
   onCreated,
 }: CreateDataServiceModalProps) {
   const [form] = Form.useForm<CreateFormValues>();
   const [sources, setSources] = useState<DataServiceSource[]>([]);
+  const [publishedRefs, setPublishedRefs] = useState<Set<string>>(new Set());
   const [sourceLoading, setSourceLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedRef, setSelectedRef] = useState<string>();
-
-  const publishedRefs = useMemo(() => new Set(
-    services
-      .filter((item) => item.sourceType === DATA_DEVELOPMENT_RELEASE_SOURCE && item.sourceRef)
-      .map((item) => item.sourceRef as string),
-  ), [services]);
 
   const selectedSource = useMemo(
     () => sources.find((item) => item.sourceRef === selectedRef),
@@ -69,13 +62,26 @@ export default function CreateDataServiceModal({
     }
   }, []);
 
+  const loadPublishedRefs = useCallback(async () => {
+    try {
+      const response = await fetchDataServices();
+      setPublishedRefs(new Set(
+        (response.data || [])
+          .filter((item) => item.sourceType === DATA_DEVELOPMENT_RELEASE_SOURCE && item.sourceRef)
+          .map((item) => item.sourceRef as string),
+      ));
+    } catch (error: any) {
+      message.error(error?.message || '加载已发布 API 状态失败');
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     form.resetFields();
     form.setFieldsValue({ maxRows: 1000, timeoutSeconds: 30, enabled: false });
     setSelectedRef(undefined);
-    void loadSources();
-  }, [form, loadSources, open]);
+    void Promise.all([loadSources(), loadPublishedRefs()]);
+  }, [form, loadPublishedRefs, loadSources, open]);
 
   const selectSource = (sourceRef?: string) => {
     setSelectedRef(sourceRef);
