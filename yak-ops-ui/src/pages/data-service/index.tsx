@@ -15,7 +15,6 @@ import {
   ArrowLeft,
   Copy,
   MoreHorizontal,
-  RefreshCw,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -378,7 +377,7 @@ export default function DataServicePage() {
       <Button type="primary" loading={loading} className="!h-8 !px-4" onClick={submitSearch}>搜索</Button>
     </div>
   ) : (
-    <div className="w-full max-w-[720px] rounded-xl bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,.04)] ring-1 ring-[#e4e7ec]">
+    <div className="w-full max-w-[720px] rounded-xl bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,.04)] ring-1 ring-[#e4e7ec] [&_.ant-input-affix-wrapper]:!bg-white [&_.ant-input-affix-wrapper>.ant-input]:!bg-white">
       <div className="flex items-center gap-2">
         <Search size={17} className="ml-2 shrink-0 text-[#98a2b3]" />
         <Input
@@ -403,23 +402,12 @@ export default function DataServicePage() {
     <div className="min-h-[calc(100vh-64px)] bg-white">
       {searching ? (
         <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <Button type="text" icon={<ArrowLeft size={15} />} onClick={resetSearch} className="!-ml-2 !px-2" />
-              <div className="min-w-0">
-                <h1 className="m-0 text-[17px] font-semibold text-[#161823]">API 集市</h1>
-                <div className="mt-1 truncate text-[12px] text-[#98a2b3]">搜索 “{submittedKeyword}”</div>
-              </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <Button type="text" icon={<ArrowLeft size={15} />} onClick={resetSearch} className="!-ml-2 !px-2" />
+            <div className="min-w-0">
+              <h1 className="m-0 text-[17px] font-semibold text-[#161823]">API 集市</h1>
+              <div className="mt-1 truncate text-[12px] text-[#98a2b3]">搜索 “{submittedKeyword}”</div>
             </div>
-            <Button
-              type="text"
-              icon={<RefreshCw size={14} />}
-              loading={loading}
-              onClick={() => void load()}
-              className="bg-[#f5f6f7]"
-            >
-              刷新
-            </Button>
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-4">
@@ -456,16 +444,6 @@ export default function DataServicePage() {
               <h1 className="m-0 mb-4 text-[20px] font-semibold tracking-[-.01em] text-[#161823]">API 集市</h1>
               {searchControls()}
             </div>
-
-            <Button
-              type="text"
-              icon={<RefreshCw size={14} />}
-              loading={loading}
-              onClick={() => void load()}
-              className="!absolute !right-5 !top-4 !bg-white/75 !text-[#667085]"
-            >
-              刷新
-            </Button>
           </div>
 
           <div className="mx-auto w-full max-w-[1480px] px-5 pb-10 pt-7">
