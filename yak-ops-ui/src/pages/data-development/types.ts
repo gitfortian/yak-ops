@@ -1,4 +1,6 @@
 export type DevelopmentTaskType = 'SQL' | 'SHELL' | 'HTTP' | 'PYTHON';
+export type DevelopmentOutputNodeType = 'DATASET' | 'DATA_SERVICE';
+export type DevelopmentNodeType = DevelopmentTaskType | DevelopmentOutputNodeType;
 export type DevelopmentId = string;
 
 export interface DevelopmentDirectory {
@@ -15,10 +17,9 @@ export interface CreateDevelopmentDirectoryPayload {
   name: string;
 }
 
-export interface DevelopmentNode {
+export interface DevelopmentResourceNodeBase {
   id: DevelopmentId;
   name: string;
-  type: DevelopmentTaskType;
   projectId?: DevelopmentId | null;
   directoryId?: DevelopmentId | null;
   configured: boolean;
@@ -28,12 +29,48 @@ export interface DevelopmentNode {
   pendingPublish?: boolean;
 }
 
+/** Authoring/executable node managed by the existing task editor lifecycle. */
+export interface DevelopmentNode extends DevelopmentResourceNodeBase {
+  type: DevelopmentTaskType;
+}
+
+/** Phase-2 output node shell. Business configuration arrives in later phases. */
+export interface DevelopmentOutputNode extends DevelopmentResourceNodeBase {
+  type: DevelopmentOutputNodeType;
+}
+
+export type DevelopmentResourceNode = DevelopmentNode | DevelopmentOutputNode;
+
 export interface CreateDevelopmentNodePayload {
   name: string;
-  type: DevelopmentTaskType;
+  type: DevelopmentNodeType;
   projectId?: DevelopmentId;
   /** 省略表示数据开发根目录。 */
   directoryId?: DevelopmentId;
+}
+
+export interface DevelopmentGraphNodeLayout {
+  nodeId: DevelopmentId;
+  x: number;
+  y: number;
+}
+
+export interface DevelopmentGraphEdge {
+  sourceNodeId: DevelopmentId;
+  targetNodeId: DevelopmentId;
+}
+
+export interface DevelopmentGraph {
+  projectId?: DevelopmentId | null;
+  nodes: DevelopmentGraphNodeLayout[];
+  edges: DevelopmentGraphEdge[];
+  updateTime?: string | null;
+}
+
+export interface SaveDevelopmentGraphPayload {
+  projectId?: DevelopmentId;
+  nodes: DevelopmentGraphNodeLayout[];
+  edges: DevelopmentGraphEdge[];
 }
 
 export interface DevelopmentTaskDefinition {

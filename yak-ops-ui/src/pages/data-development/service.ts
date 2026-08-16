@@ -6,12 +6,13 @@ import type {
   CreateDevelopmentDirectoryPayload,
   CreateDevelopmentNodePayload,
   DevelopmentDirectory,
+  DevelopmentGraph,
   DevelopmentId,
-  DevelopmentNode,
   DevelopmentReleaseDetail,
   DevelopmentReleasePage,
   DevelopmentReleaseQuery,
   DevelopmentReleaseSummary,
+  DevelopmentResourceNode,
   DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
   DevelopmentTaskExecutionDetail,
@@ -20,12 +21,14 @@ import type {
   DevelopmentTaskRevision,
   DevelopmentTaskRevisionSummary,
   DevelopmentTaskRunResult,
+  SaveDevelopmentGraphPayload,
   SaveDevelopmentTaskDraftPayload,
 } from './types';
 
 const DATA_DEVELOPMENT_API = '/api/v1/data-development';
 const DIRECTORY_API = `${DATA_DEVELOPMENT_API}/directories`;
 const NODE_API = `${DATA_DEVELOPMENT_API}/nodes`;
+const GRAPH_API = `${DATA_DEVELOPMENT_API}/graph`;
 const EXECUTION_API = `${DATA_DEVELOPMENT_API}/executions`;
 const RELEASE_API = `${DATA_DEVELOPMENT_API}/releases`;
 const EDITOR_SETTINGS_API = `${DATA_DEVELOPMENT_API}/editor-settings`;
@@ -48,23 +51,35 @@ export const deleteDevelopmentDirectory = (
   id: DevelopmentId,
 ): Promise<ApiResponse<boolean>> => HttpUtils.delete<boolean>(`${DIRECTORY_API}/${id}`);
 
-export const listDevelopmentNodes = (): Promise<ApiResponse<DevelopmentNode[]>> =>
-  HttpUtils.get<DevelopmentNode[]>(NODE_API);
+export const listDevelopmentNodes = (): Promise<ApiResponse<DevelopmentResourceNode[]>> =>
+  HttpUtils.get<DevelopmentResourceNode[]>(NODE_API);
 
 export const createDevelopmentNode = (
   payload: CreateDevelopmentNodePayload,
-): Promise<ApiResponse<DevelopmentNode>> =>
-  HttpUtils.post<DevelopmentNode>(NODE_API, payload);
+): Promise<ApiResponse<DevelopmentResourceNode>> =>
+  HttpUtils.post<DevelopmentResourceNode>(NODE_API, payload);
 
 export const renameDevelopmentNode = (
   id: DevelopmentId,
   name: string,
-): Promise<ApiResponse<DevelopmentNode>> =>
-  HttpUtils.put<DevelopmentNode>(`${NODE_API}/${id}/name`, { name });
+): Promise<ApiResponse<DevelopmentResourceNode>> =>
+  HttpUtils.put<DevelopmentResourceNode>(`${NODE_API}/${id}/name`, { name });
 
 export const deleteDevelopmentNode = (
   id: DevelopmentId,
 ): Promise<ApiResponse<boolean>> => HttpUtils.delete<boolean>(`${NODE_API}/${id}`);
+
+export const getDevelopmentGraph = (
+  projectId?: DevelopmentId,
+): Promise<ApiResponse<DevelopmentGraph>> =>
+  HttpUtils.get<DevelopmentGraph>(
+    `${GRAPH_API}${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`,
+  );
+
+export const saveDevelopmentGraph = (
+  payload: SaveDevelopmentGraphPayload,
+): Promise<ApiResponse<DevelopmentGraph>> =>
+  HttpUtils.put<DevelopmentGraph>(GRAPH_API, payload);
 
 export const getDevelopmentTaskDraft = (
   nodeId: DevelopmentId,

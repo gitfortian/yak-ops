@@ -27,7 +27,7 @@ import {
 import type {
   DevelopmentDirectory,
   DevelopmentId,
-  DevelopmentNode,
+  DevelopmentResourceNode,
   DevelopmentTaskType,
 } from './types';
 
@@ -72,7 +72,7 @@ const responseData = <T,>(
 export default function DataDevelopmentPage() {
   const { currentProject } = useSecurityProject();
   const [directories, setDirectories] = useState<DevelopmentDirectory[]>([]);
-  const [nodes, setNodes] = useState<DevelopmentNode[]>([]);
+  const [nodes, setNodes] = useState<DevelopmentResourceNode[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeKeyword, setTreeKeyword] = useState('');
   const [selectedNodeKey, setSelectedNodeKey] = useState<TreeNodeKey>();
@@ -403,6 +403,7 @@ export default function DataDevelopmentPage() {
             onNodeFocus={(nodeId) =>
               setSelectedNodeKey(nodeId ? nodeKey(nodeId) : undefined)
             }
+            onNodesChanged={loadTree}
           />
         </div>
 

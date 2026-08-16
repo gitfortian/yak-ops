@@ -72,12 +72,14 @@ public class DevelopmentNodeService {
     }
     DevelopmentNode renamed = repository.findById(id)
         .orElseThrow(() -> new IllegalStateException("节点重命名成功但无法重新读取：" + id));
-    taskCatalogService.updateSourceMetadata(
-        TaskAssetSource.DATA_DEVELOPMENT,
-        String.valueOf(renamed.id()),
-        renamed.projectId(),
-        renamed.name(),
-        renamed.type());
+    if (isProcessingType(renamed.type())) {
+      taskCatalogService.updateSourceMetadata(
+          TaskAssetSource.DATA_DEVELOPMENT,
+          String.valueOf(renamed.id()),
+          renamed.projectId(),
+          renamed.name(),
+          renamed.type());
+    }
     return renamed;
   }
 
@@ -100,9 +102,11 @@ public class DevelopmentNodeService {
     if (!repository.deleteById(id)) {
       throw new IllegalStateException("节点删除失败：" + id);
     }
-    taskCatalogService.offlineSource(
-        TaskAssetSource.DATA_DEVELOPMENT,
-        String.valueOf(current.id()));
+    if (isProcessingType(current.type())) {
+      taskCatalogService.offlineSource(
+          TaskAssetSource.DATA_DEVELOPMENT,
+          String.valueOf(current.id()));
+    }
   }
 
   private String normalizeName(String name) {
@@ -120,10 +124,15 @@ public class DevelopmentNodeService {
   private String normalizeType(String type) {
     if (type == null || type.isBlank()) throw new IllegalArgumentException("节点类型不能为空");
     String normalized = type.trim().toUpperCase(java.util.Locale.ROOT);
-    DevelopmentNodeType nodeType = DevelopmentNodeType.tryParse(normalized)
-        .filter(DevelopmentNodeType::isProcessing)
-        .orElseThrow(() -> new IllegalArgumentException("不支持的数据开发节点类型：" + normalized));
-    return nodeType.name();
+    return DevelopmentNodeType.tryParse(normalized)
+        .orElseThrow(() -> new IllegalArgumentException("不支持的数据开发节点类型：" + normalized))
+        .name();
+  }
+
+  private boolean isProcessingType(String type) {
+    return DevelopmentNodeType.tryParse(type)
+        .map(DevelopmentNodeType::isProcessing)
+        .orElse(false);
   }
 
   private Long normalizeProjectId(Long projectId) {
