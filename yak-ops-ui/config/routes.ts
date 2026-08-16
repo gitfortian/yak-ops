@@ -3,6 +3,7 @@ import { appRoutes } from '../src/config/navigation';
 const fullscreenRouteIds = new Set([
   'dashboard-new',
   'dashboard-editor',
+  'dashboard-viewer',
   'workflow-definition-editor',
 ]);
 
