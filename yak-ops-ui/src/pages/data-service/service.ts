@@ -13,6 +13,47 @@ export interface DataSourceOption {
   dbType?: string;
 }
 
+export const DATA_DEVELOPMENT_RELEASE_SOURCE = 'DATA_DEVELOPMENT_RELEASE' as const;
+
+export interface DataServiceSource {
+  sourceType: string;
+  sourceRef: string;
+  name: string;
+  sourceKind: string;
+  status: string;
+  sourceRevisionId: number;
+  sourceRevisionNo: number;
+  dataSourceId: number;
+  timeoutSeconds?: number;
+  defaultPath: string;
+  updateTime?: string;
+}
+
+export interface DataServiceSourcePage {
+  records: DataServiceSource[];
+  total: number;
+  pageNo: number;
+  pageSize: number;
+}
+
+export interface DataServiceSourceQuery {
+  sourceType: string;
+  pageNo?: number;
+  pageSize?: number;
+  keyword?: string;
+}
+
+export interface DataServicePublishPayload {
+  sourceType: string;
+  sourceRef: string;
+  name?: string;
+  path?: string;
+  maxRows?: number;
+  timeoutSeconds?: number;
+  enabled?: boolean;
+  description?: string;
+}
+
 export type DataServiceAuthMode = 'NONE' | 'API_KEY';
 export type DataServiceSchemaType =
   | 'STRING'
@@ -174,6 +215,25 @@ const PREFIX = '/api/v1/data-service';
 export const fetchDataServices = () =>
   HttpUtils.get<DataServiceApi[]>(PREFIX) as Promise<CommonApiResponse<DataServiceApi[]>>;
 
+export const fetchDataServiceSources = ({
+  sourceType,
+  pageNo = 1,
+  pageSize = 100,
+  keyword,
+}: DataServiceSourceQuery) => {
+  const query = [
+    `sourceType=${encodeURIComponent(sourceType)}`,
+    `pageNo=${pageNo}`,
+    `pageSize=${pageSize}`,
+    keyword ? `keyword=${encodeURIComponent(keyword)}` : undefined,
+  ].filter(Boolean).join('&');
+  return HttpUtils.get<DataServiceSourcePage>(`${PREFIX}/sources?${query}`) as Promise<CommonApiResponse<DataServiceSourcePage>>;
+};
+
+export const publishDataService = (payload: DataServicePublishPayload) =>
+  HttpUtils.post<DataServiceApi>(`${PREFIX}/publish`, payload) as Promise<CommonApiResponse<DataServiceApi>>;
+
+/** Legacy manual SQL creation path retained for historical services during the migration period. */
 export const createDataService = (payload: DataServiceSavePayload) =>
   HttpUtils.post<DataServiceApi>(PREFIX, payload) as Promise<CommonApiResponse<DataServiceApi>>;
 
