@@ -1,28 +1,33 @@
+import { BRAND_CSS_VARIABLES } from '@/styles/brand';
 import { history } from '@umijs/max';
 import {
   Button,
-  Empty,
   Input,
   InputNumber,
   Select,
   Spin,
   Table,
   Tag,
+  Tooltip,
   message,
   type TableColumnsType,
 } from 'antd';
 import {
-  Braces,
   ExternalLink,
-  FileText,
-  History,
-  Network,
+  FileCode2,
+  LoaderCircle,
   Play,
+  Redo2,
   RefreshCw,
   Rocket,
   Save,
-  Settings2,
+  Search,
+  Sparkles,
+  Undo2,
+  Wand2,
+  X,
 } from 'lucide-react';
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -42,21 +47,24 @@ import {
   syncDataServiceRuntime,
   type DataServicePublicationState,
 } from '../../data-service-runtime-publication';
-import type { DevelopmentId, DevelopmentResourceNode } from '../../types';
-import SqlMonacoEditor from '../../editors/sql/components/SqlMonacoEditor';
+import {
+  executeSqlEditorCommand,
+  type SqlEditorCommand,
+} from '../../editors/sql/commands/sqlEditorCommandBus';
+import SqlMonacoEditor, {
+  type SqlEditorPosition,
+} from '../../editors/sql/components/SqlMonacoEditor';
+import SqlMetadataContextToolbar from '../../editors/sql/metadata/SqlMetadataContextToolbar';
 import {
   hydrateSqlTaskConfig,
-  selectSqlDataSourceContext,
+  useSqlMetadataContext,
 } from '../../editors/sql/metadata/sqlMetadataContextStore';
-import {
-  listSqlDataSources,
-  type SqlDataSourceOption,
-} from '../../editors/sql/metadata/sqlMetadataService';
+import type { DevelopmentId, DevelopmentResourceNode } from '../../types';
 
 interface DataServiceNodeEditorProps {
   node: DevelopmentResourceNode;
   onSaved?: () => void | Promise<void>;
-  /** Kept temporarily for Workbench compatibility; standalone Data Service no longer opens a source SQL. */
+  /** Legacy workbench callback retained for API compatibility. */
   onOpenSourceNode?: (nodeId: DevelopmentId) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
@@ -77,11 +85,75 @@ const responseTypeOptions: { label: string; value: DataServiceContractType }[] =
   { label: 'OBJECT', value: 'OBJECT' },
 ];
 
-const formatTime = (value?: string | null) => value ? value.replace('T', ' ').slice(0, 19) : '-';
+const panelItems: Array<{ key: RightPanelKey; label: string }> = [
+  { key: 'properties', label: '属性' },
+  { key: 'request', label: '请求参数' },
+  { key: 'response', label: '返回参数' },
+  { key: 'versions', label: '版本' },
+  { key: 'deployment', label: '部署' },
+];
+
+const DEFAULT_PANEL_WIDTH = 380;
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_WIDTH = 640;
+const PANEL_WIDTH_STORAGE_KEY = 'yak-data-development.data-service-right-panel-width';
+
+const defaultPosition: SqlEditorPosition = {
+  lineNumber: 1,
+  column: 1,
+  selectionLength: 0,
+};
+
+const iconButtonClassName =
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent';
+
+interface ToolbarButtonProps {
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}
+
+const ToolbarButton = ({ title, onClick, disabled, children }: ToolbarButtonProps) => (
+  <Tooltip title={title} mouseEnterDelay={0.35}>
+    <button
+      type="button"
+      aria-label={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={iconButtonClassName}
+    >
+      {children}
+    </button>
+  </Tooltip>
+);
+
+const ToolbarDivider = () => <span className="mx-1 h-4 w-px shrink-0 bg-[#e5e7eb]" />;
+
+const clampPanelWidth = (value: number) =>
+  Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, value));
+
+const initialPanelWidth = () => {
+  if (typeof window === 'undefined') return DEFAULT_PANEL_WIDTH;
+  const stored = Number(window.localStorage.getItem(PANEL_WIDTH_STORAGE_KEY));
+  return Number.isFinite(stored) && stored > 0
+    ? clampPanelWidth(stored)
+    : DEFAULT_PANEL_WIDTH;
+};
+
+const formatTime = (value?: string | null) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value.replace('T', ' ').slice(0, 19)
+    : date.toLocaleString('zh-CN', { hour12: false });
+};
+
 const normalizeId = (value: unknown): DevelopmentId => {
   if (value === undefined || value === null || String(value).trim() === '') return '0';
   return String(value);
 };
+
 const safeArray = <T,>(value: T[] | null | undefined): T[] =>
   Array.isArray(value) ? value.filter(Boolean) : [];
 
@@ -124,26 +196,20 @@ const normalizeContext = (
   };
 };
 
-const panelItems: Array<{ key: RightPanelKey; label: string; icon: typeof Settings2 }> = [
-  { key: 'properties', label: '属性', icon: Settings2 },
-  { key: 'request', label: '请求参数', icon: Braces },
-  { key: 'response', label: '返回参数', icon: FileText },
-  { key: 'versions', label: '版本', icon: History },
-  { key: 'deployment', label: '部署', icon: Rocket },
-];
-
 export default function DataServiceNodeEditor({
   node,
   onSaved,
   onDirtyChange,
 }: DataServiceNodeEditorProps) {
+  const metadataContext = useSqlMetadataContext(node.id);
   const dirtyChangeRef = useRef(onDirtyChange);
-  useEffect(() => { dirtyChangeRef.current = onDirtyChange; }, [onDirtyChange]);
+  const savedDataSourceIdRef = useRef<DevelopmentId>();
+
+  useEffect(() => {
+    dirtyChangeRef.current = onDirtyChange;
+  }, [onDirtyChange]);
 
   const [context, setContext] = useState<DevelopmentDataServiceNodeContext>();
-  const [dataSourceId, setDataSourceId] = useState<DevelopmentId>();
-  const [dataSources, setDataSources] = useState<SqlDataSourceOption[]>([]);
-  const [dataSourceLoading, setDataSourceLoading] = useState(false);
   const [sqlText, setSqlText] = useState('');
   const [serviceName, setServiceName] = useState(node.name);
   const [path, setPath] = useState(`/query/${node.id}`);
@@ -162,23 +228,34 @@ export default function DataServiceNodeEditor({
   const [publicationError, setPublicationError] = useState<string>();
   const [publicationLoading, setPublicationLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
-  const [rightPanelKey, setRightPanelKey] = useState<RightPanelKey>('properties');
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [activePanel, setActivePanel] = useState<RightPanelKey>();
+  const [panelWidth, setPanelWidth] = useState(initialPanelWidth);
+  const [resizing, setResizing] = useState(false);
+  const [position, setPosition] = useState<SqlEditorPosition>(defaultPosition);
 
   const setDirtyState = useCallback((next: boolean) => {
     setDirty(next);
     dirtyChangeRef.current?.(next);
   }, []);
+
   const markDirty = useCallback(() => setDirtyState(true), [setDirtyState]);
 
   useEffect(() => () => dirtyChangeRef.current?.(false), []);
 
+  const invalidateContract = useCallback(() => {
+    setParameters([]);
+    setResponseFields([]);
+  }, []);
+
   const applyContext = useCallback((raw: DevelopmentDataServiceNodeContext) => {
     const next = normalizeContext(raw, node);
     const definition = next.draft.definition;
-    const nextDataSourceId = definition.dataSourceId !== '0' ? definition.dataSourceId : undefined;
+    const nextDataSourceId = definition.dataSourceId !== '0'
+      ? definition.dataSourceId
+      : undefined;
+
+    savedDataSourceIdRef.current = nextDataSourceId;
     setContext(next);
-    setDataSourceId(nextDataSourceId);
     setSqlText(definition.sql || '');
     setServiceName(definition.serviceName || next.nodeName);
     setPath(definition.path || `/query/${next.nodeId}`);
@@ -204,6 +281,7 @@ export default function DataServiceNodeEditor({
       setPublicationError(undefined);
       return;
     }
+
     setPublicationLoading(true);
     setPublicationError(undefined);
     try {
@@ -241,57 +319,30 @@ export default function DataServiceNodeEditor({
   }, [load]);
 
   useEffect(() => {
-    let active = true;
-    setDataSourceLoading(true);
-    listSqlDataSources()
-      .then((values) => {
-        if (active) setDataSources(values || []);
-      })
-      .catch((error) => {
-        if (active) message.error(error instanceof Error ? error.message : '查询数据源失败');
-      })
-      .finally(() => {
-        if (active) setDataSourceLoading(false);
-      });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!dataSourceId || !dataSources.length) return;
-    const selected = dataSources.find((item) => item.value === dataSourceId);
-    if (!selected) return;
-    selectSqlDataSourceContext(node.id, {
-      id: selected.value,
-      name: selected.label,
-      dbType: selected.dbType,
-    });
-  }, [dataSourceId, dataSources, node.id]);
-
-  const dataSourceOptions = useMemo(() => dataSources.map((item) => ({
-    value: item.value,
-    label: `${item.label}${item.dbType ? ` · ${item.dbType}` : ''}`,
-  })), [dataSources]);
-
-  const activeDataSource = useMemo(
-    () => dataSources.find((item) => item.value === dataSourceId),
-    [dataSourceId, dataSources],
-  );
-
-  const invalidateContract = useCallback(() => {
-    setParameters([]);
-    setResponseFields([]);
-  }, []);
-
-  const changeDataSource = (nextDataSourceId: DevelopmentId) => {
-    const selected = dataSources.find((item) => item.value === nextDataSourceId);
-    setDataSourceId(nextDataSourceId);
-    selectSqlDataSourceContext(node.id, selected ? {
-      id: selected.value,
-      name: selected.label,
-      dbType: selected.dbType,
-    } : { id: nextDataSourceId });
+    if (!context || loading) return;
+    if (metadataContext.dataSourceId === savedDataSourceIdRef.current) return;
     invalidateContract();
     markDirty();
+  }, [context, invalidateContract, loading, markDirty, metadataContext.dataSourceId]);
+
+  const metadataPath = useMemo(
+    () => [
+      metadataContext.dataSourceName || (
+        metadataContext.dataSourceId ? `DS ${metadataContext.dataSourceId}` : undefined
+      ),
+      metadataContext.database,
+      metadataContext.schema,
+    ].filter(Boolean).join(' / '),
+    [
+      metadataContext.dataSourceId,
+      metadataContext.dataSourceName,
+      metadataContext.database,
+      metadataContext.schema,
+    ],
+  );
+
+  const execute = (command: SqlEditorCommand, fallback: string) => {
+    if (!executeSqlEditorCommand(node.id, command)) message.info(fallback);
   };
 
   const changeSql = (value: string) => {
@@ -301,7 +352,9 @@ export default function DataServiceNodeEditor({
   };
 
   const preview = async () => {
+    const dataSourceId = metadataContext.dataSourceId;
     if (!dataSourceId || !sqlText.trim() || previewing) return;
+
     setPreviewing(true);
     try {
       const result = await previewDevelopmentDataServiceNode(
@@ -321,24 +374,27 @@ export default function DataServiceNodeEditor({
 
       setParameters(nextParameters.map((item) => {
         const previous = oldParameters.get(item.name.toLowerCase());
-        return previous ? {
-          ...item,
-          type: previous.type === 'OBJECT' ? 'STRING' : previous.type,
-          required: true,
-          description: previous.description,
-          example: previous.example,
-        } : { ...item, required: true };
+        return previous
+          ? {
+              ...item,
+              type: previous.type === 'OBJECT' ? 'STRING' : previous.type,
+              required: true,
+              description: previous.description,
+              example: previous.example,
+            }
+          : { ...item, required: true };
       }));
       setResponseFields(nextResponses.map((item) => {
         const previous = oldResponses.get(item.name.toLowerCase());
-        return previous ? {
-          ...item,
-          type: previous.type,
-          description: previous.description,
-          example: previous.example,
-        } : item;
+        return previous
+          ? {
+              ...item,
+              type: previous.type,
+              description: previous.description,
+              example: previous.example,
+            }
+          : item;
       }));
-      if (result?.dataSourceId) setDataSourceId(normalizeId(result.dataSourceId));
       markDirty();
       message.success(
         `Contract 已发现 · ${nextParameters.length} 个参数 / ${nextResponses.length} 个响应字段`,
@@ -351,7 +407,9 @@ export default function DataServiceNodeEditor({
   };
 
   const save = async () => {
+    const dataSourceId = metadataContext.dataSourceId;
     if (!dataSourceId || !sqlText.trim() || saving) return;
+
     setSaving(true);
     try {
       const next = await saveDevelopmentDataServiceDraft(node.id, {
@@ -393,6 +451,7 @@ export default function DataServiceNodeEditor({
       message.warning('当前有未保存修改，请先保存草稿再发布版本');
       return;
     }
+
     setPublishing(true);
     try {
       const revision = await publishDevelopmentDataServiceNode(node.id, draftRevision);
@@ -409,6 +468,7 @@ export default function DataServiceNodeEditor({
   const deployOrSync = async () => {
     const latestPublished = context?.latestPublishedRevision;
     if (!latestPublished || deploying) return;
+
     setDeploying(true);
     try {
       if (publicationState?.published) {
@@ -575,86 +635,69 @@ export default function DataServiceNodeEditor({
               : `Runtime DS R${runtimeRevisionNo || '-'} · 已停用`;
 
   const propertiesPanel = (
-    <div className="space-y-5">
-      <div>
-        <div className="text-[13px] font-semibold text-[#344054]">API 属性</div>
-        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          Data Service Node 独立拥有数据源、查询 SQL 和 API Contract，发布时一起冻结到 DS Revision。
-        </div>
+    <div className="text-[12px] leading-5">
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-4 gap-y-4">
+        <div className="text-[#667085]">API 名称：</div>
+        <Input
+          size="small"
+          value={serviceName}
+          maxLength={200}
+          onChange={(event) => { setServiceName(event.target.value); markDirty(); }}
+        />
+        <div className="text-[#667085]">请求方式：</div>
+        <div className="text-[#344054]">GET</div>
+        <div className="text-[#667085]">API Path：</div>
+        <Input
+          size="small"
+          value={path}
+          maxLength={255}
+          onChange={(event) => { setPath(event.target.value); markDirty(); }}
+        />
+        <div className="text-[#667085]">最大行数：</div>
+        <InputNumber
+          size="small"
+          min={1}
+          max={10000}
+          value={maxRows}
+          className="w-full"
+          onChange={(value) => { setMaxRows(Number(value || 1000)); markDirty(); }}
+        />
+        <div className="text-[#667085]">超时（秒）：</div>
+        <InputNumber
+          size="small"
+          min={1}
+          max={3600}
+          value={timeoutSeconds}
+          className="w-full"
+          onChange={(value) => { setTimeoutSeconds(Number(value || 30)); markDirty(); }}
+        />
+        <div className="self-start pt-1 text-[#667085]">描述：</div>
+        <Input.TextArea
+          autoSize={{ minRows: 3, maxRows: 6 }}
+          maxLength={2000}
+          value={description}
+          placeholder="说明这个数据服务提供什么能力"
+          onChange={(event) => { setDescription(event.target.value); markDirty(); }}
+        />
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <div className="mb-1.5 text-[11px] font-medium text-[#667085]">API 名称</div>
-          <Input
-            size="small"
-            value={serviceName}
-            maxLength={200}
-            onChange={(event) => { setServiceName(event.target.value); markDirty(); }}
-          />
-        </div>
-        <div>
-          <div className="mb-1.5 text-[11px] font-medium text-[#667085]">API Path</div>
-          <Input
-            size="small"
-            addonBefore="GET"
-            value={path}
-            maxLength={255}
-            onChange={(event) => { setPath(event.target.value); markDirty(); }}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="mb-1.5 text-[11px] font-medium text-[#667085]">最大返回行数</div>
-            <InputNumber
-              size="small"
-              min={1}
-              max={10000}
-              value={maxRows}
-              className="w-full"
-              onChange={(value) => { setMaxRows(Number(value || 1000)); markDirty(); }}
-            />
-          </div>
-          <div>
-            <div className="mb-1.5 text-[11px] font-medium text-[#667085]">超时时间（秒）</div>
-            <InputNumber
-              size="small"
-              min={1}
-              max={3600}
-              value={timeoutSeconds}
-              className="w-full"
-              onChange={(value) => { setTimeoutSeconds(Number(value || 30)); markDirty(); }}
-            />
-          </div>
-        </div>
-        <div>
-          <div className="mb-1.5 text-[11px] font-medium text-[#667085]">描述</div>
-          <Input.TextArea
-            rows={4}
-            maxLength={2000}
-            value={description}
-            placeholder="说明这个数据服务提供什么能力"
-            onChange={(event) => { setDescription(event.target.value); markDirty(); }}
-          />
-        </div>
-      </div>
-
-      <div className="border-t border-[#eef0f2] pt-4 text-[11px] leading-6 text-[#667085]">
-        <div className="flex justify-between"><span>Draft</span><span>#{context?.draft?.draftRevision || 0}</span></div>
-        <div className="flex justify-between"><span>最新 DS Revision</span><span>{latestPublished ? `R${latestPublished.revisionNo}` : '尚未发布'}</span></div>
-        <div className="flex justify-between gap-3"><span>数据源</span><span className="truncate text-right">{activeDataSource?.label || (dataSourceId ? `#${dataSourceId}` : '-')}</span></div>
-        <div className="flex justify-between"><span>查询 SQL</span><span>{sqlText.trim() ? '已配置' : '未填写'}</span></div>
-      </div>
+      <dl className="m-0 mt-5 grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-3 border-t border-[#eef0f2] pt-4">
+        <dt className="text-[#667085]">Draft：</dt>
+        <dd className="m-0 text-[#344054]">#{context?.draft?.draftRevision || 0}</dd>
+        <dt className="text-[#667085]">发布版本：</dt>
+        <dd className="m-0 text-[#344054]">{latestPublished ? `DS R${latestPublished.revisionNo}` : '尚未发布'}</dd>
+        <dt className="text-[#667085]">数据源：</dt>
+        <dd className="m-0 break-all text-[#344054]">{metadataPath || '未选择数据源'}</dd>
+        <dt className="text-[#667085]">查询 SQL：</dt>
+        <dd className="m-0 text-[#344054]">{sqlText.trim() ? '已配置' : '未填写'}</dd>
+      </dl>
     </div>
   );
 
   const requestPanel = (
-    <div className="space-y-3">
-      <div>
-        <div className="text-[13px] font-semibold text-[#344054]">请求参数</div>
-        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          参数来自当前 SQL 中的 <span className="font-mono">:name</span> 命名参数。v1 统一为必填参数。
-        </div>
+    <div>
+      <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
+        参数来自当前 SQL 中的 <span className="font-mono">:name</span> 命名参数，v1 统一为必填参数。
       </div>
       <Table<DevelopmentDataServiceParameter>
         rowKey="name"
@@ -669,12 +712,9 @@ export default function DataServiceNodeEditor({
   );
 
   const responsePanel = (
-    <div className="space-y-3">
-      <div>
-        <div className="text-[13px] font-semibold text-[#344054]">返回参数</div>
-        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          通过当前数据源真实预览发现字段类型，可补充描述与示例后固化到 DS Revision。
-        </div>
+    <div>
+      <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
+        通过当前数据源真实预览发现字段类型，可补充描述与示例后固化到 DS Revision。
       </div>
       <Table<DevelopmentDataServiceResponseField>
         rowKey={(record) => record.name}
@@ -689,71 +729,78 @@ export default function DataServiceNodeEditor({
   );
 
   const versionsPanel = (
-    <div>
-      <div className="text-[13px] font-semibold text-[#344054]">版本</div>
-      <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-        每个 DS Revision 都冻结当时的数据源、SQL 和 Contract；发布不会自动更新 Runtime。
-      </div>
-      <div className="mt-4 space-y-2">
-        {context?.revisions?.length ? context.revisions.map((revision) => (
-          <div key={revision.id} className="border border-[#e5e7eb] px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold text-[#344054]">DS R{revision.revisionNo}</span>
-                {latestPublished?.id === revision.id ? <Tag bordered={false}>最新</Tag> : null}
+    <div className="space-y-3 text-[12px]">
+      {context?.revisions?.length ? (
+        <div className="space-y-1.5">
+          {context.revisions.map((revision, index) => (
+            <div
+              key={revision.id}
+              className="flex w-full items-center gap-2 rounded-[3px] border border-[#eaecf0] px-2.5 py-2"
+            >
+              <FileCode2 size={14} className="shrink-0 text-[#667085]" strokeWidth={1.7} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-[#344054]">DS R{revision.revisionNo}</span>
+                  {index === 0 ? (
+                    <span className="rounded bg-[#f2f4f7] px-1.5 py-0.5 text-[10px] text-[#667085]">最新</span>
+                  ) : null}
+                </div>
+                <div className="mt-0.5 truncate text-[10px] text-[#98a2b3]">
+                  {formatTime(revision.createTime)} · Draft #{revision.sourceDraftRevision}
+                </div>
               </div>
-              <span className="text-[10px] text-[#98a2b3]">{formatTime(revision.createTime)}</span>
             </div>
-            <div className="mt-1 text-[11px] text-[#667085]">
-              Draft #{revision.sourceDraftRevision}
-            </div>
-          </div>
-        )) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未发布 DS Revision" />
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-8 text-center text-[11px] leading-5 text-[#98a2b3]">
+          暂无已发布版本
+          <div className="mt-1">保存草稿后点击顶部发布按钮生成 DS R1。</div>
+        </div>
+      )}
     </div>
   );
 
   const deploymentPanel = (
-    <div className="space-y-4">
-      <div>
-        <div className="text-[13px] font-semibold text-[#344054]">Runtime 部署</div>
-        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          发布与部署分离。先生成 DS Revision，再显式部署或同步到数据服务 Runtime。
-        </div>
-      </div>
+    <div className="text-[12px] leading-5">
+      <dl className="m-0 grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-4">
+        <dt className="text-[#667085]">最新发布：</dt>
+        <dd className="m-0 text-[#344054]">{latestPublished ? `DS R${latestPublished.revisionNo}` : '尚未发布'}</dd>
+        <dt className="text-[#667085]">Runtime：</dt>
+        <dd className="m-0 text-[#344054]">{runtimeStatus}</dd>
+        <dt className="text-[#667085]">Endpoint：</dt>
+        <dd className="m-0 break-all font-mono text-[11px] text-[#344054]">{publicationState?.detail?.runtimePath || '-'}</dd>
+      </dl>
 
-      <div className="border border-[#e5e7eb] bg-[#fafafa] px-3 py-3 text-[11px] leading-6 text-[#667085]">
-        <div className="flex justify-between"><span>最新发布</span><span>{latestPublished ? `DS R${latestPublished.revisionNo}` : '尚未发布'}</span></div>
-        <div className="flex justify-between"><span>Runtime</span><span className="text-right text-[#344054]">{runtimeStatus}</span></div>
-        {publicationState?.detail?.runtimePath ? (
-          <div className="flex justify-between gap-3"><span>Endpoint</span><span className="truncate font-mono text-[#344054]">{publicationState.detail.runtimePath}</span></div>
+      <div className="mt-5 border-t border-[#eef0f2] pt-4">
+        <Button
+          block
+          type="primary"
+          icon={<Rocket size={14} />}
+          disabled={!latestPublished}
+          loading={deploying}
+          onClick={() => void deployOrSync()}
+        >
+          {publicationState?.published ? '同步最新 Revision' : '部署 Runtime'}
+        </Button>
+        {publicationState?.published ? (
+          <Button
+            block
+            className="mt-2"
+            icon={<ExternalLink size={14} />}
+            onClick={() => history.push('/data-service')}
+          >
+            打开 API 服务
+          </Button>
+        ) : null}
+        {publicationError ? (
+          <div className="mt-3 text-[11px] leading-5 text-[#b42318]">{publicationError}</div>
         ) : null}
       </div>
-
-      <Button
-        block
-        type="primary"
-        icon={<Rocket size={14} />}
-        disabled={!latestPublished}
-        loading={deploying}
-        onClick={() => void deployOrSync()}
-      >
-        {publicationState?.published ? '同步最新 Revision' : '部署 Runtime'}
-      </Button>
-      {publicationState?.published ? (
-        <Button block icon={<ExternalLink size={14} />} onClick={() => history.push('/data-service')}>
-          打开 API 服务
-        </Button>
-      ) : null}
-      {publicationError ? (
-        <div className="text-[11px] leading-5 text-[#b42318]">{publicationError}</div>
-      ) : null}
     </div>
   );
 
-  const panelContent: Record<RightPanelKey, React.ReactNode> = {
+  const panelContent: Record<RightPanelKey, ReactNode> = {
     properties: propertiesPanel,
     request: requestPanel,
     response: responsePanel,
@@ -761,13 +808,46 @@ export default function DataServiceNodeEditor({
     deployment: deploymentPanel,
   };
 
-  const selectRightPanel = (key: RightPanelKey) => {
-    if (rightPanelKey === key && rightPanelOpen) {
-      setRightPanelOpen(false);
+  const refreshActivePanel = () => {
+    if (activePanel === 'deployment') {
+      void loadPublicationState(Boolean(latestPublished), true);
       return;
     }
-    setRightPanelKey(key);
-    setRightPanelOpen(true);
+    void load();
+  };
+
+  const handleResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!activePanel) return;
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = panelWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const resize = (moveEvent: PointerEvent) => {
+      setPanelWidth(clampPanelWidth(startWidth + startX - moveEvent.clientX));
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      const nextWidth = clampPanelWidth(startWidth + startX - upEvent.clientX);
+      setPanelWidth(nextWidth);
+      setResizing(false);
+      window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(nextWidth));
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', resize);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+
+    window.addEventListener('pointermove', resize);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   if (loading) {
@@ -792,103 +872,65 @@ export default function DataServiceNodeEditor({
     );
   }
 
-  const canPreview = Boolean(dataSourceId && sqlText.trim());
+  const canPreview = Boolean(metadataContext.dataSourceId && sqlText.trim());
   const canSave = canPreview && dirty;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-2.5">
-        <div className="flex items-center gap-1">
-          <Button type="text" size="small" icon={<RefreshCw size={14} />} onClick={() => void load()}>
-            刷新
-          </Button>
-          <Button
-            type="text"
-            size="small"
-            icon={<Play size={14} />}
-            loading={previewing}
-            disabled={!canPreview}
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-2">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <ToolbarButton
+            title={previewing ? '正在预览 Contract' : '预览 Contract'}
+            disabled={!canPreview || previewing}
             onClick={() => void preview()}
           >
-            预览 Contract
-          </Button>
-          <Button
-            type="text"
-            size="small"
-            icon={<Save size={14} />}
-            loading={saving}
-            disabled={!canSave}
+            {previewing ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} strokeWidth={1.8} />}
+          </ToolbarButton>
+          <ToolbarDivider />
+          <ToolbarButton
+            title="保存草稿"
+            disabled={!canSave || saving || publishing}
             onClick={() => void save()}
           >
-            保存草稿
-          </Button>
-          <Button
-            type="text"
-            size="small"
-            icon={<Rocket size={14} />}
-            loading={publishing}
-            disabled={!context.draft.draftRevision || dirty}
+            {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} strokeWidth={1.8} />}
+          </ToolbarButton>
+          <ToolbarButton
+            title="发布版本"
+            disabled={!context.draft.draftRevision || dirty || saving || publishing}
             onClick={() => void publish()}
           >
-            发布版本
-          </Button>
-          {latestPublished ? (
-            <Button
-              type="text"
-              size="small"
-              icon={<Network size={14} />}
-              loading={deploying}
-              onClick={() => void deployOrSync()}
-            >
-              {publicationState?.published ? '同步 Runtime' : '部署 Runtime'}
-            </Button>
-          ) : null}
+            {publishing ? <LoaderCircle size={15} className="animate-spin" /> : <Rocket size={15} strokeWidth={1.8} />}
+          </ToolbarButton>
+          <ToolbarDivider />
+          <ToolbarButton title="撤销" onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}>
+            <Undo2 size={15} strokeWidth={1.8} />
+          </ToolbarButton>
+          <ToolbarButton title="重做" onClick={() => execute('redo', 'SQL 编辑器尚未就绪')}>
+            <Redo2 size={15} strokeWidth={1.8} />
+          </ToolbarButton>
+          <ToolbarButton title="查找" onClick={() => execute('find', 'SQL 编辑器尚未就绪')}>
+            <Search size={15} strokeWidth={1.8} />
+          </ToolbarButton>
+          <ToolbarDivider />
+          <ToolbarButton title="格式化 SQL" onClick={() => execute('format', 'SQL 编辑器尚未就绪')}>
+            <Wand2 size={15} strokeWidth={1.8} />
+          </ToolbarButton>
+          <ToolbarButton title="触发智能提示" onClick={() => execute('suggest', 'SQL 编辑器尚未就绪')}>
+            <Sparkles size={15} strokeWidth={1.8} />
+          </ToolbarButton>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 text-[10px] text-[#98a2b3]">
-          <span>Draft #{context.draft.draftRevision || 0}</span>
-          <span className="text-[#d0d5dd]">|</span>
-          <span>{latestPublished ? `DS R${latestPublished.revisionNo}` : '尚未发布'}</span>
-          <span className="text-[#d0d5dd]">|</span>
-          <span className={publicationState?.updateAvailable ? 'text-[#b54708]' : ''}>{runtimeStatus}</span>
-        </div>
+        <SqlMetadataContextToolbar nodeId={node.id} />
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-          <div className="shrink-0 border-b border-[#eef0f2] px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-[72px] shrink-0 text-[12px] font-medium text-[#344054]">数据源</div>
-              <Select
-                value={dataSourceId}
-                options={dataSourceOptions}
-                placeholder="选择数据源"
-                className="min-w-0 flex-1"
-                size="small"
-                showSearch
-                loading={dataSourceLoading}
-                optionFilterProp="label"
-                onChange={changeDataSource}
-              />
-            </div>
-            <div className="ml-[84px] mt-1.5 text-[10px] text-[#98a2b3]">
-              Data Service Node 独立持有数据源和 SQL，不再关联其他 SQL 节点。
-            </div>
-          </div>
-
-          <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#eef0f2] px-3">
-            <div className="text-[12px] font-semibold text-[#344054]">查询 SQL</div>
-            <div className="flex items-center gap-2 text-[10px] text-[#98a2b3]">
-              {activeDataSource ? <span>{activeDataSource.label}</span> : dataSourceId ? <span>DataSource #{dataSourceId}</span> : null}
-              <span>可编辑</span>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-hidden bg-white">
+          <div className="min-h-0 flex-1">
             <SqlMonacoEditor
-              id={`data-service-${node.id}`}
+              id={String(node.id)}
               value={sqlText}
               onChange={changeSql}
+              onPositionChange={setPosition}
             />
           </div>
 
@@ -902,36 +944,103 @@ export default function DataServiceNodeEditor({
                   未保存
                 </span>
               ) : null}
+              <span
+                className={[
+                  'max-w-[260px] truncate',
+                  metadataContext.dataSourceId ? 'text-[#667085]' : 'text-[#b0b7c3]',
+                ].join(' ')}
+                title={metadataPath || '未选择数据源'}
+              >
+                {metadataPath || '未选择数据源'}
+              </span>
             </div>
-            <span>{responseFields.length ? `${responseFields.length} 个响应字段` : 'Contract 待预览'}</span>
+            <div className="flex shrink-0 items-center gap-3">
+              <span>{responseFields.length ? `${responseFields.length} 个响应字段` : 'Contract 待预览'}</span>
+              <span>
+                Draft #{context.draft.draftRevision || 0}
+                {latestPublished ? ` · DS R${latestPublished.revisionNo}` : ''}
+              </span>
+              {position.selectionLength > 0 ? <span>已选择 {position.selectionLength} 字符</span> : null}
+              <span>Ln {position.lineNumber}, Col {position.column}</span>
+            </div>
           </div>
         </section>
 
-        <aside className="flex shrink-0 border-l border-[#e8e9ec] bg-white">
-          {rightPanelOpen ? (
-            <div className="w-[380px] min-w-0 overflow-auto border-r border-[#eef0f2] p-4">
-              {panelContent[rightPanelKey]}
+        <aside className="flex shrink-0 bg-white" style={BRAND_CSS_VARIABLES}>
+          <div
+            className={[
+              'relative h-full shrink-0',
+              resizing ? 'transition-none' : 'transition-[width] duration-200 ease-out',
+            ].join(' ')}
+            style={{ width: activePanel ? panelWidth : 0 }}
+          >
+            {activePanel ? (
+              <div
+                role="separator"
+                aria-label="调整右侧面板宽度"
+                aria-orientation="vertical"
+                onPointerDown={handleResizeStart}
+                className="group absolute inset-y-0 left-0 z-30 w-3 -translate-x-1/2 cursor-col-resize touch-none"
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#e5e7eb] transition-[width,background-color] duration-150 group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:w-[2px] group-active:bg-[rgba(254,44,85,1)]" />
+              </div>
+            ) : null}
+
+            <div className="h-full overflow-hidden">
+              <div className="flex h-full flex-col bg-white" style={{ width: panelWidth }}>
+                <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-4">
+                  <span className="text-[13px] font-semibold text-[#30323b]">
+                    {panelItems.find((item) => item.key === activePanel)?.label}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      title="刷新"
+                      onClick={refreshActivePanel}
+                      className="flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#475467] transition-colors hover:bg-[#f5f5f6]"
+                    >
+                      <RefreshCw size={13} strokeWidth={1.8} />
+                      刷新
+                    </button>
+                    <button
+                      type="button"
+                      title="关闭"
+                      aria-label="关闭右侧面板"
+                      onClick={() => setActivePanel(undefined)}
+                      className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
+                    >
+                      <X size={14} strokeWidth={1.8} />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                  {activePanel ? panelContent[activePanel] : null}
+                </div>
+              </div>
             </div>
-          ) : null}
-          <div className="flex w-9 shrink-0 flex-col items-stretch bg-[#fafafa]">
-            {panelItems.map((item) => {
-              const Icon = item.icon;
-              const active = rightPanelOpen && rightPanelKey === item.key;
+          </div>
+
+          <div className="flex h-full w-9 shrink-0 flex-col border-l border-[#e5e7eb] bg-white">
+            {panelItems.map((item, index) => {
+              const active = activePanel === item.key;
               return (
                 <button
                   key={item.key}
                   type="button"
                   title={item.label}
-                  onClick={() => selectRightPanel(item.key)}
+                  aria-label={`${active ? '收起' : '展开'}${item.label}`}
+                  aria-expanded={active}
+                  onClick={() => setActivePanel((current) => current === item.key ? undefined : item.key)}
                   className={[
-                    'flex min-h-[84px] flex-col items-center justify-center gap-1.5 border-b border-[#eef0f2] text-[10px] transition-colors [writing-mode:vertical-rl]',
+                    'relative flex min-h-[72px] w-9 shrink-0 items-center justify-center border-b border-[#e5e7eb] py-3 text-[12px] leading-5 transition-[color,background-color,opacity]',
+                    '[writing-mode:vertical-rl] [letter-spacing:3px]',
+                    index === 0 ? 'border-t' : '',
                     active
-                      ? 'bg-white font-medium text-[#344054]'
-                      : 'text-[#667085] hover:bg-white hover:text-[#344054]',
+                      ? 'text-[var(--yak-brand-color)] opacity-100 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-[var(--yak-brand-color)]'
+                      : 'text-[#475467] opacity-70 hover:bg-[#f7f8fa] hover:text-[#344054] hover:opacity-100',
                   ].join(' ')}
                 >
-                  <Icon size={13} strokeWidth={1.8} className="[writing-mode:horizontal-tb]" />
-                  <span>{item.label}</span>
+                  {item.label}
                 </button>
               );
             })}
