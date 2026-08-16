@@ -1,7 +1,28 @@
 import { history, useParams } from '@umijs/max';
-import { Button, Empty, Space, Spin, Table, Tag, Tooltip, message, type TableColumnsType } from 'antd';
-import { ArrowLeft, Copy, FileText, Gauge, KeyRound, RefreshCw, ServerCog } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Button,
+  ConfigProvider,
+  Empty,
+  Spin,
+  Table,
+  Tabs,
+  Tooltip,
+  message,
+  type TableColumnsType,
+} from 'antd';
+import {
+  ArrowLeft,
+  Copy,
+  FileText,
+  Gauge,
+  KeyRound,
+  RefreshCw,
+  ServerCog,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+
+import { BRAND_THEME } from '@/styles/brand';
+
 import DataServiceAccessModal from '../DataServiceAccessModal';
 import DataServiceDocsModal from '../DataServiceDocsModal';
 import DataServiceRuntimeModal from '../DataServiceRuntimeModal';
@@ -21,17 +42,13 @@ import {
   type DataSourceOption,
 } from '../service';
 
-const SECTION_ITEMS = [
-  { key: 'basic', label: '基本信息' },
-  { key: 'access', label: 'API Key' },
-  { key: 'runtime', label: 'Runtime' },
-  { key: 'logs', label: '调用记录' },
-] as const;
+type DetailTabKey = 'overview' | 'access' | 'runtime' | 'logs';
 
-type SectionKey = (typeof SECTION_ITEMS)[number]['key'];
+const formatTime = (value?: string | null) =>
+  value ? value.replace('T', ' ').slice(0, 19) : '-';
 
-const formatTime = (value?: string | null) => value ? value.replace('T', ' ').slice(0, 19) : '-';
-const percent = (value?: number) => `${Math.round((value || 0) * 1000) / 10}%`;
+const percent = (value?: number) =>
+  `${Math.round((value || 0) * 1000) / 10}%`;
 
 const callerLabel = (record: DataServiceCallLog) => {
   if (record.callerType === 'CONSOLE') return '控制台测试';
@@ -43,90 +60,113 @@ const callerLabel = (record: DataServiceCallLog) => {
 const latestActivity = (runtime?: DataServiceRuntimeStatus) => {
   const values = [runtime?.lastSuccessAt, runtime?.lastFailureAt].filter(Boolean) as string[];
   if (!values.length) return '-';
-  return formatTime(values.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]);
+  return formatTime(
+    values.sort((left, right) =>
+      new Date(right).getTime() - new Date(left).getTime())[0],
+  );
 };
 
-const Metric = ({ label, value }: { label: string; value: string | number }) => (
-  <div className="min-w-0 px-4 py-3 first:pl-0">
-    <div className="text-[11px] text-[#98a2b3]">{label}</div>
-    <div className="mt-1 truncate text-[18px] font-semibold text-[#1d2939]">{value}</div>
+const MetricTile = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) => (
+  <div className="rounded-md bg-[#f7f7f8] px-4 py-4">
+    <div className="text-[12px] leading-4 text-[#7c828c]">{label}</div>
+    <div className="mt-2 truncate text-[20px] font-semibold leading-7 tracking-[-0.02em] text-[#161823]">
+      {value}
+    </div>
   </div>
 );
 
-const InfoItem = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="min-w-0 border-b border-[#f0f1f2] py-3 last:border-b-0">
-    <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 text-[12px]">
-      <span className="text-[#98a2b3]">{label}</span>
-      <div className="min-w-0 text-[#344054]">{children}</div>
+const InfoField = ({
+  label,
+  children,
+  className = '',
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) => (
+  <div className={className}>
+    <div className="text-[12px] text-[#8a8f98]">{label}</div>
+    <div className="mt-2 min-w-0 break-words text-[14px] font-medium text-[#161823]">
+      {children}
     </div>
   </div>
 );
 
 const SectionCard = ({
-  id,
   title,
-  action,
+  extra,
   children,
+  className = '',
 }: {
-  id: SectionKey;
-  title: string;
-  action?: ReactNode;
+  title: ReactNode;
+  extra?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) => (
-  <section id={`api-detail-${id}`} className="scroll-mt-6 rounded-xl border border-[#eaecf0] bg-white">
-    <div className="flex min-h-[52px] items-center justify-between gap-3 border-b border-[#f0f1f2] px-5">
-      <div className="text-[13px] font-semibold text-[#30323b]">{title}</div>
-      {action}
+  <section className={`min-w-0 rounded-lg bg-white ${className}`}>
+    <div className="flex min-h-[52px] items-center justify-between gap-4 px-5">
+      <div className="text-[15px] font-semibold text-[#161823]">{title}</div>
+      {extra}
     </div>
-    <div className="px-5 py-4">{children}</div>
+    {children}
   </section>
 );
 
-function SectionNavigator({ activeKey, onSelect }: { activeKey: SectionKey; onSelect: (key: SectionKey) => void }) {
-  return (
-    <nav className="rounded-xl bg-white px-3 py-4" aria-label="API 详情快速定位">
-      <div className="mb-3 px-2 text-[12px] font-semibold text-[#344054]">快速定位</div>
-      <div className="relative">
-        <span aria-hidden className="absolute bottom-4 left-[13px] top-4 w-px bg-[#e4e7ec]" />
-        <div className="space-y-1">
-          {SECTION_ITEMS.map((item) => {
-            const active = item.key === activeKey;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => onSelect(item.key)}
-                className={[
-                  'group relative flex w-full items-center gap-3 rounded-lg border-0 px-2 py-2 text-left transition-colors',
-                  active ? 'bg-[rgba(254,44,85,.07)]' : 'bg-transparent hover:bg-[#f7f8fa]',
-                ].join(' ')}
-              >
-                <span
-                  className={[
-                    'relative z-10 h-[11px] w-[11px] shrink-0 rounded-full border transition-all',
-                    active
-                      ? 'border-[var(--yak-brand-color)] bg-[var(--yak-brand-color)] shadow-[0_0_0_3px_rgba(254,44,85,.10)]'
-                      : 'border-[#d0d5dd] bg-[#98a2b3]',
-                  ].join(' ')}
-                />
-                <span className={active
-                  ? 'text-[12px] font-semibold text-[var(--yak-brand-color)]'
-                  : 'text-[12px] text-[#667085] group-hover:text-[#344054]'}>
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </nav>
-  );
-}
+const ApiIllustration = () => (
+  <div className="relative flex h-[116px] w-[116px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+    <svg
+      width="78"
+      height="78"
+      viewBox="0 0 78 78"
+      fill="none"
+      aria-hidden="true"
+      className="relative z-10 -translate-y-1"
+      shapeRendering="crispEdges"
+    >
+      <rect x="16" y="14" width="4" height="4" fill="#161823" />
+      <rect x="12" y="18" width="4" height="4" fill="#161823" />
+      <rect x="20" y="18" width="4" height="4" fill="#161823" />
+      <rect x="16" y="22" width="4" height="4" fill="#161823" />
+
+      <rect x="58" y="18" width="4" height="4" fill="#FE2C55" />
+      <rect x="54" y="22" width="4" height="4" fill="#FE2C55" />
+      <rect x="62" y="22" width="4" height="4" fill="#FE2C55" />
+      <rect x="58" y="26" width="4" height="4" fill="#FE2C55" />
+
+      <rect x="23" y="29" width="32" height="4" fill="#161823" />
+      <rect x="19" y="33" width="4" height="27" fill="#161823" />
+      <rect x="55" y="33" width="4" height="27" fill="#161823" />
+      <rect x="23" y="60" width="32" height="4" fill="#161823" />
+
+      <rect x="23" y="33" width="32" height="27" fill="#F5F6F8" />
+      <rect x="23" y="33" width="32" height="8" fill="#FFFFFF" />
+      <rect x="23" y="41" width="32" height="4" fill="#E3E7EC" />
+      <rect x="23" y="49" width="32" height="11" fill="#E8EBEF" />
+
+      <rect x="27" y="36" width="4" height="4" fill="#FE2C55" />
+      <rect x="34" y="36" width="4" height="4" fill="#AEB4BF" />
+      <rect x="41" y="36" width="4" height="4" fill="#AEB4BF" />
+
+      <rect x="29" y="52" width="20" height="4" fill="#161823" />
+      <rect x="33" y="56" width="12" height="4" fill="#FE2C55" />
+
+      <rect x="25" y="64" width="8" height="3" fill="#161823" />
+      <rect x="45" y="64" width="8" height="3" fill="#161823" />
+    </svg>
+
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[46px] bg-gradient-to-b from-transparent via-black/10 to-black/25" />
+  </div>
+);
 
 export default function DataServiceDetailPage() {
   const params = useParams<{ id?: string }>();
   const apiId = Number(params.id || 0);
-  const pageRootRef = useRef<HTMLDivElement>(null);
 
   const [service, setService] = useState<DataServiceApi>();
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
@@ -136,7 +176,7 @@ export default function DataServiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const [activeSection, setActiveSection] = useState<SectionKey>('basic');
+  const [activeTab, setActiveTab] = useState<DetailTabKey>('overview');
   const [docsOpen, setDocsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
@@ -146,16 +186,27 @@ export default function DataServiceDetailPage() {
       setLoading(false);
       return;
     }
+
     quiet ? setRefreshing(true) : setLoading(true);
+
     try {
-      const [servicesResponse, dataSourceResponse, runtimeResponse, keyResponse, logResponse] = await Promise.all([
+      const [
+        servicesResponse,
+        dataSourceResponse,
+        runtimeResponse,
+        keyResponse,
+        logResponse,
+      ] = await Promise.all([
         fetchDataServices(),
         fetchDataSourceOptions(),
         fetchDataServiceRuntime(apiId),
         fetchDataServiceKeys(apiId),
         fetchDataServiceLogs(),
       ]);
-      setService((servicesResponse.data || []).find((item) => Number(item.id) === apiId));
+
+      setService(
+        (servicesResponse.data || []).find((item) => Number(item.id) === apiId),
+      );
       setDataSources(dataSourceResponse.data || []);
       setRuntime(runtimeResponse.data);
       setKeys(keyResponse.data || []);
@@ -168,58 +219,35 @@ export default function DataServiceDetailPage() {
     }
   }, [apiId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const sourceManaged = service?.sourceType === DATA_SERVICE_NODE_SOURCE;
   const legacySqlRelease = service?.sourceType === LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE;
 
   const dataSourceName = useMemo(() => {
     if (!service?.dataSourceId) return '-';
-    return dataSources.find((item) => String(item.value) === String(service.dataSourceId))?.label
-      || `#${service.dataSourceId}`;
+    return dataSources.find(
+      (item) => String(item.value) === String(service.dataSourceId),
+    )?.label || `#${service.dataSourceId}`;
   }, [dataSources, service?.dataSourceId]);
 
   const serviceLogs = useMemo(
-    () => logs.filter((item) => Number(item.apiId) === apiId).slice(0, 50),
+    () => logs
+      .filter((item) => Number(item.apiId) === apiId)
+      .slice(0, 50),
     [apiId, logs],
   );
-  const activeKeys = useMemo(() => keys.filter((item) => item.enabled).length, [keys]);
 
-  const updateActiveSection = useCallback(() => {
-    const container = pageRootRef.current;
-    if (!container) return;
-    const threshold = container.getBoundingClientRect().top + 150;
-    let next: SectionKey = SECTION_ITEMS[0].key;
-    SECTION_ITEMS.forEach((item) => {
-      const element = document.getElementById(`api-detail-${item.key}`);
-      if (element && element.getBoundingClientRect().top <= threshold) next = item.key;
-    });
-    setActiveSection((current) => current === next ? current : next);
-  }, []);
-
-  useEffect(() => {
-    const container = pageRootRef.current;
-    if (!container || loading) return undefined;
-    const onScroll = () => window.requestAnimationFrame(updateActiveSection);
-    container.addEventListener('scroll', onScroll, { passive: true });
-    updateActiveSection();
-    return () => container.removeEventListener('scroll', onScroll);
-  }, [loading, updateActiveSection]);
-
-  const locate = (key: SectionKey) => {
-    const container = pageRootRef.current;
-    const element = document.getElementById(`api-detail-${key}`);
-    if (!container || !element) return;
-    const top = container.scrollTop
-      + element.getBoundingClientRect().top
-      - container.getBoundingClientRect().top
-      - 24;
-    setActiveSection(key);
-    container.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
-  };
+  const activeKeys = useMemo(
+    () => keys.filter((item) => item.enabled).length,
+    [keys],
+  );
 
   const copyEndpoint = async () => {
     if (!service?.runtimePath) return;
+
     try {
       await navigator.clipboard.writeText(service.runtimePath);
       message.success('Endpoint 已复制');
@@ -230,11 +258,14 @@ export default function DataServiceDetailPage() {
 
   const updateOnline = async () => {
     if (!service || !sourceManaged) return;
+
     setUpdating(true);
     try {
       const response = await republishDataService(service.id);
       const revisionNo = response.data?.sourceRevisionNo;
-      message.success(revisionNo ? `已更新上线到 DS R${revisionNo}` : '已更新上线');
+      message.success(
+        revisionNo ? `已更新上线到 DS R${revisionNo}` : '已更新上线',
+      );
       await load(true);
     } catch (error: any) {
       message.error(error?.message || '更新上线失败');
@@ -251,7 +282,11 @@ export default function DataServiceDetailPage() {
       render: (_, record) => (
         <div>
           <div className="text-[12px] text-[#475467]">{callerLabel(record)}</div>
-          {record.apiKeyPrefix ? <div className="mt-0.5 font-mono text-[10px] text-[#98a2b3]">{record.apiKeyPrefix}••••</div> : null}
+          {record.apiKeyPrefix ? (
+            <div className="mt-0.5 font-mono text-[10px] text-[#98a2b3]">
+              {record.apiKeyPrefix}••••
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -259,28 +294,50 @@ export default function DataServiceDetailPage() {
       title: '状态',
       dataIndex: 'success',
       width: 76,
-      render: (value: boolean) => <span className={value ? 'text-[#475467]' : 'text-[var(--yak-brand-color)]'}>{value ? '成功' : '失败'}</span>,
+      render: (value: boolean) => (
+        <span className={value ? 'text-[#475467]' : 'text-[var(--yak-brand-color)]'}>
+          {value ? '成功' : '失败'}
+        </span>
+      ),
     },
-    { title: '耗时', dataIndex: 'durationMs', width: 88, render: (value) => `${value ?? 0} ms` },
+    {
+      title: '耗时',
+      dataIndex: 'durationMs',
+      width: 88,
+      render: (value) => `${value ?? 0} ms`,
+    },
     { title: '行数', dataIndex: 'rowCount', width: 70 },
     {
       title: '错误',
       dataIndex: 'errorMessage',
       ellipsis: true,
       render: (value) => value
-        ? <Tooltip title={value}><span className="text-[#b42318]">{value}</span></Tooltip>
+        ? (
+          <Tooltip title={value}>
+            <span className="text-[#b42318]">{value}</span>
+          </Tooltip>
+        )
         : <span className="text-black/20">-</span>,
     },
-    { title: '时间', dataIndex: 'createTime', width: 150, render: formatTime },
+    {
+      title: '时间',
+      dataIndex: 'createTime',
+      width: 150,
+      render: formatTime,
+    },
   ];
 
   if (loading) {
-    return <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f8fa]"><Spin size="large" /></div>;
+    return (
+      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f7f8]">
+        <Spin size="large" />
+      </div>
+    );
   }
 
   if (!service) {
     return (
-      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f8fa]">
+      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f7f8]">
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到 API">
           <Button onClick={() => history.push('/data-service')}>返回 API 集市</Button>
         </Empty>
@@ -288,160 +345,317 @@ export default function DataServiceDetailPage() {
     );
   }
 
-  const sourceTypeLabel = sourceManaged ? 'Data Service Node' : legacySqlRelease ? 'Legacy SQL Release' : 'Legacy';
+  const sourceTypeLabel = sourceManaged
+    ? 'Data Service Node'
+    : legacySqlRelease
+      ? 'Legacy SQL Release'
+      : 'Legacy';
+
   const sourceRevisionLabel = sourceManaged
     ? `DS R${service.sourceRevisionNo || '-'}`
-    : legacySqlRelease ? `SQL v${service.sourceRevisionNo || '-'}` : '-';
+    : legacySqlRelease
+      ? `SQL v${service.sourceRevisionNo || '-'}`
+      : '-';
+
+  const overviewContent = (
+    <div className="grid gap-3 xl:grid-cols-2">
+      <SectionCard title="API 概览">
+        <div className="grid grid-cols-2 gap-3 p-5 md:grid-cols-3">
+          <MetricTile label="调用次数" value={runtime?.totalCalls || 0} />
+          <MetricTile label="成功率" value={percent(runtime?.successRate)} />
+          <MetricTile label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
+          <MetricTile label="P95" value={`${runtime?.p95DurationMs || 0} ms`} />
+          <MetricTile label="API Keys" value={keys.length} />
+          <MetricTile label="最近调用" value={latestActivity(runtime)} />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="服务信息">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-6 p-5 sm:grid-cols-2">
+          <InfoField label="请求方式">GET</InfoField>
+          <InfoField label="数据源">{dataSourceName}</InfoField>
+          <InfoField label="来源">{sourceTypeLabel}</InfoField>
+          <InfoField label="版本">{sourceRevisionLabel}</InfoField>
+          <InfoField label="最大返回行数">{service.maxRows || '-'}</InfoField>
+          <InfoField label="超时时间">
+            {service.timeoutSeconds ? `${service.timeoutSeconds}s` : '-'}
+          </InfoField>
+          <InfoField label="请求参数">{service.parameterNames?.length || 0} 个</InfoField>
+          <InfoField label="访问模式">
+            {service.authMode === 'API_KEY' ? 'API Key' : 'Public'}
+          </InfoField>
+          <InfoField label="Endpoint" className="sm:col-span-2">
+            <span className="font-mono text-[12px] font-normal text-[#475467]">
+              {service.runtimePath}
+            </span>
+          </InfoField>
+          {service.description ? (
+            <InfoField label="描述" className="sm:col-span-2">
+              <span className="font-normal text-[#475467]">{service.description}</span>
+            </InfoField>
+          ) : null}
+        </div>
+
+        {legacySqlRelease ? (
+          <div className="mx-5 mb-5 rounded-md bg-[#fffaeb] px-4 py-3 text-[12px] text-[#93370d]">
+            历史来源已冻结
+          </div>
+        ) : null}
+      </SectionCard>
+    </div>
+  );
+
+  const accessContent = (
+    <SectionCard
+      title="API Key"
+      extra={(
+        <Button
+          size="small"
+          icon={<KeyRound size={13} />}
+          onClick={() => setAccessOpen(true)}
+        >
+          管理 API Key
+        </Button>
+      )}
+    >
+      <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3">
+        <MetricTile
+          label="访问模式"
+          value={service.authMode === 'API_KEY' ? 'API Key' : 'Public'}
+        />
+        <MetricTile label="API Keys" value={keys.length} />
+        <MetricTile label="启用 Key" value={activeKeys} />
+      </div>
+    </SectionCard>
+  );
+
+  const runtimeContent = (
+    <div className="grid gap-3 xl:grid-cols-2">
+      <SectionCard
+        title="运行指标"
+        extra={(
+          <Button
+            size="small"
+            icon={<Gauge size={13} />}
+            onClick={() => setRuntimeOpen(true)}
+          >
+            Runtime 配置
+          </Button>
+        )}
+      >
+        <div className="grid grid-cols-2 gap-3 p-5">
+          <MetricTile label="调用总数" value={runtime?.totalCalls || 0} />
+          <MetricTile label="成功率" value={percent(runtime?.successRate)} />
+          <MetricTile label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
+          <MetricTile label="P95" value={`${runtime?.p95DurationMs || 0} ms`} />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="运行保护">
+        <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2">
+          <div className="rounded-md bg-[#f7f7f8] px-4 py-4">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
+              <RefreshCw size={13} /> 结果缓存
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-3 text-[12px]">
+              <InfoField label="状态">{runtime?.cacheEnabled ? '启用' : '关闭'}</InfoField>
+              <InfoField label="命中率">{percent(runtime?.cacheHitRate)}</InfoField>
+              <InfoField label="条目">{runtime?.cacheEntries || 0}</InfoField>
+            </div>
+          </div>
+
+          <div className="rounded-md bg-[#f7f7f8] px-4 py-4">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
+              <ServerCog size={13} /> 熔断器
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-3 text-[12px]">
+              <InfoField label="状态">{runtime?.circuitState || 'DISABLED'}</InfoField>
+              <InfoField label="拒绝">{runtime?.circuitRejected || 0}</InfoField>
+              <InfoField label="最近失败">{formatTime(runtime?.lastFailureAt)}</InfoField>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+    </div>
+  );
+
+  const logsContent = (
+    <SectionCard
+      title="调用记录"
+      extra={(
+        <Button
+          size="small"
+          type="text"
+          icon={<RefreshCw size={13} />}
+          loading={refreshing}
+          className="!text-[#667085]"
+          onClick={() => void load(true)}
+        >
+          刷新
+        </Button>
+      )}
+    >
+      <div className="p-5">
+        {serviceLogs.length ? (
+          <Table<DataServiceCallLog>
+            rowKey="id"
+            size="small"
+            columns={logColumns}
+            dataSource={serviceLogs}
+            pagination={false}
+            scroll={{ x: 760 }}
+            className="[&_.ant-table-container]:!rounded-md [&_.ant-table-container]:!border [&_.ant-table-container]:!border-solid [&_.ant-table-container]:!border-[#eceef1] [&_.ant-table-thead>tr>th]:!h-10 [&_.ant-table-thead>tr>th]:!bg-[#f7f7f8] [&_.ant-table-thead>tr>th]:!text-[12px] [&_.ant-table-tbody>tr>td]:!py-3 [&_.ant-table-tbody>tr>td]:!text-[12px]"
+          />
+        ) : (
+          <div className="flex min-h-[320px] items-center justify-center">
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用记录" />
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+
+  const tabItems: Array<{
+    key: DetailTabKey;
+    label: string;
+    children: ReactNode;
+  }> = [
+    { key: 'overview', label: '总览', children: overviewContent },
+    { key: 'access', label: 'API Key', children: accessContent },
+    { key: 'runtime', label: 'Runtime', children: runtimeContent },
+    { key: 'logs', label: '调用记录', children: logsContent },
+  ];
 
   return (
-    <>
-      <div className="h-[calc(100vh-64px)] overflow-hidden bg-[#f7f8fa] text-[#161823]">
-        <div ref={pageRootRef} className="h-full overflow-y-auto overscroll-contain scroll-smooth">
-          <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-6 px-6 pb-8 pt-6 max-xl:max-w-[1040px] xl:grid-cols-[minmax(0,1fr)_160px]">
-            <div className="min-w-0 space-y-4">
-              <header className="rounded-xl border border-[#eaecf0] bg-white px-5 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => history.push('/data-service')}
-                      className="mb-3 inline-flex items-center gap-1 border-0 bg-transparent p-0 text-[12px] text-[#667085] hover:text-[#344054]"
-                    >
-                      <ArrowLeft size={14} /> API 集市
-                    </button>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <h1 className="m-0 truncate text-[18px] font-semibold text-[#161823]">{service.name}</h1>
-                      <Tag bordered={false}>GET</Tag>
-                      <Tag bordered={false}>{service.enabled ? '运行中' : '已停用'}</Tag>
-                      {sourceManaged ? <Tag bordered={false}>DS R{service.sourceRevisionNo || '-'}</Tag> : null}
-                    </div>
-                    <div className="mt-2 truncate font-mono text-[11px] text-[#98a2b3]">{service.runtimePath}</div>
-                  </div>
+    <ConfigProvider theme={BRAND_THEME}>
+      <div className="min-h-[calc(100vh-64px)] bg-[#f7f7f8] text-[#161823]">
+        <div className="mx-auto w-full max-w-[1800px] px-4 pb-8 pt-0 lg:px-5">
+          <div className="mb-2 flex h-10 items-center">
+            <Button
+              type="text"
+              icon={<ArrowLeft size={15} />}
+              className="!h-9 !px-1 !text-[14px] !font-semibold !text-[#30343b]"
+              onClick={() => history.push('/data-service')}
+            >
+              返回 API 集市
+            </Button>
+          </div>
 
-                  <Space size={8} wrap>
-                    <Button icon={<Copy size={14} />} onClick={() => void copyEndpoint()}>复制 Endpoint</Button>
-                    <Button icon={<FileText size={14} />} onClick={() => setDocsOpen(true)}>OpenAPI / 调试</Button>
-                    <Button icon={<RefreshCw size={14} />} loading={refreshing} onClick={() => void load(true)}>刷新</Button>
-                  </Space>
-                </div>
-              </header>
+          <section className="rounded-lg bg-white">
+            <div className="grid min-h-[176px] gap-6 px-5 py-6 lg:px-6 xl:grid-cols-[116px_minmax(0,1fr)_340px] xl:items-center">
+              <ApiIllustration />
 
-              <SectionCard
-                id="basic"
-                title="基本信息"
-                action={sourceManaged ? (
-                  <Button size="small" loading={updating} onClick={() => void updateOnline()}>更新上线</Button>
-                ) : undefined}
-              >
-                <div className="grid grid-cols-4 divide-x divide-[#edf0f2] border-b border-[#edf0f2] pb-3">
-                  <Metric label="调用次数" value={runtime?.totalCalls || 0} />
-                  <Metric label="成功率" value={percent(runtime?.successRate)} />
-                  <Metric label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
-                  <Metric label="最近调用" value={latestActivity(runtime)} />
+              <div className="min-w-0">
+                <div className="max-w-[620px] truncate text-[14px] font-medium leading-5 text-[#161823]">
+                  {service.name}
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-x-8 lg:grid-cols-2">
-                  <div>
-                    <InfoItem label="Endpoint"><span className="break-all font-mono">{service.runtimePath}</span></InfoItem>
-                    <InfoItem label="数据源">{dataSourceName}</InfoItem>
-                    <InfoItem label="来源">{sourceTypeLabel}</InfoItem>
-                    <InfoItem label="版本">{sourceRevisionLabel}</InfoItem>
-                  </div>
-                  <div>
-                    <InfoItem label="最大返回行数">{service.maxRows || '-'}</InfoItem>
-                    <InfoItem label="超时时间">{service.timeoutSeconds ? `${service.timeoutSeconds}s` : '-'}</InfoItem>
-                    <InfoItem label="请求参数">{service.parameterNames?.length || 0} 个</InfoItem>
-                    <InfoItem label="描述">{service.description || '-'}</InfoItem>
-                  </div>
+                <div className="mt-1 text-[12px] leading-4 text-[#8a8f98]">
+                  {formatTime(service.updateTime || service.createTime)}
                 </div>
 
-                {legacySqlRelease ? (
-                  <div className="mt-3 rounded-lg bg-[#fffaeb] px-3 py-2 text-[11px] text-[#93370d]">历史来源已冻结</div>
-                ) : null}
-              </SectionCard>
-
-              <SectionCard
-                id="access"
-                title="API Key"
-                action={<Button size="small" icon={<KeyRound size={13} />} onClick={() => setAccessOpen(true)}>管理 API Key</Button>}
-              >
-                <div className="grid grid-cols-3 divide-x divide-[#edf0f2]">
-                  <Metric label="访问模式" value={service.authMode === 'API_KEY' ? 'API Key' : 'Public'} />
-                  <Metric label="API Keys" value={keys.length} />
-                  <Metric label="启用 Key" value={activeKeys} />
-                </div>
-              </SectionCard>
-
-              <SectionCard
-                id="runtime"
-                title="Runtime"
-                action={<Button size="small" icon={<Gauge size={13} />} onClick={() => setRuntimeOpen(true)}>Runtime 配置</Button>}
-              >
-                <div className="grid grid-cols-4 divide-x divide-[#edf0f2] border-b border-[#edf0f2] pb-3">
-                  <Metric label="调用总数" value={runtime?.totalCalls || 0} />
-                  <Metric label="成功率" value={percent(runtime?.successRate)} />
-                  <Metric label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
-                  <Metric label="P95" value={`${runtime?.p95DurationMs || 0} ms`} />
-                </div>
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-[#eaecf0] bg-[#fafafa] px-4 py-3">
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]"><RefreshCw size={13} /> 结果缓存</div>
-                    <div className="mt-3 grid grid-cols-3 gap-3 text-[11px] text-[#667085]">
-                      <div><div className="text-[#98a2b3]">状态</div><div className="mt-1">{runtime?.cacheEnabled ? '启用' : '关闭'}</div></div>
-                      <div><div className="text-[#98a2b3]">命中率</div><div className="mt-1">{percent(runtime?.cacheHitRate)}</div></div>
-                      <div><div className="text-[#98a2b3]">条目</div><div className="mt-1">{runtime?.cacheEntries || 0}</div></div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[#eaecf0] bg-[#fafafa] px-4 py-3">
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]"><ServerCog size={13} /> 熔断器</div>
-                    <div className="mt-3 grid grid-cols-3 gap-3 text-[11px] text-[#667085]">
-                      <div><div className="text-[#98a2b3]">状态</div><div className="mt-1">{runtime?.circuitState || 'DISABLED'}</div></div>
-                      <div><div className="text-[#98a2b3]">拒绝</div><div className="mt-1">{runtime?.circuitRejected || 0}</div></div>
-                      <div><div className="text-[#98a2b3]">最近失败</div><div className="mt-1 truncate">{formatTime(runtime?.lastFailureAt)}</div></div>
-                    </div>
-                  </div>
-                </div>
-              </SectionCard>
-
-              <SectionCard
-                id="logs"
-                title="调用记录"
-                action={<Button size="small" icon={<RefreshCw size={13} />} loading={refreshing} onClick={() => void load(true)}>刷新</Button>}
-              >
-                {serviceLogs.length ? (
-                  <Table<DataServiceCallLog>
-                    rowKey="id"
-                    size="small"
-                    columns={logColumns}
-                    dataSource={serviceLogs}
-                    pagination={false}
-                    scroll={{ x: 760 }}
+                <div className="mt-1 flex items-center gap-1 text-[11px] leading-4 text-[#667085]">
+                  <span
+                    className={[
+                      'inline-block h-[10px] w-[10px] rounded-full',
+                      service.enabled ? 'bg-[#20c77a]' : 'bg-[#b0b5bd]',
+                    ].join(' ')}
                   />
-                ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无调用记录" />}
-              </SectionCard>
-            </div>
+                  <span>{service.enabled ? '运行中' : '已停用'}</span>
+                </div>
 
-            <aside className="hidden xl:block">
-              <div className="sticky top-6">
-                <SectionNavigator activeKey={activeSection} onSelect={locate} />
+                <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px] leading-4 text-[#8a8f98]">
+                  <span className="font-mono">GET</span>
+                  <span className="text-[#d0d5dd]">·</span>
+                  <span className="truncate font-mono">{service.runtimePath}</span>
+                </div>
+
+                <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-[#8a8f98]">
+                  <span>{sourceTypeLabel}</span>
+                  <span className="text-[#d0d5dd]">·</span>
+                  <span>{sourceRevisionLabel}</span>
+                  <span className="text-[#d0d5dd]">·</span>
+                  <span className="truncate">{dataSourceName}</span>
+                </div>
               </div>
-            </aside>
+
+              <div className="min-w-0 xl:justify-self-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    icon={<FileText size={14} />}
+                    onClick={() => setDocsOpen(true)}
+                  >
+                    OpenAPI / 调试
+                  </Button>
+                  <Button
+                    icon={<Copy size={14} />}
+                    onClick={() => void copyEndpoint()}
+                  >
+                    复制 Endpoint
+                  </Button>
+                  <Tooltip title="刷新">
+                    <Button
+                      icon={<RefreshCw size={14} />}
+                      loading={refreshing}
+                      onClick={() => void load(true)}
+                    />
+                  </Tooltip>
+                </div>
+
+                {sourceManaged ? (
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      type="primary"
+                      loading={updating}
+                      onClick={() => void updateOnline()}
+                    >
+                      更新上线
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <div className="px-5 lg:px-6">
+            <Tabs
+              activeKey={activeTab}
+              onChange={(key) => setActiveTab(key as DetailTabKey)}
+              items={tabItems.map(({ key, label }) => ({ key, label }))}
+              className="[&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-nav]:!min-h-[50px] [&_.ant-tabs-tab]:!py-3.5"
+            />
+          </div>
+
+          <div className="mt-3">
+            {tabItems.find((item) => item.key === activeTab)?.children}
           </div>
         </div>
       </div>
 
-      <DataServiceDocsModal open={docsOpen} service={service} readOnly={sourceManaged} onCancel={() => setDocsOpen(false)} />
+      <DataServiceDocsModal
+        open={docsOpen}
+        service={service}
+        readOnly={sourceManaged}
+        onCancel={() => setDocsOpen(false)}
+      />
+
       <DataServiceAccessModal
         open={accessOpen}
         service={service}
         onCancel={() => setAccessOpen(false)}
-        onChanged={async () => { await load(true); }}
+        onChanged={async () => {
+          await load(true);
+        }}
       />
+
       <DataServiceRuntimeModal
         open={runtimeOpen}
         service={service}
-        onCancel={() => { setRuntimeOpen(false); void load(true); }}
+        onCancel={() => {
+          setRuntimeOpen(false);
+          void load(true);
+        }}
       />
-    </>
+    </ConfigProvider>
   );
 }
