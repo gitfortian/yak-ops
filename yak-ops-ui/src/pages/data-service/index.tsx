@@ -28,6 +28,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CreateDataServiceModal from './CreateDataServiceModal';
 import DataServiceDetailDrawer from './DataServiceDetailDrawer';
 import {
+  DATA_SERVICE_NODE_SOURCE,
+  LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE,
   deleteDataService,
   fetchDataServices,
   fetchDataSourceOptions,
@@ -89,6 +91,10 @@ export default function DataServicePage() {
   }, [dataSources]);
 
   const openEdit = (record: DataServiceApi) => {
+    if (record.sourceType === DATA_SERVICE_NODE_SOURCE) {
+      message.info('接口定义由数据开发 Data Service Node 管理，请发布新 DS Revision 后在详情中同步 Runtime');
+      return;
+    }
     setEditing(record);
     form.resetFields();
     form.setFieldsValue({
@@ -194,18 +200,31 @@ export default function DataServicePage() {
     {
       title: '来源',
       key: 'source',
-      width: 190,
-      render: (_, record) => record.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
-        <div>
-          <div className="font-medium text-[#475467]">数据开发 · SQL v{record.sourceRevisionNo || '-'}</div>
-          <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)} · Source #{record.sourceRef}</div>
-        </div>
-      ) : (
-        <div>
-          <Tag bordered={false}>Legacy</Tag>
-          <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)}</div>
-        </div>
-      ),
+      width: 220,
+      render: (_, record) => {
+        if (record.sourceType === DATA_SERVICE_NODE_SOURCE) {
+          return (
+            <div>
+              <div className="font-medium text-[#475467]">Data Service · DS R{record.sourceRevisionNo || '-'}</div>
+              <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)} · Node #{record.sourceRef}</div>
+            </div>
+          );
+        }
+        if (record.sourceType === LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE) {
+          return (
+            <div>
+              <div className="font-medium text-[#667085]">Legacy · SQL v{record.sourceRevisionNo || '-'}</div>
+              <div className="mt-1 text-[11px] text-black/35">冻结来源 · {dataSourceName(record.dataSourceId)}</div>
+            </div>
+          );
+        }
+        return (
+          <div>
+            <Tag bordered={false}>Legacy</Tag>
+            <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)}</div>
+          </div>
+        );
+      },
     },
     {
       title: '访问控制',
@@ -234,40 +253,43 @@ export default function DataServicePage() {
       key: 'actions',
       width: 140,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size={4}>
-          <Button
-            type="link"
-            size="small"
-            icon={<Eye size={14} />}
-            onClick={() => setDetailTarget(record)}
-          >
-            查看
-          </Button>
-          <Dropdown
-            trigger={['click']}
-            menu={{
-              items: [
-                { key: 'edit', icon: <Pencil size={14} />, label: '编辑服务配置' },
-                {
-                  key: 'toggle',
-                  icon: <Power size={14} />,
-                  label: record.enabled ? '停用服务' : '启用服务',
+      render: (_, record) => {
+        const sourceManaged = record.sourceType === DATA_SERVICE_NODE_SOURCE;
+        return (
+          <Space size={4}>
+            <Button
+              type="link"
+              size="small"
+              icon={<Eye size={14} />}
+              onClick={() => setDetailTarget(record)}
+            >
+              查看
+            </Button>
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: [
+                  ...(!sourceManaged ? [{ key: 'edit', icon: <Pencil size={14} />, label: '编辑服务配置' }] : []),
+                  {
+                    key: 'toggle',
+                    icon: <Power size={14} />,
+                    label: record.enabled ? '停用服务' : '启用服务',
+                  },
+                  { type: 'divider' as const },
+                  { key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除服务' },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'edit') openEdit(record);
+                  if (key === 'toggle') void toggleEnabled(record);
+                  if (key === 'delete') confirmRemove(record);
                 },
-                { type: 'divider' },
-                { key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除服务' },
-              ],
-              onClick: ({ key }) => {
-                if (key === 'edit') openEdit(record);
-                if (key === 'toggle') void toggleEnabled(record);
-                if (key === 'delete') confirmRemove(record);
-              },
-            }}
-          >
-            <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
-          </Dropdown>
-        </Space>
-      ),
+              }}
+            >
+              <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
+            </Dropdown>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -276,9 +298,9 @@ export default function DataServicePage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">管理由数据开发发布的 API Endpoint、访问控制、运行状态、文档和调用审计。</p>
+          <p className="mb-0 mt-1 text-sm text-black/45">部署数据开发已发布的 Data Service 资产，并管理启停、访问控制、Runtime 策略、文档投影和调用审计。</p>
         </div>
-        <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>新建 API</Button>
+        <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>部署 API</Button>
       </div>
 
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -300,7 +322,7 @@ export default function DataServicePage() {
         dataSource={filtered}
         columns={columns}
         pagination={false}
-        scroll={{ x: 1220 }}
+        scroll={{ x: 1240 }}
       />
 
       <CreateDataServiceModal
@@ -320,7 +342,7 @@ export default function DataServicePage() {
       />
 
       <Modal
-        title="编辑 API 服务"
+        title="编辑 Legacy API 服务"
         open={editorOpen}
         onCancel={() => {
           setEditorOpen(false);
@@ -333,21 +355,13 @@ export default function DataServicePage() {
         destroyOnHidden
       >
         <Form form={form} layout="vertical" className="pt-3">
-          {editing?.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
-            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-              <div className="font-medium text-[#344054]">来源：数据开发 SQL · v{editing.sourceRevisionNo || '-'}</div>
-              <div className="mt-1">数据源：{dataSourceName(editing.dataSourceId)} · Source #{editing.sourceRef || '-'}</div>
-              <div className="mt-1">SQL 与数据源属于上游 Runtime Snapshot；修改执行逻辑请回到数据开发发布新的 ONLINE Revision，再显式更新 API。</div>
+          <div className="mb-4 border border-[#fecdca] bg-[#fffbfa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
+            <div className="font-medium text-[#b42318]">Legacy Runtime Snapshot</div>
+            <div className="mt-1">
+              该 API 不属于新的 Data Service Node 发布链路，仅保留兼容编辑。新的 API 定义请在数据开发 Data Service Node 中维护。
             </div>
-          ) : (
-            <div className="mb-4 border border-[#fecdca] bg-[#fffbfa] px-4 py-3 text-[12px] leading-5 text-[#b42318]">
-              <div className="font-medium">Legacy 手工数据服务</div>
-              <div className="mt-1 text-[#667085]">
-                当前 SQL 与数据源快照已冻结并继续用于 Runtime。Data Service 不再提供 SQL 编辑能力；如需修改查询逻辑，请在数据开发中创建并发布 SQL，再创建新的 API 服务。
-              </div>
-              <div className="mt-1 text-[#667085]">当前数据源：{dataSourceName(editing?.dataSourceId)}</div>
-            </div>
-          )}
+            <div className="mt-1">当前数据源：{dataSourceName(editing?.dataSourceId)}</div>
+          </div>
 
           <div className="grid grid-cols-2 gap-x-4">
             <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>

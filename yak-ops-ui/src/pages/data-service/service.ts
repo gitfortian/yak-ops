@@ -13,7 +13,8 @@ export interface DataSourceOption {
   dbType?: string;
 }
 
-export const DATA_DEVELOPMENT_RELEASE_SOURCE = 'DATA_DEVELOPMENT_RELEASE' as const;
+export const DATA_SERVICE_NODE_SOURCE = 'DATA_DEVELOPMENT_DATA_SERVICE' as const;
+export const LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE = 'DATA_DEVELOPMENT_RELEASE' as const;
 
 export interface DataServiceSource {
   sourceType: string;
@@ -24,8 +25,10 @@ export interface DataServiceSource {
   sourceRevisionId: number;
   sourceRevisionNo: number;
   dataSourceId: number;
+  maxRows?: number;
   timeoutSeconds?: number;
   defaultPath: string;
+  description?: string;
   updateTime?: string;
 }
 
@@ -230,6 +233,9 @@ export const fetchDataServiceSources = ({
 
 export const publishDataService = (payload: DataServicePublishPayload) =>
   HttpUtils.post<DataServiceApi>(`${PREFIX}/publish`, payload) as Promise<CommonApiResponse<DataServiceApi>>;
+
+export const republishDataService = (id: number) =>
+  HttpUtils.post<DataServiceApi>(`${PREFIX}/${id}/republish`, {}) as Promise<CommonApiResponse<DataServiceApi>>;
 
 export const updateDataService = (id: number, payload: DataServiceUpdatePayload) =>
   HttpUtils.put<DataServiceApi>(`${PREFIX}/${id}`, payload) as Promise<CommonApiResponse<DataServiceApi>>;
