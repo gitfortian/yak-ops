@@ -23,14 +23,12 @@ import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
 import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Types;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -44,18 +42,14 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Owns the Data Service Node authoring lifecycle inside Data Development.
- *
- * <p>It deliberately stops at immutable DataServiceNodeRevision publication. Runtime deployment is
- * owned by the Data Service module and is connected in a later phase.
- */
+/** Owns the standalone Data Service Node authoring lifecycle inside Data Development. */
 @Service
 public class DevelopmentDataServiceNodeService {
 
   private static final int DEFAULT_MAX_ROWS = 1_000;
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
   private static final int MAX_PREVIEW_TIMEOUT_SECONDS = 30;
+  private static final int MAX_SQL_LENGTH = 1_000_000;
   private static final Pattern PARAMETER_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
   private static final Set<String> SCHEMA_TYPES = Set.of(
       "STRING", "INTEGER", "NUMBER", "BOOLEAN", "DATE", "DATETIME", "OBJECT");
@@ -88,26 +82,22 @@ public class DevelopmentDataServiceNodeService {
   public DataServiceNodeContext get(long nodeId) {
     DevelopmentNode node = requireDataServiceNode(nodeId);
     DevelopmentDataServiceDraft draft = draftRepository.findByNodeId(nodeId)
+        .map(value -> hydrateLegacyDraft(node, value))
         .orElseGet(() -> emptyDraft(node));
-    List<DevelopmentDataServiceRevisionSummary> revisions = revisionRepository.listByNodeId(nodeId);
-    return new DataServiceNodeContext(
-        String.valueOf(node.id()),
-        node.name(),
-        node.configured() || draft.draftRevision() > 0L,
-        availableSources(node),
-        selectedSource(draft.definition()),
-        draft,
-        revisions.isEmpty() ? null : revisions.getFirst(),
-        revisions);
+    return context(node, draft);
   }
 
-  public PreviewResult preview(long nodeId, long sourceTaskAssetId, long sourceTaskRevisionId) {
-    DevelopmentNode node = requireDataServiceNode(nodeId);
-    ResolvedSqlSource source = requireSqlSource(
-        node, sourceTaskAssetId, sourceTaskRevisionId);
-    ContractPreview contract = discoverContract(source.revision().revision().definition());
+  public PreviewResult preview(long nodeId, long dataSourceId, String sql, Integer timeoutSeconds) {
+    requireDataServiceNode(nodeId);
+    long normalizedDataSourceId = requireDataSourceId(dataSourceId);
+    String normalizedSql = normalizeSql(sql);
+    sqlCompiler.validateSelectOnly(normalizedSql);
+    ContractPreview contract = discoverContract(
+        normalizedDataSourceId,
+        normalizedSql,
+        range(timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, 3_600, "超时时间"));
     return new PreviewResult(
-        toSourceSnapshot(source.asset(), source.sourceNode(), source.revision()),
+        String.valueOf(normalizedDataSourceId),
         contract.parameters(),
         contract.responseFields());
   }
@@ -117,14 +107,10 @@ public class DevelopmentDataServiceNodeService {
     DevelopmentNode node = requireDataServiceNode(nodeId);
     if (command == null) throw new IllegalArgumentException("Data Service Node 草稿不能为空");
 
-    ResolvedSqlSource source = requireSqlSource(
-        node, command.sourceTaskAssetId(), command.sourceTaskRevisionId());
-    TaskDefinition sqlDefinition = source.revision().revision().definition();
-    List<String> sqlParameters = sqlCompiler.parameterNames(sqlDefinition.content());
-
     DevelopmentDataServiceDefinition definition = normalizeDefinition(
         node,
-        source,
+        command.dataSourceId(),
+        command.sql(),
         command.serviceName(),
         command.path(),
         command.method(),
@@ -133,7 +119,6 @@ public class DevelopmentDataServiceNodeService {
         command.maxRows(),
         command.timeoutSeconds(),
         command.description(),
-        sqlParameters,
         false);
 
     long expectedBaseRevision = command.baseRevision() == null ? 0L : command.baseRevision();
@@ -159,14 +144,11 @@ public class DevelopmentDataServiceNodeService {
               + expectedDraftRevision + "，当前 " + draft.draftRevision());
     }
 
-    DevelopmentDataServiceDefinition current = draft.definition();
-    ResolvedSqlSource source = requireSqlSource(
-        node, current.sourceTaskAssetId(), current.sourceTaskRevisionId());
-    List<String> sqlParameters = sqlCompiler.parameterNames(
-        source.revision().revision().definition().content());
+    DevelopmentDataServiceDefinition current = hydrateLegacyDefinition(node, draft.definition());
     DevelopmentDataServiceDefinition normalized = normalizeDefinition(
         node,
-        source,
+        current.dataSourceId(),
+        current.sql(),
         current.serviceName(),
         current.path(),
         current.method(),
@@ -175,12 +157,10 @@ public class DevelopmentDataServiceNodeService {
         current.maxRows(),
         current.timeoutSeconds(),
         current.description(),
-        sqlParameters,
         true);
 
     String checksum = checksum(normalized);
-    DevelopmentDataServiceRevision latest =
-        revisionRepository.findLatestByNodeId(nodeId).orElse(null);
+    DevelopmentDataServiceRevision latest = revisionRepository.findLatestByNodeId(nodeId).orElse(null);
     if (latest != null
         && latest.sourceDraftRevision() == draft.draftRevision()
         && Objects.equals(latest.checksum(), checksum)) {
@@ -203,157 +183,39 @@ public class DevelopmentDataServiceNodeService {
   }
 
   public DevelopmentDataServiceRevision getRevision(long nodeId, int revisionNo) {
-    requireDataServiceNode(nodeId);
+    DevelopmentNode node = requireDataServiceNode(nodeId);
     if (revisionNo <= 0) throw new IllegalArgumentException("revisionNo 必须大于 0");
-    return revisionRepository.findByRevisionNo(nodeId, revisionNo)
+    DevelopmentDataServiceRevision revision = revisionRepository.findByRevisionNo(nodeId, revisionNo)
         .orElseThrow(() -> new IllegalArgumentException(
             "Data Service Node 发布版本不存在：nodeId=" + nodeId + ", revisionNo=" + revisionNo));
+    DevelopmentDataServiceDefinition hydrated = hydrateLegacyDefinition(node, revision.definition());
+    if (hydrated == revision.definition()) return revision;
+    return new DevelopmentDataServiceRevision(
+        revision.id(),
+        revision.nodeId(),
+        revision.revisionNo(),
+        revision.sourceDraftRevision(),
+        hydrated,
+        revision.checksum(),
+        revision.createTime());
   }
 
-  private DataServiceNodeContext context(
-      DevelopmentNode node,
-      DevelopmentDataServiceDraft draft) {
-    List<DevelopmentDataServiceRevisionSummary> revisions =
-        revisionRepository.listByNodeId(node.id());
+  private DataServiceNodeContext context(DevelopmentNode node, DevelopmentDataServiceDraft draft) {
+    List<DevelopmentDataServiceRevisionSummary> revisions = revisionRepository.listByNodeId(node.id());
     DevelopmentNode refreshed = nodeRepository.findById(node.id()).orElse(node);
     return new DataServiceNodeContext(
         String.valueOf(refreshed.id()),
         refreshed.name(),
         refreshed.configured() || draft.draftRevision() > 0L,
-        availableSources(refreshed),
-        selectedSource(draft.definition()),
         draft,
         revisions.isEmpty() ? null : revisions.getFirst(),
         revisions);
   }
 
-  private List<SourceSnapshot> availableSources(DevelopmentNode dataServiceNode) {
-    return taskCatalogService.list("DATA_DEVELOPMENT", "ONLINE", null).stream()
-        .filter(asset -> "SQL".equalsIgnoreCase(asset.taskType()))
-        .filter(asset -> sameProject(asset.projectId(), dataServiceNode.projectId()))
-        .map(asset -> toCurrentSourceIfValid(dataServiceNode, asset))
-        .filter(Objects::nonNull)
-        .sorted(Comparator
-            .comparing(SourceSnapshot::nodeName, String.CASE_INSENSITIVE_ORDER)
-            .thenComparing(SourceSnapshot::nodeId))
-        .toList();
-  }
-
-  private SourceSnapshot toCurrentSourceIfValid(DevelopmentNode dataServiceNode, TaskAsset asset) {
-    try {
-      DevelopmentNode sourceNode = requireSourceSqlNode(asset);
-      if (!sameProject(sourceNode.projectId(), dataServiceNode.projectId())) return null;
-      TaskAssetRevision revision = taskCatalogService.resolveRevision(
-          asset.id(), asset.currentRevision().taskRevisionId());
-      return toSourceSnapshot(asset, sourceNode, revision);
-    } catch (RuntimeException exception) {
-      return null;
-    }
-  }
-
-  private SourceSnapshot selectedSource(DevelopmentDataServiceDefinition definition) {
-    if (definition == null
-        || definition.sourceTaskAssetId() <= 0L
-        || definition.sourceTaskRevisionId() <= 0L) {
-      return null;
-    }
-    try {
-      TaskAsset asset = taskCatalogService.get(definition.sourceTaskAssetId());
-      DevelopmentNode sourceNode = nodeRepository.findById(parseSourceNodeId(asset)).orElse(null);
-      TaskAssetRevision pinned = taskCatalogService.resolveRevision(
-          asset.id(), definition.sourceTaskRevisionId());
-      String nodeId = sourceNode == null ? asset.sourceRef() : String.valueOf(sourceNode.id());
-      String nodeName = sourceNode == null ? asset.name() : sourceNode.name();
-      return new SourceSnapshot(
-          nodeId,
-          nodeName,
-          String.valueOf(asset.id()),
-          asset.status().name(),
-          String.valueOf(pinned.revision().revisionId()),
-          pinned.revision().revisionNo(),
-          String.valueOf(asset.currentRevision().taskRevisionId()),
-          asset.currentRevision().revisionNo(),
-          pinned.revision().revisionId() != asset.currentRevision().taskRevisionId());
-    } catch (RuntimeException exception) {
-      return new SourceSnapshot(
-          null,
-          "历史 SQL 来源",
-          String.valueOf(definition.sourceTaskAssetId()),
-          "UNAVAILABLE",
-          String.valueOf(definition.sourceTaskRevisionId()),
-          definition.sourceTaskRevisionNo(),
-          null,
-          null,
-          false);
-    }
-  }
-
-  private ResolvedSqlSource requireSqlSource(
-      DevelopmentNode dataServiceNode,
-      long sourceTaskAssetId,
-      long sourceTaskRevisionId) {
-    if (sourceTaskAssetId <= 0L) {
-      throw new IllegalArgumentException("sourceTaskAssetId 必须大于 0");
-    }
-    if (sourceTaskRevisionId <= 0L) {
-      throw new IllegalArgumentException("sourceTaskRevisionId 必须大于 0");
-    }
-
-    TaskAsset asset = taskCatalogService.get(sourceTaskAssetId);
-    if (asset.source() != TaskAssetSource.DATA_DEVELOPMENT) {
-      throw new IllegalArgumentException("Data Service Node 只能选择数据开发 SQL 来源");
-    }
-    if (!"SQL".equalsIgnoreCase(asset.taskType())) {
-      throw new IllegalArgumentException("Data Service Node 当前仅支持 SQL 来源");
-    }
-    if (asset.status() != TaskAssetStatus.ONLINE) {
-      throw new IllegalArgumentException("Data Service Node 只能选择 ONLINE SQL 来源");
-    }
-    if (!sameProject(asset.projectId(), dataServiceNode.projectId())) {
-      throw new IllegalArgumentException("Data Service Node 只能选择同项目的 SQL 来源");
-    }
-
-    DevelopmentNode sourceNode = requireSourceSqlNode(asset);
-    if (!sameProject(sourceNode.projectId(), dataServiceNode.projectId())) {
-      throw new IllegalArgumentException("Data Service Node 只能选择同项目的 SQL 节点");
-    }
-
-    TaskAssetRevision revision = taskCatalogService.resolveRevision(
-        sourceTaskAssetId, sourceTaskRevisionId);
-    if (revision.revision().revisionId() != sourceTaskRevisionId) {
-      throw new IllegalStateException("Data Service Node 解析到的 SQL Revision 与请求不一致");
-    }
-    if (!"SQL".equalsIgnoreCase(revision.revision().definition().taskType())) {
-      throw new IllegalArgumentException("Data Service Node 来源 Revision 不是 SQL");
-    }
-    sqlCompiler.validateSelectOnly(revision.revision().definition().content());
-    return new ResolvedSqlSource(asset, sourceNode, revision);
-  }
-
-  private DevelopmentNode requireSourceSqlNode(TaskAsset asset) {
-    long sourceNodeId = parseSourceNodeId(asset);
-    DevelopmentNode sourceNode = nodeRepository.findById(sourceNodeId)
-        .orElseThrow(() -> new IllegalStateException("SQL 来源节点不存在：" + sourceNodeId));
-    if (!DevelopmentNodeType.SQL.name().equalsIgnoreCase(sourceNode.type())) {
-      throw new IllegalStateException("TaskAsset 来源节点不是 SQL：" + sourceNodeId);
-    }
-    return sourceNode;
-  }
-
-  private long parseSourceNodeId(TaskAsset asset) {
-    try {
-      long nodeId = Long.parseLong(asset.sourceRef());
-      if (nodeId <= 0L) throw new NumberFormatException("not positive");
-      return nodeId;
-    } catch (NumberFormatException exception) {
-      throw new IllegalStateException(
-          "SQL TaskAsset sourceRef 不是有效节点 ID：" + asset.sourceRef(), exception);
-    }
-  }
-
   private DevelopmentDataServiceDefinition normalizeDefinition(
       DevelopmentNode node,
-      ResolvedSqlSource source,
+      long dataSourceId,
+      String sql,
       String serviceName,
       String path,
       String method,
@@ -362,42 +224,40 @@ public class DevelopmentDataServiceNodeService {
       Integer maxRows,
       Integer timeoutSeconds,
       String description,
-      List<String> sqlParameterNames,
       boolean requireResponseContract) {
+    long normalizedDataSourceId = requireDataSourceId(dataSourceId);
+    String normalizedSql = normalizeSql(sql);
+    sqlCompiler.validateSelectOnly(normalizedSql);
+    List<String> sqlParameterNames = sqlCompiler.parameterNames(normalizedSql);
+
     String normalizedName = text(serviceName, node.name(), "服务名称", 200);
     String normalizedPath = normalizePath(path, node.id());
     String normalizedMethod = method == null || method.isBlank()
         ? "GET" : method.trim().toUpperCase(Locale.ROOT);
     if (!"GET".equals(normalizedMethod)) {
-      throw new IllegalArgumentException("Data Service Node 第一阶段仅支持 GET");
+      throw new IllegalArgumentException("Data Service Node v1 仅支持 GET");
     }
 
-    List<ParameterContract> parameters =
-        normalizeParameters(requestedParameters, sqlParameterNames);
-    List<ResponseFieldContract> responseFields =
-        normalizeResponseFields(requestedResponseFields);
+    List<ParameterContract> parameters = normalizeParameters(requestedParameters, sqlParameterNames);
+    List<ResponseFieldContract> responseFields = normalizeResponseFields(requestedResponseFields);
     if (requireResponseContract && responseFields.isEmpty()) {
       throw new IllegalArgumentException("发布前请先预览并确认响应字段 Contract");
     }
 
-    int normalizedMaxRows = range(
-        maxRows, DEFAULT_MAX_ROWS, 1, 10_000, "最大返回行数");
-    int normalizedTimeout = range(
-        timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, 3_600, "超时时间");
-    String normalizedDescription = optionalText(description, 2_000, "说明");
-
     return new DevelopmentDataServiceDefinition(
-        source.asset().id(),
-        source.revision().revision().revisionId(),
-        source.revision().revision().revisionNo(),
+        0L,
+        0L,
+        0,
         normalizedName,
         normalizedPath,
         normalizedMethod,
         parameters,
         responseFields,
-        normalizedMaxRows,
-        normalizedTimeout,
-        normalizedDescription);
+        range(maxRows, DEFAULT_MAX_ROWS, 1, 10_000, "最大返回行数"),
+        range(timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, 3_600, "超时时间"),
+        optionalText(description, 2_000, "说明"),
+        normalizedDataSourceId,
+        normalizedSql);
   }
 
   private List<ParameterContract> normalizeParameters(
@@ -425,7 +285,7 @@ public class DevelopmentDataServiceNodeService {
       normalized.add(new ParameterContract(
           name,
           normalizeSchemaType(value == null ? "STRING" : value.type()),
-          value == null || value.required(),
+          true,
           optionalText(value == null ? null : value.description(), 1_000, "参数描述"),
           optionalText(value == null ? null : value.example(), 1_000, "参数示例")));
     }
@@ -439,8 +299,7 @@ public class DevelopmentDataServiceNodeService {
     return List.copyOf(normalized);
   }
 
-  private List<ResponseFieldContract> normalizeResponseFields(
-      List<ResponseFieldContract> values) {
+  private List<ResponseFieldContract> normalizeResponseFields(List<ResponseFieldContract> values) {
     if (values == null || values.isEmpty()) return List.of();
     List<ResponseFieldContract> normalized = new ArrayList<>();
     Set<String> names = new HashSet<>();
@@ -459,32 +318,29 @@ public class DevelopmentDataServiceNodeService {
     return List.copyOf(normalized);
   }
 
-  private ContractPreview discoverContract(TaskDefinition sqlDefinition) {
-    List<String> parameterNames = sqlCompiler.parameterNames(sqlDefinition.content());
+  private ContractPreview discoverContract(long dataSourceId, String sql, int timeoutSeconds) {
+    List<String> parameterNames = sqlCompiler.parameterNames(sql);
     List<ParameterContract> parameters = parameterNames.stream()
         .map(name -> new ParameterContract(name, "STRING", true, null, null))
         .toList();
 
     Map<String, Object> previewParameters = new LinkedHashMap<>();
     parameterNames.forEach(name -> previewParameters.put(name, null));
-    DevelopmentDataServiceSqlCompiler.CompiledSql compiled =
-        sqlCompiler.compile(sqlDefinition.content(), previewParameters);
-    SourceConfig sourceConfig = sourceConfig(sqlDefinition.configJson());
+    DevelopmentDataServiceSqlCompiler.CompiledSql compiled = sqlCompiler.compile(sql, previewParameters);
 
     DataSourceSqlResult result;
-    try (DataSourceSqlExecutor executor =
-        dataSourceExecutionProvider.open(sourceConfig.dataSourceId())) {
+    try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(String.valueOf(dataSourceId))) {
       result = executor.execute(new DataSourceSqlRequest(
           compiled.sql(),
           1,
-          Math.min(sourceConfig.timeoutSeconds(), MAX_PREVIEW_TIMEOUT_SECONDS),
+          Math.min(timeoutSeconds, MAX_PREVIEW_TIMEOUT_SECONDS),
           compiled.parameters()));
     }
     if (!result.resultSet()) {
-      throw new IllegalStateException("Data Service Node Preview 没有返回结果集");
+      throw new IllegalStateException("Data Service Preview 没有返回结果集");
     }
     if (result.columns().isEmpty()) {
-      throw new IllegalArgumentException("Data Service Node 来源查询没有可发现的响应字段");
+      throw new IllegalArgumentException("查询 SQL 没有可发现的响应字段");
     }
 
     List<ResponseFieldContract> responseFields = result.columns().stream()
@@ -497,14 +353,10 @@ public class DevelopmentDataServiceNodeService {
     String name = column.label();
     if (name == null || name.isBlank()) name = column.name();
     if (name == null || name.isBlank()) {
-      throw new IllegalArgumentException("Data Service Node 来源查询存在无名称响应字段");
+      throw new IllegalArgumentException("查询结果存在无名称响应字段");
     }
     return new ResponseFieldContract(
-        name.trim(),
-        schemaType(column.jdbcType()),
-        column.nullable(),
-        null,
-        null);
+        name.trim(), schemaType(column.jdbcType()), column.nullable(), null, null);
   }
 
   private String schemaType(int jdbcType) {
@@ -521,6 +373,60 @@ public class DevelopmentDataServiceNodeService {
     };
   }
 
+  /**
+   * Transparently turns a historical SQL-Revision-backed definition into a standalone snapshot.
+   * New saves always persist standalone definitions; this path only keeps already-created assets usable.
+   */
+  private DevelopmentDataServiceDefinition hydrateLegacyDefinition(
+      DevelopmentNode dataServiceNode,
+      DevelopmentDataServiceDefinition definition) {
+    if (definition == null || definition.standaloneSql()) return definition;
+    if (definition.sourceTaskAssetId() <= 0L || definition.sourceTaskRevisionId() <= 0L) {
+      return definition;
+    }
+    try {
+      TaskAsset asset = taskCatalogService.get(definition.sourceTaskAssetId());
+      if (asset.source() != TaskAssetSource.DATA_DEVELOPMENT
+          || !"SQL".equalsIgnoreCase(asset.taskType())
+          || !sameProject(asset.projectId(), dataServiceNode.projectId())) {
+        return definition;
+      }
+      TaskAssetRevision resolved = taskCatalogService.resolveRevision(
+          asset.id(), definition.sourceTaskRevisionId());
+      TaskDefinition sqlDefinition = resolved.revision().definition();
+      SourceConfig sourceConfig = sourceConfig(sqlDefinition.configJson());
+      return new DevelopmentDataServiceDefinition(
+          definition.sourceTaskAssetId(),
+          definition.sourceTaskRevisionId(),
+          definition.sourceTaskRevisionNo(),
+          definition.serviceName(),
+          definition.path(),
+          definition.method(),
+          definition.parameters(),
+          definition.responseFields(),
+          definition.maxRows(),
+          definition.timeoutSeconds(),
+          definition.description(),
+          Long.parseLong(sourceConfig.dataSourceId()),
+          sqlDefinition.content());
+    } catch (RuntimeException exception) {
+      return definition;
+    }
+  }
+
+  private DevelopmentDataServiceDraft hydrateLegacyDraft(
+      DevelopmentNode node,
+      DevelopmentDataServiceDraft draft) {
+    DevelopmentDataServiceDefinition hydrated = hydrateLegacyDefinition(node, draft.definition());
+    if (hydrated == draft.definition()) return draft;
+    return new DevelopmentDataServiceDraft(
+        draft.nodeId(),
+        hydrated,
+        draft.draftRevision(),
+        draft.createTime(),
+        draft.updateTime());
+  }
+
   private SourceConfig sourceConfig(String configJson) {
     String raw = configJson == null || configJson.isBlank() ? "{}" : configJson.trim();
     try {
@@ -528,37 +434,18 @@ public class DevelopmentDataServiceNodeService {
       if (root == null || !root.isObject()) {
         throw new IllegalArgumentException("SQL configJson 必须是 JSON Object");
       }
-      JsonNode dataSourceNode = root.get("dataSourceId");
-      String dataSourceId = dataSourceNode == null || dataSourceNode.isNull()
-          ? null : dataSourceNode.asText();
+      String dataSourceId = root.path("dataSourceId").asText(null);
       if (dataSourceId == null || dataSourceId.isBlank()) {
-        throw new IllegalArgumentException(
-            "SQL TaskRevision 缺少 dataSourceId，无法预览 Data Service Contract");
+        throw new IllegalArgumentException("历史 SQL Revision 缺少 dataSourceId");
       }
-      int timeout = root.path("timeoutSeconds").asInt(DEFAULT_TIMEOUT_SECONDS);
-      if (timeout < 1 || timeout > 3_600) timeout = DEFAULT_TIMEOUT_SECONDS;
-      return new SourceConfig(dataSourceId.trim(), timeout);
+      long value = Long.parseLong(dataSourceId.trim());
+      if (value <= 0L) throw new IllegalArgumentException("历史 SQL Revision dataSourceId 必须大于 0");
+      return new SourceConfig(String.valueOf(value));
     } catch (IllegalArgumentException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new IllegalArgumentException("SQL TaskRevision configJson 非法", exception);
+      throw new IllegalArgumentException("历史 SQL Revision configJson 非法", exception);
     }
-  }
-
-  private SourceSnapshot toSourceSnapshot(
-      TaskAsset asset,
-      DevelopmentNode sourceNode,
-      TaskAssetRevision pinnedRevision) {
-    return new SourceSnapshot(
-        String.valueOf(sourceNode.id()),
-        sourceNode.name(),
-        String.valueOf(asset.id()),
-        asset.status().name(),
-        String.valueOf(pinnedRevision.revision().revisionId()),
-        pinnedRevision.revision().revisionNo(),
-        String.valueOf(asset.currentRevision().taskRevisionId()),
-        asset.currentRevision().revisionNo(),
-        pinnedRevision.revision().revisionId() != asset.currentRevision().taskRevisionId());
   }
 
   private DevelopmentNode requireDataServiceNode(long nodeId) {
@@ -586,10 +473,26 @@ public class DevelopmentDataServiceNodeService {
             List.of(),
             DEFAULT_MAX_ROWS,
             DEFAULT_TIMEOUT_SECONDS,
-            null),
+            null,
+            0L,
+            ""),
         0L,
         null,
         null);
+  }
+
+  private long requireDataSourceId(long value) {
+    if (value <= 0L) throw new IllegalArgumentException("请选择数据源");
+    return value;
+  }
+
+  private String normalizeSql(String value) {
+    if (value == null || value.isBlank()) throw new IllegalArgumentException("查询 SQL 不能为空");
+    String normalized = value.trim();
+    if (normalized.length() > MAX_SQL_LENGTH) {
+      throw new IllegalArgumentException("查询 SQL 不能超过 " + MAX_SQL_LENGTH + " 个字符");
+    }
+    return normalized;
   }
 
   private String normalizePath(String value, long nodeId) {
@@ -669,8 +572,8 @@ public class DevelopmentDataServiceNodeService {
   }
 
   public record SaveDraftCommand(
-      long sourceTaskAssetId,
-      long sourceTaskRevisionId,
+      long dataSourceId,
+      String sql,
       String serviceName,
       String path,
       String method,
@@ -681,19 +584,8 @@ public class DevelopmentDataServiceNodeService {
       String description,
       Long baseRevision) {}
 
-  public record SourceSnapshot(
-      String nodeId,
-      String nodeName,
-      String taskAssetId,
-      String status,
-      String revisionId,
-      Integer revisionNo,
-      String currentRevisionId,
-      Integer currentRevisionNo,
-      boolean updateAvailable) {}
-
   public record PreviewResult(
-      SourceSnapshot source,
+      String dataSourceId,
       List<ParameterContract> parameters,
       List<ResponseFieldContract> responseFields) {}
 
@@ -701,20 +593,13 @@ public class DevelopmentDataServiceNodeService {
       String nodeId,
       String nodeName,
       boolean configured,
-      List<SourceSnapshot> availableSources,
-      SourceSnapshot selectedSource,
       DevelopmentDataServiceDraft draft,
       DevelopmentDataServiceRevisionSummary latestPublishedRevision,
       List<DevelopmentDataServiceRevisionSummary> revisions) {}
-
-  private record ResolvedSqlSource(
-      TaskAsset asset,
-      DevelopmentNode sourceNode,
-      TaskAssetRevision revision) {}
 
   private record ContractPreview(
       List<ParameterContract> parameters,
       List<ResponseFieldContract> responseFields) {}
 
-  private record SourceConfig(String dataSourceId, int timeoutSeconds) {}
+  private record SourceConfig(String dataSourceId) {}
 }

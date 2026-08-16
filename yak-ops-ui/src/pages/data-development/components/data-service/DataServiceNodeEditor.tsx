@@ -1,5 +1,4 @@
 import { history } from '@umijs/max';
-import { API_SUCCESS_CODE } from '@/services/http/response';
 import {
   Button,
   Empty,
@@ -9,7 +8,6 @@ import {
   Spin,
   Table,
   Tag,
-  Tooltip,
   message,
   type TableColumnsType,
 } from 'antd';
@@ -37,7 +35,6 @@ import {
   type DevelopmentDataServiceNodeContext,
   type DevelopmentDataServiceParameter,
   type DevelopmentDataServiceResponseField,
-  type DevelopmentDataServiceSource,
 } from '../../data-service-node-service';
 import {
   deployDataServiceRuntime,
@@ -45,13 +42,21 @@ import {
   syncDataServiceRuntime,
   type DataServicePublicationState,
 } from '../../data-service-runtime-publication';
-import { getDevelopmentTaskRevision } from '../../service';
 import type { DevelopmentId, DevelopmentResourceNode } from '../../types';
 import SqlMonacoEditor from '../../editors/sql/components/SqlMonacoEditor';
+import {
+  hydrateSqlTaskConfig,
+  selectSqlDataSourceContext,
+} from '../../editors/sql/metadata/sqlMetadataContextStore';
+import {
+  listSqlDataSources,
+  type SqlDataSourceOption,
+} from '../../editors/sql/metadata/sqlMetadataService';
 
 interface DataServiceNodeEditorProps {
   node: DevelopmentResourceNode;
   onSaved?: () => void | Promise<void>;
+  /** Kept temporarily for Workbench compatibility; standalone Data Service no longer opens a source SQL. */
   onOpenSourceNode?: (nodeId: DevelopmentId) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
@@ -88,9 +93,11 @@ const normalizeContext = (
   const rawDefinition = rawDraft?.definition;
   const nodeId = normalizeId(raw?.nodeId || node.id);
   const definition: DevelopmentDataServiceDefinition = {
-    sourceTaskAssetId: normalizeId(rawDefinition?.sourceTaskAssetId),
-    sourceTaskRevisionId: normalizeId(rawDefinition?.sourceTaskRevisionId),
+    sourceTaskAssetId: rawDefinition?.sourceTaskAssetId,
+    sourceTaskRevisionId: rawDefinition?.sourceTaskRevisionId,
     sourceTaskRevisionNo: Number(rawDefinition?.sourceTaskRevisionNo || 0),
+    dataSourceId: normalizeId(rawDefinition?.dataSourceId),
+    sql: rawDefinition?.sql || '',
     serviceName: rawDefinition?.serviceName || raw?.nodeName || node.name,
     path: rawDefinition?.path || `/query/${nodeId}`,
     method: 'GET',
@@ -105,8 +112,6 @@ const normalizeContext = (
     nodeId,
     nodeName: raw?.nodeName || node.name,
     configured: Boolean(raw?.configured),
-    availableSources: safeArray(raw?.availableSources),
-    selectedSource: raw?.selectedSource || null,
     draft: {
       nodeId: normalizeId(rawDraft?.nodeId || nodeId),
       definition,
@@ -117,17 +122,6 @@ const normalizeContext = (
     latestPublishedRevision: raw?.latestPublishedRevision || null,
     revisions: safeArray(raw?.revisions),
   };
-};
-
-const parseDataSourceId = (configJson?: string) => {
-  if (!configJson) return undefined;
-  try {
-    const value = JSON.parse(configJson) as Record<string, unknown>;
-    const id = value?.dataSourceId;
-    return id === undefined || id === null || String(id).trim() === '' ? undefined : String(id);
-  } catch {
-    return undefined;
-  }
 };
 
 const panelItems: Array<{ key: RightPanelKey; label: string; icon: typeof Settings2 }> = [
@@ -141,15 +135,16 @@ const panelItems: Array<{ key: RightPanelKey; label: string; icon: typeof Settin
 export default function DataServiceNodeEditor({
   node,
   onSaved,
-  onOpenSourceNode,
   onDirtyChange,
 }: DataServiceNodeEditorProps) {
   const dirtyChangeRef = useRef(onDirtyChange);
   useEffect(() => { dirtyChangeRef.current = onDirtyChange; }, [onDirtyChange]);
 
   const [context, setContext] = useState<DevelopmentDataServiceNodeContext>();
-  const [selectedSourceId, setSelectedSourceId] = useState<DevelopmentId>();
-  const [selectedRevisionId, setSelectedRevisionId] = useState<DevelopmentId>();
+  const [dataSourceId, setDataSourceId] = useState<DevelopmentId>();
+  const [dataSources, setDataSources] = useState<SqlDataSourceOption[]>([]);
+  const [dataSourceLoading, setDataSourceLoading] = useState(false);
+  const [sqlText, setSqlText] = useState('');
   const [serviceName, setServiceName] = useState(node.name);
   const [path, setPath] = useState(`/query/${node.id}`);
   const [maxRows, setMaxRows] = useState(1000);
@@ -167,10 +162,6 @@ export default function DataServiceNodeEditor({
   const [publicationError, setPublicationError] = useState<string>();
   const [publicationLoading, setPublicationLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
-  const [sqlText, setSqlText] = useState('');
-  const [sqlConfigJson, setSqlConfigJson] = useState('{}');
-  const [sqlLoading, setSqlLoading] = useState(false);
-  const [sqlError, setSqlError] = useState<string>();
   const [rightPanelKey, setRightPanelKey] = useState<RightPanelKey>('properties');
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
@@ -185,13 +176,10 @@ export default function DataServiceNodeEditor({
   const applyContext = useCallback((raw: DevelopmentDataServiceNodeContext) => {
     const next = normalizeContext(raw, node);
     const definition = next.draft.definition;
+    const nextDataSourceId = definition.dataSourceId !== '0' ? definition.dataSourceId : undefined;
     setContext(next);
-    setSelectedSourceId(
-      definition.sourceTaskAssetId !== '0' ? definition.sourceTaskAssetId : undefined,
-    );
-    setSelectedRevisionId(
-      definition.sourceTaskRevisionId !== '0' ? definition.sourceTaskRevisionId : undefined,
-    );
+    setDataSourceId(nextDataSourceId);
+    setSqlText(definition.sql || '');
     setServiceName(definition.serviceName || next.nodeName);
     setPath(definition.path || `/query/${next.nodeId}`);
     setMaxRows(definition.maxRows || 1000);
@@ -199,6 +187,10 @@ export default function DataServiceNodeEditor({
     setDescription(definition.description || '');
     setParameters(safeArray(definition.parameters));
     setResponseFields(safeArray(definition.responseFields));
+    hydrateSqlTaskConfig(
+      node.id,
+      JSON.stringify(nextDataSourceId ? { dataSourceId: nextDataSourceId } : {}),
+    );
     setDirtyState(false);
     return next;
   }, [node, setDirtyState]);
@@ -248,103 +240,75 @@ export default function DataServiceNodeEditor({
     void load();
   }, [load]);
 
-  const availableSources = context?.availableSources || [];
-  const sourceOptions = useMemo(() => {
-    const values: DevelopmentDataServiceSource[] = [...availableSources];
-    const pinned = context?.selectedSource;
-    if (pinned && !values.some((source) => source.taskAssetId === pinned.taskAssetId)) {
-      values.unshift(pinned);
-    }
-    return values
-      .filter((source) => source && source.taskAssetId)
-      .map((source) => ({
-        value: source.taskAssetId,
-        disabled: source.status !== 'ONLINE',
-        label: `${source.nodeName || 'SQL'} · SQL R${source.currentRevisionNo || source.revisionNo || '-'}${source.status === 'ONLINE' ? '' : ` · ${source.status || 'UNKNOWN'}`}`,
-      }));
-  }, [availableSources, context?.selectedSource]);
-
-  const activeSource = useMemo(
-    () => availableSources.find((source) => source.taskAssetId === selectedSourceId)
-      || (context?.selectedSource?.taskAssetId === selectedSourceId
-        ? context?.selectedSource
-        : undefined),
-    [availableSources, context?.selectedSource, selectedSourceId],
-  );
-
-  const selectedRevisionNo = useMemo(() => {
-    if (!activeSource || !selectedRevisionId) return undefined;
-    if (activeSource.revisionId === selectedRevisionId) return activeSource.revisionNo;
-    if (activeSource.currentRevisionId === selectedRevisionId) {
-      return activeSource.currentRevisionNo || undefined;
-    }
-    if (context?.selectedSource?.revisionId === selectedRevisionId) {
-      return context.selectedSource.revisionNo;
-    }
-    return undefined;
-  }, [activeSource, context?.selectedSource, selectedRevisionId]);
-
-  const sourceUpdateAvailable = Boolean(
-    activeSource?.currentRevisionId
-      && selectedRevisionId
-      && activeSource.currentRevisionId !== selectedRevisionId,
-  );
-
-  const loadSqlRevision = useCallback(async () => {
-    if (!activeSource?.nodeId || !selectedRevisionNo) {
-      setSqlText('');
-      setSqlConfigJson('{}');
-      setSqlError(undefined);
-      return;
-    }
-
-    setSqlLoading(true);
-    setSqlError(undefined);
-    try {
-      const response = await getDevelopmentTaskRevision(activeSource.nodeId, selectedRevisionNo);
-      if (response?.code !== API_SUCCESS_CODE || !response.data) {
-        throw new Error(response?.message || response?.msg || '加载固定 SQL Revision 失败');
-      }
-      setSqlText(response.data.definition?.content || '');
-      setSqlConfigJson(response.data.definition?.configJson || '{}');
-    } catch (error) {
-      setSqlText('');
-      setSqlConfigJson('{}');
-      setSqlError(error instanceof Error ? error.message : '加载固定 SQL Revision 失败');
-    } finally {
-      setSqlLoading(false);
-    }
-  }, [activeSource?.nodeId, selectedRevisionNo]);
+  useEffect(() => {
+    let active = true;
+    setDataSourceLoading(true);
+    listSqlDataSources()
+      .then((values) => {
+        if (active) setDataSources(values || []);
+      })
+      .catch((error) => {
+        if (active) message.error(error instanceof Error ? error.message : '查询数据源失败');
+      })
+      .finally(() => {
+        if (active) setDataSourceLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
-    void loadSqlRevision();
-  }, [loadSqlRevision]);
+    if (!dataSourceId || !dataSources.length) return;
+    const selected = dataSources.find((item) => item.value === dataSourceId);
+    if (!selected) return;
+    selectSqlDataSourceContext(node.id, {
+      id: selected.value,
+      name: selected.label,
+      dbType: selected.dbType,
+    });
+  }, [dataSourceId, dataSources, node.id]);
 
-  const changeSource = (taskAssetId: DevelopmentId) => {
-    const source = availableSources.find((item) => item.taskAssetId === taskAssetId);
-    setSelectedSourceId(taskAssetId);
-    setSelectedRevisionId(source?.currentRevisionId || source?.revisionId);
+  const dataSourceOptions = useMemo(() => dataSources.map((item) => ({
+    value: item.value,
+    label: `${item.label}${item.dbType ? ` · ${item.dbType}` : ''}`,
+  })), [dataSources]);
+
+  const activeDataSource = useMemo(
+    () => dataSources.find((item) => item.value === dataSourceId),
+    [dataSourceId, dataSources],
+  );
+
+  const invalidateContract = useCallback(() => {
     setParameters([]);
     setResponseFields([]);
+  }, []);
+
+  const changeDataSource = (nextDataSourceId: DevelopmentId) => {
+    const selected = dataSources.find((item) => item.value === nextDataSourceId);
+    setDataSourceId(nextDataSourceId);
+    selectSqlDataSourceContext(node.id, selected ? {
+      id: selected.value,
+      name: selected.label,
+      dbType: selected.dbType,
+    } : { id: nextDataSourceId });
+    invalidateContract();
     markDirty();
   };
 
-  const upgradeSource = () => {
-    if (!activeSource?.currentRevisionId) return;
-    setSelectedRevisionId(activeSource.currentRevisionId);
-    setParameters([]);
-    setResponseFields([]);
+  const changeSql = (value: string) => {
+    setSqlText(value);
+    invalidateContract();
     markDirty();
   };
 
   const preview = async () => {
-    if (!selectedSourceId || !selectedRevisionId || previewing) return;
+    if (!dataSourceId || !sqlText.trim() || previewing) return;
     setPreviewing(true);
     try {
       const result = await previewDevelopmentDataServiceNode(
         node.id,
-        selectedSourceId,
-        selectedRevisionId,
+        dataSourceId,
+        sqlText,
+        timeoutSeconds,
       );
       const nextParameters = safeArray(result?.parameters);
       const nextResponses = safeArray(result?.responseFields);
@@ -374,10 +338,7 @@ export default function DataServiceNodeEditor({
           example: previous.example,
         } : item;
       }));
-      if (result?.source) {
-        setSelectedSourceId(normalizeId(result.source.taskAssetId));
-        setSelectedRevisionId(normalizeId(result.source.revisionId));
-      }
+      if (result?.dataSourceId) setDataSourceId(normalizeId(result.dataSourceId));
       markDirty();
       message.success(
         `Contract 已发现 · ${nextParameters.length} 个参数 / ${nextResponses.length} 个响应字段`,
@@ -390,12 +351,12 @@ export default function DataServiceNodeEditor({
   };
 
   const save = async () => {
-    if (!selectedSourceId || !selectedRevisionId || saving) return;
+    if (!dataSourceId || !sqlText.trim() || saving) return;
     setSaving(true);
     try {
       const next = await saveDevelopmentDataServiceDraft(node.id, {
-        sourceTaskAssetId: selectedSourceId,
-        sourceTaskRevisionId: selectedRevisionId,
+        dataSourceId,
+        sql: sqlText,
         serviceName: serviceName.trim(),
         path: path.trim(),
         method: 'GET',
@@ -540,7 +501,7 @@ export default function DataServiceNodeEditor({
         />
       ),
     },
-  ], [markDirty]);
+  ], []);
 
   const responseColumns = useMemo<TableColumnsType<DevelopmentDataServiceResponseField>>(() => [
     {
@@ -595,7 +556,7 @@ export default function DataServiceNodeEditor({
         />
       ),
     },
-  ], [markDirty]);
+  ], []);
 
   const latestPublished = context?.latestPublishedRevision;
   const runtimeRevisionNo = publicationState?.detail?.sourceRevisionNo;
@@ -612,14 +573,13 @@ export default function DataServiceNodeEditor({
             : publicationState.detail?.enabled
               ? `Runtime DS R${runtimeRevisionNo || '-'} · 运行中`
               : `Runtime DS R${runtimeRevisionNo || '-'} · 已停用`;
-  const dataSourceId = parseDataSourceId(sqlConfigJson);
 
   const propertiesPanel = (
     <div className="space-y-5">
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">API 属性</div>
         <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          Data Service Node 定义 API Contract；SQL 实现来自固定的已发布 SQL Revision。
+          Data Service Node 独立拥有数据源、查询 SQL 和 API Contract，发布时一起冻结到 DS Revision。
         </div>
       </div>
 
@@ -682,8 +642,8 @@ export default function DataServiceNodeEditor({
       <div className="border-t border-[#eef0f2] pt-4 text-[11px] leading-6 text-[#667085]">
         <div className="flex justify-between"><span>Draft</span><span>#{context?.draft?.draftRevision || 0}</span></div>
         <div className="flex justify-between"><span>最新 DS Revision</span><span>{latestPublished ? `R${latestPublished.revisionNo}` : '尚未发布'}</span></div>
-        <div className="flex justify-between"><span>来源 SQL</span><span>{selectedRevisionNo ? `R${selectedRevisionNo}` : '-'}</span></div>
-        <div className="flex justify-between"><span>数据源 ID</span><span>{dataSourceId || '-'}</span></div>
+        <div className="flex justify-between gap-3"><span>数据源</span><span className="truncate text-right">{activeDataSource?.label || (dataSourceId ? `#${dataSourceId}` : '-')}</span></div>
+        <div className="flex justify-between"><span>查询 SQL</span><span>{sqlText.trim() ? '已配置' : '未填写'}</span></div>
       </div>
     </div>
   );
@@ -693,7 +653,7 @@ export default function DataServiceNodeEditor({
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">请求参数</div>
         <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          参数来自 SQL 中的 <span className="font-mono">:name</span> 命名参数。v1 统一为必填参数。
+          参数来自当前 SQL 中的 <span className="font-mono">:name</span> 命名参数。v1 统一为必填参数。
         </div>
       </div>
       <Table<DevelopmentDataServiceParameter>
@@ -713,11 +673,11 @@ export default function DataServiceNodeEditor({
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">返回参数</div>
         <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-          通过真实数据源预览发现字段类型，可补充描述与示例后固化到 DS Revision。
+          通过当前数据源真实预览发现字段类型，可补充描述与示例后固化到 DS Revision。
         </div>
       </div>
       <Table<DevelopmentDataServiceResponseField>
-        rowKey={(record, index) => `${record.name}-${index}`}
+        rowKey={(record) => record.name}
         size="small"
         pagination={false}
         dataSource={responseFields}
@@ -732,7 +692,7 @@ export default function DataServiceNodeEditor({
     <div>
       <div className="text-[13px] font-semibold text-[#344054]">版本</div>
       <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-        发布只生成不可变 DS Revision，不会自动更新 Runtime。
+        每个 DS Revision 都冻结当时的数据源、SQL 和 Contract；发布不会自动更新 Runtime。
       </div>
       <div className="mt-4 space-y-2">
         {context?.revisions?.length ? context.revisions.map((revision) => (
@@ -745,7 +705,7 @@ export default function DataServiceNodeEditor({
               <span className="text-[10px] text-[#98a2b3]">{formatTime(revision.createTime)}</span>
             </div>
             <div className="mt-1 text-[11px] text-[#667085]">
-              SQL R{revision.sourceTaskRevisionNo} · Draft #{revision.sourceDraftRevision}
+              Draft #{revision.sourceDraftRevision}
             </div>
           </div>
         )) : (
@@ -832,6 +792,9 @@ export default function DataServiceNodeEditor({
     );
   }
 
+  const canPreview = Boolean(dataSourceId && sqlText.trim());
+  const canSave = canPreview && dirty;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-2.5">
@@ -844,7 +807,7 @@ export default function DataServiceNodeEditor({
             size="small"
             icon={<Play size={14} />}
             loading={previewing}
-            disabled={!selectedSourceId || !selectedRevisionId}
+            disabled={!canPreview}
             onClick={() => void preview()}
           >
             预览 Contract
@@ -854,7 +817,7 @@ export default function DataServiceNodeEditor({
             size="small"
             icon={<Save size={14} />}
             loading={saving}
-            disabled={!selectedSourceId || !selectedRevisionId || !dirty}
+            disabled={!canSave}
             onClick={() => void save()}
           >
             保存草稿
@@ -895,121 +858,81 @@ export default function DataServiceNodeEditor({
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
           <div className="shrink-0 border-b border-[#eef0f2] px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="w-[92px] shrink-0 text-[12px] font-medium text-[#344054]">来源 SQL</div>
+              <div className="w-[72px] shrink-0 text-[12px] font-medium text-[#344054]">数据源</div>
               <Select
-                value={selectedSourceId}
-                options={sourceOptions}
-                placeholder="选择同项目中已发布的 ONLINE SQL"
+                value={dataSourceId}
+                options={dataSourceOptions}
+                placeholder="选择数据源"
                 className="min-w-0 flex-1"
                 size="small"
                 showSearch
+                loading={dataSourceLoading}
                 optionFilterProp="label"
-                onChange={changeSource}
+                onChange={changeDataSource}
               />
-              {selectedRevisionNo ? <Tag bordered={false}>SQL R{selectedRevisionNo}</Tag> : null}
-              {sourceUpdateAvailable ? (
-                <Button size="small" onClick={upgradeSource}>
-                  更新到 R{activeSource?.currentRevisionNo || '-'}
-                </Button>
-              ) : null}
-              <Tooltip title={activeSource?.nodeId ? '在同一个开发工作台中打开来源 SQL 节点' : '来源 SQL 节点不可用'}>
-                <Button
-                  size="small"
-                  disabled={!activeSource?.nodeId}
-                  icon={<ExternalLink size={13} />}
-                  onClick={() => activeSource?.nodeId && onOpenSourceNode?.(activeSource.nodeId)}
-                >
-                  打开来源 SQL
-                </Button>
-              </Tooltip>
             </div>
-            <div className="ml-[104px] mt-1.5 text-[10px] text-[#98a2b3]">
-              Data Service 固定精确 SQL Revision；修改 SQL 请在来源节点发布新版本后，再显式更新这里的来源。
+            <div className="ml-[84px] mt-1.5 text-[10px] text-[#98a2b3]">
+              Data Service Node 独立持有数据源和 SQL，不再关联其他 SQL 节点。
             </div>
           </div>
 
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#eef0f2] px-3">
             <div className="text-[12px] font-semibold text-[#344054]">查询 SQL</div>
             <div className="flex items-center gap-2 text-[10px] text-[#98a2b3]">
-              {dataSourceId ? <span>DataSource #{dataSourceId}</span> : null}
-              <span>固定 Revision · 只读</span>
+              {activeDataSource ? <span>{activeDataSource.label}</span> : dataSourceId ? <span>DataSource #{dataSourceId}</span> : null}
+              <span>可编辑</span>
             </div>
           </div>
 
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
-            {sqlLoading ? (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70"><Spin size="small" /></div>
-            ) : null}
-            {sqlError ? (
-              <div className="flex h-full items-center justify-center px-6 text-center">
-                <div>
-                  <div className="text-[12px] font-medium text-[#b42318]">SQL Revision 加载失败</div>
-                  <div className="mt-1 text-[11px] text-[#98a2b3]">{sqlError}</div>
-                  <Button className="mt-3" size="small" onClick={() => void loadSqlRevision()}>重试</Button>
-                </div>
-              </div>
-            ) : sqlText ? (
-              <SqlMonacoEditor
-                id={`data-service-${node.id}-${selectedRevisionId || 'empty'}`}
-                value={sqlText}
-                onChange={() => undefined}
-                readOnly
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-center">
-                <div>
-                  <div className="text-[12px] font-medium text-[#667085]">选择来源 SQL Revision</div>
-                  <div className="mt-1 text-[11px] text-[#98a2b3]">选择后将在这里展示固定版本的查询 SQL</div>
-                </div>
-              </div>
-            )}
+          <div className="min-h-0 flex-1 overflow-hidden bg-white">
+            <SqlMonacoEditor
+              id={`data-service-${node.id}`}
+              value={sqlText}
+              onChange={changeSql}
+            />
           </div>
 
-          <div className="flex h-6 shrink-0 items-center justify-between border-t border-[#eef0f2] bg-[#fafafa] px-3 text-[10px] text-[#7b808a]">
+          <div className="flex h-6 shrink-0 items-center justify-between border-t border-[#eef0f2] bg-[#fafafa] px-2.5 text-[10px] text-[#7b808a]">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="font-medium text-[#7f56d9]">DATA SERVICE</span>
-              <span className="truncate">{serviceName || node.name}</span>
+              <span className="font-medium text-[#667085]">DATA SERVICE</span>
+              <span className="truncate">{node.name}</span>
               {dirty ? (
-                <span className="inline-flex items-center gap-1 text-[#667085]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#667085]" />未保存
+                <span className="inline-flex shrink-0 items-center gap-1 text-[#667085]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#667085]" />
+                  未保存
                 </span>
               ) : null}
             </div>
-            <div>{selectedRevisionNo ? `SQL R${selectedRevisionNo}` : '未选择 SQL'}</div>
+            <span>{responseFields.length ? `${responseFields.length} 个响应字段` : 'Contract 待预览'}</span>
           </div>
         </section>
 
-        <aside
-          className={[
-            'flex shrink-0 border-l border-[#e8e9ec] bg-white transition-[width] duration-150',
-            rightPanelOpen ? 'w-[470px]' : 'w-10',
-          ].join(' ')}
-        >
+        <aside className="flex shrink-0 border-l border-[#e8e9ec] bg-white">
           {rightPanelOpen ? (
-            <div className="min-w-0 flex-1 overflow-auto p-4">
+            <div className="w-[380px] min-w-0 overflow-auto border-r border-[#eef0f2] p-4">
               {panelContent[rightPanelKey]}
             </div>
           ) : null}
-          <div className="flex w-10 shrink-0 flex-col items-stretch border-l border-[#eef0f2] bg-[#fafafa]">
+          <div className="flex w-9 shrink-0 flex-col items-stretch bg-[#fafafa]">
             {panelItems.map((item) => {
               const Icon = item.icon;
               const active = rightPanelOpen && rightPanelKey === item.key;
               return (
-                <Tooltip key={item.key} title={item.label} placement="left">
-                  <button
-                    type="button"
-                    onClick={() => selectRightPanel(item.key)}
-                    className={[
-                      'flex h-[86px] flex-col items-center justify-center gap-1 border-b border-[#eef0f2] text-[10px] transition-colors',
-                      active
-                        ? 'bg-white text-[rgba(254,44,85,1)]'
-                        : 'text-[#667085] hover:bg-white hover:text-[#344054]',
-                    ].join(' ')}
-                  >
-                    <Icon size={14} strokeWidth={1.8} />
-                    <span style={{ writingMode: 'vertical-rl' }}>{item.label}</span>
-                  </button>
-                </Tooltip>
+                <button
+                  key={item.key}
+                  type="button"
+                  title={item.label}
+                  onClick={() => selectRightPanel(item.key)}
+                  className={[
+                    'flex min-h-[84px] flex-col items-center justify-center gap-1.5 border-b border-[#eef0f2] text-[10px] transition-colors [writing-mode:vertical-rl]',
+                    active
+                      ? 'bg-white font-medium text-[#344054]'
+                      : 'text-[#667085] hover:bg-white hover:text-[#344054]',
+                  ].join(' ')}
+                >
+                  <Icon size={13} strokeWidth={1.8} className="[writing-mode:horizontal-tb]" />
+                  <span>{item.label}</span>
+                </button>
               );
             })}
           </div>

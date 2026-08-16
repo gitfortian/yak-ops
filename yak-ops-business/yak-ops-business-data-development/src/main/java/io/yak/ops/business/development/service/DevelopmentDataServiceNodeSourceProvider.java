@@ -8,6 +8,7 @@ import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ResponseFieldContract;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourceContract;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourceDescriptor;
+import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceDefinition;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceRevision;
 import io.yak.ops.business.development.domain.DevelopmentNode;
@@ -17,7 +18,6 @@ import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.domain.TaskAssetRevision;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
-import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.util.ArrayList;
@@ -28,13 +28,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/**
- * Exposes published Data Service Node revisions as the only new Data Development source for Runtime.
- *
- * <p>The stable source identity is the Data Service development node id. Each resolve points to the
- * latest published Data Service revision, which in turn pins one exact SQL TaskRevision. Runtime
- * never follows the SQL asset's latest pointer directly.
- */
+/** Exposes published Data Service Node revisions to Runtime. */
 @Component
 @ConditionalOnDataSourceEnabled
 public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSourceProvider {
@@ -118,7 +112,10 @@ public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSour
     }
     validateContract(definition);
 
-    ResolvedSqlRevision sql = resolvePinnedSql(node, definition);
+    ResolvedSql resolvedSql = definition.standaloneSql()
+        ? new ResolvedSql(definition.sql(), definition.dataSourceId())
+        : resolveLegacyPinnedSql(node, definition);
+
     SourceDescriptor descriptor = new SourceDescriptor(
         SOURCE_TYPE,
         Long.toString(nodeId),
@@ -127,7 +124,7 @@ public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSour
         "ONLINE",
         dataServiceRevision.id(),
         dataServiceRevision.revisionNo(),
-        sql.dataSourceId(),
+        resolvedSql.dataSourceId(),
         definition.maxRows(),
         definition.timeoutSeconds(),
         definition.path(),
@@ -143,35 +140,35 @@ public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSour
             .map(item -> new ResponseFieldContract(
                 item.name(), item.type(), item.nullable(), item.description(), item.example()))
             .toList());
-    return new ResolvedSource(descriptor, sql.definition().content(), contract);
+    return new ResolvedSource(descriptor, resolvedSql.sql(), contract);
   }
 
-  private ResolvedSqlRevision resolvePinnedSql(
+  /** Compatibility only for DS Revisions created before standalone SQL became the v1 model. */
+  private ResolvedSql resolveLegacyPinnedSql(
       DevelopmentNode dataServiceNode,
       DevelopmentDataServiceDefinition definition) {
     TaskAsset asset = taskCatalogService.get(definition.sourceTaskAssetId());
     if (asset.source() != TaskAssetSource.DATA_DEVELOPMENT) {
-      throw new IllegalStateException("Data Service Revision 的 SQL 来源不是数据开发资产");
+      throw new IllegalStateException("历史 Data Service Revision 的 SQL 来源不是数据开发资产");
     }
     if (!"SQL".equalsIgnoreCase(asset.taskType())) {
-      throw new IllegalStateException("Data Service Revision 的来源资产不是 SQL：" + asset.taskType());
+      throw new IllegalStateException("历史 Data Service Revision 的来源资产不是 SQL：" + asset.taskType());
     }
     if (!sameProject(asset.projectId(), dataServiceNode.projectId())) {
-      throw new IllegalStateException("Data Service Revision 与 SQL 来源不属于同一项目");
+      throw new IllegalStateException("历史 Data Service Revision 与 SQL 来源不属于同一项目");
     }
 
     TaskAssetRevision resolved = taskCatalogService.resolveRevision(
         asset.id(), definition.sourceTaskRevisionId());
     if (resolved.revision().revisionId() != definition.sourceTaskRevisionId()
         || resolved.revision().revisionNo() != definition.sourceTaskRevisionNo()) {
-      throw new IllegalStateException(
-          "Data Service Revision 固定的 SQL Revision 与实际解析结果不一致");
+      throw new IllegalStateException("历史 Data Service Revision 固定的 SQL Revision 与实际解析结果不一致");
     }
     TaskDefinition sqlDefinition = resolved.revision().definition();
     if (!"SQL".equalsIgnoreCase(sqlDefinition.taskType())) {
-      throw new IllegalStateException("Data Service Revision 固定的 TaskRevision 不是 SQL");
+      throw new IllegalStateException("历史 Data Service Revision 固定的 TaskRevision 不是 SQL");
     }
-    return new ResolvedSqlRevision(sqlDefinition, dataSourceId(sqlDefinition.configJson()));
+    return new ResolvedSql(sqlDefinition.content(), dataSourceId(sqlDefinition.configJson()));
   }
 
   private void validateContract(DevelopmentDataServiceDefinition definition) {
@@ -196,15 +193,15 @@ public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSour
       }
       String reference = root.path("dataSourceId").asText(null);
       if (!StringUtils.hasText(reference)) {
-        throw new IllegalArgumentException("固定 SQL Revision 缺少 dataSourceId");
+        throw new IllegalArgumentException("历史固定 SQL Revision 缺少 dataSourceId");
       }
       long value = Long.parseLong(reference.trim());
-      if (value <= 0L) throw new IllegalArgumentException("固定 SQL Revision dataSourceId 必须大于 0");
+      if (value <= 0L) throw new IllegalArgumentException("历史固定 SQL Revision dataSourceId 必须大于 0");
       return value;
     } catch (IllegalArgumentException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new IllegalArgumentException("固定 SQL Revision configJson 非法", exception);
+      throw new IllegalArgumentException("历史固定 SQL Revision configJson 非法", exception);
     }
   }
 
@@ -231,5 +228,5 @@ public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSour
     return Objects.equals(normalizedLeft, normalizedRight);
   }
 
-  private record ResolvedSqlRevision(TaskDefinition definition, Long dataSourceId) {}
+  private record ResolvedSql(String sql, Long dataSourceId) {}
 }

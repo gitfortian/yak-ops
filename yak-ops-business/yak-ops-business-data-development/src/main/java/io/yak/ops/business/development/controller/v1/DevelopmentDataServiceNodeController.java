@@ -26,12 +26,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Data Service Node authoring API.
- *
- * <p>Publishing here only creates an immutable Data Development revision; it does not deploy a
- * runtime API.
- */
+/** Data Service Node authoring API. Publish creates an immutable Data Development revision only. */
 @Tag(name = "数据开发 Data Service Node 接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
@@ -43,24 +38,25 @@ public class DevelopmentDataServiceNodeController {
     this.service = service;
   }
 
-  @Operation(summary = "查询 Data Service Node 草稿、SQL 来源与发布历史")
+  @Operation(summary = "查询 Data Service Node 草稿与发布历史")
   @GetMapping("/{nodeId}/data-service")
   public Result<DataServiceNodeContext> get(@PathVariable("nodeId") long nodeId) {
     return Result.success(service.get(nodeId));
   }
 
-  @Operation(summary = "基于指定 SQL Revision 预览请求参数和响应字段 Contract")
+  @Operation(summary = "基于当前数据源和查询 SQL 预览请求参数与响应字段 Contract")
   @PostMapping("/{nodeId}/data-service/preview")
   public Result<PreviewResult> preview(
       @PathVariable("nodeId") long nodeId,
       @Valid @RequestBody PreviewRequest request) {
     return Result.success(service.preview(
         nodeId,
-        request.sourceTaskAssetId(),
-        request.sourceTaskRevisionId()));
+        request.dataSourceId(),
+        request.sql(),
+        request.timeoutSeconds()));
   }
 
-  @Operation(summary = "保存 Data Service Node 草稿并固定精确 SQL Revision")
+  @Operation(summary = "保存独立 Data Service Node 草稿")
   @PutMapping("/{nodeId}/data-service/draft")
   public Result<DataServiceNodeContext> saveDraft(
       @PathVariable("nodeId") long nodeId,
@@ -68,8 +64,8 @@ public class DevelopmentDataServiceNodeController {
     return Result.success(service.saveDraft(
         nodeId,
         new SaveDraftCommand(
-            request.sourceTaskAssetId(),
-            request.sourceTaskRevisionId(),
+            request.dataSourceId(),
+            request.sql(),
             request.serviceName(),
             request.path(),
             request.method(),
@@ -114,29 +110,22 @@ public class DevelopmentDataServiceNodeController {
 
   private static ParameterContract toParameterContract(ParameterRequest request) {
     return new ParameterContract(
-        request.name(),
-        request.type(),
-        request.required(),
-        request.description(),
-        request.example());
+        request.name(), request.type(), request.required(), request.description(), request.example());
   }
 
   private static ResponseFieldContract toResponseFieldContract(ResponseFieldRequest request) {
     return new ResponseFieldContract(
-        request.name(),
-        request.type(),
-        request.nullable(),
-        request.description(),
-        request.example());
+        request.name(), request.type(), request.nullable(), request.description(), request.example());
   }
 
   public record PreviewRequest(
-      @NotNull @Min(1) Long sourceTaskAssetId,
-      @NotNull @Min(1) Long sourceTaskRevisionId) {}
+      @NotNull @Min(1) Long dataSourceId,
+      @NotBlank @Size(max = 1_000_000) String sql,
+      @Min(1) @Max(3_600) Integer timeoutSeconds) {}
 
   public record SaveDraftRequest(
-      @NotNull @Min(1) Long sourceTaskAssetId,
-      @NotNull @Min(1) Long sourceTaskRevisionId,
+      @NotNull @Min(1) Long dataSourceId,
+      @NotBlank @Size(max = 1_000_000) String sql,
       @NotBlank @Size(max = 200) String serviceName,
       @NotBlank @Size(max = 255) String path,
       @Size(max = 16) String method,
@@ -161,6 +150,5 @@ public class DevelopmentDataServiceNodeController {
       @Size(max = 1_000) String description,
       @Size(max = 1_000) String example) {}
 
-  public record PublishRequest(
-      @Min(1) long expectedDraftRevision) {}
+  public record PublishRequest(@Min(1) long expectedDraftRevision) {}
 }
