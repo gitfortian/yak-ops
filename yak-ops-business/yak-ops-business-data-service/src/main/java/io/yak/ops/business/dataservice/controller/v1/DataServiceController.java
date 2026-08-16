@@ -17,10 +17,10 @@ import io.yak.ops.business.dataservice.service.DataServicePublicationService.Pub
 import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublishRequest;
 import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.DataServiceService;
-import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
 import io.yak.ops.business.dataservice.service.DataServiceService.QueryResponse;
 import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeConfigInput;
+import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourcePage;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.util.List;
@@ -86,26 +86,16 @@ public class DataServiceController {
     return Result.success(dataServiceService.get(id));
   }
 
-  /**
-   * Updates only service-facing settings.
-   *
-   * <p>SQL and datasource identity are server-owned Runtime snapshot fields. They are deliberately
-   * absent from the public update contract and can only change through source publication/republish.
-   * This also freezes execution logic for historical Legacy services while keeping them runnable.
-   */
   @Operation(summary = "更新 API 服务侧配置")
   @PutMapping("/{id}")
   public Result<ApiView> update(
       @PathVariable("id") Long id,
       @RequestBody UpdateDataServiceRequest input) {
-    ApiView current = dataServiceService.get(id);
-    return Result.success(dataServiceService.save(
+    return Result.success(dataServiceService.updateSettings(
         id,
-        new ApiInput(
+        new ServiceSettingsInput(
             input.name(),
             input.path(),
-            current.dataSourceId(),
-            current.sql(),
             input.maxRows(),
             input.timeoutSeconds(),
             input.enabled(),
