@@ -1,10 +1,10 @@
 import {
   Button,
+  Dropdown,
   Form,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Select,
   Space,
   Switch,
@@ -14,12 +14,20 @@ import {
   message,
   type TableColumnsType,
 } from 'antd';
-import { Activity, Copy, FileText, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  Copy,
+  Eye,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Power,
+  RefreshCw,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CreateDataServiceModal from './CreateDataServiceModal';
-import DataServiceAccessModal from './DataServiceAccessModal';
-import DataServiceDocsModal from './DataServiceDocsModal';
-import DataServiceRuntimeModal from './DataServiceRuntimeModal';
+import DataServiceDetailDrawer from './DataServiceDetailDrawer';
 import {
   deleteDataService,
   fetchDataServices,
@@ -39,12 +47,10 @@ export default function DataServicePage() {
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [detailTarget, setDetailTarget] = useState<DataServiceApi>();
   const [editing, setEditing] = useState<DataServiceApi>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [docsTarget, setDocsTarget] = useState<DataServiceApi>();
-  const [accessTarget, setAccessTarget] = useState<DataServiceApi>();
-  const [runtimeTarget, setRuntimeTarget] = useState<DataServiceApi>();
   const [form] = Form.useForm<DataServiceSavePayload>();
   const sourceManaged = Boolean(editing?.sourceType);
 
@@ -58,12 +64,9 @@ export default function DataServicePage() {
       const nextServices = serviceResponse.data || [];
       setServices(nextServices);
       setDataSources(dataSourceResponse.data || []);
-      const refreshTarget = (current?: DataServiceApi) => current
-        ? nextServices.find((item) => item.id === current.id) || current
-        : undefined;
-      setDocsTarget(refreshTarget);
-      setAccessTarget(refreshTarget);
-      setRuntimeTarget(refreshTarget);
+      setDetailTarget((current) => current
+        ? nextServices.find((item) => item.id === current.id)
+        : undefined);
     } catch (error: any) {
       message.error(error?.message || '加载数据服务失败');
     } finally {
@@ -77,7 +80,7 @@ export default function DataServicePage() {
     const value = keyword.trim().toLowerCase();
     if (!value) return services;
     return services.filter((item) =>
-      [item.name, item.path, item.runtimePath, item.description]
+      [item.name, item.path, item.runtimePath, item.description, item.sourceRef]
         .filter(Boolean)
         .some((text) => String(text).toLowerCase().includes(value)));
   }, [keyword, services]);
@@ -125,9 +128,10 @@ export default function DataServicePage() {
     }
   };
 
-  const remove = async (id: number) => {
+  const remove = async (record: DataServiceApi) => {
     try {
-      await deleteDataService(id);
+      await deleteDataService(record.id);
+      if (detailTarget?.id === record.id) setDetailTarget(undefined);
       message.success('已删除');
       await load();
     } catch (error: any) {
@@ -135,12 +139,23 @@ export default function DataServicePage() {
     }
   };
 
-  const toggleEnabled = async (record: DataServiceApi, enabled: boolean) => {
+  const confirmRemove = (record: DataServiceApi) => {
+    Modal.confirm({
+      title: '删除 API 服务',
+      content: `确认删除「${record.name}」？API Key、Runtime 状态和相关文档也会随服务一起移除。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => remove(record),
+    });
+  };
+
+  const toggleEnabled = async (record: DataServiceApi) => {
+    const enabled = !record.enabled;
     try {
       await setDataServiceEnabled(record.id, enabled);
-      setServices((items) => items.map((item) =>
-        item.id === record.id ? { ...item, enabled } : item));
       message.success(enabled ? '服务已启用' : '服务已停用');
+      await load();
     } catch (error: any) {
       message.error(error?.message || '状态更新失败');
     }
@@ -159,92 +174,107 @@ export default function DataServicePage() {
     {
       title: 'API 服务',
       dataIndex: 'name',
-      minWidth: 280,
+      minWidth: 240,
       render: (_, record) => (
-        <div className="py-1">
+        <div className="py-1.5">
           <div className="flex items-center gap-2">
             <span className="font-medium text-[#161823]">{record.name}</span>
             <Tag bordered={false}>GET</Tag>
-            {record.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
-              <Tag bordered={false}>数据开发 v{record.sourceRevisionNo || '-'}</Tag>
-            ) : (
-              <Tag bordered={false}>Legacy</Tag>
-            )}
           </div>
-          <div className="mt-1 flex items-center gap-1 text-xs text-black/45">
-            <span className="font-mono">{record.runtimePath}</span>
-            <Tooltip title="复制调用路径">
-              <Button type="text" size="small" icon={<Copy size={13} />} onClick={() => void copyPath(record.runtimePath)} />
-            </Tooltip>
+          <div className="mt-1 line-clamp-1 text-xs text-black/40">
+            {record.description || '暂无说明'}
           </div>
         </div>
       ),
     },
     {
-      title: '数据源',
-      dataIndex: 'dataSourceId',
-      width: 190,
-      render: (value) => dataSourceName(value),
+      title: 'Endpoint',
+      dataIndex: 'runtimePath',
+      minWidth: 290,
+      render: (value: string) => (
+        <div className="flex items-center gap-1">
+          <span className="truncate font-mono text-xs text-black/55">{value}</span>
+          <Tooltip title="复制 Endpoint">
+            <Button type="text" size="small" icon={<Copy size={13} />} onClick={() => void copyPath(value)} />
+          </Tooltip>
+        </div>
+      ),
     },
     {
-      title: '参数',
-      dataIndex: 'parameterNames',
-      width: 180,
-      render: (values: string[]) => values?.length
-        ? <span className="text-black/65">{values.map((item) => `:${item}`).join(' · ')}</span>
-        : <span className="text-black/35">无参数</span>,
+      title: '来源',
+      key: 'source',
+      width: 190,
+      render: (_, record) => record.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
+        <div>
+          <div className="font-medium text-[#475467]">数据开发 · SQL v{record.sourceRevisionNo || '-'}</div>
+          <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)} · Source #{record.sourceRef}</div>
+        </div>
+      ) : (
+        <div>
+          <Tag bordered={false}>Legacy</Tag>
+          <div className="mt-1 text-[11px] text-black/35">{dataSourceName(record.dataSourceId)}</div>
+        </div>
+      ),
     },
     {
       title: '访问控制',
       dataIndex: 'authMode',
-      width: 120,
+      width: 110,
       render: (value) => value === 'API_KEY'
-        ? <Tag bordered={false}>API Key</Tag>
-        : <span className="text-black/40">公开</span>,
-    },
-    {
-      title: '运行限制',
-      width: 150,
-      render: (_, record) => (
-        <span className="text-black/55">{record.maxRows} 行 · {record.timeoutSeconds}s</span>
-      ),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updateTime',
-      width: 170,
-      render: formatTime,
+        ? <span className="text-black/65">API Key</span>
+        : <span className="text-black/40">Public</span>,
     },
     {
       title: '状态',
       dataIndex: 'enabled',
       width: 90,
-      render: (_, record) => (
-        <Switch size="small" checked={record.enabled} onChange={(checked) => void toggleEnabled(record, checked)} />
-      ),
+      render: (value: boolean) => value
+        ? <Tag bordered={false}>运行中</Tag>
+        : <Tag bordered={false}>已停用</Tag>,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updateTime',
+      width: 160,
+      render: formatTime,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 220,
+      width: 140,
       fixed: 'right',
       render: (_, record) => (
-        <Space size={2}>
-          <Tooltip title="API 文档 / 在线调试">
-            <Button type="text" size="small" icon={<FileText size={15} />} onClick={() => setDocsTarget(record)} />
-          </Tooltip>
-          <Tooltip title="Runtime">
-            <Button type="text" size="small" icon={<Activity size={15} />} onClick={() => setRuntimeTarget(record)} />
-          </Tooltip>
-          <Tooltip title="访问控制">
-            <Button type="text" size="small" icon={<ShieldCheck size={15} />} onClick={() => setAccessTarget(record)} />
-          </Tooltip>
-          <Tooltip title="编辑">
-            <Button type="text" size="small" icon={<Pencil size={15} />} onClick={() => openEdit(record)} />
-          </Tooltip>
-          <Popconfirm title="确认删除这个数据服务？" onConfirm={() => void remove(record.id)}>
-            <Tooltip title="删除"><Button type="text" size="small" danger icon={<Trash2 size={15} />} /></Tooltip>
-          </Popconfirm>
+        <Space size={4}>
+          <Button
+            type="link"
+            size="small"
+            icon={<Eye size={14} />}
+            onClick={() => setDetailTarget(record)}
+          >
+            查看
+          </Button>
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'edit', icon: <Pencil size={14} />, label: '编辑服务配置' },
+                {
+                  key: 'toggle',
+                  icon: <Power size={14} />,
+                  label: record.enabled ? '停用服务' : '启用服务',
+                },
+                { type: 'divider' },
+                { key: 'delete', danger: true, icon: <Trash2 size={14} />, label: '删除服务' },
+              ],
+              onClick: ({ key }) => {
+                if (key === 'edit') openEdit(record);
+                if (key === 'toggle') void toggleEnabled(record);
+                if (key === 'delete') confirmRemove(record);
+              },
+            }}
+          >
+            <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
+          </Dropdown>
         </Space>
       ),
     },
@@ -255,7 +285,7 @@ export default function DataServicePage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">将数据开发中已发布的 SQL 转换为可调用、可鉴权、可缓存、可熔断、可文档化的 GET REST API。</p>
+          <p className="mb-0 mt-1 text-sm text-black/45">管理由数据开发发布的 API Endpoint、访问控制、运行状态、文档和调用审计。</p>
         </div>
         <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>新建 API</Button>
       </div>
@@ -266,8 +296,8 @@ export default function DataServicePage() {
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           prefix={<Search size={15} className="text-black/30" />}
-          placeholder="搜索名称或路径"
-          className="max-w-[320px]"
+          placeholder="搜索 API、Endpoint 或来源"
+          className="max-w-[340px]"
         />
         <Button icon={<RefreshCw size={15} />} onClick={() => void load()}>刷新</Button>
       </div>
@@ -279,7 +309,7 @@ export default function DataServicePage() {
         dataSource={filtered}
         columns={columns}
         pagination={false}
-        scroll={{ x: 1360 }}
+        scroll={{ x: 1220 }}
       />
 
       <CreateDataServiceModal
@@ -289,23 +319,13 @@ export default function DataServicePage() {
         onCreated={load}
       />
 
-      <DataServiceDocsModal
-        open={Boolean(docsTarget)}
-        service={docsTarget}
-        onCancel={() => setDocsTarget(undefined)}
-      />
-
-      <DataServiceAccessModal
-        open={Boolean(accessTarget)}
-        service={accessTarget}
-        onCancel={() => setAccessTarget(undefined)}
+      <DataServiceDetailDrawer
+        open={Boolean(detailTarget)}
+        service={detailTarget}
+        dataSources={dataSources}
+        onClose={() => setDetailTarget(undefined)}
+        onEdit={openEdit}
         onChanged={load}
-      />
-
-      <DataServiceRuntimeModal
-        open={Boolean(runtimeTarget)}
-        service={runtimeTarget}
-        onCancel={() => setRuntimeTarget(undefined)}
       />
 
       <Modal
