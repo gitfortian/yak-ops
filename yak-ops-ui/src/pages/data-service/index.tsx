@@ -5,7 +5,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Select,
   Space,
   Switch,
   Table,
@@ -35,7 +34,7 @@ import {
   setDataServiceEnabled,
   updateDataService,
   type DataServiceApi,
-  type DataServiceSavePayload,
+  type DataServiceUpdatePayload,
   type DataSourceOption,
 } from './service';
 
@@ -51,8 +50,7 @@ export default function DataServicePage() {
   const [editing, setEditing] = useState<DataServiceApi>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form] = Form.useForm<DataServiceSavePayload>();
-  const sourceManaged = Boolean(editing?.sourceType);
+  const [form] = Form.useForm<DataServiceUpdatePayload>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,8 +94,6 @@ export default function DataServicePage() {
     form.setFieldsValue({
       name: record.name,
       path: record.path,
-      dataSourceId: record.dataSourceId,
-      sql: record.sql,
       maxRows: record.maxRows,
       timeoutSeconds: record.timeoutSeconds,
       enabled: record.enabled,
@@ -109,15 +105,10 @@ export default function DataServicePage() {
   const saveEdit = async () => {
     if (!editing) return;
     const values = await form.validateFields();
-    const payload: DataServiceSavePayload = {
-      ...values,
-      dataSourceId: sourceManaged ? editing.dataSourceId : values.dataSourceId,
-      sql: sourceManaged ? editing.sql : values.sql,
-    };
     setSaving(true);
     try {
-      await updateDataService(editing.id, payload);
-      message.success('数据服务已更新');
+      await updateDataService(editing.id, values);
+      message.success('数据服务配置已更新');
       setEditorOpen(false);
       setEditing(undefined);
       await load();
@@ -338,19 +329,23 @@ export default function DataServicePage() {
         onOk={() => void saveEdit()}
         okText="保存"
         confirmLoading={saving}
-        width={760}
+        width={680}
         destroyOnHidden
       >
         <Form form={form} layout="vertical" className="pt-3">
-          {sourceManaged ? (
+          {editing?.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
             <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-              <div className="font-medium text-[#344054]">来源：数据开发 SQL · v{editing?.sourceRevisionNo || '-'}</div>
-              <div className="mt-1">数据源：{dataSourceName(editing?.dataSourceId)} · Source #{editing?.sourceRef || '-'}</div>
-              <div className="mt-1">SQL 与数据源由上游发布版本管理；需要修改执行逻辑时，请回到数据开发发布新 Revision。</div>
+              <div className="font-medium text-[#344054]">来源：数据开发 SQL · v{editing.sourceRevisionNo || '-'}</div>
+              <div className="mt-1">数据源：{dataSourceName(editing.dataSourceId)} · Source #{editing.sourceRef || '-'}</div>
+              <div className="mt-1">SQL 与数据源属于上游 Runtime Snapshot；修改执行逻辑请回到数据开发发布新的 ONLINE Revision，再显式更新 API。</div>
             </div>
           ) : (
-            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-              这是旧版手工创建的数据服务，当前继续保留 SQL 与数据源编辑能力用于兼容。新的 API 请从数据开发已发布 SQL 创建。
+            <div className="mb-4 border border-[#fecdca] bg-[#fffbfa] px-4 py-3 text-[12px] leading-5 text-[#b42318]">
+              <div className="font-medium">Legacy 手工数据服务</div>
+              <div className="mt-1 text-[#667085]">
+                当前 SQL 与数据源快照已冻结并继续用于 Runtime。Data Service 不再提供 SQL 编辑能力；如需修改查询逻辑，请在数据开发中创建并发布 SQL，再创建新的 API 服务。
+              </div>
+              <div className="mt-1 text-[#667085]">当前数据源：{dataSourceName(editing?.dataSourceId)}</div>
             </div>
           )}
 
@@ -362,36 +357,6 @@ export default function DataServicePage() {
               <Input addonBefore="GET" placeholder="/users" />
             </Form.Item>
           </div>
-
-          {!sourceManaged ? (
-            <>
-              <Form.Item
-                name="dataSourceId"
-                label="数据源"
-                rules={[{ required: true, message: '请选择数据源' }]}
-              >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder="选择已有数据源"
-                  options={dataSources.map((item) => ({ ...item, value: Number(item.value) || item.value }))}
-                />
-              </Form.Item>
-              <Form.Item
-                name="sql"
-                label="SELECT SQL"
-                extra="Legacy 兼容模式。新的 SQL 开发请统一在数据开发中完成。"
-                rules={[{ required: true, message: '请输入 SQL' }]}
-              >
-                <Input.TextArea
-                  rows={10}
-                  spellCheck={false}
-                  placeholder={'SELECT id, username\nFROM sys_user\nWHERE department = :department'}
-                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
-                />
-              </Form.Item>
-            </>
-          ) : null}
 
           <div className="grid grid-cols-3 gap-x-4">
             <Form.Item name="maxRows" label="最大返回行数" rules={[{ required: true }]}>

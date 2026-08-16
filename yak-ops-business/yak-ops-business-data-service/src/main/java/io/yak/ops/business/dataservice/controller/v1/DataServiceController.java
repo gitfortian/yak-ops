@@ -17,10 +17,10 @@ import io.yak.ops.business.dataservice.service.DataServicePublicationService.Pub
 import io.yak.ops.business.dataservice.service.DataServicePublicationService.PublishRequest;
 import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.DataServiceService;
-import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
 import io.yak.ops.business.dataservice.service.DataServiceService.QueryResponse;
 import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeConfigInput;
+import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourcePage;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.util.List;
@@ -86,16 +86,20 @@ public class DataServiceController {
     return Result.success(dataServiceService.get(id));
   }
 
-  @Operation(summary = "创建 API 服务（兼容旧版手工模式）")
-  @PostMapping
-  public Result<ApiView> create(@RequestBody ApiInput input) {
-    return Result.success(dataServiceService.save(null, input));
-  }
-
-  @Operation(summary = "更新 API 服务")
+  @Operation(summary = "更新 API 服务侧配置")
   @PutMapping("/{id}")
-  public Result<ApiView> update(@PathVariable("id") Long id, @RequestBody ApiInput input) {
-    return Result.success(dataServiceService.save(id, input));
+  public Result<ApiView> update(
+      @PathVariable("id") Long id,
+      @RequestBody UpdateDataServiceRequest input) {
+    return Result.success(dataServiceService.updateSettings(
+        id,
+        new ServiceSettingsInput(
+            input.name(),
+            input.path(),
+            input.maxRows(),
+            input.timeoutSeconds(),
+            input.enabled(),
+            input.description())));
   }
 
   @Operation(summary = "按当前上游 Revision 重新发布数据服务")
@@ -250,6 +254,14 @@ public class DataServiceController {
   public record PublishDataServiceRequest(
       String sourceType,
       String sourceRef,
+      String name,
+      String path,
+      Integer maxRows,
+      Integer timeoutSeconds,
+      Boolean enabled,
+      String description) {}
+
+  public record UpdateDataServiceRequest(
       String name,
       String path,
       Integer maxRows,

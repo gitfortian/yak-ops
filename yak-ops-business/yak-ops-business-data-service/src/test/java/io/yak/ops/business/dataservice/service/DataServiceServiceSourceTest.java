@@ -1,7 +1,6 @@
 package io.yak.ops.business.dataservice.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -11,8 +10,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.dataservice.dao.mapper.DataServiceApiMapper;
 import io.yak.ops.business.dataservice.dao.mapper.DataServiceCallLogMapper;
 import io.yak.ops.business.dataservice.dao.model.DataServiceApiPO;
-import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
+import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeDefinition;
+import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
+import io.yak.ops.business.dataservice.service.DataServiceService.SourceSnapshot;
 import io.yak.ops.business.dataservice.service.support.DataServiceSqlCompiler;
 import io.yak.ops.business.datasource.service.support.BusinessDataSourceExecutionProvider;
 import java.time.LocalDateTime;
@@ -39,76 +40,28 @@ class DataServiceServiceSourceTest {
         mock(DataServiceAccessService.class),
         runtimeService);
 
-    sourceManaged = new DataServiceApiPO();
-    sourceManaged.setId(9L);
-    sourceManaged.setName("订单查询");
-    sourceManaged.setPath("/orders");
-    sourceManaged.setDataSourceId(42L);
-    sourceManaged.setSqlText("select id from orders where status = :status");
-    sourceManaged.setMaxRows(1000);
-    sourceManaged.setTimeoutSeconds(30);
-    sourceManaged.setEnabled(true);
-    sourceManaged.setAuthMode("NONE");
-    sourceManaged.setCacheEnabled(false);
-    sourceManaged.setCacheTtlSeconds(60);
-    sourceManaged.setCacheMaxEntries(200);
-    sourceManaged.setCircuitBreakerEnabled(false);
-    sourceManaged.setCircuitFailureThreshold(5);
-    sourceManaged.setCircuitRecoverySeconds(30);
+    sourceManaged = api(
+        9L,
+        "订单查询",
+        "/orders",
+        42L,
+        "select id from orders where status = :status");
     sourceManaged.setSourceType("DATA_DEVELOPMENT_RELEASE");
     sourceManaged.setSourceRef("88");
     sourceManaged.setSourceRevisionId(102L);
     sourceManaged.setSourceRevisionNo(2);
-    sourceManaged.setCreateTime(LocalDateTime.now());
-    sourceManaged.setUpdateTime(LocalDateTime.now());
 
     when(apiMapper.selectById(9L)).thenReturn(sourceManaged);
     when(apiMapper.selectCount(any())).thenReturn(0L);
   }
 
   @Test
-  void manualEditCannotChangeDatasourceOfSourceManagedService() {
-    assertThatThrownBy(() -> service.save(
+  void sourceManagedSettingsUpdatePreservesRuntimeDefinition() {
+    ApiView updated = service.updateSettings(
         9L,
-        new ApiInput(
-            "订单查询",
-            "/orders",
-            43L,
-            sourceManaged.getSqlText(),
-            1000,
-            30,
-            true,
-            null)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("发布来源");
-  }
-
-  @Test
-  void manualEditCannotChangeSqlOfSourceManagedService() {
-    assertThatThrownBy(() -> service.save(
-        9L,
-        new ApiInput(
-            "订单查询",
-            "/orders",
-            42L,
-            "select id, amount from orders where status = :status",
-            1000,
-            30,
-            true,
-            null)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("发布来源");
-  }
-
-  @Test
-  void manualEditMayChangeOperationalMetadataWithoutLosingRuntimePolicy() {
-    ApiView updated = service.save(
-        9L,
-        new ApiInput(
+        new ServiceSettingsInput(
             "订单查询 API",
             "/orders/v1",
-            42L,
-            sourceManaged.getSqlText(),
             500,
             20,
             false,
@@ -118,11 +71,93 @@ class DataServiceServiceSourceTest {
     assertThat(updated.path()).isEqualTo("/orders/v1");
     assertThat(updated.maxRows()).isEqualTo(500);
     assertThat(updated.enabled()).isFalse();
-    assertThat(updated.authMode()).isEqualTo("NONE");
+    assertThat(updated.dataSourceId()).isEqualTo(42L);
+    assertThat(updated.sql()).isEqualTo("select id from orders where status = :status");
     assertThat(updated.sourceRevisionNo()).isEqualTo(2);
     assertThat(sourceManaged.getCacheEnabled()).isFalse();
     assertThat(sourceManaged.getCircuitBreakerEnabled()).isFalse();
     verify(apiMapper).updateById(sourceManaged);
     verify(runtimeService).invalidate(9L);
+  }
+
+  @Test
+  void legacySettingsUpdateAlsoPreservesRuntimeDefinition() {
+    DataServiceApiPO legacy = api(
+        10L,
+        "历史 API",
+        "/legacy",
+        77L,
+        "select id from legacy_orders");
+    when(apiMapper.selectById(10L)).thenReturn(legacy);
+
+    ApiView updated = service.updateSettings(
+        10L,
+        new ServiceSettingsInput(
+            "历史订单 API",
+            "/legacy/orders",
+            300,
+            15,
+            true,
+            "继续运行但执行快照冻结"));
+
+    assertThat(updated.dataSourceId()).isEqualTo(77L);
+    assertThat(updated.sql()).isEqualTo("select id from legacy_orders");
+    assertThat(updated.sourceType()).isNull();
+    assertThat(updated.name()).isEqualTo("历史订单 API");
+    assertThat(updated.path()).isEqualTo("/legacy/orders");
+  }
+
+  @Test
+  void sourceRepublishIsTheOnlyPathThatRefreshesRuntimeDefinition() {
+    when(apiMapper.selectOne(any())).thenReturn(sourceManaged);
+
+    ApiView refreshed = service.saveFromSource(
+        new SourceSnapshot("DATA_DEVELOPMENT_RELEASE", "88", 103L, 3),
+        new RuntimeDefinition(
+            43L,
+            "select id, amount from orders where status = :status"),
+        new ServiceSettingsInput(
+            "订单查询 API",
+            "/orders",
+            1000,
+            30,
+            true,
+            "新版查询"));
+
+    assertThat(refreshed.id()).isEqualTo(9L);
+    assertThat(refreshed.dataSourceId()).isEqualTo(43L);
+    assertThat(refreshed.sql())
+        .isEqualTo("select id, amount from orders where status = :status");
+    assertThat(refreshed.sourceRevisionId()).isEqualTo(103L);
+    assertThat(refreshed.sourceRevisionNo()).isEqualTo(3);
+    assertThat(sourceManaged.getCacheEnabled()).isFalse();
+    assertThat(sourceManaged.getCircuitBreakerEnabled()).isFalse();
+  }
+
+  private DataServiceApiPO api(
+      Long id,
+      String name,
+      String path,
+      Long dataSourceId,
+      String sql) {
+    DataServiceApiPO api = new DataServiceApiPO();
+    api.setId(id);
+    api.setName(name);
+    api.setPath(path);
+    api.setDataSourceId(dataSourceId);
+    api.setSqlText(sql);
+    api.setMaxRows(1000);
+    api.setTimeoutSeconds(30);
+    api.setEnabled(true);
+    api.setAuthMode("NONE");
+    api.setCacheEnabled(false);
+    api.setCacheTtlSeconds(60);
+    api.setCacheMaxEntries(200);
+    api.setCircuitBreakerEnabled(false);
+    api.setCircuitFailureThreshold(5);
+    api.setCircuitRecoverySeconds(30);
+    api.setCreateTime(LocalDateTime.now());
+    api.setUpdateTime(LocalDateTime.now());
+    return api;
   }
 }

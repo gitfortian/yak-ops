@@ -54,6 +54,15 @@ export interface DataServicePublishPayload {
   description?: string;
 }
 
+export interface DataServiceUpdatePayload {
+  name: string;
+  path: string;
+  maxRows?: number;
+  timeoutSeconds?: number;
+  enabled?: boolean;
+  description?: string;
+}
+
 export type DataServiceAuthMode = 'NONE' | 'API_KEY';
 export type DataServiceSchemaType =
   | 'STRING'
@@ -83,17 +92,6 @@ export interface DataServiceApi {
   sourceRevisionNo?: number;
   createTime?: string;
   updateTime?: string;
-}
-
-export interface DataServiceSavePayload {
-  name: string;
-  path: string;
-  dataSourceId: number;
-  sql: string;
-  maxRows?: number;
-  timeoutSeconds?: number;
-  enabled?: boolean;
-  description?: string;
 }
 
 export interface DataServiceRuntimeConfig {
@@ -233,11 +231,7 @@ export const fetchDataServiceSources = ({
 export const publishDataService = (payload: DataServicePublishPayload) =>
   HttpUtils.post<DataServiceApi>(`${PREFIX}/publish`, payload) as Promise<CommonApiResponse<DataServiceApi>>;
 
-/** Legacy manual SQL creation path retained for historical services during the migration period. */
-export const createDataService = (payload: DataServiceSavePayload) =>
-  HttpUtils.post<DataServiceApi>(PREFIX, payload) as Promise<CommonApiResponse<DataServiceApi>>;
-
-export const updateDataService = (id: number, payload: DataServiceSavePayload) =>
+export const updateDataService = (id: number, payload: DataServiceUpdatePayload) =>
   HttpUtils.put<DataServiceApi>(`${PREFIX}/${id}`, payload) as Promise<CommonApiResponse<DataServiceApi>>;
 
 export const deleteDataService = (id: number) =>
