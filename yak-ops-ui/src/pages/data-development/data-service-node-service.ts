@@ -32,9 +32,12 @@ export interface DevelopmentDataServiceResponseField {
 }
 
 export interface DevelopmentDataServiceDefinition {
-  sourceTaskAssetId: DevelopmentId;
-  sourceTaskRevisionId: DevelopmentId;
-  sourceTaskRevisionNo: number;
+  /** Legacy fields remain readable for revisions created before standalone SQL authoring. */
+  sourceTaskAssetId?: DevelopmentId;
+  sourceTaskRevisionId?: DevelopmentId;
+  sourceTaskRevisionNo?: number;
+  dataSourceId: DevelopmentId;
+  sql: string;
   serviceName: string;
   path: string;
   method: 'GET';
@@ -53,25 +56,13 @@ export interface DevelopmentDataServiceDraft {
   updateTime?: string | null;
 }
 
-export interface DevelopmentDataServiceSource {
-  nodeId?: DevelopmentId | null;
-  nodeName: string;
-  taskAssetId: DevelopmentId;
-  status: string;
-  revisionId: DevelopmentId;
-  revisionNo: number;
-  currentRevisionId?: DevelopmentId | null;
-  currentRevisionNo?: number | null;
-  updateAvailable: boolean;
-}
-
 export interface DevelopmentDataServiceRevisionSummary {
   id: DevelopmentId;
   nodeId: DevelopmentId;
   revisionNo: number;
   sourceDraftRevision: number;
-  sourceTaskRevisionId: DevelopmentId;
-  sourceTaskRevisionNo: number;
+  sourceTaskRevisionId?: DevelopmentId;
+  sourceTaskRevisionNo?: number;
   checksum: string;
   createTime?: string;
 }
@@ -90,22 +81,20 @@ export interface DevelopmentDataServiceNodeContext {
   nodeId: DevelopmentId;
   nodeName: string;
   configured: boolean;
-  availableSources: DevelopmentDataServiceSource[];
-  selectedSource?: DevelopmentDataServiceSource | null;
   draft: DevelopmentDataServiceDraft;
   latestPublishedRevision?: DevelopmentDataServiceRevisionSummary | null;
   revisions: DevelopmentDataServiceRevisionSummary[];
 }
 
 export interface PreviewDevelopmentDataServiceResult {
-  source: DevelopmentDataServiceSource;
+  dataSourceId: DevelopmentId;
   parameters: DevelopmentDataServiceParameter[];
   responseFields: DevelopmentDataServiceResponseField[];
 }
 
 export interface SaveDevelopmentDataServiceDraftPayload {
-  sourceTaskAssetId: DevelopmentId;
-  sourceTaskRevisionId: DevelopmentId;
+  dataSourceId: DevelopmentId;
+  sql: string;
   serviceName: string;
   path: string;
   method: 'GET';
@@ -133,12 +122,13 @@ export const getDevelopmentDataServiceNode = async (
 
 export const previewDevelopmentDataServiceNode = async (
   nodeId: DevelopmentId,
-  sourceTaskAssetId: DevelopmentId,
-  sourceTaskRevisionId: DevelopmentId,
+  dataSourceId: DevelopmentId,
+  sql: string,
+  timeoutSeconds = 30,
 ): Promise<PreviewDevelopmentDataServiceResult> => unwrap(
   await HttpUtils.post<PreviewDevelopmentDataServiceResult>(
     `${NODE_API}/${nodeId}/data-service/preview`,
-    { sourceTaskAssetId, sourceTaskRevisionId },
+    { dataSourceId, sql, timeoutSeconds },
   ),
   '预览 Data Service Contract 失败',
 );

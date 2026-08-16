@@ -16,7 +16,9 @@ public record DevelopmentDataServiceDefinition(
     List<ResponseFieldContract> responseFields,
     int maxRows,
     int timeoutSeconds,
-    String description) {
+    String description,
+    @JsonSerialize(using = ToStringSerializer.class) long dataSourceId,
+    String sql) {
 
   public DevelopmentDataServiceDefinition {
     parameters = parameters == null ? List.of() : List.copyOf(parameters);
@@ -24,15 +26,54 @@ public record DevelopmentDataServiceDefinition(
   }
 
   /**
-   * Lightweight v1 publish invariant.
+   * Backward-compatible constructor for historical revisions that pinned a SQL TaskRevision.
    *
-   * <p>A published Data Service Revision must be directly deployable by the current Runtime. Drafts
-   * may still be edited freely; this validation is applied only when an immutable revision is
-   * persisted.
+   * <p>New Data Service revisions are standalone and store their own dataSourceId + SQL. The legacy
+   * fields remain readable so already-published APIs do not break during the lightweight v1
+   * transition.
    */
+  public DevelopmentDataServiceDefinition(
+      long sourceTaskAssetId,
+      long sourceTaskRevisionId,
+      int sourceTaskRevisionNo,
+      String serviceName,
+      String path,
+      String method,
+      List<ParameterContract> parameters,
+      List<ResponseFieldContract> responseFields,
+      int maxRows,
+      int timeoutSeconds,
+      String description) {
+    this(
+        sourceTaskAssetId,
+        sourceTaskRevisionId,
+        sourceTaskRevisionNo,
+        serviceName,
+        path,
+        method,
+        parameters,
+        responseFields,
+        maxRows,
+        timeoutSeconds,
+        description,
+        0L,
+        null);
+  }
+
+  public boolean standaloneSql() {
+    return dataSourceId > 0L && sql != null && !sql.isBlank();
+  }
+
+  /** A published v1 Data Service Revision must be directly deployable by Runtime. */
   public void validatePublishable() {
     if (!"GET".equalsIgnoreCase(method)) {
       throw new IllegalArgumentException("当前 Data Service Runtime 仅支持 GET");
+    }
+    if (dataSourceId <= 0L) {
+      throw new IllegalArgumentException("发布前请选择数据源");
+    }
+    if (sql == null || sql.isBlank()) {
+      throw new IllegalArgumentException("发布前请填写查询 SQL");
     }
     if (responseFields.isEmpty()) {
       throw new IllegalArgumentException("发布前请先预览并确认响应字段 Contract");

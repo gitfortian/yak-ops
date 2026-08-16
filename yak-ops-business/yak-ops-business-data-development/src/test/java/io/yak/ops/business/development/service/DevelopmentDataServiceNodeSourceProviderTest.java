@@ -1,8 +1,9 @@
 package io.yak.ops.business.development.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,16 +44,12 @@ class DevelopmentDataServiceNodeSourceProviderTest {
   }
 
   @Test
-  void resolveUsesPublishedDataServiceRevisionAndPinnedSqlRevision() {
+  void resolveUsesSqlOwnedByPublishedDataServiceRevision() {
     DevelopmentNode node = dataServiceNode();
-    DevelopmentDataServiceRevision dsRevision = dataServiceRevision(900L, 2, 401L, 3);
-    TaskAsset sqlAsset = sqlAsset(TaskAssetStatus.OFFLINE, 402L, 4);
+    DevelopmentDataServiceRevision dsRevision = standaloneRevision(900L, 2);
 
     when(nodeRepository.findById(100L)).thenReturn(Optional.of(node));
     when(revisionRepository.findLatestByNodeId(100L)).thenReturn(Optional.of(dsRevision));
-    when(taskCatalogService.get(300L)).thenReturn(sqlAsset);
-    when(taskCatalogService.resolveRevision(300L, 401L))
-        .thenReturn(sqlRevision(sqlAsset, 401L, 3));
 
     ResolvedSource resolved = provider.resolve("100");
 
@@ -71,6 +68,7 @@ class DevelopmentDataServiceNodeSourceProviderTest {
         .isEqualTo("select id, status from orders where status = :status");
     assertThat(resolved.contract().parameters()).hasSize(1);
     assertThat(resolved.contract().responseFields()).hasSize(1);
+    verify(taskCatalogService, never()).get(org.mockito.ArgumentMatchers.anyLong());
   }
 
   @Test
@@ -80,40 +78,37 @@ class DevelopmentDataServiceNodeSourceProviderTest {
         101L, "未发布 API", "DATA_SERVICE", 7L, null, true, Instant.EPOCH, Instant.EPOCH);
     DevelopmentNode sql = new DevelopmentNode(
         200L, "orders.sql", "SQL", 7L, null, true, Instant.EPOCH, Instant.EPOCH);
-    DevelopmentDataServiceRevision dsRevision = dataServiceRevision(900L, 2, 401L, 3);
-    TaskAsset sqlAsset = sqlAsset(TaskAssetStatus.ONLINE, 401L, 3);
+    DevelopmentDataServiceRevision dsRevision = standaloneRevision(900L, 2);
 
     when(nodeRepository.list()).thenReturn(List.of(published, unpublished, sql));
     when(revisionRepository.findLatestByNodeId(100L)).thenReturn(Optional.of(dsRevision));
     when(revisionRepository.findLatestByNodeId(101L)).thenReturn(Optional.empty());
     when(nodeRepository.findById(100L)).thenReturn(Optional.of(published));
-    when(taskCatalogService.get(300L)).thenReturn(sqlAsset);
-    when(taskCatalogService.resolveRevision(300L, 401L))
-        .thenReturn(sqlRevision(sqlAsset, 401L, 3));
 
     var page = provider.list(1, 20, "订单");
 
     assertThat(page.total()).isEqualTo(1L);
-    assertThat(page.records()).singleElement()
-        .extracting(item -> item.sourceRef())
-        .isEqualTo("100");
+    assertThat(page.records()).hasSize(1);
+    assertThat(page.records().getFirst().sourceRef()).isEqualTo("100");
   }
 
   @Test
-  void resolveRejectsSqlRevisionMismatch() {
+  void resolveKeepsHistoricalPinnedSqlRevisionCompatible() {
     DevelopmentNode node = dataServiceNode();
-    DevelopmentDataServiceRevision dsRevision = dataServiceRevision(900L, 2, 401L, 3);
-    TaskAsset sqlAsset = sqlAsset(TaskAssetStatus.ONLINE, 402L, 4);
+    DevelopmentDataServiceRevision legacyRevision = legacyRevision(900L, 1, 401L, 3);
+    TaskAsset sqlAsset = sqlAsset(TaskAssetStatus.OFFLINE, 402L, 4);
 
     when(nodeRepository.findById(100L)).thenReturn(Optional.of(node));
-    when(revisionRepository.findLatestByNodeId(100L)).thenReturn(Optional.of(dsRevision));
+    when(revisionRepository.findLatestByNodeId(100L)).thenReturn(Optional.of(legacyRevision));
     when(taskCatalogService.get(300L)).thenReturn(sqlAsset);
     when(taskCatalogService.resolveRevision(300L, 401L))
-        .thenReturn(sqlRevision(sqlAsset, 401L, 4));
+        .thenReturn(sqlRevision(sqlAsset, 401L, 3));
 
-    assertThatThrownBy(() -> provider.resolve("100"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("不一致");
+    ResolvedSource resolved = provider.resolve("100");
+
+    assertThat(resolved.descriptor().dataSourceId()).isEqualTo(42L);
+    assertThat(resolved.sql())
+        .isEqualTo("select id, status from orders where status = :status");
   }
 
   private static DevelopmentNode dataServiceNode() {
@@ -121,7 +116,28 @@ class DevelopmentDataServiceNodeSourceProviderTest {
         100L, "订单查询 API", "DATA_SERVICE", 7L, null, true, Instant.EPOCH, Instant.EPOCH);
   }
 
-  private static DevelopmentDataServiceRevision dataServiceRevision(
+  private static DevelopmentDataServiceRevision standaloneRevision(long revisionId, int revisionNo) {
+    DevelopmentDataServiceDefinition definition = new DevelopmentDataServiceDefinition(
+        0L,
+        0L,
+        0,
+        "订单查询 API",
+        "/orders",
+        "GET",
+        List.of(new DevelopmentDataServiceDefinition.ParameterContract(
+            "status", "STRING", true, "订单状态", "PAID")),
+        List.of(new DevelopmentDataServiceDefinition.ResponseFieldContract(
+            "id", "INTEGER", false, "订单 ID", "1")),
+        500,
+        20,
+        "供运营系统查询",
+        42L,
+        "select id, status from orders where status = :status");
+    return new DevelopmentDataServiceRevision(
+        revisionId, 100L, revisionNo, 5L, definition, "ds-checksum", Instant.EPOCH);
+  }
+
+  private static DevelopmentDataServiceRevision legacyRevision(
       long revisionId,
       int revisionNo,
       long sqlRevisionId,
@@ -141,7 +157,7 @@ class DevelopmentDataServiceNodeSourceProviderTest {
         20,
         "供运营系统查询");
     return new DevelopmentDataServiceRevision(
-        revisionId, 100L, revisionNo, 5L, definition, "ds-checksum", Instant.EPOCH);
+        revisionId, 100L, revisionNo, 5L, definition, "legacy-checksum", Instant.EPOCH);
   }
 
   private static TaskAsset sqlAsset(

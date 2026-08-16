@@ -42,12 +42,36 @@ class DevelopmentDataServiceDefinitionTest {
     assertTrue(error.getMessage().contains("OBJECT"));
   }
 
+  @Test
+  void publishRejectsMissingStandaloneSql() {
+    DevelopmentDataServiceDefinition definition = new DevelopmentDataServiceDefinition(
+        0L,
+        0L,
+        0,
+        "订单查询 API",
+        "/orders",
+        "GET",
+        List.of(),
+        List.of(new DevelopmentDataServiceDefinition.ResponseFieldContract(
+            "id", "INTEGER", false, null, null)),
+        1000,
+        30,
+        null,
+        42L,
+        "");
+
+    IllegalArgumentException error =
+        assertThrows(IllegalArgumentException.class, definition::validatePublishable);
+
+    assertTrue(error.getMessage().contains("查询 SQL"));
+  }
+
   private DevelopmentDataServiceDefinition definition(
       DevelopmentDataServiceDefinition.ParameterContract parameter) {
     return new DevelopmentDataServiceDefinition(
-        300L,
-        401L,
-        3,
+        0L,
+        0L,
+        0,
         "订单查询 API",
         "/orders",
         "GET",
@@ -56,6 +80,8 @@ class DevelopmentDataServiceDefinitionTest {
             "id", "INTEGER", false, null, null)),
         1000,
         30,
-        null);
+        null,
+        42L,
+        "select id from orders where status = :status");
   }
 }
