@@ -39,17 +39,37 @@ class JdbcDatasetRepository implements DatasetRepository {
 
   @Override
   public long insertDataset(String name, String description) {
+    return insertDatasetInternal(null, name, description);
+  }
+
+  @Override
+  public long insertDevelopmentNodeDataset(
+      long developmentNodeId,
+      String name,
+      String description) {
+    if (developmentNodeId <= 0L) {
+      throw new IllegalArgumentException("developmentNodeId 必须大于 0");
+    }
+    return insertDatasetInternal(developmentNodeId, name, description);
+  }
+
+  private long insertDatasetInternal(Long developmentNodeId, String name, String description) {
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement statement = connection.prepareStatement(
           """
           INSERT INTO yak_dataset
-            (name, description, status, current_version_id, create_time, update_time)
-          VALUES (?, ?, 'ONLINE', NULL, NOW(6), NOW(6))
+            (development_node_id, name, description, status, current_version_id, create_time, update_time)
+          VALUES (?, ?, ?, 'ONLINE', NULL, NOW(6), NOW(6))
           """,
           Statement.RETURN_GENERATED_KEYS);
-      statement.setString(1, name);
-      statement.setString(2, description);
+      if (developmentNodeId == null) {
+        statement.setNull(1, java.sql.Types.BIGINT);
+      } else {
+        statement.setLong(1, developmentNodeId);
+      }
+      statement.setString(2, name);
+      statement.setString(3, description);
       return statement;
     }, keyHolder);
     Number key = keyHolder.getKey();
@@ -132,6 +152,16 @@ class JdbcDatasetRepository implements DatasetRepository {
   }
 
   @Override
+  public void updateMetadata(long datasetId, String name, String description) {
+    int updated = jdbcTemplate.update(
+        "UPDATE yak_dataset SET name = ?, description = ?, update_time = NOW(6) WHERE id = ?",
+        name,
+        description,
+        datasetId);
+    if (updated != 1) throw new IllegalArgumentException("Dataset 不存在：" + datasetId);
+  }
+
+  @Override
   public Optional<Dataset> findDataset(long datasetId) {
     return jdbcTemplate.query(
         DATASET_COLUMNS + " WHERE id = ? LIMIT 1",
@@ -148,11 +178,20 @@ class JdbcDatasetRepository implements DatasetRepository {
         FROM yak_dataset d
         INNER JOIN yak_dataset_version v ON v.dataset_id = d.id
         WHERE v.source_task_asset_id = ?
+          AND d.development_node_id IS NULL
         ORDER BY d.update_time DESC, d.id DESC
         LIMIT 1
         """,
         JdbcDatasetRepository::mapDataset,
         sourceTaskAssetId).stream().findFirst();
+  }
+
+  @Override
+  public Optional<Dataset> findDatasetByDevelopmentNodeId(long developmentNodeId) {
+    return jdbcTemplate.query(
+        DATASET_COLUMNS + " WHERE development_node_id = ? LIMIT 1",
+        JdbcDatasetRepository::mapDataset,
+        developmentNodeId).stream().findFirst();
   }
 
   @Override

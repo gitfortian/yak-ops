@@ -19,35 +19,12 @@ class DevelopmentNodeModelTest {
   }
 
   @Test
-  void allowsOnlyThePhaseOneDagContract() {
-    assertTrue(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.SQL, DevelopmentNodeType.SQL));
-    assertTrue(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.SQL, DevelopmentNodeType.DATASET));
-    assertTrue(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.SQL, DevelopmentNodeType.DATA_SERVICE));
-    assertTrue(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.DATASET, DevelopmentNodeType.DATA_SERVICE));
-
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.DATASET, DevelopmentNodeType.SQL));
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.DATASET, DevelopmentNodeType.DATASET));
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.DATA_SERVICE, DevelopmentNodeType.SQL));
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.DATA_SERVICE, DevelopmentNodeType.DATASET));
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.DATA_SERVICE, DevelopmentNodeType.DATA_SERVICE));
-  }
-
-  @Test
-  void leavesUnspecifiedProcessingEdgesClosed() {
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.SHELL, DevelopmentNodeType.DATASET));
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.HTTP, DevelopmentNodeType.DATA_SERVICE));
-    assertFalse(DevelopmentNodeConnectionPolicy.canConnect(
-        DevelopmentNodeType.PYTHON, DevelopmentNodeType.SQL));
+  void keepsOutputNodesOutsideProcessingLifecycle() {
+    assertTrue(DevelopmentNodeType.SQL.isProcessing());
+    assertTrue(DevelopmentNodeType.SHELL.isProcessing());
+    assertFalse(DevelopmentNodeType.DATASET.isProcessing());
+    assertFalse(DevelopmentNodeType.DATA_SERVICE.isProcessing());
+    assertTrue(DevelopmentNodeType.DATASET.isOutput());
+    assertTrue(DevelopmentNodeType.DATA_SERVICE.isOutput());
   }
 }

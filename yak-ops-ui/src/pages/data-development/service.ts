@@ -6,7 +6,6 @@ import type {
   CreateDevelopmentDirectoryPayload,
   CreateDevelopmentNodePayload,
   DevelopmentDirectory,
-  DevelopmentGraph,
   DevelopmentId,
   DevelopmentReleaseDetail,
   DevelopmentReleasePage,
@@ -21,14 +20,12 @@ import type {
   DevelopmentTaskRevision,
   DevelopmentTaskRevisionSummary,
   DevelopmentTaskRunResult,
-  SaveDevelopmentGraphPayload,
   SaveDevelopmentTaskDraftPayload,
 } from './types';
 
 const DATA_DEVELOPMENT_API = '/api/v1/data-development';
 const DIRECTORY_API = `${DATA_DEVELOPMENT_API}/directories`;
 const NODE_API = `${DATA_DEVELOPMENT_API}/nodes`;
-const GRAPH_API = `${DATA_DEVELOPMENT_API}/graph`;
 const EXECUTION_API = `${DATA_DEVELOPMENT_API}/executions`;
 const RELEASE_API = `${DATA_DEVELOPMENT_API}/releases`;
 const EDITOR_SETTINGS_API = `${DATA_DEVELOPMENT_API}/editor-settings`;
@@ -68,18 +65,6 @@ export const renameDevelopmentNode = (
 export const deleteDevelopmentNode = (
   id: DevelopmentId,
 ): Promise<ApiResponse<boolean>> => HttpUtils.delete<boolean>(`${NODE_API}/${id}`);
-
-export const getDevelopmentGraph = (
-  projectId?: DevelopmentId,
-): Promise<ApiResponse<DevelopmentGraph>> =>
-  HttpUtils.get<DevelopmentGraph>(
-    `${GRAPH_API}${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`,
-  );
-
-export const saveDevelopmentGraph = (
-  payload: SaveDevelopmentGraphPayload,
-): Promise<ApiResponse<DevelopmentGraph>> =>
-  HttpUtils.put<DevelopmentGraph>(GRAPH_API, payload);
 
 export const getDevelopmentTaskDraft = (
   nodeId: DevelopmentId,

@@ -8,9 +8,11 @@ import {
   ChevronRight,
   Code2,
   Copy,
+  Database,
   FileText,
   Folder,
   FolderPlus,
+  Network,
   Pencil,
   Plus,
   Search,
@@ -18,17 +20,20 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import { listDevelopmentNodes } from '../service';
+import type { DevelopmentNodeType } from '../types';
 
 export type DevelopmentTreeNodeType = 'directory' | 'node';
-export type DevelopmentNodeCreateType = 'SQL' | 'SHELL';
+export type DevelopmentNodeCreateType = DevelopmentNodeType;
 export type DevelopmentTreeAction =
   | 'create-directory'
   | 'create-sql'
   | 'create-shell'
+  | 'create-dataset'
+  | 'create-data-service'
   | 'copy-name'
   | 'copy-path'
   | 'rename'
@@ -73,7 +78,55 @@ type NodeMetadata = {
 const nodeTypeIconClassName = (taskType?: string) => {
   if (taskType === 'SHELL') return 'text-[#6172f3]';
   if (taskType === 'SQL') return 'text-[#f79009]';
+  if (taskType === 'DATASET') return 'text-[#667085]';
+  if (taskType === 'DATA_SERVICE') return 'text-[#475467]';
   return 'text-[#667085]';
+};
+
+const nodeIcon = (taskType?: string): ReactNode => {
+  const className = `shrink-0 ${nodeTypeIconClassName(taskType)}`;
+  if (taskType === 'SHELL') {
+    return <TerminalSquare size={13} strokeWidth={1.8} className={className} />;
+  }
+  if (taskType === 'DATASET') {
+    return <Database size={13} strokeWidth={1.8} className={className} />;
+  }
+  if (taskType === 'DATA_SERVICE') {
+    return <Network size={13} strokeWidth={1.8} className={className} />;
+  }
+  return <Code2 size={13} strokeWidth={1.8} className={className} />;
+};
+
+const nodeCreateItems: NonNullable<MenuProps['items']> = [
+  {
+    key: 'node-sql',
+    label: 'SQL 节点',
+    icon: <Code2 size={14} strokeWidth={1.8} className="text-[#f79009]" />,
+  },
+  {
+    key: 'node-shell',
+    label: 'Shell 节点',
+    icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
+  },
+  { type: 'divider' },
+  {
+    key: 'node-dataset',
+    label: '数据集节点',
+    icon: <Database size={14} strokeWidth={1.8} className="text-[#667085]" />,
+  },
+  {
+    key: 'node-data-service',
+    label: '数据服务节点',
+    icon: <Network size={14} strokeWidth={1.8} className="text-[#475467]" />,
+  },
+];
+
+const createTypeForMenuKey = (key: string): DevelopmentNodeCreateType | undefined => {
+  if (key === 'node-sql' || key === 'create-sql') return 'SQL';
+  if (key === 'node-shell' || key === 'create-shell') return 'SHELL';
+  if (key === 'node-dataset' || key === 'create-dataset') return 'DATASET';
+  if (key === 'node-data-service' || key === 'create-data-service') return 'DATA_SERVICE';
+  return undefined;
 };
 
 const padTimePart = (value: number) => String(value).padStart(2, '0');
@@ -110,18 +163,14 @@ const DevelopmentTreePane = ({
     void listDevelopmentNodes()
       .then((response) => {
         if (!active || !Array.isArray(response.data)) return;
-        setMetadataById(
-          new Map(
-            response.data.map((node) => [
-              node.id,
-              {
-                updatedBy: node.updatedBy,
-                updateTime: node.updateTime,
-                pendingPublish: node.pendingPublish,
-              },
-            ]),
-          ),
-        );
+        setMetadataById(new Map(response.data.map((node) => [
+          node.id,
+          {
+            updatedBy: node.updatedBy,
+            updateTime: node.updateTime,
+            pendingPublish: node.pendingPublish,
+          },
+        ])));
       })
       .catch(() => {
         // The parent tree request already owns page-level error feedback.
@@ -136,18 +185,7 @@ const DevelopmentTreePane = ({
       key: 'node',
       label: '新建节点',
       icon: <Code2 size={14} strokeWidth={1.8} />,
-      children: [
-        {
-          key: 'node-sql',
-          label: 'SQL 节点',
-          icon: <Code2 size={14} strokeWidth={1.8} className="text-[#f79009]" />,
-        },
-        {
-          key: 'node-shell',
-          label: 'Shell 节点',
-          icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
-        },
-      ],
+      children: nodeCreateItems,
     },
     {
       key: 'directory',
@@ -189,16 +227,11 @@ const DevelopmentTreePane = ({
         label: '新建节点',
         icon: <Code2 size={14} strokeWidth={1.8} />,
         children: [
-          {
-            key: 'create-sql',
-            label: 'SQL 节点',
-            icon: <Code2 size={14} strokeWidth={1.8} className="text-[#f79009]" />,
-          },
-          {
-            key: 'create-shell',
-            label: 'Shell 节点',
-            icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
-          },
+          { key: 'create-sql', label: 'SQL 节点', icon: <Code2 size={14} className="text-[#f79009]" /> },
+          { key: 'create-shell', label: 'Shell 节点', icon: <TerminalSquare size={14} className="text-[#6172f3]" /> },
+          { type: 'divider' },
+          { key: 'create-dataset', label: '数据集节点', icon: <Database size={14} className="text-[#667085]" /> },
+          { key: 'create-data-service', label: '数据服务节点', icon: <Network size={14} className="text-[#475467]" /> },
         ],
       },
       {
@@ -244,21 +277,7 @@ const DevelopmentTreePane = ({
             </Tooltip>
           ) : null}
 
-          {isNode ? (
-            node.taskType === 'SHELL' ? (
-              <TerminalSquare
-                size={13}
-                strokeWidth={1.8}
-                className={`shrink-0 ${nodeTypeIconClassName(node.taskType)}`}
-              />
-            ) : (
-              <Code2
-                size={13}
-                strokeWidth={1.8}
-                className={`shrink-0 ${nodeTypeIconClassName(node.taskType)}`}
-              />
-            )
-          ) : (
+          {isNode ? nodeIcon(node.taskType) : (
             <Folder size={14} strokeWidth={1.8} className="shrink-0 text-[#98a2b3]" />
           )}
 
@@ -303,9 +322,12 @@ const DevelopmentTreePane = ({
                 subMenuOpenDelay: 0.05,
                 subMenuCloseDelay: 0.1,
                 onClick: ({ key }) => {
-                  if (key === 'directory') onCreateDirectory();
-                  if (key === 'node-sql') onCreateNode('SQL');
-                  if (key === 'node-shell') onCreateNode('SHELL');
+                  if (key === 'directory') {
+                    onCreateDirectory();
+                    return;
+                  }
+                  const type = createTypeForMenuKey(key);
+                  if (type) onCreateNode(type);
                 },
               }}
             >
@@ -424,27 +446,15 @@ const DevelopmentTreePane = ({
           padding: 0 !important;
           border-radius: 0 !important;
           background: transparent !important;
-          line-height: 30px;
-        }
-        .development-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
-          color: #1f2937;
-          background: transparent !important;
         }
         .development-tree .ant-tree-title { display: flex; min-width: 0; flex: 1; }
-        .development-tree .ant-tree-indent-unit { width: 18px; }
         .development-tree .ant-tree-switcher {
-          display: inline-flex;
           width: 18px;
+          min-width: 18px;
           height: 30px;
-          flex: none;
-          align-items: center;
-          justify-content: center;
-          color: #98a2b3;
           line-height: 30px;
+          color: #98a2b3;
         }
-        .development-tree .ant-tree-switcher svg { transition: transform 0.15s ease; }
-        .development-tree .ant-tree-switcher_close svg { transform: rotate(-90deg); }
-        .development-tree .ant-tree-switcher-noop { width: 18px; }
       `}</style>
     </>
   );
