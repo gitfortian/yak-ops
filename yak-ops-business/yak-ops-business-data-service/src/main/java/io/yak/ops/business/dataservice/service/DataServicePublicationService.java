@@ -1,7 +1,8 @@
 package io.yak.ops.business.dataservice.service;
 
-import io.yak.ops.business.dataservice.service.DataServiceService.ApiInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.ApiView;
+import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeDefinition;
+import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.SourceSnapshot;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider;
 import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ResolvedSource;
@@ -102,11 +103,10 @@ public class DataServicePublicationService {
             identity.sourceRef(),
             source.sourceRevisionId(),
             source.sourceRevisionNo()),
-        new ApiInput(
+        new RuntimeDefinition(source.dataSourceId(), resolved.sql()),
+        new ServiceSettingsInput(
             name,
             path,
-            source.dataSourceId(),
-            resolved.sql(),
             maxRows,
             timeoutSeconds,
             enabled,
