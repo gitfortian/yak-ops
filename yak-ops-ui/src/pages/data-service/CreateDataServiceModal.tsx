@@ -1,4 +1,4 @@
-import { Form, Modal, Select, Switch, Tag, message } from 'antd';
+import { Form, Modal, Select, Tag, message } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DATA_SERVICE_NODE_SOURCE,
@@ -18,10 +18,7 @@ interface CreateDataServiceModalProps {
 
 interface DeployFormValues {
   sourceRef: string;
-  enabled: boolean;
 }
-
-const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 19) : '-';
 
 export default function CreateDataServiceModal({
   open,
@@ -80,7 +77,6 @@ export default function CreateDataServiceModal({
   useEffect(() => {
     if (!open) return;
     form.resetFields();
-    form.setFieldsValue({ enabled: false });
     setSelectedRef(undefined);
     void Promise.all([loadSources(), loadPublishedRefs()]);
   }, [form, loadPublishedRefs, loadSources, open]);
@@ -96,14 +92,15 @@ export default function CreateDataServiceModal({
       message.warning('该 Data Service Node 已部署，请在已有 API 中同步最新 Revision');
       return;
     }
+
     setSaving(true);
     try {
       await publishDataService({
         sourceType: DATA_SERVICE_NODE_SOURCE,
         sourceRef: values.sourceRef,
-        enabled: values.enabled,
+        enabled: false,
       });
-      message.success('Runtime 已从 Data Service Node Revision 部署');
+      message.success('API 已部署，当前保持停用');
       onCancel();
       await onCreated();
     } catch (error: any) {
@@ -115,33 +112,33 @@ export default function CreateDataServiceModal({
 
   return (
     <Modal
-      title="部署 API Runtime"
+      title="部署 API"
       open={open}
       onCancel={onCancel}
       onOk={() => void save()}
-      okText="部署 Runtime"
+      okText="部署"
       confirmLoading={saving}
-      width={720}
+      width={680}
       destroyOnHidden
     >
       <Form form={form} layout="vertical" className="pt-3">
         <div className="mb-4 text-[13px] leading-5 text-black/45">
-          选择数据开发中已经发布的 Data Service Node。接口名称、Path、Contract、返回限制与超时来自不可变 DS Revision；这里仅创建 Runtime Snapshot。
+          选择数据开发中已经发布的 Data Service Node。API 定义直接来自最新 DS Revision。
         </div>
 
         <Form.Item
           name="sourceRef"
           label="Data Service Node"
           rules={[{ required: true, message: '请选择已发布 Data Service Node' }]}
-          extra="同一个 Data Service Node 只对应一个 Runtime API；后续发布 DS Rn 后在已有 API 中显式同步。"
+          extra="同一个节点只部署一个 API；后续发布新 DS Revision 后直接同步即可。"
         >
           <Select
             allowClear
             showSearch
             filterOption={false}
             loading={sourceLoading}
-            placeholder="搜索并选择已发布 Data Service Node"
-            notFoundContent={sourceLoading ? '加载中...' : '暂无可部署节点，请先在数据开发发布 Data Service Revision'}
+            placeholder="搜索已发布 Data Service Node"
+            notFoundContent={sourceLoading ? '加载中...' : '暂无可部署节点'}
             onSearch={(value) => void loadSources(value)}
             onChange={selectSource}
             options={sources.map((item) => {
@@ -156,34 +153,29 @@ export default function CreateDataServiceModal({
         </Form.Item>
 
         {selectedSource ? (
-          <div className="mb-5 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3">
+          <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="font-medium text-[#161823]">{selectedSource.name}</span>
-              <Tag bordered={false}>Data Service</Tag>
               <Tag bordered={false}>DS R{selectedSource.sourceRevisionNo || '-'}</Tag>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-black/45">
-              <div>Endpoint：<span className="font-mono text-black/65">GET {selectedSource.defaultPath}</span></div>
-              <div>数据源：<span className="text-black/65">{dataSourceName}</span></div>
-              <div>最大返回：<span className="text-black/65">{selectedSource.maxRows || 1000} 行</span></div>
-              <div>超时：<span className="text-black/65">{selectedSource.timeoutSeconds || 30}s</span></div>
-              <div>Node：<span className="font-mono text-black/65">#{selectedSource.sourceRef}</span></div>
-              <div>发布时间：<span className="text-black/65">{formatTime(selectedSource.updateTime)}</span></div>
-            </div>
-            {selectedSource.description ? (
-              <div className="mt-3 border-t border-[#eceff2] pt-3 text-xs leading-5 text-black/45">
-                {selectedSource.description}
+            <div className="mt-3 space-y-2 text-xs text-black/45">
+              <div>
+                Endpoint：
+                <span className="font-mono text-black/65">GET {selectedSource.defaultPath}</span>
               </div>
-            ) : null}
+              <div>
+                数据源：<span className="text-black/65">{dataSourceName}</span>
+                <span className="mx-2 text-black/15">·</span>
+                最大返回：<span className="text-black/65">{selectedSource.maxRows || 1000} 行</span>
+                <span className="mx-2 text-black/15">·</span>
+                超时：<span className="text-black/65">{selectedSource.timeoutSeconds || 30}s</span>
+              </div>
+            </div>
           </div>
         ) : null}
 
-        <Form.Item name="enabled" label="部署后状态" valuePropName="checked">
-          <Switch checkedChildren="立即启用" unCheckedChildren="保持停用" />
-        </Form.Item>
-
         <div className="border border-[#e5e7eb] bg-white px-4 py-3 text-[12px] leading-5 text-[#667085]">
-          Runtime 不会重新解释 SQL，也不会修改接口定义。它只消费 DS Revision 冻结的定义与精确 SQL Revision，并负责启停、鉴权、限流、缓存、熔断和调用观测。
+          部署后默认保持停用。确认接口后，可直接在 API 列表中启用；API Key、Runtime 和调用记录在详情中管理。
         </div>
       </Form>
     </Modal>

@@ -41,6 +41,11 @@ public class DevelopmentDataServiceRevisionRepositoryAdapter
       long sourceDraftRevision,
       DevelopmentDataServiceDefinition definition,
       String checksum) {
+    if (definition == null) {
+      throw new IllegalArgumentException("Data Service Node 发布定义不能为空");
+    }
+    definition.validatePublishable();
+
     DevelopmentDataServiceRevisionPO po = new DevelopmentDataServiceRevisionPO();
     po.setNodeId(nodeId);
     po.setRevisionNo(revisionNo);

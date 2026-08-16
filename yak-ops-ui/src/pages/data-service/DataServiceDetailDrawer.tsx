@@ -13,12 +13,10 @@ import {
 } from 'antd';
 import {
   Activity,
-  Braces,
   Copy,
   FileText,
   Gauge,
   KeyRound,
-  Pencil,
   RefreshCw,
   ServerCog,
 } from 'lucide-react';
@@ -29,7 +27,6 @@ import DataServiceRuntimeModal from './DataServiceRuntimeModal';
 import {
   DATA_SERVICE_NODE_SOURCE,
   LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE,
-  fetchDataServiceDocumentation,
   fetchDataServiceKeys,
   fetchDataServiceLogs,
   fetchDataServiceRuntime,
@@ -37,7 +34,6 @@ import {
   type DataServiceApi,
   type DataServiceApiKey,
   type DataServiceCallLog,
-  type DataServiceDocumentation,
   type DataServiceRuntimeStatus,
   type DataSourceOption,
 } from './service';
@@ -47,7 +43,6 @@ interface DataServiceDetailDrawerProps {
   service?: DataServiceApi;
   dataSources: DataSourceOption[];
   onClose: () => void;
-  onEdit: (service: DataServiceApi) => void;
   onChanged: () => Promise<void> | void;
 }
 
@@ -59,6 +54,12 @@ const callerLabel = (record: DataServiceCallLog) => {
   if (record.callerType === 'API_KEY') return record.apiKeyName || 'API Key';
   if (record.callerType === 'PUBLIC') return '公开调用';
   return '历史调用';
+};
+
+const latestActivity = (runtime?: DataServiceRuntimeStatus) => {
+  const values = [runtime?.lastSuccessAt, runtime?.lastFailureAt].filter(Boolean) as string[];
+  if (!values.length) return '-';
+  return formatTime(values.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]);
 };
 
 const Metric = ({ label, value }: { label: string; value: string | number }) => (
@@ -77,13 +78,11 @@ export default function DataServiceDetailDrawer({
   service,
   dataSources,
   onClose,
-  onEdit,
   onChanged,
 }: DataServiceDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
   const [republishing, setRepublishing] = useState(false);
-  const [documentation, setDocumentation] = useState<DataServiceDocumentation>();
   const [runtime, setRuntime] = useState<DataServiceRuntimeStatus>();
   const [keys, setKeys] = useState<DataServiceApiKey[]>([]);
   const [logs, setLogs] = useState<DataServiceCallLog[]>([]);
@@ -114,18 +113,16 @@ export default function DataServiceDetailDrawer({
     if (!service?.id) return;
     setLoading(true);
     try {
-      const [docsResponse, runtimeResponse, keyResponse, logResponse] = await Promise.all([
-        fetchDataServiceDocumentation(service.id),
+      const [runtimeResponse, keyResponse, logResponse] = await Promise.all([
         fetchDataServiceRuntime(service.id),
         fetchDataServiceKeys(service.id),
         fetchDataServiceLogs(),
       ]);
-      setDocumentation(docsResponse.data);
       setRuntime(runtimeResponse.data);
       setKeys(keyResponse.data || []);
       setLogs(logResponse.data || []);
     } catch (error: any) {
-      message.error(error?.message || '加载 API 管理信息失败');
+      message.error(error?.message || '加载 API 运行信息失败');
     } finally {
       setLoading(false);
     }
@@ -165,10 +162,10 @@ export default function DataServiceDetailDrawer({
   if (!service) return null;
 
   const sourceTypeLabel = sourceManaged
-    ? '数据开发 · Data Service Node'
+    ? 'Data Service Node'
     : legacySqlRelease
-      ? 'Legacy · SQL Release（冻结）'
-      : 'Legacy 手工服务';
+      ? 'Legacy SQL Release'
+      : 'Legacy';
   const sourceRevisionLabel = sourceManaged
     ? `DS R${service.sourceRevisionNo || '-'}`
     : legacySqlRelease
@@ -213,7 +210,7 @@ export default function DataServiceDetailDrawer({
   const overview = (
     <div className="space-y-6">
       <div>
-        <SectionTitle>接口</SectionTitle>
+        <SectionTitle>Endpoint</SectionTitle>
         <div className="border border-[#e5e7eb] bg-[#fafafa] px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -225,98 +222,62 @@ export default function DataServiceDetailDrawer({
                 <div className="mt-2 text-[12px] leading-5 text-[#667085]">{service.description}</div>
               ) : null}
             </div>
-            <Button size="small" icon={<Copy size={14} />} onClick={() => void copy(service.runtimePath)}>复制</Button>
+            <Space size={6}>
+              <Button size="small" icon={<Copy size={14} />} onClick={() => void copy(service.runtimePath)}>复制</Button>
+              <Button size="small" icon={<FileText size={14} />} onClick={() => setDocsOpen(true)}>
+                OpenAPI / 调试
+              </Button>
+            </Space>
           </div>
+        </div>
+      </div>
+
+      <div>
+        <SectionTitle>运行概览</SectionTitle>
+        <div className="grid grid-cols-4 border-y border-[#edf0f2] py-3">
+          <Metric label="调用次数" value={runtime?.totalCalls || 0} />
+          <Metric label="成功率" value={percent(runtime?.successRate)} />
+          <Metric label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
+          <Metric label="最近调用" value={latestActivity(runtime)} />
         </div>
       </div>
 
       <div>
         <SectionTitle>来源</SectionTitle>
-        <div className="grid grid-cols-2 border border-[#e5e7eb] text-[12px]">
-          <div className="border-b border-r border-[#edf0f2] px-4 py-3">
-            <div className="text-[#98a2b3]">来源类型</div>
+        <div className="grid grid-cols-3 border border-[#e5e7eb] text-[12px]">
+          <div className="border-r border-[#edf0f2] px-4 py-3">
+            <div className="text-[#98a2b3]">来源</div>
             <div className="mt-1 font-medium text-[#344054]">{sourceTypeLabel}</div>
           </div>
-          <div className="border-b border-[#edf0f2] px-4 py-3">
-            <div className="text-[#98a2b3]">来源版本</div>
+          <div className="border-r border-[#edf0f2] px-4 py-3">
+            <div className="text-[#98a2b3]">版本</div>
             <div className="mt-1 font-medium text-[#344054]">{sourceRevisionLabel}</div>
           </div>
-          <div className="border-r border-[#edf0f2] px-4 py-3">
+          <div className="px-4 py-3">
             <div className="text-[#98a2b3]">数据源</div>
             <div className="mt-1 font-medium text-[#344054]">{dataSourceName}</div>
           </div>
-          <div className="px-4 py-3">
-            <div className="text-[#98a2b3]">{sourceManaged ? 'Node / DS Revision' : 'Source / Revision'}</div>
-            <div className="mt-1 font-mono text-[11px] text-[#475467]">
-              {service.sourceType ? `#${service.sourceRef || '-'} / #${service.sourceRevisionId || '-'}` : '-'}
-            </div>
-          </div>
         </div>
+
         {sourceManaged ? (
           <div className="mt-3 flex items-center justify-between border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] text-[#667085]">
-            <div>接口定义与 Contract 来自数据开发的不可变 DS Revision；Runtime 只保存运行快照。</div>
-            <Button size="small" icon={<RefreshCw size={13} />} loading={republishing} onClick={() => void syncLatestRevision()}>
+            <div>
+              Node #{service.sourceRef} · {service.maxRows} 行 · {service.timeoutSeconds}s · {service.parameterNames?.length || 0} 个参数
+            </div>
+            <Button
+              size="small"
+              icon={<RefreshCw size={13} />}
+              loading={republishing}
+              onClick={() => void syncLatestRevision()}
+            >
               同步最新 Revision
             </Button>
           </div>
         ) : legacySqlRelease ? (
           <div className="mt-3 border border-[#fedf89] bg-[#fffaeb] px-4 py-3 text-[12px] leading-5 text-[#93370d]">
-            历史 SQL Release 来源已冻结：现有 Runtime Snapshot 可以继续运行，但不再支持从原 SQL 来源重新发布。新的服务请通过 Data Service Node 部署。
+            历史 SQL Release 来源已冻结，现有 Runtime Snapshot 可以继续运行，但不再支持重新发布。
           </div>
         ) : null}
-      </div>
-
-      <div>
-        <SectionTitle>服务配置</SectionTitle>
-        <div className="grid grid-cols-4 border-y border-[#edf0f2] py-3">
-          <Metric label="最大返回" value={`${service.maxRows} 行`} />
-          <Metric label="超时" value={`${service.timeoutSeconds}s`} />
-          <Metric label="请求参数" value={service.parameterNames?.length || 0} />
-          <Metric label="访问模式" value={service.authMode === 'API_KEY' ? 'API Key' : 'Public'} />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between border-t border-[#edf0f2] pt-4 text-[12px] text-[#667085]">
-        <div>创建 {formatTime(service.createTime)} · 更新 {formatTime(service.updateTime)}</div>
-        {sourceManaged ? (
-          <span>定义修改请回到数据开发 Data Service Node</span>
-        ) : (
-          <Button icon={<Pencil size={14} />} onClick={() => onEdit(service)}>编辑 Legacy 配置</Button>
-        )}
-      </div>
-    </div>
-  );
-
-  const docs = (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[13px] font-medium text-[#344054]">API 文档与在线调试</div>
-          <div className="mt-1 text-[12px] text-[#667085]">
-            {sourceManaged
-              ? '参数与响应 Contract 来自 DS Revision，在 Runtime 中只读；可查看 OpenAPI 并在线调试。'
-              : '维护请求参数、响应 Schema、OpenAPI，并使用真实数据源调试。'}
-          </div>
-        </div>
-        <Button icon={<FileText size={14} />} onClick={() => setDocsOpen(true)}>{sourceManaged ? '查看文档' : '打开文档'}</Button>
-      </div>
-      <div className="grid grid-cols-3 border-y border-[#edf0f2] py-3">
-        <Metric label="文档状态" value={documentation?.documented ? '已同步' : '未维护'} />
-        <Metric label="请求参数" value={documentation?.parameters?.length || service.parameterNames?.length || 0} />
-        <Metric label="响应字段" value={documentation?.responseFields?.length || 0} />
-      </div>
-      {documentation?.schemaStale ? (
-        <div className="border border-[#fecdca] bg-[#fffbfa] px-3 py-2.5 text-[12px] leading-5 text-[#b42318]">
-          当前 Runtime SQL 与已同步 Contract 不一致，请从最新 Data Service Revision 重新发布 Runtime。
-        </div>
-      ) : null}
-      <div className="border border-[#e5e7eb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-        <div className="flex items-center gap-2 font-medium text-[#344054]"><Braces size={14} /> 参数</div>
-        <div className="mt-2">
-          {service.parameterNames?.length
-            ? service.parameterNames.map((name) => `:${name}`).join(' · ')
-            : '当前 SQL 无请求参数'}
-        </div>
       </div>
     </div>
   );
@@ -325,20 +286,15 @@ export default function DataServiceDetailDrawer({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[13px] font-medium text-[#344054]">访问控制</div>
-          <div className="mt-1 text-[12px] text-[#667085]">控制外部调用身份、API Key 生命周期与每分钟限流。</div>
+          <div className="text-[13px] font-medium text-[#344054]">API Key</div>
+          <div className="mt-1 text-[12px] text-[#667085]">管理访问模式、API Key 和每分钟限流。</div>
         </div>
-        <Button icon={<KeyRound size={14} />} onClick={() => setAccessOpen(true)}>管理访问</Button>
+        <Button icon={<KeyRound size={14} />} onClick={() => setAccessOpen(true)}>管理 API Key</Button>
       </div>
       <div className="grid grid-cols-3 border-y border-[#edf0f2] py-3">
-        <Metric label="当前模式" value={service.authMode === 'API_KEY' ? 'API Key' : 'Public'} />
+        <Metric label="访问模式" value={service.authMode === 'API_KEY' ? 'API Key' : 'Public'} />
         <Metric label="API Keys" value={keys.length} />
         <Metric label="启用 Key" value={activeKeys} />
-      </div>
-      <div className="border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-        {service.authMode === 'API_KEY'
-          ? '外部调用必须携带 X-API-Key。每个 Key 可以独立配置调用方名称、过期时间和每分钟限流。'
-          : '当前接口允许公开调用。生产或跨系统调用建议切换到 API Key 模式。'}
       </div>
     </div>
   );
@@ -348,22 +304,26 @@ export default function DataServiceDetailDrawer({
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[13px] font-medium text-[#344054]">Runtime</div>
-          <div className="mt-1 text-[12px] text-[#667085]">查看运行指标，并管理缓存与熔断策略。</div>
+          <div className="mt-1 text-[12px] text-[#667085]">轻量管理缓存、熔断和运行指标。</div>
         </div>
         <Space size={6}>
           <Button icon={<RefreshCw size={14} />} onClick={() => void loadDetail()}>刷新</Button>
           <Button icon={<Gauge size={14} />} onClick={() => setRuntimeOpen(true)}>Runtime 配置</Button>
         </Space>
       </div>
+
       <div className="grid grid-cols-4 border-y border-[#edf0f2] py-3">
         <Metric label="调用总数" value={runtime?.totalCalls || 0} />
         <Metric label="成功率" value={percent(runtime?.successRate)} />
         <Metric label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
         <Metric label="P95" value={`${runtime?.p95DurationMs || 0} ms`} />
       </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div className="border border-[#e5e7eb] px-4 py-3">
-          <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]"><Activity size={14} /> 结果缓存</div>
+          <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
+            <Activity size={14} /> 结果缓存
+          </div>
           <div className="mt-3 text-[12px] leading-6 text-[#667085]">
             <div>状态：{runtime?.cacheEnabled ? '启用' : '关闭'}</div>
             <div>命中率：{percent(runtime?.cacheHitRate)}</div>
@@ -371,7 +331,9 @@ export default function DataServiceDetailDrawer({
           </div>
         </div>
         <div className="border border-[#e5e7eb] px-4 py-3">
-          <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]"><ServerCog size={14} /> 熔断器</div>
+          <div className="flex items-center gap-2 text-[12px] font-medium text-[#344054]">
+            <ServerCog size={14} /> 熔断器
+          </div>
           <div className="mt-3 text-[12px] leading-6 text-[#667085]">
             <div>状态：{runtime?.circuitState || 'DISABLED'}</div>
             <div>拒绝次数：{runtime?.circuitRejected || 0}</div>
@@ -386,11 +348,12 @@ export default function DataServiceDetailDrawer({
     <div>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <div className="text-[13px] font-medium text-[#344054]">最近调用</div>
-          <div className="mt-1 text-[12px] text-[#667085]">展示最近 200 条全局审计记录中属于当前 API 的最多 50 条。</div>
+          <div className="text-[13px] font-medium text-[#344054]">调用记录</div>
+          <div className="mt-1 text-[12px] text-[#667085]">展示当前 API 最近的调用结果、耗时和错误。</div>
         </div>
         <Button icon={<RefreshCw size={14} />} onClick={() => void loadDetail()}>刷新</Button>
       </div>
+
       {serviceLogs.length ? (
         <Table<DataServiceCallLog>
           rowKey="id"
@@ -409,7 +372,7 @@ export default function DataServiceDetailDrawer({
       <Drawer
         open={open}
         onClose={onClose}
-        width={900}
+        width={860}
         destroyOnHidden
         title={(
           <div className="min-w-0">
@@ -419,13 +382,10 @@ export default function DataServiceDetailDrawer({
               <Tag bordered={false}>{service.enabled ? '运行中' : '已停用'}</Tag>
               {sourceManaged ? <Tag bordered={false}>DS R{service.sourceRevisionNo || '-'}</Tag> : null}
             </div>
-            <div className="mt-1 truncate font-mono text-[11px] font-normal text-[#98a2b3]">{service.runtimePath}</div>
+            <div className="mt-1 truncate font-mono text-[11px] font-normal text-[#98a2b3]">
+              {service.runtimePath}
+            </div>
           </div>
-        )}
-        extra={sourceManaged ? (
-          <Button size="small" icon={<RefreshCw size={13} />} loading={republishing} onClick={() => void syncLatestRevision()}>同步 Revision</Button>
-        ) : (
-          <Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(service)}>编辑</Button>
         )}
       >
         <Spin spinning={loading}>
@@ -434,8 +394,7 @@ export default function DataServiceDetailDrawer({
             onChange={setActiveTab}
             items={[
               { key: 'overview', label: '概览', children: overview },
-              { key: 'docs', label: '文档', children: docs },
-              { key: 'access', label: '访问控制', children: access },
+              { key: 'access', label: 'API Key', children: access },
               { key: 'runtime', label: 'Runtime', children: runtimeTab },
               { key: 'logs', label: '调用记录', children: logTab },
             ]}
@@ -447,10 +406,7 @@ export default function DataServiceDetailDrawer({
         open={docsOpen}
         service={service}
         readOnly={sourceManaged}
-        onCancel={() => {
-          setDocsOpen(false);
-          void loadDetail();
-        }}
+        onCancel={() => setDocsOpen(false)}
       />
 
       <DataServiceAccessModal
