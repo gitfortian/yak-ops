@@ -1,6 +1,6 @@
 import { history, useLocation } from '@umijs/max';
 import { Button, Empty, Input, Select, Spin, message } from 'antd';
-import { ArrowLeft, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -173,43 +173,26 @@ export default function DataServiceDebugPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f7f8]">
+      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-white">
         <Spin size="large" />
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] overflow-hidden bg-[#f7f7f8] text-[#161823]">
-      <div className="flex h-14 items-center justify-between border-b border-[#eceef1] bg-white px-5">
-        <div className="flex items-center gap-3">
-          {selectedService ? (
-            <Button
-              type="text"
-              icon={<ArrowLeft size={15} />}
-              className="!px-1 !text-[#667085]"
-              onClick={() => history.push(`/data-service/api/${selectedService.id}`)}
-            />
-          ) : null}
-          <div>
-            <div className="text-[17px] font-semibold text-[#161823]">API 调试</div>
-            {selectedService ? (
-              <div className="mt-0.5 text-[11px] text-[#98a2b3]">
-                {selectedService.name}
-              </div>
-            ) : null}
-          </div>
-        </div>
+    <div className="h-[calc(100vh-64px)] overflow-hidden bg-white text-[#161823]">
+      <div className="flex h-12 items-center px-5">
+        <div className="text-[17px] font-semibold text-[#161823]">API 测试</div>
       </div>
 
-      <div className="h-[calc(100%-56px)] p-4">
-        <div className="grid h-full min-h-0 overflow-hidden rounded-lg border border-[#e6e8eb] bg-white lg:grid-cols-[minmax(380px,0.86fr)_minmax(520px,1.14fr)]">
-          <section className="flex min-h-0 flex-col">
-            <div className="flex min-h-[52px] items-center border-b border-[#eef0f2] px-5 text-[14px] font-semibold">
+      <div className="h-[calc(100%-48px)] px-5 pb-5">
+        <div className="grid h-full min-h-0 overflow-hidden lg:grid-cols-[minmax(380px,0.86fr)_minmax(520px,1.14fr)]">
+          <section className="flex min-h-0 flex-col pr-5">
+            <div className="flex min-h-[44px] items-center border-b border-[#eef0f2] text-[14px] font-semibold">
               请求配置
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-5">
               <Select
                 showSearch
                 variant="filled"
@@ -271,7 +254,7 @@ export default function DataServiceDebugPage() {
                     ))}
                   </div>
                 ) : selectedService ? (
-                  <div className="rounded-md bg-[#f7f7f8] px-4 py-3 text-[12px] text-[#8a8f98]">
+                  <div className="bg-[#f7f7f8] px-4 py-3 text-[12px] text-[#8a8f98]">
                     当前 API 无请求参数
                   </div>
                 ) : (
@@ -287,15 +270,15 @@ export default function DataServiceDebugPage() {
                   loading={testing}
                   onClick={() => void runTest()}
                 >
-                  开始调试
+                  开始测试
                 </Button>
               </div>
             </div>
           </section>
 
-          <section className="grid min-h-0 border-l border-[#eef0f2] lg:grid-rows-[minmax(220px,0.42fr)_minmax(280px,0.58fr)]">
+          <section className="grid min-h-0 border-l border-[#eef0f2] pl-5 lg:grid-rows-[minmax(220px,0.42fr)_minmax(280px,0.58fr)]">
             <div className="flex min-h-0 flex-col border-b border-[#eef0f2]">
-              <div className="flex min-h-[52px] items-center border-b border-[#f2f3f5] px-5 text-[13px] font-semibold">
+              <div className="flex min-h-[44px] items-center border-b border-[#f2f3f5] text-[13px] font-semibold">
                 请求详情
               </div>
               <div className="min-h-0 flex-1 overflow-auto bg-[#fbfbfc] p-4">
@@ -312,7 +295,7 @@ export default function DataServiceDebugPage() {
             </div>
 
             <div className="flex min-h-0 flex-col">
-              <div className="flex min-h-[52px] items-center justify-between border-b border-[#f2f3f5] px-5">
+              <div className="flex min-h-[44px] items-center justify-between border-b border-[#f2f3f5]">
                 <div className="text-[13px] font-semibold">返回内容</div>
                 {testResult ? (
                   <div className="flex items-center gap-4 text-[11px] text-[#667085]">
@@ -329,7 +312,7 @@ export default function DataServiceDebugPage() {
                   </pre>
                 ) : (
                   <div className="flex h-full items-center justify-center text-[12px] text-[#b0b5bd]">
-                    调试结果将在这里展示
+                    测试结果将在这里展示
                   </div>
                 )}
               </div>
