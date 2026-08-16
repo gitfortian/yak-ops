@@ -16,11 +16,11 @@ import {
 } from 'antd';
 import { Activity, Copy, FileText, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import CreateDataServiceModal from './CreateDataServiceModal';
 import DataServiceAccessModal from './DataServiceAccessModal';
 import DataServiceDocsModal from './DataServiceDocsModal';
 import DataServiceRuntimeModal from './DataServiceRuntimeModal';
 import {
-  createDataService,
   deleteDataService,
   fetchDataServices,
   fetchDataSourceOptions,
@@ -38,6 +38,7 @@ export default function DataServicePage() {
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<DataServiceApi>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,15 +82,14 @@ export default function DataServicePage() {
         .some((text) => String(text).toLowerCase().includes(value)));
   }, [keyword, services]);
 
-  const openCreate = () => {
-    setEditing(undefined);
-    form.resetFields();
-    form.setFieldsValue({ maxRows: 1000, timeoutSeconds: 30, enabled: false });
-    setEditorOpen(true);
-  };
+  const dataSourceName = useCallback((dataSourceId?: number) => {
+    if (!dataSourceId) return '-';
+    return dataSources.find((item) => String(item.value) === String(dataSourceId))?.label || `#${dataSourceId}`;
+  }, [dataSources]);
 
   const openEdit = (record: DataServiceApi) => {
     setEditing(record);
+    form.resetFields();
     form.setFieldsValue({
       name: record.name,
       path: record.path,
@@ -103,14 +103,20 @@ export default function DataServicePage() {
     setEditorOpen(true);
   };
 
-  const save = async () => {
+  const saveEdit = async () => {
+    if (!editing) return;
     const values = await form.validateFields();
+    const payload: DataServiceSavePayload = {
+      ...values,
+      dataSourceId: sourceManaged ? editing.dataSourceId : values.dataSourceId,
+      sql: sourceManaged ? editing.sql : values.sql,
+    };
     setSaving(true);
     try {
-      if (editing) await updateDataService(editing.id, values);
-      else await createDataService(values);
-      message.success(editing ? '数据服务已更新' : '数据服务已创建');
+      await updateDataService(editing.id, payload);
+      message.success('数据服务已更新');
       setEditorOpen(false);
+      setEditing(undefined);
       await load();
     } catch (error: any) {
       message.error(error?.message || '保存数据服务失败');
@@ -161,7 +167,9 @@ export default function DataServicePage() {
             <Tag bordered={false}>GET</Tag>
             {record.sourceType === 'DATA_DEVELOPMENT_RELEASE' ? (
               <Tag bordered={false}>数据开发 v{record.sourceRevisionNo || '-'}</Tag>
-            ) : null}
+            ) : (
+              <Tag bordered={false}>Legacy</Tag>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-1 text-xs text-black/45">
             <span className="font-mono">{record.runtimePath}</span>
@@ -176,7 +184,7 @@ export default function DataServicePage() {
       title: '数据源',
       dataIndex: 'dataSourceId',
       width: 190,
-      render: (value) => dataSources.find((item) => String(item.value) === String(value))?.label || `#${value}`,
+      render: (value) => dataSourceName(value),
     },
     {
       title: '参数',
@@ -247,9 +255,9 @@ export default function DataServicePage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-xl font-semibold text-[#161823]">API 服务</h1>
-          <p className="mb-0 mt-1 text-sm text-black/45">将只读 SQL 发布为可调用、可鉴权、可缓存、可熔断、可文档化的 GET REST API。</p>
+          <p className="mb-0 mt-1 text-sm text-black/45">将数据开发中已发布的 SQL 转换为可调用、可鉴权、可缓存、可熔断、可文档化的 GET REST API。</p>
         </div>
-        <Button type="primary" icon={<Plus size={16} />} onClick={openCreate}>新建 API</Button>
+        <Button type="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>新建 API</Button>
       </div>
 
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -274,6 +282,13 @@ export default function DataServicePage() {
         scroll={{ x: 1360 }}
       />
 
+      <CreateDataServiceModal
+        open={createOpen}
+        dataSources={dataSources}
+        onCancel={() => setCreateOpen(false)}
+        onCreated={load}
+      />
+
       <DataServiceDocsModal
         open={Boolean(docsTarget)}
         service={docsTarget}
@@ -294,10 +309,13 @@ export default function DataServicePage() {
       />
 
       <Modal
-        title={editing ? '编辑 API 服务' : '新建 API 服务'}
+        title="编辑 API 服务"
         open={editorOpen}
-        onCancel={() => setEditorOpen(false)}
-        onOk={() => void save()}
+        onCancel={() => {
+          setEditorOpen(false);
+          setEditing(undefined);
+        }}
+        onOk={() => void saveEdit()}
         okText="保存"
         confirmLoading={saving}
         width={760}
@@ -305,10 +323,17 @@ export default function DataServicePage() {
       >
         <Form form={form} layout="vertical" className="pt-3">
           {sourceManaged ? (
-            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-3 py-2.5 text-[12px] leading-5 text-[#667085]">
-              来源：数据开发 SQL v{editing?.sourceRevisionNo || '-'}。SQL 与数据源由来源版本管理；如需更新执行逻辑，请回到数据开发重新发布数据服务。
+            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
+              <div className="font-medium text-[#344054]">来源：数据开发 SQL · v{editing?.sourceRevisionNo || '-'}</div>
+              <div className="mt-1">数据源：{dataSourceName(editing?.dataSourceId)} · Source #{editing?.sourceRef || '-'}</div>
+              <div className="mt-1">SQL 与数据源由上游发布版本管理；需要修改执行逻辑时，请回到数据开发发布新 Revision。</div>
             </div>
-          ) : null}
+          ) : (
+            <div className="mb-4 border border-[#e5e7eb] bg-[#fafafa] px-4 py-3 text-[12px] leading-5 text-[#667085]">
+              这是旧版手工创建的数据服务，当前继续保留 SQL 与数据源编辑能力用于兼容。新的 API 请从数据开发已发布 SQL 创建。
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-x-4">
             <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
               <Input placeholder="例如：用户查询 API" />
@@ -317,36 +342,37 @@ export default function DataServicePage() {
               <Input addonBefore="GET" placeholder="/users" />
             </Form.Item>
           </div>
-          <Form.Item
-            name="dataSourceId"
-            label="数据源"
-            extra={sourceManaged ? '由数据开发 SQL 发布版本继承，不支持在这里修改。' : undefined}
-            rules={[{ required: true, message: '请选择数据源' }]}
-          >
-            <Select
-              disabled={sourceManaged}
-              showSearch
-              optionFilterProp="label"
-              placeholder="选择已有数据源"
-              options={dataSources.map((item) => ({ ...item, value: Number(item.value) || item.value }))}
-            />
-          </Form.Item>
-          <Form.Item
-            name="sql"
-            label="SELECT SQL"
-            extra={sourceManaged
-              ? 'SQL 固定继承数据开发的发布版本；新 SQL 版本发布后，请从数据开发执行“发布为数据服务”完成更新。'
-              : '使用 :参数名 声明请求参数，例如 WHERE department = :department。仅允许单条 SELECT。'}
-            rules={[{ required: true, message: '请输入 SQL' }]}
-          >
-            <Input.TextArea
-              disabled={sourceManaged}
-              rows={10}
-              spellCheck={false}
-              placeholder={'SELECT id, username\nFROM sys_user\nWHERE department = :department'}
-              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
-            />
-          </Form.Item>
+
+          {!sourceManaged ? (
+            <>
+              <Form.Item
+                name="dataSourceId"
+                label="数据源"
+                rules={[{ required: true, message: '请选择数据源' }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="选择已有数据源"
+                  options={dataSources.map((item) => ({ ...item, value: Number(item.value) || item.value }))}
+                />
+              </Form.Item>
+              <Form.Item
+                name="sql"
+                label="SELECT SQL"
+                extra="Legacy 兼容模式。新的 SQL 开发请统一在数据开发中完成。"
+                rules={[{ required: true, message: '请输入 SQL' }]}
+              >
+                <Input.TextArea
+                  rows={10}
+                  spellCheck={false}
+                  placeholder={'SELECT id, username\nFROM sys_user\nWHERE department = :department'}
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
+                />
+              </Form.Item>
+            </>
+          ) : null}
+
           <div className="grid grid-cols-3 gap-x-4">
             <Form.Item name="maxRows" label="最大返回行数" rules={[{ required: true }]}>
               <InputNumber min={1} max={10000} className="w-full" />
