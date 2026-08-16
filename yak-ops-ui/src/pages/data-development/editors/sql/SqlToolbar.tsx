@@ -32,6 +32,9 @@ import SqlMetadataContextToolbar from './metadata/SqlMetadataContextToolbar';
 const iconButtonClassName =
   'flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#475467] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#1f2937] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent';
 
+const actionButtonClassName =
+  'flex h-7 shrink-0 items-center gap-1 rounded-[3px] px-1.5 text-[10px] font-medium text-[#667085] outline-none transition-colors hover:bg-[#f5f5f6] hover:text-[#344054] focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent';
+
 interface ToolbarButtonProps {
   title: string;
   onClick: () => void;
@@ -76,14 +79,28 @@ const dataServiceTooltip = (
   state: DevelopmentReleaseDataServiceState | undefined,
   loading?: boolean,
 ) => {
-  if (loading) return '正在读取数据服务状态';
-  if (!state) return '请先发布 SQL 版本，再发布为数据服务';
+  if (loading) return '正在读取 API 发布状态';
+  if (!state) return '请先发布 SQL 版本，再发布为 API';
   if (state.releaseStatus !== 'ONLINE') {
-    return 'SQL 发布任务当前未上线，请先在发布中心上线后再发布数据服务';
+    return 'SQL 发布任务当前未上线，请先在发布中心上线后再发布 API';
   }
-  if (!state.published) return `发布 SQL v${state.releaseRevisionNo} 为数据服务`;
-  if (state.updateAvailable) return `更新数据服务到 SQL v${state.releaseRevisionNo}`;
-  return `数据服务已同步 SQL v${state.releaseRevisionNo}${state.detail?.enabled === false ? ' · 已停用' : ''}`;
+  if (!state.published) return `发布当前 ONLINE SQL v${state.releaseRevisionNo} 为 API`;
+  const apiRevisionNo = state.detail?.sourceRevisionNo;
+  if (state.updateAvailable) {
+    return `线上 API 仍运行 SQL v${apiRevisionNo || '-'}，当前 ONLINE 为 v${state.releaseRevisionNo}；点击更新`;
+  }
+  if (state.detail?.enabled === false) {
+    return `API 已同步 SQL v${apiRevisionNo || state.releaseRevisionNo}，当前已停用`;
+  }
+  return `API 已同步当前 ONLINE SQL v${apiRevisionNo || state.releaseRevisionNo}`;
+};
+
+const dataServiceActionLabel = (state?: DevelopmentReleaseDataServiceState) => {
+  if (!state?.published) return '发布 API';
+  const apiRevisionNo = state.detail?.sourceRevisionNo || state.releaseRevisionNo;
+  if (state.updateAvailable) return `API v${apiRevisionNo} → v${state.releaseRevisionNo}`;
+  if (state.detail?.enabled === false) return `API v${apiRevisionNo} · 停用`;
+  return `API v${apiRevisionNo}`;
 };
 
 const SqlToolbar = ({
@@ -116,7 +133,7 @@ const SqlToolbar = ({
       .catch((error) => {
         if (!active) return;
         setDataServiceContext({});
-        message.error(error instanceof Error ? error.message : '加载数据服务状态失败');
+        message.error(error instanceof Error ? error.message : '加载 API 发布状态失败');
       })
       .finally(() => {
         if (active) setDataServiceLoading(false);
@@ -147,9 +164,11 @@ const SqlToolbar = ({
   const dataServiceReleaseUnavailable = Boolean(
     dataServiceState && dataServiceState.releaseStatus !== 'ONLINE',
   );
-  const dataServiceStateLabel = dataServiceState?.published
-    ? `API${dataServiceState.updateAvailable ? ' · 待更新' : dataServiceState.detail?.enabled === false ? ' · 已停用' : ' · 已同步'}`
-    : undefined;
+  const dataServiceActionRequired = Boolean(
+    dataServiceState
+      && dataServiceState.releaseStatus === 'ONLINE'
+      && (!dataServiceState.published || dataServiceState.updateAvailable),
+  );
 
   const openDataServiceModal = () => {
     if (!release || !dataServiceState || release.status !== 'ONLINE') return;
@@ -159,6 +178,7 @@ const SqlToolbar = ({
   const publishDataService = async (payload: PublishDevelopmentDataServicePayload) => {
     if (!release) return;
     const wasPublished = Boolean(dataServiceState?.published);
+    const previousRevisionNo = dataServiceState?.detail?.sourceRevisionNo;
     setDataServicePublishing(true);
     try {
       const detail = await publishDevelopmentReleaseDataService(release.assetId, payload);
@@ -174,13 +194,15 @@ const SqlToolbar = ({
       });
       setDataServiceModalOpen(false);
       setDataServiceRefreshKey((current) => current + 1);
-      message.success(
-        wasPublished
-          ? `数据服务已更新到 SQL v${release.currentRevisionNo}`
-          : `数据服务已发布 · ${detail.runtimePath}`,
-      );
+      if (!wasPublished) {
+        message.success(`API 已发布 · SQL v${release.currentRevisionNo}`);
+      } else if (previousRevisionNo && previousRevisionNo !== release.currentRevisionNo) {
+        message.success(`API 已更新 · SQL v${previousRevisionNo} → v${release.currentRevisionNo}`);
+      } else {
+        message.success('API 配置已保存');
+      }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '发布数据服务失败');
+      message.error(error instanceof Error ? error.message : '发布 API 失败');
     } finally {
       setDataServicePublishing(false);
     }
@@ -229,35 +251,31 @@ const SqlToolbar = ({
               {datasetStateLabel}
             </span>
           ) : null}
-          <ToolbarButton
-            title={dataServiceTooltip(dataServiceState, dataServiceLoading)}
-            disabled={!release || !dataServiceState || dataServiceReleaseUnavailable || dataServiceLoading || dataServicePublishing || saving || publishing || running}
-            onClick={openDataServiceModal}
-          >
-            {dataServiceLoading || dataServicePublishing ? (
-              <LoaderCircle size={15} className="animate-spin" />
-            ) : (
-              <Webhook
-                size={15}
-                strokeWidth={1.8}
-                className={dataServiceState?.updateAvailable ? 'text-[var(--yak-brand-color)]' : undefined}
-              />
-            )}
-          </ToolbarButton>
-          {dataServiceStateLabel ? (
-            <span
+          <Tooltip title={dataServiceTooltip(dataServiceState, dataServiceLoading)} mouseEnterDelay={0.35}>
+            <button
+              type="button"
+              aria-label={dataServiceTooltip(dataServiceState, dataServiceLoading)}
+              disabled={!release || !dataServiceState || dataServiceReleaseUnavailable || dataServiceLoading || dataServicePublishing || saving || publishing || running}
+              onClick={openDataServiceModal}
               className={[
-                'mr-1 text-[10px] font-medium',
-                dataServiceState?.updateAvailable
-                  ? 'text-[var(--yak-brand-color)]'
-                  : dataServiceState?.detail?.enabled === false
-                    ? 'text-[#b54708]'
-                    : 'text-[#667085]',
+                actionButtonClassName,
+                dataServiceActionRequired ? 'text-[var(--yak-brand-color)]' : '',
+                dataServiceState?.detail?.enabled === false && !dataServiceState?.updateAvailable
+                  ? 'text-[#b54708]'
+                  : '',
               ].join(' ')}
             >
-              {dataServiceStateLabel}
-            </span>
-          ) : null}
+              {dataServiceLoading || dataServicePublishing ? (
+                <LoaderCircle size={14} className="animate-spin" />
+              ) : (
+                <Webhook size={14} strokeWidth={1.8} />
+              )}
+              <span>{dataServiceLoading ? 'API 状态' : dataServiceActionLabel(dataServiceState)}</span>
+              {dataServiceState?.updateAvailable ? (
+                <span className="ml-0.5 text-[9px] font-medium">待更新</span>
+              ) : null}
+            </button>
+          </Tooltip>
           <ToolbarDivider />
           <ToolbarButton title="撤销" disabled={running} onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}>
             <Undo2 size={15} strokeWidth={1.8} />
