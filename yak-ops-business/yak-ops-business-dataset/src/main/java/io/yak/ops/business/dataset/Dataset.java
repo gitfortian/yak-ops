@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.Instant;
 import java.util.List;
 
-/** Stable BI-consumption asset. Task execution remains owned by the upstream source domain. */
+/** Stable BI-consumption asset. Dataset versions freeze their own executable source contract. */
 public record Dataset(
     @JsonSerialize(using = ToStringSerializer.class) long id,
     String name,
@@ -23,6 +23,7 @@ enum DatasetStatus {
 
 enum DatasetSourceType {
   QUERY_REVISION,
+  SQL_QUERY,
   TABLE,
   VIEW
 }
@@ -49,8 +50,35 @@ record DatasetVersion(
     @JsonSerialize(using = ToStringSerializer.class) long sourceTaskAssetId,
     @JsonSerialize(using = ToStringSerializer.class) long sourceTaskRevisionId,
     int sourceTaskRevisionNo,
+    String dataSourceId,
+    String sql,
     String schemaSnapshot,
     Instant createTime) {
+
+  /** Keeps existing QUERY_REVISION-focused tests/callers source compatible. */
+  DatasetVersion(
+      long id,
+      long datasetId,
+      int versionNo,
+      DatasetSourceType sourceType,
+      long sourceTaskAssetId,
+      long sourceTaskRevisionId,
+      int sourceTaskRevisionNo,
+      String schemaSnapshot,
+      Instant createTime) {
+    this(
+        id,
+        datasetId,
+        versionNo,
+        sourceType,
+        sourceTaskAssetId,
+        sourceTaskRevisionId,
+        sourceTaskRevisionNo,
+        null,
+        null,
+        schemaSnapshot,
+        createTime);
+  }
 }
 
 record DatasetField(
