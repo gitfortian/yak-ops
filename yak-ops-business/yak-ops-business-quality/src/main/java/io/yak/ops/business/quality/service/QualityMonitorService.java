@@ -23,7 +23,6 @@ import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import io.yak.ops.common.enums.quality.QualityEnums.ScheduleFrequency;
 import io.yak.ops.common.enums.quality.QualityEnums.ScheduleWeekday;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -90,7 +89,7 @@ public class QualityMonitorService {
   public QualityMonitorVO.Detail create(QualityMonitorDTO.SaveRequest request) {
     validateTarget(null, request);
     List<RuleSpec> rules = normalizeRules(request.rules());
-    MonitorSettingsSpec settings = normalizeSettings(request.settings(), null, request.enabled());
+    MonitorSettingsSpec settings = normalizeSettings(request.settings(), null);
     long id = repository.insertMonitor(toMonitorSpec(request));
     repository.upsertMonitorSettings(id, settings);
     repository.replaceRules(id, rules);
@@ -104,7 +103,7 @@ public class QualityMonitorService {
     validateTarget(id, request);
     List<RuleSpec> rules = normalizeRules(request.rules());
     MonitorSettingsSpec settings = normalizeSettings(
-        request.settings(), repository.findMonitorSettings(id), request.enabled());
+        request.settings(), repository.findMonitorSettings(id));
     if (!repository.updateMonitor(id, toMonitorSpec(request))) {
       throw new IllegalArgumentException("质量监控不存在：" + id);
     }
@@ -132,8 +131,7 @@ public class QualityMonitorService {
 
   private MonitorSettingsSpec normalizeSettings(
       QualityMonitorDTO.SettingsRequest request,
-      MonitorSettings existing,
-      Boolean monitorEnabled) {
+      MonitorSettings existing) {
     RunMode runMode = request == null
         ? existing == null ? RunMode.MANUAL : existing.runMode()
         : defaultValue(request.runMode(), RunMode.MANUAL);
@@ -174,21 +172,20 @@ public class QualityMonitorService {
       if (frequency == null) throw new IllegalArgumentException("调度触发必须选择调度周期");
       switch (frequency) {
         case DAILY -> {
-          requireScheduleTime(scheduleTime);
           weekday = null;
           cron = null;
         }
         case WEEKLY -> {
-          requireScheduleTime(scheduleTime);
           if (weekday == null) throw new IllegalArgumentException("每周调度必须选择执行日期");
           cron = null;
         }
         case CRON -> {
-          scheduleCalculator.validateCron(cron);
           scheduleTime = null;
           weekday = null;
         }
       }
+      // 这里只做业务配置校验/归一化；运行时 nextRunTime 由 Yak Schedule snapshot 回写。
+      scheduleCalculator.cronExpression(frequency, scheduleTime, weekday, cron);
     }
 
     if (notifyEnabled && notifyChannel != NotifyChannel.MESSAGE && notifyTarget == null) {
@@ -198,19 +195,9 @@ public class QualityMonitorService {
               : "Webhook 通知必须填写回调地址");
     }
 
-    boolean enabled = monitorEnabled == null || monitorEnabled;
-    LocalDateTime nextRunTime = enabled
-        ? scheduleCalculator.nextRun(
-            runMode, frequency, scheduleTime, weekday, cron, LocalDateTime.now())
-        : null;
     return new MonitorSettingsSpec(
-        runMode, frequency, scheduleTime, weekday, cron, nextRunTime,
+        runMode, frequency, scheduleTime, weekday, cron, null,
         failureAction, notifyEnabled, notifyChannel, notifyTarget, alertLevel);
-  }
-
-  private void requireScheduleTime(String scheduleTime) {
-    scheduleCalculator.nextRun(
-        RunMode.SCHEDULE, ScheduleFrequency.DAILY, scheduleTime, null, null, LocalDateTime.now());
   }
 
   private void validateTarget(Long excludeId, QualityMonitorDTO.SaveRequest request) {
