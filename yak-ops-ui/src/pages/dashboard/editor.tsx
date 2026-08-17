@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChartEditor } from './chart-editor';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
+import { DashboardSheetBar } from './sheet-bar';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
 import { DashboardVersionHistoryDrawer } from './version-history-drawer';
@@ -28,6 +29,9 @@ export default function DashboardEditorPage() {
   const designer = useDashboardDesigner(dashboardId, initialPreview, false);
   const { width, containerRef, mounted } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<'dashboard' | 'chart'>('dashboard');
+  const [activeSheetId, setActiveSheetId] = useState<string>();
+  const [sheetOrder, setSheetOrder] = useState<string[]>([]);
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
     x: widget.x,
@@ -37,14 +41,74 @@ export default function DashboardEditorPage() {
     minW: widget.minW,
     minH: widget.minH,
   })), [designer.widgets]);
+  const sheets = useMemo(() => sheetOrder.flatMap((widgetId) => {
+    const widget = designer.widgets.find((item) => item.id === widgetId);
+    if (!widget) return [];
+    const analysis = widget.analysisId
+      ? designer.analyses.find((item) => item.id === widget.analysisId)
+      : undefined;
+    return [{
+      id: widget.id,
+      title: widget.analysisId ? analysis?.name ?? '历史图表' : widget.title ?? '未命名图表',
+    }];
+  }), [designer.analyses, designer.widgets, sheetOrder]);
   const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
   const showRuntimeFilterBar = designer.preview && hasGlobalFilters;
-  let canvasMinHeight = 'min-h-[calc(100vh-88px)] 2xl:min-h-[calc(100vh-56px)]';
+  let canvasMinHeight = 'min-h-[calc(100vh-128px)] 2xl:min-h-[calc(100vh-96px)]';
   if (designer.preview) {
     canvasMinHeight = showRuntimeFilterBar
       ? 'min-h-[calc(100vh-140px)]'
       : 'min-h-[calc(100vh-96px)]';
   }
+
+  useEffect(() => {
+    setSheetOrder(designer.widgets.map((widget) => widget.id));
+    setActiveSheet('dashboard');
+    setActiveSheetId(undefined);
+  }, [designer.dashboard.id]);
+
+  useEffect(() => {
+    const widgetIds = designer.widgets.map((widget) => widget.id);
+    setSheetOrder((current) => {
+      const retained = current.filter((widgetId) => widgetIds.includes(widgetId));
+      const added = widgetIds.filter((widgetId) => !retained.includes(widgetId));
+      const next = [...retained, ...added];
+      return next.length === current.length && next.every((item, index) => item === current[index])
+        ? current
+        : next;
+    });
+  }, [designer.widgets]);
+
+  useEffect(() => {
+    if (designer.preview) return;
+    if (designer.selectedId) {
+      setActiveSheet('chart');
+      setActiveSheetId(designer.selectedId);
+      return;
+    }
+    setActiveSheet('dashboard');
+    setActiveSheetId(undefined);
+  }, [designer.preview, designer.selectedId]);
+
+  const activateDashboardSheet = () => {
+    setActiveSheet('dashboard');
+    setActiveSheetId(undefined);
+    designer.setSelectedId(undefined);
+  };
+
+  const activateChartSheet = (widgetId: string, scrollIntoView = true) => {
+    setActiveSheet('chart');
+    setActiveSheetId(widgetId);
+    designer.setSelectedId(widgetId);
+    if (!scrollIntoView) return;
+    window.requestAnimationFrame(() => {
+      document.getElementById(`dashboard-widget-${widgetId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+    });
+  };
 
   const addChart = () => designer.addWidget('bar');
 
@@ -255,7 +319,7 @@ export default function DashboardEditorPage() {
                     const drillPath = designer.drillPathForWidget(widget.id);
 
                     return (
-                      <div key={widget.id}>
+                      <div key={widget.id} id={`dashboard-widget-${widget.id}`}>
                         <WidgetShell
                           widget={widget}
                           analysis={analysis}
@@ -266,7 +330,7 @@ export default function DashboardEditorPage() {
                           selected={designer.selectedId === widget.id}
                           preview={designer.preview}
                           onSelect={() => {
-                            if (!designer.preview) designer.setSelectedId(widget.id);
+                            if (!designer.preview) activateChartSheet(widget.id, false);
                           }}
                           onDataSelect={(selection) => {
                             if (!designer.preview) return;
@@ -335,6 +399,17 @@ export default function DashboardEditorPage() {
           />
         ) : null}
       </div>
+
+      {!designer.preview ? (
+        <DashboardSheetBar
+          sheets={sheets}
+          activeSheet={activeSheet}
+          activeSheetId={activeSheetId}
+          onDashboard={activateDashboardSheet}
+          onChart={(widgetId) => activateChartSheet(widgetId)}
+          onReorder={setSheetOrder}
+        />
+      ) : null}
 
       {designer.persisted ? (
         <DashboardVersionHistoryDrawer
