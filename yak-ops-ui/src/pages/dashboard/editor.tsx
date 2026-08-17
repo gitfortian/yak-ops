@@ -6,7 +6,7 @@ import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChartEditor } from './chart-editor';
+import { DashboardChartSheetWorkspace } from './chart-sheet-workspace';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import { DashboardSheetBar } from './sheet-bar';
@@ -96,18 +96,10 @@ export default function DashboardEditorPage() {
     designer.setSelectedId(undefined);
   };
 
-  const activateChartSheet = (widgetId: string, scrollIntoView = true) => {
+  const activateChartSheet = (widgetId: string) => {
     setActiveSheet('chart');
     setActiveSheetId(widgetId);
     designer.setSelectedId(widgetId);
-    if (!scrollIntoView) return;
-    window.requestAnimationFrame(() => {
-      document.getElementById(`dashboard-widget-${widgetId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'nearest',
-      });
-    });
   };
 
   const addChart = () => designer.addWidget('bar');
@@ -227,6 +219,8 @@ export default function DashboardEditorPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [designer, saveDashboard]);
 
+  const showDashboardWorkspace = designer.preview || activeSheet === 'dashboard';
+
   return (
     <div
       className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#f3f4f6]"
@@ -276,116 +270,117 @@ export default function DashboardEditorPage() {
       ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">
-          <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4 2xl:p-0'}>
-            <div
-              ref={containerRef}
-              className={[
-                'min-w-[760px]',
-                canvasMinHeight,
-                designer.preview
-                  ? 'mx-auto max-w-[1480px] rounded-[10px] border border-[#e7e9ed] bg-white shadow-[0_6px_24px_rgba(16,24,40,.055)]'
-                  : 'dashboard-grid-canvas mx-auto max-w-[1540px] rounded-[10px] 2xl:mx-0 2xl:max-w-none 2xl:rounded-none',
-              ].join(' ')}
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget) designer.setSelectedId(undefined);
-              }}
-            >
-              {mounted && width > 0 ? (
-                <ReactGridLayout
-                  width={width}
-                  layout={layout}
-                  gridConfig={{
-                    cols: GRID_COLUMNS,
-                    rowHeight: GRID_ROW_HEIGHT,
-                    margin: [10, 10],
-                    containerPadding: [10, 10],
-                  }}
-                  dragConfig={{
-                    enabled: !designer.preview,
-                    handle: '.dashboard-widget__drag-handle',
-                  }}
-                  resizeConfig={{ enabled: !designer.preview }}
-                  onLayoutChange={designer.updateLayout}
-                >
-                  {designer.widgets.map((widget) => {
-                    const analysis = widget.analysisId
-                      ? designer.analyses.find((item) => item.id === widget.analysisId)
-                      : undefined;
-                    const runtimeSpec = designer.runtimeSpecForWidget(widget.id);
-                    const dataset = runtimeSpec
-                      ? designer.datasets.find((item) => item.id === runtimeSpec.datasetId)
-                      : undefined;
-                    const drillPath = designer.drillPathForWidget(widget.id);
+        {showDashboardWorkspace ? (
+          <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">
+            <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4 2xl:p-0'}>
+              <div
+                ref={containerRef}
+                className={[
+                  'min-w-[760px]',
+                  canvasMinHeight,
+                  designer.preview
+                    ? 'mx-auto max-w-[1480px] rounded-[10px] border border-[#e7e9ed] bg-white shadow-[0_6px_24px_rgba(16,24,40,.055)]'
+                    : 'dashboard-grid-canvas mx-auto max-w-[1540px] rounded-[10px] 2xl:mx-0 2xl:max-w-none 2xl:rounded-none',
+                ].join(' ')}
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) designer.setSelectedId(undefined);
+                }}
+              >
+                {mounted && width > 0 ? (
+                  <ReactGridLayout
+                    width={width}
+                    layout={layout}
+                    gridConfig={{
+                      cols: GRID_COLUMNS,
+                      rowHeight: GRID_ROW_HEIGHT,
+                      margin: [10, 10],
+                      containerPadding: [10, 10],
+                    }}
+                    dragConfig={{
+                      enabled: !designer.preview,
+                      handle: '.dashboard-widget__drag-handle',
+                    }}
+                    resizeConfig={{ enabled: !designer.preview }}
+                    onLayoutChange={designer.updateLayout}
+                  >
+                    {designer.widgets.map((widget) => {
+                      const analysis = widget.analysisId
+                        ? designer.analyses.find((item) => item.id === widget.analysisId)
+                        : undefined;
+                      const runtimeSpec = designer.runtimeSpecForWidget(widget.id);
+                      const dataset = runtimeSpec
+                        ? designer.datasets.find((item) => item.id === runtimeSpec.datasetId)
+                        : undefined;
+                      const drillPath = designer.drillPathForWidget(widget.id);
 
-                    return (
-                      <div key={widget.id} id={`dashboard-widget-${widget.id}`}>
-                        <WidgetShell
-                          widget={widget}
-                          analysis={analysis}
-                          runtimeSpec={runtimeSpec}
-                          dataset={dataset}
-                          runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
-                          drillPath={drillPath}
-                          selected={designer.selectedId === widget.id}
-                          preview={designer.preview}
-                          onSelect={() => {
-                            if (!designer.preview) activateChartSheet(widget.id, false);
-                          }}
-                          onDataSelect={(selection) => {
-                            if (!designer.preview) return;
-                            const target = designer.handleWidgetSelection(widget.id, selection);
-                            if (target) history.push(target);
-                          }}
-                          onDrillBack={(depth) => designer.drillBack(widget.id, depth)}
-                          onDuplicate={() => designer.duplicateWidget(widget.id)}
-                          onDelete={() => designer.deleteWidget(widget.id)}
-                        />
+                      return (
+                        <div key={widget.id} id={`dashboard-widget-${widget.id}`}>
+                          <WidgetShell
+                            widget={widget}
+                            analysis={analysis}
+                            runtimeSpec={runtimeSpec}
+                            dataset={dataset}
+                            runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
+                            drillPath={drillPath}
+                            selected={designer.selectedId === widget.id}
+                            preview={designer.preview}
+                            onSelect={() => {
+                              if (!designer.preview) activateChartSheet(widget.id);
+                            }}
+                            onDataSelect={(selection) => {
+                              if (!designer.preview) return;
+                              const target = designer.handleWidgetSelection(widget.id, selection);
+                              if (target) history.push(target);
+                            }}
+                            onDrillBack={(depth) => designer.drillBack(widget.id, depth)}
+                            onDuplicate={() => designer.duplicateWidget(widget.id)}
+                            onDelete={() => designer.deleteWidget(widget.id)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </ReactGridLayout>
+                ) : null}
+
+                {!designer.widgets.length && !designer.datasetsLoading ? (
+                  <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
+                    <div className="max-w-[340px]">
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[10px] bg-white text-[#7a818c] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+                        <BarChart3 size={18} />
                       </div>
-                    );
-                  })}
-                </ReactGridLayout>
-              ) : null}
-
-              {!designer.widgets.length && !designer.datasetsLoading ? (
-                <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
-                  <div className="max-w-[340px]">
-                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[10px] bg-white text-[#7a818c] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
-                      <BarChart3 size={18} />
+                      <div className="mt-3 text-[14px] font-semibold text-[#344054]">
+                        {designer.activeDataset ? '从一个图表开始' : '暂无可用数据集'}
+                      </div>
+                      <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
+                        {designer.activeDataset
+                          ? '添加图表后，进入对应图表 Sheet 完成数据与样式配置。'
+                          : '请先在数据开发发布中心发布并上线 Dataset。'}
+                      </div>
+                      {designer.activeDataset ? (
+                        <Button
+                          size="small"
+                          className="mt-4 !h-8 !rounded-[7px] !px-3"
+                          icon={<BarChart3 size={13} />}
+                          onClick={addChart}
+                        >
+                          添加图表
+                        </Button>
+                      ) : null}
                     </div>
-                    <div className="mt-3 text-[14px] font-semibold text-[#344054]">
-                      {designer.activeDataset ? '从一个图表开始' : '暂无可用数据集'}
-                    </div>
-                    <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-                      {designer.activeDataset
-                        ? '添加图表后，在右侧选择数据集、维度和指标即可完成配置。'
-                        : '请先在数据开发发布中心发布并上线 Dataset。'}
-                    </div>
-                    {designer.activeDataset ? (
-                      <Button
-                        size="small"
-                        className="mt-4 !h-8 !rounded-[7px] !px-3"
-                        icon={<BarChart3 size={13} />}
-                        onClick={addChart}
-                      >
-                        添加图表
-                      </Button>
-                    ) : null}
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
-          </div>
-        </main>
-
-        {!designer.preview && designer.selectedWidget ? (
-          <ChartEditor
+          </main>
+        ) : designer.selectedWidget ? (
+          <DashboardChartSheetWorkspace
             currentDashboardId={designer.dashboard.id}
             widget={designer.selectedWidget}
             datasets={designer.datasets}
             analyses={designer.analyses}
             globalFilters={designer.dashboard.globalFilters}
             interactions={designer.dashboard.interactions}
+            runtimeFilters={designer.runtimeFiltersForWidget(designer.selectedWidget.id)}
             updateWidget={(patch) =>
               designer.updateWidget(designer.selectedWidget!.id, patch)}
             updateInlineAnalysis={(patch) =>
@@ -395,7 +390,7 @@ export default function DashboardEditorPage() {
               designer.changeWidgetDataset(designer.selectedWidget!.id, datasetId)}
             detachAnalysis={() =>
               designer.detachAnalysis(designer.selectedWidget!.id)}
-            close={() => designer.setSelectedId(undefined)}
+            onDone={activateDashboardSheet}
           />
         ) : null}
       </div>
@@ -406,7 +401,7 @@ export default function DashboardEditorPage() {
           activeSheet={activeSheet}
           activeSheetId={activeSheetId}
           onDashboard={activateDashboardSheet}
-          onChart={(widgetId) => activateChartSheet(widgetId)}
+          onChart={activateChartSheet}
           onReorder={setSheetOrder}
         />
       ) : null}
@@ -442,6 +437,10 @@ export default function DashboardEditorPage() {
           border-width: 0 1px 1px 0 !important;
           height: 6px !important;
           width: 6px !important;
+        }
+        .chart-sheet-workspace > aside {
+          border-left: 0 !important;
+          border-right: 1px solid #e3e6ea !important;
         }
         .chart-editor-more > .ant-collapse-item {
           border-bottom: 1px solid #eceef1 !important;
