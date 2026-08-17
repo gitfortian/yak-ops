@@ -44,7 +44,7 @@ public class OfflineScheduleLifecycle {
         || schedule == null
         || !schedule.enabled()
         || !StringUtils.hasText(schedule.cronExpression())) {
-      engine.deleteIfPresent(definitionId);
+      engine.pauseIfPresent(definitionId);
       if (schedule != null) {
         scheduleRepository.updateRuntimeState(definitionId, schedule.lastFireTime(), null);
       }

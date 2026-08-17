@@ -10,6 +10,7 @@ import io.yak.framework.schedule.api.ScheduleTrigger;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
+import io.yak.ops.common.schedule.YakScheduleGateway;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,46 +25,42 @@ public class QualityScheduleEngineBridge {
   static final String NAMESPACE = "yak-ops-quality";
   static final String HANDLER = "qualityScheduleHandler";
 
-  private final ObjectProvider<ScheduleManager> scheduleManagers;
+  private final YakScheduleGateway gateway;
   private final QualityScheduleCalculator calculator;
 
   public QualityScheduleEngineBridge(
       ObjectProvider<ScheduleManager> scheduleManagers,
       QualityScheduleCalculator calculator) {
-    this.scheduleManagers = scheduleManagers;
+    this.gateway = new YakScheduleGateway(scheduleManagers::getIfAvailable, NAMESPACE);
     this.calculator = calculator;
   }
 
   public boolean available() {
-    return scheduleManagers.getIfAvailable() != null;
+    return gateway.available();
   }
 
   public ScheduleSnapshot save(Monitor monitor, MonitorSettings settings) {
-    return manager().save(toDefinition(monitor, settings));
+    return gateway.save(toDefinition(monitor, settings));
   }
 
   public Optional<ScheduleSnapshot> snapshot(long monitorId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    return manager == null ? Optional.empty() : manager.get(key(monitorId));
+    return gateway.snapshot(name(monitorId));
   }
 
   public List<ScheduleSnapshot> list() {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    return manager == null ? List.of() : manager.list(NAMESPACE);
+    return gateway.list();
   }
 
   public void pauseIfPresent(long monitorId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(monitorId);
-    if (manager.get(key).isPresent()) manager.pause(key);
+    gateway.pauseIfPresent(name(monitorId));
   }
 
   public void deleteIfPresent(long monitorId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(monitorId);
-    if (manager.get(key).isPresent()) manager.delete(key);
+    gateway.deleteIfPresent(name(monitorId));
+  }
+
+  public void runNowIfPresent(long monitorId) {
+    gateway.runNowIfPresent(name(monitorId));
   }
 
   ScheduleDefinition toDefinition(Monitor monitor, MonitorSettings settings) {
@@ -100,16 +97,11 @@ public class QualityScheduleEngineBridge {
   }
 
   private ScheduleKey key(long monitorId) {
-    if (monitorId <= 0L) throw new IllegalArgumentException("质量监控 ID 不合法");
-    return new ScheduleKey(NAMESPACE, String.valueOf(monitorId));
+    return gateway.key(name(monitorId));
   }
 
-  private ScheduleManager manager() {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) {
-      throw new IllegalStateException(
-          "Yak ScheduleManager 不可用，请确认 yak-schedule-core、调度引擎插件与 yak.schedule.enabled 配置");
-    }
-    return manager;
+  private String name(long monitorId) {
+    if (monitorId <= 0L) throw new IllegalArgumentException("质量监控 ID 不合法");
+    return String.valueOf(monitorId);
   }
 }
