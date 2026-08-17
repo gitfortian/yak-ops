@@ -67,15 +67,12 @@ export function DashboardSheetBar({
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', sheet.id);
               }}
+              onDragEnter={() => moveBefore(sheet.id)}
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'move';
-                moveBefore(sheet.id);
               }}
-              onDrop={(event) => {
-                event.preventDefault();
-                moveBefore(sheet.id);
-              }}
+              onDrop={(event) => event.preventDefault()}
               onDragEnd={() => setDraggingId(undefined)}
             >
               <BarChart3 size={12} className="shrink-0" />
