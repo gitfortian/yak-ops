@@ -1,17 +1,17 @@
+import {
+  getWorkflowInstances,
+  type WorkflowInstance,
+} from '@/services/workflow';
 import HttpUtils from '@/utils/HttpUtils';
 import dayjs from 'dayjs';
+import { fetchAlarmRecords } from '../alarm/service';
 import {
   batchJobInstanceApi,
   linkupJobDefinitionApi,
   type OfflineJobDefinitionVO,
   type OfflineJobExecutionVO,
 } from '../batch-link-up/api';
-import { fetchAlarmRecords } from '../alarm/service';
 import { fetchDataSourceSummary } from '../data-source/service';
-import {
-  getWorkflowInstances,
-  type WorkflowInstance,
-} from '@/services/workflow';
 import type {
   HomeAlarmOverview,
   HomeClientOverview,
@@ -217,10 +217,12 @@ export const buildExecutionOverview = (
   definitions: OfflineJobDefinitionVO[],
   batchTotal: number,
 ): HomeExecutionOverview => {
-  const definitionMap = new Map(
+  const definitionMap = new Map<string, OfflineJobDefinitionVO>(
     definitions
       .filter((item) => item.id !== undefined && item.id !== null)
-      .map((item) => [String(item.id), item]),
+      .map(
+        (item): [string, OfflineJobDefinitionVO] => [String(item.id), item],
+      ),
   );
   const runs = [
     ...batchExecutions.map((item) => toBatchRunItem(item, definitionMap)),
@@ -230,9 +232,15 @@ export const buildExecutionOverview = (
 
   return {
     todayTotal: todayRuns.length,
-    running: runs.filter((item) => RUNNING_STATUSES.has(normalizeStatus(item.status))).length,
-    success: todayRuns.filter((item) => SUCCESS_STATUSES.has(normalizeStatus(item.status))).length,
-    failed: todayRuns.filter((item) => FAILED_STATUSES.has(normalizeStatus(item.status))).length,
+    running: runs.filter((item) =>
+      RUNNING_STATUSES.has(normalizeStatus(item.status)),
+    ).length,
+    success: todayRuns.filter((item) =>
+      SUCCESS_STATUSES.has(normalizeStatus(item.status)),
+    ).length,
+    failed: todayRuns.filter((item) =>
+      FAILED_STATUSES.has(normalizeStatus(item.status)),
+    ).length,
     recent: runs
       .slice()
       .sort((left, right) => timeValue(right.startedAt) - timeValue(left.startedAt))
