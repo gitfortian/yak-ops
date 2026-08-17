@@ -120,11 +120,6 @@ public final class QualityDomain {
       RuleFailureAction ruleFailureAction, boolean notifyEnabled, NotifyChannel notifyChannel,
       String notifyTarget, AlertLevel alertLevel) {}
 
-  public record ScheduledMonitor(
-      long monitorId, RunMode runMode, ScheduleFrequency scheduleFrequency,
-      String scheduleTime, ScheduleWeekday scheduleWeekday, String cronExpression,
-      LocalDateTime expectedRunTime) {}
-
   public record RuleSpec(
       long templateId, String templateCode, String name, RuleType ruleType,
       RuleScope scope, String dimension, String columnName, ComparisonOperator operator,

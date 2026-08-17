@@ -30,8 +30,6 @@ public interface QualityMonitorDao {
 
   QualityMonitorSettingPO selectSetting(long monitorId);
   void upsertSetting(QualityMonitorSettingPO setting);
-  List<QualityMonitorSettingPO> selectDue(LocalDateTime now, int limit);
-  boolean claimSchedule(long monitorId, LocalDateTime expectedRunTime, LocalDateTime nextRunTime);
   void insertAlert(QualityAlertEventPO alert);
 
   long countTableAssets(Map<String, Object> params);

@@ -7,7 +7,6 @@ public class QualityProperties {
 
   private boolean enabled = true;
   private final Executor executor = new Executor();
-  private final Scheduler scheduler = new Scheduler();
 
   public boolean isEnabled() {
     return enabled;
@@ -19,10 +18,6 @@ public class QualityProperties {
 
   public Executor getExecutor() {
     return executor;
-  }
-
-  public Scheduler getScheduler() {
-    return scheduler;
   }
 
   public static class Executor {
@@ -61,27 +56,6 @@ public class QualityProperties {
 
     public void setShutdownWaitSeconds(int shutdownWaitSeconds) {
       this.shutdownWaitSeconds = shutdownWaitSeconds;
-    }
-  }
-
-  public static class Scheduler {
-    private long pollIntervalMs = 30000L;
-    private int batchSize = 50;
-
-    public long getPollIntervalMs() {
-      return pollIntervalMs;
-    }
-
-    public void setPollIntervalMs(long pollIntervalMs) {
-      this.pollIntervalMs = pollIntervalMs;
-    }
-
-    public int getBatchSize() {
-      return batchSize;
-    }
-
-    public void setBatchSize(int batchSize) {
-      this.batchSize = batchSize;
     }
   }
 }

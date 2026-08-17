@@ -1,10 +1,7 @@
 package io.yak.ops.business.quality.schedule;
 
-import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import io.yak.ops.common.enums.quality.QualityEnums.ScheduleFrequency;
 import io.yak.ops.common.enums.quality.QualityEnums.ScheduleWeekday;
-import java.time.DayOfWeek;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -15,23 +12,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class QualityScheduleCalculator {
   private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
-
-  public LocalDateTime nextRun(
-      RunMode runMode,
-      ScheduleFrequency frequency,
-      String scheduleTime,
-      ScheduleWeekday weekday,
-      String cronExpression,
-      LocalDateTime from) {
-    if (runMode != RunMode.SCHEDULE) return null;
-    if (frequency == null) throw new IllegalArgumentException("调度触发必须选择调度周期");
-    LocalDateTime base = from == null ? LocalDateTime.now() : from;
-    return switch (frequency) {
-      case DAILY -> nextDaily(parseTime(scheduleTime), base);
-      case WEEKLY -> nextWeekly(parseTime(scheduleTime), requiredWeekday(weekday), base);
-      case CRON -> nextCron(cronExpression, base);
-    };
-  }
 
   /** 将数据质量的友好调度配置统一转换成 Yak Schedule/Quartz 使用的 Cron。 */
   public String cronExpression(
@@ -48,25 +28,6 @@ public class QualityScheduleCalculator {
   }
 
   public void validateCron(String expression) { parseCron(expression); }
-
-  private LocalDateTime nextDaily(LocalTime time, LocalDateTime from) {
-    LocalDateTime candidate = from.toLocalDate().atTime(time);
-    return candidate.isAfter(from) ? candidate : candidate.plusDays(1);
-  }
-
-  private LocalDateTime nextWeekly(LocalTime time, ScheduleWeekday weekday, LocalDateTime from) {
-    DayOfWeek target = DayOfWeek.valueOf(weekday.name());
-    int days = Math.floorMod(target.getValue() - from.getDayOfWeek().getValue(), 7);
-    LocalDateTime candidate = from.toLocalDate().plusDays(days).atTime(time);
-    if (!candidate.isAfter(from)) candidate = candidate.plusWeeks(1);
-    return candidate;
-  }
-
-  private LocalDateTime nextCron(String expression, LocalDateTime from) {
-    LocalDateTime next = parseCron(expression).next(from);
-    if (next == null) throw new IllegalArgumentException("Cron 表达式无法计算下一次执行时间");
-    return next;
-  }
 
   private String dailyCron(LocalTime time) {
     return "0 " + time.getMinute() + " " + time.getHour() + " * * ?";

@@ -9,7 +9,6 @@ import io.yak.ops.business.quality.domain.QualityDomain.MonitorSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.Rule;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleSpec;
-import io.yak.ops.business.quality.domain.QualityDomain.ScheduledMonitor;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAsset;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetTarget;
@@ -45,8 +44,6 @@ public interface QualityRepository {
   boolean deleteMonitor(long id);
   MonitorSettings findMonitorSettings(long monitorId);
   void upsertMonitorSettings(long monitorId, MonitorSettingsSpec settings);
-  List<ScheduledMonitor> listDueMonitors(LocalDateTime now, int limit);
-  boolean claimMonitorSchedule(long monitorId, LocalDateTime expectedRunTime, LocalDateTime nextRunTime);
   void insertAlertEvent(AlertEventSpec alert);
   void replaceRules(long monitorId, List<RuleSpec> rules);
   List<Rule> listRules(long monitorId);

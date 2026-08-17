@@ -2,7 +2,6 @@ package io.yak.ops.business.quality.dao.mapper;
 
 import io.yak.ops.common.bean.po.quality.QualityMonitorSettingPO;
 import io.yak.ops.common.bean.po.quality.QualityTableAssetPO;
-import java.time.LocalDateTime;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -14,9 +13,4 @@ public interface QualityWriteMapper {
   int upsertTableAsset(QualityTableAssetPO asset);
 
   int upsertMonitorSetting(QualityMonitorSettingPO setting);
-
-  int claimMonitorSchedule(
-      @Param("monitorId") long monitorId,
-      @Param("expectedRunTime") LocalDateTime expectedRunTime,
-      @Param("nextRunTime") LocalDateTime nextRunTime);
 }
