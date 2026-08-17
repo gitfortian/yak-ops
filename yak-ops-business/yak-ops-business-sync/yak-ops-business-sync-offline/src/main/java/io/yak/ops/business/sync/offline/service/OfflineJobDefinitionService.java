@@ -10,6 +10,7 @@ import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
+import io.yak.ops.business.sync.offline.schedule.OfflineScheduleLifecycle;
 import io.yak.ops.business.sync.offline.service.OfflineDefinitionSupport.DraftDefinition;
 import io.yak.ops.business.sync.offline.service.OfflineDefinitionSupport.PreparedDefinition;
 import io.yak.ops.business.sync.offline.service.support.OfflineScheduleSupport;
@@ -34,6 +35,7 @@ public class OfflineJobDefinitionService {
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineDefinitionSupport support;
   private final OfflineScheduleSupport scheduleSupport;
+  private final OfflineScheduleLifecycle scheduleLifecycle;
   private final OfflineSyncViewMapper viewMapper;
   private final AtomicLong idSequence = new AtomicLong(System.currentTimeMillis() * 1000L);
 
@@ -83,6 +85,7 @@ public class OfflineJobDefinitionService {
     if (existing == null) definitionRepository.insert(definition); else definitionRepository.update(definition);
     scheduleRepository.saveSchedule(
         scheduleSupport.prepare(id, draft.getRequest().get("schedule")));
+    scheduleLifecycle.sync(id);
     return id;
   }
 
@@ -122,6 +125,7 @@ public class OfflineJobDefinitionService {
     if (existing == null) definitionRepository.insert(definition); else definitionRepository.update(definition);
     scheduleRepository.saveSchedule(
         scheduleSupport.prepare(id, prepared.getRequest().get("schedule")));
+    scheduleLifecycle.sync(id);
     return id;
   }
 
@@ -180,7 +184,9 @@ public class OfflineJobDefinitionService {
     resolveLogicalJobSpec(definition);
     definition.setReleaseState("ONLINE");
     definition.setUpdateTime(LocalDateTime.now());
-    return definitionRepository.update(definition);
+    boolean updated = definitionRepository.update(definition);
+    if (updated) scheduleLifecycle.sync(id);
+    return updated;
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
@@ -191,7 +197,9 @@ public class OfflineJobDefinitionService {
     }
     definition.setReleaseState("OFFLINE");
     definition.setUpdateTime(LocalDateTime.now());
-    return definitionRepository.update(definition);
+    boolean updated = definitionRepository.update(definition);
+    if (updated) scheduleLifecycle.sync(id);
+    return updated;
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
@@ -203,6 +211,7 @@ public class OfflineJobDefinitionService {
     if (executionRepository.hasActiveExecution(id)) {
       throw new IllegalStateException("运行中的任务不能删除");
     }
+    scheduleLifecycle.remove(id);
     return definitionRepository.delete(id);
   }
 

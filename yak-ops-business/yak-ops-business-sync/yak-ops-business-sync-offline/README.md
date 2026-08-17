@@ -21,6 +21,23 @@ yak:
 
 不再提供客户端管理、Connector 管理、多 Worker 调度、能力匹配、Preflight、动态注册和告警投递。
 
+## 调度边界
+
+任务级 Cron 时间触发统一交给 Yak Framework Schedule：
+
+```text
+Offline Job Definition
+  -> OfflineScheduleEngineBridge
+  -> Yak Schedule / Quartz
+  -> OfflineScheduleHandler
+  -> OfflineExecutionOrchestrator
+  -> Link-Up
+```
+
+`yak_offline_job_definition` 仍是调度配置的事实来源；Yak Schedule 只负责“什么时候触发”。应用启动后会根据业务表恢复计划，并处理一次持久化的 missed trigger。
+
+Link-Up 运行状态对账和业务失败重试仍由 `OfflineExecutionReconciler` 负责。这属于执行生命周期，不属于任务 Cron 调度，因此继续保留独立的短周期对账。
+
 ## 工程分层
 
 离线同步遵循 Yak Ops 统一业务模块边界：
