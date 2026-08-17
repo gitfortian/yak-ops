@@ -191,18 +191,6 @@
     WHERE asset.id = #{assetId} AND asset.deleted = 0
   </select>
 
-  <select id="selectDueMonitors" resultType="io.yak.ops.common.bean.po.quality.QualityMonitorSettingPO">
-    SELECT s.monitor_id, s.run_mode, s.schedule_frequency, s.schedule_time,
-      s.schedule_weekday, s.cron_expression, s.next_run_time,
-      s.rule_failure_action, s.notify_enabled, s.notify_channel,
-      s.notify_target, s.alert_level, s.created_at, s.updated_at
-    FROM yak_quality_monitor_setting s
-    JOIN yak_quality_monitor m ON m.id = s.monitor_id
-    WHERE m.deleted = 0 AND m.enabled = 1
-      AND s.run_mode = 'SCHEDULE' AND s.next_run_time IS NOT NULL AND s.next_run_time &lt;= #{now}
-    ORDER BY s.next_run_time ASC, s.monitor_id ASC LIMIT #{limit}
-  </select>
-
   <sql id="ExecutionColumns">
     e.id, e.execution_no, e.monitor_id, e.monitor_name, e.data_source_id,
     e.data_source_name, e.database_name, e.schema_name, e.table_name, e.object_name,

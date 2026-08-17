@@ -18,7 +18,6 @@ import io.yak.ops.business.quality.domain.QualityDomain.Rule;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecution;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleSpec;
-import io.yak.ops.business.quality.domain.QualityDomain.ScheduledMonitor;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAsset;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetTarget;
@@ -165,18 +164,6 @@ public class QualityRepositoryAdapter implements QualityRepository {
   }
 
   @Override public void upsertMonitorSettings(long monitorId, MonitorSettingsSpec settings) { monitorDao.upsertSetting(settingPO(monitorId, settings)); }
-
-  @Override
-  public List<ScheduledMonitor> listDueMonitors(LocalDateTime now, int limit) {
-    return monitorDao.selectDue(now, limit).stream().map(po -> new ScheduledMonitor(
-        po.getMonitorId(), enumValue(RunMode.class, po.getRunMode(), RunMode.MANUAL),
-        enumValue(ScheduleFrequency.class, po.getScheduleFrequency()),
-        po.getScheduleTime() == null ? null : po.getScheduleTime().format(TIME_FORMATTER),
-        enumValue(ScheduleWeekday.class, po.getScheduleWeekday()), po.getCronExpression(),
-        po.getNextRunTime())).toList();
-  }
-
-  @Override public boolean claimMonitorSchedule(long monitorId, LocalDateTime expectedRunTime, LocalDateTime nextRunTime) { return monitorDao.claimSchedule(monitorId, expectedRunTime, nextRunTime); }
   @Override public void insertAlertEvent(AlertEventSpec alert) { monitorDao.insertAlert(alertPO(alert)); }
 
   @Override

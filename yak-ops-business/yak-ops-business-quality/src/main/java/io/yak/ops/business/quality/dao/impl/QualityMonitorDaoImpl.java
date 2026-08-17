@@ -133,8 +133,6 @@ public class QualityMonitorDaoImpl implements QualityMonitorDao {
 
   @Override public QualityMonitorSettingPO selectSetting(long monitorId) { return settingMapper.selectById(monitorId); }
   @Override public void upsertSetting(QualityMonitorSettingPO setting) { writeMapper.upsertMonitorSetting(setting); }
-  @Override public List<QualityMonitorSettingPO> selectDue(LocalDateTime now, int limit) { return queryMapper.selectDueMonitors(now, Math.max(1, limit)); }
-  @Override public boolean claimSchedule(long monitorId, LocalDateTime expectedRunTime, LocalDateTime nextRunTime) { return writeMapper.claimMonitorSchedule(monitorId, expectedRunTime, nextRunTime) == 1; }
   @Override public void insertAlert(QualityAlertEventPO alert) { alertEventMapper.insert(alert); }
 
   @Override public long countTableAssets(Map<String, Object> params) { return queryMapper.countTableAssets(params); }
