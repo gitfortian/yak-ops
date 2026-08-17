@@ -13,12 +13,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnQualityEnabled
-@EnableScheduling
 @EnableConfigurationProperties(QualityProperties.class)
 @Import(BusinessDatabaseConfiguration.class)
 @MapperScan(
