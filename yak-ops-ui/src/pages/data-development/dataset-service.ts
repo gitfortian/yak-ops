@@ -26,22 +26,15 @@ export interface DevelopmentDatasetFieldDraft {
   defaultRole: DevelopmentDatasetFieldRole;
 }
 
-export interface DevelopmentDatasetNodeSource {
-  nodeId: DevelopmentId;
-  nodeName: string;
-  taskAssetId: DevelopmentId;
-  status: string;
-  revisionId: DevelopmentId;
-  revisionNo: number;
-}
-
 export interface DevelopmentDatasetNodeVersion {
   versionId: DevelopmentId;
   versionNo: number;
   sourceType: string;
-  sourceTaskAssetId: DevelopmentId;
-  sourceTaskRevisionId: DevelopmentId;
-  sourceTaskRevisionNo: number;
+  sourceTaskAssetId?: DevelopmentId;
+  sourceTaskRevisionId?: DevelopmentId;
+  sourceTaskRevisionNo?: number;
+  dataSourceId?: DevelopmentId | null;
+  sql?: string | null;
   createTime?: string;
 }
 
@@ -73,13 +66,12 @@ export interface DevelopmentDatasetNodeContext {
   nodeId: DevelopmentId;
   nodeName: string;
   configured: boolean;
-  availableSources: DevelopmentDatasetNodeSource[];
-  selectedSource?: DevelopmentDatasetNodeSource | null;
   dataset?: DevelopmentDatasetNodeAsset | null;
 }
 
 export interface SaveDevelopmentDatasetNodePayload {
-  sourceTaskAssetId: DevelopmentId;
+  dataSourceId: DevelopmentId;
+  sql: string;
   description?: string;
   fields?: DevelopmentDatasetFieldDraft[];
 }
@@ -100,11 +92,12 @@ export const getDevelopmentDatasetNode = async (
 
 export const previewDevelopmentDatasetNode = async (
   nodeId: DevelopmentId,
-  sourceTaskAssetId: DevelopmentId,
+  dataSourceId: DevelopmentId,
+  sql: string,
 ): Promise<DevelopmentDatasetFieldDraft[]> => unwrap(
   await HttpUtils.post<DevelopmentDatasetFieldDraft[]>(
     `${NODE_API}/${nodeId}/dataset/preview`,
-    { sourceTaskAssetId },
+    { dataSourceId, sql },
   ),
   '发现 Dataset Node 字段失败',
 );

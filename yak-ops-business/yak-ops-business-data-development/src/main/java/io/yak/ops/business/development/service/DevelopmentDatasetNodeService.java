@@ -17,13 +17,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Turns a standalone DATASET node into a stable Dataset asset.
- *
- * <p>Source selection belongs to the Dataset node itself. Workflow topology is intentionally not
- * consulted here: orchestration relationships are owned by the dedicated workflow module. Saving the
- * Dataset snapshots the selected SQL TaskAsset's current immutable TaskRevision.
- */
+/** Dataset node application service. New editors own datasource + SQL directly. */
 @Service
 public class DevelopmentDatasetNodeService {
 
@@ -46,12 +40,36 @@ public class DevelopmentDatasetNodeService {
     return context(datasetNode, dataset, selectedSource(dataset));
   }
 
+  /** Standalone editor preview; no SQL TaskAsset is required. */
+  public List<FieldDraft> preview(long nodeId, String dataSourceId, String sql) {
+    requireDatasetNode(nodeId);
+    return datasetFacade.preview(dataSourceId, sql);
+  }
+
+  /** Standalone editor save; DatasetVersion freezes datasource + SQL + field contract. */
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DatasetNodeContext save(
+      long nodeId,
+      String dataSourceId,
+      String sql,
+      String description,
+      List<FieldDraft> fields) {
+    DevelopmentNode datasetNode = requireDatasetNode(nodeId);
+    NodeDataset saved = datasetFacade.save(
+        nodeId, dataSourceId, sql, datasetNode.name(), description, fields);
+    markConfigured(datasetNode);
+    DevelopmentNode refreshed = nodeRepository.findById(nodeId).orElse(datasetNode);
+    return context(refreshed, saved, null);
+  }
+
+  /** Legacy TaskAsset preview retained for compatibility during migration. */
   public List<FieldDraft> preview(long nodeId, long sourceTaskAssetId) {
     DevelopmentNode datasetNode = requireDatasetNode(nodeId);
     TaskAsset source = requireSelectableSqlAsset(datasetNode, sourceTaskAssetId);
     return datasetFacade.preview(source.id());
   }
 
+  /** Legacy TaskAsset save retained for compatibility during migration. */
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public DatasetNodeContext save(
       long nodeId,
@@ -61,16 +79,16 @@ public class DevelopmentDatasetNodeService {
     DevelopmentNode datasetNode = requireDatasetNode(nodeId);
     TaskAsset source = requireSelectableSqlAsset(datasetNode, sourceTaskAssetId);
     NodeDataset saved = datasetFacade.save(
-        nodeId,
-        source.id(),
-        datasetNode.name(),
-        description,
-        fields);
-    if (!datasetNode.configured() && !nodeRepository.updateConfigured(nodeId, true)) {
-      throw new IllegalStateException("Dataset Node 配置状态更新失败：" + nodeId);
-    }
+        nodeId, source.id(), datasetNode.name(), description, fields);
+    markConfigured(datasetNode);
     DevelopmentNode refreshed = nodeRepository.findById(nodeId).orElse(datasetNode);
     return context(refreshed, saved, toSnapshot(source));
+  }
+
+  private void markConfigured(DevelopmentNode datasetNode) {
+    if (!datasetNode.configured() && !nodeRepository.updateConfigured(datasetNode.id(), true)) {
+      throw new IllegalStateException("Dataset Node 配置状态更新失败：" + datasetNode.id());
+    }
   }
 
   private DatasetNodeContext context(
@@ -86,6 +104,7 @@ public class DevelopmentDatasetNodeService {
         dataset);
   }
 
+  /** Legacy source list remains in the response temporarily; the new UI no longer consumes it. */
   private List<SourceSnapshot> availableSources(DevelopmentNode datasetNode) {
     return taskCatalogService.list("DATA_DEVELOPMENT", "ONLINE", null).stream()
         .filter(asset -> "SQL".equalsIgnoreCase(asset.taskType()))
@@ -100,21 +119,17 @@ public class DevelopmentDatasetNodeService {
 
   private SourceSnapshot selectedSource(NodeDataset dataset) {
     if (dataset == null || dataset.currentVersion() == null) return null;
+    String assetId = dataset.currentVersion().sourceTaskAssetId();
+    if (assetId == null || assetId.isBlank() || "0".equals(assetId)) return null;
     try {
-      TaskAsset asset = taskCatalogService.get(
-          Long.parseLong(dataset.currentVersion().sourceTaskAssetId()));
-      return toSnapshot(asset);
+      return toSnapshot(taskCatalogService.get(Long.parseLong(assetId)));
     } catch (RuntimeException exception) {
       return null;
     }
   }
 
-  private TaskAsset requireSelectableSqlAsset(
-      DevelopmentNode datasetNode,
-      long sourceTaskAssetId) {
-    if (sourceTaskAssetId <= 0L) {
-      throw new IllegalArgumentException("sourceTaskAssetId 必须大于 0");
-    }
+  private TaskAsset requireSelectableSqlAsset(DevelopmentNode datasetNode, long sourceTaskAssetId) {
+    if (sourceTaskAssetId <= 0L) throw new IllegalArgumentException("sourceTaskAssetId 必须大于 0");
     TaskAsset asset = taskCatalogService.get(sourceTaskAssetId);
     if (asset.source() != TaskAssetSource.DATA_DEVELOPMENT) {
       throw new IllegalArgumentException("Dataset 只能选择数据开发 SQL 来源");
@@ -152,8 +167,7 @@ public class DevelopmentDatasetNodeService {
 
   private Optional<SourceSnapshot> toSnapshotIfValidSqlNode(TaskAsset asset) {
     try {
-      DevelopmentNode sourceNode = requireSourceSqlNode(asset);
-      return Optional.of(toSnapshot(asset, sourceNode));
+      return Optional.of(toSnapshot(asset, requireSourceSqlNode(asset)));
     } catch (RuntimeException exception) {
       return Optional.empty();
     }
@@ -163,22 +177,15 @@ public class DevelopmentDatasetNodeService {
     DevelopmentNode sourceNode = nodeRepository.findById(parseSourceNodeId(asset)).orElse(null);
     return sourceNode == null
         ? new SourceSnapshot(
-            asset.sourceRef(),
-            asset.name(),
-            String.valueOf(asset.id()),
-            asset.status().name(),
-            String.valueOf(asset.currentRevision().taskRevisionId()),
-            asset.currentRevision().revisionNo())
+            asset.sourceRef(), asset.name(), String.valueOf(asset.id()), asset.status().name(),
+            String.valueOf(asset.currentRevision().taskRevisionId()), asset.currentRevision().revisionNo())
         : toSnapshot(asset, sourceNode);
   }
 
   private SourceSnapshot toSnapshot(TaskAsset asset, DevelopmentNode sourceNode) {
     return new SourceSnapshot(
-        String.valueOf(sourceNode.id()),
-        sourceNode.name(),
-        String.valueOf(asset.id()),
-        asset.status().name(),
-        String.valueOf(asset.currentRevision().taskRevisionId()),
+        String.valueOf(sourceNode.id()), sourceNode.name(), String.valueOf(asset.id()),
+        asset.status().name(), String.valueOf(asset.currentRevision().taskRevisionId()),
         asset.currentRevision().revisionNo());
   }
 

@@ -24,6 +24,16 @@ interface DatasetRepository {
       int sourceTaskRevisionNo,
       String schemaSnapshot);
 
+  /** Persists a Dataset-owned SQL snapshot without depending on a data-development TaskAsset. */
+  default long insertStandaloneVersion(
+      long datasetId,
+      int versionNo,
+      String dataSourceId,
+      String sql,
+      String schemaSnapshot) {
+    throw new UnsupportedOperationException("Standalone Dataset SQL is not supported");
+  }
+
   void insertFields(long versionId, List<DatasetService.FieldSpec> fields);
 
   void updateCurrentVersion(long datasetId, long versionId);
