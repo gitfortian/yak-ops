@@ -1,15 +1,15 @@
 import {
   ArrowRightLeft,
   BarChart3,
-  ChevronLeft,
   ChevronRight,
   Code2,
   Database,
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import DataCenter from './DataCenter';
+import ScheduleCenter from './ScheduleCenter';
 
 /* =========================================================
  * Types
@@ -304,215 +304,6 @@ function Section({ title, children, className = '' }: SectionProps) {
 }
 
 /* =========================================================
- * Activity Center
- * ========================================================= */
-
-interface ActivityOverviewItem {
-  title: string;
-  type: string;
-  date: string;
-}
-
-const activityOverviewItems: ActivityOverviewItem[] = [
-  {
-    title: '数据源连接巡检',
-    type: '数据源',
-    date: '08-01~08-31',
-  },
-  {
-    title: '离线同步任务周巡检',
-    type: '集成',
-    date: '08-10~08-16',
-  },
-  {
-    title: '数据质量规则扫描',
-    type: '质量',
-    date: '08-17~08-23',
-  },
-];
-
-const pad2 = (value: number) => String(value).padStart(2, '0');
-
-interface CalendarCell {
-  day: number | null;
-  date: Date | null;
-  isToday: boolean;
-}
-
-function buildCalendarWeeks(cursor: Date): CalendarCell[][] {
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date();
-
-  const cells: CalendarCell[] = Array.from({ length: 42 }, (_, index) => {
-    const day = index - firstDay + 1;
-    if (day < 1 || day > daysInMonth) {
-      return { day: null, date: null, isToday: false };
-    }
-    const date = new Date(year, month, day);
-    const isToday =
-      today.getFullYear() === year
-      && today.getMonth() === month
-      && today.getDate() === day;
-    return { day, date, isToday };
-  });
-
-  return Array.from({ length: 6 }, (_, weekIndex) =>
-    cells.slice(weekIndex * 7, weekIndex * 7 + 7),
-  );
-}
-
-function CalendarWeek({ cells }: { cells: CalendarCell[] }) {
-  const activeIndexes = cells
-    .map((cell, index) => (cell.day ? index : -1))
-    .filter((index) => index >= 0);
-  const start = activeIndexes[0];
-  const end = activeIndexes[activeIndexes.length - 1];
-
-  return (
-    <div className="relative grid h-[39px] grid-cols-7 items-center">
-      {cells.map((cell, index) => (
-        <div
-          key={`${cell.day ?? 'empty'}-${index}`}
-          className="relative flex h-full items-center justify-center text-[12px] text-[#353943]"
-        >
-          {cell.day && (
-            <span
-              className={`
-                flex h-7 min-w-7 items-center justify-center rounded-full px-1
-                ${cell.isToday ? 'bg-[#eef4ff] font-semibold text-[#356fe8]' : ''}
-              `}
-            >
-              {pad2(cell.day)}
-            </span>
-          )}
-        </div>
-      ))}
-
-      {start !== undefined && end !== undefined && (
-        <span
-          className="pointer-events-none absolute bottom-0 h-[3px] rounded-full bg-[#bfd3ff]"
-          style={{
-            left: `calc(${(start / 7) * 100}% + 8px)`,
-            width: `calc(${((end - start + 1) / 7) * 100}% - 16px)`,
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function ActivityCenter() {
-  const now = useMemo(() => new Date(), []);
-  const [cursor, setCursor] = useState(
-    () => new Date(now.getFullYear(), now.getMonth(), 1),
-  );
-  const weeks = useMemo(() => buildCalendarWeeks(cursor), [cursor]);
-  const monthLabel = `${cursor.getFullYear()}年${pad2(cursor.getMonth() + 1)}月`;
-
-  const moveMonth = (offset: number) => {
-    setCursor(
-      (current) =>
-        new Date(current.getFullYear(), current.getMonth() + offset, 1),
-    );
-  };
-
-  return (
-    <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
-      <header className="flex items-start justify-between gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.35px] text-[#252832]">
-          活动中心
-        </h2>
-
-        <div className="flex flex-col items-end gap-2">
-          <button
-            type="button"
-            className="flex items-center gap-0.5 text-[12px] text-[#666b75] transition-colors hover:text-[#252832]"
-          >
-            查看更多
-            <ChevronRight size={14} strokeWidth={1.8} />
-          </button>
-          <span className="flex items-center gap-1.5 text-[11px] text-[#8b9099]">
-            <span className="h-2 w-2 rounded-full bg-[#5b8cff]" />
-            进行中
-          </span>
-        </div>
-      </header>
-
-      <div className="mt-4">
-        <div className="flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => moveMonth(-1)}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-[#91959d] transition-colors hover:bg-[#f5f6f8] hover:text-[#4a4f58]"
-            aria-label="上个月"
-          >
-            <ChevronLeft size={16} strokeWidth={1.8} />
-          </button>
-
-          <div className="min-w-[112px] text-center text-[14px] font-semibold text-[#333741]">
-            {monthLabel}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => moveMonth(1)}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-[#91959d] transition-colors hover:bg-[#f5f6f8] hover:text-[#4a4f58]"
-            aria-label="下个月"
-          >
-            <ChevronRight size={16} strokeWidth={1.8} />
-          </button>
-        </div>
-
-        <div className="mt-2 grid grid-cols-7 text-center text-[11px] text-[#6d727c]">
-          {['日', '一', '二', '三', '四', '五', '六'].map((day) => (
-            <span key={day}>{day}</span>
-          ))}
-        </div>
-
-        <div className="mt-1">
-          {weeks.map((week, index) => (
-            <CalendarWeek key={index} cells={week} />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 border-t border-[#eef0f3] pt-4">
-        <div className="flex items-center justify-between">
-          <strong className="text-[13px] font-semibold text-[#3c4049]">
-            {cursor.getMonth() + 1}月活动总览
-          </strong>
-          <span className="text-[11px] text-[#999da5]">共9个进行中</span>
-        </div>
-
-        <div className="mt-2.5 space-y-2">
-          {activityOverviewItems.map((item) => (
-            <button
-              key={item.title}
-              type="button"
-              className="group flex w-full items-center gap-2 text-left"
-            >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#5b8cff]" />
-              <span className="min-w-0 flex-1 truncate text-[12px] text-[#464a53] transition-colors group-hover:text-[#252832]">
-                {item.title}
-              </span>
-              <span className="shrink-0 rounded border border-[#eceef2] px-1.5 py-0.5 text-[10px] leading-4 text-[#8d929a]">
-                {item.type}
-              </span>
-              <span className="w-[74px] shrink-0 text-right text-[10px] text-[#9da1a8]">
-                {item.date}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* =========================================================
  * Home secondary panels
  * ========================================================= */
 
@@ -520,7 +311,7 @@ function HomeSecondaryPanels() {
   return (
     <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_410px]">
       <DataCenter />
-      <ActivityCenter />
+      <ScheduleCenter />
     </div>
   );
 }
