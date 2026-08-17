@@ -19,16 +19,12 @@ const rowClassName = 'grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-2';
 
 interface SettingSectionProps {
   title: string;
-  description: string;
   children: ReactNode;
 }
 
-const SettingSection = ({ title, description, children }: SettingSectionProps) => (
+const SettingSection = ({ title, children }: SettingSectionProps) => (
   <section className="border-t border-[#eaecf0] py-6 first:border-t-0 first:pt-0">
-    <div className="mb-5">
-      <div className="text-[14px] font-semibold text-[#1d2939]">{title}</div>
-      <div className="mt-1 text-[12px] leading-5 text-[#98a2b3]">{description}</div>
-    </div>
+    <div className="mb-4 text-[14px] font-semibold text-[#1d2939]">{title}</div>
     {children}
   </section>
 );
@@ -104,27 +100,20 @@ const EditorSettingsPanel = () => {
 
   return (
     <div className="text-[13px] text-[#344054]">
-      <div className="mb-6 flex items-start justify-between gap-6">
-        <div>
-          <div className="text-[17px] font-semibold text-[#161823]">编辑器设置</div>
-          <div className="mt-1 text-[12px] leading-5 text-[#98a2b3]">
-            SQL 编辑器全局偏好，修改后会应用到当前账号打开的所有 SQL 编辑器。
-          </div>
-        </div>
-        <span className="shrink-0 pt-1 text-[11px] text-[#98a2b3]">
+      <div className="mb-6 flex items-center justify-between gap-6">
+        <div className="text-[17px] font-semibold text-[#161823]">编辑器设置</div>
+        <span className="shrink-0 text-[11px] text-[#98a2b3]">
           {saving ? '保存中…' : '已同步'}
         </span>
       </div>
 
-      <SettingSection
-        title="外观"
-        description="设置编辑器主题、字体和文本显示尺寸。"
-      >
+      <SettingSection title="外观">
         <div className="space-y-5">
           <div className="max-w-[520px]">
             <label className={labelClassName}>编辑器主题</label>
             <Select
               className="w-full"
+              variant="filled"
               value={settings.theme}
               options={YAK_EDITOR_THEMES.map((theme) => ({
                 label: theme.name,
@@ -139,6 +128,7 @@ const EditorSettingsPanel = () => {
               <label className={labelClassName}>编辑器字体</label>
               <Select
                 className="w-full"
+                variant="filled"
                 value={settings.fontFamily}
                 options={YAK_EDITOR_FONTS.map((font) => ({ label: font, value: font }))}
                 onChange={(value) => patch('fontFamily', value)}
@@ -147,6 +137,7 @@ const EditorSettingsPanel = () => {
             <div>
               <label className={labelClassName}>自定义字体</label>
               <Input
+                variant="filled"
                 value={settings.customFontFamily}
                 placeholder="例如 Cascadia Code"
                 onChange={(event) => patch('customFontFamily', event.target.value)}
@@ -159,6 +150,7 @@ const EditorSettingsPanel = () => {
               <label className={labelClassName}>字体大小</label>
               <InputNumber
                 className="w-full"
+                variant="filled"
                 min={10}
                 max={32}
                 addonAfter="px"
@@ -170,6 +162,7 @@ const EditorSettingsPanel = () => {
               <label className={labelClassName}>行高</label>
               <InputNumber
                 className="w-full"
+                variant="filled"
                 min={1}
                 max={3}
                 step={0.1}
@@ -181,10 +174,7 @@ const EditorSettingsPanel = () => {
         </div>
       </SettingSection>
 
-      <SettingSection
-        title="编辑器行为"
-        description="控制行号、缩略图、换行、代码折叠和辅助显示。"
-      >
+      <SettingSection title="编辑器行为">
         <div className={rowClassName}>
           <div>
             <label className={labelClassName}>显示行号</label>
@@ -206,6 +196,7 @@ const EditorSettingsPanel = () => {
             <label className={labelClassName}>行高亮</label>
             <Select
               className="w-full"
+              variant="filled"
               value={settings.renderLineHighlight}
               options={[
                 { label: 'LINE', value: 'line' },
@@ -220,6 +211,7 @@ const EditorSettingsPanel = () => {
             <label className={labelClassName}>空白字符显示</label>
             <Select
               className="w-full"
+              variant="filled"
               value={settings.renderWhitespace}
               options={[
                 { label: '不显示', value: 'none' },
@@ -234,10 +226,7 @@ const EditorSettingsPanel = () => {
         </div>
       </SettingSection>
 
-      <SettingSection
-        title="SQL"
-        description="设置 SQL 关键字显示和元数据补全偏好。"
-      >
+      <SettingSection title="SQL">
         <div className={rowClassName}>
           <div>
             <label className={labelClassName}>关键字大小写</label>
@@ -253,6 +242,7 @@ const EditorSettingsPanel = () => {
             <label className={labelClassName}>全限定补全</label>
             <Select
               className="w-full"
+              variant="filled"
               value={settings.sqlCompletionFQN}
               options={[
                 { label: '不补全限定名', value: 'none' },
@@ -266,7 +256,7 @@ const EditorSettingsPanel = () => {
       </SettingSection>
 
       <div className="border-t border-[#eaecf0] pt-6">
-        <Button onClick={() => persist(DEFAULT_YAK_EDITOR_SETTINGS)}>
+        <Button variant="filled" onClick={() => persist(DEFAULT_YAK_EDITOR_SETTINGS)}>
           恢复默认设置
         </Button>
       </div>
