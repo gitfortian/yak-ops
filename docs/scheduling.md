@@ -163,13 +163,15 @@ yak-ops-boot
 
 三者都通过 `YakScheduleGateway -> ScheduleManager` 访问调度引擎，同时保留自己的执行模型和恢复逻辑。
 
+跨业务的只读调度视图（例如首页“调度中心”）应直接聚合这些 namespace 下的 `ScheduleSnapshot`，使用 `ScheduleDefinition.trigger` 中已经归一化的触发配置，不应再次查询各业务表并自行兼容 Linux Cron / Quartz Cron 或重新拼装 DAILY / WEEKLY Cron。
+
 ## 8. 新模块接入检查表
 
 新增 SQL Task、数据集刷新、报表刷新等调度能力时，提交前确认：
 
 - [ ] 业务表是调度定义事实来源；
 - [ ] 业务模块只依赖 `yak-schedule-api`；
-- [ ] 使用独立 namespace；
+- [ ] 使用独立 namespace，并优先在 `YakScheduleNamespaces` 中登记稳定 namespace；
 - [ ] 有 `EngineBridge + Handler + Lifecycle + Reconciler`；
 - [ ] 下线使用 pause，删除使用 delete；
 - [ ] `runNow` 和 missed trigger 进入统一 Handler；

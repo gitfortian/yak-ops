@@ -11,6 +11,7 @@ import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import io.yak.ops.common.schedule.YakScheduleGateway;
+import io.yak.ops.common.schedule.YakScheduleNamespaces;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Component;
 /** Yak Ops 数据质量调度到 Yak Framework ScheduleManager 的适配层。 */
 @Component
 public class QualityScheduleEngineBridge {
-  static final String NAMESPACE = "yak-ops-quality";
+  static final String NAMESPACE = YakScheduleNamespaces.DATA_QUALITY;
   static final String HANDLER = "qualityScheduleHandler";
 
   private final YakScheduleGateway gateway;

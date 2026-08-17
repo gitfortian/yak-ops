@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.common.schedule.YakScheduleGateway;
+import io.yak.ops.common.schedule.YakScheduleNamespaces;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,7 +25,7 @@ import org.springframework.util.StringUtils;
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineScheduleEngineBridge {
-  static final String NAMESPACE = "yak-ops-offline-sync";
+  static final String NAMESPACE = YakScheduleNamespaces.OFFLINE_SYNC;
   static final String HANDLER = "offlineSyncScheduleHandler";
 
   private final YakScheduleGateway gateway;

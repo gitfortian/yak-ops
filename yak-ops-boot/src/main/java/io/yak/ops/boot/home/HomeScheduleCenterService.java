@@ -1,18 +1,16 @@
 package io.yak.ops.boot.home;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.yak.ops.business.quality.dao.mapper.QualityMonitorMapper;
-import io.yak.ops.business.quality.dao.mapper.QualityMonitorSettingMapper;
-import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobDefinitionMapper;
-import io.yak.ops.business.workflow.dao.mapper.WorkflowScheduleMapper;
-import io.yak.ops.common.bean.po.quality.QualityMonitorPO;
-import io.yak.ops.common.bean.po.quality.QualityMonitorSettingPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
-import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
+import io.yak.framework.schedule.api.ScheduleDefinition;
+import io.yak.framework.schedule.api.ScheduleManager;
+import io.yak.framework.schedule.api.ScheduleSnapshot;
+import io.yak.framework.schedule.api.ScheduleStatus;
+import io.yak.framework.schedule.api.ScheduleTrigger;
+import io.yak.framework.schedule.api.TriggerType;
+import io.yak.ops.common.schedule.YakScheduleGateway;
+import io.yak.ops.common.schedule.YakScheduleNamespaces;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -23,30 +21,32 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import java.util.TimeZone;
-import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import org.quartz.CronExpression;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** 首页调度中心统一调度配置聚合服务。 */
+/** 首页调度中心：只读取 Yak Schedule 统一运行时快照，不再重复解释各业务调度配置。 */
 @Service
-@RequiredArgsConstructor
 public class HomeScheduleCenterService {
 
   private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
   private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
-  private static final Set<String> WORKFLOW_ACTIVE_STATUS = Set.of("ONLINE");
+  private static final DateTimeFormatter ONE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-  private final ObjectProvider<OfflineJobDefinitionMapper> offlineDefinitionMapperProvider;
-  private final ObjectProvider<WorkflowScheduleMapper> workflowScheduleMapperProvider;
-  private final ObjectProvider<QualityMonitorSettingMapper> qualitySettingMapperProvider;
-  private final ObjectProvider<QualityMonitorMapper> qualityMonitorMapperProvider;
+  private final YakScheduleGateway offlineSchedules;
+  private final YakScheduleGateway workflowSchedules;
+  private final YakScheduleGateway qualitySchedules;
+
+  public HomeScheduleCenterService(ObjectProvider<ScheduleManager> scheduleManagers) {
+    this.offlineSchedules = new YakScheduleGateway(
+        scheduleManagers::getIfAvailable, YakScheduleNamespaces.OFFLINE_SYNC);
+    this.workflowSchedules = new YakScheduleGateway(
+        scheduleManagers::getIfAvailable, YakScheduleNamespaces.WORKFLOW);
+    this.qualitySchedules = new YakScheduleGateway(
+        scheduleManagers::getIfAvailable, YakScheduleNamespaces.DATA_QUALITY);
+  }
 
   public CalendarResponse calendar(String monthValue) {
     YearMonth month = resolveMonth(monthValue);
@@ -54,9 +54,9 @@ public class HomeScheduleCenterService {
     LocalDate monthEnd = month.plusMonths(1).atDay(1);
 
     List<UnifiedScheduleTask> tasks = new ArrayList<>();
-    tasks.addAll(offlineTasks());
-    tasks.addAll(workflowTasks());
-    tasks.addAll(qualityTasks());
+    tasks.addAll(tasks(offlineSchedules, "OFFLINE_SYNC"));
+    tasks.addAll(tasks(workflowSchedules, "WORKFLOW"));
+    tasks.addAll(tasks(qualitySchedules, "DATA_QUALITY"));
 
     Map<LocalDate, List<ScheduleOccurrence>> occurrencesByDay = new LinkedHashMap<>();
     Map<String, ScheduleSummary> summariesByTask = new HashMap<>();
@@ -119,105 +119,40 @@ public class HomeScheduleCenterService {
         overview);
   }
 
-  private List<UnifiedScheduleTask> offlineTasks() {
-    OfflineJobDefinitionMapper mapper = offlineDefinitionMapperProvider.getIfAvailable();
-    if (mapper == null) return List.of();
-
-    return mapper.selectList(
-            new LambdaQueryWrapper<OfflineJobDefinitionPO>()
-                .eq(OfflineJobDefinitionPO::getScheduleEnabled, true)
-                .isNotNull(OfflineJobDefinitionPO::getCronExpression))
-        .stream()
-        .filter(item -> hasText(item.getCronExpression()))
-        .map(item -> new UnifiedScheduleTask(
-            String.valueOf(item.getId()),
-            "OFFLINE_SYNC",
-            defaultText(item.getJobName(), "离线同步任务 #" + item.getId()),
-            item.getCronExpression(),
-            ZoneId.systemDefault(),
-            null,
-            null,
-            item.getCronExpression(),
-            "/sync/batch-link-up/" + item.getId() + "/detail"))
+  private List<UnifiedScheduleTask> tasks(YakScheduleGateway gateway, String taskType) {
+    return gateway.list().stream()
+        .filter(snapshot -> snapshot.status() == ScheduleStatus.ENABLED)
+        .filter(snapshot -> snapshot.definition() != null && snapshot.definition().enabled())
+        .map(snapshot -> task(snapshot, taskType))
+        .filter(task -> task != null)
         .toList();
   }
 
-  private List<UnifiedScheduleTask> workflowTasks() {
-    WorkflowScheduleMapper mapper = workflowScheduleMapperProvider.getIfAvailable();
-    if (mapper == null) return List.of();
+  private UnifiedScheduleTask task(ScheduleSnapshot snapshot, String taskType) {
+    ScheduleDefinition definition = snapshot.definition();
+    ScheduleTrigger trigger = definition.trigger();
+    if (trigger == null) return null;
 
-    return mapper.selectList(
-            new LambdaQueryWrapper<WorkflowSchedulePO>()
-                .isNotNull(WorkflowSchedulePO::getCronExpression))
-        .stream()
-        .filter(item -> WORKFLOW_ACTIVE_STATUS.contains(normalize(item.getStatus())))
-        .filter(item -> hasText(item.getCronExpression()))
-        .map(item -> new UnifiedScheduleTask(
-            item.getId(),
-            "WORKFLOW",
-            defaultText(item.getName(), "工作流调度"),
-            item.getCronExpression(),
-            resolveZone(item.getTimezone()),
-            item.getStartTime(),
-            item.getEndTime(),
-            item.getCronExpression(),
-            "/workflow/schedules"))
-        .toList();
-  }
-
-  private List<UnifiedScheduleTask> qualityTasks() {
-    QualityMonitorSettingMapper settingMapper = qualitySettingMapperProvider.getIfAvailable();
-    QualityMonitorMapper monitorMapper = qualityMonitorMapperProvider.getIfAvailable();
-    if (settingMapper == null || monitorMapper == null) return List.of();
-
-    List<QualityMonitorSettingPO> settings = settingMapper.selectList(
-        new LambdaQueryWrapper<QualityMonitorSettingPO>()
-            .eq(QualityMonitorSettingPO::getRunMode, "SCHEDULE"));
-    if (settings.isEmpty()) return List.of();
-
-    Set<Long> monitorIds = settings.stream()
-        .map(QualityMonitorSettingPO::getMonitorId)
-        .filter(Objects::nonNull)
-        .collect(Collectors.toSet());
-    if (monitorIds.isEmpty()) return List.of();
-
-    Map<Long, QualityMonitorPO> monitors = monitorMapper.selectBatchIds(monitorIds).stream()
-        .filter(item -> Boolean.TRUE.equals(item.getEnabled()))
-        .filter(item -> !Boolean.TRUE.equals(item.getDeleted()))
-        .collect(Collectors.toMap(QualityMonitorPO::getId, item -> item, (left, right) -> left));
-
-    List<UnifiedScheduleTask> result = new ArrayList<>();
-    for (QualityMonitorSettingPO setting : settings) {
-      QualityMonitorPO monitor = monitors.get(setting.getMonitorId());
-      if (monitor == null) continue;
-      String cron = qualityCron(setting);
-      if (!hasText(cron)) continue;
-      result.add(new UnifiedScheduleTask(
-          String.valueOf(monitor.getId()),
-          "DATA_QUALITY",
-          defaultText(monitor.getMonitorName(), "数据质量任务 #" + monitor.getId()),
-          cron,
-          ZoneId.systemDefault(),
-          null,
-          null,
-          qualityScheduleText(setting),
-          "/data-quality/monitor/" + monitor.getId()));
-    }
-    return result;
+    String taskId = definition.key().name();
+    ZoneId zoneId = trigger.type() == TriggerType.CRON
+        ? trigger.zoneId()
+        : ZoneId.systemDefault();
+    return new UnifiedScheduleTask(
+        taskId,
+        taskType,
+        defaultText(definition.description(), fallbackName(taskType, taskId)),
+        trigger,
+        zoneId,
+        metadataInstant(definition.metadata(), "startTime"),
+        metadataInstant(definition.metadata(), "endTime"),
+        scheduleText(trigger, zoneId),
+        detailPath(taskType, taskId));
   }
 
   private List<ScheduleOccurrenceAt> occurrences(
       UnifiedScheduleTask task,
       LocalDate monthStart,
       LocalDate monthEnd) {
-    CronExpression cron;
-    try {
-      cron = new CronExpression(normalizeCron(task.cronExpression()));
-      cron.setTimeZone(TimeZone.getTimeZone(task.zoneId()));
-    } catch (Exception ignored) {
-      return List.of();
-    }
-
     Instant lowerBound = monthStart.atStartOfDay(task.zoneId()).toInstant();
     Instant upperBound = monthEnd.atStartOfDay(task.zoneId()).toInstant();
     if (task.startTime() != null && task.startTime().isAfter(lowerBound)) {
@@ -228,9 +163,27 @@ public class HomeScheduleCenterService {
     }
     if (!lowerBound.isBefore(upperBound)) return List.of();
 
+    return switch (task.trigger().type()) {
+      case CRON -> cronOccurrences(task, lowerBound, upperBound);
+      case ONE_TIME -> oneTimeOccurrences(task, lowerBound, upperBound);
+    };
+  }
+
+  private List<ScheduleOccurrenceAt> cronOccurrences(
+      UnifiedScheduleTask task,
+      Instant lowerBound,
+      Instant upperBound) {
+    CronExpression cron;
+    try {
+      // Cron 已在业务 Bridge -> ScheduleDefinition 阶段归一化，首页不再兼容或改写任何 Cron 方言。
+      cron = new CronExpression(task.trigger().expression());
+      cron.setTimeZone(TimeZone.getTimeZone(task.zoneId()));
+    } catch (Exception ignored) {
+      return List.of();
+    }
+
     List<ScheduleOccurrenceAt> result = new ArrayList<>();
     Date cursor = Date.from(lowerBound.minusMillis(1));
-
     while (true) {
       Date next = cron.getNextValidTimeAfter(cursor);
       if (next == null) break;
@@ -240,6 +193,7 @@ public class HomeScheduleCenterService {
       LocalDateTime dateTime = LocalDateTime.ofInstant(nextInstant, task.zoneId());
       result.add(new ScheduleOccurrenceAt(dateTime));
 
+      // 首页日历按“某天有哪些调度任务”展示，同一任务一天只投影一次。
       Instant nextDay = dateTime.toLocalDate().plusDays(1).atStartOfDay(task.zoneId()).toInstant();
       if (!nextDay.isBefore(upperBound)) break;
       cursor = Date.from(nextDay.minusMillis(1));
@@ -247,45 +201,49 @@ public class HomeScheduleCenterService {
     return result;
   }
 
-  private String qualityCron(QualityMonitorSettingPO setting) {
-    String frequency = normalize(setting.getScheduleFrequency());
-    return switch (frequency) {
-      case "DAILY" -> dailyCron(setting.getScheduleTime());
-      case "WEEKLY" -> weeklyCron(setting.getScheduleTime(), setting.getScheduleWeekday());
-      case "CRON" -> setting.getCronExpression();
-      default -> null;
+  private List<ScheduleOccurrenceAt> oneTimeOccurrences(
+      UnifiedScheduleTask task,
+      Instant lowerBound,
+      Instant upperBound) {
+    Instant executeAt = task.trigger().executeAt();
+    if (executeAt == null || executeAt.isBefore(lowerBound) || !executeAt.isBefore(upperBound)) {
+      return List.of();
+    }
+    return List.of(new ScheduleOccurrenceAt(LocalDateTime.ofInstant(executeAt, task.zoneId())));
+  }
+
+  private String scheduleText(ScheduleTrigger trigger, ZoneId zoneId) {
+    if (trigger.type() == TriggerType.CRON) return trigger.expression();
+    return "单次 " + LocalDateTime.ofInstant(trigger.executeAt(), zoneId).format(ONE_TIME_FORMATTER);
+  }
+
+  private Instant metadataInstant(Map<String, String> metadata, String key) {
+    if (metadata == null) return null;
+    String value = metadata.get(key);
+    if (!hasText(value)) return null;
+    try {
+      return Instant.parse(value.trim());
+    } catch (DateTimeParseException ignored) {
+      return null;
+    }
+  }
+
+  private String fallbackName(String taskType, String taskId) {
+    return switch (taskType) {
+      case "OFFLINE_SYNC" -> "离线同步任务 #" + taskId;
+      case "WORKFLOW" -> "工作流调度 #" + taskId;
+      case "DATA_QUALITY" -> "数据质量任务 #" + taskId;
+      default -> "调度任务 #" + taskId;
     };
   }
 
-  private String qualityScheduleText(QualityMonitorSettingPO setting) {
-    String frequency = normalize(setting.getScheduleFrequency());
-    return switch (frequency) {
-      case "DAILY" -> "每天 " + timeText(setting.getScheduleTime());
-      case "WEEKLY" -> "每周" + weekdayText(setting.getScheduleWeekday()) + " " + timeText(setting.getScheduleTime());
-      case "CRON" -> defaultText(setting.getCronExpression(), "Cron");
-      default -> "调度";
+  private String detailPath(String taskType, String taskId) {
+    return switch (taskType) {
+      case "OFFLINE_SYNC" -> "/sync/batch-link-up/" + taskId + "/detail";
+      case "WORKFLOW" -> "/workflow/schedules";
+      case "DATA_QUALITY" -> "/data-quality/monitor/" + taskId;
+      default -> "/";
     };
-  }
-
-  private String dailyCron(LocalTime time) {
-    if (time == null) return null;
-    return String.format("0 %d %d * * ?", time.getMinute(), time.getHour());
-  }
-
-  private String weeklyCron(LocalTime time, String weekday) {
-    if (time == null || !hasText(weekday)) return null;
-    return String.format(
-        "0 %d %d ? * %s",
-        time.getMinute(),
-        time.getHour(),
-        normalize(weekday));
-  }
-
-  private String normalizeCron(String expression) {
-    String normalized = expression == null ? "" : expression.trim().replaceAll("\\s+", " ");
-    int fields = normalized.isEmpty() ? 0 : normalized.split(" ").length;
-    if (fields == 5) return "0 " + normalized;
-    return normalized;
   }
 
   private YearMonth resolveMonth(String value) {
@@ -295,35 +253,6 @@ public class HomeScheduleCenterService {
     } catch (DateTimeParseException exception) {
       throw new IllegalArgumentException("month 格式必须为 yyyy-MM", exception);
     }
-  }
-
-  private ZoneId resolveZone(String value) {
-    try {
-      return hasText(value) ? ZoneId.of(value.trim()) : ZoneId.systemDefault();
-    } catch (Exception ignored) {
-      return ZoneId.systemDefault();
-    }
-  }
-
-  private String weekdayText(String value) {
-    return switch (normalize(value)) {
-      case "MON" -> "一";
-      case "TUE" -> "二";
-      case "WED" -> "三";
-      case "THU" -> "四";
-      case "FRI" -> "五";
-      case "SAT" -> "六";
-      case "SUN" -> "日";
-      default -> "";
-    };
-  }
-
-  private String timeText(LocalTime value) {
-    return value == null ? "--:--" : value.format(TIME_FORMATTER);
-  }
-
-  private String normalize(String value) {
-    return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
   }
 
   private boolean hasText(String value) {
@@ -368,7 +297,7 @@ public class HomeScheduleCenterService {
       String taskId,
       String taskType,
       String taskName,
-      String cronExpression,
+      ScheduleTrigger trigger,
       ZoneId zoneId,
       Instant startTime,
       Instant endTime,

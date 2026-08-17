@@ -11,6 +11,7 @@ import io.yak.framework.schedule.api.ScheduleTarget;
 import io.yak.framework.schedule.api.ScheduleTrigger;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.schedule.YakScheduleGateway;
+import io.yak.ops.common.schedule.YakScheduleNamespaces;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,7 +27,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class WorkflowScheduleEngineBridge {
-  static final String NAMESPACE = "yak-ops-workflow";
+  static final String NAMESPACE = YakScheduleNamespaces.WORKFLOW;
   static final String HANDLER = "workflowScheduleHandler";
 
   private final YakScheduleGateway gateway;
