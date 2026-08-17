@@ -38,7 +38,7 @@ public class QualityScheduleLifecycle {
 
     MonitorSettings settings = repository.findMonitorSettings(monitorId);
     if (!monitor.enabled() || settings.runMode() != RunMode.SCHEDULE) {
-      engine.deleteIfPresent(monitorId);
+      engine.pauseIfPresent(monitorId);
       updateNextRunTime(monitorId, settings, null);
       return;
     }

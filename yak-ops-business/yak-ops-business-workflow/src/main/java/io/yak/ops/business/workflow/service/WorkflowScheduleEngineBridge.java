@@ -10,6 +10,7 @@ import io.yak.framework.schedule.api.ScheduleSnapshot;
 import io.yak.framework.schedule.api.ScheduleTarget;
 import io.yak.framework.schedule.api.ScheduleTrigger;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
+import io.yak.ops.common.schedule.YakScheduleGateway;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,42 +29,38 @@ public class WorkflowScheduleEngineBridge {
   static final String NAMESPACE = "yak-ops-workflow";
   static final String HANDLER = "workflowScheduleHandler";
 
-  private final ObjectProvider<ScheduleManager> scheduleManagers;
+  private final YakScheduleGateway gateway;
 
   public WorkflowScheduleEngineBridge(ObjectProvider<ScheduleManager> scheduleManagers) {
-    this.scheduleManagers = scheduleManagers;
+    this.gateway = new YakScheduleGateway(scheduleManagers::getIfAvailable, NAMESPACE);
   }
 
   public boolean available() {
-    return scheduleManagers.getIfAvailable() != null;
+    return gateway.available();
   }
 
   public ScheduleSnapshot save(WorkflowSchedulePO schedule) {
-    return manager().save(toDefinition(schedule));
+    return gateway.save(toDefinition(schedule));
   }
 
   public Optional<ScheduleSnapshot> snapshot(String scheduleId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    return manager == null ? Optional.empty() : manager.get(key(scheduleId));
+    return gateway.snapshot(name(scheduleId));
   }
 
   public List<ScheduleSnapshot> list() {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    return manager == null ? List.of() : manager.list(NAMESPACE);
+    return gateway.list();
   }
 
   public void pauseIfPresent(String scheduleId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(scheduleId);
-    if (manager.get(key).isPresent()) manager.pause(key);
+    gateway.pauseIfPresent(name(scheduleId));
   }
 
   public void deleteIfPresent(String scheduleId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(scheduleId);
-    if (manager.get(key).isPresent()) manager.delete(key);
+    gateway.deleteIfPresent(name(scheduleId));
+  }
+
+  public void runNowIfPresent(String scheduleId) {
+    gateway.runNowIfPresent(name(scheduleId));
   }
 
   ScheduleDefinition toDefinition(WorkflowSchedulePO schedule) {
@@ -93,19 +90,14 @@ public class WorkflowScheduleEngineBridge {
   }
 
   ScheduleKey key(String scheduleId) {
+    return gateway.key(name(scheduleId));
+  }
+
+  private String name(String scheduleId) {
     if (scheduleId == null || scheduleId.isBlank()) {
       throw new IllegalArgumentException("调度 ID 不能为空");
     }
-    return new ScheduleKey(NAMESPACE, scheduleId.trim());
-  }
-
-  private ScheduleManager manager() {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) {
-      throw new IllegalStateException(
-          "Yak ScheduleManager 不可用，请确认 yak-schedule-core、Quartz 插件与 yak.schedule.enabled 配置");
-    }
-    return manager;
+    return scheduleId.trim();
   }
 
   private ConcurrencyPolicy concurrency(String strategy) {

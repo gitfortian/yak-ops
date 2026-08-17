@@ -10,6 +10,7 @@ import io.yak.framework.schedule.api.ScheduleTrigger;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
+import io.yak.ops.common.schedule.YakScheduleGateway;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,49 +27,38 @@ public class OfflineScheduleEngineBridge {
   static final String NAMESPACE = "yak-ops-offline-sync";
   static final String HANDLER = "offlineSyncScheduleHandler";
 
-  private final ObjectProvider<ScheduleManager> scheduleManagers;
+  private final YakScheduleGateway gateway;
 
   public OfflineScheduleEngineBridge(ObjectProvider<ScheduleManager> scheduleManagers) {
-    this.scheduleManagers = scheduleManagers;
+    this.gateway = new YakScheduleGateway(scheduleManagers::getIfAvailable, NAMESPACE);
   }
 
   public boolean available() {
-    return scheduleManagers.getIfAvailable() != null;
+    return gateway.available();
   }
 
   public ScheduleSnapshot save(OfflineJobDefinition definition, OfflineSchedule schedule) {
-    return manager().save(toDefinition(definition, schedule));
+    return gateway.save(toDefinition(definition, schedule));
   }
 
   public Optional<ScheduleSnapshot> snapshot(long definitionId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    return manager == null ? Optional.empty() : manager.get(key(definitionId));
+    return gateway.snapshot(name(definitionId));
   }
 
   public List<ScheduleSnapshot> list() {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    return manager == null ? List.of() : manager.list(NAMESPACE);
+    return gateway.list();
   }
 
   public void pauseIfPresent(long definitionId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(definitionId);
-    if (manager.get(key).isPresent()) manager.pause(key);
+    gateway.pauseIfPresent(name(definitionId));
   }
 
   public void deleteIfPresent(long definitionId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(definitionId);
-    if (manager.get(key).isPresent()) manager.delete(key);
+    gateway.deleteIfPresent(name(definitionId));
   }
 
   public void runNowIfPresent(long definitionId) {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) return;
-    ScheduleKey key = key(definitionId);
-    if (manager.get(key).isPresent()) manager.runNow(key);
+    gateway.runNowIfPresent(name(definitionId));
   }
 
   ScheduleDefinition toDefinition(OfflineJobDefinition definition, OfflineSchedule schedule) {
@@ -101,17 +91,12 @@ public class OfflineScheduleEngineBridge {
   }
 
   private ScheduleKey key(long definitionId) {
-    if (definitionId <= 0L) throw new IllegalArgumentException("离线同步任务 ID 不合法");
-    return new ScheduleKey(NAMESPACE, String.valueOf(definitionId));
+    return gateway.key(name(definitionId));
   }
 
-  private ScheduleManager manager() {
-    ScheduleManager manager = scheduleManagers.getIfAvailable();
-    if (manager == null) {
-      throw new IllegalStateException(
-          "Yak ScheduleManager 不可用，请确认 yak-schedule-core、调度引擎插件与 yak.schedule.enabled 配置");
-    }
-    return manager;
+  private String name(long definitionId) {
+    if (definitionId <= 0L) throw new IllegalArgumentException("离线同步任务 ID 不合法");
+    return String.valueOf(definitionId);
   }
 
   private void put(Map<String, String> metadata, String key, String value) {

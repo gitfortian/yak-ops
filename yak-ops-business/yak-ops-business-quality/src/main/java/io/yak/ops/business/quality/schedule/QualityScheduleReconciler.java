@@ -5,7 +5,6 @@ import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.QualityRepository;
-import io.yak.ops.business.quality.service.QualityExecutionService;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -27,17 +26,14 @@ public class QualityScheduleReconciler {
   private final QualityRepository repository;
   private final QualityScheduleEngineBridge engine;
   private final QualityScheduleLifecycle lifecycle;
-  private final QualityExecutionService executionService;
 
   public QualityScheduleReconciler(
       QualityRepository repository,
       QualityScheduleEngineBridge engine,
-      QualityScheduleLifecycle lifecycle,
-      QualityExecutionService executionService) {
+      QualityScheduleLifecycle lifecycle) {
     this.repository = repository;
     this.engine = engine;
     this.lifecycle = lifecycle;
-    this.executionService = executionService;
   }
 
   @Order(30)
@@ -93,7 +89,7 @@ public class QualityScheduleReconciler {
 
       if (persistedNextRunTime != null && !persistedNextRunTime.isAfter(now)) {
         try {
-          executionService.runScheduled(monitorId);
+          engine.runNowIfPresent(monitorId);
           LOGGER.info(
               "[quality-schedule] recovered missed trigger monitor={}, planned={}",
               monitorId,

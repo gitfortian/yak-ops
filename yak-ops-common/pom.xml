@@ -17,6 +17,11 @@
             <artifactId>yak-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.yak.framework</groupId>
+            <artifactId>yak-schedule-api</artifactId>
+            <version>${yak-framework.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
