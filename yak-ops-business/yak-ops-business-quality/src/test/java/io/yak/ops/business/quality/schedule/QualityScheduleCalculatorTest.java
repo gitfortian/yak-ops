@@ -23,14 +23,41 @@ class QualityScheduleCalculatorTest {
   void shouldCalculateNextWeeklyTime() {
     LocalDateTime from = LocalDateTime.of(2026, 8, 6, 10, 0);
     assertEquals(LocalDateTime.of(2026, 8, 10, 9, 30),
-        calculator.nextRun(RunMode.SCHEDULE, ScheduleFrequency.WEEKLY, "09:30", ScheduleWeekday.MON, null, from));
+        calculator.nextRun(
+            RunMode.SCHEDULE,
+            ScheduleFrequency.WEEKLY,
+            "09:30",
+            ScheduleWeekday.MON,
+            null,
+            from));
   }
 
   @Test
   void shouldCalculateCronTime() {
     LocalDateTime from = LocalDateTime.of(2026, 8, 6, 10, 0);
     assertEquals(LocalDateTime.of(2026, 8, 7, 9, 0),
-        calculator.nextRun(RunMode.SCHEDULE, ScheduleFrequency.CRON, null, null, "0 0 9 * * *", from));
+        calculator.nextRun(
+            RunMode.SCHEDULE,
+            ScheduleFrequency.CRON,
+            null,
+            null,
+            "0 0 9 * * *",
+            from));
+  }
+
+  @Test
+  void shouldConvertFriendlySchedulesToQuartzCron() {
+    assertEquals(
+        "0 5 9 * * ?",
+        calculator.cronExpression(ScheduleFrequency.DAILY, "09:05", null, null));
+    assertEquals(
+        "0 30 18 ? * FRI",
+        calculator.cronExpression(
+            ScheduleFrequency.WEEKLY, "18:30", ScheduleWeekday.FRI, null));
+    assertEquals(
+        "0 0 2 ? * *",
+        calculator.cronExpression(
+            ScheduleFrequency.CRON, null, null, "  0  0  2  *  *  *  "));
   }
 
   @Test
