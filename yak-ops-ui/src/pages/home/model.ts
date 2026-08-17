@@ -1,4 +1,9 @@
-export type HomeDataSourceKey = 'dataSource' | 'client' | 'alarm' | 'execution';
+export type HomeDataSourceKey =
+  | 'dataSource'
+  | 'client'
+  | 'alarm'
+  | 'execution'
+  | 'schedule';
 
 export interface HomeDataSourceOverview {
   total: number;
@@ -51,10 +56,37 @@ export interface HomeExecutionOverview {
   limited: boolean;
 }
 
+export type HomeScheduleType = 'batch' | 'workflow';
+
+export interface HomeScheduleItem {
+  id: string | number;
+  type: HomeScheduleType;
+  name: string;
+  status: string;
+  cronExpression?: string;
+  nextRunAt: string;
+  lastRunAt?: string;
+  timezone?: string;
+  path: string;
+}
+
+export interface HomeScheduleOverview {
+  total: number;
+  enabled: number;
+  paused: number;
+  today: number;
+  next24h: number;
+  upcoming: HomeScheduleItem[];
+  batchObserved: number;
+  workflowObserved: number;
+  limited: boolean;
+}
+
 export interface HomeOverview {
   dataSource?: HomeDataSourceOverview;
   client?: HomeClientOverview;
   alarm?: HomeAlarmOverview;
   execution?: HomeExecutionOverview;
+  schedule?: HomeScheduleOverview;
   unavailable: HomeDataSourceKey[];
 }

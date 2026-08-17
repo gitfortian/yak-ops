@@ -2,6 +2,10 @@ import {
   getWorkflowInstances,
   type WorkflowInstance,
 } from '@/services/workflow';
+import {
+  listWorkflowSchedules,
+  type WorkflowSchedule,
+} from '@/services/workflow/schedules';
 import HttpUtils from '@/utils/HttpUtils';
 import dayjs from 'dayjs';
 import { fetchAlarmRecords } from '../alarm/service';
@@ -20,12 +24,15 @@ import type {
   HomeExecutionOverview,
   HomeOverview,
   HomeRunItem,
+  HomeScheduleItem,
+  HomeScheduleOverview,
 } from './model';
 
 const CLIENT_COUNT_API = '/api/v1/datax/executor/count';
 const HOME_BATCH_INSTANCE_LIMIT = 200;
 const HOME_BATCH_DEFINITION_LIMIT = 200;
 const HOME_RECENT_RUN_LIMIT = 6;
+const HOME_UPCOMING_SCHEDULE_LIMIT = 6;
 
 const SUCCESS_STATUSES = new Set([
   'SUCCESS',
@@ -61,10 +68,13 @@ type ClientCountPayload =
       offlineCount?: number;
     };
 
+interface BatchDefinitionSnapshot {
+  definitions: OfflineJobDefinitionVO[];
+  total: number;
+}
+
 const asFiniteNumber = (value: unknown): number | undefined => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined;
-  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return value;
 };
 
@@ -74,9 +84,7 @@ const firstNumber = (
 ): number | undefined => {
   for (const key of keys) {
     const value = asFiniteNumber(payload[key]);
-    if (value !== undefined) {
-      return value;
-    }
+    if (value !== undefined) return value;
   }
   return undefined;
 };
@@ -110,10 +118,7 @@ export const normalizeClientCount = (
   if (typeof payload === 'number') {
     return Number.isFinite(payload) ? { total: payload } : undefined;
   }
-
-  if (!payload || typeof payload !== 'object') {
-    return undefined;
-  }
+  if (!payload || typeof payload !== 'object') return undefined;
 
   const record = payload as Record<string, unknown>;
   const online = firstNumber(record, [
@@ -127,10 +132,7 @@ export const normalizeClientCount = (
     firstNumber(record, ['total', 'count', 'executorCount']) ??
     (online !== undefined && offline !== undefined ? online + offline : undefined);
 
-  if (total === undefined) {
-    return undefined;
-  }
-
+  if (total === undefined) return undefined;
   return {
     total,
     ...(online === undefined ? {} : { online }),
@@ -141,33 +143,25 @@ export const normalizeClientCount = (
 const fetchHomeDataSourceOverview = async (): Promise<HomeDataSourceOverview> => {
   const response = await fetchDataSourceSummary();
   const data = response?.data;
-
   if (!data || typeof data.total !== 'number') {
     throw new Error('数据源汇总接口未返回有效数据');
   }
-
   return data;
 };
 
 const fetchHomeClientOverview = async (): Promise<HomeClientOverview> => {
   const response = await HttpUtils.get<ClientCountPayload>(CLIENT_COUNT_API);
   const data = normalizeClientCount(response?.data);
-
-  if (!data) {
-    throw new Error('客户端统计接口未返回有效数据');
-  }
-
+  if (!data) throw new Error('客户端统计接口未返回有效数据');
   return data;
 };
 
 const fetchHomeAlarmOverview = async (): Promise<HomeAlarmOverview> => {
   const response = await fetchAlarmRecords({ pageNo: 1, pageSize: 3 });
   const data = response?.data;
-
   if (!data || typeof data.total !== 'number' || !Array.isArray(data.list)) {
     throw new Error('告警记录接口未返回有效数据');
   }
-
   return {
     total: data.total,
     recent: data.list.map((item) => ({
@@ -178,6 +172,19 @@ const fetchHomeAlarmOverview = async (): Promise<HomeAlarmOverview> => {
       time: item.sentTime || item.createTime,
     })),
   };
+};
+
+const fetchBatchDefinitionSnapshot = async (): Promise<BatchDefinitionSnapshot> => {
+  const response = await linkupJobDefinitionApi.page({
+    current: 1,
+    pageSize: HOME_BATCH_DEFINITION_LIMIT,
+  });
+  const definitions = response?.data?.bizData;
+  const total = response?.data?.pagination?.total;
+  if (!Array.isArray(definitions) || typeof total !== 'number') {
+    throw new Error('离线同步任务定义接口未返回有效数据');
+  }
+  return { definitions, total };
 };
 
 const toBatchRunItem = (
@@ -220,9 +227,7 @@ export const buildExecutionOverview = (
   const definitionMap = new Map<string, OfflineJobDefinitionVO>(
     definitions
       .filter((item) => item.id !== undefined && item.id !== null)
-      .map(
-        (item): [string, OfflineJobDefinitionVO] => [String(item.id), item],
-      ),
+      .map((item): [string, OfflineJobDefinitionVO] => [String(item.id), item]),
   );
   const runs = [
     ...batchExecutions.map((item) => toBatchRunItem(item, definitionMap)),
@@ -251,12 +256,14 @@ export const buildExecutionOverview = (
   };
 };
 
-const fetchHomeExecutionOverview = async (): Promise<HomeExecutionOverview> => {
-  const definitionPromise = linkupJobDefinitionApi
-    .page({ current: 1, pageSize: HOME_BATCH_DEFINITION_LIMIT })
-    .catch(() => undefined);
+const fetchHomeExecutionOverview = async (
+  batchDefinitionPromise: Promise<BatchDefinitionSnapshot>,
+): Promise<HomeExecutionOverview> => {
+  const definitionPromise = batchDefinitionPromise
+    .then((snapshot) => snapshot.definitions)
+    .catch(() => [] as OfflineJobDefinitionVO[]);
 
-  const [batchResponse, workflowInstances, definitionResponse] = await Promise.all([
+  const [batchResponse, workflowInstances, definitions] = await Promise.all([
     batchJobInstanceApi.page({ current: 1, pageSize: HOME_BATCH_INSTANCE_LIMIT }),
     getWorkflowInstances(),
     definitionPromise,
@@ -271,30 +278,150 @@ const fetchHomeExecutionOverview = async (): Promise<HomeExecutionOverview> => {
     throw new Error('工作流实例接口未返回有效数据');
   }
 
-  const definitions = definitionResponse?.data?.bizData;
   return buildExecutionOverview(
     batchExecutions,
     workflowInstances,
-    Array.isArray(definitions) ? definitions : [],
+    definitions,
     batchTotal,
   );
 };
 
+const isBatchSchedule = (definition: OfflineJobDefinitionVO) =>
+  Boolean(
+    definition.cronExpression ||
+      definition.scheduleStatus ||
+      definition.nextScheduleTime ||
+      definition.lastScheduleTime,
+  );
+
+const toBatchScheduleItem = (
+  definition: OfflineJobDefinitionVO,
+): HomeScheduleItem | undefined => {
+  if (
+    definition.id === undefined ||
+    definition.id === null ||
+    definition.scheduleStatus !== 'NORMAL' ||
+    !definition.nextScheduleTime
+  ) {
+    return undefined;
+  }
+  return {
+    id: definition.id,
+    type: 'batch',
+    name: definition.jobName || `离线同步 #${definition.id}`,
+    status: definition.scheduleStatus,
+    cronExpression: definition.cronExpression,
+    nextRunAt: definition.nextScheduleTime,
+    lastRunAt: definition.lastScheduleTime,
+    path: `/sync/batch-link-up/${definition.id}/detail`,
+  };
+};
+
+const toWorkflowScheduleItem = (
+  schedule: WorkflowSchedule,
+): HomeScheduleItem | undefined => {
+  if (schedule.status !== 'ONLINE' || !schedule.nextFireTime) return undefined;
+  return {
+    id: schedule.id,
+    type: 'workflow',
+    name: schedule.name || `工作流调度 #${schedule.id}`,
+    status: schedule.status,
+    cronExpression: schedule.cronExpression,
+    nextRunAt: schedule.nextFireTime,
+    lastRunAt: schedule.lastFireTime,
+    timezone: schedule.timezone,
+    path: '/workflow/schedules',
+  };
+};
+
+const isFutureSchedule = (item: HomeScheduleItem, now: dayjs.Dayjs) => {
+  const time = dayjs(item.nextRunAt);
+  return time.isValid() && time.isAfter(now);
+};
+
+export const buildScheduleOverview = (
+  definitions: OfflineJobDefinitionVO[],
+  batchTotal: number,
+  workflowSchedules: WorkflowSchedule[],
+): HomeScheduleOverview => {
+  const batchSchedules = definitions.filter(isBatchSchedule);
+  const enabledBatch = batchSchedules.filter(
+    (item) => item.scheduleStatus === 'NORMAL',
+  ).length;
+  const enabledWorkflow = workflowSchedules.filter(
+    (item) => item.status === 'ONLINE',
+  ).length;
+  const total = batchSchedules.length + workflowSchedules.length;
+  const enabled = enabledBatch + enabledWorkflow;
+  const now = dayjs();
+  const next24Hours = now.add(24, 'hour');
+
+  const futureSchedules = [
+    ...batchSchedules
+      .map(toBatchScheduleItem)
+      .filter((item): item is HomeScheduleItem => Boolean(item)),
+    ...workflowSchedules
+      .map(toWorkflowScheduleItem)
+      .filter((item): item is HomeScheduleItem => Boolean(item)),
+  ]
+    .filter((item) => isFutureSchedule(item, now))
+    .sort((left, right) => timeValue(left.nextRunAt) - timeValue(right.nextRunAt));
+
+  return {
+    total,
+    enabled,
+    paused: Math.max(total - enabled, 0),
+    today: futureSchedules.filter((item) => isToday(item.nextRunAt)).length,
+    next24h: futureSchedules.filter((item) => {
+      const time = dayjs(item.nextRunAt);
+      return time.isValid() && !time.isAfter(next24Hours);
+    }).length,
+    upcoming: futureSchedules.slice(0, HOME_UPCOMING_SCHEDULE_LIMIT),
+    batchObserved: batchSchedules.length,
+    workflowObserved: workflowSchedules.length,
+    limited: batchTotal > definitions.length,
+  };
+};
+
+const fetchHomeScheduleOverview = async (
+  batchDefinitionPromise: Promise<BatchDefinitionSnapshot>,
+): Promise<HomeScheduleOverview> => {
+  const [batchSnapshot, workflowSchedules] = await Promise.all([
+    batchDefinitionPromise,
+    listWorkflowSchedules(),
+  ]);
+  if (!Array.isArray(workflowSchedules)) {
+    throw new Error('工作流调度接口未返回有效数据');
+  }
+  return buildScheduleOverview(
+    batchSnapshot.definitions,
+    batchSnapshot.total,
+    workflowSchedules,
+  );
+};
+
 export async function fetchHomeOverview(): Promise<HomeOverview> {
-  const [dataSourceResult, clientResult, alarmResult, executionResult] =
-    await Promise.allSettled([
-      fetchHomeDataSourceOverview(),
-      fetchHomeClientOverview(),
-      fetchHomeAlarmOverview(),
-      fetchHomeExecutionOverview(),
-    ]);
+  const batchDefinitionPromise = fetchBatchDefinitionSnapshot();
+  const [
+    dataSourceResult,
+    clientResult,
+    alarmResult,
+    executionResult,
+    scheduleResult,
+  ] = await Promise.allSettled([
+    fetchHomeDataSourceOverview(),
+    fetchHomeClientOverview(),
+    fetchHomeAlarmOverview(),
+    fetchHomeExecutionOverview(batchDefinitionPromise),
+    fetchHomeScheduleOverview(batchDefinitionPromise),
+  ]);
 
   const unavailable: HomeDataSourceKey[] = [];
-
   if (dataSourceResult.status === 'rejected') unavailable.push('dataSource');
   if (clientResult.status === 'rejected') unavailable.push('client');
   if (alarmResult.status === 'rejected') unavailable.push('alarm');
   if (executionResult.status === 'rejected') unavailable.push('execution');
+  if (scheduleResult.status === 'rejected') unavailable.push('schedule');
 
   return {
     dataSource:
@@ -303,6 +430,8 @@ export async function fetchHomeOverview(): Promise<HomeOverview> {
     alarm: alarmResult.status === 'fulfilled' ? alarmResult.value : undefined,
     execution:
       executionResult.status === 'fulfilled' ? executionResult.value : undefined,
+    schedule:
+      scheduleResult.status === 'fulfilled' ? scheduleResult.value : undefined,
     unavailable,
   };
 }
