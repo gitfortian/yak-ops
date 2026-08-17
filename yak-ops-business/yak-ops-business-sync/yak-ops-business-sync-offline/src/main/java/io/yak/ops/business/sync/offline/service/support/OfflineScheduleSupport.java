@@ -4,13 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
-import java.time.LocalDateTime;
+import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 解析和校验任务级调度配置，不承担数据库访问。 */
+/** 解析和校验任务级调度配置，不承担数据库访问和运行时触发。 */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineScheduleSupport {
@@ -26,12 +26,25 @@ public class OfflineScheduleSupport {
     if (enabled && !StringUtils.hasText(cron)) {
       throw new IllegalArgumentException("启用调度时必须填写 Cron 表达式");
     }
-    if (StringUtils.hasText(cron)) CronExpression.parse(cron);
+    if (StringUtils.hasText(cron)) cron = normalizeQuartzCron(cron);
     int attempts = Math.max(1, maxAttempts(schedule));
     int backoff = Math.max(1, backoffSeconds(schedule));
-    LocalDateTime next = enabled ? CronExpression.parse(cron).next(LocalDateTime.now()) : null;
     return new OfflineSchedule(
-        definitionId, cron, enabled, attempts, backoff, next, null, writeNullable(schedule));
+        definitionId, cron, enabled, attempts, backoff, null, null, writeNullable(schedule));
+  }
+
+  /** Spring Cron 负责输入校验，最终统一为当前 Quartz Provider 可消费的六段表达式。 */
+  String normalizeQuartzCron(String value) {
+    CronExpression.parse(value);
+    String[] fields = value.trim().replaceAll("\\s+", " ").split(" ");
+    if (fields.length >= 6) {
+      if ("*".equals(fields[3]) && !"?".equals(fields[5])) {
+        fields[3] = "?";
+      } else if (!"?".equals(fields[3]) && "*".equals(fields[5])) {
+        fields[5] = "?";
+      }
+    }
+    return String.join(" ", Arrays.asList(fields));
   }
 
   private boolean enabled(JsonNode node, String cron) {
