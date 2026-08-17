@@ -41,6 +41,42 @@ class WorkflowBackfillPlannerTest {
   }
 
   @Test
+  void shouldKeepStandardFiveFieldNumericWeekdaySemantics() {
+    var plan = planner.plan(
+        "0 2 * * 0",
+        "UTC",
+        LocalDate.of(2026, 8, 2),
+        LocalDate.of(2026, 8, 2));
+
+    assertThat(plan.occurrences()).hasSize(1);
+    assertThat(plan.occurrences().get(0).businessDate()).isEqualTo(LocalDate.of(2026, 8, 2));
+  }
+
+  @Test
+  void shouldTranslateQuartzNumericWeekdayToSpringSemantics() {
+    var plan = planner.plan(
+        "0 0 2 ? * 1",
+        "UTC",
+        LocalDate.of(2026, 8, 2),
+        LocalDate.of(2026, 8, 2));
+
+    assertThat(plan.occurrences()).hasSize(1);
+    assertThat(plan.occurrences().get(0).businessDate()).isEqualTo(LocalDate.of(2026, 8, 2));
+  }
+
+  @Test
+  void shouldApplyQuartzYearFieldWithoutQuartzDependency() {
+    var plan = planner.plan(
+        "0 0 2 * * ? 2027",
+        "UTC",
+        LocalDate.of(2026, 12, 31),
+        LocalDate.of(2027, 1, 1));
+
+    assertThat(plan.occurrences()).hasSize(1);
+    assertThat(plan.occurrences().get(0).businessDate()).isEqualTo(LocalDate.of(2027, 1, 1));
+  }
+
+  @Test
   void shouldRejectAmbiguousFiveFieldDayAndWeekCombination() {
     assertThatThrownBy(() -> planner.plan(
         "0 2 1 * MON",
