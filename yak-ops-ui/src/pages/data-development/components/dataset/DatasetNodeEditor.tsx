@@ -187,7 +187,7 @@ const DatasetNodeEditor = ({ node, onSaved, onDirtyChange }: DatasetNodeEditorPr
 
   const activeSource = useMemo(
     () => availableSources.find((source) => source.taskAssetId === selectedSourceId)
-      || (context?.selectedSource?.taskAssetId === selectedSourceId ? context.selectedSource : undefined),
+      || (context?.selectedSource?.taskAssetId === selectedSourceId ? context?.selectedSource : undefined),
     [availableSources, context?.selectedSource, selectedSourceId],
   );
 
