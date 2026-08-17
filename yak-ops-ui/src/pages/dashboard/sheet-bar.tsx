@@ -1,5 +1,5 @@
 import { BarChart3, ChevronLeft, ChevronRight, LayoutDashboard } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type DashboardEditorSheet = {
   id: string;
@@ -28,13 +28,13 @@ export function DashboardSheetBar({
   const dashboardRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const updateScrollState = () => {
+  const updateScrollState = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const maximum = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
     setCanScrollLeft(viewport.scrollLeft > 1);
     setCanScrollRight(viewport.scrollLeft < maximum - 1);
-  };
+  }, []);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -47,7 +47,7 @@ export function DashboardSheetBar({
       observer.disconnect();
       viewport.removeEventListener('scroll', updateScrollState);
     };
-  }, [sheets.length]);
+  }, [sheets.length, updateScrollState]);
 
   useEffect(() => {
     if (activeSheet !== 'chart' || !activeSheetId) return;
@@ -57,7 +57,7 @@ export function DashboardSheetBar({
       inline: 'nearest',
     });
     window.requestAnimationFrame(updateScrollState);
-  }, [activeSheet, activeSheetId]);
+  }, [activeSheet, activeSheetId, updateScrollState]);
 
   const moveBefore = (targetId: string) => {
     if (!draggingId || draggingId === targetId) return;
@@ -70,7 +70,7 @@ export function DashboardSheetBar({
     onReorder(ids);
   };
 
-  const focusSheet = (id: 'dashboard' | string) => {
+  const focusSheet = (id: string) => {
     window.requestAnimationFrame(() => {
       if (id === 'dashboard') dashboardRef.current?.focus();
       else tabRefs.current.get(id)?.focus();
@@ -79,7 +79,7 @@ export function DashboardSheetBar({
 
   const handleNavigation = (
     event: React.KeyboardEvent<HTMLButtonElement>,
-    currentId: 'dashboard' | string,
+    currentId: string,
   ) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
