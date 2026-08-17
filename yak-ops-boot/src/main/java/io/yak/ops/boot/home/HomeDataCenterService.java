@@ -87,12 +87,13 @@ public class HomeDataCenterService {
         all.stream().collect(Collectors.groupingBy(RuntimeExecution::taskKey));
 
     List<RecentTask> items = new ArrayList<>();
-    grouped.values().forEach(group -> {
+      List<RecentTask> finalItems = items;
+      grouped.values().forEach(group -> {
       RuntimeExecution latest = group.stream().max(Comparator.comparing(RuntimeExecution::occurredAt)).orElse(null);
       if (latest == null) return;
       long success = group.stream().filter(RuntimeExecution::success).count();
       long failed = group.stream().filter(RuntimeExecution::failed).count();
-      items.add(new RecentTask(
+      finalItems.add(new RecentTask(
           latest.taskId(),
           latest.taskType(),
           latest.taskName(),
