@@ -1,6 +1,7 @@
-import { Braces, Code2, DatabaseZap, Network, TerminalSquare } from 'lucide-react';
+import { Braces, Code2, DatabaseZap, Network, Snail, TerminalSquare } from 'lucide-react';
 
 import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
+import { PythonEditor, PythonRunConfig, PythonRunResult } from './python/PythonEditor';
 import { ShellEditor, ShellRunConfig, ShellRunResult } from './shell/ShellEditor';
 import { SqlEditor, SqlRunConfig, SqlRunResult } from './sql/SqlEditor';
 import SqlToolbar from './sql/SqlToolbar';
@@ -74,11 +75,26 @@ const editorRegistry: Partial<
     },
     RunResult: ShellRunResult,
   },
+  PYTHON: {
+    type: 'PYTHON',
+    label: 'Python',
+    icon: Snail,
+    iconClassName: 'text-[#12b76a]',
+    capabilities: {
+      ...commonCapabilities,
+      run: true,
+      publish: true,
+    },
+    Editor: PythonEditor,
+    panels: {
+      'run-config': PythonRunConfig,
+    },
+    RunResult: PythonRunResult,
+  },
 };
 
 const fallbackLabels: Partial<Record<DevelopmentTaskType, string>> = {
   HTTP: 'HTTP',
-  PYTHON: 'Python',
 };
 
 export const getEditorDefinition = (
@@ -127,8 +143,8 @@ export const getEditorAppearance = (type: DevelopmentNodeType) => {
   if (type === 'PYTHON') {
     return {
       label: 'Python',
-      icon: Code2,
-      iconClassName: 'text-[#667085]',
+      icon: Snail,
+      iconClassName: 'text-[#12b76a]',
     };
   }
 

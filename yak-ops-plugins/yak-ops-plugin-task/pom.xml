@@ -20,6 +20,7 @@
     <modules>
         <module>yak-ops-plugin-task-api</module>
         <module>yak-ops-plugin-task-sql</module>
+        <module>yak-ops-plugin-task-python</module>
         <module>yak-ops-plugin-task-all</module>
     </modules>
 </project>

@@ -29,4 +29,24 @@ class TaskPluginAssemblyTest {
                     "{\"dataSourceId\":\"1\"}"))
             .valid());
   }
+
+  @Test
+  void discoversPythonPluginThroughServiceLoader() {
+    TaskPluginRegistry registry =
+        TaskPluginRegistry.load(Thread.currentThread().getContextClassLoader());
+
+    TaskPlugin python = registry.require("PYTHON");
+
+    assertEquals("PYTHON", python.descriptor().type());
+    assertTrue(python.descriptor().executable());
+    assertTrue(python.descriptor().cancellable());
+    assertTrue(
+        python.validate(
+                new TaskDefinition(
+                    "PYTHON",
+                    1,
+                    "print('hello')",
+                    "{}"))
+            .valid());
+  }
 }

@@ -8,7 +8,6 @@ import io.yak.ops.plugin.task.api.TaskExecutionResult;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
-import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import io.yak.ops.spi.task.model.TaskExecutionStatus;
 import io.yak.ops.spi.task.model.TaskExecutionTrigger;
@@ -20,28 +19,29 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
-import org.springframework.beans.factory.ObjectProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-/** Executes SQL revisions through the shared Task Runtime and TaskPlugin contract. */
+/** Executes Python revisions through the shared Task Runtime and TaskPlugin contract. */
 @Service
-public class SqlTaskExecutorAdapter implements TaskExecutor {
+public class PythonTaskExecutorAdapter implements TaskExecutor {
+
+  private static final Logger log = LoggerFactory.getLogger(PythonTaskExecutorAdapter.class);
+  private static final String TYPE = "PYTHON";
 
   private final TaskPluginRegistry pluginRegistry;
-  private final ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider;
   private final ObjectMapper objectMapper;
   private final TaskExecutionContextFactory contextFactory;
   private final ExecutorService workerExecutor;
   private final ConcurrentMap<String, ExecutionHandle> executions = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, String> idempotencyIndex = new ConcurrentHashMap<>();
 
-  public SqlTaskExecutorAdapter(
+  public PythonTaskExecutorAdapter(
       TaskPluginRegistry pluginRegistry,
-      ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider,
       ObjectMapper objectMapper,
       TaskExecutionContextFactory contextFactory) {
     this.pluginRegistry = pluginRegistry;
-    this.dataSourceExecutionProvider = dataSourceExecutionProvider;
     this.objectMapper = objectMapper;
     this.contextFactory = contextFactory;
     this.workerExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -49,7 +49,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
 
   @Override
   public String taskType() {
-    return "SQL";
+    return TYPE;
   }
 
   @Override
@@ -66,7 +66,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
       TaskExecutionTrigger trigger,
       String idempotencyKey,
       Map<String, Object> input) {
-    requireSqlSnapshot(snapshot);
+    requirePythonSnapshot(snapshot);
     TaskExecutionTrigger safeTrigger =
         trigger == null ? TaskExecutionTrigger.WORKFLOW : trigger;
     String safeIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
@@ -78,23 +78,17 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
     }
 
     TaskDefinition definition = immutableDefinition(snapshot);
-    TaskPlugin plugin = pluginRegistry.require("SQL");
+    TaskPlugin plugin = pluginRegistry.require(TYPE);
     if (!plugin.descriptor().executable()) {
-      throw new IllegalStateException("SQL Task Plugin 暂不支持执行");
+      throw new IllegalStateException("Python Task Plugin 暂不支持执行");
     }
     validate(plugin, definition);
 
-    DataSourceExecutionProvider provider = dataSourceExecutionProvider.getIfAvailable();
-    TaskExecutionContext context = contextFactory.create(safeTrigger, input,
-        builder -> {
-          if (provider != null) {
-            builder.capability(DataSourceExecutionProvider.class, provider);
-          }
-        });
+    TaskExecutionContext context = contextFactory.create(safeTrigger, input);
     io.yak.ops.plugin.task.api.TaskExecutor pluginExecutor =
         plugin.createExecutor(definition, context);
 
-    String executionId = "sql-" + UUID.randomUUID();
+    String executionId = "python-" + UUID.randomUUID();
     TaskExecution initial = new TaskExecution(executionId, "RUNNING", null, Map.of());
     ExecutionHandle handle = new ExecutionHandle(pluginExecutor, new AtomicReference<>(initial));
     executions.put(executionId, handle);
@@ -120,7 +114,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
   public TaskExecution status(String executionId) {
     ExecutionHandle handle = executions.get(executionId);
     if (handle == null) {
-      throw new IllegalArgumentException("SQL 任务执行不存在：" + executionId);
+      throw new IllegalArgumentException("Python 任务执行不存在：" + executionId);
     }
     return handle.snapshot().get();
   }
@@ -129,7 +123,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
   public void cancel(String executionId) {
     ExecutionHandle handle = executions.get(executionId);
     if (handle == null) {
-      throw new IllegalArgumentException("SQL 任务执行不存在：" + executionId);
+      throw new IllegalArgumentException("Python 任务执行不存在：" + executionId);
     }
     TaskExecution current = handle.snapshot().get();
     if (current.terminal()) return;
@@ -137,7 +131,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
     handle.executor().cancel();
     handle.snapshot().updateAndGet(existing -> existing.terminal()
         ? existing
-        : new TaskExecution(executionId, "CANCELED", "SQL execution cancelled", existing.output()));
+        : new TaskExecution(executionId, "CANCELED", "Python execution cancelled", existing.output()));
   }
 
   @PreDestroy
@@ -150,7 +144,14 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
       TaskExecutionResult result = handle.executor().execute();
       TaskExecution completed = convert(executionId, result);
       handle.snapshot().updateAndGet(current -> current.terminal() ? current : completed);
+      if (completed.terminal() && !"SUCCEEDED".equals(completed.status())) {
+        log.warn("Python 任务执行结束 [{}] status={} message={}",
+            executionId, completed.status(), completed.errorMessage());
+      } else {
+        log.info("Python 任务执行完成 [{}] status={}", executionId, completed.status());
+      }
     } catch (Exception exception) {
+      log.error("Python 任务执行异常 [{}]", executionId, exception);
       TaskExecution failed = new TaskExecution(
           executionId,
           "FAILED",
@@ -177,26 +178,26 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
     String definitionJson = snapshot.definitionSnapshotJson();
     if (definitionJson == null || definitionJson.isBlank()) {
       throw new IllegalArgumentException(
-          "SQL 任务缺少不可变 definitionSnapshot，拒绝回退到当前草稿或最新版本：" + snapshot.taskId());
+          "Python 任务缺少不可变 definitionSnapshot，拒绝回退到当前草稿或最新版本：" + snapshot.taskId());
     }
     try {
       TaskDefinition definition = objectMapper.readValue(definitionJson, TaskDefinition.class);
-      if (!"SQL".equalsIgnoreCase(definition.taskType())) {
+      if (!TYPE.equalsIgnoreCase(definition.taskType())) {
         throw new IllegalArgumentException(
-            "SQL 任务快照类型不匹配：snapshot=SQL, definition=" + definition.taskType());
+            "Python 任务快照类型不匹配：snapshot=PYTHON, definition=" + definition.taskType());
       }
       return definition;
     } catch (JsonProcessingException exception) {
-      throw new IllegalArgumentException("SQL 任务不可变 definitionSnapshot 不是合法 JSON", exception);
+      throw new IllegalArgumentException("Python 任务不可变 definitionSnapshot 不是合法 JSON", exception);
     }
   }
 
-  private void requireSqlSnapshot(TaskVersionSnapshot snapshot) {
+  private void requirePythonSnapshot(TaskVersionSnapshot snapshot) {
     if (snapshot == null) {
       throw new IllegalArgumentException("任务版本快照不能为空");
     }
-    if (!"SQL".equalsIgnoreCase(snapshot.type())) {
-      throw new IllegalArgumentException("SQL 执行器不能执行任务类型：" + snapshot.type());
+    if (!TYPE.equalsIgnoreCase(snapshot.type())) {
+      throw new IllegalArgumentException("Python 执行器不能执行任务类型：" + snapshot.type());
     }
   }
 
@@ -207,7 +208,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
         .map(TaskValidationIssue::message)
         .limit(3)
         .reduce((left, right) -> left + "；" + right)
-        .orElse("SQL 任务定义校验失败");
+        .orElse("Python 任务定义校验失败");
     throw new IllegalArgumentException(summary);
   }
 
@@ -219,7 +220,7 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
   private String safeMessage(Throwable throwable) {
     String message = throwable == null ? null : throwable.getMessage();
     if (message == null || message.isBlank()) {
-      return throwable == null ? "SQL execution failed" : throwable.getClass().getSimpleName();
+      return throwable == null ? "Python execution failed" : throwable.getClass().getSimpleName();
     }
     return message.length() > 500 ? message.substring(0, 500) : message;
   }
