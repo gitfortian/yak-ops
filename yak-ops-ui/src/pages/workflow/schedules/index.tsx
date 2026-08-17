@@ -8,8 +8,9 @@ import {
   type WorkflowSchedule,
 } from '@/services/workflow/schedules';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { history } from '@umijs/max';
 import { Button, ConfigProvider, Input, Modal, Select, Table, Tooltip, message } from 'antd';
-import { CalendarClock, DatabaseBackup, History, Pencil, Power, PowerOff, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarClock, DatabaseBackup, History, Pencil, Power, PowerOff, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import BackfillDrawer from './BackfillDrawer';
 import BackfillHistoryDrawer from './BackfillHistoryDrawer';
@@ -31,11 +32,17 @@ const STRATEGY_LABEL: Record<string, string> = {
 };
 
 const WorkflowSchedulesPage = () => {
+  const scopedWorkflowId = useMemo(() => {
+    const params = new URLSearchParams(history.location.search);
+    return params.get('workflowId') || undefined;
+  }, []);
+  const scoped = Boolean(scopedWorkflowId);
+
   const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
   const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
-  const [workflowId, setWorkflowId] = useState<string>();
+  const [workflowId, setWorkflowId] = useState<string | undefined>(() => scopedWorkflowId);
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowSchedule>();
@@ -51,7 +58,7 @@ const WorkflowSchedulesPage = () => {
     try {
       const [workflowData, scheduleData] = await Promise.all([
         listWorkflowDefinitions(),
-        listWorkflowSchedules(),
+        listWorkflowSchedules(scopedWorkflowId ? { workflowId: scopedWorkflowId } : undefined),
       ]);
       setDefinitions(workflowData || []);
       setSchedules(scheduleData || []);
@@ -60,7 +67,7 @@ const WorkflowSchedulesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopedWorkflowId]);
 
   useEffect(() => {
     void load();
@@ -70,6 +77,10 @@ const WorkflowSchedulesPage = () => {
     () => new Map(definitions.map((item) => [item.id, item])),
     [definitions],
   );
+
+  const scopedWorkflow = scopedWorkflowId
+    ? workflowMap.get(scopedWorkflowId)
+    : undefined;
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -254,10 +265,29 @@ const WorkflowSchedulesPage = () => {
   return (
     <ConfigProvider theme={{ token: { borderRadius: 9, colorBorder: '#eaecf0' }, components: { Input: { activeShadow: 'none' } } }}>
       <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4 text-[#161823]">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="m-0 text-[17px] font-semibold leading-8">调度管理</h1>
-            <div className="text-[11px] text-[#98a2b3]">Yak Schedule / Quartz · Trigger Ledger、Backfill、调度参数与恢复</div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {scoped && (
+              <Tooltip title="返回工作流定义">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ArrowLeft size={15} />}
+                  className="!h-8 !w-8 !px-0"
+                  onClick={() => history.push('/workflow/definitions')}
+                />
+              </Tooltip>
+            )}
+            <div className="min-w-0">
+              <h1 className="m-0 truncate text-[17px] font-semibold leading-8">
+                {scoped ? '调度配置' : '调度管理'}
+              </h1>
+              <div className="truncate text-[11px] text-[#98a2b3]">
+                {scoped
+                  ? `${scopedWorkflow?.name || scopedWorkflowId} · ${scopedWorkflow?.status === 'ONLINE' ? '工作流已上线，可启用调度' : '工作流未上线，调度可配置但不能启用'}`
+                  : 'Yak Schedule / Quartz · Trigger Ledger、Backfill、调度参数与恢复'}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button size="small" icon={<History size={14} />} onClick={() => setBackfillHistoryOpen(true)}>
@@ -272,8 +302,9 @@ const WorkflowSchedulesPage = () => {
         <div className="mt-4 flex min-h-[52px] items-center justify-between gap-3 border-y border-[#f0f0f0]">
           <div className="flex items-center gap-2">
             <Select
-              allowClear
+              allowClear={!scoped}
               showSearch
+              disabled={scoped}
               optionFilterProp="label"
               placeholder="全部工作流"
               className="w-[220px]"
@@ -297,7 +328,7 @@ const WorkflowSchedulesPage = () => {
         </div>
 
         <div className="mt-3 flex min-h-9 items-center rounded-sm bg-[#f8f9fb] px-3 text-[12px] text-[#475467]">
-          <span><b>【调度参数】</b> Cron 与 Backfill 均按逻辑计划时间注入 businessDate / scheduleTime；历史补数复用 Trigger Ledger 幂等、串行等待与并行执行。</span>
+          <span><b>【调度参数】</b> 工作流上线后才能启用调度；Cron 与 Backfill 均按逻辑计划时间注入 businessDate / scheduleTime。</span>
         </div>
 
         <div className="mt-4 flex-1">
@@ -318,7 +349,8 @@ const WorkflowSchedulesPage = () => {
           open={editorOpen}
           definitions={definitions}
           schedule={editing}
-          workflowId={workflowId}
+          workflowId={scopedWorkflowId || workflowId}
+          lockWorkflow={scoped}
           onClose={() => { setEditorOpen(false); setEditing(undefined); }}
           onSaved={load}
         />
