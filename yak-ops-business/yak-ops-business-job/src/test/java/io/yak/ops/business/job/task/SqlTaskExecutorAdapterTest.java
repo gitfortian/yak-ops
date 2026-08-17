@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.job.env.SystemEnvVarService;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionResult;
@@ -43,7 +44,8 @@ class SqlTaskExecutorAdapterTest {
     adapter = new SqlTaskExecutorAdapter(
         TaskPluginRegistry.from(List.of(plugin)),
         emptyDataSourceProvider(),
-        objectMapper);
+        objectMapper,
+        stubContextFactory());
 
     TaskDefinition frozenV1 = new TaskDefinition(
         "SQL",
@@ -77,7 +79,8 @@ class SqlTaskExecutorAdapterTest {
     adapter = new SqlTaskExecutorAdapter(
         TaskPluginRegistry.from(List.of(plugin)),
         emptyDataSourceProvider(),
-        objectMapper);
+        objectMapper,
+        stubContextFactory());
     TaskDefinition definition = new TaskDefinition("SQL", 1, "select 1", "{}");
     TaskVersionSnapshot snapshot = new TaskVersionSnapshot(
         "development:1",
@@ -105,7 +108,8 @@ class SqlTaskExecutorAdapterTest {
     adapter = new SqlTaskExecutorAdapter(
         TaskPluginRegistry.from(List.of(new RecordingSqlPlugin(TaskExecutionResult.success(Map.of())))),
         emptyDataSourceProvider(),
-        new ObjectMapper());
+        new ObjectMapper(),
+        stubContextFactory());
     TaskVersionSnapshot snapshot = new TaskVersionSnapshot(
         "task-asset:12", "今天统计", "SQL", 1L, "checksum-v1", null, null);
 
@@ -124,7 +128,8 @@ class SqlTaskExecutorAdapterTest {
     adapter = new SqlTaskExecutorAdapter(
         TaskPluginRegistry.from(List.of(plugin)),
         emptyDataSourceProvider(),
-        objectMapper);
+        objectMapper,
+        stubContextFactory());
     TaskDefinition definition = new TaskDefinition("SQL", 1, "select 1", "{}");
     TaskVersionSnapshot snapshot = new TaskVersionSnapshot(
         "task-asset:12",
@@ -158,6 +163,12 @@ class SqlTaskExecutorAdapterTest {
     ObjectProvider<DataSourceExecutionProvider> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(null);
     return provider;
+  }
+
+  private TaskExecutionContextFactory stubContextFactory() {
+    SystemEnvVarService envVarService = mock(SystemEnvVarService.class);
+    when(envVarService.resolveMergedEnv()).thenReturn(Map.of());
+    return new TaskExecutionContextFactory(envVarService);
   }
 
   private static final class RecordingSqlPlugin implements TaskPlugin {

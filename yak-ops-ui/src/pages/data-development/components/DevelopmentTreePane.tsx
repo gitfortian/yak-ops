@@ -20,6 +20,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { Snail } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
@@ -32,6 +33,7 @@ export type DevelopmentTreeAction =
   | 'create-directory'
   | 'create-sql'
   | 'create-shell'
+  | 'create-python'
   | 'create-dataset'
   | 'create-data-service'
   | 'copy-name'
@@ -78,6 +80,7 @@ type NodeMetadata = {
 const nodeTypeIconClassName = (taskType?: string) => {
   if (taskType === 'SHELL') return 'text-[#6172f3]';
   if (taskType === 'SQL') return 'text-[#f79009]';
+  if (taskType === 'PYTHON') return 'text-[#12b76a]';
   if (taskType === 'DATASET') return 'text-[#667085]';
   if (taskType === 'DATA_SERVICE') return 'text-[#475467]';
   return 'text-[#667085]';
@@ -87,6 +90,9 @@ const nodeIcon = (taskType?: string): ReactNode => {
   const className = `shrink-0 ${nodeTypeIconClassName(taskType)}`;
   if (taskType === 'SHELL') {
     return <TerminalSquare size={13} strokeWidth={1.8} className={className} />;
+  }
+  if (taskType === 'PYTHON') {
+    return <Snail size={13} strokeWidth={1.8} className={className} />;
   }
   if (taskType === 'DATASET') {
     return <Database size={13} strokeWidth={1.8} className={className} />;
@@ -108,6 +114,11 @@ const nodeCreateItems: NonNullable<MenuProps['items']> = [
     label: 'Shell 节点',
     icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
   },
+  {
+    key: 'node-python',
+    label: 'Python 节点',
+    icon: <Snail size={14} strokeWidth={1.8} className="text-[#12b76a]" />,
+  },
   { type: 'divider' },
   {
     key: 'node-dataset',
@@ -124,6 +135,7 @@ const nodeCreateItems: NonNullable<MenuProps['items']> = [
 const createTypeForMenuKey = (key: string): DevelopmentNodeCreateType | undefined => {
   if (key === 'node-sql' || key === 'create-sql') return 'SQL';
   if (key === 'node-shell' || key === 'create-shell') return 'SHELL';
+  if (key === 'node-python' || key === 'create-python') return 'PYTHON';
   if (key === 'node-dataset' || key === 'create-dataset') return 'DATASET';
   if (key === 'node-data-service' || key === 'create-data-service') return 'DATA_SERVICE';
   return undefined;
@@ -229,6 +241,7 @@ const DevelopmentTreePane = ({
         children: [
           { key: 'create-sql', label: 'SQL 节点', icon: <Code2 size={14} className="text-[#f79009]" /> },
           { key: 'create-shell', label: 'Shell 节点', icon: <TerminalSquare size={14} className="text-[#6172f3]" /> },
+          { key: 'create-python', label: 'Python 节点', icon: <Snail size={14} className="text-[#12b76a]" /> },
           { type: 'divider' },
           { key: 'create-dataset', label: '数据集节点', icon: <Database size={14} className="text-[#667085]" /> },
           { key: 'create-data-service', label: '数据服务节点', icon: <Network size={14} className="text-[#475467]" /> },
