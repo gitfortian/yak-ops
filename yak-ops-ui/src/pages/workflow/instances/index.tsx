@@ -9,6 +9,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
+import { history } from '@umijs/max';
 import {
   Button,
   ConfigProvider,
@@ -28,7 +29,6 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
-import InstanceDetailDrawer from './InstanceDetailDrawer';
 
 const { RangePicker } = DatePicker;
 
@@ -95,8 +95,6 @@ const WorkflowInstancesPage = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedKeys, setSelectedKeys] = useState<Key[]>([]);
-  const [detailId, setDetailId] = useState<string>();
-  const [detailInitial, setDetailInitial] = useState<WorkflowInstance>();
   const [batchLoading, setBatchLoading] = useState(false);
 
   const load = useCallback(async (showLoading = false) => {
@@ -166,8 +164,7 @@ const WorkflowInstancesPage = () => {
   };
 
   const openDetail = (record: WorkflowInstance) => {
-    setDetailInitial(record);
-    setDetailId(record.id);
+    history.push(`/workflow/instances/${encodeURIComponent(record.id)}`);
   };
 
   const copyId = async (value: string) => {
@@ -178,19 +175,6 @@ const WorkflowInstancesPage = () => {
       message.error('复制失败，请手动复制');
     }
   };
-
-  const handleSnapshot = useCallback((snapshot?: WorkflowInstance) => {
-    if (!snapshot) {
-      void load(false);
-      return;
-    }
-    setInstances((current) => {
-      const found = current.some((item) => item.id === snapshot.id);
-      return found
-        ? current.map((item) => item.id === snapshot.id ? snapshot : item)
-        : [snapshot, ...current];
-    });
-  }, [load]);
 
   const batchRetry = async () => {
     if (!selectedKeys.length || batchLoading) return;
@@ -394,14 +378,6 @@ const WorkflowInstancesPage = () => {
             <Select size="small" value={pageSize} className="w-[78px]" onChange={(value) => { setPageSize(value); setPage(1); }} options={[10, 20, 50].map((value) => ({ value, label: `${value} / 页` }))} />
           </div>
         </div>
-
-        <InstanceDetailDrawer
-          open={Boolean(detailId)}
-          executionId={detailId}
-          initial={detailInitial}
-          onClose={() => { setDetailId(undefined); setDetailInitial(undefined); }}
-          onChanged={handleSnapshot}
-        />
       </div>
     </ConfigProvider>
   );
