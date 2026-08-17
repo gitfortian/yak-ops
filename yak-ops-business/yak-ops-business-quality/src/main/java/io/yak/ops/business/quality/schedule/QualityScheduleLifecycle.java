@@ -1,6 +1,7 @@
 package io.yak.ops.business.quality.schedule;
 
 import io.yak.framework.schedule.api.ScheduleSnapshot;
+import io.yak.framework.schedule.api.ScheduleStatus;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
@@ -50,6 +51,7 @@ public class QualityScheduleLifecycle {
   public void refreshRuntimeState(long monitorId) {
     MonitorSettings settings = repository.findMonitorSettings(monitorId);
     Instant next = engine.snapshot(monitorId)
+        .filter(snapshot -> snapshot.status() == ScheduleStatus.ENABLED)
         .map(ScheduleSnapshot::nextFireTime)
         .orElse(null);
     updateNextRunTime(monitorId, settings, next);
