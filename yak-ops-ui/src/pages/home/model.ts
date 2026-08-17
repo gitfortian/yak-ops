@@ -1,4 +1,4 @@
-export type HomeDataSourceKey = 'dataSource' | 'client' | 'alarm';
+export type HomeDataSourceKey = 'dataSource' | 'client' | 'alarm' | 'execution';
 
 export interface HomeDataSourceOverview {
   total: number;
@@ -27,9 +27,34 @@ export interface HomeAlarmOverview {
   recent: HomeAlarmItem[];
 }
 
+export type HomeRunType = 'batch' | 'workflow';
+
+export interface HomeRunItem {
+  id: string | number;
+  type: HomeRunType;
+  name: string;
+  status?: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationMillis?: number;
+  path: string;
+}
+
+export interface HomeExecutionOverview {
+  todayTotal: number;
+  running: number;
+  success: number;
+  failed: number;
+  recent: HomeRunItem[];
+  batchObserved: number;
+  workflowObserved: number;
+  limited: boolean;
+}
+
 export interface HomeOverview {
   dataSource?: HomeDataSourceOverview;
   client?: HomeClientOverview;
   alarm?: HomeAlarmOverview;
+  execution?: HomeExecutionOverview;
   unavailable: HomeDataSourceKey[];
 }

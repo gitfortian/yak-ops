@@ -4,18 +4,22 @@ import {
   Activity,
   Bell,
   Cable,
+  CheckCircle2,
   ChevronRight,
+  Clock3,
   Database,
   RefreshCw,
   Server,
   Sparkles,
   Workflow,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   HomeDataSourceKey,
   HomeOverview,
+  HomeRunItem,
 } from './model';
 import { fetchHomeOverview } from './service';
 
@@ -74,6 +78,7 @@ const sourceLabels: Record<HomeDataSourceKey, string> = {
   dataSource: '数据源',
   client: '客户端',
   alarm: '告警',
+  execution: '运行实例',
 };
 
 const navigate = (path: string) => history.push(path);
@@ -84,6 +89,39 @@ const formatCount = (value?: number) =>
 const formatTime = (value?: string) => {
   if (!value) return '-';
   return value.replace('T', ' ').slice(0, 19);
+};
+
+const formatDuration = (value?: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '-';
+  if (value < 1000) return `${Math.round(value)} ms`;
+  const seconds = Math.round(value / 1000);
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  const restSeconds = seconds % 60;
+  if (minutes < 60) return restSeconds ? `${minutes} 分 ${restSeconds} 秒` : `${minutes} 分`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`;
+};
+
+const getRunStatusMeta = (status?: string) => {
+  const normalized = status?.trim().toUpperCase() || '';
+  if (['SUCCESS', 'SUCCEEDED', 'SUCCESS_WITH_WARNINGS', 'COMPLETED', 'FINISHED'].includes(normalized)) {
+    return { label: '成功', className: 'bg-[#f2f4f7] text-[#344054]' };
+  }
+  if (['FAILED', 'ERROR', 'TIMED_OUT', 'TIMEOUT'].includes(normalized)) {
+    return { label: '失败', className: 'bg-[#fff1f3] text-[#d92d50]' };
+  }
+  if (['RUNNING', 'STARTING', 'SUBMITTED', 'DISPATCHING', 'QUEUED', 'PENDING', 'WAITING', 'RETRYING', 'PAUSED'].includes(normalized)) {
+    return { label: normalized === 'PAUSED' ? '已暂停' : '运行中', className: 'bg-[#eef7ff] text-[#175cd3]' };
+  }
+  if (['CANCELED', 'CANCELLED'].includes(normalized)) {
+    return { label: '已取消', className: 'bg-[#f5f5f6] text-[rgba(22,24,35,0.55)]' };
+  }
+  return {
+    label: status || '状态未知',
+    className: 'bg-[#f5f5f6] text-[rgba(22,24,35,0.55)]',
+  };
 };
 
 function SectionHeader({
@@ -210,13 +248,7 @@ function QuickActionCard({ action }: { action: QuickAction }) {
   );
 }
 
-function ResourceValue({
-  label,
-  value,
-}: {
-  label: string;
-  value?: number;
-}) {
+function ResourceValue({ label, value }: { label: string; value?: number }) {
   return (
     <div className="min-w-0 rounded-lg bg-[#f8f8f9] px-3 py-3">
       <div className="text-[11px] text-[rgba(22,24,35,0.42)]">{label}</div>
@@ -227,27 +259,83 @@ function ResourceValue({
   );
 }
 
-function DeferredSection({
-  title,
-  description,
+function RuntimeValue({
+  icon: Icon,
+  label,
+  value,
+  loading,
+  unavailable,
 }: {
-  title: string;
-  description: string;
+  icon: LucideIcon;
+  label: string;
+  value?: number;
+  loading: boolean;
+  unavailable: boolean;
 }) {
   return (
-    <section className={`${HOME_CARD_CLASS} min-h-[174px] p-[22px]`}>
+    <div className="min-w-0 rounded-[10px] border border-[rgba(22,24,35,0.055)] bg-[#fafafa] px-4 py-4">
+      <div className="flex items-center gap-2 text-[11px] text-[rgba(22,24,35,0.44)]">
+        <Icon size={14} strokeWidth={1.9} />
+        <span>{label}</span>
+      </div>
+      <div className="mt-2 flex min-h-7 items-center">
+        <DataState loading={loading} unavailable={unavailable}>
+          <strong className="text-[22px] font-[650] leading-7 tracking-[-0.4px] text-[#161823]">
+            {formatCount(value)}
+          </strong>
+        </DataState>
+      </div>
+    </div>
+  );
+}
+
+function RecentRunRow({ item }: { item: HomeRunItem }) {
+  const status = getRunStatusMeta(item.status);
+  return (
+    <button
+      type="button"
+      className="group flex w-full min-w-0 cursor-pointer items-center gap-3 border-0 bg-transparent py-3 text-left first:pt-0 last:pb-0"
+      onClick={() => navigate(item.path)}
+    >
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${item.type === 'batch' ? 'bg-[#fff1f3] text-[#fe2c55]' : 'bg-[#f3f0ff] text-[#7652ff]'}`}>
+        {item.type === 'batch' ? <Database size={17} /> : <Workflow size={17} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <strong className="truncate text-[12px] font-[650] text-[#161823]">
+            {item.name}
+          </strong>
+          <span className="shrink-0 rounded bg-[#f5f5f6] px-1.5 py-0.5 text-[9px] text-[rgba(22,24,35,0.5)]">
+            {item.type === 'batch' ? '离线同步' : '工作流'}
+          </span>
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] ${status.className}`}>
+            {status.label}
+          </span>
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[rgba(22,24,35,0.4)]">
+          <span>{formatTime(item.startedAt)}</span>
+          <span>耗时 {formatDuration(item.durationMillis)}</span>
+        </span>
+      </span>
+      <ChevronRight
+        size={14}
+        className="shrink-0 text-[rgba(22,24,35,0.18)] transition group-hover:translate-x-0.5 group-hover:text-[rgba(22,24,35,0.46)]"
+      />
+    </button>
+  );
+}
+
+function DeferredSection({ title, description }: { title: string; description: string }) {
+  return (
+    <section className={`${HOME_CARD_CLASS} mt-4 min-h-[150px] p-[22px]`}>
       <SectionHeader title={title} />
-      <div className="mt-4 flex min-h-[94px] items-center rounded-lg border border-dashed border-[rgba(22,24,35,0.09)] bg-[#fafafa] px-5">
+      <div className="mt-4 flex min-h-[70px] items-center rounded-lg border border-dashed border-[rgba(22,24,35,0.09)] bg-[#fafafa] px-5">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[rgba(22,24,35,0.4)] shadow-[0_2px_8px_rgba(22,24,35,0.04)]">
           <Activity size={18} />
         </span>
         <div className="ml-3 min-w-0">
-          <div className="text-[13px] font-[650] text-[rgba(22,24,35,0.74)]">
-            等待真实数据接入
-          </div>
-          <div className="mt-1 text-[11px] leading-5 text-[rgba(22,24,35,0.42)]">
-            {description}
-          </div>
+          <div className="text-[13px] font-[650] text-[rgba(22,24,35,0.74)]">等待统一统计口径</div>
+          <div className="mt-1 text-[11px] leading-5 text-[rgba(22,24,35,0.42)]">{description}</div>
         </div>
       </div>
     </section>
@@ -269,7 +357,7 @@ const HomePage = () => {
       setOverview(nextOverview);
       setLastUpdatedAt(new Date());
     } catch {
-      setOverview({ unavailable: ['dataSource', 'client', 'alarm'] });
+      setOverview({ unavailable: ['dataSource', 'client', 'alarm', 'execution'] });
       setLoadError(true);
     } finally {
       setLoading(false);
@@ -300,9 +388,15 @@ const HomePage = () => {
     return '来自客户端统计接口';
   }, [overview?.client]);
 
+  const scrollToRuntime = () => {
+    document.getElementById('home-runtime')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const dataSource = overview?.dataSource;
   const client = overview?.client;
   const alarm = overview?.alarm;
+  const execution = overview?.execution;
+  const executionUnavailable = unavailableSet.has('execution');
 
   return (
     <div className="min-h-full bg-[#f7f8fa] p-4 font-sans text-[#161823] min-[1041px]:p-5">
@@ -315,11 +409,9 @@ const HomePage = () => {
         </div>
 
         <div className="relative z-[1] ml-[18px] min-w-0">
-          <h1 className="m-0 text-[18px] font-[650] tracking-[-0.3px] text-[#161823]">
-            Yak Ops 一体化数据平台
-          </h1>
-          <p className="mb-0 mt-2 max-w-[720px] text-xs leading-5 text-[rgba(22,24,35,0.5)]">
-            首页第一阶段仅展示已接入真实接口的数据；运行趋势、调度与复杂统计将在后续阶段逐步接入。
+          <h1 className="m-0 text-[18px] font-[650] tracking-[-0.3px] text-[#161823]">Yak Ops 一体化数据平台</h1>
+          <p className="mb-0 mt-2 max-w-[760px] text-xs leading-5 text-[rgba(22,24,35,0.5)]">
+            汇总平台资源、告警与运行实例，优先回答“现在有什么、运行怎么样、哪里出了问题”。
           </p>
           <div className="mt-2 flex items-center gap-2 text-[11px] text-[rgba(22,24,35,0.38)]">
             {lastUpdatedAt ? (
@@ -328,9 +420,7 @@ const HomePage = () => {
               <span>正在读取平台实时数据</span>
             )}
             {unavailableText ? (
-              <span className="rounded bg-[#fff1f3] px-1.5 py-0.5 text-[#d92d50]">
-                {unavailableText}
-              </span>
+              <span className="rounded bg-[#fff1f3] px-1.5 py-0.5 text-[#d92d50]">{unavailableText}</span>
             ) : null}
           </div>
         </div>
@@ -347,7 +437,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      <section className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+      <section className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           icon={Database}
           label="数据源"
@@ -367,6 +457,15 @@ const HomePage = () => {
           onClick={() => navigate('/client')}
         />
         <MetricCard
+          icon={Activity}
+          label="今日运行"
+          value={execution?.todayTotal}
+          detail={`当前运行 ${formatCount(execution?.running)} / 今日失败 ${formatCount(execution?.failed)}`}
+          loading={loading}
+          unavailable={executionUnavailable}
+          onClick={scrollToRuntime}
+        />
+        <MetricCard
           icon={Bell}
           label="告警记录"
           value={alarm?.total}
@@ -378,14 +477,9 @@ const HomePage = () => {
       </section>
 
       <section className={`${HOME_CARD_CLASS} mt-4 px-[22px] pb-[22px] pt-5`}>
-        <SectionHeader
-          title="快速创建"
-          description="保留高频入口，创建后进入各业务模块完成配置与运行。"
-        />
+        <SectionHeader title="快速创建" description="保留高频入口，创建后进入各业务模块完成配置与运行。" />
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {quickActions.map((action) => (
-            <QuickActionCard action={action} key={action.title} />
-          ))}
+          {quickActions.map((action) => <QuickActionCard action={action} key={action.title} />)}
         </div>
       </section>
 
@@ -393,15 +487,14 @@ const HomePage = () => {
         <section className={`${HOME_CARD_CLASS} min-h-[276px] p-[22px]`}>
           <SectionHeader
             title="资源概览"
-            description="资源状态直接来自数据源与客户端现有接口，不再使用首页静态演示数据。"
+            description="资源状态直接来自数据源与客户端现有接口。"
             extra={
               <button
                 type="button"
                 className="inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-xs text-[rgba(22,24,35,0.5)] transition-colors hover:text-[#161823]"
                 onClick={() => navigate('/data-source')}
               >
-                资源管理
-                <ChevronRight size={14} />
+                资源管理<ChevronRight size={14} />
               </button>
             }
           />
@@ -414,21 +507,16 @@ const HomePage = () => {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#fff1f3] text-[#fe2c55]">
-                    <Database size={19} />
-                  </span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#fff1f3] text-[#fe2c55]"><Database size={19} /></span>
                   <div className="min-w-0">
                     <strong className="block truncate text-[13px] font-[650]">数据源</strong>
-                    <span className="mt-0.5 block text-[11px] text-[rgba(22,24,35,0.42)]">
-                      连接状态与环境统计
-                    </span>
+                    <span className="mt-0.5 block text-[11px] text-[rgba(22,24,35,0.42)]">连接状态与环境统计</span>
                   </div>
                 </div>
                 <DataState unavailable={unavailableSet.has('dataSource')} loading={loading}>
                   <strong className="text-xl font-[650]">{formatCount(dataSource?.total)}</strong>
                 </DataState>
               </div>
-
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
                 <ResourceValue label="连接正常" value={dataSource?.connected} />
                 <ResourceValue label="连接异常" value={dataSource?.disconnected} />
@@ -444,21 +532,16 @@ const HomePage = () => {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f2f4f7] text-[#344054]">
-                    <Server size={19} />
-                  </span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f2f4f7] text-[#344054]"><Server size={19} /></span>
                   <div className="min-w-0">
                     <strong className="block truncate text-[13px] font-[650]">客户端</strong>
-                    <span className="mt-0.5 block text-[11px] text-[rgba(22,24,35,0.42)]">
-                      执行器服务实时统计
-                    </span>
+                    <span className="mt-0.5 block text-[11px] text-[rgba(22,24,35,0.42)]">执行器服务实时统计</span>
                   </div>
                 </div>
                 <DataState unavailable={unavailableSet.has('client')} loading={loading}>
                   <strong className="text-xl font-[650]">{formatCount(client?.total)}</strong>
                 </DataState>
               </div>
-
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <ResourceValue label="客户端总数" value={client?.total} />
                 {client?.online !== undefined || client?.offline !== undefined ? (
@@ -479,26 +562,22 @@ const HomePage = () => {
         <aside className={`${HOME_CARD_CLASS} min-h-[276px] p-[22px]`}>
           <SectionHeader
             title="最近告警"
-            description="展示告警记录接口返回的最近数据，不将历史记录误标为待处理事项。"
+            description="展示告警记录接口返回的最近数据。"
             extra={
               <button
                 type="button"
                 className="inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-xs text-[rgba(22,24,35,0.5)] transition-colors hover:text-[#161823]"
                 onClick={() => navigate('/alarm')}
               >
-                查看全部
-                <ChevronRight size={14} />
+                查看全部<ChevronRight size={14} />
               </button>
             }
           />
-
           <div className="mt-4">
             {loading ? (
               <Skeleton active paragraph={{ rows: 3 }} title={false} />
             ) : unavailableSet.has('alarm') ? (
-              <div className="flex min-h-[150px] items-center justify-center rounded-lg bg-[#fafafa] text-xs text-[rgba(22,24,35,0.4)]">
-                告警数据暂不可用
-              </div>
+              <div className="flex min-h-[150px] items-center justify-center rounded-lg bg-[#fafafa] text-xs text-[rgba(22,24,35,0.4)]">告警数据暂不可用</div>
             ) : alarm?.recent.length ? (
               <div className="divide-y divide-[rgba(22,24,35,0.06)]">
                 {alarm.recent.map((item, index) => (
@@ -508,23 +587,14 @@ const HomePage = () => {
                     key={item.id ?? `${item.jobName}-${item.time}-${index}`}
                     onClick={() => navigate('/alarm')}
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff1f3] text-[#fe2c55]">
-                      <Bell size={16} />
-                    </span>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff1f3] text-[#fe2c55]"><Bell size={16} /></span>
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <strong className="truncate text-[12px] font-[650] text-[#161823]">
-                          {item.jobName || '未命名任务'}
-                        </strong>
-                        {item.severity ? (
-                          <span className="shrink-0 rounded bg-[#f5f5f6] px-1.5 py-0.5 text-[9px] text-[rgba(22,24,35,0.55)]">
-                            {item.severity}
-                          </span>
-                        ) : null}
+                        <strong className="truncate text-[12px] font-[650] text-[#161823]">{item.jobName || '未命名任务'}</strong>
+                        {item.severity ? <span className="shrink-0 rounded bg-[#f5f5f6] px-1.5 py-0.5 text-[9px] text-[rgba(22,24,35,0.55)]">{item.severity}</span> : null}
                       </span>
                       <span className="mt-1 flex items-center gap-2 text-[10px] text-[rgba(22,24,35,0.4)]">
-                        <span>{item.status || '状态未知'}</span>
-                        <span>{formatTime(item.time)}</span>
+                        <span>{item.status || '状态未知'}</span><span>{formatTime(item.time)}</span>
                       </span>
                     </span>
                     <ChevronRight size={14} className="shrink-0 text-[rgba(22,24,35,0.2)]" />
@@ -534,25 +604,73 @@ const HomePage = () => {
             ) : (
               <div className="flex min-h-[150px] flex-col items-center justify-center rounded-lg bg-[#fafafa] text-center">
                 <Bell size={24} className="text-[rgba(22,24,35,0.24)]" />
-                <span className="mt-2 text-xs text-[rgba(22,24,35,0.42)]">
-                  当前没有告警记录
-                </span>
+                <span className="mt-2 text-xs text-[rgba(22,24,35,0.42)]">当前没有告警记录</span>
               </div>
             )}
           </div>
         </aside>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <DeferredSection
-          title="运行概览"
-          description="第二阶段将统一离线同步与工作流运行实例，接入今日运行、运行中、成功与失败等真实统计。"
-        />
-        <DeferredSection
-          title="调度与趋势"
-          description="调度日历、趋势图和同比指标需要统一统计口径，暂不展示任何演示数据。"
-        />
+      <div id="home-runtime" className="mt-4 grid scroll-mt-4 grid-cols-1 gap-4 min-[1100px]:grid-cols-[minmax(330px,0.82fr)_minmax(0,1.18fr)]">
+        <section className={`${HOME_CARD_CLASS} min-h-[286px] p-[22px]`}>
+          <SectionHeader
+            title="运行概览"
+            description="今日统计按运行开始时间计算；当前运行统计离线同步与工作流的活跃实例。"
+            extra={
+              <div className="flex items-center gap-3">
+                <button type="button" className="border-0 bg-transparent p-0 text-xs text-[rgba(22,24,35,0.5)] hover:text-[#161823]" onClick={() => navigate('/sync/batch-link-up')}>离线同步</button>
+                <button type="button" className="border-0 bg-transparent p-0 text-xs text-[rgba(22,24,35,0.5)] hover:text-[#161823]" onClick={() => navigate('/workflow/instances')}>工作流实例</button>
+              </div>
+            }
+          />
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <RuntimeValue icon={Clock3} label="今日运行" value={execution?.todayTotal} loading={loading} unavailable={executionUnavailable} />
+            <RuntimeValue icon={Activity} label="当前运行" value={execution?.running} loading={loading} unavailable={executionUnavailable} />
+            <RuntimeValue icon={CheckCircle2} label="今日成功" value={execution?.success} loading={loading} unavailable={executionUnavailable} />
+            <RuntimeValue icon={XCircle} label="今日失败" value={execution?.failed} loading={loading} unavailable={executionUnavailable} />
+          </div>
+          {!loading && !executionUnavailable && execution ? (
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] leading-5 text-[rgba(22,24,35,0.38)]">
+              <span>已读取离线实例 {formatCount(execution.batchObserved)} 条</span>
+              <span>工作流实例 {formatCount(execution.workflowObserved)} 条</span>
+              {execution.limited ? <span className="text-[#b54708]">离线实例超过首页读取上限，统计基于最近 200 条实例</span> : null}
+            </div>
+          ) : null}
+        </section>
+
+        <section className={`${HOME_CARD_CLASS} min-h-[286px] p-[22px]`}>
+          <SectionHeader
+            title="最近运行"
+            description="离线同步和工作流实例统一按开始时间排序。"
+            extra={
+              <button type="button" className="inline-flex items-center border-0 bg-transparent p-0 text-xs text-[rgba(22,24,35,0.5)] hover:text-[#161823]" onClick={() => navigate('/workflow/instances')}>
+                工作流实例<ChevronRight size={14} />
+              </button>
+            }
+          />
+          <div className="mt-4">
+            {loading ? (
+              <Skeleton active paragraph={{ rows: 4 }} title={false} />
+            ) : executionUnavailable ? (
+              <div className="flex min-h-[190px] items-center justify-center rounded-lg bg-[#fafafa] text-xs text-[rgba(22,24,35,0.4)]">运行实例数据暂不可用</div>
+            ) : execution?.recent.length ? (
+              <div className="divide-y divide-[rgba(22,24,35,0.06)]">
+                {execution.recent.map((item) => <RecentRunRow item={item} key={`${item.type}-${item.id}`} />)}
+              </div>
+            ) : (
+              <div className="flex min-h-[190px] flex-col items-center justify-center rounded-lg bg-[#fafafa] text-center">
+                <Activity size={24} className="text-[rgba(22,24,35,0.24)]" />
+                <span className="mt-2 text-xs text-[rgba(22,24,35,0.42)]">暂无运行实例</span>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
+
+      <DeferredSection
+        title="调度与趋势"
+        description="下一阶段再统一调度事件、运行趋势、SLA 与吞吐量口径；当前继续不展示任何演示统计。"
+      />
     </div>
   );
 };
