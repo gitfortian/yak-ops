@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
+import io.yak.ops.business.workflow.service.WorkflowDefinitionScheduleGuard;
 import io.yak.ops.business.workflow.service.WorkflowDefinitionService;
 import io.yak.ops.business.workflow.service.WorkflowLaunchService;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
@@ -30,12 +31,15 @@ public class WorkflowDefinitionController {
 
   private final WorkflowDefinitionService definitionService;
   private final WorkflowLaunchService launchService;
+  private final WorkflowDefinitionScheduleGuard scheduleGuard;
 
   public WorkflowDefinitionController(
       WorkflowDefinitionService definitionService,
-      WorkflowLaunchService launchService) {
+      WorkflowLaunchService launchService,
+      WorkflowDefinitionScheduleGuard scheduleGuard) {
     this.definitionService = definitionService;
     this.launchService = launchService;
+    this.scheduleGuard = scheduleGuard;
   }
 
   @Operation(summary = "查询工作流定义")
@@ -91,6 +95,7 @@ public class WorkflowDefinitionController {
   @Operation(summary = "停用工作流正式运行入口")
   @PostMapping("/{id}/offline")
   public Result<WorkflowDefinitionVO> offline(@PathVariable("id") String id) {
+    scheduleGuard.ensureCanOffline(id);
     return Result.success(definitionService.offline(id));
   }
 

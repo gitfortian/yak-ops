@@ -10,7 +10,9 @@ import {
   type WorkflowDefinition,
   type WorkflowDefinitionStatus,
 } from '@/services/workflow/definitions';
+import { listWorkflowSchedules } from '@/services/workflow/schedules';
 import {
+  CalendarOutlined,
   CloudDownloadOutlined,
   CloudUploadOutlined,
   DeleteOutlined,
@@ -341,6 +343,10 @@ export default function WorkflowDefinitionList() {
     history.push(`/workflow/definition/${record.id}?scene=edit`);
   };
 
+  const goToSchedules = (record: WorkflowDefinition) => {
+    history.push(`/workflow/schedules?workflowId=${encodeURIComponent(record.id)}`);
+  };
+
   const handleDelete = (record: WorkflowDefinition) => {
     Modal.confirm({
       centered: true,
@@ -430,9 +436,31 @@ export default function WorkflowDefinitionList() {
     });
   };
 
-  const confirmOffline = (record: WorkflowDefinition) => {
+  const confirmOffline = async (record: WorkflowDefinition) => {
     if (isActiveRuntime(record.latestExecutionStatus)) {
       message.warning('工作流存在活动执行，请先暂停或等待执行结束后再下线');
+      return;
+    }
+
+    try {
+      const onlineSchedules = await listWorkflowSchedules({
+        workflowId: record.id,
+        status: 'ONLINE',
+      });
+      if (onlineSchedules.length > 0) {
+        Modal.warning({
+          centered: true,
+          title: '请先停用工作流调度',
+          content: `当前工作流仍有 ${onlineSchedules.length} 个已启用调度。停用全部调度后才能下线工作流。`,
+          okText: '前往调度配置',
+          onOk: () => goToSchedules(record),
+        });
+        return;
+      }
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : '检查工作流调度状态失败',
+      );
       return;
     }
 
@@ -458,11 +486,14 @@ export default function WorkflowDefinitionList() {
       case 'edit':
         goToDefinition(record);
         break;
+      case 'schedule':
+        goToSchedules(record);
+        break;
       case 'online':
         confirmOnline(record);
         break;
       case 'offline':
-        confirmOffline(record);
+        void confirmOffline(record);
         break;
       case 'delete':
         handleDelete(record);
@@ -488,6 +519,11 @@ export default function WorkflowDefinitionList() {
         icon: <EditOutlined />,
         label: '编辑配置',
         disabled: !canEdit,
+      },
+      {
+        key: 'schedule',
+        icon: <CalendarOutlined />,
+        label: '调度配置',
       },
       { type: 'divider' },
       {
@@ -890,7 +926,7 @@ export default function WorkflowDefinitionList() {
               <span className="mr-2 text-[14px] text-[#faad14]">▲</span>
               <span className="font-medium text-[#344054]">【提示】</span>
               <span>
-                工作流完成节点编排并上线后即可运行；存在活动执行时不可直接下线。
+                工作流完成节点编排并上线后即可运行或启用调度；存在活动执行或已启用调度时不可直接下线。
               </span>
             </div>
           </div>

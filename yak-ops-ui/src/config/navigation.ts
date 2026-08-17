@@ -69,7 +69,7 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'data-development-task', path: '/data-development/task/:id', title: '开发任务配置', component: './data-development/task', hidden: true, parentId: 'data-development' },
   { id: 'workflow-definition', mode: 'public', path: '/workflow/definitions', title: '工作流定义', component: './workflow/management', iconKey: 'workflow', menuGroup: 'workflow', order: 10 },
   { id: 'workflow-definition-editor', path: '/workflow/definition/:id', title: '工作流配置', component: './workflow/definition', hidden: true, parentId: 'workflow-definition' },
-  { id: 'workflow-schedules', mode: 'public', path: '/workflow/schedules', title: '调度管理', component: './workflow/schedules', iconKey: 'monitor', menuGroup: 'workflow', order: 20 },
+  { id: 'workflow-schedules', path: '/workflow/schedules', title: '调度配置', component: './workflow/schedules', hidden: true, parentId: 'workflow-definition' },
   { id: 'workflow-instances', mode: 'public', path: '/workflow/instances', title: '工作流实例', component: './workflow/instances', iconKey: 'instance', menuGroup: 'workflow', order: 30 },
   { id: 'workflow-instance-detail', path: '/workflow/instances/:executionId', title: '工作流实例详情', component: './workflow/instances/detail', hidden: true, parentId: 'workflow-instances' },
   { id: 'resource-management', mode: 'one', permission: 'resource:view', path: '/resource-management', title: '文件资源', component: './resource-management', iconKey: 'database', menuGroup: 'resources', order: 10 },
