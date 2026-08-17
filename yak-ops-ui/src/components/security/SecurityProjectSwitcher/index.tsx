@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react";
 export default function SecurityProjectSwitcher() {
   const { projects, currentProject, selectProject } = useSecurityProject();
   if (!projects.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可用项目" className="m-0 px-3" />;
+    return <>暂无可用项目</>;
   }
 
   return (
