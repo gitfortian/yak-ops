@@ -9,6 +9,7 @@ import io.yak.ops.business.quality.domain.QualityDomain.Template;
 import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.business.quality.schedule.QualityScheduleCalculator;
+import io.yak.ops.business.quality.schedule.QualityScheduleLifecycle;
 import io.yak.ops.business.quality.service.support.QualityViewMapper;
 import io.yak.ops.common.bean.dto.quality.QualityMonitorDTO;
 import io.yak.ops.common.bean.vo.quality.QualityMonitorVO;
@@ -35,14 +36,17 @@ public class QualityMonitorService {
   private final QualityRepository repository;
   private final QualityExecutionService executionService;
   private final QualityScheduleCalculator scheduleCalculator;
+  private final QualityScheduleLifecycle scheduleLifecycle;
 
   public QualityMonitorService(
       QualityRepository repository,
       QualityExecutionService executionService,
-      QualityScheduleCalculator scheduleCalculator) {
+      QualityScheduleCalculator scheduleCalculator,
+      QualityScheduleLifecycle scheduleLifecycle) {
     this.repository = repository;
     this.executionService = executionService;
     this.scheduleCalculator = scheduleCalculator;
+    this.scheduleLifecycle = scheduleLifecycle;
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
@@ -90,6 +94,7 @@ public class QualityMonitorService {
     long id = repository.insertMonitor(toMonitorSpec(request));
     repository.upsertMonitorSettings(id, settings);
     repository.replaceRules(id, rules);
+    scheduleLifecycle.sync(id);
     return get(id);
   }
 
@@ -105,6 +110,7 @@ public class QualityMonitorService {
     }
     repository.upsertMonitorSettings(id, settings);
     repository.replaceRules(id, rules);
+    scheduleLifecycle.sync(id);
     return get(id);
   }
 
@@ -116,6 +122,7 @@ public class QualityMonitorService {
     if (!repository.deleteMonitor(id)) {
       throw new IllegalArgumentException("质量监控不存在：" + id);
     }
+    scheduleLifecycle.remove(id);
     return true;
   }
 
@@ -337,7 +344,11 @@ public class QualityMonitorService {
     if (value == null) throw new IllegalArgumentException(message);
     return value;
   }
-  private static <T> T defaultValue(T value, T fallback) { return value == null ? fallback : value; }
+
+  private static <T> T defaultValue(T value, T fallback) {
+    return value == null ? fallback : value;
+  }
+
   private static String trimToNull(String value) {
     if (value == null) return null;
     String trimmed = value.trim();
