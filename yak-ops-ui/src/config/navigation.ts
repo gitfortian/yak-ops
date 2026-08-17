@@ -71,6 +71,7 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'workflow-definition-editor', path: '/workflow/definition/:id', title: '工作流配置', component: './workflow/definition', hidden: true, parentId: 'workflow-definition' },
   { id: 'workflow-schedules', mode: 'public', path: '/workflow/schedules', title: '调度管理', component: './workflow/schedules', iconKey: 'monitor', menuGroup: 'workflow', order: 20 },
   { id: 'workflow-instances', mode: 'public', path: '/workflow/instances', title: '工作流实例', component: './workflow/instances', iconKey: 'instance', menuGroup: 'workflow', order: 30 },
+  { id: 'workflow-instance-detail', path: '/workflow/instances/:executionId', title: '工作流实例详情', component: './workflow/instances/detail', hidden: true, parentId: 'workflow-instances' },
   { id: 'resource-management', mode: 'one', permission: 'resource:view', path: '/resource-management', title: '文件资源', component: './resource-management', iconKey: 'database', menuGroup: 'resources', order: 10 },
   { id: 'data-quality-table-config', mode: 'one', permission: 'quality:monitor:read', path: '/data-quality/table-config', title: '数据表监控', component: './data-quality/table-config', iconKey: 'quality', menuGroup: 'data-quality', order: 10 },
   { id: 'data-quality-monitor-create', path: '/data-quality/monitor/create', title: '新增监控', component: './data-quality/monitor/editor', hidden: true, parentId: 'data-quality-table-config' },
