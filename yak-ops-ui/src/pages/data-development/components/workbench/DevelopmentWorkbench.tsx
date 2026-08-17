@@ -29,6 +29,7 @@ import type {
   DevelopmentTaskRunResult,
 } from '../../types';
 import DataServiceNodeEditor from '../data-service/DataServiceNodeEditor';
+import DatasetNodeEditor from '../dataset/DatasetNodeEditor';
 import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
 import EditorToolbar from './EditorToolbar';
@@ -48,19 +49,18 @@ interface PendingCloseRequest {
   dirtyNodeIds: DevelopmentId[];
 }
 
-interface DataServiceWorkbenchEditorProps {
+interface StandaloneWorkbenchEditorProps {
   node: DevelopmentResourceNode;
   active: boolean;
   onSaved?: () => void | Promise<void>;
-  onOpenSourceNode: (nodeId: DevelopmentId) => void;
   onDirtyChange: (dirty: boolean) => void;
 }
 
-/**
- * Keep the authoring node identity stable while the directory tree refreshes. A save in another tab
- * may recreate the node list; that must not force a hidden Data Service editor to reload and discard
- * its unsaved local form state.
- */
+interface DataServiceWorkbenchEditorProps extends StandaloneWorkbenchEditorProps {
+  onOpenSourceNode: (nodeId: DevelopmentId) => void;
+}
+
+/** Keep standalone resource identity stable when the directory tree refreshes. */
 const DataServiceWorkbenchEditor = ({
   node,
   active,
@@ -68,10 +68,7 @@ const DataServiceWorkbenchEditor = ({
   onOpenSourceNode,
   onDirtyChange,
 }: DataServiceWorkbenchEditorProps) => {
-  const stableNode = useMemo(
-    () => node,
-    [node.id, node.name],
-  );
+  const stableNode = useMemo(() => node, [node.id, node.name]);
 
   return (
     <div
@@ -84,6 +81,30 @@ const DataServiceWorkbenchEditor = ({
         node={stableNode}
         onSaved={onSaved}
         onOpenSourceNode={onOpenSourceNode}
+        onDirtyChange={onDirtyChange}
+      />
+    </div>
+  );
+};
+
+const DatasetWorkbenchEditor = ({
+  node,
+  active,
+  onSaved,
+  onDirtyChange,
+}: StandaloneWorkbenchEditorProps) => {
+  const stableNode = useMemo(() => node, [node.id, node.name]);
+
+  return (
+    <div
+      className={[
+        'min-h-0 flex-1 overflow-hidden',
+        active ? 'flex' : 'hidden',
+      ].join(' ')}
+    >
+      <DatasetNodeEditor
+        node={stableNode}
+        onSaved={onSaved}
         onDirtyChange={onDirtyChange}
       />
     </div>
@@ -119,7 +140,7 @@ const DevelopmentWorkbench = ({
   const [publishing, setPublishing] = useState(false);
   const [closeSaving, setCloseSaving] = useState(false);
   const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
-  const [dataServiceDirtyNodeIds, setDataServiceDirtyNodeIds] = useState<DevelopmentId[]>([]);
+  const [resourceDirtyNodeIds, setResourceDirtyNodeIds] = useState<DevelopmentId[]>([]);
 
   const nodeMap = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -143,7 +164,7 @@ const DevelopmentWorkbench = ({
     setActiveNodeId((current) =>
       current && nodeMap.has(current) ? current : undefined,
     );
-    setDataServiceDirtyNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
+    setResourceDirtyNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
   }, [nodeMap]);
 
   useEffect(() => {
@@ -184,18 +205,24 @@ const DevelopmentWorkbench = ({
       .filter((node): node is DevelopmentResourceNode => Boolean(node && node.type === 'DATA_SERVICE')),
     [nodeMap, openNodeIds],
   );
+  const openDatasetNodes = useMemo(
+    () => openNodeIds
+      .map((nodeId) => nodeMap.get(nodeId))
+      .filter((node): node is DevelopmentResourceNode => Boolean(node && node.type === 'DATASET')),
+    [nodeMap, openNodeIds],
+  );
 
   const focusNode = (nodeId: DevelopmentId) => {
     const target = nodeMap.get(nodeId);
     if (!target) return;
     setOpenNodeIds((current) => current.includes(nodeId) ? current : [...current, nodeId]);
     setActiveNodeId(nodeId);
-    if (target.type === 'DATA_SERVICE') setRunPanelOpen(false);
+    if (!isDevelopmentTaskNode(target)) setRunPanelOpen(false);
     onNodeFocus(nodeId);
   };
 
-  const updateDataServiceDirty = (nodeId: DevelopmentId, dirty: boolean) => {
-    setDataServiceDirtyNodeIds((current) => {
+  const updateResourceDirty = (nodeId: DevelopmentId, dirty: boolean) => {
+    setResourceDirtyNodeIds((current) => {
       if (dirty) return current.includes(nodeId) ? current : [...current, nodeId];
       return current.filter((id) => id !== nodeId);
     });
@@ -316,7 +343,7 @@ const DevelopmentWorkbench = ({
     const currentIndex = activeNodeId ? openNodeIds.indexOf(activeNodeId) : -1;
     const next = openNodeIds.filter((id) => !closeSet.has(id));
     setOpenNodeIds(next);
-    setDataServiceDirtyNodeIds((current) => current.filter((id) => !closeSet.has(id)));
+    setResourceDirtyNodeIds((current) => current.filter((id) => !closeSet.has(id)));
 
     if (!activeNodeId || !closeSet.has(activeNodeId)) return;
 
@@ -325,7 +352,8 @@ const DevelopmentWorkbench = ({
       next[next.length - 1];
     setActiveNodeId(nextActiveId);
     onNodeFocus(nextActiveId);
-    if (!nextActiveId || nodeMap.get(nextActiveId)?.type === 'DATA_SERVICE') {
+    const nextNode = nextActiveId ? nodeMap.get(nextActiveId) : undefined;
+    if (!nextNode || !isDevelopmentTaskNode(nextNode)) {
       setRunPanelOpen(false);
     }
   };
@@ -334,16 +362,16 @@ const DevelopmentWorkbench = ({
     const targetNodeIds = openNodeIds.filter((nodeId) => nodeIds.includes(nodeId));
     if (!targetNodeIds.length) return;
 
-    const dirtyDataServiceNodes = targetNodeIds
-      .filter((nodeId) => dataServiceDirtyNodeIds.includes(nodeId))
+    const dirtyResourceNodes = targetNodeIds
+      .filter((nodeId) => resourceDirtyNodeIds.includes(nodeId))
       .map((nodeId) => nodeMap.get(nodeId))
       .filter((node): node is DevelopmentResourceNode => Boolean(node));
-    if (dirtyDataServiceNodes.length) {
-      const firstName = dirtyDataServiceNodes[0]?.name || 'Data Service';
+    if (dirtyResourceNodes.length) {
+      const firstName = dirtyResourceNodes[0]?.name || '资源';
       message.warning(
-        dirtyDataServiceNodes.length === 1
-          ? `「${firstName}」有未保存修改，请先保存草稿后再关闭`
-          : `有 ${dirtyDataServiceNodes.length} 个 Data Service 编辑器尚未保存，请先保存草稿`,
+        dirtyResourceNodes.length === 1
+          ? `「${firstName}」有未保存修改，请先保存后再关闭`
+          : `有 ${dirtyResourceNodes.length} 个资源编辑器尚未保存，请先保存后再关闭`,
       );
       return;
     }
@@ -433,7 +461,7 @@ const DevelopmentWorkbench = ({
             选择左侧开发节点
           </div>
           <div className="mt-1 text-[12px] text-[#98a2b3]">
-            SQL、Shell 和 Data Service 会在同一个开发工作台中打开
+            SQL、Shell、Dataset 和 Data Service 会在同一个开发工作台中打开
           </div>
         </div>
       </main>
@@ -448,7 +476,7 @@ const DevelopmentWorkbench = ({
         nodeMap={nodeMap}
         openNodeIds={openNodeIds}
         activeNodeId={activeNodeId}
-        dirtyNodeIds={dataServiceDirtyNodeIds}
+        dirtyNodeIds={resourceDirtyNodeIds}
         onFocus={focusNode}
         onClose={(nodeId) => requestCloseNodes([nodeId])}
         onAction={handleTabAction}
@@ -505,7 +533,17 @@ const DevelopmentWorkbench = ({
             active={activeNodeId === dataServiceNode.id}
             onSaved={onNodesChanged}
             onOpenSourceNode={focusNode}
-            onDirtyChange={(dirty) => updateDataServiceDirty(dataServiceNode.id, dirty)}
+            onDirtyChange={(dirty) => updateResourceDirty(dataServiceNode.id, dirty)}
+          />
+        ))}
+
+        {openDatasetNodes.map((datasetNode) => (
+          <DatasetWorkbenchEditor
+            key={datasetNode.id}
+            node={datasetNode}
+            active={activeNodeId === datasetNode.id}
+            onSaved={onNodesChanged}
+            onDirtyChange={(dirty) => updateResourceDirty(datasetNode.id, dirty)}
           />
         ))}
       </div>

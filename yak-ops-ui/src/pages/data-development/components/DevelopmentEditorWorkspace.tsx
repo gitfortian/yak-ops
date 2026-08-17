@@ -8,7 +8,6 @@ import type {
   DevelopmentId,
   DevelopmentResourceNode,
 } from '../types';
-import DatasetNodeEditor from './dataset/DatasetNodeEditor';
 import DevelopmentWorkbench from './workbench/DevelopmentWorkbench';
 
 interface DevelopmentEditorWorkspaceProps {
@@ -83,7 +82,10 @@ export default function DevelopmentEditorWorkspace({
     [nodes, selectedNodeId],
   );
   const workbenchNodes = useMemo(
-    () => nodes.filter((node) => isDevelopmentTaskNode(node) || node.type === 'DATA_SERVICE'),
+    () => nodes.filter((node) =>
+      isDevelopmentTaskNode(node)
+      || node.type === 'DATA_SERVICE'
+      || node.type === 'DATASET'),
     [nodes],
   );
 
@@ -96,24 +98,18 @@ export default function DevelopmentEditorWorkspace({
           </div>
           <div className="text-[13px] font-medium text-[#475467]">选择一个开发节点</div>
           <div className="mt-1 text-[11px] text-[#98a2b3]">
-            SQL、Shell、数据集和数据服务都是独立节点；执行关系请在工作流模块配置。
+            SQL、Shell、数据集和数据服务都在统一开发工作台中打开。
           </div>
         </div>
       </main>
     );
   }
 
-  if (selectedResource.type === 'DATASET') {
-    return (
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <ResourceEditorBoundary resourceKey={selectedResource.id}>
-          <DatasetNodeEditor node={selectedResource} onSaved={onNodesChanged} />
-        </ResourceEditorBoundary>
-      </main>
-    );
-  }
-
-  if (isDevelopmentTaskNode(selectedResource) || selectedResource.type === 'DATA_SERVICE') {
+  if (
+    isDevelopmentTaskNode(selectedResource)
+    || selectedResource.type === 'DATA_SERVICE'
+    || selectedResource.type === 'DATASET'
+  ) {
     return (
       <ResourceEditorBoundary resourceKey={selectedResource.id}>
         <DevelopmentWorkbench
