@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Lifecycle for data-development Dataset nodes that own datasource + SQL directly. */
 @Service
-final class DevelopmentStandaloneDatasetService {
+class DevelopmentStandaloneDatasetService {
 
   private final DatasetRepository repository;
   private final DatasetSchemaDiscoveryService discoveryService;
