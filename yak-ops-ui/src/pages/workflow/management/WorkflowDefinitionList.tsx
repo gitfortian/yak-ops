@@ -11,7 +11,6 @@ import {
   type WorkflowDefinitionStatus,
 } from '@/services/workflow/definitions';
 import {
-  CopyOutlined,
   DownOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -86,6 +85,12 @@ const RUNTIME_LABEL: Record<string, string> = {
   TIMED_OUT: '已超时',
 };
 
+const FAILURE_STRATEGY_LABEL: Record<string, string> = {
+  FAIL_FAST: '快速失败',
+  CONTINUE_INDEPENDENT_BRANCHES: '继续独立分支',
+  TERMINATE_ALL: '终止全部',
+};
+
 const ACTIVE_RUNTIME_STATUSES = new Set([
   'CREATED',
   'WAITING',
@@ -122,9 +127,12 @@ const formatTime = (value?: string) => {
   return date.toLocaleString();
 };
 
-const shortId = (value?: string) => {
-  if (!value) return '-';
-  return value.length > 22 ? `${value.slice(0, 19)}...` : value;
+const formatDuration = (seconds?: number) => {
+  if (!seconds || seconds <= 0) return '未设置';
+  if (seconds < 60) return `${seconds} 秒`;
+  if (seconds % 3600 === 0) return `${seconds / 3600} 小时`;
+  if (seconds % 60 === 0) return `${seconds / 60} 分钟`;
+  return `${seconds} 秒`;
 };
 
 const runtimeTone = (status?: string) => {
@@ -167,6 +175,46 @@ const runtimeTone = (status?: string) => {
     className: 'border-[#e4e7ec] bg-[#f7f7f8] text-[#667085]',
     dotClassName: 'bg-[#98a2b3]',
   };
+};
+
+const getRuntimeHint = (
+  runtimeStatus: string | undefined,
+  definitionStatus: WorkflowDefinitionStatus,
+) => {
+  if (!runtimeStatus) {
+    return definitionStatus === 'ONLINE'
+      ? '已上线，可直接运行'
+      : '上线后可运行';
+  }
+
+  switch (runtimeStatus) {
+    case 'RUNNING':
+      return '存在活动执行，暂不可下线';
+    case 'PAUSING':
+      return '正在暂停当前执行';
+    case 'PAUSED':
+      return '执行已暂停，可恢复后继续';
+    case 'RESUMING':
+      return '正在恢复当前执行';
+    case 'CREATED':
+    case 'WAITING':
+    case 'READY':
+    case 'SUBMITTED':
+      return '执行已提交，等待运行';
+    case 'SUCCESS':
+      return '最近一次执行已成功完成';
+    case 'SUCCESS_WITH_WARNINGS':
+    case 'WARNING':
+      return '最近一次执行完成，但存在告警';
+    case 'FAILED':
+      return '最近一次执行失败';
+    case 'TIMED_OUT':
+      return '最近一次执行超时';
+    case 'CANCELED':
+      return '最近一次执行已取消';
+    default:
+      return '查看运行记录获取更多信息';
+  }
 };
 
 export default function WorkflowDefinitionList() {
@@ -233,7 +281,6 @@ export default function WorkflowDefinitionList() {
 
       return (
         item.name.toLowerCase().includes(normalizedKeyword) ||
-        item.id.toLowerCase().includes(normalizedKeyword) ||
         (item.description || '').toLowerCase().includes(normalizedKeyword)
       );
     });
@@ -296,27 +343,6 @@ export default function WorkflowDefinitionList() {
     history.push(`/workflow/definition/${record.id}?scene=edit`);
   };
 
-  const copyId = async (id: string) => {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(id);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = id;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      message.success('工作流 ID 已复制');
-    } catch {
-      message.error('复制失败，请手动复制');
-    }
-  };
-
   const handleDelete = (record: WorkflowDefinition) => {
     Modal.confirm({
       centered: true,
@@ -362,7 +388,9 @@ export default function WorkflowDefinitionList() {
           meta.className,
         ].join(' ')}
       >
-        <span className={['h-1.5 w-1.5 rounded-full', meta.dotClassName].join(' ')} />
+        <span
+          className={['h-1.5 w-1.5 rounded-full', meta.dotClassName].join(' ')}
+        />
         {meta.label}
       </span>
     );
@@ -379,7 +407,9 @@ export default function WorkflowDefinitionList() {
           tone.className,
         ].join(' ')}
       >
-        <span className={['h-1.5 w-1.5 rounded-full', tone.dotClassName].join(' ')} />
+        <span
+          className={['h-1.5 w-1.5 rounded-full', tone.dotClassName].join(' ')}
+        />
         {status ? RUNTIME_LABEL[status] || status : '尚未运行'}
       </span>
     );
@@ -528,9 +558,9 @@ export default function WorkflowDefinitionList() {
 
   const columns = [
     {
-      title: '名称 / ID',
+      title: '工作流',
       dataIndex: 'name',
-      width: 250,
+      width: 310,
       render: (_value: string, record: WorkflowDefinition) => (
         <div className="min-w-0 py-0.5">
           <button
@@ -545,47 +575,32 @@ export default function WorkflowDefinitionList() {
           >
             {record.name || '未命名工作流'}
           </button>
-
-          <div className="mt-0.5 flex h-5 min-w-0 items-center gap-1 text-[11px] leading-5 text-[#98a2b3]">
-            <span className="truncate" title={record.id}>
-              ID：{record.id}
-            </span>
-            <Tooltip title="复制工作流 ID">
-              <Button
-                type="text"
-                size="small"
-                icon={<CopyOutlined className="text-[11px]" />}
-                className="!flex !h-5 !w-5 !min-w-0 !items-center !justify-center !p-0 !text-[#98a2b3] hover:!bg-[#f2f4f7] hover:!text-[#475467]"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void copyId(record.id);
-                }}
-              />
-            </Tooltip>
+          <div
+            title={record.description || ''}
+            className="mt-0.5 truncate text-[11px] leading-5 text-[#98a2b3]"
+          >
+            {record.description || '暂无描述'}
           </div>
         </div>
       ),
     },
     {
-      title: '工作流概况',
-      dataIndex: 'overview',
-      width: 320,
+      title: '编排信息',
+      dataIndex: 'topology',
+      width: 300,
       render: (_value: unknown, record: WorkflowDefinition) => (
-        <div className="min-w-0 py-0.5 text-[12px] leading-5 text-[#667085]">
-          <div
-            title={record.description || ''}
-            className="truncate text-[#475467]"
-          >
-            {record.description || '暂无工作流描述'}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#98a2b3]">
-            <span>{record.nodeCount} 个节点</span>
-            <span>{record.edgeCount} 条连线</span>
+        <div className="py-0.5 text-[12px] leading-5 text-[#667085]">
+          <div className="flex items-center gap-2 text-[#475467]">
             <span>
-              {record.workflowTimeoutSeconds > 0
-                ? `超时 ${record.workflowTimeoutSeconds} 秒`
-                : '未设置工作流超时'}
+              {record.nodeCount > 0 ? `${record.nodeCount} 个节点` : '尚未配置节点'}
             </span>
+            <span className="text-[#d0d5dd]">·</span>
+            <span>{record.edgeCount} 条依赖</span>
+          </div>
+          <div className="mt-1 text-[11px] text-[#98a2b3]">
+            超时：{formatDuration(record.workflowTimeoutSeconds)}
+            <span className="mx-1.5 text-[#d0d5dd]">·</span>
+            失败：{FAILURE_STRATEGY_LABEL[record.failureStrategy] || record.failureStrategy}
           </div>
         </div>
       ),
@@ -593,52 +608,55 @@ export default function WorkflowDefinitionList() {
     {
       title: '发布信息',
       dataIndex: 'status',
-      width: 210,
+      width: 230,
       render: (_value: WorkflowDefinitionStatus, record: WorkflowDefinition) => (
         <div className="py-0.5">
           <div className="flex flex-wrap items-center gap-1.5">
             {renderDefinitionStatus(record.status)}
-            {record.draftChanged && record.latestVersionNo > 0 && (
+            {record.draftChanged && (
               <span className="inline-flex h-6 items-center rounded-md bg-[#fff7e6] px-2 text-[11px] font-medium text-[#b54708]">
-                有未发布变更
+                配置有变更
               </span>
             )}
           </div>
           <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
-            <span>最新 V{record.latestVersionNo || 0}</span>
-            <span className="mx-1.5 text-[#d0d5dd]">·</span>
-            <span>
-              {record.activeVersionNo
-                ? `生效 V${record.activeVersionNo}`
-                : '暂无生效版本'}
-            </span>
+            {record.latestVersionNo > 0 ? (
+              <>
+                <span>最新 V{record.latestVersionNo}</span>
+                <span className="mx-1.5 text-[#d0d5dd]">·</span>
+                <span>
+                  {record.activeVersionNo
+                    ? `生效 V${record.activeVersionNo}`
+                    : '暂无生效版本'}
+                </span>
+              </>
+            ) : (
+              <span>尚未发布版本</span>
+            )}
           </div>
         </div>
       ),
     },
     {
-      title: '执行概况',
+      title: '执行状态',
       dataIndex: 'latestExecutionStatus',
-      width: 210,
+      width: 245,
       render: (_value: string | undefined, record: WorkflowDefinition) => (
         <div className="py-0.5">
           {renderRuntimeStatus(record.latestExecutionStatus)}
-          <div
-            title={record.latestExecutionId || ''}
-            className="mt-1.5 truncate text-[11px] leading-5 text-[#98a2b3]"
-          >
-            最近执行：{shortId(record.latestExecutionId)}
+          <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
+            {getRuntimeHint(record.latestExecutionStatus, record.status)}
           </div>
         </div>
       ),
     },
     {
-      title: '更新时间',
+      title: '时间',
       dataIndex: 'updateTime',
-      width: 175,
+      width: 200,
       render: (_value: string, record: WorkflowDefinition) => (
         <div className="text-[12px] leading-5 text-[#667085]">
-          <div className="whitespace-nowrap">{formatTime(record.updateTime)}</div>
+          <div className="whitespace-nowrap">更新：{formatTime(record.updateTime)}</div>
           <div className="whitespace-nowrap text-[11px] text-[#98a2b3]">
             创建：{formatTime(record.createTime)}
           </div>
@@ -725,7 +743,7 @@ export default function WorkflowDefinitionList() {
                     variant="filled"
                     value={keywordDraft}
                     prefix={<SearchOutlined className="text-[#98a2b3]" />}
-                    placeholder="搜索工作流名称、描述或 ID"
+                    placeholder="搜索工作流名称或描述"
                     className="!h-9 !w-[300px] !min-w-[220px]"
                     onChange={(event) => setKeywordDraft(event.target.value)}
                     onPressEnter={handleSearch}
@@ -768,7 +786,7 @@ export default function WorkflowDefinitionList() {
               <span className="mr-2 text-[14px] text-[#faad14]">▲</span>
               <span className="font-medium text-[#344054]">【提示】</span>
               <span>
-                工作流需完成任务节点配置并上线后才能运行；存在活动执行时不可直接下线。
+                工作流完成节点编排并上线后即可运行；存在活动执行时不可直接下线。
               </span>
             </div>
           </div>
