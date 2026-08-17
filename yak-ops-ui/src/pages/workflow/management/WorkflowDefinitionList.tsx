@@ -11,7 +11,14 @@ import {
   type WorkflowDefinitionStatus,
 } from '@/services/workflow/definitions';
 import {
+  CloudDownloadOutlined,
+  CloudUploadOutlined,
+  DeleteOutlined,
   DownOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -26,20 +33,13 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Table,
   Tooltip,
   message,
 } from 'antd';
 import type { MenuProps } from 'antd';
-import {
-  CirclePause,
-  CirclePlay,
-  CloudOff,
-  CloudUpload,
-  GitBranch,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type FilterKey = 'ALL' | WorkflowDefinitionStatus;
@@ -108,8 +108,6 @@ const RUNNING_RUNTIME_STATUSES = new Set([
   'READY',
   'SUBMITTED',
   'RUNNING',
-  'PAUSING',
-  'RESUMING',
 ]);
 
 const isActiveRuntime = (status?: string) =>
@@ -415,24 +413,56 @@ export default function WorkflowDefinitionList() {
     );
   };
 
-  const handleMoreAction = (key: string, record: WorkflowDefinition) => {
-    switch (key) {
-      case 'edit':
-        goToDefinition(record);
-        break;
-      case 'online':
-        void executeAction(
+  const confirmOnline = (record: WorkflowDefinition) => {
+    Modal.confirm({
+      centered: true,
+      title: '工作流上线',
+      content: '上线后工作流可以被手动运行或调度触发，确认上线吗？',
+      okText: '确认',
+      cancelText: '取消',
+      async onOk() {
+        await executeAction(
           record.id,
           () => onlineWorkflowDefinition(record.id),
           '工作流已上线',
         );
-        break;
-      case 'offline':
-        void executeAction(
+      },
+    });
+  };
+
+  const confirmOffline = (record: WorkflowDefinition) => {
+    if (isActiveRuntime(record.latestExecutionStatus)) {
+      message.warning('工作流存在活动执行，请先暂停或等待执行结束后再下线');
+      return;
+    }
+
+    Modal.confirm({
+      centered: true,
+      title: '工作流下线',
+      content: '下线后工作流将不能被手动运行或调度触发，确认下线吗？',
+      okText: '确认',
+      cancelText: '取消',
+      async onOk() {
+        await executeAction(
           record.id,
           () => offlineWorkflowDefinition(record.id),
           '工作流已下线',
         );
+      },
+    });
+  };
+
+  const handleMoreAction = (key: string, record: WorkflowDefinition) => {
+    switch (key) {
+      case 'view':
+      case 'edit':
+        goToDefinition(record);
+        break;
+      case 'online':
+        confirmOnline(record);
+        break;
+      case 'offline':
+        confirmOffline(record);
         break;
       case 'delete':
         handleDelete(record);
@@ -444,55 +474,83 @@ export default function WorkflowDefinitionList() {
 
   const getMoreMenuItems = (record: WorkflowDefinition): MenuProps['items'] => {
     const active = isActiveRuntime(record.latestExecutionStatus);
-    const items: MenuProps['items'] = [
+    const canEdit = record.status !== 'ONLINE' && !active;
+    const canDelete = record.status !== 'ONLINE' && !active;
+
+    return [
+      {
+        key: 'view',
+        icon: <EyeOutlined />,
+        label: '查看配置',
+      },
       {
         key: 'edit',
-        icon: <Pencil size={14} strokeWidth={1.9} />,
-        label: record.status === 'ONLINE' ? '查看配置' : '编辑配置',
+        icon: <EditOutlined />,
+        label: '编辑配置',
+        disabled: !canEdit,
+      },
+      { type: 'divider' },
+      {
+        key: record.status === 'ONLINE' ? 'offline' : 'online',
+        icon:
+          record.status === 'ONLINE' ? (
+            <CloudDownloadOutlined />
+          ) : (
+            <CloudUploadOutlined />
+          ),
+        label: record.status === 'ONLINE' ? '下线工作流' : '上线工作流',
+        disabled: active,
+      },
+      { type: 'divider' },
+      {
+        key: 'delete',
+        icon: <DeleteOutlined />,
+        label: '删除工作流',
+        danger: true,
+        disabled: !canDelete,
       },
     ];
+  };
 
-    if (record.status !== 'ONLINE') {
-      items.push({
-        key: 'online',
-        icon: <CloudUpload size={14} strokeWidth={1.9} />,
-        label: '上线',
-      });
-    } else {
-      items.push({
-        key: 'offline',
-        icon: <CloudOff size={14} strokeWidth={1.9} />,
-        label: active ? '下线（存在活动执行）' : '下线',
-        disabled: active,
-      });
-    }
-
-    if (record.status !== 'ONLINE' && !active) {
-      items.push({ type: 'divider' });
-      items.push({
-        key: 'delete',
-        icon: <Trash2 size={14} strokeWidth={1.9} />,
-        label: '删除',
-        danger: true,
-      });
-    }
-
-    return items;
+  const getRunDisabledReason = (record: WorkflowDefinition) => {
+    if (actionId && actionId !== record.id) return '正在处理其他工作流，请稍候';
+    if (record.status !== 'ONLINE') return '请先上线工作流';
+    if (record.nodeCount <= 0) return '请先完成节点编排';
+    if (!record.activeVersionNo) return '当前没有生效版本，请重新上线发布';
+    if (isActiveRuntime(record.latestExecutionStatus)) return '当前已有活动执行';
+    return undefined;
   };
 
   const renderPrimaryAction = (record: WorkflowDefinition) => {
     const busy = actionId === record.id;
     const runtimeStatus = record.latestExecutionStatus;
 
-    if (record.status !== 'ONLINE') {
+    if (runtimeStatus === 'PAUSING') {
       return (
         <Button
           size="small"
-          icon={<Pencil size={13} strokeWidth={1.9} />}
-          className="!h-7 !rounded-md !px-2.5 !text-[12px]"
-          onClick={() => goToDefinition(record)}
+          color="danger"
+          variant="filled"
+          disabled
+          icon={<PauseCircleOutlined />}
+          className="!h-7 !rounded-md !px-2.5 !text-xs"
         >
-          编辑
+          暂停中
+        </Button>
+      );
+    }
+
+    if (runtimeStatus === 'RESUMING') {
+      return (
+        <Button
+          size="small"
+          color="primary"
+          variant="filled"
+          disabled
+          icon={<PlayCircleOutlined />}
+          className="!h-7 !rounded-md !px-2.5 !text-xs"
+        >
+          恢复中
         </Button>
       );
     }
@@ -501,9 +559,12 @@ export default function WorkflowDefinitionList() {
       return (
         <Button
           size="small"
+          color="primary"
+          variant="filled"
           loading={busy}
-          icon={<CirclePlay size={13} strokeWidth={1.9} />}
-          className="!h-7 !rounded-md !px-2.5 !text-[12px]"
+          disabled={Boolean(actionId && !busy)}
+          icon={<PlayCircleOutlined />}
+          className="!h-7 !rounded-md !px-2.5 !text-xs"
           onClick={() =>
             void executeAction(
               record.id,
@@ -519,40 +580,76 @@ export default function WorkflowDefinitionList() {
 
     if (isRunningRuntime(runtimeStatus)) {
       return (
-        <Button
-          size="small"
-          loading={busy}
-          icon={<CirclePause size={13} strokeWidth={1.9} />}
-          className="!h-7 !rounded-md !px-2.5 !text-[12px]"
-          onClick={() =>
-            void executeAction(
+        <Popconfirm
+          title="暂停工作流"
+          description="确认暂停当前工作流执行吗？"
+          okText="确认"
+          cancelText="取消"
+          disabled={Boolean(actionId && !busy)}
+          onConfirm={() =>
+            executeAction(
               record.id,
               () => pauseWorkflowDefinition(record.id),
               '已请求暂停工作流',
             )
           }
         >
-          暂停
-        </Button>
+          <Button
+            size="small"
+            color="danger"
+            variant="filled"
+            loading={busy}
+            disabled={Boolean(actionId && !busy)}
+            icon={<PauseCircleOutlined />}
+            className="!h-7 !rounded-md !px-2.5 !text-xs"
+          >
+            暂停
+          </Button>
+        </Popconfirm>
       );
     }
 
+    const disabledReason = getRunDisabledReason(record);
+    const canRun = !disabledReason;
+
     return (
-      <Button
-        size="small"
-        loading={busy}
-        icon={<CirclePlay size={13} strokeWidth={1.9} />}
-        className="!h-7 !rounded-md !px-2.5 !text-[12px]"
-        onClick={() =>
-          void executeAction(
-            record.id,
-            () => runWorkflowDefinition(record.id),
-            '工作流已启动',
-          )
-        }
-      >
-        运行
-      </Button>
+      <Tooltip title={disabledReason}>
+        <span className="inline-flex">
+          <Popconfirm
+            title="运行工作流"
+            description={
+              record.draftChanged
+                ? '当前存在未发布配置，本次将运行已生效版本。确认运行吗？'
+                : '确认运行当前工作流吗？'
+            }
+            okText="确认"
+            cancelText="取消"
+            disabled={!canRun}
+            onConfirm={() =>
+              executeAction(
+                record.id,
+                () => runWorkflowDefinition(record.id),
+                '工作流已启动',
+              )
+            }
+          >
+            <Button
+              size="small"
+              color={canRun ? 'primary' : 'default'}
+              variant="filled"
+              loading={busy}
+              disabled={!canRun}
+              icon={<PlayCircleOutlined />}
+              className={[
+                '!h-7 !rounded-md !px-2.5 !text-xs',
+                !canRun ? '!cursor-not-allowed !text-[#98a2b3]' : '',
+              ].join(' ')}
+            >
+              运行
+            </Button>
+          </Popconfirm>
+        </span>
+      </Tooltip>
     );
   };
 
@@ -666,25 +763,32 @@ export default function WorkflowDefinitionList() {
     {
       title: '操作',
       dataIndex: 'operate',
-      width: 170,
+      width: 190,
       fixed: 'right' as const,
       render: (_value: unknown, record: WorkflowDefinition) => (
-        <div className="flex min-h-7 items-center gap-1.5 whitespace-nowrap">
+        <div className="flex min-h-7 items-center gap-1 whitespace-nowrap">
           {renderPrimaryAction(record)}
           <Dropdown
             trigger={['click']}
+            placement="bottomRight"
             menu={{
               items: getMoreMenuItems(record),
-              onClick: ({ key }) => handleMoreAction(key, record),
+              onClick: ({ key, domEvent }) => {
+                domEvent.stopPropagation();
+                handleMoreAction(key, record);
+              },
             }}
           >
             <Button
-              type="text"
               size="small"
-              disabled={actionId === record.id}
-              className="!h-7 !rounded-md !px-2 !text-[12px] !text-[#667085] hover:!bg-[#f5f5f6] hover:!text-[#344054]"
+              color="default"
+              variant="text"
+              disabled={Boolean(actionId)}
+              className="!h-7 !rounded-md !px-2 !text-xs !text-[#667085]"
+              onClick={(event) => event.stopPropagation()}
             >
-              更多 <DownOutlined className="text-[10px]" />
+              更多
+              <DownOutlined className="text-[9px]" />
             </Button>
           </Dropdown>
         </div>
