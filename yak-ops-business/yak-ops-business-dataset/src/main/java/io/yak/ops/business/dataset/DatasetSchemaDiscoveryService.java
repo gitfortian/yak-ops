@@ -22,7 +22,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
-/** Discovers and freezes QUERY_REVISION output schema while a DatasetVersion is being created. */
+/** Discovers Dataset output schema from either legacy TaskRevision or Dataset-owned SQL. */
 @Service
 final class DatasetSchemaDiscoveryService {
 
@@ -47,9 +47,17 @@ final class DatasetSchemaDiscoveryService {
     return toFields(datasetId, discoverColumns(asset));
   }
 
-  /** Preview uses no persistent fieldId; DatasetService assigns stable ids when the version is saved. */
   List<DatasetService.FieldSpec> preview(TaskAsset asset) {
     return toPreviewFields(discoverColumns(asset));
+  }
+
+  List<DatasetService.FieldSpec> discover(long datasetId, String dataSourceId, String sql) {
+    return toFields(datasetId, discoverColumns(dataSourceId, sql, DEFAULT_TIMEOUT_SECONDS));
+  }
+
+  /** Preview owns no persistent fieldId; stable ids are assigned when a version is saved. */
+  List<DatasetService.FieldSpec> preview(String dataSourceId, String sql) {
+    return toPreviewFields(discoverColumns(dataSourceId, sql, DEFAULT_TIMEOUT_SECONDS));
   }
 
   private List<DataSourceSqlColumn> discoverColumns(TaskAsset asset) {
@@ -59,23 +67,29 @@ final class DatasetSchemaDiscoveryService {
         || resolved.revision().revisionNo() != asset.currentRevision().revisionNo()) {
       throw new IllegalStateException("Schema discovery 解析到的 TaskRevision 与发布快照不一致");
     }
-
     TaskDefinition definition = resolved.revision().definition();
     if (!"SQL".equalsIgnoreCase(definition.taskType())) {
       throw new IllegalArgumentException("Schema discovery 仅支持 SQL TaskRevision");
     }
-    String baseSql = DatasetSqlSafety.requireReadOnlyQuery(definition.content());
     SourceConfig config = sourceConfig(definition.configJson());
+    return discoverColumns(config.dataSourceId(), definition.content(), config.timeoutSeconds());
+  }
+
+  private List<DataSourceSqlColumn> discoverColumns(
+      String dataSourceId,
+      String sql,
+      int timeoutSeconds) {
+    String normalizedDataSourceId = requireDataSourceId(dataSourceId);
+    String baseSql = DatasetSqlSafety.requireReadOnlyQuery(sql);
     String discoverySql = "SELECT yak_dataset_source.* FROM (" + baseSql
         + ") yak_dataset_source LIMIT 1";
 
     DataSourceSqlResult result;
-    try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(config.dataSourceId())) {
-      result = executor.execute(new DataSourceSqlRequest(discoverySql, 1, config.timeoutSeconds()));
+    try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(normalizedDataSourceId)) {
+      result = executor.execute(new DataSourceSqlRequest(
+          discoverySql, 1, Math.min(Math.max(timeoutSeconds, 1), MAX_DISCOVERY_TIMEOUT_SECONDS)));
     }
-    if (!result.resultSet()) {
-      throw new IllegalStateException("Dataset schema discovery 没有返回结果集");
-    }
+    if (!result.resultSet()) throw new IllegalStateException("Dataset schema discovery 没有返回结果集");
     if (result.columns().isEmpty()) {
       throw new IllegalArgumentException("Dataset 来源查询没有可发现的输出字段");
     }
@@ -83,16 +97,11 @@ final class DatasetSchemaDiscoveryService {
   }
 
   private List<DatasetService.FieldSpec> toFields(long datasetId, List<DataSourceSqlColumn> columns) {
-    List<DatasetService.FieldSpec> preview = toPreviewFields(columns);
-    return preview.stream()
+    return toPreviewFields(columns).stream()
         .map(field -> new DatasetService.FieldSpec(
             stableFieldId(datasetId, field.physicalName()),
-            field.physicalName(),
-            field.displayName(),
-            field.dataType(),
-            field.nullable(),
-            field.description(),
-            field.defaultRole()))
+            field.physicalName(), field.displayName(), field.dataType(), field.nullable(),
+            field.description(), field.defaultRole()))
         .toList();
   }
 
@@ -110,22 +119,14 @@ final class DatasetSchemaDiscoveryService {
         throw new IllegalArgumentException(
             "Dataset 输出字段必须使用简单安全别名 [A-Za-z_][A-Za-z0-9_$]*：" + physicalName);
       }
-      String normalized = physicalName.toLowerCase(Locale.ROOT);
-      if (!names.add(normalized)) {
+      if (!names.add(physicalName.toLowerCase(Locale.ROOT))) {
         throw new IllegalArgumentException("Dataset 来源查询存在重复输出字段：" + physicalName);
       }
-
       DatasetFieldDataType dataType = dataType(column.jdbcType());
       DatasetFieldRole role = dataType == DatasetFieldDataType.NUMBER
           ? DatasetFieldRole.MEASURE : DatasetFieldRole.DIMENSION;
       fields.add(new DatasetService.FieldSpec(
-          null,
-          physicalName,
-          physicalName,
-          dataType,
-          column.nullable(),
-          null,
-          role));
+          null, physicalName, physicalName, dataType, column.nullable(), null, role));
     }
     return List.copyOf(fields);
   }
@@ -155,22 +156,22 @@ final class DatasetSchemaDiscoveryService {
     try {
       JsonNode root = objectMapper.readTree(raw);
       if (root == null || !root.isObject()) throw new IllegalArgumentException("SQL configJson 必须是 JSON 对象");
-      JsonNode dataSourceNode = root.get("dataSourceId");
-      String dataSourceId = dataSourceNode == null || dataSourceNode.isNull()
-          ? null : dataSourceNode.asText();
-      if (dataSourceId == null || dataSourceId.isBlank()) {
-        throw new IllegalArgumentException("SQL TaskRevision 缺少 dataSourceId，无法发现 Dataset schema");
-      }
+      String dataSourceId = root.path("dataSourceId").asText(null);
       int sourceTimeout = root.path("timeoutSeconds").asInt(DEFAULT_TIMEOUT_SECONDS);
       if (sourceTimeout < 1) sourceTimeout = DEFAULT_TIMEOUT_SECONDS;
       return new SourceConfig(
-          dataSourceId.trim(),
+          requireDataSourceId(dataSourceId),
           Math.min(sourceTimeout, MAX_DISCOVERY_TIMEOUT_SECONDS));
     } catch (IllegalArgumentException exception) {
       throw exception;
     } catch (Exception exception) {
       throw new IllegalArgumentException("SQL TaskRevision configJson 非法", exception);
     }
+  }
+
+  private String requireDataSourceId(String value) {
+    if (value == null || value.isBlank()) throw new IllegalArgumentException("Dataset 必须选择数据源");
+    return value.trim();
   }
 
   private record SourceConfig(String dataSourceId, int timeoutSeconds) {
