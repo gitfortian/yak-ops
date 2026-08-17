@@ -27,6 +27,7 @@ interface Props {
   definitions: WorkflowDefinition[];
   workflowId?: string;
   schedule?: WorkflowSchedule;
+  lockWorkflow?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }
@@ -36,6 +37,7 @@ const ScheduleEditorDrawer = ({
   definitions,
   workflowId,
   schedule,
+  lockWorkflow = false,
   onClose,
   onSaved,
 }: Props) => {
@@ -115,7 +117,7 @@ const ScheduleEditorDrawer = ({
         <Form.Item name="workflowId" label="工作流" rules={[{ required: true, message: '请选择工作流' }]}>
           <Select
             showSearch
-            disabled={Boolean(schedule)}
+            disabled={Boolean(schedule || lockWorkflow)}
             optionFilterProp="label"
             placeholder="选择要配置调度的工作流"
             options={definitions.map((item) => ({
