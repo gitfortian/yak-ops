@@ -8,7 +8,6 @@ import 'react-resizable/css/styles.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChartEditor } from './chart-editor';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
-import { DashboardGlobalFilterConfig } from './global-filter-config';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
@@ -29,7 +28,6 @@ export default function DashboardEditorPage() {
   const designer = useDashboardDesigner(dashboardId, initialPreview, false);
   const { width, containerRef, mounted } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [filterConfigOpen, setFilterConfigOpen] = useState(false);
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
     x: widget.x,
@@ -40,10 +38,10 @@ export default function DashboardEditorPage() {
     minH: widget.minH,
   })), [designer.widgets]);
   const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
-  const hasFilterBar = !designer.preview || hasGlobalFilters;
-  let canvasMinHeight = 'min-h-[calc(100vh-132px)]';
+  const showRuntimeFilterBar = designer.preview && hasGlobalFilters;
+  let canvasMinHeight = 'min-h-[calc(100vh-88px)] 2xl:min-h-[calc(100vh-56px)]';
   if (designer.preview) {
-    canvasMinHeight = hasFilterBar
+    canvasMinHeight = showRuntimeFilterBar
       ? 'min-h-[calc(100vh-140px)]'
       : 'min-h-[calc(100vh-96px)]';
   }
@@ -167,7 +165,7 @@ export default function DashboardEditorPage() {
 
   return (
     <div
-      className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#f6f7f9]"
+      className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#f3f4f6]"
       style={BRAND_CSS_VARIABLES}
     >
       <DashboardToolbar
@@ -199,29 +197,31 @@ export default function DashboardEditorPage() {
         onPublish={publishDashboard}
       />
 
-      <DashboardGlobalFilterBar
-        filters={designer.dashboard.globalFilters}
-        runtimeValues={designer.runtimeFilterValues}
-        widgets={designer.widgets}
-        datasets={designer.datasets}
-        analyses={designer.analyses}
-        editable={!designer.preview}
-        onRuntimeValue={designer.setRuntimeFilterValue}
-        onReset={designer.resetRuntimeFilters}
-        onManage={() => setFilterConfigOpen(true)}
-      />
+      {showRuntimeFilterBar ? (
+        <DashboardGlobalFilterBar
+          filters={designer.dashboard.globalFilters}
+          runtimeValues={designer.runtimeFilterValues}
+          widgets={designer.widgets}
+          datasets={designer.datasets}
+          analyses={designer.analyses}
+          editable={false}
+          onRuntimeValue={designer.setRuntimeFilterValue}
+          onReset={designer.resetRuntimeFilters}
+          onManage={() => undefined}
+        />
+      ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <main className="min-w-0 flex-1 overflow-auto bg-[#f6f7f9]">
+        <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">
           <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4 2xl:p-0'}>
             <div
               ref={containerRef}
               className={[
-                'min-w-[760px] bg-white',
+                'min-w-[760px]',
                 canvasMinHeight,
                 designer.preview
-                  ? 'mx-auto max-w-[1480px] rounded-[10px] border border-[#e7e9ed] shadow-[0_6px_24px_rgba(16,24,40,.055)]'
-                  : 'dashboard-grid-canvas mx-auto max-w-[1540px] rounded-[10px] border border-[#e3e6ea] shadow-[0_2px_8px_rgba(16,24,40,.035)] 2xl:mx-0 2xl:max-w-none 2xl:rounded-none 2xl:border-0 2xl:shadow-none',
+                  ? 'mx-auto max-w-[1480px] rounded-[10px] border border-[#e7e9ed] bg-white shadow-[0_6px_24px_rgba(16,24,40,.055)]'
+                  : 'dashboard-grid-canvas mx-auto max-w-[1540px] rounded-[10px] 2xl:mx-0 2xl:max-w-none 2xl:rounded-none',
               ].join(' ')}
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) designer.setSelectedId(undefined);
@@ -286,7 +286,7 @@ export default function DashboardEditorPage() {
               {!designer.widgets.length && !designer.datasetsLoading ? (
                 <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
                   <div className="max-w-[340px]">
-                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[10px] bg-[#f4f5f6] text-[#7a818c]">
+                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[10px] bg-white text-[#7a818c] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
                       <BarChart3 size={18} />
                     </div>
                     <div className="mt-3 text-[14px] font-semibold text-[#344054]">
@@ -336,16 +336,6 @@ export default function DashboardEditorPage() {
         ) : null}
       </div>
 
-      <DashboardGlobalFilterConfig
-        open={filterConfigOpen}
-        filters={designer.dashboard.globalFilters}
-        widgets={designer.widgets}
-        datasets={designer.datasets}
-        analyses={designer.analyses}
-        onChange={designer.updateGlobalFilters}
-        onClose={() => setFilterConfigOpen(false)}
-      />
-
       {designer.persisted ? (
         <DashboardVersionHistoryDrawer
           open={historyOpen}
@@ -361,8 +351,8 @@ export default function DashboardEditorPage() {
 
       <style>{`
         .dashboard-grid-canvas {
-          background-color: #fff;
-          background-image: radial-gradient(circle, rgba(15, 23, 42, .075) 1px, transparent 1px);
+          background-color: #f3f4f6;
+          background-image: radial-gradient(circle, rgba(15, 23, 42, .035) 1px, transparent 1px);
           background-size: calc(100% / 24) 36px;
           background-position: 10px 10px;
         }
