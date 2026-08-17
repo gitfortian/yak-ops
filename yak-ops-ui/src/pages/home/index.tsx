@@ -1,11 +1,11 @@
 import {
+  ArrowRightLeft,
+  BarChart3,
   ChevronRight,
-  FileText,
-  Image as ImageIcon,
-  Play,
-  UserRound,
-  Video,
-  WandSparkles,
+  Code2,
+  Database,
+  ShieldCheck,
+  Workflow,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -35,49 +35,49 @@ interface ActionItem {
 
 const createItems: ActionItem[] = [
   {
-    key: 'avatar',
-    title: 'AI分身',
-    description: '创造陪伴用户的另一个“你”',
+    key: 'data-source',
+    title: '数据源管理',
+    description: '连接和管理你的数据源',
     theme: 'avatar',
-    icon: <UserRound size={18} strokeWidth={2.2} />,
+    icon: <Database size={18} strokeWidth={2.2} />,
   },
   {
-    key: 'workshop',
-    title: 'AI工坊',
-    description: '把好想法变成好玩法',
+    key: 'offline-sync',
+    title: '离线同步',
+    description: '创建和管理离线同步任务',
     theme: 'workshop',
-    icon: <WandSparkles size={18} strokeWidth={2.2} />,
+    icon: <ArrowRightLeft size={18} strokeWidth={2.2} />,
   },
 ];
 
 const publishItems: ActionItem[] = [
   {
-    key: 'video',
-    title: '发布高清视频',
-    description: '支持常用格式，推荐mp4',
+    key: 'development',
+    title: '数据开发',
+    description: '编写、调试和发布数据任务',
     theme: 'video',
-    icon: <Play size={18} fill="currentColor" strokeWidth={0} />,
+    icon: <Code2 size={18} strokeWidth={2.2} />,
   },
   {
-    key: 'image',
-    title: '发布图文',
-    description: '支持常用图片格式，如png/jpg等',
+    key: 'workflow',
+    title: '工作流',
+    description: '编排任务并配置运行调度',
     theme: 'image',
-    icon: <ImageIcon size={18} strokeWidth={2.3} />,
+    icon: <Workflow size={18} strokeWidth={2.2} />,
   },
   {
-    key: 'panorama',
-    title: '发布全景视频',
-    description: '推荐分辨率为4K及以上',
+    key: 'quality',
+    title: '数据质量',
+    description: '监控并检查数据质量',
     theme: 'panorama',
-    icon: <Video size={18} strokeWidth={2.3} />,
+    icon: <ShieldCheck size={18} strokeWidth={2.2} />,
   },
   {
-    key: 'article',
-    title: '发布文章',
-    description: '支持上传20000字文本和30个图片素材',
+    key: 'application',
+    title: '数据应用',
+    description: '分析、共享和服务数据',
     theme: 'article',
-    icon: <FileText size={18} strokeWidth={2.3} />,
+    icon: <BarChart3 size={18} strokeWidth={2.2} />,
   },
 ];
 
@@ -471,28 +471,28 @@ export default function CreatorWorkbenchPage() {
     console.log('creator action:', key);
 
     switch (key) {
-      case 'avatar':
-        // TODO AI 分身
+      case 'data-source':
+        // TODO 数据源管理
         break;
 
-      case 'workshop':
-        // TODO AI 工坊
+      case 'offline-sync':
+        // TODO 离线同步
         break;
 
-      case 'video':
-        // TODO 发布高清视频
+      case 'development':
+        // TODO 数据开发
         break;
 
-      case 'image':
-        // TODO 发布图文
+      case 'workflow':
+        // TODO 工作流
         break;
 
-      case 'panorama':
-        // TODO 发布全景视频
+      case 'quality':
+        // TODO 数据质量
         break;
 
-      case 'article':
-        // TODO 发布文章
+      case 'application':
+        // TODO 数据应用
         break;
 
       default:
@@ -602,7 +602,7 @@ export default function CreatorWorkbenchPage() {
                 shadow-[0_2px_4px_rgba(31,35,41,0.04)]
               "
             >
-              <UserRound size={30} strokeWidth={1.5} />
+              <Database size={30} strokeWidth={1.5} />
             </div>
 
             {/* Info */}
@@ -618,7 +618,7 @@ export default function CreatorWorkbenchPage() {
                     text-[#252830]
                   "
                 >
-                  正函数
+                  Yak Ops
                 </span>
 
                 <span className="mx-3 h-[14px] w-px shrink-0 bg-black/[0.14]" />
@@ -632,7 +632,7 @@ export default function CreatorWorkbenchPage() {
                     text-[#777b84]
                   "
                 >
-                  抖音号：83644455250
+                  Data Operations Platform
                 </span>
 
                 <span className="mx-3 h-[14px] w-px shrink-0 bg-black/[0.14]" />
@@ -646,27 +646,27 @@ export default function CreatorWorkbenchPage() {
                     text-[#777b84]
                   "
                 >
-                  见路不走
+                  让数据接入、开发、编排、质量与消费变得更简单
                 </span>
               </div>
 
               {/* 第二行 */}
               <div className="mt-2.5 flex items-center gap-[27px]">
                 <ProfileStat
-                  label="关注"
-                  value={159}
+                  label="数据源"
+                  value={0}
                   arrow
                 />
 
                 <ProfileStat
-                  label="粉丝"
-                  value={10}
+                  label="运行中"
+                  value={0}
                   arrow
                 />
 
                 <ProfileStat
-                  label="获赞"
-                  value={1}
+                  label="今日异常"
+                  value={0}
                 />
               </div>
             </div>
@@ -688,10 +688,10 @@ export default function CreatorWorkbenchPage() {
             "
           >
             {/* =================================================
-                智能创作
+                数据接入
             ================================================== */}
 
-            <Section title="智能创作">
+            <Section title="数据接入">
               <div className="grid gap-[13px]">
                 {createItems.map((item) => (
                   <ActionCard
@@ -704,11 +704,11 @@ export default function CreatorWorkbenchPage() {
             </Section>
 
             {/* =================================================
-                作品发布
+                数据工作
             ================================================== */}
 
             <Section
-              title="作品发布"
+              title="数据工作"
               className="bg-white/[0.74]"
             >
               <div
