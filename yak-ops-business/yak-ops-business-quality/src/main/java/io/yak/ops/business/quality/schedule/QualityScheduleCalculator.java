@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +33,20 @@ public class QualityScheduleCalculator {
     };
   }
 
+  /** 将数据质量的友好调度配置统一转换成 Yak Schedule/Quartz 使用的 Cron。 */
+  public String cronExpression(
+      ScheduleFrequency frequency,
+      String scheduleTime,
+      ScheduleWeekday weekday,
+      String cronExpression) {
+    if (frequency == null) throw new IllegalArgumentException("调度触发必须选择调度周期");
+    return switch (frequency) {
+      case DAILY -> dailyCron(parseTime(scheduleTime));
+      case WEEKLY -> weeklyCron(parseTime(scheduleTime), requiredWeekday(weekday));
+      case CRON -> normalizeQuartzCron(cronExpression);
+    };
+  }
+
   public void validateCron(String expression) { parseCron(expression); }
 
   private LocalDateTime nextDaily(LocalTime time, LocalDateTime from) {
@@ -51,6 +66,27 @@ public class QualityScheduleCalculator {
     LocalDateTime next = parseCron(expression).next(from);
     if (next == null) throw new IllegalArgumentException("Cron 表达式无法计算下一次执行时间");
     return next;
+  }
+
+  private String dailyCron(LocalTime time) {
+    return "0 " + time.getMinute() + " " + time.getHour() + " * * ?";
+  }
+
+  private String weeklyCron(LocalTime time, ScheduleWeekday weekday) {
+    return "0 " + time.getMinute() + " " + time.getHour() + " ? * " + weekday.name();
+  }
+
+  private String normalizeQuartzCron(String value) {
+    validateCron(value);
+    String[] fields = value.trim().replaceAll("\\s+", " ").split(" ");
+    if (fields.length >= 6) {
+      if ("*".equals(fields[3]) && !"?".equals(fields[5])) {
+        fields[3] = "?";
+      } else if (!"?".equals(fields[3]) && "*".equals(fields[5])) {
+        fields[5] = "?";
+      }
+    }
+    return String.join(" ", Arrays.asList(fields));
   }
 
   private LocalTime parseTime(String value) {
