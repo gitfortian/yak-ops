@@ -33,8 +33,6 @@ export interface ResolvedDashboardTheme {
   };
   table: {
     headerBackgroundColor: string;
-    textColor: string;
-    borderColor: string;
     stripedBackgroundColor: string;
     hoverBackgroundColor: string;
   };
@@ -68,8 +66,6 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
     },
     table: {
       headerBackgroundColor: '#fafafa',
-      textColor: '#344054',
-      borderColor: '#e7eaf0',
       stripedBackgroundColor: '#fafbfc',
       hoverBackgroundColor: '#f7f8fa',
     },
@@ -101,8 +97,6 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
     },
     table: {
       headerBackgroundColor: '#182230',
-      textColor: '#e7edf5',
-      borderColor: '#344054',
       stripedBackgroundColor: '#202b3a',
       hoverBackgroundColor: '#29384b',
     },
@@ -134,8 +128,6 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
     },
     table: {
       headerBackgroundColor: '#0b2944',
-      textColor: '#d8ecfa',
-      borderColor: '#163b59',
       stripedBackgroundColor: '#0c2841',
       hoverBackgroundColor: '#103553',
     },
@@ -167,8 +159,6 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
     },
     table: {
       headerBackgroundColor: '#2b2c30',
-      textColor: '#e4e4e7',
-      borderColor: '#3f3f46',
       stripedBackgroundColor: '#292a2e',
       hoverBackgroundColor: '#34353a',
     },
@@ -200,8 +190,6 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
     },
     table: {
       headerBackgroundColor: '#f1f6fb',
-      textColor: '#344a63',
-      borderColor: '#d6e0eb',
       stripedBackgroundColor: '#f5f9fc',
       hoverBackgroundColor: '#eaf2f9',
     },
@@ -276,8 +264,6 @@ export const analysisThemeFromDashboardTheme = (
     headerBackgroundColor: resolved.table.headerBackgroundColor,
     stripedBackgroundColor: resolved.table.stripedBackgroundColor,
     hoverBackgroundColor: resolved.table.hoverBackgroundColor,
-    tableTextColor: resolved.table.textColor,
-    tableBorderColor: resolved.table.borderColor,
     tooltipBackgroundColor: resolved.chart.tooltipBackgroundColor,
     tooltipTextColor: resolved.chart.tooltipTextColor,
     metricValueColor: resolved.chart.metricValueColor,
