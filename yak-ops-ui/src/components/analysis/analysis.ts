@@ -122,7 +122,9 @@ export const analysisMetricValues = (
 ): Array<number | null> => {
   const config = metricComputationFor(spec, metric.field);
   const raw = result.rows.map((_, rowIndex) => rawMetricValue(result, rowIndex, metric));
-  if (config.quickCalculation === 'none') return raw;
+  // A metric card has no category sequence. Keep any calculation selected on another chart
+  // type parked in the persisted analysis config, but render the single aggregated value.
+  if (spec.type === 'metric' || config.quickCalculation === 'none') return raw;
 
   const colorField = resolveAnalysisEncoding(spec).color.find((item) => item.role === 'dimension')?.field;
   const groupKeys = result.rows.map((_, rowIndex) => scalarKey(dimensionValue(result, rowIndex, colorField)));
@@ -179,23 +181,25 @@ export const analysisMetricValues = (
 };
 
 const effectiveNumberFormat = (
+  type: AnalysisSpec['type'],
   config: Required<AnalysisMetricComputation>,
 ): Exclude<AnalysisNumberFormat, 'auto'> => {
   if (config.numberFormat !== 'auto') return config.numberFormat;
+  if (type === 'metric') return 'number';
   return config.quickCalculation === 'percent_of_total' || config.quickCalculation === 'previous_change'
     ? 'percent'
     : 'number';
 };
 
 export const formatAnalysisMetricValue = (
-  spec: Pick<AnalysisSpec, 'analysis'>,
+  spec: Pick<AnalysisSpec, 'analysis' | 'type'>,
   metric: MetricBinding,
   value: number | null | undefined,
 ) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const stored = spec.analysis?.metrics?.[metric.field];
   const config = metricComputationFor(spec, metric.field);
-  const format = effectiveNumberFormat(config);
+  const format = effectiveNumberFormat(spec.type, config);
   const explicitDecimals = stored?.decimalPlaces;
   const options: Intl.NumberFormatOptions = {
     useGrouping: config.useGrouping,
