@@ -107,20 +107,22 @@ export function DashboardChartSheetWorkspace({
         </div>
       </main>
 
-      <ChartSheetConfigPanel
-        currentDashboardId={currentDashboardId}
-        widget={widget}
-        datasets={datasets}
-        analyses={analyses}
-        globalFilters={globalFilters}
-        interactions={interactions}
-        updateWidget={updateWidget}
-        updateInlineAnalysis={updateInlineAnalysis}
-        updateInteractions={updateInteractions}
-        changeDataset={changeDataset}
-        detachAnalysis={detachAnalysis}
-        onDone={onDone}
-      />
+      <div className="flex shrink-0 border-l border-[#e3e6ea]">
+        <ChartSheetConfigPanel
+          currentDashboardId={currentDashboardId}
+          widget={widget}
+          datasets={datasets}
+          analyses={analyses}
+          globalFilters={globalFilters}
+          interactions={interactions}
+          updateWidget={updateWidget}
+          updateInlineAnalysis={updateInlineAnalysis}
+          updateInteractions={updateInteractions}
+          changeDataset={changeDataset}
+          detachAnalysis={detachAnalysis}
+          onDone={onDone}
+        />
+      </div>
     </div>
   );
 }
