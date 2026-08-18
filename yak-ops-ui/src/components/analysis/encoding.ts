@@ -123,8 +123,8 @@ const metricProjection = (bindings: AnalysisEncodingBinding[]): MetricBinding[] 
 
 /**
  * Keeps the existing query/render contract alive while encoding becomes the editor's
- * semantic source of truth. Inactive channels remain persisted in `encoding`, but do
- * not leak into the legacy query projection for a chart type that cannot render them.
+ * semantic source of truth. Inactive and overflow bindings stay persisted in
+ * `encoding`; only the active chart slots are projected into dimensions / metrics.
  */
 export const applyAnalysisEncoding = <T extends AnalysisSpec>(
   spec: T,
@@ -138,38 +138,40 @@ export const applyAnalysisEncoding = <T extends AnalysisSpec>(
     encoding: cloneAnalysisEncoding(encoding),
     dimensions: categoryRule
       ? encoding.category
-        .filter((binding) => binding.role === 'dimension')
+        .filter((binding) => categoryRule.roles.includes(binding.role) && binding.role === 'dimension')
         .slice(0, categoryRule.max)
         .map((binding) => binding.field)
       : [],
     metrics: valueRule
-      ? metricProjection(encoding.value).slice(0, valueRule.max)
+      ? metricProjection(
+        encoding.value.filter((binding) => valueRule.roles.includes(binding.role)),
+      ).slice(0, valueRule.max)
       : [],
   };
 };
 
-const sanitizeChannel = (
+const compatibleChannel = (
   bindings: AnalysisEncodingBinding[],
   rule: AnalysisEncodingSlotRule,
 ) => bindings
   .filter((binding) => rule.roles.includes(binding.role))
-  .slice(0, rule.max)
   .map(cloneBinding);
 
 /**
- * Chart switching preserves every inactive semantic channel, while active channels are
- * validated and trimmed to the target chart's capacity. This is what makes switching
- * metric -> bar -> metric reversible instead of destructively clearing field choices.
+ * Chart switching is non-destructive: incompatible roles are discarded for channels
+ * activated by the target chart, but bindings beyond the target slot capacity remain
+ * parked in the semantic channel. Switching back can therefore restore them.
  */
 export const changeAnalysisEncodingType = <T extends AnalysisSpec>(
   spec: T,
   type: ChartType,
 ): T => {
   const encoding = resolveAnalysisEncoding(spec);
-  const nextRules = ANALYSIS_ENCODING_RULES[type];
   const next = cloneAnalysisEncoding(encoding);
-  nextRules.forEach((rule) => {
-    next[rule.channel] = sanitizeChannel(next[rule.channel], rule);
+  ANALYSIS_ENCODING_RULES[type].forEach((rule) => {
+    const compatible = compatibleChannel(next[rule.channel], rule);
+    const incompatible = next[rule.channel].filter((binding) => !rule.roles.includes(binding.role));
+    next[rule.channel] = [...compatible, ...incompatible];
   });
   return applyAnalysisEncoding({ ...spec, type } as T, next);
 };
@@ -204,24 +206,24 @@ const fillRequiredBindings = (
 ) => {
   const next = cloneAnalysisEncoding(encoding);
   ANALYSIS_ENCODING_RULES[type].forEach((rule) => {
-    const sanitized = sanitizeChannel(next[rule.channel], rule);
-    if (sanitized.length >= rule.min) {
-      next[rule.channel] = sanitized;
-      return;
-    }
-    const used = new Set(sanitized.map((binding) => binding.field));
+    const compatible = next[rule.channel].filter((binding) => rule.roles.includes(binding.role));
+    const active = compatible.slice(0, rule.max);
+    if (active.length >= rule.min) return;
+
+    const used = new Set(next[rule.channel].map((binding) => binding.field));
     const candidates = dataset.fields.filter((field) => (
       rule.roles.includes(field.role) && !used.has(field.key)
     ));
-    const missing = Math.max(0, rule.min - sanitized.length);
+    const missing = Math.max(0, rule.min - active.length);
     next[rule.channel] = [
-      ...sanitized,
+      ...compatible,
       ...candidates.slice(0, missing).map((field) => ({
         field: field.key,
         role: field.role,
         aggregation: field.role === 'metric' ? 'SUM' as Aggregation : undefined,
       })),
-    ].slice(0, rule.max);
+      ...next[rule.channel].filter((binding) => !rule.roles.includes(binding.role)),
+    ];
   });
   return next;
 };
@@ -268,9 +270,10 @@ export const updateEncodingMetricAggregation = <T extends AnalysisSpec>(
 export const encodingMeetsChartRequirements = (spec: AnalysisSpec) => {
   const encoding = resolveAnalysisEncoding(spec);
   return ANALYSIS_ENCODING_RULES[spec.type].every((rule) => {
-    const validCount = encoding[rule.channel]
+    const activeCount = encoding[rule.channel]
       .filter((binding) => rule.roles.includes(binding.role))
+      .slice(0, rule.max)
       .length;
-    return validCount >= rule.min && validCount <= rule.max;
+    return activeCount >= rule.min;
   });
 };
