@@ -2,6 +2,7 @@ import type { AnalysisSpec, Scalar } from '@/components/analysis/model';
 import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
+import { normalizeDashboardDocument } from './dashboard-integrity';
 import type {
   DashboardDocument,
   DashboardGlobalFilter,
@@ -181,15 +182,35 @@ export const toDashboardServerDetail = (value: DashboardDetailWire): DashboardSe
   interactions: (value.interactions || []).map(interaction),
 });
 
-const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardVersionDetail => ({
-  dashboard: summary(value.dashboard),
-  version: version(value.version),
-  widgets: (value.widgets || []).map(widget),
-  globalFilters: (value.globalFilters || []).map(globalFilter),
-  interactions: (value.interactions || []).map(interaction),
-});
+const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardVersionDetail => {
+  const dashboard = summary(value.dashboard);
+  const versionDetail = version(value.version);
+  const normalized = normalizeDashboardDocument({
+    version: 1,
+    id: dashboard.id,
+    name: versionDetail.name,
+    description: versionDetail.description,
+    activeDatasetId: versionDetail.activeDatasetId || '',
+    widgets: (value.widgets || []).map(widget),
+    globalFilters: (value.globalFilters || []).map(globalFilter),
+    interactions: (value.interactions || []).map(interaction),
+    currentVersionNo: versionDetail.versionNo,
+    currentVersionId: versionDetail.id,
+    publishedVersionNo: dashboard.publishedVersionNo,
+    publishedVersionId: dashboard.publishedVersionId,
+    publishedAt: dashboard.publishedTime,
+    updatedAt: dashboard.updateTime,
+  });
+  return {
+    dashboard,
+    version: versionDetail,
+    widgets: normalized.widgets,
+    globalFilters: normalized.globalFilters,
+    interactions: normalized.interactions,
+  };
+};
 
-export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDocument => ({
+export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDocument => normalizeDashboardDocument({
   version: 1,
   id: detail.dashboard.id,
   name: detail.currentVersion?.name || detail.dashboard.name,
@@ -206,40 +227,43 @@ export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDoc
   updatedAt: detail.dashboard.updateTime,
 });
 
-const payload = (document: DashboardDocument) => ({
-  name: document.name,
-  description: document.description || undefined,
-  activeDatasetId: document.activeDatasetId || undefined,
-  widgets: document.widgets.map((item) => ({
-    widgetKey: item.id,
-    analysisId: item.analysisId,
-    title: item.title,
-    inlineAnalysis: item.inlineAnalysis,
-    x: item.x,
-    y: item.y,
-    w: item.w,
-    h: item.h,
-    minW: item.minW,
-    minH: item.minH,
-  })),
-  globalFilters: document.globalFilters.map((filter) => ({
-    filterKey: filter.id,
-    name: filter.name,
-    operator: operatorToWire(filter.operator),
-    defaultValue: filter.defaultValue,
-    bindings: filter.bindings.map((binding) => ({
-      widgetKey: binding.widgetId,
-      fieldId: binding.field,
+const payload = (document: DashboardDocument) => {
+  const normalized = normalizeDashboardDocument(document);
+  return {
+    name: normalized.name,
+    description: normalized.description || undefined,
+    activeDatasetId: normalized.activeDatasetId || undefined,
+    widgets: normalized.widgets.map((item) => ({
+      widgetKey: item.id,
+      analysisId: item.analysisId,
+      title: item.title,
+      inlineAnalysis: item.inlineAnalysis,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+      minW: item.minW,
+      minH: item.minH,
     })),
-  })),
-  interactions: document.interactions.map((item) => ({
-    interactionKey: item.id,
-    event: 'SELECT',
-    sourceWidgetKey: item.sourceWidgetId,
-    sourceFieldId: item.sourceField,
-    targetFilterKey: item.targetFilterId,
-  })),
-});
+    globalFilters: normalized.globalFilters.map((filter) => ({
+      filterKey: filter.id,
+      name: filter.name,
+      operator: operatorToWire(filter.operator),
+      defaultValue: filter.defaultValue,
+      bindings: filter.bindings.map((binding) => ({
+        widgetKey: binding.widgetId,
+        fieldId: binding.field,
+      })),
+    })),
+    interactions: normalized.interactions.map((item) => ({
+      interactionKey: item.id,
+      event: 'SELECT',
+      sourceWidgetKey: item.sourceWidgetId,
+      sourceFieldId: item.sourceField,
+      targetFilterKey: item.targetFilterId,
+    })),
+  };
+};
 
 export const fetchDashboards = async (): Promise<DashboardSummary[]> => {
   const values = unwrap(await HttpUtils.get<DashboardAssetWire[]>(DASHBOARD_API), '查询 Dashboard 列表失败');
