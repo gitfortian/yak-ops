@@ -33,6 +33,7 @@ export function DashboardToolbar({
   onUndo,
   onRedo,
   onAddChart,
+  onDashboardStyle,
   onHistory,
   onPreview,
   onSaveDraft,
@@ -57,6 +58,7 @@ export function DashboardToolbar({
   onUndo: () => void;
   onRedo: () => void;
   onAddChart: () => void;
+  onDashboardStyle: () => void;
   onHistory: () => void;
   onPreview: () => void;
   onSaveDraft: () => void;
@@ -188,6 +190,7 @@ export function DashboardToolbar({
                 size="small"
                 className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                 icon={<Palette size={13} />}
+                onClick={onDashboardStyle}
               >
                 仪表盘样式
               </Button>

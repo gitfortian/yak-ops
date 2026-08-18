@@ -5,9 +5,11 @@ import { BarChart3 } from 'lucide-react';
 import ReactGridLayout, { useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DashboardChartSheetWorkspace } from './chart-sheet-workspace';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
+import { DashboardThemeDrawer } from './dashboard-theme-drawer';
+import { resolveDashboardTheme, themeFromPreset } from './dashboard-theme';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import {
   directCrossFiltersForWidget,
@@ -15,7 +17,7 @@ import {
   sameDashboardSelection,
   type DashboardRuntimeSelections,
 } from './interaction-runtime';
-import type { AnalysisSelection } from './model';
+import type { AnalysisSelection, DashboardTheme } from './model';
 import { DashboardSheetBar } from './sheet-bar';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
@@ -36,10 +38,16 @@ export default function DashboardEditorPage() {
   const designer = useDashboardDesigner(dashboardId, initialPreview, false);
   const { width, containerRef, mounted, measureWidth } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [themePreview, setThemePreview] = useState<DashboardTheme>();
   const [activeSheet, setActiveSheet] = useState<'dashboard' | 'chart'>('dashboard');
   const [activeSheetId, setActiveSheetId] = useState<string>();
   const [sheetOrder, setSheetOrder] = useState<string[]>([]);
   const [runtimeSelections, setRuntimeSelections] = useState<DashboardRuntimeSelections>({});
+  const resolvedTheme = useMemo(
+    () => resolveDashboardTheme(themePreview ?? designer.dashboard.theme),
+    [designer.dashboard.theme, themePreview],
+  );
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
     x: widget.x,
@@ -75,10 +83,14 @@ export default function DashboardEditorPage() {
     setActiveSheet('dashboard');
     setActiveSheetId(undefined);
     setRuntimeSelections({});
+    setThemeOpen(false);
+    setThemePreview(undefined);
   }, [designer.dashboard.id]);
 
   useEffect(() => {
     setRuntimeSelections({});
+    setThemeOpen(false);
+    setThemePreview(undefined);
   }, [designer.dashboard.currentVersionId]);
 
   useEffect(() => {
@@ -298,11 +310,20 @@ export default function DashboardEditorPage() {
   }, [designer, resetRuntimeInteractions, runtimeSelections, saveDashboard]);
 
   const showDashboardWorkspace = designer.preview || activeSheet === 'dashboard';
+  const themeStyle = {
+    ...BRAND_CSS_VARIABLES,
+    '--dashboard-canvas-bg': resolvedTheme.canvas.backgroundColor,
+    '--dashboard-component-bg': resolvedTheme.component.backgroundColor,
+    '--dashboard-component-text': resolvedTheme.component.textColor,
+    '--dashboard-grid-dot': resolvedTheme.presetId === 'yak-dark'
+      ? 'rgba(255,255,255,.065)'
+      : 'rgba(15,23,42,.035)',
+  } as CSSProperties;
 
   return (
     <div
-      className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#f3f4f6]"
-      style={BRAND_CSS_VARIABLES}
+      className="flex h-screen min-h-[640px] flex-col overflow-hidden"
+      style={themeStyle}
     >
       <DashboardToolbar
         name={designer.dashboard.name}
@@ -324,6 +345,10 @@ export default function DashboardEditorPage() {
         onUndo={designer.undo}
         onRedo={designer.redo}
         onAddChart={addChart}
+        onDashboardStyle={() => {
+          setThemePreview(designer.dashboard.theme ?? themeFromPreset('yak-light'));
+          setThemeOpen(true);
+        }}
         onHistory={() => setHistoryOpen(true)}
         onPreview={() => {
           designer.setPreview((current) => !current);
@@ -350,7 +375,10 @@ export default function DashboardEditorPage() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {showDashboardWorkspace ? (
-          <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">
+          <main
+            className="min-w-0 flex-1 overflow-auto"
+            style={{ backgroundColor: resolvedTheme.canvas.backgroundColor }}
+          >
             <div className={designer.preview ? 'min-h-full p-5' : 'min-h-full p-4 2xl:p-0'}>
               <div
                 ref={containerRef}
@@ -358,9 +386,10 @@ export default function DashboardEditorPage() {
                   'min-w-[760px]',
                   canvasMinHeight,
                   designer.preview
-                    ? 'mx-auto max-w-[1480px] rounded-[10px] border border-[#e7e9ed] bg-white shadow-[0_6px_24px_rgba(16,24,40,.055)]'
-                    : 'dashboard-grid-canvas mx-auto max-w-[1540px] rounded-[10px] 2xl:mx-0 2xl:max-w-none 2xl:rounded-none',
+                    ? 'mx-auto max-w-[1480px] border border-[#e7e9ed] shadow-[0_6px_24px_rgba(16,24,40,.055)]'
+                    : 'dashboard-grid-canvas mx-auto max-w-[1540px] 2xl:mx-0 2xl:max-w-none',
                 ].join(' ')}
+                style={{ backgroundColor: resolvedTheme.canvas.backgroundColor }}
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) designer.setSelectedId(undefined);
                 }}
@@ -440,7 +469,7 @@ export default function DashboardEditorPage() {
                 {!designer.widgets.length && !designer.datasetsLoading ? (
                   <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
                     <div className="max-w-[340px]">
-                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[10px] bg-white text-[#7a818c] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center bg-white text-[#7a818c] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
                         <BarChart3 size={18} />
                       </div>
                       <div className="mt-3 text-[14px] font-semibold text-[#344054]">
@@ -521,17 +550,32 @@ export default function DashboardEditorPage() {
         />
       ) : null}
 
+      <DashboardThemeDrawer
+        open={themeOpen}
+        theme={themePreview ?? designer.dashboard.theme}
+        onChange={setThemePreview}
+        onCancel={() => {
+          setThemeOpen(false);
+          setThemePreview(undefined);
+        }}
+        onConfirm={() => {
+          designer.updateDashboardTheme(themePreview ?? designer.dashboard.theme ?? themeFromPreset('yak-light'));
+          setThemeOpen(false);
+          setThemePreview(undefined);
+        }}
+      />
+
       <style>{`
         .dashboard-grid-canvas {
-          background-color: #f3f4f6;
-          background-image: radial-gradient(circle, rgba(15, 23, 42, .035) 1px, transparent 1px);
+          background-color: var(--dashboard-canvas-bg);
+          background-image: radial-gradient(circle, var(--dashboard-grid-dot) 1px, transparent 1px);
           background-size: calc(100% / 24) 36px;
           background-position: 10px 10px;
         }
         .react-grid-item.react-grid-placeholder {
           background: var(--yak-brand-color-soft) !important;
           border: 1px dashed var(--yak-brand-color) !important;
-          border-radius: 9px !important;
+          border-radius: 0 !important;
           opacity: 1 !important;
         }
         .react-grid-item > .react-resizable-handle::after {

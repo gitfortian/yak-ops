@@ -1,3 +1,4 @@
+import { normalizeDashboardTheme } from './dashboard-theme';
 import type {
   DashboardCrossFilterRule,
   DashboardDocument,
@@ -120,6 +121,7 @@ export const normalizeDashboardDocument = (document: DashboardDocument): Dashboa
   return {
     ...document,
     version: 1,
+    theme: normalizeDashboardTheme(document.theme),
     widgets: normalizedWidgets,
     globalFilters,
     interactions,

@@ -34,6 +34,7 @@ import type {
   DashboardInlineAnalysisSpec,
   DashboardInteraction,
   DashboardServerDetail,
+  DashboardTheme,
   DashboardVersionDetail,
   DashboardVersionSummary,
   DashboardWidget,
@@ -70,6 +71,7 @@ const dashboardFingerprint = (dashboard: DashboardDocument) => JSON.stringify({
   name: dashboard.name,
   description: dashboard.description,
   activeDatasetId: dashboard.activeDatasetId,
+  theme: dashboard.theme,
   widgets: dashboard.widgets,
   globalFilters: dashboard.globalFilters,
   interactions: dashboard.interactions,
@@ -85,6 +87,7 @@ const publishedDocument = (detail: DashboardVersionDetail): DashboardDocument =>
   name: detail.version.name,
   description: detail.version.description,
   activeDatasetId: detail.version.activeDatasetId || '',
+  theme: detail.theme,
   widgets: detail.widgets,
   globalFilters: detail.globalFilters,
   interactions: detail.interactions,
@@ -314,6 +317,11 @@ export function useDashboardDesigner(
   const updateDashboardName = (name: string) => commitDashboard(
     (current) => ({ ...current, name }),
     'dashboard:name',
+  );
+
+  const updateDashboardTheme = (theme: DashboardTheme) => commitDashboard(
+    (current) => ({ ...current, theme }),
+    'dashboard:theme',
   );
 
   const updateLayout = (
@@ -678,6 +686,7 @@ export function useDashboardDesigner(
     setSelectedId,
     setPreview,
     updateDashboardName,
+    updateDashboardTheme,
     updateLayout,
     updateWidget,
     updateInlineAnalysis,

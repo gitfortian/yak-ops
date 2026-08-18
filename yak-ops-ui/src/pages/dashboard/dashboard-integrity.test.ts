@@ -51,6 +51,32 @@ const baseDocument = (): DashboardDocument => ({
 });
 
 describe('dashboard integrity', () => {
+  it('defaults legacy snapshots to the light dashboard theme', () => {
+    const normalized = normalizeDashboardDocument(baseDocument());
+
+    expect(normalized.theme).toEqual({
+      presetId: 'yak-light',
+      canvas: undefined,
+      component: undefined,
+      chart: undefined,
+    });
+  });
+
+  it('preserves supported dashboard theme overrides', () => {
+    const document = baseDocument();
+    document.theme = {
+      presetId: 'yak-dark',
+      canvas: { backgroundColor: '#101828' },
+      chart: { palette: ['#35d0ff', '#8b5cf6'] },
+    };
+
+    const normalized = normalizeDashboardDocument(document);
+
+    expect(normalized.theme?.presetId).toBe('yak-dark');
+    expect(normalized.theme?.canvas?.backgroundColor).toBe('#101828');
+    expect(normalized.theme?.chart?.palette).toEqual(['#35d0ff', '#8b5cf6']);
+  });
+
   it('drops stale references and duplicate semantic links', () => {
     const document = baseDocument();
     document.widgets[0].inlineAnalysis!.dashboardBehavior = {

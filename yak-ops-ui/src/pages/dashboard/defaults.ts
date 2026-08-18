@@ -7,6 +7,7 @@ export const DEFAULT_DASHBOARD: DashboardDocument = {
   name: '未命名仪表盘',
   description: '',
   activeDatasetId: '',
+  theme: { presetId: 'yak-light' },
   widgets: [],
   globalFilters: [],
   interactions: [],
