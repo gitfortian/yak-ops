@@ -81,11 +81,15 @@ export const resolveAnalysisStyle = (
   stripedRows: style?.stripedRows ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.stripedRows,
 });
 
+const defaultLegendTypes = new Set<ChartType>(['pie', 'stackedBar', 'area', 'radar']);
+const smoothTypes = new Set<ChartType>(['line', 'area']);
+const gridTypes = new Set<ChartType>(['bar', 'stackedBar', 'line', 'area', 'scatter']);
+
 export const createAnalysisVisualConfig = (type: ChartType): AnalysisVisualConfig => ({
   ...DEFAULT_ANALYSIS_VISUAL_CONFIG,
-  showLegend: type === 'pie',
-  smooth: type === 'line',
-  showGrid: type === 'bar' || type === 'line',
+  showLegend: defaultLegendTypes.has(type),
+  smooth: smoothTypes.has(type),
+  showGrid: gridTypes.has(type),
 });
 
 export const paletteColors = (style?: AnalysisVisualConfig) => {

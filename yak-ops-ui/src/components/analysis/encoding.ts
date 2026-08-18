@@ -39,11 +39,7 @@ const slot = (
   hint?: string,
 ): AnalysisEncodingSlotRule => ({ channel, label, roles, min, max, hint });
 
-/**
- * Semantic channel contracts for the chart renderers currently shipped by Yak Ops.
- * size / label / tooltip already exist in the versioned grammar and can be activated by
- * later renderers without another persistence migration.
- */
+/** Semantic channel contracts for every chart renderer currently shipped by Yak Ops. */
 export const ANALYSIS_ENCODING_RULES: Record<ChartType, AnalysisEncodingSlotRule[]> = {
   metric: [
     slot('value', '值', ['metric'], 1, 1, '指标卡需要 1 个指标'),
@@ -53,14 +49,41 @@ export const ANALYSIS_ENCODING_RULES: Record<ChartType, AnalysisEncodingSlotRule
     slot('value', '值', ['metric'], 1, 3, '最多 3 个指标'),
     slot('color', '颜色', ['dimension'], 0, 1, '可按 1 个维度拆分系列'),
   ],
+  stackedBar: [
+    slot('category', '分类', ['dimension'], 1, 1, '堆叠柱状图需要 1 个分类字段'),
+    slot('value', '值', ['metric'], 1, 3, '最多 3 个指标；多个指标会自动堆叠'),
+    slot('color', '堆叠分组', ['dimension'], 0, 1, '可按 1 个维度拆分堆叠系列'),
+  ],
   line: [
     slot('category', '分类', ['dimension'], 1, 1, '折线图需要 1 个分类字段'),
+    slot('value', '值', ['metric'], 1, 3, '最多 3 个指标'),
+    slot('color', '颜色', ['dimension'], 0, 1, '可按 1 个维度拆分系列'),
+  ],
+  area: [
+    slot('category', '分类', ['dimension'], 1, 1, '面积图需要 1 个分类字段'),
     slot('value', '值', ['metric'], 1, 3, '最多 3 个指标'),
     slot('color', '颜色', ['dimension'], 0, 1, '可按 1 个维度拆分系列'),
   ],
   pie: [
     slot('category', '分类', ['dimension'], 1, 1, '饼图需要 1 个分类字段'),
     slot('value', '值', ['metric'], 1, 1, '饼图需要 1 个指标'),
+  ],
+  scatter: [
+    slot('category', '点标签', ['dimension'], 1, 1, '散点图需要 1 个维度标识每个点'),
+    slot('value', '坐标值', ['metric'], 2, 2, '前两个指标分别作为 X / Y 轴'),
+    slot('color', '颜色', ['dimension'], 0, 1, '可按 1 个维度拆分点系列'),
+  ],
+  radar: [
+    slot('category', '对象', ['dimension'], 1, 1, '雷达图按 1 个维度生成对象'),
+    slot('value', '指标轴', ['metric'], 2, 5, '配置 2~5 个指标作为雷达轴'),
+  ],
+  funnel: [
+    slot('category', '阶段', ['dimension'], 1, 1, '漏斗图需要 1 个阶段字段'),
+    slot('value', '值', ['metric'], 1, 1, '漏斗图需要 1 个指标'),
+  ],
+  treemap: [
+    slot('category', '分类', ['dimension'], 1, 1, '矩形树图需要 1 个分类字段'),
+    slot('value', '面积值', ['metric'], 1, 1, '矩形面积由 1 个指标决定'),
   ],
   table: [
     slot('category', '维度', ['dimension'], 0, 3, '最多 3 个维度'),
@@ -98,15 +121,17 @@ export const cloneAnalysisEncoding = (encoding: AnalysisEncoding): AnalysisEncod
 });
 
 /**
- * Legacy snapshots have only the query projection. For bar/line we can safely infer
- * category + color from the first two projected dimensions because Encoding v1 is the
- * first editor version that intentionally produces that shape. Other charts keep their
- * historical dimensions in category to avoid inventing semantics that were never stored.
+ * Legacy snapshots have only the query projection. Cartesian grouped charts can safely
+ * infer category + color from the first two projected dimensions because Encoding v1 is
+ * the first editor version that intentionally produces that shape.
  */
 export const legacyAnalysisEncoding = (
   spec: Pick<AnalysisSpec, 'type' | 'dimensions' | 'metrics'>,
 ): AnalysisEncoding => {
-  const groupedSeries = spec.type === 'bar' || spec.type === 'line';
+  const groupedSeries = spec.type === 'bar'
+    || spec.type === 'line'
+    || spec.type === 'stackedBar'
+    || spec.type === 'area';
   const categoryDimensions = groupedSeries ? spec.dimensions.slice(0, 1) : spec.dimensions;
   const colorDimensions = groupedSeries ? spec.dimensions.slice(1, 2) : [];
   return {

@@ -11,6 +11,7 @@ import type {
 } from './model';
 
 const ANALYSIS_API = '/api/v1/analyses';
+const SHARED_ANALYSIS_CHART_TYPES = new Set<ChartType>(['metric', 'bar', 'line', 'pie', 'table']);
 
 type AnalysisFilterWireOperator = 'EQ' | 'NE' | 'GT' | 'GTE' | 'LT' | 'LTE' | 'CONTAINS';
 
@@ -118,6 +119,9 @@ const filterOperatorWire = (operator: FilterOperator): AnalysisFilterWireOperato
 };
 
 const payload = (name: string, description: string, spec: AnalysisSpec) => {
+  if (!SHARED_ANALYSIS_CHART_TYPES.has(spec.type)) {
+    throw new Error('高级图表当前仅支持 Dashboard 本地图表；共享 Analysis 暂未扩展后端 chartType 协议');
+  }
   const metric = spec.sort
     ? spec.metrics.find((candidate) => candidate.field === spec.sort?.field)
     : undefined;
