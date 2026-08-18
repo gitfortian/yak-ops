@@ -42,7 +42,7 @@ class DatasetQueryPerformanceServiceTest {
         "dataset-" + datasetId,
         datasetId * 10,
         1,
-        DatasetSourceType.SQL_QUERY,
+        "SQL_QUERY",
         "ds-1",
         "select 1",
         1,
