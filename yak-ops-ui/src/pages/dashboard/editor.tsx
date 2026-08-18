@@ -9,6 +9,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashboardChartSheetWorkspace } from './chart-sheet-workspace';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
+import {
+  directCrossFiltersForWidget,
+  pruneRuntimeSelections,
+  sameDashboardSelection,
+  type DashboardRuntimeSelections,
+} from './interaction-runtime';
+import type { AnalysisSelection } from './model';
 import { DashboardSheetBar } from './sheet-bar';
 import { DashboardToolbar } from './toolbar';
 import { useDashboardDesigner } from './use-dashboard';
@@ -32,6 +39,7 @@ export default function DashboardEditorPage() {
   const [activeSheet, setActiveSheet] = useState<'dashboard' | 'chart'>('dashboard');
   const [activeSheetId, setActiveSheetId] = useState<string>();
   const [sheetOrder, setSheetOrder] = useState<string[]>([]);
+  const [runtimeSelections, setRuntimeSelections] = useState<DashboardRuntimeSelections>({});
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
     x: widget.x,
@@ -65,7 +73,12 @@ export default function DashboardEditorPage() {
     setSheetOrder(designer.widgets.map((widget) => widget.id));
     setActiveSheet('dashboard');
     setActiveSheetId(undefined);
+    setRuntimeSelections({});
   }, [designer.dashboard.id]);
+
+  useEffect(() => {
+    setRuntimeSelections({});
+  }, [designer.dashboard.currentVersionId]);
 
   useEffect(() => {
     const widgetIds = designer.widgets.map((widget) => widget.id);
@@ -77,6 +90,7 @@ export default function DashboardEditorPage() {
         ? current
         : next;
     });
+    setRuntimeSelections((current) => pruneRuntimeSelections(designer.widgets, current));
   }, [designer.widgets]);
 
   useEffect(() => {
@@ -103,6 +117,55 @@ export default function DashboardEditorPage() {
   };
 
   const addChart = () => designer.addWidget('bar');
+
+  const clearWidgetSelection = useCallback((widgetId: string) => {
+    const nextSelections = { ...runtimeSelections };
+    delete nextSelections[widgetId];
+    setRuntimeSelections(nextSelections);
+
+    const targetFilterIds = new Set(designer.dashboard.interactions
+      .filter((interaction) => interaction.sourceWidgetId === widgetId)
+      .map((interaction) => interaction.targetFilterId));
+    targetFilterIds.forEach((filterId) => {
+      const replacement = designer.dashboard.interactions.find((interaction) => {
+        if (interaction.targetFilterId !== filterId || interaction.sourceWidgetId === widgetId) return false;
+        const selection = nextSelections[interaction.sourceWidgetId];
+        return selection?.fieldId === interaction.sourceField;
+      });
+      const replacementSelection = replacement
+        ? nextSelections[replacement.sourceWidgetId]
+        : undefined;
+      const defaultValue = designer.dashboard.globalFilters.find((filter) => filter.id === filterId)?.defaultValue;
+      designer.setRuntimeFilterValue(filterId, replacementSelection?.value ?? defaultValue);
+    });
+  }, [designer, runtimeSelections]);
+
+  const handleRuntimeSelection = useCallback((widgetId: string, selection: AnalysisSelection) => {
+    const current = runtimeSelections[widgetId];
+    if (sameDashboardSelection(current, selection)) {
+      clearWidgetSelection(widgetId);
+      return;
+    }
+
+    const widget = designer.widgets.find((item) => item.id === widgetId);
+    const behavior = widget?.inlineAnalysis?.dashboardBehavior;
+    const hasDirectLink = Boolean(behavior?.crossFilters?.some((rule) => rule.sourceField === selection.fieldId));
+    const hasGlobalLink = designer.dashboard.interactions.some((interaction) => (
+      interaction.sourceWidgetId === widgetId && interaction.sourceField === selection.fieldId
+    ));
+    const hasClickAction = Boolean(behavior?.clickAction && behavior.clickAction !== 'none');
+    if (hasDirectLink || hasGlobalLink || hasClickAction) {
+      setRuntimeSelections((items) => ({ ...items, [widgetId]: selection }));
+    }
+
+    const target = designer.handleWidgetSelection(widgetId, selection);
+    if (target) history.push(target);
+  }, [clearWidgetSelection, designer, runtimeSelections]);
+
+  const resetRuntimeInteractions = useCallback(() => {
+    setRuntimeSelections({});
+    designer.resetRuntimeFilters();
+  }, [designer]);
 
   const saveDashboard = useCallback(async () => {
     const persisted = /^\d+$/.test(designer.dashboard.id);
@@ -150,6 +213,7 @@ export default function DashboardEditorPage() {
     const restore = async () => {
       await designer.restoreVersion(versionNo);
       setHistoryOpen(false);
+      setRuntimeSelections({});
     };
     if (!designer.dirty) {
       void restore();
@@ -166,7 +230,13 @@ export default function DashboardEditorPage() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (designer.preview) return;
+      if (designer.preview) {
+        if (event.key === 'Escape' && Object.keys(runtimeSelections).length) {
+          event.preventDefault();
+          resetRuntimeInteractions();
+        }
+        return;
+      }
       const key = event.key.toLowerCase();
       const modifier = event.metaKey || event.ctrlKey;
 
@@ -217,7 +287,7 @@ export default function DashboardEditorPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [designer, saveDashboard]);
+  }, [designer, resetRuntimeInteractions, runtimeSelections, saveDashboard]);
 
   const showDashboardWorkspace = designer.preview || activeSheet === 'dashboard';
 
@@ -250,6 +320,7 @@ export default function DashboardEditorPage() {
         onPreview={() => {
           designer.setPreview((current) => !current);
           designer.setSelectedId(undefined);
+          setRuntimeSelections({});
         }}
         onSaveDraft={() => void saveDashboard()}
         onPublish={publishDashboard}
@@ -264,7 +335,7 @@ export default function DashboardEditorPage() {
           analyses={designer.analyses}
           editable={false}
           onRuntimeValue={designer.setRuntimeFilterValue}
-          onReset={designer.resetRuntimeFilters}
+          onReset={resetRuntimeInteractions}
           onManage={() => undefined}
         />
       ) : null}
@@ -312,6 +383,11 @@ export default function DashboardEditorPage() {
                         ? designer.datasets.find((item) => item.id === runtimeSpec.datasetId)
                         : undefined;
                       const drillPath = designer.drillPathForWidget(widget.id);
+                      const directFilters = directCrossFiltersForWidget(
+                        designer.widgets,
+                        runtimeSelections,
+                        widget.id,
+                      );
 
                       return (
                         <div key={widget.id} id={`dashboard-widget-${widget.id}`}>
@@ -320,8 +396,12 @@ export default function DashboardEditorPage() {
                             analysis={analysis}
                             runtimeSpec={runtimeSpec}
                             dataset={dataset}
-                            runtimeFilters={designer.runtimeFiltersForWidget(widget.id)}
+                            runtimeFilters={[
+                              ...designer.runtimeFiltersForWidget(widget.id),
+                              ...directFilters,
+                            ]}
                             drillPath={drillPath}
+                            activeSelection={runtimeSelections[widget.id]}
                             selected={designer.selectedId === widget.id}
                             preview={designer.preview}
                             onSelect={() => {
@@ -329,10 +409,13 @@ export default function DashboardEditorPage() {
                             }}
                             onDataSelect={(selection) => {
                               if (!designer.preview) return;
-                              const target = designer.handleWidgetSelection(widget.id, selection);
-                              if (target) history.push(target);
+                              handleRuntimeSelection(widget.id, selection);
                             }}
-                            onDrillBack={(depth) => designer.drillBack(widget.id, depth)}
+                            onClearSelection={() => clearWidgetSelection(widget.id)}
+                            onDrillBack={(depth) => {
+                              clearWidgetSelection(widget.id);
+                              designer.drillBack(widget.id, depth);
+                            }}
                             onDuplicate={() => designer.duplicateWidget(widget.id)}
                             onDelete={() => designer.deleteWidget(widget.id)}
                           />
@@ -376,6 +459,7 @@ export default function DashboardEditorPage() {
           <DashboardChartSheetWorkspace
             currentDashboardId={designer.dashboard.id}
             widget={designer.selectedWidget}
+            widgets={designer.widgets}
             datasets={designer.datasets}
             analyses={designer.analyses}
             globalFilters={designer.dashboard.globalFilters}
@@ -437,10 +521,6 @@ export default function DashboardEditorPage() {
           border-width: 0 1px 1px 0 !important;
           height: 6px !important;
           width: 6px !important;
-        }
-        .chart-sheet-workspace > aside {
-          border-left: 0 !important;
-          border-right: 1px solid #e3e6ea !important;
         }
         .chart-editor-more > .ant-collapse-item {
           border-bottom: 1px solid #eceef1 !important;
