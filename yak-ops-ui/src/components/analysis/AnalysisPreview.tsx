@@ -433,9 +433,9 @@ function MetricAnalysis({
     : 0;
   const style = resolveAnalysisStyle(spec.style);
   const alignment = {
-    left: { alignItems: 'flex-start', textAlign: 'left' as const },
-    center: { alignItems: 'center', textAlign: 'center' as const },
-    right: { alignItems: 'flex-end', textAlign: 'right' as const },
+    left: { alignItems: 'flex-start' as const, textAlign: 'left' as const },
+    center: { alignItems: 'center' as const, textAlign: 'center' as const },
+    right: { alignItems: 'flex-end' as const, textAlign: 'right' as const },
   }[style.metricAlign];
   const valueSize = { sm: 24, md: 28, lg: 36 }[style.metricValueSize];
   return (
