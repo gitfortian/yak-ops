@@ -52,5 +52,5 @@ export const pruneRuntimeSelections = (
   const widgetIds = new Set(widgets.map((widget) => widget.id));
   return Object.fromEntries(
     Object.entries(selections).filter(([widgetId, selection]) => widgetIds.has(widgetId) && selection),
-  );
+  ) as DashboardRuntimeSelections;
 };
