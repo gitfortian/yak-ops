@@ -61,6 +61,7 @@ export function ConfigData({
             key={rule.channel}
             rule={rule}
             values={values}
+            boundFields={bindings.map((binding) => binding.field)}
             options={options}
             onAdd={(field, role) => {
               const nextBinding: AnalysisEncodingBinding = {
@@ -69,18 +70,25 @@ export function ConfigData({
                 aggregation: role === 'metric' ? 'SUM' : undefined,
               };
               const current = encoding[rule.channel];
-              if (current.some((binding) => binding.field === field)) return;
+              const existingIndex = current.findIndex((binding) => binding.field === field);
+              const existing = existingIndex >= 0 ? current[existingIndex] : undefined;
 
               let nextChannel: AnalysisEncodingBinding[];
               if (rule.max === 1) {
-                const firstActiveIndex = current.findIndex((binding) => rule.roles.includes(binding.role));
-                if (firstActiveIndex < 0) {
-                  nextChannel = [nextBinding, ...current];
-                } else {
-                  nextChannel = current.map((binding, index) => (
-                    index === firstActiveIndex ? nextBinding : binding
-                  ));
-                }
+                // Replacing a single visual slot parks the previous binding behind the
+                // new active binding instead of destroying it. Switching chart types can
+                // therefore restore the user's earlier configuration.
+                nextChannel = [
+                  existing ?? nextBinding,
+                  ...current.filter((_, index) => index !== existingIndex),
+                ];
+              } else if (existing) {
+                // A previously parked overflow binding can be promoted into the active
+                // range without creating a duplicate.
+                nextChannel = [
+                  existing,
+                  ...current.filter((_, index) => index !== existingIndex),
+                ];
               } else {
                 const activeCount = current.filter((binding) => rule.roles.includes(binding.role)).length;
                 if (activeCount >= rule.max) return;
@@ -106,19 +114,33 @@ export function ConfigData({
 function EncodingDropZone({
   rule,
   values,
+  boundFields,
   options,
   onAdd,
   onRemove,
 }: {
   rule: AnalysisEncodingSlotRule;
   values: BoundField[];
+  boundFields: string[];
   options: FieldOption[];
   onAdd: (field: string, role: DatasetFieldRole) => void;
   onRemove: (field: string) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
-  const availableOptions = options.filter((option) => !values.some((item) => item.field === option.value));
+  const visibleFields = new Set(values.map((item) => item.field));
+  const allBoundFields = new Set(boundFields);
+  const availableOptions = options.filter((option) => (
+    rule.max === 1
+      ? !visibleFields.has(option.value)
+      : !allBoundFields.has(option.value)
+  ));
   const full = values.length >= rule.max;
+  const selectDisabled = (rule.max > 1 && full) || !availableOptions.length;
+  const selectPlaceholder = rule.max === 1 && full
+    ? `选择字段替换当前${rule.label}`
+    : full
+      ? `最多 ${rule.max} 个字段`
+      : '+ 点击选择字段';
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     if (
@@ -194,11 +216,11 @@ function EncodingDropZone({
           showSearch
           size="small"
           value={undefined}
-          disabled={full || !availableOptions.length}
+          disabled={selectDisabled}
           className="mt-2 w-full"
           options={availableOptions.map((option) => ({ label: option.label, value: option.value }))}
           optionFilterProp="label"
-          placeholder={full ? `最多 ${rule.max} 个字段` : '+ 点击选择字段'}
+          placeholder={selectPlaceholder}
           onChange={(field) => {
             const option = availableOptions.find((item) => item.value === field);
             if (option) onAdd(option.value, option.role);
