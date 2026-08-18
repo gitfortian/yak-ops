@@ -11,7 +11,7 @@ public record DatasetQueryPerformance(
     String datasetName,
     @JsonSerialize(using = ToStringSerializer.class) long datasetVersionId,
     int datasetVersionNo,
-    DatasetSourceType sourceType,
+    String sourceType,
     String dataSourceId,
     String sql,
     long waitMillis,
