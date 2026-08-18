@@ -62,22 +62,15 @@ export function WidgetShell({
   return (
     <div
       className={[
-        'group relative h-full min-h-0 overflow-visible',
+        'group dashboard-widget relative h-full min-h-0 overflow-visible',
+        preview ? 'dashboard-widget--preview' : 'dashboard-widget--editable',
         !preview && selected ? 'dashboard-widget--selected' : '',
+        preview && activeSelection ? 'dashboard-widget--active' : '',
       ].join(' ')}
     >
       <div
         onMouseDown={onSelect}
-        className={[
-          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] bg-white transition-[border-color,box-shadow] duration-150',
-          preview
-            ? activeSelection
-              ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
-              : 'border border-[#e7e9ed] shadow-[0_1px_2px_rgba(16,24,40,.03)]'
-            : selected
-              ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
-              : 'border border-[#e4e7ec] shadow-[0_1px_2px_rgba(16,24,40,.025)] hover:border-[#d6dae0] hover:shadow-[0_4px_12px_rgba(16,24,40,.055)]',
-        ].join(' ')}
+        className="dashboard-widget__surface relative flex h-full min-h-0 flex-col overflow-hidden bg-white"
       >
         <div className="dashboard-widget__drag-handle flex h-10 shrink-0 cursor-move items-center px-3.5">
           {!preview ? (
@@ -220,8 +213,46 @@ export function WidgetShell({
       ) : null}
 
       <style>{`
+        .dashboard-widget__surface {
+          outline: 1px solid transparent;
+          outline-offset: -1px;
+          transition: outline-color 120ms ease;
+        }
+        .dashboard-widget--editable:not(.dashboard-widget--selected):hover .dashboard-widget__surface {
+          outline-color: #9aa7b8;
+          outline-style: dashed;
+        }
+        .dashboard-widget--selected .dashboard-widget__surface {
+          outline-color: var(--yak-brand-color);
+          outline-style: solid;
+        }
+        .dashboard-widget--preview.dashboard-widget--active .dashboard-widget__surface {
+          outline-color: var(--yak-brand-color);
+          outline-style: solid;
+        }
         .react-grid-item:has(> .dashboard-widget--selected) {
           z-index: 20;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle {
+          background-image: none !important;
+          opacity: 0;
+          transition: opacity 120ms ease;
+          z-index: 25;
+        }
+        .dashboard-grid-canvas .react-grid-item:has(> .dashboard-widget--selected) > .react-resizable-handle {
+          opacity: 1;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle::after {
+          content: '' !important;
+          position: absolute !important;
+          left: 7px !important;
+          top: 7px !important;
+          width: 6px !important;
+          height: 6px !important;
+          box-sizing: border-box !important;
+          border: 1px solid var(--yak-brand-color) !important;
+          background: #fff !important;
+          transform: none !important;
         }
       `}</style>
     </div>
