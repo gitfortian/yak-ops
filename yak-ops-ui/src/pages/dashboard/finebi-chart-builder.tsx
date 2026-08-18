@@ -41,6 +41,132 @@ interface FieldOption {
   role: DatasetFieldRole;
 }
 
+const chartGlyphColors = {
+  blue: '#5d78f6',
+  cyan: '#20a5df',
+  orange: '#f4a11a',
+  green: '#64bea1',
+  purple: '#7a61e8',
+  slate: '#74859a',
+};
+
+function ChartTypeGlyph({ type }: { type: ChartType }) {
+  const { blue, cyan, orange, green, purple, slate } = chartGlyphColors;
+  const common = {
+    width: 30,
+    height: 24,
+    viewBox: '0 0 30 24',
+    className: 'block overflow-visible',
+    'aria-hidden': true,
+  } as const;
+
+  if (type === 'metric') {
+    return (
+      <svg {...common}>
+        <text x="3" y="16" fill={blue} fontSize="12" fontWeight="650">123</text>
+        <rect x="3" y="20" width="22" height="2" rx="1" fill={green} />
+      </svg>
+    );
+  }
+  if (type === 'bar') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="11" width="5" height="10" rx="1" fill={blue} />
+        <rect x="11" y="6" width="5" height="15" rx="1" fill={cyan} />
+        <rect x="19" y="2" width="5" height="19" rx="1" fill={blue} />
+      </svg>
+    );
+  }
+  if (type === 'stackedBar') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="12" width="5" height="9" rx="1" fill={blue} />
+        <rect x="3" y="7" width="5" height="4" rx="1" fill={cyan} />
+        <rect x="11" y="8" width="5" height="13" rx="1" fill={blue} />
+        <rect x="11" y="3" width="5" height="4" rx="1" fill={orange} />
+        <rect x="19" y="10" width="5" height="11" rx="1" fill={cyan} />
+        <rect x="19" y="4" width="5" height="5" rx="1" fill={green} />
+      </svg>
+    );
+  }
+  if (type === 'line') {
+    return (
+      <svg {...common}>
+        <polyline points="2,18 8,12 13,15 20,6 27,10" fill="none" stroke={blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="8" cy="12" r="1.6" fill={cyan} />
+        <circle cx="20" cy="6" r="1.6" fill={orange} />
+      </svg>
+    );
+  }
+  if (type === 'area') {
+    return (
+      <svg {...common}>
+        <path d="M2 19 L7 13 L12 15 L18 7 L24 10 L28 5 L28 21 L2 21 Z" fill={green} opacity="0.3" />
+        <polyline points="2,19 7,13 12,15 18,7 24,10 28,5" fill="none" stroke={cyan} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (type === 'pie') {
+    return (
+      <svg {...common}>
+        <circle cx="15" cy="12" r="9" fill={blue} opacity="0.92" />
+        <path d="M15 12 L15 3 A9 9 0 0 1 23.2 15.7 Z" fill={orange} />
+        <path d="M15 12 L23.2 15.7 A9 9 0 0 1 10.5 19.8 Z" fill={green} />
+      </svg>
+    );
+  }
+  if (type === 'scatter') {
+    return (
+      <svg {...common}>
+        <circle cx="5" cy="17" r="2" fill={blue} />
+        <circle cx="10" cy="11" r="2.4" fill={cyan} />
+        <circle cx="15" cy="15" r="1.7" fill={orange} />
+        <circle cx="19" cy="7" r="2.2" fill={purple} />
+        <circle cx="25" cy="4" r="1.7" fill={green} />
+        <circle cx="24" cy="15" r="2.4" fill={blue} opacity="0.78" />
+      </svg>
+    );
+  }
+  if (type === 'radar') {
+    return (
+      <svg {...common}>
+        <polygon points="15,2 25,9 21,21 9,21 5,9" fill="none" stroke={slate} strokeWidth="1" opacity="0.55" />
+        <polygon points="15,5 22,10 19,18 11,19 8,10" fill={purple} opacity="0.24" stroke={purple} strokeWidth="1.6" />
+        <circle cx="15" cy="5" r="1.3" fill={orange} />
+      </svg>
+    );
+  }
+  if (type === 'funnel') {
+    return (
+      <svg {...common}>
+        <path d="M3 3 H27 L23 8 H7 Z" fill={blue} />
+        <path d="M7 9 H23 L20 14 H10 Z" fill={cyan} />
+        <path d="M10 15 H20 L17 21 H13 Z" fill={orange} />
+      </svg>
+    );
+  }
+  if (type === 'treemap') {
+    return (
+      <svg {...common}>
+        <rect x="2" y="2" width="13" height="9" rx="1" fill={blue} />
+        <rect x="16" y="2" width="12" height="9" rx="1" fill={orange} />
+        <rect x="2" y="12" width="8" height="10" rx="1" fill={green} />
+        <rect x="11" y="12" width="10" height="10" rx="1" fill={purple} />
+        <rect x="22" y="12" width="6" height="10" rx="1" fill={cyan} />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <rect x="2" y="3" width="26" height="18" rx="1.5" fill="none" stroke={slate} strokeWidth="1" opacity="0.55" />
+      <rect x="3" y="4" width="8" height="5" fill={blue} opacity="0.9" />
+      <rect x="12" y="4" width="7" height="5" fill={cyan} opacity="0.85" />
+      <rect x="20" y="4" width="7" height="5" fill={green} opacity="0.9" />
+      <path d="M3 11 H27 M3 16 H27 M11.5 4 V21 M19.5 4 V21" stroke={slate} strokeWidth="0.8" opacity="0.55" />
+    </svg>
+  );
+}
+
 export function FineBiChartBuilderPanel({
   widget,
   datasets,
@@ -175,25 +301,35 @@ export function FineBiChartBuilderPanel({
   return (
     <section className="flex w-[272px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white 2xl:w-[288px]">
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3.5">
-        <div className="text-[10px] font-semibold text-[#667085]">图表类型</div>
-        <div className="mt-2 grid grid-cols-5 gap-1">
+        <div className="text-[11px] font-semibold text-[#161823]">图表类型</div>
+        <div className="mt-2.5 grid grid-cols-5 gap-x-1 gap-y-1.5">
           {(Object.keys(CHART_META) as ChartType[]).map((type) => {
             const active = spec.type === type;
             return (
               <button
                 key={type}
                 type="button"
+                aria-pressed={active}
                 title={`${CHART_META[type].label} · ${CHART_META[type].description}`}
                 onClick={() => changeType(type)}
                 className={[
-                  'flex min-w-0 flex-col items-center justify-center gap-1 rounded-[6px] border px-0.5 py-2 text-[8px] transition-colors',
+                  'group flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-[6px] border px-0.5 py-2.5 transition-[background-color,border-color,transform]',
                   active
-                    ? 'border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] font-medium text-[var(--yak-brand-color)]'
-                    : 'border-transparent bg-white text-[#7f8792] hover:bg-[#f6f7f8] hover:text-[#475467]',
+                    ? 'border-[var(--yak-brand-color)] bg-[var(--yak-brand-color-soft)]'
+                    : 'border-transparent bg-white hover:border-[#e6e9ee] hover:bg-[#f7f8fa]',
                 ].join(' ')}
               >
-                <span className="text-[13px]">{CHART_META[type].icon}</span>
-                <span className="w-full truncate text-center">{CHART_META[type].label}</span>
+                <span className="flex h-6 items-center justify-center transition-transform group-hover:-translate-y-0.5">
+                  <ChartTypeGlyph type={type} />
+                </span>
+                <span
+                  className={[
+                    'w-full truncate text-center text-[10px] leading-4 text-[#161823]',
+                    active ? 'font-semibold' : 'font-medium',
+                  ].join(' ')}
+                >
+                  {CHART_META[type].label}
+                </span>
               </button>
             );
           })}
