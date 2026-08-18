@@ -85,7 +85,8 @@ public class BusinessDatabaseConfiguration {
                         + "io.yak.ops.common.bean.po.resource,"
                         + "io.yak.ops.common.bean.po.sync.offline,"
                         + "io.yak.ops.common.bean.po.workflow,"
-                        + "io.yak.ops.common.bean.po.quality");
+                        + "io.yak.ops.common.bean.po.quality,"
+                        + "io.yak.ops.common.bean.po.alert");
 
         // All Yak Ops business modules share this SqlSessionFactory. Each module keeps its XML files
         // under mapper/<domain>/ so complex SQL stays close to the owning business module.
