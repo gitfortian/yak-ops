@@ -30,11 +30,13 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
   }
 
   @Override
-  public DatasetQueryResult execute(
+  public DatasetQueryExecution execute(
       Dataset dataset,
       DatasetVersion version,
       List<DatasetField> fields,
       DatasetQueryRequest request) {
+    long adapterStartedAt = System.nanoTime();
+    long prepareStartedAt = System.nanoTime();
     if (version.dataSourceId() == null || version.dataSourceId().isBlank()) {
       throw new IllegalStateException("SQL_QUERY DatasetVersion 缺少 dataSourceId");
     }
@@ -44,24 +46,42 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
 
     DatasetQueryCompiler.CompiledQuery compiled = compiler.compile(version.sql(), fields, request);
     int timeoutSeconds = queryTimeout(request);
-    long startedAt = System.nanoTime();
+    long prepareMillis = elapsedMillis(prepareStartedAt);
+
+    long waitStartedAt = System.nanoTime();
+    DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(version.dataSourceId());
+    long waitMillis = elapsedMillis(waitStartedAt);
+
     DataSourceSqlResult result;
-    try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(version.dataSourceId())) {
+    long executeStartedAt = System.nanoTime();
+    try (executor) {
       result = executor.execute(new DataSourceSqlRequest(
           compiled.sql(), compiled.fetchRows(), timeoutSeconds));
     }
+    long executeMillis = elapsedMillis(executeStartedAt);
+
+    long transferStartedAt = System.nanoTime();
     if (!result.resultSet()) {
       throw new IllegalStateException("Dataset Query Runtime 只接受结果集查询");
     }
-
     boolean overflow = result.rows().size() > compiled.limit();
     List<List<Object>> rows = overflow
         ? result.rows().subList(0, compiled.limit())
         : result.rows();
-    long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
-    return new DatasetQueryResult(
+    long transferMillis = elapsedMillis(transferStartedAt);
+    long elapsedMillis = elapsedMillis(adapterStartedAt);
+
+    DatasetQueryResult queryResult = new DatasetQueryResult(
         dataset.id(), version.id(), version.versionNo(), compiled.bindings(), result.columns(),
         rows, rows.size(), result.truncated() || overflow, elapsedMillis);
+    return new DatasetQueryExecution(
+        queryResult,
+        version.dataSourceId(),
+        compiled.sql(),
+        prepareMillis,
+        waitMillis,
+        executeMillis,
+        transferMillis);
   }
 
   private int queryTimeout(DatasetQueryRequest request) {
@@ -71,5 +91,9 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
       throw new IllegalArgumentException("timeoutSeconds 必须在 1~120 之间");
     }
     return requested;
+  }
+
+  private static long elapsedMillis(long startedAt) {
+    return Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
   }
 }
