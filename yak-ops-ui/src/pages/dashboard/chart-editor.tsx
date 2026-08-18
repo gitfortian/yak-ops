@@ -141,6 +141,19 @@ export function ChartSheetConfigPanel({
       && !next.metrics.some((metric) => metric.field === spec.sort?.field)
       ? undefined
       : spec.sort;
+    const currentTopN = spec.analysis?.topN;
+    const topNMetricStillActive = currentTopN
+      ? next.metrics.some((metric) => metric.field === currentTopN.metricField)
+      : true;
+    const nextAnalysis = currentTopN && !topNMetricStillActive
+      ? {
+        ...spec.analysis,
+        version: 1 as const,
+        topN: next.metrics[0]
+          ? { ...currentTopN, metricField: next.metrics[0].field }
+          : { ...currentTopN, enabled: false },
+      }
+      : spec.analysis;
     const hadColor = Boolean(spec.encoding?.color?.length);
     const hasColor = Boolean(next.encoding.color.length);
     const shouldRevealLegend = !hadColor
@@ -151,6 +164,7 @@ export function ChartSheetConfigPanel({
       dimensions: next.dimensions,
       metrics: next.metrics,
       sort: nextSort,
+      analysis: nextAnalysis,
       ...(shouldRevealLegend
         ? { style: { ...spec.style, showLegend: true, version: 1 as const } }
         : {}),
