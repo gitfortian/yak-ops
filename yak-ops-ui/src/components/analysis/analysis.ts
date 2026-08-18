@@ -97,7 +97,7 @@ export const patchMetricComputation = (
  */
 export const resolveAnalysisTopN = (spec: AnalysisSpec) => {
   const topN = spec.analysis?.topN;
-  if (!topN?.enabled) return undefined;
+  if (!topN?.enabled || spec.type === 'metric' || !spec.dimensions.length) return undefined;
   const colorField = resolveAnalysisEncoding(spec).color.find((item) => item.role === 'dimension')?.field;
   if (colorField) return undefined;
   const metric = spec.metrics.find((item) => item.field === topN.metricField);
