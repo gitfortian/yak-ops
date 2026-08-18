@@ -9,7 +9,11 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { DashboardChartSheetWorkspace } from './chart-sheet-workspace';
 import { DashboardGlobalFilterBar } from './global-filter-bar';
 import { DashboardThemeDrawer } from './dashboard-theme-drawer';
-import { resolveDashboardTheme, themeFromPreset } from './dashboard-theme';
+import {
+  analysisThemeFromDashboardTheme,
+  resolveDashboardTheme,
+  themeFromPreset,
+} from './dashboard-theme';
 import { GRID_COLUMNS, GRID_ROW_HEIGHT } from './helpers';
 import {
   directCrossFiltersForWidget,
@@ -44,9 +48,14 @@ export default function DashboardEditorPage() {
   const [activeSheetId, setActiveSheetId] = useState<string>();
   const [sheetOrder, setSheetOrder] = useState<string[]>([]);
   const [runtimeSelections, setRuntimeSelections] = useState<DashboardRuntimeSelections>({});
+  const activeTheme = themePreview ?? designer.dashboard.theme;
   const resolvedTheme = useMemo(
-    () => resolveDashboardTheme(themePreview ?? designer.dashboard.theme),
-    [designer.dashboard.theme, themePreview],
+    () => resolveDashboardTheme(activeTheme),
+    [activeTheme],
+  );
+  const analysisTheme = useMemo(
+    () => analysisThemeFromDashboardTheme(activeTheme),
+    [activeTheme],
   );
   const layout = useMemo(() => designer.widgets.map((widget) => ({
     i: widget.id,
@@ -315,9 +324,11 @@ export default function DashboardEditorPage() {
     '--dashboard-canvas-bg': resolvedTheme.canvas.backgroundColor,
     '--dashboard-component-bg': resolvedTheme.component.backgroundColor,
     '--dashboard-component-text': resolvedTheme.component.textColor,
-    '--dashboard-grid-dot': resolvedTheme.presetId === 'yak-dark'
-      ? 'rgba(255,255,255,.065)'
-      : 'rgba(15,23,42,.035)',
+    '--dashboard-component-muted': resolvedTheme.component.mutedTextColor,
+    '--dashboard-component-border': resolvedTheme.component.borderColor,
+    '--dashboard-component-subtle-bg': resolvedTheme.component.subtleBackgroundColor,
+    '--dashboard-component-hover-bg': resolvedTheme.component.hoverBackgroundColor,
+    '--dashboard-grid-dot': resolvedTheme.canvas.gridDotColor,
   } as CSSProperties;
 
   return (
@@ -386,10 +397,13 @@ export default function DashboardEditorPage() {
                   'min-w-[760px]',
                   canvasMinHeight,
                   designer.preview
-                    ? 'mx-auto max-w-[1480px] border border-[#e7e9ed] shadow-[0_6px_24px_rgba(16,24,40,.055)]'
+                    ? 'mx-auto max-w-[1480px] border shadow-[0_6px_24px_rgba(16,24,40,.055)]'
                     : 'dashboard-grid-canvas mx-auto max-w-[1540px] 2xl:mx-0 2xl:max-w-none',
                 ].join(' ')}
-                style={{ backgroundColor: resolvedTheme.canvas.backgroundColor }}
+                style={{
+                  backgroundColor: resolvedTheme.canvas.backgroundColor,
+                  borderColor: resolvedTheme.component.borderColor,
+                }}
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) designer.setSelectedId(undefined);
                 }}
@@ -440,6 +454,7 @@ export default function DashboardEditorPage() {
                               ...designer.runtimeFiltersForWidget(widget.id),
                               ...directFilters,
                             ]}
+                            analysisTheme={analysisTheme}
                             drillPath={drillPath}
                             activeSelection={runtimeSelections[widget.id]}
                             selected={designer.selectedId === widget.id}
@@ -469,13 +484,25 @@ export default function DashboardEditorPage() {
                 {!designer.widgets.length && !designer.datasetsLoading ? (
                   <div className="flex min-h-[420px] items-center justify-center px-6 text-center">
                     <div className="max-w-[340px]">
-                      <div className="mx-auto flex h-11 w-11 items-center justify-center bg-white text-[#7a818c] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+                      <div
+                        className="mx-auto flex h-11 w-11 items-center justify-center shadow-[0_1px_2px_rgba(16,24,40,.04)]"
+                        style={{
+                          backgroundColor: resolvedTheme.component.backgroundColor,
+                          color: resolvedTheme.component.mutedTextColor,
+                        }}
+                      >
                         <BarChart3 size={18} />
                       </div>
-                      <div className="mt-3 text-[14px] font-semibold text-[#344054]">
+                      <div
+                        className="mt-3 text-[14px] font-semibold"
+                        style={{ color: resolvedTheme.component.textColor }}
+                      >
                         {designer.activeDataset ? '从一个图表开始' : '暂无可用数据集'}
                       </div>
-                      <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
+                      <div
+                        className="mt-1 text-[11px] leading-5"
+                        style={{ color: resolvedTheme.component.mutedTextColor }}
+                      >
                         {designer.activeDataset
                           ? '添加图表后，进入对应图表 Sheet 完成数据与样式配置。'
                           : '请先在数据开发发布中心发布并上线 Dataset。'}
