@@ -39,9 +39,9 @@ const slot = (
 ): AnalysisEncodingSlotRule => ({ channel, label, roles, min, max, hint });
 
 /**
- * Active visual channels for the chart types currently shipped by Yak Ops.
- * The encoding model already defines color / size / label / detail / tooltip so
- * future chart renderers can enable them without another persistence migration.
+ * Semantic channel contracts for the chart renderers currently shipped by Yak Ops.
+ * size / label / tooltip already exist in the versioned grammar and can be activated by
+ * later renderers without another persistence migration.
  */
 export const ANALYSIS_ENCODING_RULES: Record<ChartType, AnalysisEncodingSlotRule[]> = {
   metric: [
@@ -50,10 +50,12 @@ export const ANALYSIS_ENCODING_RULES: Record<ChartType, AnalysisEncodingSlotRule
   bar: [
     slot('category', '分类', ['dimension'], 1, 1, '柱状图需要 1 个分类字段'),
     slot('value', '值', ['metric'], 1, 3, '最多 3 个指标'),
+    slot('color', '颜色', ['dimension'], 0, 1, '可按 1 个维度拆分系列'),
   ],
   line: [
     slot('category', '分类', ['dimension'], 1, 1, '折线图需要 1 个分类字段'),
     slot('value', '值', ['metric'], 1, 3, '最多 3 个指标'),
+    slot('color', '颜色', ['dimension'], 0, 1, '可按 1 个维度拆分系列'),
   ],
   pie: [
     slot('category', '分类', ['dimension'], 1, 1, '饼图需要 1 个分类字段'),
@@ -62,6 +64,7 @@ export const ANALYSIS_ENCODING_RULES: Record<ChartType, AnalysisEncodingSlotRule
   table: [
     slot('category', '维度', ['dimension'], 0, 3, '最多 3 个维度'),
     slot('value', '指标', ['metric'], 0, 3, '最多 3 个指标'),
+    slot('detail', '明细', ['dimension'], 0, 3, '追加明细维度，不改变指标定义'),
   ],
 };
 
@@ -84,13 +87,13 @@ const cloneBinding = (binding: AnalysisEncodingBinding): AnalysisEncodingBinding
 
 export const cloneAnalysisEncoding = (encoding: AnalysisEncoding): AnalysisEncoding => ({
   version: 1,
-  category: encoding.category.map(cloneBinding),
-  value: encoding.value.map(cloneBinding),
-  color: encoding.color.map(cloneBinding),
-  size: encoding.size.map(cloneBinding),
-  label: encoding.label.map(cloneBinding),
-  detail: encoding.detail.map(cloneBinding),
-  tooltip: encoding.tooltip.map(cloneBinding),
+  category: (encoding.category || []).map(cloneBinding),
+  value: (encoding.value || []).map(cloneBinding),
+  color: (encoding.color || []).map(cloneBinding),
+  size: (encoding.size || []).map(cloneBinding),
+  label: (encoding.label || []).map(cloneBinding),
+  detail: (encoding.detail || []).map(cloneBinding),
+  tooltip: (encoding.tooltip || []).map(cloneBinding),
 });
 
 export const legacyAnalysisEncoding = (spec: Pick<AnalysisSpec, 'dimensions' | 'metrics'>): AnalysisEncoding => ({
@@ -110,10 +113,6 @@ export const resolveAnalysisEncoding = (spec: Pick<AnalysisSpec, 'encoding' | 'd
     : legacyAnalysisEncoding(spec)
 );
 
-const activeRuleMap = (type: ChartType) => new Map(
-  ANALYSIS_ENCODING_RULES[type].map((rule) => [rule.channel, rule]),
-);
-
 const metricProjection = (bindings: AnalysisEncodingBinding[]): MetricBinding[] => bindings
   .filter((binding) => binding.role === 'metric')
   .map((binding) => ({
@@ -121,27 +120,32 @@ const metricProjection = (bindings: AnalysisEncodingBinding[]): MetricBinding[] 
     aggregation: binding.aggregation ?? 'SUM',
   }));
 
+const unique = <T,>(values: T[]) => [...new Set(values)];
+
 /**
  * Keeps the existing query/render contract alive while encoding becomes the editor's
  * semantic source of truth. Inactive and overflow bindings stay persisted in
- * `encoding`; only the active chart slots are projected into dimensions / metrics.
+ * `encoding`; only active chart slots are projected into dimensions / metrics.
  */
 export const applyAnalysisEncoding = <T extends AnalysisSpec>(
   spec: T,
   encoding: AnalysisEncoding,
 ): T => {
-  const rules = activeRuleMap(spec.type);
-  const categoryRule = rules.get('category');
-  const valueRule = rules.get('value');
+  const rules = ANALYSIS_ENCODING_RULES[spec.type];
+  const valueRule = rules.find((rule) => rule.channel === 'value');
+  const dimensions = unique(rules.flatMap((rule) => (
+    rule.roles.includes('dimension')
+      ? encoding[rule.channel]
+        .filter((binding) => binding.role === 'dimension')
+        .slice(0, rule.max)
+        .map((binding) => binding.field)
+      : []
+  )));
+
   return {
     ...spec,
     encoding: cloneAnalysisEncoding(encoding),
-    dimensions: categoryRule
-      ? encoding.category
-        .filter((binding) => categoryRule.roles.includes(binding.role) && binding.role === 'dimension')
-        .slice(0, categoryRule.max)
-        .map((binding) => binding.field)
-      : [],
+    dimensions: spec.type === 'metric' ? [] : dimensions,
     metrics: valueRule
       ? metricProjection(
         encoding.value.filter((binding) => valueRule.roles.includes(binding.role)),
@@ -158,9 +162,9 @@ const compatibleChannel = (
   .map(cloneBinding);
 
 /**
- * Chart switching is non-destructive: incompatible roles are discarded for channels
- * activated by the target chart, but bindings beyond the target slot capacity remain
- * parked in the semantic channel. Switching back can therefore restore them.
+ * Chart switching is non-destructive: incompatible roles are moved behind compatible
+ * bindings for target-active channels, while overflow bindings remain parked. Switching
+ * back can therefore restore previous field choices.
  */
 export const changeAnalysisEncodingType = <T extends AnalysisSpec>(
   spec: T,
