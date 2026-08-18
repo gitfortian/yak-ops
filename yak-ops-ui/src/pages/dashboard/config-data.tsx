@@ -44,7 +44,10 @@ export function ConfigData({
     <div className="space-y-3">
       {ANALYSIS_ENCODING_RULES[spec.type].map((rule) => {
         const bindings = encoding[rule.channel];
-        const values: BoundField[] = bindings.map((binding) => ({
+        const activeBindings = bindings
+          .filter((binding) => rule.roles.includes(binding.role))
+          .slice(0, rule.max);
+        const values: BoundField[] = activeBindings.map((binding) => ({
           field: binding.field,
           label: fieldLabel.get(binding.field) ?? binding.field,
           suffix: binding.role === 'metric'
@@ -67,9 +70,23 @@ export function ConfigData({
               };
               const current = encoding[rule.channel];
               if (current.some((binding) => binding.field === field)) return;
-              const nextChannel = rule.max === 1
-                ? [nextBinding]
-                : [...current, nextBinding].slice(0, rule.max);
+
+              let nextChannel: AnalysisEncodingBinding[];
+              if (rule.max === 1) {
+                const firstActiveIndex = current.findIndex((binding) => rule.roles.includes(binding.role));
+                if (firstActiveIndex < 0) {
+                  nextChannel = [nextBinding, ...current];
+                } else {
+                  nextChannel = current.map((binding, index) => (
+                    index === firstActiveIndex ? nextBinding : binding
+                  ));
+                }
+              } else {
+                const activeCount = current.filter((binding) => rule.roles.includes(binding.role)).length;
+                if (activeCount >= rule.max) return;
+                nextChannel = [...current, nextBinding];
+              }
+
               onEncodingChange({
                 ...encoding,
                 [rule.channel]: nextChannel,
