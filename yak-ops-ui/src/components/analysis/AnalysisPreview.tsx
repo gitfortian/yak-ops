@@ -47,7 +47,9 @@ const metricAnalysisDisplayName = (
   metric: MetricBinding,
 ) => {
   const base = metricDisplayName(dataset, metric);
-  const calculation = metricComputationFor(spec, metric.field).quickCalculation;
+  const calculation = spec.type === 'metric'
+    ? 'none'
+    : metricComputationFor(spec, metric.field).quickCalculation;
   return calculation === 'none' ? base : `${base} · ${quickCalculationLabel(calculation)}`;
 };
 
