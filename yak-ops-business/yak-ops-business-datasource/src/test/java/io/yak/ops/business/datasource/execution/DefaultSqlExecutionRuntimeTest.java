@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.yak.ops.core.execution.sql.SqlExecutionCaller;
 import io.yak.ops.core.execution.sql.SqlExecutionContext;
 import io.yak.ops.core.execution.sql.SqlExecutionPlan;
+import io.yak.ops.core.execution.sql.SqlExecutionPolicyViolationException;
 import io.yak.ops.core.execution.sql.SqlExecutionRequest;
 import io.yak.ops.core.execution.sql.SqlExecutionResult;
 import io.yak.ops.core.execution.sql.SqlExecutionResultType;
@@ -16,6 +17,8 @@ import io.yak.ops.core.execution.sql.SqlExecutionSnapshot;
 import io.yak.ops.core.execution.sql.SqlExecutionStatus;
 import io.yak.ops.core.execution.sql.SqlStatementRequest;
 import io.yak.ops.core.execution.sql.SqlStatementStatus;
+import io.yak.ops.core.execution.sql.SqlStatementType;
+import io.yak.ops.core.execution.sql.SqlTransactionMode;
 import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlColumn;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
@@ -23,6 +26,7 @@ import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
 import java.sql.SQLTimeoutException;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -99,6 +103,79 @@ class DefaultSqlExecutionRuntimeTest {
   }
 
   @Test
+  void rejectsDatasetWriteBeforeOpeningDatasource() {
+    AtomicInteger opened = new AtomicInteger();
+    DataSourceExecutionProvider provider = dataSourceId -> {
+      opened.incrementAndGet();
+      return request -> DataSourceSqlResult.updateCount(1L);
+    };
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+
+    SqlExecutionPolicyViolationException exception = assertThrows(
+        SqlExecutionPolicyViolationException.class,
+        () -> runtime.execute(new SqlExecutionRequest(
+            "42",
+            "update orders set status = 'DONE'",
+            10,
+            30,
+            SqlExecutionContext.of(SqlExecutionCaller.DATASET, "dataset-1"))));
+    runtime.shutdown();
+
+    assertEquals(SqlExecutionCaller.DATASET, exception.caller());
+    assertEquals(SqlStatementType.UPDATE, exception.classification().primaryType());
+    assertEquals(0, opened.get());
+  }
+
+  @Test
+  void rejectsMutatingCteForReadOnlyDataService() {
+    AtomicInteger opened = new AtomicInteger();
+    DataSourceExecutionProvider provider = dataSourceId -> {
+      opened.incrementAndGet();
+      return request -> DataSourceSqlResult.query(List.of(), List.of(), false);
+    };
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    SqlExecutionPlan plan = new SqlExecutionPlan(
+        "42",
+        List.of(new SqlStatementRequest("""
+            WITH deleted AS (
+              DELETE FROM orders WHERE expired = true RETURNING *
+            )
+            SELECT * FROM deleted
+            """, 10, 30)),
+        SqlExecutionContext.of(SqlExecutionCaller.DATA_SERVICE, "service-1"));
+
+    SqlExecutionPolicyViolationException exception = assertThrows(
+        SqlExecutionPolicyViolationException.class,
+        () -> runtime.start(plan));
+    runtime.shutdown();
+
+    assertEquals(SqlStatementType.SELECT, exception.classification().primaryType());
+    assertTrue(exception.classification().potentiallyMutating());
+    assertEquals(0, opened.get());
+  }
+
+  @Test
+  void rejectsEmbeddedTransactionControlForTask() {
+    AtomicInteger opened = new AtomicInteger();
+    DataSourceExecutionProvider provider = dataSourceId -> {
+      opened.incrementAndGet();
+      return request -> DataSourceSqlResult.updateCount(0L);
+    };
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+
+    SqlExecutionPolicyViolationException exception = assertThrows(
+        SqlExecutionPolicyViolationException.class,
+        () -> runtime.start(new SqlExecutionPlan(
+            "42",
+            List.of(new SqlStatementRequest("begin", 10, 30)),
+            SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-1"))));
+    runtime.shutdown();
+
+    assertEquals(SqlStatementType.BEGIN, exception.classification().primaryType());
+    assertEquals(0, opened.get());
+  }
+
+  @Test
   void tracksExplicitMultiStatementLifecycleAndResults() {
     AtomicInteger opened = new AtomicInteger();
     DataSourceExecutionProvider provider = dataSourceId -> {
@@ -116,7 +193,7 @@ class DefaultSqlExecutionRuntimeTest {
         List.of(
             new SqlStatementRequest("select 1 as value", 10, 5),
             new SqlStatementRequest("update demo set enabled = 1", 10, 5)),
-        SqlExecutionContext.of(SqlExecutionCaller.STATEMENT, "console-1"));
+        SqlExecutionContext.of(SqlExecutionCaller.CONSOLE, "console-1"));
 
     SqlExecutionSnapshot started = runtime.start(plan);
     assertTrue(runtime.find(started.executionId()).isPresent());
@@ -125,12 +202,88 @@ class DefaultSqlExecutionRuntimeTest {
     runtime.shutdown();
 
     assertEquals(SqlExecutionStatus.SUCCEEDED, completed.status());
+    assertEquals(SqlTransactionMode.AUTO_COMMIT, completed.transactionMode());
     assertEquals(2, completed.statements().size());
+    assertEquals(SqlStatementType.SELECT, completed.statements().get(0).statementType());
+    assertEquals(SqlStatementType.UPDATE, completed.statements().get(1).statementType());
     assertEquals(SqlStatementStatus.SUCCEEDED, completed.statements().get(0).status());
     assertEquals(SqlExecutionResultType.RESULT_SET, completed.statements().get(0).result().type());
     assertEquals(SqlExecutionResultType.UPDATE_COUNT, completed.statements().get(1).result().type());
     assertEquals(2L, completed.statements().get(1).result().affectedRows());
     assertTrue(completed.statements().get(0).statementId().contains(completed.executionId()));
+  }
+
+  @Test
+  void commitsSingleTransactionAfterAllStatementsSucceed() {
+    TransactionExecutor executor = new TransactionExecutor(-1);
+    AtomicInteger opened = new AtomicInteger();
+    DataSourceExecutionProvider provider = dataSourceId -> {
+      opened.incrementAndGet();
+      return executor;
+    };
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionPlan(
+        "42",
+        List.of(
+            new SqlStatementRequest("update orders set status = 'DONE' where id = 1", 10, 30),
+            new SqlStatementRequest("insert into audit_log(id) values (1)", 10, 30)),
+        SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-1"),
+        SqlTransactionMode.SINGLE_TRANSACTION)).executionId());
+    runtime.shutdown();
+
+    assertEquals(SqlExecutionStatus.SUCCEEDED, completed.status());
+    assertEquals(SqlTransactionMode.SINGLE_TRANSACTION, completed.transactionMode());
+    assertEquals(1, opened.get());
+    assertTrue(executor.begun.get());
+    assertTrue(executor.committed.get());
+    assertFalse(executor.rolledBack.get());
+    assertEquals(2, executor.sql.size());
+    assertTrue(executor.closed.get());
+  }
+
+  @Test
+  void rollsBackSingleTransactionAndSkipsRemainingStatementOnFailure() {
+    TransactionExecutor executor = new TransactionExecutor(2);
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(dataSourceId -> executor);
+    SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionPlan(
+        "42",
+        List.of(
+            new SqlStatementRequest("update orders set status = 'DONE' where id = 1", 10, 30),
+            new SqlStatementRequest("delete from audit_log where id = 1", 10, 30),
+            new SqlStatementRequest("insert into audit_log(id) values (2)", 10, 30)),
+        SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-2"),
+        SqlTransactionMode.SINGLE_TRANSACTION)).executionId());
+    runtime.shutdown();
+
+    assertEquals(SqlExecutionStatus.FAILED, completed.status());
+    assertTrue(executor.begun.get());
+    assertFalse(executor.committed.get());
+    assertTrue(executor.rolledBack.get());
+    assertEquals(SqlStatementStatus.SUCCEEDED, completed.statements().get(0).status());
+    assertEquals(SqlStatementStatus.FAILED, completed.statements().get(1).status());
+    assertEquals(SqlStatementStatus.SKIPPED, completed.statements().get(2).status());
+    assertEquals(SqlStatementType.DELETE, completed.statements().get(1).statementType());
+  }
+
+  @Test
+  void failsFastWhenDatasourceDoesNotSupportSingleTransaction() {
+    AtomicInteger executions = new AtomicInteger();
+    DataSourceSqlExecutor executor = request -> {
+      executions.incrementAndGet();
+      return DataSourceSqlResult.updateCount(1L);
+    };
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(dataSourceId -> executor);
+    SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionPlan(
+        "42",
+        List.of(new SqlStatementRequest("update demo set enabled = 1", 10, 30)),
+        SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-3"),
+        SqlTransactionMode.SINGLE_TRANSACTION)).executionId());
+    runtime.shutdown();
+
+    assertEquals(SqlExecutionStatus.FAILED, completed.status());
+    assertEquals(0, executions.get());
+    assertEquals(SqlStatementStatus.SKIPPED, completed.statements().get(0).status());
+    assertTrue(completed.errorMessage().contains("does not support SINGLE_TRANSACTION"));
   }
 
   @Test
@@ -171,7 +324,7 @@ class DefaultSqlExecutionRuntimeTest {
         "select slow_query",
         10,
         1,
-        SqlExecutionContext.of(SqlExecutionCaller.STATEMENT, "console-2"))).executionId());
+        SqlExecutionContext.of(SqlExecutionCaller.CONSOLE, "console-2"))).executionId());
     runtime.shutdown();
 
     assertEquals(SqlExecutionStatus.TIMED_OUT, completed.status());
@@ -216,6 +369,53 @@ class DefaultSqlExecutionRuntimeTest {
     @Override
     public void close() {
       closed = true;
+    }
+  }
+
+  private static final class TransactionExecutor implements DataSourceSqlExecutor {
+    private final int failOnCall;
+    private final AtomicInteger calls = new AtomicInteger();
+    private final AtomicBoolean begun = new AtomicBoolean(false);
+    private final AtomicBoolean committed = new AtomicBoolean(false);
+    private final AtomicBoolean rolledBack = new AtomicBoolean(false);
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final List<String> sql = new ArrayList<>();
+
+    private TransactionExecutor(int failOnCall) {
+      this.failOnCall = failOnCall;
+    }
+
+    @Override
+    public boolean supportsTransactions() {
+      return true;
+    }
+
+    @Override
+    public void beginTransaction() {
+      begun.set(true);
+    }
+
+    @Override
+    public DataSourceSqlResult execute(DataSourceSqlRequest request) {
+      sql.add(request.sql());
+      int call = calls.incrementAndGet();
+      if (call == failOnCall) throw new IllegalStateException("statement failed");
+      return DataSourceSqlResult.updateCount(1L);
+    }
+
+    @Override
+    public void commitTransaction() {
+      committed.set(true);
+    }
+
+    @Override
+    public void rollbackTransaction() {
+      rolledBack.set(true);
+    }
+
+    @Override
+    public void close() {
+      closed.set(true);
     }
   }
 

@@ -34,6 +34,7 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
   private final JdbcConnectionProvider connectionProvider;
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
   private final AtomicReference<Connection> activeConnection = new AtomicReference<>();
+  private final AtomicReference<Connection> transactionConnection = new AtomicReference<>();
   private final AtomicReference<Statement> activeStatement = new AtomicReference<>();
 
   public JdbcDataSourceSqlExecutor(
@@ -57,17 +58,20 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       throw executionError("SQL 执行已取消", null);
     }
 
+    Connection transactional = transactionConnection.get();
+    if (transactional != null) {
+      try {
+        return executeOnConnection(transactional, request);
+      } catch (DataSourcePluginException exception) {
+        throw exception;
+      } catch (Exception exception) {
+        throw executionError(safeMessage(exception), exception);
+      }
+    }
+
     try {
       try (Connection opened = connectionProvider.open(connection, connectionTimeoutSeconds)) {
-        activeConnection.set(opened);
-        if (cancelled.get()) {
-          throw executionError("SQL 执行已取消", null);
-        }
-        return request.parameters().isEmpty()
-            ? executePlain(opened, request)
-            : executePrepared(opened, request);
-      } finally {
-        activeConnection.set(null);
+        return executeOnConnection(opened, request);
       }
     } catch (DataSourcePluginException exception) {
       throw exception;
@@ -75,6 +79,97 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       throw executionError("数据库驱动未安装：" + connection.driverClassName(), exception);
     } catch (Exception exception) {
       throw executionError(safeMessage(exception), exception);
+    }
+  }
+
+  @Override
+  public boolean supportsTransactions() {
+    return true;
+  }
+
+  @Override
+  public synchronized void beginTransaction() {
+    if (cancelled.get()) {
+      throw executionError("SQL 执行已取消", null);
+    }
+    if (transactionConnection.get() != null) {
+      throw executionError("SQL 事务已经开启", null);
+    }
+
+    Connection opened = null;
+    try {
+      opened = connectionProvider.open(connection, connectionTimeoutSeconds);
+      if (cancelled.get()) {
+        closeQuietly(opened);
+        throw executionError("SQL 执行已取消", null);
+      }
+      opened.setAutoCommit(false);
+      transactionConnection.set(opened);
+    } catch (DataSourcePluginException exception) {
+      closeQuietly(opened);
+      throw exception;
+    } catch (ClassNotFoundException exception) {
+      closeQuietly(opened);
+      throw executionError("数据库驱动未安装：" + connection.driverClassName(), exception);
+    } catch (Exception exception) {
+      closeQuietly(opened);
+      throw executionError("开启 SQL 事务失败：" + safeMessage(exception), exception);
+    }
+  }
+
+  @Override
+  public synchronized void commitTransaction() {
+    Connection transactional = requireTransaction();
+    try {
+      transactional.commit();
+    } catch (Exception exception) {
+      try {
+        transactional.rollback();
+      } catch (Exception ignored) {
+        // Best effort: closing the connection below is the final cleanup path.
+      }
+      throw executionError("提交 SQL 事务失败：" + safeMessage(exception), exception);
+    } finally {
+      transactionConnection.compareAndSet(transactional, null);
+      closeQuietly(transactional);
+    }
+  }
+
+  @Override
+  public synchronized void rollbackTransaction() {
+    Connection transactional = transactionConnection.getAndSet(null);
+    if (transactional == null) return;
+    try {
+      if (!transactional.isClosed()) transactional.rollback();
+    } catch (Exception exception) {
+      throw executionError("回滚 SQL 事务失败：" + safeMessage(exception), exception);
+    } finally {
+      closeQuietly(transactional);
+    }
+  }
+
+  private Connection requireTransaction() {
+    Connection transactional = transactionConnection.get();
+    if (transactional == null) {
+      throw executionError("SQL 事务尚未开启", null);
+    }
+    return transactional;
+  }
+
+  private DataSourceSqlResult executeOnConnection(
+      Connection opened,
+      DataSourceSqlRequest request)
+      throws Exception {
+    activeConnection.set(opened);
+    try {
+      if (cancelled.get()) {
+        throw executionError("SQL 执行已取消", null);
+      }
+      return request.parameters().isEmpty()
+          ? executePlain(opened, request)
+          : executePrepared(opened, request);
+    } finally {
+      activeConnection.compareAndSet(opened, null);
     }
   }
 
@@ -133,25 +228,41 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       try {
         statement.cancel();
       } catch (Exception ignored) {
-        // Best effort; closing the connection below is the fallback.
+        // Best effort; transaction rollback or connection close remains the cleanup path.
       }
     }
+
+    // In transaction mode keep the connection open so the runtime can explicitly roll it back.
+    Connection transactional = transactionConnection.get();
     Connection opened = activeConnection.get();
-    if (opened != null) {
-      try {
-        opened.close();
-      } catch (Exception ignored) {
-        // Best effort cancellation. SSH tunnel is also released by Connection.close().
-      }
+    if (opened != null && opened != transactional) {
+      closeQuietly(opened);
     }
   }
 
   @Override
-  public void close() {
-    Statement statement = activeStatement.get();
-    Connection opened = activeConnection.get();
-    if (statement == null && opened == null) return;
-    cancel();
+  public synchronized void close() {
+    Connection transactional = transactionConnection.getAndSet(null);
+    if (transactional != null) {
+      try {
+        if (!transactional.isClosed()) transactional.rollback();
+      } catch (Exception ignored) {
+        // Best effort cleanup on close.
+      } finally {
+        closeQuietly(transactional);
+      }
+    }
+
+    Statement statement = activeStatement.getAndSet(null);
+    if (statement != null) {
+      try {
+        statement.close();
+      } catch (Exception ignored) {
+        // Best effort cleanup.
+      }
+    }
+    Connection opened = activeConnection.getAndSet(null);
+    if (opened != null && opened != transactional) closeQuietly(opened);
   }
 
   private DataSourceSqlResult readResultSet(ResultSet resultSet, int maxRows) throws Exception {
@@ -252,6 +363,15 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       properties.setProperty("password", connection.password());
     }
     return properties;
+  }
+
+  private static void closeQuietly(Connection connection) {
+    if (connection == null) return;
+    try {
+      connection.close();
+    } catch (Exception ignored) {
+      // Best effort cleanup.
+    }
   }
 
   private DataSourcePluginException executionError(String message, Throwable cause) {

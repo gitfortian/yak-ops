@@ -11,6 +11,7 @@ public record SqlExecutionSnapshot(
     SqlExecutionStatus status,
     String dataSourceId,
     SqlExecutionContext context,
+    SqlTransactionMode transactionMode,
     List<SqlStatementSnapshot> statements,
     Instant startedAt,
     Instant finishedAt,
@@ -27,7 +28,30 @@ public record SqlExecutionSnapshot(
     }
     dataSourceId = dataSourceId.trim();
     context = Objects.requireNonNull(context, "context");
+    transactionMode = transactionMode == null ? SqlTransactionMode.AUTO_COMMIT : transactionMode;
     statements = statements == null ? List.of() : List.copyOf(statements);
+  }
+
+  /** Backward-compatible constructor; historical callers remain auto-commit by default. */
+  public SqlExecutionSnapshot(
+      String executionId,
+      SqlExecutionStatus status,
+      String dataSourceId,
+      SqlExecutionContext context,
+      List<SqlStatementSnapshot> statements,
+      Instant startedAt,
+      Instant finishedAt,
+      String errorMessage) {
+    this(
+        executionId,
+        status,
+        dataSourceId,
+        context,
+        SqlTransactionMode.AUTO_COMMIT,
+        statements,
+        startedAt,
+        finishedAt,
+        errorMessage);
   }
 
   public boolean terminal() {
