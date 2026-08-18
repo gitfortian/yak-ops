@@ -8,12 +8,15 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "BI 数据集接口")
@@ -33,6 +36,15 @@ public class DatasetController {
   @GetMapping
   public Result<List<Dataset>> list() {
     return Result.success(service.list());
+  }
+
+  @Operation(summary = "查询最近的 Dataset SQL 性能诊断记录")
+  @GetMapping("/query-performance")
+  public Result<List<DatasetQueryPerformance>> queryPerformance(
+      @RequestParam(value = "datasetIds", required = false) List<Long> datasetIds,
+      @RequestParam(value = "limit", defaultValue = "100") int limit) {
+    Set<Long> filters = datasetIds == null ? Set.of() : new HashSet<>(datasetIds);
+    return Result.success(queryService.recentPerformance(filters, limit));
   }
 
   @Operation(summary = "查询 Dataset 详情、当前版本与版本历史")
