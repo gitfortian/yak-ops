@@ -193,14 +193,24 @@ export const formatAnalysisMetricValue = (
   value: number | null | undefined,
 ) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  const stored = spec.analysis?.metrics?.[metric.field];
   const config = metricComputationFor(spec, metric.field);
   const format = effectiveNumberFormat(config);
-  const decimalPlaces = Math.min(4, Math.max(0, Number(config.decimalPlaces)));
+  const explicitDecimals = stored?.decimalPlaces;
   const options: Intl.NumberFormatOptions = {
     useGrouping: config.useGrouping,
-    maximumFractionDigits: decimalPlaces,
   };
-  if (format !== 'number' || !Number.isInteger(value)) options.minimumFractionDigits = decimalPlaces;
+
+  if (explicitDecimals !== undefined) {
+    const decimalPlaces = Math.min(4, Math.max(0, Number(explicitDecimals)));
+    options.minimumFractionDigits = decimalPlaces;
+    options.maximumFractionDigits = decimalPlaces;
+  } else {
+    // Preserve the pre-Phase-8 display contract for legacy/raw metrics: do not force
+    // trailing zeroes, but still cap noisy floating-point output at two decimals.
+    options.maximumFractionDigits = 2;
+  }
+
   if (format === 'percent') options.style = 'percent';
   return new Intl.NumberFormat('zh-CN', options).format(value);
 };
