@@ -38,6 +38,11 @@ const ACTION_OPTIONS: Array<{
   { label: '跳转 Yak 页面', value: 'yak' },
 ];
 
+const hasBehavior = (behavior: DashboardWidgetBehavior) => Boolean(
+  behavior.crossFilters?.length
+  || (behavior.clickAction && behavior.clickAction !== 'none'),
+);
+
 export function DashboardWidgetActionEditor({
   currentDashboardId,
   spec,
@@ -85,14 +90,24 @@ export function DashboardWidgetActionEditor({
     .filter((route) => YAK_TARGET_IDS.has(route.id))
     .map((route) => ({ label: route.title, value: route.path })), []);
 
+  const emit = (next: DashboardWidgetBehavior) => {
+    onChange(hasBehavior(next) ? next : undefined);
+  };
+
   const patch = (next: Partial<DashboardWidgetBehavior>) => {
-    const value: DashboardWidgetBehavior = { ...behavior, ...next };
-    onChange(value.clickAction && value.clickAction !== 'none' ? value : undefined);
+    emit({ ...behavior, ...next });
   };
 
   const changeAction = (clickAction: DashboardWidgetClickAction) => {
     if (clickAction === 'none') {
-      onChange(undefined);
+      emit({
+        ...behavior,
+        clickAction: undefined,
+        drillFields: undefined,
+        targetDashboardId: undefined,
+        targetPath: undefined,
+        queryParam: undefined,
+      });
       return;
     }
     if (clickAction === 'drill') {
@@ -130,7 +145,7 @@ export function DashboardWidgetActionEditor({
         点击行为
       </div>
       <div className="mt-1 text-[9px] leading-4 text-[#98a2b3]">
-        这是图表的主要点击动作；Stage 3 的筛选联动仍可同时执行。
+        这是图表的主要点击动作；直接图表联动和筛选器联动仍可同时执行。
       </div>
 
       <Select

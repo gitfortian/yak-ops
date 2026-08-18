@@ -5,6 +5,7 @@ import {
 import {
   applyAnalysisEncoding,
   changeAnalysisEncodingType,
+  rebindAnalysisEncoding,
   updateEncodingMetricAggregation,
 } from '@/components/analysis/encoding';
 import type { AnalysisEncoding, AnalysisSpec } from '@/components/analysis/model';
@@ -15,6 +16,7 @@ import { ConfigData } from './config-data';
 import { MetricAggregations } from './config-metrics';
 import { QueryControls } from './config-query';
 import { ChartStyleConfig } from './config-style';
+import { DashboardDirectCrossFilterEditor } from './direct-link-editor';
 import { CHART_META, findDataset } from './helpers';
 import { DashboardInteractionEditor } from './interaction-editor';
 import type {
@@ -33,6 +35,7 @@ import { DashboardWidgetActionEditor } from './widget-action-editor';
 export function ChartSheetConfigPanel({
   currentDashboardId,
   widget,
+  widgets,
   datasets,
   analyses,
   globalFilters,
@@ -46,6 +49,7 @@ export function ChartSheetConfigPanel({
 }: {
   currentDashboardId: string;
   widget: DashboardWidget;
+  widgets: DashboardWidget[];
   datasets: PublishedDataset[];
   analyses: AnalysisAsset[];
   globalFilters: DashboardGlobalFilter[];
@@ -134,7 +138,8 @@ export function ChartSheetConfigPanel({
   const physicalMetrics = spec.metrics.filter((metric) => !isCalculatedFieldKey(spec, metric.field));
 
   const changeType = (type: ChartType) => {
-    const next = changeAnalysisEncodingType(spec, type);
+    const changed = changeAnalysisEncodingType(spec, type);
+    const next = rebindAnalysisEncoding(changed, dataset);
     updateInlineAnalysis({
       type,
       encoding: next.encoding,
@@ -174,7 +179,7 @@ export function ChartSheetConfigPanel({
     const hasColor = Boolean(next.encoding.color.length);
     const shouldRevealLegend = !hadColor
       && hasColor
-      && (spec.type === 'bar' || spec.type === 'line');
+      && ['bar', 'stackedBar', 'line', 'area', 'scatter'].includes(spec.type);
     updateInlineAnalysis({
       encoding: next.encoding,
       dimensions: next.dimensions,
@@ -221,13 +226,14 @@ export function ChartSheetConfigPanel({
 
         <div className="mt-5">
           <SectionLabel>图表类型</SectionLabel>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5">
             {(Object.keys(CHART_META) as ChartType[]).map((type) => {
               const active = spec.type === type;
               return (
                 <button
                   key={type}
                   type="button"
+                  title={CHART_META[type].description}
                   onClick={() => changeType(type)}
                   className={[
                     'flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-[7px] border px-1 py-2.5 text-[10px] transition-[background-color,border-color,color]',
@@ -239,10 +245,13 @@ export function ChartSheetConfigPanel({
                   <span className={active ? 'text-[#344054]' : 'text-[#a0a6af]'}>
                     {CHART_META[type].icon}
                   </span>
-                  <span className="truncate">{CHART_META[type].label}</span>
+                  <span className="w-full truncate text-center">{CHART_META[type].label}</span>
                 </button>
               );
             })}
+          </div>
+          <div className="mt-2 text-[9px] leading-4 text-[#98a2b3]">
+            高级图表沿用 Encoding v1；切换类型时会保留可兼容字段，并自动补齐必填槽位。
           </div>
         </div>
 
@@ -321,14 +330,25 @@ export function ChartSheetConfigPanel({
               ),
               children: (
                 <div className="space-y-4 pb-2">
-                  <DashboardInteractionEditor
+                  <DashboardDirectCrossFilterEditor
                     widget={widget}
+                    widgets={widgets}
                     spec={spec}
                     dataset={dataset}
-                    filters={globalFilters}
-                    interactions={interactions}
-                    onChange={updateInteractions}
+                    datasets={datasets}
+                    analyses={analyses}
+                    onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
                   />
+                  <div className="border-t border-[#eceef1] pt-4">
+                    <DashboardInteractionEditor
+                      widget={widget}
+                      spec={spec}
+                      dataset={dataset}
+                      filters={globalFilters}
+                      interactions={interactions}
+                      onChange={updateInteractions}
+                    />
+                  </div>
                   <div className="border-t border-[#eceef1] pt-4">
                     <DashboardWidgetActionEditor
                       currentDashboardId={currentDashboardId}

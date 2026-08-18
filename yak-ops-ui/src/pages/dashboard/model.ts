@@ -34,8 +34,21 @@ export type {
 
 export type DashboardWidgetClickAction = 'none' | 'drill' | 'dashboard' | 'yak';
 
+/**
+ * Dashboard-local direct chart linkage. The source widget owns the rule; selecting its
+ * source field creates a runtime EQ filter on the mapped target widget field.
+ */
+export interface DashboardCrossFilterRule {
+  id: string;
+  sourceField: string;
+  targetWidgetId: string;
+  targetField: string;
+}
+
 /** Dashboard-only behavior persisted together with the inline Analysis snapshot. */
 export interface DashboardWidgetBehavior {
+  /** Direct chart-to-chart filters introduced in BI Phase 11. */
+  crossFilters?: DashboardCrossFilterRule[];
   clickAction?: DashboardWidgetClickAction;
   /** Ordered hierarchy, e.g. province -> city -> store. */
   drillFields?: string[];

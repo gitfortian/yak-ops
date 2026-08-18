@@ -18,11 +18,32 @@ export function ChartStyleConfig({
   onChange: (patch: Partial<AnalysisVisualConfig>) => void;
 }) {
   const style = resolveAnalysisStyle(spec.style);
-  const hasCartesianAxes = spec.type === 'bar' || spec.type === 'line';
-  const supportsLegend = spec.type === 'bar' || spec.type === 'line' || spec.type === 'pie';
-  const supportsLabels = supportsLegend;
-  const supportsPalette = supportsLegend;
-  const activeLabelPosition: AnalysisDataLabelPosition = spec.type === 'pie'
+  const hasCartesianAxes = ['bar', 'stackedBar', 'line', 'area', 'scatter'].includes(spec.type);
+  const hasCategoricalAxis = ['bar', 'stackedBar', 'line', 'area'].includes(spec.type);
+  const supportsLegend = [
+    'bar',
+    'stackedBar',
+    'line',
+    'area',
+    'pie',
+    'scatter',
+    'radar',
+    'funnel',
+  ].includes(spec.type);
+  const supportsLabels = [
+    'bar',
+    'stackedBar',
+    'line',
+    'area',
+    'pie',
+    'scatter',
+    'funnel',
+    'treemap',
+  ].includes(spec.type);
+  const supportsPalette = !['metric', 'table'].includes(spec.type);
+  const supportsLabelPosition = supportsLabels && spec.type !== 'treemap';
+  const radialLabelPosition = spec.type === 'pie' || spec.type === 'funnel';
+  const activeLabelPosition: AnalysisDataLabelPosition = radialLabelPosition
     ? style.dataLabelPosition === 'inside' ? 'inside' : 'outside'
     : style.dataLabelPosition === 'inside' ? 'inside' : 'top';
 
@@ -90,17 +111,17 @@ export function ChartStyleConfig({
             {supportsLabels ? (
               <>
                 <ToggleRow
-                  label="显示数据标签"
+                  label={spec.type === 'treemap' ? '显示数值' : '显示数据标签'}
                   checked={style.showDataLabels}
                   onChange={(showDataLabels) => onChange({ showDataLabels })}
                 />
-                {style.showDataLabels ? (
+                {style.showDataLabels && supportsLabelPosition ? (
                   <ControlRow label="标签位置">
                     <Select
                       size="small"
                       className="w-[116px]"
                       value={activeLabelPosition}
-                      options={spec.type === 'pie'
+                      options={radialLabelPosition
                         ? [
                           { label: '外侧', value: 'outside' },
                           { label: '内部', value: 'inside' },
@@ -127,25 +148,27 @@ export function ChartStyleConfig({
               checked={style.showGrid}
               onChange={(showGrid) => onChange({ showGrid })}
             />
-            <ControlRow label="标签旋转">
-              <Select
-                size="small"
-                className="w-[116px]"
-                value={style.axisLabelRotation}
-                options={[
-                  { label: '不旋转', value: 0 },
-                  { label: '30°', value: 30 },
-                  { label: '45°', value: 45 },
-                ]}
-                onChange={(axisLabelRotation: 0 | 30 | 45) => onChange({ axisLabelRotation })}
-              />
-            </ControlRow>
+            {hasCategoricalAxis ? (
+              <ControlRow label="标签旋转">
+                <Select
+                  size="small"
+                  className="w-[116px]"
+                  value={style.axisLabelRotation}
+                  options={[
+                    { label: '不旋转', value: 0 },
+                    { label: '30°', value: 30 },
+                    { label: '45°', value: 45 },
+                  ]}
+                  onChange={(axisLabelRotation: 0 | 30 | 45) => onChange({ axisLabelRotation })}
+                />
+              </ControlRow>
+            ) : null}
           </div>
         </StyleGroup>
       ) : null}
 
-      {spec.type === 'bar' ? (
-        <StyleGroup title="柱形">
+      {spec.type === 'bar' || spec.type === 'stackedBar' ? (
+        <StyleGroup title={spec.type === 'stackedBar' ? '堆叠柱形' : '柱形'}>
           <div className="space-y-3">
             <NumberRow
               label="最大宽度"
@@ -167,8 +190,8 @@ export function ChartStyleConfig({
         </StyleGroup>
       ) : null}
 
-      {spec.type === 'line' ? (
-        <StyleGroup title="折线">
+      {spec.type === 'line' || spec.type === 'area' ? (
+        <StyleGroup title={spec.type === 'area' ? '面积线' : '折线'}>
           <div className="space-y-3">
             <ToggleRow
               label="平滑曲线"
@@ -192,6 +215,19 @@ export function ChartStyleConfig({
               onChange={(symbolSize) => onChange({ symbolSize })}
             />
           </div>
+        </StyleGroup>
+      ) : null}
+
+      {spec.type === 'scatter' ? (
+        <StyleGroup title="散点">
+          <NumberRow
+            label="点大小"
+            value={style.symbolSize}
+            min={0}
+            max={14}
+            suffix="px"
+            onChange={(symbolSize) => onChange({ symbolSize })}
+          />
         </StyleGroup>
       ) : null}
 

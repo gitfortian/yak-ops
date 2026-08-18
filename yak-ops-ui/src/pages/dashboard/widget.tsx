@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   RotateCcw,
   Trash2,
+  X,
 } from 'lucide-react';
 import type {
   AnalysisAsset,
@@ -25,10 +26,12 @@ export function WidgetShell({
   dataset,
   runtimeFilters,
   drillPath,
+  activeSelection,
   selected,
   preview,
   onSelect,
   onDataSelect,
+  onClearSelection,
   onDrillBack,
   onDuplicate,
   onDelete,
@@ -39,10 +42,12 @@ export function WidgetShell({
   dataset?: PublishedDataset;
   runtimeFilters: DashboardFilter[];
   drillPath: DashboardDrillStep[];
+  activeSelection?: AnalysisSelection;
   selected: boolean;
   preview: boolean;
   onSelect: () => void;
   onDataSelect: (selection: AnalysisSelection) => void;
+  onClearSelection: () => void;
   onDrillBack: (depth: number) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -58,7 +63,9 @@ export function WidgetShell({
       className={[
         'group relative flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] bg-white transition-[border-color,box-shadow,transform] duration-150',
         preview
-          ? 'border border-[#e7e9ed] shadow-[0_1px_2px_rgba(16,24,40,.03)]'
+          ? activeSelection
+            ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
+            : 'border border-[#e7e9ed] shadow-[0_1px_2px_rgba(16,24,40,.03)]'
           : selected
             ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
             : 'border border-[#e4e7ec] shadow-[0_1px_2px_rgba(16,24,40,.025)] hover:border-[#d6dae0] hover:shadow-[0_4px_12px_rgba(16,24,40,.055)]',
@@ -77,6 +84,22 @@ export function WidgetShell({
         <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344054]">
           {title}
         </span>
+
+        {preview && activeSelection ? (
+          <button
+            type="button"
+            title={activeSelection.label}
+            className="ml-2 flex max-w-[190px] shrink-0 items-center gap-1 rounded-[5px] border border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] px-1.5 py-1 text-[9px] text-[#475467]"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClearSelection();
+            }}
+          >
+            <span className="truncate">已选 · {String(activeSelection.value)}</span>
+            <X size={9} className="shrink-0 text-[#7a818c]" />
+          </button>
+        ) : null}
 
         {!preview ? (
           <div

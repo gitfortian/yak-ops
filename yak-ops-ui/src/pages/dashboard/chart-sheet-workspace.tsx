@@ -17,6 +17,7 @@ import type {
 export function DashboardChartSheetWorkspace({
   currentDashboardId,
   widget,
+  widgets,
   datasets,
   analyses,
   globalFilters,
@@ -31,6 +32,7 @@ export function DashboardChartSheetWorkspace({
 }: {
   currentDashboardId: string;
   widget: DashboardWidget;
+  widgets: DashboardWidget[];
   datasets: PublishedDataset[];
   analyses: AnalysisAsset[];
   globalFilters: DashboardGlobalFilter[];
@@ -112,6 +114,7 @@ export function DashboardChartSheetWorkspace({
         <ChartSheetConfigPanel
           currentDashboardId={currentDashboardId}
           widget={widget}
+          widgets={widgets}
           datasets={datasets}
           analyses={analyses}
           globalFilters={globalFilters}
