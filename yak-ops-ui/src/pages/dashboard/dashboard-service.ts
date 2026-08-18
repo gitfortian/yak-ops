@@ -182,13 +182,33 @@ export const toDashboardServerDetail = (value: DashboardDetailWire): DashboardSe
   interactions: (value.interactions || []).map(interaction),
 });
 
-const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardVersionDetail => ({
-  dashboard: summary(value.dashboard),
-  version: version(value.version),
-  widgets: (value.widgets || []).map(widget),
-  globalFilters: (value.globalFilters || []).map(globalFilter),
-  interactions: (value.interactions || []).map(interaction),
-});
+const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardVersionDetail => {
+  const dashboard = summary(value.dashboard);
+  const versionDetail = version(value.version);
+  const normalized = normalizeDashboardDocument({
+    version: 1,
+    id: dashboard.id,
+    name: versionDetail.name,
+    description: versionDetail.description,
+    activeDatasetId: versionDetail.activeDatasetId || '',
+    widgets: (value.widgets || []).map(widget),
+    globalFilters: (value.globalFilters || []).map(globalFilter),
+    interactions: (value.interactions || []).map(interaction),
+    currentVersionNo: versionDetail.versionNo,
+    currentVersionId: versionDetail.id,
+    publishedVersionNo: dashboard.publishedVersionNo,
+    publishedVersionId: dashboard.publishedVersionId,
+    publishedAt: dashboard.publishedTime,
+    updatedAt: dashboard.updateTime,
+  });
+  return {
+    dashboard,
+    version: versionDetail,
+    widgets: normalized.widgets,
+    globalFilters: normalized.globalFilters,
+    interactions: normalized.interactions,
+  };
+};
 
 export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDocument => normalizeDashboardDocument({
   version: 1,
