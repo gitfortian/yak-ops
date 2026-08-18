@@ -1,3 +1,5 @@
+import { fetchAnalyses } from '@/components/analysis/analysis-service';
+import { fetchAnalysisDatasets } from '@/components/analysis/dataset-service';
 import {
   Alert,
   Button,
@@ -10,6 +12,7 @@ import {
 } from 'antd';
 import { Download, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchDashboard } from './dashboard-service';
 import type { AnalysisAsset, DashboardWidget, PublishedDataset } from './model';
 import {
   fetchDashboardQueryPerformance,
@@ -37,27 +40,22 @@ const widgetTitle = (widget: DashboardWidget, analyses: AnalysisAsset[]) => (
 
 export function DashboardPerformanceModal({
   open,
+  dashboardId,
   dashboardName,
-  widgets,
-  analyses,
-  datasets,
   onClose,
 }: {
   open: boolean;
+  dashboardId: string;
   dashboardName: string;
-  widgets: DashboardWidget[];
-  analyses: AnalysisAsset[];
-  datasets: PublishedDataset[];
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [records, setRecords] = useState<DashboardQueryPerformance[]>([]);
   const [detail, setDetail] = useState<DashboardQueryPerformance>();
-
-  const datasetIds = useMemo(() => Array.from(new Set(widgets
-    .map((widget) => widgetDatasetId(widget, analyses))
-    .filter((value): value is string => Boolean(value)))), [analyses, widgets]);
+  const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
+  const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
+  const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
 
   const widgetNamesByDataset = useMemo(() => {
     const result = new Map<string, string[]>();
@@ -77,21 +75,28 @@ export function DashboardPerformanceModal({
   ), [datasets]);
 
   const load = useCallback(async () => {
-    if (!datasetIds.length) {
-      setRecords([]);
-      setError(undefined);
-      return;
-    }
+    if (!/^\d+$/.test(dashboardId)) return;
     setLoading(true);
     setError(undefined);
     try {
+      const [dashboard, nextAnalyses, nextDatasets] = await Promise.all([
+        fetchDashboard(dashboardId),
+        fetchAnalyses(),
+        fetchAnalysisDatasets(),
+      ]);
+      setWidgets(dashboard.widgets);
+      setAnalyses(nextAnalyses);
+      setDatasets(nextDatasets);
+      const datasetIds = Array.from(new Set(dashboard.widgets
+        .map((widget) => widgetDatasetId(widget, nextAnalyses))
+        .filter((value): value is string => Boolean(value))));
       setRecords(await fetchDashboardQueryPerformance(datasetIds, 100));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取性能分析记录失败');
     } finally {
       setLoading(false);
     }
-  }, [datasetIds]);
+  }, [dashboardId]);
 
   useEffect(() => {
     if (open) void load();
@@ -220,9 +225,7 @@ export function DashboardPerformanceModal({
             emptyText: (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={datasetIds.length
-                  ? '当前进程尚未采集到这些数据集的查询记录，请操作或刷新图表后再查看'
-                  : '当前仪表盘还没有可分析的数据集组件'}
+                description="当前进程尚未采集到该仪表盘的查询记录，请操作或刷新图表后再查看"
               />
             ),
           }}
