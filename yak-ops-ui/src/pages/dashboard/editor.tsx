@@ -57,7 +57,8 @@ export default function DashboardEditorPage() {
       : undefined;
     return [{
       id: widget.id,
-      title: widget.analysisId ? analysis?.name ?? '历史图表' : widget.title ?? '未命名图表',
+      title: widget.title?.trim()
+        || (widget.analysisId ? analysis?.name ?? '历史图表' : '未命名图表'),
     }];
   }), [designer.analyses, designer.widgets, sheetOrder]);
   const hasGlobalFilters = designer.dashboard.globalFilters.length > 0;
@@ -481,12 +482,18 @@ export default function DashboardEditorPage() {
 
       {!designer.preview ? (
         <DashboardSheetBar
+          dashboardKey={designer.dashboard.id}
           sheets={sheets}
           activeSheet={activeSheet}
           activeSheetId={activeSheetId}
+          canAddChart={Boolean(designer.activeDataset) && !designer.datasetsLoading}
           onDashboard={activateDashboardSheet}
           onChart={activateChartSheet}
           onReorder={setSheetOrder}
+          onAddChart={addChart}
+          onRename={(sheetId, title) => designer.updateWidget(sheetId, { title })}
+          onDuplicate={designer.duplicateWidget}
+          onDelete={designer.deleteWidget}
         />
       ) : null}
 
