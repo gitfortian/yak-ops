@@ -8,6 +8,12 @@ import {
   quickCalculationLabel,
   resolveAnalysisTopN,
 } from './analysis';
+import {
+  calculatedFieldFor,
+  isCalculatedFieldKey,
+  materializeCalculatedFields,
+  queryMetricsForAnalysis,
+} from './calculated-field';
 import { encodingMeetsChartRequirements, resolveAnalysisEncoding } from './encoding';
 import { queryAnalysisDataset } from './dataset-service';
 import type {
@@ -46,7 +52,10 @@ const metricAnalysisDisplayName = (
   dataset: PublishedDataset,
   metric: MetricBinding,
 ) => {
-  const base = metricDisplayName(dataset, metric);
+  const calculated = calculatedFieldFor(spec, metric.field);
+  const base = calculated
+    ? `${calculated.name} · 计算字段`
+    : metricDisplayName(dataset, metric);
   const calculation = spec.type === 'metric'
     ? 'none'
     : metricComputationFor(spec, metric.field).quickCalculation;
@@ -105,12 +114,13 @@ export const buildDatasetQueryPayload = (
   const sort = spec.sort;
   if (sort?.field) {
     const metric = spec.metrics.find((item) => item.field === sort.field);
-    const valid = Boolean(metric || spec.dimensions.includes(sort.field));
-    const duplicatedByTopN = Boolean(topN && metric?.field === topN.metric.field);
+    const physicalMetric = metric && !isCalculatedFieldKey(spec, metric.field) ? metric : undefined;
+    const valid = Boolean(physicalMetric || spec.dimensions.includes(sort.field));
+    const duplicatedByTopN = Boolean(topN && physicalMetric?.field === topN.metric.field);
     if (valid && !duplicatedByTopN) {
       sorts.push({
         fieldId: sort.field,
-        aggregation: metric?.aggregation,
+        aggregation: physicalMetric?.aggregation,
         direction: sort.direction === 'desc' ? 'DESC' : 'ASC',
       });
     }
@@ -119,7 +129,7 @@ export const buildDatasetQueryPayload = (
   const baseLimit = spec.limit ?? (spec.type === 'table' ? 200 : 500);
   return {
     dimensions: spec.type === 'metric' ? [] : spec.dimensions,
-    metrics: spec.metrics.map((metric) => ({ fieldId: metric.field, aggregation: metric.aggregation })),
+    metrics: queryMetricsForAnalysis(spec),
     filters,
     sorts,
     limit: topN ? Math.min(baseLimit, topN.count) : baseLimit,
@@ -162,7 +172,7 @@ function useAnalysisQuery(
       setError('');
       try {
         const value = await queryAnalysisDataset(dataset.id, payload);
-        if (requestId === sequence.current) setResult(value);
+        if (requestId === sequence.current) setResult(materializeCalculatedFields(spec, value));
       } catch (queryError) {
         if (requestId === sequence.current) {
           setResult(undefined);
