@@ -1,4 +1,8 @@
 import {
+  calculatedFieldKey,
+  isCalculatedFieldKey,
+} from '@/components/analysis/calculated-field';
+import {
   applyAnalysisEncoding,
   changeAnalysisEncodingType,
   updateEncodingMetricAggregation,
@@ -98,11 +102,20 @@ export function ChartSheetConfigPanel({
   const dataset = findDataset(datasets, spec.datasetId);
   if (!dataset) return null;
 
-  const fieldOptions = dataset.fields.map((field) => ({
-    label: field.label,
-    value: field.key,
-    role: field.role,
-  }));
+  const calculatedFields = spec.analysis?.calculatedFields ?? [];
+  const fieldOptions = [
+    ...dataset.fields.map((field) => ({
+      label: field.label,
+      value: field.key,
+      role: field.role,
+    })),
+    ...calculatedFields.map((field) => ({
+      label: field.name,
+      value: calculatedFieldKey(field),
+      role: 'metric' as const,
+      calculated: true,
+    })),
+  ];
   const filterOptions = dataset.fields.map((field) => ({
     label: field.label,
     value: field.key,
@@ -114,9 +127,11 @@ export function ChartSheetConfigPanel({
   const sortOptions = dataset.fields
     .filter((field) => selectedFields.has(field.key))
     .map((field) => ({ label: field.label, value: field.key }));
-  const metricLabels = Object.fromEntries(
-    dataset.fields.map((field) => [field.key, field.label]),
-  );
+  const metricLabels = Object.fromEntries([
+    ...dataset.fields.map((field) => [field.key, field.label]),
+    ...calculatedFields.map((field) => [calculatedFieldKey(field), field.name]),
+  ]);
+  const physicalMetrics = spec.metrics.filter((metric) => !isCalculatedFieldKey(spec, metric.field));
 
   const changeType = (type: ChartType) => {
     const next = changeAnalysisEncodingType(spec, type);
@@ -145,12 +160,13 @@ export function ChartSheetConfigPanel({
     const topNMetricStillActive = currentTopN
       ? next.metrics.some((metric) => metric.field === currentTopN.metricField)
       : true;
+    const topNFallback = next.metrics.find((metric) => !isCalculatedFieldKey(next, metric.field));
     const nextAnalysis = currentTopN && !topNMetricStillActive
       ? {
         ...spec.analysis,
         version: 1 as const,
-        topN: next.metrics[0]
-          ? { ...currentTopN, metricField: next.metrics[0].field }
+        topN: topNFallback
+          ? { ...currentTopN, metricField: topNFallback.field }
           : { ...currentTopN, enabled: false },
       }
       : spec.analysis;
@@ -243,7 +259,7 @@ export function ChartSheetConfigPanel({
             onEncodingChange={changeEncoding}
           />
           <MetricAggregations
-            metrics={spec.metrics}
+            metrics={physicalMetrics}
             labels={metricLabels}
             onChange={(field: string, aggregation: Aggregation) => {
               const next = updateEncodingMetricAggregation(spec, field, aggregation);
@@ -380,7 +396,7 @@ function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-4">
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">图表配置</div>
-        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、分析、样式与交互配置</div>
+        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、计算、分析、样式与交互</div>
       </div>
       <button
         type="button"

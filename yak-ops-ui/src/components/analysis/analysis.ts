@@ -1,3 +1,4 @@
+import { isCalculatedFieldKey } from './calculated-field';
 import { resolveAnalysisEncoding } from './encoding';
 import type {
   AnalysisMetricComputation,
@@ -93,7 +94,8 @@ export const patchMetricComputation = (
 /**
  * Resolve an enabled Top/Bottom N definition against the active query projection. Grouped
  * color series are deliberately excluded because limiting grouped rows could truncate a
- * category before all of its series values are returned.
+ * category before all of its series values are returned. Calculated metrics stay client-side,
+ * so they cannot be used for a server-side Top N in Phase 9.
  */
 export const resolveAnalysisTopN = (spec: AnalysisSpec) => {
   const topN = spec.analysis?.topN;
@@ -101,7 +103,7 @@ export const resolveAnalysisTopN = (spec: AnalysisSpec) => {
   const colorField = resolveAnalysisEncoding(spec).color.find((item) => item.role === 'dimension')?.field;
   if (colorField) return undefined;
   const metric = spec.metrics.find((item) => item.field === topN.metricField);
-  if (!metric) return undefined;
+  if (!metric || isCalculatedFieldKey(spec, metric.field)) return undefined;
   const count = Math.min(100, Math.max(1, Math.round(Number(topN.count) || 10)));
   return {
     metric,

@@ -61,6 +61,7 @@ export function DashboardChartSheetWorkspace({
         dataset={dataset}
         spec={spec}
         editable={!widget.analysisId && Boolean(widget.inlineAnalysis && dataset)}
+        onSpecPatch={!widget.analysisId ? updateInlineAnalysis : undefined}
       />
 
       <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">

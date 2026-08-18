@@ -1,8 +1,30 @@
-import { analysisEncodingFieldKeys } from '@/components/analysis/encoding';
-import type { AnalysisSpec } from '@/components/analysis/model';
-import { Input } from 'antd';
-import { Database, GripVertical, Hash, Search, Type } from 'lucide-react';
+import {
+  calculatedFieldKey,
+  isCalculatedFieldKey,
+} from '@/components/analysis/calculated-field';
+import {
+  analysisEncodingFieldKeys,
+  applyAnalysisEncoding,
+  resolveAnalysisEncoding,
+} from '@/components/analysis/encoding';
+import type {
+  AnalysisCalculatedField,
+  AnalysisSpec,
+} from '@/components/analysis/model';
+import { Button, Input, Popconfirm } from 'antd';
+import {
+  Braces,
+  Database,
+  GripVertical,
+  Hash,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Type,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { CalculatedFieldEditor } from './calculated-field-editor';
 import { writeChartFieldDragPayload } from './chart-field-drag';
 import type { DatasetField, PublishedDataset } from './model';
 
@@ -19,12 +41,16 @@ export function ChartFieldPanel({
   dataset,
   spec,
   editable,
+  onSpecPatch,
 }: {
   dataset?: PublishedDataset;
   spec?: AnalysisSpec;
   editable: boolean;
+  onSpecPatch?: (patch: Partial<AnalysisSpec>) => void;
 }) {
   const [keyword, setKeyword] = useState('');
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingField, setEditingField] = useState<AnalysisCalculatedField>();
   const normalizedKeyword = keyword.trim().toLowerCase();
   const fields = useMemo(() => {
     if (!dataset) return [];
@@ -37,10 +63,75 @@ export function ChartFieldPanel({
   }, [dataset, normalizedKeyword]);
   const dimensions = fields.filter((field) => field.role === 'dimension');
   const metrics = fields.filter((field) => field.role === 'metric');
+  const calculatedFields = spec?.analysis?.calculatedFields ?? [];
+  const visibleCalculatedFields = normalizedKeyword
+    ? calculatedFields.filter((field) => (
+      field.name.toLowerCase().includes(normalizedKeyword)
+      || field.expression.toLowerCase().includes(normalizedKeyword)
+    ))
+    : calculatedFields;
   const encodedFields = useMemo(
     () => spec ? analysisEncodingFieldKeys(spec) : new Set<string>(),
     [spec],
   );
+
+  const saveCalculatedField = (field: AnalysisCalculatedField) => {
+    if (!spec || !onSpecPatch) return;
+    const current = spec.analysis?.calculatedFields ?? [];
+    const exists = current.some((item) => item.id === field.id);
+    const next = exists
+      ? current.map((item) => item.id === field.id ? field : item)
+      : [...current, field];
+    onSpecPatch({
+      analysis: {
+        ...spec.analysis,
+        version: 1,
+        calculatedFields: next,
+      },
+    });
+    setEditorOpen(false);
+    setEditingField(undefined);
+  };
+
+  const deleteCalculatedField = (field: AnalysisCalculatedField) => {
+    if (!spec || !onSpecPatch) return;
+    const key = calculatedFieldKey(field);
+    const encoding = resolveAnalysisEncoding(spec);
+    const cleanedEncoding = {
+      ...encoding,
+      category: encoding.category.filter((item) => item.field !== key),
+      value: encoding.value.filter((item) => item.field !== key),
+      color: encoding.color.filter((item) => item.field !== key),
+      size: encoding.size.filter((item) => item.field !== key),
+      label: encoding.label.filter((item) => item.field !== key),
+      detail: encoding.detail.filter((item) => item.field !== key),
+      tooltip: encoding.tooltip.filter((item) => item.field !== key),
+    };
+    const metricConfig = { ...(spec.analysis?.metrics ?? {}) };
+    delete metricConfig[key];
+    const calculated = calculatedFields.filter((item) => item.id !== field.id);
+    const provisionalAnalysis = {
+      ...spec.analysis,
+      version: 1 as const,
+      metrics: metricConfig,
+      calculatedFields: calculated,
+    };
+    const rebound = applyAnalysisEncoding({ ...spec, analysis: provisionalAnalysis }, cleanedEncoding);
+    const topN = provisionalAnalysis.topN;
+    const physicalFallback = rebound.metrics.find((metric) => !isCalculatedFieldKey(rebound, metric.field));
+    const nextTopN = topN?.metricField === key
+      ? physicalFallback
+        ? { ...topN, metricField: physicalFallback.field }
+        : { ...topN, enabled: false }
+      : topN;
+    onSpecPatch({
+      encoding: rebound.encoding,
+      dimensions: rebound.dimensions,
+      metrics: rebound.metrics,
+      sort: spec.sort?.field === key ? undefined : spec.sort,
+      analysis: { ...provisionalAnalysis, topN: nextTopN },
+    });
+  };
 
   return (
     <section className="flex w-[244px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
@@ -64,8 +155,24 @@ export function ChartFieldPanel({
           className="!h-8 !rounded-[7px]"
           onChange={(event) => setKeyword(event.target.value)}
         />
-        <div className="mt-2 text-[9px] leading-4 text-[#98a2b3]">
-          {editable ? '拖动字段到右侧可视化编码槽位' : '共享图表复制为可编辑图表后可拖拽配置'}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="text-[9px] leading-4 text-[#98a2b3]">
+            {editable ? '拖动字段到右侧编码槽位' : '复制为可编辑图表后可配置'}
+          </div>
+          {editable && dataset && spec && onSpecPatch ? (
+            <Button
+              type="text"
+              size="small"
+              className="!h-6 !px-1.5 !text-[9px]"
+              icon={<Plus size={10} />}
+              onClick={() => {
+                setEditingField(undefined);
+                setEditorOpen(true);
+              }}
+            >
+              计算字段
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -86,9 +193,36 @@ export function ChartFieldPanel({
               encodedFields={encodedFields}
               editable={editable}
             />
+            {calculatedFields.length ? (
+              <CalculatedFieldGroup
+                fields={visibleCalculatedFields}
+                total={calculatedFields.length}
+                encodedFields={encodedFields}
+                editable={editable}
+                onEdit={(field) => {
+                  setEditingField(field);
+                  setEditorOpen(true);
+                }}
+                onDelete={deleteCalculatedField}
+              />
+            ) : null}
           </div>
         )}
       </div>
+
+      {dataset && spec ? (
+        <CalculatedFieldEditor
+          open={editorOpen}
+          field={editingField}
+          dataset={dataset}
+          existingFields={calculatedFields}
+          onCancel={() => {
+            setEditorOpen(false);
+            setEditingField(undefined);
+          }}
+          onSave={saveCalculatedField}
+        />
+      ) : null}
     </section>
   );
 }
@@ -144,6 +278,92 @@ function FieldGroup({
         })}
         {!fields.length ? (
           <div className="px-1.5 py-2 text-[9px] text-[#b0b5bd]">没有匹配字段</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CalculatedFieldGroup({
+  fields,
+  total,
+  encodedFields,
+  editable,
+  onEdit,
+  onDelete,
+}: {
+  fields: AnalysisCalculatedField[];
+  total: number;
+  encodedFields: Set<string>;
+  editable: boolean;
+  onEdit: (field: AnalysisCalculatedField) => void;
+  onDelete: (field: AnalysisCalculatedField) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between px-1.5">
+        <span className="text-[10px] font-semibold text-[#667085]">计算字段</span>
+        <span className="text-[9px] tabular-nums text-[#b0b5bd]">{total}</span>
+      </div>
+      <div className="space-y-0.5">
+        {fields.map((field) => {
+          const key = calculatedFieldKey(field);
+          const selected = encodedFields.has(key);
+          return (
+            <div
+              key={field.id}
+              draggable={editable}
+              title={`${field.name} · ${field.expression}`}
+              className={[
+                'group flex min-h-8 items-center gap-1.5 rounded-[6px] px-1.5 text-[10px] transition-colors',
+                editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
+                selected
+                  ? 'bg-[#f4f5f7] font-medium text-[#344054]'
+                  : 'text-[#475467] hover:bg-[#f7f8fa]',
+              ].join(' ')}
+              onDragStart={(event) => {
+                if (!editable) return;
+                writeChartFieldDragPayload(event, { field: key, role: 'metric' });
+              }}
+            >
+              <GripVertical size={12} className="shrink-0 text-[#c2c6cc]" />
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-[#f2f4f7] text-[#7a818c]">
+                <Braces size={11} />
+              </span>
+              <span className="min-w-0 flex-1 truncate">{field.name}</span>
+              <span className="shrink-0 text-[8px] text-[#b0b5bd]">计算</span>
+              {editable ? (
+                <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[#98a2b3] hover:bg-[#e9ebef] hover:text-[#475467]"
+                    aria-label={`编辑${field.name}`}
+                    onClick={() => onEdit(field)}
+                  >
+                    <Pencil size={9} />
+                  </button>
+                  <Popconfirm
+                    title="删除计算字段？"
+                    description="已绑定到图表的该字段会同步移除。"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => onDelete(field)}
+                  >
+                    <button
+                      type="button"
+                      className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[#98a2b3] hover:bg-[#e9ebef] hover:text-[#b42318]"
+                      aria-label={`删除${field.name}`}
+                    >
+                      <Trash2 size={9} />
+                    </button>
+                  </Popconfirm>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {!fields.length ? (
+          <div className="px-1.5 py-2 text-[9px] text-[#b0b5bd]">没有匹配计算字段</div>
         ) : null}
       </div>
     </div>

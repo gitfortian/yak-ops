@@ -1,3 +1,4 @@
+import { calculatedFieldKey } from './calculated-field';
 import type {
   Aggregation,
   AnalysisEncoding,
@@ -208,7 +209,11 @@ export const analysisEncodingFieldKeys = (
 const validBindingForDataset = (
   binding: AnalysisEncodingBinding,
   dataset: PublishedDataset,
+  calculatedFields: Set<string>,
 ) => {
+  if (binding.role === 'metric' && calculatedFields.has(binding.field)) {
+    return { ...binding, aggregation: binding.aggregation ?? 'SUM' } satisfies AnalysisEncodingBinding;
+  }
   const field = dataset.fields.find((item) => item.key === binding.field);
   if (!field || field.role !== binding.role) return undefined;
   return {
@@ -248,16 +253,19 @@ const fillRequiredBindings = (
   return next;
 };
 
-/** Dataset changes validate all channels, then seed only missing required slots. */
+/** Dataset changes validate all channels, preserve chart-local metrics, then seed required slots. */
 export const rebindAnalysisEncoding = <T extends AnalysisSpec>(
   spec: T,
   dataset: PublishedDataset,
 ): T => {
   const source = resolveAnalysisEncoding(spec);
   const next = cloneAnalysisEncoding(EMPTY_ANALYSIS_ENCODING);
+  const calculatedFields = new Set(
+    (spec.analysis?.calculatedFields ?? []).map((field) => calculatedFieldKey(field)),
+  );
   ENCODING_CHANNELS.forEach((channel) => {
     next[channel] = source[channel]
-      .map((binding) => validBindingForDataset(binding, dataset))
+      .map((binding) => validBindingForDataset(binding, dataset, calculatedFields))
       .filter((binding): binding is AnalysisEncodingBinding => Boolean(binding));
   });
   const seeded = fillRequiredBindings(next, spec.type, dataset);
