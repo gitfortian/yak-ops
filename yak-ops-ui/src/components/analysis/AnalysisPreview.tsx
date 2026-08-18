@@ -431,7 +431,7 @@ export function AnalysisPreview(props: AnalysisPreviewProps) {
     JSON.stringify(props.runtimeFilters ?? []),
   ].join(':');
   return (
-    <AnalysisErrorBoundary key={resetKey}>
+    <AnalysisErrorBoundary resetKey={resetKey}>
       <AnalysisPreviewContent {...props} />
     </AnalysisErrorBoundary>
   );
