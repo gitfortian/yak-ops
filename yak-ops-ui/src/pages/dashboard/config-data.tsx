@@ -19,6 +19,7 @@ interface FieldOption {
   label: string;
   value: string;
   role: DatasetFieldRole;
+  calculated?: boolean;
 }
 
 interface BoundField {
@@ -38,6 +39,9 @@ export function ConfigData({
 }) {
   const encoding = resolveAnalysisEncoding(spec);
   const fieldLabel = new Map(fieldOptions.map((option) => [option.value, option.label]));
+  const calculatedFields = new Set(
+    fieldOptions.filter((option) => option.calculated).map((option) => option.value),
+  );
   const aggregationLabel = new Map(AGGREGATION_OPTIONS.map((option) => [option.value, option.label]));
 
   return (
@@ -51,7 +55,9 @@ export function ConfigData({
           field: binding.field,
           label: fieldLabel.get(binding.field) ?? binding.field,
           suffix: binding.role === 'metric'
-            ? aggregationLabel.get(binding.aggregation ?? 'SUM') ?? binding.aggregation ?? 'SUM'
+            ? calculatedFields.has(binding.field)
+              ? '计算'
+              : aggregationLabel.get(binding.aggregation ?? 'SUM') ?? binding.aggregation ?? 'SUM'
             : undefined,
         }));
         const options = fieldOptions.filter((option) => rule.roles.includes(option.role));
@@ -157,6 +163,7 @@ function EncodingDropZone({
     setDragOver(false);
     const payload = readChartFieldDragPayload(event);
     if (!payload || !rule.roles.includes(payload.role)) return;
+    if (!options.some((option) => option.value === payload.field && option.role === payload.role)) return;
     onAdd(payload.field, payload.role);
   };
 
