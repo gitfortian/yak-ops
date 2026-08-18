@@ -3,7 +3,9 @@ import {
   BarChart3,
   ChevronLeft,
   Eye,
+  Gauge,
   History,
+  Palette,
   Redo2,
   Save,
   Send,
@@ -178,23 +180,25 @@ export function DashboardToolbar({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
           {!preview ? (
             <>
-              <a
-                href="#"
-                className="text-[12px] font-medium text-[#161823] no-underline transition-colors hover:text-[var(--yak-brand-color)]"
-                onClick={(event) => event.preventDefault()}
+              <Button
+                type="text"
+                size="small"
+                className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                icon={<Palette size={13} />}
               >
                 仪表盘样式
-              </a>
-              <a
-                href="#"
-                className="text-[12px] font-medium text-[#161823] no-underline transition-colors hover:text-[var(--yak-brand-color)]"
-                onClick={(event) => event.preventDefault()}
+              </Button>
+              <Button
+                type="text"
+                size="small"
+                className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                icon={<Gauge size={13} />}
               >
                 性能分析
-              </a>
+              </Button>
             </>
           ) : null}
 
