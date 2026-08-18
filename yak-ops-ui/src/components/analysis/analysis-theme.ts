@@ -9,6 +9,8 @@ export interface AnalysisThemeTokens {
   headerBackgroundColor: string;
   stripedBackgroundColor: string;
   hoverBackgroundColor: string;
+  tableTextColor: string;
+  tableBorderColor: string;
   tooltipBackgroundColor: string;
   tooltipTextColor: string;
   metricValueColor: string;
@@ -25,6 +27,8 @@ export const DEFAULT_ANALYSIS_THEME: AnalysisThemeTokens = {
   headerBackgroundColor: '#fafafa',
   stripedBackgroundColor: '#fafbfc',
   hoverBackgroundColor: '#f7f8fa',
+  tableTextColor: '#344054',
+  tableBorderColor: '#e7eaf0',
   tooltipBackgroundColor: 'rgba(17,24,39,.94)',
   tooltipTextColor: '#ffffff',
   metricValueColor: '#161823',
