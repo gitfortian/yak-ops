@@ -2,7 +2,7 @@ package io.yak.ops.business.dataset;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlColumn;
+import io.yak.ops.core.execution.sql.SqlExecutionColumn;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -13,7 +13,7 @@ public record DatasetQueryResult(
     @JsonSerialize(using = ToStringSerializer.class) long datasetVersionId,
     int datasetVersionNo,
     List<DatasetQueryColumnBinding> bindings,
-    List<DataSourceSqlColumn> columns,
+    List<SqlExecutionColumn> columns,
     List<List<Object>> rows,
     int returnedRows,
     boolean truncated,
