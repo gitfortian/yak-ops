@@ -59,7 +59,7 @@ public class DatasetQueryService {
         dataset.name(),
         version.id(),
         version.versionNo(),
-        version.sourceType(),
+        version.sourceType().name(),
         execution.dataSourceId(),
         execution.sql(),
         execution.waitMillis(),
