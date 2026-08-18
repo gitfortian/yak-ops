@@ -31,6 +31,11 @@ export interface ResolvedDashboardTheme {
     tooltipTextColor: string;
     metricValueColor: string;
   };
+  table: {
+    headerBackgroundColor: string;
+    stripedBackgroundColor: string;
+    hoverBackgroundColor: string;
+  };
 }
 
 export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
@@ -59,6 +64,11 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
       tooltipTextColor: '#ffffff',
       metricValueColor: '#161823',
     },
+    table: {
+      headerBackgroundColor: '#fafafa',
+      stripedBackgroundColor: '#fafbfc',
+      hoverBackgroundColor: '#f7f8fa',
+    },
   },
   {
     presetId: 'yak-dark',
@@ -84,6 +94,11 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
       tooltipBackgroundColor: '#0b1220',
       tooltipTextColor: '#f8fafc',
       metricValueColor: '#f8fafc',
+    },
+    table: {
+      headerBackgroundColor: '#182230',
+      stripedBackgroundColor: '#202b3a',
+      hoverBackgroundColor: '#29384b',
     },
   },
   {
@@ -111,6 +126,11 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
       tooltipTextColor: '#edf8ff',
       metricValueColor: '#7dd3fc',
     },
+    table: {
+      headerBackgroundColor: '#0b2944',
+      stripedBackgroundColor: '#0c2841',
+      hoverBackgroundColor: '#103553',
+    },
   },
   {
     presetId: 'graphite',
@@ -136,6 +156,11 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
       tooltipBackgroundColor: '#0f0f10',
       tooltipTextColor: '#fafafa',
       metricValueColor: '#ffffff',
+    },
+    table: {
+      headerBackgroundColor: '#2b2c30',
+      stripedBackgroundColor: '#292a2e',
+      hoverBackgroundColor: '#34353a',
     },
   },
   {
@@ -163,12 +188,26 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
       tooltipTextColor: '#ffffff',
       metricValueColor: '#172b4d',
     },
+    table: {
+      headerBackgroundColor: '#f1f6fb',
+      stripedBackgroundColor: '#f5f9fc',
+      hoverBackgroundColor: '#eaf2f9',
+    },
   },
 ];
 
 const presetById = (presetId?: DashboardThemePresetId) => (
   DASHBOARD_THEME_PRESETS.find((item) => item.presetId === presetId)
   ?? DASHBOARD_THEME_PRESETS[0]
+);
+
+const hasKeys = (value?: Record<string, unknown>) => Boolean(value && Object.keys(value).length);
+
+export const hasDashboardThemeOverrides = (theme?: DashboardTheme) => (
+  hasKeys(theme?.canvas as Record<string, unknown> | undefined)
+  || hasKeys(theme?.component as Record<string, unknown> | undefined)
+  || hasKeys(theme?.chart as Record<string, unknown> | undefined)
+  || hasKeys(theme?.table as Record<string, unknown> | undefined)
 );
 
 export const normalizeDashboardTheme = (theme?: DashboardTheme): DashboardTheme => ({
@@ -179,6 +218,7 @@ export const normalizeDashboardTheme = (theme?: DashboardTheme): DashboardTheme 
     ...theme.chart,
     palette: theme.chart.palette ? [...theme.chart.palette] : undefined,
   } : undefined,
+  table: theme?.table ? { ...theme.table } : undefined,
 });
 
 export const resolveDashboardTheme = (theme?: DashboardTheme): ResolvedDashboardTheme => {
@@ -202,6 +242,10 @@ export const resolveDashboardTheme = (theme?: DashboardTheme): ResolvedDashboard
         ? [...normalized.chart.palette]
         : [...preset.chart.palette],
     },
+    table: {
+      ...preset.table,
+      ...normalized.table,
+    },
   };
 };
 
@@ -217,9 +261,9 @@ export const analysisThemeFromDashboardTheme = (
     axisColor: resolved.chart.axisColor,
     gridColor: resolved.chart.gridColor,
     borderColor: resolved.component.borderColor,
-    headerBackgroundColor: resolved.component.subtleBackgroundColor,
-    stripedBackgroundColor: resolved.component.subtleBackgroundColor,
-    hoverBackgroundColor: resolved.component.hoverBackgroundColor,
+    headerBackgroundColor: resolved.table.headerBackgroundColor,
+    stripedBackgroundColor: resolved.table.stripedBackgroundColor,
+    hoverBackgroundColor: resolved.table.hoverBackgroundColor,
     tooltipBackgroundColor: resolved.chart.tooltipBackgroundColor,
     tooltipTextColor: resolved.chart.tooltipTextColor,
     metricValueColor: resolved.chart.metricValueColor,

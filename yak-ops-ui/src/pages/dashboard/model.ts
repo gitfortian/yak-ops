@@ -48,6 +48,8 @@ export interface DashboardThemeCanvas {
 export interface DashboardThemeComponent {
   backgroundColor?: string;
   textColor?: string;
+  mutedTextColor?: string;
+  borderColor?: string;
 }
 
 export interface DashboardThemeChart {
@@ -55,6 +57,13 @@ export interface DashboardThemeChart {
   textColor?: string;
   axisColor?: string;
   gridColor?: string;
+  metricValueColor?: string;
+}
+
+export interface DashboardThemeTable {
+  headerBackgroundColor?: string;
+  stripedBackgroundColor?: string;
+  hoverBackgroundColor?: string;
 }
 
 /** Dashboard-level visual defaults. Preset values are resolved on the client; fields are explicit overrides. */
@@ -63,6 +72,7 @@ export interface DashboardTheme {
   canvas?: DashboardThemeCanvas;
   component?: DashboardThemeComponent;
   chart?: DashboardThemeChart;
+  table?: DashboardThemeTable;
 }
 
 /**
