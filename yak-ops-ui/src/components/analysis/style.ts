@@ -73,7 +73,7 @@ export const resolveAnalysisStyle = (
   symbolSize: clamp(style?.symbolSize, 0, 14, DEFAULT_ANALYSIS_VISUAL_CONFIG.symbolSize),
   barMaxWidth: clamp(style?.barMaxWidth, 12, 72, DEFAULT_ANALYSIS_VISUAL_CONFIG.barMaxWidth),
   barRadius: clamp(style?.barRadius, 0, 16, DEFAULT_ANALYSIS_VISUAL_CONFIG.barRadius),
-  pieInnerRadius: clamp(style?.pieInnerRadius, 0, 72, DEFAULT_ANALYSIS_VISUAL_CONFIG.pieInnerRadius),
+  pieInnerRadius: clamp(style?.pieInnerRadius, 0, 64, DEFAULT_ANALYSIS_VISUAL_CONFIG.pieInnerRadius),
   metricAlign: style?.metricAlign ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.metricAlign,
   metricValueSize: style?.metricValueSize ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.metricValueSize,
   showMetricMeta: style?.showMetricMeta ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.showMetricMeta,
