@@ -73,7 +73,7 @@ export function DashboardSheetBar({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [sheetMeta, setSheetMeta] = useState<DashboardSheetMetaMap>({});
-  const [metaReady, setMetaReady] = useState(false);
+  const [loadedMetaKey, setLoadedMetaKey] = useState<string>();
   const [renameSheet, setRenameSheet] = useState<DashboardEditorSheet>();
   const [renameDraft, setRenameDraft] = useState('');
   const [noteSheet, setNoteSheet] = useState<DashboardEditorSheet>();
@@ -83,13 +83,13 @@ export function DashboardSheetBar({
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 
   useEffect(() => {
-    setMetaReady(false);
+    setLoadedMetaKey(undefined);
     setSheetMeta(readSheetMeta(dashboardKey));
-    setMetaReady(true);
+    setLoadedMetaKey(dashboardKey);
   }, [dashboardKey]);
 
   useEffect(() => {
-    if (!metaReady || typeof window === 'undefined') return;
+    if (loadedMetaKey !== dashboardKey || typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(
         `${SHEET_META_STORAGE_PREFIX}:${dashboardKey}`,
@@ -98,7 +98,7 @@ export function DashboardSheetBar({
     } catch {
       // Sheet notes and visibility are editor conveniences. Storage failure must not block editing.
     }
-  }, [dashboardKey, metaReady, sheetMeta]);
+  }, [dashboardKey, loadedMetaKey, sheetMeta]);
 
   const visibleSheets = useMemo(
     () => sheets.filter((sheet) => !sheetMeta[sheet.id]?.hidden),
