@@ -1,4 +1,9 @@
-import type { AnalysisSpec } from '@/components/analysis/model';
+import {
+  applyAnalysisEncoding,
+  changeAnalysisEncodingType,
+  updateEncodingMetricAggregation,
+} from '@/components/analysis/encoding';
+import type { AnalysisEncoding, AnalysisSpec } from '@/components/analysis/model';
 import { Button, Collapse, Input, Select, Switch } from 'antd';
 import { ChevronDown, MousePointerClick, SlidersHorizontal, X } from 'lucide-react';
 import { ConfigData } from './config-data';
@@ -15,7 +20,6 @@ import type {
   DashboardInteraction,
   DashboardWidget,
   FilterOperator,
-  MetricBinding,
   PublishedDataset,
   SortDirection,
 } from './model';
@@ -93,12 +97,11 @@ export function ChartSheetConfigPanel({
   const dataset = findDataset(datasets, spec.datasetId);
   if (!dataset) return null;
 
-  const dimensionOptions = dataset.fields
-    .filter((field) => field.role === 'dimension')
-    .map((field) => ({ label: field.label, value: field.key }));
-  const metricOptions = dataset.fields
-    .filter((field) => field.role === 'metric')
-    .map((field) => ({ label: field.label, value: field.key }));
+  const fieldOptions = dataset.fields.map((field) => ({
+    label: field.label,
+    value: field.key,
+    role: field.role,
+  }));
   const filterOptions = dataset.fields.map((field) => ({
     label: field.label,
     value: field.key,
@@ -116,12 +119,12 @@ export function ChartSheetConfigPanel({
   const filter = spec.filters[0];
 
   const changeType = (type: ChartType) => {
-    const dimensionLimit = type === 'table' ? 3 : 1;
-    const metricLimit = ['bar', 'line', 'table'].includes(type) ? 3 : 1;
+    const next = changeAnalysisEncodingType(spec, type);
     updateInlineAnalysis({
       type,
-      dimensions: type === 'metric' ? [] : spec.dimensions.slice(0, dimensionLimit),
-      metrics: spec.metrics.slice(0, metricLimit),
+      encoding: next.encoding,
+      dimensions: next.dimensions,
+      metrics: next.metrics,
       sort: undefined,
       style: {
         ...spec.style,
@@ -133,26 +136,19 @@ export function ChartSheetConfigPanel({
     });
   };
 
-  const onDimensions = (dimensions: string[]) => {
+  const changeEncoding = (encoding: AnalysisEncoding) => {
+    const next = applyAnalysisEncoding(spec, encoding);
     const nextSort = spec.sort
-      && !dimensions.includes(spec.sort.field)
-      && !spec.metrics.some((metric) => metric.field === spec.sort?.field)
+      && !next.dimensions.includes(spec.sort.field)
+      && !next.metrics.some((metric) => metric.field === spec.sort?.field)
       ? undefined
       : spec.sort;
-    updateInlineAnalysis({ dimensions, sort: nextSort });
-  };
-
-  const onMetrics = (fields: string[]) => {
-    const previous = new Map(spec.metrics.map((metric) => [metric.field, metric]));
-    const metrics: MetricBinding[] = fields.map(
-      (field) => previous.get(field) ?? { field, aggregation: 'SUM' },
-    );
-    const nextSort = spec.sort
-      && !spec.dimensions.includes(spec.sort.field)
-      && !metrics.some((metric) => metric.field === spec.sort?.field)
-      ? undefined
-      : spec.sort;
-    updateInlineAnalysis({ metrics, sort: nextSort });
+    updateInlineAnalysis({
+      encoding: next.encoding,
+      dimensions: next.dimensions,
+      metrics: next.metrics,
+      sort: nextSort,
+    });
   };
 
   const updateStyle = (patch: Partial<AnalysisSpec['style']>) =>
@@ -215,22 +211,27 @@ export function ChartSheetConfigPanel({
         </div>
 
         <div className="mt-5 rounded-[9px] bg-[#f8f9fa] p-3.5">
-          <div className="mb-3 text-[11px] font-semibold text-[#475467]">数据配置</div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold text-[#475467]">可视化编码</div>
+            <span className="rounded-[4px] border border-[#e1e4e8] bg-white px-1.5 py-0.5 text-[8px] text-[#98a2b3]">
+              Encoding v1
+            </span>
+          </div>
           <ConfigData
             spec={spec}
-            dimensionOptions={dimensionOptions}
-            metricOptions={metricOptions}
-            onDimensions={onDimensions}
-            onMetrics={onMetrics}
+            fieldOptions={fieldOptions}
+            onEncodingChange={changeEncoding}
           />
           <MetricAggregations
             metrics={spec.metrics}
             labels={metricLabels}
-            onChange={(field: string, aggregation: Aggregation) =>
+            onChange={(field: string, aggregation: Aggregation) => {
+              const next = updateEncodingMetricAggregation(spec, field, aggregation);
               updateInlineAnalysis({
-                metrics: spec.metrics.map((metric) =>
-                  metric.field === field ? { ...metric, aggregation } : metric),
-              })}
+                encoding: next.encoding,
+                metrics: next.metrics,
+              });
+            }}
           />
         </div>
 
@@ -377,7 +378,7 @@ function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-4">
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">图表配置</div>
-        <div className="mt-0.5 text-[9px] text-[#98a2b3]">数据、展示与交互配置</div>
+        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、展示与交互配置</div>
       </div>
       <button
         type="button"

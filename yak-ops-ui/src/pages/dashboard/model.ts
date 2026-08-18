@@ -7,6 +7,9 @@ import type {
 export type {
   Aggregation,
   AnalysisAsset,
+  AnalysisEncoding,
+  AnalysisEncodingBinding,
+  AnalysisEncodingChannel,
   AnalysisFilter as DashboardFilter,
   AnalysisSelection,
   AnalysisSort as DashboardSort,

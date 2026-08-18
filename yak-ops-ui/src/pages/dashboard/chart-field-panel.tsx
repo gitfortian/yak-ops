@@ -1,3 +1,4 @@
+import { analysisEncodingFieldKeys } from '@/components/analysis/encoding';
 import type { AnalysisSpec } from '@/components/analysis/model';
 import { Input } from 'antd';
 import { Database, GripVertical, Hash, Search, Type } from 'lucide-react';
@@ -36,6 +37,10 @@ export function ChartFieldPanel({
   }, [dataset, normalizedKeyword]);
   const dimensions = fields.filter((field) => field.role === 'dimension');
   const metrics = fields.filter((field) => field.role === 'metric');
+  const encodedFields = useMemo(
+    () => spec ? analysisEncodingFieldKeys(spec) : new Set<string>(),
+    [spec],
+  );
 
   return (
     <section className="flex w-[244px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
@@ -60,7 +65,7 @@ export function ChartFieldPanel({
           onChange={(event) => setKeyword(event.target.value)}
         />
         <div className="mt-2 text-[9px] leading-4 text-[#98a2b3]">
-          {editable ? '拖动字段到右侧维度 / 指标槽位' : '共享图表复制为可编辑图表后可拖拽配置'}
+          {editable ? '拖动字段到右侧可视化编码槽位' : '共享图表复制为可编辑图表后可拖拽配置'}
         </div>
       </div>
 
@@ -72,13 +77,13 @@ export function ChartFieldPanel({
             <FieldGroup
               title="维度"
               fields={dimensions}
-              spec={spec}
+              encodedFields={encodedFields}
               editable={editable}
             />
             <FieldGroup
               title="指标"
               fields={metrics}
-              spec={spec}
+              encodedFields={encodedFields}
               editable={editable}
             />
           </div>
@@ -91,12 +96,12 @@ export function ChartFieldPanel({
 function FieldGroup({
   title,
   fields,
-  spec,
+  encodedFields,
   editable,
 }: {
   title: string;
   fields: DatasetField[];
-  spec?: AnalysisSpec;
+  encodedFields: Set<string>;
   editable: boolean;
 }) {
   return (
@@ -107,14 +112,12 @@ function FieldGroup({
       </div>
       <div className="space-y-0.5">
         {fields.map((field) => {
-          const selected = field.role === 'dimension'
-            ? Boolean(spec?.dimensions.includes(field.key))
-            : Boolean(spec?.metrics.some((metric) => metric.field === field.key));
+          const selected = encodedFields.has(field.key);
           return (
             <div
               key={field.key}
               draggable={editable}
-              title={editable ? `${field.label} · 拖动到图表配置` : field.label}
+              title={editable ? `${field.label} · 拖动到图表编码槽位` : field.label}
               className={[
                 'group flex h-8 items-center gap-1.5 rounded-[6px] px-1.5 text-[10px] transition-colors',
                 editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',

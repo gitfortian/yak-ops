@@ -34,6 +34,38 @@ export interface MetricBinding {
   aggregation: Aggregation;
 }
 
+export type AnalysisEncodingChannel =
+  | 'category'
+  | 'value'
+  | 'color'
+  | 'size'
+  | 'label'
+  | 'detail'
+  | 'tooltip';
+
+/** Semantic field binding used by the visual editor, independent from a concrete chart renderer. */
+export interface AnalysisEncodingBinding {
+  field: string;
+  role: DatasetFieldRole;
+  aggregation?: Aggregation;
+}
+
+/**
+ * Versioned visualization grammar. `dimensions` / `metrics` remain as a compatibility
+ * projection for the existing query/render pipeline while the editor evolves around
+ * semantic encoding channels.
+ */
+export interface AnalysisEncoding {
+  version: 1;
+  category: AnalysisEncodingBinding[];
+  value: AnalysisEncodingBinding[];
+  color: AnalysisEncodingBinding[];
+  size: AnalysisEncodingBinding[];
+  label: AnalysisEncodingBinding[];
+  detail: AnalysisEncodingBinding[];
+  tooltip: AnalysisEncodingBinding[];
+}
+
 export interface AnalysisFilter {
   id: string;
   field: string;
@@ -57,8 +89,12 @@ export interface AnalysisVisualConfig {
 export interface AnalysisSpec {
   type: ChartType;
   datasetId: string;
+  /** Compatibility projection of the active category encoding. */
   dimensions: string[];
+  /** Compatibility projection of the active value encoding. */
   metrics: MetricBinding[];
+  /** Optional for backwards compatibility with existing Analysis / Dashboard snapshots. */
+  encoding?: AnalysisEncoding;
   filters: AnalysisFilter[];
   sort?: AnalysisSort;
   style: AnalysisVisualConfig;
