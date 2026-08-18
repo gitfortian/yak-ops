@@ -52,7 +52,10 @@ const normalizeWidget = (widget: DashboardWidget, widgetIds: Set<string>): Dashb
   const spec = widget.inlineAnalysis;
   const behavior = spec?.dashboardBehavior;
   if (!spec || !behavior) return widget;
-  const crossFilters = normalizeCrossFilters(behavior.crossFilters ?? [], widgetIds);
+  const crossFilters = normalizeCrossFilters(
+    Array.isArray(behavior.crossFilters) ? behavior.crossFilters : [],
+    widgetIds,
+  );
   return {
     ...widget,
     inlineAnalysis: {
@@ -95,20 +98,24 @@ const normalizeInteractions = (
  */
 export const normalizeDashboardDocument = (document: DashboardDocument): DashboardDocument => {
   const widgets = uniqueBy(
-    document.widgets.filter((widget) => nonEmpty(widget.id)),
+    (document.widgets ?? []).filter((widget) => nonEmpty(widget.id)),
     (widget) => widget.id,
   );
   const widgetIds = new Set(widgets.map((widget) => widget.id));
   const normalizedWidgets = widgets.map((widget) => normalizeWidget(widget, widgetIds));
   const globalFilters = uniqueBy(
-    document.globalFilters.filter((filter) => nonEmpty(filter.id)),
+    (document.globalFilters ?? []).filter((filter) => nonEmpty(filter.id)),
     (filter) => filter.id,
   ).map((filter) => ({
     ...filter,
-    bindings: normalizeBindings(filter.bindings ?? [], widgetIds),
+    bindings: normalizeBindings(Array.isArray(filter.bindings) ? filter.bindings : [], widgetIds),
   }));
   const filterIds = new Set(globalFilters.map((filter) => filter.id));
-  const interactions = normalizeInteractions(document.interactions ?? [], widgetIds, filterIds);
+  const interactions = normalizeInteractions(
+    Array.isArray(document.interactions) ? document.interactions : [],
+    widgetIds,
+    filterIds,
+  );
 
   return {
     ...document,
@@ -129,14 +136,13 @@ export const stripDashboardWidgetReferences = (
   removeWidget: boolean,
 ): DashboardDocument => normalizeDashboardDocument({
   ...document,
-  widgets: document.widgets
+  widgets: (document.widgets ?? [])
     .filter((widget) => !removeWidget || widget.id !== widgetId)
     .map((widget) => {
       if (!widget.inlineAnalysis?.dashboardBehavior) return widget;
       const behavior = widget.inlineAnalysis.dashboardBehavior;
-      const crossFilters = (behavior.crossFilters ?? []).filter((rule) => (
-        widget.id !== widgetId && rule.targetWidgetId !== widgetId
-      ));
+      const crossFilters = (Array.isArray(behavior.crossFilters) ? behavior.crossFilters : [])
+        .filter((rule) => widget.id !== widgetId && rule.targetWidgetId !== widgetId);
       return {
         ...widget,
         inlineAnalysis: {
@@ -148,9 +154,9 @@ export const stripDashboardWidgetReferences = (
         },
       };
     }),
-  globalFilters: document.globalFilters.map((filter) => ({
+  globalFilters: (document.globalFilters ?? []).map((filter) => ({
     ...filter,
-    bindings: filter.bindings.filter((binding) => binding.widgetId !== widgetId),
+    bindings: (filter.bindings ?? []).filter((binding) => binding.widgetId !== widgetId),
   })),
-  interactions: document.interactions.filter((interaction) => interaction.sourceWidgetId !== widgetId),
+  interactions: (document.interactions ?? []).filter((interaction) => interaction.sourceWidgetId !== widgetId),
 });
