@@ -34,6 +34,7 @@ export function DashboardToolbar({
   onRedo,
   onAddChart,
   onDashboardStyle,
+  onPerformance,
   onHistory,
   onPreview,
   onSaveDraft,
@@ -59,6 +60,7 @@ export function DashboardToolbar({
   onRedo: () => void;
   onAddChart: () => void;
   onDashboardStyle: () => void;
+  onPerformance: () => void;
   onHistory: () => void;
   onPreview: () => void;
   onSaveDraft: () => void;
@@ -199,6 +201,7 @@ export function DashboardToolbar({
                 size="small"
                 className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                 icon={<Gauge size={13} />}
+                onClick={onPerformance}
               >
                 性能分析
               </Button>
