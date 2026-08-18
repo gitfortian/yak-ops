@@ -4,6 +4,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
+  /** Changes clear a previous render failure without remounting healthy query state. */
+  resetKey?: string;
 }
 
 interface State {
@@ -25,6 +27,12 @@ export class AnalysisErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[BI] Analysis render failed', error, info.componentStack);
+    }
+  }
+
+  componentDidUpdate(previous: Props) {
+    if (this.state.error && previous.resetKey !== this.props.resetKey) {
+      this.setState({ error: undefined });
     }
   }
 
