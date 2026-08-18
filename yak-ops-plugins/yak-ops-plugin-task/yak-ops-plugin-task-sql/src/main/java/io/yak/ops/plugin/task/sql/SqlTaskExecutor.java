@@ -1,35 +1,38 @@
 package io.yak.ops.plugin.task.sql;
 
+import io.yak.ops.core.execution.sql.SqlExecutionCaller;
+import io.yak.ops.core.execution.sql.SqlExecutionContext;
+import io.yak.ops.core.execution.sql.SqlExecutionRequest;
+import io.yak.ops.core.execution.sql.SqlExecutionResult;
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
+import io.yak.ops.core.execution.sql.SqlExecutionSnapshot;
+import io.yak.ops.core.execution.sql.SqlExecutionStatus;
+import io.yak.ops.core.execution.sql.SqlStatementSnapshot;
 import io.yak.ops.plugin.task.api.TaskExecutionResult;
 import io.yak.ops.plugin.task.api.TaskExecutor;
-import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import io.yak.ops.spi.task.model.TaskExecutionStatus;
-import java.sql.SQLTimeoutException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** One physical SQL task execution attempt. */
+/** One SQL task attempt delegated to the shared SQL execution lifecycle. */
 final class SqlTaskExecutor implements TaskExecutor {
 
   private final TaskDefinition definition;
   private final SqlTaskConfig config;
-  private final DataSourceExecutionProvider dataSourceProvider;
+  private final SqlExecutionRuntime runtime;
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
-  private final AtomicReference<DataSourceSqlExecutor> activeExecutor = new AtomicReference<>();
+  private final AtomicReference<String> executionId = new AtomicReference<>();
 
   SqlTaskExecutor(
       TaskDefinition definition,
       SqlTaskConfig config,
-      DataSourceExecutionProvider dataSourceProvider) {
+      SqlExecutionRuntime runtime) {
     this.definition = definition;
     this.config = config;
-    this.dataSourceProvider = dataSourceProvider;
+    this.runtime = runtime;
   }
 
   @Override
@@ -38,66 +41,102 @@ final class SqlTaskExecutor implements TaskExecutor {
       return cancelledResult("SQL execution was cancelled before start");
     }
 
-    try (DataSourceSqlExecutor executor = dataSourceProvider.open(config.dataSourceId())) {
-      activeExecutor.set(executor);
+    try {
+      SqlExecutionSnapshot started = runtime.start(new SqlExecutionRequest(
+          config.dataSourceId(),
+          definition.content(),
+          config.maxRows(),
+          config.timeoutSeconds(),
+          SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, null)));
+      executionId.set(started.executionId());
+
       if (cancelled.get()) {
-        executor.cancel();
-        return cancelledResult("SQL execution was cancelled before statement execution");
+        runtime.cancel(started.executionId());
       }
 
-      DataSourceSqlResult result =
-          executor.execute(
-              new DataSourceSqlRequest(
-                  definition.content(),
-                  config.maxRows(),
-                  config.timeoutSeconds()));
-      Map<String, Object> output = new LinkedHashMap<>();
-      output.put("kind", result.resultSet() ? "RESULT_SET" : "UPDATE_COUNT");
-      output.put("columns", result.columns());
-      output.put("rows", result.rows());
-      output.put("returnedRows", result.returnedRows());
-      output.put("affectedRows", result.affectedRows());
-      output.put("truncated", result.truncated());
-      output.put("dataSourceId", config.dataSourceId());
-      return TaskExecutionResult.success(output);
-    } catch (Exception exception) {
+      SqlExecutionSnapshot completed = runtime.await(started.executionId());
+      return toTaskResult(completed);
+    } catch (RuntimeException exception) {
       if (cancelled.get()) {
         return cancelledResult(safeMessage(exception));
       }
-      TaskExecutionStatus status =
-          causedBy(exception, SQLTimeoutException.class)
-              ? TaskExecutionStatus.TIMEOUT
-              : TaskExecutionStatus.FAILED;
       return new TaskExecutionResult(
-          status,
+          TaskExecutionStatus.FAILED,
           safeMessage(exception),
-          Map.of("dataSourceId", config.dataSourceId()));
-    } finally {
-      activeExecutor.set(null);
+          failureOutput());
     }
   }
 
   @Override
   public void cancel() {
     cancelled.set(true);
-    DataSourceSqlExecutor executor = activeExecutor.get();
-    if (executor != null) executor.cancel();
+    String currentExecutionId = executionId.get();
+    if (currentExecutionId != null) {
+      runtime.cancel(currentExecutionId);
+    }
+  }
+
+  private TaskExecutionResult toTaskResult(SqlExecutionSnapshot execution) {
+    if (execution.status() == SqlExecutionStatus.CANCELLED) {
+      return new TaskExecutionResult(
+          TaskExecutionStatus.CANCELLED,
+          defaultMessage(execution.errorMessage(), "SQL execution cancelled"),
+          failureOutput(execution.executionId()));
+    }
+    if (execution.status() == SqlExecutionStatus.TIMED_OUT) {
+      return new TaskExecutionResult(
+          TaskExecutionStatus.TIMEOUT,
+          defaultMessage(execution.errorMessage(), "SQL execution timed out"),
+          failureOutput(execution.executionId()));
+    }
+    if (execution.status() != SqlExecutionStatus.SUCCEEDED) {
+      return new TaskExecutionResult(
+          TaskExecutionStatus.FAILED,
+          defaultMessage(execution.errorMessage(), "SQL execution failed"),
+          failureOutput(execution.executionId()));
+    }
+
+    SqlStatementSnapshot statement = execution.statements().stream()
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("SQL execution completed without a statement"));
+    SqlExecutionResult result = statement.result();
+    if (result == null) {
+      throw new IllegalStateException("SQL execution completed without a statement result");
+    }
+
+    Map<String, Object> output = new LinkedHashMap<>();
+    output.put("kind", result.type().name());
+    output.put("columns", result.columns());
+    output.put("rows", result.rows());
+    output.put("returnedRows", result.returnedRows());
+    output.put("affectedRows", result.affectedRows());
+    output.put("truncated", result.truncated());
+    output.put("dataSourceId", config.dataSourceId());
+    output.put("sqlExecutionId", execution.executionId());
+    output.put("statementId", statement.statementId());
+    return TaskExecutionResult.success(output);
   }
 
   private TaskExecutionResult cancelledResult(String message) {
     return new TaskExecutionResult(
         TaskExecutionStatus.CANCELLED,
-        message == null ? "SQL execution cancelled" : message,
-        Map.of("dataSourceId", config.dataSourceId()));
+        defaultMessage(message, "SQL execution cancelled"),
+        failureOutput());
   }
 
-  private boolean causedBy(Throwable throwable, Class<? extends Throwable> expected) {
-    Throwable current = throwable;
-    while (current != null) {
-      if (expected.isInstance(current)) return true;
-      current = current.getCause();
-    }
-    return false;
+  private Map<String, Object> failureOutput() {
+    return failureOutput(executionId.get());
+  }
+
+  private Map<String, Object> failureOutput(String currentExecutionId) {
+    Map<String, Object> output = new LinkedHashMap<>();
+    output.put("dataSourceId", config.dataSourceId());
+    if (currentExecutionId != null) output.put("sqlExecutionId", currentExecutionId);
+    return output;
+  }
+
+  private String defaultMessage(String message, String fallback) {
+    return message == null || message.isBlank() ? fallback : message;
   }
 
   private String safeMessage(Throwable throwable) {

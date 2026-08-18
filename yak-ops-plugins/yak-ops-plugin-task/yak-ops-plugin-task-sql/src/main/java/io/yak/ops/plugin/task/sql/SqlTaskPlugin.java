@@ -1,17 +1,17 @@
 package io.yak.ops.plugin.task.sql;
 
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutor;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginDescriptor;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
-import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Datasource-backed SQL Task Plugin. */
+/** SQL Task Plugin backed by the platform-level SQL execution lifecycle. */
 public final class SqlTaskPlugin implements TaskPlugin {
 
   public static final String TYPE = "SQL";
@@ -21,8 +21,8 @@ public final class SqlTaskPlugin implements TaskPlugin {
       new TaskPluginDescriptor(
           TYPE,
           "SQL",
-          "Execute SQL against a Yak Ops datasource reference",
-          "1.1.0",
+          "Execute SQL through the Yak Ops shared SQL execution runtime",
+          "1.2.0",
           SCHEMA_VERSION,
           true,
           true);
@@ -100,8 +100,7 @@ public final class SqlTaskPlugin implements TaskPlugin {
       throw new IllegalArgumentException(summary);
     }
     SqlTaskConfig config = SqlTaskConfig.parse(definition.configJson());
-    DataSourceExecutionProvider provider =
-        context.requireCapability(DataSourceExecutionProvider.class);
-    return new SqlTaskExecutor(definition, config, provider);
+    SqlExecutionRuntime runtime = context.requireCapability(SqlExecutionRuntime.class);
+    return new SqlTaskExecutor(definition, config, runtime);
   }
 }
