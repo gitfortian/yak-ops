@@ -61,11 +61,7 @@ export const queryAnalysisDatasetShared = (
   if (current) queryEntries.delete(key);
 
   pruneQueryEntries(now);
-  const entry: QueryEntry = {
-    promise: Promise.resolve(undefined as unknown as DatasetQueryResult),
-    settled: false,
-    expiresAt: Number.POSITIVE_INFINITY,
-  };
+  let entry: QueryEntry;
   const promise = loader(dataset.id, payload)
     .then((result) => {
       entry.settled = true;
@@ -76,7 +72,11 @@ export const queryAnalysisDatasetShared = (
       if (queryEntries.get(key) === entry) queryEntries.delete(key);
       throw error;
     });
-  entry.promise = promise;
+  entry = {
+    promise,
+    settled: false,
+    expiresAt: Number.POSITIVE_INFINITY,
+  };
   queryEntries.set(key, entry);
   return promise;
 };
