@@ -1,3 +1,8 @@
+import {
+  applyAnalysisEncoding,
+  legacyAnalysisEncoding,
+  rebindAnalysisEncoding,
+} from '@/components/analysis/encoding';
 import type { AnalysisSpec } from '@/components/analysis/model';
 import { BarChart3, ChartLine, ChartPie, Sigma, Table2 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -111,7 +116,7 @@ export const defaultBindings = (dataset: PublishedDataset) => ({
 
 export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset): AnalysisSpec => {
   const bindings = defaultBindings(dataset);
-  return {
+  const base: AnalysisSpec = {
     type,
     datasetId: dataset.id,
     dimensions: type === 'metric' ? [] : bindings.dimensions,
@@ -126,6 +131,7 @@ export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset)
     limit: type === 'table' ? 200 : 500,
     timeoutSeconds: 30,
   };
+  return applyAnalysisEncoding(base, legacyAnalysisEncoding(base));
 };
 
 export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => ({
@@ -141,16 +147,28 @@ export const createWidget = (type: ChartType, dataset: PublishedDataset, y: numb
 });
 
 const rebindInlineAnalysis = (spec: AnalysisSpec, dataset: PublishedDataset): AnalysisSpec => {
-  const bindings = defaultBindings(dataset);
-  const fieldMap = new Map(dataset.fields.map((field) => [field.key, field]));
   const sameDataset = spec.datasetId === dataset.id;
-  const validDimensions = sameDataset ? spec.dimensions.filter((field) => fieldMap.get(field)?.role === 'dimension') : [];
-  const validMetrics = sameDataset ? spec.metrics.filter((metric) => fieldMap.get(metric.field)?.role === 'metric') : [];
-  const dimensions = spec.type === 'metric' ? [] : validDimensions.length ? validDimensions : bindings.dimensions;
-  const metrics = validMetrics.length ? validMetrics : bindings.metrics;
-  const filters = sameDataset ? spec.filters.filter((filter) => fieldMap.has(filter.field)) : [];
-  const sort = sameDataset && spec.sort && fieldMap.has(spec.sort.field) ? spec.sort : undefined;
-  return { ...spec, datasetId: dataset.id, dimensions, metrics, filters, sort };
+  const filters = sameDataset
+    ? spec.filters.filter((filter) => dataset.fields.some((field) => field.key === filter.field))
+    : [];
+  const sort = sameDataset && spec.sort && dataset.fields.some((field) => field.key === spec.sort?.field)
+    ? spec.sort
+    : undefined;
+
+  if (!sameDataset) {
+    const fresh = createInlineAnalysis(spec.type, dataset);
+    return {
+      ...fresh,
+      style: { ...spec.style },
+      filters,
+      sort,
+      limit: spec.type === 'table' ? 200 : spec.limit,
+      timeoutSeconds: spec.timeoutSeconds,
+    };
+  }
+
+  const rebound = rebindAnalysisEncoding(spec, dataset);
+  return { ...rebound, filters, sort };
 };
 
 export const reconcileDashboard = (
