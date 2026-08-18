@@ -16,6 +16,7 @@ import { ConfigData } from './config-data';
 import { MetricAggregations } from './config-metrics';
 import { QueryControls } from './config-query';
 import { ChartStyleConfig } from './config-style';
+import { DashboardDirectCrossFilterEditor } from './direct-link-editor';
 import { CHART_META, findDataset } from './helpers';
 import { DashboardInteractionEditor } from './interaction-editor';
 import type {
@@ -34,6 +35,7 @@ import { DashboardWidgetActionEditor } from './widget-action-editor';
 export function ChartSheetConfigPanel({
   currentDashboardId,
   widget,
+  widgets,
   datasets,
   analyses,
   globalFilters,
@@ -47,6 +49,7 @@ export function ChartSheetConfigPanel({
 }: {
   currentDashboardId: string;
   widget: DashboardWidget;
+  widgets: DashboardWidget[];
   datasets: PublishedDataset[];
   analyses: AnalysisAsset[];
   globalFilters: DashboardGlobalFilter[];
@@ -327,14 +330,25 @@ export function ChartSheetConfigPanel({
               ),
               children: (
                 <div className="space-y-4 pb-2">
-                  <DashboardInteractionEditor
+                  <DashboardDirectCrossFilterEditor
                     widget={widget}
+                    widgets={widgets}
                     spec={spec}
                     dataset={dataset}
-                    filters={globalFilters}
-                    interactions={interactions}
-                    onChange={updateInteractions}
+                    datasets={datasets}
+                    analyses={analyses}
+                    onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
                   />
+                  <div className="border-t border-[#eceef1] pt-4">
+                    <DashboardInteractionEditor
+                      widget={widget}
+                      spec={spec}
+                      dataset={dataset}
+                      filters={globalFilters}
+                      interactions={interactions}
+                      onChange={updateInteractions}
+                    />
+                  </div>
                   <div className="border-t border-[#eceef1] pt-4">
                     <DashboardWidgetActionEditor
                       currentDashboardId={currentDashboardId}
