@@ -4,6 +4,7 @@ import {
   patchMetricComputation,
   QUICK_CALCULATION_OPTIONS,
 } from '@/components/analysis/analysis';
+import { resolveAnalysisEncoding } from '@/components/analysis/encoding';
 import type {
   AnalysisComputationConfig,
   AnalysisMetricComputation,
@@ -13,7 +14,6 @@ import type {
   AnalysisTopNDirection,
   PublishedDataset,
 } from '@/components/analysis/model';
-import { resolveAnalysisEncoding } from '@/components/analysis/encoding';
 import { InputNumber, Select, Switch } from 'antd';
 import { AGGREGATION_OPTIONS } from './helpers';
 
@@ -64,6 +64,7 @@ export function ChartAnalysisConfig({
           {spec.metrics.map((metric) => {
             const field = dataset.fields.find((item) => item.key === metric.field);
             const config = metricComputationFor(spec, metric.field);
+            const stored = spec.analysis?.metrics?.[metric.field];
             return (
               <div key={metric.field} className="rounded-[8px] border border-[#e8eaee] bg-[#fafbfc] p-2.5">
                 <div className="flex items-center justify-between gap-2">
@@ -83,7 +84,6 @@ export function ChartAnalysisConfig({
                       options={QUICK_CALCULATION_OPTIONS.map((item) => ({
                         label: item.label,
                         value: item.value,
-                        title: item.description,
                       }))}
                       onChange={(quickCalculation: AnalysisQuickCalculation) =>
                         patchMetric(metric.field, { quickCalculation })}
@@ -103,10 +103,15 @@ export function ChartAnalysisConfig({
                   />
                   <Select
                     size="small"
-                    value={config.decimalPlaces}
-                    options={[0, 1, 2, 3, 4].map((value) => ({ label: `${value} 位`, value }))}
-                    onChange={(decimalPlaces: 0 | 1 | 2 | 3 | 4) =>
-                      patchMetric(metric.field, { decimalPlaces })}
+                    value={stored?.decimalPlaces ?? 'auto'}
+                    options={[
+                      { label: '自动', value: 'auto' },
+                      ...([0, 1, 2, 3, 4] as const).map((value) => ({ label: `${value} 位`, value })),
+                    ]}
+                    onChange={(decimalPlaces: 'auto' | 0 | 1 | 2 | 3 | 4) =>
+                      patchMetric(metric.field, {
+                        decimalPlaces: decimalPlaces === 'auto' ? undefined : decimalPlaces,
+                      })}
                   />
                 </div>
                 <label className="mt-2.5 flex items-center justify-between">
