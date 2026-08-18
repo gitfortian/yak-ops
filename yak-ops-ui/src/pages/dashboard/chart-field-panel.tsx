@@ -65,7 +65,7 @@ export function ChartFieldPanel({
           onChange={(event) => setKeyword(event.target.value)}
         />
         <div className="mt-2 text-[9px] leading-4 text-[#98a2b3]">
-          {editable ? '拖动字段到右侧分类 / 值编码槽位' : '共享图表复制为可编辑图表后可拖拽配置'}
+          {editable ? '拖动字段到右侧可视化编码槽位' : '共享图表复制为可编辑图表后可拖拽配置'}
         </div>
       </div>
 
