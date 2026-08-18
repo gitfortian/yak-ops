@@ -63,14 +63,14 @@ export function CalculatedFieldEditor({
       : '';
   const canSave = !nameError && 'value' in parsed;
 
-  const eligibleFields = dataset.fields.filter((item) => (
+  const eligibleFields = useMemo(() => dataset.fields.filter((item) => (
     aggregation === 'COUNT' || aggregation === 'COUNT_DISTINCT' || item.dataType === 'number'
-  ));
+  )), [aggregation, dataset.fields]);
 
   useEffect(() => {
     if (sourceField && eligibleFields.some((item) => item.key === sourceField)) return;
     setSourceField(eligibleFields[0]?.key);
-  }, [aggregation, eligibleFields, sourceField]);
+  }, [eligibleFields, sourceField]);
 
   const append = (snippet: string) => {
     setExpression((current) => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${snippet}`);
