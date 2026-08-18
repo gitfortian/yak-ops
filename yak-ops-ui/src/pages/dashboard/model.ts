@@ -62,8 +62,6 @@ export interface DashboardThemeChart {
 
 export interface DashboardThemeTable {
   headerBackgroundColor?: string;
-  textColor?: string;
-  borderColor?: string;
   stripedBackgroundColor?: string;
   hoverBackgroundColor?: string;
 }
