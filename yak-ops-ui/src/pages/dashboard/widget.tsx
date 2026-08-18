@@ -215,7 +215,7 @@ export function WidgetShell({
       <style>{`
         .dashboard-widget__surface {
           outline: 1px solid transparent;
-          outline-offset: -1px;
+          outline-offset: 0;
           transition: outline-color 120ms ease;
         }
         .dashboard-widget--editable:not(.dashboard-widget--selected):hover .dashboard-widget__surface {
@@ -237,10 +237,48 @@ export function WidgetShell({
           border-radius: 0 !important;
         }
         .dashboard-grid-canvas .react-grid-item > .react-resizable-handle {
+          width: 18px !important;
+          height: 18px !important;
           background-image: none !important;
           opacity: 0;
           transition: opacity 120ms ease;
           z-index: 25;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-n {
+          top: -9px !important;
+          left: 50% !important;
+          margin-left: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-s {
+          bottom: -9px !important;
+          left: 50% !important;
+          margin-left: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-e {
+          right: -9px !important;
+          top: 50% !important;
+          margin-top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-w {
+          left: -9px !important;
+          top: 50% !important;
+          margin-top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-ne {
+          right: -9px !important;
+          top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-nw {
+          left: -9px !important;
+          top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-se {
+          right: -9px !important;
+          bottom: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-sw {
+          left: -9px !important;
+          bottom: -9px !important;
         }
         .dashboard-grid-canvas .react-grid-item:has(> .dashboard-widget--selected) > .react-resizable-handle {
           opacity: 1;
@@ -248,13 +286,13 @@ export function WidgetShell({
         .dashboard-grid-canvas .react-grid-item > .react-resizable-handle::after {
           content: '' !important;
           position: absolute !important;
-          left: 7px !important;
-          top: 7px !important;
+          left: 6px !important;
+          top: 6px !important;
           width: 6px !important;
           height: 6px !important;
-          box-sizing: border-box !important;
-          border: 1px solid var(--yak-brand-color) !important;
-          background: #fff !important;
+          border: 0 !important;
+          border-radius: 9999px !important;
+          background: var(--yak-brand-color) !important;
           transform: none !important;
         }
       `}</style>
