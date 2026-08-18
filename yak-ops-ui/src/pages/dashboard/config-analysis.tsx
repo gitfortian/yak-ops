@@ -4,6 +4,10 @@ import {
   patchMetricComputation,
   QUICK_CALCULATION_OPTIONS,
 } from '@/components/analysis/analysis';
+import {
+  calculatedFieldFor,
+  isCalculatedFieldKey,
+} from '@/components/analysis/calculated-field';
 import { resolveAnalysisEncoding } from '@/components/analysis/encoding';
 import type {
   AnalysisComputationConfig,
@@ -31,8 +35,9 @@ export function ChartAnalysisConfig({
   );
   const supportsSequentialCalculation = spec.type !== 'metric' && spec.dimensions.length > 0;
   const topN = spec.analysis?.topN;
-  const supportsTopN = spec.type !== 'metric' && spec.dimensions.length > 0 && spec.metrics.length > 0;
-  const topNMetricActive = !topN || spec.metrics.some((metric) => metric.field === topN.metricField);
+  const physicalMetrics = spec.metrics.filter((metric) => !isCalculatedFieldKey(spec, metric.field));
+  const supportsTopN = spec.type !== 'metric' && spec.dimensions.length > 0 && physicalMetrics.length > 0;
+  const topNMetricActive = !topN || physicalMetrics.some((metric) => metric.field === topN.metricField);
   const aggregationLabels = Object.fromEntries(
     AGGREGATION_OPTIONS.map((item) => [item.value, item.label]),
   );
@@ -42,14 +47,17 @@ export function ChartAnalysisConfig({
   };
 
   const patchTopN = (patch: Partial<NonNullable<AnalysisComputationConfig['topN']>>) => {
-    const fallbackMetric = spec.metrics[0];
+    const fallbackMetric = physicalMetrics[0];
     if (!fallbackMetric) return;
+    const currentMetric = topN && physicalMetrics.some((metric) => metric.field === topN.metricField)
+      ? topN.metricField
+      : fallbackMetric.field;
     onChange({
       ...spec.analysis,
       version: 1,
       topN: {
         enabled: topN?.enabled ?? false,
-        metricField: topN?.metricField ?? fallbackMetric.field,
+        metricField: currentMetric,
         count: topN?.count ?? 10,
         direction: topN?.direction ?? 'top',
         ...patch,
@@ -64,6 +72,7 @@ export function ChartAnalysisConfig({
         <div className="space-y-2.5">
           {spec.metrics.map((metric) => {
             const field = dataset.fields.find((item) => item.key === metric.field);
+            const calculated = calculatedFieldFor(spec, metric.field);
             const config = metricComputationFor(spec, metric.field);
             const stored = spec.analysis?.metrics?.[metric.field];
             return (
@@ -71,10 +80,10 @@ export function ChartAnalysisConfig({
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-[10px] font-medium text-[#344054]">
-                      {field?.label ?? metric.field}
+                      {calculated?.name ?? field?.label ?? metric.field}
                     </div>
                     <div className="mt-0.5 text-[9px] text-[#98a2b3]">
-                      {aggregationLabels[metric.aggregation] ?? metric.aggregation}
+                      {calculated ? '计算字段' : aggregationLabels[metric.aggregation] ?? metric.aggregation}
                     </div>
                   </div>
                   {supportsSequentialCalculation ? (
@@ -123,12 +132,17 @@ export function ChartAnalysisConfig({
                     onChange={(useGrouping) => patchMetric(metric.field, { useGrouping })}
                   />
                 </label>
+                {calculated ? (
+                  <div className="mt-2 truncate rounded-[5px] bg-white px-2 py-1 font-mono text-[8px] text-[#98a2b3]" title={calculated.expression}>
+                    {calculated.expression}
+                  </div>
+                ) : null}
               </div>
             );
           })}
         </div>
         <div className="mt-2 text-[9px] leading-4 text-[#98a2b3]">
-          占比、累计、排名和较上期变化在当前查询结果上计算，不改变 Dataset SQL。
+          占比、累计、排名和较上期变化在当前查询结果上计算；计算字段也可继续叠加这些表计算。
         </div>
       </div>
 
@@ -137,7 +151,7 @@ export function ChartAnalysisConfig({
           <div className="mb-2.5 flex items-center justify-between">
             <div>
               <div className="text-[10px] font-semibold text-[#667085]">Top / Bottom N</div>
-              <div className="mt-0.5 text-[9px] text-[#98a2b3]">先按指标排序，再限制返回分类数量</div>
+              <div className="mt-0.5 text-[9px] text-[#98a2b3]">服务端排序仅支持物理聚合指标</div>
             </div>
             <Switch
               size="small"
@@ -154,7 +168,7 @@ export function ChartAnalysisConfig({
                 className="w-full"
                 placeholder="选择 Top N 指标"
                 value={topNMetricActive ? topN.metricField : undefined}
-                options={spec.metrics.map((metric) => ({
+                options={physicalMetrics.map((metric) => ({
                   label: `${dataset.fields.find((item) => item.key === metric.field)?.label ?? metric.field} · ${aggregationLabels[metric.aggregation] ?? metric.aggregation}`,
                   value: metric.field,
                 }))}
@@ -183,7 +197,7 @@ export function ChartAnalysisConfig({
               </div>
               {!topNMetricActive ? (
                 <div className="text-[9px] leading-4 text-[#98a2b3]">
-                  原 Top N 指标在当前图表类型中暂未激活；切回原图表类型可恢复，或在这里重新选择。
+                  原 Top N 指标当前不可用于服务端排序，请重新选择一个物理指标。
                 </div>
               ) : null}
             </div>
