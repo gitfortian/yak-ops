@@ -41,11 +41,9 @@ export const DASHBOARD_THEME_PRESETS: ResolvedDashboardTheme[] = [
     presetId: 'yak-dark',
     name: '深色主题',
     canvas: { backgroundColor: '#161d2b' },
-    // Phase 1 deliberately keeps chart cards light. Phase 2 will make charts/tables consume
-    // the full dashboard palette so the entire component surface can become dark safely.
     component: {
-      backgroundColor: '#ffffff',
-      textColor: '#273142',
+      backgroundColor: '#222b3a',
+      textColor: '#f1f5f9',
     },
     chart: {
       palette: ['#35d0ff', '#5b8cff', '#8b5cf6', '#2dd4bf', '#fbbf24'],
