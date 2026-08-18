@@ -91,6 +91,16 @@ record DashboardDetail(
     List<DashboardWidgetSnapshot> widgets,
     List<DashboardGlobalFilterSnapshot> globalFilters,
     List<DashboardInteractionSnapshot> interactions) {
+
+  DashboardDetail(
+      DashboardAsset dashboard,
+      DashboardVersion currentVersion,
+      List<DashboardVersion> versions,
+      List<DashboardWidgetSnapshot> widgets,
+      List<DashboardGlobalFilterSnapshot> globalFilters,
+      List<DashboardInteractionSnapshot> interactions) {
+    this(dashboard, currentVersion, null, versions, widgets, globalFilters, interactions);
+  }
 }
 
 /** Exact immutable version snapshot, used for history preview and published reads. */
@@ -101,4 +111,13 @@ record DashboardVersionDetail(
     List<DashboardWidgetSnapshot> widgets,
     List<DashboardGlobalFilterSnapshot> globalFilters,
     List<DashboardInteractionSnapshot> interactions) {
+
+  DashboardVersionDetail(
+      DashboardAsset dashboard,
+      DashboardVersion version,
+      List<DashboardWidgetSnapshot> widgets,
+      List<DashboardGlobalFilterSnapshot> globalFilters,
+      List<DashboardInteractionSnapshot> interactions) {
+    this(dashboard, version, null, widgets, globalFilters, interactions);
+  }
 }
