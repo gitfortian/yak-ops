@@ -19,6 +19,16 @@ export interface AnalysisEncodingSlotRule {
   hint?: string;
 }
 
+const ENCODING_CHANNELS: AnalysisEncodingChannel[] = [
+  'category',
+  'value',
+  'color',
+  'size',
+  'label',
+  'detail',
+  'tooltip',
+];
+
 const slot = (
   channel: AnalysisEncodingChannel,
   label: string,
@@ -168,15 +178,9 @@ export const analysisEncodingFieldKeys = (
   spec: Pick<AnalysisSpec, 'encoding' | 'dimensions' | 'metrics'>,
 ) => {
   const encoding = resolveAnalysisEncoding(spec);
-  return new Set< string >([
-    ...encoding.category.map((binding) => binding.field),
-    ...encoding.value.map((binding) => binding.field),
-    ...encoding.color.map((binding) => binding.field),
-    ...encoding.size.map((binding) => binding.field),
-    ...encoding.label.map((binding) => binding.field),
-    ...encoding.detail.map((binding) => binding.field),
-    ...encoding.tooltip.map((binding) => binding.field),
-  ]);
+  return new Set<string>(ENCODING_CHANNELS.flatMap(
+    (channel) => encoding[channel].map((binding) => binding.field),
+  ));
 };
 
 const validBindingForDataset = (
@@ -193,20 +197,49 @@ const validBindingForDataset = (
   } satisfies AnalysisEncodingBinding;
 };
 
-/** Dataset changes remove invalid bindings from every semantic channel in one place. */
+const fillRequiredBindings = (
+  encoding: AnalysisEncoding,
+  type: ChartType,
+  dataset: PublishedDataset,
+) => {
+  const next = cloneAnalysisEncoding(encoding);
+  ANALYSIS_ENCODING_RULES[type].forEach((rule) => {
+    const sanitized = sanitizeChannel(next[rule.channel], rule);
+    if (sanitized.length >= rule.min) {
+      next[rule.channel] = sanitized;
+      return;
+    }
+    const used = new Set(sanitized.map((binding) => binding.field));
+    const candidates = dataset.fields.filter((field) => (
+      rule.roles.includes(field.role) && !used.has(field.key)
+    ));
+    const missing = Math.max(0, rule.min - sanitized.length);
+    next[rule.channel] = [
+      ...sanitized,
+      ...candidates.slice(0, missing).map((field) => ({
+        field: field.key,
+        role: field.role,
+        aggregation: field.role === 'metric' ? 'SUM' as Aggregation : undefined,
+      })),
+    ].slice(0, rule.max);
+  });
+  return next;
+};
+
+/** Dataset changes validate all channels, then seed only missing required slots. */
 export const rebindAnalysisEncoding = <T extends AnalysisSpec>(
   spec: T,
   dataset: PublishedDataset,
 ): T => {
   const source = resolveAnalysisEncoding(spec);
   const next = cloneAnalysisEncoding(EMPTY_ANALYSIS_ENCODING);
-  (Object.keys(next) as Array<keyof AnalysisEncoding>).forEach((key) => {
-    if (key === 'version') return;
-    next[key] = source[key]
+  ENCODING_CHANNELS.forEach((channel) => {
+    next[channel] = source[channel]
       .map((binding) => validBindingForDataset(binding, dataset))
-      .filter(Boolean) as AnalysisEncodingBinding[];
+      .filter((binding): binding is AnalysisEncodingBinding => Boolean(binding));
   });
-  return applyAnalysisEncoding({ ...spec, datasetId: dataset.id } as T, next);
+  const seeded = fillRequiredBindings(next, spec.type, dataset);
+  return applyAnalysisEncoding({ ...spec, datasetId: dataset.id } as T, seeded);
 };
 
 export const updateEncodingMetricAggregation = <T extends AnalysisSpec>(
