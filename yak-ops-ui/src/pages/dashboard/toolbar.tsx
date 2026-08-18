@@ -146,9 +146,9 @@ export function DashboardToolbar({
               <Button
                 type="text"
                 size="small"
-                className="!h-7 !rounded-[5px] !px-2 !text-[11px] !text-[#344054] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
                 disabled={!canAddChart || busy}
-                icon={<BarChart3 size={12} />}
+                icon={<BarChart3 size={13} />}
                 onClick={onAddChart}
               >
                 添加图表
@@ -157,8 +157,8 @@ export function DashboardToolbar({
               <Tooltip title="撤销 Ctrl/Cmd + Z">
                 <Button
                   type="text"
-                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
-                  icon={<Undo2 size={12} />}
+                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                  icon={<Undo2 size={13} />}
                   disabled={!canUndo || busy}
                   onClick={onUndo}
                 />
@@ -166,26 +166,45 @@ export function DashboardToolbar({
               <Tooltip title="重做 Ctrl/Cmd + Shift + Z">
                 <Button
                   type="text"
-                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
-                  icon={<Redo2 size={12} />}
+                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                  icon={<Redo2 size={13} />}
                   disabled={!canRedo || busy}
                   onClick={onRedo}
                 />
               </Tooltip>
             </>
           ) : (
-            <span className="text-[11px] font-medium text-[#667085]">预览模式</span>
+            <span className="text-[12px] font-medium text-[#161823]">预览模式</span>
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-3">
+          {!preview ? (
+            <>
+              <a
+                href="#"
+                className="text-[12px] font-medium text-[#161823] no-underline transition-colors hover:text-[var(--yak-brand-color)]"
+                onClick={(event) => event.preventDefault()}
+              >
+                仪表盘样式
+              </a>
+              <a
+                href="#"
+                className="text-[12px] font-medium text-[#161823] no-underline transition-colors hover:text-[var(--yak-brand-color)]"
+                onClick={(event) => event.preventDefault()}
+              >
+                性能分析
+              </a>
+            </>
+          ) : null}
+
           {persisted && currentVersionNo && !preview ? (
             <Tooltip title="历史版本">
               <Button
                 type="text"
-                className="!flex !h-7 !w-7 !min-w-0 !items-center !justify-center !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                className="!flex !h-7 !w-7 !min-w-0 !items-center !justify-center !rounded-[5px] !p-0 !text-[#344054] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                 disabled={busy}
-                icon={<History size={12} />}
+                icon={<History size={13} />}
                 onClick={onHistory}
               />
             </Tooltip>
@@ -193,9 +212,9 @@ export function DashboardToolbar({
           <Button
             type="text"
             size="small"
-            className="!h-7 !rounded-[5px] !px-2 !text-[11px] !text-[#344054] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+            className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
             disabled={busy}
-            icon={preview ? <X size={12} /> : <Eye size={12} />}
+            icon={preview ? <X size={13} /> : <Eye size={13} />}
             onClick={onPreview}
           >
             {preview ? '退出预览' : '预览'}
