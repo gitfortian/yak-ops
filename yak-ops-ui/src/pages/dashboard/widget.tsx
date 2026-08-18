@@ -158,7 +158,7 @@ export function WidgetShell({
 
       {!preview && selected ? (
         <div
-          className="absolute left-full top-0 z-30 ml-1.5 flex w-8 flex-col overflow-hidden rounded-[7px] border border-[#e4e7ec] bg-white shadow-[0_6px_18px_rgba(16,24,40,.12)]"
+          className="absolute left-full top-0 z-30 ml-3 flex w-8 flex-col overflow-hidden rounded-[7px] border border-[#e4e7ec] bg-white shadow-[0_6px_18px_rgba(16,24,40,.12)]"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <Tooltip title="编辑图表" placement="right">
@@ -232,6 +232,9 @@ export function WidgetShell({
         }
         .react-grid-item:has(> .dashboard-widget--selected) {
           z-index: 20;
+        }
+        .dashboard-grid-canvas .react-grid-item.react-grid-placeholder {
+          border-radius: 0 !important;
         }
         .dashboard-grid-canvas .react-grid-item > .react-resizable-handle {
           background-image: none !important;
