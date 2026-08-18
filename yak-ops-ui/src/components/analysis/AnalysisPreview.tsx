@@ -1,6 +1,7 @@
 import { Empty, Spin } from 'antd';
 import * as echarts from 'echarts';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnalysisErrorBoundary } from './analysis-error-boundary';
 import {
   analysisMetricValues,
   formatAnalysisMetricValue,
@@ -17,7 +18,6 @@ import {
   metricAnalysisDisplayName,
 } from './display';
 import { encodingMeetsChartRequirements, resolveAnalysisEncoding } from './encoding';
-import { queryAnalysisDataset } from './dataset-service';
 import type {
   Aggregation,
   AnalysisFilter,
@@ -29,6 +29,7 @@ import type {
   PublishedDataset,
   Scalar,
 } from './model';
+import { queryAnalysisDatasetShared } from './query-runtime';
 import { resolveAnalysisStyle } from './style';
 
 export {
@@ -146,7 +147,7 @@ function useAnalysisQuery(
       setLoading(true);
       setError('');
       try {
-        const value = await queryAnalysisDataset(dataset.id, payload);
+        const value = await queryAnalysisDatasetShared(dataset, payload);
         if (requestId === sequence.current) setResult(materializeCalculatedFields(spec, value));
       } catch (queryError) {
         if (requestId === sequence.current) {
@@ -361,19 +362,21 @@ function TableAnalysis({
   );
 }
 
-export function AnalysisPreview({
-  spec,
-  dataset,
-  runtimeFilters = [],
-  onSelect,
-  className = 'h-full min-h-0',
-}: {
+interface AnalysisPreviewProps {
   spec: AnalysisSpec;
   dataset?: PublishedDataset;
   runtimeFilters?: AnalysisFilter[];
   onSelect?: (selection: AnalysisSelection) => void;
   className?: string;
-}) {
+}
+
+function AnalysisPreviewContent({
+  spec,
+  dataset,
+  runtimeFilters = [],
+  onSelect,
+  className = 'h-full min-h-0',
+}: AnalysisPreviewProps) {
   const { result, loading, error } = useAnalysisQuery(spec, dataset, runtimeFilters);
   if (!dataset) {
     return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Dataset 不存在或已下线" className="mt-8" /></div>;
@@ -398,5 +401,14 @@ export function AnalysisPreview({
         ? <EChartAnalysis spec={spec} dataset={dataset} result={result} onSelect={onSelect} />
         : null}
     </div>
+  );
+}
+
+export function AnalysisPreview(props: AnalysisPreviewProps) {
+  const resetKey = `${props.dataset?.id ?? 'missing'}:${props.dataset?.currentVersionNo ?? 0}:${JSON.stringify(props.spec)}`;
+  return (
+    <AnalysisErrorBoundary key={resetKey}>
+      <AnalysisPreviewContent {...props} />
+    </AnalysisErrorBoundary>
   );
 }
