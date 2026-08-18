@@ -1,10 +1,10 @@
 import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
-import { Dropdown, Empty, Tooltip } from 'antd';
+import { Empty, Tooltip } from 'antd';
 import {
   ChevronRight,
   Copy,
   GripVertical,
-  MoreHorizontal,
+  Pencil,
   RotateCcw,
   Trash2,
   X,
@@ -30,6 +30,7 @@ export function WidgetShell({
   selected,
   preview,
   onSelect,
+  onEdit,
   onDataSelect,
   onClearSelection,
   onDrillBack,
@@ -46,6 +47,7 @@ export function WidgetShell({
   selected: boolean;
   preview: boolean;
   onSelect: () => void;
+  onEdit: () => void;
   onDataSelect: (selection: AnalysisSelection) => void;
   onClearSelection: () => void;
   onDrillBack: (depth: number) => void;
@@ -59,147 +61,241 @@ export function WidgetShell({
 
   return (
     <div
-      onMouseDown={onSelect}
       className={[
-        'group relative flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] bg-white transition-[border-color,box-shadow,transform] duration-150',
-        preview
-          ? activeSelection
-            ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
-            : 'border border-[#e7e9ed] shadow-[0_1px_2px_rgba(16,24,40,.03)]'
-          : selected
-            ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
-            : 'border border-[#e4e7ec] shadow-[0_1px_2px_rgba(16,24,40,.025)] hover:border-[#d6dae0] hover:shadow-[0_4px_12px_rgba(16,24,40,.055)]',
+        'group dashboard-widget relative h-full min-h-0 overflow-visible',
+        preview ? 'dashboard-widget--preview' : 'dashboard-widget--editable',
+        !preview && selected ? 'dashboard-widget--selected' : '',
+        preview && activeSelection ? 'dashboard-widget--active' : '',
       ].join(' ')}
     >
-      <div className="dashboard-widget__drag-handle flex h-10 shrink-0 cursor-move items-center px-3.5">
-        {!preview ? (
-          <GripVertical
-            size={13}
-            className={[
-              'mr-1.5 text-[#a8adb5] transition-opacity duration-150',
-              selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-            ].join(' ')}
-          />
-        ) : null}
-        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344054]">
-          {title}
-        </span>
+      <div
+        onMouseDown={onSelect}
+        className="dashboard-widget__surface relative flex h-full min-h-0 flex-col overflow-hidden bg-white"
+      >
+        <div className="dashboard-widget__drag-handle flex h-10 shrink-0 cursor-move items-center px-3.5">
+          {!preview ? (
+            <GripVertical
+              size={13}
+              className={[
+                'mr-1.5 text-[#a8adb5] transition-opacity duration-150',
+                selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+              ].join(' ')}
+            />
+          ) : null}
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344054]">
+            {title}
+          </span>
 
-        {preview && activeSelection ? (
-          <button
-            type="button"
-            title={activeSelection.label}
-            className="ml-2 flex max-w-[190px] shrink-0 items-center gap-1 rounded-[5px] border border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] px-1.5 py-1 text-[9px] text-[#475467]"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClearSelection();
-            }}
-          >
-            <span className="truncate">已选 · {String(activeSelection.value)}</span>
-            <X size={9} className="shrink-0 text-[#7a818c]" />
-          </button>
-        ) : null}
-
-        {!preview ? (
-          <div
-            className={[
-              'flex items-center transition-opacity duration-150',
-              selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-            ].join(' ')}
-          >
-            <Dropdown
-              trigger={['click']}
-              placement="bottomRight"
-              menu={{
-                items: [
-                  {
-                    key: 'duplicate',
-                    label: '复制组件',
-                    icon: <Copy size={13} />,
-                  },
-                  { type: 'divider' },
-                  {
-                    key: 'delete',
-                    label: '删除组件',
-                    icon: <Trash2 size={13} />,
-                    danger: true,
-                  },
-                ],
-                onClick: ({ key, domEvent }) => {
-                  domEvent.stopPropagation();
-                  if (key === 'duplicate') onDuplicate();
-                  if (key === 'delete') onDelete();
-                },
+          {preview && activeSelection ? (
+            <button
+              type="button"
+              title={activeSelection.label}
+              className="ml-2 flex max-w-[190px] shrink-0 items-center gap-1 rounded-[5px] border border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] px-1.5 py-1 text-[9px] text-[#475467]"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClearSelection();
               }}
             >
-              <Tooltip title="更多操作">
+              <span className="truncate">已选 · {String(activeSelection.value)}</span>
+              <X size={9} className="shrink-0 text-[#7a818c]" />
+            </button>
+          ) : null}
+        </div>
+
+        {drillPath.length ? (
+          <div
+            className="mx-3 flex h-7 shrink-0 items-center gap-0.5 rounded-[6px] bg-[#f7f8fa] px-2 text-[9px] text-[#667085]"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1 text-[#667085] hover:bg-[#eceef1] hover:text-[#344054]"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDrillBack(0);
+              }}
+            >
+              <RotateCcw size={9} />
+              全部
+            </button>
+            {drillPath.map((step, index) => (
+              <span key={`${step.field}-${index}`} className="flex min-w-0 items-center gap-0.5">
+                <ChevronRight size={9} className="shrink-0 text-[#b1b6bf]" />
                 <button
                   type="button"
-                  aria-label="组件操作"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                  className="flex h-7 w-7 items-center justify-center rounded-[6px] border-0 bg-transparent text-[#7a818c] transition-colors hover:bg-[#f5f6f7] hover:text-[#344054]"
+                  className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5 text-[#475467] hover:bg-[#eceef1]"
+                  title={step.label}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDrillBack(index + 1);
+                  }}
                 >
-                  <MoreHorizontal size={14} />
+                  {step.label}
                 </button>
-              </Tooltip>
-            </Dropdown>
+              </span>
+            ))}
           </div>
         ) : null}
+
+        <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1">
+          {spec ? (
+            <AnalysisPreview
+              spec={spec}
+              dataset={dataset}
+              runtimeFilters={runtimeFilters}
+              onSelect={onDataSelect}
+            />
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="图表数据来源已失效"
+              className="mt-8"
+            />
+          )}
+        </div>
       </div>
 
-      {drillPath.length ? (
+      {!preview && selected ? (
         <div
-          className="mx-3 flex h-7 shrink-0 items-center gap-0.5 rounded-[6px] bg-[#f7f8fa] px-2 text-[9px] text-[#667085]"
+          className="absolute left-full top-0 z-30 ml-3 flex w-8 flex-col overflow-hidden rounded-[7px] border border-[#e4e7ec] bg-white shadow-[0_6px_18px_rgba(16,24,40,.12)]"
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <button
-            type="button"
-            className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1 text-[#667085] hover:bg-[#eceef1] hover:text-[#344054]"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDrillBack(0);
-            }}
-          >
-            <RotateCcw size={9} />
-            全部
-          </button>
-          {drillPath.map((step, index) => (
-            <span key={`${step.field}-${index}`} className="flex min-w-0 items-center gap-0.5">
-              <ChevronRight size={9} className="shrink-0 text-[#b1b6bf]" />
-              <button
-                type="button"
-                className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5 text-[#475467] hover:bg-[#eceef1]"
-                title={step.label}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDrillBack(index + 1);
-                }}
-              >
-                {step.label}
-              </button>
-            </span>
-          ))}
+          <Tooltip title="编辑图表" placement="right">
+            <button
+              type="button"
+              aria-label="编辑图表"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onEdit();
+              }}
+              className="flex h-8 w-8 items-center justify-center border-0 bg-transparent text-[#667085] transition-colors hover:bg-[var(--yak-brand-color-soft)] hover:text-[var(--yak-brand-color)]"
+            >
+              <Pencil size={14} />
+            </button>
+          </Tooltip>
+
+          <div className="h-px bg-[#eef0f3]" />
+
+          <Tooltip title="复制组件" placement="right">
+            <button
+              type="button"
+              aria-label="复制组件"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDuplicate();
+              }}
+              className="flex h-8 w-8 items-center justify-center border-0 bg-transparent text-[#667085] transition-colors hover:bg-[#f5f6f7] hover:text-[#344054]"
+            >
+              <Copy size={14} />
+            </button>
+          </Tooltip>
+
+          <div className="h-px bg-[#eef0f3]" />
+
+          <Tooltip title="删除组件" placement="right">
+            <button
+              type="button"
+              aria-label="删除组件"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              className="flex h-8 w-8 items-center justify-center border-0 bg-transparent text-[#98a2b3] transition-colors hover:bg-[rgba(254,44,85,.06)] hover:text-[var(--yak-brand-color)]"
+            >
+              <Trash2 size={14} />
+            </button>
+          </Tooltip>
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1">
-        {spec ? (
-          <AnalysisPreview
-            spec={spec}
-            dataset={dataset}
-            runtimeFilters={runtimeFilters}
-            onSelect={onDataSelect}
-          />
-        ) : (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="图表数据来源已失效"
-            className="mt-8"
-          />
-        )}
-      </div>
+      <style>{`
+        .dashboard-widget__surface {
+          outline: 1px solid transparent;
+          outline-offset: 0;
+          transition: outline-color 120ms ease;
+        }
+        .dashboard-widget--editable:not(.dashboard-widget--selected):hover .dashboard-widget__surface {
+          outline-color: #9aa7b8;
+          outline-style: dashed;
+        }
+        .dashboard-widget--selected .dashboard-widget__surface {
+          outline-color: var(--yak-brand-color);
+          outline-style: solid;
+        }
+        .dashboard-widget--preview.dashboard-widget--active .dashboard-widget__surface {
+          outline-color: var(--yak-brand-color);
+          outline-style: solid;
+        }
+        .react-grid-item:has(> .dashboard-widget--selected) {
+          z-index: 20;
+        }
+        .dashboard-grid-canvas .react-grid-item.react-grid-placeholder {
+          border-radius: 0 !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle {
+          width: 18px !important;
+          height: 18px !important;
+          background-image: none !important;
+          opacity: 0;
+          transition: opacity 120ms ease;
+          z-index: 25;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-n {
+          top: -9px !important;
+          left: 50% !important;
+          margin-left: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-s {
+          bottom: -9px !important;
+          left: 50% !important;
+          margin-left: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-e {
+          right: -9px !important;
+          top: 50% !important;
+          margin-top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-w {
+          left: -9px !important;
+          top: 50% !important;
+          margin-top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-ne {
+          right: -9px !important;
+          top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-nw {
+          left: -9px !important;
+          top: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-se {
+          right: -9px !important;
+          bottom: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle-sw {
+          left: -9px !important;
+          bottom: -9px !important;
+        }
+        .dashboard-grid-canvas .react-grid-item:has(> .dashboard-widget--selected) > .react-resizable-handle {
+          opacity: 1;
+        }
+        .dashboard-grid-canvas .react-grid-item > .react-resizable-handle::after {
+          content: '' !important;
+          position: absolute !important;
+          left: 6px !important;
+          top: 6px !important;
+          width: 6px !important;
+          height: 6px !important;
+          border: 0 !important;
+          border-radius: 9999px !important;
+          background: var(--yak-brand-color) !important;
+          transform: none !important;
+        }
+      `}</style>
     </div>
   );
 }

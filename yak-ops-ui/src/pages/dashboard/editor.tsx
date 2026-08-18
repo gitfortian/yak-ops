@@ -34,7 +34,7 @@ export default function DashboardEditorPage() {
   const dashboardId = id && id !== 'new' ? id : undefined;
   const initialPreview = new URLSearchParams(window.location.search).get('preview') === '1';
   const designer = useDashboardDesigner(dashboardId, initialPreview, false);
-  const { width, containerRef, mounted } = useContainerWidth();
+  const { width, containerRef, mounted, measureWidth } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<'dashboard' | 'chart'>('dashboard');
   const [activeSheetId, setActiveSheetId] = useState<string>();
@@ -95,15 +95,22 @@ export default function DashboardEditorPage() {
   }, [designer.widgets]);
 
   useEffect(() => {
-    if (designer.preview) return;
+    if (designer.preview || activeSheet !== 'chart') return;
     if (designer.selectedId) {
-      setActiveSheet('chart');
       setActiveSheetId(designer.selectedId);
       return;
     }
     setActiveSheet('dashboard');
     setActiveSheetId(undefined);
-  }, [designer.preview, designer.selectedId]);
+  }, [activeSheet, designer.preview, designer.selectedId]);
+
+  useEffect(() => {
+    if (designer.preview || activeSheet !== 'dashboard') return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      measureWidth();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSheet, designer.preview, measureWidth]);
 
   const activateDashboardSheet = () => {
     setActiveSheet('dashboard');
@@ -372,7 +379,10 @@ export default function DashboardEditorPage() {
                       enabled: !designer.preview,
                       handle: '.dashboard-widget__drag-handle',
                     }}
-                    resizeConfig={{ enabled: !designer.preview }}
+                    resizeConfig={{
+                      enabled: !designer.preview,
+                      handles: ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'],
+                    }}
                     onLayoutChange={designer.updateLayout}
                   >
                     {designer.widgets.map((widget) => {
@@ -406,8 +416,9 @@ export default function DashboardEditorPage() {
                             selected={designer.selectedId === widget.id}
                             preview={designer.preview}
                             onSelect={() => {
-                              if (!designer.preview) activateChartSheet(widget.id);
+                              if (!designer.preview) designer.setSelectedId(widget.id);
                             }}
+                            onEdit={() => activateChartSheet(widget.id)}
                             onDataSelect={(selection) => {
                               if (!designer.preview) return;
                               handleRuntimeSelection(widget.id, selection);

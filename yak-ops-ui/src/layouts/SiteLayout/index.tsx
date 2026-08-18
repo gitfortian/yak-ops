@@ -218,8 +218,8 @@ function BrandLogo({ compact }: { compact: boolean }) {
   return (
     <button
       type="button"
-      aria-label="返回数据源管理"
-      onClick={() => history.push("/data-source")}
+      aria-label="返回首页"
+      onClick={() => history.push("/home")}
       className={[
         "mt-3 mb-1.5 flex h-12 w-full items-center border-0 bg-transparent",
         "transition-all duration-200",

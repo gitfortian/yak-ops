@@ -3,7 +3,9 @@ import {
   BarChart3,
   ChevronLeft,
   Eye,
+  Gauge,
   History,
+  Palette,
   Redo2,
   Save,
   Send,
@@ -73,83 +75,155 @@ export function DashboardToolbar({
   })();
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e8eaee] bg-white px-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <Tooltip title="退出编辑器">
-          <Button
-            type="text"
-            className="!flex !h-8 !w-8 !min-w-0 !items-center !justify-center !rounded-[7px] !p-0 !text-[#667085] hover:!bg-[#f5f6f7] hover:!text-[#344054]"
-            icon={<ChevronLeft size={16} />}
-            disabled={preview || busy}
-            onClick={onBack}
-          />
-        </Tooltip>
-        <div className="h-7 w-px bg-[#eceef1]" />
-        <div className="min-w-0">
+    <header className="shrink-0 border-b border-[#dce3ea] bg-[#eef3f8]">
+      <div className="flex h-10 items-center justify-between border-b border-[#dce4ee] bg-[#eef3f8] px-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Tooltip title="退出编辑器">
+            <Button
+              type="text"
+              className="!flex !h-7 !w-7 !min-w-0 !items-center !justify-center !rounded-[6px] !p-0 !text-[#526075] hover:!bg-[#e1e8f1] hover:!text-[#1f2a44]"
+              icon={<ChevronLeft size={15} />}
+              disabled={preview || busy}
+              onClick={onBack}
+            />
+          </Tooltip>
+          <div className="h-5 w-px bg-[#ccd6e2]" />
           <Input
             variant="borderless"
             value={name}
             disabled={preview || busy}
             onChange={(event) => onName(event.target.value)}
-            className="!h-6 !w-[280px] !px-0 !text-[14px] !font-semibold !leading-6 !text-[#161823]"
+            className="!h-6 !w-[250px] !bg-transparent !px-0 !text-[13px] !font-semibold !leading-6 !text-[#172033]"
           />
-          <div className="mt-0.5 flex h-4 items-center gap-2 text-[10px] leading-4 text-[#98a2b3]">
+          <div className="hidden items-center gap-2 whitespace-nowrap text-[10px] text-[#6f7d91] lg:flex">
             <span>{lifecycleText}</span>
             {dirty ? (
               <>
-                <span className="h-1 w-1 rounded-full bg-[#c2c6cc]" />
-                <span className="text-[#667085]">有未保存修改</span>
+                <span className="h-1 w-1 rounded-full bg-[#9ca9ba]" />
+                <span className="text-[#526075]">有未保存修改</span>
               </>
             ) : null}
           </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-1.5">
-        {!preview ? (
-          <>
-            <div className="mr-1 flex items-center rounded-[7px] bg-[#f6f7f8] p-0.5">
-              <Tooltip title="撤销 Ctrl/Cmd + Z">
-                <Button type="text" className="!h-7 !w-7 !min-w-0 !rounded-[6px] !p-0" icon={<Undo2 size={13} />} disabled={!canUndo || busy} onClick={onUndo} />
-              </Tooltip>
-              <Tooltip title="重做 Ctrl/Cmd + Shift + Z">
-                <Button type="text" className="!h-7 !w-7 !min-w-0 !rounded-[6px] !p-0" icon={<Redo2 size={13} />} disabled={!canRedo || busy} onClick={onRedo} />
-              </Tooltip>
-            </div>
-            <Button size="small" className="!h-8 !rounded-[7px] !border-[#e4e7ec] !px-3" disabled={!canAddChart || busy} icon={<BarChart3 size={13} />} onClick={onAddChart}>
-              添加图表
-            </Button>
-          </>
-        ) : null}
-
-        {persisted && currentVersionNo ? (
-          <Tooltip title="历史版本">
-            <Button type="text" className="!flex !h-8 !w-8 !min-w-0 !items-center !justify-center !rounded-[7px] !p-0 !text-[#667085] hover:!bg-[#f5f6f7]" disabled={busy} icon={<History size={14} />} onClick={onHistory} />
-          </Tooltip>
-        ) : null}
-
-        <Button size="small" className="!h-8 !rounded-[7px] !border-[#e4e7ec] !px-3" disabled={busy} icon={preview ? <X size={13} /> : <Eye size={13} />} onClick={onPreview}>
-          {preview ? '退出预览' : '预览'}
-        </Button>
 
         {!preview ? (
-          <>
+          <div className="flex items-center gap-1.5">
             <Tooltip title={saveDisabled ? '当前没有需要保存到草稿的修改' : '保存草稿 Ctrl/Cmd + S'}>
               <span>
-                <Button size="small" className="!h-8 !rounded-[7px] !border-[#e4e7ec] !px-3" loading={saving} disabled={saveDisabled || publishing} icon={<Save size={13} />} onClick={onSaveDraft}>
+                <Button
+                  size="small"
+                  className="!h-7 !rounded-[6px] !border-[#cfd8e4] !bg-[rgba(255,255,255,.72)] !px-2.5 !text-[11px] !text-[#344054] hover:!border-[#bfcad8] hover:!bg-white"
+                  loading={saving}
+                  disabled={saveDisabled || publishing}
+                  icon={<Save size={12} />}
+                  onClick={onSaveDraft}
+                >
                   保存草稿
                 </Button>
               </span>
             </Tooltip>
             <Tooltip title={!canPublish ? '当前草稿已经是已发布版本' : undefined}>
               <span>
-                <Button size="small" type="primary" className="!h-8 !rounded-[7px] !px-3.5 !shadow-none" loading={publishing} disabled={!canPublish || saving} icon={<Send size={13} />} onClick={onPublish}>
+                <Button
+                  size="small"
+                  type="primary"
+                  className="!h-7 !rounded-[6px] !px-3 !text-[11px] !shadow-none"
+                  loading={publishing}
+                  disabled={!canPublish || saving}
+                  icon={<Send size={12} />}
+                  onClick={onPublish}
+                >
                   {hasPublishedVersion ? '发布更新' : '发布'}
                 </Button>
               </span>
             </Tooltip>
-          </>
+          </div>
         ) : null}
+      </div>
+
+      <div className="flex h-8 items-center justify-between bg-white px-3">
+        <div className="flex items-center gap-1">
+          {!preview ? (
+            <>
+              <Button
+                type="text"
+                size="small"
+                className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                disabled={!canAddChart || busy}
+                icon={<BarChart3 size={13} />}
+                onClick={onAddChart}
+              >
+                添加图表
+              </Button>
+              <div className="mx-1 h-4 w-px bg-[#e1e5ea]" />
+              <Tooltip title="撤销 Ctrl/Cmd + Z">
+                <Button
+                  type="text"
+                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                  icon={<Undo2 size={13} />}
+                  disabled={!canUndo || busy}
+                  onClick={onUndo}
+                />
+              </Tooltip>
+              <Tooltip title="重做 Ctrl/Cmd + Shift + Z">
+                <Button
+                  type="text"
+                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                  icon={<Redo2 size={13} />}
+                  disabled={!canRedo || busy}
+                  onClick={onRedo}
+                />
+              </Tooltip>
+            </>
+          ) : (
+            <span className="text-[12px] font-medium text-[#161823]">预览模式</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {!preview ? (
+            <>
+              <Button
+                type="text"
+                size="small"
+                className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                icon={<Palette size={13} />}
+              >
+                仪表盘样式
+              </Button>
+              <Button
+                type="text"
+                size="small"
+                className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                icon={<Gauge size={13} />}
+              >
+                性能分析
+              </Button>
+            </>
+          ) : null}
+
+          {persisted && currentVersionNo && !preview ? (
+            <Tooltip title="历史版本">
+              <Button
+                type="text"
+                className="!flex !h-7 !w-7 !min-w-0 !items-center !justify-center !rounded-[5px] !p-0 !text-[#344054] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+                disabled={busy}
+                icon={<History size={13} />}
+                onClick={onHistory}
+              />
+            </Tooltip>
+          ) : null}
+          <Button
+            type="text"
+            size="small"
+            className="!h-7 !rounded-[5px] !px-2 !text-[12px] !font-medium !text-[#161823] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
+            disabled={busy}
+            icon={preview ? <X size={13} /> : <Eye size={13} />}
+            onClick={onPreview}
+          >
+            {preview ? '退出预览' : '预览'}
+          </Button>
+        </div>
       </div>
     </header>
   );
