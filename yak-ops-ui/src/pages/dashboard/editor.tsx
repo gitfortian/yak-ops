@@ -379,7 +379,10 @@ export default function DashboardEditorPage() {
                       enabled: !designer.preview,
                       handle: '.dashboard-widget__drag-handle',
                     }}
-                    resizeConfig={{ enabled: !designer.preview }}
+                    resizeConfig={{
+                      enabled: !designer.preview,
+                      handles: ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'],
+                    }}
                     onLayoutChange={designer.updateLayout}
                   >
                     {designer.widgets.map((widget) => {
