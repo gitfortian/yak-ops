@@ -21,7 +21,7 @@ import type {
 } from './model';
 import { DashboardWidgetActionEditor } from './widget-action-editor';
 
-export function ChartEditor({
+export function ChartSheetConfigPanel({
   currentDashboardId,
   widget,
   datasets,
@@ -33,7 +33,7 @@ export function ChartEditor({
   updateInteractions,
   changeDataset,
   detachAnalysis,
-  close,
+  onDone,
 }: {
   currentDashboardId: string;
   widget: DashboardWidget;
@@ -46,7 +46,7 @@ export function ChartEditor({
   updateInteractions: (interactions: DashboardInteraction[]) => void;
   changeDataset: (datasetId: string) => void;
   detachAnalysis: () => void;
-  close: () => void;
+  onDone: () => void;
 }) {
   if (widget.analysisId) {
     const analysis = analyses.find((item) => item.id === widget.analysisId);
@@ -55,8 +55,8 @@ export function ChartEditor({
       : undefined;
 
     return (
-      <aside className="flex w-[344px] shrink-0 flex-col border-l border-[#e8eaee] bg-white">
-        <EditorHeader onClose={close} />
+      <section className="chart-sheet-config-panel flex w-[360px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
+        <ConfigPanelHeader onDone={onDone} />
         <div className="p-4">
           <div className="rounded-[8px] border border-[#e7e9ed] bg-[#fafbfc] p-3.5">
             <div className="truncate text-[12px] font-semibold text-[#344054]">
@@ -84,7 +84,7 @@ export function ChartEditor({
             复制为可编辑图表
           </Button>
         </div>
-      </aside>
+      </section>
     );
   }
 
@@ -159,8 +159,8 @@ export function ChartEditor({
     updateInlineAnalysis({ style: { ...spec.style, ...patch } });
 
   return (
-    <aside className="flex w-[344px] shrink-0 flex-col border-l border-[#e8eaee] bg-white">
-      <EditorHeader onClose={close} />
+    <section className="chart-sheet-config-panel flex w-[360px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
+      <ConfigPanelHeader onDone={onDone} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
@@ -356,11 +356,11 @@ export function ChartEditor({
       </div>
 
       <div className="shrink-0 border-t border-[#eceef1] bg-[#fbfcfd] p-3">
-        <Button block size="small" className="!h-8 !rounded-[7px]" onClick={close}>
+        <Button block size="small" className="!h-8 !rounded-[7px]" onClick={onDone}>
           完成
         </Button>
       </div>
-    </aside>
+    </section>
   );
 }
 
@@ -372,18 +372,18 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function EditorHeader({ onClose }: { onClose: () => void }) {
+function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
   return (
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-4">
       <div>
-        <div className="text-[13px] font-semibold text-[#344054]">图表设置</div>
+        <div className="text-[13px] font-semibold text-[#344054]">图表配置</div>
         <div className="mt-0.5 text-[9px] text-[#98a2b3]">数据、展示与交互配置</div>
       </div>
       <button
         type="button"
-        onClick={onClose}
+        onClick={onDone}
         className="flex h-7 w-7 items-center justify-center rounded-[6px] border-0 bg-transparent text-[#7a818c] hover:bg-[#f5f6f7] hover:text-[#344054]"
-        aria-label="关闭图表编辑"
+        aria-label="返回仪表盘 Sheet"
       >
         <X size={14} />
       </button>
