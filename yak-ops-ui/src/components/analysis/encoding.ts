@@ -96,18 +96,34 @@ export const cloneAnalysisEncoding = (encoding: AnalysisEncoding): AnalysisEncod
   tooltip: (encoding.tooltip || []).map(cloneBinding),
 });
 
-export const legacyAnalysisEncoding = (spec: Pick<AnalysisSpec, 'dimensions' | 'metrics'>): AnalysisEncoding => ({
-  ...cloneAnalysisEncoding(EMPTY_ANALYSIS_ENCODING),
-  category: spec.dimensions.map((field) => ({ field, role: 'dimension' as const })),
-  value: spec.metrics.map((metric) => ({
-    field: metric.field,
-    role: 'metric' as const,
-    aggregation: metric.aggregation,
-  })),
-});
+/**
+ * Legacy snapshots have only the query projection. For bar/line we can safely infer
+ * category + color from the first two projected dimensions because Encoding v1 is the
+ * first editor version that intentionally produces that shape. Other charts keep their
+ * historical dimensions in category to avoid inventing semantics that were never stored.
+ */
+export const legacyAnalysisEncoding = (
+  spec: Pick<AnalysisSpec, 'type' | 'dimensions' | 'metrics'>,
+): AnalysisEncoding => {
+  const groupedSeries = spec.type === 'bar' || spec.type === 'line';
+  const categoryDimensions = groupedSeries ? spec.dimensions.slice(0, 1) : spec.dimensions;
+  const colorDimensions = groupedSeries ? spec.dimensions.slice(1, 2) : [];
+  return {
+    ...cloneAnalysisEncoding(EMPTY_ANALYSIS_ENCODING),
+    category: categoryDimensions.map((field) => ({ field, role: 'dimension' as const })),
+    color: colorDimensions.map((field) => ({ field, role: 'dimension' as const })),
+    value: spec.metrics.map((metric) => ({
+      field: metric.field,
+      role: 'metric' as const,
+      aggregation: metric.aggregation,
+    })),
+  };
+};
 
 /** Existing snapshots without `encoding` are upgraded lazily and losslessly in memory. */
-export const resolveAnalysisEncoding = (spec: Pick<AnalysisSpec, 'encoding' | 'dimensions' | 'metrics'>): AnalysisEncoding => (
+export const resolveAnalysisEncoding = (
+  spec: Pick<AnalysisSpec, 'type' | 'encoding' | 'dimensions' | 'metrics'>,
+): AnalysisEncoding => (
   spec.encoding?.version === 1
     ? cloneAnalysisEncoding(spec.encoding)
     : legacyAnalysisEncoding(spec)
@@ -181,7 +197,7 @@ export const changeAnalysisEncodingType = <T extends AnalysisSpec>(
 };
 
 export const analysisEncodingFieldKeys = (
-  spec: Pick<AnalysisSpec, 'encoding' | 'dimensions' | 'metrics'>,
+  spec: Pick<AnalysisSpec, 'type' | 'encoding' | 'dimensions' | 'metrics'>,
 ) => {
   const encoding = resolveAnalysisEncoding(spec);
   return new Set<string>(ENCODING_CHANNELS.flatMap(
