@@ -1,6 +1,9 @@
 package io.yak.ops.business.job.env;
 
+import io.yak.ops.business.job.dao.SystemEnvVarDao;
+import io.yak.ops.common.bean.po.job.SystemEnvVarPO;
 import jakarta.annotation.PostConstruct;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,7 +11,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,21 +33,18 @@ public class SystemEnvVarService {
 
   private static final Logger log = LoggerFactory.getLogger(SystemEnvVarService.class);
 
-  private final JdbcTemplate jdbcTemplate;
+  private final SystemEnvVarDao dao;
   private final ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
 
-  public SystemEnvVarService(JdbcTemplate jdbcTemplate) {
-    this.jdbcTemplate = jdbcTemplate;
+  public SystemEnvVarService(SystemEnvVarDao dao) {
+    this.dao = dao;
   }
 
   @PostConstruct
   void loadFromDatabase() {
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-        "SELECT var_key, var_value FROM yak_system_env_var");
-    for (Map<String, Object> row : rows) {
-      String key = String.valueOf(row.get("var_key"));
-      String value = String.valueOf(row.get("var_value"));
-      cache.put(key, value);
+    List<SystemEnvVarPO> rows = dao.selectAll();
+    for (SystemEnvVarPO row : rows) {
+      cache.put(row.getVarKey(), row.getVarValue());
     }
     log.info("Loaded {} application environment variable(s) from database", cache.size());
   }
@@ -68,25 +67,34 @@ public class SystemEnvVarService {
   }
 
   /** Sets (or updates) an application-level environment variable. */
-  @Transactional
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void set(String key, String value) {
     String normalizedKey = normalizeKey(key);
     String normalizedValue = value == null ? "" : value;
-    jdbcTemplate.update(
-        "INSERT INTO yak_system_env_var (var_key, var_value, create_time, update_time) "
-            + "VALUES (?, ?, NOW(6), NOW(6)) "
-            + "ON DUPLICATE KEY UPDATE var_value = VALUES(var_value), update_time = NOW(6)",
-        normalizedKey, normalizedValue);
+
+    SystemEnvVarPO existing = dao.selectByKey(normalizedKey);
+    if (existing != null) {
+      existing.setVarValue(normalizedValue);
+      existing.setUpdateTime(LocalDateTime.now());
+      dao.updateByKey(existing);
+    } else {
+      SystemEnvVarPO po = new SystemEnvVarPO();
+      po.setVarKey(normalizedKey);
+      po.setVarValue(normalizedValue);
+      po.setCreateTime(LocalDateTime.now());
+      po.setUpdateTime(LocalDateTime.now());
+      dao.insert(po);
+    }
+
     cache.put(normalizedKey, normalizedValue);
     log.info("Application environment variable set: {} = {}", normalizedKey, maskSensitive(normalizedKey, normalizedValue));
   }
 
   /** Removes an application-level environment variable. */
-  @Transactional
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public boolean remove(String key) {
     String normalizedKey = normalizeKey(key);
-    int affected = jdbcTemplate.update(
-        "DELETE FROM yak_system_env_var WHERE var_key = ?", normalizedKey);
+    int affected = dao.deleteByKey(normalizedKey);
     cache.remove(normalizedKey);
     if (affected > 0) {
       log.info("Application environment variable removed: {}", normalizedKey);
@@ -95,7 +103,7 @@ public class SystemEnvVarService {
   }
 
   /** Batch-saves environment variables, replacing all existing application-level variables. */
-  @Transactional
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void batchSave(Map<String, String> variables) {
     if (variables == null || variables.isEmpty()) {
       return;

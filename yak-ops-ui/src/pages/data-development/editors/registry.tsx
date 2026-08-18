@@ -1,4 +1,6 @@
-import { Braces, Code2, DatabaseZap, Network, Snail, TerminalSquare } from 'lucide-react';
+import { Braces, Code2, DatabaseZap, Network, TerminalSquare } from 'lucide-react';
+
+import PythonIcon from '../icon/PythonIcon';
 
 import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
 import { PythonEditor, PythonRunConfig, PythonRunResult } from './python/PythonEditor';
@@ -78,8 +80,8 @@ const editorRegistry: Partial<
   PYTHON: {
     type: 'PYTHON',
     label: 'Python',
-    icon: Snail,
-    iconClassName: 'text-[#12b76a]',
+    icon: PythonIcon,
+    iconClassName: '',
     capabilities: {
       ...commonCapabilities,
       run: true,
@@ -143,8 +145,8 @@ export const getEditorAppearance = (type: DevelopmentNodeType) => {
   if (type === 'PYTHON') {
     return {
       label: 'Python',
-      icon: Snail,
-      iconClassName: 'text-[#12b76a]',
+      icon: PythonIcon,
+      iconClassName: '',
     };
   }
 
