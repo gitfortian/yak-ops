@@ -33,6 +33,31 @@ export type {
 } from '@/components/analysis/model';
 
 export type DashboardWidgetClickAction = 'none' | 'drill' | 'dashboard' | 'yak';
+export type DashboardThemePresetId = 'yak-light' | 'yak-dark';
+
+export interface DashboardThemeCanvas {
+  backgroundColor?: string;
+}
+
+export interface DashboardThemeComponent {
+  backgroundColor?: string;
+  textColor?: string;
+}
+
+export interface DashboardThemeChart {
+  palette?: string[];
+  textColor?: string;
+  axisColor?: string;
+  gridColor?: string;
+}
+
+/** Dashboard-level visual defaults. Preset values are resolved on the client; fields are explicit overrides. */
+export interface DashboardTheme {
+  presetId?: DashboardThemePresetId;
+  canvas?: DashboardThemeCanvas;
+  component?: DashboardThemeComponent;
+  chart?: DashboardThemeChart;
+}
 
 /**
  * Dashboard-local direct chart linkage. The source widget owns the rule; selecting its
@@ -121,6 +146,7 @@ export interface DashboardDocument {
   name: string;
   description?: string;
   activeDatasetId: string;
+  theme?: DashboardTheme;
   widgets: DashboardWidget[];
   globalFilters: DashboardGlobalFilter[];
   interactions: DashboardInteraction[];
@@ -160,6 +186,7 @@ export interface DashboardVersionSummary {
 export interface DashboardServerDetail {
   dashboard: DashboardSummary;
   currentVersion?: DashboardVersionSummary;
+  theme?: DashboardTheme;
   versions: DashboardVersionSummary[];
   widgets: DashboardWidget[];
   globalFilters: DashboardGlobalFilter[];
@@ -169,6 +196,7 @@ export interface DashboardServerDetail {
 export interface DashboardVersionDetail {
   dashboard: DashboardSummary;
   version: DashboardVersionSummary;
+  theme?: DashboardTheme;
   widgets: DashboardWidget[];
   globalFilters: DashboardGlobalFilter[];
   interactions: DashboardInteraction[];
