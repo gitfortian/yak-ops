@@ -112,6 +112,41 @@ export interface AnalysisVisualConfig {
   stripedRows?: boolean;
 }
 
+export type AnalysisQuickCalculation =
+  | 'none'
+  | 'percent_of_total'
+  | 'running_total'
+  | 'rank'
+  | 'previous_change';
+export type AnalysisNumberFormat = 'auto' | 'number' | 'percent';
+export type AnalysisTopNDirection = 'top' | 'bottom';
+
+/** Per-metric table calculation and presentation choices. */
+export interface AnalysisMetricComputation {
+  quickCalculation?: AnalysisQuickCalculation;
+  numberFormat?: AnalysisNumberFormat;
+  decimalPlaces?: 0 | 1 | 2 | 3 | 4;
+  useGrouping?: boolean;
+}
+
+/** Server-side row reduction built from the current metric aggregation. */
+export interface AnalysisTopNConfig {
+  enabled: boolean;
+  metricField: string;
+  count: number;
+  direction: AnalysisTopNDirection;
+}
+
+/**
+ * Versioned analysis semantics layered on top of the Dataset query result. Quick
+ * calculations are table calculations and therefore do not alter the Dataset SQL contract.
+ */
+export interface AnalysisComputationConfig {
+  version: 1;
+  metrics?: Record<string, AnalysisMetricComputation>;
+  topN?: AnalysisTopNConfig;
+}
+
 /** Query + visualization definition that can be reused outside a Dashboard. */
 export interface AnalysisSpec {
   type: ChartType;
@@ -125,6 +160,8 @@ export interface AnalysisSpec {
   filters: AnalysisFilter[];
   sort?: AnalysisSort;
   style: AnalysisVisualConfig;
+  /** Optional Phase 8 analysis semantics. Legacy snapshots resolve to raw metric values. */
+  analysis?: AnalysisComputationConfig;
   limit?: number;
   timeoutSeconds?: number;
 }
