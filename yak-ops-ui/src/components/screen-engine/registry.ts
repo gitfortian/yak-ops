@@ -1,8 +1,18 @@
 import type { ScreenTemplate } from './model';
-import { dataCenterTemplate, operationCenterTemplate, simpleDashboardTemplate } from './templates';
+import {
+  commandCenterTemplate,
+  dataCenterTemplate,
+  operationCenterTemplate,
+  simpleDashboardTemplate,
+} from './templates';
 import { assertValidScreenTemplate } from './validator';
 
-const templates = [operationCenterTemplate, dataCenterTemplate, simpleDashboardTemplate].map(assertValidScreenTemplate);
+const templates = [
+  commandCenterTemplate,
+  operationCenterTemplate,
+  dataCenterTemplate,
+  simpleDashboardTemplate,
+].map(assertValidScreenTemplate);
 const templateMap = new Map<string, ScreenTemplate>();
 
 for (const template of templates) {

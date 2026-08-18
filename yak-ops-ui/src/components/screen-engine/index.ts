@@ -18,6 +18,11 @@ export type {
   ScreenDataBinding,
   ScreenDataOverrides,
   ScreenLineComponent,
+  ScreenMapComponent,
+  ScreenMapData,
+  ScreenMapOptions,
+  ScreenMapPoint,
+  ScreenMapRoute,
   ScreenMetricBinding,
   ScreenMetricComponent,
   ScreenMetricData,
@@ -33,7 +38,16 @@ export type {
   ScreenTextComponent,
   ScreenTextData,
   ScreenTheme,
+  ScreenTickerComponent,
+  ScreenTickerData,
+  ScreenTickerItem,
+  ScreenTickerOptions,
 } from './model';
 export { assertValidScreenTemplate, validateScreenTemplate } from './validator';
 export type { ScreenTemplateValidationResult } from './validator';
-export { dataCenterTemplate, operationCenterTemplate, simpleDashboardTemplate } from './templates';
+export {
+  commandCenterTemplate,
+  dataCenterTemplate,
+  operationCenterTemplate,
+  simpleDashboardTemplate,
+} from './templates';
