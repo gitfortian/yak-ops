@@ -27,7 +27,10 @@ export const SCREEN_AGGREGATION_LABELS: Record<Aggregation, string> = {
 };
 
 export const isBindableScreenComponent = (component?: ScreenComponent) => Boolean(
-  component && component.type !== 'text',
+  component
+  && component.type !== 'text'
+  && component.type !== 'map'
+  && component.type !== 'ticker',
 );
 
 export const canQueryScreenComponent = (
@@ -35,7 +38,7 @@ export const canQueryScreenComponent = (
   binding?: DigitalScreenComponentBinding,
 ) => {
   if (!binding?.datasetId) return false;
-  if (component.type === 'text') return false;
+  if (component.type === 'text' || component.type === 'map' || component.type === 'ticker') return false;
   if (component.type === 'metric') return binding.metrics.length === 1;
   if (component.type === 'table') return binding.dimensions.length > 0 || binding.metrics.length > 0;
   return binding.dimensions.length > 0 && binding.metrics.length > 0;

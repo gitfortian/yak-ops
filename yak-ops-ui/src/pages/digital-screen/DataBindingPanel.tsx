@@ -15,6 +15,8 @@ const COMPONENT_LABELS: Record<ScreenComponent['type'], string> = {
   pie: '饼图',
   table: '表格',
   text: '文本',
+  map: '态势地图',
+  ticker: '动态数据带',
 };
 
 const aggregationOptions = Object.entries(SCREEN_AGGREGATION_LABELS).map(([value, label]) => ({
@@ -59,9 +61,14 @@ export function DataBindingPanel({
   }
 
   if (!isBindableScreenComponent(component)) {
+    const message = component.type === 'map'
+      ? '态势地图由模板提供节点、路径与动画配置，当前版本暂不绑定业务数据集。'
+      : component.type === 'ticker'
+        ? '动态数据带由模板提供展示内容，当前版本暂不绑定业务数据集。'
+        : '文本组件由模板负责展示，不需要绑定数据集。';
     return (
       <div className="rounded-[7px] bg-[#f6f7f8] px-4 py-4 text-[12px] leading-5 text-[#8a9099]">
-        文本组件由模板负责展示，不需要绑定数据集。
+        {message}
       </div>
     );
   }

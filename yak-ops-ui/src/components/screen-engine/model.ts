@@ -1,4 +1,4 @@
-export type ScreenComponentType = 'metric' | 'line' | 'bar' | 'pie' | 'table' | 'text';
+export type ScreenComponentType = 'metric' | 'line' | 'bar' | 'pie' | 'table' | 'text' | 'map' | 'ticker';
 export type ScreenScalar = string | number | boolean | null;
 export type ScreenAggregation = 'SUM' | 'AVG' | 'COUNT' | 'COUNT_DISTINCT' | 'MAX' | 'MIN';
 
@@ -43,6 +43,9 @@ export interface ScreenComponentStyle {
   fontWeight?: number;
   letterSpacing?: number;
   textAlign?: 'left' | 'center' | 'right';
+  frame?: 'standard' | 'glass' | 'hud';
+  glow?: boolean;
+  effect?: 'none' | 'scan' | 'pulse';
 }
 
 export interface ScreenComponentBase {
@@ -86,6 +89,11 @@ export interface ScreenChartOptions {
   showGrid?: boolean;
   showLabels?: boolean;
   smooth?: boolean;
+  horizontal?: boolean;
+  showArea?: boolean;
+  gradient?: boolean;
+  neon?: boolean;
+  rose?: boolean;
 }
 
 export interface ScreenLineComponent extends ScreenComponentBase {
@@ -112,7 +120,7 @@ export interface ScreenPieData {
 export interface ScreenPieComponent extends ScreenComponentBase {
   type: 'pie';
   data?: ScreenPieData;
-  options?: Pick<ScreenChartOptions, 'showLegend' | 'showLabels'>;
+  options?: Pick<ScreenChartOptions, 'showLegend' | 'showLabels' | 'gradient' | 'neon' | 'rose'>;
 }
 
 export interface ScreenTableColumn {
@@ -141,13 +149,72 @@ export interface ScreenTextComponent extends ScreenComponentBase {
   data?: ScreenTextData;
 }
 
+export interface ScreenMapPoint {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  value?: number;
+  tone?: 'primary' | 'success' | 'warning' | 'danger';
+}
+
+export interface ScreenMapRoute {
+  from: string;
+  to: string;
+  intensity?: number;
+}
+
+export interface ScreenMapData {
+  /** Normalized 0-100 polygon used as a lightweight offline geographic silhouette. */
+  outline: Array<[number, number]>;
+  points: ScreenMapPoint[];
+  routes: ScreenMapRoute[];
+  centerId?: string;
+}
+
+export interface ScreenMapOptions {
+  showLabels?: boolean;
+  showRoutes?: boolean;
+  pulse?: boolean;
+  scan?: boolean;
+}
+
+export interface ScreenMapComponent extends ScreenComponentBase {
+  type: 'map';
+  data?: ScreenMapData;
+  options?: ScreenMapOptions;
+}
+
+export interface ScreenTickerItem {
+  label: string;
+  value: string;
+  meta?: string;
+  tone?: 'primary' | 'success' | 'warning' | 'danger';
+}
+
+export interface ScreenTickerData {
+  items: ScreenTickerItem[];
+}
+
+export interface ScreenTickerOptions {
+  speed?: number;
+}
+
+export interface ScreenTickerComponent extends ScreenComponentBase {
+  type: 'ticker';
+  data?: ScreenTickerData;
+  options?: ScreenTickerOptions;
+}
+
 export type ScreenComponent =
   | ScreenMetricComponent
   | ScreenLineComponent
   | ScreenBarComponent
   | ScreenPieComponent
   | ScreenTableComponent
-  | ScreenTextComponent;
+  | ScreenTextComponent
+  | ScreenMapComponent
+  | ScreenTickerComponent;
 
 export type ScreenComponentData = NonNullable<ScreenComponent['data']>;
 
