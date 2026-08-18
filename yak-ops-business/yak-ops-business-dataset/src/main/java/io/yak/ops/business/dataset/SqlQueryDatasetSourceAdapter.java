@@ -1,9 +1,10 @@
 package io.yak.ops.business.dataset;
 
-import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
+import io.yak.ops.core.execution.sql.SqlExecutionCaller;
+import io.yak.ops.core.execution.sql.SqlExecutionContext;
+import io.yak.ops.core.execution.sql.SqlExecutionRequest;
+import io.yak.ops.core.execution.sql.SqlExecutionResult;
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -14,13 +15,13 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
   private static final int MAX_TIMEOUT_SECONDS = 120;
 
-  private final DataSourceExecutionProvider dataSourceExecutionProvider;
+  private final SqlExecutionRuntime sqlExecutionRuntime;
   private final DatasetQueryCompiler compiler;
 
   SqlQueryDatasetSourceAdapter(
-      DataSourceExecutionProvider dataSourceExecutionProvider,
+      SqlExecutionRuntime sqlExecutionRuntime,
       DatasetQueryCompiler compiler) {
-    this.dataSourceExecutionProvider = dataSourceExecutionProvider;
+    this.sqlExecutionRuntime = sqlExecutionRuntime;
     this.compiler = compiler;
   }
 
@@ -48,17 +49,14 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
     long prepareMillis = elapsedMillis(prepareStartedAt);
     long runtimeStartedAt = System.nanoTime();
 
-    long waitStartedAt = System.nanoTime();
-    DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(version.dataSourceId());
-    long waitMillis = elapsedMillis(waitStartedAt);
-
-    DataSourceSqlResult result;
-    long executeStartedAt = System.nanoTime();
-    try (executor) {
-      result = executor.execute(new DataSourceSqlRequest(
-          compiled.sql(), compiled.fetchRows(), timeoutSeconds));
-    }
-    long executeMillis = elapsedMillis(executeStartedAt);
+    SqlExecutionResult result = sqlExecutionRuntime.execute(new SqlExecutionRequest(
+        version.dataSourceId(),
+        compiled.sql(),
+        compiled.fetchRows(),
+        timeoutSeconds,
+        SqlExecutionContext.of(SqlExecutionCaller.DATASET, String.valueOf(dataset.id()))));
+    long waitMillis = result.timing().openMillis();
+    long executeMillis = result.timing().executeMillis();
 
     long transferStartedAt = System.nanoTime();
     if (!result.resultSet()) {

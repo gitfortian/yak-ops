@@ -15,7 +15,7 @@ import io.yak.ops.business.dataservice.service.DataServiceService.RuntimeDefinit
 import io.yak.ops.business.dataservice.service.DataServiceService.ServiceSettingsInput;
 import io.yak.ops.business.dataservice.service.DataServiceService.SourceSnapshot;
 import io.yak.ops.business.dataservice.service.support.DataServiceSqlCompiler;
-import io.yak.ops.business.datasource.service.support.BusinessDataSourceExecutionProvider;
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class DataServiceServiceSourceTest {
     service = new DataServiceService(
         apiMapper,
         mock(DataServiceCallLogMapper.class),
-        mock(BusinessDataSourceExecutionProvider.class),
+        mock(SqlExecutionRuntime.class),
         new DataServiceSqlCompiler(),
         new ObjectMapper(),
         mock(DataServiceAccessService.class),

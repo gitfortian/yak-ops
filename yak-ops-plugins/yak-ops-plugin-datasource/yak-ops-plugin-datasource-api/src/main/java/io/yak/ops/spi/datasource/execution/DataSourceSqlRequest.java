@@ -1,30 +1,37 @@
 package io.yak.ops.spi.datasource.execution;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
-/** Immutable SQL execution request shared by task plugins and datasource plugins. */
+/** JDBC-neutral request used by SQL-capable datasource plugins. */
 public record DataSourceSqlRequest(
     String sql,
     int maxRows,
     int timeoutSeconds,
     List<Object> parameters) {
 
-  /** Backward-compatible constructor for callers that execute SQL without bind parameters. */
+  public DataSourceSqlRequest {
+    sql = Objects.requireNonNull(sql, "sql").trim();
+    if (sql.isEmpty()) {
+      throw new IllegalArgumentException("sql must not be blank");
+    }
+    if (maxRows <= 0) {
+      throw new IllegalArgumentException("maxRows must be greater than zero");
+    }
+    if (timeoutSeconds <= 0) {
+      throw new IllegalArgumentException("timeoutSeconds must be greater than zero");
+    }
+    parameters = immutableNullableList(parameters);
+  }
+
   public DataSourceSqlRequest(String sql, int maxRows, int timeoutSeconds) {
     this(sql, maxRows, timeoutSeconds, List.of());
   }
 
-  public DataSourceSqlRequest {
-    if (sql == null || sql.isBlank()) {
-      throw new IllegalArgumentException("sql must not be blank");
-    }
-    sql = sql.trim();
-    if (maxRows < 1 || maxRows > 10_000) {
-      throw new IllegalArgumentException("maxRows must be between 1 and 10000");
-    }
-    if (timeoutSeconds < 1 || timeoutSeconds > 3_600) {
-      throw new IllegalArgumentException("timeoutSeconds must be between 1 and 3600");
-    }
-    parameters = parameters == null ? List.of() : List.copyOf(parameters);
+  private static List<Object> immutableNullableList(List<Object> values) {
+    if (values == null || values.isEmpty()) return List.of();
+    return Collections.unmodifiableList(new ArrayList<>(values));
   }
 }

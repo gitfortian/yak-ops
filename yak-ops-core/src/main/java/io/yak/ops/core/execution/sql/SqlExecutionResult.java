@@ -1,31 +1,32 @@
-package io.yak.ops.spi.datasource.execution;
+package io.yak.ops.core.execution.sql;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
-/** JDBC-neutral SQL execution result. */
-public record DataSourceSqlResult(
-    boolean resultSet,
-    List<DataSourceSqlColumn> columns,
+/** Result of one synchronous SQL execution. SQL semantics remain a caller/policy concern. */
+public record SqlExecutionResult(
+    SqlExecutionResultType type,
+    List<SqlExecutionColumn> columns,
     List<List<Object>> rows,
     long affectedRows,
-    boolean truncated) {
+    boolean truncated,
+    SqlExecutionTiming timing) {
 
-  public DataSourceSqlResult {
+  public SqlExecutionResult {
+    type = Objects.requireNonNull(type, "type");
     columns = columns == null ? List.of() : List.copyOf(columns);
     rows = immutableRows(rows);
+    timing = Objects.requireNonNull(timing, "timing");
   }
 
-  public static DataSourceSqlResult resultSet(
-      List<DataSourceSqlColumn> columns,
-      List<List<Object>> rows,
-      boolean truncated) {
-    return new DataSourceSqlResult(true, columns, rows, 0L, truncated);
+  public boolean resultSet() {
+    return type == SqlExecutionResultType.RESULT_SET;
   }
 
-  public static DataSourceSqlResult updateCount(long affectedRows) {
-    return new DataSourceSqlResult(false, List.of(), List.of(), affectedRows, false);
+  public int returnedRows() {
+    return rows.size();
   }
 
   private static List<List<Object>> immutableRows(List<List<Object>> values) {
