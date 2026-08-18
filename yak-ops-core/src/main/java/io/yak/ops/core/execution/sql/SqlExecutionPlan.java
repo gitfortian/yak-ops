@@ -12,7 +12,8 @@ import java.util.Objects;
 public record SqlExecutionPlan(
     String dataSourceId,
     List<SqlStatementRequest> statements,
-    SqlExecutionContext context) {
+    SqlExecutionContext context,
+    SqlTransactionMode transactionMode) {
 
   public SqlExecutionPlan {
     if (dataSourceId == null || dataSourceId.isBlank()) {
@@ -27,6 +28,17 @@ public record SqlExecutionPlan(
       throw new IllegalArgumentException("statements must not contain null");
     }
     context = Objects.requireNonNull(context, "context");
+    transactionMode = transactionMode == null
+        ? SqlTransactionMode.AUTO_COMMIT
+        : transactionMode;
+  }
+
+  /** Backward-compatible constructor; existing callers remain auto-commit by default. */
+  public SqlExecutionPlan(
+      String dataSourceId,
+      List<SqlStatementRequest> statements,
+      SqlExecutionContext context) {
+    this(dataSourceId, statements, context, SqlTransactionMode.AUTO_COMMIT);
   }
 
   public static SqlExecutionPlan single(SqlExecutionRequest request) {
@@ -34,6 +46,7 @@ public record SqlExecutionPlan(
     return new SqlExecutionPlan(
         request.dataSourceId(),
         List.of(SqlStatementRequest.from(request)),
-        request.context());
+        request.context(),
+        SqlTransactionMode.AUTO_COMMIT);
   }
 }

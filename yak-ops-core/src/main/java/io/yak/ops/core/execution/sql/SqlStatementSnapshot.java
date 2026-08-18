@@ -9,6 +9,7 @@ public record SqlStatementSnapshot(
     String statementId,
     int index,
     String sql,
+    SqlStatementType statementType,
     SqlStatementStatus status,
     SqlExecutionResult result,
     String errorMessage,
@@ -23,7 +24,30 @@ public record SqlStatementSnapshot(
     if (index < 0) throw new IllegalArgumentException("index must not be negative");
     if (sql == null || sql.isBlank()) throw new IllegalArgumentException("sql must not be blank");
     sql = sql.trim();
+    statementType = statementType == null ? SqlStatementType.OTHER : statementType;
     status = Objects.requireNonNull(status, "status");
+  }
+
+  /** Backward-compatible constructor for callers created before statement semantics were exposed. */
+  public SqlStatementSnapshot(
+      String statementId,
+      int index,
+      String sql,
+      SqlStatementStatus status,
+      SqlExecutionResult result,
+      String errorMessage,
+      Instant startedAt,
+      Instant finishedAt) {
+    this(
+        statementId,
+        index,
+        sql,
+        SqlStatementType.OTHER,
+        status,
+        result,
+        errorMessage,
+        startedAt,
+        finishedAt);
   }
 
   public boolean terminal() {
