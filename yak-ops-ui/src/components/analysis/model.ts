@@ -137,6 +137,37 @@ export interface AnalysisTopNConfig {
   direction: AnalysisTopNDirection;
 }
 
+export type AnalysisFormulaBinaryOperator = '+' | '-' | '*' | '/';
+export type AnalysisFormulaFunction = 'ABS' | 'ROUND' | 'COALESCE';
+
+/**
+ * Safe calculated-field AST. Expressions are parsed once in the editor and evaluated
+ * without `eval`; aggregate references are the only nodes that read Dataset values.
+ */
+export type AnalysisFormulaNode =
+  | { kind: 'literal'; value: number }
+  | { kind: 'metric'; field: string; aggregation: Aggregation }
+  | { kind: 'unary'; operator: '-'; value: AnalysisFormulaNode }
+  | {
+    kind: 'binary';
+    operator: AnalysisFormulaBinaryOperator;
+    left: AnalysisFormulaNode;
+    right: AnalysisFormulaNode;
+  }
+  | {
+    kind: 'function';
+    name: AnalysisFormulaFunction;
+    args: AnalysisFormulaNode[];
+  };
+
+/** Chart-local virtual metric backed by a validated aggregate expression. */
+export interface AnalysisCalculatedField {
+  id: string;
+  name: string;
+  expression: string;
+  ast: AnalysisFormulaNode;
+}
+
 /**
  * Versioned analysis semantics layered on top of the Dataset query result. Quick
  * calculations are table calculations and therefore do not alter the Dataset SQL contract.
@@ -145,6 +176,8 @@ export interface AnalysisComputationConfig {
   version: 1;
   metrics?: Record<string, AnalysisMetricComputation>;
   topN?: AnalysisTopNConfig;
+  /** Optional Phase 9 chart-local calculated metrics. */
+  calculatedFields?: AnalysisCalculatedField[];
 }
 
 /** Query + visualization definition that can be reused outside a Dashboard. */
@@ -160,7 +193,7 @@ export interface AnalysisSpec {
   filters: AnalysisFilter[];
   sort?: AnalysisSort;
   style: AnalysisVisualConfig;
-  /** Optional Phase 8 analysis semantics. Legacy snapshots resolve to raw metric values. */
+  /** Optional Phase 8+ analysis semantics. Legacy snapshots resolve to raw metric values. */
   analysis?: AnalysisComputationConfig;
   limit?: number;
   timeoutSeconds?: number;
