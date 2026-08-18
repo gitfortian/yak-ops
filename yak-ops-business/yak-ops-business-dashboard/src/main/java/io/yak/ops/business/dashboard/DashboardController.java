@@ -1,5 +1,8 @@
 package io.yak.ops.business.dashboard;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
@@ -10,6 +13,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,10 +27,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/dashboards")
 public class DashboardController {
 
-  private final DashboardService service;
+  private static final int MAX_THEME_JSON = 16000;
 
-  public DashboardController(DashboardService service) {
+  private final DashboardService service;
+  private final DashboardThemeRepository themeRepository;
+  private final ObjectMapper objectMapper;
+
+  public DashboardController(
+      DashboardService service,
+      DashboardThemeRepository themeRepository,
+      ObjectMapper objectMapper) {
     this.service = service;
+    this.themeRepository = themeRepository;
+    this.objectMapper = objectMapper;
   }
 
   @Operation(summary = "查询 Dashboard 列表")
@@ -38,7 +51,7 @@ public class DashboardController {
   @Operation(summary = "查询 Dashboard 当前草稿和历史版本")
   @GetMapping("/{dashboardId}")
   public Result<DashboardDetail> get(@PathVariable("dashboardId") long dashboardId) {
-    return Result.success(service.get(dashboardId));
+    return Result.success(withTheme(service.get(dashboardId)));
   }
 
   @Operation(summary = "查询 Dashboard 版本历史")
@@ -52,50 +65,62 @@ public class DashboardController {
   public Result<DashboardVersionDetail> version(
       @PathVariable("dashboardId") long dashboardId,
       @PathVariable("versionNo") int versionNo) {
-    return Result.success(service.version(dashboardId, versionNo));
+    return Result.success(withTheme(service.version(dashboardId, versionNo)));
   }
 
   @Operation(summary = "查询 Dashboard 当前已发布快照")
   @GetMapping("/{dashboardId}/published")
   public Result<DashboardVersionDetail> published(@PathVariable("dashboardId") long dashboardId) {
-    return Result.success(service.published(dashboardId));
+    return Result.success(withTheme(service.published(dashboardId)));
   }
 
   @Operation(summary = "创建 Dashboard，并保存草稿 V1")
   @PostMapping
+  @Transactional("yakBusinessTransactionManager")
   public Result<DashboardDetail> create(@Valid @RequestBody SaveDashboardRequest request) {
-    return Result.success(service.create(toCommand(request)));
+    DashboardDetail detail = service.create(toCommand(request));
+    persistTheme(detail.dashboard().currentVersionId(), request.theme());
+    return Result.success(withTheme(detail));
   }
 
   @Operation(summary = "保存 Dashboard 新草稿版本")
   @PostMapping("/{dashboardId}/versions")
+  @Transactional("yakBusinessTransactionManager")
   public Result<DashboardDetail> saveVersion(
       @PathVariable("dashboardId") long dashboardId,
       @Valid @RequestBody SaveDashboardRequest request) {
-    return Result.success(service.saveVersion(dashboardId, toCommand(request)));
+    DashboardDetail detail = service.saveVersion(dashboardId, toCommand(request));
+    persistTheme(detail.dashboard().currentVersionId(), request.theme());
+    return Result.success(withTheme(detail));
   }
 
   @Operation(summary = "发布当前 Dashboard 草稿")
   @PostMapping("/{dashboardId}/publish")
   public Result<DashboardDetail> publish(@PathVariable("dashboardId") long dashboardId) {
-    return Result.success(service.publish(dashboardId));
+    return Result.success(withTheme(service.publish(dashboardId)));
   }
 
   @Operation(summary = "将历史 DashboardVersion 恢复为新的草稿版本")
   @PostMapping("/{dashboardId}/restore/{versionNo}")
+  @Transactional("yakBusinessTransactionManager")
   public Result<DashboardDetail> restoreVersion(
       @PathVariable("dashboardId") long dashboardId,
       @PathVariable("versionNo") int versionNo) {
-    return Result.success(service.restoreVersion(dashboardId, versionNo));
+    DashboardVersionDetail source = service.version(dashboardId, versionNo);
+    Object sourceTheme = themeRepository.find(source.version().id());
+    DashboardDetail restored = service.restoreVersion(dashboardId, versionNo);
+    persistTheme(restored.dashboard().currentVersionId(), sourceTheme);
+    return Result.success(withTheme(restored));
   }
 
   @Deprecated
   @Operation(summary = "兼容旧版激活接口：恢复历史版本为新草稿")
   @PostMapping("/{dashboardId}/activate/{versionNo}")
+  @Transactional("yakBusinessTransactionManager")
   public Result<DashboardDetail> activateVersion(
       @PathVariable("dashboardId") long dashboardId,
       @PathVariable("versionNo") int versionNo) {
-    return Result.success(service.activateVersion(dashboardId, versionNo));
+    return restoreVersion(dashboardId, versionNo);
   }
 
   @Operation(summary = "删除 Dashboard 及其历史版本")
@@ -103,6 +128,46 @@ public class DashboardController {
   public Result<Boolean> delete(@PathVariable("dashboardId") long dashboardId) {
     service.delete(dashboardId);
     return Result.success(Boolean.TRUE);
+  }
+
+  private DashboardDetail withTheme(DashboardDetail detail) {
+    Object theme = detail.currentVersion() == null ? null : themeRepository.find(detail.currentVersion().id());
+    return new DashboardDetail(
+        detail.dashboard(),
+        detail.currentVersion(),
+        theme,
+        detail.versions(),
+        detail.widgets(),
+        detail.globalFilters(),
+        detail.interactions());
+  }
+
+  private DashboardVersionDetail withTheme(DashboardVersionDetail detail) {
+    return new DashboardVersionDetail(
+        detail.dashboard(),
+        detail.version(),
+        themeRepository.find(detail.version().id()),
+        detail.widgets(),
+        detail.globalFilters(),
+        detail.interactions());
+  }
+
+  private void persistTheme(Long versionId, Object theme) {
+    if (versionId == null) throw new IllegalStateException("Dashboard 当前草稿版本不存在");
+    themeRepository.save(versionId, themeJson(theme));
+  }
+
+  private String themeJson(Object theme) {
+    if (theme == null) return null;
+    JsonNode node = objectMapper.valueToTree(theme);
+    if (!node.isObject()) throw new IllegalArgumentException("Dashboard Theme 必须是 JSON 对象");
+    try {
+      String json = objectMapper.writeValueAsString(theme);
+      if (json.length() > MAX_THEME_JSON) throw new IllegalArgumentException("Dashboard Theme 配置过大");
+      return json;
+    } catch (JsonProcessingException exception) {
+      throw new IllegalArgumentException("Dashboard Theme 无法序列化", exception);
+    }
   }
 
   private DashboardService.SaveCommand toCommand(SaveDashboardRequest request) {
@@ -133,6 +198,7 @@ public class DashboardController {
       @NotBlank @Size(max = 200) String name,
       @Size(max = 2000) String description,
       @Min(1) Long activeDatasetId,
+      Object theme,
       @Size(max = 200) List<@Valid WidgetRequest> widgets,
       @Size(max = 20) List<@Valid GlobalFilterRequest> globalFilters,
       @Size(max = 100) List<@Valid InteractionRequest> interactions) {
