@@ -204,7 +204,7 @@ export function ChartStyleConfig({
             </div>
             <Slider
               min={0}
-              max={72}
+              max={64}
               step={2}
               value={style.pieInnerRadius}
               onChange={(pieInnerRadius) => onChange({ pieInnerRadius })}
