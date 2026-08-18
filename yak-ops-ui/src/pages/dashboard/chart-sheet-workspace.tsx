@@ -25,7 +25,6 @@ export function DashboardChartSheetWorkspace({
   globalFilters,
   interactions,
   runtimeFilters,
-  updateWidget,
   updateInlineAnalysis,
   updateInteractions,
   changeDataset,
@@ -58,7 +57,7 @@ export function DashboardChartSheetWorkspace({
     ? analysis?.name ?? '历史图表'
     : widget.title?.trim() || '未命名图表';
   const chartTypeLabel = spec ? CHART_META[spec.type]?.label : undefined;
-  const editable = !widget.analysisId && Boolean(widget.inlineAnalysis && dataset);
+  const editable = !widget.analysisId && Boolean(widget.inlineAnalysis);
 
   return (
     <div className="chart-sheet-workspace flex min-h-0 flex-1 overflow-hidden bg-[#f3f4f6]">
@@ -84,7 +83,7 @@ export function DashboardChartSheetWorkspace({
         <ChartEncodingShelf
           spec={spec}
           dataset={dataset}
-          editable={editable}
+          editable={editable && Boolean(dataset)}
           onSpecPatch={!widget.analysisId ? updateInlineAnalysis : undefined}
         />
 
