@@ -12,6 +12,7 @@ import {
 import type {
   AnalysisAsset,
   AnalysisSelection,
+  AnalysisThemeTokens,
   DashboardDrillStep,
   DashboardFilter,
   DashboardInlineAnalysisSpec,
@@ -25,6 +26,7 @@ export function WidgetShell({
   runtimeSpec,
   dataset,
   runtimeFilters,
+  analysisTheme,
   drillPath,
   activeSelection,
   selected,
@@ -42,6 +44,7 @@ export function WidgetShell({
   runtimeSpec?: DashboardInlineAnalysisSpec | AnalysisAsset;
   dataset?: PublishedDataset;
   runtimeFilters: DashboardFilter[];
+  analysisTheme?: AnalysisThemeTokens;
   drillPath: DashboardDrillStep[];
   activeSelection?: AnalysisSelection;
   selected: boolean;
@@ -78,9 +81,10 @@ export function WidgetShell({
             <GripVertical
               size={13}
               className={[
-                'mr-1.5 text-[#a8adb5] transition-opacity duration-150',
+                'mr-1.5 transition-opacity duration-150',
                 selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
               ].join(' ')}
+              style={{ color: 'var(--dashboard-component-muted)' }}
             />
           ) : null}
           <span
@@ -94,7 +98,8 @@ export function WidgetShell({
             <button
               type="button"
               title={activeSelection.label}
-              className="ml-2 flex max-w-[190px] shrink-0 items-center gap-1 rounded-[5px] border border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] px-1.5 py-1 text-[9px] text-[#475467]"
+              className="ml-2 flex max-w-[190px] shrink-0 items-center gap-1 rounded-[5px] border border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] px-1.5 py-1 text-[9px]"
+              style={{ color: 'var(--dashboard-component-text)' }}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
@@ -102,19 +107,24 @@ export function WidgetShell({
               }}
             >
               <span className="truncate">已选 · {String(activeSelection.value)}</span>
-              <X size={9} className="shrink-0 text-[#7a818c]" />
+              <X size={9} className="shrink-0" />
             </button>
           ) : null}
         </div>
 
         {drillPath.length ? (
           <div
-            className="mx-3 flex h-7 shrink-0 items-center gap-0.5 rounded-[6px] bg-[#f7f8fa] px-2 text-[9px] text-[#667085]"
+            className="mx-3 flex h-7 shrink-0 items-center gap-0.5 rounded-[6px] px-2 text-[9px]"
+            style={{
+              backgroundColor: 'var(--dashboard-component-subtle-bg)',
+              color: 'var(--dashboard-component-muted)',
+            }}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <button
               type="button"
-              className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1 text-[#667085] hover:bg-[#eceef1] hover:text-[#344054]"
+              className="flex h-5 items-center gap-1 rounded-[4px] border-0 bg-transparent px-1"
+              style={{ color: 'var(--dashboard-component-muted)' }}
               onClick={(event) => {
                 event.stopPropagation();
                 onDrillBack(0);
@@ -125,10 +135,11 @@ export function WidgetShell({
             </button>
             {drillPath.map((step, index) => (
               <span key={`${step.field}-${index}`} className="flex min-w-0 items-center gap-0.5">
-                <ChevronRight size={9} className="shrink-0 text-[#b1b6bf]" />
+                <ChevronRight size={9} className="shrink-0 opacity-60" />
                 <button
                   type="button"
-                  className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5 text-[#475467] hover:bg-[#eceef1]"
+                  className="max-w-[120px] truncate rounded-[4px] border-0 bg-transparent px-1 py-0.5"
+                  style={{ color: 'var(--dashboard-component-text)' }}
                   title={step.label}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -142,12 +153,16 @@ export function WidgetShell({
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-hidden bg-white px-1 pb-1">
+        <div
+          className="min-h-0 flex-1 overflow-hidden px-1 pb-1"
+          style={{ backgroundColor: 'var(--dashboard-component-bg)' }}
+        >
           {spec ? (
             <AnalysisPreview
               spec={spec}
               dataset={dataset}
               runtimeFilters={runtimeFilters}
+              theme={analysisTheme}
               onSelect={onDataSelect}
             />
           ) : (

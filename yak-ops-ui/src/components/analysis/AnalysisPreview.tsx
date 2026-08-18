@@ -1,12 +1,17 @@
 import { Button, Empty, Spin } from 'antd';
 import * as echarts from 'echarts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AnalysisErrorBoundary } from './analysis-error-boundary';
 import {
   analysisMetricValues,
   formatAnalysisMetricValue,
   resolveAnalysisTopN,
 } from './analysis';
+import {
+  applyAnalysisChartTheme,
+  resolveAnalysisThemeTokens,
+  type AnalysisThemeTokens,
+} from './analysis-theme';
 import {
   isCalculatedFieldKey,
   materializeCalculatedFields,
@@ -221,17 +226,19 @@ function EChartAnalysis({
   spec,
   dataset,
   result,
+  theme,
   onSelect,
 }: {
   spec: AnalysisSpec;
   dataset: PublishedDataset;
   result: DatasetQueryResult;
+  theme?: AnalysisThemeTokens;
   onSelect?: (selection: AnalysisSelection) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const option = useMemo(
-    () => buildAnalysisChartOption(spec, dataset, result),
-    [spec, dataset, result],
+    () => applyAnalysisChartTheme(buildAnalysisChartOption(spec, dataset, result), theme),
+    [spec, dataset, result, theme],
   );
 
   useEffect(() => {
@@ -263,15 +270,18 @@ function MetricAnalysis({
   spec,
   dataset,
   result,
+  theme,
 }: {
   spec: AnalysisSpec;
   dataset: PublishedDataset;
   result: DatasetQueryResult;
+  theme?: AnalysisThemeTokens;
 }) {
   const metric = spec.metrics[0];
   if (!metric) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请添加指标" className="mt-4" />;
   const value = analysisMetricValues(spec, result, metric)[0] ?? null;
   const style = resolveAnalysisStyle(spec.style);
+  const tokens = resolveAnalysisThemeTokens(theme);
   const alignment = {
     left: { alignItems: 'flex-start' as const, textAlign: 'left' as const },
     center: { alignItems: 'center' as const, textAlign: 'center' as const },
@@ -279,18 +289,32 @@ function MetricAnalysis({
   }[style.metricAlign];
   const valueSize = { sm: 24, md: 28, lg: 36 }[style.metricValueSize];
   return (
-    <div className="flex h-full flex-col justify-center px-5" style={{ alignItems: alignment.alignItems }}>
-      <div className="text-[12px] font-medium text-[#667085]" style={{ textAlign: alignment.textAlign }}>
+    <div
+      className="flex h-full flex-col justify-center px-5"
+      style={{ alignItems: alignment.alignItems, backgroundColor: tokens.backgroundColor }}
+    >
+      <div
+        className="text-[12px] font-medium"
+        style={{ textAlign: alignment.textAlign, color: tokens.mutedTextColor }}
+      >
         {metricAnalysisDisplayName(spec, dataset, metric)}
       </div>
       <div
-        className="mt-2 font-semibold tracking-[-0.02em] text-[#161823]"
-        style={{ fontSize: valueSize, lineHeight: 1.15, textAlign: alignment.textAlign }}
+        className="mt-2 font-semibold tracking-[-0.02em]"
+        style={{
+          color: tokens.metricValueColor,
+          fontSize: valueSize,
+          lineHeight: 1.15,
+          textAlign: alignment.textAlign,
+        }}
       >
         {formatAnalysisMetricValue(spec, metric, value)}
       </div>
       {style.showMetricMeta ? (
-        <div className="mt-2 text-[11px] text-[#98a2b3]" style={{ textAlign: alignment.textAlign }}>
+        <div
+          className="mt-2 text-[11px]"
+          style={{ textAlign: alignment.textAlign, color: tokens.mutedTextColor, opacity: 0.78 }}
+        >
           {dataset.name} · DV{result.datasetVersionNo} · {result.elapsedMillis}ms
         </div>
       ) : null}
@@ -302,14 +326,17 @@ function TableAnalysis({
   spec,
   dataset,
   result,
+  theme,
   onSelect,
 }: {
   spec: AnalysisSpec;
   dataset: PublishedDataset;
   result: DatasetQueryResult;
+  theme?: AnalysisThemeTokens;
   onSelect?: (selection: AnalysisSelection) => void;
 }) {
   const style = resolveAnalysisStyle(spec.style);
+  const tokens = resolveAnalysisThemeTokens(theme);
   const dimensions = spec.dimensions.map((field) => getAnalysisField(dataset, field)).filter(Boolean);
   const computedValues = new Map(spec.metrics.map((metric) => [
     metric.field,
@@ -320,18 +347,35 @@ function TableAnalysis({
     : style.tableDensity === 'relaxed'
       ? 'px-3 py-3'
       : 'px-3 py-2';
+  const tableVars = {
+    '--analysis-table-hover': tokens.hoverBackgroundColor,
+  } as CSSProperties;
   return (
-    <div className="h-full overflow-auto">
+    <div
+      className="h-full overflow-auto"
+      style={{ ...tableVars, backgroundColor: tokens.backgroundColor }}
+    >
       <table className="w-full border-collapse text-[11px]">
-        <thead className="sticky top-0 z-10 bg-[#fafafa] text-[#475467]">
+        <thead
+          className="sticky top-0 z-10"
+          style={{ backgroundColor: tokens.headerBackgroundColor, color: tokens.textColor }}
+        >
           <tr>
             {dimensions.map((field) => (
-              <th key={field?.key} className={`whitespace-nowrap border-b border-[#e7eaf0] text-left font-medium ${cellPadding}`}>
+              <th
+                key={field?.key}
+                className={`whitespace-nowrap border-b text-left font-medium ${cellPadding}`}
+                style={{ borderColor: tokens.borderColor }}
+              >
                 {field?.label}
               </th>
             ))}
             {spec.metrics.map((metric) => (
-              <th key={`${metric.field}-${metric.aggregation}`} className={`whitespace-nowrap border-b border-[#e7eaf0] text-right font-medium ${cellPadding}`}>
+              <th
+                key={`${metric.field}-${metric.aggregation}`}
+                className={`whitespace-nowrap border-b text-right font-medium ${cellPadding}`}
+                style={{ borderColor: tokens.borderColor }}
+              >
                 {metricAnalysisDisplayName(spec, dataset, metric)}
               </th>
             ))}
@@ -340,23 +384,35 @@ function TableAnalysis({
         <tbody>
           {result.rows.map((row, rowIndex) => {
             const striped = style.stripedRows && rowIndex % 2 === 1;
-            const hover = onSelect && spec.dimensions.length ? 'cursor-pointer hover:bg-[#f7f8fa]' : 'hover:bg-[#fafbfc]';
+            const clickable = Boolean(onSelect && spec.dimensions.length);
             return (
               <tr
                 key={rowIndex}
-                className={`${striped ? 'bg-[#fafbfc]' : ''} ${hover}`}
+                className={`${clickable ? 'cursor-pointer' : ''} hover:!bg-[var(--analysis-table-hover)]`}
+                style={{
+                  backgroundColor: striped ? tokens.stripedBackgroundColor : tokens.backgroundColor,
+                  color: tokens.textColor,
+                }}
                 onClick={() => {
                   const selection = selectionForRow(spec, dataset, result, rowIndex);
                   if (selection) onSelect?.(selection);
                 }}
               >
                 {spec.dimensions.map((field) => (
-                  <td key={field} className={`border-b border-[#f0f2f5] text-[#344054] ${cellPadding}`}>
+                  <td
+                    key={field}
+                    className={`border-b ${cellPadding}`}
+                    style={{ borderColor: tokens.borderColor }}
+                  >
                     {String(cell(result, row, field) ?? '')}
                   </td>
                 ))}
                 {spec.metrics.map((metric) => (
-                  <td key={`${metric.field}-${metric.aggregation}`} className={`border-b border-[#f0f2f5] text-right tabular-nums text-[#344054] ${cellPadding}`}>
+                  <td
+                    key={`${metric.field}-${metric.aggregation}`}
+                    className={`border-b text-right tabular-nums ${cellPadding}`}
+                    style={{ borderColor: tokens.borderColor }}
+                  >
                     {formatAnalysisMetricValue(spec, metric, computedValues.get(metric.field)?.[rowIndex])}
                   </td>
                 ))}
@@ -366,7 +422,9 @@ function TableAnalysis({
         </tbody>
       </table>
       {result.truncated ? (
-        <div className="px-3 py-2 text-[10px] text-[#98a2b3]">结果已截断，仅展示前 {result.returnedRows} 行</div>
+        <div className="px-3 py-2 text-[10px]" style={{ color: tokens.mutedTextColor }}>
+          结果已截断，仅展示前 {result.returnedRows} 行
+        </div>
       ) : null}
     </div>
   );
@@ -376,6 +434,7 @@ interface AnalysisPreviewProps {
   spec: AnalysisSpec;
   dataset?: PublishedDataset;
   runtimeFilters?: AnalysisFilter[];
+  theme?: AnalysisThemeTokens;
   onSelect?: (selection: AnalysisSelection) => void;
   className?: string;
 }
@@ -384,22 +443,25 @@ function AnalysisPreviewContent({
   spec,
   dataset,
   runtimeFilters = [],
+  theme,
   onSelect,
   className = 'h-full min-h-0',
 }: AnalysisPreviewProps) {
   const { result, loading, error, retry } = useAnalysisQuery(spec, dataset, runtimeFilters);
+  const tokens = resolveAnalysisThemeTokens(theme);
+  const themedStyle = { backgroundColor: tokens.backgroundColor, color: tokens.textColor };
   if (!dataset) {
-    return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Dataset 不存在或已下线" className="mt-8" /></div>;
+    return <div className={className} style={themedStyle}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Dataset 不存在或已下线" className="mt-8" /></div>;
   }
   if (!canQueryAnalysis(spec)) {
-    return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置必填编码" className="mt-8" /></div>;
+    return <div className={className} style={themedStyle}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置必填编码" className="mt-8" /></div>;
   }
   if (loading && !result) {
-    return <div className={`${className} flex items-center justify-center`}><Spin size="small" /></div>;
+    return <div className={`${className} flex items-center justify-center`} style={themedStyle}><Spin size="small" /></div>;
   }
   if (error) {
     return (
-      <div className={`${className} flex items-center justify-center px-5 text-center`}>
+      <div className={`${className} flex items-center justify-center px-5 text-center`} style={themedStyle}>
         <div>
           <div className="text-[11px] text-[#b42318]">{error}</div>
           <Button size="small" type="text" className="mt-2 !h-7 !text-[10px]" onClick={retry}>
@@ -409,16 +471,32 @@ function AnalysisPreviewContent({
       </div>
     );
   }
-  if (!result) return <div className={className} />;
+  if (!result) return <div className={className} style={themedStyle} />;
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} style={themedStyle}>
       {loading ? <Spin size="small" className="absolute right-3 top-3 z-20" /> : null}
-      {spec.type === 'metric' ? <MetricAnalysis spec={spec} dataset={dataset} result={result} /> : null}
-      {spec.type === 'table' ? <TableAnalysis spec={spec} dataset={dataset} result={result} onSelect={onSelect} /> : null}
-      {spec.type !== 'metric' && spec.type !== 'table'
-        ? <EChartAnalysis spec={spec} dataset={dataset} result={result} onSelect={onSelect} />
-        : null}
+      {spec.type === 'metric' ? (
+        <MetricAnalysis spec={spec} dataset={dataset} result={result} theme={theme} />
+      ) : null}
+      {spec.type === 'table' ? (
+        <TableAnalysis
+          spec={spec}
+          dataset={dataset}
+          result={result}
+          theme={theme}
+          onSelect={onSelect}
+        />
+      ) : null}
+      {spec.type !== 'metric' && spec.type !== 'table' ? (
+        <EChartAnalysis
+          spec={spec}
+          dataset={dataset}
+          result={result}
+          theme={theme}
+          onSelect={onSelect}
+        />
+      ) : null}
     </div>
   );
 }
@@ -429,6 +507,7 @@ export function AnalysisPreview(props: AnalysisPreviewProps) {
     props.dataset?.currentVersionNo ?? 0,
     JSON.stringify(props.spec),
     JSON.stringify(props.runtimeFilters ?? []),
+    JSON.stringify(props.theme ?? {}),
   ].join(':');
   return (
     <AnalysisErrorBoundary resetKey={resetKey}>

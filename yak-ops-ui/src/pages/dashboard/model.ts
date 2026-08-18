@@ -4,6 +4,7 @@ import type {
   Scalar,
 } from '@/components/analysis/model';
 
+export type { AnalysisThemeTokens } from '@/components/analysis/analysis-theme';
 export type {
   Aggregation,
   AnalysisAsset,
@@ -33,7 +34,12 @@ export type {
 } from '@/components/analysis/model';
 
 export type DashboardWidgetClickAction = 'none' | 'drill' | 'dashboard' | 'yak';
-export type DashboardThemePresetId = 'yak-light' | 'yak-dark';
+export type DashboardThemePresetId =
+  | 'yak-light'
+  | 'yak-dark'
+  | 'ocean-night'
+  | 'graphite'
+  | 'mist-blue';
 
 export interface DashboardThemeCanvas {
   backgroundColor?: string;

@@ -4,60 +4,70 @@ import {
   DASHBOARD_THEME_PRESETS,
   resolveDashboardTheme,
   themeFromPreset,
+  type ResolvedDashboardTheme,
 } from './dashboard-theme';
 import type { DashboardTheme, DashboardThemePresetId } from './model';
 
-const ThemePreview = ({ presetId }: { presetId: DashboardThemePresetId }) => {
-  const theme = resolveDashboardTheme(themeFromPreset(presetId));
-  const dark = presetId === 'yak-dark';
+const ThemePreview = ({ preset }: { preset: ResolvedDashboardTheme }) => {
+  const theme = resolveDashboardTheme(themeFromPreset(preset.presetId));
   return (
     <div
-      className="h-[86px] overflow-hidden border border-[#e5e7eb]"
-      style={{ backgroundColor: theme.canvas.backgroundColor }}
+      className="h-[96px] overflow-hidden border-b"
+      style={{
+        backgroundColor: theme.canvas.backgroundColor,
+        borderColor: theme.component.borderColor,
+      }}
     >
       <div className="grid h-full grid-cols-[1.15fr_.85fr] gap-2 p-2.5">
-        <div className="flex flex-col gap-2">
+        <div className="flex min-h-0 flex-col gap-2">
           <div
-            className="h-6 border border-black/[.04]"
-            style={{ backgroundColor: theme.component.backgroundColor }}
+            className="flex min-h-0 flex-1 items-end gap-1.5 border px-2 pb-2"
+            style={{
+              backgroundColor: theme.component.backgroundColor,
+              borderColor: theme.component.borderColor,
+            }}
           >
-            <div className="flex h-full items-end gap-1 px-2 pb-1.5">
-              {[14, 20, 10, 24, 17].map((height, index) => (
-                <span
-                  key={index}
-                  className="w-2"
-                  style={{
-                    height,
-                    backgroundColor: theme.chart.palette[index % theme.chart.palette.length],
-                    opacity: dark ? 0.9 : 0.78,
-                  }}
-                />
-              ))}
-            </div>
+            {[18, 30, 14, 38, 24].map((height, index) => (
+              <span
+                key={index}
+                className="min-w-0 flex-1"
+                style={{
+                  height,
+                  maxWidth: 9,
+                  backgroundColor: theme.chart.palette[index % theme.chart.palette.length],
+                }}
+              />
+            ))}
           </div>
-          <div
-            className="flex min-h-0 flex-1 items-center px-2"
-            style={{ backgroundColor: theme.component.backgroundColor }}
-          >
-            <div className="w-full space-y-1.5">
-              <div className="h-1 w-[78%] bg-[#d8dde5]" />
-              <div className="h-1 w-[56%] bg-[#e5e9ef]" />
-            </div>
+          <div className="flex h-2 items-center gap-1">
+            {theme.chart.palette.slice(0, 5).map((color) => (
+              <span key={color} className="h-1.5 flex-1" style={{ backgroundColor: color }} />
+            ))}
           </div>
         </div>
+
         <div
-          className="flex flex-col justify-between p-2"
-          style={{ backgroundColor: theme.component.backgroundColor }}
+          className="flex flex-col justify-between border p-2"
+          style={{
+            backgroundColor: theme.component.backgroundColor,
+            borderColor: theme.component.borderColor,
+          }}
         >
-          <div className="h-1 w-10 bg-[#d8dde5]" />
+          <div
+            className="h-1 w-10"
+            style={{ backgroundColor: theme.component.mutedTextColor, opacity: 0.55 }}
+          />
           <div>
             <div
-              className="text-[14px] font-semibold leading-none"
-              style={{ color: theme.component.textColor }}
+              className="text-[15px] font-semibold leading-none"
+              style={{ color: theme.chart.metricValueColor }}
             >
               86.4%
             </div>
-            <div className="mt-1.5 h-1 w-8 bg-[#e5e9ef]" />
+            <div
+              className="mt-2 h-1 w-9"
+              style={{ backgroundColor: theme.component.mutedTextColor, opacity: 0.35 }}
+            />
           </div>
         </div>
       </div>
@@ -83,7 +93,7 @@ export function DashboardThemeDrawer({
   return (
     <Drawer
       title={<span className="text-[14px] font-semibold text-[#161823]">仪表盘样式</span>}
-      width={376}
+      width={412}
       open={open}
       onClose={onCancel}
       mask={false}
@@ -106,7 +116,7 @@ export function DashboardThemeDrawer({
       <div className="grid grid-cols-2 gap-3">
         {DASHBOARD_THEME_PRESETS.map((preset) => {
           const selected = selectedId === preset.presetId;
-          const Icon = preset.presetId === 'yak-dark' ? Moon : Sun;
+          const Icon = preset.tone === 'dark' ? Moon : Sun;
           return (
             <button
               key={preset.presetId}
@@ -117,11 +127,14 @@ export function DashboardThemeDrawer({
                   ? 'border-[var(--yak-brand-color)]'
                   : 'border-[#e4e7ec] hover:border-[#c8ced8]',
               ].join(' ')}
-              onClick={() => onChange(themeFromPreset(preset.presetId))}
+              onClick={() => onChange(themeFromPreset(preset.presetId as DashboardThemePresetId))}
             >
-              <ThemePreview presetId={preset.presetId} />
+              <ThemePreview preset={preset} />
               <div className="flex h-9 items-center gap-1.5 px-2.5">
-                <Icon size={13} className={selected ? 'text-[var(--yak-brand-color)]' : 'text-[#667085]'} />
+                <Icon
+                  size={13}
+                  className={selected ? 'text-[var(--yak-brand-color)]' : 'text-[#667085]'}
+                />
                 <span className="text-[12px] font-medium text-[#344054]">{preset.name}</span>
               </div>
               {selected ? (
