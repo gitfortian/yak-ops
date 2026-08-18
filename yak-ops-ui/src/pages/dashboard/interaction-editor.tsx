@@ -26,7 +26,9 @@ export function DashboardInteractionEditor({
   onChange: (interactions: DashboardInteraction[]) => void;
 }) {
   const rules = interactions.filter((item) => item.sourceWidgetId === widget.id);
-  const sourceOptions = spec.dimensions.map((fieldId) => {
+  // AnalysisSelection currently emits the primary category dimension. Keep configured
+  // interaction sources aligned with the actual runtime event contract.
+  const sourceOptions = spec.dimensions.slice(0, 1).map((fieldId) => {
     const field = dataset.fields.find((item) => item.key === fieldId);
     return {
       label: field?.label || fieldId,
@@ -76,10 +78,10 @@ export function DashboardInteractionEditor({
         <div>
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
             <Link2 size={12} />
-            图表联动
+            筛选器联动
           </div>
           <div className="mt-1 text-[9px] leading-4 text-[#98a2b3]">
-            点击当前图表的分类值后，写入目标筛选器并刷新它绑定的图表。
+            点击当前图表的主分类值后，写入目标全局筛选器并刷新它绑定的图表。
           </div>
         </div>
         <Button
@@ -95,11 +97,11 @@ export function DashboardInteractionEditor({
 
       {!filters.length ? (
         <div className="mt-2 rounded-[5px] bg-[#fafbfc] px-2.5 py-2 text-[10px] text-[#98a2b3]">
-          先在画布顶部添加全局筛选器，再配置图表联动。
+          先创建全局筛选器，再配置筛选器联动。
         </div>
       ) : !sourceOptions.length ? (
         <div className="mt-2 rounded-[5px] bg-[#fafbfc] px-2.5 py-2 text-[10px] text-[#98a2b3]">
-          当前图表没有维度字段，暂时不能作为联动来源。
+          当前图表没有可点击的主分类维度，暂时不能作为联动来源。
         </div>
       ) : !targetOptions.length ? (
         <div className="mt-2 rounded-[5px] bg-[#fafbfc] px-2.5 py-2 text-[10px] text-[#98a2b3]">
@@ -146,7 +148,7 @@ export function DashboardInteractionEditor({
         </div>
       ) : (
         <div className="mt-2 rounded-[5px] bg-[#fafbfc] px-2.5 py-2 text-[10px] text-[#98a2b3]">
-          暂无联动。点击“添加”后选择来源维度和目标筛选器。
+          暂无筛选器联动。添加后选择来源维度和目标全局筛选器。
         </div>
       )}
     </div>
