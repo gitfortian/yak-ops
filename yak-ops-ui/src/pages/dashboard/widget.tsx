@@ -70,7 +70,8 @@ export function WidgetShell({
     >
       <div
         onMouseDown={onSelect}
-        className="dashboard-widget__surface relative flex h-full min-h-0 flex-col overflow-hidden bg-white"
+        className="dashboard-widget__surface relative flex h-full min-h-0 flex-col overflow-hidden"
+        style={{ backgroundColor: 'var(--dashboard-component-bg)' }}
       >
         <div className="dashboard-widget__drag-handle flex h-10 shrink-0 cursor-move items-center px-3.5">
           {!preview ? (
@@ -82,7 +83,10 @@ export function WidgetShell({
               ].join(' ')}
             />
           ) : null}
-          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344054]">
+          <span
+            className="min-w-0 flex-1 truncate text-[12px] font-semibold"
+            style={{ color: 'var(--dashboard-component-text)' }}
+          >
             {title}
           </span>
 
@@ -138,7 +142,7 @@ export function WidgetShell({
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1">
+        <div className="min-h-0 flex-1 overflow-hidden bg-white px-1 pb-1">
           {spec ? (
             <AnalysisPreview
               spec={spec}
@@ -216,7 +220,7 @@ export function WidgetShell({
         .dashboard-widget__surface {
           outline: 1px solid transparent;
           outline-offset: 0;
-          transition: outline-color 120ms ease;
+          transition: outline-color 120ms ease, background-color 160ms ease;
         }
         .dashboard-widget--editable:not(.dashboard-widget--selected):hover .dashboard-widget__surface {
           outline-color: #9aa7b8;
