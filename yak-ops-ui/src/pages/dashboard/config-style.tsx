@@ -22,6 +22,9 @@ export function ChartStyleConfig({
   const supportsLegend = spec.type === 'bar' || spec.type === 'line' || spec.type === 'pie';
   const supportsLabels = supportsLegend;
   const supportsPalette = supportsLegend;
+  const activeLabelPosition: AnalysisDataLabelPosition = spec.type === 'pie'
+    ? style.dataLabelPosition === 'inside' ? 'inside' : 'outside'
+    : style.dataLabelPosition === 'inside' ? 'inside' : 'top';
 
   return (
     <div className="space-y-4 pb-1 text-[11px] text-[#475467]">
@@ -96,7 +99,7 @@ export function ChartStyleConfig({
                     <Select
                       size="small"
                       className="w-[116px]"
-                      value={style.dataLabelPosition}
+                      value={activeLabelPosition}
                       options={spec.type === 'pie'
                         ? [
                           { label: '外侧', value: 'outside' },
