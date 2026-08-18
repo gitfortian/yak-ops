@@ -4,6 +4,7 @@ import type {
   Scalar,
 } from '@/components/analysis/model';
 
+export type { AnalysisThemeTokens } from '@/components/analysis/analysis-theme';
 export type {
   Aggregation,
   AnalysisAsset,
@@ -13,7 +14,6 @@ export type {
   AnalysisFilter as DashboardFilter,
   AnalysisSelection,
   AnalysisSort as DashboardSort,
-  AnalysisThemeTokens,
   AnalysisVisualConfig as DashboardWidgetStyle,
   ChartType,
   DatasetField,
