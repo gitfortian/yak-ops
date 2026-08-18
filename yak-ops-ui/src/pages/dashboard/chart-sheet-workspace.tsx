@@ -1,7 +1,10 @@
 import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
 import { Empty } from 'antd';
 import { BarChart3, Database } from 'lucide-react';
-import { ChartSheetConfigPanel } from './chart-editor';
+import {
+  ChartAppearanceConfigPanel,
+  ChartBuildConfigPanel,
+} from './chart-editor';
 import { ChartFieldPanel } from './chart-field-panel';
 import { CHART_META } from './helpers';
 import type {
@@ -59,15 +62,27 @@ export function DashboardChartSheetWorkspace({
 
   return (
     <div className="chart-sheet-workspace flex min-h-0 flex-1 overflow-hidden bg-[#f3f4f6]">
-      <ChartFieldPanel
-        dataset={dataset}
-        spec={spec}
-        editable={!widget.analysisId && Boolean(widget.inlineAnalysis && dataset)}
-        onSpecPatch={!widget.analysisId ? updateInlineAnalysis : undefined}
-      />
+      <div className="flex min-h-0 shrink-0 bg-white shadow-[1px_0_0_#e3e6ea]">
+        <ChartFieldPanel
+          dataset={dataset}
+          spec={spec}
+          editable={!widget.analysisId && Boolean(widget.inlineAnalysis && dataset)}
+          onSpecPatch={!widget.analysisId ? updateInlineAnalysis : undefined}
+        />
+        <ChartBuildConfigPanel
+          widget={widget}
+          datasets={datasets}
+          analyses={analyses}
+          updateWidget={updateWidget}
+          updateInlineAnalysis={updateInlineAnalysis}
+          changeDataset={changeDataset}
+          detachAnalysis={detachAnalysis}
+          onDone={onDone}
+        />
+      </div>
 
       <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">
-        <div className="flex min-h-full p-5 2xl:p-6">
+        <div className="flex min-h-full p-4 2xl:p-5">
           <div className="mx-auto flex min-h-[560px] w-full max-w-[1320px] flex-1 flex-col">
             <div className="flex h-10 shrink-0 items-center justify-between gap-4 px-1">
               <div className="flex min-w-0 items-center gap-2">
@@ -110,23 +125,18 @@ export function DashboardChartSheetWorkspace({
         </div>
       </main>
 
-      <div className="flex shrink-0 border-l border-[#e3e6ea]">
-        <ChartSheetConfigPanel
-          currentDashboardId={currentDashboardId}
-          widget={widget}
-          widgets={widgets}
-          datasets={datasets}
-          analyses={analyses}
-          globalFilters={globalFilters}
-          interactions={interactions}
-          updateWidget={updateWidget}
-          updateInlineAnalysis={updateInlineAnalysis}
-          updateInteractions={updateInteractions}
-          changeDataset={changeDataset}
-          detachAnalysis={detachAnalysis}
-          onDone={onDone}
-        />
-      </div>
+      <ChartAppearanceConfigPanel
+        currentDashboardId={currentDashboardId}
+        widget={widget}
+        widgets={widgets}
+        datasets={datasets}
+        analyses={analyses}
+        globalFilters={globalFilters}
+        interactions={interactions}
+        updateInlineAnalysis={updateInlineAnalysis}
+        updateInteractions={updateInteractions}
+        onDone={onDone}
+      />
     </div>
   );
 }

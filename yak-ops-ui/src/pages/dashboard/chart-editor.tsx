@@ -9,8 +9,15 @@ import {
   updateEncodingMetricAggregation,
 } from '@/components/analysis/encoding';
 import type { AnalysisEncoding, AnalysisSpec } from '@/components/analysis/model';
-import { Button, Collapse, Input, Select } from 'antd';
-import { Calculator, ChevronDown, MousePointerClick, Palette, SlidersHorizontal, X } from 'lucide-react';
+import { Button, Collapse, Input, Select, Tabs } from 'antd';
+import {
+  Calculator,
+  ChevronDown,
+  MousePointerClick,
+  Palette,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
 import { ChartAnalysisConfig } from './config-analysis';
 import { ConfigData } from './config-data';
 import { MetricAggregations } from './config-metrics';
@@ -32,21 +39,18 @@ import type {
 } from './model';
 import { DashboardWidgetActionEditor } from './widget-action-editor';
 
-export function ChartSheetConfigPanel({
-  currentDashboardId,
-  widget,
-  widgets,
-  datasets,
-  analyses,
-  globalFilters,
-  interactions,
-  updateWidget,
-  updateInlineAnalysis,
-  updateInteractions,
-  changeDataset,
-  detachAnalysis,
-  onDone,
-}: {
+interface ChartBuildConfigPanelProps {
+  widget: DashboardWidget;
+  datasets: PublishedDataset[];
+  analyses: AnalysisAsset[];
+  updateWidget: (patch: Partial<DashboardWidget>) => void;
+  updateInlineAnalysis: (patch: Partial<DashboardInlineAnalysisSpec>) => void;
+  changeDataset: (datasetId: string) => void;
+  detachAnalysis: () => void;
+  onDone: () => void;
+}
+
+interface ChartAppearanceConfigPanelProps {
   currentDashboardId: string;
   widget: DashboardWidget;
   widgets: DashboardWidget[];
@@ -54,13 +58,26 @@ export function ChartSheetConfigPanel({
   analyses: AnalysisAsset[];
   globalFilters: DashboardGlobalFilter[];
   interactions: DashboardInteraction[];
-  updateWidget: (patch: Partial<DashboardWidget>) => void;
   updateInlineAnalysis: (patch: Partial<DashboardInlineAnalysisSpec>) => void;
   updateInteractions: (interactions: DashboardInteraction[]) => void;
-  changeDataset: (datasetId: string) => void;
-  detachAnalysis: () => void;
   onDone: () => void;
-}) {
+}
+
+/**
+ * Structural chart editing lives next to the field catalog on the left side of Chart Sheet.
+ * The panel intentionally owns data binding, chart type, Encoding and query/analysis semantics,
+ * while visual appearance and runtime interactions are handled by ChartAppearanceConfigPanel.
+ */
+export function ChartBuildConfigPanel({
+  widget,
+  datasets,
+  analyses,
+  updateWidget,
+  updateInlineAnalysis,
+  changeDataset,
+  detachAnalysis,
+  onDone,
+}: ChartBuildConfigPanelProps) {
   if (widget.analysisId) {
     const analysis = analyses.find((item) => item.id === widget.analysisId);
     const dataset = analysis
@@ -68,8 +85,12 @@ export function ChartSheetConfigPanel({
       : undefined;
 
     return (
-      <section className="chart-sheet-config-panel flex w-[360px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
-        <ConfigPanelHeader onDone={onDone} />
+      <section className="chart-build-config-panel flex w-[320px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white 2xl:w-[336px]">
+        <PanelHeader
+          title="图表构建"
+          description="数据、类型与字段编码"
+          onDone={onDone}
+        />
         <div className="p-4">
           <div className="rounded-[8px] border border-[#e7e9ed] bg-[#fafbfc] p-3.5">
             <div className="truncate text-[12px] font-semibold text-[#344054]">
@@ -80,7 +101,7 @@ export function ChartSheetConfigPanel({
             </div>
           </div>
           <div className="mt-3 text-[11px] leading-5 text-[#667085]">
-            这个图表来自旧版共享资产。复制为当前仪表盘图表后，即可继续编辑数据、样式与交互。
+            这个图表来自旧版共享资产。复制为当前仪表盘图表后，即可继续编辑字段、分析、样式与交互。
           </div>
           {!analysis ? (
             <div className="mt-3 rounded-[6px] border border-[#fecdca] bg-[#fffbfa] px-2.5 py-2 text-[10px] text-[#b42318]">
@@ -192,14 +213,15 @@ export function ChartSheetConfigPanel({
     });
   };
 
-  const updateStyle = (patch: Partial<AnalysisSpec['style']>) =>
-    updateInlineAnalysis({ style: { ...spec.style, ...patch, version: 1 } });
-
   return (
-    <section className="chart-sheet-config-panel flex w-[360px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
-      <ConfigPanelHeader onDone={onDone} />
+    <section className="chart-build-config-panel flex w-[320px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white 2xl:w-[336px]">
+      <PanelHeader
+        title="图表构建"
+        description="数据、类型、编码与分析"
+        onDone={onDone}
+      />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4">
         <div className="space-y-4">
           <div>
             <SectionLabel>图表标题</SectionLabel>
@@ -251,11 +273,11 @@ export function ChartSheetConfigPanel({
             })}
           </div>
           <div className="mt-2 text-[9px] leading-4 text-[#98a2b3]">
-            高级图表沿用 Encoding v1；切换类型时会保留可兼容字段，并自动补齐必填槽位。
+            切换类型会保留兼容字段，并自动补齐必填编码槽位。
           </div>
         </div>
 
-        <div className="mt-5 rounded-[9px] bg-[#f8f9fa] p-3.5">
+        <div className="mt-5 rounded-[9px] border border-[#edf0f3] bg-[#f8f9fa] p-3">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="text-[11px] font-semibold text-[#475467]">可视化编码</div>
             <span className="rounded-[4px] border border-[#e1e4e8] bg-white px-1.5 py-0.5 text-[8px] text-[#98a2b3]">
@@ -309,58 +331,6 @@ export function ChartSheetConfigPanel({
               ),
             },
             {
-              key: 'style',
-              label: (
-                <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
-                  <Palette size={12} />
-                  样式设置
-                </span>
-              ),
-              children: (
-                <ChartStyleConfig spec={spec} onChange={updateStyle} />
-              ),
-            },
-            {
-              key: 'interaction',
-              label: (
-                <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
-                  <MousePointerClick size={12} />
-                  交互设置
-                </span>
-              ),
-              children: (
-                <div className="space-y-4 pb-2">
-                  <DashboardDirectCrossFilterEditor
-                    widget={widget}
-                    widgets={widgets}
-                    spec={spec}
-                    dataset={dataset}
-                    datasets={datasets}
-                    analyses={analyses}
-                    onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
-                  />
-                  <div className="border-t border-[#eceef1] pt-4">
-                    <DashboardInteractionEditor
-                      widget={widget}
-                      spec={spec}
-                      dataset={dataset}
-                      filters={globalFilters}
-                      interactions={interactions}
-                      onChange={updateInteractions}
-                    />
-                  </div>
-                  <div className="border-t border-[#eceef1] pt-4">
-                    <DashboardWidgetActionEditor
-                      currentDashboardId={currentDashboardId}
-                      spec={spec}
-                      dataset={dataset}
-                      onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
-                    />
-                  </div>
-                </div>
-              ),
-            },
-            {
               key: 'query',
               label: (
                 <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
@@ -393,12 +363,125 @@ export function ChartSheetConfigPanel({
           ]}
         />
       </div>
+    </section>
+  );
+}
 
-      <div className="shrink-0 border-t border-[#eceef1] bg-[#fbfcfd] p-3">
-        <Button block size="small" className="!h-8 !rounded-[7px]" onClick={onDone}>
-          完成
-        </Button>
+/** Right-side inspector for how a chart is rendered and how the rendered marks behave. */
+export function ChartAppearanceConfigPanel({
+  currentDashboardId,
+  widget,
+  widgets,
+  datasets,
+  analyses,
+  globalFilters,
+  interactions,
+  updateInlineAnalysis,
+  updateInteractions,
+  onDone,
+}: ChartAppearanceConfigPanelProps) {
+  if (widget.analysisId) {
+    const analysis = analyses.find((item) => item.id === widget.analysisId);
+    return (
+      <section className="chart-appearance-config-panel flex w-[320px] shrink-0 flex-col border-l border-[#e3e6ea] bg-white 2xl:w-[336px]">
+        <InspectorHeader />
+        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+          <div>
+            <Palette size={18} className="mx-auto text-[#b0b5bd]" />
+            <div className="mt-2 text-[11px] font-medium text-[#667085]">共享图表为只读状态</div>
+            <div className="mt-1 text-[9px] leading-4 text-[#98a2b3]">
+              {analysis ? '先在左侧复制为可编辑图表，再调整渲染样式与交互。' : '当前共享图表已不可用。'}
+            </div>
+          </div>
+        </div>
+        <DoneFooter onDone={onDone} />
+      </section>
+    );
+  }
+
+  const spec = widget.inlineAnalysis;
+  if (!spec) return null;
+  const dataset = findDataset(datasets, spec.datasetId);
+  if (!dataset) return null;
+
+  const updateStyle = (patch: Partial<AnalysisSpec['style']>) =>
+    updateInlineAnalysis({ style: { ...spec.style, ...patch, version: 1 } });
+
+  const styleContent = (
+    <div className="px-4 pb-5 pt-1">
+      <div className="mb-3 rounded-[7px] bg-[#f8f9fa] px-2.5 py-2 text-[9px] leading-4 text-[#98a2b3]">
+        这里只控制当前图表的视觉表现；字段、图表类型与分析逻辑统一在左侧完成。
       </div>
+      <ChartStyleConfig spec={spec} onChange={updateStyle} />
+    </div>
+  );
+
+  const interactionContent = (
+    <div className="space-y-4 px-4 pb-5 pt-1">
+      <DashboardDirectCrossFilterEditor
+        widget={widget}
+        widgets={widgets}
+        spec={spec}
+        dataset={dataset}
+        datasets={datasets}
+        analyses={analyses}
+        onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
+      />
+      <div className="border-t border-[#eceef1] pt-4">
+        <DashboardInteractionEditor
+          widget={widget}
+          spec={spec}
+          dataset={dataset}
+          filters={globalFilters}
+          interactions={interactions}
+          onChange={updateInteractions}
+        />
+      </div>
+      <div className="border-t border-[#eceef1] pt-4">
+        <DashboardWidgetActionEditor
+          currentDashboardId={currentDashboardId}
+          spec={spec}
+          dataset={dataset}
+          onChange={(dashboardBehavior) => updateInlineAnalysis({ dashboardBehavior })}
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="chart-appearance-config-panel flex w-[320px] shrink-0 flex-col border-l border-[#e3e6ea] bg-white 2xl:w-[336px]">
+      <InspectorHeader />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Tabs
+          size="small"
+          defaultActiveKey="style"
+          className="chart-appearance-tabs"
+          tabBarStyle={{ margin: 0, padding: '0 16px' }}
+          items={[
+            {
+              key: 'style',
+              label: (
+                <span className="flex items-center gap-1.5 text-[11px]">
+                  <Palette size={12} />
+                  样式
+                </span>
+              ),
+              children: styleContent,
+            },
+            {
+              key: 'interaction',
+              label: (
+                <span className="flex items-center gap-1.5 text-[11px]">
+                  <MousePointerClick size={12} />
+                  交互
+                </span>
+              ),
+              children: interactionContent,
+            },
+          ]}
+        />
+      </div>
+      <DoneFooter onDone={onDone} />
     </section>
   );
 }
@@ -411,12 +494,20 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
+function PanelHeader({
+  title,
+  description,
+  onDone,
+}: {
+  title: string;
+  description: string;
+  onDone: () => void;
+}) {
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-4">
+    <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-3.5">
       <div>
-        <div className="text-[13px] font-semibold text-[#344054]">图表配置</div>
-        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、计算、分析、样式与交互</div>
+        <div className="text-[13px] font-semibold text-[#344054]">{title}</div>
+        <div className="mt-0.5 text-[9px] text-[#98a2b3]">{description}</div>
       </div>
       <button
         type="button"
@@ -426,6 +517,27 @@ function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
       >
         <X size={14} />
       </button>
+    </div>
+  );
+}
+
+function InspectorHeader() {
+  return (
+    <div className="flex h-14 shrink-0 items-center border-b border-[#eceef1] px-4">
+      <div>
+        <div className="text-[13px] font-semibold text-[#344054]">渲染设置</div>
+        <div className="mt-0.5 text-[9px] text-[#98a2b3]">外观样式与图表交互</div>
+      </div>
+    </div>
+  );
+}
+
+function DoneFooter({ onDone }: { onDone: () => void }) {
+  return (
+    <div className="shrink-0 border-t border-[#eceef1] bg-[#fbfcfd] p-3">
+      <Button block size="small" className="!h-8 !rounded-[7px]" onClick={onDone}>
+        完成
+      </Button>
     </div>
   );
 }
