@@ -86,6 +86,7 @@ record DashboardInteractionSnapshot(
 record DashboardDetail(
     DashboardAsset dashboard,
     DashboardVersion currentVersion,
+    Object theme,
     List<DashboardVersion> versions,
     List<DashboardWidgetSnapshot> widgets,
     List<DashboardGlobalFilterSnapshot> globalFilters,
@@ -96,6 +97,7 @@ record DashboardDetail(
 record DashboardVersionDetail(
     DashboardAsset dashboard,
     DashboardVersion version,
+    Object theme,
     List<DashboardWidgetSnapshot> widgets,
     List<DashboardGlobalFilterSnapshot> globalFilters,
     List<DashboardInteractionSnapshot> interactions) {
