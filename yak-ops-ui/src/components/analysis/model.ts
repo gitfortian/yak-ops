@@ -24,7 +24,15 @@ export interface PublishedDataset {
   fields: DatasetField[];
 }
 
-export type ChartType = 'metric' | 'bar' | 'line' | 'pie' | 'table';
+export type BasicChartType = 'metric' | 'bar' | 'line' | 'pie' | 'table';
+export type AdvancedChartType =
+  | 'stackedBar'
+  | 'area'
+  | 'scatter'
+  | 'radar'
+  | 'funnel'
+  | 'treemap';
+export type ChartType = BasicChartType | AdvancedChartType;
 export type Aggregation = 'SUM' | 'AVG' | 'COUNT' | 'COUNT_DISTINCT' | 'MAX' | 'MIN';
 export type SortDirection = 'asc' | 'desc';
 export type FilterOperator = 'eq' | 'neq' | 'contains' | 'gt' | 'gte' | 'lt' | 'lte';

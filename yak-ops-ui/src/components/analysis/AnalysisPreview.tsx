@@ -4,16 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   analysisMetricValues,
   formatAnalysisMetricValue,
-  metricComputationFor,
-  quickCalculationLabel,
   resolveAnalysisTopN,
 } from './analysis';
 import {
-  calculatedFieldFor,
   isCalculatedFieldKey,
   materializeCalculatedFields,
   queryMetricsForAnalysis,
 } from './calculated-field';
+import { buildAnalysisChartOption } from './chart-options';
+import {
+  getAnalysisField,
+  metricAnalysisDisplayName,
+} from './display';
 import { encodingMeetsChartRequirements, resolveAnalysisEncoding } from './encoding';
 import { queryAnalysisDataset } from './dataset-service';
 import type {
@@ -24,43 +26,16 @@ import type {
   DatasetField,
   DatasetQueryPayload,
   DatasetQueryResult,
-  MetricBinding,
   PublishedDataset,
   Scalar,
 } from './model';
-import { paletteColors, resolveAnalysisStyle } from './style';
+import { resolveAnalysisStyle } from './style';
 
-export const AGGREGATION_LABELS: Record<Aggregation, string> = {
-  SUM: '求和',
-  AVG: '平均',
-  COUNT: '计数',
-  COUNT_DISTINCT: '去重计数',
-  MAX: '最大值',
-  MIN: '最小值',
-};
-
-export const getAnalysisField = (dataset: PublishedDataset, fieldKey?: string) =>
-  dataset.fields.find((field) => field.key === fieldKey);
-
-export const metricDisplayName = (
-  dataset: PublishedDataset,
-  metric: AnalysisSpec['metrics'][number],
-) => `${getAnalysisField(dataset, metric.field)?.label ?? metric.field} · ${AGGREGATION_LABELS[metric.aggregation]}`;
-
-const metricAnalysisDisplayName = (
-  spec: AnalysisSpec,
-  dataset: PublishedDataset,
-  metric: MetricBinding,
-) => {
-  const calculated = calculatedFieldFor(spec, metric.field);
-  const base = calculated
-    ? `${calculated.name} · 计算字段`
-    : metricDisplayName(dataset, metric);
-  const calculation = spec.type === 'metric'
-    ? 'none'
-    : metricComputationFor(spec, metric.field).quickCalculation;
-  return calculation === 'none' ? base : `${base} · ${quickCalculationLabel(calculation)}`;
-};
+export {
+  AGGREGATION_LABELS,
+  getAnalysisField,
+  metricDisplayName,
+} from './display';
 
 const filterValue = (field: DatasetField | undefined, value: string): Scalar => {
   if (field?.dataType === 'number') {
@@ -210,25 +185,6 @@ const cell = (
   return index >= 0 ? row[index] : null;
 };
 
-const rowLabel = (result: DatasetQueryResult, row: Scalar[], dimensions: string[]) =>
-  dimensions.map((fieldId) => String(cell(result, row, fieldId) ?? '')).join(' / ');
-
-const scalarKey = (value: Scalar) => `${typeof value}:${String(value)}`;
-
-const uniqueDimensionValues = (
-  result: DatasetQueryResult,
-  fieldId: string,
-) => {
-  const seen = new Set<string>();
-  return result.rows.flatMap((row) => {
-    const value = cell(result, row, fieldId);
-    const key = scalarKey(value);
-    if (seen.has(key)) return [];
-    seen.add(key);
-    return [{ key, value, label: String(value ?? '') }];
-  });
-};
-
 const selectionForRow = (
   spec: AnalysisSpec,
   dataset: PublishedDataset,
@@ -250,193 +206,6 @@ const selectionForRow = (
   };
 };
 
-const legendOption = (
-  visible: boolean,
-  position: 'top' | 'right' | 'bottom',
-  axisText: string,
-) => {
-  if (!visible) return { show: false };
-  const base = { textStyle: { color: axisText, fontSize: 11 } };
-  if (position === 'right') return { ...base, orient: 'vertical', right: 0, top: 'middle' };
-  if (position === 'bottom') return { ...base, orient: 'horizontal', left: 'center', bottom: 0 };
-  return { ...base, orient: 'horizontal', right: 4, top: 0 };
-};
-
-const chartOptionFor = (
-  spec: AnalysisSpec,
-  dataset: PublishedDataset,
-  result: DatasetQueryResult,
-) => {
-  const encoding = resolveAnalysisEncoding(spec);
-  const style = resolveAnalysisStyle(spec.style);
-  const colors = paletteColors(spec.style);
-  const firstDimension = encoding.category.find((binding) => binding.role === 'dimension')?.field
-    ?? spec.dimensions[0];
-  const colorDimension = encoding.color.find((binding) => binding.role === 'dimension')?.field;
-  const dimension = getAnalysisField(dataset, firstDimension);
-  const metrics = spec.metrics;
-  const computedValues = new Map(metrics.map((metric) => [
-    metric.field,
-    analysisMetricValues(spec, result, metric),
-  ]));
-  const metricValue = (metric: MetricBinding, rowIndex: number) =>
-    computedValues.get(metric.field)?.[rowIndex] ?? null;
-  const formatted = (metric: MetricBinding, value: unknown) => {
-    if (value === null || value === undefined) return '—';
-    const number = Number(value);
-    return formatAnalysisMetricValue(spec, metric, Number.isFinite(number) ? number : null);
-  };
-  const axisText = '#667085';
-  const axisLine = '#d8dde6';
-  const splitLine = '#eef1f5';
-
-  if (!firstDimension || !metrics.length) return undefined;
-
-  if (spec.type === 'pie') {
-    const metric = metrics[0];
-    const metricConfig = metricComputationFor(spec, metric.field);
-    const legacyPieLabel = metricConfig.quickCalculation === 'none'
-      && metricConfig.numberFormat === 'auto';
-    const legendVisible = style.showLegend;
-    const legendOnRight = legendVisible && style.legendPosition === 'right';
-    const legendOnTop = legendVisible && style.legendPosition === 'top';
-    const legendOnBottom = legendVisible && style.legendPosition === 'bottom';
-    const labelPosition = style.dataLabelPosition === 'inside' ? 'inside' : 'outside';
-    return {
-      color: colors,
-      tooltip: {
-        trigger: 'item',
-        valueFormatter: (value: unknown) => formatted(metric, value),
-      },
-      legend: legendOption(legendVisible, style.legendPosition, axisText),
-      series: [{
-        name: metricAnalysisDisplayName(spec, dataset, metric),
-        type: 'pie',
-        radius: [`${style.pieInnerRadius}%`, '70%'],
-        center: [
-          legendOnRight ? '38%' : '50%',
-          legendOnTop ? '56%' : legendOnBottom ? '45%' : '52%',
-        ],
-        label: {
-          show: style.showDataLabels,
-          position: labelPosition,
-          formatter: legacyPieLabel
-            ? (labelPosition === 'inside' ? '{d}%' : '{b} {d}%')
-            : (params: any) => labelPosition === 'inside'
-              ? formatted(metric, params?.value)
-              : `${params?.name ?? ''} ${formatted(metric, params?.value)}`.trim(),
-        },
-        itemStyle: { borderColor: '#fff', borderWidth: 2 },
-        data: result.rows.map((row, rowIndex) => ({
-          name: rowLabel(result, row, [firstDimension]),
-          value: metricValue(metric, rowIndex),
-          __rowIndex: rowIndex,
-        })),
-      }],
-    };
-  }
-
-  if (spec.type === 'bar' || spec.type === 'line') {
-    const isLine = spec.type === 'line';
-    const categories = uniqueDimensionValues(result, firstDimension);
-    const colorValues = colorDimension
-      ? uniqueDimensionValues(result, colorDimension)
-      : [];
-    const legendVisible = style.showLegend;
-    const labelPosition = style.dataLabelPosition === 'inside' ? 'inside' : 'top';
-
-    const rowIndexFor = (category: Scalar, color?: Scalar) => result.rows.findIndex((row) => (
-      Object.is(cell(result, row, firstDimension), category)
-      && (!colorDimension || Object.is(cell(result, row, colorDimension), color))
-    ));
-
-    const seriesStyleFor = (metric: MetricBinding) => ({
-      smooth: isLine && style.smooth,
-      symbolSize: isLine ? style.symbolSize : undefined,
-      lineStyle: isLine ? { width: style.lineWidth } : undefined,
-      barMaxWidth: !isLine ? style.barMaxWidth : undefined,
-      itemStyle: !isLine ? { borderRadius: style.barRadius } : undefined,
-      label: {
-        show: style.showDataLabels,
-        position: labelPosition,
-        formatter: (params: any) => formatted(metric, params?.value),
-      },
-      tooltip: {
-        valueFormatter: (value: unknown) => formatted(metric, value),
-      },
-    });
-
-    const series = colorDimension
-      ? metrics.flatMap((metric) => colorValues.map((color) => ({
-        name: metrics.length > 1
-          ? `${color.label} · ${metricAnalysisDisplayName(spec, dataset, metric)}`
-          : color.label,
-        type: spec.type,
-        ...seriesStyleFor(metric),
-        data: categories.map((category) => {
-          const rowIndex = rowIndexFor(category.value, color.value);
-          if (rowIndex < 0) return null;
-          return {
-            value: metricValue(metric, rowIndex),
-            __rowIndex: rowIndex,
-          };
-        }),
-      })))
-      : metrics.map((metric) => ({
-        name: metricAnalysisDisplayName(spec, dataset, metric),
-        type: spec.type,
-        ...seriesStyleFor(metric),
-        data: categories.map((category) => {
-          const rowIndex = rowIndexFor(category.value);
-          if (rowIndex < 0) return null;
-          return {
-            value: metricValue(metric, rowIndex),
-            __rowIndex: rowIndex,
-          };
-        }),
-      }));
-
-    return {
-      color: colors,
-      grid: {
-        left: 22,
-        right: legendVisible && style.legendPosition === 'right' ? 112 : 16,
-        top: legendVisible && style.legendPosition === 'top' ? 34 : 14,
-        bottom: legendVisible && style.legendPosition === 'bottom' ? 40 : 22,
-        containLabel: true,
-      },
-      tooltip: { trigger: 'axis' },
-      legend: legendOption(legendVisible, style.legendPosition, axisText),
-      xAxis: {
-        type: 'category',
-        boundaryGap: !isLine,
-        name: dimension?.label,
-        nameTextStyle: { color: '#98a2b3', fontSize: 10 },
-        data: categories.map((item) => item.label),
-        axisLine: { lineStyle: { color: axisLine } },
-        axisTick: { show: false },
-        axisLabel: {
-          color: axisText,
-          fontSize: 11,
-          rotate: style.axisLabelRotation,
-        },
-      },
-      yAxis: {
-        type: 'value',
-        splitLine: { show: style.showGrid, lineStyle: { color: splitLine } },
-        axisLabel: {
-          color: axisText,
-          fontSize: 11,
-          formatter: (value: number) => formatAnalysisMetricValue(spec, metrics[0], value),
-        },
-      },
-      series,
-    };
-  }
-
-  return undefined;
-};
-
 function EChartAnalysis({
   spec,
   dataset,
@@ -449,7 +218,10 @@ function EChartAnalysis({
   onSelect?: (selection: AnalysisSelection) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const option = useMemo(() => chartOptionFor(spec, dataset, result), [spec, dataset, result]);
+  const option = useMemo(
+    () => buildAnalysisChartOption(spec, dataset, result),
+    [spec, dataset, result],
+  );
 
   useEffect(() => {
     if (!containerRef.current || !option) return undefined;

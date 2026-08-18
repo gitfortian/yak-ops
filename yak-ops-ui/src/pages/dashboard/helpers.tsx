@@ -26,8 +26,14 @@ export const FIELD_DRAG_MIME = 'application/x-yak-dashboard-field';
 export const CHART_META: Record<ChartType, { label: string; description: string; icon: ReactNode }> = {
   metric: { label: '指标卡', description: '展示单个核心指标', icon: <Sigma size={15} /> },
   bar: { label: '柱状图', description: '分类对比与排行', icon: <BarChart3 size={15} /> },
+  stackedBar: { label: '堆叠柱状图', description: '堆叠比较整体与构成', icon: <BarChart3 size={15} /> },
   line: { label: '折线图', description: '趋势与时间序列', icon: <ChartLine size={15} /> },
+  area: { label: '面积图', description: '趋势变化与区间体量', icon: <ChartLine size={15} /> },
   pie: { label: '饼图', description: '占比与构成分析', icon: <ChartPie size={15} /> },
+  scatter: { label: '散点图', description: '双指标相关性与离群点', icon: <Sigma size={15} /> },
+  radar: { label: '雷达图', description: '多指标对象对比', icon: <ChartPie size={15} /> },
+  funnel: { label: '漏斗图', description: '阶段转化与逐层收敛', icon: <BarChart3 size={15} /> },
+  treemap: { label: '矩形树图', description: '按面积呈现分类贡献', icon: <Table2 size={15} /> },
   table: { label: '明细表', description: '多维度数据查看', icon: <Table2 size={15} /> },
 };
 
@@ -122,7 +128,7 @@ export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset)
     datasetId: dataset.id,
     // Seed semantic category even for metric cards. `applyAnalysisEncoding` keeps the
     // metric query dimensionless while preserving a useful category if the user later
-    // switches this chart to bar / line / pie.
+    // switches chart type.
     dimensions: bindings.dimensions,
     metrics: bindings.metrics,
     filters: [],
@@ -130,7 +136,17 @@ export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset)
     limit: type === 'table' ? 200 : 500,
     timeoutSeconds: 30,
   };
-  return applyAnalysisEncoding(base, legacyAnalysisEncoding(base));
+  const encoded = applyAnalysisEncoding(base, legacyAnalysisEncoding(base));
+  // Advanced charts such as scatter / radar have a larger minimum metric cardinality.
+  // Rebinding seeds only required slots when the Dataset has enough compatible fields.
+  return rebindAnalysisEncoding(encoded, dataset);
+};
+
+const widgetShapeFor = (type: ChartType) => {
+  if (type === 'metric') return { w: 6, h: 4, minW: 4, minH: 3 };
+  if (type === 'table') return { w: 16, h: 8, minW: 8, minH: 6 };
+  if (type === 'radar' || type === 'treemap') return { w: 12, h: 8, minW: 7, minH: 6 };
+  return { w: 10, h: 7, minW: 6, minH: 5 };
 };
 
 export const createWidget = (type: ChartType, dataset: PublishedDataset, y: number): DashboardWidget => ({
@@ -139,10 +155,7 @@ export const createWidget = (type: ChartType, dataset: PublishedDataset, y: numb
   inlineAnalysis: createInlineAnalysis(type, dataset),
   x: 0,
   y,
-  w: type === 'metric' ? 6 : type === 'table' ? 16 : 10,
-  h: type === 'metric' ? 4 : type === 'table' ? 8 : 7,
-  minW: type === 'metric' ? 4 : type === 'table' ? 8 : 6,
-  minH: type === 'metric' ? 3 : type === 'table' ? 6 : 5,
+  ...widgetShapeFor(type),
 });
 
 const rebindInlineAnalysis = (spec: AnalysisSpec, dataset: PublishedDataset): AnalysisSpec => {
