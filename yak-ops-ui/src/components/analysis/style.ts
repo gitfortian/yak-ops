@@ -30,7 +30,7 @@ export const ANALYSIS_PALETTES: Record<
   },
 };
 
-export const DEFAULT_ANALYSIS_VISUAL_CONFIG: AnalysisVisualConfig = {
+export const DEFAULT_ANALYSIS_VISUAL_CONFIG: Required<AnalysisVisualConfig> = {
   version: 1,
   showLegend: false,
   showDataLabels: false,
@@ -65,11 +65,20 @@ export const resolveAnalysisStyle = (
   ...DEFAULT_ANALYSIS_VISUAL_CONFIG,
   ...style,
   version: 1,
-  lineWidth: clamp(style?.lineWidth, 1, 6, DEFAULT_ANALYSIS_VISUAL_CONFIG.lineWidth!),
-  symbolSize: clamp(style?.symbolSize, 0, 14, DEFAULT_ANALYSIS_VISUAL_CONFIG.symbolSize!),
-  barMaxWidth: clamp(style?.barMaxWidth, 12, 72, DEFAULT_ANALYSIS_VISUAL_CONFIG.barMaxWidth!),
-  barRadius: clamp(style?.barRadius, 0, 16, DEFAULT_ANALYSIS_VISUAL_CONFIG.barRadius!),
-  pieInnerRadius: clamp(style?.pieInnerRadius, 0, 72, DEFAULT_ANALYSIS_VISUAL_CONFIG.pieInnerRadius!),
+  palette: style?.palette ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.palette,
+  legendPosition: style?.legendPosition ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.legendPosition,
+  dataLabelPosition: style?.dataLabelPosition ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.dataLabelPosition,
+  axisLabelRotation: style?.axisLabelRotation ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.axisLabelRotation,
+  lineWidth: clamp(style?.lineWidth, 1, 6, DEFAULT_ANALYSIS_VISUAL_CONFIG.lineWidth),
+  symbolSize: clamp(style?.symbolSize, 0, 14, DEFAULT_ANALYSIS_VISUAL_CONFIG.symbolSize),
+  barMaxWidth: clamp(style?.barMaxWidth, 12, 72, DEFAULT_ANALYSIS_VISUAL_CONFIG.barMaxWidth),
+  barRadius: clamp(style?.barRadius, 0, 16, DEFAULT_ANALYSIS_VISUAL_CONFIG.barRadius),
+  pieInnerRadius: clamp(style?.pieInnerRadius, 0, 72, DEFAULT_ANALYSIS_VISUAL_CONFIG.pieInnerRadius),
+  metricAlign: style?.metricAlign ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.metricAlign,
+  metricValueSize: style?.metricValueSize ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.metricValueSize,
+  showMetricMeta: style?.showMetricMeta ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.showMetricMeta,
+  tableDensity: style?.tableDensity ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.tableDensity,
+  stripedRows: style?.stripedRows ?? DEFAULT_ANALYSIS_VISUAL_CONFIG.stripedRows,
 });
 
 export const createAnalysisVisualConfig = (type: ChartType): AnalysisVisualConfig => ({
