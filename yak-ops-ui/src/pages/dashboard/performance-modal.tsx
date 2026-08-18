@@ -1,5 +1,4 @@
 import { fetchAnalyses } from '@/components/analysis/analysis-service';
-import { fetchAnalysisDatasets } from '@/components/analysis/dataset-service';
 import {
   Alert,
   Button,
@@ -13,7 +12,7 @@ import {
 import { Download, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchDashboard } from './dashboard-service';
-import type { AnalysisAsset, DashboardWidget, PublishedDataset } from './model';
+import type { AnalysisAsset, DashboardWidget } from './model';
 import {
   fetchDashboardQueryPerformance,
   type DashboardQueryPerformance,
@@ -25,7 +24,7 @@ const formatTime = (value?: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false });
 };
 
-const escapeCsv = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 const widgetDatasetId = (widget: DashboardWidget, analyses: AnalysisAsset[]) => (
   widget.inlineAnalysis?.datasetId
@@ -55,7 +54,6 @@ export function DashboardPerformanceModal({
   const [detail, setDetail] = useState<DashboardQueryPerformance>();
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
   const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
-  const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
 
   const widgetNamesByDataset = useMemo(() => {
     const result = new Map<string, string[]>();
@@ -70,23 +68,17 @@ export function DashboardPerformanceModal({
     return result;
   }, [analyses, widgets]);
 
-  const datasetNameById = useMemo(() => new Map(
-    datasets.map((dataset) => [dataset.id, dataset.name]),
-  ), [datasets]);
-
   const load = useCallback(async () => {
     if (!/^\d+$/.test(dashboardId)) return;
     setLoading(true);
     setError(undefined);
     try {
-      const [dashboard, nextAnalyses, nextDatasets] = await Promise.all([
+      const [dashboard, nextAnalyses] = await Promise.all([
         fetchDashboard(dashboardId),
         fetchAnalyses(),
-        fetchAnalysisDatasets(),
       ]);
       setWidgets(dashboard.widgets);
       setAnalyses(nextAnalyses);
-      setDatasets(nextDatasets);
       const datasetIds = Array.from(new Set(dashboard.widgets
         .map((widget) => widgetDatasetId(widget, nextAnalyses))
         .filter((value): value is string => Boolean(value))));
@@ -110,7 +102,7 @@ export function DashboardPerformanceModal({
     const rows = records.map((record) => [
       dashboardName,
       (widgetNamesByDataset.get(record.datasetId) ?? []).join(' / '),
-      record.datasetName || datasetNameById.get(record.datasetId) || record.datasetId,
+      record.datasetName || record.datasetId,
       record.queryId,
       record.waitMillis,
       record.prepareMillis,
@@ -149,7 +141,7 @@ export function DashboardPerformanceModal({
     {
       title: '数据集',
       width: 150,
-      render: (_, record) => record.datasetName || datasetNameById.get(record.datasetId) || record.datasetId,
+      render: (_, record) => record.datasetName || record.datasetId,
     },
     {
       title: '查询ID',
@@ -199,7 +191,7 @@ export function DashboardPerformanceModal({
         <div className="mb-3 flex items-center justify-between">
           <div>
             <div className="text-[12px] font-semibold text-[#344054]">核心信息</div>
-            <div className="mt-0.5 text-[10px] text-[#98a2b3]">最近 100 条当前仪表盘 Dataset SQL 查询记录</div>
+            <div className="mt-0.5 text-[10px] text-[#98a2b3]">最近 100 条当前已保存仪表盘的 Dataset SQL 查询记录</div>
           </div>
           <div className="flex items-center gap-1">
             <Button type="text" size="small" icon={<RefreshCw size={12} />} loading={loading} onClick={() => void load()}>
