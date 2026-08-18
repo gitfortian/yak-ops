@@ -5,7 +5,8 @@ import {
 } from '@/components/analysis/encoding';
 import type { AnalysisEncoding, AnalysisSpec } from '@/components/analysis/model';
 import { Button, Collapse, Input, Select } from 'antd';
-import { ChevronDown, MousePointerClick, Palette, SlidersHorizontal, X } from 'lucide-react';
+import { Calculator, ChevronDown, MousePointerClick, Palette, SlidersHorizontal, X } from 'lucide-react';
+import { ChartAnalysisConfig } from './config-analysis';
 import { ConfigData } from './config-data';
 import { MetricAggregations } from './config-metrics';
 import { QueryControls } from './config-query';
@@ -20,7 +21,6 @@ import type {
   DashboardInlineAnalysisSpec,
   DashboardInteraction,
   DashboardWidget,
-  FilterOperator,
   PublishedDataset,
   SortDirection,
 } from './model';
@@ -117,7 +117,6 @@ export function ChartSheetConfigPanel({
   const metricLabels = Object.fromEntries(
     dataset.fields.map((field) => [field.key, field.label]),
   );
-  const filter = spec.filters[0];
 
   const changeType = (type: ChartType) => {
     const next = changeAnalysisEncodingType(spec, type);
@@ -127,10 +126,10 @@ export function ChartSheetConfigPanel({
       dimensions: next.dimensions,
       metrics: next.metrics,
       sort: undefined,
-      // Keep style values non-destructive across chart type switches. Each renderer only
-      // consumes properties relevant to its type, so returning to a type restores the
-      // user's previous visual choices instead of resetting them.
+      // Keep style and analysis values non-destructive across chart type switches. Each
+      // renderer consumes only the options relevant to the currently active chart.
       style: { ...spec.style, version: 1 },
+      analysis: spec.analysis,
       limit: type === 'table' ? 200 : 500,
     });
   };
@@ -142,6 +141,19 @@ export function ChartSheetConfigPanel({
       && !next.metrics.some((metric) => metric.field === spec.sort?.field)
       ? undefined
       : spec.sort;
+    const currentTopN = spec.analysis?.topN;
+    const topNMetricStillActive = currentTopN
+      ? next.metrics.some((metric) => metric.field === currentTopN.metricField)
+      : true;
+    const nextAnalysis = currentTopN && !topNMetricStillActive
+      ? {
+        ...spec.analysis,
+        version: 1 as const,
+        topN: next.metrics[0]
+          ? { ...currentTopN, metricField: next.metrics[0].field }
+          : { ...currentTopN, enabled: false },
+      }
+      : spec.analysis;
     const hadColor = Boolean(spec.encoding?.color?.length);
     const hasColor = Boolean(next.encoding.color.length);
     const shouldRevealLegend = !hadColor
@@ -152,6 +164,7 @@ export function ChartSheetConfigPanel({
       dimensions: next.dimensions,
       metrics: next.metrics,
       sort: nextSort,
+      analysis: nextAnalysis,
       ...(shouldRevealLegend
         ? { style: { ...spec.style, showLegend: true, version: 1 as const } }
         : {}),
@@ -246,7 +259,7 @@ export function ChartSheetConfigPanel({
           ghost
           className="chart-editor-more mt-4 border-t border-[#eceef1]"
           expandIconPosition="end"
-          defaultActiveKey={['style']}
+          defaultActiveKey={['analysis']}
           expandIcon={({ isActive }) => (
             <ChevronDown
               size={13}
@@ -254,6 +267,22 @@ export function ChartSheetConfigPanel({
             />
           )}
           items={[
+            {
+              key: 'analysis',
+              label: (
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
+                  <Calculator size={12} />
+                  分析设置
+                </span>
+              ),
+              children: (
+                <ChartAnalysisConfig
+                  spec={spec}
+                  dataset={dataset}
+                  onChange={(analysis) => updateInlineAnalysis({ analysis })}
+                />
+              ),
+            },
             {
               key: 'style',
               label: (
@@ -310,9 +339,7 @@ export function ChartSheetConfigPanel({
                     filterOptions={filterOptions}
                     sortField={spec.sort?.field}
                     sortDirection={spec.sort?.direction ?? 'asc'}
-                    filterField={filter?.field}
-                    filterOperator={filter?.operator ?? 'eq'}
-                    filterValue={filter?.value ?? ''}
+                    filters={spec.filters}
                     onSortField={(field?: string) =>
                       updateInlineAnalysis({
                         sort: field
@@ -322,23 +349,7 @@ export function ChartSheetConfigPanel({
                     onSortDirection={(direction: SortDirection) =>
                       spec.sort
                       && updateInlineAnalysis({ sort: { ...spec.sort, direction } })}
-                    onFilterField={(field?: string) =>
-                      updateInlineAnalysis({
-                        filters: field
-                          ? [{
-                            id: filter?.id ?? 'filter-main',
-                            field,
-                            operator: filter?.operator ?? 'eq',
-                            value: filter?.value ?? '',
-                          }]
-                          : [],
-                      })}
-                    onFilterOperator={(operator: FilterOperator) =>
-                      filter
-                      && updateInlineAnalysis({ filters: [{ ...filter, operator }] })}
-                    onFilterValue={(value) =>
-                      filter
-                      && updateInlineAnalysis({ filters: [{ ...filter, value }] })}
+                    onFiltersChange={(filters) => updateInlineAnalysis({ filters })}
                   />
                 </div>
               ),
@@ -369,7 +380,7 @@ function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-4">
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">图表配置</div>
-        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、样式与交互配置</div>
+        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、分析、样式与交互配置</div>
       </div>
       <button
         type="button"
