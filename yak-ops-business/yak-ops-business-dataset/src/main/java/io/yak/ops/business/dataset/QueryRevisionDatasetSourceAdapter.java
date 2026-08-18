@@ -46,7 +46,6 @@ final class QueryRevisionDatasetSourceAdapter implements DatasetSourceQueryAdapt
       DatasetVersion version,
       List<DatasetField> fields,
       DatasetQueryRequest request) {
-    long adapterStartedAt = System.nanoTime();
     long prepareStartedAt = System.nanoTime();
     TaskAssetRevision resolved = taskCatalogService.resolveRevision(
         version.sourceTaskAssetId(), version.sourceTaskRevisionId());
@@ -64,6 +63,7 @@ final class QueryRevisionDatasetSourceAdapter implements DatasetSourceQueryAdapt
     DatasetQueryCompiler.CompiledQuery compiled = compiler.compile(definition.content(), fields, request);
     int timeoutSeconds = queryTimeout(request, sourceConfig.timeoutSeconds());
     long prepareMillis = elapsedMillis(prepareStartedAt);
+    long runtimeStartedAt = System.nanoTime();
 
     long waitStartedAt = System.nanoTime();
     DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(sourceConfig.dataSourceId());
@@ -86,7 +86,7 @@ final class QueryRevisionDatasetSourceAdapter implements DatasetSourceQueryAdapt
         ? result.rows().subList(0, compiled.limit())
         : result.rows();
     long transferMillis = elapsedMillis(transferStartedAt);
-    long elapsedMillis = elapsedMillis(adapterStartedAt);
+    long elapsedMillis = elapsedMillis(runtimeStartedAt);
 
     DatasetQueryResult queryResult = new DatasetQueryResult(
         dataset.id(),
