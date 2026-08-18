@@ -95,15 +95,14 @@ export default function DashboardEditorPage() {
   }, [designer.widgets]);
 
   useEffect(() => {
-    if (designer.preview) return;
+    if (designer.preview || activeSheet !== 'chart') return;
     if (designer.selectedId) {
-      setActiveSheet('chart');
       setActiveSheetId(designer.selectedId);
       return;
     }
     setActiveSheet('dashboard');
     setActiveSheetId(undefined);
-  }, [designer.preview, designer.selectedId]);
+  }, [activeSheet, designer.preview, designer.selectedId]);
 
   useEffect(() => {
     if (designer.preview || activeSheet !== 'dashboard') return undefined;
@@ -414,8 +413,9 @@ export default function DashboardEditorPage() {
                             selected={designer.selectedId === widget.id}
                             preview={designer.preview}
                             onSelect={() => {
-                              if (!designer.preview) activateChartSheet(widget.id);
+                              if (!designer.preview) designer.setSelectedId(widget.id);
                             }}
+                            onEdit={() => activateChartSheet(widget.id)}
                             onDataSelect={(selection) => {
                               if (!designer.preview) return;
                               handleRuntimeSelection(widget.id, selection);
