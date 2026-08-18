@@ -1,6 +1,7 @@
 import { Empty, Spin } from 'antd';
 import * as echarts from 'echarts';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { encodingMeetsChartRequirements, resolveAnalysisEncoding } from './encoding';
 import { queryAnalysisDataset } from './dataset-service';
 import type {
   Aggregation,
@@ -99,9 +100,9 @@ export const buildDatasetQueryPayload = (
 };
 
 export const canQueryAnalysis = (spec: AnalysisSpec) => {
-  if (spec.type === 'metric') return spec.metrics.length === 1;
+  if (!encodingMeetsChartRequirements(spec)) return false;
   if (spec.type === 'table') return spec.dimensions.length > 0 || spec.metrics.length > 0;
-  return spec.dimensions.length > 0 && spec.metrics.length > 0;
+  return true;
 };
 
 function useAnalysisQuery(
@@ -184,13 +185,31 @@ const numericCell = (
 const rowLabel = (result: DatasetQueryResult, row: Scalar[], dimensions: string[]) =>
   dimensions.map((fieldId) => String(cell(result, row, fieldId) ?? '')).join(' / ');
 
+const scalarKey = (value: Scalar) => `${typeof value}:${String(value)}`;
+
+const uniqueDimensionValues = (
+  result: DatasetQueryResult,
+  fieldId: string,
+) => {
+  const seen = new Set<string>();
+  return result.rows.flatMap((row) => {
+    const value = cell(result, row, fieldId);
+    const key = scalarKey(value);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ key, value, label: String(value ?? '') }];
+  });
+};
+
 const selectionForRow = (
   spec: AnalysisSpec,
   dataset: PublishedDataset,
   result: DatasetQueryResult,
   rowIndex: number,
 ): AnalysisSelection | undefined => {
-  const fieldId = spec.dimensions[0];
+  const encoding = resolveAnalysisEncoding(spec);
+  const fieldId = encoding.category.find((binding) => binding.role === 'dimension')?.field
+    ?? spec.dimensions[0];
   const row = result.rows[rowIndex];
   if (!fieldId || !row) return undefined;
   const value = cell(result, row, fieldId);
@@ -208,7 +227,10 @@ const chartOptionFor = (
   dataset: PublishedDataset,
   result: DatasetQueryResult,
 ) => {
-  const firstDimension = spec.dimensions[0];
+  const encoding = resolveAnalysisEncoding(spec);
+  const firstDimension = encoding.category.find((binding) => binding.role === 'dimension')?.field
+    ?? spec.dimensions[0];
+  const colorDimension = encoding.color.find((binding) => binding.role === 'dimension')?.field;
   const dimension = getAnalysisField(dataset, firstDimension);
   const metrics = spec.metrics;
   const axisText = '#667085';
@@ -231,9 +253,10 @@ const chartOptionFor = (
         center: [spec.style.showLegend ? '38%' : '50%', '52%'],
         label: { show: spec.style.showDataLabels, formatter: '{b} {d}%' },
         itemStyle: { borderColor: '#fff', borderWidth: 2 },
-        data: result.rows.map((row) => ({
-          name: rowLabel(result, row, spec.dimensions),
+        data: result.rows.map((row, rowIndex) => ({
+          name: rowLabel(result, row, [firstDimension]),
           value: numericCell(result, row, metric.field, metric.aggregation),
+          __rowIndex: rowIndex,
         })),
       }],
     };
@@ -241,10 +264,57 @@ const chartOptionFor = (
 
   if (spec.type === 'bar' || spec.type === 'line') {
     const isLine = spec.type === 'line';
+    const categories = uniqueDimensionValues(result, firstDimension);
+    const colorValues = colorDimension
+      ? uniqueDimensionValues(result, colorDimension)
+      : [];
+    const legendVisible = spec.style.showLegend || Boolean(colorDimension);
+
+    const rowIndexFor = (category: Scalar, color?: Scalar) => result.rows.findIndex((row) => (
+      Object.is(cell(result, row, firstDimension), category)
+      && (!colorDimension || Object.is(cell(result, row, colorDimension), color))
+    ));
+
+    const series = colorDimension
+      ? metrics.flatMap((metric) => colorValues.map((color) => ({
+        name: metrics.length > 1
+          ? `${color.label} · ${metricDisplayName(dataset, metric)}`
+          : color.label,
+        type: spec.type,
+        smooth: isLine && spec.style.smooth,
+        symbolSize: 5,
+        barMaxWidth: 34,
+        label: { show: spec.style.showDataLabels, position: 'top' },
+        data: categories.map((category) => {
+          const rowIndex = rowIndexFor(category.value, color.value);
+          if (rowIndex < 0) return null;
+          return {
+            value: numericCell(result, result.rows[rowIndex], metric.field, metric.aggregation),
+            __rowIndex: rowIndex,
+          };
+        }),
+      })))
+      : metrics.map((metric) => ({
+        name: metricDisplayName(dataset, metric),
+        type: spec.type,
+        smooth: isLine && spec.style.smooth,
+        symbolSize: 5,
+        barMaxWidth: 34,
+        label: { show: spec.style.showDataLabels, position: 'top' },
+        data: categories.map((category) => {
+          const rowIndex = rowIndexFor(category.value);
+          if (rowIndex < 0) return null;
+          return {
+            value: numericCell(result, result.rows[rowIndex], metric.field, metric.aggregation),
+            __rowIndex: rowIndex,
+          };
+        }),
+      }));
+
     return {
-      grid: { left: 22, right: 16, top: spec.style.showLegend ? 30 : 14, bottom: 22, containLabel: true },
+      grid: { left: 22, right: 16, top: legendVisible ? 30 : 14, bottom: 22, containLabel: true },
       tooltip: { trigger: 'axis' },
-      legend: spec.style.showLegend
+      legend: legendVisible
         ? { top: 0, right: 4, textStyle: { color: axisText, fontSize: 11 } }
         : { show: false },
       xAxis: {
@@ -252,7 +322,7 @@ const chartOptionFor = (
         boundaryGap: !isLine,
         name: dimension?.label,
         nameTextStyle: { color: '#98a2b3', fontSize: 10 },
-        data: result.rows.map((row) => rowLabel(result, row, spec.dimensions)),
+        data: categories.map((item) => item.label),
         axisLine: { lineStyle: { color: axisLine } },
         axisTick: { show: false },
         axisLabel: { color: axisText, fontSize: 11 },
@@ -262,15 +332,7 @@ const chartOptionFor = (
         splitLine: { show: spec.style.showGrid, lineStyle: { color: splitLine } },
         axisLabel: { color: axisText, fontSize: 11 },
       },
-      series: metrics.map((metric) => ({
-        name: metricDisplayName(dataset, metric),
-        type: spec.type,
-        smooth: isLine && spec.style.smooth,
-        symbolSize: 5,
-        barMaxWidth: 34,
-        label: { show: spec.style.showDataLabels, position: 'top' },
-        data: result.rows.map((row) => numericCell(result, row, metric.field, metric.aggregation)),
-      })),
+      series,
     };
   }
 
@@ -296,7 +358,8 @@ function EChartAnalysis({
     const chart = echarts.init(containerRef.current);
     chart.setOption(option, true);
     const click = (params: any) => {
-      const selection = selectionForRow(spec, dataset, result, Number(params?.dataIndex));
+      const rowIndex = Number(params?.data?.__rowIndex ?? params?.dataIndex);
+      const selection = selectionForRow(spec, dataset, result, rowIndex);
       if (selection) onSelect?.(selection);
     };
     chart.on('click', click);
@@ -310,7 +373,7 @@ function EChartAnalysis({
   }, [option, onSelect, spec, dataset, result]);
 
   if (!option) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置维度和指标" className="mt-8" />;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置必填编码" className="mt-8" />;
   }
   return <div ref={containerRef} className="h-full min-h-0 w-full" />;
 }
@@ -420,7 +483,7 @@ export function AnalysisPreview({
     return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Dataset 不存在或已下线" className="mt-8" /></div>;
   }
   if (!canQueryAnalysis(spec)) {
-    return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置维度和指标" className="mt-8" /></div>;
+    return <div className={className}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请配置必填编码" className="mt-8" /></div>;
   }
   if (loading && !result) {
     return <div className={`${className} flex items-center justify-center`}><Spin size="small" /></div>;
