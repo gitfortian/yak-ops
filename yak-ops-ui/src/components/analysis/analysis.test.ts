@@ -3,7 +3,12 @@ import {
   formatAnalysisMetricValue,
   resolveAnalysisTopN,
 } from './analysis';
-import type { AnalysisSpec, DatasetQueryResult, MetricBinding } from './model';
+import type {
+  AnalysisQuickCalculation,
+  AnalysisSpec,
+  DatasetQueryResult,
+  MetricBinding,
+} from './model';
 
 const metric: MetricBinding = { field: 'sales', aggregation: 'SUM' };
 
@@ -49,9 +54,7 @@ const result = (values: number[]): DatasetQueryResult => ({
   elapsedMillis: 1,
 });
 
-const withCalculation = (
-  quickCalculation: NonNullable<NonNullable<AnalysisSpec['analysis']>['metrics']>[string]['quickCalculation'],
-): AnalysisSpec => baseSpec({
+const withCalculation = (quickCalculation: AnalysisQuickCalculation): AnalysisSpec => baseSpec({
   version: 1,
   metrics: {
     sales: { quickCalculation },
