@@ -1,16 +1,18 @@
-import { Braces, LayoutTemplate, SlidersHorizontal } from 'lucide-react';
+import { Bell, Braces, LayoutTemplate, SlidersHorizontal } from 'lucide-react';
 import { history, useLocation } from '@umijs/max';
 
+import AlertSettingsPanel from './components/AlertSettingsPanel';
 import EditorSettingsPanel from './components/EditorSettingsPanel';
 import EnvironmentSettingsPanel from './components/EnvironmentSettingsPanel';
 import ScreenTemplateSettingsPanel from './components/ScreenTemplateSettingsPanel';
 
-type SettingsTab = 'editor' | 'environment' | 'screen-template';
+type SettingsTab = 'editor' | 'environment' | 'screen-template' | 'alert';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'editor', label: '编辑器设置', icon: <SlidersHorizontal size={15} strokeWidth={1.8} /> },
   { key: 'environment', label: '环境变量', icon: <Braces size={15} strokeWidth={1.8} /> },
   { key: 'screen-template', label: '大屏模板', icon: <LayoutTemplate size={15} strokeWidth={1.8} /> },
+  { key: 'alert', label: '告警设置', icon: <Bell size={15} strokeWidth={1.8} /> },
 ];
 
 const SettingsPage = () => {
@@ -59,6 +61,7 @@ const SettingsPage = () => {
           {activeTab === 'editor' && <EditorSettingsPanel />}
           {activeTab === 'environment' && <EnvironmentSettingsPanel />}
           {activeTab === 'screen-template' && <ScreenTemplateSettingsPanel />}
+          {activeTab === 'alert' && <AlertSettingsPanel />}
         </div>
       </section>
     </div>
