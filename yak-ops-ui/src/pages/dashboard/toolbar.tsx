@@ -73,7 +73,7 @@ export function DashboardToolbar({
   })();
 
   return (
-    <header className="shrink-0 border-b border-[#172138] bg-[#eef3f8]">
+    <header className="shrink-0 border-b border-[#dce3ea] bg-[#eef3f8]">
       <div className="flex h-10 items-center justify-between border-b border-[#dce4ee] bg-[#eef3f8] px-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <Tooltip title="退出编辑器">
@@ -139,25 +139,25 @@ export function DashboardToolbar({
         ) : null}
       </div>
 
-      <div className="flex h-8 items-center justify-between bg-[#1f2a44] px-3">
+      <div className="flex h-8 items-center justify-between bg-white px-3">
         <div className="flex items-center gap-1">
           {!preview ? (
             <>
               <Button
                 type="text"
                 size="small"
-                className="!h-7 !rounded-[5px] !px-2 !text-[11px] !text-[#dbe5f2] hover:!bg-[rgba(255,255,255,.09)] hover:!text-white"
+                className="!h-7 !rounded-[5px] !px-2 !text-[11px] !text-[#344054] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                 disabled={!canAddChart || busy}
                 icon={<BarChart3 size={12} />}
                 onClick={onAddChart}
               >
                 添加图表
               </Button>
-              <div className="mx-1 h-4 w-px bg-[#43506a]" />
+              <div className="mx-1 h-4 w-px bg-[#e1e5ea]" />
               <Tooltip title="撤销 Ctrl/Cmd + Z">
                 <Button
                   type="text"
-                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#b8c5d8] hover:!bg-[rgba(255,255,255,.09)] hover:!text-white"
+                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                   icon={<Undo2 size={12} />}
                   disabled={!canUndo || busy}
                   onClick={onUndo}
@@ -166,7 +166,7 @@ export function DashboardToolbar({
               <Tooltip title="重做 Ctrl/Cmd + Shift + Z">
                 <Button
                   type="text"
-                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#b8c5d8] hover:!bg-[rgba(255,255,255,.09)] hover:!text-white"
+                  className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                   icon={<Redo2 size={12} />}
                   disabled={!canRedo || busy}
                   onClick={onRedo}
@@ -174,7 +174,7 @@ export function DashboardToolbar({
               </Tooltip>
             </>
           ) : (
-            <span className="text-[11px] font-medium text-[#c7d2e3]">预览模式</span>
+            <span className="text-[11px] font-medium text-[#667085]">预览模式</span>
           )}
         </div>
 
@@ -183,7 +183,7 @@ export function DashboardToolbar({
             <Tooltip title="历史版本">
               <Button
                 type="text"
-                className="!flex !h-7 !w-7 !min-w-0 !items-center !justify-center !rounded-[5px] !p-0 !text-[#b8c5d8] hover:!bg-[rgba(255,255,255,.09)] hover:!text-white"
+                className="!flex !h-7 !w-7 !min-w-0 !items-center !justify-center !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                 disabled={busy}
                 icon={<History size={12} />}
                 onClick={onHistory}
@@ -193,7 +193,7 @@ export function DashboardToolbar({
           <Button
             type="text"
             size="small"
-            className="!h-7 !rounded-[5px] !px-2 !text-[11px] !text-[#dbe5f2] hover:!bg-[rgba(255,255,255,.09)] hover:!text-white"
+            className="!h-7 !rounded-[5px] !px-2 !text-[11px] !text-[#344054] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
             disabled={busy}
             icon={preview ? <X size={12} /> : <Eye size={12} />}
             onClick={onPreview}
