@@ -47,6 +47,16 @@ describe('analysis query runtime', () => {
     await expect(first).resolves.toBe(result);
   });
 
+  it('reuses a recently settled result', async () => {
+    const loader = jest.fn(async () => result);
+    const dataset = { id: '1', currentVersionNo: 3 };
+
+    await expect(queryAnalysisDatasetShared(dataset, payload, loader)).resolves.toBe(result);
+    await expect(queryAnalysisDatasetShared(dataset, payload, loader)).resolves.toBe(result);
+
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+
   it('separates cache entries by Dataset version', async () => {
     const loader = jest.fn(async () => result);
 
