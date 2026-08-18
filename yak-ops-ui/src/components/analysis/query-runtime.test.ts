@@ -16,6 +16,7 @@ const payload: DatasetQueryPayload = {
 
 const result: DatasetQueryResult = {
   datasetId: '1',
+  datasetVersionId: 'version-3',
   datasetVersionNo: 3,
   columns: [],
   bindings: [],
