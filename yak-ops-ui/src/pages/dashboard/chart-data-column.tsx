@@ -27,7 +27,7 @@ export function ChartDataColumn({
           size="small"
           variant="filled"
           value={dataset?.id}
-          disabled={!editable || !dataset}
+          disabled={!editable}
           optionFilterProp="label"
           className="w-full"
           placeholder="选择数据集"
@@ -39,7 +39,7 @@ export function ChartDataColumn({
           onChange={onDatasetChange}
         />
         <div className="mt-1.5 truncate px-0.5 text-[9px] text-[#98a2b3]">
-          {dataset ? `数据目录 · ${dataset.name}` : '当前数据来源不可用'}
+          {dataset ? `数据目录 · ${dataset.name}` : '当前数据来源不可用，可重新选择'}
         </div>
       </div>
 
@@ -47,7 +47,7 @@ export function ChartDataColumn({
         <ChartFieldPanel
           dataset={dataset}
           spec={spec}
-          editable={editable}
+          editable={editable && Boolean(dataset)}
           onSpecPatch={onSpecPatch}
         />
       </div>
