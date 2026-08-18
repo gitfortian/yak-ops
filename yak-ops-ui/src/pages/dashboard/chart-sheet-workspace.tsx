@@ -2,6 +2,7 @@ import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
 import { Empty } from 'antd';
 import { BarChart3, Database } from 'lucide-react';
 import { ChartSheetConfigPanel } from './chart-editor';
+import { ChartFieldPanel } from './chart-field-panel';
 import { CHART_META } from './helpers';
 import type {
   AnalysisAsset,
@@ -56,19 +57,10 @@ export function DashboardChartSheetWorkspace({
 
   return (
     <div className="chart-sheet-workspace flex min-h-0 flex-1 overflow-hidden bg-[#f3f4f6]">
-      <ChartSheetConfigPanel
-        currentDashboardId={currentDashboardId}
-        widget={widget}
-        datasets={datasets}
-        analyses={analyses}
-        globalFilters={globalFilters}
-        interactions={interactions}
-        updateWidget={updateWidget}
-        updateInlineAnalysis={updateInlineAnalysis}
-        updateInteractions={updateInteractions}
-        changeDataset={changeDataset}
-        detachAnalysis={detachAnalysis}
-        onDone={onDone}
+      <ChartFieldPanel
+        dataset={dataset}
+        spec={spec}
+        editable={!widget.analysisId && Boolean(widget.inlineAnalysis && dataset)}
       />
 
       <main className="min-w-0 flex-1 overflow-auto bg-[#f3f4f6]">
@@ -114,6 +106,23 @@ export function DashboardChartSheetWorkspace({
           </div>
         </div>
       </main>
+
+      <div className="flex shrink-0 border-l border-[#e3e6ea]">
+        <ChartSheetConfigPanel
+          currentDashboardId={currentDashboardId}
+          widget={widget}
+          datasets={datasets}
+          analyses={analyses}
+          globalFilters={globalFilters}
+          interactions={interactions}
+          updateWidget={updateWidget}
+          updateInlineAnalysis={updateInlineAnalysis}
+          updateInteractions={updateInteractions}
+          changeDataset={changeDataset}
+          detachAnalysis={detachAnalysis}
+          onDone={onDone}
+        />
+      </div>
     </div>
   );
 }
