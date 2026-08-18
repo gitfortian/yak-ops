@@ -142,11 +142,19 @@ export function ChartSheetConfigPanel({
       && !next.metrics.some((metric) => metric.field === spec.sort?.field)
       ? undefined
       : spec.sort;
+    const hadColor = Boolean(spec.encoding?.color?.length);
+    const hasColor = Boolean(next.encoding.color.length);
+    const shouldRevealLegend = !hadColor
+      && hasColor
+      && (spec.type === 'bar' || spec.type === 'line');
     updateInlineAnalysis({
       encoding: next.encoding,
       dimensions: next.dimensions,
       metrics: next.metrics,
       sort: nextSort,
+      ...(shouldRevealLegend
+        ? { style: { ...spec.style, showLegend: true, version: 1 as const } }
+        : {}),
     });
   };
 
