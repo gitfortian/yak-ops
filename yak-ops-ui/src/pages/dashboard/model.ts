@@ -13,6 +13,7 @@ export type {
   AnalysisFilter as DashboardFilter,
   AnalysisSelection,
   AnalysisSort as DashboardSort,
+  AnalysisThemeTokens,
   AnalysisVisualConfig as DashboardWidgetStyle,
   ChartType,
   DatasetField,
@@ -33,7 +34,12 @@ export type {
 } from '@/components/analysis/model';
 
 export type DashboardWidgetClickAction = 'none' | 'drill' | 'dashboard' | 'yak';
-export type DashboardThemePresetId = 'yak-light' | 'yak-dark';
+export type DashboardThemePresetId =
+  | 'yak-light'
+  | 'yak-dark'
+  | 'ocean-night'
+  | 'graphite'
+  | 'mist-blue';
 
 export interface DashboardThemeCanvas {
   backgroundColor?: string;
