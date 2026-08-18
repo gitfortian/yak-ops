@@ -5,6 +5,7 @@ import {
   Copy,
   GripVertical,
   MoreHorizontal,
+  Pencil,
   RotateCcw,
   Trash2,
   X,
@@ -30,6 +31,7 @@ export function WidgetShell({
   selected,
   preview,
   onSelect,
+  onEdit,
   onDataSelect,
   onClearSelection,
   onDrillBack,
@@ -46,6 +48,7 @@ export function WidgetShell({
   selected: boolean;
   preview: boolean;
   onSelect: () => void;
+  onEdit: () => void;
   onDataSelect: (selection: AnalysisSelection) => void;
   onClearSelection: () => void;
   onDrillBack: (depth: number) => void;
@@ -61,7 +64,7 @@ export function WidgetShell({
     <div
       onMouseDown={onSelect}
       className={[
-        'group relative flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] bg-white transition-[border-color,box-shadow,transform] duration-150',
+        'group relative flex h-full min-h-0 flex-col overflow-hidden rounded-[9px] bg-white transition-[border-color,box-shadow] duration-150',
         preview
           ? activeSelection
             ? 'border border-[var(--yak-brand-color)] shadow-[0_0_0_2px_var(--yak-brand-color-soft),0_4px_12px_rgba(16,24,40,.05)]'
@@ -104,10 +107,28 @@ export function WidgetShell({
         {!preview ? (
           <div
             className={[
-              'flex items-center transition-opacity duration-150',
+              'flex items-center gap-1 transition-opacity duration-150',
               selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             ].join(' ')}
           >
+            {selected ? (
+              <Tooltip title="编辑图表">
+                <button
+                  type="button"
+                  aria-label="编辑图表"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onEdit();
+                  }}
+                  className="flex h-7 items-center gap-1 rounded-[6px] border border-[var(--yak-brand-color-border)] bg-[var(--yak-brand-color-soft)] px-2 text-[10px] font-medium text-[var(--yak-brand-color)] transition-colors hover:bg-[rgba(254,44,85,.1)]"
+                >
+                  <Pencil size={11} />
+                  编辑
+                </button>
+              </Tooltip>
+            ) : null}
+
             <Dropdown
               trigger={['click']}
               placement="bottomRight"
