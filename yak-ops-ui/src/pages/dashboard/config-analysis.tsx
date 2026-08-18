@@ -32,6 +32,7 @@ export function ChartAnalysisConfig({
   const supportsSequentialCalculation = spec.type !== 'metric' && spec.dimensions.length > 0;
   const topN = spec.analysis?.topN;
   const supportsTopN = spec.type !== 'metric' && spec.dimensions.length > 0 && spec.metrics.length > 0;
+  const topNMetricActive = !topN || spec.metrics.some((metric) => metric.field === topN.metricField);
   const aggregationLabels = Object.fromEntries(
     AGGREGATION_OPTIONS.map((item) => [item.value, item.label]),
   );
@@ -151,7 +152,8 @@ export function ChartAnalysisConfig({
               <Select
                 size="small"
                 className="w-full"
-                value={topN.metricField}
+                placeholder="选择 Top N 指标"
+                value={topNMetricActive ? topN.metricField : undefined}
                 options={spec.metrics.map((metric) => ({
                   label: `${dataset.fields.find((item) => item.key === metric.field)?.label ?? metric.field} · ${aggregationLabels[metric.aggregation] ?? metric.aggregation}`,
                   value: metric.field,
@@ -179,6 +181,11 @@ export function ChartAnalysisConfig({
                   }}
                 />
               </div>
+              {!topNMetricActive ? (
+                <div className="text-[9px] leading-4 text-[#98a2b3]">
+                  原 Top N 指标在当前图表类型中暂未激活；切回原图表类型可恢复，或在这里重新选择。
+                </div>
+              ) : null}
             </div>
           ) : null}
 
