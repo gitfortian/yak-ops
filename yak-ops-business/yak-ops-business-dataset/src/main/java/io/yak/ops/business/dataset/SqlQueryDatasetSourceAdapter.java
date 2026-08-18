@@ -35,7 +35,6 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
       DatasetVersion version,
       List<DatasetField> fields,
       DatasetQueryRequest request) {
-    long adapterStartedAt = System.nanoTime();
     long prepareStartedAt = System.nanoTime();
     if (version.dataSourceId() == null || version.dataSourceId().isBlank()) {
       throw new IllegalStateException("SQL_QUERY DatasetVersion 缺少 dataSourceId");
@@ -47,6 +46,7 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
     DatasetQueryCompiler.CompiledQuery compiled = compiler.compile(version.sql(), fields, request);
     int timeoutSeconds = queryTimeout(request);
     long prepareMillis = elapsedMillis(prepareStartedAt);
+    long runtimeStartedAt = System.nanoTime();
 
     long waitStartedAt = System.nanoTime();
     DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(version.dataSourceId());
@@ -69,7 +69,7 @@ final class SqlQueryDatasetSourceAdapter implements DatasetSourceQueryAdapter {
         ? result.rows().subList(0, compiled.limit())
         : result.rows();
     long transferMillis = elapsedMillis(transferStartedAt);
-    long elapsedMillis = elapsedMillis(adapterStartedAt);
+    long elapsedMillis = elapsedMillis(runtimeStartedAt);
 
     DatasetQueryResult queryResult = new DatasetQueryResult(
         dataset.id(), version.id(), version.versionNo(), compiled.bindings(), result.columns(),
