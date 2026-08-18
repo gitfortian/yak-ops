@@ -119,7 +119,10 @@ export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset)
   const base: AnalysisSpec = {
     type,
     datasetId: dataset.id,
-    dimensions: type === 'metric' ? [] : bindings.dimensions,
+    // Seed semantic category even for metric cards. `applyAnalysisEncoding` keeps the
+    // metric query dimensionless while preserving a useful category if the user later
+    // switches this chart to bar / line / pie.
+    dimensions: bindings.dimensions,
     metrics: bindings.metrics,
     filters: [],
     style: {
