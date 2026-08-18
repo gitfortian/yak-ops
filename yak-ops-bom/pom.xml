@@ -96,6 +96,11 @@
                 <artifactId>yak-ops-business-sync-offline</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-business-alert</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>io.yak.ops</groupId>
@@ -162,6 +167,22 @@
             <dependency>
                 <groupId>io.yak.ops</groupId>
                 <artifactId>yak-ops-plugin-task-all</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-plugin-alert-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-plugin-alert-dingtalk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-plugin-alert-all</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
