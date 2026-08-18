@@ -9,6 +9,7 @@ import type {
   DashboardInteraction,
   DashboardServerDetail,
   DashboardSummary,
+  DashboardTheme,
   DashboardVersionDetail,
   DashboardVersionSummary,
   DashboardWidget,
@@ -77,6 +78,7 @@ interface DashboardInteractionWire {
 interface DashboardDetailWire {
   dashboard: DashboardAssetWire;
   currentVersion?: DashboardVersionWire | null;
+  theme?: DashboardTheme | null;
   versions: DashboardVersionWire[];
   widgets: DashboardWidgetWire[];
   globalFilters?: DashboardGlobalFilterWire[];
@@ -86,6 +88,7 @@ interface DashboardDetailWire {
 interface DashboardVersionDetailWire {
   dashboard: DashboardAssetWire;
   version: DashboardVersionWire;
+  theme?: DashboardTheme | null;
   widgets: DashboardWidgetWire[];
   globalFilters?: DashboardGlobalFilterWire[];
   interactions?: DashboardInteractionWire[];
@@ -176,6 +179,7 @@ const interaction = (value: DashboardInteractionWire): DashboardInteraction => (
 export const toDashboardServerDetail = (value: DashboardDetailWire): DashboardServerDetail => ({
   dashboard: summary(value.dashboard),
   currentVersion: value.currentVersion ? version(value.currentVersion) : undefined,
+  theme: value.theme || undefined,
   versions: (value.versions || []).map(version),
   widgets: (value.widgets || []).map(widget),
   globalFilters: (value.globalFilters || []).map(globalFilter),
@@ -191,6 +195,7 @@ const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardV
     name: versionDetail.name,
     description: versionDetail.description,
     activeDatasetId: versionDetail.activeDatasetId || '',
+    theme: value.theme || undefined,
     widgets: (value.widgets || []).map(widget),
     globalFilters: (value.globalFilters || []).map(globalFilter),
     interactions: (value.interactions || []).map(interaction),
@@ -204,6 +209,7 @@ const toDashboardVersionDetail = (value: DashboardVersionDetailWire): DashboardV
   return {
     dashboard,
     version: versionDetail,
+    theme: normalized.theme,
     widgets: normalized.widgets,
     globalFilters: normalized.globalFilters,
     interactions: normalized.interactions,
@@ -216,6 +222,7 @@ export const toDashboardDocument = (detail: DashboardServerDetail): DashboardDoc
   name: detail.currentVersion?.name || detail.dashboard.name,
   description: detail.currentVersion?.description || detail.dashboard.description,
   activeDatasetId: detail.currentVersion?.activeDatasetId || '',
+  theme: detail.theme,
   widgets: detail.widgets,
   globalFilters: detail.globalFilters,
   interactions: detail.interactions,
@@ -233,6 +240,7 @@ const payload = (document: DashboardDocument) => {
     name: normalized.name,
     description: normalized.description || undefined,
     activeDatasetId: normalized.activeDatasetId || undefined,
+    theme: normalized.theme,
     widgets: normalized.widgets.map((item) => ({
       widgetKey: item.id,
       analysisId: item.analysisId,
