@@ -14,6 +14,7 @@ import type {
   PublishedDataset,
   Scalar,
 } from './model';
+import { paletteColors, resolveAnalysisStyle } from './style';
 
 export const AGGREGATION_LABELS: Record<Aggregation, string> = {
   SUM: '求和',
@@ -222,12 +223,26 @@ const selectionForRow = (
   };
 };
 
+const legendOption = (
+  visible: boolean,
+  position: 'top' | 'right' | 'bottom',
+  axisText: string,
+) => {
+  if (!visible) return { show: false };
+  const base = { textStyle: { color: axisText, fontSize: 11 } };
+  if (position === 'right') return { ...base, orient: 'vertical', right: 0, top: 'middle' };
+  if (position === 'bottom') return { ...base, orient: 'horizontal', left: 'center', bottom: 0 };
+  return { ...base, orient: 'horizontal', right: 4, top: 0 };
+};
+
 const chartOptionFor = (
   spec: AnalysisSpec,
   dataset: PublishedDataset,
   result: DatasetQueryResult,
 ) => {
   const encoding = resolveAnalysisEncoding(spec);
+  const style = resolveAnalysisStyle(spec.style);
+  const colors = paletteColors(spec.style);
   const firstDimension = encoding.category.find((binding) => binding.role === 'dimension')?.field
     ?? spec.dimensions[0];
   const colorDimension = encoding.color.find((binding) => binding.role === 'dimension')?.field;
@@ -241,17 +256,28 @@ const chartOptionFor = (
 
   if (spec.type === 'pie') {
     const metric = metrics[0];
+    const legendVisible = style.showLegend;
+    const legendOnRight = legendVisible && style.legendPosition === 'right';
+    const legendOnTop = legendVisible && style.legendPosition === 'top';
+    const legendOnBottom = legendVisible && style.legendPosition === 'bottom';
+    const labelPosition = style.dataLabelPosition === 'inside' ? 'inside' : 'outside';
     return {
+      color: colors,
       tooltip: { trigger: 'item' },
-      legend: spec.style.showLegend
-        ? { orient: 'vertical', right: 8, top: 'middle', textStyle: { color: axisText, fontSize: 11 } }
-        : { show: false },
+      legend: legendOption(legendVisible, style.legendPosition, axisText),
       series: [{
         name: metricDisplayName(dataset, metric),
         type: 'pie',
-        radius: ['42%', '70%'],
-        center: [spec.style.showLegend ? '38%' : '50%', '52%'],
-        label: { show: spec.style.showDataLabels, formatter: '{b} {d}%' },
+        radius: [`${style.pieInnerRadius}%`, '70%'],
+        center: [
+          legendOnRight ? '38%' : '50%',
+          legendOnTop ? '56%' : legendOnBottom ? '45%' : '52%',
+        ],
+        label: {
+          show: style.showDataLabels,
+          position: labelPosition,
+          formatter: labelPosition === 'inside' ? '{d}%' : '{b} {d}%',
+        },
         itemStyle: { borderColor: '#fff', borderWidth: 2 },
         data: result.rows.map((row, rowIndex) => ({
           name: rowLabel(result, row, [firstDimension]),
@@ -268,12 +294,22 @@ const chartOptionFor = (
     const colorValues = colorDimension
       ? uniqueDimensionValues(result, colorDimension)
       : [];
-    const legendVisible = spec.style.showLegend || Boolean(colorDimension);
+    const legendVisible = style.showLegend;
+    const labelPosition = style.dataLabelPosition === 'inside' ? 'inside' : 'top';
 
     const rowIndexFor = (category: Scalar, color?: Scalar) => result.rows.findIndex((row) => (
       Object.is(cell(result, row, firstDimension), category)
       && (!colorDimension || Object.is(cell(result, row, colorDimension), color))
     ));
+
+    const seriesStyle = {
+      smooth: isLine && style.smooth,
+      symbolSize: isLine ? style.symbolSize : undefined,
+      lineStyle: isLine ? { width: style.lineWidth } : undefined,
+      barMaxWidth: !isLine ? style.barMaxWidth : undefined,
+      itemStyle: !isLine ? { borderRadius: style.barRadius } : undefined,
+      label: { show: style.showDataLabels, position: labelPosition },
+    };
 
     const series = colorDimension
       ? metrics.flatMap((metric) => colorValues.map((color) => ({
@@ -281,10 +317,7 @@ const chartOptionFor = (
           ? `${color.label} · ${metricDisplayName(dataset, metric)}`
           : color.label,
         type: spec.type,
-        smooth: isLine && spec.style.smooth,
-        symbolSize: 5,
-        barMaxWidth: 34,
-        label: { show: spec.style.showDataLabels, position: 'top' },
+        ...seriesStyle,
         data: categories.map((category) => {
           const rowIndex = rowIndexFor(category.value, color.value);
           if (rowIndex < 0) return null;
@@ -297,10 +330,7 @@ const chartOptionFor = (
       : metrics.map((metric) => ({
         name: metricDisplayName(dataset, metric),
         type: spec.type,
-        smooth: isLine && spec.style.smooth,
-        symbolSize: 5,
-        barMaxWidth: 34,
-        label: { show: spec.style.showDataLabels, position: 'top' },
+        ...seriesStyle,
         data: categories.map((category) => {
           const rowIndex = rowIndexFor(category.value);
           if (rowIndex < 0) return null;
@@ -312,11 +342,16 @@ const chartOptionFor = (
       }));
 
     return {
-      grid: { left: 22, right: 16, top: legendVisible ? 30 : 14, bottom: 22, containLabel: true },
+      color: colors,
+      grid: {
+        left: 22,
+        right: legendVisible && style.legendPosition === 'right' ? 112 : 16,
+        top: legendVisible && style.legendPosition === 'top' ? 34 : 14,
+        bottom: legendVisible && style.legendPosition === 'bottom' ? 40 : 22,
+        containLabel: true,
+      },
       tooltip: { trigger: 'axis' },
-      legend: legendVisible
-        ? { top: 0, right: 4, textStyle: { color: axisText, fontSize: 11 } }
-        : { show: false },
+      legend: legendOption(legendVisible, style.legendPosition, axisText),
       xAxis: {
         type: 'category',
         boundaryGap: !isLine,
@@ -325,11 +360,15 @@ const chartOptionFor = (
         data: categories.map((item) => item.label),
         axisLine: { lineStyle: { color: axisLine } },
         axisTick: { show: false },
-        axisLabel: { color: axisText, fontSize: 11 },
+        axisLabel: {
+          color: axisText,
+          fontSize: 11,
+          rotate: style.axisLabelRotation,
+        },
       },
       yAxis: {
         type: 'value',
-        splitLine: { show: spec.style.showGrid, lineStyle: { color: splitLine } },
+        splitLine: { show: style.showGrid, lineStyle: { color: splitLine } },
         axisLabel: { color: axisText, fontSize: 11 },
       },
       series,
@@ -392,15 +431,29 @@ function MetricAnalysis({
   const value = result.rows[0]
     ? numericCell(result, result.rows[0], metric.field, metric.aggregation)
     : 0;
+  const style = resolveAnalysisStyle(spec.style);
+  const alignment = {
+    left: { alignItems: 'flex-start', textAlign: 'left' as const },
+    center: { alignItems: 'center', textAlign: 'center' as const },
+    right: { alignItems: 'flex-end', textAlign: 'right' as const },
+  }[style.metricAlign];
+  const valueSize = { sm: 24, md: 28, lg: 36 }[style.metricValueSize];
   return (
-    <div className="flex h-full flex-col justify-center px-5">
-      <div className="text-[12px] font-medium text-[#667085]">{metricDisplayName(dataset, metric)}</div>
-      <div className="mt-2 text-[28px] font-semibold tracking-[-0.02em] text-[#161823]">
+    <div className="flex h-full flex-col justify-center px-5" style={{ alignItems: alignment.alignItems }}>
+      <div className="text-[12px] font-medium text-[#667085]" style={{ textAlign: alignment.textAlign }}>
+        {metricDisplayName(dataset, metric)}
+      </div>
+      <div
+        className="mt-2 font-semibold tracking-[-0.02em] text-[#161823]"
+        style={{ fontSize: valueSize, lineHeight: 1.15, textAlign: alignment.textAlign }}
+      >
         {formatMetricValue(value)}
       </div>
-      <div className="mt-2 text-[11px] text-[#98a2b3]">
-        {dataset.name} · DV{result.datasetVersionNo} · {result.elapsedMillis}ms
-      </div>
+      {style.showMetricMeta ? (
+        <div className="mt-2 text-[11px] text-[#98a2b3]" style={{ textAlign: alignment.textAlign }}>
+          {dataset.name} · DV{result.datasetVersionNo} · {result.elapsedMillis}ms
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -416,46 +469,56 @@ function TableAnalysis({
   result: DatasetQueryResult;
   onSelect?: (selection: AnalysisSelection) => void;
 }) {
+  const style = resolveAnalysisStyle(spec.style);
   const dimensions = spec.dimensions.map((field) => getAnalysisField(dataset, field)).filter(Boolean);
+  const cellPadding = style.tableDensity === 'compact'
+    ? 'px-3 py-1.5'
+    : style.tableDensity === 'relaxed'
+      ? 'px-3 py-3'
+      : 'px-3 py-2';
   return (
     <div className="h-full overflow-auto">
       <table className="w-full border-collapse text-[11px]">
         <thead className="sticky top-0 z-10 bg-[#fafafa] text-[#475467]">
           <tr>
             {dimensions.map((field) => (
-              <th key={field?.key} className="whitespace-nowrap border-b border-[#e7eaf0] px-3 py-2 text-left font-medium">
+              <th key={field?.key} className={`whitespace-nowrap border-b border-[#e7eaf0] text-left font-medium ${cellPadding}`}>
                 {field?.label}
               </th>
             ))}
             {spec.metrics.map((metric) => (
-              <th key={`${metric.field}-${metric.aggregation}`} className="whitespace-nowrap border-b border-[#e7eaf0] px-3 py-2 text-right font-medium">
+              <th key={`${metric.field}-${metric.aggregation}`} className={`whitespace-nowrap border-b border-[#e7eaf0] text-right font-medium ${cellPadding}`}>
                 {metricDisplayName(dataset, metric)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {result.rows.map((row, rowIndex) => (
-            <tr
-              key={rowIndex}
-              className={onSelect && spec.dimensions.length ? 'cursor-pointer hover:bg-[#f7f8fa]' : 'hover:bg-[#fafbfc]'}
-              onClick={() => {
-                const selection = selectionForRow(spec, dataset, result, rowIndex);
-                if (selection) onSelect?.(selection);
-              }}
-            >
-              {spec.dimensions.map((field) => (
-                <td key={field} className="border-b border-[#f0f2f5] px-3 py-2 text-[#344054]">
-                  {String(cell(result, row, field) ?? '')}
-                </td>
-              ))}
-              {spec.metrics.map((metric) => (
-                <td key={`${metric.field}-${metric.aggregation}`} className="border-b border-[#f0f2f5] px-3 py-2 text-right tabular-nums text-[#344054]">
-                  {formatMetricValue(numericCell(result, row, metric.field, metric.aggregation))}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {result.rows.map((row, rowIndex) => {
+            const striped = style.stripedRows && rowIndex % 2 === 1;
+            const hover = onSelect && spec.dimensions.length ? 'cursor-pointer hover:bg-[#f7f8fa]' : 'hover:bg-[#fafbfc]';
+            return (
+              <tr
+                key={rowIndex}
+                className={`${striped ? 'bg-[#fafbfc]' : ''} ${hover}`}
+                onClick={() => {
+                  const selection = selectionForRow(spec, dataset, result, rowIndex);
+                  if (selection) onSelect?.(selection);
+                }}
+              >
+                {spec.dimensions.map((field) => (
+                  <td key={field} className={`border-b border-[#f0f2f5] text-[#344054] ${cellPadding}`}>
+                    {String(cell(result, row, field) ?? '')}
+                  </td>
+                ))}
+                {spec.metrics.map((metric) => (
+                  <td key={`${metric.field}-${metric.aggregation}`} className={`border-b border-[#f0f2f5] text-right tabular-nums text-[#344054] ${cellPadding}`}>
+                    {formatMetricValue(numericCell(result, row, metric.field, metric.aggregation))}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {result.truncated ? (
