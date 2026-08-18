@@ -180,7 +180,7 @@ export function ChartFieldPanel({
         {!dataset ? (
           <div className="px-2 py-6 text-center text-[11px] text-[#8b929c]">暂无可用字段</div>
         ) : (
-          <div className="space-y-4.5">
+          <div className="space-y-4">
             <FieldGroup
               title="维度"
               role="dimension"
