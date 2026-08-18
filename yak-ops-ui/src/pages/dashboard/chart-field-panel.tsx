@@ -138,8 +138,8 @@ export function ChartFieldPanel({
       <div className="flex h-14 shrink-0 items-center border-b border-[#eceef1] px-3.5">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold text-[#344054]">数据字段</div>
-          <div className="mt-0.5 flex items-center gap-1 text-[9px] text-[#98a2b3]">
-            <Database size={9} className="shrink-0" />
+          <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-[#7a818c]">
+            <Database size={10} className="shrink-0" />
             <span className="truncate">{dataset?.name ?? '数据来源不可用'}</span>
           </div>
         </div>
@@ -150,21 +150,21 @@ export function ChartFieldPanel({
           allowClear
           size="small"
           value={keyword}
-          prefix={<Search size={12} className="text-[#a0a6af]" />}
+          prefix={<Search size={13} className="text-[#7a818c]" />}
           placeholder="搜索字段"
-          className="!h-8 !rounded-[7px]"
+          className="!h-9 !rounded-[7px] !text-[11px]"
           onChange={(event) => setKeyword(event.target.value)}
         />
         <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="text-[9px] leading-4 text-[#98a2b3]">
-            {editable ? '拖动字段到右侧编码槽位' : '复制为可编辑图表后可配置'}
+          <div className="text-[10px] leading-4 text-[#8b929c]">
+            {editable ? '拖动字段到上方字段槽位' : '复制为可编辑图表后可配置'}
           </div>
           {editable && dataset && spec && onSpecPatch ? (
             <Button
               type="text"
               size="small"
-              className="!h-6 !px-1.5 !text-[9px]"
-              icon={<Plus size={10} />}
+              className="!h-7 !px-1.5 !text-[10px]"
+              icon={<Plus size={11} />}
               onClick={() => {
                 setEditingField(undefined);
                 setEditorOpen(true);
@@ -176,19 +176,21 @@ export function ChartFieldPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3.5">
         {!dataset ? (
-          <div className="px-2 py-6 text-center text-[10px] text-[#98a2b3]">暂无可用字段</div>
+          <div className="px-2 py-6 text-center text-[11px] text-[#8b929c]">暂无可用字段</div>
         ) : (
           <div className="space-y-4">
             <FieldGroup
               title="维度"
+              role="dimension"
               fields={dimensions}
               encodedFields={encodedFields}
               editable={editable}
             />
             <FieldGroup
               title="指标"
+              role="metric"
               fields={metrics}
               encodedFields={encodedFields}
               editable={editable}
@@ -229,35 +231,56 @@ export function ChartFieldPanel({
 
 function FieldGroup({
   title,
+  role,
   fields,
   encodedFields,
   editable,
 }: {
   title: string;
+  role: DatasetField['role'];
   fields: DatasetField[];
   encodedFields: Set<string>;
   editable: boolean;
 }) {
+  const dimension = role === 'dimension';
+
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between px-1.5">
-        <span className="text-[10px] font-semibold text-[#667085]">{title}</span>
-        <span className="text-[9px] tabular-nums text-[#b0b5bd]">{fields.length}</span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={[
+              'flex h-5 w-5 items-center justify-center rounded-[5px] border',
+              dimension
+                ? 'border-[#dce6ff] bg-[#eef3ff] text-[#5674e8]'
+                : 'border-[#d5eeee] bg-[#edf9f9] text-[#169c9c]',
+            ].join(' ')}
+          >
+            {dimension ? <Type size={10} /> : <Hash size={10} />}
+          </span>
+          <span className="text-[11px] font-semibold text-[#344054]">{title}</span>
+        </div>
+        <span className="rounded-[4px] bg-[#f2f4f7] px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-[#667085]">
+          {fields.length}
+        </span>
       </div>
       <div className="space-y-0.5">
         {fields.map((field) => {
           const selected = encodedFields.has(field.key);
+          const isDimension = field.role === 'dimension';
           return (
             <div
               key={field.key}
               draggable={editable}
-              title={editable ? `${field.label} · 拖动到图表编码槽位` : field.label}
+              title={editable ? `${field.label} · 拖动到上方字段槽位` : field.label}
               className={[
-                'group flex h-8 items-center gap-1.5 rounded-[6px] px-1.5 text-[10px] transition-colors',
+                'group flex h-9 items-center gap-2 rounded-[6px] px-1.5 text-[11px] transition-colors',
                 editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
                 selected
-                  ? 'bg-[#f4f5f7] font-medium text-[#344054]'
-                  : 'text-[#475467] hover:bg-[#f7f8fa]',
+                  ? isDimension
+                    ? 'bg-[#f4f7ff] font-medium text-[#263244]'
+                    : 'bg-[#f0fafa] font-medium text-[#263244]'
+                  : 'text-[#344054] hover:bg-[#f7f8fa]',
               ].join(' ')}
               onDragStart={(event) => {
                 if (!editable) return;
@@ -266,18 +289,25 @@ function FieldGroup({
             >
               <GripVertical
                 size={12}
-                className={editable ? 'shrink-0 text-[#c2c6cc] group-hover:text-[#8b929c]' : 'shrink-0 text-[#e0e2e6]'}
+                className={editable ? 'shrink-0 text-[#c2c6cc] group-hover:text-[#8b929c]' : 'shrink-0 text-[#d9dde2]'}
               />
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-[#f2f4f7] text-[#7a818c]">
-                {field.dataType === 'number' ? <Hash size={11} /> : <Type size={11} />}
+              <span
+                className={[
+                  'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[5px] border',
+                  isDimension
+                    ? 'border-[#dce6ff] bg-[#eef3ff] text-[#5674e8]'
+                    : 'border-[#d5eeee] bg-[#edf9f9] text-[#169c9c]',
+                ].join(' ')}
+              >
+                {isDimension ? <Type size={11} /> : <Hash size={11} />}
               </span>
-              <span className="min-w-0 flex-1 truncate">{field.label}</span>
-              <span className="shrink-0 text-[8px] text-[#b0b5bd]">{fieldTypeLabel[field.dataType]}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{field.label}</span>
+              <span className="shrink-0 text-[9px] text-[#8e95a0]">{fieldTypeLabel[field.dataType]}</span>
             </div>
           );
         })}
         {!fields.length ? (
-          <div className="px-1.5 py-2 text-[9px] text-[#b0b5bd]">没有匹配字段</div>
+          <div className="px-1.5 py-2.5 text-[10px] text-[#98a2b3]">没有匹配字段</div>
         ) : null}
       </div>
     </div>
@@ -302,8 +332,15 @@ function CalculatedFieldGroup({
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between px-1.5">
-        <span className="text-[10px] font-semibold text-[#667085]">计算字段</span>
-        <span className="text-[9px] tabular-nums text-[#b0b5bd]">{total}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded-[5px] border border-[#fee1c7] bg-[#fff6ed] text-[#f79009]">
+            <Braces size={10} />
+          </span>
+          <span className="text-[11px] font-semibold text-[#344054]">计算字段</span>
+        </div>
+        <span className="rounded-[4px] bg-[#f2f4f7] px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-[#667085]">
+          {total}
+        </span>
       </div>
       <div className="space-y-0.5">
         {fields.map((field) => {
@@ -315,28 +352,28 @@ function CalculatedFieldGroup({
               draggable={editable}
               title={`${field.name} · ${field.expression}`}
               className={[
-                'group flex min-h-8 items-center gap-1.5 rounded-[6px] px-1.5 text-[10px] transition-colors',
+                'group flex min-h-9 items-center gap-2 rounded-[6px] px-1.5 text-[11px] transition-colors',
                 editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
                 selected
-                  ? 'bg-[#f4f5f7] font-medium text-[#344054]'
-                  : 'text-[#475467] hover:bg-[#f7f8fa]',
+                  ? 'bg-[#fff8f0] font-medium text-[#263244]'
+                  : 'text-[#344054] hover:bg-[#f7f8fa]',
               ].join(' ')}
               onDragStart={(event) => {
                 if (!editable) return;
                 writeChartFieldDragPayload(event, { field: key, role: 'metric' });
               }}
             >
-              <GripVertical size={12} className="shrink-0 text-[#c2c6cc]" />
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-[#f2f4f7] text-[#7a818c]">
+              <GripVertical size={12} className="shrink-0 text-[#c2c6cc] group-hover:text-[#8b929c]" />
+              <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[5px] border border-[#fee1c7] bg-[#fff6ed] text-[#f79009]">
                 <Braces size={11} />
               </span>
-              <span className="min-w-0 flex-1 truncate">{field.name}</span>
-              <span className="shrink-0 text-[8px] text-[#b0b5bd]">计算</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{field.name}</span>
+              <span className="shrink-0 text-[9px] text-[#8e95a0]">计算</span>
               {editable ? (
                 <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
                   <button
                     type="button"
-                    className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[#98a2b3] hover:bg-[#e9ebef] hover:text-[#475467]"
+                    className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[#8e95a0] hover:bg-[#e9ebef] hover:text-[#475467]"
                     aria-label={`编辑${field.name}`}
                     onClick={() => onEdit(field)}
                   >
@@ -351,7 +388,7 @@ function CalculatedFieldGroup({
                   >
                     <button
                       type="button"
-                      className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[#98a2b3] hover:bg-[#e9ebef] hover:text-[#b42318]"
+                      className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[#8e95a0] hover:bg-[#e9ebef] hover:text-[#b42318]"
                       aria-label={`删除${field.name}`}
                     >
                       <Trash2 size={9} />
@@ -363,7 +400,7 @@ function CalculatedFieldGroup({
           );
         })}
         {!fields.length ? (
-          <div className="px-1.5 py-2 text-[9px] text-[#b0b5bd]">没有匹配计算字段</div>
+          <div className="px-1.5 py-2.5 text-[10px] text-[#98a2b3]">没有匹配计算字段</div>
         ) : null}
       </div>
     </div>

@@ -21,24 +21,24 @@ export function ChartDataColumn({
 }) {
   return (
     <section className="chart-data-column flex w-[244px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
-      <div className="shrink-0 border-b border-[#eceef1] px-3 py-3">
+      <div className="shrink-0 border-b border-[#eceef1] px-3 py-3.5">
         <Select
           showSearch
-          size="small"
+          size="middle"
           variant="filled"
           value={dataset?.id}
           disabled={!editable}
           optionFilterProp="label"
-          className="w-full"
+          className="chart-dataset-select w-full"
           placeholder="选择数据集"
-          suffixIcon={<Database size={12} className="text-[#8e95a0]" />}
+          suffixIcon={<Database size={13} className="text-[#667085]" />}
           options={datasets.map((item) => ({
             label: item.name,
             value: item.id,
           }))}
           onChange={onDatasetChange}
         />
-        <div className="mt-1.5 truncate px-0.5 text-[9px] text-[#98a2b3]">
+        <div className="mt-2 truncate px-0.5 text-[10px] font-medium text-[#7a818c]">
           {dataset ? `数据目录 · ${dataset.name}` : '当前数据来源不可用，可重新选择'}
         </div>
       </div>
@@ -59,6 +59,18 @@ export function ChartDataColumn({
         }
         .chart-data-column > .min-h-0 > section > div:first-child {
           display: none;
+        }
+        .chart-data-column .chart-dataset-select .ant-select-selector {
+          min-height: 34px !important;
+          border-radius: 7px !important;
+        }
+        .chart-data-column .chart-dataset-select .ant-select-selection-item,
+        .chart-data-column .chart-dataset-select .ant-select-selection-placeholder {
+          font-size: 12px !important;
+        }
+        .chart-data-column .chart-dataset-select .ant-select-selection-item {
+          font-weight: 600 !important;
+          color: #344054 !important;
         }
       `}</style>
     </section>
