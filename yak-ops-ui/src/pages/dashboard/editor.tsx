@@ -34,7 +34,7 @@ export default function DashboardEditorPage() {
   const dashboardId = id && id !== 'new' ? id : undefined;
   const initialPreview = new URLSearchParams(window.location.search).get('preview') === '1';
   const designer = useDashboardDesigner(dashboardId, initialPreview, false);
-  const { width, containerRef, mounted } = useContainerWidth();
+  const { width, containerRef, mounted, measureWidth } = useContainerWidth();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<'dashboard' | 'chart'>('dashboard');
   const [activeSheetId, setActiveSheetId] = useState<string>();
@@ -104,6 +104,14 @@ export default function DashboardEditorPage() {
     setActiveSheet('dashboard');
     setActiveSheetId(undefined);
   }, [designer.preview, designer.selectedId]);
+
+  useEffect(() => {
+    if (designer.preview || activeSheet !== 'dashboard') return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      measureWidth();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSheet, designer.preview, measureWidth]);
 
   const activateDashboardSheet = () => {
     setActiveSheet('dashboard');
