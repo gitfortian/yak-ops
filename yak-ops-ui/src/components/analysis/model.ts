@@ -78,11 +78,38 @@ export interface AnalysisSort {
   direction: SortDirection;
 }
 
+export type AnalysisColorPalette = 'yak' | 'ocean' | 'sunset' | 'violet' | 'mono';
+export type AnalysisLegendPosition = 'top' | 'right' | 'bottom';
+export type AnalysisDataLabelPosition = 'top' | 'inside' | 'outside';
+export type AnalysisMetricAlign = 'left' | 'center' | 'right';
+export type AnalysisMetricValueSize = 'sm' | 'md' | 'lg';
+export type AnalysisTableDensity = 'compact' | 'comfortable' | 'relaxed';
+
+/**
+ * Versioned visual appearance grammar. The original four booleans stay required for
+ * backwards source compatibility; Phase 7 properties are optional so old persisted
+ * Analysis / Dashboard snapshots continue to deserialize without migration.
+ */
 export interface AnalysisVisualConfig {
+  version?: 1;
   showLegend: boolean;
   showDataLabels: boolean;
   smooth: boolean;
   showGrid: boolean;
+  palette?: AnalysisColorPalette;
+  legendPosition?: AnalysisLegendPosition;
+  dataLabelPosition?: AnalysisDataLabelPosition;
+  axisLabelRotation?: 0 | 30 | 45;
+  lineWidth?: number;
+  symbolSize?: number;
+  barMaxWidth?: number;
+  barRadius?: number;
+  pieInnerRadius?: number;
+  metricAlign?: AnalysisMetricAlign;
+  metricValueSize?: AnalysisMetricValueSize;
+  showMetricMeta?: boolean;
+  tableDensity?: AnalysisTableDensity;
+  stripedRows?: boolean;
 }
 
 /** Query + visualization definition that can be reused outside a Dashboard. */

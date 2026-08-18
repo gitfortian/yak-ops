@@ -4,6 +4,7 @@ import {
   rebindAnalysisEncoding,
 } from '@/components/analysis/encoding';
 import type { AnalysisSpec } from '@/components/analysis/model';
+import { createAnalysisVisualConfig } from '@/components/analysis/style';
 import { BarChart3, ChartLine, ChartPie, Sigma, Table2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DEFAULT_DASHBOARD } from './defaults';
@@ -62,7 +63,7 @@ const legacyWidgetToCurrent = (value: any): DashboardWidget => {
     metrics: Array.isArray(value.metrics) ? value.metrics : [],
     filters: Array.isArray(value.filters) ? value.filters : [],
     sort: value.sort,
-    style: value.style ?? { showLegend: false, showDataLabels: false, smooth: false, showGrid: false },
+    style: value.style ?? createAnalysisVisualConfig(value.type),
     limit: value.limit,
     timeoutSeconds: value.timeoutSeconds,
   };
@@ -125,12 +126,7 @@ export const createInlineAnalysis = (type: ChartType, dataset: PublishedDataset)
     dimensions: bindings.dimensions,
     metrics: bindings.metrics,
     filters: [],
-    style: {
-      showLegend: type === 'pie',
-      showDataLabels: false,
-      smooth: type === 'line',
-      showGrid: type === 'bar' || type === 'line',
-    },
+    style: createAnalysisVisualConfig(type),
     limit: type === 'table' ? 200 : 500,
     timeoutSeconds: 30,
   };
