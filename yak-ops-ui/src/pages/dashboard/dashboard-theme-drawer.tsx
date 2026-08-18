@@ -9,6 +9,7 @@ import {
   Sun,
   Table2,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import {
   DASHBOARD_THEME_PRESETS,
   hasDashboardThemeOverrides,
@@ -119,8 +120,8 @@ const SectionLabel = ({
   icon,
   children,
 }: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
 }) => (
   <div className="flex items-center gap-2 text-[12px] font-semibold text-[#344054]">
     <span className="text-[#667085]">{icon}</span>
@@ -290,11 +291,6 @@ export function DashboardThemeDrawer({
                     ))}
                   </div>
                 </div>
-                <ColorSetting
-                  label="图表文字"
-                  value={resolved.chart.textColor}
-                  onChange={(textColor) => updateChart({ textColor })}
-                />
                 <ColorSetting
                   label="坐标轴"
                   value={resolved.chart.axisColor}
