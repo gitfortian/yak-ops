@@ -4,11 +4,12 @@ import {
   updateEncodingMetricAggregation,
 } from '@/components/analysis/encoding';
 import type { AnalysisEncoding, AnalysisSpec } from '@/components/analysis/model';
-import { Button, Collapse, Input, Select, Switch } from 'antd';
-import { ChevronDown, MousePointerClick, SlidersHorizontal, X } from 'lucide-react';
+import { Button, Collapse, Input, Select } from 'antd';
+import { ChevronDown, MousePointerClick, Palette, SlidersHorizontal, X } from 'lucide-react';
 import { ConfigData } from './config-data';
 import { MetricAggregations } from './config-metrics';
 import { QueryControls } from './config-query';
+import { ChartStyleConfig } from './config-style';
 import { CHART_META, findDataset } from './helpers';
 import { DashboardInteractionEditor } from './interaction-editor';
 import type {
@@ -126,12 +127,10 @@ export function ChartSheetConfigPanel({
       dimensions: next.dimensions,
       metrics: next.metrics,
       sort: undefined,
-      style: {
-        ...spec.style,
-        showLegend: type === 'pie' ? true : spec.style.showLegend,
-        smooth: type === 'line' ? spec.style.smooth : false,
-        showGrid: type === 'line' || type === 'bar' ? spec.style.showGrid : false,
-      },
+      // Keep style values non-destructive across chart type switches. Each renderer only
+      // consumes properties relevant to its type, so returning to a type restores the
+      // user's previous visual choices instead of resetting them.
+      style: { ...spec.style, version: 1 },
       limit: type === 'table' ? 200 : 500,
     });
   };
@@ -152,7 +151,7 @@ export function ChartSheetConfigPanel({
   };
 
   const updateStyle = (patch: Partial<AnalysisSpec['style']>) =>
-    updateInlineAnalysis({ style: { ...spec.style, ...patch } });
+    updateInlineAnalysis({ style: { ...spec.style, ...patch, version: 1 } });
 
   return (
     <section className="chart-sheet-config-panel flex w-[360px] shrink-0 flex-col border-r border-[#e3e6ea] bg-white">
@@ -239,6 +238,7 @@ export function ChartSheetConfigPanel({
           ghost
           className="chart-editor-more mt-4 border-t border-[#eceef1]"
           expandIconPosition="end"
+          defaultActiveKey={['style']}
           expandIcon={({ isActive }) => (
             <ChevronDown
               size={13}
@@ -246,6 +246,18 @@ export function ChartSheetConfigPanel({
             />
           )}
           items={[
+            {
+              key: 'style',
+              label: (
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
+                  <Palette size={12} />
+                  样式设置
+                </span>
+              ),
+              children: (
+                <ChartStyleConfig spec={spec} onChange={updateStyle} />
+              ),
+            },
             {
               key: 'interaction',
               label: (
@@ -276,79 +288,50 @@ export function ChartSheetConfigPanel({
               ),
             },
             {
-              key: 'advanced',
+              key: 'query',
               label: (
                 <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#667085]">
                   <SlidersHorizontal size={12} />
-                  样式与查询
+                  查询设置
                 </span>
               ),
               children: (
                 <div className="pb-2">
-                  <div className="space-y-3 text-[11px] text-[#475467]">
-                    {spec.type !== 'metric' && spec.type !== 'table' ? (
-                      <label className="flex items-center justify-between">
-                        <span>显示图例</span>
-                        <Switch size="small" checked={spec.style.showLegend} onChange={(showLegend) => updateStyle({ showLegend })} />
-                      </label>
-                    ) : null}
-                    {spec.type !== 'metric' && spec.type !== 'table' ? (
-                      <label className="flex items-center justify-between">
-                        <span>显示数据标签</span>
-                        <Switch size="small" checked={spec.style.showDataLabels} onChange={(showDataLabels) => updateStyle({ showDataLabels })} />
-                      </label>
-                    ) : null}
-                    {spec.type === 'line' ? (
-                      <label className="flex items-center justify-between">
-                        <span>平滑曲线</span>
-                        <Switch size="small" checked={spec.style.smooth} onChange={(smooth) => updateStyle({ smooth })} />
-                      </label>
-                    ) : null}
-                    {spec.type === 'line' || spec.type === 'bar' ? (
-                      <label className="flex items-center justify-between">
-                        <span>显示网格线</span>
-                        <Switch size="small" checked={spec.style.showGrid} onChange={(showGrid) => updateStyle({ showGrid })} />
-                      </label>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-4 border-t border-[#eceef1] pt-4">
-                    <QueryControls
-                      sortOptions={sortOptions}
-                      filterOptions={filterOptions}
-                      sortField={spec.sort?.field}
-                      sortDirection={spec.sort?.direction ?? 'asc'}
-                      filterField={filter?.field}
-                      filterOperator={filter?.operator ?? 'eq'}
-                      filterValue={filter?.value ?? ''}
-                      onSortField={(field?: string) =>
-                        updateInlineAnalysis({
-                          sort: field
-                            ? { field, direction: spec.sort?.direction ?? 'asc' }
-                            : undefined,
-                        })}
-                      onSortDirection={(direction: SortDirection) =>
-                        spec.sort
-                        && updateInlineAnalysis({ sort: { ...spec.sort, direction } })}
-                      onFilterField={(field?: string) =>
-                        updateInlineAnalysis({
-                          filters: field
-                            ? [{
-                              id: filter?.id ?? 'filter-main',
-                              field,
-                              operator: filter?.operator ?? 'eq',
-                              value: filter?.value ?? '',
-                            }]
-                            : [],
-                        })}
-                      onFilterOperator={(operator: FilterOperator) =>
-                        filter
-                        && updateInlineAnalysis({ filters: [{ ...filter, operator }] })}
-                      onFilterValue={(value) =>
-                        filter
-                        && updateInlineAnalysis({ filters: [{ ...filter, value }] })}
-                    />
-                  </div>
+                  <QueryControls
+                    sortOptions={sortOptions}
+                    filterOptions={filterOptions}
+                    sortField={spec.sort?.field}
+                    sortDirection={spec.sort?.direction ?? 'asc'}
+                    filterField={filter?.field}
+                    filterOperator={filter?.operator ?? 'eq'}
+                    filterValue={filter?.value ?? ''}
+                    onSortField={(field?: string) =>
+                      updateInlineAnalysis({
+                        sort: field
+                          ? { field, direction: spec.sort?.direction ?? 'asc' }
+                          : undefined,
+                      })}
+                    onSortDirection={(direction: SortDirection) =>
+                      spec.sort
+                      && updateInlineAnalysis({ sort: { ...spec.sort, direction } })}
+                    onFilterField={(field?: string) =>
+                      updateInlineAnalysis({
+                        filters: field
+                          ? [{
+                            id: filter?.id ?? 'filter-main',
+                            field,
+                            operator: filter?.operator ?? 'eq',
+                            value: filter?.value ?? '',
+                          }]
+                          : [],
+                      })}
+                    onFilterOperator={(operator: FilterOperator) =>
+                      filter
+                      && updateInlineAnalysis({ filters: [{ ...filter, operator }] })}
+                    onFilterValue={(value) =>
+                      filter
+                      && updateInlineAnalysis({ filters: [{ ...filter, value }] })}
+                  />
                 </div>
               ),
             },
@@ -378,7 +361,7 @@ function ConfigPanelHeader({ onDone }: { onDone: () => void }) {
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#eceef1] px-4">
       <div>
         <div className="text-[13px] font-semibold text-[#344054]">图表配置</div>
-        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、展示与交互配置</div>
+        <div className="mt-0.5 text-[9px] text-[#98a2b3]">字段编码、样式与交互配置</div>
       </div>
       <button
         type="button"
