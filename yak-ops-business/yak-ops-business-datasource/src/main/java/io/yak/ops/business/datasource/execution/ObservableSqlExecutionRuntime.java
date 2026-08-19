@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -45,6 +46,7 @@ public final class ObservableSqlExecutionRuntime implements SqlExecutionRuntime 
   private final LexicalSqlStatementClassifier classifier = new LexicalSqlStatementClassifier();
   private final ExecutorService tracker = Executors.newVirtualThreadPerTaskExecutor();
 
+  @Autowired
   public ObservableSqlExecutionRuntime(
       DefaultSqlExecutionRuntime delegate,
       ObjectProvider<SqlExecutionObserver> observers) {
