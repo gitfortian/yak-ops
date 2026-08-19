@@ -129,17 +129,33 @@ public class DevelopmentDataServiceNodeSourceProvider implements DataServiceSour
         definition.timeoutSeconds(),
         definition.path(),
         definition.description(),
-        dataServiceRevision.createTime());
+        dataServiceRevision.createTime(),
+        definition.paginationEnabled());
 
-    SourceContract contract = new SourceContract(
-        definition.parameters().stream()
-            .map(item -> new ParameterContract(
-                item.name(), item.type(), item.required(), item.description(), item.example()))
-            .toList(),
-        definition.responseFields().stream()
-            .map(item -> new ResponseFieldContract(
-                item.name(), item.type(), item.nullable(), item.description(), item.example()))
-            .toList());
+    List<ParameterContract> parameters = new ArrayList<>(definition.parameters().stream()
+        .map(item -> new ParameterContract(
+            item.name(), item.type(), item.required(), item.description(), item.example()))
+        .toList());
+    List<ResponseFieldContract> responseFields = new ArrayList<>(definition.responseFields().stream()
+        .map(item -> new ResponseFieldContract(
+            item.name(), item.type(), item.nullable(), item.description(), item.example()))
+        .toList());
+    if (definition.paginationEnabled()) {
+      parameters.add(new ParameterContract(
+          "returnTotalNum", "BOOLEAN", false, "是否返回分页总数，默认 true", "true"));
+      parameters.add(new ParameterContract(
+          "pageNum", "INTEGER", false, "页码，从 1 开始，默认 1", "1"));
+      parameters.add(new ParameterContract(
+          "pageSize", "INTEGER", false, "每页条数，默认 20，不超过服务最大行数", "20"));
+      responseFields.add(new ResponseFieldContract(
+          "totalNum", "INTEGER", true, "分页结果总数；未请求总数时为空", null));
+      responseFields.add(new ResponseFieldContract(
+          "pageNum", "INTEGER", false, "当前页码", "1"));
+      responseFields.add(new ResponseFieldContract(
+          "pageSize", "INTEGER", false, "当前每页条数", "20"));
+    }
+
+    SourceContract contract = new SourceContract(parameters, responseFields);
     return new ResolvedSource(descriptor, resolvedSql.sql(), contract);
   }
 

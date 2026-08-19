@@ -87,19 +87,29 @@ public class DevelopmentDataServiceNodeService {
     return context(node, draft);
   }
 
-  public PreviewResult preview(long nodeId, long dataSourceId, String sql, Integer timeoutSeconds) {
+  public PreviewResult preview(
+      long nodeId,
+      long dataSourceId,
+      String sql,
+      Integer maxRows,
+      Integer timeoutSeconds,
+      Map<String, Object> parameterValues) {
     requireDataServiceNode(nodeId);
     long normalizedDataSourceId = requireDataSourceId(dataSourceId);
     String normalizedSql = normalizeSql(sql);
     sqlCompiler.validateSelectOnly(normalizedSql);
-    ContractPreview contract = discoverContract(
+    ContractPreview preview = discoverContract(
         normalizedDataSourceId,
         normalizedSql,
-        range(timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, 3_600, "超时时间"));
+        range(maxRows, DEFAULT_MAX_ROWS, 1, 10_000, "最大返回行数"),
+        range(timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, 3_600, "超时时间"),
+        parameterValues);
     return new PreviewResult(
         String.valueOf(normalizedDataSourceId),
-        contract.parameters(),
-        contract.responseFields());
+        preview.parameters(),
+        preview.responseFields(),
+        preview.result(),
+        preview.durationMs());
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
@@ -119,6 +129,8 @@ public class DevelopmentDataServiceNodeService {
         command.maxRows(),
         command.timeoutSeconds(),
         command.description(),
+        command.paginationEnabled(),
+        command.autoParseParameters(),
         false);
 
     long expectedBaseRevision = command.baseRevision() == null ? 0L : command.baseRevision();
@@ -157,6 +169,8 @@ public class DevelopmentDataServiceNodeService {
         current.maxRows(),
         current.timeoutSeconds(),
         current.description(),
+        current.paginationEnabled(),
+        current.autoParseParametersEnabled(),
         true);
 
     String checksum = checksum(normalized);
@@ -224,6 +238,8 @@ public class DevelopmentDataServiceNodeService {
       Integer maxRows,
       Integer timeoutSeconds,
       String description,
+      Boolean paginationEnabled,
+      Boolean autoParseParameters,
       boolean requireResponseContract) {
     long normalizedDataSourceId = requireDataSourceId(dataSourceId);
     String normalizedSql = normalizeSql(sql);
@@ -241,7 +257,7 @@ public class DevelopmentDataServiceNodeService {
     List<ParameterContract> parameters = normalizeParameters(requestedParameters, sqlParameterNames);
     List<ResponseFieldContract> responseFields = normalizeResponseFields(requestedResponseFields);
     if (requireResponseContract && responseFields.isEmpty()) {
-      throw new IllegalArgumentException("发布前请先预览并确认响应字段 Contract");
+      throw new IllegalArgumentException("发布前请先运行查询并确认响应字段");
     }
 
     return new DevelopmentDataServiceDefinition(
@@ -257,7 +273,9 @@ public class DevelopmentDataServiceNodeService {
         range(timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, 3_600, "超时时间"),
         optionalText(description, 2_000, "说明"),
         normalizedDataSourceId,
-        normalizedSql);
+        normalizedSql,
+        Boolean.TRUE.equals(paginationEnabled),
+        autoParseParameters == null ? Boolean.TRUE : autoParseParameters);
   }
 
   private List<ParameterContract> normalizeParameters(
@@ -318,26 +336,34 @@ public class DevelopmentDataServiceNodeService {
     return List.copyOf(normalized);
   }
 
-  private ContractPreview discoverContract(long dataSourceId, String sql, int timeoutSeconds) {
+  private ContractPreview discoverContract(
+      long dataSourceId,
+      String sql,
+      int maxRows,
+      int timeoutSeconds,
+      Map<String, Object> parameterValues) {
     List<String> parameterNames = sqlCompiler.parameterNames(sql);
     List<ParameterContract> parameters = parameterNames.stream()
         .map(name -> new ParameterContract(name, "STRING", true, null, null))
         .toList();
 
+    Map<String, Object> supplied = parameterValues == null ? Map.of() : parameterValues;
     Map<String, Object> previewParameters = new LinkedHashMap<>();
-    parameterNames.forEach(name -> previewParameters.put(name, null));
+    parameterNames.forEach(name -> previewParameters.put(name, supplied.get(name)));
     DevelopmentDataServiceSqlCompiler.CompiledSql compiled = sqlCompiler.compile(sql, previewParameters);
 
+    long started = System.nanoTime();
     DataSourceSqlResult result;
     try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(String.valueOf(dataSourceId))) {
       result = executor.execute(new DataSourceSqlRequest(
           compiled.sql(),
-          1,
+          maxRows,
           Math.min(timeoutSeconds, MAX_PREVIEW_TIMEOUT_SECONDS),
           compiled.parameters()));
     }
+    long durationMs = Math.max(0L, (System.nanoTime() - started) / 1_000_000L);
     if (!result.resultSet()) {
-      throw new IllegalStateException("Data Service Preview 没有返回结果集");
+      throw new IllegalStateException("Data Service 查询没有返回结果集");
     }
     if (result.columns().isEmpty()) {
       throw new IllegalArgumentException("查询 SQL 没有可发现的响应字段");
@@ -346,7 +372,20 @@ public class DevelopmentDataServiceNodeService {
     List<ResponseFieldContract> responseFields = result.columns().stream()
         .map(this::toResponseField)
         .toList();
-    return new ContractPreview(parameters, responseFields);
+    List<PreviewColumn> columns = result.columns().stream()
+        .map(column -> new PreviewColumn(
+            column.name(),
+            column.label(),
+            column.typeName(),
+            column.jdbcType(),
+            column.nullable()))
+        .toList();
+    PreviewSqlResult sqlResult = new PreviewSqlResult(
+        columns,
+        result.rows(),
+        result.rows().size(),
+        result.truncated());
+    return new ContractPreview(parameters, responseFields, sqlResult, durationMs);
   }
 
   private ResponseFieldContract toResponseField(DataSourceSqlColumn column) {
@@ -408,7 +447,9 @@ public class DevelopmentDataServiceNodeService {
           definition.timeoutSeconds(),
           definition.description(),
           Long.parseLong(sourceConfig.dataSourceId()),
-          sqlDefinition.content());
+          sqlDefinition.content(),
+          definition.paginationEnabled(),
+          definition.autoParseParametersEnabled());
     } catch (RuntimeException exception) {
       return definition;
     }
@@ -475,7 +516,9 @@ public class DevelopmentDataServiceNodeService {
             DEFAULT_TIMEOUT_SECONDS,
             null,
             0L,
-            ""),
+            "",
+            false,
+            Boolean.TRUE),
         0L,
         null,
         null);
@@ -582,12 +625,34 @@ public class DevelopmentDataServiceNodeService {
       Integer maxRows,
       Integer timeoutSeconds,
       String description,
+      Boolean paginationEnabled,
+      Boolean autoParseParameters,
       Long baseRevision) {}
+
+  public record PreviewColumn(
+      String name,
+      String label,
+      String typeName,
+      int jdbcType,
+      boolean nullable) {}
+
+  public record PreviewSqlResult(
+      List<PreviewColumn> columns,
+      List<List<Object>> rows,
+      int returnedRows,
+      boolean truncated) {
+    public PreviewSqlResult {
+      columns = columns == null ? List.of() : List.copyOf(columns);
+      rows = rows == null ? List.of() : List.copyOf(rows);
+    }
+  }
 
   public record PreviewResult(
       String dataSourceId,
       List<ParameterContract> parameters,
-      List<ResponseFieldContract> responseFields) {}
+      List<ResponseFieldContract> responseFields,
+      PreviewSqlResult result,
+      long durationMs) {}
 
   public record DataServiceNodeContext(
       String nodeId,
@@ -599,7 +664,9 @@ public class DevelopmentDataServiceNodeService {
 
   private record ContractPreview(
       List<ParameterContract> parameters,
-      List<ResponseFieldContract> responseFields) {}
+      List<ResponseFieldContract> responseFields,
+      PreviewSqlResult result,
+      long durationMs) {}
 
   private record SourceConfig(String dataSourceId) {}
 }

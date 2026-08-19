@@ -88,12 +88,16 @@ class DevelopmentDataServiceNodeServiceTest {
             1000,
             30,
             null,
+            true,
+            true,
             0L));
 
     assertEquals(42L, context.draft().definition().dataSourceId());
     assertEquals(sql, context.draft().definition().sql());
     assertEquals(0L, context.draft().definition().sourceTaskAssetId());
     assertEquals(0L, context.draft().definition().sourceTaskRevisionId());
+    assertTrue(context.draft().definition().paginationEnabled());
+    assertTrue(context.draft().definition().autoParseParametersEnabled());
     verify(taskCatalogService, never()).get(anyLong());
     verify(nodeRepository).updateConfigured(100L, true);
   }
@@ -170,6 +174,8 @@ class DevelopmentDataServiceNodeServiceTest {
                 1000,
                 30,
                 null,
+                false,
+                true,
                 0L)));
 
     assertTrue(error.getMessage().contains("数据源"));

@@ -91,6 +91,7 @@ class DataServicePublicationStateTest {
         revisionId,
         revisionNo,
         null,
-        null);
+        null,
+        false);
   }
 }

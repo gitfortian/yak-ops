@@ -14,9 +14,9 @@ public interface DataServiceSourceProvider {
   /**
    * Whether service-facing definition fields are owned by the upstream authoring revision.
    *
-   * <p>When true, Data Service treats name/path/contracts/maxRows/timeout/description as immutable
-   * source definition and only owns runtime concerns such as enablement, auth, rate limits, cache,
-   * circuit breaking and observability.
+   * <p>When true, Data Service treats name/path/contracts/maxRows/timeout/description/pagination as
+   * immutable source definition and only owns runtime concerns such as enablement, auth, rate limits,
+   * cache, circuit breaking and observability.
    */
   default boolean managesServiceDefinition() {
     return false;
@@ -51,7 +51,40 @@ public interface DataServiceSourceProvider {
       Integer timeoutSeconds,
       String defaultPath,
       String description,
-      Instant updateTime) {
+      Instant updateTime,
+      Boolean paginationEnabled) {
+
+    /** Keeps existing full descriptors source-compatible while pagination ownership evolves. */
+    public SourceDescriptor(
+        String sourceType,
+        String sourceRef,
+        String name,
+        String sourceKind,
+        String status,
+        Long sourceRevisionId,
+        Integer sourceRevisionNo,
+        Long dataSourceId,
+        Integer maxRows,
+        Integer timeoutSeconds,
+        String defaultPath,
+        String description,
+        Instant updateTime) {
+      this(
+          sourceType,
+          sourceRef,
+          name,
+          sourceKind,
+          status,
+          sourceRevisionId,
+          sourceRevisionNo,
+          dataSourceId,
+          maxRows,
+          timeoutSeconds,
+          defaultPath,
+          description,
+          updateTime,
+          Boolean.FALSE);
+    }
 
     /** Keeps existing unmanaged providers source-compatible while definition ownership evolves. */
     public SourceDescriptor(
@@ -79,7 +112,8 @@ public interface DataServiceSourceProvider {
           timeoutSeconds,
           defaultPath,
           null,
-          updateTime);
+          updateTime,
+          Boolean.FALSE);
     }
   }
 

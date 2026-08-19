@@ -27,8 +27,8 @@ import org.springframework.util.StringUtils;
  * Single backend transition from an immutable upstream revision to a Data Service runtime snapshot.
  *
  * <p>Executable SQL and datasource identity are always resolved server-side. Sources that own their
- * service definition also make name/path/contracts/limits authoritative; Data Service then owns only
- * runtime concerns such as enablement, access control, resilience and observability.
+ * service definition also make name/path/contracts/limits/pagination authoritative; Data Service then
+ * owns only runtime concerns such as enablement, access control, resilience and observability.
  */
 @Service
 @ConditionalOnDataSourceEnabled
@@ -188,7 +188,8 @@ public class DataServicePublicationService {
         source.maxRows() == null ? DEFAULT_MAX_ROWS : source.maxRows(),
         source.timeoutSeconds() == null ? DEFAULT_TIMEOUT_SECONDS : source.timeoutSeconds(),
         enabled,
-        source.description());
+        source.description(),
+        Boolean.TRUE.equals(source.paginationEnabled()));
   }
 
   private ServiceSettingsInput legacySettings(
@@ -211,7 +212,10 @@ public class DataServicePublicationService {
     String description = request.description() != null
         ? request.description()
         : existing.map(ApiView::description).orElse(source.description());
-    return new ServiceSettingsInput(name, path, maxRows, timeoutSeconds, enabled, description);
+    Boolean paginationEnabled = existing.map(ApiView::paginationEnabled)
+        .orElse(Boolean.TRUE.equals(source.paginationEnabled()));
+    return new ServiceSettingsInput(
+        name, path, maxRows, timeoutSeconds, enabled, description, paginationEnabled);
   }
 
   private void syncSourceContract(Long apiId, SourceContract contract) {

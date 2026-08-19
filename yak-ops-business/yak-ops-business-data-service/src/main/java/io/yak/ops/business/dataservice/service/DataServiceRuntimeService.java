@@ -158,7 +158,14 @@ public class DataServiceRuntimeService {
 
   private QueryResponse copyWithDuration(QueryResponse response, long durationMs) {
     return new QueryResponse(
-        response.columns(), response.rows(), response.truncated(), response.rowCount(), durationMs);
+        response.columns(),
+        response.rows(),
+        response.truncated(),
+        response.rowCount(),
+        durationMs,
+        response.totalNum(),
+        response.pageNum(),
+        response.pageSize());
   }
 
   private long elapsedMs(long started) {
