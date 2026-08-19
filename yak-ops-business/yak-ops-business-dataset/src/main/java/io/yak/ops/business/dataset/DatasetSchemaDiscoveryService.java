@@ -28,6 +28,7 @@ final class DatasetSchemaDiscoveryService {
 
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
   private static final int MAX_DISCOVERY_TIMEOUT_SECONDS = 30;
+  private static final int DEFAULT_PREVIEW_MAX_ROWS = 1_000;
   private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_$]*");
 
   private final TaskCatalogService taskCatalogService;
@@ -58,6 +59,26 @@ final class DatasetSchemaDiscoveryService {
   /** Preview owns no persistent fieldId; stable ids are assigned when a version is saved. */
   List<DatasetService.FieldSpec> preview(String dataSourceId, String sql) {
     return toPreviewFields(discoverColumns(dataSourceId, sql, DEFAULT_TIMEOUT_SECONDS));
+  }
+
+  /** Editor query preview returns real rows and derives the field contract from the same result set. */
+  QueryPreview previewQuery(String dataSourceId, String sql) {
+    String normalizedDataSourceId = requireDataSourceId(dataSourceId);
+    String baseSql = DatasetSqlSafety.requireReadOnlyQuery(sql);
+    long started = System.nanoTime();
+    DataSourceSqlResult result;
+    try (DataSourceSqlExecutor executor = dataSourceExecutionProvider.open(normalizedDataSourceId)) {
+      result = executor.execute(new DataSourceSqlRequest(
+          baseSql,
+          DEFAULT_PREVIEW_MAX_ROWS,
+          DEFAULT_TIMEOUT_SECONDS));
+    }
+    long durationMs = Math.max(0L, (System.nanoTime() - started) / 1_000_000L);
+    if (!result.resultSet()) throw new IllegalStateException("Dataset 查询没有返回结果集");
+    if (result.columns().isEmpty()) {
+      throw new IllegalArgumentException("Dataset 来源查询没有可发现的输出字段");
+    }
+    return new QueryPreview(toPreviewFields(result.columns()), result, durationMs);
   }
 
   private List<DataSourceSqlColumn> discoverColumns(TaskAsset asset) {
@@ -172,6 +193,12 @@ final class DatasetSchemaDiscoveryService {
   private String requireDataSourceId(String value) {
     if (value == null || value.isBlank()) throw new IllegalArgumentException("Dataset 必须选择数据源");
     return value.trim();
+  }
+
+  record QueryPreview(
+      List<DatasetService.FieldSpec> fields,
+      DataSourceSqlResult result,
+      long durationMs) {
   }
 
   private record SourceConfig(String dataSourceId, int timeoutSeconds) {
