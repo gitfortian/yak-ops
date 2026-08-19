@@ -86,7 +86,7 @@ export default function LoginPanel() {
           rules={[{ required: true, message: "请输入用户名" }]}
         >
           <Input
-            className="!h-11 !rounded-xl !border-[#dededb] !bg-white !px-3.5 !text-[15px] !shadow-none placeholder:!text-[#aaa] hover:!border-[#bdbdb8] focus:!border-[#171717]"
+            className="!h-10 !rounded-full !border-[#dededb] !bg-white !px-3.5 !text-[15px] !shadow-none placeholder:!text-[#aaa] hover:!border-[#bdbdb8] focus:!border-[#171717]"
             placeholder="Enter your username"
             autoComplete="username"
           />
@@ -108,7 +108,7 @@ export default function LoginPanel() {
           ]}
         >
           <Input.Password
-            className="!h-11 !rounded-xl !border-[#dededb] !bg-white !px-3.5 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
+            className="!h-10 !rounded-full !border-[#dededb] !bg-white !px-3.5 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
             placeholder="Enter your password"
             autoComplete="current-password"
           />
@@ -119,7 +119,7 @@ export default function LoginPanel() {
           type="primary"
           htmlType="submit"
           loading={loading}
-          className="!h-11 !rounded-xl !border-[#171717] !bg-[#171717] !font-medium !text-white !shadow-none hover:!border-[#292929] hover:!bg-[#292929]"
+          className="!h-10 !rounded-full !border-[#171717] !bg-[#171717] !font-medium !text-white !shadow-none hover:!border-[#292929] hover:!bg-[#292929]"
         >
           Log in
         </Button>
