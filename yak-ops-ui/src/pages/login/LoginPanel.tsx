@@ -1,72 +1,39 @@
 import { login } from "@/services/security/account";
 import { resetAuthenticationFailure } from "@/utils/request";
 import { getSafeReturnTo } from "@/utils/security/redirect";
-import { ArrowRightOutlined } from "@ant-design/icons";
 import { history, useIntl, useModel } from "@umijs/max";
 import { App, Button, Form, Input } from "antd";
 import { useForm } from "antd/es/form/Form";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { flushSync } from "react-dom";
 import GoogleLoginButton from "./components/GoogleLoginButton";
-import "./index.less";
 
-type ActionType =
-  | "BLINK"
-  | "SMILE"
-  | "SURPRISE"
-  | "TILT"
-  | "SHAKE"
-  | "BOW"
-  | "THANKS";
-
-type FocusedField = "userName" | "userPassword" | null;
-
-type LoginPanelProps = {
-  onFire: (type: ActionType) => void;
-  onPanelHoverChange?: (hovered: boolean) => void;
-  onFieldFocusChange?: (field: FocusedField) => void;
-};
-
-export default function LoginPanel({
-  onFire,
-  onPanelHoverChange,
-  onFieldFocusChange,
-}: LoginPanelProps) {
+export default function LoginPanel() {
   const [loading, setLoading] = useState(false);
   const [form] = useForm();
-  const lastFireRef = useRef<Record<string, number>>({});
 
   const { initialState, setInitialState } = useModel("@@initialState");
   const { message } = App.useApp();
   const intl = useIntl();
-
-  const fireThrottled = (key: string, type: ActionType, gapMs = 900) => {
-    const now = Date.now();
-    const last = lastFireRef.current[key] || 0;
-
-    if (now - last >= gapMs) {
-      lastFireRef.current[key] = now;
-      onFire(type);
-    }
-  };
 
   const fetchUserInfo = async () => {
     const userInfo = await initialState?.fetchUserInfo?.();
 
     if (userInfo) {
       flushSync(() => {
-        setInitialState((s: any) => ({
-          ...s,
+        setInitialState((state: any) => ({
+          ...state,
           currentUser: userInfo,
         }));
       });
     }
+
     return userInfo;
   };
 
   const redirectAfterLogin = () => {
     const requested = new URLSearchParams(window.location.search).get(
-      "returnTo"
+      "returnTo",
     );
     history.replace(getSafeReturnTo(requested));
   };
@@ -88,79 +55,47 @@ export default function LoginPanel({
         intl.formatMessage({
           id: "pages.login.success",
           defaultMessage: "登录成功！",
-        })
+        }),
       );
-
-      onFieldFocusChange?.(null);
-      onFire("THANKS");
 
       const userInfo = await fetchUserInfo();
       if (!userInfo) throw new Error("登录后无法加载当前用户");
       redirectAfterLogin();
     } catch (_error) {
-      onFire("SHAKE");
+      // Request handling already surfaces authentication errors to the user.
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSuccess = async () => {
-    onFieldFocusChange?.(null);
-    onFire("THANKS");
-
     const userInfo = await fetchUserInfo();
-    if (!userInfo) return;
+
+    if (!userInfo) {
+      setLoading(false);
+      return;
+    }
+
     redirectAfterLogin();
   };
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100vh",
-        background: "white",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 64px",
-      }}
-      onMouseEnter={() => onPanelHoverChange?.(true)}
-      onMouseLeave={() => {
-        onPanelHoverChange?.(false);
-        onFieldFocusChange?.(null);
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 380,
-        }}
-      >
-        <div style={{ marginBottom: 32, textAlign: "center" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 32,
-              lineHeight: 1.15,
-              fontWeight: 700,
-              color: "#0f172a",
-              fontFamily: "Inter, sans-serif",
-            }}
-          >
-            Welcome back!
-          </h1>
+    <div className="w-full">
+      <div className="rounded-[26px] border border-[#e4e4e1] bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.035)] sm:p-6">
+        <GoogleLoginButton
+          className="!h-11 !rounded-xl !border-[#dededb] !bg-white !font-medium !text-[#1b1b1b] !shadow-none hover:!border-[#bdbdb8] hover:!bg-[#fafafa] hover:!text-[#1b1b1b]"
+          loading={loading}
+          onStart={() => setLoading(true)}
+          onSuccess={handleGoogleSuccess}
+          onError={() => setLoading(false)}
+        />
 
-          <p
-            style={{
-              marginTop: 10,
-              marginBottom: 0,
-              fontSize: 14,
-              color: "#647b9a",
-              fontFamily: "Inter, sans-serif",
-            }}
-          >
-            Please enter your details
-          </p>
+        <div className="my-5 flex items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-[#ececea]" />
+          <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#8a8a86]">
+            or
+          </span>
+          <span className="h-px flex-1 bg-[#ececea]" />
         </div>
 
         <Form
@@ -170,52 +105,30 @@ export default function LoginPanel({
           onFinish={handleAccountLogin}
         >
           <Form.Item
+            className="!mb-4"
             label={
-              <span
-                style={{
-                  fontWeight: 500,
-                  color: "black",
-                  fontSize: "0.875rem",
-                  fontFamily: "Inter, sans-serif",
-                }}
-              >
-                用户名
+              <span className="text-[13px] font-medium text-[#333]">
+                Username
               </span>
             }
             name="userName"
-            style={{ marginBottom: 18 }}
             rules={[{ required: true, message: "请输入用户名" }]}
           >
             <Input
-              className="login-input"
-              size="large"
-              placeholder="请输入用户名"
+              className="!h-11 !rounded-xl !border-[#dededb] !bg-white !px-3.5 !text-[15px] !shadow-none placeholder:!text-[#aaa] hover:!border-[#bdbdb8] focus:!border-[#171717]"
+              placeholder="Enter your username"
               autoComplete="username"
-              onFocus={() => {
-                onFieldFocusChange?.("userName");
-                fireThrottled("focus_user", "SURPRISE", 1200);
-              }}
-              onBlur={() => {
-                onFieldFocusChange?.(null);
-              }}
             />
           </Form.Item>
 
           <Form.Item
+            className="!mb-2.5"
             label={
-              <span
-                style={{
-                  fontWeight: 500,
-                  color: "black",
-                  fontSize: "0.875rem",
-                  fontFamily: "Inter, sans-serif",
-                }}
-              >
+              <span className="text-[13px] font-medium text-[#333]">
                 Password
               </span>
             }
             name="userPassword"
-            style={{ marginBottom: 14 }}
             rules={[
               {
                 required: true,
@@ -224,86 +137,45 @@ export default function LoginPanel({
             ]}
           >
             <Input.Password
-              className="login-password-input"
-              size="large"
-              placeholder="••••••••"
+              className="!h-11 !rounded-xl !border-[#dededb] !bg-white !px-3.5 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
+              placeholder="Enter your password"
               autoComplete="current-password"
-              onFocus={() => {
-                onFieldFocusChange?.("userPassword");
-                fireThrottled("focus_pwd", "BLINK", 1200);
-              }}
-              onBlur={() => {
-                onFieldFocusChange?.(null);
-              }}
             />
           </Form.Item>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 18,
-              fontSize: 14,
-            }}
-          >
-            <Button type="link" style={{ padding: 0 }}>
+          <div className="mb-5 flex justify-end">
+            <button
+              type="button"
+              className="border-0 bg-transparent p-0 text-[13px] text-[#666] transition-colors hover:text-[#171717]"
+            >
               Forgot password?
-            </Button>
+            </button>
           </div>
 
           <Button
-            className="animated-profile-btn-v2"
             block
-            type="default"
+            type="primary"
             htmlType="submit"
             loading={loading}
-            onMouseEnter={() => fireThrottled("login_hover", "SMILE", 900)}
+            className="!h-11 !rounded-xl !border-[#171717] !bg-[#171717] !font-medium !text-white !shadow-none hover:!border-[#292929] hover:!bg-[#292929]"
           >
-            <span className="default-layer">Log in</span>
-
-            <span className="hover-layer">
-              <span className="hover-label">Log in</span>
-              <span className="hover-icon">
-                <ArrowRightOutlined />
-              </span>
-            </span>
+            Log in
           </Button>
-
-          <GoogleLoginButton
-            className="animated-profile-btn-v2"
-            style={{ marginTop: 14 }}
-            loading={loading}
-            onStart={() => {
-              onFieldFocusChange?.(null);
-              setLoading(true);
-            }}
-            onSuccess={handleGoogleSuccess}
-            onError={() => {
-              onFieldFocusChange?.(null);
-              onFire("SHAKE");
-              setLoading(false);
-            }}
-          />
-
-          <div
-            style={{
-              marginTop: 26,
-              textAlign: "center",
-              color: "rgba(71, 85, 105, 0.72)",
-              fontSize: 14,
-            }}
-          >
-            Don&apos;t have an account?{" "}
-            <Button
-              type="link"
-              style={{ padding: 0, fontWeight: 600 }}
-              onMouseEnter={() => fireThrottled("signup_hover", "TILT", 900)}
-            >
-              Sign Up
-            </Button>
-          </div>
         </Form>
+
+        <p className="mb-0 mt-4 text-center text-[11px] leading-5 text-[#92928d]">
+          By continuing, you agree to use Yak Ops according to your organization&apos;s access policy.
+        </p>
+      </div>
+
+      <div className="mt-5 text-center text-[13px] text-[#73736f]">
+        Don&apos;t have an account?{" "}
+        <button
+          type="button"
+          className="border-0 bg-transparent p-0 font-semibold text-[#171717] hover:underline"
+        >
+          Sign up
+        </button>
       </div>
     </div>
   );
