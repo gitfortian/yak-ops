@@ -19,6 +19,7 @@ public class DataServiceApiPO {
   private String sqlText;
   private Integer maxRows;
   private Integer timeoutSeconds;
+  private Boolean paginationEnabled;
   private Boolean enabled;
   private String authMode;
   private Boolean cacheEnabled;
