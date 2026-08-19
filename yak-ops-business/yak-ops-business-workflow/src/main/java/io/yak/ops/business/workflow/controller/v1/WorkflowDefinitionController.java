@@ -89,13 +89,15 @@ public class WorkflowDefinitionController {
   @Operation(summary = "发布或重新启用工作流版本")
   @PostMapping("/{id}/online")
   public Result<WorkflowDefinitionVO> online(@PathVariable("id") String id) {
-    return Result.success(definitionService.online(id));
+    WorkflowDefinitionVO workflow = definitionService.online(id);
+    scheduleGuard.activateConfiguredSchedules(id);
+    return Result.success(workflow);
   }
 
   @Operation(summary = "停用工作流正式运行入口")
   @PostMapping("/{id}/offline")
   public Result<WorkflowDefinitionVO> offline(@PathVariable("id") String id) {
-    scheduleGuard.ensureCanOffline(id);
+    scheduleGuard.deactivateConfiguredSchedules(id);
     return Result.success(definitionService.offline(id));
   }
 
