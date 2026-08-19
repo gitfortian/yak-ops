@@ -12,11 +12,13 @@ import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.domain.TaskAssetRevision;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.business.taskcatalog.spi.TaskSourceRevision;
-import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlColumn;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
+import io.yak.ops.core.execution.sql.SqlExecutionCaller;
+import io.yak.ops.core.execution.sql.SqlExecutionColumn;
+import io.yak.ops.core.execution.sql.SqlExecutionRequest;
+import io.yak.ops.core.execution.sql.SqlExecutionResult;
+import io.yak.ops.core.execution.sql.SqlExecutionResultType;
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
+import io.yak.ops.core.execution.sql.SqlExecutionTiming;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
 import io.yak.ops.spi.task.model.TaskDefinition;
@@ -30,10 +32,9 @@ import org.mockito.ArgumentCaptor;
 class QueryRevisionDatasetSourceAdapterTest {
 
   @Test
-  void executesPinnedRevisionThroughDatasourceProviderAndTrimsOverflowRow() {
+  void executesPinnedRevisionThroughSqlRuntimeAndTrimsOverflowRow() {
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DataSourceExecutionProvider provider = mock(DataSourceExecutionProvider.class);
-    DataSourceSqlExecutor executor = mock(DataSourceSqlExecutor.class);
+    SqlExecutionRuntime runtime = mock(SqlExecutionRuntime.class);
     TaskAsset asset = new TaskAsset(
         11L,
         TaskAssetSource.DATA_DEVELOPMENT,
@@ -51,19 +52,21 @@ class QueryRevisionDatasetSourceAdapterTest {
         new TaskDefinition("SQL", 1, "SELECT region, amount FROM sales", "{\"dataSourceId\":\"9\"}"),
         "checksum-v3");
     when(catalog.resolveRevision(11L, 71L)).thenReturn(new TaskAssetRevision(asset, revision));
-    when(provider.open("9")).thenReturn(executor);
-    when(executor.execute(any())).thenReturn(DataSourceSqlResult.resultSet(
+    when(runtime.execute(any())).thenReturn(new SqlExecutionResult(
+        SqlExecutionResultType.RESULT_SET,
         List.of(
-            new DataSourceSqlColumn("region", "region", "VARCHAR", Types.VARCHAR, true),
-            new DataSourceSqlColumn("amount", "amount", "DECIMAL", Types.DECIMAL, true)),
+            new SqlExecutionColumn("region", "region", "VARCHAR", Types.VARCHAR, true),
+            new SqlExecutionColumn("amount", "amount", "DECIMAL", Types.DECIMAL, true)),
         List.of(
             List.of("east", 10),
             List.of("west", 20),
             List.of("north", 30)),
-        false));
+        0L,
+        false,
+        new SqlExecutionTiming(4L, 8L, 12L)));
 
     QueryRevisionDatasetSourceAdapter adapter = new QueryRevisionDatasetSourceAdapter(
-        catalog, provider, new ObjectMapper(), new DatasetQueryCompiler());
+        catalog, runtime, new ObjectMapper(), new DatasetQueryCompiler());
     Dataset dataset = new Dataset(21L, "sales", null, DatasetStatus.ONLINE, 31L, Instant.EPOCH, Instant.EPOCH);
     DatasetVersion version = new DatasetVersion(
         31L, 21L, 1, DatasetSourceType.QUERY_REVISION, 11L, 71L, 3, "[]", Instant.EPOCH);
@@ -77,19 +80,22 @@ class QueryRevisionDatasetSourceAdapterTest {
     DatasetQueryResult result = execution.result();
 
     verify(catalog).resolveRevision(11L, 71L);
-    ArgumentCaptor<DataSourceSqlRequest> captor = ArgumentCaptor.forClass(DataSourceSqlRequest.class);
-    verify(executor).execute(captor.capture());
+    ArgumentCaptor<SqlExecutionRequest> captor = ArgumentCaptor.forClass(SqlExecutionRequest.class);
+    verify(runtime).execute(captor.capture());
     assertTrue(captor.getValue().sql().contains("FROM (SELECT region, amount FROM sales) yak_dataset_source"));
     assertEquals(3, captor.getValue().maxRows());
     assertEquals(15, captor.getValue().timeoutSeconds());
+    assertEquals(SqlExecutionCaller.DATASET, captor.getValue().context().caller());
+    assertEquals("21", captor.getValue().context().callerReference());
     assertEquals(2, result.returnedRows());
     assertTrue(result.truncated());
     assertEquals(1, result.datasetVersionNo());
+    assertEquals("region", result.columns().get(0).name());
     assertEquals("9", execution.dataSourceId());
     assertEquals(captor.getValue().sql(), execution.sql());
     assertTrue(execution.prepareMillis() >= 0L);
-    assertTrue(execution.waitMillis() >= 0L);
-    assertTrue(execution.executeMillis() >= 0L);
+    assertEquals(4L, execution.waitMillis());
+    assertEquals(8L, execution.executeMillis());
     assertTrue(execution.transferMillis() >= 0L);
   }
 }
