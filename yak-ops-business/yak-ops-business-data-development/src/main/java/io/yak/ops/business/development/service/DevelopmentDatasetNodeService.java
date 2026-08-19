@@ -3,6 +3,7 @@ package io.yak.ops.business.development.service;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.FieldDraft;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.NodeDataset;
+import io.yak.ops.business.dataset.DevelopmentDatasetFacade.PreviewResult;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentNodeType;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
@@ -44,6 +45,12 @@ public class DevelopmentDatasetNodeService {
   public List<FieldDraft> preview(long nodeId, String dataSourceId, String sql) {
     requireDatasetNode(nodeId);
     return datasetFacade.preview(dataSourceId, sql);
+  }
+
+  /** Execute Dataset-owned SQL and return both field contract and actual result rows. */
+  public PreviewResult query(long nodeId, String dataSourceId, String sql) {
+    requireDatasetNode(nodeId);
+    return datasetFacade.previewQuery(dataSourceId, sql);
   }
 
   /** Standalone editor save; DatasetVersion freezes datasource + SQL + field contract. */
