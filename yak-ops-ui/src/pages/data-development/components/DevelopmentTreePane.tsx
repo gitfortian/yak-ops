@@ -20,7 +20,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { Snail } from 'lucide-react';
+import PythonIcon from '../icon/PythonIcon';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
@@ -80,7 +80,7 @@ type NodeMetadata = {
 const nodeTypeIconClassName = (taskType?: string) => {
   if (taskType === 'SHELL') return 'text-[#6172f3]';
   if (taskType === 'SQL') return 'text-[#f79009]';
-  if (taskType === 'PYTHON') return 'text-[#12b76a]';
+  if (taskType === 'PYTHON') return '';
   if (taskType === 'DATASET') return 'text-[#667085]';
   if (taskType === 'DATA_SERVICE') return 'text-[#475467]';
   return 'text-[#667085]';
@@ -92,7 +92,7 @@ const nodeIcon = (taskType?: string): ReactNode => {
     return <TerminalSquare size={13} strokeWidth={1.8} className={className} />;
   }
   if (taskType === 'PYTHON') {
-    return <Snail size={13} strokeWidth={1.8} className={className} />;
+    return <PythonIcon size={13} />;
   }
   if (taskType === 'DATASET') {
     return <Database size={13} strokeWidth={1.8} className={className} />;
@@ -117,7 +117,7 @@ const nodeCreateItems: NonNullable<MenuProps['items']> = [
   {
     key: 'node-python',
     label: 'Python 节点',
-    icon: <Snail size={14} strokeWidth={1.8} className="text-[#12b76a]" />,
+    icon: <PythonIcon size={14} />,
   },
   { type: 'divider' },
   {
@@ -241,7 +241,7 @@ const DevelopmentTreePane = ({
         children: [
           { key: 'create-sql', label: 'SQL 节点', icon: <Code2 size={14} className="text-[#f79009]" /> },
           { key: 'create-shell', label: 'Shell 节点', icon: <TerminalSquare size={14} className="text-[#6172f3]" /> },
-          { key: 'create-python', label: 'Python 节点', icon: <Snail size={14} className="text-[#12b76a]" /> },
+          { key: 'create-python', label: 'Python 节点', icon: <PythonIcon size={14} /> },
           { type: 'divider' },
           { key: 'create-dataset', label: '数据集节点', icon: <Database size={14} className="text-[#667085]" /> },
           { key: 'create-data-service', label: '数据服务节点', icon: <Network size={14} className="text-[#475467]" /> },
