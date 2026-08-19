@@ -6,6 +6,7 @@ import {
   InputNumber,
   Select,
   Spin,
+  Switch,
   Table,
   Tag,
   Tooltip,
@@ -58,7 +59,12 @@ import {
   hydrateSqlTaskConfig,
   useSqlMetadataContext,
 } from '../../editors/sql/metadata/sqlMetadataContextStore';
-import type { DevelopmentId, DevelopmentResourceNode } from '../../types';
+import type {
+  DevelopmentId,
+  DevelopmentResourceNode,
+  DevelopmentTaskRunResult,
+} from '../../types';
+import SqlResultWorkspace from '../sql-result/SqlResultWorkspace';
 
 interface DataServiceNodeEditorProps {
   node: DevelopmentResourceNode;
@@ -156,6 +162,45 @@ const normalizeId = (value: unknown): DevelopmentId => {
 const safeArray = <T,>(value: T[] | null | undefined): T[] =>
   Array.isArray(value) ? value.filter(Boolean) : [];
 
+const parseNamedParameters = (sql: string) => {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const matcher = /(^|[^:]):([A-Za-z_][A-Za-z0-9_]*)/g;
+  let match: RegExpExecArray | null;
+  while ((match = matcher.exec(sql)) !== null) {
+    const name = match[2];
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+};
+
+const mergeParameters = (
+  names: string[],
+  current: DevelopmentDataServiceParameter[],
+) => {
+  const previous = new Map(
+    current.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
+  );
+  return names.map((name) => {
+    const item = previous.get(name.toLowerCase());
+    return item
+      ? {
+          ...item,
+          name,
+          type: item.type === 'OBJECT' ? 'STRING' as const : item.type,
+          required: true,
+        }
+      : {
+          name,
+          type: 'STRING' as const,
+          required: true,
+        };
+  });
+};
+
 const normalizeContext = (
   raw: DevelopmentDataServiceNodeContext,
   node: DevelopmentResourceNode,
@@ -177,6 +222,8 @@ const normalizeContext = (
     maxRows: Number(rawDefinition?.maxRows || 1000),
     timeoutSeconds: Number(rawDefinition?.timeoutSeconds || 30),
     description: rawDefinition?.description || undefined,
+    paginationEnabled: Boolean(rawDefinition?.paginationEnabled),
+    autoParseParameters: rawDefinition?.autoParseParameters !== false,
   };
 
   return {
@@ -217,10 +264,13 @@ export default function DataServiceNodeEditor({
   const [description, setDescription] = useState('');
   const [parameters, setParameters] = useState<DevelopmentDataServiceParameter[]>([]);
   const [responseFields, setResponseFields] = useState<DevelopmentDataServiceResponseField[]>([]);
+  const [paginationEnabled, setPaginationEnabled] = useState(false);
+  const [autoParseParameters, setAutoParseParameters] = useState(true);
+  const [queryResult, setQueryResult] = useState<DevelopmentTaskRunResult>();
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string>();
-  const [previewing, setPreviewing] = useState(false);
+  const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publicationState, setPublicationState] = useState<DataServicePublicationState>();
@@ -241,11 +291,6 @@ export default function DataServiceNodeEditor({
 
   useEffect(() => () => dirtyChangeRef.current?.(false), []);
 
-  const invalidateContract = useCallback(() => {
-    setParameters([]);
-    setResponseFields([]);
-  }, []);
-
   const applyContext = useCallback((raw: DevelopmentDataServiceNodeContext) => {
     const next = normalizeContext(raw, node);
     const definition = next.draft.definition;
@@ -263,6 +308,9 @@ export default function DataServiceNodeEditor({
     setDescription(definition.description || '');
     setParameters(safeArray(definition.parameters));
     setResponseFields(safeArray(definition.responseFields));
+    setPaginationEnabled(Boolean(definition.paginationEnabled));
+    setAutoParseParameters(definition.autoParseParameters !== false);
+    setQueryResult(undefined);
     hydrateSqlTaskConfig(
       node.id,
       JSON.stringify(nextDataSourceId ? { dataSourceId: nextDataSourceId } : {}),
@@ -320,9 +368,10 @@ export default function DataServiceNodeEditor({
   useEffect(() => {
     if (!context || loading) return;
     if (metadataContext.dataSourceId === savedDataSourceIdRef.current) return;
-    invalidateContract();
+    setResponseFields([]);
+    setQueryResult(undefined);
     markDirty();
-  }, [context, invalidateContract, loading, markDirty, metadataContext.dataSourceId]);
+  }, [context, loading, markDirty, metadataContext.dataSourceId]);
 
   const metadataPath = useMemo(
     () => [
@@ -346,62 +395,103 @@ export default function DataServiceNodeEditor({
 
   const changeSql = (value: string) => {
     setSqlText(value);
-    invalidateContract();
+    setQueryResult(undefined);
+    if (autoParseParameters) {
+      setParameters((current) => mergeParameters(parseNamedParameters(value), current));
+      setResponseFields([]);
+    }
     markDirty();
   };
 
-  const preview = async () => {
+  const runQuery = async (forceContractSync = false) => {
     const dataSourceId = metadataContext.dataSourceId;
-    if (!dataSourceId || !sqlText.trim() || previewing) return;
+    if (!dataSourceId || !sqlText.trim() || running) return;
 
-    setPreviewing(true);
+    setRunning(true);
+    setQueryResult({
+      status: 'RUNNING',
+      message: '正在执行 Data Service 查询',
+      durationMs: 0,
+      output: {},
+    });
     try {
+      const parameterValues = Object.fromEntries(
+        parameters
+          .filter((item) => item?.name)
+          .map((item) => [item.name, item.example?.trim() || null]),
+      );
       const result = await previewDevelopmentDataServiceNode(
         node.id,
         dataSourceId,
         sqlText,
+        maxRows,
         timeoutSeconds,
+        parameterValues,
       );
       const nextParameters = safeArray(result?.parameters);
       const nextResponses = safeArray(result?.responseFields);
-      const oldParameters = new Map(
-        parameters.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
-      );
-      const oldResponses = new Map(
-        responseFields.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
-      );
 
-      setParameters(nextParameters.map((item) => {
-        const previous = oldParameters.get(item.name.toLowerCase());
-        return previous
-          ? {
-              ...item,
-              type: previous.type === 'OBJECT' ? 'STRING' : previous.type,
-              required: true,
-              description: previous.description,
-              example: previous.example,
-            }
-          : { ...item, required: true };
-      }));
-      setResponseFields(nextResponses.map((item) => {
-        const previous = oldResponses.get(item.name.toLowerCase());
-        return previous
-          ? {
-              ...item,
-              type: previous.type,
-              description: previous.description,
-              example: previous.example,
-            }
-          : item;
-      }));
-      markDirty();
+      if (autoParseParameters || forceContractSync) {
+        const oldParameters = new Map(
+          parameters.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
+        );
+        const oldResponses = new Map(
+          responseFields.filter((item) => item?.name).map((item) => [item.name.toLowerCase(), item]),
+        );
+
+        setParameters(nextParameters.map((item) => {
+          const previous = oldParameters.get(item.name.toLowerCase());
+          return previous
+            ? {
+                ...item,
+                type: previous.type === 'OBJECT' ? 'STRING' : previous.type,
+                required: true,
+                description: previous.description,
+                example: previous.example,
+              }
+            : { ...item, required: true };
+        }));
+        setResponseFields(nextResponses.map((item) => {
+          const previous = oldResponses.get(item.name.toLowerCase());
+          return previous
+            ? {
+                ...item,
+                type: previous.type,
+                description: previous.description,
+                example: previous.example,
+              }
+            : item;
+        }));
+        markDirty();
+      }
+
+      setQueryResult({
+        status: 'SUCCESS',
+        message: '查询成功',
+        durationMs: Number(result?.durationMs || 0),
+        output: {
+          kind: 'RESULT_SET',
+          columns: safeArray(result?.result?.columns),
+          rows: safeArray(result?.result?.rows),
+          returnedRows: Number(result?.result?.returnedRows || 0),
+          truncated: Boolean(result?.result?.truncated),
+          dataSourceId: result?.dataSourceId,
+        },
+      });
       message.success(
-        `Contract 已发现 · ${nextParameters.length} 个参数 / ${nextResponses.length} 个响应字段`,
+        `查询完成 · ${Number(result?.result?.returnedRows || 0)} 行 / ${nextResponses.length} 个字段`,
       );
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '预览 Data Service Contract 失败');
+      const text = error instanceof Error ? error.message : '运行 Data Service 查询失败';
+      setQueryResult({
+        status: 'FAILED',
+        message: text,
+        durationMs: 0,
+        output: {},
+      });
+      message.error(text);
     } finally {
-      setPreviewing(false);
+      setRunning(false);
     }
   };
 
@@ -431,6 +521,8 @@ export default function DataServiceNodeEditor({
         maxRows,
         timeoutSeconds,
         description: description.trim() || undefined,
+        paginationEnabled,
+        autoParseParameters,
         baseRevision: context?.draft?.draftRevision || 0,
       });
       applyContext(next);
@@ -586,7 +678,7 @@ export default function DataServiceNodeEditor({
         <Input
           size="small"
           value={value || ''}
-          placeholder="示例值"
+          placeholder="运行查询时作为参数值"
           onChange={(event) => updateParameter(index, { example: event.target.value })}
         />
       ),
@@ -704,6 +796,10 @@ export default function DataServiceNodeEditor({
         <dd className="m-0 break-all text-[#344054]">{metadataPath || '未选择数据源'}</dd>
         <dt className="text-[#667085]">查询 SQL：</dt>
         <dd className="m-0 text-[#344054]">{sqlText.trim() ? '已配置' : '未填写'}</dd>
+        <dt className="text-[#667085]">结果分页：</dt>
+        <dd className="m-0 text-[#344054]">{paginationEnabled ? '开启' : '关闭'}</dd>
+        <dt className="text-[#667085]">参数解析：</dt>
+        <dd className="m-0 text-[#344054]">{autoParseParameters ? '自动' : '手动维护'}</dd>
       </dl>
     </div>
   );
@@ -711,8 +807,18 @@ export default function DataServiceNodeEditor({
   const requestPanel = (
     <div>
       <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
-        参数来自当前 SQL 中的 <span className="font-mono">:name</span> 命名参数，v1 统一为必填参数。
+        SQL 中的 <span className="font-mono">:name</span> 命名参数作为请求参数；示例值同时用于顶部“运行查询”。
       </div>
+      {paginationEnabled ? (
+        <div className="mb-4 rounded-[4px] border border-[#e6e9ef] bg-[#fafbfc] px-3 py-2 text-[11px] leading-5 text-[#667085]">
+          <span className="font-medium text-[#475467]">分页系统参数</span>
+          <span className="ml-2 font-mono">returnTotalNum</span>
+          <span className="mx-1 text-[#c0c5ce]">·</span>
+          <span className="font-mono">pageNum</span>
+          <span className="mx-1 text-[#c0c5ce]">·</span>
+          <span className="font-mono">pageSize</span>
+        </div>
+      ) : null}
       <Table<DevelopmentDataServiceParameter>
         rowKey="name"
         size="small"
@@ -720,7 +826,7 @@ export default function DataServiceNodeEditor({
         dataSource={parameters}
         columns={parameterColumns}
         scroll={{ x: 610 }}
-        locale={{ emptyText: '预览 Contract 后自动发现请求参数' }}
+        locale={{ emptyText: autoParseParameters ? '运行查询后自动发现请求参数' : '当前 SQL 没有请求参数' }}
       />
     </div>
   );
@@ -728,8 +834,18 @@ export default function DataServiceNodeEditor({
   const responsePanel = (
     <div>
       <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
-        通过当前数据源真实预览发现字段类型，可补充描述与示例后固化到 DS Revision。
+        运行当前 SQL 后从真实结果集发现字段类型，可补充描述与示例后固化到 DS Revision。
       </div>
+      {paginationEnabled ? (
+        <div className="mb-4 rounded-[4px] border border-[#e6e9ef] bg-[#fafbfc] px-3 py-2 text-[11px] leading-5 text-[#667085]">
+          <span className="font-medium text-[#475467]">分页返回信息</span>
+          <span className="ml-2 font-mono">totalNum</span>
+          <span className="mx-1 text-[#c0c5ce]">·</span>
+          <span className="font-mono">pageNum</span>
+          <span className="mx-1 text-[#c0c5ce]">·</span>
+          <span className="font-mono">pageSize</span>
+        </div>
+      ) : null}
       <Table<DevelopmentDataServiceResponseField>
         rowKey={(record) => record.name}
         size="small"
@@ -737,7 +853,7 @@ export default function DataServiceNodeEditor({
         dataSource={responseFields}
         columns={responseColumns}
         scroll={{ x: 610 }}
-        locale={{ emptyText: '预览 Contract 后自动发现返回字段' }}
+        locale={{ emptyText: '运行查询后自动发现返回字段' }}
       />
     </div>
   );
@@ -896,19 +1012,19 @@ export default function DataServiceNodeEditor({
     );
   }
 
-  const canPreview = Boolean(metadataContext.dataSourceId && sqlText.trim());
-  const canSave = canPreview && dirty;
+  const canRun = Boolean(metadataContext.dataSourceId && sqlText.trim());
+  const canSave = canRun && dirty;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e8e9ec] bg-white px-2">
         <div className="flex shrink-0 items-center gap-0.5">
           <ToolbarButton
-            title={previewing ? '正在预览 Contract' : '预览 Contract'}
-            disabled={!canPreview || previewing}
-            onClick={() => void preview()}
+            title={running ? '正在运行查询' : '运行查询'}
+            disabled={!canRun || running}
+            onClick={() => void runQuery()}
           >
-            {previewing ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} strokeWidth={1.8} />}
+            {running ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} strokeWidth={1.8} />}
           </ToolbarButton>
           <ToolbarDivider />
           <ToolbarButton
@@ -944,12 +1060,55 @@ export default function DataServiceNodeEditor({
           </ToolbarButton>
         </div>
 
-        <SqlMetadataContextToolbar nodeId={node.id} />
+        <div className="flex min-w-0 items-center justify-end gap-3">
+          <div className="hidden shrink-0 items-center gap-4 border-r border-[#e5e7eb] pr-3 xl:flex">
+            <Tooltip
+              title="开启后，发布的数据服务使用分页请求参数 pageNum / pageSize / returnTotalNum，并返回分页信息。"
+              mouseEnterDelay={0.3}
+            >
+              <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[#475467]">
+                <span>返回结果分页</span>
+                <Switch
+                  size="small"
+                  checked={paginationEnabled}
+                  onChange={(checked) => {
+                    setPaginationEnabled(checked);
+                    markDirty();
+                  }}
+                />
+              </label>
+            </Tooltip>
+            <Tooltip
+              title="开启后，运行查询会根据 SQL 命名参数和真实结果集同步请求参数、返回字段。"
+              mouseEnterDelay={0.3}
+            >
+              <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[#475467]">
+                <span>自动解析参数</span>
+                <Switch
+                  size="small"
+                  checked={autoParseParameters}
+                  onChange={(checked) => {
+                    setAutoParseParameters(checked);
+                    if (checked) {
+                      setParameters((current) => mergeParameters(parseNamedParameters(sqlText), current));
+                      setResponseFields([]);
+                    }
+                    markDirty();
+                    if (checked && metadataContext.dataSourceId && sqlText.trim()) {
+                      window.setTimeout(() => void runQuery(true), 0);
+                    }
+                  }}
+                />
+              </label>
+            </Tooltip>
+          </div>
+          <SqlMetadataContextToolbar nodeId={node.id} />
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-          <div className="min-h-0 flex-1">
+          <div className="min-h-[220px] min-w-0 flex-1">
             <SqlMonacoEditor
               id={String(node.id)}
               value={sqlText}
@@ -979,7 +1138,7 @@ export default function DataServiceNodeEditor({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <span>{responseFields.length ? `${responseFields.length} 个响应字段` : 'Contract 待预览'}</span>
+              <span>{responseFields.length ? `${responseFields.length} 个响应字段` : '运行查询以发现字段'}</span>
               <span>
                 Draft #{context.draft.draftRevision || 0}
                 {latestPublished ? ` · DS R${latestPublished.revisionNo}` : ''}
@@ -987,6 +1146,10 @@ export default function DataServiceNodeEditor({
               {position.selectionLength > 0 ? <span>已选择 {position.selectionLength} 字符</span> : null}
               <span>Ln {position.lineNumber}, Col {position.column}</span>
             </div>
+          </div>
+
+          <div className="h-[34%] min-h-[190px] max-h-[380px] shrink-0 border-t border-[#e7eaf0] bg-white">
+            <SqlResultWorkspace result={queryResult} />
           </div>
         </section>
 
