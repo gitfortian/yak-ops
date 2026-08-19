@@ -70,7 +70,6 @@ const WorkflowNodeInspector = ({
       disabled: locked,
       onClick: onDuplicate,
     },
-    { type: 'divider' },
     {
       key: 'delete',
       icon: <Trash2 size={14} />,
@@ -82,53 +81,53 @@ const WorkflowNodeInspector = ({
   ], [locked, onDelete, onDuplicate]);
 
   return (
-    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[400px] flex-col overflow-hidden rounded-2xl border border-[#e2e5e9] bg-white shadow-[0_12px_36px_rgba(22,24,35,.12)]">
-      <header className="shrink-0 border-b border-[#eceef1] bg-white">
-        <div className="flex items-center gap-2 px-4 pb-2 pt-4">
+    <aside className="absolute bottom-0 right-0 top-0 z-20 flex w-[340px] flex-col overflow-hidden border-l border-[#e8eaee] bg-white">
+      <header className="shrink-0 border-b border-[#eef0f2] bg-white">
+        <div className="flex h-12 items-center gap-2 px-4">
           <WorkflowNodeIcon taskType={node.data.taskType} size="sm" />
-          <div className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#161823]">
-            {node.data.label}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-semibold text-[#161823]">
+              {node.data.label}
+            </div>
+            <div className="mt-0.5 truncate text-[9px] text-[#98a2b3]">
+              {node.data.typeLabel || node.data.taskType || '任务节点'}
+            </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-0.5">
             <ActionButton label="复制节点" onClick={locked ? undefined : onDuplicate}>
-              <Copy size={15} />
+              <Copy size={14} />
             </ActionButton>
             <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
               <span>
                 <ActionButton label="更多操作">
-                  <Ellipsis size={16} />
+                  <Ellipsis size={15} />
                 </ActionButton>
               </span>
             </Dropdown>
-            <div className="mx-1 h-4 w-px bg-[#e7e9ed]" />
             <ActionButton label="关闭" onClick={onClose}>
-              <X size={16} />
+              <X size={15} />
             </ActionButton>
           </div>
         </div>
 
-        <div className="px-4 pb-2 text-[11px] leading-5 text-[rgba(22,24,35,.36)]">
-          配置节点失败后的重试和异常处理方式。
-        </div>
-
-        <nav className="flex h-10 items-end gap-5 px-4" aria-label="节点配置页签">
+        <nav className="flex h-9 items-end gap-5 px-4" aria-label="节点配置页签">
           <button
             type="button"
             className={[
-              'relative h-10 border-0 bg-transparent px-0 text-[12px] font-semibold transition-colors',
-              activeTab === 'settings' ? 'text-[#344054]' : 'text-[#667085] hover:text-[#344054]',
+              'relative h-9 border-0 bg-transparent px-0 text-[11px] font-medium transition-colors',
+              activeTab === 'settings' ? 'text-[#161823]' : 'text-[#98a2b3] hover:text-[#475467]',
             ].join(' ')}
             onClick={() => setActiveTab('settings')}
           >
-            设置
+            属性
             {activeTab === 'settings' ? <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#fe2c55]" /> : null}
           </button>
           <button
             type="button"
             className={[
-              'relative h-10 border-0 bg-transparent px-0 text-[12px] font-semibold transition-colors',
-              activeTab === 'lastRun' ? 'text-[#344054]' : 'text-[#667085] hover:text-[#344054]',
+              'relative h-9 border-0 bg-transparent px-0 text-[11px] font-medium transition-colors',
+              activeTab === 'lastRun' ? 'text-[#161823]' : 'text-[#98a2b3] hover:text-[#475467]',
             ].join(' ')}
             onClick={() => setActiveTab('lastRun')}
           >
