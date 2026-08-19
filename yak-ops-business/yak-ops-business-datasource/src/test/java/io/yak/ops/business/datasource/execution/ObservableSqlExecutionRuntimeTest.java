@@ -1,0 +1,134 @@
+package io.yak.ops.business.datasource.execution;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.yak.ops.core.execution.sql.SqlExecutionCaller;
+import io.yak.ops.core.execution.sql.SqlExecutionContext;
+import io.yak.ops.core.execution.sql.SqlExecutionObserver;
+import io.yak.ops.core.execution.sql.SqlExecutionPlan;
+import io.yak.ops.core.execution.sql.SqlExecutionPolicyViolationException;
+import io.yak.ops.core.execution.sql.SqlExecutionRequest;
+import io.yak.ops.core.execution.sql.SqlExecutionResult;
+import io.yak.ops.core.execution.sql.SqlExecutionSnapshot;
+import io.yak.ops.core.execution.sql.SqlExecutionStatus;
+import io.yak.ops.core.execution.sql.SqlStatementRequest;
+import io.yak.ops.core.execution.sql.SqlStatementStatus;
+import io.yak.ops.core.execution.sql.SqlStatementType;
+import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
+import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+
+class ObservableSqlExecutionRuntimeTest {
+
+  @Test
+  void observesSynchronousDatasetExecution() {
+    AtomicReference<SqlExecutionSnapshot> observed = new AtomicReference<>();
+    RuntimePair pair = runtime(observed::set);
+    try {
+      SqlExecutionResult result = pair.observable().execute(new SqlExecutionRequest(
+          "42",
+          "select * from demo where id = 7",
+          10,
+          5,
+          SqlExecutionContext.of(SqlExecutionCaller.DATASET, "dataset-1")));
+
+      assertTrue(result.resultSet());
+      SqlExecutionSnapshot snapshot = observed.get();
+      assertEquals(SqlExecutionStatus.SUCCEEDED, snapshot.status());
+      assertTrue(snapshot.executionId().startsWith("sql-sync-"));
+      assertEquals(SqlStatementType.SELECT, snapshot.statements().get(0).statementType());
+      assertEquals(SqlStatementStatus.SUCCEEDED, snapshot.statements().get(0).status());
+    } finally {
+      pair.close();
+    }
+  }
+
+  @Test
+  void observesTrackedExecutionOnceAtTerminalState() throws Exception {
+    AtomicInteger calls = new AtomicInteger();
+    AtomicReference<SqlExecutionSnapshot> observed = new AtomicReference<>();
+    CountDownLatch latch = new CountDownLatch(1);
+    RuntimePair pair = runtime(snapshot -> {
+      calls.incrementAndGet();
+      observed.set(snapshot);
+      latch.countDown();
+    });
+    try {
+      SqlExecutionSnapshot started = pair.observable().start(new SqlExecutionPlan(
+          "42",
+          List.of(new SqlStatementRequest("update demo set enabled = 1", 10, 5)),
+          SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-1")));
+
+      SqlExecutionSnapshot completed = pair.observable().await(started.executionId());
+      assertEquals(SqlExecutionStatus.SUCCEEDED, completed.status());
+      assertTrue(latch.await(2, TimeUnit.SECONDS));
+      assertEquals(1, calls.get());
+      assertEquals(started.executionId(), observed.get().executionId());
+    } finally {
+      pair.close();
+    }
+  }
+
+  @Test
+  void observerFailureNeverChangesSqlOutcome() {
+    RuntimePair pair = runtime(snapshot -> {
+      throw new IllegalStateException("audit unavailable");
+    });
+    try {
+      SqlExecutionResult result = pair.observable().execute(new SqlExecutionRequest(
+          "42",
+          "select 1",
+          10,
+          5,
+          SqlExecutionContext.of(SqlExecutionCaller.CONSOLE, "console-1")));
+
+      assertTrue(result.resultSet());
+    } finally {
+      pair.close();
+    }
+  }
+
+  @Test
+  void policyRejectedSqlIsNotRecordedAsPhysicalExecution() {
+    AtomicInteger calls = new AtomicInteger();
+    RuntimePair pair = runtime(snapshot -> calls.incrementAndGet());
+    try {
+      assertThrows(
+          SqlExecutionPolicyViolationException.class,
+          () -> pair.observable().execute(new SqlExecutionRequest(
+              "42",
+              "update demo set enabled = 1",
+              10,
+              5,
+              SqlExecutionContext.of(SqlExecutionCaller.DATASET, "dataset-1"))));
+      assertEquals(0, calls.get());
+    } finally {
+      pair.close();
+    }
+  }
+
+  private static RuntimePair runtime(SqlExecutionObserver observer) {
+    DataSourceExecutionProvider provider = dataSourceId -> request ->
+        request.sql().trim().toLowerCase().startsWith("select")
+            ? DataSourceSqlResult.query(List.of(), List.of(), false)
+            : DataSourceSqlResult.updateCount(1L);
+    DefaultSqlExecutionRuntime delegate = new DefaultSqlExecutionRuntime(provider);
+    return new RuntimePair(delegate, new ObservableSqlExecutionRuntime(delegate, List.of(observer)));
+  }
+
+  private record RuntimePair(
+      DefaultSqlExecutionRuntime delegate,
+      ObservableSqlExecutionRuntime observable) {
+    void close() {
+      observable.shutdown();
+      delegate.shutdown();
+    }
+  }
+}
