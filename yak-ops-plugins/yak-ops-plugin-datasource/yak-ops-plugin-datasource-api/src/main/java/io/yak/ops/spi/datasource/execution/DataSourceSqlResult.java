@@ -28,27 +28,6 @@ public record DataSourceSqlResult(
     return new DataSourceSqlResult(false, List.of(), List.of(), affectedRows, false);
   }
 
-  /**
-   * Backward-compatible alias retained for datasource plugins compiled against the original SPI.
-   * New callers should use {@link #resultSet(List, List, boolean)}.
-   */
-  @Deprecated
-  public static DataSourceSqlResult query(
-      List<DataSourceSqlColumn> columns,
-      List<List<Object>> rows,
-      boolean truncated) {
-    return resultSet(columns, rows, truncated);
-  }
-
-  /**
-   * Backward-compatible alias retained for datasource plugins compiled against the original SPI.
-   * New callers should use {@link #updateCount(long)}.
-   */
-  @Deprecated
-  public static DataSourceSqlResult update(long affectedRows) {
-    return updateCount(affectedRows);
-  }
-
   private static List<List<Object>> immutableRows(List<List<Object>> values) {
     if (values == null || values.isEmpty()) return List.of();
     List<List<Object>> copied = new ArrayList<>(values.size());

@@ -66,14 +66,6 @@ public final class DefaultSqlExecutionRuntime implements SqlExecutionRuntime {
     this(executionProvider, new LexicalSqlStatementClassifier(), executionPolicy);
   }
 
-  /** Backward-compatible constructor used by existing tests and embedders. */
-  public DefaultSqlExecutionRuntime(DataSourceExecutionProvider executionProvider) {
-    this(
-        executionProvider,
-        new LexicalSqlStatementClassifier(),
-        new DefaultSqlExecutionPolicy());
-  }
-
   DefaultSqlExecutionRuntime(
       DataSourceExecutionProvider executionProvider,
       SqlStatementClassifier statementClassifier,

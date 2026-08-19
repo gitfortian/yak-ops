@@ -16,6 +16,7 @@ import io.yak.ops.core.execution.sql.SqlExecutionStatus;
 import io.yak.ops.core.execution.sql.SqlExecutionTiming;
 import io.yak.ops.core.execution.sql.SqlStatementSnapshot;
 import io.yak.ops.core.execution.sql.SqlStatementStatus;
+import io.yak.ops.core.execution.sql.SqlStatementType;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionResult;
 import io.yak.ops.plugin.task.api.TaskExecutor;
@@ -56,6 +57,7 @@ class SqlTaskPluginTest {
                 "sql-test:stmt:1",
                 0,
                 plan.statements().get(0).sql(),
+                SqlStatementType.SELECT,
                 SqlStatementStatus.SUCCEEDED,
                 new SqlExecutionResult(
                     SqlExecutionResultType.RESULT_SET,
@@ -73,6 +75,7 @@ class SqlTaskPluginTest {
                 SqlExecutionStatus.SUCCEEDED,
                 plan.dataSourceId(),
                 plan.context(),
+                plan.transactionMode(),
                 List.of(statement),
                 Instant.now(),
                 Instant.now(),
@@ -89,8 +92,21 @@ class SqlTaskPluginTest {
           }
 
           @Override
+          public Optional<SqlExecutionSnapshot> find(String executionId) {
+            SqlExecutionSnapshot snapshot = completed.get();
+            return snapshot != null && snapshot.executionId().equals(executionId)
+                ? Optional.of(snapshot)
+                : Optional.empty();
+          }
+
+          @Override
           public SqlExecutionSnapshot await(String executionId) {
             return completed.get();
+          }
+
+          @Override
+          public boolean cancel(String executionId) {
+            return false;
           }
         };
 

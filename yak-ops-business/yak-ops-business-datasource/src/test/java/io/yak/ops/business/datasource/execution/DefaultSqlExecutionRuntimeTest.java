@@ -109,7 +109,7 @@ class DefaultSqlExecutionRuntimeTest {
       opened.incrementAndGet();
       return request -> DataSourceSqlResult.updateCount(1L);
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
 
     SqlExecutionPolicyViolationException exception = assertThrows(
         SqlExecutionPolicyViolationException.class,
@@ -131,9 +131,9 @@ class DefaultSqlExecutionRuntimeTest {
     AtomicInteger opened = new AtomicInteger();
     DataSourceExecutionProvider provider = dataSourceId -> {
       opened.incrementAndGet();
-      return request -> DataSourceSqlResult.query(List.of(), List.of(), false);
+      return request -> DataSourceSqlResult.resultSet(List.of(), List.of(), false);
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
     SqlExecutionPlan plan = new SqlExecutionPlan(
         "42",
         List.of(new SqlStatementRequest("""
@@ -161,7 +161,7 @@ class DefaultSqlExecutionRuntimeTest {
       opened.incrementAndGet();
       return request -> DataSourceSqlResult.updateCount(0L);
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
 
     SqlExecutionPolicyViolationException exception = assertThrows(
         SqlExecutionPolicyViolationException.class,
@@ -181,13 +181,13 @@ class DefaultSqlExecutionRuntimeTest {
     DataSourceExecutionProvider provider = dataSourceId -> {
       int index = opened.getAndIncrement();
       return request -> index == 0
-          ? DataSourceSqlResult.query(
+          ? DataSourceSqlResult.resultSet(
               List.of(new DataSourceSqlColumn("VALUE", "value", "INTEGER", Types.INTEGER, true)),
               List.of(List.of(1)),
               false)
           : DataSourceSqlResult.updateCount(2L);
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
     SqlExecutionPlan plan = new SqlExecutionPlan(
         "42",
         List.of(
@@ -221,7 +221,7 @@ class DefaultSqlExecutionRuntimeTest {
       opened.incrementAndGet();
       return executor;
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
     SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionPlan(
         "42",
         List.of(
@@ -244,7 +244,7 @@ class DefaultSqlExecutionRuntimeTest {
   @Test
   void rollsBackSingleTransactionAndSkipsRemainingStatementOnFailure() {
     TransactionExecutor executor = new TransactionExecutor(2);
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(dataSourceId -> executor);
+    DefaultSqlExecutionRuntime runtime = runtime(dataSourceId -> executor);
     SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionPlan(
         "42",
         List.of(
@@ -272,7 +272,7 @@ class DefaultSqlExecutionRuntimeTest {
       executions.incrementAndGet();
       return DataSourceSqlResult.updateCount(1L);
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(dataSourceId -> executor);
+    DefaultSqlExecutionRuntime runtime = runtime(dataSourceId -> executor);
     SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionPlan(
         "42",
         List.of(new SqlStatementRequest("update demo set enabled = 1", 10, 30)),
@@ -292,7 +292,7 @@ class DefaultSqlExecutionRuntimeTest {
     AtomicInteger opened = new AtomicInteger();
     DataSourceExecutionProvider provider = dataSourceId ->
         opened.getAndIncrement() == 0 ? blocking : request -> DataSourceSqlResult.updateCount(1L);
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
     SqlExecutionSnapshot started = runtime.start(new SqlExecutionPlan(
         "42",
         List.of(
@@ -318,7 +318,7 @@ class DefaultSqlExecutionRuntimeTest {
     DataSourceExecutionProvider provider = dataSourceId -> request -> {
       throw new IllegalStateException(new SQLTimeoutException("query timeout"));
     };
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime runtime = runtime(provider);
     SqlExecutionSnapshot completed = runtime.await(runtime.start(new SqlExecutionRequest(
         "42",
         "select slow_query",
@@ -338,7 +338,11 @@ class DefaultSqlExecutionRuntimeTest {
       executor.request = new CapturedRequest(dataSourceId, List.of());
       return executor;
     };
-    return new DefaultSqlExecutionRuntime(provider);
+    return runtime(provider);
+  }
+
+  private static DefaultSqlExecutionRuntime runtime(DataSourceExecutionProvider provider) {
+    return new DefaultSqlExecutionRuntime(provider, new DefaultSqlExecutionPolicy());
   }
 
   private record CapturedRequest(String dataSourceId, List<Object> parameters) {}
@@ -433,7 +437,7 @@ class DefaultSqlExecutionRuntimeTest {
         Thread.currentThread().interrupt();
       }
       if (cancelled.get()) throw new IllegalStateException("SQL execution cancelled");
-      return DataSourceSqlResult.query(List.of(), List.of(), false);
+      return DataSourceSqlResult.resultSet(List.of(), List.of(), false);
     }
 
     @Override

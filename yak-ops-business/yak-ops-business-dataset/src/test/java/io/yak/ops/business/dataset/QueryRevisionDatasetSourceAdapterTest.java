@@ -52,7 +52,7 @@ class QueryRevisionDatasetSourceAdapterTest {
         "checksum-v3");
     when(catalog.resolveRevision(11L, 71L)).thenReturn(new TaskAssetRevision(asset, revision));
     when(provider.open("9")).thenReturn(executor);
-    when(executor.execute(any())).thenReturn(DataSourceSqlResult.query(
+    when(executor.execute(any())).thenReturn(DataSourceSqlResult.resultSet(
         List.of(
             new DataSourceSqlColumn("region", "region", "VARCHAR", Types.VARCHAR, true),
             new DataSourceSqlColumn("amount", "amount", "DECIMAL", Types.DECIMAL, true)),

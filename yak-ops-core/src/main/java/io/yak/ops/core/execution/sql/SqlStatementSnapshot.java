@@ -28,28 +28,6 @@ public record SqlStatementSnapshot(
     status = Objects.requireNonNull(status, "status");
   }
 
-  /** Backward-compatible constructor for callers created before statement semantics were exposed. */
-  public SqlStatementSnapshot(
-      String statementId,
-      int index,
-      String sql,
-      SqlStatementStatus status,
-      SqlExecutionResult result,
-      String errorMessage,
-      Instant startedAt,
-      Instant finishedAt) {
-    this(
-        statementId,
-        index,
-        sql,
-        SqlStatementType.OTHER,
-        status,
-        result,
-        errorMessage,
-        startedAt,
-        finishedAt);
-  }
-
   public boolean terminal() {
     return status.terminal();
   }

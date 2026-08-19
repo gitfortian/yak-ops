@@ -26,7 +26,9 @@ class DefaultSqlExecutionTransactionCancellationTest {
   @Test
   void rollsBackSingleTransactionWhenActiveStatementIsCancelled() throws Exception {
     BlockingTransactionExecutor executor = new BlockingTransactionExecutor();
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(dataSourceId -> executor);
+    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(
+        dataSourceId -> executor,
+        new DefaultSqlExecutionPolicy());
     SqlExecutionSnapshot started = runtime.start(new SqlExecutionPlan(
         "42",
         List.of(

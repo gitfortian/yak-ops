@@ -33,7 +33,7 @@ public record SqlExecutionPlan(
         : transactionMode;
   }
 
-  /** Backward-compatible constructor; existing callers remain auto-commit by default. */
+  /** Convenience overload for the common auto-commit execution mode. */
   public SqlExecutionPlan(
       String dataSourceId,
       List<SqlStatementRequest> statements,
