@@ -19,7 +19,7 @@ export default function LoginPage() {
             <div className="w-full max-w-[520px]">
               <div className="mb-8 text-center">
                 <h1 className="m-0 text-[42px] font-normal leading-[1.02] tracking-[-0.045em] text-[#171717] sm:text-[54px] lg:text-[58px]">
-                  Data ops, simplified.
+                  Data ops,  &nbsp; simplified.
                 </h1>
 
                 <p className="mt-4 text-[15px] leading-6 text-[#555] sm:text-base">
