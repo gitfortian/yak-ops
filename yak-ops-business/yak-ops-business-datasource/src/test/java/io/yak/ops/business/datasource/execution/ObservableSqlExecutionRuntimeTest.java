@@ -24,8 +24,27 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class ObservableSqlExecutionRuntimeTest {
+
+  @Test
+  void springUsesExplicitInjectionConstructorWhenTestConstructorAlsoExists() {
+    DataSourceExecutionProvider provider = dataSourceId -> request ->
+        DataSourceSqlResult.resultSet(List.of(), List.of(), false);
+    DefaultSqlExecutionRuntime delegate =
+        new DefaultSqlExecutionRuntime(provider, new DefaultSqlExecutionPolicy());
+
+    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+      context.getBeanFactory().registerSingleton("defaultSqlExecutionRuntime", delegate);
+      context.registerBean(ObservableSqlExecutionRuntime.class);
+      context.refresh();
+
+      assertTrue(context.getBean(ObservableSqlExecutionRuntime.class) instanceof SqlExecutionRuntime);
+    } finally {
+      delegate.shutdown();
+    }
+  }
 
   @Test
   void observesSynchronousDatasetExecution() {
