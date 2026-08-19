@@ -35,6 +35,7 @@ public class DataServiceService {
 
   private static final int DEFAULT_MAX_ROWS = 1_000;
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+  private static final int DEFAULT_PAGE_SIZE = 20;
   private static final int DEFAULT_CACHE_TTL_SECONDS = 60;
   private static final int DEFAULT_CACHE_MAX_ENTRIES = 200;
   private static final int DEFAULT_CIRCUIT_FAILURE_THRESHOLD = 5;
@@ -235,6 +236,7 @@ public class DataServiceService {
     api.setPath(input.path());
     api.setMaxRows(input.maxRows());
     api.setTimeoutSeconds(input.timeoutSeconds());
+    api.setPaginationEnabled(Boolean.TRUE.equals(input.paginationEnabled()));
     api.setEnabled(input.enabled());
     api.setDescription(input.description());
   }
@@ -256,9 +258,18 @@ public class DataServiceService {
     boolean enabled = input.enabled() == null
         ? existing != null && Boolean.TRUE.equals(existing.getEnabled())
         : input.enabled();
+    boolean paginationEnabled = input.paginationEnabled() == null
+        ? existing != null && Boolean.TRUE.equals(existing.getPaginationEnabled())
+        : input.paginationEnabled();
     String description = StringUtils.hasText(input.description()) ? input.description().trim() : null;
     return new ServiceSettingsInput(
-        input.name().trim(), path, maxRows, timeoutSeconds, enabled, description);
+        input.name().trim(),
+        path,
+        maxRows,
+        timeoutSeconds,
+        enabled,
+        description,
+        paginationEnabled);
   }
 
   private RuntimeDefinition normalizeRuntimeDefinition(RuntimeDefinition runtimeDefinition) {
@@ -281,13 +292,24 @@ public class DataServiceService {
       boolean resilientRuntime) {
     long started = System.nanoTime();
     try {
-      DataServiceSqlCompiler.CompiledSql compiled = sqlCompiler.compile(api.getSqlText(), parameters);
+      PaginationRequest pagination = paginationRequest(api, parameters);
+      Map<String, String> sqlParameters = sqlParameters(parameters, pagination != null);
+      DataServiceSqlCompiler.CompiledSql compiled = sqlCompiler.compile(api.getSqlText(), sqlParameters);
       QueryResponse response;
       if (resilientRuntime) {
-        String cacheKey = runtimeService.cacheKey(compiled.sql(), compiled.parameters());
-        response = runtimeService.execute(api, cacheKey, () -> executeDatabase(api, compiled));
+        List<Object> cacheBindings = new ArrayList<>(compiled.parameters());
+        if (pagination != null) {
+          cacheBindings.add("__yak_page_num=" + pagination.pageNum());
+          cacheBindings.add("__yak_page_size=" + pagination.pageSize());
+          cacheBindings.add("__yak_return_total=" + pagination.returnTotalNum());
+        }
+        String cacheKey = runtimeService.cacheKey(compiled.sql(), cacheBindings);
+        response = runtimeService.execute(
+            api,
+            cacheKey,
+            () -> executeDatabase(api, compiled, pagination));
       } else {
-        response = executeDatabase(api, compiled);
+        response = executeDatabase(api, compiled, pagination);
       }
       if (writeLog) {
         saveLog(api, parameters, true, response.durationMs(), response.rowCount(), null, access);
@@ -302,32 +324,105 @@ public class DataServiceService {
 
   private QueryResponse executeDatabase(
       DataServiceApiPO api,
-      DataServiceSqlCompiler.CompiledSql compiled) {
+      DataServiceSqlCompiler.CompiledSql compiled,
+      PaginationRequest pagination) {
+    int fetchRows = api.getMaxRows();
+    if (pagination != null && !pagination.returnTotalNum()) {
+      long requiredRows = pagination.offset() + pagination.pageSize();
+      fetchRows = (int) Math.min(api.getMaxRows(), Math.max(1L, requiredRows));
+    }
+
     SqlExecutionResult result = sqlExecutionRuntime.execute(new SqlExecutionRequest(
         String.valueOf(api.getDataSourceId()),
         compiled.sql(),
         compiled.parameters(),
-        api.getMaxRows(),
+        fetchRows,
         api.getTimeoutSeconds(),
         SqlExecutionContext.of(SqlExecutionCaller.DATA_SERVICE, String.valueOf(api.getId()))));
     if (!result.resultSet()) {
       throw new IllegalStateException("数据服务仅允许返回 SELECT 查询结果");
     }
-    return toResponse(result);
+    return toResponse(result, pagination);
   }
 
-  private QueryResponse toResponse(SqlExecutionResult result) {
+  private QueryResponse toResponse(SqlExecutionResult result, PaginationRequest pagination) {
     List<String> columns = result.columns().stream().map(SqlExecutionColumn::label).toList();
-    List<Map<String, Object>> rows = new ArrayList<>(result.rows().size());
+    List<Map<String, Object>> allRows = new ArrayList<>(result.rows().size());
     for (List<Object> values : result.rows()) {
       Map<String, Object> row = new LinkedHashMap<>();
       for (int index = 0; index < columns.size(); index++) {
         row.put(columns.get(index), index < values.size() ? values.get(index) : null);
       }
-      rows.add(row);
+      allRows.add(row);
     }
+
+    if (pagination == null) {
+      return new QueryResponse(
+          columns,
+          allRows,
+          result.truncated(),
+          allRows.size(),
+          result.timing().totalMillis());
+    }
+
+    int from = (int) Math.min(pagination.offset(), allRows.size());
+    int to = Math.min(allRows.size(), from + pagination.pageSize());
+    List<Map<String, Object>> pageRows = List.copyOf(allRows.subList(from, to));
+    Integer totalNum = pagination.returnTotalNum() ? allRows.size() : null;
     return new QueryResponse(
-        columns, rows, result.truncated(), rows.size(), result.timing().totalMillis());
+        columns,
+        pageRows,
+        result.truncated(),
+        pageRows.size(),
+        result.timing().totalMillis(),
+        totalNum,
+        pagination.pageNum(),
+        pagination.pageSize());
+  }
+
+  private PaginationRequest paginationRequest(
+      DataServiceApiPO api,
+      Map<String, String> parameters) {
+    if (!Boolean.TRUE.equals(api.getPaginationEnabled())) return null;
+    Map<String, String> values = parameters == null ? Map.of() : parameters;
+    int pageNum = positiveInt(values.get("pageNum"), 1, "pageNum");
+    int pageSize = positiveInt(values.get("pageSize"), DEFAULT_PAGE_SIZE, "pageSize");
+    if (pageSize > api.getMaxRows()) {
+      throw new IllegalArgumentException("pageSize 不能超过服务最大返回行数 " + api.getMaxRows());
+    }
+    boolean returnTotalNum = booleanValue(values.get("returnTotalNum"), true, "returnTotalNum");
+    long offset = (long) (pageNum - 1) * pageSize;
+    return new PaginationRequest(pageNum, pageSize, returnTotalNum, offset);
+  }
+
+  private Map<String, String> sqlParameters(
+      Map<String, String> parameters,
+      boolean paginationEnabled) {
+    if (parameters == null || parameters.isEmpty()) return Map.of();
+    if (!paginationEnabled) return parameters;
+    Map<String, String> result = new LinkedHashMap<>(parameters);
+    result.remove("pageNum");
+    result.remove("pageSize");
+    result.remove("returnTotalNum");
+    return result;
+  }
+
+  private int positiveInt(String raw, int fallback, String name) {
+    if (!StringUtils.hasText(raw)) return fallback;
+    try {
+      int value = Integer.parseInt(raw.trim());
+      if (value <= 0) throw new NumberFormatException("not positive");
+      return value;
+    } catch (NumberFormatException exception) {
+      throw new IllegalArgumentException(name + " 必须是大于 0 的整数");
+    }
+  }
+
+  private boolean booleanValue(String raw, boolean fallback, String name) {
+    if (!StringUtils.hasText(raw)) return fallback;
+    if ("true".equalsIgnoreCase(raw) || "1".equals(raw)) return true;
+    if ("false".equalsIgnoreCase(raw) || "0".equals(raw)) return false;
+    throw new IllegalArgumentException(name + " 必须是 true/false 或 1/0");
   }
 
   private void saveLog(
@@ -359,12 +454,25 @@ public class DataServiceService {
   private ApiView toView(DataServiceApiPO api) {
     if (api == null) return null;
     return new ApiView(
-        api.getId(), api.getName(), api.getPath(), RUNTIME_PREFIX + api.getPath(),
-        api.getDataSourceId(), api.getSqlText(), sqlCompiler.parameterNames(api.getSqlText()),
-        api.getMaxRows(), api.getTimeoutSeconds(), Boolean.TRUE.equals(api.getEnabled()),
+        api.getId(),
+        api.getName(),
+        api.getPath(),
+        RUNTIME_PREFIX + api.getPath(),
+        api.getDataSourceId(),
+        api.getSqlText(),
+        sqlCompiler.parameterNames(api.getSqlText()),
+        api.getMaxRows(),
+        api.getTimeoutSeconds(),
+        Boolean.TRUE.equals(api.getEnabled()),
         StringUtils.hasText(api.getAuthMode()) ? api.getAuthMode() : "NONE",
-        api.getDescription(), api.getSourceType(), api.getSourceRef(), api.getSourceRevisionId(),
-        api.getSourceRevisionNo(), api.getCreateTime(), api.getUpdateTime());
+        api.getDescription(),
+        api.getSourceType(),
+        api.getSourceRef(),
+        api.getSourceRevisionId(),
+        api.getSourceRevisionNo(),
+        api.getCreateTime(),
+        api.getUpdateTime(),
+        Boolean.TRUE.equals(api.getPaginationEnabled()));
   }
 
   private DataServiceApiPO requireApi(Long id) {
@@ -374,6 +482,7 @@ public class DataServiceService {
   }
 
   private void initializeRuntimeDefaults(DataServiceApiPO api, boolean creating) {
+    if (api.getPaginationEnabled() == null) api.setPaginationEnabled(Boolean.FALSE);
     if (api.getCacheEnabled() == null) api.setCacheEnabled(Boolean.FALSE);
     if (api.getCacheTtlSeconds() == null) api.setCacheTtlSeconds(DEFAULT_CACHE_TTL_SECONDS);
     if (api.getCacheMaxEntries() == null) api.setCacheMaxEntries(DEFAULT_CACHE_MAX_ENTRIES);
@@ -483,7 +592,18 @@ public class DataServiceService {
       Integer maxRows,
       Integer timeoutSeconds,
       Boolean enabled,
-      String description) {}
+      String description,
+      Boolean paginationEnabled) {
+    public ServiceSettingsInput(
+        String name,
+        String path,
+        Integer maxRows,
+        Integer timeoutSeconds,
+        Boolean enabled,
+        String description) {
+      this(name, path, maxRows, timeoutSeconds, enabled, description, null);
+    }
+  }
 
   public record RuntimeDefinition(Long dataSourceId, String sql) {}
 
@@ -519,14 +639,33 @@ public class DataServiceService {
       Long sourceRevisionId,
       Integer sourceRevisionNo,
       LocalDateTime createTime,
-      LocalDateTime updateTime) {}
+      LocalDateTime updateTime,
+      Boolean paginationEnabled) {}
 
   public record QueryResponse(
       List<String> columns,
       List<Map<String, Object>> rows,
       boolean truncated,
       int rowCount,
-      long durationMs) {}
+      long durationMs,
+      Integer totalNum,
+      Integer pageNum,
+      Integer pageSize) {
+    public QueryResponse(
+        List<String> columns,
+        List<Map<String, Object>> rows,
+        boolean truncated,
+        int rowCount,
+        long durationMs) {
+      this(columns, rows, truncated, rowCount, durationMs, null, null, null);
+    }
+  }
+
+  private record PaginationRequest(
+      int pageNum,
+      int pageSize,
+      boolean returnTotalNum,
+      long offset) {}
 
   private record SourceKey(String sourceType, String sourceRef) {}
 }
