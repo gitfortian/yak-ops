@@ -61,6 +61,8 @@ export default function LoginPanel() {
       const userInfo = await fetchUserInfo();
       if (!userInfo) throw new Error("登录后无法加载当前用户");
       redirectAfterLogin();
+    } catch (_error) {
+      // Request handling already surfaces authentication errors to the user.
     } finally {
       setLoading(false);
     }
