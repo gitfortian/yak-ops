@@ -18,11 +18,48 @@ public record DevelopmentDataServiceDefinition(
     int timeoutSeconds,
     String description,
     @JsonSerialize(using = ToStringSerializer.class) long dataSourceId,
-    String sql) {
+    String sql,
+    boolean paginationEnabled,
+    Boolean autoParseParameters) {
 
   public DevelopmentDataServiceDefinition {
     parameters = parameters == null ? List.of() : List.copyOf(parameters);
     responseFields = responseFields == null ? List.of() : List.copyOf(responseFields);
+  }
+
+  /**
+   * Backward-compatible constructor for standalone revisions created before query options were added.
+   */
+  public DevelopmentDataServiceDefinition(
+      long sourceTaskAssetId,
+      long sourceTaskRevisionId,
+      int sourceTaskRevisionNo,
+      String serviceName,
+      String path,
+      String method,
+      List<ParameterContract> parameters,
+      List<ResponseFieldContract> responseFields,
+      int maxRows,
+      int timeoutSeconds,
+      String description,
+      long dataSourceId,
+      String sql) {
+    this(
+        sourceTaskAssetId,
+        sourceTaskRevisionId,
+        sourceTaskRevisionNo,
+        serviceName,
+        path,
+        method,
+        parameters,
+        responseFields,
+        maxRows,
+        timeoutSeconds,
+        description,
+        dataSourceId,
+        sql,
+        false,
+        Boolean.TRUE);
   }
 
   /**
@@ -57,11 +94,18 @@ public record DevelopmentDataServiceDefinition(
         timeoutSeconds,
         description,
         0L,
-        null);
+        null,
+        false,
+        Boolean.TRUE);
   }
 
   public boolean standaloneSql() {
     return dataSourceId > 0L && sql != null && !sql.isBlank();
+  }
+
+  /** Historical JSON has no autoParseParameters field; keep the previous auto-discovery behavior. */
+  public boolean autoParseParametersEnabled() {
+    return autoParseParameters == null || autoParseParameters;
   }
 
   /** A published v1 Data Service Revision must be directly deployable by Runtime. */
@@ -76,7 +120,7 @@ public record DevelopmentDataServiceDefinition(
       throw new IllegalArgumentException("发布前请填写查询 SQL");
     }
     if (responseFields.isEmpty()) {
-      throw new IllegalArgumentException("发布前请先预览并确认响应字段 Contract");
+      throw new IllegalArgumentException("发布前请先运行查询并确认响应字段");
     }
     for (ParameterContract parameter : parameters) {
       if (parameter == null) {
