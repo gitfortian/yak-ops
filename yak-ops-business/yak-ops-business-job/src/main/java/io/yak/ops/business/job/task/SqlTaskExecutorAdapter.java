@@ -2,6 +2,7 @@ package io.yak.ops.business.job.task;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionResult;
@@ -21,6 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Executes SQL revisions through the shared Task Runtime and TaskPlugin contract. */
@@ -29,22 +31,40 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
 
   private final TaskPluginRegistry pluginRegistry;
   private final ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider;
+  private final ObjectProvider<SqlExecutionRuntime> sqlExecutionRuntime;
   private final ObjectMapper objectMapper;
   private final TaskExecutionContextFactory contextFactory;
   private final ExecutorService workerExecutor;
   private final ConcurrentMap<String, ExecutionHandle> executions = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, String> idempotencyIndex = new ConcurrentHashMap<>();
 
+  @Autowired
   public SqlTaskExecutorAdapter(
       TaskPluginRegistry pluginRegistry,
       ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider,
+      ObjectProvider<SqlExecutionRuntime> sqlExecutionRuntime,
       ObjectMapper objectMapper,
       TaskExecutionContextFactory contextFactory) {
     this.pluginRegistry = pluginRegistry;
     this.dataSourceExecutionProvider = dataSourceExecutionProvider;
+    this.sqlExecutionRuntime = sqlExecutionRuntime;
     this.objectMapper = objectMapper;
     this.contextFactory = contextFactory;
     this.workerExecutor = Executors.newVirtualThreadPerTaskExecutor();
+  }
+
+  /** Backward-compatible constructor for existing adapter-level tests and embedders. */
+  SqlTaskExecutorAdapter(
+      TaskPluginRegistry pluginRegistry,
+      ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider,
+      ObjectMapper objectMapper,
+      TaskExecutionContextFactory contextFactory) {
+    this(
+        pluginRegistry,
+        dataSourceExecutionProvider,
+        null,
+        objectMapper,
+        contextFactory);
   }
 
   @Override
@@ -85,10 +105,15 @@ public class SqlTaskExecutorAdapter implements TaskExecutor {
     validate(plugin, definition);
 
     DataSourceExecutionProvider provider = dataSourceExecutionProvider.getIfAvailable();
+    SqlExecutionRuntime runtime =
+        sqlExecutionRuntime == null ? null : sqlExecutionRuntime.getIfAvailable();
     TaskExecutionContext context = contextFactory.create(safeTrigger, input,
         builder -> {
           if (provider != null) {
             builder.capability(DataSourceExecutionProvider.class, provider);
+          }
+          if (runtime != null) {
+            builder.capability(SqlExecutionRuntime.class, runtime);
           }
         });
     io.yak.ops.plugin.task.api.TaskExecutor pluginExecutor =

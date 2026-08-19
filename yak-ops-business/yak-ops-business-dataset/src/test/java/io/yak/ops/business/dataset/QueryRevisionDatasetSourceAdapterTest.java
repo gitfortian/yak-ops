@@ -73,7 +73,8 @@ class QueryRevisionDatasetSourceAdapterTest {
     DatasetQueryRequest request = new DatasetQueryRequest(
         null, List.of(), List.of(), List.of(), List.of(), 2, 15);
 
-    DatasetQueryResult result = adapter.execute(dataset, version, fields, request);
+    DatasetQueryExecution execution = adapter.execute(dataset, version, fields, request);
+    DatasetQueryResult result = execution.result();
 
     verify(catalog).resolveRevision(11L, 71L);
     ArgumentCaptor<DataSourceSqlRequest> captor = ArgumentCaptor.forClass(DataSourceSqlRequest.class);
@@ -84,5 +85,11 @@ class QueryRevisionDatasetSourceAdapterTest {
     assertEquals(2, result.returnedRows());
     assertTrue(result.truncated());
     assertEquals(1, result.datasetVersionNo());
+    assertEquals("9", execution.dataSourceId());
+    assertEquals(captor.getValue().sql(), execution.sql());
+    assertTrue(execution.prepareMillis() >= 0L);
+    assertTrue(execution.waitMillis() >= 0L);
+    assertTrue(execution.executeMillis() >= 0L);
+    assertTrue(execution.transferMillis() >= 0L);
   }
 }

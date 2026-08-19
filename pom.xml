@@ -43,6 +43,7 @@
         <module>yak-ops-plugins/yak-ops-plugin-datasource</module>
         <module>yak-ops-plugins/yak-ops-plugin-storage</module>
         <module>yak-ops-plugins/yak-ops-plugin-task</module>
+        <module>yak-ops-plugins/yak-ops-plugin-alert</module>
         <module>yak-ops-boot</module>
         <module>yak-ops-ui</module>
         <module>yak-ops-dist</module>
@@ -148,6 +149,11 @@
                 <artifactId>yak-ops-business-workflow</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-business-alert</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>io.yak.ops</groupId>
@@ -214,6 +220,22 @@
             <dependency>
                 <groupId>io.yak.ops</groupId>
                 <artifactId>yak-ops-plugin-task-all</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-plugin-alert-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-plugin-alert-dingtalk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.yak.ops</groupId>
+                <artifactId>yak-ops-plugin-alert-all</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

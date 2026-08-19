@@ -4,6 +4,7 @@ import type {
   Scalar,
 } from '@/components/analysis/model';
 
+export type { AnalysisThemeTokens } from '@/components/analysis/analysis-theme';
 export type {
   Aggregation,
   AnalysisAsset,
@@ -33,7 +34,12 @@ export type {
 } from '@/components/analysis/model';
 
 export type DashboardWidgetClickAction = 'none' | 'drill' | 'dashboard' | 'yak';
-export type DashboardThemePresetId = 'yak-light' | 'yak-dark';
+export type DashboardThemePresetId =
+  | 'yak-light'
+  | 'yak-dark'
+  | 'ocean-night'
+  | 'graphite'
+  | 'mist-blue';
 
 export interface DashboardThemeCanvas {
   backgroundColor?: string;
@@ -42,6 +48,8 @@ export interface DashboardThemeCanvas {
 export interface DashboardThemeComponent {
   backgroundColor?: string;
   textColor?: string;
+  mutedTextColor?: string;
+  borderColor?: string;
 }
 
 export interface DashboardThemeChart {
@@ -49,6 +57,13 @@ export interface DashboardThemeChart {
   textColor?: string;
   axisColor?: string;
   gridColor?: string;
+  metricValueColor?: string;
+}
+
+export interface DashboardThemeTable {
+  headerBackgroundColor?: string;
+  stripedBackgroundColor?: string;
+  hoverBackgroundColor?: string;
 }
 
 /** Dashboard-level visual defaults. Preset values are resolved on the client; fields are explicit overrides. */
@@ -57,6 +72,7 @@ export interface DashboardTheme {
   canvas?: DashboardThemeCanvas;
   component?: DashboardThemeComponent;
   chart?: DashboardThemeChart;
+  table?: DashboardThemeTable;
 }
 
 /**

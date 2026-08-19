@@ -10,11 +10,12 @@ import io.yak.ops.business.dataservice.service.DataServiceAccessService.AccessCo
 import io.yak.ops.business.dataservice.service.DataServiceRuntimeService.RuntimeSnapshot;
 import io.yak.ops.business.dataservice.service.support.DataServiceSqlCompiler;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.service.support.BusinessDataSourceExecutionProvider;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlColumn;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlRequest;
-import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
+import io.yak.ops.core.execution.sql.SqlExecutionCaller;
+import io.yak.ops.core.execution.sql.SqlExecutionColumn;
+import io.yak.ops.core.execution.sql.SqlExecutionContext;
+import io.yak.ops.core.execution.sql.SqlExecutionRequest;
+import io.yak.ops.core.execution.sql.SqlExecutionResult;
+import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,7 +43,7 @@ public class DataServiceService {
 
   private final DataServiceApiMapper apiMapper;
   private final DataServiceCallLogMapper callLogMapper;
-  private final BusinessDataSourceExecutionProvider executionProvider;
+  private final SqlExecutionRuntime sqlExecutionRuntime;
   private final DataServiceSqlCompiler sqlCompiler;
   private final ObjectMapper objectMapper;
   private final DataServiceAccessService accessService;
@@ -302,21 +303,21 @@ public class DataServiceService {
   private QueryResponse executeDatabase(
       DataServiceApiPO api,
       DataServiceSqlCompiler.CompiledSql compiled) {
-    long started = System.nanoTime();
-    DataSourceSqlResult result;
-    try (DataSourceSqlExecutor executor = executionProvider.open(String.valueOf(api.getDataSourceId()))) {
-      result = executor.execute(
-          new DataSourceSqlRequest(
-              compiled.sql(), api.getMaxRows(), api.getTimeoutSeconds(), compiled.parameters()));
-    }
+    SqlExecutionResult result = sqlExecutionRuntime.execute(new SqlExecutionRequest(
+        String.valueOf(api.getDataSourceId()),
+        compiled.sql(),
+        compiled.parameters(),
+        api.getMaxRows(),
+        api.getTimeoutSeconds(),
+        SqlExecutionContext.of(SqlExecutionCaller.DATA_SERVICE, String.valueOf(api.getId()))));
     if (!result.resultSet()) {
       throw new IllegalStateException("数据服务仅允许返回 SELECT 查询结果");
     }
-    return toResponse(result, elapsedMs(started));
+    return toResponse(result);
   }
 
-  private QueryResponse toResponse(DataSourceSqlResult result, long durationMs) {
-    List<String> columns = result.columns().stream().map(DataSourceSqlColumn::label).toList();
+  private QueryResponse toResponse(SqlExecutionResult result) {
+    List<String> columns = result.columns().stream().map(SqlExecutionColumn::label).toList();
     List<Map<String, Object>> rows = new ArrayList<>(result.rows().size());
     for (List<Object> values : result.rows()) {
       Map<String, Object> row = new LinkedHashMap<>();
@@ -325,7 +326,8 @@ public class DataServiceService {
       }
       rows.add(row);
     }
-    return new QueryResponse(columns, rows, result.truncated(), rows.size(), durationMs);
+    return new QueryResponse(
+        columns, rows, result.truncated(), rows.size(), result.timing().totalMillis());
   }
 
   private void saveLog(

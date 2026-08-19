@@ -48,18 +48,36 @@ export function DashboardGlobalFilterBar({
   if (!filters.length && !editable) return null;
 
   return (
-    <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-[#eceef1] bg-[#fbfcfd] px-4 py-1.5">
-      <div className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-[#475467]">
+    <div
+      className="flex min-h-11 shrink-0 items-center gap-2 border-b px-4 py-1.5"
+      style={{
+        backgroundColor: 'var(--dashboard-component-subtle-bg, #fbfcfd)',
+        borderColor: 'var(--dashboard-component-border, #eceef1)',
+      }}
+    >
+      <div
+        className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium"
+        style={{ color: 'var(--dashboard-component-text, #475467)' }}
+      >
         <SlidersHorizontal size={13} />
         筛选条件
         {filters.length ? (
-          <span className="rounded-full bg-[#eef0f2] px-1.5 py-px text-[9px] font-normal text-[#7a818c]">
+          <span
+            className="rounded-full px-1.5 py-px text-[9px] font-normal"
+            style={{
+              backgroundColor: 'var(--dashboard-component-bg, #eef0f2)',
+              color: 'var(--dashboard-component-muted, #7a818c)',
+            }}
+          >
             {filters.length}
           </span>
         ) : null}
       </div>
 
-      <div className="mx-1 h-5 w-px shrink-0 bg-[#eceef1]" />
+      <div
+        className="mx-1 h-5 w-px shrink-0"
+        style={{ backgroundColor: 'var(--dashboard-component-border, #eceef1)' }}
+      />
 
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-0.5">
         {filters.length ? filters.map((filter) => {
@@ -85,12 +103,22 @@ export function DashboardGlobalFilterBar({
           return (
             <div
               key={filter.id}
-              className="flex h-8 shrink-0 items-center rounded-[7px] border border-[#e7e9ed] bg-white pl-2.5 shadow-[0_1px_2px_rgba(16,24,40,.025)]"
+              className="flex h-8 shrink-0 items-center rounded-[7px] border pl-2.5 shadow-[0_1px_2px_rgba(16,24,40,.025)]"
+              style={{
+                backgroundColor: 'var(--dashboard-component-bg, #fff)',
+                borderColor: 'var(--dashboard-component-border, #e7e9ed)',
+              }}
             >
-              <span className="mr-1.5 max-w-[120px] truncate text-[10px] font-medium text-[#475467]">
+              <span
+                className="mr-1.5 max-w-[120px] truncate text-[10px] font-medium"
+                style={{ color: 'var(--dashboard-component-text, #475467)' }}
+              >
                 {filter.name}
               </span>
-              <span className="mr-0.5 text-[9px] text-[#a0a6af]">
+              <span
+                className="mr-0.5 text-[9px]"
+                style={{ color: 'var(--dashboard-component-muted, #a0a6af)' }}
+              >
                 {OPERATOR_LABELS[filter.operator]}
               </span>
               {dateFilter ? (
@@ -124,7 +152,12 @@ export function DashboardGlobalFilterBar({
             </div>
           );
         }) : (
-          <span className="text-[10px] text-[#a0a6af]">还没有筛选条件，可在这里添加全局筛选</span>
+          <span
+            className="text-[10px]"
+            style={{ color: 'var(--dashboard-component-muted, #a0a6af)' }}
+          >
+            还没有筛选条件，可在这里添加全局筛选
+          </span>
         )}
       </div>
 
@@ -132,7 +165,8 @@ export function DashboardGlobalFilterBar({
         <Tooltip title="恢复默认筛选">
           <Button
             type="text"
-            className="!h-7 !w-7 !min-w-0 !rounded-[6px] !p-0 !text-[#667085]"
+            className="!h-7 !w-7 !min-w-0 !rounded-[6px] !p-0"
+            style={{ color: 'var(--dashboard-component-muted, #667085)' }}
             icon={<RefreshCw size={12} />}
             onClick={onReset}
           />
@@ -142,7 +176,8 @@ export function DashboardGlobalFilterBar({
       {editable ? (
         <Button
           size="small"
-          className="!h-7 !rounded-[6px] !border-[#e4e7ec] !px-2.5 !text-[11px]"
+          className="!h-7 !rounded-[6px] !px-2.5 !text-[11px]"
+          style={{ borderColor: 'var(--dashboard-component-border, #e4e7ec)' }}
           icon={filters.length ? <Settings2 size={12} /> : <Plus size={12} />}
           onClick={onManage}
         >

@@ -7,9 +7,20 @@ interface DatasetSourceQueryAdapter {
 
   DatasetSourceType sourceType();
 
-  DatasetQueryResult execute(
+  DatasetQueryExecution execute(
       Dataset dataset,
       DatasetVersion version,
       List<DatasetField> fields,
       DatasetQueryRequest request);
+}
+
+/** Adapter result plus execution-only diagnostics used by the Dataset performance analyzer. */
+record DatasetQueryExecution(
+    DatasetQueryResult result,
+    String dataSourceId,
+    String sql,
+    long prepareMillis,
+    long waitMillis,
+    long executeMillis,
+    long transferMillis) {
 }
