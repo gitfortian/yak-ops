@@ -28,7 +28,6 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import {
   ArrowLeft,
-  CalendarClock,
   DatabaseBackup,
   History,
   ListTree,
@@ -81,12 +80,6 @@ const WORKFLOW_STATUS_LABEL: Record<string, string> = {
   OFFLINE: '已下线',
 };
 
-const formatTime = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-};
-
 interface SectionNavigatorProps {
   activeKey: SectionKey;
   onSelect: (key: SectionKey) => void;
@@ -95,53 +88,38 @@ interface SectionNavigatorProps {
 function SectionNavigator({ activeKey, onSelect }: SectionNavigatorProps) {
   return (
     <nav aria-label="调度配置区块定位" className="rounded-xl bg-white px-3 py-4">
-      <div className="mb-3 px-2 text-[12px] font-semibold text-[#344054]">
+      <div className="mb-2 px-2 text-[12px] font-semibold text-[#344054]">
         快速定位
       </div>
-      <div className="relative">
-        <span
-          aria-hidden
-          className="absolute bottom-4 left-[13px] top-4 w-px bg-[#e4e7ec]"
-        />
-        <div className="space-y-1">
-          {SECTION_ITEMS.map((item) => {
-            const active = activeKey === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                aria-current={active ? 'location' : undefined}
+      <div className="space-y-1">
+        {SECTION_ITEMS.map((item) => {
+          const active = activeKey === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              aria-current={active ? 'location' : undefined}
+              className={[
+                'flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 px-2 py-2 text-left transition-colors',
+                active
+                  ? 'bg-[rgba(254,44,85,0.08)] text-[var(--yak-brand-color)]'
+                  : 'bg-transparent text-[#667085] hover:bg-[#f7f8fa] hover:text-[#344054]',
+              ].join(' ')}
+              onClick={() => onSelect(item.key)}
+            >
+              <span
+                aria-hidden
                 className={[
-                  'group relative flex w-full cursor-pointer items-center gap-3 rounded-lg border-0 px-2 py-2 text-left transition-colors',
-                  active
-                    ? 'bg-[rgba(254,44,85,0.08)]'
-                    : 'bg-transparent hover:bg-[#f7f8fa]',
+                  'h-2 w-2 shrink-0 rounded-full',
+                  active ? 'bg-[var(--yak-brand-color)]' : 'bg-[#c5c9d0]',
                 ].join(' ')}
-                onClick={() => onSelect(item.key)}
-              >
-                <span
-                  aria-hidden
-                  className={[
-                    'relative z-10 h-[11px] w-[11px] shrink-0 rounded-full border transition-all duration-200',
-                    active
-                      ? 'border-[var(--yak-brand-color)] bg-[var(--yak-brand-color)] shadow-[0_0_0_3px_rgba(254,44,85,0.12)]'
-                      : 'border-[#d0d5dd] bg-[#98a2b3] group-hover:border-[#98a2b3]',
-                  ].join(' ')}
-                />
-                <span
-                  className={[
-                    'text-[12px] leading-5 transition-colors',
-                    active
-                      ? 'font-semibold text-[var(--yak-brand-color)]'
-                      : 'font-normal text-[#667085] group-hover:text-[#344054]',
-                  ].join(' ')}
-                >
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+              />
+              <span className={active ? 'text-[12px] font-semibold' : 'text-[12px]'}>
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
@@ -150,21 +128,16 @@ function SectionNavigator({ activeKey, onSelect }: SectionNavigatorProps) {
 function SectionCard({
   id,
   title,
-  description,
   children,
 }: {
   id: SectionKey;
   title: string;
-  description: string;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="overflow-hidden rounded-xl border border-[#eaecf0] bg-white">
-      <div className="border-b border-[#f0f2f5] px-6 py-4">
-        <div className="text-[14px] font-semibold text-[#161823]">{title}</div>
-        <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">{description}</div>
-      </div>
-      <div className="px-6 py-5">{children}</div>
+    <section id={id} className="rounded-xl bg-white px-6 py-5">
+      <div className="mb-5 text-[14px] font-semibold text-[#161823]">{title}</div>
+      {children}
     </section>
   );
 }
@@ -364,7 +337,7 @@ export default function WorkflowScheduleConfigPage() {
     Modal.confirm({
       centered: true,
       title: '删除调度配置',
-      content: '删除后工作流仍可手动运行，但上线时不会再自动创建定时触发。历史 Trigger 与补数记录会继续保留用于审计。',
+      content: '删除后不影响工作流和历史运行记录。',
       okText: '删除',
       cancelText: '取消',
       okButtonProps: { danger: true },
@@ -385,12 +358,6 @@ export default function WorkflowScheduleConfigPage() {
     setBackfillHistoryOpen(false);
     setLedgerOpen(true);
   };
-
-  const lifecycleText = !primarySchedule
-    ? '尚未配置调度，工作流仍可手动运行。'
-    : workflow?.status === 'ONLINE'
-      ? `调度已随工作流上线${primarySchedule.nextFireTime ? `，下次运行 ${formatTime(primarySchedule.nextFireTime)}` : ''}。`
-      : '调度配置已保存；上线工作流时自动启用，下线工作流时自动停用。';
 
   if (!workflowId) return null;
 
@@ -418,15 +385,15 @@ export default function WorkflowScheduleConfigPage() {
         <div ref={pageRootRef} className="h-full overflow-y-auto overscroll-contain scroll-smooth">
           <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-6 px-6 pb-6 pt-6 max-xl:max-w-[1040px] xl:grid-cols-[minmax(0,1fr)_160px]">
             <div className="min-w-0">
-              <main className="space-y-5 pb-4">
-                <div className="rounded-xl border border-[#eaecf0] bg-white px-6 py-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="flex min-w-0 items-start gap-3">
+              <main className="space-y-4">
+                <div className="rounded-xl bg-white px-6 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Button
                         type="text"
                         size="small"
                         icon={<ArrowLeft size={16} />}
-                        className="!mt-0.5 !h-8 !w-8 !shrink-0 !px-0"
+                        className="!h-8 !w-8 !shrink-0 !px-0"
                         onClick={() => history.push('/workflow/definitions')}
                       />
                       <div className="min-w-0">
@@ -438,11 +405,8 @@ export default function WorkflowScheduleConfigPage() {
                             {WORKFLOW_STATUS_LABEL[workflow.status] || workflow.status}
                           </span>
                         </div>
-                        <div className="mt-1 truncate text-[12px] text-[#667085]">
+                        <div className="truncate text-[12px] text-[#667085]">
                           {workflow.name}
-                        </div>
-                        <div className="mt-2 text-[11px] leading-5 text-[#98a2b3]">
-                          {lifecycleText}
                         </div>
                       </div>
                     </div>
@@ -484,24 +448,20 @@ export default function WorkflowScheduleConfigPage() {
                 </div>
 
                 {schedules.length > 1 ? (
-                  <div className="rounded-lg border border-[#fedf89] bg-[#fffaeb] px-4 py-3 text-[12px] leading-5 text-[#7a2e0e]">
-                    检测到该工作流存在 {schedules.length} 个历史调度。本页按简化模式只编辑最早创建的主调度；工作流上线、下线仍会联动全部已有调度。
+                  <div className="rounded-lg bg-[#fffaeb] px-4 py-2.5 text-[12px] text-[#7a2e0e]">
+                    存在 {schedules.length} 个历史调度，本页编辑主调度。
                   </div>
                 ) : null}
 
                 {!canEdit ? (
-                  <div className="rounded-lg border border-[#eaecf0] bg-[#f8f9fb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-                    当前工作流或调度处于启用状态。需要修改调度时，请先在工作流定义页下线工作流；下线会自动停用调度。
+                  <div className="rounded-lg bg-[#f2f4f7] px-4 py-2.5 text-[12px] text-[#667085]">
+                    当前工作流已启用，请下线后修改调度。
                   </div>
                 ) : null}
 
                 <Form form={form} layout="vertical" requiredMark="optional" disabled={!canEdit}>
-                  <div className="space-y-5">
-                    <SectionCard
-                      id="schedule-basic"
-                      title="调度设置"
-                      description="定义这个工作流什么时候执行。调度只保存配置，最终是否生效由工作流上线状态统一控制。"
-                    >
+                  <div className="space-y-4">
+                    <SectionCard id="schedule-basic" title="调度设置">
                       <Form.Item
                         name="name"
                         label="调度名称"
@@ -517,7 +477,6 @@ export default function WorkflowScheduleConfigPage() {
                         name="cronExpression"
                         label="Cron 表达式"
                         rules={[{ required: true, message: '请输入 Cron 表达式' }]}
-                        extra="使用 Quartz Cron 表达式，并按下方时区计算计划时间。"
                       >
                         <Input variant="filled" placeholder="0 0 2 * * ?" className="font-mono" />
                       </Form.Item>
@@ -553,17 +512,12 @@ export default function WorkflowScheduleConfigPage() {
                       </div>
                     </SectionCard>
 
-                    <SectionCard
-                      id="schedule-strategy"
-                      title="运行策略"
-                      description="控制计划重叠和服务恢复时的行为。默认策略适合绝大多数离线批处理工作流。"
-                    >
+                    <SectionCard id="schedule-strategy" title="运行策略">
                       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <Form.Item
                           name="executionStrategy"
                           label="实例并发策略"
                           rules={[{ required: true }]}
-                          extra="等待：前序完成后再执行；跳过：已有实例时记录为 SKIPPED；并行：允许同时创建实例。"
                         >
                           <Select
                             options={[
@@ -577,7 +531,6 @@ export default function WorkflowScheduleConfigPage() {
                           name="misfireStrategy"
                           label="错过调度策略"
                           rules={[{ required: true }]}
-                          extra="服务恢复后可合并补跑一次，或直接跳过错过的计划并保留审计记录。"
                         >
                           <Select
                             options={[
@@ -589,29 +542,17 @@ export default function WorkflowScheduleConfigPage() {
                       </div>
                     </SectionCard>
 
-                    <SectionCard
-                      id="schedule-advanced"
-                      title="高级配置"
-                      description="按需覆盖工作流参数。业务日期和计划时间等系统参数仍由调度运行时自动注入。"
-                    >
-                      <Form.Item
-                        name="inputJson"
-                        label="调度运行参数 JSON"
-                        extra="合并顺序：工作流版本参数 < 调度参数 < Backfill 参数 < 系统参数。系统会注入 businessDate、scheduleTime、scheduleTimezone、triggerType、scheduleId，并在 __schedule 中保留完整副本。"
-                      >
+                    <SectionCard id="schedule-advanced" title="高级配置">
+                      <Form.Item name="inputJson" label="调度运行参数 JSON" className="mb-4">
                         <Input.TextArea
-                          rows={8}
+                          rows={7}
                           spellCheck={false}
                           className="font-mono text-[12px]"
                         />
                       </Form.Item>
 
                       {primarySchedule && canEdit ? (
-                        <div className="mt-6 flex items-center justify-between border-t border-[#f0f2f5] pt-4">
-                          <div>
-                            <div className="text-[12px] font-medium text-[#475467]">不再需要定时执行？</div>
-                            <div className="mt-1 text-[11px] text-[#98a2b3]">删除调度不会删除工作流，也不会删除历史运行审计。</div>
-                          </div>
+                        <div className="flex justify-end">
                           <Button
                             danger
                             type="text"
@@ -627,29 +568,25 @@ export default function WorkflowScheduleConfigPage() {
                 </Form>
               </main>
 
-              <footer className="sticky bottom-0 z-50 overflow-hidden rounded-t-lg border border-b-0 border-[#eaecf0] bg-white">
-                <div className="flex min-h-[76px] items-center gap-3 px-8 py-4">
+              <footer className="sticky bottom-0 z-50 mt-4 rounded-xl bg-white px-6 py-3">
+                <div className="flex items-center gap-3">
                   <Button
                     type="primary"
                     loading={saving}
                     disabled={!canEdit}
                     icon={<Save size={15} />}
-                    className="!h-9 !min-w-[120px] !rounded-lg !px-6 !font-medium !text-white"
+                    className="!h-9 !min-w-[112px] !rounded-lg !px-5 !font-medium !text-white"
                     onClick={() => void handleSave()}
                   >
                     保存配置
                   </Button>
                   <Button
                     disabled={saving}
-                    className="!h-9 !min-w-[120px] !rounded-lg !border-0 !bg-[#f2f3f5] !px-5 !font-medium !text-[#344054] hover:!bg-[#e9eaec]"
+                    className="!h-9 !min-w-[96px] !rounded-lg !border-0 !bg-[#f2f3f5] !px-5 !font-medium !text-[#344054] hover:!bg-[#e9eaec]"
                     onClick={() => history.push('/workflow/definitions')}
                   >
                     返回
                   </Button>
-                  <div className="ml-auto hidden items-center gap-2 text-[11px] text-[#98a2b3] md:flex">
-                    <CalendarClock size={14} />
-                    {primarySchedule ? `当前 Cron：${primarySchedule.cronExpression}` : '保存后再上线工作流即可生效'}
-                  </div>
                 </div>
               </footer>
             </div>
