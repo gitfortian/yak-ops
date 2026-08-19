@@ -117,9 +117,10 @@ class ObservableSqlExecutionRuntimeTest {
   private static RuntimePair runtime(SqlExecutionObserver observer) {
     DataSourceExecutionProvider provider = dataSourceId -> request ->
         request.sql().trim().toLowerCase().startsWith("select")
-            ? DataSourceSqlResult.query(List.of(), List.of(), false)
+            ? DataSourceSqlResult.resultSet(List.of(), List.of(), false)
             : DataSourceSqlResult.updateCount(1L);
-    DefaultSqlExecutionRuntime delegate = new DefaultSqlExecutionRuntime(provider);
+    DefaultSqlExecutionRuntime delegate =
+        new DefaultSqlExecutionRuntime(provider, new DefaultSqlExecutionPolicy());
     return new RuntimePair(delegate, new ObservableSqlExecutionRuntime(delegate, List.of(observer)));
   }
 

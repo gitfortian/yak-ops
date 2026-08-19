@@ -14,11 +14,6 @@ public record SqlExecutionContext(
     operator = normalize(operator);
   }
 
-  /** Backward-compatible constructor for callers that do not yet resolve an operator. */
-  public SqlExecutionContext(SqlExecutionCaller caller, String callerReference) {
-    this(caller, callerReference, null);
-  }
-
   public static SqlExecutionContext of(SqlExecutionCaller caller, String callerReference) {
     return new SqlExecutionContext(caller, callerReference, null);
   }

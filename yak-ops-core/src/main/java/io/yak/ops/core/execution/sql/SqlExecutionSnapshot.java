@@ -32,28 +32,6 @@ public record SqlExecutionSnapshot(
     statements = statements == null ? List.of() : List.copyOf(statements);
   }
 
-  /** Backward-compatible constructor; historical callers remain auto-commit by default. */
-  public SqlExecutionSnapshot(
-      String executionId,
-      SqlExecutionStatus status,
-      String dataSourceId,
-      SqlExecutionContext context,
-      List<SqlStatementSnapshot> statements,
-      Instant startedAt,
-      Instant finishedAt,
-      String errorMessage) {
-    this(
-        executionId,
-        status,
-        dataSourceId,
-        context,
-        SqlTransactionMode.AUTO_COMMIT,
-        statements,
-        startedAt,
-        finishedAt,
-        errorMessage);
-  }
-
   public boolean terminal() {
     return status.terminal();
   }

@@ -18,22 +18,14 @@ public interface SqlExecutionRuntime {
   }
 
   /** Start one tracked execution whose statement boundaries are supplied explicitly by the caller. */
-  default SqlExecutionSnapshot start(SqlExecutionPlan plan) {
-    throw new UnsupportedOperationException("Tracked SQL execution is not supported");
-  }
+  SqlExecutionSnapshot start(SqlExecutionPlan plan);
 
   /** Find the latest immutable snapshot for a tracked execution. */
-  default Optional<SqlExecutionSnapshot> find(String executionId) {
-    return Optional.empty();
-  }
+  Optional<SqlExecutionSnapshot> find(String executionId);
 
   /** Wait until a tracked execution reaches a terminal state. */
-  default SqlExecutionSnapshot await(String executionId) {
-    throw new UnsupportedOperationException("Tracked SQL execution is not supported");
-  }
+  SqlExecutionSnapshot await(String executionId);
 
   /** Request cancellation. Returns false when the execution is absent or already terminal. */
-  default boolean cancel(String executionId) {
-    return false;
-  }
+  boolean cancel(String executionId);
 }

@@ -213,7 +213,7 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
   private DataSourceSqlResult readStatementResult(
       Statement statement, boolean hasResultSet, int maxRows) throws Exception {
     if (!hasResultSet) {
-      return DataSourceSqlResult.update(statement.getUpdateCount());
+      return DataSourceSqlResult.updateCount(statement.getUpdateCount());
     }
     try (ResultSet resultSet = statement.getResultSet()) {
       return readResultSet(resultSet, maxRows);
@@ -282,7 +282,7 @@ public final class JdbcDataSourceSqlExecutor implements DataSourceSqlExecutor {
       }
       rows.add(row);
     }
-    return DataSourceSqlResult.query(columns, rows, truncated);
+    return DataSourceSqlResult.resultSet(columns, rows, truncated);
   }
 
   private List<DataSourceSqlColumn> columns(ResultSetMetaData metadata) throws Exception {
