@@ -10,7 +10,6 @@ import {
   type WorkflowDefinition,
   type WorkflowDefinitionStatus,
 } from '@/services/workflow/definitions';
-import { listWorkflowSchedules } from '@/services/workflow/schedules';
 import {
   CalendarOutlined,
   CloudDownloadOutlined,
@@ -344,7 +343,9 @@ export default function WorkflowDefinitionList() {
   };
 
   const goToSchedules = (record: WorkflowDefinition) => {
-    history.push(`/workflow/schedules?workflowId=${encodeURIComponent(record.id)}`);
+    history.push(
+      `/workflow/definition/${encodeURIComponent(record.id)}/schedule`,
+    );
   };
 
   const handleDelete = (record: WorkflowDefinition) => {
@@ -423,7 +424,7 @@ export default function WorkflowDefinitionList() {
     Modal.confirm({
       centered: true,
       title: '工作流上线',
-      content: '上线后工作流可以被手动运行或调度触发，确认上线吗？',
+      content: '上线后工作流可以被手动运行，已保存的调度将同步启用。确认上线吗？',
       okText: '确认',
       cancelText: '取消',
       async onOk() {
@@ -436,38 +437,16 @@ export default function WorkflowDefinitionList() {
     });
   };
 
-  const confirmOffline = async (record: WorkflowDefinition) => {
+  const confirmOffline = (record: WorkflowDefinition) => {
     if (isActiveRuntime(record.latestExecutionStatus)) {
       message.warning('工作流存在活动执行，请先暂停或等待执行结束后再下线');
-      return;
-    }
-
-    try {
-      const onlineSchedules = await listWorkflowSchedules({
-        workflowId: record.id,
-        status: 'ONLINE',
-      });
-      if (onlineSchedules.length > 0) {
-        Modal.warning({
-          centered: true,
-          title: '请先停用工作流调度',
-          content: `当前工作流仍有 ${onlineSchedules.length} 个已启用调度。停用全部调度后才能下线工作流。`,
-          okText: '前往调度配置',
-          onOk: () => goToSchedules(record),
-        });
-        return;
-      }
-    } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '检查工作流调度状态失败',
-      );
       return;
     }
 
     Modal.confirm({
       centered: true,
       title: '工作流下线',
-      content: '下线后工作流将不能被手动运行或调度触发，确认下线吗？',
+      content: '下线后工作流将不能被手动运行或调度触发，已启用调度会同步停用。确认下线吗？',
       okText: '确认',
       cancelText: '取消',
       async onOk() {
@@ -493,7 +472,7 @@ export default function WorkflowDefinitionList() {
         confirmOnline(record);
         break;
       case 'offline':
-        void confirmOffline(record);
+        confirmOffline(record);
         break;
       case 'delete':
         handleDelete(record);
@@ -926,7 +905,7 @@ export default function WorkflowDefinitionList() {
               <span className="mr-2 text-[14px] text-[#faad14]">▲</span>
               <span className="font-medium text-[#344054]">【提示】</span>
               <span>
-                工作流完成节点编排并上线后即可运行或启用调度；存在活动执行或已启用调度时不可直接下线。
+                工作流可先完成节点编排与调度配置，再统一上线；上线会自动启用调度，下线会自动停用调度。
               </span>
             </div>
           </div>
