@@ -27,7 +27,7 @@ export default function LoginPage() {
           <section className="flex min-w-0 items-center justify-center py-7 lg:py-10">
             <div className="w-full max-w-[520px]">
               <div className="mb-8 text-center">
-                <h1 className="m-0 text-[42px] font-normal leading-[1.02] tracking-[-0.045em] text-[#171717] sm:text-[54px] lg:text-[58px] [font-family:Georgia,'Times_New_Roman',serif]">
+                <h1 className="m-0 text-[42px] font-normal leading-[1.02] tracking-[-0.045em] text-[#171717] sm:text-[54px] lg:text-[58px]">
                   Operate what&apos;s next
                 </h1>
                 <p className="mt-4 text-[15px] leading-6 text-[#555] sm:text-base">
