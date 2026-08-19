@@ -102,6 +102,10 @@ const DEFAULT_PANEL_WIDTH = 380;
 const MIN_PANEL_WIDTH = 280;
 const MAX_PANEL_WIDTH = 640;
 const PANEL_WIDTH_STORAGE_KEY = 'yak-data-development.data-service-right-panel-width';
+const DEFAULT_RESULT_HEIGHT = 280;
+const MIN_RESULT_HEIGHT = 160;
+const MAX_RESULT_HEIGHT = 520;
+const RESULT_HEIGHT_STORAGE_KEY = 'yak-data-development.bottom-panel-height';
 
 const defaultPosition: SqlEditorPosition = {
   lineNumber: 1,
@@ -144,6 +148,17 @@ const initialPanelWidth = () => {
   return Number.isFinite(stored) && stored > 0
     ? clampPanelWidth(stored)
     : DEFAULT_PANEL_WIDTH;
+};
+
+const clampResultHeight = (value: number) =>
+  Math.min(MAX_RESULT_HEIGHT, Math.max(MIN_RESULT_HEIGHT, value));
+
+const initialResultHeight = () => {
+  if (typeof window === 'undefined') return DEFAULT_RESULT_HEIGHT;
+  const stored = Number(window.localStorage.getItem(RESULT_HEIGHT_STORAGE_KEY));
+  return Number.isFinite(stored) && stored > 0
+    ? clampResultHeight(stored)
+    : DEFAULT_RESULT_HEIGHT;
 };
 
 const formatTime = (value?: string | null) => {
@@ -280,6 +295,8 @@ export default function DataServiceNodeEditor({
   const [activePanel, setActivePanel] = useState<RightPanelKey>();
   const [panelWidth, setPanelWidth] = useState(initialPanelWidth);
   const [resizing, setResizing] = useState(false);
+  const [resultHeight, setResultHeight] = useState(initialResultHeight);
+  const [resultResizing, setResultResizing] = useState(false);
   const [position, setPosition] = useState<SqlEditorPosition>(defaultPosition);
 
   const setDirtyState = useCallback((next: boolean) => {
@@ -990,6 +1007,39 @@ export default function DataServiceNodeEditor({
     window.addEventListener('pointercancel', finish);
   };
 
+  const handleResultResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = resultHeight;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setResultResizing(true);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const resize = (moveEvent: PointerEvent) => {
+      setResultHeight(clampResultHeight(startHeight + startY - moveEvent.clientY));
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      const nextHeight = clampResultHeight(startHeight + startY - upEvent.clientY);
+      setResultHeight(nextHeight);
+      setResultResizing(false);
+      window.localStorage.setItem(RESULT_HEIGHT_STORAGE_KEY, String(nextHeight));
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', resize);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+
+    window.addEventListener('pointermove', resize);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center bg-white">
@@ -1148,8 +1198,25 @@ export default function DataServiceNodeEditor({
             </div>
           </div>
 
-          <div className="h-[34%] min-h-[190px] max-h-[380px] shrink-0 border-t border-[#e7eaf0] bg-white">
-            <SqlResultWorkspace result={queryResult} />
+          <div
+            className={[
+              'relative shrink-0 bg-white',
+              resultResizing ? 'transition-none' : 'transition-[height] duration-200 ease-out',
+            ].join(' ')}
+            style={{ height: resultHeight }}
+          >
+            <div
+              role="separator"
+              aria-label="调整查询结果面板高度"
+              aria-orientation="horizontal"
+              onPointerDown={handleResultResizeStart}
+              className="group absolute inset-x-0 top-0 z-40 h-3 -translate-y-1/2 cursor-row-resize touch-none"
+            >
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#e5e7eb] transition-[height,background-color] duration-150 group-hover:h-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:h-[2px] group-active:bg-[rgba(254,44,85,1)]" />
+            </div>
+            <div className="h-full overflow-hidden bg-white">
+              <SqlResultWorkspace result={queryResult} />
+            </div>
           </div>
         </section>
 
