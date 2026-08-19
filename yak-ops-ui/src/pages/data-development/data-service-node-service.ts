@@ -2,7 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 
-import type { DevelopmentId } from './types';
+import type { DevelopmentId, DevelopmentSqlResultColumn } from './types';
 
 const NODE_API = '/api/v1/data-development/nodes';
 
@@ -46,6 +46,8 @@ export interface DevelopmentDataServiceDefinition {
   maxRows: number;
   timeoutSeconds: number;
   description?: string | null;
+  paginationEnabled: boolean;
+  autoParseParameters: boolean;
 }
 
 export interface DevelopmentDataServiceDraft {
@@ -86,10 +88,19 @@ export interface DevelopmentDataServiceNodeContext {
   revisions: DevelopmentDataServiceRevisionSummary[];
 }
 
+export interface PreviewDevelopmentDataServiceSqlResult {
+  columns: DevelopmentSqlResultColumn[];
+  rows: unknown[][];
+  returnedRows: number;
+  truncated: boolean;
+}
+
 export interface PreviewDevelopmentDataServiceResult {
   dataSourceId: DevelopmentId;
   parameters: DevelopmentDataServiceParameter[];
   responseFields: DevelopmentDataServiceResponseField[];
+  result: PreviewDevelopmentDataServiceSqlResult;
+  durationMs: number;
 }
 
 export interface SaveDevelopmentDataServiceDraftPayload {
@@ -103,6 +114,8 @@ export interface SaveDevelopmentDataServiceDraftPayload {
   maxRows: number;
   timeoutSeconds: number;
   description?: string;
+  paginationEnabled: boolean;
+  autoParseParameters: boolean;
   baseRevision: number;
 }
 
@@ -124,13 +137,15 @@ export const previewDevelopmentDataServiceNode = async (
   nodeId: DevelopmentId,
   dataSourceId: DevelopmentId,
   sql: string,
+  maxRows = 1000,
   timeoutSeconds = 30,
+  parameterValues: Record<string, unknown> = {},
 ): Promise<PreviewDevelopmentDataServiceResult> => unwrap(
   await HttpUtils.post<PreviewDevelopmentDataServiceResult>(
     `${NODE_API}/${nodeId}/data-service/preview`,
-    { dataSourceId, sql, timeoutSeconds },
+    { dataSourceId, sql, maxRows, timeoutSeconds, parameterValues },
   ),
-  '预览 Data Service Contract 失败',
+  '运行 Data Service 查询失败',
 );
 
 export const saveDevelopmentDataServiceDraft = async (
