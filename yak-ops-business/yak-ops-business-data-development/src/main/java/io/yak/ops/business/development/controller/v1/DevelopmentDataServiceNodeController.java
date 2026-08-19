@@ -18,6 +18,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +45,7 @@ public class DevelopmentDataServiceNodeController {
     return Result.success(service.get(nodeId));
   }
 
-  @Operation(summary = "基于当前数据源和查询 SQL 预览请求参数与响应字段 Contract")
+  @Operation(summary = "执行当前查询 SQL，并返回结果数据、请求参数与响应字段")
   @PostMapping("/{nodeId}/data-service/preview")
   public Result<PreviewResult> preview(
       @PathVariable("nodeId") long nodeId,
@@ -53,7 +54,9 @@ public class DevelopmentDataServiceNodeController {
         nodeId,
         request.dataSourceId(),
         request.sql(),
-        request.timeoutSeconds()));
+        request.maxRows(),
+        request.timeoutSeconds(),
+        request.parameterValues()));
   }
 
   @Operation(summary = "保存独立 Data Service Node 草稿")
@@ -82,6 +85,8 @@ public class DevelopmentDataServiceNodeController {
             request.maxRows(),
             request.timeoutSeconds(),
             request.description(),
+            request.paginationEnabled(),
+            request.autoParseParameters(),
             request.baseRevision())));
   }
 
@@ -121,7 +126,9 @@ public class DevelopmentDataServiceNodeController {
   public record PreviewRequest(
       @NotNull @Min(1) Long dataSourceId,
       @NotBlank @Size(max = 1_000_000) String sql,
-      @Min(1) @Max(3_600) Integer timeoutSeconds) {}
+      @Min(1) @Max(10_000) Integer maxRows,
+      @Min(1) @Max(3_600) Integer timeoutSeconds,
+      Map<String, Object> parameterValues) {}
 
   public record SaveDraftRequest(
       @NotNull @Min(1) Long dataSourceId,
@@ -134,6 +141,8 @@ public class DevelopmentDataServiceNodeController {
       @Min(1) @Max(10_000) Integer maxRows,
       @Min(1) @Max(3_600) Integer timeoutSeconds,
       @Size(max = 2_000) String description,
+      Boolean paginationEnabled,
+      Boolean autoParseParameters,
       @Min(0) Long baseRevision) {}
 
   public record ParameterRequest(
