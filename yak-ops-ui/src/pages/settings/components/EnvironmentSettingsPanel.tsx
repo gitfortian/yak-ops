@@ -1,7 +1,6 @@
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Input, message, Modal, Popconfirm, Spin, Tag } from 'antd';
-import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { Input, message, Popconfirm, Spin } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   deleteSystemEnvVar,
@@ -10,36 +9,24 @@ import {
   type EnvVarEntry,
 } from '@/services/system/envVars';
 
-const labelClassName = 'mb-2 block text-[13px] font-medium text-[#344054]';
-
-interface SettingSectionProps {
-  title: string;
-  description: string;
-  children: ReactNode;
-}
-
-const SettingSection = ({ title, description, children }: SettingSectionProps) => (
-  <section className="border-t border-[#eaecf0] py-6 first:border-t-0 first:pt-0">
-    <div className="mb-5">
-      <div className="text-[14px] font-semibold text-[#1d2939]">{title}</div>
-      <div className="mt-1 text-[12px] leading-5 text-[#98a2b3]">{description}</div>
-    </div>
-    {children}
-  </section>
-);
+const KV_ROW = 'flex items-center gap-2 rounded-md border border-[#eaecf0] px-3 py-2 transition-colors hover:border-[#d1d5db]';
+const KEY_CLS = 'shrink-0 font-mono text-[13px] font-semibold text-[#161823]';
+const EQ_CLS = 'text-[#d1d5db] select-none';
+const VAL_CLS = 'min-w-0 flex-1 truncate font-mono text-[13px] text-[#475569]';
+const ICON_BTN = 'shrink-0 flex items-center justify-center w-6 h-6 rounded hover:bg-[#f5f5f5] cursor-pointer text-[#98a2b3] hover:text-[#475569] transition-colors';
 
 const EnvironmentSettingsPanel = () => {
   const [entries, setEntries] = useState<EnvVarEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [searchText, setSearchText] = useState('');
 
-  // Add modal state
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  // Inline-add state
+  const [adding, setAdding] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
+  const newKeyRef = useRef<Input>(null);
 
-  // Edit state: key being edited inline
+  // Edit state
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
 
@@ -70,9 +57,6 @@ const EnvironmentSettingsPanel = () => {
     const existing = entries.find((e) => e.key === trimmedKey);
     if (existing && existing.source === 'app') {
       message.warning(`变量 ${trimmedKey} 已存在，请直接编辑`);
-      setAddModalOpen(false);
-      setNewKey('');
-      setNewValue('');
       return;
     }
 
@@ -80,7 +64,7 @@ const EnvironmentSettingsPanel = () => {
     try {
       await saveSystemEnvVars({ [trimmedKey]: newValue });
       message.success('环境变量已添加');
-      setAddModalOpen(false);
+      setAdding(false);
       setNewKey('');
       setNewValue('');
       fetchEntries();
@@ -89,6 +73,19 @@ const EnvironmentSettingsPanel = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const startAdding = () => {
+    setAdding(true);
+    setNewKey('');
+    setNewValue('');
+    setTimeout(() => newKeyRef.current?.focus(), 0);
+  };
+
+  const cancelAdding = () => {
+    setAdding(false);
+    setNewKey('');
+    setNewValue('');
   };
 
   const handleSaveEdit = async (key: string, value: string) => {
@@ -128,13 +125,9 @@ const EnvironmentSettingsPanel = () => {
     setEditingValue('');
   };
 
-  const filteredAppEntries = entries
-    .filter((e) => e.source === 'app')
-    .filter((e) => !searchText || e.key.toLowerCase().includes(searchText.toLowerCase()) || e.value.toLowerCase().includes(searchText.toLowerCase()));
+  const appEntries = entries.filter((e) => e.source === 'app');
 
-  const filteredSystemEntries = entries
-    .filter((e) => e.source === 'system')
-    .filter((e) => !searchText || e.key.toLowerCase().includes(searchText.toLowerCase()));
+  const systemEntries = entries.filter((e) => e.source === 'system');
 
   if (loading) {
     return (
@@ -146,196 +139,154 @@ const EnvironmentSettingsPanel = () => {
 
   return (
     <div className="text-[13px] text-[#344054]">
-      <div className="mb-6 flex items-start justify-between gap-6">
-        <div>
-          <div className="text-[17px] font-semibold text-[#161823]">环境变量设置</div>
-          <div className="mt-1 text-[12px] leading-5 text-[#98a2b3]">
-            管理系统环境变量，配置后任务运行时将自动使用。应用配置优先级高于操作系统环境变量。
-          </div>
-        </div>
-        <span className="shrink-0 pt-1 text-[11px] text-[#98a2b3]">
-          {saving ? '保存中…' : '已同步'}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-[17px] font-semibold text-[#161823]">环境变量</div>
+        <span className="text-[11px] text-[#98a2b3]">
+          {saving ? '保存中…' : `${appEntries.length} 项`}
         </span>
       </div>
 
-      {/* App-configured environment variables */}
-      <SettingSection
-        title="应用配置"
-        description="通过设置页面管理的环境变量，保存后立即生效。运行时优先级高于系统默认值。"
-      >
-        <div className="mb-4 max-w-[520px]">
-          <Input
-            placeholder="搜索变量名或值…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            allowClear
-          />
-        </div>
-
-        {filteredAppEntries.length === 0 ? (
-          <div className="rounded-md border border-dashed border-[#d1d5db] px-4 py-8 text-center text-[12px] text-[#98a2b3]">
-            {searchText ? '没有匹配的环境变量' : '暂无应用配置的环境变量，点击下方按钮添加'}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredAppEntries.map((entry) => (
-              <div
-                key={entry.key}
-                className="group flex items-center gap-3 rounded-md border border-[#eaecf0] px-4 py-3 transition-colors hover:border-[#d1d5db]"
-              >
-                <div className="min-w-0 flex-1">
-                  {editingKey === entry.key ? (
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 font-mono text-[13px] font-semibold text-[#161823]">
-                        {entry.key}
-                      </span>
-                      <span className="text-[#98a2b3]">=</span>
-                      <Input
-                        className="flex-1"
-                        value={editingValue}
-                        onChange={(e) => setEditingValue(e.target.value)}
-                        onPressEnter={() => handleSaveEdit(entry.key, editingValue)}
-                        size="small"
-                      />
-                      <Button
-                        type="link"
-                        size="small"
-                        onClick={() => handleSaveEdit(entry.key, editingValue)}
-                        loading={saving}
-                      >
-                        保存
-                      </Button>
-                      <Button type="link" size="small" onClick={cancelEditing}>
-                        取消
-                      </Button>
-                    </div>
-                  ) : (
-                    <div
-                      className="flex cursor-pointer items-center gap-2"
-                      onClick={() => startEditing(entry)}
-                    >
-                      <span className="shrink-0 font-mono text-[13px] font-semibold text-[#161823]">
-                        {entry.key}
-                      </span>
-                      <span className="text-[#98a2b3]">=</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-[#475569]">
-                        {entry.value}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <Tag
-                  color="blue"
-                  className="shrink-0 border-0 bg-[#eff8ff] text-[11px] text-[#2563eb]"
+      {/* App-configured env vars */}
+      <div className="space-y-1.5">
+        {appEntries.map((entry) => (
+          <div key={entry.key} className={`${KV_ROW} group`}>
+            {editingKey === entry.key ? (
+              <>
+                <span className={KEY_CLS}>{entry.key}</span>
+                <span className={EQ_CLS}>=</span>
+                <Input
+                  className="flex-1 font-mono"
+                  value={editingValue}
+                  onChange={(e) => setEditingValue(e.target.value)}
+                  onPressEnter={() => handleSaveEdit(entry.key, editingValue)}
+                  size="small"
+                  autoFocus
+                />
+                <span
+                  className={`${ICON_BTN} text-[#12b76a]`}
+                  onClick={() => handleSaveEdit(entry.key, editingValue)}
                 >
-                  应用配置
-                </Tag>
-
+                  <CheckOutlined />
+                </span>
+                <span className={ICON_BTN} onClick={cancelEditing}>
+                  <CloseOutlined />
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  className={KEY_CLS}
+                  onClick={() => startEditing(entry)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {entry.key}
+                </span>
+                <span className={EQ_CLS}>=</span>
+                <span
+                  className={VAL_CLS}
+                  onClick={() => startEditing(entry)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {entry.value || <span className="text-[#d1d5db]">空</span>}
+                </span>
+                <span
+                  className={`${ICON_BTN} opacity-0 group-hover:opacity-100`}
+                  onClick={() => startEditing(entry)}
+                >
+                  <EditOutlined />
+                </span>
                 <Popconfirm
-                  title={`确定删除 ${entry.key}？`}
+                  title={`删除 ${entry.key}？`}
                   onConfirm={() => handleDelete(entry.key)}
                   okText="删除"
                   cancelText="取消"
                   okButtonProps={{ danger: true }}
                 >
-                  <Button
-                    type="text"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                  />
+                  <span
+                    className={`${ICON_BTN} text-[#f04438] opacity-0 group-hover:opacity-100 hover:!text-[#f04438]`}
+                  >
+                    <DeleteOutlined />
+                  </span>
                 </Popconfirm>
-              </div>
-            ))}
+              </>
+            )}
+          </div>
+        ))}
+
+        {/* Inline add row */}
+        {adding && (
+          <div className={KV_ROW}>
+            <Input
+              ref={newKeyRef}
+              className="w-[180px] font-mono"
+              placeholder="变量名"
+              value={newKey}
+              onChange={(e) => setNewKey(e.target.value)}
+              size="small"
+              autoFocus
+            />
+            <span className={EQ_CLS}>=</span>
+            <Input
+              className="flex-1 font-mono"
+              placeholder="变量值"
+              value={newValue}
+              onChange={(e) => setNewValue(e.target.value)}
+              onPressEnter={handleAdd}
+              size="small"
+            />
+            <span className={`${ICON_BTN} text-[#12b76a]`} onClick={handleAdd}>
+              <CheckOutlined />
+            </span>
+            <span className={ICON_BTN} onClick={cancelAdding}>
+              <CloseOutlined />
+            </span>
           </div>
         )}
 
-        <div className="mt-4">
-          <Button
-            type="dashed"
-            icon={<PlusOutlined />}
-            onClick={() => setAddModalOpen(true)}
-          >
-            添加环境变量
-          </Button>
-        </div>
-      </SettingSection>
-
-      {/* System default environment variables (read-only) */}
-      <SettingSection
-        title="系统默认"
-        description="操作系统级别的环境变量（只读）。可在应用配置中添加同名变量进行覆盖。"
-      >
-        {filteredSystemEntries.length === 0 ? (
-          <div className="rounded-md border border-dashed border-[#d1d5db] px-4 py-8 text-center text-[12px] text-[#98a2b3]">
-            {searchText ? '没有匹配的系统环境变量' : '未检测到系统环境变量'}
+        {/* Empty state */}
+        {appEntries.length === 0 && !adding && (
+          <div className="rounded-md border border-dashed border-[#d1d5db] px-4 py-6 text-center text-[12px] text-[#98a2b3]">
+            暂无环境变量
           </div>
-        ) : (
-          <div className="max-h-[360px] overflow-y-auto rounded-md border border-[#eaecf0]">
-            {filteredSystemEntries.map((entry) => (
+        )}
+      </div>
+
+      {/* Add button */}
+      {!adding && (
+        <div className="mt-3">
+          <span
+            className="inline-flex cursor-pointer items-center gap-1 text-[13px] text-[#344054] hover:text-[#1d2939] transition-colors"
+            onClick={startAdding}
+          >
+            <PlusOutlined />
+            添加
+          </span>
+        </div>
+      )}
+
+      {/* System defaults (read-only) */}
+      {systemEntries.length > 0 && (
+        <div className="mt-8 border-t border-[#eaecf0] pt-6">
+          <div className="mb-4 text-[14px] font-semibold text-[#1d2939]">系统环境变量</div>
+          <div className="overflow-y-auto rounded-md border border-[#f2f4f7]">
+            {systemEntries.map((entry) => (
               <div
                 key={entry.key}
-                className="flex items-center gap-3 border-b border-[#f5f5f5] px-4 py-2.5 last:border-b-0"
+                className="flex items-center gap-2 border-b border-[#f5f5f5] px-3 py-2 last:border-b-0"
               >
-                <span className="shrink-0 font-mono text-[12px] font-semibold text-[#475569]">
+                <span className="shrink-0 font-mono text-[12px] font-semibold text-[#344054]">
                   {entry.key}
                 </span>
-                <span className="text-[#d1d5db]">=</span>
+                <span className={EQ_CLS}>=</span>
                 <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#98a2b3]">
                   {entry.value}
                 </span>
-                <Tag
-                  className="shrink-0 border-0 bg-[#f5f5f5] text-[11px] text-[#98a2b3]"
-                >
-                  系统默认
-                </Tag>
               </div>
             ))}
           </div>
-        )}
-      </SettingSection>
 
-      {/* Add Modal */}
-      <Modal
-        title="添加环境变量"
-        open={addModalOpen}
-        onOk={handleAdd}
-        onCancel={() => {
-          setAddModalOpen(false);
-          setNewKey('');
-          setNewValue('');
-        }}
-        okText="添加"
-        cancelText="取消"
-        confirmLoading={saving}
-        width={520}
-      >
-        <div className="space-y-4 py-2">
-          <div>
-            <label className={labelClassName}>变量名</label>
-            <Input
-              placeholder="例如 PYTHON_HOME"
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
-              className="font-mono"
-            />
-            <div className="mt-1 text-[11px] text-[#98a2b3]">
-              只能包含字母、数字和下划线，不能以数字开头
-            </div>
-          </div>
-          <div>
-            <label className={labelClassName}>变量值</label>
-            <Input
-              placeholder="例如 C:\Python312 或 /usr/bin/python3"
-              value={newValue}
-              onChange={(e) => setNewValue(e.target.value)}
-              className="font-mono"
-            />
-          </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 };
