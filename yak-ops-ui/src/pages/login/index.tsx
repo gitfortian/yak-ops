@@ -1,4 +1,4 @@
-import loginHeroVideo from "@/assets/video/login-hero.mp4";
+import loginHeroVideo from "@/assets/video/login-hero3.mp4";
 import LoginPanel from "./LoginPanel";
 
 export default function LoginPage() {
