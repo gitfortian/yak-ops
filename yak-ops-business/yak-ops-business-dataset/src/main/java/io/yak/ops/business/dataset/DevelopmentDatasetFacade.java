@@ -32,6 +32,25 @@ public class DevelopmentDatasetFacade {
         .toList();
   }
 
+  /** Execute Dataset-owned SQL for the editor and expose both field metadata and real rows. */
+  public PreviewResult previewQuery(String dataSourceId, String sql) {
+    DatasetSchemaDiscoveryService.QueryPreview preview = standaloneService.previewQuery(dataSourceId, sql);
+    return new PreviewResult(
+        preview.fields().stream().map(DevelopmentDatasetFacade::toFieldDraft).toList(),
+        preview.result().columns().stream()
+            .map(column -> new PreviewColumn(
+                column.name(),
+                column.label(),
+                column.typeName(),
+                column.jdbcType(),
+                column.nullable()))
+            .toList(),
+        preview.result().rows(),
+        preview.result().rows().size(),
+        preview.result().truncated(),
+        preview.durationMs());
+  }
+
   public NodeDataset save(
       long developmentNodeId,
       String dataSourceId,
@@ -193,5 +212,27 @@ public class DevelopmentDatasetFacade {
       boolean nullable,
       String description,
       String defaultRole) {
+  }
+
+  public record PreviewColumn(
+      String name,
+      String label,
+      String typeName,
+      int jdbcType,
+      boolean nullable) {
+  }
+
+  public record PreviewResult(
+      List<FieldDraft> fields,
+      List<PreviewColumn> columns,
+      List<List<Object>> rows,
+      int returnedRows,
+      boolean truncated,
+      long durationMs) {
+    public PreviewResult {
+      fields = fields == null ? List.of() : List.copyOf(fields);
+      columns = columns == null ? List.of() : List.copyOf(columns);
+      rows = rows == null ? List.of() : List.copyOf(rows);
+    }
   }
 }

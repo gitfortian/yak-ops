@@ -2,7 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 
-import type { DevelopmentId } from './types';
+import type { DevelopmentId, DevelopmentSqlResultColumn } from './types';
 
 const NODE_API = '/api/v1/data-development/nodes';
 
@@ -69,6 +69,15 @@ export interface DevelopmentDatasetNodeContext {
   dataset?: DevelopmentDatasetNodeAsset | null;
 }
 
+export interface DevelopmentDatasetQueryResult {
+  fields: DevelopmentDatasetFieldDraft[];
+  columns: DevelopmentSqlResultColumn[];
+  rows: unknown[][];
+  returnedRows: number;
+  truncated: boolean;
+  durationMs: number;
+}
+
 export interface SaveDevelopmentDatasetNodePayload {
   dataSourceId: DevelopmentId;
   sql: string;
@@ -100,6 +109,18 @@ export const previewDevelopmentDatasetNode = async (
     { dataSourceId, sql },
   ),
   '发现 Dataset Node 字段失败',
+);
+
+export const runDevelopmentDatasetNode = async (
+  nodeId: DevelopmentId,
+  dataSourceId: DevelopmentId,
+  sql: string,
+): Promise<DevelopmentDatasetQueryResult> => unwrap(
+  await HttpUtils.post<DevelopmentDatasetQueryResult>(
+    `${NODE_API}/${nodeId}/dataset/query`,
+    { dataSourceId, sql },
+  ),
+  '运行 Dataset Node 查询失败',
 );
 
 export const saveDevelopmentDatasetNode = async (

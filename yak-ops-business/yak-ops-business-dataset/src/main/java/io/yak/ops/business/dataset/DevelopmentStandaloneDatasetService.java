@@ -36,6 +36,10 @@ class DevelopmentStandaloneDatasetService {
     return discoveryService.preview(requireDataSourceId(dataSourceId), requireSql(sql));
   }
 
+  DatasetSchemaDiscoveryService.QueryPreview previewQuery(String dataSourceId, String sql) {
+    return discoveryService.previewQuery(requireDataSourceId(dataSourceId), requireSql(sql));
+  }
+
   @Transactional("yakBusinessTransactionManager")
   DatasetDetail save(
       long developmentNodeId,
