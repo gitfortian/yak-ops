@@ -90,6 +90,7 @@ class DataServicePublicationServiceTest {
     assertThat(settingsCaptor.getValue().timeoutSeconds()).isEqualTo(20);
     assertThat(settingsCaptor.getValue().enabled()).isFalse();
     assertThat(settingsCaptor.getValue().description()).isEqualTo("DS Revision 定义");
+    assertThat(settingsCaptor.getValue().paginationEnabled()).isFalse();
     assertThat(result.id()).isEqualTo(9L);
 
     ArgumentCaptor<DocumentationInput> docsCaptor = ArgumentCaptor.forClass(DocumentationInput.class);
@@ -225,6 +226,7 @@ class DataServicePublicationServiceTest {
         source.sourceRevisionId(),
         source.sourceRevisionNo(),
         null,
-        null);
+        null,
+        Boolean.TRUE.equals(settings.paginationEnabled()));
   }
 }
