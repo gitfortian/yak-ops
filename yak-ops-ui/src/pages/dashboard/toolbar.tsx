@@ -233,7 +233,7 @@ export function DashboardToolbar({
                 <Tooltip title="撤销 Ctrl/Cmd + Z">
                   <Button
                     type="text"
-                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                     icon={<Undo2 size={13} />}
                     disabled={!canUndo || busy}
                     onClick={onUndo}
@@ -242,7 +242,7 @@ export function DashboardToolbar({
                 <Tooltip title="重做 Ctrl/Cmd + Shift + Z">
                   <Button
                     type="text"
-                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                     icon={<Redo2 size={13} />}
                     disabled={!canRedo || busy}
                     onClick={onRedo}
