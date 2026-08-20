@@ -16,6 +16,7 @@ import {
 import { isDevelopmentTaskNode } from '../../node-model';
 import {
   getDevelopmentTaskDraft,
+  previewDevelopmentSqlLineage,
   publishDevelopmentTask,
   runDevelopmentTask,
   saveDevelopmentTaskDraft,
@@ -25,6 +26,7 @@ import type {
   DevelopmentId,
   DevelopmentNode,
   DevelopmentResourceNode,
+  DevelopmentSqlLineagePreview,
   DevelopmentTaskDraft,
   DevelopmentTaskRunResult,
 } from '../../types';
@@ -34,7 +36,9 @@ import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
 import EditorToolbar from './EditorToolbar';
 import RightPanel from './RightPanel';
-import RunResultPanel from './RunResultPanel';
+import RunResultPanel, {
+  type WorkbenchBottomPanelView,
+} from './RunResultPanel';
 
 interface DevelopmentWorkbenchProps {
   nodes: DevelopmentResourceNode[];
@@ -131,9 +135,15 @@ const DevelopmentWorkbench = ({
   const [openNodeIds, setOpenNodeIds] = useState<DevelopmentId[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<DevelopmentId>();
   const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [bottomPanelView, setBottomPanelView] =
+    useState<WorkbenchBottomPanelView>('result');
   const [runResults, setRunResults] = useState<
     Partial<Record<DevelopmentId, DevelopmentTaskRunResult>>
   >({});
+  const [lineagePreviews, setLineagePreviews] = useState<
+    Partial<Record<DevelopmentId, DevelopmentSqlLineagePreview>>
+  >({});
+  const [lineageLoadingNodeIds, setLineageLoadingNodeIds] = useState<DevelopmentId[]>([]);
   const [runningNodeIds, setRunningNodeIds] = useState<DevelopmentId[]>([]);
   const [pendingClose, setPendingClose] = useState<PendingCloseRequest>();
   const [saving, setSaving] = useState(false);
@@ -165,6 +175,7 @@ const DevelopmentWorkbench = ({
       current && nodeMap.has(current) ? current : undefined,
     );
     setResourceDirtyNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
+    setLineageLoadingNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
   }, [nodeMap]);
 
   useEffect(() => {
@@ -199,6 +210,9 @@ const DevelopmentWorkbench = ({
   const activeRunning = activeTaskNode
     ? runningNodeIds.includes(activeTaskNode.id)
     : false;
+  const activeLineageLoading = activeTaskNode
+    ? lineageLoadingNodeIds.includes(activeTaskNode.id)
+    : false;
   const openDataServiceNodes = useMemo(
     () => openNodeIds
       .map((nodeId) => nodeMap.get(nodeId))
@@ -218,6 +232,7 @@ const DevelopmentWorkbench = ({
     setOpenNodeIds((current) => current.includes(nodeId) ? current : [...current, nodeId]);
     setActiveNodeId(nodeId);
     if (!isDevelopmentTaskNode(target)) setRunPanelOpen(false);
+    else if (target.type !== 'SQL') setBottomPanelView('result');
     onNodeFocus(nodeId);
   };
 
@@ -267,6 +282,7 @@ const DevelopmentWorkbench = ({
     const node = activeTaskNode;
     const startedAt = Date.now();
     setRunPanelOpen(true);
+    setBottomPanelView('result');
     setRunningNodeIds((current) => [...current, node.id]);
     setRunResults((current) => ({
       ...current,
@@ -306,6 +322,34 @@ const DevelopmentWorkbench = ({
       message.error(errorMessage);
     } finally {
       setRunningNodeIds((current) => current.filter((nodeId) => nodeId !== node.id));
+    }
+  };
+
+  const previewActiveLineage = async () => {
+    if (!activeTaskNode || activeTaskNode.type !== 'SQL' || activeLineageLoading) return;
+    const node = activeTaskNode;
+    setRunPanelOpen(true);
+    setBottomPanelView('lineage');
+    setLineageLoadingNodeIds((current) =>
+      current.includes(node.id) ? current : [...current, node.id],
+    );
+
+    try {
+      const definition = prepareDevelopmentTaskDefinition(node);
+      const preview = responseData(
+        await previewDevelopmentSqlLineage(node.id, definition),
+        '血缘解析失败',
+      );
+      setLineagePreviews((current) => ({ ...current, [node.id]: preview }));
+      if (preview.status === 'FAILED') {
+        message.error(preview.parseError || '当前 SQL 血缘解析失败');
+      } else if (preview.status === 'PARTIAL' || preview.status === 'UNRESOLVED') {
+        message.warning('血缘解析完成，部分字段暂未能解析');
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '血缘解析失败');
+    } finally {
+      setLineageLoadingNodeIds((current) => current.filter((nodeId) => nodeId !== node.id));
     }
   };
 
@@ -355,6 +399,8 @@ const DevelopmentWorkbench = ({
     const nextNode = nextActiveId ? nodeMap.get(nextActiveId) : undefined;
     if (!nextNode || !isDevelopmentTaskNode(nextNode)) {
       setRunPanelOpen(false);
+    } else if (nextNode.type !== 'SQL') {
+      setBottomPanelView('result');
     }
   };
 
@@ -492,9 +538,13 @@ const DevelopmentWorkbench = ({
               onRun={() => void runActiveTask()}
               onSave={() => void saveActiveDraft()}
               onPublish={() => void publishActiveTask()}
+              onLineage={activeTaskNode.type === 'SQL'
+                ? () => void previewActiveLineage()
+                : undefined}
               running={activeRunning}
               saving={saving}
               publishing={publishing}
+              lineageLoading={activeLineageLoading}
             />
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -520,6 +570,13 @@ const DevelopmentWorkbench = ({
                 directory={activeDirectory}
                 definition={definition}
                 result={runResults[activeTaskNode.id]}
+                view={bottomPanelView}
+                onViewChange={setBottomPanelView}
+                lineagePreview={lineagePreviews[activeTaskNode.id]}
+                lineageLoading={activeLineageLoading}
+                onRefreshLineage={activeTaskNode.type === 'SQL'
+                  ? () => void previewActiveLineage()
+                  : undefined}
                 onClose={() => setRunPanelOpen(false)}
               />
             </div>
