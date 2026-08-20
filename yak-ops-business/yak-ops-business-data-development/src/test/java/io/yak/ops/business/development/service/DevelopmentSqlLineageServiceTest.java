@@ -106,8 +106,8 @@ class DevelopmentSqlLineageServiceTest {
       byKey.put(command.assetKey(), command);
     }
 
-    LineageService.RegisterAssetCommand sourceColumn = byKey.get("column:12:ods.orders.id");
-    LineageService.RegisterAssetCommand targetColumn = byKey.get("column:12:dws.sales.order_id");
+    LineageService.RegisterAssetCommand sourceColumn = byKey.get("column:12:.ods.orders.id");
+    LineageService.RegisterAssetCommand targetColumn = byKey.get("column:12:.dws.sales.order_id");
     assertNotNull(sourceColumn);
     assertNotNull(targetColumn);
     assertEquals(LineageAssetType.COLUMN, sourceColumn.assetType());

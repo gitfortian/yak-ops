@@ -38,6 +38,7 @@ public class DevelopmentSqlLineageService {
   private final SqlTableLineageParser tableParser;
   private final SqlColumnLineageParser columnParser;
   private final ObjectMapper objectMapper;
+  private final TableIdentityResolver identityResolver = new TableIdentityResolver();
 
   private DataSourceCatalogService dataSourceCatalogService;
 
@@ -68,7 +69,8 @@ public class DevelopmentSqlLineageService {
     if (!"SQL".equalsIgnoreCase(revision.definition().taskType())) return;
 
     String evidenceId = String.valueOf(node.id());
-    String dataSourceId = dataSourceId(revision.definition().configJson());
+    SqlContext sqlContext = sqlContext(revision.definition().configJson());
+    String dataSourceId = sqlContext.dataSourceId();
     String sql = revision.definition().content();
 
     try {
@@ -107,7 +109,7 @@ public class DevelopmentSqlLineageService {
       Map<String, LineageAsset> tableAssets = new LinkedHashMap<>();
 
       for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
-        LineageAsset table = registerTableAsset(dataSourceId, input, tableAssets);
+        LineageAsset table = registerTableAsset(sqlContext, input, tableAssets);
         lineageService.registerRelation(new LineageService.RegisterRelationCommand(
             table.id(),
             task.id(),
@@ -122,7 +124,7 @@ public class DevelopmentSqlLineageService {
       }
 
       for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
-        LineageAsset table = registerTableAsset(dataSourceId, output, tableAssets);
+        LineageAsset table = registerTableAsset(sqlContext, output, tableAssets);
         lineageService.registerRelation(new LineageService.RegisterRelationCommand(
             task.id(),
             table.id(),
@@ -138,7 +140,7 @@ public class DevelopmentSqlLineageService {
 
       if (columnParsed != null) {
         registerColumnLineage(
-            dataSourceId,
+            sqlContext,
             task,
             revision,
             columnParsed,
@@ -234,7 +236,7 @@ public class DevelopmentSqlLineageService {
   }
 
   private void registerColumnLineage(
-      String dataSourceId,
+      SqlContext sqlContext,
       LineageAsset task,
       DevelopmentTaskRevision revision,
       SqlColumnLineageParser.ParseResult parsed,
@@ -244,15 +246,15 @@ public class DevelopmentSqlLineageService {
     int mappingIndex = 0;
     for (SqlColumnLineageParser.ColumnMapping mapping : parsed.mappings()) {
       mappingIndex++;
-      LineageAsset sourceTable = registerTableAsset(dataSourceId, mapping.sourceTable(), tableAssets);
-      LineageAsset targetTable = registerTableAsset(dataSourceId, mapping.targetTable(), tableAssets);
+      LineageAsset sourceTable = registerTableAsset(sqlContext, mapping.sourceTable(), tableAssets);
+      LineageAsset targetTable = registerTableAsset(sqlContext, mapping.targetTable(), tableAssets);
       LineageAsset sourceColumn = registerColumnAsset(
-          dataSourceId,
+          sqlContext,
           sourceTable,
           mapping.sourceTable(),
           mapping.sourceColumnName());
       LineageAsset targetColumn = registerColumnAsset(
-          dataSourceId,
+          sqlContext,
           targetTable,
           mapping.targetTable(),
           mapping.targetColumnName());
@@ -350,10 +352,11 @@ public class DevelopmentSqlLineageService {
   }
 
   private LineageAsset registerTableAsset(
-      String dataSourceId,
+      SqlContext sqlContext,
       SqlTableLineageParser.TableRef table,
       Map<String, LineageAsset> cache) {
-    String key = tableAssetKey(dataSourceId, table);
+    TableIdentityResolver.PhysicalTableIdentity identity = resolve(table, sqlContext);
+    String key = identity.assetKey();
     LineageAsset cached = cache.get(key);
     if (cached != null) return cached;
 
@@ -364,12 +367,12 @@ public class DevelopmentSqlLineageService {
         LineageAssetType.TABLE,
         table.qualifiedName(),
         "DATASOURCE",
-        dataSourceId,
+        sqlContext.dataSourceId(),
         null,
-        dataSourceId,
-        table.databaseName(),
-        table.schemaName(),
-        table.tableName(),
+        sqlContext.dataSourceId(),
+        emptyToNull(identity.databaseName()),
+        emptyToNull(identity.schemaName()),
+        identity.tableName(),
         null,
         properties));
     cache.put(key, registered);
@@ -377,7 +380,7 @@ public class DevelopmentSqlLineageService {
   }
 
   private LineageAsset registerColumnAsset(
-      String dataSourceId,
+      SqlContext sqlContext,
       LineageAsset tableAsset,
       SqlTableLineageParser.TableRef table,
       String columnName) {
@@ -385,16 +388,16 @@ public class DevelopmentSqlLineageService {
     properties.put("qualifiedName", table.qualifiedName() + "." + columnName);
 
     return lineageService.registerAsset(new LineageService.RegisterAssetCommand(
-        columnAssetKey(dataSourceId, table, columnName),
+        columnAssetKey(resolve(table, sqlContext), columnName),
         LineageAssetType.COLUMN,
         columnName,
         "DATASOURCE",
-        dataSourceId,
+        sqlContext.dataSourceId(),
         tableAsset.id(),
-        dataSourceId,
-        table.databaseName(),
-        table.schemaName(),
-        table.tableName(),
+        sqlContext.dataSourceId(),
+        emptyToNull(resolve(table, sqlContext).databaseName()),
+        emptyToNull(resolve(table, sqlContext).schemaName()),
+        resolve(table, sqlContext).tableName(),
         columnName,
         properties));
   }
@@ -428,7 +431,7 @@ public class DevelopmentSqlLineageService {
     return properties;
   }
 
-  private String dataSourceId(String configJson) {
+  private SqlContext sqlContext(String configJson) {
     try {
       JsonNode root = objectMapper.readTree(
           configJson == null || configJson.isBlank() ? "{}" : configJson);
@@ -437,28 +440,46 @@ public class DevelopmentSqlLineageService {
       if (dataSourceId == null || dataSourceId.isBlank()) {
         throw new IllegalArgumentException("SQL task dataSourceId 不能为空");
       }
-      return dataSourceId.trim();
+      return new SqlContext(
+          dataSourceId.trim(),
+          text(root, "databaseName", "database", "catalog"),
+          text(root, "schemaName", "schema"),
+          TableIdentityResolver.SqlDialect.from(text(root, "dialect", "dbType")));
     } catch (JsonProcessingException exception) {
       throw new IllegalArgumentException("SQL task configJson 不是合法 JSON", exception);
     }
   }
 
-  private static String tableAssetKey(
-      String dataSourceId,
-      SqlTableLineageParser.TableRef table) {
-    return "table:" + dataSourceId + ":" + table.canonicalName();
+  private TableIdentityResolver.PhysicalTableIdentity resolve(
+      SqlTableLineageParser.TableRef table, SqlContext context) {
+    return identityResolver.resolve(table, new TableIdentityResolver.ResolutionContext(
+        context.dataSourceId(), context.databaseName(), context.schemaName(), context.dialect()));
   }
 
   private static String columnAssetKey(
-      String dataSourceId,
-      SqlTableLineageParser.TableRef table,
+      TableIdentityResolver.PhysicalTableIdentity table,
       String columnName) {
-    return "column:"
-        + dataSourceId
-        + ":"
-        + table.canonicalName()
-        + "."
-        + columnName.toLowerCase(java.util.Locale.ROOT);
+    return table.assetKey().replaceFirst("^table:", "column:")
+        + "." + columnName.toLowerCase(java.util.Locale.ROOT);
+  }
+
+  private static String text(JsonNode root, String... names) {
+    for (String name : names) {
+      JsonNode value = root == null ? null : root.get(name);
+      if (value != null && !value.isNull() && !value.asText().isBlank()) return value.asText().trim();
+    }
+    return null;
+  }
+
+  private static String emptyToNull(String value) {
+    return value == null || value.isEmpty() ? null : value;
+  }
+
+  private record SqlContext(
+      String dataSourceId,
+      String databaseName,
+      String schemaName,
+      TableIdentityResolver.SqlDialect dialect) {
   }
 
   private static String truncate(String value, int maxLength) {
