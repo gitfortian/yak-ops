@@ -12,6 +12,8 @@
   A focused data operations platform for datasource management, offline synchronization, resources, data quality, and system administration.
 </p>
 
+> Yak Ops is continuously evolving to make complex data engineering workflows simpler and more product-oriented.
+
 ## Current scope
 
 Yak Ops currently keeps a deliberately small and maintainable feature set:
