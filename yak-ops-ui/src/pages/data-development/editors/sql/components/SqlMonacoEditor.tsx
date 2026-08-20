@@ -299,6 +299,8 @@ const SqlMonacoEditor = ({
         runningRef.current ||
         !activeStatement
       ) return;
+      const target = event.target.element;
+      if (!(target instanceof HTMLElement) || !target.classList.contains('yak-sql-run-glyph')) return;
       const lineNumber = event.target.position?.lineNumber;
       if (!lineNumber || lineNumber !== activeStatement.startLine) return;
       runStatement(activeStatement.sql);
@@ -344,7 +346,7 @@ const SqlMonacoEditor = ({
     model.pushEditOperations([], [{ range: model.getFullModelRange(), text: value }], () => null);
   }, [value]);
 
-  return <div ref={containerRef} className="h-full min-h-0 w-full" />;
+  return <div ref={containerRef} className="yak-sql-editor h-full min-h-0 w-full" />;
 };
 
 export default SqlMonacoEditor;
