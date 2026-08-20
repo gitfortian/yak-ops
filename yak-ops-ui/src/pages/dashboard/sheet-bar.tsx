@@ -352,7 +352,7 @@ export function DashboardSheetBar({
                 draggable={!renaming}
                 title={renaming ? undefined : (note ? `${sheet.title}\n备注：${note}` : `${sheet.title} · 双击重命名 · 拖动可调整 Sheet 顺序`)}
                 className={[
-                  'group relative mb-0 flex h-7 min-w-[160px] max-w-[280px] shrink-0 items-stretch rounded-t-[4px] border transition-colors',
+                  'group relative mb-0 flex h-7 w-[220px] min-w-[220px] max-w-[220px] shrink-0 items-stretch rounded-t-[4px] border transition-colors',
                   active
                     ? 'z-10 border-[#d7dce3] border-b-white bg-white text-[#161823] after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
                     : 'border-transparent bg-transparent text-[#667085] hover:bg-[#e4e8ed] hover:text-[#344054]',
@@ -374,14 +374,15 @@ export function DashboardSheetBar({
                 onDragEnd={() => setDraggingId(undefined)}
               >
                 {renaming ? (
-                  <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent py-0 pl-3.5 pr-1 text-left text-[11px]">
                     <BarChart3 size={12} className="shrink-0 text-[#344054]" />
                     <input
                       autoFocus
                       value={renameDraft}
                       maxLength={60}
                       aria-label={`重命名 ${sheet.title}`}
-                      className="h-[22px] min-w-0 flex-1 rounded-[3px] border border-[#b8c0cc] bg-white px-1.5 text-[11px] text-[#161823] outline-none selection:bg-[rgba(254,44,85,.14)] focus:border-[var(--yak-brand-color)] focus:ring-1 focus:ring-[rgba(254,44,85,.12)]"
+                      className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-[11px] font-medium text-[#161823] outline-none shadow-none [appearance:none] focus:border-0 focus:outline-none focus:ring-0"
+                      onFocus={(event) => event.currentTarget.select()}
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => event.stopPropagation()}
                       onChange={(event) => setRenameDraft(event.target.value)}
@@ -426,23 +427,23 @@ export function DashboardSheetBar({
                   </button>
                 )}
 
-                {!renaming ? (
-                  <Dropdown menu={menuFor(sheet)} trigger={['click']} placement="topLeft">
-                    <button
-                      type="button"
-                      aria-label={`${sheet.title} Sheet 操作`}
-                      draggable={false}
-                      className={[
-                        'mr-1 flex w-6 shrink-0 items-center justify-center self-center rounded-[4px] text-[#818995] transition-all',
-                        'opacity-0 hover:bg-[#eef1f4] hover:text-[#344054] focus:opacity-100 focus:outline-none group-hover:opacity-100',
-                      ].join(' ')}
-                      onClick={(event) => event.stopPropagation()}
-                      onMouseDown={(event) => event.stopPropagation()}
-                    >
-                      <MoreHorizontal size={14} />
-                    </button>
-                  </Dropdown>
-                ) : null}
+                <Dropdown menu={menuFor(sheet)} trigger={['click']} placement="topLeft">
+                  <button
+                    type="button"
+                    aria-label={`${sheet.title} Sheet 操作`}
+                    draggable={false}
+                    className={[
+                      'mr-1 flex w-6 shrink-0 items-center justify-center self-center rounded-[4px] text-[#818995] transition-all',
+                      renaming
+                        ? 'opacity-100 hover:bg-[#eef1f4] hover:text-[#344054] focus:outline-none'
+                        : 'opacity-0 hover:bg-[#eef1f4] hover:text-[#344054] focus:opacity-100 focus:outline-none group-hover:opacity-100',
+                    ].join(' ')}
+                    onClick={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </Dropdown>
               </div>
             );
           }) : (
