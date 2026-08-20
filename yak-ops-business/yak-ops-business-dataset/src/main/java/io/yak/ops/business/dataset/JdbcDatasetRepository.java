@@ -10,7 +10,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -32,9 +34,20 @@ class JdbcDatasetRepository implements DatasetRepository {
           + "schema_snapshot, create_time FROM yak_dataset_version";
 
   private final JdbcTemplate jdbcTemplate;
+  private final ApplicationEventPublisher eventPublisher;
 
-  JdbcDatasetRepository(@Qualifier("yakBusinessDataSource") DataSource dataSource) {
+  @Autowired
+  JdbcDatasetRepository(
+      @Qualifier("yakBusinessDataSource") DataSource dataSource,
+      ApplicationEventPublisher eventPublisher) {
     this.jdbcTemplate = new JdbcTemplate(dataSource);
+    this.eventPublisher = eventPublisher;
+  }
+
+  /** Keeps focused repository tests source-compatible without a Spring event publisher. */
+  JdbcDatasetRepository(DataSource dataSource) {
+    this.jdbcTemplate = new JdbcTemplate(dataSource);
+    this.eventPublisher = null;
   }
 
   @Override
@@ -155,6 +168,7 @@ class JdbcDatasetRepository implements DatasetRepository {
         "UPDATE yak_dataset SET current_version_id = ?, update_time = NOW(6) WHERE id = ?",
         versionId, datasetId);
     if (updated != 1) throw new IllegalArgumentException("Dataset 不存在：" + datasetId);
+    requestLineageRefresh(datasetId);
   }
 
   @Override
@@ -163,6 +177,7 @@ class JdbcDatasetRepository implements DatasetRepository {
         "UPDATE yak_dataset SET status = ?, update_time = NOW(6) WHERE id = ?",
         status.name(), datasetId);
     if (updated != 1) throw new IllegalArgumentException("Dataset 不存在：" + datasetId);
+    requestLineageRefresh(datasetId);
   }
 
   @Override
@@ -171,6 +186,7 @@ class JdbcDatasetRepository implements DatasetRepository {
         "UPDATE yak_dataset SET name = ?, description = ?, update_time = NOW(6) WHERE id = ?",
         name, description, datasetId);
     if (updated != 1) throw new IllegalArgumentException("Dataset 不存在：" + datasetId);
+    requestLineageRefresh(datasetId);
   }
 
   @Override
@@ -242,6 +258,12 @@ class JdbcDatasetRepository implements DatasetRepository {
         "SELECT COALESCE(MAX(version_no), 0) + 1 FROM yak_dataset_version WHERE dataset_id = ?",
         Integer.class, datasetId);
     return value == null ? 1 : value;
+  }
+
+  private void requestLineageRefresh(long datasetId) {
+    if (eventPublisher != null) {
+      eventPublisher.publishEvent(new DatasetLineageRefreshRequested(datasetId));
+    }
   }
 
   private static Dataset mapDataset(ResultSet rs, int rowNum) throws SQLException {
