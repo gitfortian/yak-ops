@@ -259,3 +259,46 @@ ol {
 .yak-sql-run-glyph:active {
   transform: scale(1);
 }
+
+// Rule template library: keep the interface neutral and reserve brand red for
+// primary actions / destructive states instead of using it for every selection.
+div[class~='h-[calc(100vh-64px)]'][class~='min-h-[620px]'] {
+  aside button[class*='bg-[rgba(254,44,85,.08)]'] {
+    background: #f2f4f7 !important;
+    color: #161823 !important;
+  }
+
+  aside button[class*='bg-[rgba(254,44,85,.08)]']:hover {
+    background: #e9ecf1 !important;
+  }
+
+  aside button[class*='bg-[rgba(254,44,85,.08)]'] span[class*='text-[var(--yak-brand-color)]'] {
+    color: #475467 !important;
+  }
+
+  .ant-tabs .ant-tabs-ink-bar {
+    background: #161823 !important;
+  }
+
+  .ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: #161823 !important;
+    text-shadow: none !important;
+  }
+
+  .ant-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn {
+    color: #344054 !important;
+  }
+
+  main button[class*='text-[var(--yak-brand-color)]'] {
+    color: #172033 !important;
+  }
+
+  main button[class*='text-[var(--yak-brand-color)]']:hover {
+    color: #101828 !important;
+  }
+
+  main .ant-table .ant-tag {
+    color: #667085 !important;
+    background: #f2f4f7 !important;
+  }
+}
