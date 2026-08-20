@@ -290,31 +290,33 @@ export function DashboardSheetBar({
   return (
     <>
       <div
-        className="flex h-9 shrink-0 items-stretch border-t border-[#d9dde3] bg-[#f4f6f8] shadow-[0_-1px_0_rgba(16,24,40,.02)]"
+        className="flex h-8 shrink-0 items-stretch border-t border-[#d8dde4] bg-[#eef1f4] shadow-[0_-1px_0_rgba(16,24,40,.025)]"
         aria-label="仪表盘编辑 Sheet"
       >
-        <button
-          ref={dashboardRef}
-          type="button"
-          role="tab"
-          aria-selected={dashboardActive}
-          className={[
-            'relative flex h-full shrink-0 items-center gap-1.5 border-r border-[#dfe3e8] px-3.5 text-[11px] outline-none transition-colors',
-            'focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--yak-brand-color)]',
-            dashboardActive
-              ? 'bg-white font-medium text-[#161823] after:absolute after:inset-x-0 after:top-0 after:h-[2px] after:bg-[var(--yak-brand-color)]'
-              : 'text-[#626b78] hover:bg-white/80 hover:text-[#344054]',
-          ].join(' ')}
-          onClick={onDashboard}
-          onKeyDown={(event) => handleNavigation(event, 'dashboard')}
-        >
-          <LayoutDashboard size={13} className={dashboardActive ? 'text-[var(--yak-brand-color)]' : ''} />
-          <span>仪表盘</span>
-        </button>
+        <div className="flex shrink-0 items-end pl-1">
+          <button
+            ref={dashboardRef}
+            type="button"
+            role="tab"
+            aria-selected={dashboardActive}
+            className={[
+              'relative mb-0 flex h-7 shrink-0 items-center gap-1.5 rounded-t-[4px] border px-3 text-[11px] outline-none transition-colors',
+              'focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--yak-brand-color)]',
+              dashboardActive
+                ? 'z-10 border-[#d7dce3] border-b-white bg-white font-medium text-[#161823] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
+                : 'border-transparent text-[#667085] hover:bg-[#e4e8ed] hover:text-[#344054]',
+            ].join(' ')}
+            onClick={onDashboard}
+            onKeyDown={(event) => handleNavigation(event, 'dashboard')}
+          >
+            <LayoutDashboard size={13} className={dashboardActive ? 'text-[#344054]' : 'text-[#7d8591]'} />
+            <span>仪表盘</span>
+          </button>
+        </div>
 
         <div
           ref={viewportRef}
-          className="flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 flex-1 items-end gap-px overflow-x-auto overflow-y-hidden px-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           role="tablist"
         >
           {visibleSheets.length ? visibleSheets.map((sheet) => {
@@ -326,10 +328,10 @@ export function DashboardSheetBar({
                 draggable
                 title={note ? `${sheet.title}\n备注：${note}` : `${sheet.title} · 拖动可调整 Sheet 顺序`}
                 className={[
-                  'group relative flex h-full min-w-[116px] max-w-[210px] shrink-0 items-stretch border-r border-[#dfe3e8] transition-colors',
+                  'group relative mb-0 flex h-7 min-w-[112px] max-w-[210px] shrink-0 items-stretch rounded-t-[4px] border transition-colors',
                   active
-                    ? 'bg-white text-[#161823] after:absolute after:inset-x-0 after:top-0 after:h-[2px] after:bg-[var(--yak-brand-color)]'
-                    : 'bg-transparent text-[#626b78] hover:bg-white/80 hover:text-[#344054]',
+                    ? 'z-10 border-[#d7dce3] border-b-white bg-white text-[#161823] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
+                    : 'border-transparent bg-transparent text-[#667085] hover:bg-[#e4e8ed] hover:text-[#344054]',
                   draggingId === sheet.id ? 'opacity-45' : '',
                 ].join(' ')}
                 onDragStart={(event) => {
@@ -359,7 +361,7 @@ export function DashboardSheetBar({
                 >
                   <BarChart3
                     size={12}
-                    className={active ? 'shrink-0 text-[var(--yak-brand-color)]' : 'shrink-0 text-[#7d8591]'}
+                    className={active ? 'shrink-0 text-[#344054]' : 'shrink-0 text-[#7d8591]'}
                   />
                   <span className={active ? 'truncate font-medium' : 'truncate'}>{sheet.title}</span>
                   {note ? (
@@ -377,7 +379,7 @@ export function DashboardSheetBar({
                     draggable={false}
                     className={[
                       'mr-1 flex w-6 shrink-0 items-center justify-center self-center rounded-[4px] text-[#818995] transition-all',
-                      'opacity-0 hover:bg-[#eef0f3] hover:text-[#344054] focus:opacity-100 focus:outline-none group-hover:opacity-100',
+                      'opacity-0 hover:bg-[#eef1f4] hover:text-[#344054] focus:opacity-100 focus:outline-none group-hover:opacity-100',
                     ].join(' ')}
                     onClick={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.stopPropagation()}
@@ -388,19 +390,19 @@ export function DashboardSheetBar({
               </div>
             );
           }) : (
-            <div className="flex h-full items-center px-3 text-[10px] text-[#98a2b3]">
+            <div className="flex h-7 items-center px-3 text-[10px] text-[#98a2b3]">
               暂无图表 Sheet
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-stretch border-l border-[#dfe3e8] bg-[#f4f6f8]">
+        <div className="flex shrink-0 items-center border-l border-[#d8dde4] bg-[#eef1f4] px-0.5">
           <Tooltip title="向左滚动">
             <button
               type="button"
               aria-label="向左滚动图表 Sheet"
               disabled={!canScrollLeft}
-              className="flex w-7 items-center justify-center bg-transparent text-[#687180] transition-colors hover:bg-white disabled:cursor-default disabled:text-[#c7ccd4]"
+              className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-transparent text-[#687180] transition-colors hover:bg-[#e1e5ea] hover:text-[#344054] disabled:cursor-default disabled:text-[#c2c8d0] disabled:hover:bg-transparent"
               onClick={() => scrollSheets(-1)}
             >
               <ChevronLeft size={13} />
@@ -411,7 +413,7 @@ export function DashboardSheetBar({
               type="button"
               aria-label="向右滚动图表 Sheet"
               disabled={!canScrollRight}
-              className="flex w-7 items-center justify-center bg-transparent text-[#687180] transition-colors hover:bg-white disabled:cursor-default disabled:text-[#c7ccd4]"
+              className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-transparent text-[#687180] transition-colors hover:bg-[#e1e5ea] hover:text-[#344054] disabled:cursor-default disabled:text-[#c2c8d0] disabled:hover:bg-transparent"
               onClick={() => scrollSheets(1)}
             >
               <ChevronRight size={13} />
@@ -424,7 +426,7 @@ export function DashboardSheetBar({
                 <button
                   type="button"
                   aria-label="显示隐藏 Sheet"
-                  className="relative flex w-8 items-center justify-center border-l border-[#dfe3e8] bg-transparent text-[#687180] transition-colors hover:bg-white"
+                  className="relative flex h-7 w-8 items-center justify-center rounded-[4px] bg-transparent text-[#687180] transition-colors hover:bg-[#e1e5ea] hover:text-[#344054]"
                 >
                   <EyeOff size={13} />
                   <span className="absolute right-0.5 top-0.5 min-w-[12px] rounded-full bg-[#8d95a1] px-0.5 text-center text-[8px] leading-[12px] text-white">
@@ -435,12 +437,13 @@ export function DashboardSheetBar({
             </Dropdown>
           ) : null}
 
+          <div className="mx-0.5 h-4 w-px bg-[#d4d9e0]" />
           <Tooltip title="新建图表 Sheet">
             <button
               type="button"
               aria-label="新建图表 Sheet"
               disabled={!onAddChart || !canAddChart}
-              className="flex w-9 items-center justify-center border-l border-[#dfe3e8] bg-transparent text-[#596271] transition-colors hover:bg-white hover:text-[var(--yak-brand-color)] disabled:cursor-not-allowed disabled:text-[#c7ccd4]"
+              className="flex h-7 w-8 items-center justify-center rounded-[4px] bg-transparent text-[#596271] transition-colors hover:bg-[#e1e5ea] hover:text-[#161823] disabled:cursor-not-allowed disabled:text-[#c2c8d0] disabled:hover:bg-transparent"
               onClick={onAddChart}
             >
               <Plus size={14} />
