@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 
 import type { YakEditorSettings } from './editors/sql/editorSettings';
+import { getSqlMetadataContext } from './editors/sql/metadata/sqlMetadataContextStore';
 import type {
   CreateDevelopmentDirectoryPayload,
   CreateDevelopmentNodePayload,
@@ -90,11 +91,17 @@ export const runDevelopmentTask = (
 export const previewDevelopmentSqlLineage = (
   nodeId: DevelopmentId,
   payload: DevelopmentSqlLineagePreviewRequest,
-): Promise<ApiResponse<DevelopmentSqlLineagePreview>> =>
-  HttpUtils.post<DevelopmentSqlLineagePreview>(
+): Promise<ApiResponse<DevelopmentSqlLineagePreview>> => {
+  const metadataContext = getSqlMetadataContext(nodeId);
+  return HttpUtils.post<DevelopmentSqlLineagePreview>(
     `${NODE_API}/${nodeId}/lineage/preview`,
-    payload,
+    {
+      ...payload,
+      databaseName: payload.databaseName ?? metadataContext?.database,
+      schemaName: payload.schemaName ?? metadataContext?.schema,
+    },
   );
+};
 
 const queryString = (query: object) => {
   const params = new URLSearchParams();
