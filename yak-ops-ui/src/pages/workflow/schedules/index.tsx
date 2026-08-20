@@ -575,7 +575,12 @@ export default function WorkflowScheduleConfigPage() {
                     loading={saving}
                     disabled={!canEdit}
                     icon={<Save size={15} />}
-                    className="!h-9 !min-w-[112px] !rounded-lg !px-5 !font-medium !text-white"
+                    className={[
+                      '!h-9 !min-w-[112px] !rounded-lg !px-5 !font-medium',
+                      canEdit
+                        ? '!text-white'
+                        : '!border-[#e3e6eb] !bg-[#f2f3f5] !text-[#a5acb6] !shadow-none',
+                    ].join(' ')}
                     onClick={() => void handleSave()}
                   >
                     保存配置
