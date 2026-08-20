@@ -30,7 +30,9 @@ class DevelopmentSqlLineagePreviewServiceTest {
             FROM ods.orders o
             GROUP BY o.id
             """,
-        "{\"dataSourceId\":\"12\"}");
+        "{\"dataSourceId\":\"12\"}",
+        null,
+        null);
 
     assertEquals("SUCCESS", preview.status());
     assertEquals(1, preview.inputTableCount());
@@ -56,7 +58,9 @@ class DevelopmentSqlLineagePreviewServiceTest {
         7L,
         "SQL",
         "INSERT INTO dws.order_copy (id) SELECT s.id FROM ods.orders s",
-        "{\"dataSourceId\":\"3\"}");
+        "{\"dataSourceId\":\"3\"}",
+        null,
+        null);
 
     assertEquals("SUCCESS", preview.status());
     assertEquals(1, preview.inputTableCount());
@@ -81,8 +85,10 @@ class DevelopmentSqlLineagePreviewServiceTest {
     DevelopmentSqlLineagePreview preview = service.preview(
         9L,
         "SQL",
-        "SELECT FROM",
-        "{\"dataSourceId\":\"1\"}");
+        "SELECT (",
+        "{\"dataSourceId\":\"1\"}",
+        null,
+        null);
 
     assertEquals("FAILED", preview.status());
     assertTrue(preview.parseError() != null && !preview.parseError().isBlank());
@@ -108,7 +114,9 @@ class DevelopmentSqlLineagePreviewServiceTest {
             5L,
             "SQL",
             "SELECT 1",
-            "{\"dataSourceId\":\"1\"}"));
+            "{\"dataSourceId\":\"1\"}",
+            null,
+            null));
   }
 
   private static DevelopmentSqlLineagePreviewService service(DevelopmentNode node) {
