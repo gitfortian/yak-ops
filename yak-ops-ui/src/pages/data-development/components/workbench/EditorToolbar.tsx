@@ -11,9 +11,11 @@ interface EditorToolbarProps {
   onRun: () => void;
   onSave: () => void;
   onPublish: () => void;
+  onLineage?: () => void;
   running: boolean;
   saving: boolean;
   publishing: boolean;
+  lineageLoading?: boolean;
 }
 
 const iconButtonClassName =
@@ -26,9 +28,11 @@ const EditorToolbar = ({
   onRun,
   onSave,
   onPublish,
+  onLineage,
   running,
   saving,
   publishing,
+  lineageLoading,
 }: EditorToolbarProps) => {
   const Toolbar = definition.Toolbar;
   const capabilities = definition.capabilities;
@@ -43,9 +47,11 @@ const EditorToolbar = ({
             onRun={onRun}
             onSave={onSave}
             onPublish={onPublish}
+            onLineage={onLineage}
             running={running}
             saving={saving}
             publishing={publishing}
+            lineageLoading={lineageLoading}
           />
         </div>
       ) : (

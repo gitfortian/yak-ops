@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 
 import type { YakEditorSettings } from './editors/sql/editorSettings';
+import { getSqlMetadataContext } from './editors/sql/metadata/sqlMetadataContextStore';
 import type {
   CreateDevelopmentDirectoryPayload,
   CreateDevelopmentNodePayload,
@@ -12,6 +13,8 @@ import type {
   DevelopmentReleaseQuery,
   DevelopmentReleaseSummary,
   DevelopmentResourceNode,
+  DevelopmentSqlLineagePreview,
+  DevelopmentSqlLineagePreviewRequest,
   DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
   DevelopmentTaskExecutionDetail,
@@ -83,6 +86,22 @@ export const runDevelopmentTask = (
   payload: DevelopmentTaskDefinition,
 ): Promise<ApiResponse<DevelopmentTaskRunResult>> =>
   HttpUtils.post<DevelopmentTaskRunResult>(`${NODE_API}/${nodeId}/run`, payload);
+
+/** Parse current SQL editor content without saving, publishing or registering lineage. */
+export const previewDevelopmentSqlLineage = (
+  nodeId: DevelopmentId,
+  payload: DevelopmentSqlLineagePreviewRequest,
+): Promise<ApiResponse<DevelopmentSqlLineagePreview>> => {
+  const metadataContext = getSqlMetadataContext(nodeId);
+  return HttpUtils.post<DevelopmentSqlLineagePreview>(
+    `${NODE_API}/${nodeId}/lineage/preview`,
+    {
+      ...payload,
+      databaseName: payload.databaseName ?? metadataContext?.database,
+      schemaName: payload.schemaName ?? metadataContext?.schema,
+    },
+  );
+};
 
 const queryString = (query: object) => {
   const params = new URLSearchParams();
