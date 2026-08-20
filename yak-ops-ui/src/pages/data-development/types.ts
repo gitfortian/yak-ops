@@ -114,6 +114,73 @@ export interface DevelopmentSqlRunOutput {
   dataSourceId?: string;
 }
 
+export type DevelopmentSqlLineagePreviewStatus =
+  | 'SUCCESS'
+  | 'PARTIAL'
+  | 'UNRESOLVED'
+  | 'FAILED';
+
+export interface DevelopmentSqlLineagePreviewAsset {
+  id: string;
+  assetKey: string;
+  assetType: 'TABLE' | 'SQL_TASK';
+  name: string;
+  sourceType?: string;
+  sourceId?: string;
+  parentAssetId?: string;
+  dataSourceId?: string;
+  databaseName?: string;
+  schemaName?: string;
+  tableName?: string;
+  columnName?: string;
+  properties?: Record<string, unknown>;
+}
+
+export interface DevelopmentSqlLineagePreviewRelation {
+  id: string;
+  sourceAssetId: string;
+  targetAssetId: string;
+  relationType: 'READS_FROM' | 'WRITES_TO';
+  sourceType?: string;
+  sourceId?: string;
+  expression?: string;
+  properties?: Record<string, unknown>;
+}
+
+export interface DevelopmentSqlLineagePreviewGraph {
+  root: DevelopmentSqlLineagePreviewAsset;
+  direction: 'BOTH';
+  depth: number;
+  nodes: DevelopmentSqlLineagePreviewAsset[];
+  relations: DevelopmentSqlLineagePreviewRelation[];
+}
+
+export interface DevelopmentSqlLineageColumnMapping {
+  sourceTable: string;
+  sourceColumn: string;
+  targetTable?: string | null;
+  targetColumn: string;
+  mappingKind: 'IDENTITY' | 'TRANSFORMATION' | 'AGGREGATION';
+  expression?: string | null;
+  outputOrdinal: number;
+  sourceOrdinal: number;
+}
+
+export interface DevelopmentSqlLineagePreview {
+  status: DevelopmentSqlLineagePreviewStatus;
+  dataSourceId: string;
+  statementCount: number;
+  inputTableCount: number;
+  outputTableCount: number;
+  columnMappingCount: number;
+  candidateOutputColumnCount: number;
+  unresolvedColumnReferenceCount: number;
+  parseError?: string | null;
+  columnParseError?: string | null;
+  graph: DevelopmentSqlLineagePreviewGraph;
+  columnMappings: DevelopmentSqlLineageColumnMapping[];
+}
+
 export interface DevelopmentTaskExecutionSummary {
   id: DevelopmentId;
   nodeId: DevelopmentId;
