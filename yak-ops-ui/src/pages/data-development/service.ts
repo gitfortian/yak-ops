@@ -12,6 +12,7 @@ import type {
   DevelopmentReleaseQuery,
   DevelopmentReleaseSummary,
   DevelopmentResourceNode,
+  DevelopmentSqlLineagePreview,
   DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
   DevelopmentTaskExecutionDetail,
@@ -83,6 +84,16 @@ export const runDevelopmentTask = (
   payload: DevelopmentTaskDefinition,
 ): Promise<ApiResponse<DevelopmentTaskRunResult>> =>
   HttpUtils.post<DevelopmentTaskRunResult>(`${NODE_API}/${nodeId}/run`, payload);
+
+/** Parse current SQL editor content without saving, publishing or registering lineage. */
+export const previewDevelopmentSqlLineage = (
+  nodeId: DevelopmentId,
+  payload: DevelopmentTaskDefinition,
+): Promise<ApiResponse<DevelopmentSqlLineagePreview>> =>
+  HttpUtils.post<DevelopmentSqlLineagePreview>(
+    `${NODE_API}/${nodeId}/lineage/preview`,
+    payload,
+  );
 
 const queryString = (query: object) => {
   const params = new URLSearchParams();
