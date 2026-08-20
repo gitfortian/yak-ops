@@ -2,7 +2,17 @@ import { history } from '@umijs/max';
 import { Button, Drawer, Empty, Segmented, Tooltip } from 'antd';
 import { ArrowUpRight, Expand, Focus, GitBranch, LoaderCircle, RefreshCw, Shrink } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import ReactFlow, { Background, Controls, type Edge, MarkerType, type Node, type ReactFlowInstance } from 'reactflow';
+import ReactFlow, {
+  Background,
+  BaseEdge,
+  Controls,
+  type Edge,
+  type EdgeProps,
+  getSmoothStepPath,
+  MarkerType,
+  type Node,
+  type ReactFlowInstance,
+} from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import { buildLineageView } from '@/pages/data-analysis/lineage/graph-layout';
@@ -10,6 +20,7 @@ import LineageNode, { type LineageNodeData } from '@/pages/data-analysis/lineage
 import type { LineageAssetType, LineageGraph } from '@/pages/data-analysis/lineage/types';
 import type { DevelopmentId, DevelopmentSqlLineageColumnMapping, DevelopmentSqlLineagePreview } from '../../../types';
 import ColumnLineageNode, { type ColumnLineageNodeData, columnHandleId } from './ColumnLineageNode';
+import { LineageInteractionContext, useLineageInteraction } from './LineageInteractionContext';
 
 interface Props {
   nodeId: DevelopmentId;
@@ -24,7 +35,63 @@ interface FieldSelection {
   mappings: DevelopmentSqlLineageColumnMapping[];
 }
 
-const nodeTypes = { lineage: LineageNode, columnLineage: ColumnLineageNode };
+interface InteractiveEdgeData {
+  defaultLabel?: string;
+}
+const InteractiveEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  data,
+}: EdgeProps<InteractiveEdgeData>) => {
+  const interaction = useLineageInteraction();
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  });
+  const hasHover = Boolean(interaction.hoveredNodeId || interaction.hoveredFieldKey);
+  const active = interaction.relatedEdgeIds.has(id) || interaction.relatedMappingIds.has(id);
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        style={{
+          stroke: active ? '#f04473' : '#c5cad1',
+          strokeWidth: active ? 2.2 : 1.25,
+          opacity: hasHover && !active ? 0.16 : 1,
+          transition: 'opacity 120ms, stroke 120ms',
+        }}
+      />
+      {data?.defaultLabel ? (
+        <text x={labelX} y={labelY} textAnchor="middle" className="fill-[#6941c6] text-[10px]">
+          {data.defaultLabel}
+        </text>
+      ) : null}
+    </>
+  );
+};
+const InteractiveLineageNode = (props: Parameters<typeof LineageNode>[0]) => {
+  const interaction = useLineageInteraction();
+  const dimmed = Boolean(interaction.hoveredNodeId && !interaction.relatedNodeIds.has(props.id));
+  return (
+    <div style={{ opacity: dimmed ? 0.25 : 1, transition: 'opacity 120ms' }}>
+      <LineageNode {...props} />
+    </div>
+  );
+};
+const nodeTypes = { lineage: InteractiveLineageNode, columnLineage: ColumnLineageNode };
+const edgeTypes = { interactive: InteractiveEdge };
 const visibleTypes = new Set<LineageAssetType>(['TABLE', 'SQL_TASK']);
 const statusLabel = { SUCCESS: '解析成功', PARTIAL: '部分解析', UNRESOLVED: '字段待解析', FAILED: '解析失败' } as const;
 const statusClassName = {
@@ -93,6 +160,15 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
     }
     return ids;
   }, [hoveredAsset, view]);
+  const relatedTableEdges = useMemo(
+    () =>
+      new Set(
+        view?.relations
+          .filter((edge) => relatedAssets.has(edge.sourceAssetId) && relatedAssets.has(edge.targetAssetId))
+          .map((edge) => edge.id) || [],
+      ),
+    [relatedAssets, view?.relations],
+  );
 
   const tableNodes = useMemo<Array<Node<LineageNodeData>>>(
     () =>
@@ -102,31 +178,19 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
         position,
         draggable: true,
         data: { asset, root: asset.id === graph?.root.id },
-        style: hoveredAsset && !relatedAssets.has(asset.id) ? { opacity: 0.28 } : undefined,
       })) || [],
-    [graph?.root.id, hoveredAsset, relatedAssets, view?.nodes],
+    [graph?.root.id, view?.nodes],
   );
   const tableEdges = useMemo<Edge[]>(
     () =>
-      view?.relations.map((relation) => {
-        const active = Boolean(
-          hoveredAsset && relatedAssets.has(relation.sourceAssetId) && relatedAssets.has(relation.targetAssetId),
-        );
-        return {
-          id: relation.id,
-          source: relation.sourceAssetId,
-          target: relation.targetAssetId,
-          type: 'smoothstep',
-          animated: active,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: active ? '#f04473' : '#98a2b3' },
-          style: {
-            stroke: active ? '#f04473' : '#c5cad1',
-            strokeWidth: active ? 2.2 : 1.25,
-            opacity: hoveredAsset && !active ? 0.2 : 1,
-          },
-        };
-      }) || [],
-    [hoveredAsset, relatedAssets, view?.relations],
+      view?.relations.map((relation) => ({
+        id: relation.id,
+        source: relation.sourceAssetId,
+        target: relation.targetAssetId,
+        type: 'interactive',
+        markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: '#98a2b3' },
+      })) || [],
+    [view?.relations],
   );
 
   const activeMappingIds = useMemo(
@@ -186,7 +250,6 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
                 (role === 'source' ? item.sourceColumn : item.targetColumn) === name && item.mappingKind !== 'IDENTITY',
             ),
           })),
-          activeFields: new Set(hoveredField && hoveredField.table === table ? [hoveredField.column] : []),
           onFieldClick: openField,
           onFieldHover: hoverField,
         },
@@ -196,34 +259,43 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
       ...layout.sourceTables.map(({ table, position }) => makeNode('source', table, position)),
       ...layout.targetTables.map(({ table, position }) => makeNode('target', table, position)),
     ];
-  }, [hoveredField, hoverField, layout, openField, preview?.columnMappings]);
+  }, [hoverField, layout, openField, preview?.columnMappings]);
   const columnEdges = useMemo<Edge[]>(
     () =>
       (preview?.columnMappings || [])
         .filter((item) => item.targetTable)
         .map((item) => {
           const id = `${item.outputOrdinal}:${item.sourceOrdinal}`;
-          const active = !hoveredField || activeMappingIds.has(id);
           return {
             id,
             source: nodeIdFor('source', item.sourceTable),
             sourceHandle: columnHandleId(item.sourceColumn),
             target: nodeIdFor('target', item.targetTable!),
             targetHandle: columnHandleId(item.targetColumn),
-            type: 'smoothstep',
-            animated: Boolean(hoveredField && active),
-            label: item.mappingKind === 'IDENTITY' ? undefined : item.mappingKind === 'AGGREGATION' ? '聚合' : '转换',
-            labelStyle: { fontSize: 10, fill: '#6941c6' },
-            labelBgStyle: { fill: '#f4f0ff' },
-            markerEnd: { type: MarkerType.ArrowClosed, color: active ? '#f04473' : '#b9c0c9', width: 13, height: 13 },
-            style: {
-              stroke: active ? '#f04473' : '#c7ccd4',
-              strokeWidth: active ? 2 : 1.15,
-              opacity: active ? 1 : 0.12,
+            type: 'interactive',
+            data: {
+              defaultLabel:
+                item.mappingKind === 'IDENTITY'
+                  ? undefined
+                  : item.mappingKind === 'AGGREGATION'
+                    ? 'SUM / COUNT'
+                    : 'TRANSFORM',
             },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#b9c0c9', width: 13, height: 13 },
           };
         }),
-    [activeMappingIds, hoveredField, preview?.columnMappings],
+    [preview?.columnMappings],
+  );
+
+  const interaction = useMemo(
+    () => ({
+      hoveredNodeId: hoveredAsset,
+      hoveredFieldKey: hoveredField ? fieldKey(hoveredField.table, hoveredField.column) : undefined,
+      relatedNodeIds: relatedAssets,
+      relatedEdgeIds: relatedTableEdges,
+      relatedMappingIds: hoveredField ? activeMappingIds : new Set<string>(),
+    }),
+    [activeMappingIds, hoveredAsset, hoveredField, relatedAssets, relatedTableEdges],
   );
 
   if (loading && !preview)
@@ -341,26 +413,28 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
         </Button>
       </div>
       <div className="relative min-h-0 flex-1 bg-[#f8fafc]">
-        <ReactFlow
-          key={`${mode}:${graph?.root.id}`}
-          nodes={isColumn ? columnNodes : tableNodes}
-          edges={isColumn ? columnEdges : tableEdges}
-          nodeTypes={nodeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.25, minZoom: 0.45, maxZoom: 1 }}
-          minZoom={0.25}
-          maxZoom={1.5}
-          nodesDraggable
-          nodesConnectable={false}
-          elementsSelectable={false}
-          onInit={setFlow}
-          onNodeMouseEnter={(_, node) => !isColumn && setHoveredAsset(node.id)}
-          onNodeMouseLeave={() => setHoveredAsset(undefined)}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background gap={18} size={1} color="#dfe3e8" />
-          <Controls showInteractive={false} position="bottom-right" />
-        </ReactFlow>
+        <LineageInteractionContext.Provider value={interaction}>
+          <ReactFlow
+            nodes={isColumn ? columnNodes : tableNodes}
+            edges={isColumn ? columnEdges : tableEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.25, minZoom: 0.45, maxZoom: 1 }}
+            minZoom={0.25}
+            maxZoom={1.5}
+            nodesDraggable
+            nodesConnectable={false}
+            elementsSelectable
+            onInit={setFlow}
+            onNodeMouseEnter={(_, node) => !isColumn && setHoveredAsset(node.id)}
+            onNodeMouseLeave={() => setHoveredAsset(undefined)}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background gap={18} size={1} color="#dfe3e8" />
+            <Controls showInteractive={false} position="bottom-right" />
+          </ReactFlow>
+        </LineageInteractionContext.Provider>
       </div>
       <Drawer width={430} title="字段血缘详情" open={Boolean(selection)} onClose={() => setSelection(undefined)}>
         {selection ? (
