@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,6 +46,28 @@ class LineageServiceTest {
     LineageGraph upstream = service.upstream(chartE.id(), 4);
     assertTrue(ids(upstream).contains(tableA.id()));
     assertTrue(ids(upstream).contains(datasetD.id()));
+  }
+
+  @Test
+  void searchesAssetsByKeywordTypeAndLimit() {
+    InMemoryLineageRepository repository = new InMemoryLineageRepository();
+    LineageService service = new LineageService(repository);
+
+    service.registerAsset(new LineageService.RegisterAssetCommand(
+        "dataset:1", LineageAssetType.DATASET, "Sales Dataset", "TEST", "1", null,
+        null, null, null, null, null, null));
+    service.registerAsset(new LineageService.RegisterAssetCommand(
+        "dataset:2", LineageAssetType.DATASET, "Inventory", "TEST", "2", null,
+        null, null, null, null, null, null));
+    service.registerAsset(new LineageService.RegisterAssetCommand(
+        "chart:1", LineageAssetType.CHART, "Sales Chart", "TEST", "3", null,
+        null, null, null, null, null, null));
+
+    List<LineageAsset> values = service.searchAssets("sales", LineageAssetType.DATASET, 10);
+
+    assertEquals(1, values.size());
+    assertEquals("dataset:1", values.get(0).assetKey());
+    assertEquals(1, service.searchAssets(null, LineageAssetType.DATASET, 1).size());
   }
 
   private static Set<Long> ids(LineageGraph graph) {
@@ -110,6 +132,18 @@ class LineageServiceTest {
     public Optional<LineageAsset> findAssetByKey(String assetKey) {
       Long id = assetKeys.get(assetKey);
       return id == null ? Optional.empty() : findAsset(id);
+    }
+
+    @Override
+    public List<LineageAsset> searchAssets(String keyword, LineageAssetType assetType, int limit) {
+      String normalized = keyword == null ? "" : keyword.toLowerCase(Locale.ROOT);
+      return assets.values().stream()
+          .filter(asset -> assetType == null || asset.assetType() == assetType)
+          .filter(asset -> normalized.isBlank()
+              || asset.name().toLowerCase(Locale.ROOT).contains(normalized)
+              || asset.assetKey().toLowerCase(Locale.ROOT).contains(normalized))
+          .limit(limit)
+          .toList();
     }
 
     @Override

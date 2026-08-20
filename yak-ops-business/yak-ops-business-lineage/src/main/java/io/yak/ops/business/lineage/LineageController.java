@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -68,6 +69,16 @@ public class LineageController {
         request.version(),
         request.observedAt(),
         request.properties())));
+  }
+
+  @Operation(summary = "搜索血缘资产")
+  @GetMapping("/assets")
+  public Result<List<LineageAsset>> searchAssets(
+      @RequestParam(value = "keyword", required = false) @Size(max = 200) String keyword,
+      @RequestParam(value = "assetType", required = false) LineageAssetType assetType,
+      @RequestParam(value = "limit", defaultValue = "30")
+      @Min(1) @Max(LineageService.MAX_ASSET_SEARCH_LIMIT) int limit) {
+    return Result.success(service.searchAssets(keyword, assetType, limit));
   }
 
   @Operation(summary = "查询血缘资产")

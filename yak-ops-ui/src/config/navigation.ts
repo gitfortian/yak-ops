@@ -44,6 +44,7 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'dashboard-editor', path: '/dashboard/:id/edit', title: '仪表盘编辑', component: './dashboard/editor', hidden: true, parentId: 'dashboard' },
   { id: 'dashboard-viewer', path: '/dashboard/:id', title: '仪表盘查看', component: './dashboard/viewer', hidden: true, parentId: 'dashboard' },
   { id: 'data-analysis-catalog', mode: 'public', path: '/data-analysis/data-catalog', title: '数据目录', component: './data-analysis/data-catalog', iconKey: 'database', menuGroup: 'data-analysis', order: 20 },
+  { id: 'data-analysis-lineage', mode: 'public', path: '/data-analysis/lineage', title: '数据血缘', component: './data-analysis/lineage', iconKey: 'workflow', menuGroup: 'data-analysis', order: 25 },
   { id: 'digital-screen', mode: 'public', path: '/digital-screen', title: '数字化大屏', component: './digital-screen', iconKey: 'insight', menuGroup: 'data-analysis', order: 30 },
   { id: 'digital-screen-new', path: '/digital-screen/new', title: '新建数字化大屏', component: './digital-screen/new', hidden: true, parentId: 'digital-screen' },
   { id: 'digital-screen-editor', path: '/digital-screen/:id/edit', title: '数字化大屏编辑', component: './digital-screen/editor', hidden: true, parentId: 'digital-screen' },
