@@ -1,0 +1,137 @@
+package io.yak.ops.business.development.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview;
+import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
+import io.yak.ops.business.lineage.LineageRelationType;
+import java.time.Instant;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+
+class DevelopmentSqlLineagePreviewServiceTest {
+
+  @Test
+  void previewsCurrentSelectWithoutPersistingAProductionTarget() {
+    DevelopmentSqlLineagePreviewService service = service(sqlNode(1L, "订单汇总"));
+
+    DevelopmentSqlLineagePreview preview = service.preview(
+        1L,
+        "SQL",
+        """
+            SELECT o.id, SUM(o.amount) AS total_amount
+            FROM ods.orders o
+            GROUP BY o.id
+            """,
+        "{\"dataSourceId\":\"12\"}");
+
+    assertEquals("SUCCESS", preview.status());
+    assertEquals(1, preview.inputTableCount());
+    assertEquals(0, preview.outputTableCount());
+    assertEquals(2, preview.columnMappingCount());
+    assertEquals(2, preview.graph().nodes().size());
+    assertEquals(1, preview.graph().relations().size());
+    assertEquals(LineageRelationType.READS_FROM, preview.graph().relations().get(0).relationType());
+    assertTrue(preview.graph().nodes().stream()
+        .anyMatch(asset -> "table:12:ods.orders".equals(asset.assetKey())));
+    assertTrue(preview.columnMappings().stream()
+        .anyMatch(mapping -> "amount".equals(mapping.sourceColumn())
+            && "total_amount".equals(mapping.targetColumn())
+            && "AGGREGATION".equals(mapping.mappingKind())));
+    assertNull(preview.columnMappings().get(0).targetTable());
+  }
+
+  @Test
+  void previewsInsertAsInputTaskOutputAndKeepsColumnEvidence() {
+    DevelopmentSqlLineagePreviewService service = service(sqlNode(7L, "写入汇总"));
+
+    DevelopmentSqlLineagePreview preview = service.preview(
+        7L,
+        "SQL",
+        "INSERT INTO dws.order_copy (id) SELECT s.id FROM ods.orders s",
+        "{\"dataSourceId\":\"3\"}");
+
+    assertEquals("SUCCESS", preview.status());
+    assertEquals(1, preview.inputTableCount());
+    assertEquals(1, preview.outputTableCount());
+    assertEquals(3, preview.graph().nodes().size());
+    assertEquals(2, preview.graph().relations().size());
+    assertTrue(preview.graph().relations().stream()
+        .anyMatch(relation -> relation.relationType() == LineageRelationType.READS_FROM));
+    assertTrue(preview.graph().relations().stream()
+        .anyMatch(relation -> relation.relationType() == LineageRelationType.WRITES_TO));
+    assertTrue(preview.columnMappings().stream()
+        .anyMatch(mapping -> "ods.orders".equals(mapping.sourceTable())
+            && "id".equals(mapping.sourceColumn())
+            && "dws.order_copy".equals(mapping.targetTable())
+            && "id".equals(mapping.targetColumn())));
+  }
+
+  @Test
+  void returnsFailedPreviewForInvalidSqlInsteadOfWritingStaleLineage() {
+    DevelopmentSqlLineagePreviewService service = service(sqlNode(9L, "错误 SQL"));
+
+    DevelopmentSqlLineagePreview preview = service.preview(
+        9L,
+        "SQL",
+        "SELECT FROM",
+        "{\"dataSourceId\":\"1\"}");
+
+    assertEquals("FAILED", preview.status());
+    assertTrue(preview.parseError() != null && !preview.parseError().isBlank());
+    assertEquals(1, preview.graph().nodes().size());
+    assertTrue(preview.graph().relations().isEmpty());
+  }
+
+  @Test
+  void rejectsNonSqlNode() {
+    DevelopmentSqlLineagePreviewService service = service(new DevelopmentNode(
+        5L,
+        "Python",
+        "PYTHON",
+        null,
+        null,
+        true,
+        Instant.now(),
+        Instant.now()));
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> service.preview(
+            5L,
+            "SQL",
+            "SELECT 1",
+            "{\"dataSourceId\":\"1\"}"));
+  }
+
+  private static DevelopmentSqlLineagePreviewService service(DevelopmentNode node) {
+    DevelopmentNodeRepository repository = mock(DevelopmentNodeRepository.class);
+    when(repository.findById(node.id())).thenReturn(Optional.of(node));
+    SqlColumnLineageParser columnParser = new DerivedAwareSqlColumnLineageParser();
+    return new DevelopmentSqlLineagePreviewService(
+        repository,
+        new SqlTableLineageParser(),
+        columnParser,
+        new DevelopmentSqlProjectionLineageAnalyzer(columnParser),
+        new ObjectMapper());
+  }
+
+  private static DevelopmentNode sqlNode(long id, String name) {
+    return new DevelopmentNode(
+        id,
+        name,
+        "SQL",
+        null,
+        null,
+        true,
+        Instant.now(),
+        Instant.now());
+  }
+}
