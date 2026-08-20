@@ -68,6 +68,67 @@ body {
   background: transparent;
 }
 
+// Ant Design Table uses its own scroll containers and, with sticky enabled,
+// an extra simulated scrollbar. Keep both variants aligned with the global style.
+.ant-table-content,
+.ant-table-body {
+  scrollbar-color: rgba(0, 0, 0, 0.32) transparent;
+  scrollbar-width: thin;
+}
+
+.ant-table-content::-webkit-scrollbar,
+.ant-table-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ant-table-content::-webkit-scrollbar-track,
+.ant-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ant-table-content::-webkit-scrollbar-thumb,
+.ant-table-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+.ant-table-content::-webkit-scrollbar-thumb:hover,
+.ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.45);
+  background-clip: padding-box;
+}
+
+.ant-table-content::-webkit-scrollbar-button,
+.ant-table-body::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.ant-table-content::-webkit-scrollbar-corner,
+.ant-table-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ant-table-wrapper .ant-table-sticky-scroll {
+  height: 10px !important;
+  background: transparent !important;
+}
+
+.ant-table-wrapper .ant-table-sticky-scroll-bar {
+  bottom: 2px !important;
+  height: 6px !important;
+  background: rgba(0, 0, 0, 0.32) !important;
+  border-radius: 999px !important;
+}
+
+.ant-table-wrapper .ant-table-sticky-scroll-bar:hover {
+  background: rgba(0, 0, 0, 0.45) !important;
+}
+
 ul,
 ol {
   list-style: none;
