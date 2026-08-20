@@ -10,7 +10,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -29,9 +31,20 @@ class JdbcAnalysisRepository implements AnalysisRepository {
       """;
 
   private final JdbcTemplate jdbcTemplate;
+  private final ApplicationEventPublisher eventPublisher;
 
-  JdbcAnalysisRepository(@Qualifier("yakBusinessDataSource") DataSource dataSource) {
+  @Autowired
+  JdbcAnalysisRepository(
+      @Qualifier("yakBusinessDataSource") DataSource dataSource,
+      ApplicationEventPublisher eventPublisher) {
     this.jdbcTemplate = new JdbcTemplate(dataSource);
+    this.eventPublisher = eventPublisher;
+  }
+
+  /** Keeps focused repository tests source-compatible without a Spring event publisher. */
+  JdbcAnalysisRepository(DataSource dataSource) {
+    this.jdbcTemplate = new JdbcTemplate(dataSource);
+    this.eventPublisher = null;
   }
 
   @Override
@@ -62,7 +75,9 @@ class JdbcAnalysisRepository implements AnalysisRepository {
     }, keyHolder);
     Number key = keyHolder.getKey();
     if (key == null) throw new IllegalStateException("创建 Analysis 后未返回主键");
-    return key.longValue();
+    long analysisId = key.longValue();
+    requestLineageRefresh(AnalysisLineageRefreshRequested.refresh(analysisId));
+    return analysisId;
   }
 
   @Override
@@ -89,6 +104,7 @@ class JdbcAnalysisRepository implements AnalysisRepository {
         visualConfigJson,
         analysisId);
     if (updated != 1) throw new IllegalArgumentException("Analysis 不存在：" + analysisId);
+    requestLineageRefresh(AnalysisLineageRefreshRequested.refresh(analysisId));
   }
 
   @Override
@@ -110,6 +126,11 @@ class JdbcAnalysisRepository implements AnalysisRepository {
   public void delete(long analysisId) {
     int deleted = jdbcTemplate.update("DELETE FROM yak_analysis WHERE id = ?", analysisId);
     if (deleted != 1) throw new IllegalArgumentException("Analysis 不存在：" + analysisId);
+    requestLineageRefresh(AnalysisLineageRefreshRequested.deleted(analysisId));
+  }
+
+  private void requestLineageRefresh(AnalysisLineageRefreshRequested event) {
+    if (eventPublisher != null) eventPublisher.publishEvent(event);
   }
 
   private static AnalysisRow map(ResultSet rs, int rowNum) throws SQLException {

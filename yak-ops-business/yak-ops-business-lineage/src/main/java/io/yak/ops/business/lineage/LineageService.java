@@ -92,7 +92,8 @@ public class LineageService {
         .orElseThrow(() -> new IllegalArgumentException("血缘资产不存在：" + assetId));
   }
 
-  @Transactional(readOnly = true)
+  /** Missing-by-key is a normal fallback branch for derived metadata registration. */
+  @Transactional(readOnly = true, noRollbackFor = IllegalArgumentException.class)
   public LineageAsset getAssetByKey(String assetKey) {
     String normalized = required(assetKey, "assetKey", 512);
     return repository.findAssetByKey(normalized)
