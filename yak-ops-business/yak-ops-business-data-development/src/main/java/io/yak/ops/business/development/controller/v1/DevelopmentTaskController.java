@@ -101,7 +101,9 @@ public class DevelopmentTaskController {
         nodeId,
         request.taskType(),
         request.content(),
-        request.configJson()));
+        request.configJson(),
+        request.databaseName(),
+        request.schemaName()));
   }
 
   @Operation(summary = "发布节点版本")
