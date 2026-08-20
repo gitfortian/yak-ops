@@ -31,4 +31,12 @@ public final class DevelopmentTaskApi {
       String content,
       String configJson) {
   }
+
+  /** Parses the current SQL editor definition without saving, publishing or persisting lineage. */
+  public record LineagePreviewRequest(
+      @NotBlank String taskType,
+      @Min(1) int schemaVersion,
+      String content,
+      String configJson) {
+  }
 }
