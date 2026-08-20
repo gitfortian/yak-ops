@@ -26,9 +26,11 @@ export interface DevelopmentEditorToolbarContext
   onRun: () => void;
   onSave: () => void;
   onPublish: () => void;
+  onLineage?: () => void;
   running: boolean;
   saving: boolean;
   publishing: boolean;
+  lineageLoading?: boolean;
 }
 
 export interface DevelopmentEditorRunResultContext
