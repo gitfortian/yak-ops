@@ -1,13 +1,17 @@
-import { LoaderCircle, X } from 'lucide-react';
+import { GitBranch, LoaderCircle, Table2, X } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useState } from 'react';
 
+import SqlLineagePreviewPanel from '../../editors/sql/lineage/SqlLineagePreviewPanel';
 import type { DevelopmentEditorDefinition } from '../../editors/types';
 import type {
   DevelopmentDirectory,
   DevelopmentNode,
+  DevelopmentSqlLineagePreview,
   DevelopmentTaskRunResult,
 } from '../../types';
+
+export type WorkbenchBottomPanelView = 'result' | 'lineage';
 
 interface RunResultPanelProps {
   open: boolean;
@@ -15,6 +19,11 @@ interface RunResultPanelProps {
   directory?: DevelopmentDirectory;
   definition: DevelopmentEditorDefinition;
   result?: DevelopmentTaskRunResult;
+  view: WorkbenchBottomPanelView;
+  onViewChange: (view: WorkbenchBottomPanelView) => void;
+  lineagePreview?: DevelopmentSqlLineagePreview;
+  lineageLoading?: boolean;
+  onRefreshLineage?: () => void;
   onClose: () => void;
 }
 
@@ -44,16 +53,30 @@ const statusText = (result?: DevelopmentTaskRunResult) => {
   return result.status;
 };
 
+const tabClassName = (active: boolean) => [
+  'relative flex h-full items-center gap-1.5 px-2 text-[12px] transition-colors',
+  active
+    ? 'font-medium text-[#344054] after:absolute after:inset-x-1 after:bottom-0 after:h-[2px] after:bg-[rgba(254,44,85,.9)]'
+    : 'text-[#8a8f99] hover:text-[#475467]',
+].join(' ');
+
 const RunResultPanel = ({
   open,
   node,
   directory,
   definition,
   result,
+  view,
+  onViewChange,
+  lineagePreview,
+  lineageLoading = false,
+  onRefreshLineage,
   onClose,
 }: RunResultPanelProps) => {
   const [height, setHeight] = useState(initialHeight);
   const [resizing, setResizing] = useState(false);
+  const lineageAvailable = node.type === 'SQL' && Boolean(onRefreshLineage);
+  const actualView = view === 'lineage' && lineageAvailable ? 'lineage' : 'result';
 
   const handleResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!open) return;
@@ -103,7 +126,7 @@ const RunResultPanel = ({
         <>
           <div
             role="separator"
-            aria-label="调整运行结果面板高度"
+            aria-label="调整底部面板高度"
             aria-orientation="horizontal"
             onPointerDown={handleResizeStart}
             className="group absolute inset-x-0 top-0 z-40 h-3 -translate-y-1/2 cursor-row-resize touch-none"
@@ -112,29 +135,49 @@ const RunResultPanel = ({
           </div>
 
           <div className="flex h-full flex-col overflow-hidden bg-white">
-            <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="shrink-0 text-[12px] font-medium text-[#344054]">
-                  运行结果
-                </span>
-                <span className="truncate text-[11px] text-[#98a2b3]">
+            <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#e5e7eb] px-2">
+              <div className="flex h-full min-w-0 items-center gap-1">
+                <button
+                  type="button"
+                  className={tabClassName(actualView === 'result')}
+                  onClick={() => onViewChange('result')}
+                >
+                  <Table2 size={13} strokeWidth={1.8} />
+                  结果
+                </button>
+                {lineageAvailable ? (
+                  <button
+                    type="button"
+                    className={tabClassName(actualView === 'lineage')}
+                    onClick={() => onViewChange('lineage')}
+                  >
+                    <GitBranch size={13} strokeWidth={1.8} />
+                    血缘
+                  </button>
+                ) : null}
+                <span className="mx-1 h-4 w-px bg-[#e5e7eb]" />
+                <span className="max-w-[240px] truncate text-[11px] text-[#98a2b3]">
                   当前节点：{node.name}
                 </span>
-                {result?.status === 'RUNNING' ? (
+                {actualView === 'result' && result?.status === 'RUNNING' ? (
                   <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-[#667085]">
                     <LoaderCircle size={12} className="animate-spin" />
                     运行中
                   </span>
-                ) : statusText(result) ? (
+                ) : actualView === 'result' && statusText(result) ? (
                   <span className="shrink-0 text-[11px] text-[#667085]">
                     {statusText(result)}
+                  </span>
+                ) : actualView === 'lineage' ? (
+                  <span className="shrink-0 text-[11px] text-[#667085]">
+                    当前 SQL · 预览血缘
                   </span>
                 ) : null}
               </div>
               <button
                 type="button"
                 title="关闭"
-                aria-label="关闭运行结果面板"
+                aria-label="关闭底部面板"
                 onClick={onClose}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
               >
@@ -143,7 +186,14 @@ const RunResultPanel = ({
             </div>
 
             <div className="min-h-0 flex-1 overflow-hidden bg-white">
-              {Result ? (
+              {actualView === 'lineage' && onRefreshLineage ? (
+                <SqlLineagePreviewPanel
+                  nodeId={node.id}
+                  preview={lineagePreview}
+                  loading={lineageLoading}
+                  onRefresh={onRefreshLineage}
+                />
+              ) : Result ? (
                 <Result node={node} directory={directory} result={result} />
               ) : (
                 <div className="flex h-full items-center justify-center text-center">

@@ -10,8 +10,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import javax.sql.DataSource;
@@ -154,6 +156,32 @@ class JdbcLineageRepository implements LineageRepository {
     return jdbcTemplate.query(
         ASSET_COLUMNS + " WHERE asset_key = ? LIMIT 1", this::mapAsset, assetKey)
         .stream().findFirst();
+  }
+
+  @Override
+  public List<LineageAsset> searchAssets(String keyword, LineageAssetType assetType, int limit) {
+    StringBuilder sql = new StringBuilder(ASSET_COLUMNS).append(" WHERE 1 = 1");
+    List<Object> arguments = new ArrayList<>();
+
+    if (keyword != null && !keyword.isBlank()) {
+      String pattern = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
+      sql.append(
+          " AND (LOWER(name) LIKE ? OR LOWER(asset_key) LIKE ?"
+              + " OR LOWER(COALESCE(table_name, '')) LIKE ?"
+              + " OR LOWER(COALESCE(column_name, '')) LIKE ?)");
+      arguments.add(pattern);
+      arguments.add(pattern);
+      arguments.add(pattern);
+      arguments.add(pattern);
+    }
+    if (assetType != null) {
+      sql.append(" AND asset_type = ?");
+      arguments.add(assetType.name());
+    }
+    sql.append(" ORDER BY update_time DESC, id DESC LIMIT ?");
+    arguments.add(limit);
+
+    return jdbcTemplate.query(sql.toString(), this::mapAsset, arguments.toArray());
   }
 
   @Override

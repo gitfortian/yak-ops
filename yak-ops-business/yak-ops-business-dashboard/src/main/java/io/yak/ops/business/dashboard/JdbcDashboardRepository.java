@@ -12,7 +12,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -31,12 +33,23 @@ class JdbcDashboardRepository implements DashboardRepository {
 
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
+  @Autowired
   JdbcDashboardRepository(
       @Qualifier("yakBusinessDataSource") DataSource dataSource,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ApplicationEventPublisher eventPublisher) {
     this.jdbcTemplate = new JdbcTemplate(dataSource);
     this.objectMapper = objectMapper;
+    this.eventPublisher = eventPublisher;
+  }
+
+  /** Keeps focused repository tests source-compatible without a Spring event publisher. */
+  JdbcDashboardRepository(DataSource dataSource, ObjectMapper objectMapper) {
+    this.jdbcTemplate = new JdbcTemplate(dataSource);
+    this.objectMapper = objectMapper;
+    this.eventPublisher = null;
   }
 
   @Override
@@ -140,6 +153,7 @@ class JdbcDashboardRepository implements DashboardRepository {
         "UPDATE yak_dashboard SET current_version_id = ?, current_version_no = ?, name = ?, description = ?, update_time = NOW(6) WHERE id = ?",
         versionId, versionNo, name, description, dashboardId);
     if (updated != 1) throw new IllegalArgumentException("Dashboard 不存在：" + dashboardId);
+    requestLineageRefresh(DashboardLineageRefreshRequested.refresh(dashboardId));
   }
 
   @Override
@@ -148,6 +162,7 @@ class JdbcDashboardRepository implements DashboardRepository {
         "UPDATE yak_dashboard SET published_version_id = ?, published_version_no = ?, published_time = NOW(6), update_time = NOW(6) WHERE id = ?",
         versionId, versionNo, dashboardId);
     if (updated != 1) throw new IllegalArgumentException("Dashboard 不存在：" + dashboardId);
+    requestLineageRefresh(DashboardLineageRefreshRequested.refresh(dashboardId));
   }
 
   @Override
@@ -243,6 +258,11 @@ class JdbcDashboardRepository implements DashboardRepository {
   public void deleteDashboard(long dashboardId) {
     int deleted = jdbcTemplate.update("DELETE FROM yak_dashboard WHERE id = ?", dashboardId);
     if (deleted != 1) throw new IllegalArgumentException("Dashboard 不存在：" + dashboardId);
+    requestLineageRefresh(DashboardLineageRefreshRequested.deleted(dashboardId));
+  }
+
+  private void requestLineageRefresh(DashboardLineageRefreshRequested event) {
+    if (eventPublisher != null) eventPublisher.publishEvent(event);
   }
 
   private static DashboardAsset mapDashboard(ResultSet rs, int rowNum) throws SQLException {

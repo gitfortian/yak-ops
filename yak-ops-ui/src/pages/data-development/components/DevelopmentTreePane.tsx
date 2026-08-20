@@ -10,7 +10,6 @@ import {
   Copy,
   Database,
   FileText,
-  Folder,
   FolderPlus,
   Network,
   Pencil,
@@ -23,7 +22,7 @@ import {
 import JavaIcon from '../icon/JavaIcon';
 import PythonIcon from '../icon/PythonIcon';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { listDevelopmentNodes } from '../service';
 import type { DevelopmentNodeType } from '../types';
@@ -109,6 +108,73 @@ const nodeIcon = (taskType?: string): ReactNode => {
   return <Code2 size={13} strokeWidth={1.8} className={className} />;
 };
 
+const DevelopmentFolderIcon = ({ expanded }: { expanded: boolean }) => {
+  if (expanded) {
+    return (
+      <svg
+        aria-hidden="true"
+        className="shrink-0"
+        width="18"
+        height="18"
+        viewBox="0 0 20 20"
+        fill="none"
+      >
+        <path
+          d="M2.8 6.05V5.6c0-.66.54-1.2 1.2-1.2h4.15l1.55 1.75h6.3c.66 0 1.2.54 1.2 1.2v5.7H3.95c-.64 0-1.15-.52-1.15-1.15V6.05Z"
+          fill="#FFF8DE"
+          stroke="#F5A000"
+          strokeWidth="1.25"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4.55 8.25h12.38c.73 0 1.2.78.85 1.42l-2.6 4.78c-.2.38-.6.62-1.03.62H3.27c-.74 0-1.21-.8-.84-1.44l2.12-4.76c.2-.38.59-.62 1.02-.62Z"
+          fill="#FFF1B8"
+          stroke="#F5A000"
+          strokeWidth="1.25"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="shrink-0"
+      width="18"
+      height="18"
+      viewBox="0 0 20 20"
+      fill="none"
+    >
+      <path
+        d="M2.8 5.55c0-.66.54-1.2 1.2-1.2h4.15L9.7 6.1H16c.66 0 1.2.54 1.2 1.2v7.15c0 .66-.54 1.2-1.2 1.2H4c-.66 0-1.2-.54-1.2-1.2v-8.9Z"
+        fill="#FFF8DE"
+        stroke="#F5A000"
+        strokeWidth="1.25"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.15 7.55h13.7"
+        stroke="#F5A000"
+        strokeWidth="1.05"
+        strokeLinecap="round"
+        opacity="0.72"
+      />
+    </svg>
+  );
+};
+
+const collectExpandedDirectoryKeys = (nodes: DevelopmentTreeNode[]): string[] =>
+  nodes.flatMap((node) => {
+    const childKeys = node.children?.length
+      ? collectExpandedDirectoryKeys(node.children)
+      : [];
+    if (node.nodeType === 'directory' && node.children?.length) {
+      return [node.key, ...childKeys];
+    }
+    return childKeys;
+  });
+
 const nodeCreateItems: NonNullable<MenuProps['items']> = [
   {
     key: 'node-sql',
@@ -181,6 +247,19 @@ const DevelopmentTreePane = ({
   onCollapsedChange,
 }: DevelopmentTreePaneProps) => {
   const [metadataById, setMetadataById] = useState<Map<string, NodeMetadata>>(new Map());
+  const [expandedDirectoryKeys, setExpandedDirectoryKeys] = useState<string[]>([]);
+  const expansionInitializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!treeData.length) {
+      expansionInitializedRef.current = false;
+      setExpandedDirectoryKeys([]);
+      return;
+    }
+    if (expansionInitializedRef.current) return;
+    expansionInitializedRef.current = true;
+    setExpandedDirectoryKeys(collectExpandedDirectoryKeys(treeData));
+  }, [treeData]);
 
   useEffect(() => {
     let active = true;
@@ -304,7 +383,7 @@ const DevelopmentTreePane = ({
           ) : null}
 
           {isNode ? nodeIcon(node.taskType) : (
-            <Folder size={14} strokeWidth={1.8} className="shrink-0 text-[#98a2b3]" />
+            <DevelopmentFolderIcon expanded={expandedDirectoryKeys.includes(node.key)} />
           )}
 
           <span
@@ -393,6 +472,7 @@ const DevelopmentTreePane = ({
                   treeData={treeData}
                   titleRender={renderTitle}
                   switcherIcon={<ChevronDown size={12} strokeWidth={1.8} />}
+                  onExpand={(keys) => setExpandedDirectoryKeys(keys.map(String))}
                   onSelect={onSelect}
                   className="development-tree bg-transparent"
                 />

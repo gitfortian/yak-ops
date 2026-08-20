@@ -1,5 +1,6 @@
 import { Tooltip, message } from 'antd';
 import {
+  GitBranch,
   LoaderCircle,
   Play,
   Redo2,
@@ -50,9 +51,11 @@ const SqlToolbar = ({
   onRun,
   onSave,
   onPublish,
+  onLineage,
   running,
   saving,
   publishing,
+  lineageLoading,
 }: DevelopmentEditorToolbarContext) => {
   const execute = (command: SqlEditorCommand, fallback: string) => {
     if (!executeSqlEditorCommand(node.id, command)) {
@@ -97,6 +100,19 @@ const SqlToolbar = ({
             <Rocket size={15} strokeWidth={1.8} />
           )}
         </ToolbarButton>
+        {onLineage ? (
+          <ToolbarButton
+            title={lineageLoading ? '血缘解析中' : '解析当前 SQL 血缘'}
+            disabled={Boolean(lineageLoading || saving || publishing || running)}
+            onClick={onLineage}
+          >
+            {lineageLoading ? (
+              <LoaderCircle size={15} className="animate-spin" />
+            ) : (
+              <GitBranch size={15} strokeWidth={1.8} />
+            )}
+          </ToolbarButton>
+        ) : null}
         <ToolbarDivider />
         <ToolbarButton
           title="撤销"

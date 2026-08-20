@@ -1,7 +1,9 @@
 package io.yak.ops.business.dataset;
 
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -13,13 +15,27 @@ class DatasetLineageRefreshListener {
   private static final Logger LOGGER = LoggerFactory.getLogger(DatasetLineageRefreshListener.class);
 
   private final DatasetService datasetService;
-  private final DatasetLineageService lineageService;
+  private final Consumer<DatasetDetail> syncOperation;
 
+  @Autowired
+  DatasetLineageRefreshListener(
+      DatasetService datasetService,
+      DatasetLineageTransactionRunner transactionRunner) {
+    this(datasetService, transactionRunner::sync);
+  }
+
+  /** Keeps focused tests source-compatible while production uses the REQUIRES_NEW runner. */
   DatasetLineageRefreshListener(
       DatasetService datasetService,
       DatasetLineageService lineageService) {
+    this(datasetService, lineageService::syncCurrent);
+  }
+
+  private DatasetLineageRefreshListener(
+      DatasetService datasetService,
+      Consumer<DatasetDetail> syncOperation) {
     this.datasetService = datasetService;
-    this.lineageService = lineageService;
+    this.syncOperation = syncOperation;
   }
 
   @TransactionalEventListener(
@@ -28,7 +44,7 @@ class DatasetLineageRefreshListener {
   public void refresh(DatasetLineageRefreshRequested event) {
     if (event == null || event.datasetId() <= 0L) return;
     try {
-      lineageService.syncCurrent(datasetService.get(event.datasetId()));
+      syncOperation.accept(datasetService.get(event.datasetId()));
     } catch (RuntimeException exception) {
       // Lineage is derived metadata. A refresh failure must never turn a committed Dataset publish
       // into an apparent business failure for the caller.
