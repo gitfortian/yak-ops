@@ -25,6 +25,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +39,14 @@ public class DevelopmentTaskService {
   private final TaskCatalogService taskCatalogService;
   private final TaskPluginRegistry pluginRegistry;
   private final ObjectMapper objectMapper;
+  private final DevelopmentSqlLineageService sqlLineageService;
 
+  /**
+   * Keeps focused unit tests and non-Spring callers source compatible.
+   *
+   * <p>Production wiring uses the annotated constructor below so SQL lineage is synchronized after
+   * a successful publish.
+   */
   public DevelopmentTaskService(
       DevelopmentNodeRepository nodeRepository,
       DevelopmentTaskDraftRepository draftRepository,
@@ -46,12 +54,32 @@ public class DevelopmentTaskService {
       TaskCatalogService taskCatalogService,
       TaskPluginRegistry pluginRegistry,
       ObjectMapper objectMapper) {
+    this(
+        nodeRepository,
+        draftRepository,
+        revisionRepository,
+        taskCatalogService,
+        pluginRegistry,
+        objectMapper,
+        null);
+  }
+
+  @Autowired
+  public DevelopmentTaskService(
+      DevelopmentNodeRepository nodeRepository,
+      DevelopmentTaskDraftRepository draftRepository,
+      DevelopmentTaskRevisionRepository revisionRepository,
+      TaskCatalogService taskCatalogService,
+      TaskPluginRegistry pluginRegistry,
+      ObjectMapper objectMapper,
+      DevelopmentSqlLineageService sqlLineageService) {
     this.nodeRepository = nodeRepository;
     this.draftRepository = draftRepository;
     this.revisionRepository = revisionRepository;
     this.taskCatalogService = taskCatalogService;
     this.pluginRegistry = pluginRegistry;
     this.objectMapper = objectMapper;
+    this.sqlLineageService = sqlLineageService;
   }
 
   public DevelopmentTaskDraft getDraft(Long nodeId) {
@@ -132,6 +160,9 @@ public class DevelopmentTaskService {
         definition.taskType(),
         published.id(),
         published.revisionNo());
+    if (sqlLineageService != null) {
+      sqlLineageService.syncPublished(node, published);
+    }
     return published;
   }
 

@@ -135,6 +135,14 @@ class JdbcLineageRepository implements LineageRepository {
   }
 
   @Override
+  public int deleteRelationsByEvidence(String sourceType, String sourceId) {
+    return jdbcTemplate.update(
+        "DELETE FROM yak_metadata_relation WHERE source_type = ? AND source_id = ?",
+        sourceType,
+        sourceId);
+  }
+
+  @Override
   public Optional<LineageAsset> findAsset(long assetId) {
     return jdbcTemplate.query(
         ASSET_COLUMNS + " WHERE id = ? LIMIT 1", this::mapAsset, assetId)

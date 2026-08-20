@@ -13,6 +13,10 @@ interface LineageRepository {
 
   LineageRelation upsertRelation(RelationWrite write);
 
+  default int deleteRelationsByEvidence(String sourceType, String sourceId) {
+    throw new UnsupportedOperationException("Relation evidence cleanup is not supported");
+  }
+
   Optional<LineageAsset> findAsset(long assetId);
 
   Optional<LineageAsset> findAssetByKey(String assetKey);
