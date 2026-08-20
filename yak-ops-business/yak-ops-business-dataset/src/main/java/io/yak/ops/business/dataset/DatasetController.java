@@ -42,9 +42,11 @@ public class DatasetController {
   @GetMapping("/query-performance")
   public Result<List<DatasetQueryPerformance>> queryPerformance(
       @RequestParam(value = "datasetIds", required = false) List<Long> datasetIds,
+      @RequestParam(value = "queryIds", required = false) List<String> queryIds,
       @RequestParam(value = "limit", defaultValue = "100") int limit) {
-    Set<Long> filters = datasetIds == null ? Set.of() : new HashSet<>(datasetIds);
-    return Result.success(queryService.recentPerformance(filters, limit));
+    Set<Long> datasetFilters = datasetIds == null ? Set.of() : new HashSet<>(datasetIds);
+    Set<String> queryFilters = queryIds == null ? Set.of() : new HashSet<>(queryIds);
+    return Result.success(queryService.recentPerformance(datasetFilters, queryFilters, limit));
   }
 
   @Operation(summary = "查询 Dataset 详情、当前版本与版本历史")

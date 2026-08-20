@@ -52,9 +52,10 @@ public class DatasetQueryService {
 
     DatasetQueryExecution execution = adapter.execute(dataset, version, fields, request);
     long totalMillis = elapsedMillis(queryStartedAt);
-    DatasetQueryResult result = execution.result();
+    String queryId = UUID.randomUUID().toString().replace("-", "");
+    DatasetQueryResult result = execution.result().withQueryId(queryId);
     performanceService.record(new DatasetQueryPerformance(
-        UUID.randomUUID().toString().replace("-", ""),
+        queryId,
         dataset.id(),
         dataset.name(),
         version.id(),
@@ -75,6 +76,13 @@ public class DatasetQueryService {
 
   public List<DatasetQueryPerformance> recentPerformance(Set<Long> datasetIds, int limit) {
     return performanceService.recent(datasetIds, limit);
+  }
+
+  public List<DatasetQueryPerformance> recentPerformance(
+      Set<Long> datasetIds,
+      Set<String> queryIds,
+      int limit) {
+    return performanceService.recent(datasetIds, queryIds, limit);
   }
 
   private DatasetVersion resolveVersion(Dataset dataset, Integer versionNo) {
