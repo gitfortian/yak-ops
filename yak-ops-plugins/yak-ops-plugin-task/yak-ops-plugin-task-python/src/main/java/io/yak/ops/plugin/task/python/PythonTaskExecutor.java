@@ -1,7 +1,13 @@
 package io.yak.ops.plugin.task.python;
 
+import static io.yak.ops.plugin.task.api.ScriptTaskSupport.readStream;
+import static io.yak.ops.plugin.task.api.ScriptTaskSupport.resolveScriptContent;
+import static io.yak.ops.plugin.task.api.ScriptTaskSupport.safeMessage;
+import static io.yak.ops.plugin.task.api.ScriptTaskSupport.truncate;
+
 import io.yak.ops.plugin.task.api.TaskExecutionResult;
 import io.yak.ops.plugin.task.api.TaskExecutor;
+import io.yak.ops.spi.resource.ResourceResolver;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import io.yak.ops.spi.task.model.TaskExecutionStatus;
 import java.io.IOException;
@@ -21,20 +27,25 @@ import org.slf4j.LoggerFactory;
 final class PythonTaskExecutor implements TaskExecutor {
 
   private static final Logger log = LoggerFactory.getLogger(PythonTaskExecutor.class);
-  private static final int MAX_CAPTURE_LENGTH = 50_000;
   private static final boolean IS_WINDOWS =
       System.getProperty("os.name", "").toLowerCase().contains("win");
 
   private final TaskDefinition definition;
   private final PythonTaskConfig config;
   private final Map<String, String> globalEnvVars;
+  private final ResourceResolver resourceResolver;
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
   private final AtomicReference<Process> activeProcess = new AtomicReference<>();
 
-  PythonTaskExecutor(TaskDefinition definition, PythonTaskConfig config, Map<String, String> globalEnvVars) {
+  PythonTaskExecutor(
+      TaskDefinition definition,
+      PythonTaskConfig config,
+      Map<String, String> globalEnvVars,
+      ResourceResolver resourceResolver) {
     this.definition = definition;
     this.config = config;
     this.globalEnvVars = globalEnvVars != null ? globalEnvVars : Map.of();
+    this.resourceResolver = resourceResolver;
   }
 
   @Override
@@ -45,7 +56,9 @@ final class PythonTaskExecutor implements TaskExecutor {
 
     Path scriptFile = null;
     try {
-      scriptFile = writeScriptToTempFile();
+      String scriptContent = resolveScriptContent(
+          definition, resourceResolver, config.resourceId(), config.resourceVersion());
+      scriptFile = writeScriptToTempFile(scriptContent);
       Process process = startProcess(scriptFile);
       activeProcess.set(process);
 
@@ -89,7 +102,7 @@ final class PythonTaskExecutor implements TaskExecutor {
           output);
     } catch (IOException exception) {
       if (cancelled.get()) {
-        return cancelledResult(safeMessage(exception));
+        return cancelledResult(safeMessage(exception, "Python execution failed"));
       }
       String diagnostic = buildProcessStartDiagnostic(exception, config.pythonExecutable());
       Map<String, Object> output = new LinkedHashMap<>();
@@ -112,10 +125,12 @@ final class PythonTaskExecutor implements TaskExecutor {
     if (process != null) process.destroyForcibly();
   }
 
-  private Path writeScriptToTempFile() throws IOException {
-    Path dir = config.workingDirectory() != null ? Path.of(config.workingDirectory()) : Files.createTempDirectory("yak-python-");
+  private Path writeScriptToTempFile(String content) throws IOException {
+    Path dir = config.workingDirectory() != null
+        ? Path.of(config.workingDirectory())
+        : Files.createTempDirectory("yak-python-");
     Path scriptFile = Files.createTempFile(dir, "task-", ".py");
-    Files.writeString(scriptFile, definition.content(), StandardCharsets.UTF_8);
+    Files.writeString(scriptFile, content, StandardCharsets.UTF_8);
     return scriptFile;
   }
 
@@ -151,16 +166,6 @@ final class PythonTaskExecutor implements TaskExecutor {
     return builder.start();
   }
 
-  private String readStream(java.io.BufferedReader reader) throws IOException {
-    StringBuilder sb = new StringBuilder();
-    String line;
-    while ((line = reader.readLine()) != null) {
-      if (sb.length() > 0) sb.append('\n');
-      sb.append(line);
-    }
-    return sb.toString();
-  }
-
   private TaskExecutionResult cancelledResult(String message) {
     return new TaskExecutionResult(
         TaskExecutionStatus.CANCELLED,
@@ -169,9 +174,8 @@ final class PythonTaskExecutor implements TaskExecutor {
   }
 
   private static String buildProcessStartDiagnostic(IOException exception, String pythonExecutable) {
-    String exceptionMessage = safeMessage(exception);
+    String exceptionMessage = safeMessage(exception, "Python execution failed");
     if (IS_WINDOWS) {
-      // CreateProcess error=2 = file not found; 9009 = command not recognized by CMD
       return "Cannot start Python process: " + exceptionMessage
           + ". On Windows this usually means the Java process cannot find '"
           + pythonExecutable + "' in its PATH. "
@@ -185,7 +189,6 @@ final class PythonTaskExecutor implements TaskExecutor {
   }
 
   private static String buildFailureMessage(int exitCode, String stderr, String pythonExecutable) {
-    // Windows exit code 9009 = "The program or command is not recognized"
     if (exitCode == 9009) {
       return "Python executable not found (exit code 9009). "
           + "Set PYTHON_HOME environment variable or install Python and ensure '"
@@ -193,20 +196,5 @@ final class PythonTaskExecutor implements TaskExecutor {
     }
     String firstLine = stderr.isBlank() ? "" : ": " + stderr.lines().findFirst().orElse("");
     return "Python script exited with code " + exitCode + firstLine;
-  }
-
-  private static String truncate(String value) {
-    if (value == null) return "";
-    return value.length() > MAX_CAPTURE_LENGTH
-        ? value.substring(0, MAX_CAPTURE_LENGTH) + "\n... [truncated]"
-        : value;
-  }
-
-  private static String safeMessage(Throwable throwable) {
-    String message = throwable == null ? null : throwable.getMessage();
-    if (message == null || message.isBlank()) {
-      return throwable == null ? "Python execution failed" : throwable.getClass().getSimpleName();
-    }
-    return message.length() > 500 ? message.substring(0, 500) : message;
   }
 }

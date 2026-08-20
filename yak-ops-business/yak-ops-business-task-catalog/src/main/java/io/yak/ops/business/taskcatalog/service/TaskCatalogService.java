@@ -26,7 +26,8 @@ public class TaskCatalogService {
       "SQL",
       "SHELL",
       "HTTP",
-      "PYTHON");
+      "PYTHON",
+      "JAVA");
 
   private final TaskAssetRepository repository;
   private final Map<TaskAssetSource, TaskAssetRevisionProvider> revisionProviders;

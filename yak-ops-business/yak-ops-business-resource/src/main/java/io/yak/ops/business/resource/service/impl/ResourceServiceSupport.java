@@ -31,7 +31,7 @@ import org.springframework.util.StringUtils;
 @Component
 @ConditionalOnResourceEnabled
 @RequiredArgsConstructor
-class ResourceServiceSupport {
+public class ResourceServiceSupport {
 
   private final ResourceRepository repository;
   private final StorageOperatorRegistry storageRegistry;
@@ -62,7 +62,7 @@ class ResourceServiceSupport {
         .orElseThrow(() -> new ResourceException(ResourceErrorCode.NOT_FOUND, String.valueOf(id)));
   }
 
-  ResourceNode requireFile(Long id) {
+  public ResourceNode requireFile(Long id) {
     ResourceNode resource = require(id);
     if (resource.getNodeType() != ResourceNodeType.FILE) {
       throw new ResourceException(ResourceErrorCode.DIRECTORY_CONTENT_UNSUPPORTED);

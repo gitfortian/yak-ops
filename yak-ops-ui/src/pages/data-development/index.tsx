@@ -69,6 +69,8 @@ const responseData = <T,>(
 const createTypeForAction = (action: DevelopmentTreeAction): DevelopmentNodeType | undefined => {
   if (action === 'create-sql') return 'SQL';
   if (action === 'create-shell') return 'SHELL';
+  if (action === 'create-python') return 'PYTHON';
+  if (action === 'create-java') return 'JAVA';
   if (action === 'create-dataset') return 'DATASET';
   if (action === 'create-data-service') return 'DATA_SERVICE';
   return undefined;

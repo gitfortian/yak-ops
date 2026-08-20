@@ -25,8 +25,6 @@ import dayjs from 'dayjs';
 import {
   Database,
   Download,
-  File,
-  FileCode2,
   FilePlus2,
   Files,
   Folder,
@@ -51,6 +49,7 @@ import {
 
 import CreateDirectoryModal from './components/CreateDirectoryModal';
 import CreateTextResourceModal from './components/CreateTextResourceModal';
+import { FileSuffixIcon } from './components/FileSuffixIcon';
 import MoveResourceModal from './components/MoveResourceModal';
 import ResourceDetailDrawer from './components/ResourceDetailDrawer';
 import ResourceMetadataModal from './components/ResourceMetadataModal';
@@ -90,6 +89,7 @@ import {
 } from './utils';
 
 const { confirm } = Modal;
+
 
 const ResourceManagementPage = () => {
   const { can } = usePermissionAccess();
@@ -360,7 +360,7 @@ const ResourceManagementPage = () => {
     [
       {
         key: 'open',
-        icon: isDirectory(resource) ? <Folder size={15} /> : <FileCode2 size={15} />,
+        icon: isDirectory(resource) ? <Folder size={15} /> : <FileSuffixIcon suffix={resource.suffix} size={15} />,
         label: isDirectory(resource) ? '打开文件夹' : '查看详情',
       },
       !isDirectory(resource) && canDownload
@@ -445,7 +445,7 @@ const ResourceManagementPage = () => {
               isDirectory(resource) ? 'is-directory' : 'is-file',
             ].join(' ')}
           >
-            {isDirectory(resource) ? <Folder size={19} /> : <File size={19} />}
+            {isDirectory(resource) ? <Folder size={19} /> : <FileSuffixIcon suffix={resource.suffix} />}
           </span>
           <span className="resource-name-cell__text">
             <strong title={resource.name}>{resource.name}</strong>

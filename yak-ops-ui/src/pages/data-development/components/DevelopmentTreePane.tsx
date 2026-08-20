@@ -20,6 +20,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import JavaIcon from '../icon/JavaIcon';
 import PythonIcon from '../icon/PythonIcon';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
@@ -34,6 +35,7 @@ export type DevelopmentTreeAction =
   | 'create-sql'
   | 'create-shell'
   | 'create-python'
+  | 'create-java'
   | 'create-dataset'
   | 'create-data-service'
   | 'copy-name'
@@ -81,6 +83,7 @@ const nodeTypeIconClassName = (taskType?: string) => {
   if (taskType === 'SHELL') return 'text-[#6172f3]';
   if (taskType === 'SQL') return 'text-[#f79009]';
   if (taskType === 'PYTHON') return '';
+  if (taskType === 'JAVA') return '';
   if (taskType === 'DATASET') return 'text-[#667085]';
   if (taskType === 'DATA_SERVICE') return 'text-[#475467]';
   return 'text-[#667085]';
@@ -93,6 +96,9 @@ const nodeIcon = (taskType?: string): ReactNode => {
   }
   if (taskType === 'PYTHON') {
     return <PythonIcon size={13} />;
+  }
+  if (taskType === 'JAVA') {
+    return <JavaIcon size={13} />;
   }
   if (taskType === 'DATASET') {
     return <Database size={13} strokeWidth={1.8} className={className} />;
@@ -119,6 +125,11 @@ const nodeCreateItems: NonNullable<MenuProps['items']> = [
     label: 'Python 节点',
     icon: <PythonIcon size={14} />,
   },
+  {
+    key: 'node-java',
+    label: 'Java 节点',
+    icon: <JavaIcon size={14} />,
+  },
   { type: 'divider' },
   {
     key: 'node-dataset',
@@ -136,6 +147,7 @@ const createTypeForMenuKey = (key: string): DevelopmentNodeCreateType | undefine
   if (key === 'node-sql' || key === 'create-sql') return 'SQL';
   if (key === 'node-shell' || key === 'create-shell') return 'SHELL';
   if (key === 'node-python' || key === 'create-python') return 'PYTHON';
+  if (key === 'node-java' || key === 'create-java') return 'JAVA';
   if (key === 'node-dataset' || key === 'create-dataset') return 'DATASET';
   if (key === 'node-data-service' || key === 'create-data-service') return 'DATA_SERVICE';
   return undefined;
@@ -242,6 +254,7 @@ const DevelopmentTreePane = ({
           { key: 'create-sql', label: 'SQL 节点', icon: <Code2 size={14} className="text-[#f79009]" /> },
           { key: 'create-shell', label: 'Shell 节点', icon: <TerminalSquare size={14} className="text-[#6172f3]" /> },
           { key: 'create-python', label: 'Python 节点', icon: <PythonIcon size={14} /> },
+          { key: 'create-java', label: 'Java 节点', icon: <JavaIcon size={14} /> },
           { type: 'divider' },
           { key: 'create-dataset', label: '数据集节点', icon: <Database size={14} className="text-[#667085]" /> },
           { key: 'create-data-service', label: '数据服务节点', icon: <Network size={14} className="text-[#475467]" /> },

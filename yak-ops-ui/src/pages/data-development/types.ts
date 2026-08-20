@@ -1,4 +1,4 @@
-export type DevelopmentTaskType = 'SQL' | 'SHELL' | 'HTTP' | 'PYTHON';
+export type DevelopmentTaskType = 'SQL' | 'SHELL' | 'HTTP' | 'PYTHON' | 'JAVA';
 export type DevelopmentOutputNodeType = 'DATASET' | 'DATA_SERVICE';
 export type DevelopmentNodeType = DevelopmentTaskType | DevelopmentOutputNodeType;
 export type DevelopmentId = string;

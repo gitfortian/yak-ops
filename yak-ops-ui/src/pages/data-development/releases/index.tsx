@@ -38,6 +38,7 @@ const taskTypeOptions = [
   { label: 'SQL', value: 'SQL' },
   { label: 'SHELL', value: 'SHELL' },
   { label: 'PYTHON', value: 'PYTHON' },
+  { label: 'JAVA', value: 'JAVA' },
   { label: 'HTTP', value: 'HTTP' },
 ];
 
