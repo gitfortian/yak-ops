@@ -74,10 +74,11 @@ export function DashboardSheetBar({
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [sheetMeta, setSheetMeta] = useState<DashboardSheetMetaMap>({});
   const [loadedMetaKey, setLoadedMetaKey] = useState<string>();
-  const [renameSheet, setRenameSheet] = useState<DashboardEditorSheet>();
+  const [renamingId, setRenamingId] = useState<string>();
   const [renameDraft, setRenameDraft] = useState('');
   const [noteSheet, setNoteSheet] = useState<DashboardEditorSheet>();
   const [noteDraft, setNoteDraft] = useState('');
+  const renameCancelledRef = useRef(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const dashboardRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -195,8 +196,30 @@ export function DashboardSheetBar({
   };
 
   const openRename = (sheet: DashboardEditorSheet) => {
-    setRenameSheet(sheet);
+    if (!onRename) return;
+    renameCancelledRef.current = false;
+    setRenamingId(sheet.id);
     setRenameDraft(sheet.title);
+    onChart(sheet.id);
+  };
+
+  const commitRename = (sheet: DashboardEditorSheet) => {
+    if (renameCancelledRef.current) {
+      renameCancelledRef.current = false;
+      setRenamingId(undefined);
+      setRenameDraft('');
+      return;
+    }
+    const value = renameDraft.trim();
+    if (value && value !== sheet.title) onRename?.(sheet.id, value);
+    setRenamingId(undefined);
+    setRenameDraft('');
+  };
+
+  const cancelRename = () => {
+    renameCancelledRef.current = true;
+    setRenamingId(undefined);
+    setRenameDraft('');
   };
 
   const openNote = (sheet: DashboardEditorSheet) => {
@@ -300,10 +323,10 @@ export function DashboardSheetBar({
             role="tab"
             aria-selected={dashboardActive}
             className={[
-              'relative mb-0 flex h-7 shrink-0 items-center gap-1.5 rounded-t-[4px] border px-3 text-[11px] outline-none transition-colors',
+              'relative mb-0 flex h-7 min-w-[110px] shrink-0 items-center justify-center gap-1.5 rounded-t-[4px] border px-4 text-[11px] outline-none transition-colors',
               'focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--yak-brand-color)]',
               dashboardActive
-                ? 'z-10 border-[#d7dce3] border-b-white bg-white font-medium text-[#161823] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
+                ? 'z-10 border-[#d7dce3] border-b-white bg-white font-medium text-[#161823] after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
                 : 'border-transparent text-[#667085] hover:bg-[#e4e8ed] hover:text-[#344054]',
             ].join(' ')}
             onClick={onDashboard}
@@ -322,71 +345,104 @@ export function DashboardSheetBar({
           {visibleSheets.length ? visibleSheets.map((sheet) => {
             const active = activeSheet === 'chart' && activeSheetId === sheet.id;
             const note = sheetMeta[sheet.id]?.note?.trim();
+            const renaming = renamingId === sheet.id;
             return (
               <div
                 key={sheet.id}
-                draggable
-                title={note ? `${sheet.title}\n备注：${note}` : `${sheet.title} · 拖动可调整 Sheet 顺序`}
+                draggable={!renaming}
+                title={renaming ? undefined : (note ? `${sheet.title}\n备注：${note}` : `${sheet.title} · 双击重命名 · 拖动可调整 Sheet 顺序`)}
                 className={[
-                  'group relative mb-0 flex h-7 min-w-[112px] max-w-[210px] shrink-0 items-stretch rounded-t-[4px] border transition-colors',
+                  'group relative mb-0 flex h-7 min-w-[160px] max-w-[280px] shrink-0 items-stretch rounded-t-[4px] border transition-colors',
                   active
-                    ? 'z-10 border-[#d7dce3] border-b-white bg-white text-[#161823] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
+                    ? 'z-10 border-[#d7dce3] border-b-white bg-white text-[#161823] after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[var(--yak-brand-color)]'
                     : 'border-transparent bg-transparent text-[#667085] hover:bg-[#e4e8ed] hover:text-[#344054]',
                   draggingId === sheet.id ? 'opacity-45' : '',
                 ].join(' ')}
                 onDragStart={(event) => {
+                  if (renaming) return;
                   setDraggingId(sheet.id);
                   event.dataTransfer.effectAllowed = 'move';
                   event.dataTransfer.setData('text/plain', sheet.id);
                 }}
                 onDragEnter={() => moveBefore(sheet.id)}
                 onDragOver={(event) => {
+                  if (renaming) return;
                   event.preventDefault();
                   event.dataTransfer.dropEffect = 'move';
                 }}
                 onDrop={(event) => event.preventDefault()}
                 onDragEnd={() => setDraggingId(undefined)}
               >
-                <button
-                  ref={(node) => {
-                    if (node) tabRefs.current.set(sheet.id, node);
-                    else tabRefs.current.delete(sheet.id);
-                  }}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent py-0 pl-3 pr-1 text-left text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--yak-brand-color)]"
-                  onClick={() => onChart(sheet.id)}
-                  onKeyDown={(event) => handleNavigation(event, sheet.id)}
-                >
-                  <BarChart3
-                    size={12}
-                    className={active ? 'shrink-0 text-[#344054]' : 'shrink-0 text-[#7d8591]'}
-                  />
-                  <span className={active ? 'truncate font-medium' : 'truncate'}>{sheet.title}</span>
-                  {note ? (
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#aeb5bf]"
-                      aria-label="已有备注"
+                {renaming ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
+                    <BarChart3 size={12} className="shrink-0 text-[#344054]" />
+                    <input
+                      autoFocus
+                      value={renameDraft}
+                      maxLength={60}
+                      aria-label={`重命名 ${sheet.title}`}
+                      className="h-[22px] min-w-0 flex-1 rounded-[3px] border border-[#b8c0cc] bg-white px-1.5 text-[11px] text-[#161823] outline-none selection:bg-[rgba(254,44,85,.14)] focus:border-[var(--yak-brand-color)] focus:ring-1 focus:ring-[rgba(254,44,85,.12)]"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      onBlur={() => commitRename(sheet)}
+                      onKeyDown={(event) => {
+                        event.stopPropagation();
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          commitRename(sheet);
+                        } else if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelRename();
+                        }
+                      }}
                     />
-                  ) : null}
-                </button>
-
-                <Dropdown menu={menuFor(sheet)} trigger={['click']} placement="topLeft">
+                  </div>
+                ) : (
                   <button
+                    ref={(node) => {
+                      if (node) tabRefs.current.set(sheet.id, node);
+                      else tabRefs.current.delete(sheet.id);
+                    }}
                     type="button"
-                    aria-label={`${sheet.title} Sheet 操作`}
-                    draggable={false}
-                    className={[
-                      'mr-1 flex w-6 shrink-0 items-center justify-center self-center rounded-[4px] text-[#818995] transition-all',
-                      'opacity-0 hover:bg-[#eef1f4] hover:text-[#344054] focus:opacity-100 focus:outline-none group-hover:opacity-100',
-                    ].join(' ')}
-                    onClick={(event) => event.stopPropagation()}
-                    onMouseDown={(event) => event.stopPropagation()}
+                    role="tab"
+                    aria-selected={active}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent py-0 pl-3.5 pr-1 text-left text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--yak-brand-color)]"
+                    onClick={() => onChart(sheet.id)}
+                    onDoubleClick={() => openRename(sheet)}
+                    onKeyDown={(event) => handleNavigation(event, sheet.id)}
                   >
-                    <MoreHorizontal size={14} />
+                    <BarChart3
+                      size={12}
+                      className={active ? 'shrink-0 text-[#344054]' : 'shrink-0 text-[#7d8591]'}
+                    />
+                    <span className={active ? 'truncate font-medium' : 'truncate'}>{sheet.title}</span>
+                    {note ? (
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#aeb5bf]"
+                        aria-label="已有备注"
+                      />
+                    ) : null}
                   </button>
-                </Dropdown>
+                )}
+
+                {!renaming ? (
+                  <Dropdown menu={menuFor(sheet)} trigger={['click']} placement="topLeft">
+                    <button
+                      type="button"
+                      aria-label={`${sheet.title} Sheet 操作`}
+                      draggable={false}
+                      className={[
+                        'mr-1 flex w-6 shrink-0 items-center justify-center self-center rounded-[4px] text-[#818995] transition-all',
+                        'opacity-0 hover:bg-[#eef1f4] hover:text-[#344054] focus:opacity-100 focus:outline-none group-hover:opacity-100',
+                      ].join(' ')}
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                  </Dropdown>
+                ) : null}
               </div>
             );
           }) : (
@@ -451,36 +507,6 @@ export function DashboardSheetBar({
           </Tooltip>
         </div>
       </div>
-
-      <Modal
-        open={Boolean(renameSheet)}
-        title="重命名 Sheet"
-        okText="确定"
-        cancelText="取消"
-        width={400}
-        okButtonProps={{ disabled: !renameDraft.trim() }}
-        onCancel={() => setRenameSheet(undefined)}
-        onOk={() => {
-          const value = renameDraft.trim();
-          if (!renameSheet || !value) return;
-          onRename?.(renameSheet.id, value);
-          setRenameSheet(undefined);
-        }}
-      >
-        <Input
-          autoFocus
-          value={renameDraft}
-          maxLength={60}
-          placeholder="输入 Sheet 名称"
-          onChange={(event) => setRenameDraft(event.target.value)}
-          onPressEnter={() => {
-            const value = renameDraft.trim();
-            if (!renameSheet || !value) return;
-            onRename?.(renameSheet.id, value);
-            setRenameSheet(undefined);
-          }}
-        />
-      </Modal>
 
       <Modal
         open={Boolean(noteSheet)}
