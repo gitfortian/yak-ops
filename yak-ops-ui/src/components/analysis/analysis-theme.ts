@@ -95,7 +95,7 @@ const themeSeries = (series: any, theme: AnalysisThemeTokens) => {
 
 /**
  * Apply presentation-only tokens to an ECharts option built from Analysis semantics.
- * The Analysis spec remains unchanged, so Dashboard themes never rewrite chart configuration.
+ * Chart-local colors stay authoritative; the Dashboard theme palette is only a fallback.
  */
 export const applyAnalysisChartTheme = (
   option: any,
@@ -103,10 +103,13 @@ export const applyAnalysisChartTheme = (
 ) => {
   if (!option) return option;
   const theme = resolveAnalysisThemeTokens(value);
+  const palette = Array.isArray(option.color) && option.color.length
+    ? option.color
+    : theme.palette;
   return {
     ...option,
     backgroundColor: 'transparent',
-    color: [...theme.palette],
+    color: [...palette],
     textStyle: {
       ...(option.textStyle || {}),
       color: theme.textColor,
