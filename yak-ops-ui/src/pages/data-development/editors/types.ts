@@ -12,7 +12,8 @@ export type DevelopmentEditorPanelKey =
   | 'properties'
   | 'run-config'
   | 'schedule-config'
-  | 'versions';
+  | 'versions'
+  | 'lineage';
 
 export interface DevelopmentEditorContext {
   node: DevelopmentNode;
@@ -50,6 +51,7 @@ export interface DevelopmentEditorCapabilities {
   runConfig: boolean;
   scheduleConfig: boolean;
   versions: boolean;
+  lineage?: boolean;
 }
 
 export interface DevelopmentEditorDefinition {
