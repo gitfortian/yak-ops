@@ -232,24 +232,30 @@ ol {
   display: none;
 }
 
-// SQL editor statement action: compact green play marker in Monaco's glyph margin.
+// SQL editor statement action follows Chat2DB: the active statement exposes a
+// compact outlined play glyph at its first line, while the current line keeps
+// Monaco's native very-light highlight.
+.yak-sql-editor .monaco-editor .margin {
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
 .yak-sql-run-glyph {
+  width: 16px !important;
+  height: 16px !important;
   cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 3l14 9-14 9V3z' fill='none' stroke='%23667085' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 15px 15px;
+  opacity: 0.82;
+  transition: transform 0.16s ease-in-out, opacity 0.16s ease-in-out;
 }
 
-.yak-sql-run-glyph::before {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-left: 8px solid #22a06b;
-  content: '';
-  transform: translate(-42%, -50%);
+.yak-sql-run-glyph:hover {
+  opacity: 1;
+  transform: scale(1.18);
 }
 
-.yak-sql-run-glyph:hover::before {
-  border-left-color: #138a5b;
+.yak-sql-run-glyph:active {
+  transform: scale(1);
 }
