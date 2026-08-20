@@ -13,6 +13,7 @@ import type {
   DevelopmentReleaseSummary,
   DevelopmentResourceNode,
   DevelopmentSqlLineagePreview,
+  DevelopmentSqlLineagePreviewRequest,
   DevelopmentTaskDefinition,
   DevelopmentTaskDraft,
   DevelopmentTaskExecutionDetail,
@@ -88,7 +89,7 @@ export const runDevelopmentTask = (
 /** Parse current SQL editor content without saving, publishing or registering lineage. */
 export const previewDevelopmentSqlLineage = (
   nodeId: DevelopmentId,
-  payload: DevelopmentTaskDefinition,
+  payload: DevelopmentSqlLineagePreviewRequest,
 ): Promise<ApiResponse<DevelopmentSqlLineagePreview>> =>
   HttpUtils.post<DevelopmentSqlLineagePreview>(
     `${NODE_API}/${nodeId}/lineage/preview`,
