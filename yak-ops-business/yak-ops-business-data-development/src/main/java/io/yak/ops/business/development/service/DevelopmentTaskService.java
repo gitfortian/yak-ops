@@ -39,12 +39,12 @@ public class DevelopmentTaskService {
   private final TaskCatalogService taskCatalogService;
   private final TaskPluginRegistry pluginRegistry;
   private final ObjectMapper objectMapper;
-  private final DevelopmentSqlLineageService sqlLineageService;
+  private final DevelopmentLineageOutbox outbox;
 
   /**
    * Keeps focused unit tests and non-Spring callers source compatible.
    *
-   * <p>Production wiring uses the annotated constructor below so SQL lineage is synchronized after
+   * <p>Production wiring uses the annotated constructor below so durable SQL-lineage work is persisted with
    * a successful publish.
    */
   public DevelopmentTaskService(
@@ -72,14 +72,14 @@ public class DevelopmentTaskService {
       TaskCatalogService taskCatalogService,
       TaskPluginRegistry pluginRegistry,
       ObjectMapper objectMapper,
-      DevelopmentSqlLineageService sqlLineageService) {
+      DevelopmentLineageOutbox outbox) {
     this.nodeRepository = nodeRepository;
     this.draftRepository = draftRepository;
     this.revisionRepository = revisionRepository;
     this.taskCatalogService = taskCatalogService;
     this.pluginRegistry = pluginRegistry;
     this.objectMapper = objectMapper;
-    this.sqlLineageService = sqlLineageService;
+    this.outbox = outbox;
   }
 
   public DevelopmentTaskDraft getDraft(Long nodeId) {
@@ -160,8 +160,8 @@ public class DevelopmentTaskService {
         definition.taskType(),
         published.id(),
         published.revisionNo());
-    if (sqlLineageService != null) {
-      sqlLineageService.syncPublished(node, published);
+    if (outbox != null && "SQL".equalsIgnoreCase(definition.taskType())) {
+      outbox.enqueue(node.id(), published.id());
     }
     return published;
   }
