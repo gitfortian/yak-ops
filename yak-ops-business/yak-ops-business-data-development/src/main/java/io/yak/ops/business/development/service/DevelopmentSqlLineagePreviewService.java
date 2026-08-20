@@ -34,6 +34,7 @@ public class DevelopmentSqlLineagePreviewService {
   private final SqlColumnLineageParser columnParser;
   private final SqlProjectionLineageAnalyzer projectionAnalyzer;
   private final ObjectMapper objectMapper;
+  private final TableIdentityResolver identityResolver = new TableIdentityResolver();
 
   private DataSourceCatalogService dataSourceCatalogService;
 
@@ -66,9 +67,12 @@ public class DevelopmentSqlLineagePreviewService {
     if (sql == null || sql.isBlank()) {
       throw new IllegalArgumentException("SQL 不能为空");
     }
-    String dataSourceId = dataSourceId(configJson);
-    String defaultDatabase = normalizeContext(databaseName);
-    String defaultSchema = normalizeContext(schemaName);
+    SqlContext persisted = sqlContext(configJson);
+    String dataSourceId = persisted.dataSourceId();
+    // Explicit preview parameters override persisted revision context.
+    String defaultDatabase = firstNonBlank(databaseName, persisted.databaseName());
+    String defaultSchema = firstNonBlank(schemaName, persisted.schemaName());
+    SqlContext context = new SqlContext(dataSourceId, defaultDatabase, defaultSchema, persisted.dialect());
     PreviewAsset task = taskAsset(node, dataSourceId);
 
     final SqlTableLineageParser.ParseResult tableParsed;
@@ -89,7 +93,7 @@ public class DevelopmentSqlLineagePreviewService {
     nodes.put(task.id(), task);
 
     for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
-      PreviewAsset table = tableAsset(dataSourceId, input);
+      PreviewAsset table = tableAsset(context, input);
       nodes.putIfAbsent(table.id(), table);
       PreviewRelation relation = tableRelation(
           table,
@@ -100,7 +104,7 @@ public class DevelopmentSqlLineagePreviewService {
       relations.putIfAbsent(relation.id(), relation);
     }
     for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
-      PreviewAsset table = tableAsset(dataSourceId, output);
+      PreviewAsset table = tableAsset(context, output);
       nodes.putIfAbsent(table.id(), table);
       PreviewRelation relation = tableRelation(
           task,
@@ -360,20 +364,23 @@ public class DevelopmentSqlLineagePreviewService {
         Map.of("preview", true));
   }
 
-  private PreviewAsset tableAsset(String dataSourceId, SqlTableLineageParser.TableRef table) {
-    String key = "table:" + dataSourceId + ":" + table.canonicalName();
+  private PreviewAsset tableAsset(SqlContext context, SqlTableLineageParser.TableRef table) {
+    TableIdentityResolver.PhysicalTableIdentity identity = identityResolver.resolve(
+        table, new TableIdentityResolver.ResolutionContext(
+            context.dataSourceId(), context.databaseName(), context.schemaName(), context.dialect()));
+    String key = identity.assetKey();
     return new PreviewAsset(
         key,
         key,
         LineageAssetType.TABLE,
         table.qualifiedName(),
         "DATASOURCE",
-        dataSourceId,
+        context.dataSourceId(),
         null,
-        dataSourceId,
-        table.databaseName(),
-        table.schemaName(),
-        table.tableName(),
+        context.dataSourceId(),
+        emptyToNull(identity.databaseName()),
+        emptyToNull(identity.schemaName()),
+        identity.tableName(),
         null,
         Map.of("qualifiedName", table.qualifiedName(), "preview", true));
   }
@@ -415,7 +422,7 @@ public class DevelopmentSqlLineagePreviewService {
         List.of());
   }
 
-  private String dataSourceId(String configJson) {
+  private SqlContext sqlContext(String configJson) {
     try {
       JsonNode root = objectMapper.readTree(
           configJson == null || configJson.isBlank() ? "{}" : configJson);
@@ -424,7 +431,11 @@ public class DevelopmentSqlLineagePreviewService {
       if (dataSourceId == null || dataSourceId.isBlank()) {
         throw new IllegalArgumentException("SQL task dataSourceId 不能为空");
       }
-      return dataSourceId.trim();
+      return new SqlContext(
+          dataSourceId.trim(),
+          text(root, "databaseName", "database", "catalog"),
+          text(root, "schemaName", "schema"),
+          TableIdentityResolver.SqlDialect.from(text(root, "dialect", "dbType")));
     } catch (JsonProcessingException exception) {
       throw new IllegalArgumentException("SQL task configJson 不是合法 JSON", exception);
     }
@@ -433,6 +444,24 @@ public class DevelopmentSqlLineagePreviewService {
   private static String normalizeContext(String value) {
     if (value == null || value.isBlank()) return null;
     return value.trim();
+  }
+
+
+  private static String firstNonBlank(String explicit, String persisted) {
+    String normalized = normalizeContext(explicit);
+    return normalized == null ? normalizeContext(persisted) : normalized;
+  }
+
+  private static String text(JsonNode root, String... names) {
+    for (String name : names) {
+      JsonNode value = root == null ? null : root.get(name);
+      if (value != null && !value.isNull() && !value.asText().isBlank()) return value.asText().trim();
+    }
+    return null;
+  }
+
+  private static String emptyToNull(String value) {
+    return value == null || value.isEmpty() ? null : value;
   }
 
   private static String schemaCacheKey(
@@ -452,6 +481,13 @@ public class DevelopmentSqlLineagePreviewService {
       return throwable == null ? "unknown parser error" : throwable.getClass().getSimpleName();
     }
     return message.length() > 1000 ? message.substring(0, 1000) : message;
+  }
+
+  private record SqlContext(
+      String dataSourceId,
+      String databaseName,
+      String schemaName,
+      TableIdentityResolver.SqlDialect dialect) {
   }
 
   private record CatalogColumn(String name, Integer ordinalPosition) {

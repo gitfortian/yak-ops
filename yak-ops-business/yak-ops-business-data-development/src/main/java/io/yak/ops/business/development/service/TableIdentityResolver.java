@@ -21,22 +21,24 @@ public class TableIdentityResolver {
 
     ResolutionContext actual = context == null ? ResolutionContext.empty() : context;
 
-    String database = firstNonBlank(
-        table.databaseName(),
-        actual.databaseName());
-    String schema = firstNonBlank(
-        table.schemaName(),
-        actual.schemaName());
+    boolean unqualified = table.databaseName() == null && table.schemaName() == null;
+    String database = table.databaseName();
+    String schema = table.schemaName();
+    if (unqualified) {
+      database = actual.databaseName();
+      schema = actual.schemaName();
+    } else if (database == null && schema != null && actual.dialect() == SqlDialect.MYSQL) {
+      // JSQLParser exposes a two-part name as schema.table. Its SQL meaning is dialect-specific:
+      // PostgreSQL keeps that interpretation, while MySQL treats the first part as database.
+      database = schema;
+      schema = null;
+    }
 
     return new PhysicalTableIdentity(
         normalize(actual.dataSourceId()),
         normalize(database),
         normalize(schema),
         normalize(table.tableName()));
-  }
-
-  private String firstNonBlank(String value, String fallback) {
-    return value == null || value.isBlank() ? fallback : value;
   }
 
   private String normalize(String value) {
@@ -48,10 +50,30 @@ public class TableIdentityResolver {
   public record ResolutionContext(
       String dataSourceId,
       String databaseName,
-      String schemaName) {
+      String schemaName,
+      SqlDialect dialect) {
+
+    public ResolutionContext(String dataSourceId, String databaseName, String schemaName) {
+      this(dataSourceId, databaseName, schemaName, SqlDialect.UNKNOWN);
+    }
 
     public static ResolutionContext empty() {
-      return new ResolutionContext(null, null, null);
+      return new ResolutionContext(null, null, null, SqlDialect.UNKNOWN);
+    }
+  }
+
+  public enum SqlDialect {
+    POSTGRESQL,
+    MYSQL,
+    UNKNOWN;
+
+    public static SqlDialect from(String value) {
+      if (value == null) return UNKNOWN;
+      String normalized = value.trim().toLowerCase(Locale.ROOT);
+      if (normalized.contains("postgres")) return POSTGRESQL;
+      if (normalized.contains("mysql") || normalized.contains("mariadb")
+          || normalized.contains("doris")) return MYSQL;
+      return UNKNOWN;
     }
   }
 
@@ -62,7 +84,10 @@ public class TableIdentityResolver {
       String tableName) {
 
     public String assetKey() {
-      return "table:%s:%s.%s.%s".formatted(
+      // Legacy configs without database/schema must never alias a confirmed physical asset.
+      String resolution = databaseName.isEmpty() && schemaName.isEmpty() ? "unresolved:" : "";
+      return "table:%s%s:%s.%s.%s".formatted(
+          resolution,
           dataSourceId,
           databaseName,
           schemaName,

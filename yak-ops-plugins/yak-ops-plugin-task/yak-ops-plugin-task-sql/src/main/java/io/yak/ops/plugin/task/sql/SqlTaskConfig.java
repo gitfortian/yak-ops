@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /** SQL task plugin-owned schemaVersion=1 configuration. */
 record SqlTaskConfig(
     String dataSourceId,
+    String databaseName,
+    String schemaName,
+    String dialect,
     int maxRows,
     int timeoutSeconds) {
 
@@ -32,7 +35,13 @@ record SqlTaskConfig(
               DEFAULT_TIMEOUT_SECONDS,
               1,
               MAX_TIMEOUT_SECONDS);
-      return new SqlTaskConfig(dataSourceId, maxRows, timeoutSeconds);
+      return new SqlTaskConfig(
+          dataSourceId,
+          firstText(root, "databaseName", "database", "catalog"),
+          firstText(root, "schemaName", "schema"),
+          firstText(root, "dialect", "dbType"),
+          maxRows,
+          timeoutSeconds);
     } catch (IllegalArgumentException exception) {
       throw exception;
     } catch (Exception exception) {
@@ -45,6 +54,14 @@ record SqlTaskConfig(
     if (value == null || value.isNull()) return null;
     String text = value.asText();
     return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  private static String firstText(JsonNode root, String... keys) {
+    for (String key : keys) {
+      String value = text(root, key);
+      if (value != null) return value;
+    }
+    return null;
   }
 
   private static int integer(
