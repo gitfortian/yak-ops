@@ -51,6 +51,16 @@ const ensureYakThemes = () => {
   YAK_EDITOR_THEMES.forEach((theme) => monaco.editor.defineTheme(theme.name, theme.data));
 };
 
+const findFallbackRunButton = (container: HTMLElement | null) => {
+  let element = container;
+  while (element) {
+    const button = element.querySelector<HTMLButtonElement>('button[aria-label="运行查询"]');
+    if (button) return button;
+    element = element.parentElement;
+  }
+  return undefined;
+};
+
 const SqlMonacoEditor = ({
   id,
   value,
@@ -151,19 +161,67 @@ const SqlMonacoEditor = ({
     });
 
     let statementRanges = getSqlStatementRanges(model.getValue());
+    let hoveredStatementStartLine: number | undefined;
     const runDecorations = editor.createDecorationsCollection();
-    const refreshStatementDecorations = () => {
-      statementRanges = getSqlStatementRanges(model.getValue());
-      runDecorations.set(
-        readOnly
-          ? []
-          : statementRanges.map((statement) => ({
-              range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
-              options: { glyphMarginClassName: 'yak-sql-run-glyph' },
-            })),
-      );
+
+    const clearStatementDecoration = () => {
+      hoveredStatementStartLine = undefined;
+      runDecorations.clear();
     };
-    refreshStatementDecorations();
+
+    const canRunStatement = () => {
+      if (onRunStatementRef.current) return true;
+      const button = findFallbackRunButton(containerRef.current);
+      return Boolean(button && !button.disabled);
+    };
+
+    const runStatement = (sql: string) => {
+      if (onRunStatementRef.current) {
+        onRunStatementRef.current(sql);
+        return;
+      }
+      const button = findFallbackRunButton(containerRef.current);
+      if (button && !button.disabled) button.click();
+    };
+
+    const refreshStatementRanges = () => {
+      statementRanges = getSqlStatementRanges(model.getValue());
+      clearStatementDecoration();
+    };
+
+    const showStatementDecoration = (lineNumber?: number) => {
+      if (readOnly || runningRef.current || !lineNumber || !canRunStatement()) {
+        clearStatementDecoration();
+        return;
+      }
+
+      const statement = statementRanges.find((candidate) => candidate.startLine === lineNumber);
+      if (!statement) {
+        clearStatementDecoration();
+        return;
+      }
+      if (hoveredStatementStartLine === statement.startLine) return;
+
+      hoveredStatementStartLine = statement.startLine;
+      runDecorations.set([
+        {
+          range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
+          options: { glyphMarginClassName: 'yak-sql-run-glyph' },
+        },
+        {
+          range: new monaco.Range(
+            statement.startLine,
+            1,
+            statement.endLine,
+            model.getLineMaxColumn(statement.endLine),
+          ),
+          options: {
+            isWholeLine: true,
+            className: 'bg-[rgba(34,160,107,0.035)]',
+          },
+        },
+      ]);
+    };
 
     let wordWrapEnabled = initialSettings.wordWrap;
     let minimapEnabled = initialSettings.showMinimap;
@@ -228,20 +286,28 @@ const SqlMonacoEditor = ({
     };
 
     const contentDisposable = model.onDidChangeContent(() => {
-      refreshStatementDecorations();
+      refreshStatementRanges();
       if (!readOnly) onChangeRef.current(model.getValue());
+    });
+    const hoverDisposable = editor.onMouseMove((event) => {
+      showStatementDecoration(event.target.position?.lineNumber);
+    });
+    const mouseLeaveDisposable = editor.onMouseLeave(() => {
+      clearStatementDecoration();
     });
     const gutterDisposable = editor.onMouseDown((event) => {
       if (
         readOnly ||
         event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
         runningRef.current ||
-        !onRunStatementRef.current
+        !canRunStatement()
       ) return;
       const lineNumber = event.target.position?.lineNumber;
       if (!lineNumber) return;
       const statement = statementRanges.find((candidate) => candidate.startLine === lineNumber);
-      if (statement) onRunStatementRef.current(statement.sql);
+      if (!statement) return;
+      clearStatementDecoration();
+      runStatement(statement.sql);
     });
     const cursorDisposable = editor.onDidChangeCursorPosition(emitEditorState);
     const selectionDisposable = editor.onDidChangeCursorSelection(emitEditorState);
@@ -253,6 +319,8 @@ const SqlMonacoEditor = ({
       emitEditorState();
       unsubscribeSettings();
       contentDisposable.dispose();
+      hoverDisposable.dispose();
+      mouseLeaveDisposable.dispose();
       gutterDisposable.dispose();
       cursorDisposable.dispose();
       selectionDisposable.dispose();
