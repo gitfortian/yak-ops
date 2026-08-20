@@ -59,12 +59,16 @@ public class DevelopmentSqlLineagePreviewService {
       Long nodeId,
       String taskType,
       String sql,
-      String configJson) {
+      String configJson,
+      String databaseName,
+      String schemaName) {
     DevelopmentNode node = requireSqlNode(nodeId, taskType);
     if (sql == null || sql.isBlank()) {
       throw new IllegalArgumentException("SQL 不能为空");
     }
     String dataSourceId = dataSourceId(configJson);
+    String defaultDatabase = normalizeContext(databaseName);
+    String defaultSchema = normalizeContext(schemaName);
     PreviewAsset task = taskAsset(node, dataSourceId);
 
     final SqlTableLineageParser.ParseResult tableParsed;
@@ -74,7 +78,12 @@ public class DevelopmentSqlLineagePreviewService {
       return failedPreview(task, dataSourceId, safeMessage(exception));
     }
 
-    ColumnAnalysis columnAnalysis = analyzeColumns(sql, dataSourceId, tableParsed.outputs().isEmpty());
+    ColumnAnalysis columnAnalysis = analyzeColumns(
+        sql,
+        dataSourceId,
+        tableParsed.outputs().isEmpty(),
+        defaultDatabase,
+        defaultSchema);
     Map<String, PreviewAsset> nodes = new LinkedHashMap<>();
     Map<String, PreviewRelation> relations = new LinkedHashMap<>();
     nodes.put(task.id(), task);
@@ -82,13 +91,23 @@ public class DevelopmentSqlLineagePreviewService {
     for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
       PreviewAsset table = tableAsset(dataSourceId, input);
       nodes.putIfAbsent(table.id(), table);
-      PreviewRelation relation = tableRelation(table, task, LineageRelationType.READS_FROM, "INPUT", node.id());
+      PreviewRelation relation = tableRelation(
+          table,
+          task,
+          LineageRelationType.READS_FROM,
+          "INPUT",
+          node.id());
       relations.putIfAbsent(relation.id(), relation);
     }
     for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
       PreviewAsset table = tableAsset(dataSourceId, output);
       nodes.putIfAbsent(table.id(), table);
-      PreviewRelation relation = tableRelation(task, table, LineageRelationType.WRITES_TO, "OUTPUT", node.id());
+      PreviewRelation relation = tableRelation(
+          task,
+          table,
+          LineageRelationType.WRITES_TO,
+          "OUTPUT",
+          node.id());
       relations.putIfAbsent(relation.id(), relation);
     }
 
@@ -134,12 +153,17 @@ public class DevelopmentSqlLineagePreviewService {
     return node;
   }
 
-  private ColumnAnalysis analyzeColumns(String sql, String dataSourceId, boolean projectionOnly) {
+  private ColumnAnalysis analyzeColumns(
+      String sql,
+      String dataSourceId,
+      boolean projectionOnly,
+      String defaultDatabase,
+      String defaultSchema) {
     if (projectionOnly) {
       try {
         SqlProjectionLineageAnalyzer.ProjectionResult result = projectionAnalyzer.analyze(
             sql,
-            projectionSchemaProvider(dataSourceId));
+            projectionSchemaProvider(dataSourceId, defaultDatabase, defaultSchema));
         List<ColumnMapping> mappings = result.mappings().stream()
             .map(mapping -> new ColumnMapping(
                 mapping.sourceTable().qualifiedName(),
@@ -160,7 +184,11 @@ public class DevelopmentSqlLineagePreviewService {
         // Non-projection statements can also have no write target. Fall through to the baseline
         // parser before surfacing a column-level preview failure.
         try {
-          return analyzePhysicalColumns(sql, dataSourceId);
+          return analyzePhysicalColumns(
+              sql,
+              dataSourceId,
+              defaultDatabase,
+              defaultSchema);
         } catch (RuntimeException ignored) {
           return new ColumnAnalysis(List.of(), 0, 0, safeMessage(projectionFailure));
         }
@@ -168,14 +196,20 @@ public class DevelopmentSqlLineagePreviewService {
     }
 
     try {
-      return analyzePhysicalColumns(sql, dataSourceId);
+      return analyzePhysicalColumns(sql, dataSourceId, defaultDatabase, defaultSchema);
     } catch (RuntimeException exception) {
       return new ColumnAnalysis(List.of(), 0, 0, safeMessage(exception));
     }
   }
 
-  private ColumnAnalysis analyzePhysicalColumns(String sql, String dataSourceId) {
-    SqlColumnLineageParser.ParseResult result = columnParser.parse(sql, columnSchemaProvider(dataSourceId));
+  private ColumnAnalysis analyzePhysicalColumns(
+      String sql,
+      String dataSourceId,
+      String defaultDatabase,
+      String defaultSchema) {
+    SqlColumnLineageParser.ParseResult result = columnParser.parse(
+        sql,
+        columnSchemaProvider(dataSourceId, defaultDatabase, defaultSchema));
     List<ColumnMapping> mappings = result.mappings().stream()
         .map(mapping -> new ColumnMapping(
             mapping.sourceTable().qualifiedName(),
@@ -194,32 +228,67 @@ public class DevelopmentSqlLineagePreviewService {
         null);
   }
 
-  private SqlColumnLineageParser.SchemaProvider columnSchemaProvider(String dataSourceId) {
+  private SqlColumnLineageParser.SchemaProvider columnSchemaProvider(
+      String dataSourceId,
+      String defaultDatabase,
+      String defaultSchema) {
     Map<String, List<CatalogColumn>> cache = new LinkedHashMap<>();
     return table -> cache.computeIfAbsent(
-            table.canonicalName(),
-            ignored -> catalogColumns(
+            schemaCacheKey(table.canonicalName(), defaultDatabase, defaultSchema),
+            ignored -> catalogColumnsForTable(
                 dataSourceId,
                 table.databaseName(),
                 table.schemaName(),
-                table.tableName()))
+                table.tableName(),
+                defaultDatabase,
+                defaultSchema))
         .stream()
-        .map(column -> new SqlColumnLineageParser.SchemaColumn(column.name(), column.ordinalPosition()))
+        .map(column -> new SqlColumnLineageParser.SchemaColumn(
+            column.name(),
+            column.ordinalPosition()))
         .toList();
   }
 
-  private SqlProjectionLineageAnalyzer.SchemaProvider projectionSchemaProvider(String dataSourceId) {
+  private SqlProjectionLineageAnalyzer.SchemaProvider projectionSchemaProvider(
+      String dataSourceId,
+      String defaultDatabase,
+      String defaultSchema) {
     Map<String, List<CatalogColumn>> cache = new LinkedHashMap<>();
     return table -> cache.computeIfAbsent(
-            table.canonicalName(),
-            ignored -> catalogColumns(
+            schemaCacheKey(table.canonicalName(), defaultDatabase, defaultSchema),
+            ignored -> catalogColumnsForTable(
                 dataSourceId,
                 table.databaseName(),
                 table.schemaName(),
-                table.tableName()))
+                table.tableName(),
+                defaultDatabase,
+                defaultSchema))
         .stream()
-        .map(column -> new SqlProjectionLineageAnalyzer.SchemaColumn(column.name(), column.ordinalPosition()))
+        .map(column -> new SqlProjectionLineageAnalyzer.SchemaColumn(
+            column.name(),
+            column.ordinalPosition()))
         .toList();
+  }
+
+  /**
+   * Only unqualified table references inherit the editor database/schema context. Two-part names
+   * remain parser-owned so the existing PostgreSQL schema.table / MySQL database.table fallback is
+   * preserved.
+   */
+  private List<CatalogColumn> catalogColumnsForTable(
+      String dataSourceId,
+      String explicitDatabase,
+      String explicitSchema,
+      String table,
+      String defaultDatabase,
+      String defaultSchema) {
+    String database = explicitDatabase;
+    String schema = explicitSchema;
+    if (database == null && schema == null) {
+      database = defaultDatabase;
+      schema = defaultSchema;
+    }
+    return catalogColumns(dataSourceId, database, schema, table);
   }
 
   private List<CatalogColumn> catalogColumns(
@@ -359,6 +428,22 @@ public class DevelopmentSqlLineagePreviewService {
     } catch (JsonProcessingException exception) {
       throw new IllegalArgumentException("SQL task configJson 不是合法 JSON", exception);
     }
+  }
+
+  private static String normalizeContext(String value) {
+    if (value == null || value.isBlank()) return null;
+    return value.trim();
+  }
+
+  private static String schemaCacheKey(
+      String canonicalName,
+      String defaultDatabase,
+      String defaultSchema) {
+    return canonicalName
+        + "|"
+        + (defaultDatabase == null ? "" : defaultDatabase)
+        + "|"
+        + (defaultSchema == null ? "" : defaultSchema);
   }
 
   private static String safeMessage(Throwable throwable) {
