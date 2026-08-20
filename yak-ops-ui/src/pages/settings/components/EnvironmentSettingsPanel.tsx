@@ -268,7 +268,7 @@ const EnvironmentSettingsPanel = () => {
       {systemEntries.length > 0 && (
         <div className="mt-8 border-t border-[#eaecf0] pt-6">
           <div className="mb-4 text-[14px] font-semibold text-[#1d2939]">系统环境变量</div>
-          <div className="overflow-y-auto rounded-md border border-[#f2f4f7]">
+          <div className="max-h-[300px] overflow-auto rounded-md border border-[#f2f4f7]">
             {systemEntries.map((entry) => (
               <div
                 key={entry.key}
