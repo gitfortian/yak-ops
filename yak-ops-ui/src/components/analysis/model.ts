@@ -266,6 +266,7 @@ export interface DatasetQueryColumn {
 }
 
 export interface DatasetQueryResult {
+  queryId?: string;
   datasetId: string;
   datasetVersionId: string;
   datasetVersionNo: number;

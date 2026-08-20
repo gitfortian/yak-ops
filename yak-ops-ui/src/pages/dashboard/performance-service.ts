@@ -31,13 +31,12 @@ const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
 };
 
 export const fetchDashboardQueryPerformance = async (
-  datasetIds: string[],
-  limit = 100,
+  queryIds: string[],
 ): Promise<DashboardQueryPerformance[]> => {
-  if (!datasetIds.length) return [];
+  if (!queryIds.length) return [];
   const params = new URLSearchParams();
-  datasetIds.forEach((datasetId) => params.append('datasetIds', datasetId));
-  params.set('limit', String(limit));
+  queryIds.forEach((queryId) => params.append('queryIds', queryId));
+  params.set('limit', String(Math.min(queryIds.length, 200)));
   return unwrap(
     await HttpUtils.get<DashboardQueryPerformance[]>(`${PERFORMANCE_API}?${params.toString()}`),
     '查询 Dataset 性能分析记录失败',
