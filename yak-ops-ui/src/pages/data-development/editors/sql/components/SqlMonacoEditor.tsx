@@ -128,9 +128,12 @@ const SqlMonacoEditor = ({
       insertSpaces: true,
       scrollBeyondLastLine: false,
       smoothScrolling: true,
-      cursorSmoothCaretAnimation: 'on',
-      cursorBlinking: 'smooth',
-      cursorWidth: 1,
+      // Keep the caret aligned with Chat2DB/Monaco's immediate line-cursor feel.
+      // Interpolated caret travel looks smooth in isolation but trails fast typing/navigation.
+      cursorStyle: 'line',
+      cursorSmoothCaretAnimation: 'off',
+      cursorBlinking: 'blink',
+      cursorWidth: 2,
       showFoldingControls: 'mouseover',
       glyphMargin: !readOnly,
       lineDecorationsWidth: 24,
@@ -201,8 +204,25 @@ const SqlMonacoEditor = ({
       );
     };
 
-    const updateRunDecoration = (position = editor.getPosition()) => {
-      activeStatement = findStatementAtPosition(position);
+    const isSameStatement = (
+      left?: SqlStatementRange,
+      right?: SqlStatementRange,
+    ) =>
+      left?.startOffset === right?.startOffset
+      && left?.endOffset === right?.endOffset
+      && left?.startLine === right?.startLine;
+
+    const updateRunDecoration = (
+      position = editor.getPosition(),
+      force = false,
+    ) => {
+      const nextActiveStatement = findStatementAtPosition(position);
+      const statementChanged = !isSameStatement(activeStatement, nextActiveStatement);
+      activeStatement = nextActiveStatement;
+
+      // Moving within the same SQL statement should not recreate the same gutter decoration.
+      if (!force && !statementChanged) return;
+
       if (!activeStatement || !canRunStatement()) {
         runDecorations.clear();
         return;
@@ -219,7 +239,7 @@ const SqlMonacoEditor = ({
       ]);
     };
 
-    refreshRunDecorationRef.current = () => updateRunDecoration();
+    refreshRunDecorationRef.current = () => updateRunDecoration(editor.getPosition(), true);
 
     const runStatement = (sql: string) => {
       if (onRunStatementRef.current) {
@@ -232,7 +252,7 @@ const SqlMonacoEditor = ({
 
     const refreshStatementRanges = () => {
       statementRanges = getSqlStatementRanges(model.getValue());
-      updateRunDecoration();
+      updateRunDecoration(editor.getPosition(), true);
     };
 
     let wordWrapEnabled = initialSettings.wordWrap;
@@ -297,6 +317,15 @@ const SqlMonacoEditor = ({
       });
     };
 
+    let editorStateFrame: number | undefined;
+    const scheduleEditorStateEmit = () => {
+      if (editorStateFrame !== undefined) return;
+      editorStateFrame = window.requestAnimationFrame(() => {
+        editorStateFrame = undefined;
+        emitEditorState();
+      });
+    };
+
     const contentDisposable = model.onDidChangeContent(() => {
       refreshStatementRanges();
       if (!readOnly) onChangeRef.current(model.getValue());
@@ -314,17 +343,21 @@ const SqlMonacoEditor = ({
       if (!lineNumber || lineNumber !== activeStatement.startLine) return;
       runStatement(activeStatement.sql);
     });
-    const cursorDisposable = editor.onDidChangeCursorPosition(() => {
-      emitEditorState();
-      updateRunDecoration();
+    const cursorDisposable = editor.onDidChangeCursorPosition((event) => {
+      scheduleEditorStateEmit();
+      updateRunDecoration(event.position);
     });
-    const selectionDisposable = editor.onDidChangeCursorSelection(emitEditorState);
-    const scrollDisposable = editor.onDidScrollChange(emitEditorState);
+    const selectionDisposable = editor.onDidChangeCursorSelection(scheduleEditorStateEmit);
+    const scrollDisposable = editor.onDidScrollChange(scheduleEditorStateEmit);
 
     emitEditorState();
-    updateRunDecoration();
+    updateRunDecoration(editor.getPosition(), true);
 
     return () => {
+      if (editorStateFrame !== undefined) {
+        window.cancelAnimationFrame(editorStateFrame);
+        editorStateFrame = undefined;
+      }
       emitEditorState();
       refreshRunDecorationRef.current = () => {};
       unsubscribeSettings();
