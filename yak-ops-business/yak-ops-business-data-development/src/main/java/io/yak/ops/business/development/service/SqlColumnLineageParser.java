@@ -1,6 +1,7 @@
 package io.yak.ops.business.development.service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,9 +35,9 @@ import org.springframework.stereotype.Component;
 /**
  * Extracts conservative column-to-column lineage from SQL ASTs.
  *
- * <p>V1 only emits a mapping when both source and target columns can be identified without
- * guessing. Unsupported or ambiguous expressions are counted as unresolved and safely fall back
- * to the already-persisted table-level lineage.
+ * <p>The parser never guesses. Without schema metadata it preserves the V1 conservative behavior.
+ * When a {@link SchemaProvider} is supplied it can expand stars, disambiguate unqualified columns
+ * across joins and align INSERT projections with physical target-column order.
  */
 @Component
 public class SqlColumnLineageParser {
@@ -46,10 +47,15 @@ public class SqlColumnLineageParser {
       "STDDEV", "STDDEV_POP", "STDDEV_SAMP", "VAR_POP", "VAR_SAMP", "VARIANCE");
 
   public ParseResult parse(String sql) {
+    return parse(sql, SchemaProvider.none());
+  }
+
+  public ParseResult parse(String sql, SchemaProvider schemaProvider) {
     if (sql == null || sql.isBlank()) {
       return new ParseResult(List.of(), 0, 0, 0);
     }
 
+    SchemaProvider provider = schemaProvider == null ? SchemaProvider.none() : schemaProvider;
     try {
       Statements parsed = CCJSqlParserUtil.parseStatements(sql);
       Map<String, ColumnMapping> mappings = new LinkedHashMap<>();
@@ -58,7 +64,7 @@ public class SqlColumnLineageParser {
 
       for (Statement statement : parsed.getStatements()) {
         statementIndex++;
-        analyze(statement, statementIndex, mappings, stats);
+        analyze(statement, statementIndex, mappings, stats, provider);
       }
 
       return new ParseResult(
@@ -79,13 +85,14 @@ public class SqlColumnLineageParser {
       Statement statement,
       int statementIndex,
       Map<String, ColumnMapping> mappings,
-      MutableStats stats) {
+      MutableStats stats,
+      SchemaProvider schemaProvider) {
     if (statement instanceof Insert insert) {
-      analyzeInsert(insert, statementIndex, mappings, stats);
+      analyzeInsert(insert, statementIndex, mappings, stats, schemaProvider);
     } else if (statement instanceof CreateTable createTable) {
-      analyzeCreateTable(createTable, statementIndex, mappings, stats);
+      analyzeCreateTable(createTable, statementIndex, mappings, stats, schemaProvider);
     } else if (statement instanceof Update update) {
-      analyzeUpdate(update, statementIndex, mappings, stats);
+      analyzeUpdate(update, statementIndex, mappings, stats, schemaProvider);
     }
   }
 
@@ -93,7 +100,8 @@ public class SqlColumnLineageParser {
       Insert insert,
       int statementIndex,
       Map<String, ColumnMapping> mappings,
-      MutableStats stats) {
+      MutableStats stats,
+      SchemaProvider schemaProvider) {
     SqlTableLineageParser.TableRef target = tableRef(insert.getTable());
     Select select = insert.getSelect();
     if (target == null || select == null) return;
@@ -105,9 +113,9 @@ public class SqlColumnLineageParser {
       }
     }
 
-    // INSERT without an explicit target column list depends on the physical target schema.
-    // V1 deliberately does not infer target column names from SELECT aliases because that can
-    // silently produce incorrect lineage. Table-level lineage remains available.
+    if (targetColumns.isEmpty()) {
+      targetColumns = schemaColumnNames(schemaProvider, target);
+    }
     if (targetColumns.isEmpty()) {
       stats.unresolvedReferenceCount++;
       return;
@@ -120,14 +128,16 @@ public class SqlColumnLineageParser {
         statementIndex,
         mappings,
         stats,
-        cteNames(insert.getWithItemsList()));
+        cteNames(insert.getWithItemsList()),
+        schemaProvider);
   }
 
   private void analyzeCreateTable(
       CreateTable createTable,
       int statementIndex,
       Map<String, ColumnMapping> mappings,
-      MutableStats stats) {
+      MutableStats stats,
+      SchemaProvider schemaProvider) {
     SqlTableLineageParser.TableRef target = tableRef(createTable.getTable());
     Select select = createTable.getSelect();
     if (target == null || select == null) return;
@@ -139,7 +149,7 @@ public class SqlColumnLineageParser {
       }
     }
     if (targetColumns.isEmpty()) {
-      targetColumns = inferSelectOutputNames(select);
+      targetColumns = inferSelectOutputNames(select, schemaProvider, Set.of());
     }
 
     analyzeSelect(
@@ -149,14 +159,16 @@ public class SqlColumnLineageParser {
         statementIndex,
         mappings,
         stats,
-        Set.of());
+        Set.of(),
+        schemaProvider);
   }
 
   private void analyzeUpdate(
       Update update,
       int statementIndex,
       Map<String, ColumnMapping> mappings,
-      MutableStats stats) {
+      MutableStats stats,
+      SchemaProvider schemaProvider) {
     SqlTableLineageParser.TableRef target = tableRef(update.getTable());
     if (target == null || update.getUpdateSets() == null) return;
 
@@ -189,7 +201,8 @@ public class SqlColumnLineageParser {
             statementIndex,
             outputOrdinal,
             mappings,
-            stats);
+            stats,
+            schemaProvider);
       }
       if (updateSet.getColumns().size() != updateSet.getValues().size()) {
         stats.unresolvedReferenceCount +=
@@ -218,7 +231,8 @@ public class SqlColumnLineageParser {
       int statementIndex,
       Map<String, ColumnMapping> mappings,
       MutableStats stats,
-      Set<String> inheritedCteNames) {
+      Set<String> inheritedCteNames,
+      SchemaProvider schemaProvider) {
     if (select == null) return;
 
     Set<String> cteNames = new LinkedHashSet<>(inheritedCteNames);
@@ -238,7 +252,8 @@ public class SqlColumnLineageParser {
           statementIndex,
           mappings,
           stats,
-          cteNames);
+          cteNames,
+          schemaProvider);
       return;
     }
 
@@ -252,7 +267,8 @@ public class SqlColumnLineageParser {
             statementIndex,
             mappings,
             stats,
-            cteNames);
+            cteNames,
+            schemaProvider);
       }
       return;
     }
@@ -267,25 +283,52 @@ public class SqlColumnLineageParser {
       int statementIndex,
       Map<String, ColumnMapping> mappings,
       MutableStats stats,
-      Set<String> cteNames) {
+      Set<String> cteNames,
+      SchemaProvider schemaProvider) {
     if (select.getSelectItems() == null) return;
 
     Scope scope = buildScope(select, cteNames);
-    List<SelectItem<?>> items = select.getSelectItems();
-    for (int i = 0; i < items.size(); i++) {
-      stats.candidateOutputCount++;
-      SelectItem<?> item = items.get(i);
+    int outputOrdinal = 0;
+    for (SelectItem<?> item : select.getSelectItems()) {
       Expression expression = item == null ? null : item.getExpression();
 
-      String targetColumn =
-          i < targetColumns.size() ? normalizeColumnName(targetColumns.get(i)) : null;
-      if (targetColumn == null) {
-        stats.unresolvedReferenceCount++;
+      if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
+        List<SourceColumnRef> expanded = expandStar(expression, scope, schemaProvider);
+        if (expanded.isEmpty()) {
+          outputOrdinal++;
+          stats.candidateOutputCount++;
+          stats.unresolvedReferenceCount++;
+          continue;
+        }
+
+        for (SourceColumnRef source : expanded) {
+          outputOrdinal++;
+          stats.candidateOutputCount++;
+          String targetColumn = targetColumn(targetColumns, outputOrdinal);
+          if (targetColumn == null) {
+            stats.unresolvedReferenceCount++;
+            continue;
+          }
+          putMapping(
+              new ColumnMapping(
+                  source.table(),
+                  source.columnName(),
+                  target,
+                  targetColumn,
+                  MappingKind.IDENTITY,
+                  expression.toString(),
+                  statementIndex,
+                  outputOrdinal,
+                  1),
+              mappings);
+        }
         continue;
       }
-      if (expression == null
-          || expression instanceof AllColumns
-          || expression instanceof AllTableColumns) {
+
+      outputOrdinal++;
+      stats.candidateOutputCount++;
+      String targetColumn = targetColumn(targetColumns, outputOrdinal);
+      if (targetColumn == null || expression == null) {
         stats.unresolvedReferenceCount++;
         continue;
       }
@@ -296,14 +339,56 @@ public class SqlColumnLineageParser {
           targetColumn,
           scope,
           statementIndex,
-          i + 1,
+          outputOrdinal,
           mappings,
-          stats);
+          stats,
+          schemaProvider);
     }
 
-    if (targetColumns.size() > items.size()) {
-      stats.unresolvedReferenceCount += targetColumns.size() - items.size();
+    if (targetColumns.size() > outputOrdinal) {
+      stats.unresolvedReferenceCount += targetColumns.size() - outputOrdinal;
     }
+  }
+
+  private String targetColumn(List<String> targetColumns, int outputOrdinal) {
+    int index = outputOrdinal - 1;
+    return index >= 0 && index < targetColumns.size()
+        ? normalizeColumnName(targetColumns.get(index))
+        : null;
+  }
+
+  private List<SourceColumnRef> expandStar(
+      Expression expression,
+      Scope scope,
+      SchemaProvider schemaProvider) {
+    if (expression instanceof AllColumns allColumns
+        && ((allColumns.getExceptColumns() != null && !allColumns.getExceptColumns().isEmpty())
+            || (allColumns.getReplaceExpressions() != null
+                && !allColumns.getReplaceExpressions().isEmpty()))) {
+      return List.of();
+    }
+
+    List<SqlTableLineageParser.TableRef> tables = new ArrayList<>();
+
+    if (expression instanceof AllTableColumns allTableColumns) {
+      Table qualifier = allTableColumns.getTable();
+      String rawQualifier = qualifier == null ? null : qualifier.getFullyQualifiedName();
+      SqlTableLineageParser.TableRef table = scope.resolve(rawQualifier);
+      if (table != null) tables.add(table);
+    } else {
+      tables.addAll(scope.orderedTables());
+    }
+
+    List<SourceColumnRef> expanded = new ArrayList<>();
+    for (SqlTableLineageParser.TableRef table : tables) {
+      for (SchemaColumn column : safeColumns(schemaProvider, table)) {
+        String columnName = normalizeColumnName(column.name());
+        if (columnName != null) {
+          expanded.add(new SourceColumnRef(table, columnName));
+        }
+      }
+    }
+    return expanded;
   }
 
   private void collectMappings(
@@ -314,8 +399,9 @@ public class SqlColumnLineageParser {
       int statementIndex,
       int outputOrdinal,
       Map<String, ColumnMapping> mappings,
-      MutableStats stats) {
-    SourceCollection collected = collectSources(expression, scope);
+      MutableStats stats,
+      SchemaProvider schemaProvider) {
+    SourceCollection collected = collectSources(expression, scope, schemaProvider);
     stats.unresolvedReferenceCount += collected.unresolvedCount();
 
     MappingKind kind =
@@ -328,21 +414,25 @@ public class SqlColumnLineageParser {
     int sourceOrdinal = 0;
     for (SourceColumnRef source : collected.sources()) {
       sourceOrdinal++;
-      ColumnMapping mapping = new ColumnMapping(
-          source.table(),
-          source.columnName(),
-          target,
-          targetColumn,
-          kind,
-          expression.toString(),
-          statementIndex,
-          outputOrdinal,
-          sourceOrdinal);
-      mappings.putIfAbsent(mappingKey(mapping), mapping);
+      putMapping(
+          new ColumnMapping(
+              source.table(),
+              source.columnName(),
+              target,
+              targetColumn,
+              kind,
+              expression.toString(),
+              statementIndex,
+              outputOrdinal,
+              sourceOrdinal),
+          mappings);
     }
   }
 
-  private SourceCollection collectSources(Expression expression, Scope scope) {
+  private SourceCollection collectSources(
+      Expression expression,
+      Scope scope,
+      SchemaProvider schemaProvider) {
     Map<String, SourceColumnRef> sources = new LinkedHashMap<>();
     int[] unresolved = new int[] {0};
     boolean[] aggregate = new boolean[] {false};
@@ -351,7 +441,8 @@ public class SqlColumnLineageParser {
       @Override
       public void visit(Column column) {
         String columnName = normalizeColumnName(column.getColumnName());
-        SqlTableLineageParser.TableRef table = resolveTable(column, scope);
+        SqlTableLineageParser.TableRef table =
+            resolveTable(column, scope, schemaProvider);
         if (columnName == null || table == null) {
           unresolved[0]++;
           return;
@@ -411,13 +502,44 @@ public class SqlColumnLineageParser {
     scope.add(ref, alias);
   }
 
-  private SqlTableLineageParser.TableRef resolveTable(Column column, Scope scope) {
+  private SqlTableLineageParser.TableRef resolveTable(
+      Column column,
+      Scope scope,
+      SchemaProvider schemaProvider) {
     Table qualifier = column.getTable();
     String rawQualifier = qualifier == null ? null : qualifier.getFullyQualifiedName();
     if (rawQualifier != null && !rawQualifier.isBlank()) {
       return scope.resolve(rawQualifier);
     }
-    return scope.onlyTable();
+
+    SqlTableLineageParser.TableRef only = scope.onlyTable();
+    if (only != null) return only;
+
+    String columnName = normalizeColumnName(column.getColumnName());
+    if (columnName == null) return null;
+
+    SqlTableLineageParser.TableRef resolved = null;
+    for (SqlTableLineageParser.TableRef table : scope.orderedTables()) {
+      if (!hasColumn(schemaProvider, table, columnName)) continue;
+      if (resolved != null
+          && !resolved.canonicalName().equals(table.canonicalName())) {
+        return null;
+      }
+      resolved = table;
+    }
+    return resolved;
+  }
+
+  private boolean hasColumn(
+      SchemaProvider schemaProvider,
+      SqlTableLineageParser.TableRef table,
+      String columnName) {
+    for (SchemaColumn column : safeColumns(schemaProvider, table)) {
+      if (column.name() != null && column.name().equalsIgnoreCase(columnName)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private SqlTableLineageParser.TableRef tableRef(Table table) {
@@ -444,8 +566,21 @@ public class SqlColumnLineageParser {
         tableName);
   }
 
-  private List<String> inferSelectOutputNames(Select select) {
+  private List<String> inferSelectOutputNames(
+      Select select,
+      SchemaProvider schemaProvider,
+      Set<String> inheritedCteNames) {
     if (select instanceof PlainSelect plainSelect) {
+      Set<String> cteNames = new LinkedHashSet<>(inheritedCteNames);
+      if (select.getWithItemsList() != null) {
+        for (WithItem withItem : select.getWithItemsList()) {
+          if (withItem.getAlias() != null && withItem.getAlias().getName() != null) {
+            cteNames.add(withItem.getAlias().getName().toLowerCase(Locale.ROOT));
+          }
+        }
+      }
+
+      Scope scope = buildScope(plainSelect, cteNames);
       List<String> names = new ArrayList<>();
       if (plainSelect.getSelectItems() == null) return names;
       for (SelectItem<?> item : plainSelect.getSelectItems()) {
@@ -455,6 +590,17 @@ public class SqlColumnLineageParser {
           names.add(normalizeColumnName(item.getAlias().getName()));
         } else if (item.getExpression() instanceof Column column) {
           names.add(normalizeColumnName(column.getColumnName()));
+        } else if (item.getExpression() instanceof AllColumns
+            || item.getExpression() instanceof AllTableColumns) {
+          List<SourceColumnRef> expanded =
+              expandStar(item.getExpression(), scope, schemaProvider);
+          if (expanded.isEmpty()) {
+            names.add(null);
+          } else {
+            for (SourceColumnRef source : expanded) {
+              names.add(source.columnName());
+            }
+          }
         } else {
           names.add(null);
         }
@@ -465,9 +611,46 @@ public class SqlColumnLineageParser {
     if (select instanceof SetOperationList setOperationList
         && setOperationList.getSelects() != null
         && !setOperationList.getSelects().isEmpty()) {
-      return inferSelectOutputNames(setOperationList.getSelect(0));
+      return inferSelectOutputNames(
+          setOperationList.getSelect(0), schemaProvider, inheritedCteNames);
     }
     return List.of();
+  }
+
+  private List<String> schemaColumnNames(
+      SchemaProvider schemaProvider,
+      SqlTableLineageParser.TableRef table) {
+    List<String> names = new ArrayList<>();
+    for (SchemaColumn column : safeColumns(schemaProvider, table)) {
+      String name = normalizeColumnName(column.name());
+      if (name != null) names.add(name);
+    }
+    return names;
+  }
+
+  private List<SchemaColumn> safeColumns(
+      SchemaProvider schemaProvider,
+      SqlTableLineageParser.TableRef table) {
+    if (schemaProvider == null || table == null) return List.of();
+    try {
+      List<SchemaColumn> columns = schemaProvider.columns(table);
+      if (columns == null || columns.isEmpty()) return List.of();
+      return columns.stream()
+          .filter(column -> column != null && normalizeColumnName(column.name()) != null)
+          .sorted(Comparator.comparingInt(
+              column -> column.ordinalPosition() == null
+                  ? Integer.MAX_VALUE
+                  : column.ordinalPosition()))
+          .toList();
+    } catch (RuntimeException ignored) {
+      return List.of();
+    }
+  }
+
+  private static void putMapping(
+      ColumnMapping mapping,
+      Map<String, ColumnMapping> mappings) {
+    mappings.putIfAbsent(mappingKey(mapping), mapping);
   }
 
   private static String mappingKey(ColumnMapping mapping) {
@@ -539,6 +722,18 @@ public class SqlColumnLineageParser {
       int sourceOrdinal) {
   }
 
+  public record SchemaColumn(String name, Integer ordinalPosition) {
+  }
+
+  @FunctionalInterface
+  public interface SchemaProvider {
+    List<SchemaColumn> columns(SqlTableLineageParser.TableRef table);
+
+    static SchemaProvider none() {
+      return table -> List.of();
+    }
+  }
+
   private record SourceColumnRef(
       SqlTableLineageParser.TableRef table,
       String columnName) {
@@ -579,6 +774,10 @@ public class SqlColumnLineageParser {
 
     SqlTableLineageParser.TableRef onlyTable() {
       return tables.size() == 1 ? tables.values().iterator().next() : null;
+    }
+
+    List<SqlTableLineageParser.TableRef> orderedTables() {
+      return List.copyOf(tables.values());
     }
 
     private void addQualifier(String qualifier, SqlTableLineageParser.TableRef table) {

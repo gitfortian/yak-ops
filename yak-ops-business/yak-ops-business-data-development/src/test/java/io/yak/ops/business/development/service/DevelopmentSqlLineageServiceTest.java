@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.lineage.LineageAsset;
@@ -19,6 +20,7 @@ import io.yak.ops.business.lineage.LineageAssetType;
 import io.yak.ops.business.lineage.LineageMaintenanceService;
 import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.LineageService;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -115,6 +117,56 @@ class DevelopmentSqlLineageServiceTest {
   }
 
   @Test
+  void catalogSchemaEnablesStarAndImplicitTargetColumnLineage() {
+    LineageService lineageService = mock(LineageService.class);
+    LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
+    SqlColumnLineageParser columnParser = new SqlColumnLineageParser();
+    DataSourceCatalogService catalogService = mock(DataSourceCatalogService.class);
+    ObjectMapper objectMapper = new ObjectMapper();
+    stubAssetRegistration(lineageService);
+
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
+        lineageService, maintenanceService, tableParser, columnParser, objectMapper);
+    service.setDataSourceCatalogService(catalogService);
+
+    String sql = "INSERT INTO dws.orders_copy SELECT * FROM ods.orders";
+    SqlTableLineageParser.TableRef orders = table("ods.orders", "ods", "orders");
+    SqlTableLineageParser.TableRef copy = table("dws.orders_copy", "dws", "orders_copy");
+    when(tableParser.parse(sql)).thenReturn(new SqlTableLineageParser.ParseResult(
+        List.of(orders), List.of(copy), 1));
+
+    // Simulate a MySQL/Doris style two-part name. The first schema.table interpretation returns no
+    // metadata; the service retries the same qualifier as database.table.
+    when(catalogService.listColumns(12L, null, "ods", "orders")).thenReturn(List.of());
+    when(catalogService.listColumns(12L, "ods", null, "orders")).thenReturn(List.of(
+        catalogColumn("id", 1),
+        catalogColumn("amount", 2)));
+    when(catalogService.listColumns(12L, null, "dws", "orders_copy")).thenReturn(List.of());
+    when(catalogService.listColumns(12L, "dws", null, "orders_copy")).thenReturn(List.of(
+        catalogColumn("order_id", 1),
+        catalogColumn("order_amount", 2)));
+
+    service.syncPublished(node(), revision(sql));
+
+    ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
+        ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
+    verify(lineageService, times(4)).registerRelation(relations.capture());
+
+    assertEquals(1, count(relations, LineageRelationType.READS_FROM));
+    assertEquals(1, count(relations, LineageRelationType.WRITES_TO));
+    assertEquals(2, count(relations, LineageRelationType.DERIVES_FROM));
+    assertTrue(relations.getAllValues().stream()
+        .filter(value -> value.relationType() == LineageRelationType.DERIVES_FROM)
+        .anyMatch(value -> "id".equals(value.properties().path("sourceColumn").asText())
+            && "order_id".equals(value.properties().path("targetColumn").asText())));
+    assertTrue(relations.getAllValues().stream()
+        .filter(value -> value.relationType() == LineageRelationType.DERIVES_FROM)
+        .anyMatch(value -> "amount".equals(value.properties().path("sourceColumn").asText())
+            && "order_amount".equals(value.properties().path("targetColumn").asText())));
+  }
+
+  @Test
   void columnParserFailureKeepsCurrentTableLineage() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
@@ -200,6 +252,19 @@ class DevelopmentSqlLineageServiceTest {
       String table) {
     return new SqlTableLineageParser.TableRef(
         qualifiedName, qualifiedName, null, schema, table);
+  }
+
+  private static DataSourceCatalogColumnVO catalogColumn(String name, int ordinal) {
+    return new DataSourceCatalogColumnVO(
+        name,
+        "VARCHAR",
+        null,
+        null,
+        null,
+        true,
+        ordinal,
+        false,
+        null);
   }
 
   private static void stubAssetRegistration(LineageService lineageService) {
