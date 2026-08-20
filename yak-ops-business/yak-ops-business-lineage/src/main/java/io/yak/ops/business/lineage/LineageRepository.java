@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -12,6 +13,14 @@ interface LineageRepository {
   LineageAsset upsertAsset(AssetWrite write);
 
   LineageRelation upsertRelation(RelationWrite write);
+
+  default Map<String, LineageAsset> upsertAssets(List<AssetWrite> writes, int batchSize) {
+    throw new UnsupportedOperationException("Batch asset registration is not supported");
+  }
+
+  default void upsertRelations(List<RelationWrite> writes, int batchSize) {
+    throw new UnsupportedOperationException("Batch relation registration is not supported");
+  }
 
   default int deleteRelationsByEvidence(String sourceType, String sourceId) {
     throw new UnsupportedOperationException("Relation evidence cleanup is not supported");

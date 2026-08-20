@@ -86,6 +86,65 @@ public class LineageService {
         command.properties()));
   }
 
+  /** Registers deduplicated assets with JDBC batches and returns their database identities. */
+  @Transactional
+  public Map<String, LineageAsset> registerAssetsBatch(
+      List<RegisterAssetCommand> commands, int batchSize) {
+    requireBatchSize(batchSize);
+    if (commands == null || commands.isEmpty()) return Map.of();
+    Map<String, LineageRepository.AssetWrite> writes = new LinkedHashMap<>();
+    for (RegisterAssetCommand command : commands) {
+      Objects.requireNonNull(command, "command");
+      String assetKey = required(command.assetKey(), "assetKey", 512);
+      LineageAssetType assetType = Objects.requireNonNull(command.assetType(), "assetType");
+      String name = optional(command.name(), 200);
+      if (name == null) name = assetKey;
+      if (command.parentAssetId() != null) requirePositive(command.parentAssetId(), "parentAssetId");
+      writes.putIfAbsent(assetKey, new LineageRepository.AssetWrite(
+          assetKey, assetType, name, valueOrEmpty(command.sourceType(), 64),
+          valueOrEmpty(command.sourceId(), 200), command.parentAssetId(),
+          optional(command.dataSourceId(), 64), optional(command.databaseName(), 256),
+          optional(command.schemaName(), 256), optional(command.tableName(), 256),
+          optional(command.columnName(), 256), command.properties()));
+    }
+    return repository.upsertAssets(List.copyOf(writes.values()), batchSize);
+  }
+
+  /** Registers deduplicated relations using real JDBC batch execution. */
+  @Transactional
+  public void registerRelationsBatch(List<RegisterRelationCommand> commands, int batchSize) {
+    requireBatchSize(batchSize);
+    if (commands == null || commands.isEmpty()) return;
+    Map<String, LineageRepository.RelationWrite> writes = new LinkedHashMap<>();
+    for (RegisterRelationCommand command : commands) {
+      Objects.requireNonNull(command, "command");
+      requirePositive(command.sourceAssetId(), "sourceAssetId");
+      requirePositive(command.targetAssetId(), "targetAssetId");
+      if (command.sourceAssetId() == command.targetAssetId()) {
+        throw new IllegalArgumentException("血缘关系不能指向资产自身");
+      }
+      LineageRelationType type = Objects.requireNonNull(command.relationType(), "relationType");
+      BigDecimal confidence = command.confidence() == null ? BigDecimal.ONE : command.confidence();
+      if (confidence.compareTo(BigDecimal.ZERO) < 0 || confidence.compareTo(BigDecimal.ONE) > 0) {
+        throw new IllegalArgumentException("confidence 必须在 0 到 1 之间");
+      }
+      String sourceType = valueOrEmpty(command.sourceType(), 64);
+      String sourceId = valueOrEmpty(command.sourceId(), 200);
+      String version = valueOrEmpty(command.version(), 128);
+      String identity = command.sourceAssetId() + "\u0000" + command.targetAssetId() + "\u0000"
+          + type + "\u0000" + sourceType + "\u0000" + sourceId + "\u0000" + version;
+      writes.putIfAbsent(identity, new LineageRepository.RelationWrite(
+          command.sourceAssetId(), command.targetAssetId(), type, sourceType, sourceId,
+          optional(command.expression(), 16000), confidence, version,
+          command.observedAt() == null ? Instant.now() : command.observedAt(), command.properties()));
+    }
+    repository.upsertRelations(List.copyOf(writes.values()), batchSize);
+  }
+
+  private static void requireBatchSize(int batchSize) {
+    if (batchSize < 1) throw new IllegalArgumentException("batchSize 必须大于 0");
+  }
+
   @Transactional(readOnly = true)
   public LineageAsset getAsset(long assetId) {
     requirePositive(assetId, "assetId");

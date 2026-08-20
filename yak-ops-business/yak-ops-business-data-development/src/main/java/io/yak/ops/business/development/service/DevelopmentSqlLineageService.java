@@ -22,6 +22,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** Publishes authoritative table- and column-level lineage for immutable SQL task revisions. */
@@ -41,6 +42,7 @@ public class DevelopmentSqlLineageService {
   private final TableIdentityResolver identityResolver = new TableIdentityResolver();
 
   private DataSourceCatalogService dataSourceCatalogService;
+  private int lineageBatchSize = 200;
 
   public DevelopmentSqlLineageService(
       LineageService lineageService,
@@ -62,6 +64,14 @@ public class DevelopmentSqlLineageService {
   @Autowired(required = false)
   void setDataSourceCatalogService(DataSourceCatalogService dataSourceCatalogService) {
     this.dataSourceCatalogService = dataSourceCatalogService;
+  }
+
+  @Value("${yak.lineage.write-batch-size:200}")
+  void setLineageBatchSize(int lineageBatchSize) {
+    if (lineageBatchSize < 1) {
+      throw new IllegalArgumentException("yak.lineage.write-batch-size 必须大于 0");
+    }
+    this.lineageBatchSize = lineageBatchSize;
   }
 
   /** Performs parsing and optional catalog lookups without opening a database transaction. */
@@ -215,25 +225,19 @@ public class DevelopmentSqlLineageService {
       String evidenceId,
       Instant observedAt,
       Map<String, LineageAsset> tableAssets) {
+    Map<String, LineageService.RegisterAssetCommand> columnCommands = new LinkedHashMap<>();
+    Map<String, PendingColumnRelation> pendingRelations = new LinkedHashMap<>();
     int mappingIndex = 0;
     for (SqlColumnLineageParser.ColumnMapping mapping : parsed.mappings()) {
       mappingIndex++;
       LineageAsset sourceTable = registerTableAsset(sqlContext, mapping.sourceTable(), tableAssets);
       LineageAsset targetTable = registerTableAsset(sqlContext, mapping.targetTable(), tableAssets);
-      LineageAsset sourceColumn = registerColumnAsset(
-          sqlContext,
-          sourceTable,
-          mapping.sourceTable(),
-          mapping.sourceColumnName());
-      LineageAsset targetColumn = registerColumnAsset(
-          sqlContext,
-          targetTable,
-          mapping.targetTable(),
-          mapping.targetColumnName());
-
-      // UPDATE a = a + 1 is a valid dependency, but Lineage Core intentionally forbids self edges.
-      // The authoritative TABLE -> SQL_TASK -> TABLE path remains available for that case.
-      if (sourceColumn.id() == targetColumn.id()) continue;
+      LineageService.RegisterAssetCommand sourceColumn = columnAssetCommand(
+          sqlContext, sourceTable, mapping.sourceTable(), mapping.sourceColumnName());
+      LineageService.RegisterAssetCommand targetColumn = columnAssetCommand(
+          sqlContext, targetTable, mapping.targetTable(), mapping.targetColumnName());
+      columnCommands.putIfAbsent(sourceColumn.assetKey(), sourceColumn);
+      columnCommands.putIfAbsent(targetColumn.assetKey(), targetColumn);
 
       String relationVersion = revision.revisionNo()
           + ":column:"
@@ -244,19 +248,40 @@ public class DevelopmentSqlLineageService {
           + mapping.sourceOrdinal()
           + ":"
           + mappingIndex;
-      lineageService.registerRelation(new LineageService.RegisterRelationCommand(
-          sourceColumn.id(),
-          targetColumn.id(),
+      String edgeKey = sourceColumn.assetKey() + "\u0000" + targetColumn.assetKey() + "\u0000"
+          + mapping.statementIndex() + "\u0000" + mapping.outputOrdinal() + "\u0000"
+          + mapping.sourceOrdinal();
+      pendingRelations.putIfAbsent(edgeKey, new PendingColumnRelation(
+          sourceColumn.assetKey(), targetColumn.assetKey(), mapping, relationVersion));
+    }
+
+    Map<String, LineageAsset> columns = lineageService.registerAssetsBatch(
+        List.copyOf(columnCommands.values()), lineageBatchSize);
+    List<LineageService.RegisterRelationCommand> relations = new ArrayList<>();
+    for (PendingColumnRelation pending : pendingRelations.values()) {
+      LineageAsset sourceColumn = columns.get(pending.sourceAssetKey());
+      LineageAsset targetColumn = columns.get(pending.targetAssetKey());
+      if (sourceColumn == null || targetColumn == null) {
+        throw new IllegalStateException("批量保存字段资产后缺少返回的资产身份");
+      }
+      // UPDATE a = a + 1 is a valid dependency, but Lineage Core intentionally forbids self edges.
+      if (sourceColumn.id() == targetColumn.id()) continue;
+      relations.add(new LineageService.RegisterRelationCommand(
+          sourceColumn.id(), targetColumn.id(),
           LineageRelationType.DERIVES_FROM,
           EVIDENCE_SOURCE_TYPE,
           evidenceId,
-          truncate(mapping.expression(), MAX_EVIDENCE_SQL_LENGTH),
+          truncate(pending.mapping().expression(), MAX_EVIDENCE_SQL_LENGTH),
           BigDecimal.ONE,
-          relationVersion,
+          pending.relationVersion(),
           observedAt,
-          columnRelationProperties(task, revision, mapping)));
+          columnRelationProperties(task, revision, pending.mapping())));
     }
+    lineageService.registerRelationsBatch(relations, lineageBatchSize);
   }
+
+  private record PendingColumnRelation(String sourceAssetKey, String targetAssetKey,
+      SqlColumnLineageParser.ColumnMapping mapping, String relationVersion) {}
 
   private LineageAsset registerTaskAsset(
       DevelopmentNode node,
@@ -351,7 +376,7 @@ public class DevelopmentSqlLineageService {
     return registered;
   }
 
-  private LineageAsset registerColumnAsset(
+  private LineageService.RegisterAssetCommand columnAssetCommand(
       SqlContext sqlContext,
       LineageAsset tableAsset,
       SqlTableLineageParser.TableRef table,
@@ -359,7 +384,7 @@ public class DevelopmentSqlLineageService {
     ObjectNode properties = objectMapper.createObjectNode();
     properties.put("qualifiedName", table.qualifiedName() + "." + columnName);
 
-    return lineageService.registerAsset(new LineageService.RegisterAssetCommand(
+    return new LineageService.RegisterAssetCommand(
         columnAssetKey(resolve(table, sqlContext), columnName),
         LineageAssetType.COLUMN,
         columnName,
@@ -371,7 +396,7 @@ public class DevelopmentSqlLineageService {
         emptyToNull(resolve(table, sqlContext).schemaName()),
         resolve(table, sqlContext).tableName(),
         columnName,
-        properties));
+        properties);
   }
 
   private JsonNode tableRelationProperties(DevelopmentTaskRevision revision, String role) {
