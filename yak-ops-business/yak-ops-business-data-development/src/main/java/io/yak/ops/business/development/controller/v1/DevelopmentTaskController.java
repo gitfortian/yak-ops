@@ -4,14 +4,17 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.extend.CurrentUserProvider;
+import io.yak.ops.business.development.api.DevelopmentTaskApi.LineagePreviewRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.PublishRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.RunRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.SaveDraftRequest;
+import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview;
 import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
 import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.service.DevelopmentNodeService;
+import io.yak.ops.business.development.service.DevelopmentSqlLineagePreviewService;
 import io.yak.ops.business.development.service.DevelopmentTaskRunService;
 import io.yak.ops.business.development.service.DevelopmentTaskService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,16 +36,19 @@ public class DevelopmentTaskController {
 
   private final DevelopmentTaskService service;
   private final DevelopmentTaskRunService runService;
+  private final DevelopmentSqlLineagePreviewService lineagePreviewService;
   private final DevelopmentNodeService nodeService;
   private final CurrentUserProvider currentUserProvider;
 
   public DevelopmentTaskController(
       DevelopmentTaskService service,
       DevelopmentTaskRunService runService,
+      DevelopmentSqlLineagePreviewService lineagePreviewService,
       DevelopmentNodeService nodeService,
       CurrentUserProvider currentUserProvider) {
     this.service = service;
     this.runService = runService;
+    this.lineagePreviewService = lineagePreviewService;
     this.nodeService = nodeService;
     this.currentUserProvider = currentUserProvider;
   }
@@ -84,6 +90,18 @@ public class DevelopmentTaskController {
             request.content(),
             request.configJson(),
             operatorName(servletRequest)));
+  }
+
+  @Operation(summary = "预览当前 SQL 编辑器血缘")
+  @PostMapping("/{nodeId}/lineage/preview")
+  public Result<DevelopmentSqlLineagePreview> previewLineage(
+      @PathVariable("nodeId") Long nodeId,
+      @Valid @RequestBody LineagePreviewRequest request) {
+    return Result.success(lineagePreviewService.preview(
+        nodeId,
+        request.taskType(),
+        request.content(),
+        request.configJson()));
   }
 
   @Operation(summary = "发布节点版本")
