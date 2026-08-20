@@ -21,6 +21,8 @@ interface LineageRepository {
 
   Optional<LineageAsset> findAssetByKey(String assetKey);
 
+  List<LineageAsset> searchAssets(String keyword, LineageAssetType assetType, int limit);
+
   List<LineageAsset> findAssetsByIds(Set<Long> assetIds);
 
   List<LineageRelation> findOutgoingRelations(Set<Long> sourceAssetIds);

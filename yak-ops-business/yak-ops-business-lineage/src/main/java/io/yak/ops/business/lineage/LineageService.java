@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LineageService {
 
   public static final int MAX_GRAPH_DEPTH = 10;
+  public static final int MAX_ASSET_SEARCH_LIMIT = 100;
 
   private final LineageRepository repository;
 
@@ -98,6 +99,16 @@ public class LineageService {
     String normalized = required(assetKey, "assetKey", 512);
     return repository.findAssetByKey(normalized)
         .orElseThrow(() -> new IllegalArgumentException("血缘资产不存在：" + normalized));
+  }
+
+  @Transactional(readOnly = true)
+  public List<LineageAsset> searchAssets(
+      String keyword,
+      LineageAssetType assetType,
+      int limit) {
+    String normalizedKeyword = optional(keyword, 200);
+    int actualLimit = Math.min(MAX_ASSET_SEARCH_LIMIT, Math.max(1, limit));
+    return repository.searchAssets(normalizedKeyword, assetType, actualLimit);
   }
 
   @Transactional(readOnly = true)
