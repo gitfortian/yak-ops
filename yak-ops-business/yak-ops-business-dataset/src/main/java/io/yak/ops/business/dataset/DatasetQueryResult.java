@@ -9,6 +9,7 @@ import java.util.List;
 
 /** Result returned to Dashboard/Chart consumers by the Dataset query runtime. */
 public record DatasetQueryResult(
+    String queryId,
     @JsonSerialize(using = ToStringSerializer.class) long datasetId,
     @JsonSerialize(using = ToStringSerializer.class) long datasetVersionId,
     int datasetVersionNo,
@@ -23,6 +24,43 @@ public record DatasetQueryResult(
     bindings = bindings == null ? List.of() : List.copyOf(bindings);
     columns = columns == null ? List.of() : List.copyOf(columns);
     rows = immutableRows(rows);
+  }
+
+  public DatasetQueryResult(
+      long datasetId,
+      long datasetVersionId,
+      int datasetVersionNo,
+      List<DatasetQueryColumnBinding> bindings,
+      List<SqlExecutionColumn> columns,
+      List<List<Object>> rows,
+      int returnedRows,
+      boolean truncated,
+      long elapsedMillis) {
+    this(
+        null,
+        datasetId,
+        datasetVersionId,
+        datasetVersionNo,
+        bindings,
+        columns,
+        rows,
+        returnedRows,
+        truncated,
+        elapsedMillis);
+  }
+
+  public DatasetQueryResult withQueryId(String value) {
+    return new DatasetQueryResult(
+        value,
+        datasetId,
+        datasetVersionId,
+        datasetVersionNo,
+        bindings,
+        columns,
+        rows,
+        returnedRows,
+        truncated,
+        elapsedMillis);
   }
 
   private static List<List<Object>> immutableRows(List<List<Object>> values) {

@@ -42,6 +42,93 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+// Global scrollbar: keep it slim, light and unobtrusive.
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.45);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+// Ant Design Table uses its own scroll containers and, with sticky enabled,
+// an extra simulated scrollbar. Keep both variants aligned with the global style.
+.ant-table-content,
+.ant-table-body {
+  scrollbar-color: rgba(0, 0, 0, 0.32) transparent;
+  scrollbar-width: thin;
+}
+
+.ant-table-content::-webkit-scrollbar,
+.ant-table-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ant-table-content::-webkit-scrollbar-track,
+.ant-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ant-table-content::-webkit-scrollbar-thumb,
+.ant-table-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+.ant-table-content::-webkit-scrollbar-thumb:hover,
+.ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.45);
+  background-clip: padding-box;
+}
+
+.ant-table-content::-webkit-scrollbar-button,
+.ant-table-body::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.ant-table-content::-webkit-scrollbar-corner,
+.ant-table-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ant-table-wrapper .ant-table-sticky-scroll {
+  height: 10px !important;
+  background: transparent !important;
+}
+
+.ant-table-wrapper .ant-table-sticky-scroll-bar {
+  bottom: 2px !important;
+  height: 6px !important;
+  background: rgba(0, 0, 0, 0.32) !important;
+  border-radius: 999px !important;
+}
+
+.ant-table-wrapper .ant-table-sticky-scroll-bar:hover {
+  background: rgba(0, 0, 0, 0.45) !important;
+}
+
 ul,
 ol {
   list-style: none;
@@ -145,24 +232,73 @@ ol {
   display: none;
 }
 
-// SQL editor statement action: compact green play marker in Monaco's glyph margin.
+// SQL editor statement action follows Chat2DB: the active statement exposes a
+// compact outlined play glyph at its first line, while the current line keeps
+// Monaco's native very-light highlight.
+.yak-sql-editor .monaco-editor .margin {
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
 .yak-sql-run-glyph {
+  width: 16px !important;
+  height: 16px !important;
   cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 3l14 9-14 9V3z' fill='none' stroke='%23667085' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 15px 15px;
+  opacity: 0.82;
+  transition: transform 0.16s ease-in-out, opacity 0.16s ease-in-out;
 }
 
-.yak-sql-run-glyph::before {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-left: 8px solid #22a06b;
-  content: '';
-  transform: translate(-42%, -50%);
+.yak-sql-run-glyph:hover {
+  opacity: 1;
+  transform: scale(1.18);
 }
 
-.yak-sql-run-glyph:hover::before {
-  border-left-color: #138a5b;
+.yak-sql-run-glyph:active {
+  transform: scale(1);
+}
+
+// Rule template library: keep the interface neutral and reserve brand red for
+// primary actions / destructive states instead of using it for every selection.
+div[class~='h-[calc(100vh-64px)]'][class~='min-h-[620px]'] {
+  aside button[class*='bg-[rgba(254,44,85,.08)]'] {
+    background: #f2f4f7 !important;
+    color: #161823 !important;
+  }
+
+  aside button[class*='bg-[rgba(254,44,85,.08)]']:hover {
+    background: #e9ecf1 !important;
+  }
+
+  aside button[class*='bg-[rgba(254,44,85,.08)]'] span[class*='text-[var(--yak-brand-color)]'] {
+    color: #475467 !important;
+  }
+
+  .ant-tabs .ant-tabs-ink-bar {
+    background: #161823 !important;
+  }
+
+  .ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: #161823 !important;
+    text-shadow: none !important;
+  }
+
+  .ant-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn {
+    color: #344054 !important;
+  }
+
+  main button[class*='text-[var(--yak-brand-color)]'] {
+    color: #172033 !important;
+  }
+
+  main button[class*='text-[var(--yak-brand-color)]']:hover {
+    color: #101828 !important;
+  }
+
+  main .ant-table .ant-tag {
+    color: #667085 !important;
+    background: #f2f4f7 !important;
+  }
 }

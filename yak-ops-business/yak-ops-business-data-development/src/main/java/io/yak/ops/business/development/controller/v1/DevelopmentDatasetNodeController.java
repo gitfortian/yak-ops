@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.FieldDraft;
+import io.yak.ops.business.dataset.DevelopmentDatasetFacade.PreviewResult;
 import io.yak.ops.business.development.service.DevelopmentDatasetNodeService;
 import io.yak.ops.business.development.service.DevelopmentDatasetNodeService.DatasetNodeContext;
 import jakarta.validation.Valid;
@@ -42,6 +43,14 @@ public class DevelopmentDatasetNodeController {
       @PathVariable("nodeId") long nodeId,
       @Valid @RequestBody DatasetSqlRequest request) {
     return Result.success(service.preview(nodeId, request.dataSourceId(), request.sql()));
+  }
+
+  @Operation(summary = "执行 Dataset 自有 SQL，并返回结果数据与输出字段")
+  @PostMapping("/{nodeId}/dataset/query")
+  public Result<PreviewResult> query(
+      @PathVariable("nodeId") long nodeId,
+      @Valid @RequestBody DatasetSqlRequest request) {
+    return Result.success(service.query(nodeId, request.dataSourceId(), request.sql()));
   }
 
   @Operation(summary = "保存 Dataset Node 并冻结数据源、SQL 与字段契约")

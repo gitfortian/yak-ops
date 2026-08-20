@@ -16,7 +16,7 @@ describe('analysis theme', () => {
     expect(theme.gridColor).toBeTruthy();
   });
 
-  it('applies palette, axes, legend, tooltip and block-chart borders', () => {
+  it('preserves a chart-local palette while applying the remaining theme tokens', () => {
     const option = {
       color: ['#old'],
       tooltip: { trigger: 'item' },
@@ -46,7 +46,7 @@ describe('analysis theme', () => {
       tooltipTextColor: '#edf8ff',
     });
 
-    expect(themed.color).toEqual(['#38bdf8', '#818cf8']);
+    expect(themed.color).toEqual(['#old']);
     expect(themed.legend.textStyle.color).toBe('#8db3d3');
     expect(themed.tooltip.backgroundColor).toBe('#071624');
     expect(themed.tooltip.textStyle.color).toBe('#edf8ff');
@@ -55,5 +55,14 @@ describe('analysis theme', () => {
     expect(themed.series[0].label.color).toBe('#e5f3ff');
     expect(themed.series[0].itemStyle.borderColor).toBe('#0a2138');
     expect(option.series[0].itemStyle.borderColor).toBe('#fff');
+  });
+
+  it('falls back to the dashboard theme palette when the chart does not define colors', () => {
+    const themed = applyAnalysisChartTheme(
+      { series: [{ type: 'bar', data: [1, 2] }] },
+      { palette: ['#38bdf8', '#818cf8'] },
+    );
+
+    expect(themed.color).toEqual(['#38bdf8', '#818cf8']);
   });
 });

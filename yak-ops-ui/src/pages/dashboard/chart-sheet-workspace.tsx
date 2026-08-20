@@ -1,6 +1,12 @@
-import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
+import {
+  AnalysisPreview,
+  buildDatasetQueryPayload,
+  canQueryAnalysis,
+} from '@/components/analysis/AnalysisPreview';
+import { analysisQueryCacheKey } from '@/components/analysis/query-runtime';
 import { Empty } from 'antd';
 import { BarChart3 } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import { ChartAppearanceConfigPanel } from './chart-editor';
 import { ChartDataColumn } from './chart-data-column';
 import { ChartEncodingShelf } from './chart-encoding-shelf';
@@ -15,6 +21,7 @@ import type {
   DashboardWidget,
   PublishedDataset,
 } from './model';
+import { registerDashboardPerformanceQuery } from './performance-runtime';
 
 export function DashboardChartSheetWorkspace({
   currentDashboardId,
@@ -58,6 +65,23 @@ export function DashboardChartSheetWorkspace({
     : widget.title?.trim() || '未命名图表';
   const chartTypeLabel = spec ? CHART_META[spec.type]?.label : undefined;
   const editable = !widget.analysisId && Boolean(widget.inlineAnalysis);
+  const performanceQueryKey = useMemo(() => {
+    if (!spec || !dataset || !canQueryAnalysis(spec)) return undefined;
+    return analysisQueryCacheKey(
+      dataset,
+      buildDatasetQueryPayload(spec, dataset, runtimeFilters),
+    );
+  }, [dataset, runtimeFilters, spec]);
+
+  useEffect(() => {
+    if (!dataset || !performanceQueryKey) return;
+    registerDashboardPerformanceQuery({
+      widgetId: widget.id,
+      widgetName: title,
+      datasetId: dataset.id,
+      queryKey: performanceQueryKey,
+    });
+  }, [dataset, performanceQueryKey, title, widget.id]);
 
   return (
     <div className="chart-sheet-workspace flex min-h-0 flex-1 overflow-hidden bg-[#f3f4f6]">

@@ -12,7 +12,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DashboardPerformanceModal } from './performance-modal';
 
 export function DashboardToolbar({
@@ -67,6 +67,7 @@ export function DashboardToolbar({
   onPublish: () => void;
 }) {
   const [performanceOpen, setPerformanceOpen] = useState(false);
+  const previewAnchorRef = useRef<HTMLDivElement>(null);
   const persisted = /^\d+$/.test(dashboardId);
   const saveDisabled = persisted && !dirty;
   const busy = saving || publishing;
@@ -78,6 +79,73 @@ export function DashboardToolbar({
       ? `草稿 V${currentVersionNo} · 已发布 V${publishedVersionNo}`
       : `草稿 V${currentVersionNo} · 未发布`;
   })();
+
+  useEffect(() => {
+    if (!preview) return undefined;
+    const root = previewAnchorRef.current?.parentElement;
+    if (!root) return undefined;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    root.classList.add('dashboard-preview-fullscreen');
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      root.classList.remove('dashboard-preview-fullscreen');
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [preview]);
+
+  if (preview) {
+    return (
+      <>
+        <div ref={previewAnchorRef} className="dashboard-preview-anchor">
+          <Button
+            type="text"
+            size="small"
+            className="!h-8 !rounded-[7px] !border !border-white/20 !bg-[rgba(17,24,39,.72)] !px-2.5 !text-[11px] !font-medium !text-white !shadow-[0_4px_16px_rgba(15,23,42,.16)] backdrop-blur-sm hover:!bg-[rgba(17,24,39,.86)] hover:!text-white"
+            icon={<X size={13} />}
+            onClick={onPreview}
+          >
+            退出预览
+          </Button>
+        </div>
+
+        <style>{`
+          .dashboard-preview-fullscreen {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 1200 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            min-height: 0 !important;
+            background: var(--dashboard-canvas-bg, #f5f6f8) !important;
+          }
+          .dashboard-preview-fullscreen > .dashboard-preview-anchor {
+            position: fixed;
+            top: 12px;
+            right: 14px;
+            z-index: 1300;
+            pointer-events: none;
+          }
+          .dashboard-preview-fullscreen > .dashboard-preview-anchor > button {
+            pointer-events: auto;
+          }
+          .dashboard-preview-fullscreen main > div {
+            min-height: 100% !important;
+            padding: 0 !important;
+          }
+          .dashboard-preview-fullscreen main > div > div {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 100% !important;
+            margin: 0 !important;
+            border: 0 !important;
+            box-shadow: none !important;
+          }
+        `}</style>
+      </>
+    );
+  }
 
   return (
     <>
@@ -165,7 +233,7 @@ export function DashboardToolbar({
                 <Tooltip title="撤销 Ctrl/Cmd + Z">
                   <Button
                     type="text"
-                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                     icon={<Undo2 size={13} />}
                     disabled={!canUndo || busy}
                     onClick={onUndo}
@@ -174,7 +242,7 @@ export function DashboardToolbar({
                 <Tooltip title="重做 Ctrl/Cmd + Shift + Z">
                   <Button
                     type="text"
-                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[var(--yak-brand-color)] hover:!bg-[var(--yak-brand-color-soft)] hover:!text-[var(--yak-brand-color)]"
+                    className="!h-7 !w-7 !min-w-0 !rounded-[5px] !p-0 !text-[#667085] hover:!bg-[#f3f5f7] hover:!text-[#161823]"
                     icon={<Redo2 size={13} />}
                     disabled={!canRedo || busy}
                     onClick={onRedo}

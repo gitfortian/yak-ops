@@ -23,6 +23,7 @@
         <module>yak-ops-business-job</module>
         <module>yak-ops-business-task-catalog</module>
         <module>yak-ops-business-data-development</module>
+        <module>yak-ops-business-lineage</module>
         <module>yak-ops-business-dataset</module>
         <module>yak-ops-business-analysis</module>
         <module>yak-ops-business-dashboard</module>

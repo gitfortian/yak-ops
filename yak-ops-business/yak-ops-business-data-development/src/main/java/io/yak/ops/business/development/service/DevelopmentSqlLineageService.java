@@ -1,0 +1,468 @@
+package io.yak.ops.business.development.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
+import io.yak.ops.business.lineage.LineageAsset;
+import io.yak.ops.business.lineage.LineageAssetType;
+import io.yak.ops.business.lineage.LineageMaintenanceService;
+import io.yak.ops.business.lineage.LineageRelationType;
+import io.yak.ops.business.lineage.LineageService;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+/** Publishes authoritative table- and column-level lineage for immutable SQL task revisions. */
+@Service
+public class DevelopmentSqlLineageService {
+
+  static final String EVIDENCE_SOURCE_TYPE = "DATA_DEVELOPMENT_SQL_PARSE";
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(DevelopmentSqlLineageService.class);
+  private static final int MAX_EVIDENCE_SQL_LENGTH = 16000;
+
+  private final LineageService lineageService;
+  private final LineageMaintenanceService maintenanceService;
+  private final SqlTableLineageParser tableParser;
+  private final SqlColumnLineageParser columnParser;
+  private final ObjectMapper objectMapper;
+
+  private DataSourceCatalogService dataSourceCatalogService;
+
+  public DevelopmentSqlLineageService(
+      LineageService lineageService,
+      LineageMaintenanceService maintenanceService,
+      SqlTableLineageParser tableParser,
+      SqlColumnLineageParser columnParser,
+      ObjectMapper objectMapper) {
+    this.lineageService = lineageService;
+    this.maintenanceService = maintenanceService;
+    this.tableParser = tableParser;
+    this.columnParser = columnParser;
+    this.objectMapper = objectMapper;
+  }
+
+  /**
+   * Catalog is optional because datasource support itself can be disabled. Lineage must continue to
+   * publish table-level facts and conservative column facts when Catalog metadata is unavailable.
+   */
+  @Autowired(required = false)
+  void setDataSourceCatalogService(DataSourceCatalogService dataSourceCatalogService) {
+    this.dataSourceCatalogService = dataSourceCatalogService;
+  }
+
+  public void syncPublished(DevelopmentNode node, DevelopmentTaskRevision revision) {
+    if (node == null || revision == null || revision.definition() == null) return;
+    if (!"SQL".equalsIgnoreCase(revision.definition().taskType())) return;
+
+    String evidenceId = String.valueOf(node.id());
+    String dataSourceId = dataSourceId(revision.definition().configJson());
+    String sql = revision.definition().content();
+
+    try {
+      SqlTableLineageParser.ParseResult tableParsed = tableParser.parse(sql);
+      SqlColumnLineageParser.ParseResult columnParsed = null;
+      SqlColumnLineageParser.SqlColumnLineageParseException columnFailure = null;
+      try {
+        if (dataSourceCatalogService == null) {
+          columnParsed = columnParser.parse(sql);
+        } else {
+          columnParsed = columnParser.parse(sql, schemaProvider(dataSourceId));
+        }
+      } catch (SqlColumnLineageParser.SqlColumnLineageParseException exception) {
+        columnFailure = exception;
+        LOGGER.warn(
+            "Failed to parse SQL column lineage for development node {} revision {}: {}",
+            node.id(),
+            revision.revisionNo(),
+            exception.getMessage());
+      }
+
+      // Table and column lineage share one evidence scope. A new immutable revision replaces every
+      // generated relationship from the previous revision before current facts are written.
+      maintenanceService.clearRelationsByEvidence(EVIDENCE_SOURCE_TYPE, evidenceId);
+
+      LineageAsset task = registerTaskAsset(
+          node,
+          revision,
+          dataSourceId,
+          tableParsed,
+          columnParsed,
+          null,
+          columnFailure);
+      String evidenceSql = truncate(sql, MAX_EVIDENCE_SQL_LENGTH);
+      Instant observedAt = revision.createTime() == null ? Instant.now() : revision.createTime();
+      Map<String, LineageAsset> tableAssets = new LinkedHashMap<>();
+
+      for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
+        LineageAsset table = registerTableAsset(dataSourceId, input, tableAssets);
+        lineageService.registerRelation(new LineageService.RegisterRelationCommand(
+            table.id(),
+            task.id(),
+            LineageRelationType.READS_FROM,
+            EVIDENCE_SOURCE_TYPE,
+            evidenceId,
+            evidenceSql,
+            BigDecimal.ONE,
+            Integer.toString(revision.revisionNo()),
+            observedAt,
+            tableRelationProperties(revision, "INPUT")));
+      }
+
+      for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
+        LineageAsset table = registerTableAsset(dataSourceId, output, tableAssets);
+        lineageService.registerRelation(new LineageService.RegisterRelationCommand(
+            task.id(),
+            table.id(),
+            LineageRelationType.WRITES_TO,
+            EVIDENCE_SOURCE_TYPE,
+            evidenceId,
+            evidenceSql,
+            BigDecimal.ONE,
+            Integer.toString(revision.revisionNo()),
+            observedAt,
+            tableRelationProperties(revision, "OUTPUT")));
+      }
+
+      if (columnParsed != null) {
+        registerColumnLineage(
+            dataSourceId,
+            task,
+            revision,
+            columnParsed,
+            evidenceId,
+            observedAt,
+            tableAssets);
+      }
+    } catch (SqlTableLineageParser.SqlLineageParseException exception) {
+      maintenanceService.clearRelationsByEvidence(EVIDENCE_SOURCE_TYPE, evidenceId);
+      registerTaskAsset(node, revision, dataSourceId, null, null, exception, null);
+      LOGGER.warn(
+          "Failed to parse SQL table lineage for development node {} revision {}: {}",
+          node.id(),
+          revision.revisionNo(),
+          exception.getMessage());
+    }
+  }
+
+  private SqlColumnLineageParser.SchemaProvider schemaProvider(String dataSourceId) {
+    DataSourceCatalogService catalogService = this.dataSourceCatalogService;
+    if (catalogService == null) {
+      return SqlColumnLineageParser.SchemaProvider.none();
+    }
+
+    final Long numericDataSourceId;
+    try {
+      numericDataSourceId = Long.valueOf(dataSourceId);
+    } catch (NumberFormatException exception) {
+      LOGGER.debug("Skip schema-aware lineage because datasource id is not numeric: {}", dataSourceId);
+      return SqlColumnLineageParser.SchemaProvider.none();
+    }
+
+    Map<String, List<SqlColumnLineageParser.SchemaColumn>> cache = new LinkedHashMap<>();
+    return table -> cache.computeIfAbsent(
+        table.canonicalName(),
+        ignored -> loadSchemaColumns(catalogService, numericDataSourceId, table));
+  }
+
+  private List<SqlColumnLineageParser.SchemaColumn> loadSchemaColumns(
+      DataSourceCatalogService catalogService,
+      Long dataSourceId,
+      SqlTableLineageParser.TableRef table) {
+    List<DataSourceCatalogColumnVO> columns = listColumns(
+        catalogService,
+        dataSourceId,
+        table.databaseName(),
+        table.schemaName(),
+        table.tableName());
+
+    // A two-part SQL name is dialect-dependent: PostgreSQL usually means schema.table while
+    // MySQL/Doris usually means database.table. Try the alternate interpretation only when the
+    // primary lookup produced no metadata, keeping the resolver dialect-tolerant without leaking
+    // datasource-plugin details into the SQL parser.
+    if (columns.isEmpty() && table.databaseName() == null && table.schemaName() != null) {
+      columns = listColumns(
+          catalogService,
+          dataSourceId,
+          table.schemaName(),
+          null,
+          table.tableName());
+    }
+
+    List<SqlColumnLineageParser.SchemaColumn> result = new ArrayList<>();
+    for (DataSourceCatalogColumnVO column : columns) {
+      if (column == null || column.getName() == null || column.getName().isBlank()) continue;
+      result.add(new SqlColumnLineageParser.SchemaColumn(
+          column.getName(),
+          column.getOrdinalPosition()));
+    }
+    return List.copyOf(result);
+  }
+
+  private List<DataSourceCatalogColumnVO> listColumns(
+      DataSourceCatalogService catalogService,
+      Long dataSourceId,
+      String database,
+      String schema,
+      String table) {
+    try {
+      List<DataSourceCatalogColumnVO> columns =
+          catalogService.listColumns(dataSourceId, database, schema, table);
+      return columns == null ? List.of() : columns;
+    } catch (RuntimeException exception) {
+      LOGGER.debug(
+          "Catalog column lookup failed for datasource {} table {}.{}.{}: {}",
+          dataSourceId,
+          database,
+          schema,
+          table,
+          exception.getMessage());
+      return List.of();
+    }
+  }
+
+  private void registerColumnLineage(
+      String dataSourceId,
+      LineageAsset task,
+      DevelopmentTaskRevision revision,
+      SqlColumnLineageParser.ParseResult parsed,
+      String evidenceId,
+      Instant observedAt,
+      Map<String, LineageAsset> tableAssets) {
+    int mappingIndex = 0;
+    for (SqlColumnLineageParser.ColumnMapping mapping : parsed.mappings()) {
+      mappingIndex++;
+      LineageAsset sourceTable = registerTableAsset(dataSourceId, mapping.sourceTable(), tableAssets);
+      LineageAsset targetTable = registerTableAsset(dataSourceId, mapping.targetTable(), tableAssets);
+      LineageAsset sourceColumn = registerColumnAsset(
+          dataSourceId,
+          sourceTable,
+          mapping.sourceTable(),
+          mapping.sourceColumnName());
+      LineageAsset targetColumn = registerColumnAsset(
+          dataSourceId,
+          targetTable,
+          mapping.targetTable(),
+          mapping.targetColumnName());
+
+      // UPDATE a = a + 1 is a valid dependency, but Lineage Core intentionally forbids self edges.
+      // The authoritative TABLE -> SQL_TASK -> TABLE path remains available for that case.
+      if (sourceColumn.id() == targetColumn.id()) continue;
+
+      String relationVersion = revision.revisionNo()
+          + ":column:"
+          + mapping.statementIndex()
+          + ":"
+          + mapping.outputOrdinal()
+          + ":"
+          + mapping.sourceOrdinal()
+          + ":"
+          + mappingIndex;
+      lineageService.registerRelation(new LineageService.RegisterRelationCommand(
+          sourceColumn.id(),
+          targetColumn.id(),
+          LineageRelationType.DERIVES_FROM,
+          EVIDENCE_SOURCE_TYPE,
+          evidenceId,
+          truncate(mapping.expression(), MAX_EVIDENCE_SQL_LENGTH),
+          BigDecimal.ONE,
+          relationVersion,
+          observedAt,
+          columnRelationProperties(task, revision, mapping)));
+    }
+  }
+
+  private LineageAsset registerTaskAsset(
+      DevelopmentNode node,
+      DevelopmentTaskRevision revision,
+      String dataSourceId,
+      SqlTableLineageParser.ParseResult tableParsed,
+      SqlColumnLineageParser.ParseResult columnParsed,
+      RuntimeException tableFailure,
+      RuntimeException columnFailure) {
+    ObjectNode properties = objectMapper.createObjectNode();
+    if (node.projectId() != null) properties.put("projectId", String.valueOf(node.projectId()));
+    properties.put("revisionId", String.valueOf(revision.id()));
+    properties.put("revisionNo", revision.revisionNo());
+    properties.put("checksum", revision.checksum());
+    properties.put("dataSourceId", dataSourceId);
+    properties.put(
+        "columnSchemaResolution",
+        dataSourceCatalogService == null ? "NONE" : "DATASOURCE_CATALOG");
+
+    if (tableFailure == null && tableParsed != null) {
+      properties.put("parseStatus", "SUCCESS");
+      properties.put("statementCount", tableParsed.statementCount());
+      properties.put("inputTableCount", tableParsed.inputs().size());
+      properties.put("outputTableCount", tableParsed.outputs().size());
+    } else {
+      properties.put("parseStatus", "FAILED");
+      properties.put("parseError", truncate(
+          tableFailure == null ? "Unknown SQL table lineage parser failure" : tableFailure.getMessage(),
+          1000));
+    }
+
+    if (tableFailure != null) {
+      properties.put("columnParseStatus", "SKIPPED");
+    } else if (columnFailure != null) {
+      properties.put("columnParseStatus", "FAILED");
+      properties.put("columnParseError", truncate(columnFailure.getMessage(), 1000));
+    } else if (columnParsed != null) {
+      properties.put("columnMappingCount", columnParsed.mappings().size());
+      properties.put("candidateOutputColumnCount", columnParsed.candidateOutputCount());
+      properties.put("unresolvedColumnReferenceCount", columnParsed.unresolvedReferenceCount());
+      if (columnParsed.unresolvedReferenceCount() > 0 && !columnParsed.mappings().isEmpty()) {
+        properties.put("columnParseStatus", "PARTIAL");
+      } else if (columnParsed.unresolvedReferenceCount() > 0) {
+        properties.put("columnParseStatus", "UNRESOLVED");
+      } else {
+        properties.put("columnParseStatus", "SUCCESS");
+      }
+    } else {
+      properties.put("columnParseStatus", "SKIPPED");
+    }
+
+    return lineageService.registerAsset(new LineageService.RegisterAssetCommand(
+        "sql-task:data-development:" + node.id(),
+        LineageAssetType.SQL_TASK,
+        node.name(),
+        "DATA_DEVELOPMENT",
+        String.valueOf(node.id()),
+        null,
+        dataSourceId,
+        null,
+        null,
+        null,
+        null,
+        properties));
+  }
+
+  private LineageAsset registerTableAsset(
+      String dataSourceId,
+      SqlTableLineageParser.TableRef table,
+      Map<String, LineageAsset> cache) {
+    String key = tableAssetKey(dataSourceId, table);
+    LineageAsset cached = cache.get(key);
+    if (cached != null) return cached;
+
+    ObjectNode properties = objectMapper.createObjectNode();
+    properties.put("qualifiedName", table.qualifiedName());
+    LineageAsset registered = lineageService.registerAsset(new LineageService.RegisterAssetCommand(
+        key,
+        LineageAssetType.TABLE,
+        table.qualifiedName(),
+        "DATASOURCE",
+        dataSourceId,
+        null,
+        dataSourceId,
+        table.databaseName(),
+        table.schemaName(),
+        table.tableName(),
+        null,
+        properties));
+    cache.put(key, registered);
+    return registered;
+  }
+
+  private LineageAsset registerColumnAsset(
+      String dataSourceId,
+      LineageAsset tableAsset,
+      SqlTableLineageParser.TableRef table,
+      String columnName) {
+    ObjectNode properties = objectMapper.createObjectNode();
+    properties.put("qualifiedName", table.qualifiedName() + "." + columnName);
+
+    return lineageService.registerAsset(new LineageService.RegisterAssetCommand(
+        columnAssetKey(dataSourceId, table, columnName),
+        LineageAssetType.COLUMN,
+        columnName,
+        "DATASOURCE",
+        dataSourceId,
+        tableAsset.id(),
+        dataSourceId,
+        table.databaseName(),
+        table.schemaName(),
+        table.tableName(),
+        columnName,
+        properties));
+  }
+
+  private JsonNode tableRelationProperties(DevelopmentTaskRevision revision, String role) {
+    ObjectNode properties = objectMapper.createObjectNode();
+    properties.put("revisionId", String.valueOf(revision.id()));
+    properties.put("revisionNo", revision.revisionNo());
+    properties.put("lineageLevel", "TABLE");
+    properties.put("tableRole", role);
+    return properties;
+  }
+
+  private JsonNode columnRelationProperties(
+      LineageAsset task,
+      DevelopmentTaskRevision revision,
+      SqlColumnLineageParser.ColumnMapping mapping) {
+    ObjectNode properties = objectMapper.createObjectNode();
+    properties.put("revisionId", String.valueOf(revision.id()));
+    properties.put("revisionNo", revision.revisionNo());
+    properties.put("lineageLevel", "COLUMN");
+    properties.put("sqlTaskAssetId", String.valueOf(task.id()));
+    properties.put("mappingKind", mapping.mappingKind().name());
+    properties.put("statementIndex", mapping.statementIndex());
+    properties.put("outputOrdinal", mapping.outputOrdinal());
+    properties.put("sourceOrdinal", mapping.sourceOrdinal());
+    properties.put("sourceTable", mapping.sourceTable().qualifiedName());
+    properties.put("sourceColumn", mapping.sourceColumnName());
+    properties.put("targetTable", mapping.targetTable().qualifiedName());
+    properties.put("targetColumn", mapping.targetColumnName());
+    return properties;
+  }
+
+  private String dataSourceId(String configJson) {
+    try {
+      JsonNode root = objectMapper.readTree(
+          configJson == null || configJson.isBlank() ? "{}" : configJson);
+      JsonNode value = root == null ? null : root.get("dataSourceId");
+      String dataSourceId = value == null || value.isNull() ? null : value.asText();
+      if (dataSourceId == null || dataSourceId.isBlank()) {
+        throw new IllegalArgumentException("SQL task dataSourceId 不能为空");
+      }
+      return dataSourceId.trim();
+    } catch (JsonProcessingException exception) {
+      throw new IllegalArgumentException("SQL task configJson 不是合法 JSON", exception);
+    }
+  }
+
+  private static String tableAssetKey(
+      String dataSourceId,
+      SqlTableLineageParser.TableRef table) {
+    return "table:" + dataSourceId + ":" + table.canonicalName();
+  }
+
+  private static String columnAssetKey(
+      String dataSourceId,
+      SqlTableLineageParser.TableRef table,
+      String columnName) {
+    return "column:"
+        + dataSourceId
+        + ":"
+        + table.canonicalName()
+        + "."
+        + columnName.toLowerCase(java.util.Locale.ROOT);
+  }
+
+  private static String truncate(String value, int maxLength) {
+    if (value == null) return null;
+    return value.length() <= maxLength ? value : value.substring(0, maxLength);
+  }
+}

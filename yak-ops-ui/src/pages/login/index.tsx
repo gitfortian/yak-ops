@@ -14,20 +14,20 @@ export default function LoginPage() {
           />
         </header>
 
-        <div className="grid flex-1 grid-cols-1 gap-10 pt-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(520px,1fr)] lg:items-center lg:gap-12 lg:pt-0 xl:gap-16">
-          <section className="flex min-w-0 items-center justify-center py-7 lg:py-10">
-            <div className="w-full max-w-[520px]">
-              <div className="mb-8 text-center">
-                <h1 className="m-0 text-[42px] font-normal leading-[1.02] tracking-[-0.045em] text-[#171717] sm:text-[54px] lg:text-[58px]">
+        <div className="grid flex-1 grid-cols-1 gap-10 pt-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(540px,0.95fr)] lg:items-center lg:gap-14 lg:pt-0 xl:gap-20">
+          <section className="flex min-w-0 items-center justify-center py-8 lg:py-10">
+            <div className="w-full max-w-[620px]">
+              <div className="mb-10 text-center">
+                <h1 className="m-0 text-[46px] font-normal leading-[1.01] tracking-[-0.045em] text-[#171717] sm:text-[60px] lg:text-[64px]">
                   Data ops,  &nbsp; simplified.
                 </h1>
 
-                <p className="mt-4 text-[15px] leading-6 text-[#555] sm:text-base">
+                <p className="mt-5 text-[16px] leading-7 text-[#555] sm:text-[17px]">
                   One workspace for your data.
                 </p>
               </div>
 
-              <div className="mx-auto w-full max-w-[390px]">
+              <div className="mx-auto w-full max-w-[430px]">
                 <LoginPanel />
               </div>
             </div>

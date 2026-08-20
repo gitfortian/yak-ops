@@ -68,7 +68,7 @@ export default function LoginPanel() {
   };
 
   return (
-    <div className="w-full rounded-[24px] border border-[#e4e4e1] bg-white p-5 shadow-[0_12px_36px_rgba(15,23,42,0.035)] sm:p-6">
+    <div className="w-full rounded-[26px] border border-[#e4e4e1] bg-white p-6 shadow-[0_14px_40px_rgba(15,23,42,0.04)] sm:p-7">
       <Form
         layout="vertical"
         form={form}
@@ -76,7 +76,7 @@ export default function LoginPanel() {
         onFinish={handleAccountLogin}
       >
         <Form.Item
-          className="!mb-4"
+          className="!mb-5"
           label={
             <span className="text-[13px] font-medium text-[#333]">
               Username
@@ -86,14 +86,14 @@ export default function LoginPanel() {
           rules={[{ required: true, message: "请输入用户名" }]}
         >
           <Input
-            className="!h-10 !rounded-full !border-[#dededb] !bg-white !px-3.5 !text-[15px] !shadow-none placeholder:!text-[#aaa] hover:!border-[#bdbdb8] focus:!border-[#171717]"
+            className="!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !text-[15px] !shadow-none placeholder:!text-[#aaa] hover:!border-[#bdbdb8] focus:!border-[#171717]"
             placeholder="Enter your username"
             autoComplete="username"
           />
         </Form.Item>
 
         <Form.Item
-          className="!mb-5"
+          className="!mb-6"
           label={
             <span className="text-[13px] font-medium text-[#333]">
               Password
@@ -108,7 +108,7 @@ export default function LoginPanel() {
           ]}
         >
           <Input.Password
-            className="!h-10 !rounded-full !border-[#dededb] !bg-white !px-3.5 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
+            className="!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
             placeholder="Enter your password"
             autoComplete="current-password"
           />
@@ -119,7 +119,7 @@ export default function LoginPanel() {
           type="primary"
           htmlType="submit"
           loading={loading}
-          className="!h-10 !rounded-full !border-[#171717] !bg-[#171717] !font-medium !text-white !shadow-none hover:!border-[#292929] hover:!bg-[#292929]"
+          className="!h-11 !rounded-full !border-[#171717] !bg-[#171717] !font-medium !text-white !shadow-none hover:!border-[#292929] hover:!bg-[#292929]"
         >
           Log in
         </Button>

@@ -23,7 +23,10 @@ import {
 } from '../editorSettings';
 import { formatSqlText } from '../formatting/formatSqlText';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
-import { getSqlStatementRanges } from '../monaco/sqlStatementRanges';
+import {
+  getSqlStatementRanges,
+  type SqlStatementRange,
+} from '../monaco/sqlStatementRanges';
 
 export interface SqlEditorPosition {
   lineNumber: number;
@@ -51,6 +54,16 @@ const ensureYakThemes = () => {
   YAK_EDITOR_THEMES.forEach((theme) => monaco.editor.defineTheme(theme.name, theme.data));
 };
 
+const findFallbackRunButton = (container: HTMLElement | null) => {
+  let element = container;
+  while (element) {
+    const button = element.querySelector<HTMLButtonElement>('button[aria-label="运行查询"]');
+    if (button) return button;
+    element = element.parentElement;
+  }
+  return undefined;
+};
+
 const SqlMonacoEditor = ({
   id,
   value,
@@ -68,12 +81,16 @@ const SqlMonacoEditor = ({
   const onChangeRef = useRef(onChange);
   const onRunStatementRef = useRef(onRunStatement);
   const runningRef = useRef(running);
+  const refreshRunDecorationRef = useRef<() => void>(() => {});
   const onPositionChangeRef = useRef(onPositionChange);
   const onViewStateChangeRef = useRef(onViewStateChange);
 
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   useEffect(() => { onRunStatementRef.current = onRunStatement; }, [onRunStatement]);
-  useEffect(() => { runningRef.current = running; }, [running]);
+  useEffect(() => {
+    runningRef.current = running;
+    refreshRunDecorationRef.current();
+  }, [running]);
   useEffect(() => { onPositionChangeRef.current = onPositionChange; }, [onPositionChange]);
   useEffect(() => { onViewStateChangeRef.current = onViewStateChange; }, [onViewStateChange]);
 
@@ -111,15 +128,27 @@ const SqlMonacoEditor = ({
       insertSpaces: true,
       scrollBeyondLastLine: false,
       smoothScrolling: true,
-      cursorSmoothCaretAnimation: 'on',
-      cursorBlinking: 'smooth',
-      showFoldingControls: 'always',
+      // Keep the caret aligned with Chat2DB/Monaco's immediate line-cursor feel.
+      // Interpolated caret travel looks smooth in isolation but trails fast typing/navigation.
+      cursorStyle: 'line',
+      cursorSmoothCaretAnimation: 'off',
+      cursorBlinking: 'blink',
+      cursorWidth: 2,
+      showFoldingControls: 'mouseover',
       glyphMargin: !readOnly,
-      lineNumbersMinChars: 3,
+      lineDecorationsWidth: 24,
+      lineNumbersMinChars: 2,
+      renderLineHighlightOnlyWhenFocus: true,
       overviewRulerLanes: 0,
+      overviewRulerBorder: false,
       hideCursorInOverviewRuler: true,
       fixedOverflowWidgets: true,
-      padding: { top: 12, bottom: 12 },
+      padding: { top: 10, bottom: 12 },
+      scrollbar: {
+        verticalScrollbarSize: 8,
+        horizontalScrollbarSize: 8,
+        useShadows: false,
+      },
       quickSuggestions: { other: true, comments: false, strings: false },
       suggestOnTriggerCharacters: true,
       acceptSuggestionOnEnter: 'on',
@@ -138,8 +167,8 @@ const SqlMonacoEditor = ({
         snippetsPreventQuickSuggestions: false,
       },
       wordBasedSuggestions: 'off',
-      bracketPairColorization: { enabled: true },
-      guides: { bracketPairs: true, indentation: true },
+      bracketPairColorization: { enabled: false },
+      guides: { bracketPairs: false, indentation: false },
     });
 
     editorRef.current = editor;
@@ -151,19 +180,80 @@ const SqlMonacoEditor = ({
     });
 
     let statementRanges = getSqlStatementRanges(model.getValue());
+    let activeStatement: SqlStatementRange | undefined;
     const runDecorations = editor.createDecorationsCollection();
-    const refreshStatementDecorations = () => {
-      statementRanges = getSqlStatementRanges(model.getValue());
-      runDecorations.set(
-        readOnly
-          ? []
-          : statementRanges.map((statement) => ({
-              range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
-              options: { glyphMarginClassName: 'yak-sql-run-glyph' },
-            })),
+
+    const canRunStatement = () => {
+      if (readOnly || runningRef.current) return false;
+      if (onRunStatementRef.current) return true;
+      const button = findFallbackRunButton(containerRef.current);
+      return Boolean(button && !button.disabled);
+    };
+
+    const findStatementAtPosition = (position?: monaco.Position | null) => {
+      if (!position) return undefined;
+      const offset = model.getOffsetAt(position);
+      const exact = statementRanges.find(
+        (statement) => offset >= statement.startOffset && offset <= statement.endOffset,
+      );
+      if (exact) return exact;
+      return statementRanges.find(
+        (statement) =>
+          position.lineNumber >= statement.startLine
+          && position.lineNumber <= statement.endLine,
       );
     };
-    refreshStatementDecorations();
+
+    const isSameStatement = (
+      left?: SqlStatementRange,
+      right?: SqlStatementRange,
+    ) =>
+      left?.startOffset === right?.startOffset
+      && left?.endOffset === right?.endOffset
+      && left?.startLine === right?.startLine;
+
+    const updateRunDecoration = (
+      position = editor.getPosition(),
+      force = false,
+    ) => {
+      const nextActiveStatement = findStatementAtPosition(position);
+      const statementChanged = !isSameStatement(activeStatement, nextActiveStatement);
+      activeStatement = nextActiveStatement;
+
+      // Moving within the same SQL statement should not recreate the same gutter decoration.
+      if (!force && !statementChanged) return;
+
+      if (!activeStatement || !canRunStatement()) {
+        runDecorations.clear();
+        return;
+      }
+
+      runDecorations.set([
+        {
+          range: new monaco.Range(activeStatement.startLine, 1, activeStatement.startLine, 1),
+          options: {
+            isWholeLine: false,
+            glyphMarginClassName: 'yak-sql-run-glyph',
+          },
+        },
+      ]);
+    };
+
+    refreshRunDecorationRef.current = () => updateRunDecoration(editor.getPosition(), true);
+
+    const runStatement = (sql: string) => {
+      if (onRunStatementRef.current) {
+        onRunStatementRef.current(sql);
+        return;
+      }
+      const button = findFallbackRunButton(containerRef.current);
+      if (button && !button.disabled) button.click();
+    };
+
+    const refreshStatementRanges = () => {
+      statementRanges = getSqlStatementRanges(model.getValue());
+      updateRunDecoration(editor.getPosition(), true);
+    };
 
     let wordWrapEnabled = initialSettings.wordWrap;
     let minimapEnabled = initialSettings.showMinimap;
@@ -227,8 +317,17 @@ const SqlMonacoEditor = ({
       });
     };
 
+    let editorStateFrame: number | undefined;
+    const scheduleEditorStateEmit = () => {
+      if (editorStateFrame !== undefined) return;
+      editorStateFrame = window.requestAnimationFrame(() => {
+        editorStateFrame = undefined;
+        emitEditorState();
+      });
+    };
+
     const contentDisposable = model.onDidChangeContent(() => {
-      refreshStatementDecorations();
+      refreshStatementRanges();
       if (!readOnly) onChangeRef.current(model.getValue());
     });
     const gutterDisposable = editor.onMouseDown((event) => {
@@ -236,21 +335,31 @@ const SqlMonacoEditor = ({
         readOnly ||
         event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
         runningRef.current ||
-        !onRunStatementRef.current
+        !activeStatement
       ) return;
+      const target = event.target.element;
+      if (!(target instanceof HTMLElement) || !target.classList.contains('yak-sql-run-glyph')) return;
       const lineNumber = event.target.position?.lineNumber;
-      if (!lineNumber) return;
-      const statement = statementRanges.find((candidate) => candidate.startLine === lineNumber);
-      if (statement) onRunStatementRef.current(statement.sql);
+      if (!lineNumber || lineNumber !== activeStatement.startLine) return;
+      runStatement(activeStatement.sql);
     });
-    const cursorDisposable = editor.onDidChangeCursorPosition(emitEditorState);
-    const selectionDisposable = editor.onDidChangeCursorSelection(emitEditorState);
-    const scrollDisposable = editor.onDidScrollChange(emitEditorState);
+    const cursorDisposable = editor.onDidChangeCursorPosition((event) => {
+      scheduleEditorStateEmit();
+      updateRunDecoration(event.position);
+    });
+    const selectionDisposable = editor.onDidChangeCursorSelection(scheduleEditorStateEmit);
+    const scrollDisposable = editor.onDidScrollChange(scheduleEditorStateEmit);
 
     emitEditorState();
+    updateRunDecoration(editor.getPosition(), true);
 
     return () => {
+      if (editorStateFrame !== undefined) {
+        window.cancelAnimationFrame(editorStateFrame);
+        editorStateFrame = undefined;
+      }
       emitEditorState();
+      refreshRunDecorationRef.current = () => {};
       unsubscribeSettings();
       contentDisposable.dispose();
       gutterDisposable.dispose();
@@ -279,7 +388,7 @@ const SqlMonacoEditor = ({
     model.pushEditOperations([], [{ range: model.getFullModelRange(), text: value }], () => null);
   }, [value]);
 
-  return <div ref={containerRef} className="h-full min-h-0 w-full" />;
+  return <div ref={containerRef} className="yak-sql-editor h-full min-h-0 w-full" />;
 };
 
 export default SqlMonacoEditor;
