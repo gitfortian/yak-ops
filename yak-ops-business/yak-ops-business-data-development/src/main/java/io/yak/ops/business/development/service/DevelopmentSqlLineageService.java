@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.lineage.LineageAsset;
@@ -11,12 +12,16 @@ import io.yak.ops.business.lineage.LineageAssetType;
 import io.yak.ops.business.lineage.LineageMaintenanceService;
 import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.LineageService;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Publishes authoritative table- and column-level lineage for immutable SQL task revisions. */
@@ -34,6 +39,8 @@ public class DevelopmentSqlLineageService {
   private final SqlColumnLineageParser columnParser;
   private final ObjectMapper objectMapper;
 
+  private DataSourceCatalogService dataSourceCatalogService;
+
   public DevelopmentSqlLineageService(
       LineageService lineageService,
       LineageMaintenanceService maintenanceService,
@@ -45,6 +52,15 @@ public class DevelopmentSqlLineageService {
     this.tableParser = tableParser;
     this.columnParser = columnParser;
     this.objectMapper = objectMapper;
+  }
+
+  /**
+   * Catalog is optional because datasource support itself can be disabled. Lineage must continue to
+   * publish table-level facts and conservative column facts when Catalog metadata is unavailable.
+   */
+  @Autowired(required = false)
+  void setDataSourceCatalogService(DataSourceCatalogService dataSourceCatalogService) {
+    this.dataSourceCatalogService = dataSourceCatalogService;
   }
 
   public void syncPublished(DevelopmentNode node, DevelopmentTaskRevision revision) {
@@ -60,7 +76,11 @@ public class DevelopmentSqlLineageService {
       SqlColumnLineageParser.ParseResult columnParsed = null;
       SqlColumnLineageParser.SqlColumnLineageParseException columnFailure = null;
       try {
-        columnParsed = columnParser.parse(sql);
+        if (dataSourceCatalogService == null) {
+          columnParsed = columnParser.parse(sql);
+        } else {
+          columnParsed = columnParser.parse(sql, schemaProvider(dataSourceId));
+        }
       } catch (SqlColumnLineageParser.SqlColumnLineageParseException exception) {
         columnFailure = exception;
         LOGGER.warn(
@@ -137,6 +157,82 @@ public class DevelopmentSqlLineageService {
     }
   }
 
+  private SqlColumnLineageParser.SchemaProvider schemaProvider(String dataSourceId) {
+    DataSourceCatalogService catalogService = this.dataSourceCatalogService;
+    if (catalogService == null) {
+      return SqlColumnLineageParser.SchemaProvider.none();
+    }
+
+    final Long numericDataSourceId;
+    try {
+      numericDataSourceId = Long.valueOf(dataSourceId);
+    } catch (NumberFormatException exception) {
+      LOGGER.debug("Skip schema-aware lineage because datasource id is not numeric: {}", dataSourceId);
+      return SqlColumnLineageParser.SchemaProvider.none();
+    }
+
+    Map<String, List<SqlColumnLineageParser.SchemaColumn>> cache = new LinkedHashMap<>();
+    return table -> cache.computeIfAbsent(
+        table.canonicalName(),
+        ignored -> loadSchemaColumns(catalogService, numericDataSourceId, table));
+  }
+
+  private List<SqlColumnLineageParser.SchemaColumn> loadSchemaColumns(
+      DataSourceCatalogService catalogService,
+      Long dataSourceId,
+      SqlTableLineageParser.TableRef table) {
+    List<DataSourceCatalogColumnVO> columns = listColumns(
+        catalogService,
+        dataSourceId,
+        table.databaseName(),
+        table.schemaName(),
+        table.tableName());
+
+    // A two-part SQL name is dialect-dependent: PostgreSQL usually means schema.table while
+    // MySQL/Doris usually means database.table. Try the alternate interpretation only when the
+    // primary lookup produced no metadata, keeping the resolver dialect-tolerant without leaking
+    // datasource-plugin details into the SQL parser.
+    if (columns.isEmpty() && table.databaseName() == null && table.schemaName() != null) {
+      columns = listColumns(
+          catalogService,
+          dataSourceId,
+          table.schemaName(),
+          null,
+          table.tableName());
+    }
+
+    List<SqlColumnLineageParser.SchemaColumn> result = new ArrayList<>();
+    for (DataSourceCatalogColumnVO column : columns) {
+      if (column == null || column.getName() == null || column.getName().isBlank()) continue;
+      result.add(new SqlColumnLineageParser.SchemaColumn(
+          column.getName(),
+          column.getOrdinalPosition()));
+    }
+    return List.copyOf(result);
+  }
+
+  private List<DataSourceCatalogColumnVO> listColumns(
+      DataSourceCatalogService catalogService,
+      Long dataSourceId,
+      String database,
+      String schema,
+      String table) {
+    try {
+      List<DataSourceCatalogColumnVO> columns =
+          catalogService.listColumns(dataSourceId, database, schema, table);
+      return columns == null ? List.of() : columns;
+    } catch (RuntimeException exception) {
+      LOGGER.debug(
+          "Catalog column lookup failed for datasource {} table {}.{}.{}: {}",
+          dataSourceId,
+          database,
+          schema,
+          table,
+          exception.getMessage());
+      return List.of();
+    }
+  }
+
   private void registerColumnLineage(
       String dataSourceId,
       LineageAsset task,
@@ -202,6 +298,9 @@ public class DevelopmentSqlLineageService {
     properties.put("revisionNo", revision.revisionNo());
     properties.put("checksum", revision.checksum());
     properties.put("dataSourceId", dataSourceId);
+    properties.put(
+        "columnSchemaResolution",
+        dataSourceCatalogService == null ? "NONE" : "DATASOURCE_CATALOG");
 
     if (tableFailure == null && tableParsed != null) {
       properties.put("parseStatus", "SUCCESS");
