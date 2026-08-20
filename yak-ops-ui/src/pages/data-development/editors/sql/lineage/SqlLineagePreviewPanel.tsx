@@ -1,132 +1,243 @@
 import { history } from '@umijs/max';
-import { Button, Empty, Tooltip } from 'antd';
-import { ArrowUpRight, GitBranch, LoaderCircle, RefreshCw } from 'lucide-react';
-import { useMemo } from 'react';
-import ReactFlow, {
-  Background,
-  Controls,
-  MarkerType,
-  type Edge,
-  type Node,
-} from 'reactflow';
+import { Button, Drawer, Empty, Segmented, Tooltip } from 'antd';
+import { ArrowUpRight, Focus, GitBranch, LoaderCircle, RefreshCw } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import ReactFlow, { Background, Controls, type Edge, MarkerType, type Node, type ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import LineageNode, {
-  type LineageNodeData,
-} from '@/pages/data-analysis/lineage/LineageNode';
 import { buildLineageView } from '@/pages/data-analysis/lineage/graph-layout';
-import type {
-  LineageAssetType,
-  LineageGraph,
-} from '@/pages/data-analysis/lineage/types';
+import LineageNode, { type LineageNodeData } from '@/pages/data-analysis/lineage/LineageNode';
+import type { LineageAssetType, LineageGraph } from '@/pages/data-analysis/lineage/types';
+import type { DevelopmentId, DevelopmentSqlLineageColumnMapping, DevelopmentSqlLineagePreview } from '../../../types';
+import ColumnLineageNode, { type ColumnLineageNodeData, columnHandleId } from './ColumnLineageNode';
 
-import type {
-  DevelopmentId,
-  DevelopmentSqlLineagePreview,
-} from '../../../types';
-
-interface SqlLineagePreviewPanelProps {
+interface Props {
   nodeId: DevelopmentId;
   preview?: DevelopmentSqlLineagePreview;
   loading: boolean;
   onRefresh: () => void;
 }
+type Mode = 'table' | 'column';
+interface FieldSelection {
+  table: string;
+  column: string;
+  mappings: DevelopmentSqlLineageColumnMapping[];
+}
 
-const nodeTypes = { lineage: LineageNode };
+const nodeTypes = { lineage: LineageNode, columnLineage: ColumnLineageNode };
 const visibleTypes = new Set<LineageAssetType>(['TABLE', 'SQL_TASK']);
-
-const statusLabel: Record<DevelopmentSqlLineagePreview['status'], string> = {
-  SUCCESS: '解析成功',
-  PARTIAL: '部分解析',
-  UNRESOLVED: '字段待解析',
-  FAILED: '解析失败',
-};
-
-const statusClassName: Record<DevelopmentSqlLineagePreview['status'], string> = {
+const statusLabel = { SUCCESS: '解析成功', PARTIAL: '部分解析', UNRESOLVED: '字段待解析', FAILED: '解析失败' } as const;
+const statusClassName = {
   SUCCESS: 'bg-[#ecfdf3] text-[#027a48]',
   PARTIAL: 'bg-[#fffaeb] text-[#b54708]',
   UNRESOLVED: 'bg-[#f2f4f7] text-[#667085]',
   FAILED: 'bg-[#fef3f2] text-[#b42318]',
-};
-
+} as const;
 const Metric = ({ label, value }: { label: string; value: number }) => (
   <span className="inline-flex items-center gap-1 text-[11px] text-[#8a8f99]">
     <span>{label}</span>
-    <span className="font-medium tabular-nums text-[#475467]">{value}</span>
+    <b className="font-medium tabular-nums text-[#475467]">{value}</b>
   </span>
 );
+const fieldKey = (table: string, column: string) => `${table}.${column}`;
+const nodeIdFor = (role: 'source' | 'target', table: string) => `${role}:${table}`;
 
-const SqlLineagePreviewPanel = ({
-  nodeId,
-  preview,
-  loading,
-  onRefresh,
-}: SqlLineagePreviewPanelProps) => {
+/** Dagre-style left-to-right rank layout. Tables in each rank are centered vertically. */
+export const layoutColumnTables = (mappings: DevelopmentSqlLineageColumnMapping[]) => {
+  const sourceTables = [...new Set(mappings.map((item) => item.sourceTable))].sort();
+  const targetTables = [
+    ...new Set(mappings.map((item) => item.targetTable).filter((item): item is string => Boolean(item))),
+  ].sort();
+  const position = (rank: number, index: number, total: number) => ({
+    x: rank * 430,
+    y: (index - (total - 1) / 2) * 250,
+  });
+  return {
+    sourceTables: sourceTables.map((table, index) => ({ table, position: position(0, index, sourceTables.length) })),
+    targetTables: targetTables.map((table, index) => ({ table, position: position(1, index, targetTables.length) })),
+  };
+};
+
+export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRefresh }: Props) {
+  const [mode, setMode] = useState<Mode>('table');
+  const [hoveredAsset, setHoveredAsset] = useState<string>();
+  const [hoveredField, setHoveredField] = useState<{ table: string; column: string }>();
+  const [selection, setSelection] = useState<FieldSelection>();
+  const [flow, setFlow] = useState<ReactFlowInstance>();
   const graph: LineageGraph | undefined = preview?.graph;
-  const view = useMemo(
-    () => (graph ? buildLineageView(graph, 'BOTH', visibleTypes) : undefined),
-    [graph],
+  const view = useMemo(() => (graph ? buildLineageView(graph, 'BOTH', visibleTypes) : undefined), [graph]);
+
+  const relatedAssets = useMemo(() => {
+    if (!hoveredAsset || !view) return new Set<string>();
+    const ids = new Set([hoveredAsset]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      view.relations.forEach((edge) => {
+        if (ids.has(edge.sourceAssetId) || ids.has(edge.targetAssetId)) {
+          if (!ids.has(edge.sourceAssetId) || !ids.has(edge.targetAssetId)) changed = true;
+          ids.add(edge.sourceAssetId);
+          ids.add(edge.targetAssetId);
+        }
+      });
+    }
+    return ids;
+  }, [hoveredAsset, view]);
+
+  const tableNodes = useMemo<Array<Node<LineageNodeData>>>(
+    () =>
+      view?.nodes.map(({ asset, position }) => ({
+        id: asset.id,
+        type: 'lineage',
+        position,
+        draggable: false,
+        data: { asset, root: asset.id === graph?.root.id },
+        style: hoveredAsset && !relatedAssets.has(asset.id) ? { opacity: 0.28 } : undefined,
+      })) || [],
+    [graph?.root.id, hoveredAsset, relatedAssets, view?.nodes],
+  );
+  const tableEdges = useMemo<Edge[]>(
+    () =>
+      view?.relations.map((relation) => {
+        const active = Boolean(
+          hoveredAsset && relatedAssets.has(relation.sourceAssetId) && relatedAssets.has(relation.targetAssetId),
+        );
+        return {
+          id: relation.id,
+          source: relation.sourceAssetId,
+          target: relation.targetAssetId,
+          type: 'smoothstep',
+          animated: active,
+          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: active ? '#f04473' : '#98a2b3' },
+          style: {
+            stroke: active ? '#f04473' : '#c5cad1',
+            strokeWidth: active ? 2.2 : 1.25,
+            opacity: hoveredAsset && !active ? 0.2 : 1,
+          },
+        };
+      }) || [],
+    [hoveredAsset, relatedAssets, view?.relations],
   );
 
-  const flowNodes = useMemo<Array<Node<LineageNodeData>>>(() => (
-    view?.nodes.map(({ asset, position }) => ({
-      id: asset.id,
-      type: 'lineage',
-      position,
-      draggable: false,
-      selectable: false,
-      data: { asset, root: asset.id === graph?.root.id },
-    })) || []
-  ), [graph?.root.id, view?.nodes]);
+  const activeMappingIds = useMemo(
+    () =>
+      new Set(
+        (preview?.columnMappings || [])
+          .filter(
+            (mapping) =>
+              !hoveredField ||
+              fieldKey(mapping.sourceTable, mapping.sourceColumn) ===
+                fieldKey(hoveredField.table, hoveredField.column) ||
+              fieldKey(mapping.targetTable || '', mapping.targetColumn) ===
+                fieldKey(hoveredField.table, hoveredField.column),
+          )
+          .map((mapping) => `${mapping.outputOrdinal}:${mapping.sourceOrdinal}`),
+      ),
+    [hoveredField, preview?.columnMappings],
+  );
+  const layout = useMemo(() => layoutColumnTables(preview?.columnMappings || []), [preview?.columnMappings]);
+  const openField = useCallback(
+    (table: string, column: string) => {
+      const mappings = (preview?.columnMappings || []).filter(
+        (item) =>
+          fieldKey(item.sourceTable, item.sourceColumn) === fieldKey(table, column) ||
+          fieldKey(item.targetTable || '', item.targetColumn) === fieldKey(table, column),
+      );
+      setSelection({ table, column, mappings });
+    },
+    [preview?.columnMappings],
+  );
+  const hoverField = useCallback(
+    (table?: string, column?: string) => setHoveredField(table && column ? { table, column } : undefined),
+    [],
+  );
+  const columnNodes = useMemo<Array<Node<ColumnLineageNodeData>>>(() => {
+    const makeNode = (
+      role: 'source' | 'target',
+      table: string,
+      position: { x: number; y: number },
+    ): Node<ColumnLineageNodeData> => {
+      const mappings = (preview?.columnMappings || []).filter((item) =>
+        role === 'source' ? item.sourceTable === table : item.targetTable === table,
+      );
+      const names = [...new Set(mappings.map((item) => (role === 'source' ? item.sourceColumn : item.targetColumn)))];
+      return {
+        id: nodeIdFor(role, table),
+        type: 'columnLineage',
+        position,
+        draggable: false,
+        data: {
+          tableName: table,
+          role,
+          fields: names.map((name) => ({
+            name,
+            transformed: mappings.some(
+              (item) =>
+                (role === 'source' ? item.sourceColumn : item.targetColumn) === name && item.mappingKind !== 'IDENTITY',
+            ),
+          })),
+          activeFields: new Set(hoveredField && hoveredField.table === table ? [hoveredField.column] : []),
+          onFieldClick: openField,
+          onFieldHover: hoverField,
+        },
+      };
+    };
+    return [
+      ...layout.sourceTables.map(({ table, position }) => makeNode('source', table, position)),
+      ...layout.targetTables.map(({ table, position }) => makeNode('target', table, position)),
+    ];
+  }, [hoveredField, hoverField, layout, openField, preview?.columnMappings]);
+  const columnEdges = useMemo<Edge[]>(
+    () =>
+      (preview?.columnMappings || [])
+        .filter((item) => item.targetTable)
+        .map((item) => {
+          const id = `${item.outputOrdinal}:${item.sourceOrdinal}`;
+          const active = !hoveredField || activeMappingIds.has(id);
+          return {
+            id,
+            source: nodeIdFor('source', item.sourceTable),
+            sourceHandle: columnHandleId(item.sourceColumn),
+            target: nodeIdFor('target', item.targetTable!),
+            targetHandle: columnHandleId(item.targetColumn),
+            type: 'smoothstep',
+            animated: Boolean(hoveredField && active),
+            label: item.mappingKind === 'IDENTITY' ? undefined : item.mappingKind === 'AGGREGATION' ? '聚合' : '转换',
+            labelStyle: { fontSize: 10, fill: '#6941c6' },
+            labelBgStyle: { fill: '#f4f0ff' },
+            markerEnd: { type: MarkerType.ArrowClosed, color: active ? '#f04473' : '#b9c0c9', width: 13, height: 13 },
+            style: {
+              stroke: active ? '#f04473' : '#c7ccd4',
+              strokeWidth: active ? 2 : 1.15,
+              opacity: active ? 1 : 0.12,
+            },
+          };
+        }),
+    [activeMappingIds, hoveredField, preview?.columnMappings],
+  );
 
-  const flowEdges = useMemo<Edge[]>(() => (
-    view?.relations.map((relation) => ({
-      id: relation.id,
-      source: relation.sourceAssetId,
-      target: relation.targetAssetId,
-      type: 'smoothstep',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 14,
-        height: 14,
-        color: '#b9bec6',
-      },
-      style: {
-        stroke: '#c9cdd3',
-        strokeWidth: 1.15,
-      },
-    })) || []
-  ), [view?.relations]);
-
-  const productionAssetKey = `sql-task:data-development:${nodeId}`;
-  const graphKey = graph
-    ? graph.nodes.map((node) => node.id).join('|') || graph.root.id
-    : 'empty';
-
-  if (loading && !preview) {
+  if (loading && !preview)
     return (
       <div className="flex h-full items-center justify-center bg-[#fbfcfd] text-[12px] text-[#667085]">
         <LoaderCircle size={16} className="mr-2 animate-spin" />
         正在解析当前 SQL 血缘
       </div>
     );
-  }
-
-  if (!preview) {
+  if (!preview)
     return (
       <div className="flex h-full items-center justify-center bg-[#fbfcfd]">
         <Empty
-          image={(
-            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[9px] bg-[#eef0f3] text-[#667085]">
+          image={
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[9px] bg-[#eef0f3]">
               <GitBranch size={20} />
             </div>
-          )}
-          description={(
-            <div>
-              <div className="text-[13px] font-medium text-[#475467]">解析当前 SQL 查看血缘</div>
-              <div className="mt-1 text-[11px] text-[#98a2b3]">预览只解析当前编辑内容，不保存、不发布、也不写入正式血缘。</div>
-            </div>
-          )}
+          }
+          description={
+            <>
+              <div className="text-[13px] font-medium">解析当前 SQL 查看血缘</div>
+              <div className="mt-1 text-[11px] text-[#98a2b3]">预览不会保存、发布或写入正式血缘。</div>
+            </>
+          }
         >
           <Button size="small" icon={<RefreshCw size={13} />} onClick={onRefresh}>
             解析血缘
@@ -134,100 +245,135 @@ const SqlLineagePreviewPanel = ({
         </Empty>
       </div>
     );
-  }
-
-  if (preview.status === 'FAILED') {
+  if (preview.status === 'FAILED')
     return (
-      <div className="flex h-full items-center justify-center bg-[#fbfcfd] px-8">
+      <div className="flex h-full items-center justify-center bg-[#fbfcfd]">
         <Empty
-          description={(
-            <div className="max-w-[620px]">
-              <div className="text-[13px] font-medium text-[#b42318]">SQL 血缘解析失败</div>
-              <div className="mt-1 break-words text-[11px] leading-5 text-[#8a8f99]">
-                {preview.parseError || '当前 SQL 暂时无法解析，请检查语法后重试。'}
-              </div>
-            </div>
-          )}
+          description={
+            <>
+              <div className="font-medium text-[#b42318]">SQL 血缘解析失败</div>
+              <div className="text-[11px] text-[#8a8f99]">{preview.parseError || '请检查语法后重试。'}</div>
+            </>
+          }
         >
-          <Button size="small" icon={<RefreshCw size={13} />} onClick={onRefresh}>
+          <Button size="small" onClick={onRefresh}>
             再次解析
           </Button>
         </Empty>
       </div>
     );
-  }
 
+  const isColumn = mode === 'column';
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex h-9 shrink-0 items-center gap-3 border-b border-[#eef0f2] px-3">
-        <span
-          className={[
-            'shrink-0 rounded-[4px] px-1.5 py-0.5 text-[10px] font-medium',
-            statusClassName[preview.status],
-          ].join(' ')}
-        >
+      <div className="flex h-11 shrink-0 items-center gap-3 border-b border-[#eef0f2] px-3">
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusClassName[preview.status]}`}>
           {statusLabel[preview.status]}
         </span>
+        <Segmented
+          size="small"
+          value={mode}
+          options={[
+            { label: '表级血缘', value: 'table' },
+            {
+              label: `字段血缘 ${preview.columnMappingCount}`,
+              value: 'column',
+              disabled: preview.columnMappingCount === 0,
+            },
+          ]}
+          onChange={(value) => {
+            setMode(value as Mode);
+            setHoveredAsset(undefined);
+            setHoveredField(undefined);
+          }}
+        />
         <Metric label="输入表" value={preview.inputTableCount} />
         <Metric label="输出表" value={preview.outputTableCount} />
-        <Metric label="字段映射" value={preview.columnMappingCount} />
         <Metric label="未解析" value={preview.unresolvedColumnReferenceCount} />
-        {preview.columnParseError ? (
-          <span
-            className="min-w-0 flex-1 truncate text-[11px] text-[#b54708]"
-            title={preview.columnParseError}
-          >
-            字段级解析降级：{preview.columnParseError}
-          </span>
-        ) : (
-          <span className="min-w-0 flex-1" />
-        )}
-        <Tooltip title="重新解析当前编辑器 SQL">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-[#b54708]">
+          {preview.columnParseError ? `字段级解析降级：${preview.columnParseError}` : ''}
+        </span>
+        <Tooltip title="自动布局并聚焦全部链路">
           <Button
             type="text"
             size="small"
-            loading={loading}
-            icon={<RefreshCw size={13} />}
-            onClick={onRefresh}
+            icon={<Focus size={13} />}
+            onClick={() => flow?.fitView({ padding: 0.25, duration: 350 })}
           >
-            再次解析
+            聚焦链路
           </Button>
         </Tooltip>
-        <Tooltip title="打开该 SQL 节点已发布并持久化的正式血缘">
-          <Button
-            type="text"
-            size="small"
-            icon={<ArrowUpRight size={13} />}
-            onClick={() => history.push(
-              `/data-analysis/lineage?assetKey=${encodeURIComponent(productionAssetKey)}`,
-            )}
-          >
-            生产血缘
-          </Button>
-        </Tooltip>
+        <Button type="text" size="small" loading={loading} icon={<RefreshCw size={13} />} onClick={onRefresh}>
+          再次解析
+        </Button>
+        <Button
+          type="text"
+          size="small"
+          icon={<ArrowUpRight size={13} />}
+          onClick={() =>
+            history.push(`/data-analysis/lineage?assetKey=${encodeURIComponent(`sql-task:data-development:${nodeId}`)}`)
+          }
+        >
+          生产血缘
+        </Button>
       </div>
-
-      <div className="relative min-h-0 flex-1 bg-[#fbfcfd]">
+      <div className="relative min-h-0 flex-1 bg-[#f8fafc]">
         <ReactFlow
-          key={graphKey}
-          nodes={flowNodes}
-          edges={flowEdges}
+          key={`${mode}:${graph?.root.id}`}
+          nodes={isColumn ? columnNodes : tableNodes}
+          edges={isColumn ? columnEdges : tableEdges}
           nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.28, minZoom: 0.62, maxZoom: 1.05 }}
-          minZoom={0.35}
-          maxZoom={1.35}
+          fitViewOptions={{ padding: 0.25, minZoom: 0.45, maxZoom: 1 }}
+          minZoom={0.25}
+          maxZoom={1.5}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
+          onInit={setFlow}
+          onNodeMouseEnter={(_, node) => !isColumn && setHoveredAsset(node.id)}
+          onNodeMouseLeave={() => setHoveredAsset(undefined)}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={18} size={1} color="#e4e7eb" />
+          <Background gap={18} size={1} color="#dfe3e8" />
           <Controls showInteractive={false} position="bottom-right" />
         </ReactFlow>
       </div>
+      <Drawer width={430} title="字段血缘详情" open={Boolean(selection)} onClose={() => setSelection(undefined)}>
+        {selection ? (
+          <div>
+            <div className="rounded-lg bg-[#f8fafc] p-3">
+              <div className="text-[11px] text-[#667085]">当前字段</div>
+              <div className="mt-1 font-mono text-[13px] font-semibold text-[#1d2939]">
+                {selection.table}.{selection.column}
+              </div>
+            </div>
+            {selection.mappings.map((item) => (
+              <div
+                key={`${item.outputOrdinal}:${item.sourceOrdinal}`}
+                className="mt-3 rounded-lg border border-[#e4e7ec] p-3"
+              >
+                <div className="flex items-center gap-2 text-[12px]">
+                  <code>
+                    {item.sourceTable}.{item.sourceColumn}
+                  </code>
+                  <span className="text-[#98a2b3]">→</span>
+                  <code>
+                    {item.targetTable || '目标表'}.{item.targetColumn}
+                  </code>
+                </div>
+                <div className="mt-2 inline-flex rounded bg-[#f4f0ff] px-2 py-1 text-[10px] font-medium text-[#6941c6]">
+                  {item.mappingKind}
+                </div>
+                <div className="mt-3 text-[11px] text-[#667085]">转换逻辑</div>
+                <pre className="mt-1 whitespace-pre-wrap rounded bg-[#101828] p-3 text-[11px] leading-5 text-[#eaecf0]">
+                  {item.expression || (item.mappingKind === 'IDENTITY' ? item.sourceColumn : '未返回表达式')}
+                </pre>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Drawer>
     </div>
   );
-};
-
-export default SqlLineagePreviewPanel;
+}
