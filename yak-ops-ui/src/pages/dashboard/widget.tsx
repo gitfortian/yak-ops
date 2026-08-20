@@ -1,4 +1,9 @@
-import { AnalysisPreview } from '@/components/analysis/AnalysisPreview';
+import {
+  AnalysisPreview,
+  buildDatasetQueryPayload,
+  canQueryAnalysis,
+} from '@/components/analysis/AnalysisPreview';
+import { analysisQueryCacheKey } from '@/components/analysis/query-runtime';
 import { Empty, Tooltip } from 'antd';
 import {
   ChevronRight,
@@ -9,6 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import type {
   AnalysisAsset,
   AnalysisSelection,
@@ -19,6 +25,7 @@ import type {
   DashboardWidget,
   PublishedDataset,
 } from './model';
+import { registerDashboardPerformanceQuery } from './performance-runtime';
 
 export function WidgetShell({
   widget,
@@ -61,6 +68,23 @@ export function WidgetShell({
   const title = widget.analysisId
     ? analysis?.name ?? '历史图表'
     : widget.title ?? '未命名图表';
+  const performanceQueryKey = useMemo(() => {
+    if (!spec || !dataset || !canQueryAnalysis(spec)) return undefined;
+    return analysisQueryCacheKey(
+      dataset,
+      buildDatasetQueryPayload(spec, dataset, runtimeFilters),
+    );
+  }, [dataset, runtimeFilters, spec]);
+
+  useEffect(() => {
+    if (!dataset || !performanceQueryKey) return;
+    registerDashboardPerformanceQuery({
+      widgetId: widget.id,
+      widgetName: title,
+      datasetId: dataset.id,
+      queryKey: performanceQueryKey,
+    });
+  }, [dataset, performanceQueryKey, title, widget.id]);
 
   return (
     <div

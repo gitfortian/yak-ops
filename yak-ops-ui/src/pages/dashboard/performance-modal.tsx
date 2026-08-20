@@ -1,4 +1,4 @@
-import { fetchAnalyses } from '@/components/analysis/analysis-service';
+import { latestAnalysisQueryId } from '@/components/analysis/query-runtime';
 import {
   Alert,
   Button,
@@ -10,9 +10,9 @@ import {
   type TableColumnsType,
 } from 'antd';
 import { Download, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchDashboard } from './dashboard-service';
-import type { AnalysisAsset, DashboardWidget } from './model';
+import { getDashboardPerformanceQuery } from './performance-runtime';
 import {
   fetchDashboardQueryPerformance,
   type DashboardQueryPerformance,
@@ -26,16 +26,10 @@ const formatTime = (value?: string) => {
 
 const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
-const widgetDatasetId = (widget: DashboardWidget, analyses: AnalysisAsset[]) => (
-  widget.inlineAnalysis?.datasetId
-  ?? (widget.analysisId ? analyses.find((item) => item.id === widget.analysisId)?.datasetId : undefined)
-);
-
-const widgetTitle = (widget: DashboardWidget, analyses: AnalysisAsset[]) => (
-  widget.title?.trim()
-  || (widget.analysisId ? analyses.find((item) => item.id === widget.analysisId)?.name : undefined)
-  || '未命名组件'
-);
+type DashboardPerformanceRow = DashboardQueryPerformance & {
+  widgetId: string;
+  widgetName: string;
+};
 
 export function DashboardPerformanceModal({
   open,
@@ -50,39 +44,33 @@ export function DashboardPerformanceModal({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const [records, setRecords] = useState<DashboardQueryPerformance[]>([]);
+  const [records, setRecords] = useState<DashboardPerformanceRow[]>([]);
   const [detail, setDetail] = useState<DashboardQueryPerformance>();
-  const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
-  const [analyses, setAnalyses] = useState<AnalysisAsset[]>([]);
-
-  const widgetNamesByDataset = useMemo(() => {
-    const result = new Map<string, string[]>();
-    widgets.forEach((widget) => {
-      const datasetId = widgetDatasetId(widget, analyses);
-      if (!datasetId) return;
-      const current = result.get(datasetId) ?? [];
-      const title = widgetTitle(widget, analyses);
-      if (!current.includes(title)) current.push(title);
-      result.set(datasetId, current);
-    });
-    return result;
-  }, [analyses, widgets]);
 
   const load = useCallback(async () => {
     if (!/^\d+$/.test(dashboardId)) return;
     setLoading(true);
     setError(undefined);
     try {
-      const [dashboard, nextAnalyses] = await Promise.all([
-        fetchDashboard(dashboardId),
-        fetchAnalyses(),
-      ]);
-      setWidgets(dashboard.widgets);
-      setAnalyses(nextAnalyses);
-      const datasetIds = Array.from(new Set(dashboard.widgets
-        .map((widget) => widgetDatasetId(widget, nextAnalyses))
-        .filter((value): value is string => Boolean(value))));
-      setRecords(await fetchDashboardQueryPerformance(datasetIds, 100));
+      const dashboard = await fetchDashboard(dashboardId);
+      const executions = dashboard.widgets.flatMap((widget) => {
+        const binding = getDashboardPerformanceQuery(widget.id);
+        if (!binding) return [];
+        const queryId = latestAnalysisQueryId(binding.queryKey);
+        if (!queryId) return [];
+        return [{
+          widgetId: widget.id,
+          widgetName: binding.widgetName,
+          queryId,
+        }];
+      });
+      const queryIds = Array.from(new Set(executions.map((item) => item.queryId)));
+      const traces = await fetchDashboardQueryPerformance(queryIds);
+      const tracesById = new Map(traces.map((trace) => [trace.queryId, trace]));
+      setRecords(executions.flatMap((execution) => {
+        const trace = tracesById.get(execution.queryId);
+        return trace ? [{ ...trace, ...execution }] : [];
+      }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取性能分析记录失败');
     } finally {
@@ -101,7 +89,7 @@ export function DashboardPerformanceModal({
     ];
     const rows = records.map((record) => [
       dashboardName,
-      (widgetNamesByDataset.get(record.datasetId) ?? []).join(' / '),
+      record.widgetName,
       record.datasetName || record.datasetId,
       record.queryId,
       record.waitMillis,
@@ -123,7 +111,7 @@ export function DashboardPerformanceModal({
     URL.revokeObjectURL(url);
   };
 
-  const columns: TableColumnsType<DashboardQueryPerformance> = [
+  const columns: TableColumnsType<DashboardPerformanceRow> = [
     {
       title: '一级资源名称',
       width: 130,
@@ -131,12 +119,13 @@ export function DashboardPerformanceModal({
     },
     {
       title: '二级资源名称',
+      dataIndex: 'widgetName',
       width: 180,
-      render: (_, record) => {
-        const names = widgetNamesByDataset.get(record.datasetId) ?? [];
-        const value = names.length ? names.join(' / ') : '-';
-        return <Tooltip title={value}><span className="block max-w-[160px] truncate">{value}</span></Tooltip>;
-      },
+      render: (value: string) => (
+        <Tooltip title={value}>
+          <span className="block max-w-[160px] truncate">{value || '-'}</span>
+        </Tooltip>
+      ),
     },
     {
       title: '数据集',
@@ -186,12 +175,12 @@ export function DashboardPerformanceModal({
         onCancel={onClose}
         footer={null}
         destroyOnClose={false}
-        styles={{ body: { paddingTop: 8 } }}
+        styles={{ body: { paddingTop: 8, height: 560, overflow: 'hidden' } }}
       >
         <div className="mb-3 flex items-center justify-between">
           <div>
             <div className="text-[12px] font-semibold text-[#344054]">核心信息</div>
-            <div className="mt-0.5 text-[10px] text-[#98a2b3]">最近 100 条当前已保存仪表盘的 Dataset SQL 查询记录</div>
+            <div className="mt-0.5 text-[10px] text-[#98a2b3]">当前仪表盘每个图表最近一次实际执行的 Dataset SQL 查询</div>
           </div>
           <div className="flex items-center gap-1">
             <Button type="text" size="small" icon={<RefreshCw size={12} />} loading={loading} onClick={() => void load()}>
@@ -205,19 +194,19 @@ export function DashboardPerformanceModal({
 
         {error ? <Alert className="mb-3" type="error" showIcon message={error} /> : null}
 
-        <Table<DashboardQueryPerformance>
-          rowKey="queryId"
+        <Table<DashboardPerformanceRow>
+          rowKey={(record) => `${record.widgetId}-${record.queryId}`}
           size="small"
           loading={loading}
           columns={columns}
           dataSource={records}
           pagination={false}
-          scroll={{ x: 1500, y: 430 }}
+          scroll={{ x: 1500, y: 420 }}
           locale={{
             emptyText: (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="当前进程尚未采集到该仪表盘的查询记录，请操作或刷新图表后再查看"
+                description="当前仪表盘尚未产生可追踪的查询，请等待图表加载完成或刷新后再查看"
               />
             ),
           }}

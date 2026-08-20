@@ -7,6 +7,7 @@ import type {
 
 const QUERY_RESULT_TTL_MS = 1_500;
 const MAX_QUERY_ENTRIES = 64;
+const MAX_QUERY_IDS = 128;
 
 type AnalysisQueryLoader = (
   datasetId: string,
@@ -20,6 +21,7 @@ interface QueryEntry {
 }
 
 const queryEntries = new Map<string, QueryEntry>();
+const latestQueryIds = new Map<string, string>();
 
 export const analysisQueryCacheKey = (
   dataset: Pick<PublishedDataset, 'id' | 'currentVersionNo'>,
@@ -38,6 +40,17 @@ const pruneQueryEntries = (now: number) => {
     const oldest = queryEntries.keys().next().value as string | undefined;
     if (!oldest) break;
     queryEntries.delete(oldest);
+  }
+};
+
+const rememberQueryId = (key: string, queryId?: string) => {
+  if (!queryId) return;
+  latestQueryIds.delete(key);
+  latestQueryIds.set(key, queryId);
+  while (latestQueryIds.size > MAX_QUERY_IDS) {
+    const oldest = latestQueryIds.keys().next().value as string | undefined;
+    if (!oldest) break;
+    latestQueryIds.delete(oldest);
   }
 };
 
@@ -66,6 +79,7 @@ export const queryAnalysisDatasetShared = (
     .then((result) => {
       entry.settled = true;
       entry.expiresAt = Date.now() + QUERY_RESULT_TTL_MS;
+      rememberQueryId(key, result.queryId);
       return result;
     })
     .catch((error) => {
@@ -81,6 +95,11 @@ export const queryAnalysisDatasetShared = (
   return promise;
 };
 
-export const clearAnalysisQueryRuntime = () => queryEntries.clear();
+export const latestAnalysisQueryId = (queryKey: string) => latestQueryIds.get(queryKey);
+
+export const clearAnalysisQueryRuntime = () => {
+  queryEntries.clear();
+  latestQueryIds.clear();
+};
 
 export const analysisQueryRuntimeSize = () => queryEntries.size;

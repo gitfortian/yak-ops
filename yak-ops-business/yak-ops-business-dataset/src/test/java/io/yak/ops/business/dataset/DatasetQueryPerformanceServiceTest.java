@@ -23,6 +23,20 @@ class DatasetQueryPerformanceServiceTest {
   }
 
   @Test
+  void filtersRecentTracesByExactQueryIds() {
+    DatasetQueryPerformanceService service = new DatasetQueryPerformanceService();
+    service.record(trace("q1", 1L, 10L));
+    service.record(trace("q2", 1L, 20L));
+    service.record(trace("q3", 2L, 30L));
+
+    var traces = service.recent(Set.of(), Set.of("q1", "q3"), 10);
+
+    assertEquals(2, traces.size());
+    assertEquals("q3", traces.get(0).queryId());
+    assertEquals("q1", traces.get(1).queryId());
+  }
+
+  @Test
   void capsTheDiagnosticWindow() {
     DatasetQueryPerformanceService service = new DatasetQueryPerformanceService();
     for (int index = 0; index < DatasetQueryPerformanceService.MAX_TRACES + 5; index++) {
