@@ -121,9 +121,9 @@ const EditorTabs = ({
   );
 
   return (
-    <div className="flex h-9 shrink-0 border-b border-[#e8e9ec] bg-[#f7f7f8]">
+    <div className="flex h-9 shrink-0 bg-[#f7f7f8]">
       <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex h-9 min-w-max items-stretch">
+        <div className="flex h-9 min-w-full w-max items-stretch">
           {openNodeIds.map((nodeId) => {
             const node = nodeMap.get(nodeId);
             if (!node) return null;
@@ -142,10 +142,10 @@ const EditorTabs = ({
                   if (event.button === 1) onClose(nodeId);
                 }}
                 className={[
-                  'group relative flex h-9 min-w-[120px] max-w-[220px] flex-none items-center border-b border-b-transparent border-r border-r-[#e5e7eb] border-t-2 transition-colors',
+                  'group relative flex h-9 min-w-[120px] max-w-[220px] flex-none items-center border-b border-r border-r-[#e5e7eb] border-t-2 transition-colors',
                   active
-                    ? `z-10 border-b-white border-t-[rgba(254,44,85,1)] bg-white text-[#344054] after:pointer-events-none after:absolute after:-bottom-px after:left-0 after:right-0 after:z-20 after:h-px after:bg-white after:content-['']`
-                    : 'border-t-transparent bg-[#f7f7f8] text-[#667085] hover:bg-[#f0f1f2] hover:text-[#344054]',
+                    ? 'z-10 border-b-white border-t-[rgba(254,44,85,1)] bg-white text-[#344054]'
+                    : 'border-b-[#e8e9ec] border-t-transparent bg-[#f7f7f8] text-[#667085] hover:bg-[#f0f1f2] hover:text-[#344054]',
                 ].join(' ')}
               >
                 <button
@@ -196,10 +196,11 @@ const EditorTabs = ({
               </div>
             );
           })}
+          <div className="min-w-0 flex-1 border-b border-b-[#e8e9ec]" aria-hidden="true" />
         </div>
       </div>
 
-      <div className="flex h-9 w-10 shrink-0 items-center justify-center border-l border-[#e5e7eb] bg-[#f7f7f8]">
+      <div className="flex h-9 w-10 shrink-0 items-center justify-center border-b border-b-[#e8e9ec] border-l border-[#e5e7eb] bg-[#f7f7f8]">
         <Dropdown
           trigger={['click']}
           placement="bottomRight"
