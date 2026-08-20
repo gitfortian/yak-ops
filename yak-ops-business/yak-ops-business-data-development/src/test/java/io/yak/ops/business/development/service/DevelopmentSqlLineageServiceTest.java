@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -54,6 +55,7 @@ class DevelopmentSqlLineageServiceTest {
     when(columnParser.parse(sql)).thenReturn(new SqlColumnLineageParser.ParseResult(
         List.of(
             mapping(orders, "id", sales, "order_id", 1, 1),
+            mapping(orders, "id", sales, "order_id", 1, 1),
             mapping(users, "name", sales, "user_name", 2, 1)),
         1,
         2,
@@ -66,12 +68,18 @@ class DevelopmentSqlLineageServiceTest {
 
     ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
         ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
-    verify(lineageService, times(5)).registerRelation(relations.capture());
+    verify(lineageService, times(3)).registerRelation(relations.capture());
+    ArgumentCaptor<List<LineageService.RegisterRelationCommand>> columnRelations =
+        ArgumentCaptor.forClass(List.class);
+    verify(lineageService).registerRelationsBatch(columnRelations.capture(), anyInt());
+    List<LineageService.RegisterRelationCommand> allRelations =
+        new java.util.ArrayList<>(relations.getAllValues());
+    allRelations.addAll(columnRelations.getValue());
 
-    assertEquals(2, count(relations, LineageRelationType.READS_FROM));
-    assertEquals(1, count(relations, LineageRelationType.WRITES_TO));
-    assertEquals(2, count(relations, LineageRelationType.DERIVES_FROM));
-    assertTrue(relations.getAllValues().stream()
+    assertEquals(2, count(allRelations, LineageRelationType.READS_FROM));
+    assertEquals(1, count(allRelations, LineageRelationType.WRITES_TO));
+    assertEquals(2, count(allRelations, LineageRelationType.DERIVES_FROM));
+    assertTrue(allRelations.stream()
         .filter(value -> value.relationType() == LineageRelationType.DERIVES_FROM)
         .allMatch(value -> "COLUMN".equals(value.properties().path("lineageLevel").asText())));
   }
@@ -99,10 +107,16 @@ class DevelopmentSqlLineageServiceTest {
 
     ArgumentCaptor<LineageService.RegisterAssetCommand> assets =
         ArgumentCaptor.forClass(LineageService.RegisterAssetCommand.class);
-    verify(lineageService, times(5)).registerAsset(assets.capture());
+    verify(lineageService, times(3)).registerAsset(assets.capture());
+    ArgumentCaptor<List<LineageService.RegisterAssetCommand>> columnAssets =
+        ArgumentCaptor.forClass(List.class);
+    verify(lineageService).registerAssetsBatch(columnAssets.capture(), anyInt());
 
     Map<String, LineageService.RegisterAssetCommand> byKey = new LinkedHashMap<>();
     for (LineageService.RegisterAssetCommand command : assets.getAllValues()) {
+      byKey.put(command.assetKey(), command);
+    }
+    for (LineageService.RegisterAssetCommand command : columnAssets.getValue()) {
       byKey.put(command.assetKey(), command);
     }
 
@@ -151,16 +165,22 @@ class DevelopmentSqlLineageServiceTest {
 
     ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
         ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
-    verify(lineageService, times(4)).registerRelation(relations.capture());
+    verify(lineageService, times(2)).registerRelation(relations.capture());
+    ArgumentCaptor<List<LineageService.RegisterRelationCommand>> columnRelations =
+        ArgumentCaptor.forClass(List.class);
+    verify(lineageService).registerRelationsBatch(columnRelations.capture(), anyInt());
+    List<LineageService.RegisterRelationCommand> allRelations =
+        new java.util.ArrayList<>(relations.getAllValues());
+    allRelations.addAll(columnRelations.getValue());
 
-    assertEquals(1, count(relations, LineageRelationType.READS_FROM));
-    assertEquals(1, count(relations, LineageRelationType.WRITES_TO));
-    assertEquals(2, count(relations, LineageRelationType.DERIVES_FROM));
-    assertTrue(relations.getAllValues().stream()
+    assertEquals(1, count(allRelations, LineageRelationType.READS_FROM));
+    assertEquals(1, count(allRelations, LineageRelationType.WRITES_TO));
+    assertEquals(2, count(allRelations, LineageRelationType.DERIVES_FROM));
+    assertTrue(allRelations.stream()
         .filter(value -> value.relationType() == LineageRelationType.DERIVES_FROM)
         .anyMatch(value -> "id".equals(value.properties().path("sourceColumn").asText())
             && "order_id".equals(value.properties().path("targetColumn").asText())));
-    assertTrue(relations.getAllValues().stream()
+    assertTrue(allRelations.stream()
         .filter(value -> value.relationType() == LineageRelationType.DERIVES_FROM)
         .anyMatch(value -> "amount".equals(value.properties().path("sourceColumn").asText())
             && "order_amount".equals(value.properties().path("targetColumn").asText())));
@@ -222,7 +242,12 @@ class DevelopmentSqlLineageServiceTest {
   private static long count(
       ArgumentCaptor<LineageService.RegisterRelationCommand> relations,
       LineageRelationType type) {
-    return relations.getAllValues().stream()
+    return count(relations.getAllValues(), type);
+  }
+
+  private static long count(
+      List<LineageService.RegisterRelationCommand> relations, LineageRelationType type) {
+    return relations.stream()
         .filter(value -> value.relationType() == type)
         .count();
   }
@@ -289,6 +314,20 @@ class DevelopmentSqlLineageServiceTest {
           command.properties(),
           Instant.parse("2026-08-20T00:00:00Z"),
           Instant.parse("2026-08-20T00:00:00Z"));
+    });
+    when(lineageService.registerAssetsBatch(any(), anyInt())).thenAnswer(invocation -> {
+      List<LineageService.RegisterAssetCommand> commands = invocation.getArgument(0);
+      Map<String, LineageAsset> result = new LinkedHashMap<>();
+      for (LineageService.RegisterAssetCommand command : commands) {
+        long id = stableIds.computeIfAbsent(command.assetKey(), ignored -> ids.getAndIncrement());
+        result.put(command.assetKey(), new LineageAsset(
+            id, command.assetKey(), command.assetType(), command.name(), command.sourceType(),
+            command.sourceId(), command.parentAssetId(), command.dataSourceId(),
+            command.databaseName(), command.schemaName(), command.tableName(), command.columnName(),
+            command.properties(), Instant.parse("2026-08-20T00:00:00Z"),
+            Instant.parse("2026-08-20T00:00:00Z")));
+      }
+      return result;
     });
   }
 

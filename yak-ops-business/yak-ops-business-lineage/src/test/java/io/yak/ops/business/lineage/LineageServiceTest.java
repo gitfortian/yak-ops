@@ -70,6 +70,37 @@ class LineageServiceTest {
     assertEquals(1, service.searchAssets(null, LineageAssetType.DATASET, 1).size());
   }
 
+  @Test
+  void batchSizingMakesThousandColumnLineageWritesBounded() {
+    // 1,000 unique edges with two unique endpoints each: asset batch + identity read + edge batch.
+    assertEquals(25, 2 * JdbcLineageRepository.batchExecutionCount(2_000, 200)
+        + JdbcLineageRepository.batchExecutionCount(1_000, 200));
+    assertEquals(5, JdbcLineageRepository.batchExecutionCount(1_000, 256));
+    assertEquals(0, JdbcLineageRepository.batchExecutionCount(0, 200));
+  }
+
+  @Test
+  void batchApiDeduplicatesInputsAndSkipsEmptyCollections() {
+    InMemoryLineageRepository repository = new InMemoryLineageRepository();
+    LineageService service = new LineageService(repository);
+
+    Map<String, LineageAsset> assets = service.registerAssetsBatch(
+        List.of(asset("column:a", LineageAssetType.COLUMN),
+            asset("column:a", LineageAssetType.COLUMN),
+            asset("column:b", LineageAssetType.COLUMN)), 1);
+    service.registerRelationsBatch(List.of(
+        relation(assets.get("column:a").id(), assets.get("column:b").id(),
+            LineageRelationType.DERIVES_FROM),
+        relation(assets.get("column:a").id(), assets.get("column:b").id(),
+            LineageRelationType.DERIVES_FROM)), 7);
+
+    assertEquals(2, assets.size());
+    assertEquals(1, repository.relations.size());
+    assertTrue(service.registerAssetsBatch(List.of(), 10).isEmpty());
+    service.registerRelationsBatch(List.of(), 10);
+    assertEquals(1, repository.relations.size());
+  }
+
   private static Set<Long> ids(LineageGraph graph) {
     return graph.nodes().stream().map(LineageAsset::id).collect(Collectors.toSet());
   }
@@ -121,6 +152,18 @@ class LineageServiceTest {
           write.version(), write.observedAt(), write.properties(), now, now);
       relations.put(id, relation);
       return relation;
+    }
+
+    @Override
+    public Map<String, LineageAsset> upsertAssets(List<AssetWrite> writes, int batchSize) {
+      Map<String, LineageAsset> result = new LinkedHashMap<>();
+      for (AssetWrite write : writes) result.put(write.assetKey(), upsertAsset(write));
+      return result;
+    }
+
+    @Override
+    public void upsertRelations(List<RelationWrite> writes, int batchSize) {
+      for (RelationWrite write : writes) upsertRelation(write);
     }
 
     @Override

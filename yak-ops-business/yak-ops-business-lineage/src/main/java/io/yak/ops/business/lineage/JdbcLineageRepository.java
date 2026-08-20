@@ -12,8 +12,10 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import javax.sql.DataSource;
@@ -137,6 +139,69 @@ class JdbcLineageRepository implements LineageRepository {
   }
 
   @Override
+  public Map<String, LineageAsset> upsertAssets(List<AssetWrite> writes, int batchSize) {
+    if (writes == null || writes.isEmpty()) return Map.of();
+    Map<String, LineageAsset> result = new LinkedHashMap<>();
+    for (int start = 0; start < writes.size(); start += batchSize) {
+      List<AssetWrite> batch = writes.subList(start, Math.min(start + batchSize, writes.size()));
+      jdbcTemplate.batchUpdate(
+          """
+          INSERT INTO yak_metadata_asset
+            (asset_key, asset_type, name, source_type, source_id, parent_asset_id,
+             data_source_id, database_name, schema_name, table_name, column_name, properties,
+             create_time, update_time)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(6), NOW(6))
+          ON DUPLICATE KEY UPDATE
+            asset_type=VALUES(asset_type), name=VALUES(name), source_type=VALUES(source_type),
+            source_id=VALUES(source_id), parent_asset_id=VALUES(parent_asset_id),
+            data_source_id=VALUES(data_source_id), database_name=VALUES(database_name),
+            schema_name=VALUES(schema_name), table_name=VALUES(table_name),
+            column_name=VALUES(column_name), properties=VALUES(properties), update_time=NOW(6)
+          """,
+          batch,
+          batch.size(),
+          (statement, write) -> bindAsset(statement, write));
+      List<String> keys = batch.stream().map(AssetWrite::assetKey).toList();
+      String placeholders = String.join(",", Collections.nCopies(keys.size(), "?"));
+      for (LineageAsset asset : jdbcTemplate.query(
+          ASSET_COLUMNS + " WHERE asset_key IN (" + placeholders + ")", this::mapAsset,
+          keys.toArray())) {
+        result.put(asset.assetKey(), asset);
+      }
+    }
+    if (result.size() != writes.size()) {
+      throw new IllegalStateException("批量保存血缘资产后无法读取全部资产");
+    }
+    return result;
+  }
+
+  static int batchExecutionCount(int itemCount, int batchSize) {
+    if (itemCount <= 0) return 0;
+    if (batchSize < 1) throw new IllegalArgumentException("batchSize must be positive");
+    return (itemCount + batchSize - 1) / batchSize;
+  }
+
+  @Override
+  public void upsertRelations(List<RelationWrite> writes, int batchSize) {
+    if (writes == null || writes.isEmpty()) return;
+    for (int start = 0; start < writes.size(); start += batchSize) {
+      List<RelationWrite> batch = writes.subList(start, Math.min(start + batchSize, writes.size()));
+      jdbcTemplate.batchUpdate(
+          """
+          INSERT INTO yak_metadata_relation
+            (source_asset_id, target_asset_id, relation_type, source_type, source_id,
+             expression, confidence, version, observed_at, properties, create_time, update_time)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(6), NOW(6))
+          ON DUPLICATE KEY UPDATE expression=VALUES(expression), confidence=VALUES(confidence),
+            observed_at=VALUES(observed_at), properties=VALUES(properties), update_time=NOW(6)
+          """,
+          batch,
+          batch.size(),
+          (statement, write) -> bindRelation(statement, write));
+    }
+  }
+
+  @Override
   public int deleteRelationsByEvidence(String sourceType, String sourceId) {
     return jdbcTemplate.update(
         "DELETE FROM yak_metadata_relation WHERE source_type = ? AND source_id = ?",
@@ -219,6 +284,35 @@ class JdbcLineageRepository implements LineageRepository {
         RELATION_COLUMNS + " WHERE id = ? LIMIT 1", this::mapRelation, relationId)
         .stream().findFirst()
         .orElseThrow(() -> new IllegalStateException("保存血缘关系后无法读取关系"));
+  }
+
+  private void bindAsset(PreparedStatement statement, AssetWrite write) throws SQLException {
+    statement.setString(1, write.assetKey());
+    statement.setString(2, write.assetType().name());
+    statement.setString(3, write.name());
+    statement.setString(4, write.sourceType());
+    statement.setString(5, write.sourceId());
+    if (write.parentAssetId() == null) statement.setNull(6, java.sql.Types.BIGINT);
+    else statement.setLong(6, write.parentAssetId());
+    statement.setString(7, write.dataSourceId());
+    statement.setString(8, write.databaseName());
+    statement.setString(9, write.schemaName());
+    statement.setString(10, write.tableName());
+    statement.setString(11, write.columnName());
+    statement.setString(12, toJson(write.properties()));
+  }
+
+  private void bindRelation(PreparedStatement statement, RelationWrite write) throws SQLException {
+    statement.setLong(1, write.sourceAssetId());
+    statement.setLong(2, write.targetAssetId());
+    statement.setString(3, write.relationType().name());
+    statement.setString(4, write.sourceType());
+    statement.setString(5, write.sourceId());
+    statement.setString(6, write.expression());
+    statement.setBigDecimal(7, write.confidence());
+    statement.setString(8, write.version());
+    statement.setTimestamp(9, Timestamp.from(write.observedAt()));
+    statement.setString(10, toJson(write.properties()));
   }
 
   private LineageAsset mapAsset(ResultSet rs, int rowNum) throws SQLException {
