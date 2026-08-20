@@ -64,100 +64,72 @@ public class DevelopmentSqlLineageService {
     this.dataSourceCatalogService = dataSourceCatalogService;
   }
 
-  public void syncPublished(DevelopmentNode node, DevelopmentTaskRevision revision) {
-    if (node == null || revision == null || revision.definition() == null) return;
-    if (!"SQL".equalsIgnoreCase(revision.definition().taskType())) return;
-
-    String evidenceId = String.valueOf(node.id());
-    SqlContext sqlContext = sqlContext(revision.definition().configJson());
-    String dataSourceId = sqlContext.dataSourceId();
-    String sql = revision.definition().content();
-
+  /** Performs parsing and optional catalog lookups without opening a database transaction. */
+  public PreparedLineage prepare(DevelopmentNode node, DevelopmentTaskRevision revision) {
+    if (node == null || revision == null || revision.definition() == null
+        || !"SQL".equalsIgnoreCase(revision.definition().taskType())) {
+      return null;
+    }
+    SqlContext context = sqlContext(revision.definition().configJson());
     try {
-      SqlTableLineageParser.ParseResult tableParsed = tableParser.parse(sql);
-      SqlColumnLineageParser.ParseResult columnParsed = null;
-      SqlColumnLineageParser.SqlColumnLineageParseException columnFailure = null;
+      SqlTableLineageParser.ParseResult tables = tableParser.parse(revision.definition().content());
       try {
-        if (dataSourceCatalogService == null) {
-          columnParsed = columnParser.parse(sql);
-        } else {
-          columnParsed = columnParser.parse(sql, schemaProvider(dataSourceId));
-        }
-      } catch (SqlColumnLineageParser.SqlColumnLineageParseException exception) {
-        columnFailure = exception;
-        LOGGER.warn(
-            "Failed to parse SQL column lineage for development node {} revision {}: {}",
-            node.id(),
-            revision.revisionNo(),
-            exception.getMessage());
+        SqlColumnLineageParser.ParseResult columns = dataSourceCatalogService == null
+            ? columnParser.parse(revision.definition().content())
+            : columnParser.parse(revision.definition().content(), schemaProvider(context.dataSourceId()));
+        return new PreparedLineage(context, tables, columns, null, null);
+      } catch (SqlColumnLineageParser.SqlColumnLineageParseException failure) {
+        return new PreparedLineage(context, tables, null, null, failure);
       }
-
-      // Table and column lineage share one evidence scope. A new immutable revision replaces every
-      // generated relationship from the previous revision before current facts are written.
-      maintenanceService.clearRelationsByEvidence(EVIDENCE_SOURCE_TYPE, evidenceId);
-
-      LineageAsset task = registerTaskAsset(
-          node,
-          revision,
-          dataSourceId,
-          tableParsed,
-          columnParsed,
-          null,
-          columnFailure);
-      String evidenceSql = truncate(sql, MAX_EVIDENCE_SQL_LENGTH);
-      Instant observedAt = revision.createTime() == null ? Instant.now() : revision.createTime();
-      Map<String, LineageAsset> tableAssets = new LinkedHashMap<>();
-
-      for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
-        LineageAsset table = registerTableAsset(sqlContext, input, tableAssets);
-        lineageService.registerRelation(new LineageService.RegisterRelationCommand(
-            table.id(),
-            task.id(),
-            LineageRelationType.READS_FROM,
-            EVIDENCE_SOURCE_TYPE,
-            evidenceId,
-            evidenceSql,
-            BigDecimal.ONE,
-            Integer.toString(revision.revisionNo()),
-            observedAt,
-            tableRelationProperties(revision, "INPUT")));
-      }
-
-      for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
-        LineageAsset table = registerTableAsset(sqlContext, output, tableAssets);
-        lineageService.registerRelation(new LineageService.RegisterRelationCommand(
-            task.id(),
-            table.id(),
-            LineageRelationType.WRITES_TO,
-            EVIDENCE_SOURCE_TYPE,
-            evidenceId,
-            evidenceSql,
-            BigDecimal.ONE,
-            Integer.toString(revision.revisionNo()),
-            observedAt,
-            tableRelationProperties(revision, "OUTPUT")));
-      }
-
-      if (columnParsed != null) {
-        registerColumnLineage(
-            sqlContext,
-            task,
-            revision,
-            columnParsed,
-            evidenceId,
-            observedAt,
-            tableAssets);
-      }
-    } catch (SqlTableLineageParser.SqlLineageParseException exception) {
-      maintenanceService.clearRelationsByEvidence(EVIDENCE_SOURCE_TYPE, evidenceId);
-      registerTaskAsset(node, revision, dataSourceId, null, null, exception, null);
-      LOGGER.warn(
-          "Failed to parse SQL table lineage for development node {} revision {}: {}",
-          node.id(),
-          revision.revisionNo(),
-          exception.getMessage());
+    } catch (SqlTableLineageParser.SqlLineageParseException failure) {
+      return new PreparedLineage(context, null, null, failure, null);
     }
   }
+
+  /** Compatibility entry point; production outbox uses prepare then an independent write transaction. */
+  public void syncPublished(DevelopmentNode node, DevelopmentTaskRevision revision) {
+    PreparedLineage prepared = prepare(node, revision);
+    if (prepared != null) applyPrepared(node, revision, prepared);
+  }
+
+  /** Writes an already prepared snapshot. Caller supplies the atomic transaction. */
+  public void applyPrepared(DevelopmentNode node, DevelopmentTaskRevision revision,
+      PreparedLineage prepared) {
+    String evidenceId = String.valueOf(node.id());
+    String dataSourceId = prepared.context().dataSourceId();
+    maintenanceService.clearRelationsByEvidence(EVIDENCE_SOURCE_TYPE, evidenceId);
+    if (prepared.tableFailure() != null) {
+      registerTaskAsset(node, revision, dataSourceId, null, null, prepared.tableFailure(), null);
+      return;
+    }
+    SqlTableLineageParser.ParseResult tableParsed = prepared.tables();
+    SqlColumnLineageParser.ParseResult columnParsed = prepared.columns();
+    LineageAsset task = registerTaskAsset(node, revision, dataSourceId, tableParsed, columnParsed,
+        null, prepared.columnFailure());
+    String evidenceSql = truncate(revision.definition().content(), MAX_EVIDENCE_SQL_LENGTH);
+    Instant observedAt = revision.createTime() == null ? Instant.now() : revision.createTime();
+    Map<String, LineageAsset> tableAssets = new LinkedHashMap<>();
+    for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
+      LineageAsset table = registerTableAsset(prepared.context(), input, tableAssets);
+      lineageService.registerRelation(new LineageService.RegisterRelationCommand(table.id(), task.id(),
+          LineageRelationType.READS_FROM, EVIDENCE_SOURCE_TYPE, evidenceId, evidenceSql,
+          BigDecimal.ONE, Integer.toString(revision.revisionNo()), observedAt,
+          tableRelationProperties(revision, "INPUT")));
+    }
+    for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
+      LineageAsset table = registerTableAsset(prepared.context(), output, tableAssets);
+      lineageService.registerRelation(new LineageService.RegisterRelationCommand(task.id(), table.id(),
+          LineageRelationType.WRITES_TO, EVIDENCE_SOURCE_TYPE, evidenceId, evidenceSql,
+          BigDecimal.ONE, Integer.toString(revision.revisionNo()), observedAt,
+          tableRelationProperties(revision, "OUTPUT")));
+    }
+    if (columnParsed != null) registerColumnLineage(prepared.context(), task, revision, columnParsed,
+        evidenceId, observedAt, tableAssets);
+  }
+
+  public record PreparedLineage(SqlContext context, SqlTableLineageParser.ParseResult tables,
+      SqlColumnLineageParser.ParseResult columns, RuntimeException tableFailure,
+      RuntimeException columnFailure) {}
 
   private SqlColumnLineageParser.SchemaProvider schemaProvider(String dataSourceId) {
     DataSourceCatalogService catalogService = this.dataSourceCatalogService;
@@ -475,7 +447,7 @@ public class DevelopmentSqlLineageService {
     return value == null || value.isEmpty() ? null : value;
   }
 
-  private record SqlContext(
+  record SqlContext(
       String dataSourceId,
       String databaseName,
       String schemaName,
