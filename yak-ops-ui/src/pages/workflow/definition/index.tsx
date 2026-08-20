@@ -10,6 +10,10 @@ export default function WorkflowDefinitionFullscreenPage() {
     <div className="workflow-definition-fullscreen-shell h-screen overflow-hidden bg-[#f5f6f8]">
       <WorkflowDefinitionEditor />
       <style>{`
+        .workflow-definition-fullscreen-shell {
+          --workflow-inspector-width: 340px;
+        }
+
         .workflow-definition-fullscreen-shell > div:first-child {
           height: 100vh !important;
           min-height: 100vh !important;
@@ -28,6 +32,24 @@ export default function WorkflowDefinitionFullscreenPage() {
           background: rgba(255,255,255,.98) !important;
           padding-left: 18px !important;
           padding-right: 14px !important;
+        }
+
+        .workflow-definition-fullscreen-shell .workflow-editor-toolbar > div:first-child {
+          display: flex !important;
+          height: 100% !important;
+          align-items: center !important;
+        }
+
+        .workflow-definition-fullscreen-shell .workflow-editor-toolbar > div:first-child > div:first-child {
+          max-width: 460px !important;
+          font-size: 15px !important;
+          line-height: 22px !important;
+          font-weight: 600 !important;
+          color: #101828 !important;
+        }
+
+        .workflow-definition-fullscreen-shell .workflow-editor-toolbar > div:first-child > div:nth-child(2) {
+          display: none !important;
         }
 
         .workflow-definition-fullscreen-shell section > div[style],
@@ -53,16 +75,17 @@ export default function WorkflowDefinitionFullscreenPage() {
           right: 0 !important;
           bottom: 0 !important;
           left: auto !important;
-          width: 340px !important;
+          width: var(--workflow-inspector-width) !important;
           border: 0 !important;
           border-left: 1px solid #e8eaee !important;
           border-radius: 0 !important;
           box-shadow: none !important;
           background: #fff !important;
+          color: #344054 !important;
         }
 
         .workflow-definition-fullscreen-shell section > div:has(> aside) > .react-flow {
-          width: calc(100% - 340px) !important;
+          width: calc(100% - var(--workflow-inspector-width)) !important;
         }
 
         .workflow-definition-fullscreen-shell section > div:has(> aside) > aside > header {
@@ -77,11 +100,23 @@ export default function WorkflowDefinitionFullscreenPage() {
           padding: 14px 16px 8px !important;
         }
 
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside > header > div:first-child [class*="text-[14px]"] {
+          font-size: 15px !important;
+          font-weight: 600 !important;
+          color: #101828 !important;
+        }
+
         .workflow-definition-fullscreen-shell section > div:has(> aside) > aside > header nav {
           height: 38px !important;
           padding-left: 16px !important;
           padding-right: 16px !important;
           gap: 20px !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside > header nav button {
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          color: #344054 !important;
         }
 
         .workflow-definition-fullscreen-shell section > div:has(> aside) > aside .mx-4.border-t {
@@ -97,9 +132,57 @@ export default function WorkflowDefinitionFullscreenPage() {
           border-radius: 8px !important;
         }
 
+        /* Keep the inspector focused on labels and values instead of explanatory copy. */
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[rgba(22,24,35,.36)]"],
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[rgba(22,24,35,.38)]"] {
+          display: none !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside section > div[class*="mb-3"][class*="flex"] > div > div[class*="text-[rgba(22,24,35,.42)]"] {
+          display: none !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside details div[class*="mt-1"][class*="text-[9px]"][class*="text-[#98a2b3]"] {
+          display: none !important;
+        }
+
+        /* Raise inspector typography one level and use stronger neutral colors. */
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[12px]"] {
+          font-size: 13px !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[11px]"] {
+          font-size: 12px !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[10px]"] {
+          font-size: 11px !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[9px]"] {
+          font-size: 10px !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[#344054]"] {
+          color: #1d2939 !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[#667085]"] {
+          color: #475467 !important;
+        }
+
+        .workflow-definition-fullscreen-shell section > div:has(> aside) > aside [class*="text-[#98a2b3]"] {
+          color: #667085 !important;
+        }
+
+        /*
+         * Canvas controls use one stable anchor. The right inspector only changes
+         * the ReactFlow viewport width; opening/closing a node must not shift the
+         * top or bottom control groups.
+         */
         .workflow-definition-fullscreen-shell [class*="absolute left-3 top-1/2"] {
           top: 12px !important;
-          left: 50% !important;
+          left: calc((100% - var(--workflow-inspector-width)) / 2) !important;
           bottom: auto !important;
           transform: translateX(-50%) !important;
           flex-direction: row !important;
@@ -107,18 +190,11 @@ export default function WorkflowDefinitionFullscreenPage() {
           box-shadow: 0 2px 10px rgba(22,24,35,.06) !important;
         }
 
-        .workflow-definition-fullscreen-shell section > div:has(> aside) [class*="absolute left-3 top-1/2"] {
-          left: calc((100% - 340px) / 2) !important;
-        }
-
         .workflow-definition-fullscreen-shell [class*="absolute bottom-2 left-1/2"] {
           bottom: 14px !important;
+          left: calc((100% - var(--workflow-inspector-width)) / 2) !important;
           border-radius: 9px !important;
           box-shadow: 0 2px 10px rgba(22,24,35,.06) !important;
-        }
-
-        .workflow-definition-fullscreen-shell section > div:has(> aside) [class*="absolute bottom-2 left-1/2"] {
-          left: calc((100% - 340px) / 2) !important;
         }
 
         .workflow-definition-fullscreen-shell [class*="absolute left-3 top-1/2"] > div[class*="h-px"] {
@@ -128,17 +204,8 @@ export default function WorkflowDefinitionFullscreenPage() {
         }
 
         @media (max-width: 1180px) {
-          .workflow-definition-fullscreen-shell section > div:has(> aside) > aside {
-            width: 320px !important;
-          }
-
-          .workflow-definition-fullscreen-shell section > div:has(> aside) > .react-flow {
-            width: calc(100% - 320px) !important;
-          }
-
-          .workflow-definition-fullscreen-shell section > div:has(> aside) [class*="absolute left-3 top-1/2"],
-          .workflow-definition-fullscreen-shell section > div:has(> aside) [class*="absolute bottom-2 left-1/2"] {
-            left: calc((100% - 320px) / 2) !important;
+          .workflow-definition-fullscreen-shell {
+            --workflow-inspector-width: 320px;
           }
         }
       `}</style>
