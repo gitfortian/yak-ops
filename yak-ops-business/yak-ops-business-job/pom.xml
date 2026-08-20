@@ -27,6 +27,10 @@
         </dependency>
         <dependency>
             <groupId>io.yak.ops</groupId>
+            <artifactId>yak-ops-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.yak.ops</groupId>
             <artifactId>yak-ops-plugin-datasource-api</artifactId>
         </dependency>
         <dependency>

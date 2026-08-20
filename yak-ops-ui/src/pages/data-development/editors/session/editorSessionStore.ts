@@ -17,6 +17,7 @@ const TASK_TYPES = new Set<DevelopmentTaskType>([
   'SHELL',
   'HTTP',
   'PYTHON',
+  'JAVA',
 ]);
 
 interface PersistedEditorSessions {

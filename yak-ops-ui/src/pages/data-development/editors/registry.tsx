@@ -1,8 +1,10 @@
 import { Braces, Code2, DatabaseZap, Network, TerminalSquare } from 'lucide-react';
 
+import JavaIcon from '../icon/JavaIcon';
 import PythonIcon from '../icon/PythonIcon';
 
 import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
+import { JavaEditor, JavaRunConfig, JavaRunResult } from './java/JavaEditor';
 import SqlLineagePanel from '../components/workbench/SqlLineagePanel';
 import { PythonEditor, PythonRunConfig, PythonRunResult } from './python/PythonEditor';
 import { ShellEditor, ShellRunConfig, ShellRunResult } from './shell/ShellEditor';
@@ -61,7 +63,11 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
     label: 'Shell',
     icon: TerminalSquare,
     iconClassName: 'text-[#6172f3]',
-    capabilities: commonCapabilities,
+    capabilities: {
+      ...commonCapabilities,
+      run: true,
+      publish: true,
+    },
     Editor: ShellEditor,
     panels: {
       'run-config': ShellRunConfig,
@@ -83,6 +89,22 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
       'run-config': PythonRunConfig,
     },
     RunResult: PythonRunResult,
+  },
+  JAVA: {
+    type: 'JAVA',
+    label: 'Java',
+    icon: JavaIcon,
+    iconClassName: '',
+    capabilities: {
+      ...commonCapabilities,
+      run: true,
+      publish: true,
+    },
+    Editor: JavaEditor,
+    panels: {
+      'run-config': JavaRunConfig,
+    },
+    RunResult: JavaRunResult,
   },
 };
 
@@ -113,6 +135,13 @@ export const getEditorAppearance = (type: DevelopmentNodeType) => {
   }
   if (type === 'HTTP') {
     return { label: 'HTTP', icon: Braces, iconClassName: 'text-[#2e90fa]' };
+  }
+  if (type === 'JAVA') {
+    return {
+      label: 'Java',
+      icon: JavaIcon,
+      iconClassName: '',
+    };
   }
   if (type === 'PYTHON') {
     return { label: 'Python', icon: PythonIcon, iconClassName: '' };

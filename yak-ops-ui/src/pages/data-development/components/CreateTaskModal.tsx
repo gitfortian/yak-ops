@@ -44,6 +44,8 @@ export default function CreateTaskModal({
     () => [
       { label: 'SQL', value: 'SQL' },
       { label: 'Shell', value: 'SHELL' },
+      { label: 'Python', value: 'PYTHON' },
+      { label: 'Java', value: 'JAVA' },
       { label: '数据集', value: 'DATASET' },
       { label: '数据服务', value: 'DATA_SERVICE' },
     ],

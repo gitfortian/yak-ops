@@ -1,11 +1,15 @@
 package io.yak.ops.plugin.task.python;
 
+import static io.yak.ops.plugin.task.api.ScriptTaskSupport.parseResourceId;
+import static io.yak.ops.plugin.task.api.ScriptTaskSupport.summarizeIssues;
+
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutor;
 import io.yak.ops.plugin.task.api.TaskPlugin;
 import io.yak.ops.plugin.task.api.TaskPluginDescriptor;
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import io.yak.ops.plugin.task.api.TaskValidationResult;
+import io.yak.ops.spi.resource.ResourceResolver;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,11 +62,24 @@ public final class PythonTaskPlugin implements TaskPlugin {
               "Python plugin currently supports schemaVersion=1"));
     }
     if (definition.content() == null || definition.content().isBlank()) {
+      // Stage 1: allow empty content when resourceId is present in configJson
+      // (resource reference mode — execution path is Stage 2)
+      boolean hasResource = parseResourceId(definition.configJson()) != null;
+      if (!hasResource) {
+        issues.add(
+            new TaskValidationIssue(
+                "PYTHON_CONTENT_OR_RESOURCE_REQUIRED",
+                "content",
+                "Python task must have either inline content or a referenced resource (resourceId in configJson)"));
+      }
+    }
+    if (definition.content() != null && !definition.content().isBlank()
+        && parseResourceId(definition.configJson()) != null) {
       issues.add(
           new TaskValidationIssue(
-              "PYTHON_CONTENT_REQUIRED",
+              "PYTHON_CONTENT_RESOURCE_CONFLICT",
               "content",
-              "Python script content must not be blank"));
+              "Python task cannot have both inline content and a referenced resource"));
     }
 
     try {
@@ -84,16 +101,16 @@ public final class PythonTaskPlugin implements TaskPlugin {
       TaskExecutionContext context) {
     TaskValidationResult validation = validate(definition);
     if (!validation.valid()) {
-      String summary =
-          validation.issues().stream()
-              .map(TaskValidationIssue::message)
-              .limit(3)
-              .reduce((left, right) -> left + "; " + right)
-              .orElse("Python task validation failed");
+      String summary = summarizeIssues(validation, "Python task validation failed");
       throw new IllegalArgumentException(summary);
     }
     Map<String, String> globalEnv = context.globalEnvVars();
     PythonTaskConfig config = PythonTaskConfig.parse(definition.configJson(), globalEnv);
-    return new PythonTaskExecutor(definition, config, globalEnv);
+    ResourceResolver resourceResolver = null;
+    boolean hasContent = definition.content() != null && !definition.content().isBlank();
+    if (!hasContent && config.resourceId() > 0) {
+      resourceResolver = context.requireCapability(ResourceResolver.class);
+    }
+    return new PythonTaskExecutor(definition, config, globalEnv, resourceResolver);
   }
 }

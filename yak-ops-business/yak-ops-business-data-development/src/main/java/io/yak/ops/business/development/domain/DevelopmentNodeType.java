@@ -9,6 +9,7 @@ public enum DevelopmentNodeType {
   SHELL(DevelopmentNodeCategory.PROCESSING),
   HTTP(DevelopmentNodeCategory.PROCESSING),
   PYTHON(DevelopmentNodeCategory.PROCESSING),
+  JAVA(DevelopmentNodeCategory.PROCESSING),
   DATASET(DevelopmentNodeCategory.OUTPUT),
   DATA_SERVICE(DevelopmentNodeCategory.OUTPUT);
 
@@ -38,7 +39,7 @@ public enum DevelopmentNodeType {
    */
   public boolean supportsTaskLifecycle() {
     return switch (this) {
-      case SQL, SHELL, HTTP, PYTHON -> true;
+      case SQL, SHELL, HTTP, PYTHON, JAVA -> true;
       case DATASET, DATA_SERVICE -> false;
     };
   }

@@ -16,11 +16,12 @@ export const NODE_CATEGORY_BY_TYPE = {
   SHELL: 'PROCESSING',
   HTTP: 'PROCESSING',
   PYTHON: 'PROCESSING',
+  JAVA: 'PROCESSING',
   DATASET: 'OUTPUT',
   DATA_SERVICE: 'OUTPUT',
 } as const satisfies Record<NodeType, NodeCategory>;
 
-const TASK_NODE_TYPES = new Set<NodeType>(['SQL', 'SHELL', 'HTTP', 'PYTHON']);
+const TASK_NODE_TYPES = new Set<NodeType>(['SQL', 'SHELL', 'HTTP', 'PYTHON', 'JAVA']);
 
 export const getNodeCategory = (type: NodeType): NodeCategory => NODE_CATEGORY_BY_TYPE[type];
 

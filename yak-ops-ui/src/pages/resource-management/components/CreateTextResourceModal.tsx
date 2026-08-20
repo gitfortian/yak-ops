@@ -16,6 +16,7 @@ const CONTENT_TYPES = [
   { label: 'JSON', value: 'application/json;charset=UTF-8' },
   { label: 'YAML', value: 'application/yaml;charset=UTF-8' },
   { label: 'SQL', value: 'application/sql;charset=UTF-8' },
+  { label: 'Python', value: 'text/x-python;charset=UTF-8' },
   { label: 'Shell', value: 'text/x-shellscript;charset=UTF-8' },
 ];
 

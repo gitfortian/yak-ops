@@ -16,7 +16,9 @@ record PythonTaskConfig(
     List<String> scriptArgs,
     Map<String, String> envVars,
     int timeoutSeconds,
-    String workingDirectory) {
+    String workingDirectory,
+    long resourceId,
+    int resourceVersion) {
 
   static final String PYTHON_HOME_ENV = "PYTHON_HOME";
   static final int DEFAULT_TIMEOUT_SECONDS = 60;
@@ -85,8 +87,11 @@ record PythonTaskConfig(
       int timeoutSeconds =
           integer(root, "timeoutSeconds", DEFAULT_TIMEOUT_SECONDS, 1, MAX_TIMEOUT_SECONDS);
       String workingDirectory = textOrNull(root, "workingDirectory");
+      long resourceId = root.path("resourceId").asLong(0);
+      int resourceVersion = integer(root, "resourceVersion", 0, 0, Integer.MAX_VALUE);
       return new PythonTaskConfig(
-          pythonExecutable, scriptArgs, envVars, timeoutSeconds, workingDirectory);
+          pythonExecutable, scriptArgs, envVars, timeoutSeconds, workingDirectory,
+          resourceId, resourceVersion);
     } catch (IllegalArgumentException exception) {
       throw exception;
     } catch (Exception exception) {
