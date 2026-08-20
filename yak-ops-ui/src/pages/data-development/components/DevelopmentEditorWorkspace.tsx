@@ -1,6 +1,6 @@
 import { Button } from 'antd';
 import { Boxes, RefreshCw } from 'lucide-react';
-import { Component, type ReactNode, useMemo } from 'react';
+import { Component, type ReactNode, useEffect, useMemo, useState } from 'react';
 
 import { isDevelopmentTaskNode } from '../node-model';
 import type {
@@ -77,9 +77,21 @@ export default function DevelopmentEditorWorkspace({
   onNodeFocus,
   onNodesChanged,
 }: DevelopmentEditorWorkspaceProps) {
+  const [focusedNodeId, setFocusedNodeId] = useState<DevelopmentId | undefined>(selectedNodeId);
+
+  useEffect(() => {
+    if (!selectedNodeId || !nodes.some((node) => node.id === selectedNodeId)) return;
+    setFocusedNodeId(selectedNodeId);
+  }, [nodes, selectedNodeId]);
+
+  // Directory selection only changes the tree context. Keep the last focused
+  // development node so the workbench (and its open tabs) stays mounted.
+  const effectiveNodeId = selectedNodeId && nodes.some((node) => node.id === selectedNodeId)
+    ? selectedNodeId
+    : focusedNodeId;
   const selectedResource = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId),
-    [nodes, selectedNodeId],
+    () => nodes.find((node) => node.id === effectiveNodeId),
+    [effectiveNodeId, nodes],
   );
   const workbenchNodes = useMemo(
     () => nodes.filter((node) =>
@@ -88,6 +100,11 @@ export default function DevelopmentEditorWorkspace({
       || node.type === 'DATASET'),
     [nodes],
   );
+
+  const handleNodeFocus = (nodeId?: DevelopmentId) => {
+    setFocusedNodeId(nodeId);
+    onNodeFocus(nodeId);
+  };
 
   if (!selectedResource) {
     return (
@@ -116,7 +133,7 @@ export default function DevelopmentEditorWorkspace({
           nodes={workbenchNodes}
           directories={directories}
           selectedNodeId={selectedResource.id}
-          onNodeFocus={onNodeFocus}
+          onNodeFocus={handleNodeFocus}
           onNodesChanged={onNodesChanged}
         />
       </ResourceEditorBoundary>
