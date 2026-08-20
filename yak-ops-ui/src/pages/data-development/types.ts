@@ -114,6 +114,11 @@ export interface DevelopmentSqlRunOutput {
   dataSourceId?: string;
 }
 
+export interface DevelopmentSqlLineagePreviewRequest extends DevelopmentTaskDefinition {
+  databaseName?: string;
+  schemaName?: string;
+}
+
 export type DevelopmentSqlLineagePreviewStatus =
   | 'SUCCESS'
   | 'PARTIAL'
