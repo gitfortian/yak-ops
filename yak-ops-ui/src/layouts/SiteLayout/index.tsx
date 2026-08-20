@@ -43,6 +43,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MessageList, { MESSAGE_COUNT_CHANGED_EVENT } from "@/pages/system/messages/MessageList";
 import { getUnreadMessageCount } from "@/services/security/messages";
+import { recordRecentVisit } from "@/utils/recent-visits";
 
 const HEADER_HEIGHT = 48;
 const SIDEBAR_WIDTH = 200;
@@ -466,6 +467,19 @@ function SiteLayoutContent() {
   const routeMetadata = getRouteMetadata(location.pathname);
 
   const pageTitle = routeMetadata?.title ?? "Yak Ops";
+
+  useEffect(() => {
+    if (!routeMetadata || routeMetadata.id === "home") return;
+    recordRecentVisit({
+      path: `${location.pathname}${location.search}`,
+      title: routeMetadata.title,
+    });
+  }, [
+    location.pathname,
+    location.search,
+    routeMetadata?.id,
+    routeMetadata?.title,
+  ]);
 
   const userInitial = useMemo(() => {
     return currentUser?.name?.trim().slice(0, 1).toUpperCase() || "Y";

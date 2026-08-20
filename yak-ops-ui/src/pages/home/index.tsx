@@ -1,3 +1,4 @@
+import { history } from '@umijs/max';
 import {
   ArrowRightLeft,
   BarChart3,
@@ -7,9 +8,12 @@ import {
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { fetchDataSourceSummary } from '@/pages/data-source/service';
 import DataCenter from './DataCenter';
+import HomeWorkbench from './HomeWorkbench';
 import ScheduleCenter from './ScheduleCenter';
+import { homeDataCenterApi } from './service';
 
 /* =========================================================
  * Types
@@ -253,12 +257,19 @@ interface ProfileStatProps {
   label: string;
   value: number;
   arrow?: boolean;
+  onClick?: () => void;
 }
 
-function ProfileStat({ label, value, arrow = false }: ProfileStatProps) {
+function ProfileStat({
+  label,
+  value,
+  arrow = false,
+  onClick,
+}: ProfileStatProps) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="
         flex items-center border-0 bg-transparent p-0 text-sm leading-[22px]
         text-[#747983] transition-colors duration-200 hover:text-[#292c35]
@@ -321,31 +332,49 @@ function HomeSecondaryPanels() {
  * ========================================================= */
 
 export default function CreatorWorkbenchPage() {
-  const handleAction = (key: string) => {
-    console.log('creator action:', key);
+  const [headerStats, setHeaderStats] = useState({
+    dataSourceCount: 0,
+    runningCount: 0,
+    exceptionCount: 0,
+  });
 
-    switch (key) {
-      case 'data-source':
-        // TODO 数据源管理
-        break;
-      case 'offline-sync':
-        // TODO 离线同步
-        break;
-      case 'development':
-        // TODO 数据开发
-        break;
-      case 'workflow':
-        // TODO 工作流
-        break;
-      case 'quality':
-        // TODO 数据质量
-        break;
-      case 'application':
-        // TODO 数据应用
-        break;
-      default:
-        break;
-    }
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      fetchDataSourceSummary(),
+      homeDataCenterApi.overview('7d'),
+    ]).then(([dataSourceResult, overviewResult]) => {
+      if (!active) return;
+      setHeaderStats({
+        dataSourceCount:
+          dataSourceResult.status === 'fulfilled'
+            ? dataSourceResult.value.data?.total || 0
+            : 0,
+        runningCount:
+          overviewResult.status === 'fulfilled'
+            ? overviewResult.value.data?.metrics?.runningCount || 0
+            : 0,
+        exceptionCount:
+          overviewResult.status === 'fulfilled'
+            ? overviewResult.value.data?.metrics?.failedCount || 0
+            : 0,
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleAction = (key: string) => {
+    const routes: Record<string, string> = {
+      'data-source': '/data-source',
+      'offline-sync': '/sync/batch-link-up',
+      development: '/data-development',
+      workflow: '/workflow/definitions',
+      quality: '/data-quality/table-config',
+      application: '/dashboard',
+    };
+    if (routes[key]) history.push(routes[key]);
   };
 
   return (
@@ -414,9 +443,23 @@ export default function CreatorWorkbenchPage() {
               </div>
 
               <div className="mt-2.5 flex items-center gap-[27px]">
-                <ProfileStat label="数据源" value={0} arrow />
-                <ProfileStat label="运行中" value={0} arrow />
-                <ProfileStat label="今日异常" value={0} />
+                <ProfileStat
+                  label="数据源"
+                  value={headerStats.dataSourceCount}
+                  arrow
+                  onClick={() => history.push('/data-source')}
+                />
+                <ProfileStat
+                  label="运行中"
+                  value={headerStats.runningCount}
+                  arrow
+                  onClick={() => history.push('/data-development/executions')}
+                />
+                <ProfileStat
+                  label="近7日异常"
+                  value={headerStats.exceptionCount}
+                  onClick={() => history.push('/data-development/executions')}
+                />
               </div>
             </div>
           </div>
@@ -459,6 +502,7 @@ export default function CreatorWorkbenchPage() {
           </div>
 
           <HomeSecondaryPanels />
+          <HomeWorkbench />
         </main>
       </div>
     </div>
