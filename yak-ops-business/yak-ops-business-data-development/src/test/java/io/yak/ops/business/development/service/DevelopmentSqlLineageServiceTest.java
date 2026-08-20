@@ -2,6 +2,7 @@ package io.yak.ops.business.development.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -20,7 +21,9 @@ import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.LineageService;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,31 +31,185 @@ import org.mockito.ArgumentCaptor;
 class DevelopmentSqlLineageServiceTest {
 
   @Test
-  void replacesGeneratedRelationsWithPublishedSqlLineage() {
+  void replacesGeneratedRelationsWithTableAndColumnLineage() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
-    SqlTableLineageParser parser = mock(SqlTableLineageParser.class);
+    SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
+    SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
-    DevelopmentSqlLineageService service =
-        new DevelopmentSqlLineageService(lineageService, maintenanceService, parser, objectMapper);
+    stubAssetRegistration(lineageService);
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
+        lineageService, maintenanceService, tableParser, columnParser, objectMapper);
 
     String sql =
-        "INSERT INTO dws.sales SELECT o.id FROM ods.orders o JOIN dim.users u ON u.id=o.user_id";
-    when(parser.parse(sql)).thenReturn(new SqlTableLineageParser.ParseResult(
+        "INSERT INTO dws.sales (order_id, user_name) "
+            + "SELECT o.id, u.name FROM ods.orders o JOIN dim.users u ON u.id=o.user_id";
+    SqlTableLineageParser.TableRef orders = table("ods.orders", "ods", "orders");
+    SqlTableLineageParser.TableRef users = table("dim.users", "dim", "users");
+    SqlTableLineageParser.TableRef sales = table("dws.sales", "dws", "sales");
+    when(tableParser.parse(sql)).thenReturn(new SqlTableLineageParser.ParseResult(
+        List.of(users, orders), List.of(sales), 1));
+    when(columnParser.parse(sql)).thenReturn(new SqlColumnLineageParser.ParseResult(
         List.of(
-            new SqlTableLineageParser.TableRef(
-                "dim.users", "dim.users", null, "dim", "users"),
-            new SqlTableLineageParser.TableRef(
-                "ods.orders", "ods.orders", null, "ods", "orders")),
-        List.of(new SqlTableLineageParser.TableRef(
-            "dws.sales", "dws.sales", null, "dws", "sales")),
-        1));
+            mapping(orders, "id", sales, "order_id", 1, 1),
+            mapping(users, "name", sales, "user_name", 2, 1)),
+        1,
+        2,
+        0));
 
+    service.syncPublished(node(), revision(sql));
+
+    verify(maintenanceService).clearRelationsByEvidence(
+        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42");
+
+    ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
+        ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
+    verify(lineageService, times(5)).registerRelation(relations.capture());
+
+    assertEquals(2, count(relations, LineageRelationType.READS_FROM));
+    assertEquals(1, count(relations, LineageRelationType.WRITES_TO));
+    assertEquals(2, count(relations, LineageRelationType.DERIVES_FROM));
+    assertTrue(relations.getAllValues().stream()
+        .filter(value -> value.relationType() == LineageRelationType.DERIVES_FROM)
+        .allMatch(value -> "COLUMN".equals(value.properties().path("lineageLevel").asText())));
+  }
+
+  @Test
+  void columnAssetsAreParentedByStableTableAssets() {
+    LineageService lineageService = mock(LineageService.class);
+    LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
+    SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
+    ObjectMapper objectMapper = new ObjectMapper();
+    stubAssetRegistration(lineageService);
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
+        lineageService, maintenanceService, tableParser, columnParser, objectMapper);
+
+    String sql = "INSERT INTO dws.sales (order_id) SELECT o.id FROM ods.orders o";
+    SqlTableLineageParser.TableRef orders = table("ods.orders", "ods", "orders");
+    SqlTableLineageParser.TableRef sales = table("dws.sales", "dws", "sales");
+    when(tableParser.parse(sql)).thenReturn(new SqlTableLineageParser.ParseResult(
+        List.of(orders), List.of(sales), 1));
+    when(columnParser.parse(sql)).thenReturn(new SqlColumnLineageParser.ParseResult(
+        List.of(mapping(orders, "id", sales, "order_id", 1, 1)), 1, 1, 0));
+
+    service.syncPublished(node(), revision(sql));
+
+    ArgumentCaptor<LineageService.RegisterAssetCommand> assets =
+        ArgumentCaptor.forClass(LineageService.RegisterAssetCommand.class);
+    verify(lineageService, times(5)).registerAsset(assets.capture());
+
+    Map<String, LineageService.RegisterAssetCommand> byKey = new LinkedHashMap<>();
+    for (LineageService.RegisterAssetCommand command : assets.getAllValues()) {
+      byKey.put(command.assetKey(), command);
+    }
+
+    LineageService.RegisterAssetCommand sourceColumn = byKey.get("column:12:ods.orders.id");
+    LineageService.RegisterAssetCommand targetColumn = byKey.get("column:12:dws.sales.order_id");
+    assertNotNull(sourceColumn);
+    assertNotNull(targetColumn);
+    assertEquals(LineageAssetType.COLUMN, sourceColumn.assetType());
+    assertEquals(LineageAssetType.COLUMN, targetColumn.assetType());
+    assertNotNull(sourceColumn.parentAssetId());
+    assertNotNull(targetColumn.parentAssetId());
+  }
+
+  @Test
+  void columnParserFailureKeepsCurrentTableLineage() {
+    LineageService lineageService = mock(LineageService.class);
+    LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
+    SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
+    ObjectMapper objectMapper = new ObjectMapper();
+    stubAssetRegistration(lineageService);
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
+        lineageService, maintenanceService, tableParser, columnParser, objectMapper);
+
+    String sql = "INSERT INTO dws.sales (id) SELECT o.id FROM ods.orders o";
+    SqlTableLineageParser.TableRef orders = table("ods.orders", "ods", "orders");
+    SqlTableLineageParser.TableRef sales = table("dws.sales", "dws", "sales");
+    when(tableParser.parse(sql)).thenReturn(new SqlTableLineageParser.ParseResult(
+        List.of(orders), List.of(sales), 1));
+    when(columnParser.parse(sql)).thenThrow(
+        new SqlColumnLineageParser.SqlColumnLineageParseException(
+            "column parse failed", new RuntimeException("column parse failed")));
+
+    assertDoesNotThrow(() -> service.syncPublished(node(), revision(sql)));
+
+    ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
+        ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
+    verify(lineageService, times(2)).registerRelation(relations.capture());
+    assertEquals(1, count(relations, LineageRelationType.READS_FROM));
+    assertEquals(1, count(relations, LineageRelationType.WRITES_TO));
+    assertEquals(0, count(relations, LineageRelationType.DERIVES_FROM));
+  }
+
+  @Test
+  void tableParserFailureClearsStaleRelationsAndSkipsColumnParsing() {
+    LineageService lineageService = mock(LineageService.class);
+    LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
+    SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
+    ObjectMapper objectMapper = new ObjectMapper();
+    stubAssetRegistration(lineageService);
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
+        lineageService, maintenanceService, tableParser, columnParser, objectMapper);
+
+    String sql = "SELECT FROM";
+    when(tableParser.parse(sql)).thenThrow(new SqlTableLineageParser.SqlLineageParseException(
+        "table parse failed", new RuntimeException("table parse failed")));
+
+    assertDoesNotThrow(() -> service.syncPublished(node(), revision(sql)));
+
+    verify(maintenanceService).clearRelationsByEvidence(
+        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42");
+    verify(columnParser, never()).parse(any());
+    verify(lineageService, never()).registerRelation(any());
+  }
+
+  private static long count(
+      ArgumentCaptor<LineageService.RegisterRelationCommand> relations,
+      LineageRelationType type) {
+    return relations.getAllValues().stream()
+        .filter(value -> value.relationType() == type)
+        .count();
+  }
+
+  private static SqlColumnLineageParser.ColumnMapping mapping(
+      SqlTableLineageParser.TableRef sourceTable,
+      String sourceColumn,
+      SqlTableLineageParser.TableRef targetTable,
+      String targetColumn,
+      int outputOrdinal,
+      int sourceOrdinal) {
+    return new SqlColumnLineageParser.ColumnMapping(
+        sourceTable,
+        sourceColumn,
+        targetTable,
+        targetColumn,
+        SqlColumnLineageParser.MappingKind.IDENTITY,
+        sourceTable.tableName() + "." + sourceColumn,
+        1,
+        outputOrdinal,
+        sourceOrdinal);
+  }
+
+  private static SqlTableLineageParser.TableRef table(
+      String qualifiedName,
+      String schema,
+      String table) {
+    return new SqlTableLineageParser.TableRef(
+        qualifiedName, qualifiedName, null, schema, table);
+  }
+
+  private static void stubAssetRegistration(LineageService lineageService) {
     AtomicLong ids = new AtomicLong(1);
+    Map<String, Long> stableIds = new LinkedHashMap<>();
     when(lineageService.registerAsset(any())).thenAnswer(invocation -> {
       LineageService.RegisterAssetCommand command = invocation.getArgument(0);
+      long id = stableIds.computeIfAbsent(command.assetKey(), ignored -> ids.getAndIncrement());
       return new LineageAsset(
-          ids.getAndIncrement(),
+          id,
           command.assetKey(),
           command.assetType(),
           command.name(),
@@ -68,66 +225,6 @@ class DevelopmentSqlLineageServiceTest {
           Instant.parse("2026-08-20T00:00:00Z"),
           Instant.parse("2026-08-20T00:00:00Z"));
     });
-
-    service.syncPublished(node(), revision(sql));
-
-    verify(maintenanceService).clearRelationsByEvidence(
-        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42");
-
-    ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
-        ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
-    verify(lineageService, times(3)).registerRelation(relations.capture());
-
-    long reads = relations.getAllValues().stream()
-        .filter(value -> value.relationType() == LineageRelationType.READS_FROM)
-        .count();
-    long writes = relations.getAllValues().stream()
-        .filter(value -> value.relationType() == LineageRelationType.WRITES_TO)
-        .count();
-    assertEquals(2, reads);
-    assertEquals(1, writes);
-    assertTrue(relations.getAllValues().stream()
-        .allMatch(value -> value.sourceType().equals(
-            DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE)));
-  }
-
-  @Test
-  void parserFailureClearsStaleRelationsWithoutBreakingTaskPublish() {
-    LineageService lineageService = mock(LineageService.class);
-    LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
-    SqlTableLineageParser parser = mock(SqlTableLineageParser.class);
-    ObjectMapper objectMapper = new ObjectMapper();
-    DevelopmentSqlLineageService service =
-        new DevelopmentSqlLineageService(lineageService, maintenanceService, parser, objectMapper);
-
-    String sql = "SELECT FROM";
-    when(parser.parse(sql)).thenThrow(new SqlTableLineageParser.SqlLineageParseException(
-        "parse failed", new RuntimeException("parse failed")));
-    when(lineageService.registerAsset(any())).thenAnswer(invocation -> {
-      LineageService.RegisterAssetCommand command = invocation.getArgument(0);
-      return new LineageAsset(
-          1L,
-          command.assetKey(),
-          LineageAssetType.SQL_TASK,
-          command.name(),
-          command.sourceType(),
-          command.sourceId(),
-          null,
-          command.dataSourceId(),
-          null,
-          null,
-          null,
-          null,
-          command.properties(),
-          Instant.parse("2026-08-20T00:00:00Z"),
-          Instant.parse("2026-08-20T00:00:00Z"));
-    });
-
-    assertDoesNotThrow(() -> service.syncPublished(node(), revision(sql)));
-
-    verify(maintenanceService).clearRelationsByEvidence(
-        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42");
-    verify(lineageService, never()).registerRelation(any());
   }
 
   private static DevelopmentNode node() {
