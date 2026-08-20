@@ -1,7 +1,7 @@
 import { history } from '@umijs/max';
 import { Button, Drawer, Empty, Segmented, Tooltip } from 'antd';
-import { ArrowUpRight, Focus, GitBranch, LoaderCircle, RefreshCw } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { ArrowUpRight, Expand, Focus, GitBranch, LoaderCircle, RefreshCw, Shrink } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, { Background, Controls, type Edge, MarkerType, type Node, type ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -60,12 +60,22 @@ export const layoutColumnTables = (mappings: DevelopmentSqlLineageColumnMapping[
 
 export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRefresh }: Props) {
   const [mode, setMode] = useState<Mode>('table');
+  const [fullscreen, setFullscreen] = useState(false);
   const [hoveredAsset, setHoveredAsset] = useState<string>();
   const [hoveredField, setHoveredField] = useState<{ table: string; column: string }>();
   const [selection, setSelection] = useState<FieldSelection>();
   const [flow, setFlow] = useState<ReactFlowInstance>();
   const graph: LineageGraph | undefined = preview?.graph;
   const view = useMemo(() => (graph ? buildLineageView(graph, 'BOTH', visibleTypes) : undefined), [graph]);
+
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    const exitFullscreen = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreen(false);
+    };
+    document.addEventListener('keydown', exitFullscreen);
+    return () => document.removeEventListener('keydown', exitFullscreen);
+  }, [fullscreen]);
 
   const relatedAssets = useMemo(() => {
     if (!hoveredAsset || !view) return new Set<string>();
@@ -90,7 +100,7 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
         id: asset.id,
         type: 'lineage',
         position,
-        draggable: false,
+        draggable: true,
         data: { asset, root: asset.id === graph?.root.id },
         style: hoveredAsset && !relatedAssets.has(asset.id) ? { opacity: 0.28 } : undefined,
       })) || [],
@@ -165,7 +175,7 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
         id: nodeIdFor(role, table),
         type: 'columnLineage',
         position,
-        draggable: false,
+        draggable: true,
         data: {
           tableName: table,
           role,
@@ -265,7 +275,11 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
 
   const isColumn = mode === 'column';
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div
+      className={`flex min-h-0 flex-col bg-white ${
+        fullscreen ? 'fixed inset-0 z-[1000] h-screen border border-[#e4e7ec]' : 'h-full'
+      }`}
+    >
       <div className="flex h-11 shrink-0 items-center gap-3 border-b border-[#eef0f2] px-3">
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusClassName[preview.status]}`}>
           {statusLabel[preview.status]}
@@ -306,6 +320,15 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
         <Button type="text" size="small" loading={loading} icon={<RefreshCw size={13} />} onClick={onRefresh}>
           再次解析
         </Button>
+        <Tooltip title={fullscreen ? '退出全屏（ESC）' : '全屏展示血缘'}>
+          <Button
+            type="text"
+            size="small"
+            aria-label={fullscreen ? '退出全屏' : '全屏展示血缘'}
+            icon={fullscreen ? <Shrink size={13} /> : <Expand size={13} />}
+            onClick={() => setFullscreen((value) => !value)}
+          />
+        </Tooltip>
         <Button
           type="text"
           size="small"
@@ -327,7 +350,7 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
           fitViewOptions={{ padding: 0.25, minZoom: 0.45, maxZoom: 1 }}
           minZoom={0.25}
           maxZoom={1.5}
-          nodesDraggable={false}
+          nodesDraggable
           nodesConnectable={false}
           elementsSelectable={false}
           onInit={setFlow}
