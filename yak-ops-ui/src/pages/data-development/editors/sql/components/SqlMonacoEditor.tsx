@@ -23,7 +23,10 @@ import {
 } from '../editorSettings';
 import { formatSqlText } from '../formatting/formatSqlText';
 import { setupMonacoEnvironment } from '../monaco/setupMonacoEnvironment';
-import { getSqlStatementRanges } from '../monaco/sqlStatementRanges';
+import {
+  getSqlStatementRanges,
+  type SqlStatementRange,
+} from '../monaco/sqlStatementRanges';
 
 export interface SqlEditorPosition {
   lineNumber: number;
@@ -78,12 +81,16 @@ const SqlMonacoEditor = ({
   const onChangeRef = useRef(onChange);
   const onRunStatementRef = useRef(onRunStatement);
   const runningRef = useRef(running);
+  const refreshRunDecorationRef = useRef<() => void>(() => {});
   const onPositionChangeRef = useRef(onPositionChange);
   const onViewStateChangeRef = useRef(onViewStateChange);
 
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   useEffect(() => { onRunStatementRef.current = onRunStatement; }, [onRunStatement]);
-  useEffect(() => { runningRef.current = running; }, [running]);
+  useEffect(() => {
+    runningRef.current = running;
+    refreshRunDecorationRef.current();
+  }, [running]);
   useEffect(() => { onPositionChangeRef.current = onPositionChange; }, [onPositionChange]);
   useEffect(() => { onViewStateChangeRef.current = onViewStateChange; }, [onViewStateChange]);
 
@@ -161,19 +168,49 @@ const SqlMonacoEditor = ({
     });
 
     let statementRanges = getSqlStatementRanges(model.getValue());
-    let hoveredStatementStartLine: number | undefined;
+    let activeStatement: SqlStatementRange | undefined;
     const runDecorations = editor.createDecorationsCollection();
 
-    const clearStatementDecoration = () => {
-      hoveredStatementStartLine = undefined;
-      runDecorations.clear();
-    };
-
     const canRunStatement = () => {
+      if (readOnly || runningRef.current) return false;
       if (onRunStatementRef.current) return true;
       const button = findFallbackRunButton(containerRef.current);
       return Boolean(button && !button.disabled);
     };
+
+    const findStatementAtPosition = (position?: monaco.Position | null) => {
+      if (!position) return undefined;
+      const offset = model.getOffsetAt(position);
+      const exact = statementRanges.find(
+        (statement) => offset >= statement.startOffset && offset <= statement.endOffset,
+      );
+      if (exact) return exact;
+      return statementRanges.find(
+        (statement) =>
+          position.lineNumber >= statement.startLine
+          && position.lineNumber <= statement.endLine,
+      );
+    };
+
+    const updateRunDecoration = (position = editor.getPosition()) => {
+      activeStatement = findStatementAtPosition(position);
+      if (!activeStatement || !canRunStatement()) {
+        runDecorations.clear();
+        return;
+      }
+
+      runDecorations.set([
+        {
+          range: new monaco.Range(activeStatement.startLine, 1, activeStatement.startLine, 1),
+          options: {
+            isWholeLine: false,
+            glyphMarginClassName: 'yak-sql-run-glyph',
+          },
+        },
+      ]);
+    };
+
+    refreshRunDecorationRef.current = () => updateRunDecoration();
 
     const runStatement = (sql: string) => {
       if (onRunStatementRef.current) {
@@ -186,41 +223,7 @@ const SqlMonacoEditor = ({
 
     const refreshStatementRanges = () => {
       statementRanges = getSqlStatementRanges(model.getValue());
-      clearStatementDecoration();
-    };
-
-    const showStatementDecoration = (lineNumber?: number) => {
-      if (readOnly || runningRef.current || !lineNumber || !canRunStatement()) {
-        clearStatementDecoration();
-        return;
-      }
-
-      const statement = statementRanges.find((candidate) => candidate.startLine === lineNumber);
-      if (!statement) {
-        clearStatementDecoration();
-        return;
-      }
-      if (hoveredStatementStartLine === statement.startLine) return;
-
-      hoveredStatementStartLine = statement.startLine;
-      runDecorations.set([
-        {
-          range: new monaco.Range(statement.startLine, 1, statement.startLine, 1),
-          options: { glyphMarginClassName: 'yak-sql-run-glyph' },
-        },
-        {
-          range: new monaco.Range(
-            statement.startLine,
-            1,
-            statement.endLine,
-            model.getLineMaxColumn(statement.endLine),
-          ),
-          options: {
-            isWholeLine: true,
-            className: 'bg-[rgba(34,160,107,0.035)]',
-          },
-        },
-      ]);
+      updateRunDecoration();
     };
 
     let wordWrapEnabled = initialSettings.wordWrap;
@@ -289,38 +292,32 @@ const SqlMonacoEditor = ({
       refreshStatementRanges();
       if (!readOnly) onChangeRef.current(model.getValue());
     });
-    const hoverDisposable = editor.onMouseMove((event) => {
-      showStatementDecoration(event.target.position?.lineNumber);
-    });
-    const mouseLeaveDisposable = editor.onMouseLeave(() => {
-      clearStatementDecoration();
-    });
     const gutterDisposable = editor.onMouseDown((event) => {
       if (
         readOnly ||
         event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
         runningRef.current ||
-        !canRunStatement()
+        !activeStatement
       ) return;
       const lineNumber = event.target.position?.lineNumber;
-      if (!lineNumber) return;
-      const statement = statementRanges.find((candidate) => candidate.startLine === lineNumber);
-      if (!statement) return;
-      clearStatementDecoration();
-      runStatement(statement.sql);
+      if (!lineNumber || lineNumber !== activeStatement.startLine) return;
+      runStatement(activeStatement.sql);
     });
-    const cursorDisposable = editor.onDidChangeCursorPosition(emitEditorState);
+    const cursorDisposable = editor.onDidChangeCursorPosition(() => {
+      emitEditorState();
+      updateRunDecoration();
+    });
     const selectionDisposable = editor.onDidChangeCursorSelection(emitEditorState);
     const scrollDisposable = editor.onDidScrollChange(emitEditorState);
 
     emitEditorState();
+    updateRunDecoration();
 
     return () => {
       emitEditorState();
+      refreshRunDecorationRef.current = () => {};
       unsubscribeSettings();
       contentDisposable.dispose();
-      hoverDisposable.dispose();
-      mouseLeaveDisposable.dispose();
       gutterDisposable.dispose();
       cursorDisposable.dispose();
       selectionDisposable.dispose();
