@@ -171,13 +171,35 @@ export default function RealtimeSync() {
     await Promise.all([loadJobs(), loadMetadata()]);
   };
 
+  const waitForStartResult = async (id: number) => {
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+      try {
+        const result = await realtimeApi.detail(id);
+        if (['RUNNING', 'FAILED', 'UNKNOWN', 'CONFLICT'].includes(result.data.observedState)) {
+          return result.data.observedState;
+        }
+      } catch {
+        // A transient read failure must not turn an accepted deployment into an action failure.
+      }
+    }
+    return 'STARTING';
+  };
+
   const action = async (
     job: RealtimeJob,
     name: 'publish' | 'validate' | 'start' | 'stop' | 'restart',
   ) => {
     try {
       await realtimeApi.action(job.id, name);
-      message.success(name === 'validate' ? 'Runtime 校验通过' : '操作成功');
+      if (name === 'start') {
+        const state = await waitForStartResult(job.id);
+        if (state === 'RUNNING') message.success('实时同步任务已启动');
+        else if (state === 'STARTING') message.warning('Runtime 仍在启动，请稍后刷新状态');
+        else message.warning(`Runtime 启动结果：${observedStateLabel[state] || state}`);
+      } else {
+        message.success(name === 'validate' ? 'Runtime 校验通过' : '操作成功');
+      }
       await loadJobs();
     } catch (error: any) {
       message.error(error?.message || '操作失败');
@@ -431,11 +453,11 @@ export default function RealtimeSync() {
       render: (_, job) => {
         const running = job.desiredState === 'RUNNING';
         const startDisabled =
-          !capabilities.dynamicCredentialBinding ||
+          !capabilities.deployEnabled ||
           job.releaseState !== 'PUBLISHED' ||
           running;
-        const startTooltip = !capabilities.dynamicCredentialBinding
-          ? 'Runtime 尚未提供动态凭据绑定能力，启动已被安全阻止'
+        const startTooltip = !capabilities.deployEnabled
+          ? capabilities.deployDisabledReason || 'Runtime 尚未准备好安全部署'
           : job.releaseState !== 'PUBLISHED'
             ? '请先发布当前任务版本'
             : running

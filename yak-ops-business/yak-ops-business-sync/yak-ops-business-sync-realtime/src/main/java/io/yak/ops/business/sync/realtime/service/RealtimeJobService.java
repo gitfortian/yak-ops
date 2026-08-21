@@ -12,6 +12,7 @@ import io.yak.ops.business.sync.realtime.engine.HttpRealtimeEngineGateway.Gatewa
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPipeline;
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
+import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
@@ -127,7 +128,7 @@ public class RealtimeJobService {
         return store.deploymentView(existing);
       }
 
-      requireDeployableCredentialBinding();
+      requireDeployableCredentialBinding(prepared.manifest());
 
       gateway.validate(prepared.compiled().yaml());
       Long deploymentId;
@@ -171,7 +172,7 @@ public class RealtimeJobService {
 
       long deployment = deploymentId == null ? 0 : deploymentId;
       try {
-        RealtimeEngineGateway.DeployResult result = gateway.deploy(prepared.compiled().yaml(), key);
+        RealtimeEngineGateway.DeployResult result = deploy(prepared, key);
         transactions.executeWithoutResult(
             status -> {
               store.markDeploymentRunning(
@@ -287,8 +288,17 @@ public class RealtimeJobService {
           .put("checkpointConfiguration", false);
       ((com.fasterxml.jackson.databind.node.ObjectNode) manifest)
           .put("restartConfiguration", false);
-      ((com.fasterxml.jackson.databind.node.ObjectNode) manifest)
-          .put("dynamicCredentialBinding", false);
+      com.fasterxml.jackson.databind.node.ObjectNode capabilities =
+          (com.fasterxml.jackson.databind.node.ObjectNode) manifest;
+      boolean credentialBinding = manifest.path("dynamicCredentialBinding").asBoolean(false);
+      boolean protocolCompatible = "1".equals(manifest.path("protocolVersion").asText());
+      capabilities.put("protocolCompatible", protocolCompatible);
+      capabilities.put("deployEnabled", credentialBinding && protocolCompatible);
+      if (!credentialBinding) {
+        capabilities.put("deployDisabledReason", "Runtime 尚未提供动态凭据绑定能力");
+      } else if (!protocolCompatible) {
+        capabilities.put("deployDisabledReason", "Runtime 部署协议版本不兼容，需要 protocolVersion=1");
+      }
     }
     return manifest;
   }
@@ -434,7 +444,8 @@ public class RealtimeJobService {
         definition,
         spec,
         compiler.compile(definition.name(), spec, resolved),
-        manifest.path("runtimeVersion").asText("unknown"));
+        manifest.path("runtimeVersion").asText("unknown"),
+        manifest);
   }
 
   private void requirePublished(DefinitionRow definition) {
@@ -491,10 +502,23 @@ public class RealtimeJobService {
     return key;
   }
 
-  private void requireDeployableCredentialBinding() {
-    throw new IllegalStateException(
-        "当前 Runtime Gateway 不支持按部署动态注入数据源凭据，且 Flink CDC 3.6 不会自动解析"
-            + " ${ENV:...} Pipeline 值；启动已被安全阻止，请先扩展 Runtime 契约");
+  private RealtimeEngineGateway.DeployResult deploy(Prepared prepared, String key) {
+    RealtimeDeployRequest.CredentialBinding[] credentials =
+        dataSourceResolver.resolveCredentials(prepared.spec());
+    try (RealtimeDeployRequest request =
+        new RealtimeDeployRequest(
+            prepared.compiled().yaml(), key, credentials[0], credentials[1])) {
+      return gateway.deploy(request);
+    }
+  }
+
+  private void requireDeployableCredentialBinding(JsonNode manifest) {
+    if (!manifest.path("dynamicCredentialBinding").asBoolean(false)) {
+      throw new IllegalStateException("Runtime 尚未提供动态凭据绑定能力，启动已被安全阻止");
+    }
+    if (!"1".equals(manifest.path("protocolVersion").asText())) {
+      throw new IllegalStateException("Runtime 部署协议版本不兼容，需要 protocolVersion=1");
+    }
   }
 
   private void requireName(String name) {
@@ -525,5 +549,6 @@ public class RealtimeJobService {
       DefinitionRow definition,
       CdcPipelineSpec spec,
       CompiledPipeline compiled,
-      String runtimeRevision) {}
+      String runtimeRevision,
+      JsonNode manifest) {}
 }

@@ -21,6 +21,8 @@ class HttpRealtimeEngineGatewayTest {
   private HttpServer server;
   private HttpRealtimeEngineGateway gateway;
   private final AtomicReference<String> stopBody = new AtomicReference<>();
+  private final AtomicReference<String> deployBody = new AtomicReference<>();
+  private final AtomicReference<String> deployKey = new AtomicReference<>();
 
   @BeforeEach
   void setUp() throws Exception {
@@ -35,8 +37,12 @@ class HttpRealtimeEngineGatewayTest {
             json(exchange, 200, "{\"valid\":true,\"deliverySemantics\":\"at-least-once\"}"));
     server.createContext(
         "/deploy",
-        exchange ->
-            json(exchange, 202, "{\"jobId\":\"job-1\",\"deliverySemantics\":\"at-least-once\"}"));
+        exchange -> {
+          deployKey.set(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+          deployBody.set(
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          json(exchange, 202, "{\"jobId\":\"job-1\",\"deliverySemantics\":\"at-least-once\"}");
+        });
     server.createContext(
         "/status", exchange -> json(exchange, 200, "{\"jobId\":\"job-1\",\"status\":\"RUNNING\"}"));
     server.createContext(
@@ -63,7 +69,13 @@ class HttpRealtimeEngineGatewayTest {
   void followsFixedRuntimeContract() {
     assertThat(gateway.capabilities().path("runtimeVersion").asText()).isEqualTo("0.1.0-phase0");
     assertThat(gateway.validate("source:\n  type: mysql").valid()).isTrue();
-    assertThat(gateway.deploy("source:\n  type: mysql", "local-key").jobId()).isEqualTo("job-1");
+    try (RealtimeDeployRequest request = request()) {
+      assertThat(gateway.deploy(request).jobId()).isEqualTo("job-1");
+    }
+    assertThat(deployKey.get()).isEqualTo("local-key");
+    assertThat(new ObjectMapper().readTree(deployBody.get()).path("pipelineYaml").asText())
+        .isEqualTo("source:\n  type: mysql");
+    assertThat(deployBody.get()).contains("source-secret", "sink-secret");
     assertThat(gateway.status().state())
         .isEqualTo(RealtimeEngineGateway.RuntimeStatus.State.RUNNING);
     assertThat(gateway.logs(20)).isEqualTo("line");
@@ -76,12 +88,25 @@ class HttpRealtimeEngineGatewayTest {
     server.removeContext("/deploy");
     server.createContext("/deploy", exchange -> json(exchange, 202, "not-json"));
 
-    assertThatThrownBy(() -> gateway.deploy("source:\n  type: mysql", "local-key"))
+    assertThatThrownBy(
+            () -> {
+              try (RealtimeDeployRequest request = request()) {
+                gateway.deploy(request);
+              }
+            })
         .isInstanceOf(HttpRealtimeEngineGateway.GatewayException.class)
         .satisfies(
             exception ->
                 assertThat(((HttpRealtimeEngineGateway.GatewayException) exception).uncertain())
                     .isTrue());
+  }
+
+  private RealtimeDeployRequest request() {
+    return new RealtimeDeployRequest(
+        "source:\n  type: mysql",
+        "local-key",
+        new RealtimeDeployRequest.CredentialBinding("reader", "source-secret"),
+        new RealtimeDeployRequest.CredentialBinding("writer", "sink-secret"));
   }
 
   private void json(HttpExchange exchange, int status, String body) throws IOException {

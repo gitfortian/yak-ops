@@ -21,12 +21,13 @@
 Yak Ops currently keeps a deliberately small and maintainable feature set:
 
 - datasource management;
-- offline synchronization under Data Integration;
+- offline synchronization and the realtime CDC control plane under Data Integration;
 - resource management, including files, clients, and connectors;
 - data-quality rule templates, table monitors, manual checks, and execution results;
 - system management and security administration.
 
-Data Development and realtime synchronization remain outside the active codebase and can be redesigned independently before being introduced again.
+Realtime synchronization requires a compatible Yak CDC Runtime implementing the secure deployment
+contract in `docs/realtime-sync-runtime-contract.md`.
 
 ## Quick start
 
@@ -73,7 +74,8 @@ yak-ops
 │   ├── yak-ops-business-quality
 │   ├── yak-ops-business-resource
 │   └── yak-ops-business-sync
-│       └── yak-ops-business-sync-offline
+│       ├── yak-ops-business-sync-offline
+│       └── yak-ops-business-sync-realtime
 ├── yak-ops-plugins
 │   ├── yak-ops-plugin-datasource
 │   └── yak-ops-plugin-storage
@@ -110,7 +112,6 @@ Resource management supports managed files and pluggable Local, MinIO, and HDFS 
 The following runtime modules and frontend pages are not assembled:
 
 - Data Development and its task plugins;
-- realtime synchronization;
 - historical data-quality scheduling and alerting implementations.
 
 Existing database tables are not automatically dropped. Deployments that already contain historical data can retain it for audit or migrate it separately.

@@ -116,6 +116,12 @@ yak:
         replication: ${YAK_RESOURCE_HDFS_REPLICATION:1}
 
   sync:
+    realtime:
+      enabled: ${YAK_REALTIME_SYNC_ENABLED:true}
+      base-url: ${YAK_REALTIME_RUNTIME_URL:http://127.0.0.1:18090}
+      connect-timeout: ${YAK_REALTIME_CONNECT_TIMEOUT:3s}
+      request-timeout: ${YAK_REALTIME_REQUEST_TIMEOUT:30s}
+      reconcile-delay: ${YAK_REALTIME_RECONCILE_DELAY:10000}
     offline:
       enabled: ${YAK_OFFLINE_SYNC_ENABLED:true}
       engine:

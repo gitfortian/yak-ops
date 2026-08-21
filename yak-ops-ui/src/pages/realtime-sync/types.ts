@@ -103,6 +103,10 @@ export interface RuntimeCapabilities {
   checkpointConfiguration?: boolean;
   restartConfiguration?: boolean;
   dynamicCredentialBinding?: boolean;
+  protocolVersion?: string;
+  protocolCompatible?: boolean;
+  deployEnabled?: boolean;
+  deployDisabledReason?: string;
 }
 
 export interface ApiResponse<T> {
