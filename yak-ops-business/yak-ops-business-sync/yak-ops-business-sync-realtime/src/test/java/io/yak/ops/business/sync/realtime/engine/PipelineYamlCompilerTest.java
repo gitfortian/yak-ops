@@ -2,7 +2,6 @@ package io.yak.ops.business.sync.realtime.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import java.util.List;
@@ -11,9 +10,8 @@ import org.junit.jupiter.api.Test;
 class PipelineYamlCompilerTest {
 
   @Test
-  void mapsResolvedCoordinatesAndPersistsOnlyEnvironmentReferences() {
-    RealtimeSyncProperties properties = new RealtimeSyncProperties();
-    PipelineYamlCompiler compiler = new PipelineYamlCompiler(properties);
+  void mapsResolvedCoordinatesAndUsesSubmissionSecretReferences() {
+    PipelineYamlCompiler compiler = new PipelineYamlCompiler();
     CdcPipelineSpec spec =
         new CdcPipelineSpec(
             1L,
@@ -58,12 +56,11 @@ class PipelineYamlCompilerTest {
             "tables: '\\Qshop\\E.\\Qorders\\E'",
             "type: yak-jdbc",
             "dialect: postgres",
-            "password: ${ENV:SOURCE_PASSWORD}",
-            "password: ${ENV:SINK_PASSWORD}",
+            "password: ${SECRET:source.password}",
+            "password: ${SECRET:sink.password}",
             "max-batch-bytes: 1048576",
             "replay-safety: strict")
         .doesNotContain(
-            "secret",
             "pipeline_yaml",
             "database-name:",
             "table-name:",
@@ -116,7 +113,7 @@ class PipelineYamlCompilerTest {
                 "dw"));
 
     String yaml =
-        new PipelineYamlCompiler(new RealtimeSyncProperties())
+        new PipelineYamlCompiler()
             .compile("job", spec, resolved)
             .yaml();
 

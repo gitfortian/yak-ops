@@ -11,7 +11,7 @@ public interface RealtimeEngineGateway {
 
   ValidationResult validate(String pipelineYaml);
 
-  DeployResult deploy(String pipelineYaml, String localIdempotencyKey);
+  DeployResult deploy(RealtimeDeployRequest request);
 
   RuntimeStatus status();
 
