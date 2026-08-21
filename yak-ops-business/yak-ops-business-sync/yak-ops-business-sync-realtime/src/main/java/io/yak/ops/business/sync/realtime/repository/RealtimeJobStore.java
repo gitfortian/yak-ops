@@ -63,25 +63,30 @@ public class RealtimeJobStore {
         db.update(
             "update yak_realtime_job_definition set job_name=?,description=?,spec_json=?,"
                 + "config_digest=?,definition_version=definition_version+1,release_state='DRAFT' "
-                + "where id=? and desired_state='STOPPED'",
+                + "where id=? and desired_state='STOPPED' "
+                + "and observed_state in ('STOPPED','FAILED')",
             name,
             description,
             write(spec),
             digest,
             id);
     if (changed != 1) {
-      throw new IllegalStateException("运行中的任务不能编辑，或任务不存在");
+      throw new IllegalStateException("任务运行态未稳定，只有已停止或明确失败的任务才能编辑");
     }
   }
 
-  public void publish(long id) {
+  public void publish(long id, int expectedDefinitionVersion, String expectedDigest) {
     int changed =
         db.update(
             "update yak_realtime_job_definition set release_state='PUBLISHED',"
-                + "published_version=definition_version where id=? and desired_state='STOPPED'",
-            id);
+                + "published_version=definition_version where id=? and desired_state='STOPPED' "
+                + "and observed_state in ('STOPPED','FAILED') and definition_version=? "
+                + "and config_digest=?",
+            id,
+            expectedDefinitionVersion,
+            expectedDigest);
     if (changed != 1) {
-      throw new IllegalStateException("运行中的任务不能发布，或任务不存在");
+      throw new IllegalStateException("任务状态或定义版本已变化，请刷新后重新校验并发布");
     }
   }
 
@@ -292,9 +297,11 @@ public class RealtimeJobStore {
   public void delete(long id) {
     int changed =
         db.update(
-            "delete from yak_realtime_job_definition where id=? and desired_state='STOPPED'", id);
+            "delete from yak_realtime_job_definition where id=? and desired_state='STOPPED' "
+                + "and observed_state in ('STOPPED','FAILED')",
+            id);
     if (changed != 1) {
-      throw new IllegalStateException("运行中的任务不能删除，或任务不存在");
+      throw new IllegalStateException("任务运行态未稳定，只有已停止或明确失败的任务才能删除");
     }
   }
 
