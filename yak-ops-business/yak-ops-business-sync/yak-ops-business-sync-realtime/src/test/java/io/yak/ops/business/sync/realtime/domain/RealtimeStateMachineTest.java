@@ -27,4 +27,25 @@ class RealtimeStateMachineTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("非法实时任务状态迁移");
   }
+
+  @Test
+  void allowsDefinitionMutationOnlyWhenRuntimeIsStable() {
+    assertThatCode(() -> stateMachine.requireDefinitionMutable("STOPPED", "STOPPED"))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> stateMachine.requireDefinitionMutable("STOPPED", "FAILED"))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void rejectsDefinitionMutationForActiveOrUncertainRuntime() {
+    assertThatThrownBy(() -> stateMachine.requireDefinitionMutable("RUNNING", "RUNNING"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("运行态未稳定");
+    assertThatThrownBy(() -> stateMachine.requireDefinitionMutable("STOPPED", "UNKNOWN"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("运行态未稳定");
+    assertThatThrownBy(() -> stateMachine.requireDefinitionMutable("STOPPED", "CONFLICT"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("运行态未稳定");
+  }
 }
