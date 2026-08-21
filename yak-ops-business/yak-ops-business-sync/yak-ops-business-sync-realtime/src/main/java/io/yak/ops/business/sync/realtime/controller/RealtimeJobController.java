@@ -112,7 +112,7 @@ public class RealtimeJobController {
     return Result.success(true);
   }
 
-  @Operation(summary = "使用 Runtime 校验当前定义")
+  @Operation(summary = "使用 Flink CDC 配置校验当前定义")
   @PostMapping("/{id}/validate")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<RealtimeEngineGateway.ValidationResult> validate(@PathVariable long id) {
@@ -164,16 +164,28 @@ public class RealtimeJobController {
     return Result.success(service.events(id));
   }
 
-  @Operation(summary = "查询固定 Runtime 能力")
+  @Operation(summary = "查询 Flink CDC 运行能力")
   @GetMapping("/runtime/capabilities")
   public Result<JsonNode> capabilities() {
     return Result.success(service.capabilities());
   }
 
-  @Operation(summary = "查询当前任务临时 Runtime 日志")
+  @Operation(summary = "查询当前任务提交日志和 Flink 异常")
   @GetMapping("/{id}/logs")
   public Result<Map<String, String>> logs(
       @PathVariable long id, @RequestParam(defaultValue = "200") int tail) {
     return Result.success(Map.of("logs", service.logs(id, tail)));
+  }
+
+  @Operation(summary = "查询当前任务 Checkpoint 统计")
+  @GetMapping("/{id}/checkpoints")
+  public Result<JsonNode> checkpoints(@PathVariable long id) {
+    return Result.success(service.checkpoints(id));
+  }
+
+  @Operation(summary = "查询当前任务 Flink 指标")
+  @GetMapping("/{id}/metrics")
+  public Result<JsonNode> metrics(@PathVariable long id) {
+    return Result.success(service.metrics(id));
   }
 }

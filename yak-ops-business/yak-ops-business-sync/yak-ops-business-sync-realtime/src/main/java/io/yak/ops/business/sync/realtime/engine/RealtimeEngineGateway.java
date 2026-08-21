@@ -2,7 +2,7 @@ package io.yak.ops.business.sync.realtime.engine;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/** Stable Yak Ops-side adapter for the fixed Yak CDC Runtime Gateway. */
+/** Yak Ops-side adapter for Flink CDC CLI submission and Flink REST operations. */
 public interface RealtimeEngineGateway {
 
   JsonNode health();
@@ -13,11 +13,15 @@ public interface RealtimeEngineGateway {
 
   DeployResult deploy(RealtimeDeployRequest request);
 
-  RuntimeStatus status();
+  RuntimeStatus status(String jobId);
 
-  void stop();
+  void stop(String jobId);
 
-  String logs(int tailLines);
+  String logs(String jobId, int tailLines);
+
+  JsonNode checkpoints(String jobId);
+
+  JsonNode metrics(String jobId);
 
   record ValidationResult(boolean valid, String deliverySemantics) {}
 

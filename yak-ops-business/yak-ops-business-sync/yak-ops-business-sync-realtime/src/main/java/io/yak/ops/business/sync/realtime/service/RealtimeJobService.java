@@ -9,12 +9,12 @@ import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
-import io.yak.ops.business.sync.realtime.engine.HttpRealtimeEngineGateway.GatewayException;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPipeline;
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
-import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest;
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
+import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest;
+import io.yak.ops.business.sync.realtime.engine.RealtimeEngineException;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
 import io.yak.ops.business.sync.realtime.engine.RealtimeLogRedactor;
@@ -27,6 +27,7 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -52,7 +53,8 @@ public class RealtimeJobService {
   private final TransactionTemplate transactions;
   private final RealtimeSyncProperties properties;
   private final ReentrantLock lifecycleLock = new ReentrantLock();
-  private final AtomicInteger consecutiveRuntimeFailures = new AtomicInteger();
+  private final ConcurrentHashMap<Long, AtomicInteger> consecutiveEngineFailures =
+      new ConcurrentHashMap<>();
 
   public RealtimeJobService(
       RealtimeJobStore store,
@@ -125,7 +127,7 @@ public class RealtimeJobService {
     transactions.executeWithoutResult(
         status -> {
           store.publish(id);
-          store.event(id, null, "PUBLISHED", "DRAFT", "PUBLISHED", "Runtime 校验通过，任务已发布");
+          store.event(id, null, "PUBLISHED", "DRAFT", "PUBLISHED", "Flink CDC 校验通过，任务已发布");
         });
   }
 
@@ -147,8 +149,6 @@ public class RealtimeJobService {
         return store.deploymentView(existing);
       }
 
-      requireDeployableCredentialBinding(prepared.manifest());
-
       gateway.validate(prepared.compiled().yaml());
       Long deploymentId;
       try {
@@ -157,9 +157,6 @@ public class RealtimeJobService {
                 status -> {
                   DefinitionRow locked = store.lockDefinition(id);
                   requirePublished(locked);
-                  if (store.hasOtherDesiredRunning(id)) {
-                    throw new IllegalStateException("当前 Runtime 仅允许一个活动任务");
-                  }
                   stateMachine.requireTransition(locked.observedState(), "STARTING");
                   long created =
                       store.insertDeployment(
@@ -175,7 +172,7 @@ public class RealtimeJobService {
                       "START_REQUESTED",
                       locked.observedState(),
                       "STARTING",
-                      "开始提交 Runtime");
+                      "开始通过 Flink CDC CLI 提交任务");
                   return created;
                 });
       } catch (DuplicateKeyException exception) {
@@ -196,9 +193,9 @@ public class RealtimeJobService {
             status -> {
               store.markDeploymentRunning(
                   id, deployment, result.jobId(), prepared.runtimeRevision());
-              store.event(id, deployment, "STARTED", "STARTING", "RUNNING", "Runtime 已接受任务");
+              store.event(id, deployment, "STARTED", "STARTING", "RUNNING", "Flink 已接受任务");
             });
-      } catch (GatewayException exception) {
+      } catch (RealtimeEngineException exception) {
         transactions.executeWithoutResult(
             status -> {
               store.markDeployFailure(
@@ -230,15 +227,11 @@ public class RealtimeJobService {
           && "STOPPED".equals(definition.observedState())) {
         return;
       }
-      RuntimeStatus runtime = gateway.status();
-      if (runtime.state() == RuntimeStatus.State.RUNNING) {
-        if (deployment == null || !StringUtils.hasText(deployment.engineJobId())) {
-          throw new IllegalStateException("无法证明 Runtime 活动任务归属于当前部署，拒绝执行全局停止");
-        }
-        if (!deployment.engineJobId().equals(runtime.jobId())) {
-          throw new IllegalStateException("Runtime 当前任务与所选部署不一致，拒绝执行全局停止");
-        }
-      }
+      String jobId = deployment == null ? null : deployment.engineJobId();
+      RuntimeStatus runtime =
+          StringUtils.hasText(jobId)
+              ? gateway.status(jobId)
+              : new RuntimeStatus(null, RuntimeStatus.State.NONE);
       transactions.executeWithoutResult(
           status -> {
             stateMachine.requireTransition(definition.observedState(), "STOPPING");
@@ -249,17 +242,17 @@ public class RealtimeJobService {
                 "STOP_REQUESTED",
                 definition.observedState(),
                 "STOPPING",
-                "已请求 Runtime 停止当前任务");
+                "已请求 Flink 停止当前任务");
           });
       try {
         if (runtime.state() == RuntimeStatus.State.RUNNING) {
-          gateway.stop();
-          waitForRuntimeStop();
-          markStopped(id, deployment, "Runtime 已停止任务");
+          gateway.stop(jobId);
+          waitForRuntimeStop(jobId);
+          markStopped(id, deployment, "Flink 已停止任务");
         } else {
-          markStopped(id, deployment, "Runtime 已无活动任务");
+          markStopped(id, deployment, "Flink 中已无活动任务");
         }
-      } catch (GatewayException exception) {
+      } catch (RealtimeEngineException exception) {
         transactions.executeWithoutResult(
             status -> {
               store.reconcile(
@@ -299,99 +292,71 @@ public class RealtimeJobService {
   }
 
   public JsonNode capabilities() {
-    JsonNode manifest = gateway.capabilities().deepCopy();
-    if (manifest.isObject()) {
-      ((com.fasterxml.jackson.databind.node.ObjectNode) manifest).put("checkpointsApi", false);
-      ((com.fasterxml.jackson.databind.node.ObjectNode) manifest).put("metricsApi", false);
-      ((com.fasterxml.jackson.databind.node.ObjectNode) manifest)
-          .put("checkpointConfiguration", false);
-      ((com.fasterxml.jackson.databind.node.ObjectNode) manifest)
-          .put("restartConfiguration", false);
-      com.fasterxml.jackson.databind.node.ObjectNode capabilities =
-          (com.fasterxml.jackson.databind.node.ObjectNode) manifest;
-      boolean credentialBinding = manifest.path("dynamicCredentialBinding").asBoolean(false);
-      boolean protocolCompatible = "1".equals(manifest.path("protocolVersion").asText());
-      capabilities.put("protocolCompatible", protocolCompatible);
-      capabilities.put("deployEnabled", credentialBinding && protocolCompatible);
-      if (!credentialBinding) {
-        capabilities.put("deployDisabledReason", "Runtime 尚未提供动态凭据绑定能力");
-      } else if (!protocolCompatible) {
-        capabilities.put("deployDisabledReason", "Runtime 部署协议版本不兼容，需要 protocolVersion=1");
-      }
-    }
-    return manifest;
+    return gateway.capabilities();
   }
 
   public String logs(long id, int tail) {
     DeploymentRow deployment =
         store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
-    RuntimeStatus status = gateway.status();
-    if (status.jobId() != null
-        && deployment.engineJobId() != null
-        && !status.jobId().equals(deployment.engineJobId())) {
-      throw new IllegalStateException("Runtime 当前任务与所选部署不一致");
-    }
-    return logRedactor.redact(gateway.logs(tail));
+    requireEngineJobId(deployment);
+    return logRedactor.redact(gateway.logs(deployment.engineJobId(), tail));
+  }
+
+  public JsonNode checkpoints(long id) {
+    DeploymentRow deployment = latestDeploymentWithJobId(id);
+    return gateway.checkpoints(deployment.engineJobId());
+  }
+
+  public JsonNode metrics(long id) {
+    DeploymentRow deployment = latestDeploymentWithJobId(id);
+    return gateway.metrics(deployment.engineJobId());
   }
 
   public void reconcile() {
     lifecycleLock.lock();
     try {
       List<DefinitionRow> candidates = store.desiredJobs();
-      if (candidates.isEmpty()) {
-        return;
-      }
-      RuntimeStatus runtime;
-      try {
-        runtime = gateway.status();
-      } catch (GatewayException exception) {
-        int failures = consecutiveRuntimeFailures.incrementAndGet();
-        if (failures < Math.max(1, properties.getReconcileFailureThreshold())) {
-          return;
+      for (DefinitionRow job : candidates) {
+        DeploymentRow deployment = store.latestDeployment(job.id()).orElse(null);
+        if (deployment == null || !StringUtils.hasText(deployment.engineJobId())) {
+          // Another Yak Ops instance may still be inside the synchronous CLI submission. An
+          // uncertain submission without a jobId also requires operator verification in Flink UI;
+          // it must not be converted into a definite failure by the reconciler.
+          if (!"STARTING".equals(job.observedState()) && !"UNKNOWN".equals(job.observedState())) {
+            reconcile(job, deployment, new RuntimeStatus(null, RuntimeStatus.State.NONE));
+          }
+          continue;
         }
-        for (DefinitionRow job : candidates) {
-          DeploymentRow deployment = store.latestDeployment(job.id()).orElse(null);
-          if (!"UNKNOWN".equals(job.observedState())) {
-            transactions.executeWithoutResult(
-                status -> {
-                  store.reconcile(
-                      job.id(),
-                      deployment == null ? null : deployment.id(),
-                      "UNKNOWN",
-                      "UNKNOWN",
-                      deployment == null ? null : deployment.engineJobId(),
-                      "Runtime 状态不可用");
-                  store.event(
-                      job.id(),
-                      deployment == null ? null : deployment.id(),
-                      "RUNTIME_UNAVAILABLE",
-                      job.observedState(),
-                      "UNKNOWN",
-                      "Runtime 状态不可用");
-                });
+        try {
+          RuntimeStatus runtime = gateway.status(deployment.engineJobId());
+          consecutiveEngineFailures.remove(job.id());
+          reconcile(job, deployment, runtime);
+        } catch (RealtimeEngineException exception) {
+          int failures =
+              consecutiveEngineFailures
+                  .computeIfAbsent(job.id(), ignored -> new AtomicInteger())
+                  .incrementAndGet();
+          if (failures >= Math.max(1, properties.getReconcileFailureThreshold())
+              && !"UNKNOWN".equals(job.observedState())) {
+            changeState(
+                job, deployment, "UNKNOWN", "UNKNOWN", deployment.engineJobId(), "Flink 状态不可用");
           }
         }
-        return;
-      }
-      consecutiveRuntimeFailures.set(0);
-
-      for (DefinitionRow job : candidates) {
-        reconcile(job, store.latestDeployment(job.id()).orElse(null), runtime);
       }
     } finally {
       lifecycleLock.unlock();
     }
   }
 
-  /** Performs an operator-requested reconciliation without submitting a new Runtime job. */
+  /** Performs an operator-requested reconciliation without submitting a new Flink job. */
   public RealtimeJobView reconcile(long id) {
     lifecycleLock.lock();
     try {
       DefinitionRow definition =
           store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
-      DeploymentRow deployment = store.latestDeployment(id).orElse(null);
-      reconcile(definition, deployment, gateway.status());
-      consecutiveRuntimeFailures.set(0);
+      DeploymentRow deployment = latestDeploymentWithJobId(id);
+      reconcile(definition, deployment, gateway.status(deployment.engineJobId()));
+      consecutiveEngineFailures.remove(id);
       return store.view(id);
     } finally {
       lifecycleLock.unlock();
@@ -404,16 +369,16 @@ public class RealtimeJobService {
 
     if (runtime.state() == RuntimeStatus.State.RUNNING) {
       if (!StringUtils.hasText(expectedJobId)) {
-        changeState(job, deployment, "CONFLICT", "UNKNOWN", null, "无法证明 Runtime jobId 归属于当前部署");
+        changeState(job, deployment, "CONFLICT", "UNKNOWN", null, "无法证明 Flink jobId 归属于当前部署");
       } else if (!expectedJobId.equals(runtime.jobId())) {
         changeState(
-            job, deployment, "CONFLICT", "UNKNOWN", runtime.jobId(), "Runtime jobId 与部署记录不一致");
+            job, deployment, "CONFLICT", "UNKNOWN", runtime.jobId(), "Flink jobId 与部署记录不一致");
       } else if ("RUNNING".equals(job.desiredState())) {
         changeState(job, deployment, "RUNNING", "RUNNING", runtime.jobId(), null);
       } else {
         try {
-          gateway.stop();
-        } catch (GatewayException ignored) {
+          gateway.stop(expectedJobId);
+        } catch (RealtimeEngineException ignored) {
           changeState(job, deployment, "UNKNOWN", "UNKNOWN", runtime.jobId(), "停止状态对账失败");
         }
       }
@@ -427,13 +392,13 @@ public class RealtimeJobService {
 
     String message =
         runtime.state() == RuntimeStatus.State.TERMINATED
-            ? "Runtime 任务已异常终止"
-            : "Runtime 中未找到期望运行的任务；为避免重复回放，不自动重新提交";
+            ? "Flink 任务已终止"
+            : "Flink 中未找到期望运行的任务；为避免重复回放，不自动重新提交";
     transactions.executeWithoutResult(
         status -> {
           store.markTerminalFailure(job.id(), deploymentId, message);
           store.event(
-              job.id(), deploymentId, "RUNTIME_JOB_LOST", job.observedState(), "FAILED", message);
+              job.id(), deploymentId, "FLINK_JOB_LOST", job.observedState(), "FAILED", message);
         });
   }
 
@@ -464,7 +429,7 @@ public class RealtimeJobService {
               "STATE_RECONCILED",
               job.observedState(),
               observed,
-              error == null ? "Runtime 状态已对账" : error);
+              error == null ? "Flink 状态已对账" : error);
         });
   }
 
@@ -495,9 +460,9 @@ public class RealtimeJobService {
     }
   }
 
-  private void waitForRuntimeStop() {
+  private void waitForRuntimeStop(String jobId) {
     for (int attempt = 0; attempt < 20; attempt++) {
-      RuntimeStatus status = gateway.status();
+      RuntimeStatus status = gateway.status(jobId);
       if (status.state() != RuntimeStatus.State.RUNNING) {
         return;
       }
@@ -505,10 +470,10 @@ public class RealtimeJobService {
         Thread.sleep(250);
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
-        throw new IllegalStateException("等待 Runtime 停止时被中断", exception);
+        throw new IllegalStateException("等待 Flink 停止时被中断", exception);
       }
     }
-    throw new IllegalStateException("Runtime 未在 5 秒内停止，请稍后再重启");
+    throw new IllegalStateException("Flink 任务未在 5 秒内停止，请稍后再重启");
   }
 
   private void markStopped(long definitionId, DeploymentRow deployment, String message) {
@@ -551,12 +516,16 @@ public class RealtimeJobService {
     }
   }
 
-  private void requireDeployableCredentialBinding(JsonNode manifest) {
-    if (!manifest.path("dynamicCredentialBinding").asBoolean(false)) {
-      throw new IllegalStateException("Runtime 尚未提供动态凭据绑定能力，启动已被安全阻止");
-    }
-    if (!"1".equals(manifest.path("protocolVersion").asText())) {
-      throw new IllegalStateException("Runtime 部署协议版本不兼容，需要 protocolVersion=1");
+  private DeploymentRow latestDeploymentWithJobId(long id) {
+    DeploymentRow deployment =
+        store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
+    requireEngineJobId(deployment);
+    return deployment;
+  }
+
+  private void requireEngineJobId(DeploymentRow deployment) {
+    if (!StringUtils.hasText(deployment.engineJobId())) {
+      throw new IllegalStateException("部署记录尚无 Flink jobId");
     }
   }
 

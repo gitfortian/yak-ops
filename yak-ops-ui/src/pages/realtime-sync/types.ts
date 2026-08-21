@@ -96,8 +96,9 @@ export interface DataSourceOption {
 }
 
 export interface RuntimeCapabilities {
+  engineType?: string;
   runtimeVersion?: string;
-  javaVersion?: string;
+  restUrl?: string;
   flinkVersion?: string;
   flinkCdcVersion?: string;
   deliverySemantics?: string;
@@ -110,8 +111,6 @@ export interface RuntimeCapabilities {
   metricsApi?: boolean;
   checkpointConfiguration?: boolean;
   restartConfiguration?: boolean;
-  dynamicCredentialBinding?: boolean;
-  protocolVersion?: string;
   protocolCompatible?: boolean;
   deployEnabled?: boolean;
   deployDisabledReason?: string;

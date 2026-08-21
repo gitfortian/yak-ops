@@ -1,6 +1,5 @@
 import { history } from '@umijs/max';
 import {
-  Alert,
   Button,
   ConfigProvider,
   Descriptions,
@@ -124,6 +123,8 @@ export default function RealtimeSync() {
   const [detail, setDetail] = useState<RealtimeJob>();
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [logs, setLogs] = useState('');
+  const [checkpointData, setCheckpointData] = useState<unknown>();
+  const [metricsData, setMetricsData] = useState<unknown>();
   const [streamConnected, setStreamConnected] = useState(false);
 
   const dataSourceMap = useMemo(
@@ -160,7 +161,7 @@ export default function RealtimeSync() {
     setCapabilities(caps.status === 'fulfilled' ? caps.value.data || {} : {});
     setDataSources(sources.status === 'fulfilled' ? sources.value.data || [] : []);
     if (caps.status === 'rejected') {
-      message.warning('Runtime 当前不可用，任务定义仍可查看');
+      message.warning('Flink CDC 当前不可用，任务定义仍可查看');
     }
   }, []);
 
@@ -247,10 +248,10 @@ export default function RealtimeSync() {
       if (name === 'start') {
         const state = await waitForStartResult(job.id);
         if (state === 'RUNNING') message.success('实时同步任务已启动');
-        else if (state === 'STARTING') message.warning('Runtime 仍在启动，请稍后刷新状态');
-        else message.warning(`Runtime 启动结果：${observedStateLabel[state] || state}`);
+        else if (state === 'STARTING') message.warning('Flink 任务仍在启动，请稍后刷新状态');
+        else message.warning(`Flink 启动结果：${observedStateLabel[state] || state}`);
       } else {
-        message.success(name === 'validate' ? 'Runtime 校验通过' : '操作成功');
+        message.success(name === 'validate' ? 'Flink CDC 校验通过' : '操作成功');
       }
       await loadJobs();
     } catch (error: any) {
@@ -267,6 +268,8 @@ export default function RealtimeSync() {
       setDetail(jobResult.data);
       setEvents(eventResult.data || []);
       setLogs('');
+      setCheckpointData(undefined);
+      setMetricsData(undefined);
     } catch (error: any) {
       message.error(error?.message || '加载运行详情失败');
     }
@@ -377,7 +380,7 @@ export default function RealtimeSync() {
     { key: 'detail', label: '查看运行详情' },
     {
       key: 'validate',
-      label: 'Runtime 校验',
+      label: 'Flink CDC 校验',
       disabled: job.releaseState === 'PUBLISHED',
     },
     {
@@ -480,7 +483,7 @@ export default function RealtimeSync() {
       ),
     },
     {
-      title: 'Runtime',
+      title: 'Flink 运行时',
       dataIndex: 'runtime',
       width: 170,
       render: (_, job) => (
@@ -514,7 +517,7 @@ export default function RealtimeSync() {
           job.releaseState !== 'PUBLISHED' ||
           running;
         const startTooltip = !capabilities.deployEnabled
-          ? capabilities.deployDisabledReason || 'Runtime 尚未准备好安全部署'
+          ? capabilities.deployDisabledReason || 'Flink CDC 尚未准备好提交任务'
           : job.releaseState !== 'PUBLISHED'
             ? '请先发布当前任务版本'
             : running
@@ -598,7 +601,7 @@ export default function RealtimeSync() {
           <div>
             <h1 className="m-0 text-[17px] font-semibold leading-7 text-[#101828]">实时同步</h1>
             <div className="mt-0.5 text-[12px] text-[#98a2b3]">
-              固定 Yak CDC Runtime · MySQL CDC → MySQL / PostgreSQL
+              Flink CDC CLI + Flink REST · MySQL CDC → MySQL / PostgreSQL
               <span className="ml-2">· {streamConnected ? '状态流已连接' : '状态流重连中'}</span>
             </div>
           </div>
@@ -733,9 +736,10 @@ export default function RealtimeSync() {
                   placement="bottomLeft"
                   content={
                     <Descriptions size="small" column={1} className="w-[420px]">
-                      <Descriptions.Item label="Runtime">{capabilities.runtimeVersion || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="提交引擎">{capabilities.runtimeVersion || '-'}</Descriptions.Item>
                       <Descriptions.Item label="Flink">{capabilities.flinkVersion || '-'}</Descriptions.Item>
                       <Descriptions.Item label="Flink CDC">{capabilities.flinkCdcVersion || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="REST">{capabilities.restUrl || '-'}</Descriptions.Item>
                       <Descriptions.Item label="语义">{capabilities.deliverySemantics || '-'}</Descriptions.Item>
                       <Descriptions.Item label="Sources">
                         {capabilities.connectors?.sources?.join(', ') || '-'}
@@ -746,9 +750,9 @@ export default function RealtimeSync() {
                     </Descriptions>
                   }
                 >
-                  <Button size="small" className="!h-8">Runtime 能力</Button>
+                  <Button size="small" className="!h-8">Flink 能力</Button>
                 </Popover>
-                <Tooltip title="刷新任务与 Runtime 能力">
+                <Tooltip title="刷新任务与 Flink 能力">
                   <Button
                     size="small"
                     icon={<ReloadOutlined spin={loading} />}
@@ -768,13 +772,6 @@ export default function RealtimeSync() {
               </Button>
             </div>
 
-            {capabilities.dynamicCredentialBinding === false && (
-              <div className="flex min-h-9 items-center rounded-sm bg-[#fff7e6] px-3 text-[12px] text-[#475467]">
-                <span className="mr-2 text-[14px] text-[#faad14]">▲</span>
-                <span className="font-medium text-[#344054]">【Runtime 提示】</span>
-                <span>当前尚无按部署动态凭据接口，启动操作已被安全阻止；创建、校验、发布和查看任务不受影响。</span>
-              </div>
-            )}
           </div>
 
           <Divider style={{ marginTop: 4, marginBottom: 16 }} />
@@ -873,7 +870,7 @@ export default function RealtimeSync() {
                       <Descriptions.Item label="Engine Job ID">
                         {detail.latestDeployment?.engineJobId || '-'}
                       </Descriptions.Item>
-                      <Descriptions.Item label="Runtime Revision">
+                      <Descriptions.Item label="Flink CDC Revision">
                         {detail.latestDeployment?.runtimeRevision || '-'}
                       </Descriptions.Item>
                       <Descriptions.Item label="最近错误">{detail.lastError || '-'}</Descriptions.Item>
@@ -905,7 +902,7 @@ export default function RealtimeSync() {
                 },
                 {
                   key: 'logs',
-                  label: '临时日志',
+                  label: '任务日志',
                   children: (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <Button
@@ -938,12 +935,32 @@ export default function RealtimeSync() {
                   key: 'observability',
                   label: 'Checkpoint / Metrics',
                   children: (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      message="当前 Runtime Gateway 不支持 Checkpoint 与 Metrics API"
-                      description="页面不会直接访问 Flink REST，也不会伪造吞吐或 Checkpoint 数据。"
-                    />
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const [checkpoints, metrics] = await Promise.all([
+                              realtimeApi.checkpoints(detail.id),
+                              realtimeApi.metrics(detail.id),
+                            ]);
+                            setCheckpointData(checkpoints.data);
+                            setMetricsData(metrics.data);
+                          } catch (error: any) {
+                            message.error(error?.message || 'Checkpoint / Metrics 不可用');
+                          }
+                        }}
+                      >
+                        刷新 Flink 观测数据
+                      </Button>
+                      <Typography.Text strong>Checkpoints</Typography.Text>
+                      <pre className="max-h-[300px] overflow-auto rounded bg-[#f8f9fb] p-3 text-[12px]">
+                        {checkpointData ? JSON.stringify(checkpointData, null, 2) : '尚未读取'}
+                      </pre>
+                      <Typography.Text strong>Job Metrics</Typography.Text>
+                      <pre className="max-h-[300px] overflow-auto rounded bg-[#f8f9fb] p-3 text-[12px]">
+                        {metricsData ? JSON.stringify(metricsData, null, 2) : '尚未读取'}
+                      </pre>
+                    </Space>
                   ),
                 },
               ]}

@@ -1,80 +1,99 @@
-# 实时同步 MVP
+# 实时同步一期
 
-## 运行边界
+## 设计边界
 
-控制面位于独立模块 `yak-ops-business-sync-realtime`，不复用离线同步任务实体、执行表或状态机。执行面固定使用 [yak-flink-cdc-connectors](https://github.com/weifuwan/yak-flink-cdc-connectors) 中的 `yak-cdc-runtime`：Java 11、Flink 1.20.5、Flink CDC 3.6.0，以及 `yak-jdbc` MySQL/PostgreSQL Sink。
+一期不引入 `yak-cdc-runtime`。Yak Ops 负责控制面，复用现有 Flink Standalone Session
+Cluster：
 
-Yak Ops 仅调用 Gateway，不嵌入 Flink/Flink CDC 依赖，浏览器也不直接访问 Flink REST。当前 Gateway 契约只有：
+- 启动：在 Yak Ops 所在机器执行 Flink CDC CLI；
+- 停止和状态：按持久化的 Flink `jobId` 调用 REST API；
+- 日志：展示本次 CLI 提交日志和 Flink `/exceptions`；
+- 指标：代理 Flink Job、Metrics 和 Checkpoints REST API；
+- Connector：由部署人员放入 Flink CDC 的 `lib`，Yak Ops 不依赖 Connector 工程。
 
-| Method | Runtime path | Yak Ops 用途 |
+浏览器只访问 Yak Ops API，不直接访问 Flink REST。每个任务独立保存 `jobId`，同一个
+Session Cluster 可以运行多个实时任务。
+
+## 环境准备
+
+推荐版本为 Flink 1.20.5、Flink CDC 3.6.0 和 Java 21。先准备目录：
+
+```text
+/opt/flink
+/opt/flink-cdc
+```
+
+将需要的 Connector JAR（例如 `yak-flink-cdc-connectors` 的构建产物）复制到
+`/opt/flink-cdc/lib`，然后启动 Flink Session Cluster：
+
+```bash
+/opt/flink/bin/start-cluster.sh
+curl http://127.0.0.1:8081/overview
+```
+
+Yak Ops 需要和上述目录位于同一台机器或同一个挂载命名空间。核心配置：
+
+| 环境变量 | 默认值 | 说明 |
 |---|---|---|
-| GET | `/health` | 健康检查 |
-| GET | `/capabilities` | 版本、Source/Sink 与交付语义 |
-| POST | `/validate` | 校验临时 Pipeline YAML |
-| POST | `/deploy` | 提交唯一活动任务 |
-| GET | `/status` | 对账 `NONE/RUNNING/TERMINATED` |
-| POST | `/stop` | 停止当前任务；请求 body 为空 |
-| GET | `/logs` | 临时读取脱敏日志 |
+| `YAK_FLINK_REST_URL` | `http://127.0.0.1:8081` | Flink REST 地址 |
+| `YAK_FLINK_HOME` | `/opt/flink` | Flink 安装目录 |
+| `YAK_FLINK_CDC_HOME` | `/opt/flink-cdc` | Flink CDC 安装目录 |
+| `YAK_FLINK_JAVA_HOME` | 空 | 可选，提交进程使用的 `JAVA_HOME` |
+| `YAK_REALTIME_WORK_DIRECTORY` | `./data/realtime-sync` | 提交日志和短期临时文件目录 |
+| `YAK_REALTIME_SUBMIT_TIMEOUT` | `60s` | CLI 提交超时 |
 
-当前 Runtime 没有 Checkpoint、Metrics、认证和每任务凭据下发接口。Yak Ops 不伪造这些能力。
+`YAK_REALTIME_WORK_DIRECTORY` 应位于本机受保护目录，不应放在共享 Web 目录。
 
-Flink CDC 3.6 的 Pipeline YAML 只接受 PipelineOptions；Checkpoint 与 Flink restart-strategy 属于 Runtime/Flink 配置。当前 Gateway 没有每任务覆盖接口，因此编译器不会生成无效的 `checkpoint-interval` 或 `restart-strategy` YAML。逻辑 Spec 预留这两项，界面明确标为 Runtime 固定配置；要让它们真正按任务生效，必须先扩展 Runtime 契约和 capability manifest。
+## 启停流程
 
-## Spec 与凭据
+启动时 Yak Ops：
 
-`CdcPipelineSpec` 只保存数据源 ID、表匹配/映射、主键声明、启动模式、Schema Evolution 和运行参数。host、port、JDBC URL、用户名与密码均不属于任务定义。
+1. 校验已发布的任务定义和 Source/Sink 能力；
+2. 从数据源管理读取最新凭据，仅在内存中替换密码占位符；
+3. 以 `0600` 权限写入短期 Pipeline YAML；
+4. 执行：
 
-发布、校验和启动前，`RealtimeDataSourceResolver` 会重新读取最新数据源定义，并按角色执行独立校验：
+   ```bash
+   /opt/flink-cdc/bin/flink-cdc.sh pipeline.yaml \
+     --flink-home /opt/flink \
+     --target remote \
+     -Drest.address=127.0.0.1 \
+     -Drest.port=8081
+   ```
 
-- Source 仅允许 MySQL，对应 Runtime `mysql` Source；
-- Sink 仅允许 MySQL/PostgreSQL，对应 `yak-jdbc:mysql` 或 `yak-jdbc:postgres`；
-- 能力必须以 Runtime `/capabilities` 返回值为准；
-- 一期强制 At-least-once、主键声明和 strict Replay Safety。
+5. 从 CLI 输出解析 32 位 Flink `jobId`，保存到部署记录；
+6. CLI 退出后立即删除临时 YAML，提交日志按 `jobId` 保存且经过接口脱敏。
 
-编译出的 Pipeline YAML 仅在调用栈中短暂存在，密码字段为 `${ENV:SOURCE_PASSWORD}` 和 `${ENV:SINK_PASSWORD}`（名称可配置），不会落库或返回前端。部署环境必须把与本次数据源一致的密码预置到 Runtime 环境。由于当前 Gateway 不支持安全的动态凭据下发，Yak Ops 无法把数据源密码自动注入 Runtime；扩展 Gateway 前不得用明文 YAML 或日志传递密码。
+停止任务调用 `PATCH /jobs/{jobId}`。Yak Ops 不管理 CLI PID，因为 CLI 完成提交后会退出；
+真正的运行实体是 Flink Job。
 
-因此启动被安全阻止：当前 Gateway 只检查 `${ENV:...}` 形式，但 Flink CDC 3.6 的 Pipeline 解析器不会自动展开该值。Draft PR 合并前必须先由 Runtime 增加按部署 Secret 引用/绑定及内存内解析能力，并在 capability manifest 中明确声明；不能依赖明文临时文件或假定上游会展开占位符。
+## 状态、日志和指标
 
-## 状态与恢复
-
-任务使用三个正交状态轴：
-
-- `releaseState`：`DRAFT/PUBLISHED`；
-- `desiredState`：`RUNNING/STOPPED`；
-- `observedState`：`STOPPED/STARTING/RUNNING/STOPPING/FAILED/UNKNOWN/CONFLICT`。
-
-显式状态机拒绝非法迁移。启动先创建无密码部署快照和本地幂等键，再调用 Runtime；提交超时会保留 `UNKNOWN`，同一幂等键不会再次提交。Reconciler 周期查询 `/status`，可在 Yak Ops 重启后恢复 RUNNING/STOPPED/FAILED/CONFLICT。Runtime 丢失任务时不会自动重新部署，以避免 At-least-once 场景重复回放。
-
-## 数据库
-
-| 表 | 内容 |
+| Yak Ops API | Flink 数据源 |
 |---|---|
-| `yak_realtime_job_definition` | 无密码逻辑 Spec、三个状态轴、当前/发布版本、摘要 |
-| `yak_realtime_job_deployment` | definitionVersion、无密码快照、Spec 摘要、SHA-256、幂等键、engineJobId、runtimeRevision、结果不确定标记 |
-| `yak_realtime_job_event` | 低频状态迁移与审计事件 |
+| `GET /api/v1/realtime-sync/{id}` | 本地定义、部署和最近状态 |
+| `POST /api/v1/realtime-sync/{id}/reconcile` | `GET /jobs/{jobId}` |
+| `GET /api/v1/realtime-sync/{id}/logs` | 本地提交日志 + `/jobs/{jobId}/exceptions` |
+| `GET /api/v1/realtime-sync/{id}/checkpoints` | `/jobs/{jobId}/checkpoints` |
+| `GET /api/v1/realtime-sync/{id}/metrics` | `/jobs/{jobId}` + `/jobs/{jobId}/metrics` |
 
-V2 迁移会清空旧实现曾保存的 `pipeline_yaml`，后续部署始终写入 `NULL`。高频指标和完整日志不进入业务库。
+后台 Reconciler 按每个部署的 `jobId` 对账。短暂 REST 故障达到配置阈值后才把该任务标为
+`UNKNOWN`；任务丢失或终止时不会自动重新提交，避免 At-least-once 场景产生意外重复回放。
 
-## Yak Ops API
+状态事件和操作审计保存在业务库；高频 Metrics、Checkpoint 详情和完整 Flink 日志不入库。
+完整运行日志仍通过 Flink Web UI 或集群日志系统查看。
 
-| Method | Path | 用途 |
-|---|---|---|
-| POST | `/api/v1/realtime-sync/draft` | 新建草稿 |
-| PUT | `/api/v1/realtime-sync/{id}` | 保存新定义版本 |
-| GET | `/api/v1/realtime-sync/{id}` | 详情与最近部署 |
-| GET | `/api/v1/realtime-sync` | 服务端分页/搜索 |
-| DELETE | `/api/v1/realtime-sync/{id}` | 删除已停止任务 |
-| POST | `/{id}/validate` | 按最新数据源与 Runtime 能力校验 |
-| POST | `/{id}/publish` | 校验并发布当前版本 |
-| POST | `/{id}/start` | 使用 `Idempotency-Key` 启动 |
-| POST | `/{id}/stop` | 停止 |
-| POST | `/{id}/restart` | 等待停止后重新部署 |
-| GET | `/{id}/events` | 状态与审计事件 |
-| GET | `/{id}/logs` | 临时 Runtime 日志 |
-| GET | `/runtime/capabilities` | Runtime 能力代理 |
+## 操作流程
 
-接口分别受 `task:realtime:read/create/update/delete/execute` 权限保护。
+1. 启动 Flink Session Cluster，并确认 `/overview` 正常；
+2. 启动 Yak Ops，打开“数据集成 → 实时同步”；
+3. 创建任务，选择 MySQL Source、MySQL/PostgreSQL Sink 和表路由；
+4. 保存并发布；
+5. 点击“启动”，在详情中确认 Flink Job ID 和 `RUNNING`；
+6. 在“任务日志”查看提交失败或 Job 异常；
+7. 在“Checkpoint / Metrics”刷新实时观测数据；
+8. 点击“停止”，Yak Ops 按该任务的 `jobId` 取消 Flink Job。
 
-## 页面
-
-“数据集成 → 实时同步”包括任务分页、Source/Sink/表规则/运行参数向导、发布与启停、部署摘要、Runtime 版本、状态事件和临时日志。Checkpoint/Metrics 页签依据后端能力明确显示不可用。
+一期的 Checkpoint 间隔和 Restart Strategy 仍以 Flink 集群配置为准，不向 Pipeline YAML
+写入非 Flink CDC Pipeline Options。按任务 Savepoint、恢复启动、Vertex 级指标聚合和集中式
+日志检索留到后续版本。

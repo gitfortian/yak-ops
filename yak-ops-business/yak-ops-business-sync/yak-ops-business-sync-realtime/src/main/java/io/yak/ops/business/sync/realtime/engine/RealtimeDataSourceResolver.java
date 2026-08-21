@@ -38,7 +38,7 @@ public class RealtimeDataSourceResolver {
     return new ResolvedCdcPipeline(endpoint(source, Role.SOURCE), endpoint(sink, Role.SINK));
   }
 
-  /** Resolves credentials only for the lifetime of one Runtime submission. */
+  /** Resolves credentials only for the lifetime of one Flink CDC CLI submission. */
   public RealtimeDeployRequest.CredentialBinding[] resolveCredentials(CdcPipelineSpec spec) {
     DataSourceDefinition source = find(spec.sourceDataSourceRef(), "Source");
     DataSourceDefinition sink = find(spec.sinkDataSourceRef(), "Sink");
