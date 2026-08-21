@@ -19,5 +19,6 @@
 
     <modules>
         <module>yak-ops-business-sync-offline</module>
+        <module>yak-ops-business-sync-realtime</module>
     </modules>
 </project>

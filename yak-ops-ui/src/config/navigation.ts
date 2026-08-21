@@ -63,6 +63,7 @@ export const appRoutes: readonly NavigationRoute[] = [
     quickCreateRequirement: { mode: 'one', permission: 'task:batch:create' },
     quickCreateLabel: '新建离线同步',
   },
+  { id: 'realtime-sync', mode: 'public', path: '/sync/realtime', title: '实时同步', component: './realtime-sync', iconKey: 'realtime', menuGroup: 'integration', order: 20 },
   { id: 'batch-link-up-detail', path: '/sync/batch-link-up/:id/detail', title: '离线同步详情', component: './batch-link-up/detail', hidden: true, parentId: 'batch-link-up' },
   { id: 'batch-link-up-single', path: '/sync/batch-link-up/:id/config/single', title: '单表同步配置', component: './batch-link-up/config/single', hidden: true, parentId: 'batch-link-up' },
   { id: 'batch-link-up-multi', path: '/sync/batch-link-up/:id/config/multi', title: '多表同步配置', component: './batch-link-up/config/multi', hidden: true, parentId: 'batch-link-up' },

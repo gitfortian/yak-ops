@@ -1,0 +1,17 @@
+import { request } from '@umijs/max';
+import { Alert, Button, Card, Descriptions, Drawer, Space, Table, Tabs, Tag, Typography, message } from 'antd';
+import { useEffect, useState } from 'react';
+
+type Job={id:number;job_name:string;description?:string;release_state:string;desired_state:string;observed_state:string;definition_version:number;update_time:string};
+type Api<T>={data:T;success?:boolean;message?:string};
+const api={list:()=>request<Api<Job[]>>('/api/v1/realtime-sync'),capabilities:()=>request<Api<Record<string,unknown>>>('/api/v1/realtime-sync/runtime/capabilities'),action:(id:number,a:string)=>request(`/api/v1/realtime-sync/${id}/${a}`,{method:'POST'}),events:(id:number)=>request<Api<Record<string,unknown>[]>>(`/api/v1/realtime-sync/${id}/events`),logs:()=>request<Api<unknown>>('/api/v1/realtime-sync/runtime/logs')};
+export default function RealtimeSync(){const [jobs,setJobs]=useState<Job[]>([]),[caps,setCaps]=useState<Record<string,unknown>>({}),[detail,setDetail]=useState<{title:string;value:unknown}|null>(null);const load=async()=>{try{setJobs((await api.list()).data||[]);setCaps((await api.capabilities()).data||{});}catch(e){message.error('实时同步 Runtime 或控制面不可用');}};useEffect(()=>{void load();},[]);const act=async(j:Job,a:string)=>{try{await api.action(j.id,a);message.success('操作已提交');await load();}catch(e:any){message.error(e?.message||'操作失败');}};return <Space direction="vertical" size={16} style={{width:'100%'}}>
+ <div><Typography.Title level={3}>实时同步</Typography.Title><Typography.Text type="secondary">MySQL CDC 到 MySQL / PostgreSQL；运行时同一时间仅允许一个活动任务。</Typography.Text></div>
+ <Alert type="info" showIcon message="At-least-once 交付" description="Connector、版本与交付语义均来自 Runtime capabilities。当前 Runtime 未提供 checkpoints/metrics，页面不展示虚构指标。"/>
+ <Card title="Runtime 能力" extra={<Button onClick={load}>刷新</Button>}><Descriptions size="small" column={3}>{Object.entries(caps).map(([k,v])=><Descriptions.Item key={k} label={k}>{typeof v==='object'?JSON.stringify(v):String(v)}</Descriptions.Item>)}</Descriptions></Card>
+ <Card title="任务定义" extra={<Button type="primary" disabled title="请通过创建向导 API 保存无密码 Spec">新建任务</Button>}><Table rowKey="id" dataSource={jobs} pagination={{pageSize:20}} columns={[
+ {title:'任务',dataIndex:'job_name'},{title:'版本',dataIndex:'definition_version'},{title:'发布',dataIndex:'release_state',render:(v)=><Tag>{v}</Tag>},{title:'期望状态',dataIndex:'desired_state'},{title:'运行状态',dataIndex:'observed_state',render:(v)=><Tag color={v==='RUNNING'?'green':v==='FAILED'?'red':'default'}>{v}</Tag>},{title:'更新时间',dataIndex:'update_time'},
+ {title:'操作',render:(_,j)=><Space wrap><Button size="small" onClick={()=>act(j,'publish')}>发布</Button><Button size="small" type="primary" onClick={()=>act(j,'start')}>启动</Button><Button size="small" onClick={()=>act(j,'stop')}>停止</Button><Button size="small" onClick={()=>act(j,'restart')}>重启</Button><Button size="small" onClick={async()=>setDetail({title:'事件',value:(await api.events(j.id)).data})}>事件</Button><Button size="small" onClick={async()=>setDetail({title:'Runtime 日志',value:(await api.logs()).data})}>日志</Button></Space>}
+ ]}/></Card>
+ <Drawer width={720} title={detail?.title} open={!!detail} onClose={()=>setDetail(null)}><Tabs items={[{key:'data',label:'数据',children:<pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(detail?.value,null,2)}</pre>},{key:'metrics',label:'Checkpoints / Metrics',children:<Alert type="warning" message="当前运行时暂不支持"/>}]}/></Drawer>
+ </Space>}

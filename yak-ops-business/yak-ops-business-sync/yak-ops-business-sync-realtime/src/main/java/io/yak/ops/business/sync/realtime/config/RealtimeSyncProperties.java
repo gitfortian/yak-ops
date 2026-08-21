@@ -1,0 +1,4 @@
+package io.yak.ops.business.sync.realtime.config;
+import java.time.Duration; import org.springframework.boot.context.properties.ConfigurationProperties;
+@ConfigurationProperties("yak.sync.realtime")
+public class RealtimeSyncProperties {private boolean enabled=true;private String baseUrl="http://localhost:8088";private Duration connectTimeout=Duration.ofSeconds(3),requestTimeout=Duration.ofSeconds(15);public boolean isEnabled(){return enabled;}public void setEnabled(boolean v){enabled=v;}public String getBaseUrl(){return baseUrl;}public void setBaseUrl(String v){baseUrl=v;}public Duration getConnectTimeout(){return connectTimeout;}public void setConnectTimeout(Duration v){connectTimeout=v;}public Duration getRequestTimeout(){return requestTimeout;}public void setRequestTimeout(Duration v){requestTimeout=v;}}
