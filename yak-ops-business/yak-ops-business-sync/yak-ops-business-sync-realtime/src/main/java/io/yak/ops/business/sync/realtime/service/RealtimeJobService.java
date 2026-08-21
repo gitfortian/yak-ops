@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -93,8 +94,16 @@ public class RealtimeJobService {
                 store.event(created, null, "DRAFT_CREATED", null, "DRAFT", "已创建实时同步草稿");
                 return created;
               }
+              DefinitionRow locked = store.lockDefinition(id);
+              stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
               store.updateDefinition(id, name.trim(), description, spec, digest);
-              store.event(id, null, "DRAFT_SAVED", null, "DRAFT", "已保存草稿并生成新定义版本");
+              store.event(
+                  id,
+                  null,
+                  "DRAFT_SAVED",
+                  locked.releaseState(),
+                  "DRAFT",
+                  "已保存草稿并生成新定义版本");
               return id;
             });
     return saved == null ? 0 : saved;
@@ -123,11 +132,23 @@ public class RealtimeJobService {
 
   public void publish(long id) {
     Prepared prepared = prepare(id, false);
+    stateMachine.requireDefinitionMutable(
+        prepared.definition().desiredState(), prepared.definition().observedState());
     gateway.validate(prepared.compiled().yaml());
     transactions.executeWithoutResult(
         status -> {
-          store.publish(id);
-          store.event(id, null, "PUBLISHED", "DRAFT", "PUBLISHED", "Flink CDC 校验通过，任务已发布");
+          DefinitionRow locked = store.lockDefinition(id);
+          stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
+          requirePreparedDefinitionCurrent(prepared, locked);
+          store.publish(
+              id, prepared.definition().definitionVersion(), prepared.definition().configDigest());
+          store.event(
+              id,
+              null,
+              "PUBLISHED",
+              locked.releaseState(),
+              "PUBLISHED",
+              "Flink CDC 校验通过，任务已发布");
         });
   }
 
@@ -157,6 +178,7 @@ public class RealtimeJobService {
                 status -> {
                   DefinitionRow locked = store.lockDefinition(id);
                   requirePublished(locked);
+                  requirePreparedDefinitionCurrent(prepared, locked);
                   stateMachine.requireTransition(locked.observedState(), "STARTING");
                   long created =
                       store.insertDeployment(
@@ -283,7 +305,12 @@ public class RealtimeJobService {
   }
 
   public void delete(long id) {
-    transactions.executeWithoutResult(status -> store.delete(id));
+    transactions.executeWithoutResult(
+        status -> {
+          DefinitionRow locked = store.lockDefinition(id);
+          stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
+          store.delete(id);
+        });
   }
 
   public List<RealtimeJobEventView> events(long id) {
@@ -457,6 +484,14 @@ public class RealtimeJobService {
         || definition.publishedVersion() == null
         || definition.publishedVersion() != definition.definitionVersion()) {
       throw new IllegalStateException("请先发布当前定义版本");
+    }
+  }
+
+  private void requirePreparedDefinitionCurrent(Prepared prepared, DefinitionRow current) {
+    DefinitionRow snapshot = prepared.definition();
+    if (snapshot.definitionVersion() != current.definitionVersion()
+        || !Objects.equals(snapshot.configDigest(), current.configDigest())) {
+      throw new IllegalStateException("任务定义在校验期间已变化，请刷新后重试");
     }
   }
 
