@@ -163,6 +163,11 @@ public class RealtimeJobListQuery {
   }
 
   private CdcPipelineSpec readSpec(String value) {
+    // Two-stage drafts intentionally have no spec until the configuration page is saved.
+    // Keep those rows visible in list queries instead of attempting to deserialize SQL NULL.
+    if (!StringUtils.hasText(value)) {
+      return null;
+    }
     try {
       return json.readValue(value, CdcPipelineSpec.class);
     } catch (Exception exception) {
