@@ -37,6 +37,7 @@ class DevelopmentSqlLineageServiceTest {
   void replacesGeneratedRelationsWithTableAndColumnLineage() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
@@ -63,8 +64,9 @@ class DevelopmentSqlLineageServiceTest {
 
     service.syncPublished(node(), revision(sql));
 
-    verify(maintenanceService).clearRelationsByEvidence(
-        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42");
+    verify(maintenanceService).beginReplacement(
+        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42", "DATA_DEVELOPMENT", "42");
+    verify(maintenanceService).finishReplacement(null);
 
     ArgumentCaptor<LineageService.RegisterRelationCommand> relations =
         ArgumentCaptor.forClass(LineageService.RegisterRelationCommand.class);
@@ -88,6 +90,7 @@ class DevelopmentSqlLineageServiceTest {
   void columnAssetsAreParentedByStableTableAssets() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
@@ -134,6 +137,7 @@ class DevelopmentSqlLineageServiceTest {
   void catalogSchemaEnablesStarAndImplicitTargetColumnLineage() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = new SqlColumnLineageParser();
     DataSourceCatalogService catalogService = mock(DataSourceCatalogService.class);
@@ -190,6 +194,7 @@ class DevelopmentSqlLineageServiceTest {
   void columnParserFailureKeepsCurrentTableLineage() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
@@ -220,6 +225,7 @@ class DevelopmentSqlLineageServiceTest {
   void tableParserFailureClearsStaleRelationsAndSkipsColumnParsing() {
     LineageService lineageService = mock(LineageService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
+    when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
@@ -233,8 +239,9 @@ class DevelopmentSqlLineageServiceTest {
 
     assertDoesNotThrow(() -> service.syncPublished(node(), revision(sql)));
 
-    verify(maintenanceService).clearRelationsByEvidence(
-        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42");
+    verify(maintenanceService).beginReplacement(
+        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42", "DATA_DEVELOPMENT", "42");
+    verify(maintenanceService).finishReplacement(null);
     verify(columnParser, never()).parse(any());
     verify(lineageService, never()).registerRelation(any());
   }

@@ -1,5 +1,6 @@
 package io.yak.ops.business.lineage;
 
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,44 @@ public class LineageMaintenanceService {
     String normalizedType = required(sourceType, "sourceType", 64);
     String normalizedId = required(sourceId, "sourceId", 200);
     return repository.deleteRelationsByEvidence(normalizedType, normalizedId);
+  }
+
+  /** Starts an evidence-scoped replacement and remembers only its former endpoints. */
+  @Transactional
+  public CleanupScope beginReplacement(
+      String sourceType, String sourceId, String ownerType, String ownerId) {
+    String evidenceType = required(sourceType, "sourceType", 64);
+    String evidenceId = required(sourceId, "sourceId", 200);
+    CleanupScope scope = new CleanupScope(evidenceType, evidenceId,
+        required(ownerType, "ownerType", 64), required(ownerId, "ownerId", 200),
+        repository.findAssetIdsByEvidence(evidenceType, evidenceId));
+    repository.deleteRelationsByEvidence(evidenceType, evidenceId);
+    return scope;
+  }
+
+  /** Deletes old endpoints only when explicit ownership, all edges, and children permit it. */
+  @Transactional
+  public int finishReplacement(CleanupScope scope) {
+    if (scope == null) throw new IllegalArgumentException("cleanupScope 不能为空");
+    return repository.deleteUnreferencedOwnedAssets(
+        scope.candidateAssetIds(), scope.ownerType(), scope.ownerId());
+  }
+
+  /** Serializes publishers and rejects an older revision after a newer revision has committed. */
+  @Transactional
+  public boolean lockAndAcceptRevision(String assetKey, int revisionNo) {
+    String key = required(assetKey, "assetKey", 512);
+    return repository.lockAssetByKey(key).map(asset -> {
+      if (asset.properties() == null || !asset.properties().has("revisionNo")) return true;
+      return asset.properties().path("revisionNo").asInt(Integer.MIN_VALUE) <= revisionNo;
+    }).orElse(true);
+  }
+
+  public record CleanupScope(String sourceType, String sourceId, String ownerType, String ownerId,
+      Set<Long> candidateAssetIds) {
+    public CleanupScope {
+      candidateAssetIds = candidateAssetIds == null ? Set.of() : Set.copyOf(candidateAssetIds);
+    }
   }
 
   private static String required(String value, String field, int maxLength) {

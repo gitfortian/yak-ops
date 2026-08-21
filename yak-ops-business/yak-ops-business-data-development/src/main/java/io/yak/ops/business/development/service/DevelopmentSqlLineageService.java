@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Publishes authoritative table- and column-level lineage for immutable SQL task revisions. */
 @Service
@@ -97,19 +98,25 @@ public class DevelopmentSqlLineageService {
   }
 
   /** Compatibility entry point; production outbox uses prepare then an independent write transaction. */
+  @Transactional
   public void syncPublished(DevelopmentNode node, DevelopmentTaskRevision revision) {
     PreparedLineage prepared = prepare(node, revision);
     if (prepared != null) applyPrepared(node, revision, prepared);
   }
 
-  /** Writes an already prepared snapshot. Caller supplies the atomic transaction. */
+  /** Writes and reclaims one snapshot atomically. */
+  @Transactional
   public void applyPrepared(DevelopmentNode node, DevelopmentTaskRevision revision,
       PreparedLineage prepared) {
     String evidenceId = String.valueOf(node.id());
     String dataSourceId = prepared.context().dataSourceId();
-    maintenanceService.clearRelationsByEvidence(EVIDENCE_SOURCE_TYPE, evidenceId);
+    if (!maintenanceService.lockAndAcceptRevision(
+        "sql-task:data-development:" + node.id(), revision.revisionNo())) return;
+    LineageMaintenanceService.CleanupScope cleanup = maintenanceService.beginReplacement(
+        EVIDENCE_SOURCE_TYPE, evidenceId, "DATA_DEVELOPMENT", evidenceId);
     if (prepared.tableFailure() != null) {
       registerTaskAsset(node, revision, dataSourceId, null, null, prepared.tableFailure(), null);
+      maintenanceService.finishReplacement(cleanup);
       return;
     }
     SqlTableLineageParser.ParseResult tableParsed = prepared.tables();
@@ -135,6 +142,7 @@ public class DevelopmentSqlLineageService {
     }
     if (columnParsed != null) registerColumnLineage(prepared.context(), task, revision, columnParsed,
         evidenceId, observedAt, tableAssets);
+    maintenanceService.finishReplacement(cleanup);
   }
 
   public record PreparedLineage(SqlContext context, SqlTableLineageParser.ParseResult tables,
