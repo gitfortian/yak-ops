@@ -1,81 +1,184 @@
 import {
   Alert,
   Button,
-  Card,
+  ConfigProvider,
   Descriptions,
+  Divider,
   Drawer,
+  Dropdown,
+  Empty,
   Input,
   message,
-  Popconfirm,
+  Modal,
+  Popover,
+  Select,
   Space,
   Table,
   Tabs,
-  Tag,
   Timeline,
+  Tooltip,
   Typography,
 } from 'antd';
+import { CopyOutlined, FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import CustomPagination from '../batch-link-up/CustomPagination';
 import { realtimeApi } from './api';
 import JobEditor from './JobEditor';
-import type { DataSourceOption, RealtimeEvent, RealtimeJob, RuntimeCapabilities } from './types';
+import type {
+  DataSourceOption,
+  RealtimeEvent,
+  RealtimeJob,
+  ReleaseState,
+  RuntimeCapabilities,
+} from './types';
 
-const stateColor = (state: string) =>
-  ({
-    RUNNING: 'green',
-    FAILED: 'red',
-    CONFLICT: 'red',
-    UNKNOWN: 'orange',
-    STARTING: 'blue',
-    STOPPING: 'blue',
-    PUBLISHED: 'geekblue',
-    DRAFT: 'default',
-  })[state] || 'default';
+type StateGroup = 'ALL' | 'RUNNING' | 'STOPPED' | 'ABNORMAL';
+
+interface FilterState {
+  keyword?: string;
+  id?: string;
+  releaseState?: ReleaseState;
+  stateGroup: StateGroup;
+}
+
+const statusTabs: Array<{ label: string; value: StateGroup }> = [
+  { label: '全部任务', value: 'ALL' },
+  { label: '运行中', value: 'RUNNING' },
+  { label: '已停止', value: 'STOPPED' },
+  { label: '异常', value: 'ABNORMAL' },
+];
+
+const releaseOptions = [
+  { label: '草稿', value: 'DRAFT' },
+  { label: '已发布', value: 'PUBLISHED' },
+];
+
+const observedStateLabel: Record<string, string> = {
+  STOPPED: '已停止',
+  STARTING: '启动中',
+  RUNNING: '运行中',
+  STOPPING: '停止中',
+  FAILED: '失败',
+  UNKNOWN: '未知',
+  CONFLICT: '冲突',
+};
+
+const releaseStateLabel: Record<string, string> = {
+  DRAFT: '草稿',
+  PUBLISHED: '已发布',
+};
+
+const statusStyle = (state?: string) => {
+  switch (String(state || '').toUpperCase()) {
+    case 'RUNNING':
+    case 'PUBLISHED':
+      return { dot: '#12b76a', text: '#027a48', background: '#ecfdf3', border: '#abefc6' };
+    case 'STARTING':
+    case 'STOPPING':
+      return { dot: '#2e90fa', text: '#175cd3', background: '#eff8ff', border: '#b2ddff' };
+    case 'FAILED':
+    case 'CONFLICT':
+      return { dot: '#f04438', text: '#b42318', background: '#fef3f2', border: '#fecdca' };
+    case 'UNKNOWN':
+      return { dot: '#f79009', text: '#b54708', background: '#fffaeb', border: '#fedf89' };
+    case 'DRAFT':
+    case 'STOPPED':
+    default:
+      return { dot: '#98a2b3', text: '#475467', background: '#f9fafb', border: '#eaecf0' };
+  }
+};
+
+const StateBadge = ({ state, label }: { state?: string; label?: string }) => {
+  const style = statusStyle(state);
+  return (
+    <span
+      className="inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium"
+      style={{ color: style.text, background: style.background, borderColor: style.border }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: style.dot }} />
+      {label || state || '-'}
+    </span>
+  );
+};
+
+const initialFilters: FilterState = { stateGroup: 'ALL' };
 
 export default function RealtimeSync() {
   const [jobs, setJobs] = useState<RealtimeJob[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNo, setPageNo] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [capabilities, setCapabilities] = useState<RuntimeCapabilities>({});
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
+  const [filterDraft, setFilterDraft] = useState<FilterState>(initialFilters);
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editor, setEditor] = useState<{ open: boolean; job?: RealtimeJob }>({ open: false });
   const [detail, setDetail] = useState<RealtimeJob>();
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [logs, setLogs] = useState('');
 
-  const load = useCallback(async () => {
+  const dataSourceMap = useMemo(
+    () => new Map(dataSources.map((item) => [String(item.value), item])),
+    [dataSources],
+  );
+
+  const loadJobs = useCallback(async () => {
     setLoading(true);
     try {
-      const [page, caps, sources] = await Promise.allSettled([
-        realtimeApi.page(pageNo, pageSize, keyword || undefined),
-        realtimeApi.capabilities(),
-        realtimeApi.dataSources(),
-      ]);
-      if (page.status === 'rejected') throw page.reason;
-      setJobs(page.value.data.records || []);
-      setTotal(page.value.data.total || 0);
-      setCapabilities(caps.status === 'fulfilled' ? caps.value.data || {} : {});
-      setDataSources(sources.status === 'fulfilled' ? sources.value.data || [] : []);
-      if (caps.status === 'rejected') message.warning('Runtime 当前不可用，任务定义仍可查看');
+      const id = filters.id?.trim();
+      const page = await realtimeApi.page({
+        pageNo,
+        pageSize,
+        keyword: filters.keyword?.trim() || undefined,
+        id: id && /^\d+$/.test(id) ? Number(id) : undefined,
+        releaseState: filters.releaseState,
+        stateGroup: filters.stateGroup === 'ALL' ? undefined : filters.stateGroup,
+      });
+      setJobs(page.data.records || []);
+      setTotal(page.data.total || 0);
     } catch (error: any) {
-      message.error(error?.message || '加载实时同步控制面失败');
+      message.error(error?.message || '加载实时同步任务失败');
     } finally {
       setLoading(false);
     }
-  }, [keyword, pageNo, pageSize]);
+  }, [filters, pageNo, pageSize]);
+
+  const loadMetadata = useCallback(async () => {
+    const [caps, sources] = await Promise.allSettled([
+      realtimeApi.capabilities(),
+      realtimeApi.dataSources(),
+    ]);
+    setCapabilities(caps.status === 'fulfilled' ? caps.value.data || {} : {});
+    setDataSources(sources.status === 'fulfilled' ? sources.value.data || [] : []);
+    if (caps.status === 'rejected') {
+      message.warning('Runtime 当前不可用，任务定义仍可查看');
+    }
+  }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadJobs();
+  }, [loadJobs]);
 
-  const action = async (job: RealtimeJob, name: 'publish' | 'validate' | 'start' | 'stop' | 'restart') => {
+  useEffect(() => {
+    void loadMetadata();
+  }, [loadMetadata]);
+
+  const refresh = async () => {
+    await Promise.all([loadJobs(), loadMetadata()]);
+  };
+
+  const action = async (
+    job: RealtimeJob,
+    name: 'publish' | 'validate' | 'start' | 'stop' | 'restart',
+  ) => {
     try {
       await realtimeApi.action(job.id, name);
       message.success(name === 'validate' ? 'Runtime 校验通过' : '操作成功');
-      await load();
+      await loadJobs();
     } catch (error: any) {
       message.error(error?.message || '操作失败');
     }
@@ -83,7 +186,10 @@ export default function RealtimeSync() {
 
   const openDetail = async (job: RealtimeJob) => {
     try {
-      const [jobResult, eventResult] = await Promise.all([realtimeApi.detail(job.id), realtimeApi.events(job.id)]);
+      const [jobResult, eventResult] = await Promise.all([
+        realtimeApi.detail(job.id),
+        realtimeApi.events(job.id),
+      ]);
       setDetail(jobResult.data);
       setEvents(eventResult.data || []);
       setLogs('');
@@ -92,255 +198,678 @@ export default function RealtimeSync() {
     }
   };
 
+  const copyToClipboard = async (value: string | number) => {
+    const text = String(value);
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      message.success('任务 ID 已复制');
+    } catch {
+      message.error('复制失败，请手动复制');
+    }
+  };
+
+  const applyFilters = (next: FilterState) => {
+    setFilterDraft(next);
+    setFilters(next);
+    setPageNo(1);
+  };
+
+  const handleSearch = () => {
+    if (filterDraft.id && !/^\d+$/.test(filterDraft.id.trim())) {
+      message.warning('任务 ID 仅支持数字');
+      return;
+    }
+    setFilters({ ...filterDraft });
+    setPageNo(1);
+  };
+
+  const handleTabChange = (stateGroup: StateGroup) => {
+    applyFilters({ ...filterDraft, stateGroup });
+  };
+
+  const handleReleaseChange = (releaseState?: ReleaseState) => {
+    applyFilters({ ...filterDraft, releaseState });
+  };
+
+  const handleReset = () => {
+    applyFilters(initialFilters);
+    setAdvancedOpen(false);
+  };
+
+  const advancedFilterCount = [filterDraft.id].filter(Boolean).length;
+
+  const sourceLabel = (job: RealtimeJob) => {
+    const source = dataSourceMap.get(String(job.spec?.sourceDataSourceRef));
+    return source?.label || `数据源 #${job.spec?.sourceDataSourceRef || '-'}`;
+  };
+
+  const sinkLabel = (job: RealtimeJob) => {
+    const sink = dataSourceMap.get(String(job.spec?.sinkDataSourceRef));
+    return sink?.label || `数据源 #${job.spec?.sinkDataSourceRef || '-'}`;
+  };
+
+  const sourceType = (job: RealtimeJob) =>
+    dataSourceMap.get(String(job.spec?.sourceDataSourceRef))?.dbType || '-';
+  const sinkType = (job: RealtimeJob) =>
+    dataSourceMap.get(String(job.spec?.sinkDataSourceRef))?.dbType || '-';
+
+  const deleteJob = (job: RealtimeJob) => {
+    Modal.confirm({
+      title: '删除实时同步任务',
+      content: `确认删除“${job.name}”？该操作仅允许已停止任务执行。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await realtimeApi.remove(job.id);
+          message.success('任务已删除');
+          await loadJobs();
+        } catch (error: any) {
+          message.error(error?.message || '删除失败');
+          throw error;
+        }
+      },
+    });
+  };
+
+  const handleMoreAction = (job: RealtimeJob, key: string) => {
+    if (key === 'detail') {
+      void openDetail(job);
+      return;
+    }
+    if (key === 'delete') {
+      deleteJob(job);
+      return;
+    }
+    if (key === 'validate' || key === 'publish' || key === 'restart') {
+      void action(job, key);
+    }
+  };
+
+  const moreItems = (job: RealtimeJob): MenuProps['items'] => [
+    { key: 'detail', label: '查看运行详情' },
+    {
+      key: 'validate',
+      label: 'Runtime 校验',
+      disabled: job.releaseState === 'PUBLISHED',
+    },
+    {
+      key: 'publish',
+      label: '发布当前版本',
+      disabled: job.releaseState === 'PUBLISHED' || job.desiredState === 'RUNNING',
+    },
+    {
+      key: 'restart',
+      label: '重启任务',
+      disabled: job.desiredState !== 'RUNNING' || !capabilities.dynamicCredentialBinding,
+    },
+    { type: 'divider' },
+    {
+      key: 'delete',
+      label: <span className="text-[#d92d20]">删除任务</span>,
+      disabled: job.desiredState !== 'STOPPED',
+    },
+  ];
+
   const columns: ColumnsType<RealtimeJob> = [
     {
-      title: '任务',
+      title: '名称 / ID',
       dataIndex: 'name',
-      width: 210,
+      width: 250,
       render: (value, job) => (
-        <Space direction="vertical" size={0}>
-          <Button type="link" style={{ padding: 0 }} onClick={() => openDetail(job)}>
-            {value}
-          </Button>
-          <Typography.Text type="secondary" ellipsis style={{ maxWidth: 200 }}>
-            {job.description || '-'}
-          </Typography.Text>
-        </Space>
+        <div className="min-w-0 py-0.5">
+          <button
+            type="button"
+            className="block max-w-full truncate text-left text-[13px] font-medium leading-5 text-[#344054] hover:text-[#ff4d4f]"
+            title={value}
+            onClick={() => void openDetail(job)}
+          >
+            {value || '-'}
+          </button>
+          <div className="mt-0.5 flex h-5 items-center gap-1 text-[11px] leading-5 text-[#98a2b3]">
+            <span className="truncate">ID：{job.id} · v{job.definitionVersion}</span>
+            <Tooltip title="复制任务 ID">
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined className="text-[11px]" />}
+                className="!flex !h-5 !w-5 !min-w-0 !items-center !justify-center !p-0 !text-[#98a2b3] hover:!bg-[#f2f4f7] hover:!text-[#475467]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void copyToClipboard(job.id);
+                }}
+              />
+            </Tooltip>
+          </div>
+        </div>
       ),
     },
-    { title: '版本', width: 90, render: (_, job) => `v${job.definitionVersion}` },
     {
-      title: '发布',
+      title: '数据源同步方案',
+      dataIndex: 'syncPlan',
+      width: 300,
+      render: (_, job) => (
+        <div className="min-w-0 py-0.5 text-[12px] leading-5 text-[#667085]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="max-w-[118px] truncate font-medium text-[#475467]" title={sourceLabel(job)}>
+              {sourceLabel(job)}
+            </span>
+            <span className="text-[#98a2b3]">→</span>
+            <span className="max-w-[118px] truncate font-medium text-[#475467]" title={sinkLabel(job)}>
+              {sinkLabel(job)}
+            </span>
+          </div>
+          <div className="mt-0.5 text-[11px] text-[#98a2b3]">
+            {sourceType(job)} → {sinkType(job)} · {job.spec?.tables?.length || 0} 张表
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '发布状态',
       dataIndex: 'releaseState',
-      width: 110,
-      render: (value) => <Tag color={stateColor(value)}>{value}</Tag>,
+      width: 115,
+      align: 'center',
+      render: (value) => (
+        <StateBadge state={value} label={releaseStateLabel[value] || value} />
+      ),
     },
-    { title: '期望', dataIndex: 'desiredState', width: 110, render: (value) => <Tag>{value}</Tag> },
     {
-      title: '运行',
+      title: '运行状态',
       dataIndex: 'observedState',
-      width: 120,
-      render: (value) => <Tag color={stateColor(value)}>{value}</Tag>,
+      width: 145,
+      render: (value, job) => (
+        <div className="flex flex-col items-start gap-1">
+          <StateBadge state={value} label={observedStateLabel[value] || value} />
+          <span className="text-[10px] leading-4 text-[#98a2b3]">
+            期望：{job.desiredState === 'RUNNING' ? '运行' : '停止'}
+          </span>
+        </div>
+      ),
     },
-    { title: 'Runtime', width: 150, render: (_, job) => job.latestDeployment?.runtimeRevision || '-' },
-    { title: '更新时间', dataIndex: 'updateTime', width: 190 },
+    {
+      title: 'Runtime',
+      dataIndex: 'runtime',
+      width: 170,
+      render: (_, job) => (
+        <div className="text-[12px] leading-5 text-[#667085]">
+          <div className="truncate text-[#475467]" title={job.latestDeployment?.runtimeRevision}>
+            {job.latestDeployment?.runtimeRevision || '-'}
+          </div>
+          <div className="text-[11px] text-[#98a2b3]">
+            {job.latestDeployment?.engineJobId ? `Job ${job.latestDeployment.engineJobId}` : '尚未部署'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updateTime',
+      width: 170,
+      render: (value) => (
+        <span className="whitespace-nowrap text-[12px] leading-5 text-[#98a2b3]">{value || '-'}</span>
+      ),
+    },
     {
       title: '操作',
+      key: 'operate',
       fixed: 'right',
-      width: 360,
-      render: (_, job) => (
-        <Space wrap>
-          <Button size="small" disabled={job.desiredState === 'RUNNING'} onClick={() => setEditor({ open: true, job })}>
-            编辑
-          </Button>
-          <Button size="small" disabled={job.releaseState === 'PUBLISHED'} onClick={() => action(job, 'validate')}>
-            校验
-          </Button>
-          <Button size="small" disabled={job.releaseState === 'PUBLISHED'} onClick={() => action(job, 'publish')}>
-            发布
-          </Button>
-          <Button
-            size="small"
-            type="primary"
-            disabled={
-              !capabilities.dynamicCredentialBinding ||
-              job.releaseState !== 'PUBLISHED' ||
-              job.desiredState === 'RUNNING'
-            }
-            onClick={() => action(job, 'start')}
-          >
-            启动
-          </Button>
-          <Button size="small" disabled={job.desiredState === 'STOPPED'} onClick={() => action(job, 'stop')}>
-            停止
-          </Button>
-          <Button size="small" disabled={job.desiredState !== 'RUNNING'} onClick={() => action(job, 'restart')}>
-            重启
-          </Button>
-          <Popconfirm
-            title="确认删除这个已停止任务？"
-            onConfirm={async () => {
-              await realtimeApi.remove(job.id);
-              await load();
-            }}
-          >
-            <Button size="small" danger disabled={job.desiredState !== 'STOPPED'}>
-              删除
+      width: 215,
+      render: (_, job) => {
+        const running = job.desiredState === 'RUNNING';
+        const startDisabled =
+          !capabilities.dynamicCredentialBinding ||
+          job.releaseState !== 'PUBLISHED' ||
+          running;
+        const startTooltip = !capabilities.dynamicCredentialBinding
+          ? 'Runtime 尚未提供动态凭据绑定能力，启动已被安全阻止'
+          : job.releaseState !== 'PUBLISHED'
+            ? '请先发布当前任务版本'
+            : running
+              ? '任务已处于运行期望状态'
+              : undefined;
+
+        return (
+          <div className="flex min-h-7 items-center gap-0.5 whitespace-nowrap">
+            <Button
+              type="link"
+              size="small"
+              className="!h-7 !px-1.5 !text-[12px]"
+              disabled={running}
+              onClick={() => setEditor({ open: true, job })}
+            >
+              编辑
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+            {running ? (
+              <Button
+                type="link"
+                danger
+                size="small"
+                className="!h-7 !px-1.5 !text-[12px]"
+                onClick={() => void action(job, 'stop')}
+              >
+                停止
+              </Button>
+            ) : (
+              <Tooltip title={startTooltip}>
+                <span>
+                  <Button
+                    type="link"
+                    danger
+                    size="small"
+                    className="!h-7 !px-1.5 !text-[12px]"
+                    disabled={startDisabled}
+                    onClick={() => void action(job, 'start')}
+                  >
+                    启动
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: moreItems(job),
+                onClick: ({ key }) => handleMoreAction(job, key),
+              }}
+            >
+              <Button
+                type="text"
+                size="small"
+                icon={<MoreOutlined />}
+                className="!h-7 !w-7 !min-w-0 !p-0 !text-[#667085] hover:!bg-[#f2f4f7]"
+              />
+            </Dropdown>
+          </div>
+        );
+      },
     },
   ];
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div>
-        <Typography.Title level={3} style={{ marginBottom: 4 }}>
-          实时同步
-        </Typography.Title>
-        <Typography.Text type="secondary">MySQL CDC → MySQL / PostgreSQL，使用固定 Yak CDC Runtime。</Typography.Text>
-      </div>
-      <Alert
-        type="error"
-        showIcon
-        message="Runtime 尚无按部署动态凭据接口，启动已被安全阻止"
-        description="可以创建、校验和发布逻辑定义；合并前需要 Runtime 提供安全的按部署凭据绑定与内存内解析。不会用明文 YAML 或假定 Flink CDC 自动展开占位符来绕过。"
-      />
-      <Card size="small" title="Runtime 能力">
-        <Descriptions size="small" column={4}>
-          <Descriptions.Item label="Runtime">{capabilities.runtimeVersion || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Flink">{capabilities.flinkVersion || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Flink CDC">{capabilities.flinkCdcVersion || '-'}</Descriptions.Item>
-          <Descriptions.Item label="语义">{capabilities.deliverySemantics || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Sources">{capabilities.connectors?.sources?.join(', ') || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Sinks" span={3}>
-            {capabilities.connectors?.sinks?.join(', ') || '-'}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-      <Card
-        title="任务定义"
-        extra={
-          <Space>
-            <Input.Search
-              allowClear
-              placeholder="搜索任务"
-              onSearch={(value) => {
-                setKeyword(value);
-                setPageNo(1);
+    <ConfigProvider
+      theme={{
+        token: {
+          borderRadius: 10,
+          colorBorder: '#f0f0f0',
+          colorBgContainer: '#ffffff',
+        },
+        components: {
+          Button: { borderRadius: 8 },
+          Input: { activeShadow: 'none' },
+          Select: { activeOutlineColor: 'transparent' },
+        },
+      }}
+    >
+      <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h1 className="m-0 text-[17px] font-semibold leading-7 text-[#101828]">实时同步</h1>
+            <div className="mt-0.5 text-[12px] text-[#98a2b3]">
+              固定 Yak CDC Runtime · MySQL CDC → MySQL / PostgreSQL
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto mt-3 flex w-full max-w-full flex-1 flex-col">
+          <div className="mb-3">
+            <div className="border-b border-[#f0f0f0]">
+              <div className="flex min-h-[54px] items-center justify-between gap-4 py-2">
+                <div className="flex shrink-0 items-center gap-1 rounded-lg bg-[#f5f5f6] p-1">
+                  {statusTabs.map((item) => {
+                    const active = filters.stateGroup === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => handleTabChange(item.value)}
+                        className={[
+                          'h-8 rounded-md px-3.5 text-[13px] font-medium transition-all',
+                          active
+                            ? 'bg-white text-[#ff4d4f] shadow-[0_1px_4px_rgba(16,24,40,0.08)]'
+                            : 'text-[#667085] hover:bg-white/70 hover:text-[#344054]',
+                        ].join(' ')}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto">
+                  <Input
+                    allowClear
+                    variant="filled"
+                    value={filterDraft.keyword}
+                    prefix={<SearchOutlined className="text-[#98a2b3]" />}
+                    placeholder="搜索任务名称 / 描述"
+                    className="!h-9 !w-[240px] !min-w-[190px]"
+                    onChange={(event) =>
+                      setFilterDraft((previous) => ({
+                        ...previous,
+                        keyword: event.target.value || undefined,
+                      }))
+                    }
+                    onPressEnter={handleSearch}
+                  />
+                  <Select
+                    allowClear
+                    variant="filled"
+                    value={filterDraft.releaseState}
+                    options={releaseOptions}
+                    placeholder="发布状态"
+                    className="!h-9 !w-[135px] !min-w-[125px]"
+                    onChange={handleReleaseChange}
+                  />
+                  <Button size="small" className="!h-9 !px-4" onClick={handleSearch}>
+                    查询
+                  </Button>
+                  <Popover
+                    trigger="click"
+                    placement="bottomRight"
+                    open={advancedOpen}
+                    onOpenChange={setAdvancedOpen}
+                    content={
+                      <div className="w-[320px]">
+                        <div className="text-[14px] font-semibold text-[#101828]">高级搜索</div>
+                        <div className="mt-1 text-[12px] text-[#98a2b3]">按任务 ID 精确定位实时任务</div>
+                        <div className="mt-4">
+                          <div className="mb-1.5 text-[12px] text-[#667085]">任务 ID</div>
+                          <Input
+                            allowClear
+                            variant="filled"
+                            value={filterDraft.id}
+                            placeholder="请输入数字任务 ID"
+                            onChange={(event) =>
+                              setFilterDraft((previous) => ({
+                                ...previous,
+                                id: event.target.value || undefined,
+                              }))
+                            }
+                            onPressEnter={() => {
+                              handleSearch();
+                              setAdvancedOpen(false);
+                            }}
+                          />
+                        </div>
+                        <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#f0f0f0] pt-4">
+                          <Button size="small" className="!h-8" onClick={handleReset}>
+                            重置全部
+                          </Button>
+                          <Button
+                            danger
+                            type="primary"
+                            size="small"
+                            className="!h-8"
+                            onClick={() => {
+                              handleSearch();
+                              setAdvancedOpen(false);
+                            }}
+                          >
+                            应用筛选
+                          </Button>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <Button
+                      size="small"
+                      icon={<FilterOutlined />}
+                      className={[
+                        '!h-9 !px-3',
+                        advancedFilterCount > 0
+                          ? '!border-[#ffccc7] !bg-[#fff1f0] !text-[#ff4d4f]'
+                          : '',
+                      ].join(' ')}
+                    >
+                      高级搜索
+                      {advancedFilterCount > 0 && (
+                        <span className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#ff4d4f] px-1 text-[10px] leading-[18px] text-white">
+                          {advancedFilterCount}
+                        </span>
+                      )}
+                    </Button>
+                  </Popover>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex min-h-[48px] items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Popover
+                  placement="bottomLeft"
+                  content={
+                    <Descriptions size="small" column={1} className="w-[420px]">
+                      <Descriptions.Item label="Runtime">{capabilities.runtimeVersion || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="Flink">{capabilities.flinkVersion || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="Flink CDC">{capabilities.flinkCdcVersion || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="语义">{capabilities.deliverySemantics || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="Sources">
+                        {capabilities.connectors?.sources?.join(', ') || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Sinks">
+                        {capabilities.connectors?.sinks?.join(', ') || '-'}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  }
+                >
+                  <Button size="small" className="!h-8">Runtime 能力</Button>
+                </Popover>
+                <Tooltip title="刷新任务与 Runtime 能力">
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined spin={loading} />}
+                    className="!h-8 !w-8 !px-0"
+                    onClick={() => void refresh()}
+                  />
+                </Tooltip>
+              </div>
+              <Button
+                type="primary"
+                size="small"
+                danger
+                className="!h-7"
+                onClick={() => setEditor({ open: true })}
+              >
+                <span className="text-[13px]">新建同步任务</span>
+              </Button>
+            </div>
+
+            {capabilities.dynamicCredentialBinding === false && (
+              <div className="flex min-h-9 items-center rounded-sm bg-[#fff7e6] px-3 text-[12px] text-[#475467]">
+                <span className="mr-2 text-[14px] text-[#faad14]">▲</span>
+                <span className="font-medium text-[#344054]">【Runtime 提示】</span>
+                <span>当前尚无按部署动态凭据接口，启动操作已被安全阻止；创建、校验、发布和查看任务不受影响。</span>
+              </div>
+            )}
+          </div>
+
+          <Divider style={{ marginTop: 4, marginBottom: 16 }} />
+
+          <div className="flex-1">
+            <Table
+              rowKey="id"
+              loading={loading}
+              dataSource={jobs}
+              columns={columns}
+              bordered
+              size="small"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              className={[
+                'compact-sync-task-table',
+                '[&_.ant-table]:!text-[13px]',
+                '[&_.ant-table-container]:!border-[#eaecf0]',
+                '[&_.ant-table-cell]:!align-middle',
+                '[&_.ant-table-thead>tr>th]:!h-10',
+                '[&_.ant-table-thead>tr>th]:!bg-[#f8f9fb]',
+                '[&_.ant-table-thead>tr>th]:!px-4',
+                '[&_.ant-table-thead>tr>th]:!py-2',
+                '[&_.ant-table-thead>tr>th]:!text-[12px]',
+                '[&_.ant-table-thead>tr>th]:!font-medium',
+                '[&_.ant-table-thead>tr>th]:!text-[#667085]',
+                '[&_.ant-table-thead>tr>th]:!border-[#eaecf0]',
+                '[&_.ant-table-tbody>tr>td]:!px-4',
+                '[&_.ant-table-tbody>tr>td]:!py-2.5',
+                '[&_.ant-table-tbody>tr>td]:!border-[#f0f2f5]',
+                '[&_.ant-table-tbody>tr>td]:!text-[#667085]',
+                '[&_.ant-table-tbody>tr:hover>td]:!bg-[#fafbfc]',
+                '[&_.ant-table-cell-fix-right]:!bg-white',
+                '[&_.ant-table-tbody>tr:hover_.ant-table-cell-fix-right]:!bg-[#fafbfc]',
+                '[&_.ant-table-placeholder>td]:!h-[240px]',
+              ].join(' ')}
+              locale={{
+                emptyText: (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={<span className="text-[12px] text-[#98a2b3]">暂无实时同步任务</span>}
+                  />
+                ),
               }}
             />
-            <Button onClick={load}>刷新</Button>
-            <Button type="primary" onClick={() => setEditor({ open: true })}>
-              新建任务
-            </Button>
-          </Space>
-        }
-      >
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={jobs}
-          columns={columns}
-          scroll={{ x: 1450 }}
-          pagination={{
-            current: pageNo,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (nextPage, nextSize) => {
-              setPageNo(nextPage);
-              setPageSize(nextSize);
-            },
+          </div>
+
+          <div className="sticky bottom-0 z-20 mt-auto flex min-h-[56px] items-center justify-end border border-t-0 border-[#e5e7eb] bg-white px-5 py-3 shadow-[0_-4px_12px_rgba(16,24,40,0.04)]">
+            <CustomPagination
+              total={total}
+              current={pageNo}
+              pageSize={pageSize}
+              onChange={(nextPage, nextSize) => {
+                setPageNo(nextPage);
+                setPageSize(nextSize);
+              }}
+            />
+          </div>
+        </div>
+
+        <JobEditor
+          open={editor.open}
+          job={editor.job}
+          dataSources={dataSources}
+          onClose={() => setEditor({ open: false })}
+          onSaved={() => {
+            setEditor({ open: false });
+            void loadJobs();
           }}
         />
-      </Card>
-      <JobEditor
-        open={editor.open}
-        job={editor.job}
-        dataSources={dataSources}
-        onClose={() => setEditor({ open: false })}
-        onSaved={() => {
-          setEditor({ open: false });
-          void load();
-        }}
-      />
-      <Drawer width={820} title={detail?.name} open={Boolean(detail)} onClose={() => setDetail(undefined)}>
-        {detail && (
-          <Tabs
-            items={[
-              {
-                key: 'overview',
-                label: '运行概览',
-                children: (
-                  <Descriptions column={1} bordered size="small">
-                    <Descriptions.Item label="定义版本">
-                      v{detail.definitionVersion} / 已发布 v{detail.publishedVersion || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="状态">
-                      {detail.releaseState} · {detail.desiredState} · {detail.observedState}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="部署摘要">
-                      {detail.latestDeployment?.specSummary || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Engine Job ID">
-                      {detail.latestDeployment?.engineJobId || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Runtime Revision">
-                      {detail.latestDeployment?.runtimeRevision || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="最近错误">{detail.lastError || '-'}</Descriptions.Item>
-                  </Descriptions>
-                ),
-              },
-              {
-                key: 'events',
-                label: '状态事件',
-                children: (
-                  <Timeline
-                    items={events.map((event) => ({
-                      color: event.toState === 'FAILED' || event.toState === 'CONFLICT' ? 'red' : 'blue',
-                      children: (
-                        <div>
-                          <Typography.Text strong>{event.eventType}</Typography.Text>{' '}
-                          <Typography.Text type="secondary">{event.createTime}</Typography.Text>
+
+        <Drawer
+          width={820}
+          title={detail?.name}
+          open={Boolean(detail)}
+          onClose={() => setDetail(undefined)}
+        >
+          {detail && (
+            <Tabs
+              items={[
+                {
+                  key: 'overview',
+                  label: '运行概览',
+                  children: (
+                    <Descriptions column={1} bordered size="small">
+                      <Descriptions.Item label="定义版本">
+                        v{detail.definitionVersion} / 已发布 v{detail.publishedVersion || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="状态">
+                        {detail.releaseState} · {detail.desiredState} · {detail.observedState}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="部署摘要">
+                        {detail.latestDeployment?.specSummary || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Engine Job ID">
+                        {detail.latestDeployment?.engineJobId || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Runtime Revision">
+                        {detail.latestDeployment?.runtimeRevision || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="最近错误">{detail.lastError || '-'}</Descriptions.Item>
+                    </Descriptions>
+                  ),
+                },
+                {
+                  key: 'events',
+                  label: '状态事件',
+                  children: (
+                    <Timeline
+                      items={events.map((event) => ({
+                        color:
+                          event.toState === 'FAILED' || event.toState === 'CONFLICT'
+                            ? 'red'
+                            : 'blue',
+                        children: (
                           <div>
-                            {event.fromState || '-'} → {event.toState || '-'} · {event.message}
+                            <Typography.Text strong>{event.eventType}</Typography.Text>{' '}
+                            <Typography.Text type="secondary">{event.createTime}</Typography.Text>
+                            <div>
+                              {event.fromState || '-'} → {event.toState || '-'} · {event.message}
+                            </div>
                           </div>
-                        </div>
-                      ),
-                    }))}
-                  />
-                ),
-              },
-              {
-                key: 'logs',
-                label: '临时日志',
-                children: (
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Button
-                      onClick={async () => {
-                        try {
-                          setLogs((await realtimeApi.logs(detail.id)).data.logs);
-                        } catch (error: any) {
-                          message.error(error?.message || '日志不可用');
-                        }
-                      }}
-                    >
-                      读取最近日志
-                    </Button>
-                    <pre
-                      style={{
-                        whiteSpace: 'pre-wrap',
-                        maxHeight: 520,
-                        overflow: 'auto',
-                        background: '#111',
-                        color: '#ddd',
-                        padding: 12,
-                      }}
-                    >
-                      {logs || '尚未读取'}
-                    </pre>
-                  </Space>
-                ),
-              },
-              {
-                key: 'observability',
-                label: 'Checkpoint / Metrics',
-                children: (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message="当前 Runtime Gateway 不支持 Checkpoint 与 Metrics API"
-                    description="页面不会直接访问 Flink REST，也不会伪造吞吐或 Checkpoint 数据。"
-                  />
-                ),
-              },
-            ]}
-          />
-        )}
-      </Drawer>
-    </Space>
+                        ),
+                      }))}
+                    />
+                  ),
+                },
+                {
+                  key: 'logs',
+                  label: '临时日志',
+                  children: (
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            setLogs((await realtimeApi.logs(detail.id)).data.logs);
+                          } catch (error: any) {
+                            message.error(error?.message || '日志不可用');
+                          }
+                        }}
+                      >
+                        读取最近日志
+                      </Button>
+                      <pre
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          maxHeight: 520,
+                          overflow: 'auto',
+                          background: '#111',
+                          color: '#ddd',
+                          padding: 12,
+                        }}
+                      >
+                        {logs || '尚未读取'}
+                      </pre>
+                    </Space>
+                  ),
+                },
+                {
+                  key: 'observability',
+                  label: 'Checkpoint / Metrics',
+                  children: (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="当前 Runtime Gateway 不支持 Checkpoint 与 Metrics API"
+                      description="页面不会直接访问 Flink REST，也不会伪造吞吐或 Checkpoint 数据。"
+                    />
+                  ),
+                },
+              ]}
+            />
+          )}
+        </Drawer>
+      </div>
+    </ConfigProvider>
   );
 }
