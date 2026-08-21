@@ -56,3 +56,15 @@ The Runtime should treat `Idempotency-Key` as a server-side idempotency key. HTT
 different active job already occupies the fixed Runtime; HTTP `422` means the Pipeline was rejected.
 
 The existing `/validate`, `/status`, `/stop`, and `/logs` endpoints retain their current contracts.
+
+
+## Reliable control-plane behavior
+
+Yak Ops publishes committed task changes over `GET /api/v1/realtime-sync/stream` using SSE. Clients
+fall back to bounded polling while the stream reconnects. A database lease ensures that only one Yak
+Ops instance reconciles the fixed Runtime at a time, and transient Runtime status failures must reach
+the configured threshold before running tasks become `UNKNOWN`.
+
+Operators can request a non-deploying state check with `POST /api/v1/realtime-sync/{id}/reconcile`.
+This operation only compares the latest local deployment with `/status`; it never resubmits a lost
+CDC job automatically.

@@ -30,6 +30,7 @@ import type {
   DataSourceOption,
   RealtimeEvent,
   RealtimeJob,
+  RealtimeJobChange,
   ReleaseState,
   RuntimeCapabilities,
 } from './types';
@@ -120,6 +121,7 @@ export default function RealtimeSync() {
   const [detail, setDetail] = useState<RealtimeJob>();
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [logs, setLogs] = useState('');
+  const [streamConnected, setStreamConnected] = useState(false);
 
   const dataSourceMap = useMemo(
     () => new Map(dataSources.map((item) => [String(item.value), item])),
@@ -167,6 +169,53 @@ export default function RealtimeSync() {
     void loadMetadata();
   }, [loadMetadata]);
 
+  useEffect(() => {
+    const source = new EventSource('/api/v1/realtime-sync/stream');
+    let fallbackTimer: number | undefined;
+    const stopFallback = () => {
+      if (fallbackTimer !== undefined) window.clearInterval(fallbackTimer);
+      fallbackTimer = undefined;
+    };
+    const startFallback = () => {
+      if (fallbackTimer !== undefined) return;
+      fallbackTimer = window.setInterval(() => void loadJobs(), 5000);
+    };
+    const refreshChangedJob = async (change: RealtimeJobChange) => {
+      try {
+        await loadJobs();
+        if (detail?.id !== change.definitionId) return;
+        const [jobResult, eventResult] = await Promise.all([
+          realtimeApi.detail(change.definitionId),
+          realtimeApi.events(change.definitionId),
+        ]);
+        setDetail(jobResult.data);
+        setEvents(eventResult.data || []);
+      } catch {
+        startFallback();
+      }
+    };
+    source.onopen = () => {
+      setStreamConnected(true);
+      stopFallback();
+    };
+    source.onerror = () => {
+      setStreamConnected(false);
+      startFallback();
+    };
+    source.addEventListener('realtime', (event) => {
+      try {
+        const change = JSON.parse((event as MessageEvent<string>).data) as RealtimeJobChange;
+        void refreshChangedJob(change);
+      } catch {
+        void loadJobs();
+      }
+    });
+    return () => {
+      source.close();
+      stopFallback();
+    };
+  }, [detail?.id, loadJobs]);
+
   const refresh = async () => {
     await Promise.all([loadJobs(), loadMetadata()]);
   };
@@ -188,7 +237,7 @@ export default function RealtimeSync() {
 
   const action = async (
     job: RealtimeJob,
-    name: 'publish' | 'validate' | 'start' | 'stop' | 'restart',
+    name: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile',
   ) => {
     try {
       await realtimeApi.action(job.id, name);
@@ -316,7 +365,7 @@ export default function RealtimeSync() {
       deleteJob(job);
       return;
     }
-    if (key === 'validate' || key === 'publish' || key === 'restart') {
+    if (key === 'validate' || key === 'publish' || key === 'restart' || key === 'reconcile') {
       void action(job, key);
     }
   };
@@ -336,7 +385,12 @@ export default function RealtimeSync() {
     {
       key: 'restart',
       label: '重启任务',
-      disabled: job.desiredState !== 'RUNNING' || !capabilities.dynamicCredentialBinding,
+      disabled: job.desiredState !== 'RUNNING' || !capabilities.deployEnabled,
+    },
+    {
+      key: 'reconcile',
+      label: '立即状态对账',
+      disabled: !['UNKNOWN', 'CONFLICT', 'STARTING', 'STOPPING'].includes(job.observedState),
     },
     { type: 'divider' },
     {
@@ -542,6 +596,7 @@ export default function RealtimeSync() {
             <h1 className="m-0 text-[17px] font-semibold leading-7 text-[#101828]">实时同步</h1>
             <div className="mt-0.5 text-[12px] text-[#98a2b3]">
               固定 Yak CDC Runtime · MySQL CDC → MySQL / PostgreSQL
+              <span className="ml-2">· {streamConnected ? '状态流已连接' : '状态流重连中'}</span>
             </div>
           </div>
         </div>

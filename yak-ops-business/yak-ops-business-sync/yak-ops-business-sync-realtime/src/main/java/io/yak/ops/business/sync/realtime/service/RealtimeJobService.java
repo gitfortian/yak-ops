@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.realtime.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
@@ -26,6 +27,7 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DuplicateKeyException;
@@ -48,7 +50,9 @@ public class RealtimeJobService {
   private final RealtimeEngineGateway gateway;
   private final RealtimeLogRedactor logRedactor;
   private final TransactionTemplate transactions;
+  private final RealtimeSyncProperties properties;
   private final ReentrantLock lifecycleLock = new ReentrantLock();
+  private final AtomicInteger consecutiveRuntimeFailures = new AtomicInteger();
 
   public RealtimeJobService(
       RealtimeJobStore store,
@@ -60,6 +64,7 @@ public class RealtimeJobService {
       PipelineYamlCompiler compiler,
       RealtimeEngineGateway gateway,
       RealtimeLogRedactor logRedactor,
+      RealtimeSyncProperties properties,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager) {
     this.store = store;
     this.json = json;
@@ -70,6 +75,7 @@ public class RealtimeJobService {
     this.compiler = compiler;
     this.gateway = gateway;
     this.logRedactor = logRedactor;
+    this.properties = properties;
     this.transactions = new TransactionTemplate(transactionManager);
   }
 
@@ -326,6 +332,10 @@ public class RealtimeJobService {
       try {
         runtime = gateway.status();
       } catch (GatewayException exception) {
+        int failures = consecutiveRuntimeFailures.incrementAndGet();
+        if (failures < Math.max(1, properties.getReconcileFailureThreshold())) {
+          return;
+        }
         for (DefinitionRow job : candidates) {
           DeploymentRow deployment = store.latestDeployment(job.id()).orElse(null);
           if (!"UNKNOWN".equals(job.observedState())) {
@@ -350,10 +360,26 @@ public class RealtimeJobService {
         }
         return;
       }
+      consecutiveRuntimeFailures.set(0);
 
       for (DefinitionRow job : candidates) {
         reconcile(job, store.latestDeployment(job.id()).orElse(null), runtime);
       }
+    } finally {
+      lifecycleLock.unlock();
+    }
+  }
+
+  /** Performs an operator-requested reconciliation without submitting a new Runtime job. */
+  public RealtimeJobView reconcile(long id) {
+    lifecycleLock.lock();
+    try {
+      DefinitionRow definition =
+          store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+      DeploymentRow deployment = store.latestDeployment(id).orElse(null);
+      reconcile(definition, deployment, gateway.status());
+      consecutiveRuntimeFailures.set(0);
+      return store.view(id);
     } finally {
       lifecycleLock.unlock();
     }

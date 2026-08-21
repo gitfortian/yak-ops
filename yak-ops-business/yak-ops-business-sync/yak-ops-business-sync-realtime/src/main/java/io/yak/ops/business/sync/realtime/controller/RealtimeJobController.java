@@ -11,12 +11,14 @@ import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
+import io.yak.ops.business.sync.realtime.service.RealtimeEventStreamService;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Tag(name = "实时同步")
 @RestController
@@ -36,10 +39,15 @@ public class RealtimeJobController {
 
   private final RealtimeJobService service;
   private final RealtimeJobListQuery listQuery;
+  private final RealtimeEventStreamService eventStream;
 
-  public RealtimeJobController(RealtimeJobService service, RealtimeJobListQuery listQuery) {
+  public RealtimeJobController(
+      RealtimeJobService service,
+      RealtimeJobListQuery listQuery,
+      RealtimeEventStreamService eventStream) {
     this.service = service;
     this.listQuery = listQuery;
+    this.eventStream = eventStream;
   }
 
   public record SaveRequest(
@@ -80,6 +88,12 @@ public class RealtimeJobController {
     return Result.success(listQuery.page(pageNo, pageSize, keyword, id, releaseState, stateGroup));
   }
 
+  @Operation(summary = "订阅实时同步任务状态")
+  @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter stream() {
+    return eventStream.subscribe();
+  }
+
   @Operation(summary = "发布当前定义版本")
   @PostMapping("/{id}/publish")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
@@ -117,6 +131,13 @@ public class RealtimeJobController {
   @RequiresPermission(RealtimePermissionCode.EXECUTE)
   public Result<RealtimeJobView.Deployment> restart(@PathVariable long id) {
     return Result.success(service.restart(id));
+  }
+
+  @Operation(summary = "立即对账实时同步任务")
+  @PostMapping("/{id}/reconcile")
+  @RequiresPermission(RealtimePermissionCode.EXECUTE)
+  public Result<RealtimeJobView> reconcile(@PathVariable long id) {
+    return Result.success(service.reconcile(id));
   }
 
   @Operation(summary = "删除已停止的实时同步任务")

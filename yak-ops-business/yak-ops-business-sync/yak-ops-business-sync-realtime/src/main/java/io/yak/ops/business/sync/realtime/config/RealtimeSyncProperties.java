@@ -10,9 +10,9 @@ public class RealtimeSyncProperties {
   private String baseUrl = "http://localhost:8080";
   private Duration connectTimeout = Duration.ofSeconds(3);
   private Duration requestTimeout = Duration.ofSeconds(15);
-  private String sourcePasswordEnv = "SOURCE_PASSWORD";
-  private String sinkPasswordEnv = "SINK_PASSWORD";
   private int maxLogLines = 1_000;
+  private int reconcileFailureThreshold = 3;
+  private int reconcileLeaseSeconds = 30;
 
   public boolean isEnabled() {
     return enabled;
@@ -46,20 +46,20 @@ public class RealtimeSyncProperties {
     this.requestTimeout = requestTimeout;
   }
 
-  public String getSourcePasswordEnv() {
-    return sourcePasswordEnv;
+  public int getReconcileFailureThreshold() {
+    return reconcileFailureThreshold;
   }
 
-  public void setSourcePasswordEnv(String sourcePasswordEnv) {
-    this.sourcePasswordEnv = sourcePasswordEnv;
+  public void setReconcileFailureThreshold(int reconcileFailureThreshold) {
+    this.reconcileFailureThreshold = reconcileFailureThreshold;
   }
 
-  public String getSinkPasswordEnv() {
-    return sinkPasswordEnv;
+  public int getReconcileLeaseSeconds() {
+    return reconcileLeaseSeconds;
   }
 
-  public void setSinkPasswordEnv(String sinkPasswordEnv) {
-    this.sinkPasswordEnv = sinkPasswordEnv;
+  public void setReconcileLeaseSeconds(int reconcileLeaseSeconds) {
+    this.reconcileLeaseSeconds = reconcileLeaseSeconds;
   }
 
   public int getMaxLogLines() {

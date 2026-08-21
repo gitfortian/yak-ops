@@ -17,6 +17,8 @@ class RealtimeStateMachineTest {
         .doesNotThrowAnyException();
     assertThatCode(() -> stateMachine.requireTransition("STOPPING", "STOPPED"))
         .doesNotThrowAnyException();
+    assertThatCode(() -> stateMachine.requireTransition("CONFLICT", "RUNNING"))
+        .doesNotThrowAnyException();
   }
 
   @Test
