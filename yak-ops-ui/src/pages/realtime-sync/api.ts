@@ -28,6 +28,8 @@ export const realtimeApi = {
       params,
     }),
   detail: (id: number) => request<ApiResponse<RealtimeJob>>(`${PREFIX}/${id}`),
+  createBasic: (payload: { name: string; description?: string }) =>
+    request<ApiResponse<number>>(PREFIX, { method: 'POST', data: payload }),
   create: (payload: { name: string; description?: string; spec: CdcPipelineSpec }) =>
     request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
   update: (id: number, payload: { name: string; description?: string; spec: CdcPipelineSpec }) =>

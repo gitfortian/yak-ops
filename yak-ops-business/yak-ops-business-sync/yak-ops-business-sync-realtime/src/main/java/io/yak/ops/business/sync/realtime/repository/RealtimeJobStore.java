@@ -49,7 +49,7 @@ public class RealtimeJobStore {
                   Statement.RETURN_GENERATED_KEYS);
           statement.setString(1, name);
           statement.setString(2, description);
-          statement.setString(3, write(spec));
+          statement.setString(3, spec == null ? null : write(spec));
           statement.setString(4, digest);
           return statement;
         },
@@ -435,6 +435,9 @@ public class RealtimeJobStore {
   }
 
   private CdcPipelineSpec read(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
     try {
       return json.readValue(value, CdcPipelineSpec.class);
     } catch (Exception exception) {

@@ -55,6 +55,16 @@ public class RealtimeJobController {
       @Size(max = 1000) String description,
       @Valid CdcPipelineSpec spec) {}
 
+  public record CreateRequest(
+      @NotBlank @Size(max = 200) String name, @Size(max = 1000) String description) {}
+
+  @Operation(summary = "创建实时同步基础任务")
+  @PostMapping
+  @RequiresPermission(RealtimePermissionCode.CREATE)
+  public Result<Long> create(@Valid @RequestBody CreateRequest request) {
+    return Result.success(service.create(request.name(), request.description()));
+  }
+
   @Operation(summary = "新建实时同步草稿")
   @PostMapping("/draft")
   @RequiresPermission(RealtimePermissionCode.CREATE)

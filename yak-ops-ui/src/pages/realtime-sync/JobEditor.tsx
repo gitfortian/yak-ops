@@ -54,7 +54,7 @@ const defaults: FormValue = {
 };
 
 const toFormValue = (job?: RealtimeJob): FormValue =>
-  job
+  job?.spec
     ? {
         name: job.name,
         description: job.description,

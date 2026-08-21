@@ -63,6 +63,7 @@ export const appRoutes: readonly NavigationRoute[] = [
     quickCreateRequirement: { mode: 'one', permission: 'task:batch:create' },
     quickCreateLabel: '新建离线同步',
   },
+  { id: 'realtime-sync-detail', path: '/sync/realtime/:id/detail', title: '实时同步配置', component: './realtime-sync/detail', hidden: true, parentId: 'realtime-sync' },
   {
     id: 'realtime-sync', mode: 'one', permission: 'task:realtime:read',
     path: '/sync/realtime', title: '实时同步', component: './realtime-sync',
