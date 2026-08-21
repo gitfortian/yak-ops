@@ -124,6 +124,7 @@ yak:
       reconcile-delay: ${YAK_REALTIME_RECONCILE_DELAY:10000}
       reconcile-failure-threshold: ${YAK_REALTIME_RECONCILE_FAILURE_THRESHOLD:3}
       reconcile-lease-seconds: ${YAK_REALTIME_RECONCILE_LEASE_SECONDS:30}
+
     offline:
       enabled: ${YAK_OFFLINE_SYNC_ENABLED:true}
       engine:

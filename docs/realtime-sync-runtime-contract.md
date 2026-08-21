@@ -57,6 +57,7 @@ different active job already occupies the fixed Runtime; HTTP `422` means the Pi
 
 The existing `/validate`, `/status`, `/stop`, and `/logs` endpoints retain their current contracts.
 
+
 ## Reliable control-plane behavior
 
 Yak Ops publishes committed task changes over `GET /api/v1/realtime-sync/stream` using SSE. Clients

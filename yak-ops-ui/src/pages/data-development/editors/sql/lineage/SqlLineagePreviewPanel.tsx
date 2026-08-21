@@ -245,6 +245,9 @@ export default function SqlLineagePreviewPanel({ nodeId, preview, loading, onRef
           role,
           fields: names.map((name) => ({
             name,
+            dataType: mappings.find(
+              (item) => (role === 'source' ? item.sourceColumn : item.targetColumn) === name,
+            )?.[role === 'source' ? 'sourceDataType' : 'targetDataType'] || undefined,
             transformed: mappings.some(
               (item) =>
                 (role === 'source' ? item.sourceColumn : item.targetColumn) === name && item.mappingKind !== 'IDENTITY',

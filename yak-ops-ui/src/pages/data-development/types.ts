@@ -163,8 +163,10 @@ export interface DevelopmentSqlLineagePreviewGraph {
 export interface DevelopmentSqlLineageColumnMapping {
   sourceTable: string;
   sourceColumn: string;
+  sourceDataType?: string | null;
   targetTable?: string | null;
   targetColumn: string;
+  targetDataType?: string | null;
   mappingKind: 'IDENTITY' | 'TRANSFORMATION' | 'AGGREGATION';
   expression?: string | null;
   outputOrdinal: number;
