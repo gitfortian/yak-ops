@@ -13,7 +13,7 @@ import {
   Space,
   Switch,
 } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BRAND_THEME } from '@/styles/brand';
 import { realtimeApi } from './api';
 import type { CdcPipelineSpec, DataSourceOption, RealtimeJob } from './types';
@@ -59,6 +59,9 @@ const sections = [
 ] as const;
 type SectionKey = (typeof sections)[number]['key'];
 
+const SECTION_SCROLL_OFFSET = 24;
+const ACTIVE_SECTION_OFFSET = SECTION_SCROLL_OFFSET + 8;
+
 const toFormValue = (job?: RealtimeJob): FormValue =>
   job?.spec
     ? {
@@ -92,6 +95,8 @@ export default function JobEditor({
   const [form] = Form.useForm<FormValue>();
   const [saving, setSaving] = useState(false);
   const [active, setActive] = useState<SectionKey>('task-basic');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollingToRef = useRef<SectionKey | null>(null);
   const sourceOptions = useMemo(() => dataSources.filter((item) => item.dbType === 'MYSQL'), [dataSources]);
   const sinkOptions = useMemo(
     () => dataSources.filter((item) => ['MYSQL', 'POSTGRE_SQL', 'POSTGRESQL'].includes(item.dbType)),
@@ -103,20 +108,53 @@ export default function JobEditor({
   }, [form, job, open]);
   useEffect(() => {
     if (!open) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible) setActive(visible.target.id as SectionKey);
-      },
-      { rootMargin: '-15% 0px -65%', threshold: [0, 0.2, 0.5] },
-    );
-    sections.forEach(({ key }) => {
-      const node = document.getElementById(key);
-      if (node) observer.observe(node);
-    });
-    return () => observer.disconnect();
+    const root = scrollContainerRef.current;
+    if (!root) return;
+
+    let frame = 0;
+    let releaseTimer: number | undefined;
+
+    const updateActiveFromScroll = () => {
+      if (scrollingToRef.current) return;
+
+      if (root.scrollTop + root.clientHeight >= root.scrollHeight - 1) {
+        const lastSection = sections[sections.length - 1].key;
+        setActive((current) => (current === lastSection ? current : lastSection));
+        return;
+      }
+
+      const rootTop = root.getBoundingClientRect().top;
+      let next: SectionKey = sections[0].key;
+      for (const { key } of sections) {
+        const node = root.querySelector<HTMLElement>(`#${key}`);
+        if (!node) continue;
+        if (node.getBoundingClientRect().top - rootTop <= ACTIVE_SECTION_OFFSET) next = key;
+        else break;
+      }
+      setActive((current) => (current === next ? current : next));
+    };
+
+    const handleScroll = () => {
+      if (scrollingToRef.current) {
+        if (releaseTimer !== undefined) window.clearTimeout(releaseTimer);
+        releaseTimer = window.setTimeout(() => {
+          scrollingToRef.current = null;
+          updateActiveFromScroll();
+        }, 120);
+        return;
+      }
+
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActiveFromScroll);
+    };
+
+    updateActiveFromScroll();
+    root.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      root.removeEventListener('scroll', handleScroll);
+      window.cancelAnimationFrame(frame);
+      if (releaseTimer !== undefined) window.clearTimeout(releaseTimer);
+    };
   }, [open]);
 
   const save = async () => {
@@ -157,8 +195,8 @@ export default function JobEditor({
   if (!open) return null;
   const option = (item: DataSourceOption) => ({ label: `${item.label} (${item.dbType})`, value: Number(item.value) });
   return (
-    <ConfigProvider theme={BRAND_THEME}>
-      <div className="h-[calc(100vh-64px)] overflow-y-auto bg-[#f7f8fa] text-[#161823]">
+    <ConfigProvider theme={BRAND_THEME} variant="filled">
+      <div ref={scrollContainerRef} className="h-[calc(100vh-64px)] overflow-y-auto bg-[#f7f8fa] text-[#161823]">
         <Form form={form} layout="vertical" initialValues={defaults}>
           <div className="mx-auto grid w-full max-w-[1280px] grid-cols-[minmax(0,1fr)_160px] gap-6 px-6 pb-6 pt-6 max-xl:grid-cols-1">
             <main className="min-w-0 space-y-5">
@@ -374,8 +412,27 @@ export default function JobEditor({
                       type="button"
                       className={`relative flex w-full items-center gap-3 rounded-lg border-0 px-2 py-2 text-left text-[12px] ${active === item.key ? 'bg-[rgba(254,44,85,0.08)] font-semibold text-[var(--yak-brand-color)]' : 'bg-transparent text-[#667085]'}`}
                       onClick={() => {
+                        const root = scrollContainerRef.current;
+                        const target = root?.querySelector<HTMLElement>(`#${item.key}`);
+                        if (!root || !target) return;
+
+                        const targetTop = Math.min(
+                          Math.max(
+                            root.scrollTop +
+                              target.getBoundingClientRect().top -
+                              root.getBoundingClientRect().top -
+                              SECTION_SCROLL_OFFSET,
+                            0,
+                          ),
+                          root.scrollHeight - root.clientHeight,
+                        );
+                        scrollingToRef.current = item.key;
                         setActive(item.key);
-                        document.getElementById(item.key)?.scrollIntoView({ behavior: 'smooth' });
+                        if (Math.abs(root.scrollTop - targetTop) <= 1) {
+                          scrollingToRef.current = null;
+                          return;
+                        }
+                        root.scrollTo({ top: targetTop, behavior: 'smooth' });
                       }}
                     >
                       <span
