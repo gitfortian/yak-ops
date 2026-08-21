@@ -91,7 +91,7 @@ public class HttpRealtimeEngineGateway implements RealtimeEngineGateway {
       HttpRequest request = request("/stop").POST(HttpRequest.BodyPublishers.noBody()).build();
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() != 200) {
-        throw httpError(response.statusCode(), parse(response.body()), true);
+        throw httpError(response.statusCode(), parse(response.body(), true), true);
       }
     } catch (HttpTimeoutException exception) {
       throw new GatewayException(Kind.UNAVAILABLE, "Runtime 停止结果不确定", true, null, exception);
