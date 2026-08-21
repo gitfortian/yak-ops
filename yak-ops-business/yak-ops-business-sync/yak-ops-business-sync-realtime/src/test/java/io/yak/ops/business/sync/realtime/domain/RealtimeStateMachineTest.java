@@ -48,4 +48,31 @@ class RealtimeStateMachineTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("运行态未稳定");
   }
+
+  @Test
+  void allowsStartOnlyFromDefinitelyInactiveStates() {
+    assertThatCode(() -> stateMachine.requireStartable("STOPPED", "STOPPED"))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> stateMachine.requireStartable("STOPPED", "FAILED"))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void rejectsDuplicateOrUncertainStartReservations() {
+    assertThatThrownBy(() -> stateMachine.requireStartable("RUNNING", "STARTING"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("请勿重复启动");
+    assertThatThrownBy(() -> stateMachine.requireStartable("RUNNING", "RUNNING"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("请勿重复启动");
+    assertThatThrownBy(() -> stateMachine.requireStartable("STOPPED", "STOPPING"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("请勿重复启动");
+    assertThatThrownBy(() -> stateMachine.requireStartable("STOPPED", "UNKNOWN"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("请勿重复启动");
+    assertThatThrownBy(() -> stateMachine.requireStartable("STOPPED", "CONFLICT"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("请勿重复启动");
+  }
 }
