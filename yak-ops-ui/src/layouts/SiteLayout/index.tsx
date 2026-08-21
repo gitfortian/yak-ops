@@ -12,7 +12,7 @@ import { RouteAccessBoundary } from "@/components/security";
 import SecurityProjectSwitcher from "@/components/security/SecurityProjectSwitcher";
 import { SecurityProjectProvider, useSecurityProject } from "@/contexts/SecurityProjectContext";
 import { logout } from "@/services/security/account";
-import { history, Outlet, useLocation, useModel } from "@umijs/max";
+import { history, Link, Outlet, useLocation, useModel } from "@umijs/max";
 import { Badge, Button, Drawer, Dropdown, type MenuProps } from "antd";
 import {
   Activity,
@@ -217,10 +217,9 @@ function HeaderAction({
 
 function BrandLogo({ compact }: { compact: boolean }) {
   return (
-    <button
-      type="button"
+    <Link
+      to="/home"
       aria-label="返回首页"
-      onClick={() => history.push("/home")}
       className={[
         "mt-3 mb-1.5 flex h-12 w-full items-center border-0 bg-transparent",
         "transition-all duration-200",
@@ -251,7 +250,7 @@ function BrandLogo({ compact }: { compact: boolean }) {
           "
         />
       )}
-    </button>
+    </Link>
   );
 }
 
@@ -351,13 +350,12 @@ function SiteLayoutContent() {
     const active = activeNavigationId === route.id;
 
     return (
-      <button
+      <Link
         key={route.id}
-        type="button"
+        to={route.path}
         title={compact ? route.title : undefined}
         aria-label={compact ? route.title : undefined}
         aria-current={active ? "page" : undefined}
-        onClick={() => navigate(route.path)}
         className={[
           "group relative flex h-10 w-full items-center border-0 bg-transparent",
           "text-left transition-colors duration-150",
@@ -380,7 +378,7 @@ function SiteLayoutContent() {
         {compact && active && (
           <span className="absolute right-0 h-4 w-[2px] rounded-full bg-[#161823]" />
         )}
-      </button>
+      </Link>
     );
   };
 
@@ -485,14 +483,6 @@ function SiteLayoutContent() {
     return currentUser?.name?.trim().slice(0, 1).toUpperCase() || "Y";
   }, [currentUser?.name]);
 
-  const navigate = (path: string) => {
-    setQuickCreateOpen(false);
-
-    if (location.pathname !== path) {
-      history.push(path);
-    }
-  };
-
   const toggleGroup = (groupId: string) => {
     setOpenGroupIds((current) => {
       const next = new Set(current);
@@ -519,13 +509,12 @@ function SiteLayoutContent() {
     const active = activeNavigationId === route.id;
 
     return (
-      <button
+      <Link
         key={route.id}
-        type="button"
+        to={route.path}
         title={compact ? route.title : undefined}
         aria-label={compact ? route.title : undefined}
         aria-current={active ? "page" : undefined}
-        onClick={() => navigate(route.path)}
         className={[
           "group relative flex w-full items-center border-0",
           "bg-transparent text-left",
@@ -584,7 +573,7 @@ function SiteLayoutContent() {
             {route.title}
           </span>
         )}
-      </button>
+      </Link>
     );
   };
 
@@ -674,10 +663,10 @@ function SiteLayoutContent() {
             >
               {quickCreateRoutes.length > 0 ? (
                 quickCreateRoutes.map((route) => (
-                  <button
-                    type="button"
+                  <Link
                     key={route.id}
-                    onClick={() => navigate(route.path)}
+                    to={route.path}
+                    onClick={() => setQuickCreateOpen(false)}
                     className="
                         flex h-9 w-full items-center
                         rounded-md border-0 bg-transparent
@@ -706,7 +695,7 @@ function SiteLayoutContent() {
                     <span className="truncate">
                       {route.quickCreateLabel ?? route.title}
                     </span>
-                  </button>
+                  </Link>
                 ))
               ) : (
                 <div
