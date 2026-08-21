@@ -118,9 +118,16 @@ yak:
   sync:
     realtime:
       enabled: ${YAK_REALTIME_SYNC_ENABLED:true}
-      base-url: ${YAK_REALTIME_RUNTIME_URL:http://127.0.0.1:18090}
+      rest-url: ${YAK_FLINK_REST_URL:http://127.0.0.1:8081}
+      flink-home: ${YAK_FLINK_HOME:/opt/flink}
+      flink-cdc-home: ${YAK_FLINK_CDC_HOME:/opt/flink-cdc}
+      java-home: ${YAK_FLINK_JAVA_HOME:}
+      work-directory: ${YAK_REALTIME_WORK_DIRECTORY:./data/realtime-sync}
+      flink-version: ${YAK_FLINK_VERSION:1.20.5}
+      flink-cdc-version: ${YAK_FLINK_CDC_VERSION:3.6.0}
       connect-timeout: ${YAK_REALTIME_CONNECT_TIMEOUT:3s}
       request-timeout: ${YAK_REALTIME_REQUEST_TIMEOUT:30s}
+      submit-timeout: ${YAK_REALTIME_SUBMIT_TIMEOUT:60s}
       reconcile-delay: ${YAK_REALTIME_RECONCILE_DELAY:10000}
       reconcile-failure-threshold: ${YAK_REALTIME_RECONCILE_FAILURE_THRESHOLD:3}
       reconcile-lease-seconds: ${YAK_REALTIME_RECONCILE_LEASE_SECONDS:30}

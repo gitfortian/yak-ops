@@ -8,7 +8,7 @@ import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/** Validates role-specific connector support against the runtime capability manifest. */
+/** Validates role-specific connector support against the Flink CDC capability manifest. */
 @Component
 public class RealtimeConnectorCapabilityResolver {
 
@@ -19,7 +19,7 @@ public class RealtimeConnectorCapabilityResolver {
     Set<String> sinks = values(connectors.path("sinks"));
 
     if (!sources.contains("mysql") || pipeline.source().dbType() != DataSourceDbType.MYSQL) {
-      throw new IllegalStateException("Runtime 不支持 MySQL CDC Source");
+      throw new IllegalStateException("Flink CDC 不支持 MySQL CDC Source");
     }
 
     String sinkCapability =
@@ -27,17 +27,17 @@ public class RealtimeConnectorCapabilityResolver {
             ? "yak-jdbc:postgres"
             : "yak-jdbc:mysql";
     if (!sinks.contains(sinkCapability)) {
-      throw new IllegalStateException("Runtime 不支持 Sink Connector：" + sinkCapability);
+      throw new IllegalStateException("Flink CDC 不支持 Sink Connector：" + sinkCapability);
     }
 
     String delivery = manifest.path("deliverySemantics").asText("");
     if (!"at-least-once".equalsIgnoreCase(delivery)) {
-      throw new IllegalStateException("Runtime 交付语义与一期 At-least-once 契约不一致");
+      throw new IllegalStateException("Flink CDC 交付语义与一期 At-least-once 契约不一致");
     }
     if (spec.schemaEvolution() == CdcPipelineSpec.SchemaEvolution.EVOLVE
         && (!connectors.path("schemaEvolution").isArray()
             || connectors.path("schemaEvolution").isEmpty())) {
-      throw new IllegalStateException("Runtime 未声明 Schema Evolution 能力");
+      throw new IllegalStateException("Flink CDC 未声明 Schema Evolution 能力");
     }
   }
 

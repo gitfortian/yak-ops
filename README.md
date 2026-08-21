@@ -26,8 +26,8 @@ Yak Ops currently keeps a deliberately small and maintainable feature set:
 - data-quality rule templates, table monitors, manual checks, and execution results;
 - system management and security administration.
 
-Realtime synchronization requires a compatible Yak CDC Runtime implementing the secure deployment
-contract in `docs/realtime-sync-runtime-contract.md`.
+Realtime synchronization submits Pipeline YAML through the local Flink CDC CLI and manages each
+job through the Flink REST API. See `docs/realtime-sync-mvp.md` for installation and operations.
 
 ## Quick start
 

@@ -42,6 +42,8 @@ export const realtimeApi = {
   remove: (id: number) => request<ApiResponse<boolean>>(`${PREFIX}/${id}`, { method: 'DELETE' }),
   events: (id: number) => request<ApiResponse<RealtimeEvent[]>>(`${PREFIX}/${id}/events`),
   logs: (id: number) => request<ApiResponse<{ logs: string }>>(`${PREFIX}/${id}/logs`, { params: { tail: 500 } }),
+  checkpoints: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/checkpoints`),
+  metrics: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/metrics`),
   capabilities: () => request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`),
   dataSources: () => request<ApiResponse<DataSourceOption[]>>('/api/v1/data-source/option'),
 };
