@@ -26,6 +26,18 @@ interface LineageRepository {
     throw new UnsupportedOperationException("Relation evidence cleanup is not supported");
   }
 
+  default Set<Long> findAssetIdsByEvidence(String sourceType, String sourceId) {
+    throw new UnsupportedOperationException("Relation evidence lookup is not supported");
+  }
+
+  default int deleteUnreferencedOwnedAssets(Set<Long> assetIds, String ownerType, String ownerId) {
+    throw new UnsupportedOperationException("Owned asset cleanup is not supported");
+  }
+
+  default Optional<LineageAsset> lockAssetByKey(String assetKey) {
+    return findAssetByKey(assetKey);
+  }
+
   Optional<LineageAsset> findAsset(long assetId);
 
   Optional<LineageAsset> findAssetByKey(String assetKey);

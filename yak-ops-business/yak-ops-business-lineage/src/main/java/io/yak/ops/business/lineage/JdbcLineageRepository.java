@@ -210,6 +210,42 @@ class JdbcLineageRepository implements LineageRepository {
   }
 
   @Override
+  public Set<Long> findAssetIdsByEvidence(String sourceType, String sourceId) {
+    return Set.copyOf(jdbcTemplate.queryForList("""
+        SELECT source_asset_id AS asset_id FROM yak_metadata_relation
+         WHERE source_type = ? AND source_id = ?
+        UNION
+        SELECT target_asset_id AS asset_id FROM yak_metadata_relation
+         WHERE source_type = ? AND source_id = ?
+        """, Long.class, sourceType, sourceId, sourceType, sourceId));
+  }
+
+  @Override
+  public int deleteUnreferencedOwnedAssets(Set<Long> assetIds, String ownerType, String ownerId) {
+    if (assetIds == null || assetIds.isEmpty()) return 0;
+    String placeholders = String.join(",", Collections.nCopies(assetIds.size(), "?"));
+    List<Object> arguments = new ArrayList<>(assetIds);
+    arguments.add(ownerType);
+    arguments.add(ownerId);
+    return jdbcTemplate.update("""
+        DELETE asset FROM yak_metadata_asset asset
+        LEFT JOIN yak_metadata_relation outgoing ON outgoing.source_asset_id = asset.id
+        LEFT JOIN yak_metadata_relation incoming ON incoming.target_asset_id = asset.id
+        LEFT JOIN yak_metadata_asset child ON child.parent_asset_id = asset.id
+         WHERE asset.id IN (%s)
+           AND asset.source_type = ? AND asset.source_id = ?
+           AND outgoing.id IS NULL AND incoming.id IS NULL AND child.id IS NULL
+        """.formatted(placeholders), arguments.toArray());
+  }
+
+  @Override
+  public Optional<LineageAsset> lockAssetByKey(String assetKey) {
+    return jdbcTemplate.query(
+        ASSET_COLUMNS + " WHERE asset_key = ? LIMIT 1 FOR UPDATE", this::mapAsset, assetKey)
+        .stream().findFirst();
+  }
+
+  @Override
   public Optional<LineageAsset> findAsset(long assetId) {
     return jdbcTemplate.query(
         ASSET_COLUMNS + " WHERE id = ? LIMIT 1", this::mapAsset, assetId)
