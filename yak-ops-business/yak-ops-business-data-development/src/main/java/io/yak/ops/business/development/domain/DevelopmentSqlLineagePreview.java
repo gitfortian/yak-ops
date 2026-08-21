@@ -70,8 +70,10 @@ public record DevelopmentSqlLineagePreview(
   public record ColumnMapping(
       String sourceTable,
       String sourceColumn,
+      String sourceDataType,
       String targetTable,
       String targetColumn,
+      String targetDataType,
       String mappingKind,
       String expression,
       int outputOrdinal,

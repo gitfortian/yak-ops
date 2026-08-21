@@ -168,17 +168,28 @@ public class DevelopmentSqlLineagePreviewService {
         SqlProjectionLineageAnalyzer.ProjectionResult result = projectionAnalyzer.analyze(
             sql,
             projectionSchemaProvider(dataSourceId, defaultDatabase, defaultSchema));
-        List<ColumnMapping> mappings = result.mappings().stream()
-            .map(mapping -> new ColumnMapping(
-                mapping.sourceTable().qualifiedName(),
-                mapping.sourceColumnName(),
-                null,
-                mapping.outputColumnName(),
-                mapping.mappingKind().name(),
-                mapping.expression(),
-                mapping.outputOrdinal(),
-                mapping.sourceOrdinal()))
-            .toList();
+        List<ColumnMapping> mappings = result.mappings().stream().map(mapping -> {
+          String sourceType = catalogDataType(
+              dataSourceId,
+              mapping.sourceTable().databaseName(),
+              mapping.sourceTable().schemaName(),
+              mapping.sourceTable().tableName(),
+              mapping.sourceColumnName(),
+              defaultDatabase,
+              defaultSchema);
+          return new ColumnMapping(
+              mapping.sourceTable().qualifiedName(),
+              mapping.sourceColumnName(),
+              sourceType,
+              null,
+              mapping.outputColumnName(),
+              inferredTargetDataType(
+                  sourceType, mapping.mappingKind().name(), mapping.expression()),
+              mapping.mappingKind().name(),
+              mapping.expression(),
+              mapping.outputOrdinal(),
+              mapping.sourceOrdinal());
+        }).toList();
         return new ColumnAnalysis(
             mappings,
             result.candidateOutputCount(),
@@ -214,17 +225,37 @@ public class DevelopmentSqlLineagePreviewService {
     SqlColumnLineageParser.ParseResult result = columnParser.parse(
         sql,
         columnSchemaProvider(dataSourceId, defaultDatabase, defaultSchema));
-    List<ColumnMapping> mappings = result.mappings().stream()
-        .map(mapping -> new ColumnMapping(
-            mapping.sourceTable().qualifiedName(),
-            mapping.sourceColumnName(),
-            mapping.targetTable().qualifiedName(),
-            mapping.targetColumnName(),
-            mapping.mappingKind().name(),
-            mapping.expression(),
-            mapping.outputOrdinal(),
-            mapping.sourceOrdinal()))
-        .toList();
+    List<ColumnMapping> mappings = result.mappings().stream().map(mapping -> {
+      String sourceType = catalogDataType(
+          dataSourceId,
+          mapping.sourceTable().databaseName(),
+          mapping.sourceTable().schemaName(),
+          mapping.sourceTable().tableName(),
+          mapping.sourceColumnName(),
+          defaultDatabase,
+          defaultSchema);
+      String targetType = catalogDataType(
+          dataSourceId,
+          mapping.targetTable().databaseName(),
+          mapping.targetTable().schemaName(),
+          mapping.targetTable().tableName(),
+          mapping.targetColumnName(),
+          defaultDatabase,
+          defaultSchema);
+      return new ColumnMapping(
+          mapping.sourceTable().qualifiedName(),
+          mapping.sourceColumnName(),
+          sourceType,
+          mapping.targetTable().qualifiedName(),
+          mapping.targetColumnName(),
+          targetType == null
+              ? inferredTargetDataType(sourceType, mapping.mappingKind().name(), mapping.expression())
+              : targetType,
+          mapping.mappingKind().name(),
+          mapping.expression(),
+          mapping.outputOrdinal(),
+          mapping.sourceOrdinal());
+    }).toList();
     return new ColumnAnalysis(
         mappings,
         result.candidateOutputCount(),
@@ -323,7 +354,8 @@ public class DevelopmentSqlLineagePreviewService {
     List<CatalogColumn> result = new ArrayList<>();
     for (DataSourceCatalogColumnVO column : columns) {
       if (column == null || column.getName() == null || column.getName().isBlank()) continue;
-      result.add(new CatalogColumn(column.getName(), column.getOrdinalPosition()));
+      result.add(new CatalogColumn(
+          column.getName(), column.getTypeName(), column.getOrdinalPosition()));
     }
     return List.copyOf(result);
   }
@@ -344,6 +376,34 @@ public class DevelopmentSqlLineagePreviewService {
     } catch (RuntimeException exception) {
       return List.of();
     }
+  }
+
+  private String catalogDataType(
+      String dataSourceId,
+      String explicitDatabase,
+      String explicitSchema,
+      String table,
+      String columnName,
+      String defaultDatabase,
+      String defaultSchema) {
+    return catalogColumnsForTable(
+            dataSourceId, explicitDatabase, explicitSchema, table, defaultDatabase, defaultSchema)
+        .stream()
+        .filter(column -> column.name().equalsIgnoreCase(columnName))
+        .map(CatalogColumn::dataType)
+        .filter(type -> type != null && !type.isBlank())
+        .findFirst()
+        .orElse(null);
+  }
+
+  private static String inferredTargetDataType(
+      String sourceDataType, String mappingKind, String expression) {
+    if ("AGGREGATION".equals(mappingKind)
+        && expression != null
+        && expression.stripLeading().toUpperCase(java.util.Locale.ROOT).startsWith("COUNT(")) {
+      return "BIGINT";
+    }
+    return sourceDataType;
   }
 
   private PreviewAsset taskAsset(DevelopmentNode node, String dataSourceId) {
@@ -490,7 +550,7 @@ public class DevelopmentSqlLineagePreviewService {
       TableIdentityResolver.SqlDialect dialect) {
   }
 
-  private record CatalogColumn(String name, Integer ordinalPosition) {
+  private record CatalogColumn(String name, String dataType, Integer ordinalPosition) {
   }
 
   private record ColumnAnalysis(

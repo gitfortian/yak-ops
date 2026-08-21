@@ -11,7 +11,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
+import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.lineage.LineageRelationType;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -79,6 +81,29 @@ class DevelopmentSqlLineagePreviewServiceTest {
   }
 
   @Test
+  void includesCatalogDataTypesInColumnMappings() {
+    DevelopmentSqlLineagePreviewService service = service(sqlNode(8L, "类型血缘"));
+    DataSourceCatalogService catalogService = mock(DataSourceCatalogService.class);
+    when(catalogService.listColumns(3L, null, "ods", "orders"))
+        .thenReturn(java.util.List.of(column("id", "BIGINT", 1)));
+    when(catalogService.listColumns(3L, null, "dws", "order_copy"))
+        .thenReturn(java.util.List.of(column("id", "DECIMAL(20,0)", 1)));
+    service.setDataSourceCatalogService(catalogService);
+
+    DevelopmentSqlLineagePreview preview = service.preview(
+        8L,
+        "SQL",
+        "INSERT INTO dws.order_copy (id) SELECT s.id FROM ods.orders s",
+        "{\"dataSourceId\":\"3\"}",
+        null,
+        null);
+
+    DevelopmentSqlLineagePreview.ColumnMapping mapping = preview.columnMappings().get(0);
+    assertEquals("BIGINT", mapping.sourceDataType());
+    assertEquals("DECIMAL(20,0)", mapping.targetDataType());
+  }
+
+  @Test
   void returnsFailedPreviewForInvalidSqlInsteadOfWritingStaleLineage() {
     DevelopmentSqlLineagePreviewService service = service(sqlNode(9L, "错误 SQL"));
 
@@ -141,5 +166,10 @@ class DevelopmentSqlLineagePreviewServiceTest {
         true,
         Instant.now(),
         Instant.now());
+  }
+
+  private static DataSourceCatalogColumnVO column(String name, String type, int ordinal) {
+    return new DataSourceCatalogColumnVO(
+        name, type, null, null, null, true, ordinal, false, null);
   }
 }
