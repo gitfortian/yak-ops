@@ -35,6 +35,7 @@ import {
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import DatasetLineageTab from './DatasetLineageTab';
 import {
   fetchCatalogWorkspace,
   offlineCatalogDataset,
@@ -274,7 +275,7 @@ const DataCatalogPage = () => {
     'ALL' | CatalogDatasetSourceType
   >('ALL');
   const [detailTab, setDetailTab] = useState<
-    'fields' | 'versions' | 'overview'
+    'fields' | 'versions' | 'overview' | 'lineage'
   >('fields');
   const [current, setCurrent] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -780,6 +781,7 @@ const DataCatalogPage = () => {
       { key: 'fields', label: `字段信息 ${summary.fields}` },
       { key: 'versions', label: `版本历史 ${dataset.versions.length}` },
       { key: 'overview', label: '基本信息' },
+      { key: 'lineage', label: '血缘' },
     ] as const;
 
     const fieldColumns: ColumnsType<CatalogDataset['fields'][number]> = [
@@ -981,7 +983,7 @@ const DataCatalogPage = () => {
               label: tab.label,
             }))}
             onChange={(key) =>
-              setDetailTab(key as 'fields' | 'versions' | 'overview')
+              setDetailTab(key as 'fields' | 'versions' | 'overview' | 'lineage')
             }
             className="dataset-detail-tabs"
           />
@@ -1013,6 +1015,8 @@ const DataCatalogPage = () => {
                 scroll={{ x: 760 }}
                 locale={{ emptyText: '暂无 DatasetVersion' }}
               />
+            ) : detailTab === 'lineage' ? (
+              <DatasetLineageTab key={dataset.id} dataset={dataset} />
             ) : (
               <div className="max-w-[980px]">
                 <div className="grid grid-cols-4 gap-3">
