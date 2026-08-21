@@ -10,6 +10,7 @@ import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
+import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -34,9 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class RealtimeJobController {
 
   private final RealtimeJobService service;
+  private final RealtimeJobListQuery listQuery;
 
-  public RealtimeJobController(RealtimeJobService service) {
+  public RealtimeJobController(RealtimeJobService service, RealtimeJobListQuery listQuery) {
     this.service = service;
+    this.listQuery = listQuery;
   }
 
   public record SaveRequest(
@@ -74,7 +77,7 @@ public class RealtimeJobController {
       @RequestParam(required = false) Long id,
       @RequestParam(required = false) String releaseState,
       @RequestParam(required = false) String stateGroup) {
-    return Result.success(service.page(pageNo, pageSize, keyword, id, releaseState, stateGroup));
+    return Result.success(listQuery.page(pageNo, pageSize, keyword, id, releaseState, stateGroup));
   }
 
   @Operation(summary = "发布当前定义版本")
