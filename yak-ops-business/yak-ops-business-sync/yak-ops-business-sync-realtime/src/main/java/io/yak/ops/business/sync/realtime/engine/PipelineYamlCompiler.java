@@ -1,6 +1,5 @@
 package io.yak.ops.business.sync.realtime.engine;
 
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import java.util.regex.Pattern;
@@ -11,17 +10,7 @@ import org.springframework.stereotype.Component;
 public class PipelineYamlCompiler {
 
   private static final Pattern SAFE_SCALAR = Pattern.compile("[A-Za-z0-9_.$:/?=&,*-]+");
-  private static final Pattern ENV_NAME = Pattern.compile("[A-Z_][A-Z0-9_]*");
-
-  private final RealtimeSyncProperties properties;
-
-  public PipelineYamlCompiler(RealtimeSyncProperties properties) {
-    this.properties = properties;
-  }
-
   public CompiledPipeline compile(String name, CdcPipelineSpec spec, ResolvedCdcPipeline resolved) {
-    String sourcePassword = envReference(properties.getSourcePasswordEnv());
-    String sinkPassword = envReference(properties.getSinkPasswordEnv());
     ResolvedCdcPipeline.Endpoint source = resolved.source();
     ResolvedCdcPipeline.Endpoint sink = resolved.sink();
 
@@ -49,7 +38,7 @@ public class PipelineYamlCompiler {
         .append(quote(source.username()))
         .append('\n')
         .append("  password: ")
-        .append(sourcePassword)
+        .append("${SECRET:source.password}")
         .append('\n')
         .append("  tables: ")
         .append(quote(tablePattern(spec, source.database())))
@@ -70,7 +59,7 @@ public class PipelineYamlCompiler {
         .append(quote(sink.username()))
         .append('\n')
         .append("  password: ")
-        .append(sinkPassword)
+        .append("${SECRET:sink.password}")
         .append('\n')
         .append("  dialect: ")
         .append(dialect(sink.dbType()))
@@ -135,13 +124,6 @@ public class PipelineYamlCompiler {
 
   private String dialect(DataSourceDbType type) {
     return type == DataSourceDbType.POSTGRE_SQL ? "postgres" : "mysql";
-  }
-
-  private String envReference(String name) {
-    if (name == null || !ENV_NAME.matcher(name).matches()) {
-      throw new IllegalStateException("Runtime 密码环境变量名配置无效");
-    }
-    return "${ENV:" + name + "}";
   }
 
   private String quote(String value) {

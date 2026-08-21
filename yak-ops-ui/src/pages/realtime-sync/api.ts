@@ -32,7 +32,7 @@ export const realtimeApi = {
     request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
   update: (id: number, payload: { name: string; description?: string; spec: CdcPipelineSpec }) =>
     request<ApiResponse<number>>(`${PREFIX}/${id}`, { method: 'PUT', data: payload }),
-  action: (id: number, action: 'publish' | 'validate' | 'start' | 'stop' | 'restart') =>
+  action: (id: number, action: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile') =>
     request<ApiResponse<RealtimeDeployment | boolean>>(`${PREFIX}/${id}/${action}`, {
       method: 'POST',
       headers: action === 'start' ? { 'Idempotency-Key': crypto.randomUUID() } : undefined,

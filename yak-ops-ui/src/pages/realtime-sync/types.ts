@@ -81,6 +81,14 @@ export interface RealtimeEvent {
   createTime: string;
 }
 
+export interface RealtimeJobChange {
+  definitionId: number;
+  eventType: string;
+  fromState?: string;
+  toState?: string;
+  message?: string;
+}
+
 export interface DataSourceOption {
   label: string;
   value: string;
@@ -103,6 +111,10 @@ export interface RuntimeCapabilities {
   checkpointConfiguration?: boolean;
   restartConfiguration?: boolean;
   dynamicCredentialBinding?: boolean;
+  protocolVersion?: string;
+  protocolCompatible?: boolean;
+  deployEnabled?: boolean;
+  deployDisabledReason?: string;
 }
 
 export interface ApiResponse<T> {

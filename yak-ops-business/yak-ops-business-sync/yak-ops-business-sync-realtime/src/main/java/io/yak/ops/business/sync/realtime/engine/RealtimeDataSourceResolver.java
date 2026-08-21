@@ -38,6 +38,23 @@ public class RealtimeDataSourceResolver {
     return new ResolvedCdcPipeline(endpoint(source, Role.SOURCE), endpoint(sink, Role.SINK));
   }
 
+  /** Resolves credentials only for the lifetime of one Runtime submission. */
+  public RealtimeDeployRequest.CredentialBinding[] resolveCredentials(CdcPipelineSpec spec) {
+    DataSourceDefinition source = find(spec.sourceDataSourceRef(), "Source");
+    DataSourceDefinition sink = find(spec.sinkDataSourceRef(), "Sink");
+    requireRole(source, Role.SOURCE);
+    requireRole(sink, Role.SINK);
+    RealtimeDeployRequest.CredentialBinding sourceCredential = credential(source, Role.SOURCE);
+    try {
+      return new RealtimeDeployRequest.CredentialBinding[] {
+        sourceCredential, credential(sink, Role.SINK)
+      };
+    } catch (RuntimeException exception) {
+      sourceCredential.close();
+      throw exception;
+    }
+  }
+
   private DataSourceDefinition find(Long id, String role) {
     return repository
         .findById(id)
@@ -57,6 +74,29 @@ public class RealtimeDataSourceResolver {
   }
 
   private ResolvedCdcPipeline.Endpoint endpoint(DataSourceDefinition definition, Role role) {
+    DataSourceConnection connection = connection(definition, role);
+
+    HostPort hostPort = hostPort(connection.normalizedJson(), connection.jdbcUrl());
+    return new ResolvedCdcPipeline.Endpoint(
+        definition.getId(),
+        definition.getName(),
+        definition.getDbType(),
+        hostPort.host(),
+        hostPort.port(),
+        connection.jdbcUrl(),
+        connection.driverClassName(),
+        connection.username(),
+        connection.database());
+  }
+
+  private RealtimeDeployRequest.CredentialBinding credential(
+      DataSourceDefinition definition, Role role) {
+    DataSourceConnection connection = connection(definition, role);
+    return new RealtimeDeployRequest.CredentialBinding(
+        connection.username(), connection.password());
+  }
+
+  private DataSourceConnection connection(DataSourceDefinition definition, Role role) {
     String connectionJson = definition.getConnectionParams();
     if (!StringUtils.hasText(connectionJson)) {
       connectionJson = definition.getOriginalJson();
@@ -77,17 +117,7 @@ public class RealtimeDataSourceResolver {
       throw new IllegalArgumentException(role + " 数据源连接参数不完整");
     }
 
-    HostPort hostPort = hostPort(connection.normalizedJson(), connection.jdbcUrl());
-    return new ResolvedCdcPipeline.Endpoint(
-        definition.getId(),
-        definition.getName(),
-        definition.getDbType(),
-        hostPort.host(),
-        hostPort.port(),
-        connection.jdbcUrl(),
-        connection.driverClassName(),
-        connection.username(),
-        connection.database());
+    return connection;
   }
 
   private HostPort hostPort(String normalizedJson, String jdbcUrl) {

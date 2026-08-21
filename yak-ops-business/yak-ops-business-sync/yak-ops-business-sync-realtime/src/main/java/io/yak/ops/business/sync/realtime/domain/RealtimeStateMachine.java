@@ -46,6 +46,7 @@ public class RealtimeStateMachine {
         ObservedState.CONFLICT);
     allow(
         ObservedState.CONFLICT,
+        ObservedState.RUNNING,
         ObservedState.STOPPING,
         ObservedState.STOPPED,
         ObservedState.UNKNOWN);

@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.realtime.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobChangeEvent;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
@@ -14,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
@@ -24,12 +26,15 @@ public class RealtimeJobStore {
 
   private final JdbcTemplate db;
   private final ObjectMapper json;
+  private final ApplicationEventPublisher events;
 
   public RealtimeJobStore(
       @Qualifier("yakBusinessDataSource") DataSource dataSource,
-      @Qualifier("realtimeObjectMapper") ObjectMapper json) {
+      @Qualifier("realtimeObjectMapper") ObjectMapper json,
+      ApplicationEventPublisher events) {
     this.db = new JdbcTemplate(dataSource);
     this.json = json;
+    this.events = events;
   }
 
   public long insertDefinition(
@@ -271,7 +276,7 @@ public class RealtimeJobStore {
   public List<DefinitionRow> desiredJobs() {
     return db.query(
         "select * from yak_realtime_job_definition where desired_state='RUNNING' or observed_state"
-            + " in ('STARTING','STOPPING','UNKNOWN') order by id",
+            + " in ('STARTING','STOPPING','UNKNOWN','CONFLICT') order by id",
         (result, row) -> definitionRow(result));
   }
 
@@ -305,6 +310,19 @@ public class RealtimeJobStore {
         from,
         to,
         message);
+    events.publishEvent(new RealtimeJobChangeEvent(definitionId, type, from, to, message));
+  }
+
+  public boolean tryAcquireReconcileLease(String owner, int leaseSeconds) {
+    int changed =
+        db.update(
+            "update yak_realtime_runtime_lease set lease_owner=?,"
+                + "lease_until=timestampadd(second,?,current_timestamp(3)) where id=1 "
+                + "and (lease_until is null or lease_until<current_timestamp(3) or lease_owner=?)",
+            owner,
+            Math.max(5, leaseSeconds),
+            owner);
+    return changed == 1;
   }
 
   public List<RealtimeJobEventView> events(long definitionId) {

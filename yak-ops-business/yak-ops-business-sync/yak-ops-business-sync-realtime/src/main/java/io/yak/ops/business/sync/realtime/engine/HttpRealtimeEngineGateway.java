@@ -55,8 +55,8 @@ public class HttpRealtimeEngineGateway implements RealtimeEngineGateway {
   }
 
   @Override
-  public DeployResult deploy(String pipelineYaml, String localIdempotencyKey) {
-    Response response = yaml("/deploy", pipelineYaml, true, localIdempotencyKey);
+  public DeployResult deploy(RealtimeDeployRequest request) {
+    Response response = deployment(request);
     if (response.status() == 409) {
       throw new GatewayException(Kind.CONFLICT, "Runtime 已有活动任务", false, response.status(), null);
     }
@@ -69,6 +69,38 @@ public class HttpRealtimeEngineGateway implements RealtimeEngineGateway {
       throw new GatewayException(Kind.PROTOCOL, "Runtime 未返回 jobId", true, 202, null);
     }
     return new DeployResult(jobId, response.body().path("deliverySemantics").asText(null));
+  }
+
+  private Response deployment(RealtimeDeployRequest deployment) {
+    try {
+      var body = json.createObjectNode();
+      body.put("pipelineYaml", deployment.pipelineYaml());
+      var credentials = body.putObject("credentials");
+      credential(credentials.putObject("source"), deployment.source());
+      credential(credentials.putObject("sink"), deployment.sink());
+      HttpRequest request =
+          request("/deploy")
+              .header("Content-Type", "application/json")
+              .header("Idempotency-Key", deployment.idempotencyKey())
+              .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+              .build();
+      HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+      return new Response(response.statusCode(), parse(response.body(), true));
+    } catch (HttpTimeoutException exception) {
+      throw unavailable("Runtime 提交超时，结果不确定", true, exception);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw unavailable("Runtime 提交被中断", true, exception);
+    } catch (IOException exception) {
+      throw unavailable("Runtime 连接失败", true, exception);
+    }
+  }
+
+  private void credential(
+      com.fasterxml.jackson.databind.node.ObjectNode target,
+      RealtimeDeployRequest.CredentialBinding binding) {
+    target.put("username", binding.username());
+    target.put("password", new String(binding.password()));
   }
 
   @Override
