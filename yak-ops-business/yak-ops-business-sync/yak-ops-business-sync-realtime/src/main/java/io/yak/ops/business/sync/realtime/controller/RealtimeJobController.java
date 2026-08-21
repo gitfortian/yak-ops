@@ -70,8 +70,11 @@ public class RealtimeJobController {
   public Result<RealtimeJobPage> page(
       @RequestParam(defaultValue = "1") int pageNo,
       @RequestParam(defaultValue = "20") int pageSize,
-      @RequestParam(required = false) String keyword) {
-    return Result.success(service.page(pageNo, pageSize, keyword));
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) Long id,
+      @RequestParam(required = false) String releaseState,
+      @RequestParam(required = false) String stateGroup) {
+    return Result.success(service.page(pageNo, pageSize, keyword, id, releaseState, stateGroup));
   }
 
   @Operation(summary = "发布当前定义版本")
