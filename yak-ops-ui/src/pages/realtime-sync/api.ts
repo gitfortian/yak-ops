@@ -7,15 +7,25 @@ import type {
   RealtimeEvent,
   RealtimeJob,
   RealtimeJobPage,
+  ReleaseState,
   RuntimeCapabilities,
 } from './types';
 
 const PREFIX = '/api/v1/realtime-sync';
 
+export interface RealtimePageQuery {
+  pageNo: number;
+  pageSize: number;
+  keyword?: string;
+  id?: number;
+  releaseState?: ReleaseState;
+  stateGroup?: 'RUNNING' | 'STOPPED' | 'ABNORMAL';
+}
+
 export const realtimeApi = {
-  page: (pageNo: number, pageSize: number, keyword?: string) =>
+  page: (params: RealtimePageQuery) =>
     request<ApiResponse<RealtimeJobPage>>(PREFIX, {
-      params: { pageNo, pageSize, keyword },
+      params,
     }),
   detail: (id: number) => request<ApiResponse<RealtimeJob>>(`${PREFIX}/${id}`),
   create: (payload: { name: string; description?: string; spec: CdcPipelineSpec }) =>
