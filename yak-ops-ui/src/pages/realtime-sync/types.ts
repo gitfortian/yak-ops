@@ -51,7 +51,7 @@ export interface RealtimeJob {
   id: number;
   name: string;
   description?: string;
-  spec: CdcPipelineSpec;
+  spec?: CdcPipelineSpec;
   releaseState: ReleaseState;
   desiredState: DesiredState;
   observedState: ObservedState;

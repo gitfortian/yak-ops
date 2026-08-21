@@ -1,3 +1,4 @@
+import { history } from '@umijs/max';
 import {
   Alert,
   Button,
@@ -26,6 +27,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CustomPagination from '../batch-link-up/CustomPagination';
 import { realtimeApi } from './api';
 import JobEditor from './JobEditor';
+import CreateRealtimeTaskDrawer from './CreateRealtimeTaskDrawer';
 import type {
   DataSourceOption,
   RealtimeEvent,
@@ -118,6 +120,7 @@ export default function RealtimeSync() {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [editor, setEditor] = useState<{ open: boolean; job?: RealtimeJob }>({ open: false });
+  const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<RealtimeJob>();
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [logs, setLogs] = useState('');
@@ -525,7 +528,7 @@ export default function RealtimeSync() {
               size="small"
               className="!h-7 !px-1.5 !text-[12px]"
               disabled={running}
-              onClick={() => setEditor({ open: true, job })}
+              onClick={() => history.push(`/sync/realtime/${job.id}/detail?scene=edit`)}
             >
               编辑
             </Button>
@@ -759,7 +762,7 @@ export default function RealtimeSync() {
                 size="small"
                 danger
                 className="!h-7"
-                onClick={() => setEditor({ open: true })}
+                onClick={() => setCreateOpen(true)}
               >
                 <span className="text-[13px]">新建同步任务</span>
               </Button>
@@ -842,6 +845,7 @@ export default function RealtimeSync() {
             void loadJobs();
           }}
         />
+        <CreateRealtimeTaskDrawer open={createOpen} onClose={() => setCreateOpen(false)} />
 
         <Drawer
           width={820}

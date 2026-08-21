@@ -98,6 +98,19 @@ public class RealtimeJobService {
     return saved == null ? 0 : saved;
   }
 
+  /** Creates the shell first; the editor supplies the pipeline spec in the second stage. */
+  public long create(String name, String description) {
+    requireName(name);
+    Long saved =
+        transactions.execute(
+            status -> {
+              long created = store.insertDefinition(name.trim(), description, null, null);
+              store.event(created, null, "DRAFT_CREATED", null, "DRAFT", "已创建实时同步基础任务");
+              return created;
+            });
+    return saved == null ? 0 : saved;
+  }
+
   public RealtimeJobView get(long id) {
     return store.view(id);
   }
