@@ -7,6 +7,7 @@ import { history } from "@umijs/max";
 
 import defaultSettings from "../config/defaultSettings";
 import { GlobalSearch, Knowledge } from "./components/RightContent";
+import SidebarMenuLink from "./components/SidebarMenuLink";
 import { getCurrentUser } from "./services/security/account";
 import { toCurrentUser } from "./services/security/currentIdentity";
 import {
@@ -73,6 +74,11 @@ export const layout: RunTimeLayoutConfig = ({
     menuProps: {
       defaultOpenKeys: ["/sync"],
     },
+    menuItemRender: (menuItemProps, defaultDom) => (
+      <SidebarMenuLink path={menuItemProps.path}>
+        {defaultDom}
+      </SidebarMenuLink>
+    ),
     actionsRender: () => [
       <GlobalSearch key="globalsearch" />,
       // <OpenAPI key="open-api" />,
