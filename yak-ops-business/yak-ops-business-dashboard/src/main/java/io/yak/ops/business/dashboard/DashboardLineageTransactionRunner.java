@@ -1,5 +1,8 @@
 package io.yak.ops.business.dashboard;
 
+import io.yak.ops.business.dashboard.domain.DashboardAsset;
+import io.yak.ops.business.dashboard.domain.DashboardVersion;
+import io.yak.ops.business.dashboard.domain.DashboardWidgetSnapshot;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
