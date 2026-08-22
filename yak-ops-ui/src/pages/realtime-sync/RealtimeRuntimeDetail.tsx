@@ -46,6 +46,9 @@ const formatBytes = (value?: number) => {
   return `${current.toFixed(current >= 100 ? 0 : current >= 10 ? 1 : 2)} ${units[index]}`;
 };
 
+const formatByteRate = (value?: number) =>
+  value === undefined || value === null ? '-' : `${formatBytes(value)}/s`;
+
 const formatDuration = (value?: number) => {
   if (value === undefined || value === null) return '-';
   const seconds = Math.max(0, Math.floor(value / 1000));
@@ -98,6 +101,7 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
   const [runtimeLoading, setRuntimeLoading] = useState(false);
 
   const engineJobId = job.latestDeployment?.engineJobId;
+  const hasDeployment = Boolean(job.latestDeployment);
   const canObserve = Boolean(engineJobId);
 
   const refreshObservability = useCallback(
@@ -170,11 +174,13 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <div className="flex items-center justify-between gap-3">
           <div className="text-[12px] text-[#98a2b3]">
-            {observability?.sampledAt ? `采样时间：${formatTime(observability.sampledAt)}` : '正在读取 Flink 状态'}
+            {observability?.sampledAt
+              ? `采样时间：${formatTime(observability.sampledAt)}`
+              : '正在读取 Flink 状态'}
           </div>
           <Space>
             {flinkWebUrl && (
-              <Button size="small" href={flinkWebUrl} target="_blank" rel="noreferrer">
+              <Button size="small" href={flinkWebUrl} target="_blank">
                 打开 Flink Web UI
               </Button>
             )}
@@ -221,7 +227,9 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
           </Descriptions.Item>
           <Descriptions.Item label="启动时间">{formatTime(observability?.startTime)}</Descriptions.Item>
           <Descriptions.Item label="最近 Checkpoint">
-            {latestCheckpoint?.id ? `#${latestCheckpoint.id} · ${formatDuration(latestCheckpoint.durationMs)}` : '-'}
+            {latestCheckpoint?.id
+              ? `#${latestCheckpoint.id} · ${formatDuration(latestCheckpoint.durationMs)}`
+              : '-'}
           </Descriptions.Item>
           <Descriptions.Item label="部署摘要" span={2}>
             {job.latestDeployment?.specSummary || '-'}
@@ -234,32 +242,32 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
     </Spin>
   );
 
-  const logs = !canObserve ? (
-    <Empty description="当前任务还没有 Flink JobId，暂无日志可查询" />
-  ) : (
+  const logs = (
     <Tabs
       items={[
         {
           key: 'submission',
           label: '提交日志',
-          children: (
+          children: hasDeployment ? (
             <Space direction="vertical" style={{ width: '100%' }}>
               <Alert
                 type="info"
                 showIcon
-                message="这里展示 Flink CDC CLI 提交过程；密码、Token 等敏感字段会在后端再次脱敏。"
+                message="这里展示 Flink CDC CLI 提交过程；即使提交失败、超时或 JobId 尚未恢复，也会按本次部署保留日志。密码、Token 等敏感字段会在后端再次脱敏。"
               />
               <Button loading={submissionLoading} onClick={() => void loadSubmissionLog()}>
                 读取最近提交日志
               </Button>
               <CodeBlock empty="尚未读取提交日志">{submissionLog}</CodeBlock>
             </Space>
+          ) : (
+            <Empty description="任务尚无部署记录，暂无提交日志" />
           ),
         },
         {
           key: 'runtime',
           label: '运行诊断',
-          children: (
+          children: canObserve ? (
             <Space direction="vertical" style={{ width: '100%' }}>
               <Alert
                 type="info"
@@ -274,7 +282,9 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
                   type="error"
                   showIcon
                   message={`最近异常 · ${formatTime(runtimeLog.timestamp)}`}
-                  description={<pre className="m-0 whitespace-pre-wrap text-[12px]">{runtimeLog.rootException}</pre>}
+                  description={
+                    <pre className="m-0 whitespace-pre-wrap text-[12px]">{runtimeLog.rootException}</pre>
+                  }
                 />
               )}
               {runtimeLog?.truncated && (
@@ -290,7 +300,8 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
                           {item.exceptionName || 'Runtime Exception'}
                         </div>
                         <div className="mt-0.5 text-[11px] text-[#98a2b3]">
-                          {formatTime(item.timestamp)} · {item.taskName || '-'} · {item.taskManagerId || '-'}
+                          {formatTime(item.timestamp)} · {item.taskName || '-'} ·{' '}
+                          {item.taskManagerId || '-'}
                         </div>
                         {item.stacktrace && (
                           <pre className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded bg-[#f8f9fb] p-3 text-[11px] text-[#475467]">
@@ -305,6 +316,8 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
                 <Empty description={runtimeLog ? 'Flink 当前没有异常历史' : '尚未读取运行诊断'} />
               )}
             </Space>
+          ) : (
+            <Empty description="Flink JobId 尚未确认；可以先查看提交日志，待状态对账恢复 JobId 后再读取运行诊断" />
           ),
         },
       ]}
@@ -336,9 +349,15 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
         {latestCheckpoint ? (
           <Descriptions bordered size="small" column={2}>
             <Descriptions.Item label="最近成功 ID">#{latestCheckpoint.id}</Descriptions.Item>
-            <Descriptions.Item label="完成时间">{formatTime(latestCheckpoint.latestAckTimestamp)}</Descriptions.Item>
-            <Descriptions.Item label="耗时">{formatDuration(latestCheckpoint.durationMs)}</Descriptions.Item>
-            <Descriptions.Item label="状态大小">{formatBytes(latestCheckpoint.stateSizeBytes)}</Descriptions.Item>
+            <Descriptions.Item label="完成时间">
+              {formatTime(latestCheckpoint.latestAckTimestamp)}
+            </Descriptions.Item>
+            <Descriptions.Item label="耗时">
+              {formatDuration(latestCheckpoint.durationMs)}
+            </Descriptions.Item>
+            <Descriptions.Item label="状态大小">
+              {formatBytes(latestCheckpoint.stateSizeBytes)}
+            </Descriptions.Item>
             <Descriptions.Item label="Checkpointed Size">
               {formatBytes(latestCheckpoint.checkpointedSizeBytes)}
             </Descriptions.Item>
@@ -350,7 +369,12 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
           <Empty description="还没有成功的 Checkpoint" />
         )}
         {checkpoint?.latestFailed?.failureMessage && (
-          <Alert type="error" showIcon message="最近 Checkpoint 失败" description={checkpoint.latestFailed.failureMessage} />
+          <Alert
+            type="error"
+            showIcon
+            message="最近 Checkpoint 失败"
+            description={checkpoint.latestFailed.failureMessage}
+          />
         )}
       </Space>
     </Spin>
@@ -388,12 +412,12 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
           <MetricCard
             label="Source Bytes"
             value={formatBytes(metrics?.bytesRead)}
-            hint={`${formatBytes(metrics?.bytesReadPerSecond)}/s`}
+            hint={formatByteRate(metrics?.bytesReadPerSecond)}
           />
           <MetricCard
             label="Sink Bytes"
             value={formatBytes(metrics?.bytesWritten)}
-            hint={`${formatBytes(metrics?.bytesWrittenPerSecond)}/s`}
+            hint={formatByteRate(metrics?.bytesWrittenPerSecond)}
           />
         </div>
         <Card size="small" title="运行压力">
@@ -410,7 +434,15 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
                 <span>最大 Backpressure</span>
                 <span>{metrics?.maxBackpressuredMsPerSecond?.toFixed(0) ?? '-'} ms/s</span>
               </div>
-              <Progress percent={pressurePercent(metrics?.maxBackpressuredMsPerSecond)} showInfo={false} status={pressurePercent(metrics?.maxBackpressuredMsPerSecond) >= 70 ? 'exception' : 'normal'} />
+              <Progress
+                percent={pressurePercent(metrics?.maxBackpressuredMsPerSecond)}
+                showInfo={false}
+                status={
+                  pressurePercent(metrics?.maxBackpressuredMsPerSecond) >= 70
+                    ? 'exception'
+                    : 'normal'
+                }
+              />
             </div>
             <div>
               <div className="mb-1 flex justify-between text-[12px] text-[#667085]">
