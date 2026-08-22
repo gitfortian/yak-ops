@@ -19,15 +19,13 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResol
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
-import jakarta.validation.Validator;
+import jakarta.validation.Validation;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class RealtimeDefinitionValidatorTest {
 
-  private Validator beanValidator;
   private CdcPipelineSpecValidator specValidator;
   private RealtimeRuntimeResolver runtimeResolver;
   private RealtimeDataSourceResolver dataSourceResolver;
@@ -40,7 +38,6 @@ class RealtimeDefinitionValidatorTest {
 
   @BeforeEach
   void setUp() {
-    beanValidator = mock(Validator.class);
     specValidator = mock(CdcPipelineSpecValidator.class);
     runtimeResolver = mock(RealtimeRuntimeResolver.class);
     dataSourceResolver = mock(RealtimeDataSourceResolver.class);
@@ -50,7 +47,6 @@ class RealtimeDefinitionValidatorTest {
     environment = mock(ComputeEnvironmentSnapshot.class);
     resolved = mock(ResolvedCdcPipeline.class);
 
-    when(beanValidator.validate(any(CdcPipelineSpec.class))).thenReturn(Set.of());
     when(runtimeResolver.environment(3L, true)).thenReturn(environment);
     when(dataSourceResolver.resolve(any(CdcPipelineSpec.class))).thenReturn(resolved);
     ObjectNode manifest = new ObjectMapper().createObjectNode();
@@ -63,7 +59,7 @@ class RealtimeDefinitionValidatorTest {
 
     validator =
         new RealtimeDefinitionValidator(
-            beanValidator,
+            Validation.buildDefaultValidatorFactory().getValidator(),
             specValidator,
             runtimeResolver,
             dataSourceResolver,
@@ -99,6 +95,29 @@ class RealtimeDefinitionValidatorTest {
         .hasMessageContaining("Source 数据源不存在");
 
     verify(compiler, never()).compile(any(), any(), any());
+  }
+
+  @Test
+  void rejectsBeanValidationFailureBeforeDatasourceResolution() {
+    CdcPipelineSpec invalid =
+        new CdcPipelineSpec(
+            1L,
+            2L,
+            List.of(
+                new CdcPipelineSpec.TableRoute(
+                    "orders", "orders", CdcPipelineSpec.MatchMode.EXACT, List.of("id"))),
+            "initial",
+            CdcPipelineSpec.SchemaEvolution.EVOLVE,
+            0,
+            60_000,
+            new CdcPipelineSpec.RestartPolicy("fixed-delay", 3, 10_000),
+            new CdcPipelineSpec.SinkTuning(3, 1_000, 2_000, 16_777_216, 128, true));
+
+    assertThatThrownBy(() -> validator.validate(invalid, 3L))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("parallelism");
+
+    verify(dataSourceResolver, never()).resolve(any());
   }
 
   private CdcPipelineSpec spec() {
