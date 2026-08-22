@@ -3,6 +3,7 @@ import { message, Spin } from 'antd';
 import { useEffect, useState } from 'react';
 import { realtimeApi } from './api';
 import JobEditor from './JobEditor';
+import WizardJobEditor from './WizardJobEditor';
 import YamlJobEditor from './YamlJobEditor';
 import type { ComputeEnvironmentOption, DataSourceOption, RealtimeJob } from './types';
 
@@ -34,6 +35,16 @@ export default function RealtimeSyncDetail() {
     return (
       <YamlJobEditor
         job={job}
+        onClose={() => history.push('/sync/realtime')}
+        onSaved={() => history.push('/sync/realtime')}
+      />
+    );
+  }
+  if (editorMode === 'wizard') {
+    return (
+      <WizardJobEditor
+        job={job}
+        dataSources={dataSources}
         onClose={() => history.push('/sync/realtime')}
         onSaved={() => history.push('/sync/realtime')}
       />
