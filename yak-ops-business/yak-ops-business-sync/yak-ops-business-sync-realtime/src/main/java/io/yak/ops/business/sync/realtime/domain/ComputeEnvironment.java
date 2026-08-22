@@ -14,12 +14,45 @@ public record ComputeEnvironment(
     boolean defaultEnvironment,
     int version,
     LocalDateTime createTime,
-    LocalDateTime updateTime) {
+    LocalDateTime updateTime,
+    String lastCheckStatus,
+    String lastCheckMessage,
+    LocalDateTime lastCheckTime) {
 
   public static final String ENGINE_FLINK_CDC = "FLINK_CDC";
   public static final String DEPLOYMENT_REMOTE = "REMOTE";
   public static final String SUBMITTER_LOCAL = "LOCAL";
   public static final String SUBMITTER_SSH = "SSH";
+
+  /** Source-compatible constructor for callers that predate environment diagnostics. */
+  public ComputeEnvironment(
+      long id,
+      String name,
+      String engineType,
+      String deploymentMode,
+      String submitterType,
+      RuntimeConfig config,
+      boolean enabled,
+      boolean defaultEnvironment,
+      int version,
+      LocalDateTime createTime,
+      LocalDateTime updateTime) {
+    this(
+        id,
+        name,
+        engineType,
+        deploymentMode,
+        submitterType,
+        config,
+        enabled,
+        defaultEnvironment,
+        version,
+        createTime,
+        updateTime,
+        null,
+        null,
+        null);
+  }
 
   /**
    * Settings that describe where and how Flink CDC is submitted. Yak Ops operational settings such

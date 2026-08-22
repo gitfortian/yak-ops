@@ -1,11 +1,16 @@
 import {
+  CheckCircleFilled,
+  CloseCircleFilled,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
+  ReloadOutlined,
   StarFilled,
   StarOutlined,
+  WarningFilled,
 } from '@ant-design/icons';
 import {
+  Alert,
   Button,
   Empty,
   Form,
@@ -26,6 +31,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   computeEnvironmentApi,
   type ComputeEnvironment,
+  type ComputeEnvironmentDiagnosis,
+  type ComputeEnvironmentDiagnosisCheck,
+  type ComputeEnvironmentHealthStatus,
   type ComputeEnvironmentPayload,
 } from '../services/computeEnvironments';
 
@@ -83,6 +91,58 @@ const errorText = (error: unknown, fallback: string): string =>
 const submitterLabel = (value?: SubmitterType | string | null) =>
   value === 'SSH' ? 'SSH 远程执行' : '本机执行';
 
+const healthMeta = (status?: ComputeEnvironmentHealthStatus) => {
+  switch (status) {
+    case 'HEALTHY':
+      return { label: '环境正常', color: 'green', icon: <CheckCircleFilled /> };
+    case 'WARNING':
+      return { label: '需要关注', color: 'gold', icon: <WarningFilled /> };
+    case 'FAILED':
+      return { label: '检测失败', color: 'red', icon: <CloseCircleFilled /> };
+    default:
+      return { label: '未检测', color: 'default', icon: undefined };
+  }
+};
+
+const checkIcon = (check: ComputeEnvironmentDiagnosisCheck) => {
+  if (check.status === 'PASS') return <CheckCircleFilled className="text-[#12b76a]" />;
+  if (check.status === 'WARN') return <WarningFilled className="text-[#f79009]" />;
+  return <CloseCircleFilled className="text-[#f04438]" />;
+};
+
+const formatTime = (value?: string) =>
+  value ? new Date(value).toLocaleString('zh-CN') : '尚未检测';
+
+const toPayload = (values: FormValues): ComputeEnvironmentPayload => ({
+  name: values.name.trim(),
+  submitterType: values.submitterType,
+  enabled: values.enabled,
+  makeDefault: values.makeDefault,
+  config: {
+    restUrl: values.restUrl.trim(),
+    flinkHome: values.flinkHome.trim(),
+    flinkCdcHome: values.flinkCdcHome.trim(),
+    javaHome: values.javaHome?.trim() || undefined,
+    flinkVersion: values.flinkVersion.trim(),
+    flinkCdcVersion: values.flinkCdcVersion.trim(),
+    ssh:
+      values.submitterType === 'SSH'
+        ? {
+            executable: values.sshExecutable?.trim() || 'ssh',
+            host: values.sshHost?.trim(),
+            port: values.sshPort || 22,
+            user: values.sshUser?.trim(),
+            identityFile: values.sshIdentityFile?.trim() || undefined,
+            knownHostsFile: values.sshKnownHostsFile?.trim() || undefined,
+            strictHostKeyChecking: values.sshStrictHostKeyChecking ?? true,
+            connectTimeoutSeconds: values.sshConnectTimeoutSeconds || 5,
+            remoteRestAddress: values.sshRemoteRestAddress?.trim() || undefined,
+            remoteRestPort: values.sshRemoteRestPort,
+          }
+        : undefined,
+  },
+});
+
 const ComputeEngineSettingsPanel = () => {
   const [form] = Form.useForm<FormValues>();
   const [environments, setEnvironments] = useState<ComputeEnvironment[]>([]);
@@ -93,6 +153,9 @@ const ComputeEngineSettingsPanel = () => {
   const [switchingId, setSwitchingId] = useState<number | null>(null);
   const [defaultingId, setDefaultingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [diagnosingId, setDiagnosingId] = useState<number | null>(null);
+  const [previewDiagnosing, setPreviewDiagnosing] = useState(false);
+  const [diagnosis, setDiagnosis] = useState<ComputeEnvironmentDiagnosis | null>(null);
   const submitterType = Form.useWatch('submitterType', form) || 'LOCAL';
 
   const load = useCallback(async () => {
@@ -155,44 +218,15 @@ const ComputeEngineSettingsPanel = () => {
       return;
     }
 
-    const payload: ComputeEnvironmentPayload = {
-      name: values.name.trim(),
-      submitterType: values.submitterType,
-      enabled: values.enabled,
-      makeDefault: values.makeDefault,
-      config: {
-        restUrl: values.restUrl.trim(),
-        flinkHome: values.flinkHome.trim(),
-        flinkCdcHome: values.flinkCdcHome.trim(),
-        javaHome: values.javaHome?.trim() || undefined,
-        flinkVersion: values.flinkVersion.trim(),
-        flinkCdcVersion: values.flinkCdcVersion.trim(),
-        ssh:
-          values.submitterType === 'SSH'
-            ? {
-                executable: values.sshExecutable?.trim() || 'ssh',
-                host: values.sshHost?.trim(),
-                port: values.sshPort || 22,
-                user: values.sshUser?.trim(),
-                identityFile: values.sshIdentityFile?.trim() || undefined,
-                knownHostsFile: values.sshKnownHostsFile?.trim() || undefined,
-                strictHostKeyChecking: values.sshStrictHostKeyChecking ?? true,
-                connectTimeoutSeconds: values.sshConnectTimeoutSeconds || 5,
-                remoteRestAddress: values.sshRemoteRestAddress?.trim() || undefined,
-                remoteRestPort: values.sshRemoteRestPort,
-              }
-            : undefined,
-      },
-    };
-
     setSaving(true);
     try {
+      const payload = toPayload(values);
       if (editing) {
         await computeEnvironmentApi.update(editing.id, payload);
-        message.success('运行环境已更新');
+        message.success('运行环境已更新，建议重新检测环境');
       } else {
         await computeEnvironmentApi.create(payload);
-        message.success('运行环境已创建');
+        message.success('运行环境已创建，建议执行一次环境检测');
       }
       setModalOpen(false);
       await load();
@@ -200,6 +234,53 @@ const ComputeEngineSettingsPanel = () => {
       message.error(errorText(error, editing ? '运行环境更新失败' : '运行环境创建失败'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const diagnosePreview = async () => {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    setPreviewDiagnosing(true);
+    try {
+      const response = await computeEnvironmentApi.diagnosePreview(toPayload(values));
+      const result = response.data;
+      const detected: Partial<FormValues> = {};
+      if (result.detectedFlinkVersion) detected.flinkVersion = result.detectedFlinkVersion;
+      if (result.detectedFlinkCdcVersion) detected.flinkCdcVersion = result.detectedFlinkCdcVersion;
+      if (Object.keys(detected).length) {
+        form.setFieldsValue(detected);
+      }
+      setDiagnosis(result);
+      if (result.ready) {
+        message.success(
+          Object.keys(detected).length ? '检测完成，已自动填入识别到的版本' : '运行环境检测完成',
+        );
+      } else {
+        message.warning('检测发现阻塞项，请按结果修正后再保存');
+      }
+    } catch (error) {
+      message.error(errorText(error, '运行环境检测失败'));
+    } finally {
+      setPreviewDiagnosing(false);
+    }
+  };
+
+  const diagnoseSaved = async (environment: ComputeEnvironment) => {
+    setDiagnosingId(environment.id);
+    try {
+      const response = await computeEnvironmentApi.diagnose(environment.id);
+      setDiagnosis(response.data);
+      await load();
+      if (response.data.ready) message.success('运行环境检测完成');
+      else message.warning('检测发现阻塞项，请查看检测详情');
+    } catch (error) {
+      message.error(errorText(error, '运行环境检测失败'));
+    } finally {
+      setDiagnosingId(null);
     }
   };
 
@@ -248,7 +329,7 @@ const ComputeEngineSettingsPanel = () => {
         <div>
           <div className="text-[18px] font-semibold text-[#161823]">计算引擎</div>
           <div className="mt-1.5 max-w-[700px] text-[12px] leading-5 text-[#667085]">
-            集中管理实时同步使用的运行环境。Yak Ops 可以在本机执行 Flink CDC，也可以通过 SSH 到远端提交节点执行。
+            集中管理实时同步使用的运行环境。配置完成后可以一键检测 SSH、Flink REST、CLI、Java 和工作目录，并自动识别运行版本。
           </div>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -257,7 +338,7 @@ const ComputeEngineSettingsPanel = () => {
       </div>
 
       <div className="mb-5 rounded-lg border border-[#e4e7ec] bg-[#f9fafb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-        任务只需要选择运行环境。Flink REST 用于状态、停止和指标；“任务提交方式”只决定 flink-cdc.sh 在 Yak Ops 本机执行，还是通过 SSH 在远端服务器执行。
+        任务只需要选择运行环境。检测只做连通性和只读运行检查，不会提交 Flink Job；修改环境配置后，历史检测状态会自动失效，建议重新检测。
       </div>
 
       {loading ? (
@@ -276,6 +357,7 @@ const ComputeEngineSettingsPanel = () => {
         <div className="space-y-4">
           {environments.map((environment) => {
             const ssh = environment.config.ssh;
+            const health = healthMeta(environment.lastCheckStatus);
             return (
               <div
                 key={environment.id}
@@ -294,6 +376,9 @@ const ComputeEngineSettingsPanel = () => {
                       )}
                       <Tag color={environment.enabled ? 'green' : 'default'} className="!mr-0">
                         {environment.enabled ? '已启用' : '已停用'}
+                      </Tag>
+                      <Tag color={health.color} icon={health.icon} className="!mr-0">
+                        {health.label}
                       </Tag>
                     </div>
 
@@ -376,54 +461,71 @@ const ComputeEngineSettingsPanel = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end gap-1 border-t border-[#f2f4f7] pt-3">
-                  {!environment.defaultEnvironment && (
-                    <Tooltip title={!environment.enabled ? '请先启用该运行环境' : undefined}>
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<StarOutlined />}
-                        disabled={!environment.enabled}
-                        loading={defaultingId === environment.id}
-                        onClick={() => void setDefault(environment)}
-                      >
-                        设为默认
-                      </Button>
-                    </Tooltip>
-                  )}
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => openEdit(environment)}
-                  >
-                    编辑
-                  </Button>
-                  <Popconfirm
-                    title="删除运行环境"
-                    description={
-                      environment.defaultEnvironment
-                        ? '默认运行环境不能删除，请先切换默认环境。'
-                        : `确定删除 ${environment.name} 吗？如果仍有实时任务绑定该环境，系统会拒绝删除。`
-                    }
-                    disabled={environment.defaultEnvironment}
-                    okText="删除"
-                    cancelText="取消"
-                    okButtonProps={{ danger: true, loading: deletingId === environment.id }}
-                    onConfirm={() => remove(environment)}
-                  >
-                    <Tooltip title={environment.defaultEnvironment ? '请先切换默认环境' : undefined}>
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        disabled={environment.defaultEnvironment}
-                        icon={<DeleteOutlined />}
-                      >
-                        删除
-                      </Button>
-                    </Tooltip>
-                  </Popconfirm>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#f2f4f7] pt-3">
+                  <div className="min-w-0 text-[11px] text-[#98a2b3]">
+                    <span>{formatTime(environment.lastCheckTime)}</span>
+                    {environment.lastCheckMessage && (
+                      <span className="ml-2">· {environment.lastCheckMessage}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      loading={diagnosingId === environment.id}
+                      onClick={() => void diagnoseSaved(environment)}
+                    >
+                      检测环境
+                    </Button>
+                    {!environment.defaultEnvironment && (
+                      <Tooltip title={!environment.enabled ? '请先启用该运行环境' : undefined}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<StarOutlined />}
+                          disabled={!environment.enabled}
+                          loading={defaultingId === environment.id}
+                          onClick={() => void setDefault(environment)}
+                        >
+                          设为默认
+                        </Button>
+                      </Tooltip>
+                    )}
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => openEdit(environment)}
+                    >
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title="删除运行环境"
+                      description={
+                        environment.defaultEnvironment
+                          ? '默认运行环境不能删除，请先切换默认环境。'
+                          : `确定删除 ${environment.name} 吗？如果仍有实时任务绑定该环境，系统会拒绝删除。`
+                      }
+                      disabled={environment.defaultEnvironment}
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true, loading: deletingId === environment.id }}
+                      onConfirm={() => remove(environment)}
+                    >
+                      <Tooltip title={environment.defaultEnvironment ? '请先切换默认环境' : undefined}>
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          disabled={environment.defaultEnvironment}
+                          icon={<DeleteOutlined />}
+                        >
+                          删除
+                        </Button>
+                      </Tooltip>
+                    </Popconfirm>
+                  </div>
                 </div>
               </div>
             );
@@ -439,7 +541,7 @@ const ComputeEngineSettingsPanel = () => {
         cancelText="取消"
         confirmLoading={saving}
         onOk={() => void save()}
-        onCancel={() => !saving && setModalOpen(false)}
+        onCancel={() => !saving && !previewDiagnosing && setModalOpen(false)}
       >
         <Form<FormValues>
           form={form}
@@ -510,7 +612,22 @@ const ComputeEngineSettingsPanel = () => {
           </div>
 
           <div className="mt-4 rounded-lg border border-[#eaecf0] px-4 py-4">
-            <div className="mb-4 text-[13px] font-semibold text-[#1d2939]">Flink 集群</div>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-semibold text-[#1d2939]">Flink 集群</div>
+                <div className="mt-1 text-[11px] text-[#98a2b3]">
+                  可先填写连接和路径，再点击检测自动识别 Flink / CDC 版本。
+                </div>
+              </div>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={previewDiagnosing}
+                onClick={() => void diagnosePreview()}
+              >
+                检测并识别版本
+              </Button>
+            </div>
             <Form.Item
               name="restUrl"
               label="JobManager REST URL"
@@ -524,14 +641,14 @@ const ComputeEngineSettingsPanel = () => {
                 label="Flink 版本"
                 rules={[{ required: true, message: '请输入 Flink 版本' }]}
               >
-                <Input placeholder="1.20.5" />
+                <Input placeholder="检测后自动填写，也可手动输入" />
               </Form.Item>
               <Form.Item
                 name="flinkCdcVersion"
                 label="Flink CDC 版本"
                 rules={[{ required: true, message: '请输入 Flink CDC 版本' }]}
               >
-                <Input placeholder="3.6.0" />
+                <Input placeholder="检测后自动填写，也可手动输入" />
               </Form.Item>
             </div>
           </div>
@@ -617,8 +734,8 @@ const ComputeEngineSettingsPanel = () => {
             </div>
             <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
               {submitterType === 'SSH'
-                ? '以下路径填写 SSH 服务器上的 Linux 路径。'
-                : '以下路径填写 Yak Ops 所在服务器上的运行路径。'}
+                ? '以下路径填写 SSH 服务器上的 Linux 路径。环境检测会检查 CLI、Java 和远端临时目录。'
+                : '以下路径填写 Yak Ops 所在服务器上的运行路径。环境检测会检查 CLI、Java 和 Yak Ops 工作目录。'}
             </div>
             <Form.Item
               name="flinkHome"
@@ -639,6 +756,76 @@ const ComputeEngineSettingsPanel = () => {
             </Form.Item>
           </div>
         </Form>
+      </Modal>
+
+      <Modal
+        title="运行环境检测"
+        open={Boolean(diagnosis)}
+        width={680}
+        footer={
+          <Button type="primary" onClick={() => setDiagnosis(null)}>
+            关闭
+          </Button>
+        }
+        onCancel={() => setDiagnosis(null)}
+      >
+        {diagnosis && (
+          <div className="pt-2">
+            <Alert
+              showIcon
+              type={
+                diagnosis.status === 'HEALTHY'
+                  ? 'success'
+                  : diagnosis.status === 'WARNING'
+                    ? 'warning'
+                    : 'error'
+              }
+              message={diagnosis.summary}
+              description={`检测时间：${formatTime(diagnosis.checkedAt)}`}
+            />
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-[#f9fafb] px-3 py-3">
+                <div className="text-[11px] text-[#98a2b3]">Flink</div>
+                <div className="mt-1 font-medium text-[#344054]">
+                  {diagnosis.detectedFlinkVersion || '未识别'}
+                </div>
+              </div>
+              <div className="rounded-lg bg-[#f9fafb] px-3 py-3">
+                <div className="text-[11px] text-[#98a2b3]">Flink CDC</div>
+                <div className="mt-1 font-medium text-[#344054]">
+                  {diagnosis.detectedFlinkCdcVersion || '未识别'}
+                </div>
+              </div>
+              <div className="rounded-lg bg-[#f9fafb] px-3 py-3">
+                <div className="text-[11px] text-[#98a2b3]">Java</div>
+                <div className="mt-1 font-medium text-[#344054]">
+                  {diagnosis.detectedJavaVersion || '未识别'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 overflow-hidden rounded-lg border border-[#eaecf0]">
+              {diagnosis.checks.map((check, index) => (
+                <div
+                  key={check.key}
+                  className={[
+                    'flex items-start gap-3 px-4 py-3',
+                    index > 0 ? 'border-t border-[#f2f4f7]' : '',
+                  ].join(' ')}
+                >
+                  <span className="mt-0.5 text-[15px]">{checkIcon(check)}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-medium text-[#344054]">{check.label}</div>
+                    <div className="mt-0.5 break-all text-[11px] leading-5 text-[#667085]">
+                      {check.message}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

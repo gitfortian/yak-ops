@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.springframework.util.StringUtils;
@@ -106,6 +108,42 @@ final class SshFlinkCdcCommandRunner {
       Thread.currentThread().interrupt();
       destroy(process);
       throw failure("SSH 远端环境探测被中断", false, exception);
+    } catch (IOException exception) {
+      destroy(process);
+      throw failure("无法启动 OpenSSH 客户端：" + exception.getMessage(), false, exception);
+    }
+  }
+
+  /** Runs a richer, read-only SSH probe used by the settings diagnostics UI. */
+  RemoteProbe probe(ComputeEnvironmentSnapshot environment, URI restUri) {
+    String error = configurationError(environment);
+    if (error != null) {
+      throw failure(error, false, null);
+    }
+    remoteRestPort(environment, restUri);
+    Process process = null;
+    try {
+      process =
+          new ProcessBuilder(
+                  sshCommand(environment, remoteDiagnosticCommand(environment, restUri)))
+              .redirectErrorStream(true)
+              .start();
+      process.getOutputStream().close();
+      Duration timeout = connectTimeout(sshConfig(environment)).plusSeconds(15);
+      if (!process.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS)) {
+        destroy(process);
+        throw failure("SSH 运行环境检测超时", false, null);
+      }
+      String output =
+          new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+      if (process.exitValue() != 0) {
+        throw failure(probeFailureMessage(process.exitValue()), false, null);
+      }
+      return parseRemoteProbe(output);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      destroy(process);
+      throw failure("SSH 运行环境检测被中断", false, exception);
     } catch (IOException exception) {
       destroy(process);
       throw failure("无法启动 OpenSSH 客户端：" + exception.getMessage(), false, exception);
@@ -219,6 +257,91 @@ final class SshFlinkCdcCommandRunner {
         .append("; ");
     command.append("echo YAK_REALTIME_SSH_READY");
     return command.toString();
+  }
+
+  private String remoteDiagnosticCommand(ComputeEnvironmentSnapshot environment, URI restUri) {
+    RuntimeConfig config = requireConfig(environment);
+    String cdc = remoteCdcCli(environment);
+    String flink = config.flinkHome().replaceAll("/+$", "") + "/bin/flink";
+    StringBuilder command = new StringBuilder("set +e; ");
+    command.append("printf 'YAK_SSH=1\\n'; ");
+
+    command.append("if test -x ").append(shellQuote(cdc)).append("; then ");
+    command.append("printf 'YAK_CDC_EXEC=1\\n'; ");
+    command.append("v=$(").append(shellQuote(cdc)).append(" --version 2>&1); rc=$?; ");
+    command.append("v=$(printf '%s\\n' \"$v\" | head -n 1); ");
+    command.append("printf 'YAK_CDC_VERSION_OK=%s\\n' \"$([ $rc -eq 0 ] && echo 1 || echo 0)\"; ");
+    command.append("printf 'YAK_CDC_VERSION=%s\\n' \"$v\"; ");
+    command.append("else printf 'YAK_CDC_EXEC=0\\n'; fi; ");
+
+    command.append("if test -x ").append(shellQuote(flink)).append("; then ");
+    command.append("printf 'YAK_FLINK_EXEC=1\\n'; ");
+    command.append("v=$(").append(shellQuote(flink)).append(" --version 2>&1); rc=$?; ");
+    command.append("v=$(printf '%s\\n' \"$v\" | head -n 1); ");
+    command.append("printf 'YAK_FLINK_VERSION_OK=%s\\n' \"$([ $rc -eq 0 ] && echo 1 || echo 0)\"; ");
+    command.append("printf 'YAK_FLINK_VERSION=%s\\n' \"$v\"; ");
+    command.append("else printf 'YAK_FLINK_EXEC=0\\n'; fi; ");
+
+    if (StringUtils.hasText(config.javaHome())) {
+      String java = config.javaHome().replaceAll("/+$", "") + "/bin/java";
+      command.append("if test -x ").append(shellQuote(java)).append("; then ");
+      command.append("printf 'YAK_JAVA_EXEC=1\\n'; ");
+      command.append("v=$(").append(shellQuote(java)).append(" -version 2>&1); rc=$?; ");
+    } else {
+      command.append("if command -v java >/dev/null 2>&1; then ");
+      command.append("printf 'YAK_JAVA_EXEC=1\\n'; ");
+      command.append("v=$(java -version 2>&1); rc=$?; ");
+    }
+    command.append("v=$(printf '%s\\n' \"$v\" | head -n 1); ");
+    command.append("printf 'YAK_JAVA_VERSION_OK=%s\\n' \"$([ $rc -eq 0 ] && echo 1 || echo 0)\"; ");
+    command.append("printf 'YAK_JAVA_VERSION=%s\\n' \"$v\"; ");
+    command.append("else printf 'YAK_JAVA_EXEC=0\\n'; fi; ");
+
+    command.append("if command -v mktemp >/dev/null 2>&1; then ");
+    command.append("tmp=$(mktemp \"${TMPDIR:-/tmp}/yak-ops-probe.XXXXXX\" 2>/dev/null); ");
+    command.append("if test -n \"$tmp\" && test -f \"$tmp\"; then rm -f \"$tmp\"; printf 'YAK_TEMP=1\\n'; ");
+    command.append("else printf 'YAK_TEMP=0\\n'; fi; else printf 'YAK_TEMP=0\\n'; fi; ");
+
+    command
+        .append("printf 'YAK_REMOTE_REST=%s:%s\\n' ")
+        .append(shellQuote(remoteRestAddress(environment, restUri)))
+        .append(" ")
+        .append(shellQuote(Integer.toString(remoteRestPort(environment, restUri))))
+        .append("; exit 0");
+    return command.toString();
+  }
+
+  private RemoteProbe parseRemoteProbe(String output) {
+    Map<String, String> values = new HashMap<>();
+    if (output != null) {
+      output.lines()
+          .filter(line -> line.startsWith("YAK_"))
+          .forEach(
+              line -> {
+                int separator = line.indexOf('=');
+                if (separator > 0) {
+                  values.put(line.substring(0, separator), line.substring(separator + 1).trim());
+                }
+              });
+    }
+    if (!"1".equals(values.get("YAK_SSH"))) {
+      throw failure("SSH 已连接，但远端检测命令未返回预期标记", false, null);
+    }
+    return new RemoteProbe(
+        flag(values, "YAK_CDC_EXEC"),
+        flag(values, "YAK_CDC_VERSION_OK"),
+        values.get("YAK_CDC_VERSION"),
+        flag(values, "YAK_FLINK_EXEC"),
+        flag(values, "YAK_FLINK_VERSION_OK"),
+        values.get("YAK_FLINK_VERSION"),
+        flag(values, "YAK_JAVA_EXEC"),
+        flag(values, "YAK_JAVA_VERSION_OK"),
+        values.get("YAK_JAVA_VERSION"),
+        flag(values, "YAK_TEMP"));
+  }
+
+  private boolean flag(Map<String, String> values, String key) {
+    return "1".equals(values.get(key));
   }
 
   private String remoteSubmitCommand(ComputeEnvironmentSnapshot environment, URI restUri) {
@@ -385,4 +508,16 @@ final class SshFlinkCdcCommandRunner {
   }
 
   record ExecutionResult(int exitCode, boolean uncertain) {}
+
+  record RemoteProbe(
+      boolean cdcExecutable,
+      boolean cdcVersionCommandOk,
+      String cdcVersionOutput,
+      boolean flinkExecutable,
+      boolean flinkVersionCommandOk,
+      String flinkVersionOutput,
+      boolean javaExecutable,
+      boolean javaVersionCommandOk,
+      String javaVersionOutput,
+      boolean tempWritable) {}
 }
