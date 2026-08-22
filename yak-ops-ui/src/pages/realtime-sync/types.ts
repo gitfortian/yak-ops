@@ -164,6 +164,9 @@ export interface RuntimeCapabilities {
   engineType?: string;
   runtimeVersion?: string;
   restUrl?: string;
+  restTransport?: 'DIRECT';
+  submissionMode?: 'LOCAL' | 'SSH';
+  submissionEndpoint?: string;
   flinkVersion?: string;
   flinkCdcVersion?: string;
   deliverySemantics?: string;
