@@ -275,11 +275,20 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public int deleteDefinition(long id) {
-    return definitionMapper.delete(
+    int deleted = definitionMapper.delete(
         Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
             .eq(RealtimeJobDefinitionPO::getId, id)
             .eq(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
             .in(RealtimeJobDefinitionPO::getObservedState, List.of("STOPPED", "FAILED")));
+    if (deleted != 1) return deleted;
+
+    eventMapper.delete(
+        Wrappers.<RealtimeJobEventPO>lambdaQuery()
+            .eq(RealtimeJobEventPO::getDefinitionId, id));
+    deploymentMapper.delete(
+        Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
+            .eq(RealtimeJobDeploymentPO::getDefinitionId, id));
+    return deleted;
   }
 
   @Override

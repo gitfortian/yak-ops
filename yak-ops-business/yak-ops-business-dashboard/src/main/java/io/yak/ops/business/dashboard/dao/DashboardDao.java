@@ -50,6 +50,8 @@ public interface DashboardDao {
 
     List<DashboardInteractionPO> selectInteractions(long versionId);
 
+    boolean existsWidgetByAnalysisId(long analysisId);
+
     int selectNextVersionNo(long dashboardId);
 
     int deleteDashboard(long dashboardId);

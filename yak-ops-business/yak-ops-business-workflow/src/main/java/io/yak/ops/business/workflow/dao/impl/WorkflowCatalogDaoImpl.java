@@ -3,14 +3,17 @@ package io.yak.ops.business.workflow.dao.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.yak.ops.business.workflow.dao.WorkflowCatalogDao;
 import io.yak.ops.business.workflow.dao.mapper.WorkflowDefinitionMapper;
+import io.yak.ops.business.workflow.dao.mapper.WorkflowScheduleMapper;
 import io.yak.ops.business.workflow.dao.mapper.WorkflowVersionMapper;
 import io.yak.ops.common.bean.po.workflow.WorkflowDefinitionPO;
+import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowVersionPO;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 基于 MyBatis-Plus 的工作流定义与版本 DAO。 */
 @Repository
@@ -24,6 +27,7 @@ import org.springframework.stereotype.Repository;
 public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
   private final WorkflowDefinitionMapper definitionMapper;
   private final WorkflowVersionMapper versionMapper;
+  private final WorkflowScheduleMapper scheduleMapper;
 
   @Override
   public List<WorkflowDefinitionPO> selectDefinitions() {
@@ -57,8 +61,24 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
   }
 
   @Override
+  @Transactional(transactionManager = "yakBusinessTransactionManager")
   public int deleteDefinition(String workflowId) {
-    return definitionMapper.deleteById(workflowId);
+    List<String> scheduleIds = scheduleMapper.selectObjs(
+            Wrappers.<WorkflowSchedulePO>query()
+                .select("id")
+                .eq("workflow_id", workflowId))
+        .stream()
+        .filter(String.class::isInstance)
+        .map(String.class::cast)
+        .toList();
+
+    int deleted = definitionMapper.deleteById(workflowId);
+    if (deleted != 1 || scheduleIds.isEmpty()) return deleted;
+
+    scheduleMapper.delete(
+        Wrappers.<WorkflowSchedulePO>lambdaQuery()
+            .in(WorkflowSchedulePO::getId, scheduleIds));
+    return deleted;
   }
 
   @Override

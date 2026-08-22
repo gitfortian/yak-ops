@@ -6,9 +6,13 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
+import io.yak.ops.business.sync.offline.dao.mapper.OfflineExecutionEventMapper;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobDefinitionMapper;
+import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobExecutionMapper;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineWriteMapper;
+import io.yak.ops.common.bean.po.sync.offline.OfflineExecutionEventPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
+import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +30,8 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
       List.of("CREATED", "SUBMITTED", "QUEUED", "RUNNING");
 
   private final OfflineJobDefinitionMapper mapper;
+  private final OfflineJobExecutionMapper executionMapper;
+  private final OfflineExecutionEventMapper eventMapper;
   private final OfflineWriteMapper writeMapper;
 
   @Override
@@ -45,7 +51,28 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
 
   @Override
   public boolean deleteById(Long id) {
-    return mapper.deleteById(id) > 0;
+    List<Long> executionIds = executionMapper.selectObjs(
+            Wrappers.<OfflineJobExecutionPO>query()
+                .select("id")
+                .eq("job_definition_id", id))
+        .stream()
+        .filter(Number.class::isInstance)
+        .map(Number.class::cast)
+        .map(Number::longValue)
+        .toList();
+
+    boolean deleted = mapper.deleteById(id) > 0;
+    if (!deleted) return false;
+
+    if (!executionIds.isEmpty()) {
+      eventMapper.delete(
+          Wrappers.<OfflineExecutionEventPO>lambdaQuery()
+              .in(OfflineExecutionEventPO::getExecutionId, executionIds));
+    }
+    executionMapper.delete(
+        Wrappers.<OfflineJobExecutionPO>lambdaQuery()
+            .eq(OfflineJobExecutionPO::getJobDefinitionId, id));
+    return true;
   }
 
   @Override

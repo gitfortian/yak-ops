@@ -174,6 +174,13 @@ public class DashboardDaoImpl implements DashboardDao {
     }
 
     @Override
+    public boolean existsWidgetByAnalysisId(long analysisId) {
+        return widgetMapper.selectCount(
+                Wrappers.<DashboardWidgetPO>lambdaQuery()
+                        .eq(DashboardWidgetPO::getAnalysisId, analysisId)) > 0L;
+    }
+
+    @Override
     public int selectNextVersionNo(long dashboardId) {
         List<Object> values = versionMapper.selectObjs(
                 Wrappers.<DashboardVersionPO>query()
@@ -187,6 +194,36 @@ public class DashboardDaoImpl implements DashboardDao {
 
     @Override
     public int deleteDashboard(long dashboardId) {
-        return dashboardMapper.deleteById(dashboardId);
+        List<Long> versionIds = versionMapper.selectObjs(
+                        Wrappers.<DashboardVersionPO>query()
+                                .select("id")
+                                .eq("dashboard_id", dashboardId))
+                .stream()
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .map(Number::longValue)
+                .toList();
+
+        int deleted = dashboardMapper.deleteById(dashboardId);
+        if (deleted != 1 || versionIds.isEmpty()) {
+            return deleted;
+        }
+
+        interactionMapper.delete(
+                Wrappers.<DashboardInteractionPO>lambdaQuery()
+                        .in(DashboardInteractionPO::getDashboardVersionId, versionIds));
+        filterBindingMapper.delete(
+                Wrappers.<DashboardFilterBindingPO>lambdaQuery()
+                        .in(DashboardFilterBindingPO::getDashboardVersionId, versionIds));
+        filterMapper.delete(
+                Wrappers.<DashboardFilterPO>lambdaQuery()
+                        .in(DashboardFilterPO::getDashboardVersionId, versionIds));
+        widgetMapper.delete(
+                Wrappers.<DashboardWidgetPO>lambdaQuery()
+                        .in(DashboardWidgetPO::getDashboardVersionId, versionIds));
+        versionMapper.delete(
+                Wrappers.<DashboardVersionPO>lambdaQuery()
+                        .in(DashboardVersionPO::getId, versionIds));
+        return deleted;
     }
 }
