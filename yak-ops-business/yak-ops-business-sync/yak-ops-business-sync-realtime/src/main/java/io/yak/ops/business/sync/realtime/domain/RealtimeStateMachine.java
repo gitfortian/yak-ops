@@ -42,7 +42,11 @@ public class RealtimeStateMachine {
         ObservedState.CONFLICT);
     allow(
         ObservedState.STOPPING, ObservedState.STOPPED, ObservedState.FAILED, ObservedState.UNKNOWN);
-    allow(ObservedState.FAILED, ObservedState.STOPPED, ObservedState.STARTING);
+    allow(
+        ObservedState.FAILED,
+        ObservedState.STOPPED,
+        ObservedState.STARTING,
+        ObservedState.STOPPING);
     allow(
         ObservedState.UNKNOWN,
         ObservedState.RUNNING,
