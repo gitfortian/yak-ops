@@ -49,8 +49,10 @@ class RealtimeDefinitionValidatorTest {
     capabilityResolver = mock(RealtimeConnectorCapabilityResolver.class);
     compiler = mock(PipelineYamlCompiler.class);
     gateway = mock(RealtimeEngineGateway.class);
-    environment = mock(ComputeEnvironmentSnapshot.class);
-    resolved = mock(ResolvedCdcPipeline.class);
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L, "test-env", "FLINK_CDC", "REMOTE", "LOCAL", null, 1);
+    resolved = new ResolvedCdcPipeline(null, null);
 
     when(runtimeResolver.environment(3L, true)).thenReturn(environment);
     when(dataSourceResolver.resolve(any(CdcPipelineSpec.class))).thenReturn(resolved);
