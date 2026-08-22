@@ -1,5 +1,7 @@
 # 实时同步一期
 
+> 领域设计入口：[Realtime Sync Domain Design](./realtime-sync/domain/README.md)。本文件描述一期 Flink CDC 运行实现，不作为实时同步核心领域模型定义。
+
 ## 设计边界
 
 一期不引入 `yak-cdc-runtime`。Yak Ops 负责控制面，复用现有 Flink Standalone Session
@@ -65,7 +67,7 @@ Yak Ops 需要和上述目录位于同一台机器或同一个挂载命名空间
 6. CLI 退出后立即删除临时 YAML，提交日志按 `jobId` 保存且经过接口脱敏。
 
 停止任务调用 `PATCH /jobs/{jobId}`。Yak Ops 不管理 CLI PID，因为 CLI 完成提交后会退出；
-真正的运行实体是 Flink Job。
+Flink 侧实际执行实体是 Flink Job，领域中的运行实例仍统一称为 `SyncExecution`。
 
 ## 状态、日志和指标
 
