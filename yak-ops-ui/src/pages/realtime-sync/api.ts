@@ -3,6 +3,8 @@ import type {
   ApiResponse,
   CdcPipelineSpec,
   ComputeEnvironmentOption,
+  DataSourceCatalogColumn,
+  DataSourceCatalogTable,
   DataSourceOption,
   RealtimeDeployment,
   RealtimeEvent,
@@ -15,6 +17,7 @@ import type {
 } from './types';
 
 const PREFIX = '/api/v1/realtime-sync';
+const DATA_SOURCE_PREFIX = '/api/v1/data-source';
 
 export interface RealtimePageQuery {
   pageNo: number;
@@ -44,6 +47,16 @@ export const realtimeApi = {
     request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
   update: (id: number, payload: RealtimeDefinitionPayload) =>
     request<ApiResponse<number>>(`${PREFIX}/${id}`, { method: 'PUT', data: payload }),
+  parseYaml: (yaml: string) =>
+    request<ApiResponse<CdcPipelineSpec>>(`${PREFIX}/yaml/parse`, {
+      method: 'POST',
+      data: { yaml },
+    }),
+  renderYaml: (spec: CdcPipelineSpec) =>
+    request<ApiResponse<{ yaml: string }>>(`${PREFIX}/yaml/render`, {
+      method: 'POST',
+      data: { spec },
+    }),
   action: (id: number, action: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile') =>
     request<ApiResponse<RealtimeDeployment | boolean>>(`${PREFIX}/${id}/${action}`, {
       method: 'POST',
@@ -68,5 +81,15 @@ export const realtimeApi = {
     }),
   environments: () =>
     request<ApiResponse<ComputeEnvironmentOption[]>>('/api/v1/compute-environments'),
-  dataSources: () => request<ApiResponse<DataSourceOption[]>>('/api/v1/data-source/option'),
+  dataSources: () => request<ApiResponse<DataSourceOption[]>>(`${DATA_SOURCE_PREFIX}/option`),
+  catalogTables: (dataSourceId: number) =>
+    request<ApiResponse<DataSourceCatalogTable[]>>(`${DATA_SOURCE_PREFIX}/catalog/${dataSourceId}/tables`),
+  catalogColumns: (dataSourceId: number, table: DataSourceCatalogTable) =>
+    request<ApiResponse<DataSourceCatalogColumn[]>>(`${DATA_SOURCE_PREFIX}/catalog/${dataSourceId}/columns`, {
+      params: {
+        database: table.database || undefined,
+        schema: table.schema || undefined,
+        table: table.name,
+      },
+    }),
 };
