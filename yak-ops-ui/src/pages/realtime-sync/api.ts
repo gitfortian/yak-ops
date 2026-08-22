@@ -46,15 +46,6 @@ const validateDefinition = (spec: CdcPipelineSpec, runtimeEnvironmentId: number)
     data: { spec, runtimeEnvironmentId },
   });
 
-const saveDefinition = async (
-  method: 'POST' | 'PUT',
-  url: string,
-  payload: RealtimeDefinitionPayload,
-) => {
-  await validateDefinition(payload.spec, payload.runtimeEnvironmentId);
-  return request<ApiResponse<number>>(url, { method, data: payload });
-};
-
 export const realtimeApi = {
   page: (params: RealtimePageQuery) =>
     request<ApiResponse<RealtimeJobPage>>(PREFIX, {
@@ -64,9 +55,9 @@ export const realtimeApi = {
   createBasic: (payload: { name: string; description?: string; runtimeEnvironmentId: number }) =>
     request<ApiResponse<number>>(PREFIX, { method: 'POST', data: payload }),
   create: (payload: RealtimeDefinitionPayload) =>
-    saveDefinition('POST', `${PREFIX}/draft`, payload),
+    request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
   update: (id: number, payload: RealtimeDefinitionPayload) =>
-    saveDefinition('PUT', `${PREFIX}/${id}`, payload),
+    request<ApiResponse<number>>(`${PREFIX}/${id}`, { method: 'PUT', data: payload }),
   validateDefinition,
   parseYaml: (yaml: string) =>
     request<ApiResponse<CdcPipelineSpec>>(`${PREFIX}/yaml/parse`, {
