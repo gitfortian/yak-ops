@@ -30,7 +30,11 @@ public class ComputeEnvironmentController {
   }
 
   public record SaveRequest(
-      String name, RuntimeConfig config, boolean enabled, boolean makeDefault) {}
+      String name,
+      String submitterType,
+      RuntimeConfig config,
+      boolean enabled,
+      boolean makeDefault) {}
 
   public record EnabledRequest(boolean enabled) {}
 
@@ -51,7 +55,12 @@ public class ComputeEnvironmentController {
   @RequiresPermission(RealtimePermissionCode.CREATE)
   public Result<Long> create(@RequestBody SaveRequest request) {
     return Result.success(
-        service.create(request.name(), request.config(), request.enabled(), request.makeDefault()));
+        service.create(
+            request.name(),
+            request.submitterType(),
+            request.config(),
+            request.enabled(),
+            request.makeDefault()));
   }
 
   @Operation(summary = "更新运行环境")
@@ -61,6 +70,7 @@ public class ComputeEnvironmentController {
     service.update(
         id,
         request.name(),
+        request.submitterType(),
         request.config(),
         request.enabled(),
         request.makeDefault());

@@ -22,9 +22,8 @@ public record ComputeEnvironment(
   public static final String SUBMITTER_SSH = "SSH";
 
   /**
-   * Stage one intentionally stores only the settings that describe where Flink CDC runs. Yak Ops
-   * operational settings such as timeouts, log retention and reconcile cadence remain application
-   * level settings.
+   * Settings that describe where and how Flink CDC is submitted. Yak Ops operational settings such
+   * as timeouts, log retention and reconcile cadence remain application-level settings.
    */
   public record RuntimeConfig(
       String restUrl,
@@ -32,5 +31,35 @@ public record ComputeEnvironment(
       String flinkCdcHome,
       String javaHome,
       String flinkVersion,
-      String flinkCdcVersion) {}
+      String flinkCdcVersion,
+      SshConfig ssh) {
+
+    /** Source-compatible constructor for local/legacy environments that do not carry SSH config. */
+    public RuntimeConfig(
+        String restUrl,
+        String flinkHome,
+        String flinkCdcHome,
+        String javaHome,
+        String flinkVersion,
+        String flinkCdcVersion) {
+      this(restUrl, flinkHome, flinkCdcHome, javaHome, flinkVersion, flinkCdcVersion, null);
+    }
+  }
+
+  /**
+   * OpenSSH client settings for remote submission. Private key material is never stored here: the
+   * optional identityFile is only a filesystem path on the Yak Ops host. If it is empty, OpenSSH
+   * can use the system SSH configuration or ssh-agent.
+   */
+  public record SshConfig(
+      String executable,
+      String host,
+      Integer port,
+      String user,
+      String identityFile,
+      String knownHostsFile,
+      Boolean strictHostKeyChecking,
+      Integer connectTimeoutSeconds,
+      String remoteRestAddress,
+      Integer remoteRestPort) {}
 }

@@ -8,6 +8,10 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.SubmissionMode;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -48,17 +52,9 @@ class FlinkCdcEngineGatewaySshTest {
     FlinkCdcEngineGateway gateway =
         new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
 
-    String yaml =
-        "source:\n  password: ${SECRET:source.password}\n"
-            + "sink:\n  password: ${SECRET:sink.password}\n"
-            + "pipeline:\n  name: test\n";
+    String yaml = pipelineYaml();
     RealtimeEngineGateway.DeployResult result;
-    try (RealtimeDeployRequest request =
-        new RealtimeDeployRequest(
-            yaml,
-            "ssh-key",
-            new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
-            new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"))) {
+    try (RealtimeDeployRequest request = request(yaml, "ssh-key")) {
       result = gateway.deploy(request);
     }
 
@@ -77,22 +73,43 @@ class FlinkCdcEngineGatewaySshTest {
   }
 
   @Test
+  void usesEnvironmentScopedSshSettingsInsteadOfApplicationFallback() throws Exception {
+    Path captured = temp.resolve("environment-pipeline.yaml");
+    Path ssh = fakeSsh(captured, 0);
+    RealtimeSyncProperties properties = new RealtimeSyncProperties();
+    properties.setSubmissionMode(SubmissionMode.SSH);
+    properties.setWorkDirectory(temp.resolve("work-env").toString());
+    properties.setSubmitTimeout(Duration.ofSeconds(5));
+    // Deliberately unusable application fallback. The explicit environment must win.
+    properties.getSsh().setExecutable(temp.resolve("missing-ssh").toString());
+    properties.getSsh().setHost("fallback.invalid");
+    properties.getSsh().setUser("fallback");
+
+    FlinkCdcEngineGateway gateway =
+        new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
+    ComputeEnvironmentSnapshot environment = sshEnvironment(ssh, "10.0.0.88", 2222);
+
+    RealtimeEngineGateway.DeployResult result;
+    try (RealtimeDeployRequest request = request(pipelineYaml(), "environment-key")) {
+      result = gateway.deploy(environment, request);
+    }
+
+    assertThat(result.jobId()).isEqualTo(JOB_ID);
+    assertThat(gateway.capabilities(environment).path("submissionEndpoint").asText())
+        .isEqualTo("flink@10.0.0.88:2222");
+    assertThat(Files.readString(captured, StandardCharsets.UTF_8))
+        .contains("password: 'source-secret'")
+        .doesNotContain("${SECRET:");
+  }
+
+  @Test
   void propagatesSsh255AsUncertainEngineFailureAndRetainsLog() throws Exception {
     Path ssh = fakeSsh(temp.resolve("remote-uncertain.yaml"), 255);
     RealtimeSyncProperties properties = sshProperties(ssh);
     FlinkCdcEngineGateway gateway =
         new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
-    String yaml =
-        "source:\n  password: ${SECRET:source.password}\n"
-            + "sink:\n  password: ${SECRET:sink.password}\n"
-            + "pipeline:\n  name: test\n";
 
-    try (RealtimeDeployRequest request =
-        new RealtimeDeployRequest(
-            yaml,
-            "ssh-uncertain",
-            new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
-            new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"))) {
+    try (RealtimeDeployRequest request = request(pipelineYaml(), "ssh-uncertain")) {
       assertThatThrownBy(() -> gateway.deploy(request))
           .isInstanceOf(RealtimeEngineException.class)
           .satisfies(
@@ -101,6 +118,37 @@ class FlinkCdcEngineGatewaySshTest {
     }
 
     assertThat(temp.resolve("work/logs/submit-ssh-uncertain.log")).exists();
+  }
+
+  private ComputeEnvironmentSnapshot sshEnvironment(Path executable, String host, int port) {
+    int restPort = server.getAddress().getPort();
+    RuntimeConfig config =
+        new RuntimeConfig(
+            "http://127.0.0.1:" + restPort,
+            "/opt/flink",
+            "/opt/flink-cdc",
+            null,
+            "1.20.5",
+            "3.6.0",
+            new SshConfig(
+                executable.toString(),
+                host,
+                port,
+                "flink",
+                null,
+                null,
+                true,
+                1,
+                "127.0.0.1",
+                restPort));
+    return new ComputeEnvironmentSnapshot(
+        9L,
+        "ssh-env",
+        ComputeEnvironment.ENGINE_FLINK_CDC,
+        ComputeEnvironment.DEPLOYMENT_REMOTE,
+        ComputeEnvironment.SUBMITTER_SSH,
+        config,
+        3);
   }
 
   private RealtimeSyncProperties sshProperties(Path executable) {
@@ -121,8 +169,22 @@ class FlinkCdcEngineGatewaySshTest {
     return properties;
   }
 
+  private RealtimeDeployRequest request(String yaml, String key) {
+    return new RealtimeDeployRequest(
+        yaml,
+        key,
+        new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
+        new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"));
+  }
+
+  private String pipelineYaml() {
+    return "source:\n  password: ${SECRET:source.password}\n"
+        + "sink:\n  password: ${SECRET:sink.password}\n"
+        + "pipeline:\n  name: test\n";
+  }
+
   private Path fakeSsh(Path captured, int submitExitCode) throws Exception {
-    Path script = temp.resolve("gateway-fake-ssh-" + submitExitCode + ".sh");
+    Path script = temp.resolve("gateway-fake-ssh-" + submitExitCode + "-" + captured.getFileName() + ".sh");
     String content =
         "#!/bin/sh\n"
             + "case \"$*\" in\n"

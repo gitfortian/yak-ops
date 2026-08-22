@@ -3,6 +3,7 @@ package io.yak.ops.business.sync.realtime.engine;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -33,18 +34,19 @@ final class SshFlinkCdcCommandRunner {
   }
 
   String configurationError(ComputeEnvironmentSnapshot environment) {
-    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
+    SshConfig ssh = sshConfig(environment);
     RuntimeConfig config = requireConfig(environment);
-    if (!StringUtils.hasText(ssh.getExecutable())) {
+    if (!StringUtils.hasText(ssh.executable())) {
       return "SSH executable 不能为空";
     }
-    if (!StringUtils.hasText(ssh.getHost()) || !SSH_HOST.matcher(ssh.getHost()).matches()) {
+    if (!StringUtils.hasText(ssh.host()) || !SSH_HOST.matcher(ssh.host()).matches()) {
       return "SSH host 未配置或格式无效";
     }
-    if (!StringUtils.hasText(ssh.getUser()) || !SSH_USER.matcher(ssh.getUser()).matches()) {
+    if (!StringUtils.hasText(ssh.user()) || !SSH_USER.matcher(ssh.user()).matches()) {
       return "SSH user 未配置或格式无效";
     }
-    if (ssh.getPort() < 1 || ssh.getPort() > 65535) {
+    int port = ssh.port() == null ? 22 : ssh.port();
+    if (port < 1 || port > 65535) {
       return "SSH port 必须在 1-65535 之间";
     }
     if (!absoluteUnixPath(config.flinkHome()) || !absoluteUnixPath(config.flinkCdcHome())) {
@@ -53,7 +55,7 @@ final class SshFlinkCdcCommandRunner {
     if (StringUtils.hasText(config.javaHome()) && !absoluteUnixPath(config.javaHome())) {
       return "SSH 模式下 java-home 必须是远端 Linux 绝对路径";
     }
-    Integer remoteRestPort = ssh.getRemoteRestPort();
+    Integer remoteRestPort = ssh.remoteRestPort();
     if (remoteRestPort != null && (remoteRestPort < 1 || remoteRestPort > 65535)) {
       return "SSH remote-rest-port 必须在 1-65535 之间";
     }
@@ -61,10 +63,16 @@ final class SshFlinkCdcCommandRunner {
   }
 
   String endpoint() {
-    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
-    return StringUtils.hasText(ssh.getUser()) && StringUtils.hasText(ssh.getHost())
-        ? ssh.getUser() + "@" + ssh.getHost() + ":" + ssh.getPort()
-        : null;
+    return endpoint(bootstrapEnvironment());
+  }
+
+  String endpoint(ComputeEnvironmentSnapshot environment) {
+    SshConfig ssh = sshConfig(environment);
+    if (!StringUtils.hasText(ssh.user()) || !StringUtils.hasText(ssh.host())) {
+      return null;
+    }
+    int port = ssh.port() == null ? 22 : ssh.port();
+    return ssh.user() + "@" + ssh.host() + ":" + port;
   }
 
   void validateReady(URI restUri) {
@@ -76,18 +84,17 @@ final class SshFlinkCdcCommandRunner {
     if (error != null) {
       throw failure(error, false, null);
     }
-    remoteRestPort(restUri);
+    remoteRestPort(environment, restUri);
     Process process = null;
     try {
       process =
-          new ProcessBuilder(sshCommand(remoteProbeCommand(environment, restUri)))
+          new ProcessBuilder(
+                  sshCommand(environment, remoteProbeCommand(environment, restUri)))
               .redirectErrorStream(true)
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .start();
       process.getOutputStream().close();
-      Duration connectTimeout =
-          positiveDuration(properties.getSsh().getConnectTimeout(), Duration.ofSeconds(5));
-      Duration timeout = connectTimeout.plusSeconds(5);
+      Duration timeout = connectTimeout(sshConfig(environment)).plusSeconds(5);
       if (!process.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS)) {
         destroy(process);
         throw failure("SSH 远端环境探测超时", false, null);
@@ -124,7 +131,7 @@ final class SshFlinkCdcCommandRunner {
     boolean started = false;
     try {
       ProcessBuilder builder =
-          new ProcessBuilder(sshCommand(remoteSubmitCommand(environment, restUri)))
+          new ProcessBuilder(sshCommand(environment, remoteSubmitCommand(environment, restUri)))
               .redirectErrorStream(true)
               .redirectOutput(outputLog.toFile());
       process = builder.start();
@@ -154,16 +161,17 @@ final class SshFlinkCdcCommandRunner {
     }
   }
 
-  private List<String> sshCommand(String remoteCommand) {
-    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
+  private List<String> sshCommand(
+      ComputeEnvironmentSnapshot environment, String remoteCommand) {
+    SshConfig ssh = sshConfig(environment);
     List<String> command = new ArrayList<>();
-    command.add(ssh.getExecutable());
+    command.add(ssh.executable());
     command.add("-o");
     command.add("BatchMode=yes");
     command.add("-o");
     command.add("ConnectionAttempts=1");
     command.add("-o");
-    command.add("ConnectTimeout=" + seconds(ssh.getConnectTimeout()));
+    command.add("ConnectTimeout=" + seconds(ssh));
     command.add("-o");
     command.add("ServerAliveInterval=15");
     command.add("-o");
@@ -172,18 +180,19 @@ final class SshFlinkCdcCommandRunner {
     command.add("LogLevel=ERROR");
     command.add("-o");
     command.add(
-        "StrictHostKeyChecking=" + (ssh.isStrictHostKeyChecking() ? "yes" : "accept-new"));
-    if (StringUtils.hasText(ssh.getKnownHostsFile())) {
+        "StrictHostKeyChecking="
+            + (strictHostKeyChecking(ssh) ? "yes" : "accept-new"));
+    if (StringUtils.hasText(ssh.knownHostsFile())) {
       command.add("-o");
-      command.add("UserKnownHostsFile=" + ssh.getKnownHostsFile());
+      command.add("UserKnownHostsFile=" + ssh.knownHostsFile());
     }
-    if (StringUtils.hasText(ssh.getIdentityFile())) {
+    if (StringUtils.hasText(ssh.identityFile())) {
       command.add("-i");
-      command.add(ssh.getIdentityFile());
+      command.add(ssh.identityFile());
     }
     command.add("-p");
-    command.add(Integer.toString(ssh.getPort()));
-    command.add(ssh.getUser() + "@" + ssh.getHost());
+    command.add(Integer.toString(ssh.port() == null ? 22 : ssh.port()));
+    command.add(ssh.user() + "@" + ssh.host());
     command.add(remoteCommand);
     return command;
   }
@@ -204,7 +213,10 @@ final class SshFlinkCdcCommandRunner {
           .append(shellQuote(config.javaHome() + "/bin/java"))
           .append(" || exit 44; ");
     }
-    command.append("test -n ").append(shellQuote(remoteRestAddress(restUri))).append("; ");
+    command
+        .append("test -n ")
+        .append(shellQuote(remoteRestAddress(environment, restUri)))
+        .append("; ");
     command.append("echo YAK_REALTIME_SSH_READY");
     return command.toString();
   }
@@ -224,8 +236,12 @@ final class SshFlinkCdcCommandRunner {
     command.append(shellQuote(remoteCdcCli(environment))).append(" \"$tmp\"");
     command.append(" --flink-home ").append(shellQuote(config.flinkHome()));
     command.append(" --target remote");
-    command.append(" ").append(shellQuote("-Drest.address=" + remoteRestAddress(restUri)));
-    command.append(" ").append(shellQuote("-Drest.port=" + remoteRestPort(restUri)));
+    command
+        .append(" ")
+        .append(shellQuote("-Drest.address=" + remoteRestAddress(environment, restUri)));
+    command
+        .append(" ")
+        .append(shellQuote("-Drest.port=" + remoteRestPort(environment, restUri)));
     return command.toString();
   }
 
@@ -234,10 +250,11 @@ final class SshFlinkCdcCommandRunner {
     return home + "/bin/flink-cdc.sh";
   }
 
-  private String remoteRestAddress(URI restUri) {
+  private String remoteRestAddress(ComputeEnvironmentSnapshot environment, URI restUri) {
+    SshConfig ssh = sshConfig(environment);
     String value =
-        StringUtils.hasText(properties.getSsh().getRemoteRestAddress())
-            ? properties.getSsh().getRemoteRestAddress().trim()
+        StringUtils.hasText(ssh.remoteRestAddress())
+            ? ssh.remoteRestAddress().trim()
             : restUri.getHost();
     if (!StringUtils.hasText(value)) {
       throw new IllegalArgumentException("SSH remote REST address 不能为空");
@@ -245,8 +262,8 @@ final class SshFlinkCdcCommandRunner {
     return value;
   }
 
-  private int remoteRestPort(URI restUri) {
-    Integer configured = properties.getSsh().getRemoteRestPort();
+  private int remoteRestPort(ComputeEnvironmentSnapshot environment, URI restUri) {
+    Integer configured = sshConfig(environment).remoteRestPort();
     if (configured != null) {
       if (configured < 1 || configured > 65535) {
         throw new IllegalArgumentException("ssh.remote-rest-port 必须在 1-65535 之间");
@@ -277,6 +294,29 @@ final class SshFlinkCdcCommandRunner {
     return environment.config();
   }
 
+  private SshConfig sshConfig(ComputeEnvironmentSnapshot environment) {
+    RuntimeConfig config = requireConfig(environment);
+    return config.ssh() == null ? bootstrapSshConfig() : config.ssh();
+  }
+
+  private SshConfig bootstrapSshConfig() {
+    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
+    Duration timeout = ssh.getConnectTimeout();
+    int timeoutSeconds =
+        timeout == null ? 5 : (int) Math.max(1, Math.min(120, timeout.toSeconds()));
+    return new SshConfig(
+        ssh.getExecutable(),
+        ssh.getHost(),
+        ssh.getPort(),
+        ssh.getUser(),
+        ssh.getIdentityFile(),
+        ssh.getKnownHostsFile(),
+        ssh.isStrictHostKeyChecking(),
+        timeoutSeconds,
+        ssh.getRemoteRestAddress(),
+        ssh.getRemoteRestPort());
+  }
+
   private ComputeEnvironmentSnapshot bootstrapEnvironment() {
     RuntimeConfig config =
         new RuntimeConfig(
@@ -285,7 +325,8 @@ final class SshFlinkCdcCommandRunner {
             properties.getFlinkCdcHome(),
             properties.getJavaHome(),
             properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion());
+            properties.getFlinkCdcVersion(),
+            bootstrapSshConfig());
     return new ComputeEnvironmentSnapshot(
         0L,
         "application/default",
@@ -300,13 +341,21 @@ final class SshFlinkCdcCommandRunner {
     return StringUtils.hasText(value) && value.startsWith("/");
   }
 
+  private boolean strictHostKeyChecking(SshConfig ssh) {
+    return ssh.strictHostKeyChecking() == null || ssh.strictHostKeyChecking();
+  }
+
+  private Duration connectTimeout(SshConfig ssh) {
+    int seconds = ssh.connectTimeoutSeconds() == null ? 5 : ssh.connectTimeoutSeconds();
+    return Duration.ofSeconds(Math.max(1, Math.min(120, seconds)));
+  }
+
   private Duration positiveDuration(Duration value, Duration fallback) {
     return value == null || value.isNegative() || value.isZero() ? fallback : value;
   }
 
-  private int seconds(Duration value) {
-    Duration effective = positiveDuration(value, Duration.ofSeconds(5));
-    return (int) Math.max(1, Math.min(Integer.MAX_VALUE, (effective.toMillis() + 999) / 1000));
+  private int seconds(SshConfig ssh) {
+    return (int) Math.max(1, Math.min(Integer.MAX_VALUE, connectTimeout(ssh).toSeconds()));
   }
 
   private String shellQuote(String value) {
