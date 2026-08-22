@@ -117,20 +117,18 @@ public class ComputeEnvironmentStore {
     }
   }
 
-  /** Persists a diagnosis only if the environment configuration did not change during the probe. */
   public void saveDiagnosis(
-      long id, int expectedVersion, String status, String message, LocalDateTime checkedAt) {
+      long id, String status, String message, LocalDateTime checkedAt) {
     int changed =
         db.update(
             "update yak_compute_environment set last_check_status=?,last_check_message=?,"
-                + "last_check_time=? where id=? and version=?",
+                + "last_check_time=? where id=?",
             status,
             message,
             checkedAt == null ? null : Timestamp.valueOf(checkedAt),
-            id,
-            expectedVersion);
+            id);
     if (changed != 1) {
-      throw new IllegalStateException("运行环境配置在检测期间已变化，请重新检测");
+      throw new IllegalArgumentException("运行环境不存在：" + id);
     }
   }
 
