@@ -43,7 +43,8 @@ final class SshFlinkCdcCommandRunner {
         || !absoluteUnixPath(properties.getFlinkCdcHome())) {
       return "SSH 模式下 flink-home 和 flink-cdc-home 必须是远端 Linux 绝对路径";
     }
-    if (StringUtils.hasText(properties.getJavaHome()) && !absoluteUnixPath(properties.getJavaHome())) {
+    if (StringUtils.hasText(properties.getJavaHome())
+        && !absoluteUnixPath(properties.getJavaHome())) {
       return "SSH 模式下 java-home 必须是远端 Linux 绝对路径";
     }
     Integer remoteRestPort = ssh.getRemoteRestPort();
@@ -74,18 +75,15 @@ final class SshFlinkCdcCommandRunner {
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .start();
       process.getOutputStream().close();
-      Duration connectTimeout = positiveDuration(properties.getSsh().getConnectTimeout(), Duration.ofSeconds(5));
+      Duration connectTimeout =
+          positiveDuration(properties.getSsh().getConnectTimeout(), Duration.ofSeconds(5));
       Duration timeout = connectTimeout.plusSeconds(5);
       if (!process.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS)) {
         destroy(process);
         throw failure("SSH 远端环境探测超时", false, null);
       }
       if (process.exitValue() != 0) {
-        String message =
-            process.exitValue() == 255
-                ? "SSH 连接或认证失败，请检查 host key、用户和密钥配置"
-                : "SSH 已连接，但远端 Flink/Flink CDC/Java 环境未通过检查";
-        throw failure(message + "，exitCode=" + process.exitValue(), false, null);
+        throw failure(probeFailureMessage(process.exitValue()), false, null);
       }
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
@@ -174,14 +172,20 @@ final class SshFlinkCdcCommandRunner {
   private String remoteProbeCommand(URI restUri) {
     String cdc = remoteCdcCli();
     StringBuilder command = new StringBuilder("set -eu; ");
-    command.append("test -x ").append(shellQuote(cdc)).append("; ");
-    command.append("test -d ").append(shellQuote(properties.getFlinkHome())).append("; ");
-    command.append("command -v mktemp >/dev/null 2>&1; ");
+    command
+        .append("test -x ")
+        .append(shellQuote(cdc))
+        .append(" || exit 41; ");
+    command
+        .append("test -d ")
+        .append(shellQuote(properties.getFlinkHome()))
+        .append(" || exit 42; ");
+    command.append("command -v mktemp >/dev/null 2>&1 || exit 43; ");
     if (StringUtils.hasText(properties.getJavaHome())) {
       command
           .append("test -x ")
           .append(shellQuote(properties.getJavaHome() + "/bin/java"))
-          .append("; ");
+          .append(" || exit 44; ");
     }
     command.append("test -n ").append(shellQuote(remoteRestAddress(restUri))).append("; ");
     command.append("echo YAK_REALTIME_SSH_READY");
@@ -192,7 +196,8 @@ final class SshFlinkCdcCommandRunner {
     StringBuilder command = new StringBuilder();
     command.append("set -eu; umask 077; ");
     command.append("tmp=$(mktemp \"${TMPDIR:-/tmp}/yak-ops-cdc.XXXXXX.yaml\"); ");
-    command.append("cleanup(){ rm -f \"$tmp\"; }; trap cleanup 0 HUP INT TERM; ");
+    command.append("cleanup(){ rm -f \"$tmp\"; }; trap cleanup 0; ");
+    command.append("trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM; ");
     command.append("cat > \"$tmp\"; ");
     command.append("export FLINK_HOME=").append(shellQuote(properties.getFlinkHome())).append("; ");
     if (StringUtils.hasText(properties.getJavaHome())) {
@@ -236,6 +241,17 @@ final class SshFlinkCdcCommandRunner {
       return restUri.getPort();
     }
     return "https".equalsIgnoreCase(restUri.getScheme()) ? 443 : 80;
+  }
+
+  private String probeFailureMessage(int exitCode) {
+    return switch (exitCode) {
+      case 41 -> "SSH 已连接，但远端 Flink CDC CLI 不存在或不可执行";
+      case 42 -> "SSH 已连接，但远端 Flink Home 不存在";
+      case 43 -> "SSH 已连接，但远端缺少 mktemp 命令";
+      case 44 -> "SSH 已连接，但远端 JAVA_HOME/bin/java 不存在或不可执行";
+      case 255 -> "SSH 连接或认证失败，请检查 host key、用户和密钥配置";
+      default -> "SSH 远端运行环境未通过检查，exitCode=" + exitCode;
+    };
   }
 
   private boolean absoluteUnixPath(String value) {
