@@ -25,7 +25,8 @@ public class RealtimeObservabilityService {
   }
 
   public String submissionLog(long definitionId, int tailLines) {
-    return flink.submissionLog(requireJobId(definitionId), tailLines);
+    DeploymentRow deployment = requireDeployment(definitionId);
+    return flink.submissionLog(deployment.idempotencyKey(), tailLines);
   }
 
   public RuntimeLog runtimeLog(long definitionId, int maxExceptions) {
@@ -33,16 +34,19 @@ public class RealtimeObservabilityService {
   }
 
   private String requireJobId(long definitionId) {
-    store
-        .definition(definitionId)
-        .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + definitionId));
-    DeploymentRow deployment =
-        store
-            .latestDeployment(definitionId)
-            .orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
+    DeploymentRow deployment = requireDeployment(definitionId);
     if (!StringUtils.hasText(deployment.engineJobId())) {
       throw new IllegalStateException("部署记录尚无 Flink jobId，请先执行状态对账");
     }
     return deployment.engineJobId();
+  }
+
+  private DeploymentRow requireDeployment(long definitionId) {
+    store
+        .definition(definitionId)
+        .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + definitionId));
+    return store
+        .latestDeployment(definitionId)
+        .orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
   }
 }
