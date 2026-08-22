@@ -1,4 +1,5 @@
--- Lineage Core V1: unified metadata assets and typed upstream-to-downstream relationships.
+-- Consolidated Lineage schema baseline.
+-- Parent/edge integrity is enforced by lineage services; no physical FK constraints are created.
 CREATE TABLE IF NOT EXISTS yak_metadata_asset (
     id BIGINT NOT NULL AUTO_INCREMENT,
     asset_key VARCHAR(512) NOT NULL,
@@ -20,10 +21,7 @@ CREATE TABLE IF NOT EXISTS yak_metadata_asset (
     KEY idx_yak_metadata_asset_type (asset_type),
     KEY idx_yak_metadata_asset_source (source_type, source_id),
     KEY idx_yak_metadata_asset_parent (parent_asset_id),
-    KEY idx_yak_metadata_asset_datasource (data_source_id),
-    CONSTRAINT fk_yak_metadata_asset_parent
-        FOREIGN KEY (parent_asset_id) REFERENCES yak_metadata_asset(id)
-        ON DELETE SET NULL
+    KEY idx_yak_metadata_asset_datasource (data_source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_metadata_relation (
@@ -45,10 +43,5 @@ CREATE TABLE IF NOT EXISTS yak_metadata_relation (
         (source_asset_id, target_asset_id, relation_type, source_type, source_id, version),
     KEY idx_yak_metadata_relation_source (source_asset_id, relation_type),
     KEY idx_yak_metadata_relation_target (target_asset_id, relation_type),
-    CONSTRAINT fk_yak_metadata_relation_source
-        FOREIGN KEY (source_asset_id) REFERENCES yak_metadata_asset(id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_yak_metadata_relation_target
-        FOREIGN KEY (target_asset_id) REFERENCES yak_metadata_asset(id)
-        ON DELETE CASCADE
+    KEY idx_yak_metadata_relation_evidence (source_type, source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

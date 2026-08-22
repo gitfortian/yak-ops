@@ -1,20 +1,6 @@
--- Destructive phase-one rebuild. Existing offline-sync history and business data are intentionally removed.
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS yak_offline_worker_registration_event;
-DROP TABLE IF EXISTS yak_offline_worker_registration_nonce;
-DROP TABLE IF EXISTS yak_offline_worker_preflight;
-DROP TABLE IF EXISTS yak_offline_connector_schema;
-DROP TABLE IF EXISTS yak_offline_alert_event;
-DROP TABLE IF EXISTS yak_offline_execution_event;
-DROP TABLE IF EXISTS yak_offline_job_execution;
-DROP TABLE IF EXISTS yak_offline_schedule;
-DROP TABLE IF EXISTS yak_offline_job_version;
-DROP TABLE IF EXISTS yak_offline_engine_node;
-DROP TABLE IF EXISTS yak_offline_job_definition;
-DROP TABLE IF EXISTS yak_offline_schema_history;
-SET FOREIGN_KEY_CHECKS = 1;
-
-CREATE TABLE yak_offline_job_definition (
+-- Consolidated Offline Sync schema baseline.
+-- Definition/execution/event lifecycle is owned by application code; no physical FK constraints are created.
+CREATE TABLE IF NOT EXISTS yak_offline_job_definition (
     id BIGINT NOT NULL COMMENT '任务定义 ID',
     job_name VARCHAR(200) NOT NULL COMMENT '任务名称',
     job_desc VARCHAR(1000) NULL COMMENT '任务描述',
@@ -58,7 +44,7 @@ CREATE TABLE yak_offline_job_definition (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='离线同步任务定义';
 
-CREATE TABLE yak_offline_job_execution (
+CREATE TABLE IF NOT EXISTS yak_offline_job_execution (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '执行实例 ID',
     job_definition_id BIGINT NOT NULL,
     definition_version INT NOT NULL DEFAULT 1,
@@ -81,9 +67,17 @@ CREATE TABLE yak_offline_job_execution (
     engine_snapshot_json LONGTEXT NULL,
     error_message TEXT NULL,
     source_record_count BIGINT NOT NULL DEFAULT 0,
+    sink_attempted_record_count BIGINT NOT NULL DEFAULT 0 COMMENT 'Sink 尝试写入记录数',
     sink_success_record_count BIGINT NOT NULL DEFAULT 0,
+    sink_committed_record_count BIGINT NOT NULL DEFAULT 0 COMMENT 'Sink 已提交记录数',
     source_read_bytes BIGINT NOT NULL DEFAULT 0,
     sink_written_bytes BIGINT NOT NULL DEFAULT 0,
+    source_average_qps DOUBLE NOT NULL DEFAULT 0 COMMENT 'Source 平均读取 QPS',
+    sink_average_qps DOUBLE NOT NULL DEFAULT 0 COMMENT 'Sink 平均写入 QPS',
+    failed_record_count BIGINT NOT NULL DEFAULT 0 COMMENT '失败记录数',
+    skipped_record_count BIGINT NOT NULL DEFAULT 0 COMMENT '跳过记录数',
+    database_commit_millis BIGINT NOT NULL DEFAULT 0 COMMENT '数据库提交耗时，毫秒',
+    sql_execution_millis BIGINT NOT NULL DEFAULT 0 COMMENT 'SQL 执行耗时，毫秒',
     qps DOUBLE NOT NULL DEFAULT 0,
     duration_millis BIGINT NOT NULL DEFAULT 0,
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -96,14 +90,11 @@ CREATE TABLE yak_offline_job_execution (
     UNIQUE KEY uk_yak_offline_idempotency (idempotency_key),
     KEY idx_yak_offline_execution_definition (job_definition_id, id),
     KEY idx_yak_offline_execution_status (status, last_sync_time),
-    KEY idx_yak_offline_execution_retry (retry_created, next_retry_time),
-    CONSTRAINT fk_yak_offline_execution_definition
-        FOREIGN KEY (job_definition_id) REFERENCES yak_offline_job_definition (id)
-        ON DELETE CASCADE
+    KEY idx_yak_offline_execution_retry (retry_created, next_retry_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='离线同步执行实例';
 
-CREATE TABLE yak_offline_execution_event (
+CREATE TABLE IF NOT EXISTS yak_offline_execution_event (
     id BIGINT NOT NULL AUTO_INCREMENT,
     execution_id BIGINT NOT NULL,
     state_version BIGINT NOT NULL,
@@ -114,9 +105,6 @@ CREATE TABLE yak_offline_execution_event (
     payload_json LONGTEXT NULL,
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    KEY idx_yak_offline_event_execution (execution_id, id),
-    CONSTRAINT fk_yak_offline_event_execution
-        FOREIGN KEY (execution_id) REFERENCES yak_offline_job_execution (id)
-        ON DELETE CASCADE
+    KEY idx_yak_offline_event_execution (execution_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='离线同步执行状态事件';

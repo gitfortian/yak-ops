@@ -1,6 +1,8 @@
--- Stage 1 BI foundation: Dataset is a data contract, independent from executable TaskAsset state.
+-- Consolidated Dataset schema baseline.
+-- Dataset-to-development/task references are logical references maintained by application services.
 CREATE TABLE IF NOT EXISTS yak_dataset (
     id BIGINT NOT NULL AUTO_INCREMENT,
+    development_node_id BIGINT NULL,
     name VARCHAR(200) NOT NULL,
     description VARCHAR(2000) NULL,
     status VARCHAR(32) NOT NULL,
@@ -8,6 +10,7 @@ CREATE TABLE IF NOT EXISTS yak_dataset (
     create_time DATETIME(6) NOT NULL,
     update_time DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
+    UNIQUE KEY uk_yak_dataset_development_node (development_node_id),
     KEY idx_yak_dataset_status_update (status, update_time),
     KEY idx_yak_dataset_current_version (current_version_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -20,13 +23,14 @@ CREATE TABLE IF NOT EXISTS yak_dataset_version (
     source_task_asset_id BIGINT NOT NULL,
     source_task_revision_id BIGINT NOT NULL,
     source_task_revision_no INT NOT NULL,
+    data_source_id VARCHAR(128) NULL,
+    sql_content LONGTEXT NULL,
     schema_snapshot JSON NULL,
     create_time DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_yak_dataset_version_no (dataset_id, version_no),
     KEY idx_yak_dataset_version_source (source_task_asset_id, source_task_revision_id),
-    CONSTRAINT fk_yak_dataset_version_dataset
-        FOREIGN KEY (dataset_id) REFERENCES yak_dataset(id)
+    KEY idx_yak_dataset_version_datasource (data_source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_dataset_field (
@@ -41,7 +45,5 @@ CREATE TABLE IF NOT EXISTS yak_dataset_field (
     sort_order INT NOT NULL DEFAULT 0,
     PRIMARY KEY (version_id, field_id),
     UNIQUE KEY uk_yak_dataset_field_physical_name (version_id, physical_name),
-    KEY idx_yak_dataset_field_role (version_id, default_role),
-    CONSTRAINT fk_yak_dataset_field_version
-        FOREIGN KEY (version_id) REFERENCES yak_dataset_version(id)
+    KEY idx_yak_dataset_field_role (version_id, default_role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
