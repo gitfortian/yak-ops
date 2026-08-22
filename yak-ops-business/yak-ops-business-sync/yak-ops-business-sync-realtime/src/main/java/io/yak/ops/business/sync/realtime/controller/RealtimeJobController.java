@@ -139,8 +139,10 @@ public class RealtimeJobController {
   @Operation(summary = "重启实时同步任务")
   @PostMapping("/{id}/restart")
   @RequiresPermission(RealtimePermissionCode.EXECUTE)
-  public Result<RealtimeJobView.Deployment> restart(@PathVariable long id) {
-    return Result.success(service.restart(id));
+  public Result<RealtimeJobView.Deployment> restart(
+      @PathVariable long id,
+      @RequestHeader(value = "Idempotency-Key", required = false) String key) {
+    return Result.success(service.restart(id, key));
   }
 
   @Operation(summary = "立即对账实时同步任务")

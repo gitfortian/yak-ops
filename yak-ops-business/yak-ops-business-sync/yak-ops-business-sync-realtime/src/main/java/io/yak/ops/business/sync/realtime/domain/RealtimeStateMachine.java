@@ -14,6 +14,8 @@ public class RealtimeStateMachine {
 
   private static final EnumSet<ObservedState> DEFINITION_MUTABLE_STATES =
       EnumSet.of(ObservedState.STOPPED, ObservedState.FAILED);
+  private static final EnumSet<ObservedState> STARTABLE_STATES =
+      EnumSet.of(ObservedState.STOPPED, ObservedState.FAILED);
 
   private final Map<ObservedState, EnumSet<ObservedState>> transitions =
       new EnumMap<>(ObservedState.class);
@@ -40,7 +42,11 @@ public class RealtimeStateMachine {
         ObservedState.CONFLICT);
     allow(
         ObservedState.STOPPING, ObservedState.STOPPED, ObservedState.FAILED, ObservedState.UNKNOWN);
-    allow(ObservedState.FAILED, ObservedState.STOPPED, ObservedState.STARTING);
+    allow(
+        ObservedState.FAILED,
+        ObservedState.STOPPED,
+        ObservedState.STARTING,
+        ObservedState.STOPPING);
     allow(
         ObservedState.UNKNOWN,
         ObservedState.RUNNING,
@@ -78,6 +84,15 @@ public class RealtimeStateMachine {
     if (desired != DesiredState.STOPPED || !DEFINITION_MUTABLE_STATES.contains(observed)) {
       throw new IllegalStateException(
           "任务运行态未稳定，只有已停止或明确失败的任务才能编辑、发布或删除");
+    }
+  }
+
+  /** A new deployment may only reserve a task that is definitely not active. */
+  public void requireStartable(String desiredValue, String observedValue) {
+    DesiredState desired = DesiredState.valueOf(desiredValue);
+    ObservedState observed = ObservedState.valueOf(observedValue);
+    if (desired != DesiredState.STOPPED || !STARTABLE_STATES.contains(observed)) {
+      throw new IllegalStateException("任务已在启动、运行或停止过程中，请勿重复启动");
     }
   }
 

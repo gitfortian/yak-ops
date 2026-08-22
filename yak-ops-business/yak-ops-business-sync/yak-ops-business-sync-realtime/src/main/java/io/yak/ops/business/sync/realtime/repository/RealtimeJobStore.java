@@ -189,31 +189,58 @@ public class RealtimeJobStore {
     return Objects.requireNonNull(keys.getKey(), "新增部署未返回主键").longValue();
   }
 
+  /** Claims the lifecycle slot for a new deployment. The SQL predicate is a defensive CAS guard. */
   public void markStarting(long definitionId) {
-    db.update(
-        "update yak_realtime_job_definition set desired_state='RUNNING',"
-            + "observed_state='STARTING',last_error=null where id=?",
-        definitionId);
+    int changed =
+        db.update(
+            "update yak_realtime_job_definition set desired_state='RUNNING',"
+                + "observed_state='STARTING',last_error=null where id=? "
+                + "and desired_state='STOPPED' and observed_state in ('STOPPED','FAILED')",
+            definitionId);
+    if (changed != 1) {
+      throw new IllegalStateException("任务已被其他启动或停止请求抢占，请刷新后重试");
+    }
   }
 
+  /** Completes STARTING only while no concurrent stop request has changed the desired state. */
   public void markDeploymentRunning(
       long definitionId, long deploymentId, String engineJobId, String runtimeRevision) {
     db.update(
         "update yak_realtime_job_deployment set"
-            + " gateway_job_id=?,runtime_version=?,runtime_revision=?,status='RUNNING',result_uncertain=0,error_message=null"
-            + " where id=?",
+            + " gateway_job_id=?,runtime_version=?,runtime_revision=?,status='RUNNING',"
+            + "result_uncertain=0,error_message=null where id=?",
         engineJobId,
         runtimeRevision,
         runtimeRevision,
         deploymentId);
+    int changed =
+        db.update(
+            "update yak_realtime_job_definition set observed_state='RUNNING',last_error=null "
+                + "where id=? and desired_state='RUNNING' and observed_state='STARTING'",
+            definitionId);
+    if (changed != 1) {
+      throw new IllegalStateException("启动完成前任务状态已变化，不能覆盖当前运行意图");
+    }
+  }
+
+  /** Binds the real Flink job before cancelling a submission that raced with a stop request. */
+  public void bindDeploymentForStop(
+      long deploymentId, String engineJobId, String runtimeRevision) {
     db.update(
-        "update yak_realtime_job_definition set observed_state='RUNNING',last_error=null where"
-            + " id=?",
-        definitionId);
+        "update yak_realtime_job_deployment set gateway_job_id=?,runtime_version=?,"
+            + "runtime_revision=?,status='STOPPING',result_uncertain=0,error_message=null where id=?",
+        engineJobId,
+        runtimeRevision,
+        runtimeRevision,
+        deploymentId);
   }
 
   public void markDeployFailure(
-      long definitionId, long deploymentId, boolean uncertain, String message) {
+      long definitionId,
+      long deploymentId,
+      boolean uncertain,
+      boolean stopRequested,
+      String message) {
     db.update(
         "update yak_realtime_job_deployment set status=?,result_uncertain=?,error_message=? where"
             + " id=?",
@@ -221,10 +248,11 @@ public class RealtimeJobStore {
         uncertain,
         message,
         deploymentId);
+    String desiredState = stopRequested ? "STOPPED" : (uncertain ? "RUNNING" : "STOPPED");
     db.update(
         "update yak_realtime_job_definition set desired_state=?,observed_state=?,last_error=? where"
             + " id=?",
-        uncertain ? "RUNNING" : "STOPPED",
+        desiredState,
         uncertain ? "UNKNOWN" : "FAILED",
         message,
         definitionId);
