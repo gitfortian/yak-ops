@@ -80,7 +80,7 @@ public class RealtimeJobController {
     return Result.success(service.save(null, request.name(), request.description(), spec, request.runtimeEnvironmentId()));
   }
 
-  @Operation(summary = "校验未保存的实时同步定义") @PostMapping("/spec/validate")
+  @Operation(summary = "校验未保存的实时同步定义") @PostMapping("/spec/validate") @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<RealtimeViews.Validation> validateDefinition(@Valid @RequestBody RealtimeJobRequests.DefinitionValidationRequest request) {
     return Result.success(viewMapper.toView(validationService.validateDefinition(requestMapper.toSpec(request.spec()), request.runtimeEnvironmentId())));
   }
