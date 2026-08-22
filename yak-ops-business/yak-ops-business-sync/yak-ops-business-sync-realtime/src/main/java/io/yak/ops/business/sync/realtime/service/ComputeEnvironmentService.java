@@ -5,12 +5,15 @@ import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.RuntimeOv
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.SubmissionMode;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.dao.DuplicateKeyException;
@@ -26,6 +29,8 @@ import org.springframework.util.StringUtils;
 public class ComputeEnvironmentService {
 
   private static final String BOOTSTRAP_NAME = "默认实时环境";
+  private static final Pattern SSH_USER = Pattern.compile("[A-Za-z0-9._-]+");
+  private static final Pattern SSH_HOST = Pattern.compile("[A-Za-z0-9._:%-]+");
 
   private final ComputeEnvironmentStore store;
   private final RealtimeSyncProperties properties;
@@ -43,6 +48,7 @@ public class ComputeEnvironmentService {
   @PostConstruct
   void initialize() {
     bootstrapDefaultEnvironment();
+    backfillLegacySshConfigurations();
     backfillLegacyRuntimeBindings();
     refreshRuntimeOverrides();
   }
@@ -55,9 +61,15 @@ public class ComputeEnvironmentService {
     return require(id);
   }
 
-  public long create(String name, RuntimeConfig config, boolean enabled, boolean makeDefault) {
+  public long create(
+      String name,
+      String submitterType,
+      RuntimeConfig config,
+      boolean enabled,
+      boolean makeDefault) {
     String normalizedName = normalizeName(name);
-    RuntimeConfig normalizedConfig = normalizeConfig(config);
+    String normalizedSubmitter = normalizeSubmitterType(submitterType, ComputeEnvironment.SUBMITTER_LOCAL);
+    RuntimeConfig normalizedConfig = normalizeConfig(config, normalizedSubmitter);
     if (makeDefault && !enabled) {
       throw new IllegalArgumentException("默认运行环境必须保持启用");
     }
@@ -73,7 +85,7 @@ public class ComputeEnvironmentService {
                     normalizedName,
                     ComputeEnvironment.ENGINE_FLINK_CDC,
                     ComputeEnvironment.DEPLOYMENT_REMOTE,
-                    ComputeEnvironment.SUBMITTER_LOCAL,
+                    normalizedSubmitter,
                     normalizedConfig,
                     enabled,
                     makeDefault);
@@ -88,10 +100,18 @@ public class ComputeEnvironmentService {
   }
 
   public void update(
-      long id, String name, RuntimeConfig config, boolean enabled, boolean makeDefault) {
+      long id,
+      String name,
+      String submitterType,
+      RuntimeConfig config,
+      boolean enabled,
+      boolean makeDefault) {
     ComputeEnvironment current = require(id);
     String normalizedName = normalizeName(name);
-    RuntimeConfig normalizedConfig = normalizeConfig(config);
+    String normalizedSubmitter =
+        normalizeSubmitterType(submitterType, current.submitterType());
+    RuntimeConfig requestedConfig = preserveExistingSshConfig(current, normalizedSubmitter, config);
+    RuntimeConfig normalizedConfig = normalizeConfig(requestedConfig, normalizedSubmitter);
     boolean switchingDefault = makeDefault && !current.defaultEnvironment();
 
     if (current.defaultEnvironment() && !enabled) {
@@ -104,7 +124,7 @@ public class ComputeEnvironmentService {
     try {
       transactions.executeWithoutResult(
           status -> {
-            store.update(id, normalizedName, normalizedConfig, enabled);
+            store.update(id, normalizedName, normalizedSubmitter, normalizedConfig, enabled);
             if (switchingDefault) {
               store.clearDefault();
               store.setDefault(id);
@@ -155,8 +175,7 @@ public class ComputeEnvironmentService {
 
   /**
    * The application/default override remains as a compatibility fallback for older integrations.
-   * Stage two runtime operations use the task/deployment environment explicitly and no longer rely
-   * on this mutable global value.
+   * Task lifecycle operations use the task/deployment environment explicitly.
    */
   @Scheduled(fixedDelayString = "${yak.sync.realtime.environment-refresh-delay:5000}")
   public void refreshRuntimeOverrides() {
@@ -182,6 +201,7 @@ public class ComputeEnvironmentService {
     if (store.count() > 0) {
       return;
     }
+    String submitterType = properties.getSubmissionMode().name();
     RuntimeConfig config =
         new RuntimeConfig(
             properties.getRestUrl(),
@@ -189,7 +209,8 @@ public class ComputeEnvironmentService {
             properties.getFlinkCdcHome(),
             properties.getJavaHome(),
             properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion());
+            properties.getFlinkCdcVersion(),
+            ComputeEnvironment.SUBMITTER_SSH.equals(submitterType) ? bootstrapSshConfig() : null);
     try {
       transactions.executeWithoutResult(
           status -> {
@@ -198,14 +219,46 @@ public class ComputeEnvironmentService {
                   BOOTSTRAP_NAME,
                   ComputeEnvironment.ENGINE_FLINK_CDC,
                   ComputeEnvironment.DEPLOYMENT_REMOTE,
-                  properties.getSubmissionMode().name(),
-                  normalizeConfig(config),
+                  submitterType,
+                  normalizeConfig(config, submitterType),
                   true,
                   true);
             }
           });
     } catch (DuplicateKeyException ignored) {
       // Another Yak Ops instance won the bootstrap race.
+    }
+  }
+
+  /**
+   * Stage one/two could create an SSH environment whose SSH client settings still lived only in
+   * application.yml. Copy that non-secret connection metadata into config_json once so the stage
+   * three editor can manage it. Historical deployment snapshots remain unchanged.
+   */
+  private void backfillLegacySshConfigurations() {
+    SshConfig fallback = bootstrapSshConfig();
+    for (ComputeEnvironment environment : store.list()) {
+      RuntimeConfig config = environment.config();
+      if (!ComputeEnvironment.SUBMITTER_SSH.equals(environment.submitterType())
+          || config == null
+          || config.ssh() != null) {
+        continue;
+      }
+      RuntimeConfig migrated =
+          new RuntimeConfig(
+              config.restUrl(),
+              config.flinkHome(),
+              config.flinkCdcHome(),
+              config.javaHome(),
+              config.flinkVersion(),
+              config.flinkCdcVersion(),
+              fallback);
+      store.update(
+          environment.id(),
+          environment.name(),
+          environment.submitterType(),
+          migrated,
+          environment.enabled());
     }
   }
 
@@ -232,7 +285,36 @@ public class ComputeEnvironmentService {
     return normalized;
   }
 
-  private RuntimeConfig normalizeConfig(RuntimeConfig value) {
+  private String normalizeSubmitterType(String value, String fallback) {
+    String normalized =
+        StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : fallback;
+    if (!ComputeEnvironment.SUBMITTER_LOCAL.equals(normalized)
+        && !ComputeEnvironment.SUBMITTER_SSH.equals(normalized)) {
+      throw new IllegalArgumentException("不支持的任务提交方式：" + value);
+    }
+    return normalized;
+  }
+
+  private RuntimeConfig preserveExistingSshConfig(
+      ComputeEnvironment current, String submitterType, RuntimeConfig requested) {
+    if (requested == null
+        || !ComputeEnvironment.SUBMITTER_SSH.equals(submitterType)
+        || requested.ssh() != null
+        || current.config() == null
+        || current.config().ssh() == null) {
+      return requested;
+    }
+    return new RuntimeConfig(
+        requested.restUrl(),
+        requested.flinkHome(),
+        requested.flinkCdcHome(),
+        requested.javaHome(),
+        requested.flinkVersion(),
+        requested.flinkCdcVersion(),
+        current.config().ssh());
+  }
+
+  private RuntimeConfig normalizeConfig(RuntimeConfig value, String submitterType) {
     if (value == null) {
       throw new IllegalArgumentException("运行环境配置不能为空");
     }
@@ -240,11 +322,88 @@ public class ComputeEnvironmentService {
     validateRestUrl(restUrl);
     String flinkHome = required(value.flinkHome(), "Flink Home", 500);
     String flinkCdcHome = required(value.flinkCdcHome(), "Flink CDC Home", 500);
-    String javaHome = optional(value.javaHome(), 500);
+    String javaHome = optional(value.javaHome(), "Java Home", 500);
     String flinkVersion = required(value.flinkVersion(), "Flink 版本", 64);
     String flinkCdcVersion = required(value.flinkCdcVersion(), "Flink CDC 版本", 64);
+    SshConfig ssh = null;
+    if (ComputeEnvironment.SUBMITTER_SSH.equals(submitterType)) {
+      if (!absoluteUnixPath(flinkHome) || !absoluteUnixPath(flinkCdcHome)) {
+        throw new IllegalArgumentException("SSH 远程执行时 Flink Home 和 Flink CDC Home 必须是 Linux 绝对路径");
+      }
+      if (StringUtils.hasText(javaHome) && !absoluteUnixPath(javaHome)) {
+        throw new IllegalArgumentException("SSH 远程执行时 Java Home 必须是 Linux 绝对路径");
+      }
+      ssh = normalizeSshConfig(value.ssh());
+    }
     return new RuntimeConfig(
-        restUrl, flinkHome, flinkCdcHome, javaHome, flinkVersion, flinkCdcVersion);
+        restUrl, flinkHome, flinkCdcHome, javaHome, flinkVersion, flinkCdcVersion, ssh);
+  }
+
+  private SshConfig normalizeSshConfig(SshConfig value) {
+    if (value == null) {
+      throw new IllegalArgumentException("请选择 SSH 远程执行并填写提交节点配置");
+    }
+    String executable =
+        StringUtils.hasText(value.executable()) ? value.executable().trim() : "ssh";
+    if (executable.length() > 500) {
+      throw new IllegalArgumentException("SSH executable 长度不能超过 500 个字符");
+    }
+    String host = required(value.host(), "SSH Host", 255);
+    if (!SSH_HOST.matcher(host).matches()) {
+      throw new IllegalArgumentException("SSH Host 格式无效");
+    }
+    int port = value.port() == null ? 22 : value.port();
+    requirePort(port, "SSH Port");
+    String user = required(value.user(), "SSH User", 128);
+    if (!SSH_USER.matcher(user).matches()) {
+      throw new IllegalArgumentException("SSH User 格式无效");
+    }
+    String identityFile = optional(value.identityFile(), "SSH Identity File", 500);
+    String knownHostsFile = optional(value.knownHostsFile(), "SSH Known Hosts File", 500);
+    boolean strictHostKeyChecking =
+        value.strictHostKeyChecking() == null || value.strictHostKeyChecking();
+    int connectTimeoutSeconds =
+        value.connectTimeoutSeconds() == null ? 5 : value.connectTimeoutSeconds();
+    if (connectTimeoutSeconds < 1 || connectTimeoutSeconds > 120) {
+      throw new IllegalArgumentException("SSH 连接超时必须在 1-120 秒之间");
+    }
+    String remoteRestAddress = optional(value.remoteRestAddress(), "远端 Flink REST 地址", 255);
+    if (StringUtils.hasText(remoteRestAddress) && !SSH_HOST.matcher(remoteRestAddress).matches()) {
+      throw new IllegalArgumentException("远端 Flink REST 地址格式无效");
+    }
+    Integer remoteRestPort = value.remoteRestPort();
+    if (remoteRestPort != null) {
+      requirePort(remoteRestPort, "远端 Flink REST Port");
+    }
+    return new SshConfig(
+        executable,
+        host,
+        port,
+        user,
+        identityFile,
+        knownHostsFile,
+        strictHostKeyChecking,
+        connectTimeoutSeconds,
+        remoteRestAddress,
+        remoteRestPort);
+  }
+
+  private SshConfig bootstrapSshConfig() {
+    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
+    Duration timeout = ssh.getConnectTimeout();
+    int timeoutSeconds =
+        timeout == null ? 5 : (int) Math.max(1, Math.min(120, timeout.toSeconds()));
+    return new SshConfig(
+        ssh.getExecutable(),
+        ssh.getHost(),
+        ssh.getPort(),
+        ssh.getUser(),
+        ssh.getIdentityFile(),
+        ssh.getKnownHostsFile(),
+        ssh.isStrictHostKeyChecking(),
+        timeoutSeconds,
+        ssh.getRemoteRestAddress(),
+        ssh.getRemoteRestPort());
   }
 
   private void validateRestUrl(String value) {
@@ -273,15 +432,25 @@ public class ComputeEnvironmentService {
     return normalized;
   }
 
-  private String optional(String value, int maxLength) {
+  private String optional(String value, String label, int maxLength) {
     if (!StringUtils.hasText(value)) {
       return null;
     }
     String normalized = value.trim();
     if (normalized.length() > maxLength) {
-      throw new IllegalArgumentException("Java Home 长度不能超过 " + maxLength + " 个字符");
+      throw new IllegalArgumentException(label + "长度不能超过 " + maxLength + " 个字符");
     }
     return normalized;
+  }
+
+  private void requirePort(int port, String label) {
+    if (port < 1 || port > 65535) {
+      throw new IllegalArgumentException(label + " 必须在 1-65535 之间");
+    }
+  }
+
+  private boolean absoluteUnixPath(String value) {
+    return StringUtils.hasText(value) && value.startsWith("/");
   }
 
   private SubmissionMode submissionMode(String value) {
