@@ -11,6 +11,19 @@ public class RealtimeSyncProperties {
     SSH
   }
 
+  /**
+   * Environment-scoped runtime settings. The object is replaced atomically when the default
+   * compute environment changes, while application.yml / ENV values remain the bootstrap fallback.
+   */
+  public record RuntimeOverrides(
+      String restUrl,
+      String flinkHome,
+      String flinkCdcHome,
+      String javaHome,
+      String flinkVersion,
+      String flinkCdcVersion,
+      SubmissionMode submissionMode) {}
+
   private boolean enabled = true;
   private String restUrl = "http://127.0.0.1:8081";
   private String flinkHome = "/opt/flink";
@@ -27,6 +40,7 @@ public class RealtimeSyncProperties {
   private int maxLogLines = 1_000;
   private int reconcileFailureThreshold = 3;
   private int reconcileLeaseSeconds = 30;
+  private volatile RuntimeOverrides runtimeOverrides;
 
   public boolean isEnabled() {
     return enabled;
@@ -37,7 +51,8 @@ public class RealtimeSyncProperties {
   }
 
   public String getRestUrl() {
-    return restUrl;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? restUrl : current.restUrl();
   }
 
   public void setRestUrl(String restUrl) {
@@ -45,7 +60,8 @@ public class RealtimeSyncProperties {
   }
 
   public String getFlinkHome() {
-    return flinkHome;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? flinkHome : current.flinkHome();
   }
 
   public void setFlinkHome(String flinkHome) {
@@ -53,7 +69,8 @@ public class RealtimeSyncProperties {
   }
 
   public String getFlinkCdcHome() {
-    return flinkCdcHome;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? flinkCdcHome : current.flinkCdcHome();
   }
 
   public void setFlinkCdcHome(String flinkCdcHome) {
@@ -61,13 +78,18 @@ public class RealtimeSyncProperties {
   }
 
   public String getJavaHome() {
-    return javaHome;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? javaHome : current.javaHome();
   }
 
   public void setJavaHome(String javaHome) {
     this.javaHome = javaHome;
   }
 
+  /**
+   * The work directory is intentionally application-scoped in stage one. Submission logs for
+   * historical deployments must not move when the default compute environment is switched.
+   */
   public String getWorkDirectory() {
     return workDirectory;
   }
@@ -77,7 +99,8 @@ public class RealtimeSyncProperties {
   }
 
   public String getFlinkVersion() {
-    return flinkVersion;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? flinkVersion : current.flinkVersion();
   }
 
   public void setFlinkVersion(String flinkVersion) {
@@ -85,7 +108,8 @@ public class RealtimeSyncProperties {
   }
 
   public String getFlinkCdcVersion() {
-    return flinkCdcVersion;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? flinkCdcVersion : current.flinkCdcVersion();
   }
 
   public void setFlinkCdcVersion(String flinkCdcVersion) {
@@ -93,7 +117,8 @@ public class RealtimeSyncProperties {
   }
 
   public SubmissionMode getSubmissionMode() {
-    return submissionMode;
+    RuntimeOverrides current = runtimeOverrides;
+    return current == null ? submissionMode : current.submissionMode();
   }
 
   public void setSubmissionMode(SubmissionMode submissionMode) {
@@ -102,6 +127,14 @@ public class RealtimeSyncProperties {
 
   public Ssh getSsh() {
     return ssh;
+  }
+
+  public void applyRuntimeOverrides(RuntimeOverrides overrides) {
+    this.runtimeOverrides = overrides;
+  }
+
+  public void clearRuntimeOverrides() {
+    this.runtimeOverrides = null;
   }
 
   public Duration getConnectTimeout() {
