@@ -95,17 +95,21 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
   public Optional<PublishedDefinitionRow> publishedDefinition(long definitionId) {
     Optional<Long> ref = definitionVersions.publishedDefinitionVersionId(definitionId);
     if (ref.isEmpty()) return Optional.empty();
-
-    PublicationSnapshot snapshot =
-        definitionVersions
-            .find(ref.get())
+    return Optional.of(
+        definitionVersion(definitionId, ref.get())
             .orElseThrow(
                 () ->
                     new IllegalStateException(
-                        "实时同步任务引用的 Published DefinitionVersion 不存在：" + ref.get()));
+                        "实时同步任务引用的 Published DefinitionVersion 不存在：" + ref.get())));
+  }
+
+  @Override
+  public Optional<PublishedDefinitionRow> definitionVersion(long taskId, long definitionVersionId) {
+    PublicationSnapshot snapshot = definitionVersions.find(definitionVersionId).orElse(null);
+    if (snapshot == null) return Optional.empty();
     StoredVersion version = snapshot.version();
-    if (version.taskId() != definitionId) {
-      throw new IllegalStateException("Published DefinitionVersion 不属于当前实时同步任务");
+    if (version.taskId() != taskId) {
+      throw new IllegalStateException("DefinitionVersion 不属于当前实时同步任务");
     }
     return Optional.of(
         new PublishedDefinitionRow(

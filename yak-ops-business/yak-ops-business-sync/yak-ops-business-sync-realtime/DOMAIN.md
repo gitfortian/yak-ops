@@ -171,7 +171,7 @@ A newer Draft MUST NOT mutate or invalidate historical Published versions or run
 
 A newer Draft MUST NOT automatically become the version used by an existing Execution.
 
-Wave 4 current rule:
+Wave 4+ current rule:
 
 ```text
 Active/uncertain SyncExecution
@@ -206,7 +206,7 @@ MUST:
 ```text
 Start -> new Execution
 RestartExecution -> new Execution pinned to the same DefinitionVersion
-ApplyPublishedVersion -> separate use case that starts the new Published version
+ApplyPublishedVersion -> separate use case that starts the explicitly captured Published version
 ```
 
 MUST NOT resurrect a terminal Execution.
@@ -231,6 +231,8 @@ CONFLICT
 ```
 
 Do not create a second Execution while one of the above exists.
+
+Version-changing lifecycle commands MUST NOT be used to bypass an uncertain runtime state. `RestartExecution` and `ApplyPublishedVersion` require a stable `RUNNING/RUNNING` execution in Wave 5.
 
 ---
 
@@ -276,9 +278,9 @@ Task row locking may remain a cross-instance command mutex; lock location does n
 
 ---
 
-# 7. Restart is not version upgrade
+# 7. RestartExecution and ApplyPublishedVersion are distinct commands
 
-These are different commands.
+These are different domain commands and MUST remain different in Application/API/UI semantics.
 
 ```text
 RestartExecution
@@ -290,21 +292,58 @@ ApplyPublishedVersion
 E100(v3) -> stop -> E101(v4)
 ```
 
-MUST NOT implement a generic `restart()` that silently reads whatever version is currently published and upgrades the task.
+## 7.1 RestartExecution
 
-Restart MUST pin the DefinitionVersion of the Execution being restarted.
+Restart MUST pin the immutable `DefinitionVersionId` from the Execution being restarted.
 
-Wave 4 transitional rule, until Wave 5 introduces explicit commands:
+It MUST NOT depend on the current `RealtimeSyncTask.publishedDefinitionRef`.
+
+Therefore this is valid:
 
 ```text
-active Execution.definitionVersionRef
-        !=
-Task.publishedDefinitionRef
+E100 runs V3
+Task.publishedDefinitionRef = V4
+RestartExecution(E100)
+  -> E101(V3)
 ```
 
-MUST cause Restart to reject **before Stop is issued**. Do not stop the old version first and only then discover that Restart would upgrade it.
+The legacy `/restart` endpoint, while it exists for compatibility, MUST delegate to `RestartExecution` semantics and MUST NEVER become a restart-to-latest shortcut.
 
-Do not infer this comparison from legacy `definition_version / published_version` integers. Domain version identity is the immutable `DefinitionVersionId`.
+## 7.2 ApplyPublishedVersion
+
+ApplyPublishedVersion explicitly captures `RealtimeSyncTask.publishedDefinitionRef` at command start.
+
+That captured immutable target MUST remain pinned for the entire command. If another Publish advances the Task to V5 while an Apply of V4 is already in progress, the existing command MUST NOT drift from V4 to V5.
+
+If the active Execution already uses the captured Published `DefinitionVersionId`, Apply MUST reject as unnecessary.
+
+## 7.3 Preflight before Stop
+
+Both commands MUST resolve and preflight their exact target DefinitionVersion **before** stopping the currently healthy Execution.
+
+If target datasource/runtime/connector validation fails, the command MUST fail before `STOPPING` is persisted or an engine Stop is issued.
+
+After target preflight succeeds, runtime Stop uncertainty continues to use the normal `STOPPING/UNKNOWN` rules; do not start a replacement Execution unless the old one is definitely terminal.
+
+## 7.4 Version identity
+
+Do not infer version identity from legacy `definition_version / published_version` integers.
+
+The authoritative comparison is:
+
+```text
+SyncExecution.definitionVersionId
+vs
+RealtimeSyncTask.publishedDefinitionVersionId
+```
+
+The UI/query projection may expose a derived fact such as:
+
+```text
+publishedUpdateAvailable
+```
+
+but that flag MUST be derived server-side from immutable VersionIds. It is not another version source of truth.
 
 ---
 
@@ -602,8 +641,8 @@ Wave 0  New Core VOs + legacy mapper, no behavior change                     ✅
 Wave 1  Immutable DefinitionVersion persistence + publish dual-write          ✅
 Wave 2  Start by Published DefinitionVersion                                  ✅
 Wave 3  Deployment evolves to SyncExecution; move desired/observed ownership  ✅
-Wave 4  Allow editing/publishing while execution is active                     ✅ current
-Wave 5  Separate RestartExecution from ApplyPublishedVersion                   pending
+Wave 4  Allow editing/publishing while execution is active                     ✅
+Wave 5  Separate RestartExecution from ApplyPublishedVersion                   ✅ current
 Wave 6  Cleanup legacy fields/package/names                                    pending
 ```
 
@@ -613,12 +652,15 @@ Critical ordering rule:
 
 Historical reason: before Wave 3, task-row state and DAO predicates participated in lifecycle ownership. Removing only service-level Save/Publish guards at that time would have produced inconsistent concurrency semantics.
 
-Current rule after Wave 3:
+Current rule after Wave 5:
 
 ```text
 Save Draft / Publish -> RealtimeSyncTask + DefinitionVersion lifecycle
-Start / Stop / Reconcile -> SyncExecution lifecycle
-Delete -> requires terminal Execution and runtime safety checks
+Start                -> current PublishedDefinitionRef -> new SyncExecution
+RestartExecution     -> current Execution VersionRef -> new same-version SyncExecution
+ApplyPublishedVersion-> command-time PublishedDefinitionRef -> new versioned SyncExecution
+Stop / Reconcile     -> SyncExecution lifecycle
+Delete               -> requires terminal Execution and runtime safety checks
 ```
 
 Database migration MUST use:
@@ -645,6 +687,7 @@ DeploymentRow                   -> SyncExecution persistence compatibility row
 configDigest on definition      -> draft DefinitionDigest-like value
 configDigest on deployment      -> ExecutionArtifactDigest
 ReleaseState DRAFT/PUBLISHED    -> legacy/derived presentation state
+legacy /restart endpoint        -> compatibility alias for RestartExecution
 ```
 
 Do not compare legacy `definition_version / published_version` as if they were immutable Domain `DefinitionVersionId` values.
@@ -699,6 +742,8 @@ Flink/SSH/JDBC credential fields in Core Domain
 Execution reading current Draft
 in-place mutation of Published Version
 Restart that may silently upgrade version
+ApplyPublishedVersion that re-reads a newer Published target after command start
+target-version command that stops a healthy Execution before target preflight succeeds
 second active Execution while UNKNOWN/CONFLICT exists
 UNKNOWN treated as FAILED solely to permit retry
 hard deletion of execution/version/audit history

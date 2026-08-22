@@ -40,6 +40,16 @@ interface DefinitionValidationResult {
   deliverySemantics: string;
 }
 
+export type RealtimeAction =
+  | 'publish'
+  | 'validate'
+  | 'start'
+  | 'stop'
+  | 'restart-execution'
+  | 'apply-published-version'
+  | 'reconcile'
+  | 'restart';
+
 const validateDefinition = (spec: CdcPipelineSpec, runtimeEnvironmentId: number) =>
   request<ApiResponse<DefinitionValidationResult>>(`${PREFIX}/spec/validate`, {
     method: 'POST',
@@ -66,6 +76,9 @@ const capabilities = async (environmentId?: number) => {
   });
 };
 
+const needsIdempotencyKey = (action: RealtimeAction) =>
+  ['start', 'restart', 'restart-execution', 'apply-published-version'].includes(action);
+
 export const realtimeApi = {
   page: (params: RealtimePageQuery) =>
     request<ApiResponse<RealtimeJobPage>>(PREFIX, {
@@ -89,13 +102,12 @@ export const realtimeApi = {
       method: 'POST',
       data: { spec },
     }),
-  action: (id: number, action: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile') =>
+  action: (id: number, action: RealtimeAction) =>
     request<ApiResponse<RealtimeDeployment | boolean>>(`${PREFIX}/${id}/${action}`, {
       method: 'POST',
-      headers:
-        action === 'start' || action === 'restart'
-          ? { 'Idempotency-Key': crypto.randomUUID() }
-          : undefined,
+      headers: needsIdempotencyKey(action)
+        ? { 'Idempotency-Key': crypto.randomUUID() }
+        : undefined,
     }),
   remove: (id: number) => request<ApiResponse<boolean>>(`${PREFIX}/${id}`, { method: 'DELETE' }),
   events: (id: number) => request<ApiResponse<RealtimeEvent[]>>(`${PREFIX}/${id}/events`),

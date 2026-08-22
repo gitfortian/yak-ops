@@ -29,6 +29,10 @@ public interface RealtimeJobStore {
   default Optional<PublishedDefinitionRow> publishedDefinition(long definitionId) {
     return Optional.empty();
   }
+  /** Lookup one explicit immutable DefinitionVersion. */
+  default Optional<PublishedDefinitionRow> definitionVersion(long taskId, long definitionVersionId) {
+    return Optional.empty();
+  }
   Optional<DeploymentRow> deploymentByIdempotencyKey(String key);
   Optional<DeploymentRow> latestDeployment(long definitionId);
   default Optional<SyncExecution> latestExecution(long definitionId) {
@@ -102,10 +106,46 @@ public interface RealtimeJobStore {
       String observedState,
       int definitionVersion,
       Integer publishedVersion,
+      Long publishedDefinitionVersionId,
       String configDigest,
       String lastError,
       LocalDateTime createTime,
-      LocalDateTime updateTime) {}
+      LocalDateTime updateTime) {
+
+    /** Compatibility constructor for callers created before Wave 5 surfaced the immutable ref. */
+    public DefinitionRow(
+        long id,
+        String name,
+        String description,
+        CdcPipelineSpec spec,
+        long runtimeEnvironmentId,
+        String releaseState,
+        String desiredState,
+        String observedState,
+        int definitionVersion,
+        Integer publishedVersion,
+        String configDigest,
+        String lastError,
+        LocalDateTime createTime,
+        LocalDateTime updateTime) {
+      this(
+          id,
+          name,
+          description,
+          spec,
+          runtimeEnvironmentId,
+          releaseState,
+          desiredState,
+          observedState,
+          definitionVersion,
+          publishedVersion,
+          null,
+          configDigest,
+          lastError,
+          createTime,
+          updateTime);
+    }
+  }
 
   /**
    * Persistence/read compatibility row. From Wave 3 onward desiredState/observedState are the

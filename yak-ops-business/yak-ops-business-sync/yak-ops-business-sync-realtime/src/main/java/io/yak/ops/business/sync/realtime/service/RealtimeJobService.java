@@ -139,8 +139,6 @@ public class RealtimeJobService {
     transactions.executeWithoutResult(
         status -> {
           DefinitionRow locked = store.lockDefinition(id); // cross-instance command mutex
-          // Publishing advances Task.publishedDefinitionRef only. Any active SyncExecution stays
-          // pinned to the immutable DefinitionVersion recorded when that execution was created.
           requirePreparedDefinitionCurrent(prepared, locked);
           store.publish(
               id, prepared.definition().definitionVersion(), prepared.definition().configDigest());
@@ -163,22 +161,27 @@ public class RealtimeJobService {
     ReentrantLock lock = lifecycleLock(id);
     lock.lock();
     try {
-      return startLocked(id, requestedKey, null);
+      String key = normalizeKey(requestedKey);
+      DeploymentRow existing = idempotentDeployment(id, key);
+      if (existing != null) return store.deploymentView(existing);
+
+      PublishedDefinitionRow target = requirePublishedDefinition(id);
+      StartPrepared prepared = prepareVersion(id, target);
+      gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
+      return startPreparedLocked(id, key, prepared, true, StartIntent.START);
     } finally {
       lock.unlock();
     }
   }
 
-  private RealtimeJobView.Deployment startLocked(
-      long id, String requestedKey, Long expectedPublishedDefinitionVersionId) {
-    String key = normalizeKey(requestedKey);
+  private RealtimeJobView.Deployment startPreparedLocked(
+      long id,
+      String key,
+      StartPrepared prepared,
+      boolean requireCurrentPublished,
+      StartIntent intent) {
     DeploymentRow existing = idempotentDeployment(id, key);
-    if (existing != null) {
-      return store.deploymentView(existing);
-    }
-
-    StartPrepared prepared = preparePublished(id, expectedPublishedDefinitionVersionId);
-    gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
+    if (existing != null) return store.deploymentView(existing);
 
     StartReservation reservation;
     try {
@@ -192,8 +195,19 @@ public class RealtimeJobService {
                   return new StartReservation(duplicate.id(), false);
                 }
 
-                PublishedDefinitionRow currentPublished = requirePublishedDefinition(id);
-                requirePreparedPublishedCurrent(prepared, currentPublished);
+                PublishedDefinitionRow currentTarget;
+                if (requireCurrentPublished) {
+                  currentTarget = requirePublishedDefinition(id);
+                  requirePreparedVersionCurrent(
+                      prepared, currentTarget, "已发布定义在校验期间已变化，请刷新后重试");
+                } else {
+                  currentTarget =
+                      requireDefinitionVersion(id, prepared.definitionVersion().id());
+                  requirePreparedVersionCurrent(
+                      prepared,
+                      currentTarget,
+                      "目标 DefinitionVersion 在执行期间已变化，请刷新后重试");
+                }
 
                 SyncExecution previous = store.latestExecution(id).orElse(null);
                 executionStateMachine.requireNewExecutionAllowed(previous);
@@ -212,17 +226,18 @@ public class RealtimeJobService {
                         key);
                 store.bindDeploymentDefinitionVersion(
                     created,
-                    prepared.publishedDefinition().id(),
-                    prepared.publishedDefinition().sourceDraftRevision());
+                    prepared.definitionVersion().id(),
+                    prepared.definitionVersion().sourceDraftRevision());
                 store.markStarting(id); // Task-row compatibility projection only
                 store.event(
                     id,
                     created,
-                    "START_REQUESTED",
+                    intent.eventType,
                     null,
                     "STARTING",
-                    "开始使用已发布版本 v"
-                        + prepared.publishedDefinition().versionNo()
+                    intent.messagePrefix
+                        + " DefinitionVersion v"
+                        + prepared.definitionVersion().versionNo()
                         + "，通过运行环境「"
                         + prepared.runtimeEnvironment().name()
                         + "」提交 Flink CDC 任务"
@@ -385,8 +400,6 @@ public class RealtimeJobService {
 
     DeploymentRow deployment = reservation.deployment();
     if (deployment == null || !StringUtils.hasText(deployment.engineJobId())) {
-      // STARTING may still be blocked in the synchronous CLI. Keep Execution STOPPING; the start
-      // owner will bind the returned JobId and cancel it in completeStart().
       return;
     }
 
@@ -430,37 +443,82 @@ public class RealtimeJobService {
         });
   }
 
+  /** Compatibility alias. Domain semantics are RestartExecution, not generic restart-to-latest. */
+  @Deprecated
   public RealtimeJobView.Deployment restart(long id, String requestedKey) {
+    return restartExecution(id, requestedKey);
+  }
+
+  /** Stop the current RUNNING execution and create a new execution pinned to the same version. */
+  public RealtimeJobView.Deployment restartExecution(long id, String requestedKey) {
     ReentrantLock lock = lifecycleLock(id);
     lock.lock();
     try {
       String key = normalizeKey(requestedKey);
       DeploymentRow existing = idempotentDeployment(id, key);
-      if (existing != null) {
-        return store.deploymentView(existing);
+      if (existing != null) return store.deploymentView(existing);
+
+      DeploymentRow currentRow = requireStableRunningExecutionRow(id, "重启");
+      SyncExecution currentExecution = currentRow.execution();
+      long targetVersionId = requireExecutionVersionId(currentExecution);
+      PublishedDefinitionRow target = requireDefinitionVersion(id, targetVersionId);
+
+      // Preflight target before claiming the stop/replacement command.
+      StartPrepared prepared = prepareVersion(id, target);
+      gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
+
+      DeploymentRow reserved =
+          reserveVersionReplacementStop(
+              id,
+              currentRow.id(),
+              "RESTART_EXECUTION_STOP_REQUESTED",
+              "已为同版本 RestartExecution 预留停止当前运行实例");
+      stopBoundJob(
+          id,
+          reserved.id(),
+          reserved.engineJobId(),
+          "当前 SyncExecution 已停止，准备按原 DefinitionVersion 重启");
+      requireLatestExecutionSettled(id);
+      return startPreparedLocked(id, key, prepared, false, StartIntent.RESTART_EXECUTION);
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /** Stop the current RUNNING execution and explicitly apply the PublishedDefinitionRef snapshot. */
+  public RealtimeJobView.Deployment applyPublishedVersion(long id, String requestedKey) {
+    ReentrantLock lock = lifecycleLock(id);
+    lock.lock();
+    try {
+      String key = normalizeKey(requestedKey);
+      DeploymentRow existing = idempotentDeployment(id, key);
+      if (existing != null) return store.deploymentView(existing);
+
+      DeploymentRow currentRow = requireStableRunningExecutionRow(id, "应用已发布版本");
+      SyncExecution currentExecution = currentRow.execution();
+      long currentVersionId = requireExecutionVersionId(currentExecution);
+      PublishedDefinitionRow target = requirePublishedDefinition(id); // command-time snapshot
+      if (currentVersionId == target.id()) {
+        throw new IllegalStateException("当前 SyncExecution 已经运行最新已发布 DefinitionVersion，无需应用");
       }
 
-      PublishedDefinitionRow restartPublished = requirePublishedDefinition(id);
-      SyncExecution restartExecution =
-          store.latestExecution(id).orElseThrow(() -> new IllegalStateException("当前没有可重启的 SyncExecution"));
-      if (restartExecution.terminal()) {
-        throw new IllegalStateException("当前 SyncExecution 已结束，请直接启动已发布版本");
-      }
-      Long runningVersionId = restartExecution.definitionVersionId();
-      if (runningVersionId == null) {
-        throw new IllegalStateException("当前 SyncExecution 缺少 DefinitionVersionRef，无法安全重启");
-      }
-      if (runningVersionId.longValue() != restartPublished.id()) {
-        throw new IllegalStateException(
-            "当前运行版本与最新发布版本不同，拒绝通过重启隐式升级；请停止后显式启动最新发布版本");
-      }
+      // Validate the exact target before claiming the stop/replacement command.
+      StartPrepared prepared = prepareVersion(id, target);
+      gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
 
-      stopLocked(id);
-      SyncExecution settled = store.latestExecution(id).orElse(null);
-      if (settled != null && settled.activeOrUncertain()) {
-        throw new IllegalStateException("Execution 仍在停止中，请稍后使用相同 Idempotency-Key 重试重启");
-      }
-      return startLocked(id, key, runningVersionId);
+      DeploymentRow reserved =
+          reserveVersionReplacementStop(
+              id,
+              currentRow.id(),
+              "APPLY_PUBLISHED_VERSION_STOP_REQUESTED",
+              "已为 ApplyPublishedVersion 预留停止当前运行实例");
+      stopBoundJob(
+          id,
+          reserved.id(),
+          reserved.engineJobId(),
+          "当前 SyncExecution 已停止，准备应用已发布 DefinitionVersion");
+      requireLatestExecutionSettled(id);
+      return startPreparedLocked(id, key, prepared, false, StartIntent.APPLY_PUBLISHED_VERSION);
     } finally {
       lock.unlock();
     }
@@ -476,7 +534,8 @@ public class RealtimeJobService {
   }
 
   public List<RealtimeJobEventView> events(long id) {
-    store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+    store.definition(id)
+        .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
     return store.events(id);
   }
 
@@ -486,7 +545,8 @@ public class RealtimeJobService {
 
   private Prepared prepare(long id, boolean requirePublished) {
     DefinitionRow definition =
-        store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+        store.definition(id)
+            .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
     if (requirePublished) {
       throw new IllegalArgumentException("内部调用错误：Start 必须通过 immutable Published Definition 准备");
     }
@@ -504,26 +564,23 @@ public class RealtimeJobService {
         manifest);
   }
 
-  private StartPrepared preparePublished(
-      long id, Long expectedPublishedDefinitionVersionId) {
+  private StartPrepared prepareVersion(long id, PublishedDefinitionRow version) {
     DefinitionRow task =
-        store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
-    PublishedDefinitionRow published = requirePublishedDefinition(id);
-    if (expectedPublishedDefinitionVersionId != null
-        && published.id() != expectedPublishedDefinitionVersionId) {
-      throw new IllegalStateException("重启期间已发布版本发生变化，请刷新后重新操作");
+        store.definition(id)
+            .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+    if (version.taskId() != id) {
+      throw new IllegalStateException("DefinitionVersion 不属于当前实时同步任务");
     }
-
-    CdcPipelineSpec spec = published.spec();
+    CdcPipelineSpec spec = version.spec();
     specValidator.validate(spec);
     ComputeEnvironmentSnapshot runtimeEnvironment =
-        runtimeResolver.environment(published.runtimeEnvironmentId(), true);
+        runtimeResolver.environment(version.runtimeEnvironmentId(), true);
     ResolvedCdcPipeline resolved = dataSourceResolver.resolve(spec);
     JsonNode manifest = gateway.capabilities(runtimeEnvironment);
     capabilityResolver.requireSupported(manifest, resolved, spec);
     return new StartPrepared(
         task,
-        published,
+        version,
         spec,
         compiler.compile(task.name(), spec, resolved),
         runtimeEnvironment,
@@ -536,14 +593,21 @@ public class RealtimeJobService {
         .orElseThrow(() -> new IllegalStateException("请先发布至少一个可运行的定义版本"));
   }
 
-  private void requirePreparedPublishedCurrent(
-      StartPrepared prepared, PublishedDefinitionRow currentPublished) {
-    PublishedDefinitionRow snapshot = prepared.publishedDefinition();
-    if (snapshot.id() != currentPublished.id()
-        || snapshot.taskId() != currentPublished.taskId()
-        || snapshot.sourceDraftRevision() != currentPublished.sourceDraftRevision()
-        || !Objects.equals(snapshot.sourceConfigDigest(), currentPublished.sourceConfigDigest())) {
-      throw new IllegalStateException("已发布定义在校验期间已变化，请刷新后重试");
+  private PublishedDefinitionRow requireDefinitionVersion(long taskId, long definitionVersionId) {
+    return store
+        .definitionVersion(taskId, definitionVersionId)
+        .orElseThrow(
+            () -> new IllegalStateException("DefinitionVersion 不存在：" + definitionVersionId));
+  }
+
+  private void requirePreparedVersionCurrent(
+      StartPrepared prepared, PublishedDefinitionRow current, String message) {
+    PublishedDefinitionRow snapshot = prepared.definitionVersion();
+    if (snapshot.id() != current.id()
+        || snapshot.taskId() != current.taskId()
+        || snapshot.sourceDraftRevision() != current.sourceDraftRevision()
+        || !Objects.equals(snapshot.sourceConfigDigest(), current.sourceConfigDigest())) {
+      throw new IllegalStateException(message);
     }
   }
 
@@ -561,6 +625,86 @@ public class RealtimeJobService {
     executionStateMachine.requireDefinitionMutable(store.latestExecution(id).orElse(null));
   }
 
+  private DeploymentRow requireStableRunningExecutionRow(long taskId, String action) {
+    DeploymentRow row =
+        store.latestDeployment(taskId)
+            .orElseThrow(() -> new IllegalStateException("当前没有可" + action + "的 SyncExecution"));
+    SyncExecution execution = row.execution();
+    requireStableRunningExecution(execution, action);
+    if (!execution.engineExecutionRef().bound() || !StringUtils.hasText(row.engineJobId())) {
+      throw new IllegalStateException(action + "要求当前 SyncExecution 已绑定 EngineExecutionRef，请先执行状态对账");
+    }
+    return row;
+  }
+
+  private void requireStableRunningExecution(SyncExecution execution, String action) {
+    if (execution.terminal()) {
+      throw new IllegalStateException("当前 SyncExecution 已结束，请直接启动已发布版本");
+    }
+    if (!"RUNNING".equals(execution.desiredState().name())
+        || !"RUNNING".equals(execution.observedState().name())
+        || execution.resultUncertain()) {
+      throw new IllegalStateException(
+          action
+              + "只允许对稳定 RUNNING 的 SyncExecution 执行；STARTING/STOPPING/UNKNOWN/CONFLICT 请先对账");
+    }
+  }
+
+  /**
+   * Linearization point for RestartExecution / ApplyPublishedVersion across multiple Yak instances.
+   * The expensive target preflight is intentionally done before this reservation. Once this
+   * transaction marks the expected execution STOPPING, this version command owns the replacement;
+   * a competing Stop/version command that won first makes this reservation fail instead.
+   */
+  private DeploymentRow reserveVersionReplacementStop(
+      long taskId, long expectedExecutionId, String eventType, String message) {
+    DeploymentRow reserved =
+        transactions.execute(
+            status -> {
+              store.lockDefinition(taskId); // cross-instance command mutex
+              DeploymentRow latest =
+                  store.latestDeployment(taskId)
+                      .orElseThrow(() -> new IllegalStateException("当前 SyncExecution 已变化，请刷新后重试"));
+              if (latest.id() != expectedExecutionId) {
+                throw new IllegalStateException("当前 SyncExecution 已变化，请刷新后重试");
+              }
+              SyncExecution execution = latest.execution();
+              requireStableRunningExecution(execution, "版本切换");
+              if (!execution.engineExecutionRef().bound() || !StringUtils.hasText(latest.engineJobId())) {
+                throw new IllegalStateException("当前 SyncExecution 缺少 EngineExecutionRef，请先执行状态对账");
+              }
+              executionStateMachine.requireTransition(execution, "STOPPING");
+              store.markStopping(taskId, latest.id());
+              store.event(
+                  taskId,
+                  latest.id(),
+                  eventType,
+                  execution.observedState().name(),
+                  "STOPPING",
+                  message);
+              return latest;
+            });
+    if (reserved == null) {
+      throw new IllegalStateException("未能预留版本切换停止命令");
+    }
+    return reserved;
+  }
+
+  private long requireExecutionVersionId(SyncExecution execution) {
+    Long versionId = execution.definitionVersionId();
+    if (versionId == null) {
+      throw new IllegalStateException("当前 SyncExecution 缺少 DefinitionVersionRef，无法安全执行版本命令");
+    }
+    return versionId;
+  }
+
+  private void requireLatestExecutionSettled(long taskId) {
+    SyncExecution settled = store.latestExecution(taskId).orElse(null);
+    if (settled != null && settled.activeOrUncertain()) {
+      throw new IllegalStateException("Execution 仍在停止中，请稍后使用相同 Idempotency-Key 重试");
+    }
+  }
+
   private DeploymentRow requireCurrentExecutionRow(long taskId, long executionId) {
     DeploymentRow latest =
         store.latestDeployment(taskId)
@@ -571,7 +715,8 @@ public class RealtimeJobService {
     return latest;
   }
 
-  private void waitForRuntimeStop(ComputeEnvironmentSnapshot runtimeEnvironment, String jobId) {
+  private void waitForRuntimeStop(
+      ComputeEnvironmentSnapshot runtimeEnvironment, String jobId) {
     for (int attempt = 0; attempt < 20; attempt++) {
       RuntimeStatus status = gateway.status(runtimeEnvironment, jobId);
       if (status.state() == RuntimeStatus.State.TERMINATED
@@ -591,7 +736,8 @@ public class RealtimeJobService {
     throw new RealtimeEngineException("Flink 任务未在 5 秒内停止，等待后续对账", true, null, null);
   }
 
-  private void markStopped(long definitionId, long deploymentId, String jobId, String message) {
+  private void markStopped(
+      long definitionId, long deploymentId, String jobId, String message) {
     transactions.executeWithoutResult(
         status -> {
           store.lockDefinition(definitionId);
@@ -655,7 +801,8 @@ public class RealtimeJobService {
       throw new IllegalStateException("任务尚无 Execution 记录");
     }
     DefinitionRow definition =
-        store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+        store.definition(id)
+            .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
     return runtimeResolver.deployment(definition, deployment);
   }
 
@@ -696,7 +843,7 @@ public class RealtimeJobService {
 
   private record StartPrepared(
       DefinitionRow task,
-      PublishedDefinitionRow publishedDefinition,
+      PublishedDefinitionRow definitionVersion,
       CdcPipelineSpec spec,
       CompiledPipeline compiled,
       ComputeEnvironmentSnapshot runtimeEnvironment,
@@ -704,5 +851,20 @@ public class RealtimeJobService {
 
   private record StartReservation(long deploymentId, boolean created) {}
 
-  private record StopReservation(DeploymentRow deployment, boolean settled, boolean inProgress) {}
+  private record StopReservation(
+      DeploymentRow deployment, boolean settled, boolean inProgress) {}
+
+  private enum StartIntent {
+    START("START_REQUESTED", "启动"),
+    RESTART_EXECUTION("RESTART_EXECUTION_REQUESTED", "重启当前运行版本"),
+    APPLY_PUBLISHED_VERSION("APPLY_PUBLISHED_VERSION_REQUESTED", "应用已发布版本");
+
+    private final String eventType;
+    private final String messagePrefix;
+
+    StartIntent(String eventType, String messagePrefix) {
+      this.eventType = eventType;
+      this.messagePrefix = messagePrefix;
+    }
+  }
 }

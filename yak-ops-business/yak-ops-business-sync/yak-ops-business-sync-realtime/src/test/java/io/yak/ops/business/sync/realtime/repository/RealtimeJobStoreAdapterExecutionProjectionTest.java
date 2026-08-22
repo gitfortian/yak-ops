@@ -21,6 +21,43 @@ class RealtimeJobStoreAdapterExecutionProjectionTest {
 
   @Test
   void detailProjectionUsesLatestExecutionStateInsteadOfStaleTaskRuntimeProjection() {
+    Fixture fixture = fixture();
+    fixture.task.setDesiredState("RUNNING");
+    fixture.task.setObservedState("UNKNOWN");
+    fixture.task.setLastError("stale task projection error");
+    fixture.execution.setDesiredState("STOPPED");
+    fixture.execution.setObservedState("STOPPED");
+    fixture.execution.setStatus("STOPPED");
+    fixture.execution.setErrorMessage(null);
+
+    RealtimeJobView view = fixture.store.view(7L);
+
+    assertThat(view.desiredState()).isEqualTo("STOPPED");
+    assertThat(view.observedState()).isEqualTo("STOPPED");
+    assertThat(view.lastError()).isNull();
+    assertThat(view.releaseState()).isEqualTo("DRAFT");
+    assertThat(view.latestDeployment().runtimeEnvironment().id()).isEqualTo(3L);
+    assertThat(view.publishedUpdateAvailable()).isFalse();
+  }
+
+  @Test
+  void publishedUpdateAvailableUsesImmutableVersionIdsNotLegacyRevisions() {
+    Fixture fixture = fixture();
+    fixture.task.setPublishedDefinitionVersionId(32L);
+    fixture.task.setPublishedVersion(4);
+    fixture.execution.setDefinitionVersionId(31L);
+    // Deliberately make the legacy revision numbers equal. They must not decide this capability.
+    fixture.execution.setDefinitionVersion(4);
+    fixture.execution.setDesiredState("RUNNING");
+    fixture.execution.setObservedState("RUNNING");
+    fixture.execution.setStatus("RUNNING");
+
+    RealtimeJobView view = fixture.store.view(7L);
+
+    assertThat(view.publishedUpdateAvailable()).isTrue();
+  }
+
+  private Fixture fixture() {
     RealtimeJobDao dao = mock(RealtimeJobDao.class);
     RealtimeJsonCodec json = mock(RealtimeJsonCodec.class);
     RealtimeJobListQuery listQuery = mock(RealtimeJobListQuery.class);
@@ -32,11 +69,11 @@ class RealtimeJobStoreAdapterExecutionProjectionTest {
     task.setJobName("orders-sync");
     task.setRuntimeEnvironmentId(4L);
     task.setReleaseState("DRAFT");
-    task.setDesiredState("RUNNING");
-    task.setObservedState("UNKNOWN");
+    task.setDesiredState("STOPPED");
+    task.setObservedState("STOPPED");
     task.setDefinitionVersion(4);
     task.setPublishedVersion(3);
-    task.setLastError("stale task projection error");
+    task.setPublishedDefinitionVersionId(31L);
     task.setCreateTime(LocalDateTime.now());
     task.setUpdateTime(LocalDateTime.now());
 
@@ -79,13 +116,11 @@ class RealtimeJobStoreAdapterExecutionProjectionTest {
     when(dao.findDefinition(7L)).thenReturn(Optional.of(task));
     when(dao.latestDeployment(7L)).thenReturn(Optional.of(execution));
     when(json.readEnvironmentSnapshot("{}")).thenReturn(runtime);
-
-    RealtimeJobView view = store.view(7L);
-
-    assertThat(view.desiredState()).isEqualTo("STOPPED");
-    assertThat(view.observedState()).isEqualTo("STOPPED");
-    assertThat(view.lastError()).isNull();
-    assertThat(view.releaseState()).isEqualTo("DRAFT");
-    assertThat(view.latestDeployment().runtimeEnvironment().id()).isEqualTo(3L);
+    return new Fixture(store, task, execution);
   }
+
+  private record Fixture(
+      RealtimeJobStoreAdapter store,
+      RealtimeJobDefinitionPO task,
+      RealtimeJobDeploymentPO execution) {}
 }

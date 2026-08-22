@@ -110,16 +110,7 @@ class VersioningRealtimeJobStoreTest {
         new VersioningRealtimeJobStore(
             delegate, versions, new CdcPipelineSpecCompatibilityMapper());
     CdcPipelineSpec snapshotSpec = spec("fixed-delay");
-    StoredVersion stored =
-        new StoredVersion(
-            201L,
-            TASK_ID,
-            3,
-            8,
-            "b".repeat(64),
-            SOURCE_DIGEST,
-            DomainMappingState.MAPPED,
-            LocalDateTime.now());
+    StoredVersion stored = storedVersion(201L, TASK_ID, 3, 8);
     when(versions.publishedDefinitionVersionId(TASK_ID)).thenReturn(Optional.of(stored.id()));
     when(versions.find(stored.id()))
         .thenReturn(Optional.of(new PublicationSnapshot(stored, 33L, snapshotSpec)));
@@ -136,22 +127,47 @@ class VersioningRealtimeJobStoreTest {
   }
 
   @Test
+  void resolvesHistoricalVersionWithoutConsultingCurrentPublishedReference() {
+    RealtimeJobStoreAdapter delegate = mock(RealtimeJobStoreAdapter.class);
+    DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
+    VersioningRealtimeJobStore store =
+        new VersioningRealtimeJobStore(
+            delegate, versions, new CdcPipelineSpecCompatibilityMapper());
+    StoredVersion v3 = storedVersion(203L, TASK_ID, 3, 8);
+    CdcPipelineSpec snapshotSpec = spec("fixed-delay");
+    when(versions.find(v3.id()))
+        .thenReturn(Optional.of(new PublicationSnapshot(v3, 33L, snapshotSpec)));
+
+    PublishedDefinitionRow historical = store.definitionVersion(TASK_ID, v3.id()).orElseThrow();
+
+    assertThat(historical.id()).isEqualTo(v3.id());
+    assertThat(historical.versionNo()).isEqualTo(3);
+    assertThat(historical.spec()).isEqualTo(snapshotSpec);
+  }
+
+  @Test
+  void brokenPublishedReferenceIsReportedInsteadOfPretendingTaskIsUnpublished() {
+    RealtimeJobStoreAdapter delegate = mock(RealtimeJobStoreAdapter.class);
+    DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
+    VersioningRealtimeJobStore store =
+        new VersioningRealtimeJobStore(
+            delegate, versions, new CdcPipelineSpecCompatibilityMapper());
+    when(versions.publishedDefinitionVersionId(TASK_ID)).thenReturn(Optional.of(999L));
+    when(versions.find(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> store.publishedDefinition(TASK_ID))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("引用的 Published DefinitionVersion 不存在");
+  }
+
+  @Test
   void rejectsPublishedVersionThatBelongsToAnotherTask() {
     RealtimeJobStoreAdapter delegate = mock(RealtimeJobStoreAdapter.class);
     DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
     VersioningRealtimeJobStore store =
         new VersioningRealtimeJobStore(
             delegate, versions, new CdcPipelineSpecCompatibilityMapper());
-    StoredVersion foreign =
-        new StoredVersion(
-            301L,
-            99L,
-            1,
-            1,
-            "b".repeat(64),
-            SOURCE_DIGEST,
-            DomainMappingState.MAPPED,
-            LocalDateTime.now());
+    StoredVersion foreign = storedVersion(301L, 99L, 1, 1);
     when(versions.publishedDefinitionVersionId(TASK_ID)).thenReturn(Optional.of(foreign.id()));
     when(versions.find(foreign.id()))
         .thenReturn(Optional.of(new PublicationSnapshot(foreign, 3L, spec("fixed-delay"))));
@@ -173,6 +189,19 @@ class VersioningRealtimeJobStoreTest {
 
     assertThat(store.reconcileCandidates()).containsExactly(execution);
     verify(delegate).reconcileCandidates();
+  }
+
+  private StoredVersion storedVersion(
+      long id, long taskId, int versionNo, int sourceDraftRevision) {
+    return new StoredVersion(
+        id,
+        taskId,
+        versionNo,
+        sourceDraftRevision,
+        "b".repeat(64),
+        SOURCE_DIGEST,
+        DomainMappingState.MAPPED,
+        LocalDateTime.now());
   }
 
   private DefinitionRow definitionRow(CdcPipelineSpec spec) {

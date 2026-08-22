@@ -35,7 +35,7 @@ public final class RealtimeViews {
       long id, String name, String description, PipelineSpec spec, long runtimeEnvironmentId,
       String releaseState, String desiredState, String observedState, int definitionVersion,
       Integer publishedVersion, String configDigest, String lastError, LocalDateTime createTime,
-      LocalDateTime updateTime, Deployment latestDeployment) {}
+      LocalDateTime updateTime, boolean publishedUpdateAvailable, Deployment latestDeployment) {}
 
   public record Page(List<Job> records, long total, int pageNo, int pageSize) {}
   public record Event(long id, Long deploymentId, String eventType, String fromState, String toState, String message, LocalDateTime createTime) {}

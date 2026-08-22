@@ -18,7 +18,44 @@ public record RealtimeJobView(
     String lastError,
     LocalDateTime createTime,
     LocalDateTime updateTime,
+    boolean publishedUpdateAvailable,
     Deployment latestDeployment) {
+
+  /** Compatibility constructor for callers created before Wave 5 added the derived capability. */
+  public RealtimeJobView(
+      long id,
+      String name,
+      String description,
+      CdcPipelineSpec spec,
+      long runtimeEnvironmentId,
+      String releaseState,
+      String desiredState,
+      String observedState,
+      int definitionVersion,
+      Integer publishedVersion,
+      String configDigest,
+      String lastError,
+      LocalDateTime createTime,
+      LocalDateTime updateTime,
+      Deployment latestDeployment) {
+    this(
+        id,
+        name,
+        description,
+        spec,
+        runtimeEnvironmentId,
+        releaseState,
+        desiredState,
+        observedState,
+        definitionVersion,
+        publishedVersion,
+        configDigest,
+        lastError,
+        createTime,
+        updateTime,
+        false,
+        latestDeployment);
+  }
 
   public record Deployment(
       long id,

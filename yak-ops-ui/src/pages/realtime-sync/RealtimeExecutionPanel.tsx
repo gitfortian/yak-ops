@@ -10,9 +10,10 @@ import { Alert, Button, Card, ConfigProvider, Descriptions, Space, Steps, Tag, m
 import { useEffect, useMemo, useState } from 'react';
 import { BRAND_THEME } from '@/styles/brand';
 import { realtimeApi } from './api';
+import type { RealtimeAction } from './api';
 import type { RealtimeJob, RuntimeCapabilities } from './types';
 
-type ExecutionAction = 'validate' | 'publish' | 'start' | 'stop' | 'reconcile';
+type ExecutionAction = Exclude<RealtimeAction, 'restart'>;
 
 const stateLabel: Record<string, string> = {
   STOPPED: '已停止',
@@ -23,6 +24,11 @@ const stateLabel: Record<string, string> = {
   UNKNOWN: '未知',
   CONFLICT: '冲突',
 };
+
+const isExecutionStartingAction = (action: ExecutionAction) =>
+  action === 'start' ||
+  action === 'restart-execution' ||
+  action === 'apply-published-version';
 
 export default function RealtimeExecutionPanel({
   job,
@@ -90,14 +96,22 @@ export default function RealtimeExecutionPanel({
             ? '当前草稿已发布；正在运行的 SyncExecution 继续使用启动时的 DefinitionVersion'
             : '当前定义版本已发布',
         );
-      } else if (action === 'start') {
+      } else if (isExecutionStartingAction(action)) {
         const refreshed = await waitForStartResult();
         if (refreshed.observedState === 'RUNNING') {
-          message.success('实时同步任务已启动');
+          if (action === 'restart-execution') {
+            message.success('已按当前 DefinitionVersion 创建新的 SyncExecution');
+          } else if (action === 'apply-published-version') {
+            message.success('已显式应用命令开始时固定的 Published DefinitionVersion');
+          } else {
+            message.success('实时同步任务已启动');
+          }
         } else if (refreshed.observedState === 'STARTING') {
           message.warning('Flink 任务仍在启动，可返回列表继续观察状态');
         } else {
-          message.warning(`Flink 启动结果：${stateLabel[refreshed.observedState] || refreshed.observedState}`);
+          message.warning(
+            `Flink 执行结果：${stateLabel[refreshed.observedState] || refreshed.observedState}`,
+          );
         }
       } else if (action === 'stop') {
         await refreshJob();
@@ -123,6 +137,7 @@ export default function RealtimeExecutionPanel({
     current.releaseState === 'PUBLISHED' && current.publishedVersion === current.definitionVersion;
   const hasUnpublishedChanges = hasPublishedVersion && !currentDraftPublished;
   const running = current.desiredState === 'RUNNING';
+  const stableRunning = running && current.observedState === 'RUNNING';
   const startable =
     hasPublishedVersion &&
     current.desiredState === 'STOPPED' &&
@@ -161,7 +176,9 @@ export default function RealtimeExecutionPanel({
       {
         title: '运行实例',
         description: running
-          ? `${stateLabel[current.observedState] || current.observedState} · 固定启动时 DefinitionVersion`
+          ? current.publishedUpdateAvailable
+            ? `${stateLabel[current.observedState] || current.observedState} · 有已发布更新可显式应用`
+            : `${stateLabel[current.observedState] || current.observedState} · 固定启动时 DefinitionVersion`
           : hasUnpublishedChanges
             ? `下一次启动使用已发布 v${current.publishedVersion}`
             : '等待启动',
@@ -172,7 +189,14 @@ export default function RealtimeExecutionPanel({
             : ('wait' as const),
       },
     ],
-    [current, currentDraftPublished, hasPublishedVersion, hasUnpublishedChanges, running, validated],
+    [
+      current,
+      currentDraftPublished,
+      hasPublishedVersion,
+      hasUnpublishedChanges,
+      running,
+      validated,
+    ],
   );
 
   return (
@@ -183,7 +207,7 @@ export default function RealtimeExecutionPanel({
             <div>
               <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--yak-brand-color)]">
                 <CheckCircleOutlined />
-                配置已保存 · 定义与运行解耦
+                配置已保存 · 版本与运行显式解耦
               </div>
               <h1 className="mb-0 mt-1 text-[20px] font-semibold text-[#101828]">{current.name}</h1>
               <div className="mt-1 text-[12px] text-[#98a2b3]">
@@ -233,13 +257,13 @@ export default function RealtimeExecutionPanel({
             />
           )}
 
-          {running && currentDraftPublished && (
+          {current.publishedUpdateAvailable && (
             <Alert
               className="mb-5"
               type="warning"
               showIcon
-              message="发布不会热更新当前 SyncExecution"
-              description="Wave 4 的 Restart 也不会隐式升级版本：后端会用 immutable DefinitionVersionId 校验运行版本与最新 Published Ref；若不同会在停止前拒绝。Wave 5 会把 RestartExecution 与 ApplyPublishedVersion 正式拆成两个命令。"
+              message="存在新的 Published DefinitionVersion"
+              description="“重启当前版本”会保持当前运行版本；“应用已发布版本”才会停止当前 Execution，并显式创建使用新 Published DefinitionVersion 的 Execution。两个命令不会互相替代。"
             />
           )}
 
@@ -308,19 +332,41 @@ export default function RealtimeExecutionPanel({
                         <PlayCircleOutlined /> 3. 运行实例
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        新 Start 只读取不可变 Published DefinitionVersion；已有运行实例始终保持自己的启动快照。
+                        重启固定当前 DefinitionVersion；应用已发布版本是独立的显式升级命令。两个命令都会先预检目标版本，再停止当前稳定运行实例。
                       </div>
                     </div>
                     {running ? (
-                      <Button
-                        danger
-                        icon={<StopOutlined />}
-                        loading={acting === 'stop'}
-                        disabled={Boolean(acting)}
-                        onClick={() => void run('stop')}
-                      >
-                        停止任务
-                      </Button>
+                      <Space wrap>
+                        <Button
+                          danger
+                          icon={<StopOutlined />}
+                          loading={acting === 'stop'}
+                          disabled={Boolean(acting)}
+                          onClick={() => void run('stop')}
+                        >
+                          停止任务
+                        </Button>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          loading={acting === 'restart-execution'}
+                          disabled={Boolean(acting) || !stableRunning}
+                          onClick={() => void run('restart-execution')}
+                        >
+                          重启当前版本
+                        </Button>
+                        {current.publishedUpdateAvailable && (
+                          <Button
+                            type="primary"
+                            danger
+                            icon={<PlayCircleOutlined />}
+                            loading={acting === 'apply-published-version'}
+                            disabled={Boolean(acting) || !stableRunning}
+                            onClick={() => void run('apply-published-version')}
+                          >
+                            应用已发布版本
+                          </Button>
+                        )}
+                      </Space>
                     ) : (
                       <Button
                         type="primary"
@@ -349,6 +395,9 @@ export default function RealtimeExecutionPanel({
                   </Descriptions.Item>
                   <Descriptions.Item label="当前运行定义">
                     {running ? '启动时 DefinitionVersion 快照（保持不变）' : '无活动运行'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="已发布更新">
+                    {current.publishedUpdateAvailable ? '有，可显式应用' : '无'}
                   </Descriptions.Item>
                   <Descriptions.Item label="运行状态">
                     <Tag>{stateLabel[current.observedState] || current.observedState}</Tag>
