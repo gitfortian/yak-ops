@@ -1,6 +1,7 @@
 package io.yak.ops.business.sync.realtime.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -10,10 +11,13 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.DomainMappingState;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationCandidate;
+import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationSnapshot;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.StoredVersion;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
+import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -95,6 +99,65 @@ class VersioningRealtimeJobStoreTest {
         .isEqualTo(DomainMappingState.LEGACY_UNMAPPED);
     assertThat(candidate.getValue().domainDefinition()).isNull();
     assertThat(candidate.getValue().definitionDigest()).isNull();
+  }
+
+  @Test
+  void resolvesPublishedDefinitionThroughTaskReference() {
+    RealtimeJobStoreAdapter delegate = mock(RealtimeJobStoreAdapter.class);
+    DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
+    VersioningRealtimeJobStore store =
+        new VersioningRealtimeJobStore(
+            delegate, versions, new CdcPipelineSpecCompatibilityMapper());
+    CdcPipelineSpec snapshotSpec = spec("fixed-delay");
+    StoredVersion stored =
+        new StoredVersion(
+            201L,
+            TASK_ID,
+            3,
+            8,
+            "b".repeat(64),
+            SOURCE_DIGEST,
+            DomainMappingState.MAPPED,
+            LocalDateTime.now());
+    when(versions.publishedDefinitionVersionId(TASK_ID)).thenReturn(Optional.of(stored.id()));
+    when(versions.find(stored.id()))
+        .thenReturn(Optional.of(new PublicationSnapshot(stored, 33L, snapshotSpec)));
+
+    PublishedDefinitionRow published = store.publishedDefinition(TASK_ID).orElseThrow();
+
+    assertThat(published.id()).isEqualTo(stored.id());
+    assertThat(published.taskId()).isEqualTo(TASK_ID);
+    assertThat(published.versionNo()).isEqualTo(3);
+    assertThat(published.sourceDraftRevision()).isEqualTo(8);
+    assertThat(published.spec()).isEqualTo(snapshotSpec);
+    assertThat(published.runtimeEnvironmentId()).isEqualTo(33L);
+    assertThat(published.sourceConfigDigest()).isEqualTo(SOURCE_DIGEST);
+  }
+
+  @Test
+  void rejectsPublishedVersionThatBelongsToAnotherTask() {
+    RealtimeJobStoreAdapter delegate = mock(RealtimeJobStoreAdapter.class);
+    DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
+    VersioningRealtimeJobStore store =
+        new VersioningRealtimeJobStore(
+            delegate, versions, new CdcPipelineSpecCompatibilityMapper());
+    StoredVersion foreign =
+        new StoredVersion(
+            301L,
+            99L,
+            1,
+            1,
+            "b".repeat(64),
+            SOURCE_DIGEST,
+            DomainMappingState.MAPPED,
+            LocalDateTime.now());
+    when(versions.publishedDefinitionVersionId(TASK_ID)).thenReturn(Optional.of(foreign.id()));
+    when(versions.find(foreign.id()))
+        .thenReturn(Optional.of(new PublicationSnapshot(foreign, 3L, spec("fixed-delay"))));
+
+    assertThatThrownBy(() -> store.publishedDefinition(TASK_ID))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("不属于当前实时同步任务");
   }
 
   private DefinitionRow definitionRow(CdcPipelineSpec spec) {

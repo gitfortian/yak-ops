@@ -17,6 +17,8 @@ public interface RealtimeJobDao {
   Optional<RealtimeJobDeploymentPO> latestDeployment(long definitionId);
   Optional<RealtimeJobDeploymentPO> findDeployment(long deploymentId);
   long insertDeployment(RealtimeJobDeploymentPO deployment);
+  void bindDeploymentDefinitionVersion(
+      long deploymentId, long definitionVersionId, int sourceDraftRevision);
   int markStarting(long definitionId);
   int markDeploymentRunning(long definitionId, long deploymentId, String engineJobId, String runtimeRevision);
   void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision);

@@ -14,6 +14,7 @@ import io.yak.ops.business.sync.realtime.domain.SyncDefinition;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinitionDigestCalculator;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.DomainMappingState;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationCandidate;
+import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationSnapshot;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.StoredVersion;
 import java.util.List;
 import java.util.Objects;
@@ -102,6 +103,34 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
   }
 
   @Override
+  public Optional<PublishedDefinitionRow> publishedDefinition(long definitionId) {
+    Optional<Long> ref = definitionVersions.publishedDefinitionVersionId(definitionId);
+    if (ref.isEmpty()) return Optional.empty();
+
+    PublicationSnapshot snapshot =
+        definitionVersions
+            .find(ref.get())
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "实时同步任务引用的 Published DefinitionVersion 不存在：" + ref.get()));
+    StoredVersion version = snapshot.version();
+    if (version.taskId() != definitionId) {
+      throw new IllegalStateException("Published DefinitionVersion 不属于当前实时同步任务");
+    }
+    return Optional.of(
+        new PublishedDefinitionRow(
+            version.id(),
+            version.taskId(),
+            version.versionNo(),
+            version.sourceDraftRevision(),
+            snapshot.compatibilityDefinition(),
+            snapshot.runtimeEnvironmentId(),
+            version.sourceConfigDigest(),
+            version.definitionDigest()));
+  }
+
+  @Override
   public long insertDefinition(
       String name,
       String description,
@@ -162,6 +191,13 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
       String idempotencyKey) {
     return delegate.insertDeployment(
         definition, spec, summary, digest, environment, idempotencyKey);
+  }
+
+  @Override
+  public void bindDeploymentDefinitionVersion(
+      long deploymentId, long definitionVersionId, int sourceDraftRevision) {
+    delegate.bindDeploymentDefinitionVersion(
+        deploymentId, definitionVersionId, sourceDraftRevision);
   }
 
   @Override

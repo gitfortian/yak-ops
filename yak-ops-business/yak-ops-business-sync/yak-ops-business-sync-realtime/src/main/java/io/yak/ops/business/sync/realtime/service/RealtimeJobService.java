@@ -20,6 +20,7 @@ import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
+import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -161,20 +162,21 @@ public class RealtimeJobService {
     ReentrantLock lock = lifecycleLock(id);
     lock.lock();
     try {
-      return startLocked(id, requestedKey);
+      return startLocked(id, requestedKey, null);
     } finally {
       lock.unlock();
     }
   }
 
-  private RealtimeJobView.Deployment startLocked(long id, String requestedKey) {
+  private RealtimeJobView.Deployment startLocked(
+      long id, String requestedKey, Long expectedPublishedDefinitionVersionId) {
     String key = normalizeKey(requestedKey);
     DeploymentRow existing = idempotentDeployment(id, key);
     if (existing != null) {
       return store.deploymentView(existing);
     }
 
-    Prepared prepared = prepare(id, true);
+    StartPrepared prepared = preparePublished(id, expectedPublishedDefinitionVersionId);
     gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
 
     StartReservation reservation;
@@ -191,8 +193,8 @@ public class RealtimeJobService {
                   return new StartReservation(duplicate.id(), false);
                 }
 
-                requirePublished(locked);
-                requirePreparedDefinitionCurrent(prepared, locked);
+                PublishedDefinitionRow currentPublished = requirePublishedDefinition(id);
+                requirePreparedPublishedCurrent(prepared, currentPublished);
                 stateMachine.requireStartable(locked.desiredState(), locked.observedState());
                 stateMachine.requireTransition(locked.observedState(), "STARTING");
                 long created =
@@ -203,6 +205,10 @@ public class RealtimeJobService {
                         digest(prepared.compiled().yaml()),
                         prepared.runtimeEnvironment(),
                         key);
+                store.bindDeploymentDefinitionVersion(
+                    created,
+                    prepared.publishedDefinition().id(),
+                    prepared.publishedDefinition().sourceDraftRevision());
                 store.markStarting(id);
                 store.event(
                     id,
@@ -210,7 +216,9 @@ public class RealtimeJobService {
                     "START_REQUESTED",
                     locked.observedState(),
                     "STARTING",
-                    "开始通过运行环境「"
+                    "开始使用已发布版本 v"
+                        + prepared.publishedDefinition().versionNo()
+                        + "，通过运行环境「"
                         + prepared.runtimeEnvironment().name()
                         + "」提交 Flink CDC 任务");
                 return new StartReservation(created, true);
@@ -255,7 +263,7 @@ public class RealtimeJobService {
   private RealtimeJobView.Deployment completeStart(
       long id,
       long deploymentId,
-      Prepared prepared,
+      StartPrepared prepared,
       RealtimeEngineGateway.DeployResult result) {
     Boolean cancelAfterSubmit =
         transactions.execute(
@@ -420,6 +428,7 @@ public class RealtimeJobService {
         return store.deploymentView(existing);
       }
 
+      PublishedDefinitionRow restartPublished = requirePublishedDefinition(id);
       stopLocked(id);
       DefinitionRow current =
           store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
@@ -428,7 +437,7 @@ public class RealtimeJobService {
               || "FAILED".equals(current.observedState()))) {
         throw new IllegalStateException("任务仍在停止中，请稍后使用相同 Idempotency-Key 重试重启");
       }
-      return startLocked(id, key);
+      return startLocked(id, key, restartPublished.id());
     } finally {
       lock.unlock();
     }
@@ -456,7 +465,7 @@ public class RealtimeJobService {
     DefinitionRow definition =
         store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
     if (requirePublished) {
-      requirePublished(definition);
+      throw new IllegalArgumentException("内部调用错误：Start 必须通过 immutable Published Definition 准备");
     }
     CdcPipelineSpec spec = store.spec(definition);
     specValidator.validate(spec);
@@ -472,11 +481,46 @@ public class RealtimeJobService {
         manifest);
   }
 
-  private void requirePublished(DefinitionRow definition) {
-    if (!"PUBLISHED".equals(definition.releaseState())
-        || definition.publishedVersion() == null
-        || definition.publishedVersion() != definition.definitionVersion()) {
-      throw new IllegalStateException("请先发布当前定义版本");
+  private StartPrepared preparePublished(
+      long id, Long expectedPublishedDefinitionVersionId) {
+    DefinitionRow task =
+        store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+    PublishedDefinitionRow published = requirePublishedDefinition(id);
+    if (expectedPublishedDefinitionVersionId != null
+        && published.id() != expectedPublishedDefinitionVersionId) {
+      throw new IllegalStateException("重启期间已发布版本发生变化，请刷新后重新操作");
+    }
+
+    CdcPipelineSpec spec = published.spec();
+    specValidator.validate(spec);
+    ComputeEnvironmentSnapshot runtimeEnvironment =
+        runtimeResolver.environment(published.runtimeEnvironmentId(), true);
+    ResolvedCdcPipeline resolved = dataSourceResolver.resolve(spec);
+    JsonNode manifest = gateway.capabilities(runtimeEnvironment);
+    capabilityResolver.requireSupported(manifest, resolved, spec);
+    return new StartPrepared(
+        task,
+        published,
+        spec,
+        compiler.compile(task.name(), spec, resolved),
+        runtimeEnvironment,
+        manifest);
+  }
+
+  private PublishedDefinitionRow requirePublishedDefinition(long id) {
+    return store
+        .publishedDefinition(id)
+        .orElseThrow(() -> new IllegalStateException("请先发布至少一个可运行的定义版本"));
+  }
+
+  private void requirePreparedPublishedCurrent(
+      StartPrepared prepared, PublishedDefinitionRow currentPublished) {
+    PublishedDefinitionRow snapshot = prepared.publishedDefinition();
+    if (snapshot.id() != currentPublished.id()
+        || snapshot.taskId() != currentPublished.taskId()
+        || snapshot.sourceDraftRevision() != currentPublished.sourceDraftRevision()
+        || !Objects.equals(snapshot.sourceConfigDigest(), currentPublished.sourceConfigDigest())) {
+      throw new IllegalStateException("已发布定义在校验期间已变化，请刷新后重试");
     }
   }
 
@@ -557,7 +601,7 @@ public class RealtimeJobService {
     return key;
   }
 
-  private RealtimeEngineGateway.DeployResult deploy(Prepared prepared, String key) {
+  private RealtimeEngineGateway.DeployResult deploy(StartPrepared prepared, String key) {
     RealtimeDeployRequest.CredentialBinding[] credentials =
         dataSourceResolver.resolveCredentials(prepared.spec());
     try (RealtimeDeployRequest request =
@@ -606,6 +650,14 @@ public class RealtimeJobService {
 
   private record Prepared(
       DefinitionRow definition,
+      CdcPipelineSpec spec,
+      CompiledPipeline compiled,
+      ComputeEnvironmentSnapshot runtimeEnvironment,
+      JsonNode manifest) {}
+
+  private record StartPrepared(
+      DefinitionRow task,
+      PublishedDefinitionRow publishedDefinition,
       CdcPipelineSpec spec,
       CompiledPipeline compiled,
       ComputeEnvironmentSnapshot runtimeEnvironment,

@@ -534,15 +534,20 @@ export default function RealtimeSync() {
       render: (_, job) => {
         const running = job.desiredState === 'RUNNING';
         const environment = boundEnvironment(job);
-        const environmentDisabled = environment?.enabled === false;
-        const startDisabled = job.releaseState !== 'PUBLISHED' || running || environmentDisabled;
+        const hasPublishedVersion = job.publishedVersion != null;
+        const currentDraftIsPublished =
+          job.releaseState === 'PUBLISHED' && job.publishedVersion === job.definitionVersion;
+        const environmentDisabled = currentDraftIsPublished && environment?.enabled === false;
+        const startDisabled = !hasPublishedVersion || running || environmentDisabled;
         const startTooltip = environmentDisabled
-          ? `运行环境“${environment?.name}”已停用，请先编辑任务切换环境`
-          : job.releaseState !== 'PUBLISHED'
-            ? '请先发布当前任务版本'
+          ? `运行环境“${environment?.name}”已停用，请先编辑任务切换环境并重新发布`
+          : !hasPublishedVersion
+            ? '请先发布至少一个任务版本'
             : running
               ? '任务已处于运行期望状态'
-              : undefined;
+              : !currentDraftIsPublished
+                ? `当前草稿尚未发布，将启动已发布版本 v${job.publishedVersion}`
+                : undefined;
 
         return (
           <div className="flex min-h-7 items-center gap-0.5 whitespace-nowrap">

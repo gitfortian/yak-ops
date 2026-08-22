@@ -22,12 +22,19 @@ public interface RealtimeJobStore {
   }
   DefinitionRow lockDefinition(long id);
   RealtimeJobPage page(int pageNo, int pageSize, String keyword);
+  default Optional<PublishedDefinitionRow> publishedDefinition(long definitionId) {
+    return Optional.empty();
+  }
   Optional<DeploymentRow> deploymentByIdempotencyKey(String key);
   Optional<DeploymentRow> latestDeployment(long definitionId);
   default Optional<ComputeEnvironmentSnapshot> deploymentEnvironment(long deploymentId) {
     return Optional.empty();
   }
   long insertDeployment(DefinitionRow definition, CdcPipelineSpec spec, String summary, String digest, ComputeEnvironmentSnapshot environment, String idempotencyKey);
+  default void bindDeploymentDefinitionVersion(
+      long deploymentId, long definitionVersionId, int sourceDraftRevision) {
+    throw new UnsupportedOperationException("当前 RealtimeJobStore 不支持 DefinitionVersion 绑定");
+  }
   void markStarting(long definitionId);
   void markDeploymentRunning(long definitionId, long deploymentId, String engineJobId, String runtimeRevision);
   void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision);
@@ -44,6 +51,29 @@ public interface RealtimeJobStore {
   RealtimeJobView view(long id);
   default CdcPipelineSpec spec(DefinitionRow definition) { return definition.spec(); }
   RealtimeJobView.Deployment deploymentView(DeploymentRow deployment);
+
+  record PublishedDefinitionRow(
+      long id,
+      long taskId,
+      int versionNo,
+      int sourceDraftRevision,
+      CdcPipelineSpec spec,
+      long runtimeEnvironmentId,
+      String sourceConfigDigest,
+      String definitionDigest) {
+    public PublishedDefinitionRow {
+      if (id <= 0) throw new IllegalArgumentException("DefinitionVersionId 必须大于 0");
+      if (taskId <= 0) throw new IllegalArgumentException("TaskId 必须大于 0");
+      if (versionNo <= 0) throw new IllegalArgumentException("Published versionNo 必须大于 0");
+      if (sourceDraftRevision <= 0) {
+        throw new IllegalArgumentException("Published sourceDraftRevision 必须大于 0");
+      }
+      if (spec == null) throw new IllegalArgumentException("Published definition snapshot 不能为空");
+      if (runtimeEnvironmentId <= 0) {
+        throw new IllegalArgumentException("Published RuntimeEnvironmentRef 必须大于 0");
+      }
+    }
+  }
 
   record DefinitionRow(
       long id,
@@ -64,6 +94,7 @@ public interface RealtimeJobStore {
   record DeploymentRow(
       long id,
       long definitionId,
+      Long definitionVersionId,
       int definitionVersion,
       CdcPipelineSpec specSnapshot,
       String specSummary,
@@ -76,5 +107,42 @@ public interface RealtimeJobStore {
       boolean resultUncertain,
       String errorMessage,
       LocalDateTime createTime,
-      LocalDateTime updateTime) {}
+      LocalDateTime updateTime) {
+
+    /** Compatibility constructor for tests/callers created before Wave 2 added the immutable ref. */
+    public DeploymentRow(
+        long id,
+        long definitionId,
+        int definitionVersion,
+        CdcPipelineSpec specSnapshot,
+        String specSummary,
+        String configDigest,
+        String idempotencyKey,
+        String engineJobId,
+        String runtimeRevision,
+        ComputeEnvironmentSnapshot runtimeEnvironment,
+        String status,
+        boolean resultUncertain,
+        String errorMessage,
+        LocalDateTime createTime,
+        LocalDateTime updateTime) {
+      this(
+          id,
+          definitionId,
+          null,
+          definitionVersion,
+          specSnapshot,
+          specSummary,
+          configDigest,
+          idempotencyKey,
+          engineJobId,
+          runtimeRevision,
+          runtimeEnvironment,
+          status,
+          resultUncertain,
+          errorMessage,
+          createTime,
+          updateTime);
+    }
+  }
 }
