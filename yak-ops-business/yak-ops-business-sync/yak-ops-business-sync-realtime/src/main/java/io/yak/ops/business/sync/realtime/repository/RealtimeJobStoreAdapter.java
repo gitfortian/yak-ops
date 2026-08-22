@@ -63,6 +63,7 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
   @Override public Optional<DefinitionRow> definition(long id) { return dao.findDefinition(id).map(this::definitionRow); }
   @Override public DefinitionRow lockDefinition(long id) { return dao.lockDefinition(id).map(this::definitionRow).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id)); }
   @Override public RealtimeJobPage page(int pageNo, int pageSize, String keyword) { return listQuery.page(pageNo, pageSize, keyword, null, null, null); }
+  @Override public Optional<PublishedDefinitionRow> publishedDefinition(long definitionId) { return Optional.empty(); }
   @Override public Optional<DeploymentRow> deploymentByIdempotencyKey(String key) { return dao.deploymentByIdempotencyKey(key).map(this::deploymentRow); }
   @Override public Optional<DeploymentRow> latestDeployment(long definitionId) { return dao.latestDeployment(definitionId).map(this::deploymentRow); }
 
@@ -93,6 +94,12 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
     po.setStatus("SUBMITTING");
     po.setResultUncertain(false);
     return dao.insertDeployment(po);
+  }
+
+  @Override
+  public void bindDeploymentDefinitionVersion(
+      long deploymentId, long definitionVersionId, int sourceDraftRevision) {
+    dao.bindDeploymentDefinitionVersion(deploymentId, definitionVersionId, sourceDraftRevision);
   }
 
   @Override public void markStarting(long definitionId) { if (dao.markStarting(definitionId) != 1) throw new IllegalStateException("任务已被其他启动或停止请求抢占，请刷新后重试"); }
@@ -157,7 +164,8 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
 
   private DeploymentRow deploymentRow(RealtimeJobDeploymentPO po) {
     return new DeploymentRow(
-        po.getId(), po.getDefinitionId(), po.getDefinitionVersion() == null ? 0 : po.getDefinitionVersion(),
+        po.getId(), po.getDefinitionId(), po.getDefinitionVersionId(),
+        po.getDefinitionVersion() == null ? 0 : po.getDefinitionVersion(),
         json.readSpec(po.getSpecSnapshotJson()), po.getSpecSummary(), po.getConfigDigest(), po.getIdempotencyKey(),
         po.getGatewayJobId(), po.getRuntimeRevision(), json.readEnvironmentSnapshot(po.getRuntimeEnvironmentSnapshotJson()),
         po.getStatus(), Boolean.TRUE.equals(po.getResultUncertain()), po.getErrorMessage(), po.getCreateTime(), po.getUpdateTime());

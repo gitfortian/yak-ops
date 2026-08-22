@@ -45,7 +45,7 @@ export default function RealtimeExecutionPanel({
   useEffect(() => {
     let cancelled = false;
     realtimeApi
-      .capabilities(job.runtimeEnvironmentId)
+      .capabilities(current.runtimeEnvironmentId)
       .then((response) => {
         if (!cancelled) setCapabilities(response.data || {});
       })
@@ -55,7 +55,7 @@ export default function RealtimeExecutionPanel({
     return () => {
       cancelled = true;
     };
-  }, [job.runtimeEnvironmentId]);
+  }, [current.runtimeEnvironmentId]);
 
   const refreshJob = async () => {
     const response = await realtimeApi.detail(current.id);
@@ -116,14 +116,17 @@ export default function RealtimeExecutionPanel({
     }
   };
 
-  const published =
+  const hasPublishedVersion = current.publishedVersion != null;
+  const currentDraftPublished =
     current.releaseState === 'PUBLISHED' && current.publishedVersion === current.definitionVersion;
+  const hasUnpublishedChanges = hasPublishedVersion && !currentDraftPublished;
   const running = current.desiredState === 'RUNNING';
   const startable =
-    published &&
+    hasPublishedVersion &&
     current.desiredState === 'STOPPED' &&
     ['STOPPED', 'FAILED'].includes(current.observedState);
   const runtimeDisabled = capabilities.deployEnabled === false;
+  const blockStartForDisplayedRuntime = currentDraftPublished && runtimeDisabled;
   const runtimeDisabledReason = capabilities.deployDisabledReason || '当前运行环境不可提交任务';
 
   const steps = useMemo(
@@ -136,28 +139,38 @@ export default function RealtimeExecutionPanel({
       {
         title: '运行校验',
         description: 'Flink CDC / Connector',
-        status: validated || published || running ? ('finish' as const) : ('process' as const),
+        status: validated || currentDraftPublished || running ? ('finish' as const) : ('process' as const),
       },
       {
         title: '发布版本',
-        description: published ? `已发布 v${current.publishedVersion}` : '锁定当前定义版本',
-        status: published || running
+        description: currentDraftPublished
+          ? `已发布 v${current.publishedVersion}`
+          : hasPublishedVersion
+            ? `已发布 v${current.publishedVersion} · 当前草稿未发布`
+            : '锁定当前定义版本',
+        status: currentDraftPublished || running
           ? ('finish' as const)
           : validated
             ? ('process' as const)
-            : ('wait' as const),
+            : hasPublishedVersion
+              ? ('finish' as const)
+              : ('wait' as const),
       },
       {
         title: '启动任务',
-        description: running ? stateLabel[current.observedState] || current.observedState : '提交到 Flink CDC',
+        description: running
+          ? stateLabel[current.observedState] || current.observedState
+          : hasUnpublishedChanges
+            ? `将启动已发布 v${current.publishedVersion}`
+            : '提交到 Flink CDC',
         status: current.observedState === 'RUNNING'
           ? ('finish' as const)
-          : published
+          : hasPublishedVersion
             ? ('process' as const)
             : ('wait' as const),
       },
     ],
-    [current, published, running, validated],
+    [current, currentDraftPublished, hasPublishedVersion, hasUnpublishedChanges, running, validated],
   );
 
   return (
@@ -172,7 +185,8 @@ export default function RealtimeExecutionPanel({
               </div>
               <h1 className="mb-0 mt-1 text-[20px] font-semibold text-[#101828]">{current.name}</h1>
               <div className="mt-1 text-[12px] text-[#98a2b3]">
-                任务 ID：{current.id} · 定义版本 v{current.definitionVersion}
+                任务 ID：{current.id} · 当前草稿 v{current.definitionVersion}
+                {hasPublishedVersion ? ` · 已发布 v${current.publishedVersion}` : ''}
               </div>
             </div>
             <Space>
@@ -189,12 +203,22 @@ export default function RealtimeExecutionPanel({
             <Steps responsive items={steps} />
           </Card>
 
-          {runtimeDisabled && (
+          {hasUnpublishedChanges && (
+            <Alert
+              className="mb-5"
+              type="info"
+              showIcon
+              message={`当前草稿 v${current.definitionVersion} 尚未发布`}
+              description={`点击“启动任务”会运行已发布版本 v${current.publishedVersion}；当前草稿及其运行环境配置不会影响这次启动。`}
+            />
+          )}
+
+          {runtimeDisabled && currentDraftPublished && (
             <Alert
               className="mb-5"
               type="warning"
               showIcon
-              message="当前运行环境暂不可提交任务"
+              message="当前已发布版本绑定的运行环境暂不可提交任务"
               description={runtimeDisabledReason}
             />
           )}
@@ -209,7 +233,7 @@ export default function RealtimeExecutionPanel({
                         <SafetyOutlined /> 1. 校验运行环境
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        使用任务绑定的运行环境执行 Flink CDC CLI / REST readiness 和 Connector 校验。
+                        校验当前草稿绑定的运行环境和 Connector；启动时后端会再次按实际 Published Version 独立校验。
                       </div>
                     </div>
                     <Button
@@ -229,16 +253,16 @@ export default function RealtimeExecutionPanel({
                         <CloudServerOutlined /> 2. 发布当前版本
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        发布会再次运行完整校验，并锁定当前 definitionVersion / configDigest。
+                        发布会再次运行完整校验，并创建不可变的 DefinitionVersion。
                       </div>
                     </div>
                     <Button
                       type="primary"
                       loading={acting === 'publish'}
-                      disabled={Boolean(acting) || published || running || !current.spec || runtimeDisabled}
+                      disabled={Boolean(acting) || currentDraftPublished || running || !current.spec || runtimeDisabled}
                       onClick={() => void run('publish')}
                     >
-                      {published ? '已发布' : '发布当前版本'}
+                      {currentDraftPublished ? '已发布' : '发布当前版本'}
                     </Button>
                   </div>
                 </div>
@@ -250,7 +274,7 @@ export default function RealtimeExecutionPanel({
                         <PlayCircleOutlined /> 3. 启动实时任务
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        启动只读取已发布的统一 Spec，由 PipelineYamlCompiler 生成临时 Flink CDC YAML 后通过 LOCAL / SSH 提交。
+                        启动只读取不可变的 Published DefinitionVersion，由 PipelineYamlCompiler 生成临时 Flink CDC YAML 后通过 LOCAL / SSH 提交。
                       </div>
                     </div>
                     {running ? (
@@ -269,10 +293,10 @@ export default function RealtimeExecutionPanel({
                         danger
                         icon={<PlayCircleOutlined />}
                         loading={acting === 'start'}
-                        disabled={Boolean(acting) || !startable || runtimeDisabled}
+                        disabled={Boolean(acting) || !startable || blockStartForDisplayedRuntime}
                         onClick={() => void run('start')}
                       >
-                        启动任务
+                        {hasUnpublishedChanges ? `启动已发布 v${current.publishedVersion}` : '启动任务'}
                       </Button>
                     )}
                   </div>
@@ -283,13 +307,16 @@ export default function RealtimeExecutionPanel({
             <div className="space-y-5">
               <Card title="当前执行状态">
                 <Descriptions size="small" column={1}>
-                  <Descriptions.Item label="发布状态">
-                    <Tag>{current.releaseState}</Tag>
+                  <Descriptions.Item label="当前草稿">
+                    v{current.definitionVersion} · {current.releaseState}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="已发布版本">
+                    {hasPublishedVersion ? `v${current.publishedVersion}` : '未发布'}
                   </Descriptions.Item>
                   <Descriptions.Item label="运行状态">
                     <Tag>{stateLabel[current.observedState] || current.observedState}</Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="运行环境">
+                  <Descriptions.Item label="当前草稿运行环境">
                     {capabilities.runtimeEnvironmentName || `环境 #${current.runtimeEnvironmentId}`}
                   </Descriptions.Item>
                   <Descriptions.Item label="提交方式">
@@ -317,7 +344,7 @@ export default function RealtimeExecutionPanel({
                 type="info"
                 showIcon
                 message="Wizard 与 YAML 共用这一条执行链路"
-                description="编辑方式不会写入任务运行定义。发布和启动只认同一份 CdcPipelineSpec；数据库不保存原生 Flink CDC YAML。"
+                description="编辑方式不会写入任务运行定义。发布形成不可变 DefinitionVersion；启动只读取该版本快照，数据库不保存原生 Flink CDC YAML。"
               />
             </div>
           </div>

@@ -35,6 +35,7 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.Validation
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
+import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +47,7 @@ class RealtimeJobServiceConcurrencyTest {
 
   private static final long JOB_ID = 7L;
   private static final long DEPLOYMENT_ID = 19L;
+  private static final long DEFINITION_VERSION_ID = 31L;
 
   private RealtimeJobStore store;
   private CdcPipelineSpecValidator specValidator;
@@ -101,6 +103,7 @@ class RealtimeJobServiceConcurrencyTest {
     stopped = definition("STOPPED", "STOPPED");
     when(store.spec(any())).thenReturn(spec);
     when(store.runtimeEnvironmentId(JOB_ID)).thenReturn(environment.id());
+    when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.of(published()));
 
     service = new RealtimeJobService(
         store,
@@ -130,6 +133,21 @@ class RealtimeJobServiceConcurrencyTest {
   }
 
   @Test
+  void refusesLegacyPublishedMarkerWithoutImmutablePublishedReference() {
+    when(store.deploymentByIdempotencyKey("no-ref")).thenReturn(Optional.empty());
+    when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
+    when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.start(JOB_ID, "no-ref"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("请先发布至少一个可运行的定义版本");
+
+    verify(compiler, never()).compile(any(), any(), any());
+    verify(store, never()).insertDeployment(any(), any(), any(), any(), any(), any());
+    verify(gateway, never()).deploy(any(), any());
+  }
+
+  @Test
   void cancelsSubmittedJobWhenStopWinsDuringCliSubmission() {
     DefinitionRow stopping = definition("STOPPED", "STOPPING");
     DeploymentRow deployment = deployment("job-123", "STOPPING");
@@ -153,10 +171,52 @@ class RealtimeJobServiceConcurrencyTest {
 
     assertThatCode(() -> service.start(JOB_ID, "restart-safe")).doesNotThrowAnyException();
 
+    verify(store)
+        .bindDeploymentDefinitionVersion(DEPLOYMENT_ID, DEFINITION_VERSION_ID, 1);
     verify(store, never()).markDeploymentRunning(anyLong(), anyLong(), any(), any());
     verify(store).bindDeploymentForStop(DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
     verify(gateway).stop(environment, "job-123");
     verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
+  }
+
+  @Test
+  void restartRefusesToSilentlySwitchPublishedVersion() {
+    PublishedDefinitionRow original = published();
+    PublishedDefinitionRow changed =
+        new PublishedDefinitionRow(
+            DEFINITION_VERSION_ID + 1,
+            JOB_ID,
+            2,
+            2,
+            spec,
+            environment.id(),
+            "c".repeat(64),
+            "d".repeat(64));
+    when(store.deploymentByIdempotencyKey("restart-pin")).thenReturn(Optional.empty());
+    when(store.publishedDefinition(JOB_ID))
+        .thenReturn(Optional.of(original), Optional.of(changed));
+    when(store.lockDefinition(JOB_ID)).thenReturn(stopped);
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.empty());
+    when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
+
+    assertThatThrownBy(() -> service.restart(JOB_ID, "restart-pin"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("重启期间已发布版本发生变化");
+
+    verify(store, never()).insertDeployment(any(), any(), any(), any(), any(), any());
+    verify(gateway, never()).deploy(any(), any());
+  }
+
+  private PublishedDefinitionRow published() {
+    return new PublishedDefinitionRow(
+        DEFINITION_VERSION_ID,
+        JOB_ID,
+        1,
+        1,
+        spec,
+        environment.id(),
+        "a".repeat(64),
+        "b".repeat(64));
   }
 
   private DefinitionRow definition(String desired, String observed) {
@@ -181,6 +241,7 @@ class RealtimeJobServiceConcurrencyTest {
     return new DeploymentRow(
         DEPLOYMENT_ID,
         JOB_ID,
+        DEFINITION_VERSION_ID,
         1,
         spec,
         "test",

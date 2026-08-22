@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS yak_realtime_definition_version (
 CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     id BIGINT NOT NULL AUTO_INCREMENT,
     definition_id BIGINT NOT NULL,
+    definition_version_id BIGINT NULL,
     definition_version INT NOT NULL,
     runtime_environment_id BIGINT NOT NULL,
     runtime_environment_version INT NOT NULL,
@@ -86,6 +87,7 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     UNIQUE KEY uk_realtime_idempotency (idempotency_key),
     UNIQUE KEY uk_realtime_runtime_job_name (runtime_job_name),
     KEY idx_realtime_deployment_definition (definition_id, id),
+    KEY idx_realtime_deployment_definition_version (definition_version_id, id),
     KEY idx_realtime_deployment_environment (runtime_environment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

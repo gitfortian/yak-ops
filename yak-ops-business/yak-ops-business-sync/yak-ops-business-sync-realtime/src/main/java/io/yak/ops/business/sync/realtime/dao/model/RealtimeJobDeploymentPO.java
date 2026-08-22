@@ -12,6 +12,7 @@ public class RealtimeJobDeploymentPO {
   @TableId(type = IdType.AUTO)
   private Long id;
   private Long definitionId;
+  private Long definitionVersionId;
   private Integer definitionVersion;
   private Long runtimeEnvironmentId;
   private Integer runtimeEnvironmentVersion;

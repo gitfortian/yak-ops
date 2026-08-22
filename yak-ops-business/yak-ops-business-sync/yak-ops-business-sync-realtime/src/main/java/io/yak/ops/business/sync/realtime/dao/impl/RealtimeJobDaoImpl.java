@@ -127,6 +127,23 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   }
 
   @Override
+  public void bindDeploymentDefinitionVersion(
+      long deploymentId, long definitionVersionId, int sourceDraftRevision) {
+    int updated =
+        deploymentMapper.update(
+            null,
+            Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
+                .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(RealtimeJobDeploymentPO::getStatus, "SUBMITTING")
+                .isNull(RealtimeJobDeploymentPO::getDefinitionVersionId)
+                .set(RealtimeJobDeploymentPO::getDefinitionVersionId, definitionVersionId)
+                .set(RealtimeJobDeploymentPO::getDefinitionVersion, sourceDraftRevision));
+    if (updated != 1) {
+      throw new IllegalStateException("部署绑定 Published DefinitionVersion 失败：" + deploymentId);
+    }
+  }
+
+  @Override
   public int markStarting(long definitionId) {
     return definitionMapper.update(
         null,
