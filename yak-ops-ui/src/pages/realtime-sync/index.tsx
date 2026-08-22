@@ -15,7 +15,13 @@ import {
   Table,
   Tooltip,
 } from 'antd';
-import { CopyOutlined, FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  CopyOutlined,
+  FilterOutlined,
+  MoreOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,6 +31,7 @@ import JobEditor from './JobEditor';
 import CreateRealtimeTaskDrawer from './CreateRealtimeTaskDrawer';
 import RealtimeRuntimeDetail from './RealtimeRuntimeDetail';
 import type {
+  ComputeEnvironmentOption,
   DataSourceOption,
   RealtimeEvent,
   RealtimeJob,
@@ -112,6 +119,7 @@ export default function RealtimeSync() {
   const [loading, setLoading] = useState(false);
   const [capabilities, setCapabilities] = useState<RuntimeCapabilities>({});
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
+  const [environments, setEnvironments] = useState<ComputeEnvironmentOption[]>([]);
   const [filterDraft, setFilterDraft] = useState<FilterState>(initialFilters);
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -124,6 +132,10 @@ export default function RealtimeSync() {
   const dataSourceMap = useMemo(
     () => new Map(dataSources.map((item) => [String(item.value), item])),
     [dataSources],
+  );
+  const environmentMap = useMemo(
+    () => new Map(environments.map((item) => [item.id, item])),
+    [environments],
   );
 
   const loadJobs = useCallback(async () => {
@@ -148,14 +160,18 @@ export default function RealtimeSync() {
   }, [filters, pageNo, pageSize]);
 
   const loadMetadata = useCallback(async () => {
-    const [caps, sources] = await Promise.allSettled([
+    const [caps, sources, runtimeEnvironments] = await Promise.allSettled([
       realtimeApi.capabilities(),
       realtimeApi.dataSources(),
+      realtimeApi.environments(),
     ]);
     setCapabilities(caps.status === 'fulfilled' ? caps.value.data || {} : {});
     setDataSources(sources.status === 'fulfilled' ? sources.value.data || [] : []);
-    if (caps.status === 'rejected') {
-      message.warning('Flink CDC 当前不可用，任务定义仍可查看');
+    setEnvironments(
+      runtimeEnvironments.status === 'fulfilled' ? runtimeEnvironments.value.data || [] : [],
+    );
+    if (runtimeEnvironments.status === 'rejected') {
+      message.warning('运行环境列表暂不可用，任务状态仍可查看');
     }
   }, []);
 
@@ -333,6 +349,9 @@ export default function RealtimeSync() {
   const sinkType = (job: RealtimeJob) =>
     dataSourceMap.get(String(job.spec?.sinkDataSourceRef))?.dbType || '-';
 
+  const boundEnvironment = (job: RealtimeJob) =>
+    job.runtimeEnvironmentId ? environmentMap.get(job.runtimeEnvironmentId) : undefined;
+
   const deleteJob = (job: RealtimeJob) => {
     Modal.confirm({
       title: '删除实时同步任务',
@@ -367,35 +386,38 @@ export default function RealtimeSync() {
     }
   };
 
-  const moreItems = (job: RealtimeJob): MenuProps['items'] => [
-    { key: 'detail', label: '查看运行详情' },
-    {
-      key: 'validate',
-      label: 'Flink CDC 校验',
-      disabled: job.releaseState === 'PUBLISHED',
-    },
-    {
-      key: 'publish',
-      label: '发布当前版本',
-      disabled: job.releaseState === 'PUBLISHED' || job.desiredState === 'RUNNING',
-    },
-    {
-      key: 'restart',
-      label: '重启任务',
-      disabled: job.desiredState !== 'RUNNING' || !capabilities.deployEnabled,
-    },
-    {
-      key: 'reconcile',
-      label: '立即状态对账',
-      disabled: !['UNKNOWN', 'CONFLICT', 'STARTING', 'STOPPING'].includes(job.observedState),
-    },
-    { type: 'divider' },
-    {
-      key: 'delete',
-      label: <span className="text-[#d92d20]">删除任务</span>,
-      disabled: job.desiredState !== 'STOPPED',
-    },
-  ];
+  const moreItems = (job: RealtimeJob): MenuProps['items'] => {
+    const environment = boundEnvironment(job);
+    return [
+      { key: 'detail', label: '查看运行详情' },
+      {
+        key: 'validate',
+        label: 'Flink CDC 校验',
+        disabled: job.releaseState === 'PUBLISHED',
+      },
+      {
+        key: 'publish',
+        label: '发布当前版本',
+        disabled: job.releaseState === 'PUBLISHED' || job.desiredState === 'RUNNING',
+      },
+      {
+        key: 'restart',
+        label: '重启任务',
+        disabled: job.desiredState !== 'RUNNING' || environment?.enabled === false,
+      },
+      {
+        key: 'reconcile',
+        label: '立即状态对账',
+        disabled: !['UNKNOWN', 'CONFLICT', 'STARTING', 'STOPPING'].includes(job.observedState),
+      },
+      { type: 'divider' },
+      {
+        key: 'delete',
+        label: <span className="text-[#d92d20]">删除任务</span>,
+        disabled: job.desiredState !== 'STOPPED',
+      },
+    ];
+  };
 
   const columns: ColumnsType<RealtimeJob> = [
     {
@@ -456,9 +478,7 @@ export default function RealtimeSync() {
       dataIndex: 'releaseState',
       width: 115,
       align: 'center',
-      render: (value) => (
-        <StateBadge state={value} label={releaseStateLabel[value] || value} />
-      ),
+      render: (value) => <StateBadge state={value} label={releaseStateLabel[value] || value} />,
     },
     {
       title: '运行状态',
@@ -476,17 +496,27 @@ export default function RealtimeSync() {
     {
       title: 'Flink 运行时',
       dataIndex: 'runtime',
-      width: 170,
-      render: (_, job) => (
-        <div className="text-[12px] leading-5 text-[#667085]">
-          <div className="truncate text-[#475467]" title={job.latestDeployment?.runtimeRevision}>
-            {job.latestDeployment?.runtimeRevision || '-'}
+      width: 210,
+      render: (_, job) => {
+        const deploymentEnvironment = job.latestDeployment?.runtimeEnvironment;
+        const definitionEnvironment = boundEnvironment(job);
+        return (
+          <div className="text-[12px] leading-5 text-[#667085]">
+            <div
+              className="truncate font-medium text-[#475467]"
+              title={deploymentEnvironment?.name || definitionEnvironment?.name}
+            >
+              {deploymentEnvironment?.name || definitionEnvironment?.name || `环境 #${job.runtimeEnvironmentId || '-'}`}
+            </div>
+            <div className="truncate text-[11px] text-[#98a2b3]" title={job.latestDeployment?.runtimeRevision}>
+              {job.latestDeployment?.runtimeRevision || '尚未部署'}
+            </div>
+            {job.latestDeployment?.engineJobId && (
+              <div className="truncate text-[10px] text-[#b0b7c3]">Job {job.latestDeployment.engineJobId}</div>
+            )}
           </div>
-          <div className="text-[11px] text-[#98a2b3]">
-            {job.latestDeployment?.engineJobId ? `Job ${job.latestDeployment.engineJobId}` : '尚未部署'}
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: '更新时间',
@@ -503,12 +533,11 @@ export default function RealtimeSync() {
       width: 215,
       render: (_, job) => {
         const running = job.desiredState === 'RUNNING';
-        const startDisabled =
-          !capabilities.deployEnabled ||
-          job.releaseState !== 'PUBLISHED' ||
-          running;
-        const startTooltip = !capabilities.deployEnabled
-          ? capabilities.deployDisabledReason || 'Flink CDC 尚未准备好提交任务'
+        const environment = boundEnvironment(job);
+        const environmentDisabled = environment?.enabled === false;
+        const startDisabled = job.releaseState !== 'PUBLISHED' || running || environmentDisabled;
+        const startTooltip = environmentDisabled
+          ? `运行环境“${environment?.name}”已停用，请先编辑任务切换环境`
           : job.releaseState !== 'PUBLISHED'
             ? '请先发布当前任务版本'
             : running
@@ -727,23 +756,23 @@ export default function RealtimeSync() {
                   placement="bottomLeft"
                   content={
                     <Descriptions size="small" column={1} className="w-[420px]">
+                      <Descriptions.Item label="默认运行环境">
+                        {capabilities.runtimeEnvironmentName || '-'}
+                      </Descriptions.Item>
                       <Descriptions.Item label="提交引擎">{capabilities.runtimeVersion || '-'}</Descriptions.Item>
                       <Descriptions.Item label="Flink">{capabilities.flinkVersion || '-'}</Descriptions.Item>
                       <Descriptions.Item label="Flink CDC">{capabilities.flinkCdcVersion || '-'}</Descriptions.Item>
                       <Descriptions.Item label="REST">{capabilities.restUrl || '-'}</Descriptions.Item>
                       <Descriptions.Item label="语义">{capabilities.deliverySemantics || '-'}</Descriptions.Item>
-                      <Descriptions.Item label="Sources">
-                        {capabilities.connectors?.sources?.join(', ') || '-'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Sinks">
-                        {capabilities.connectors?.sinks?.join(', ') || '-'}
+                      <Descriptions.Item label="说明">
+                        这里只展示默认环境能力；任务启动会按各自绑定的运行环境独立校验。
                       </Descriptions.Item>
                     </Descriptions>
                   }
                 >
-                  <Button size="small" className="!h-8">Flink 能力</Button>
+                  <Button size="small" className="!h-8">默认环境能力</Button>
                 </Popover>
-                <Tooltip title="刷新任务与 Flink 能力">
+                <Tooltip title="刷新任务、数据源与运行环境">
                   <Button
                     size="small"
                     icon={<ReloadOutlined spin={loading} />}
@@ -762,7 +791,6 @@ export default function RealtimeSync() {
                 <span className="text-[13px]">新建同步任务</span>
               </Button>
             </div>
-
           </div>
 
           <Divider style={{ marginTop: 4, marginBottom: 16 }} />
@@ -827,6 +855,7 @@ export default function RealtimeSync() {
           open={editor.open}
           job={editor.job}
           dataSources={dataSources}
+          environments={environments}
           onClose={() => setEditor({ open: false })}
           onSaved={() => {
             setEditor({ open: false });
@@ -841,9 +870,7 @@ export default function RealtimeSync() {
           open={Boolean(detail)}
           onClose={() => setDetail(undefined)}
         >
-          {detail && (
-            <RealtimeRuntimeDetail job={detail} events={events} capabilities={capabilities} />
-          )}
+          {detail && <RealtimeRuntimeDetail job={detail} events={events} />}
         </Drawer>
       </div>
     </ConfigProvider>
