@@ -101,7 +101,7 @@ class RealtimeJobLifecycleCoordinatorTest {
             "STOPPED",
             "STOPPING",
             "STOPPED",
-            "Flink jobs overview 未发现匹配任务，已确认停止");
+            "恢复窗口内未发现匹配的 Flink runtime job，已确认停止");
   }
 
   private DefinitionRow definition(String desired, String observed) {
