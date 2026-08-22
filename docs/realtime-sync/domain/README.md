@@ -19,9 +19,18 @@
 | 2 | [核心领域模型 v1](./02-core-domain-model.md) | 确定聚合根、Entity、Value Object 和核心对象关系 |
 | 3 | [领域不变量与生命周期](./03-invariants-and-lifecycle.md) | 固定 Draft / Publish / Execution 不变量、状态机、并发和快照规则 |
 | 4 | [现有代码到领域模型 Mapping](./04-current-code-mapping.md) | 逐类标记 KEEP / ADAPT / MIGRATE / REMOVE FROM DOMAIN / IMPLEMENTATION GAP，并形成最小迁移施工顺序 |
-| 5 | 待补充 | AI 领域开发宪法 |
+| 5 | [AI 领域开发宪法](./05-ai-domain-rules.md) | 把阶段 1～4 转换成 AI 必须执行的前置分析、禁止项、停止条件、迁移规则和 Review Checklist |
 | 6 | 待补充 | 最小领域重构 |
 | 7 | 待补充 | 自动化领域护栏 |
+
+模块级硬规则入口：
+
+```text
+yak-ops-business/yak-ops-business-sync/
+yak-ops-business-sync-realtime/DOMAIN.md
+```
+
+任何 AI / Codex / 开发者修改 realtime-sync 代码前，都应先读取该 `DOMAIN.md`。
 
 ## 当前已接受的模型方向
 
@@ -122,5 +131,45 @@ expand -> dual write/read -> verify -> switch -> contract
 而不是 Big Bang rename/drop。
 
 现有 `CdcPipelineSpec`、REST v1、Yak YAML v1、Flink/SSH 执行实现都应通过 compatibility adapter 渐进迁移，而不是一次性推翻。
+
+## 阶段 5：AI 强制执行方式
+
+阶段 5 不再只要求“理解领域文档”，而是规定 AI 在编码前必须先输出：
+
+```text
+Domain Impact Analysis
+- Bounded Context
+- Aggregate(s)
+- SyncDefinition Area
+- Invariant/Lifecycle Impact
+- Layer
+- Stage-4 Mapping/Gap
+- Migration Wave
+- Safety Protection List
+- Domain Gap: yes/no
+```
+
+如果：
+
+```text
+Domain Gap = yes
+```
+
+AI 必须先停止编码，提出领域模型扩展方案，不能通过临时 `*Spec / *Task / syncType / sceneType / boolean` 绕过。
+
+阶段 5 同时把以下内容升级为硬规则：
+
+- `SyncDefinition` 是唯一配置事实模型；
+- `Task ≠ Version ≠ Execution`；
+- Execution 只能读取不可变 Published Version；
+- terminal Execution 不复活；
+- Restart 必须 pin 原 Version，升级版本是另一 use case；
+- `UNKNOWN / CONFLICT` 不能为了重试被粗暴转成失败；
+- Flink / SSH / JDBC Credential / Adapter Tuning 不进入 Core Domain；
+- 新场景优先扩 Selector / Route / Target / Policy，不优先新增 scene/sync type；
+- Domain 接受的 ExecutionPolicy 必须真正执行或明确拒绝，禁止 silent ignore；
+- 历史 Version / Execution / Event 默认不可业务级硬删除；
+- Stage-4 Wave 顺序不可随意跳过，尤其 Wave 4（运行中编辑/发布）不能早于 Wave 3（Execution lifecycle ownership）；
+- 后续领域重构必须保护现有 Idempotency、CAS、stop-during-start、UNKNOWN recovery、runtime identity、environment snapshot、credential zeroize 和 log redaction。
 
 如果一个新需求无法映射到当前三个聚合、`SyncDefinition` 子模型、阶段 3 生命周期或阶段 4 的现有代码位置，应先记录为 **Domain Gap**，不要直接增加新的 `syncType / sceneType / *Spec / *Task` 体系，也不要绕过已有的幂等、快照、不确定性和恢复机制。
