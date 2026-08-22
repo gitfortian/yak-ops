@@ -8,7 +8,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = RealtimeJobController.class)
+@RestControllerAdvice(
+    assignableTypes = {RealtimeJobController.class, ComputeEnvironmentController.class})
 public class RealtimeExceptionHandler {
 
   @ExceptionHandler(IllegalArgumentException.class)
