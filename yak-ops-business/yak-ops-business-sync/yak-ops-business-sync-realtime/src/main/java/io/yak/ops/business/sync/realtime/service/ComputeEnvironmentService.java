@@ -6,6 +6,9 @@ import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.Submissio
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentDiagnosis;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
+import io.yak.ops.business.sync.realtime.engine.FlinkRuntimeEnvironmentProbe;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
@@ -34,14 +37,17 @@ public class ComputeEnvironmentService {
 
   private final ComputeEnvironmentStore store;
   private final RealtimeSyncProperties properties;
+  private final FlinkRuntimeEnvironmentProbe probe;
   private final TransactionTemplate transactions;
 
   public ComputeEnvironmentService(
       ComputeEnvironmentStore store,
       RealtimeSyncProperties properties,
+      FlinkRuntimeEnvironmentProbe probe,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager) {
     this.store = store;
     this.properties = properties;
+    this.probe = probe;
     this.transactions = new TransactionTemplate(transactionManager);
   }
 
@@ -68,8 +74,9 @@ public class ComputeEnvironmentService {
       boolean enabled,
       boolean makeDefault) {
     String normalizedName = normalizeName(name);
-    String normalizedSubmitter = normalizeSubmitterType(submitterType, ComputeEnvironment.SUBMITTER_LOCAL);
-    RuntimeConfig normalizedConfig = normalizeConfig(config, normalizedSubmitter);
+    String normalizedSubmitter =
+        normalizeSubmitterType(submitterType, ComputeEnvironment.SUBMITTER_LOCAL);
+    RuntimeConfig normalizedConfig = normalizeConfig(config, normalizedSubmitter, true);
     if (makeDefault && !enabled) {
       throw new IllegalArgumentException("默认运行环境必须保持启用");
     }
@@ -111,7 +118,7 @@ public class ComputeEnvironmentService {
     String normalizedSubmitter =
         normalizeSubmitterType(submitterType, current.submitterType());
     RuntimeConfig requestedConfig = preserveExistingSshConfig(current, normalizedSubmitter, config);
-    RuntimeConfig normalizedConfig = normalizeConfig(requestedConfig, normalizedSubmitter);
+    RuntimeConfig normalizedConfig = normalizeConfig(requestedConfig, normalizedSubmitter, true);
     boolean switchingDefault = makeDefault && !current.defaultEnvironment();
 
     if (current.defaultEnvironment() && !enabled) {
@@ -136,6 +143,36 @@ public class ComputeEnvironmentService {
     if (current.defaultEnvironment() || switchingDefault) {
       refreshRuntimeOverrides();
     }
+  }
+
+  /** Diagnoses a saved environment and stores only the small summary shown on its settings card. */
+  public ComputeEnvironmentDiagnosis diagnose(long id) {
+    ComputeEnvironment environment = require(id);
+    ComputeEnvironmentDiagnosis result = probe.diagnose(ComputeEnvironmentSnapshot.from(environment));
+    store.saveDiagnosis(id, result.status(), result.summary(), result.checkedAt());
+    return result;
+  }
+
+  /**
+   * Diagnoses an unsaved form so users can validate connectivity and auto-fill detected versions
+   * before creating or updating the environment. Preview checks never write to the database.
+   */
+  public ComputeEnvironmentDiagnosis diagnosePreview(
+      String name, String submitterType, RuntimeConfig config) {
+    String normalizedSubmitter =
+        normalizeSubmitterType(submitterType, ComputeEnvironment.SUBMITTER_LOCAL);
+    RuntimeConfig normalizedConfig = normalizeConfig(config, normalizedSubmitter, false);
+    String normalizedName = StringUtils.hasText(name) ? normalizeName(name) : "未保存环境";
+    ComputeEnvironmentSnapshot preview =
+        new ComputeEnvironmentSnapshot(
+            0L,
+            normalizedName,
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            normalizedSubmitter,
+            normalizedConfig,
+            0);
+    return probe.diagnose(preview);
   }
 
   public void setEnabled(long id, boolean enabled) {
@@ -220,7 +257,7 @@ public class ComputeEnvironmentService {
                   ComputeEnvironment.ENGINE_FLINK_CDC,
                   ComputeEnvironment.DEPLOYMENT_REMOTE,
                   submitterType,
-                  normalizeConfig(config, submitterType),
+                  normalizeConfig(config, submitterType, true),
                   true,
                   true);
             }
@@ -314,7 +351,8 @@ public class ComputeEnvironmentService {
         current.config().ssh());
   }
 
-  private RuntimeConfig normalizeConfig(RuntimeConfig value, String submitterType) {
+  private RuntimeConfig normalizeConfig(
+      RuntimeConfig value, String submitterType, boolean requireVersions) {
     if (value == null) {
       throw new IllegalArgumentException("运行环境配置不能为空");
     }
@@ -323,8 +361,14 @@ public class ComputeEnvironmentService {
     String flinkHome = required(value.flinkHome(), "Flink Home", 500);
     String flinkCdcHome = required(value.flinkCdcHome(), "Flink CDC Home", 500);
     String javaHome = optional(value.javaHome(), "Java Home", 500);
-    String flinkVersion = required(value.flinkVersion(), "Flink 版本", 64);
-    String flinkCdcVersion = required(value.flinkCdcVersion(), "Flink CDC 版本", 64);
+    String flinkVersion =
+        requireVersions
+            ? required(value.flinkVersion(), "Flink 版本", 64)
+            : optional(value.flinkVersion(), "Flink 版本", 64);
+    String flinkCdcVersion =
+        requireVersions
+            ? required(value.flinkCdcVersion(), "Flink CDC 版本", 64)
+            : optional(value.flinkCdcVersion(), "Flink CDC 版本", 64);
     SshConfig ssh = null;
     if (ComputeEnvironment.SUBMITTER_SSH.equals(submitterType)) {
       if (!absoluteUnixPath(flinkHome) || !absoluteUnixPath(flinkCdcHome)) {
