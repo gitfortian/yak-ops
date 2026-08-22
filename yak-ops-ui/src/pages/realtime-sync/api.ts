@@ -46,6 +46,26 @@ const validateDefinition = (spec: CdcPipelineSpec, runtimeEnvironmentId: number)
     data: { spec, runtimeEnvironmentId },
   });
 
+const environments = () =>
+  request<ApiResponse<ComputeEnvironmentOption[]>>('/api/v1/compute-environments');
+
+const capabilities = async (environmentId?: number) => {
+  let resolvedEnvironmentId = environmentId;
+  if (!resolvedEnvironmentId) {
+    const response = await environments();
+    const rows = response.data || [];
+    resolvedEnvironmentId =
+      rows.find((item) => item.defaultEnvironment && item.enabled)?.id ??
+      rows.find((item) => item.enabled)?.id;
+  }
+  if (!resolvedEnvironmentId) {
+    throw new Error('暂无已启用的 Flink CDC 运行环境');
+  }
+  return request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`, {
+    params: { environmentId: resolvedEnvironmentId },
+  });
+};
+
 export const realtimeApi = {
   page: (params: RealtimePageQuery) =>
     request<ApiResponse<RealtimeJobPage>>(PREFIX, {
@@ -87,12 +107,8 @@ export const realtimeApi = {
     request<ApiResponse<RealtimeRuntimeLog>>(`${PREFIX}/${id}/logs/runtime`, {
       params: { maxExceptions },
     }),
-  capabilities: (environmentId: number) =>
-    request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`, {
-      params: { environmentId },
-    }),
-  environments: () =>
-    request<ApiResponse<ComputeEnvironmentOption[]>>('/api/v1/compute-environments'),
+  capabilities,
+  environments,
   dataSources: () => request<ApiResponse<DataSourceOption[]>>(`${DATA_SOURCE_PREFIX}/option`),
   catalogTables: (dataSourceId: number) =>
     request<ApiResponse<DataSourceCatalogTable[]>>(`${DATA_SOURCE_PREFIX}/catalog/${dataSourceId}/tables`),
