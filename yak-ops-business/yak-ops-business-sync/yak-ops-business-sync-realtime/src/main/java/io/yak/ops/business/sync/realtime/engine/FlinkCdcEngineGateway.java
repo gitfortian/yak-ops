@@ -11,7 +11,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -113,17 +112,17 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   public DeployResult deploy(RealtimeDeployRequest request) {
     validate(request.pipelineYaml());
     Path work = Path.of(properties.getWorkDirectory()).toAbsolutePath().normalize();
-    Path pendingLog = null;
+    Path submissionLog = null;
     Path pipelineFile = null;
     try {
       Path pipelines = Files.createDirectories(work.resolve("pipelines"));
-      Path logs = Files.createDirectories(work.resolve("logs"));
-      String safeKey = request.idempotencyKey().replaceAll("[^A-Za-z0-9._-]", "_");
+      Files.createDirectories(work.resolve("logs"));
+      String safeKey = safeKey(request.idempotencyKey());
       pipelineFile = pipelines.resolve("pipeline-" + safeKey + "-" + System.nanoTime() + ".yaml");
-      pendingLog = logs.resolve("submit-" + safeKey + "-" + System.nanoTime() + ".log");
+      submissionLog = submitLogByKey(request.idempotencyKey());
       String resolved = resolveSecrets(request);
       writePrivate(pipelineFile, resolved);
-      writePrivate(pendingLog, "");
+      writePrivate(submissionLog, "");
 
       URI rest = restUri();
       int port = rest.getPort() < 0 ? defaultPort(rest) : rest.getPort();
@@ -138,7 +137,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
                   "-Drest.address=" + rest.getHost(),
                   "-Drest.port=" + port)
               .redirectErrorStream(true)
-              .redirectOutput(pendingLog.toFile());
+              .redirectOutput(submissionLog.toFile());
       builder.environment().put("FLINK_HOME", properties.getFlinkHome());
       if (StringUtils.hasText(properties.getJavaHome())) {
         builder.environment().put("JAVA_HOME", properties.getJavaHome());
@@ -147,11 +146,12 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       Duration timeout = properties.getSubmitTimeout();
       if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
         process.destroyForcibly();
+        process.waitFor(5, TimeUnit.SECONDS);
         throw failure("Flink CDC 提交超时，结果不确定，请在 Flink UI 中核对", true, null, null);
       }
-      String output = Files.readString(pendingLog, StandardCharsets.UTF_8);
+      String output = Files.readString(submissionLog, StandardCharsets.UTF_8);
       output = sanitizeOutput(output, request);
-      writePrivate(pendingLog, output);
+      writePrivate(submissionLog, output);
       if (process.exitValue() != 0) {
         String excerpt = tail(output, 20);
         throw failure(
@@ -167,16 +167,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
         throw failure("Flink CDC CLI 未返回 jobId，提交结果不确定", true, null, null);
       }
       String jobId = matcher.group(1).toLowerCase(Locale.ROOT);
-      try {
-        Files.move(
-            pendingLog,
-            submitLog(jobId),
-            StandardCopyOption.REPLACE_EXISTING,
-            StandardCopyOption.ATOMIC_MOVE);
-      } catch (AtomicMoveNotSupportedException ignored) {
-        Files.move(pendingLog, submitLog(jobId), StandardCopyOption.REPLACE_EXISTING);
-      }
-      pendingLog = null;
+      Files.copy(submissionLog, submitLog(jobId), StandardCopyOption.REPLACE_EXISTING);
       return new DeployResult(jobId, "at-least-once");
     } catch (RealtimeEngineException exception) {
       throw exception;
@@ -186,8 +177,8 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     } catch (IOException exception) {
       throw failure("无法执行 Flink CDC CLI：" + exception.getMessage(), false, null, exception);
     } finally {
+      sanitizeLogQuietly(submissionLog, request);
       deleteQuietly(pipelineFile);
-      deleteQuietly(pendingLog);
     }
   }
 
@@ -278,6 +269,18 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     return sanitized;
   }
 
+  private void sanitizeLogQuietly(Path log, RealtimeDeployRequest request) {
+    if (log == null || !Files.isRegularFile(log)) {
+      return;
+    }
+    try {
+      String output = Files.readString(log, StandardCharsets.UTF_8);
+      writePrivate(log, sanitizeOutput(output, request));
+    } catch (IOException ignored) {
+      // Log retention is best-effort and must never mask the actual submission result.
+    }
+  }
+
   private void writePrivate(Path path, String content) throws IOException {
     Files.writeString(path, content, StandardCharsets.UTF_8);
     try {
@@ -359,6 +362,16 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
 
   private Path cliPath() {
     return Path.of(properties.getFlinkCdcHome(), "bin", "flink-cdc.sh")
+        .toAbsolutePath()
+        .normalize();
+  }
+
+  private String safeKey(String idempotencyKey) {
+    return idempotencyKey.replaceAll("[^A-Za-z0-9._-]", "_");
+  }
+
+  private Path submitLogByKey(String idempotencyKey) {
+    return Path.of(properties.getWorkDirectory(), "logs", "submit-" + safeKey(idempotencyKey) + ".log")
         .toAbsolutePath()
         .normalize();
   }
