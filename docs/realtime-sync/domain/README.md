@@ -16,17 +16,43 @@
 | 阶段 | 文档 | 目标 |
 |---|---|---|
 | 1 | [领域边界与统一语言](./01-domain-boundary-and-language.md) | 定义实时同步负责什么、绝不负责什么，以及统一术语 |
-| 2 | 待补充 | 核心领域模型 v1：聚合根、Entity、Value Object |
+| 2 | [核心领域模型 v1](./02-core-domain-model.md) | 确定聚合根、Entity、Value Object 和核心对象关系 |
 | 3 | 待补充 | 领域不变量与生命周期 |
 | 4 | 待补充 | 现有代码到领域模型 Mapping |
 | 5 | 待补充 | AI 领域开发宪法 |
 | 6 | 待补充 | 最小领域重构 |
 | 7 | 待补充 | 自动化领域护栏 |
 
-## 当前原则
+## 当前已接受的模型方向
 
-在阶段 2 完成前，不因为文档命名而大规模重命名现有 Java 类。
+阶段 2 完成后，Realtime Sync Core Domain 使用三个聚合根：
 
-例如当前 `CdcPipelineSpec`、`TableRoute`、`DeploymentRow` 仍然可以继续存在；阶段 1 先建立统一语言和边界，后续再决定如何逐步映射与迁移。
+```text
+RealtimeSyncTask
+DefinitionVersion
+SyncExecution
+```
 
-如果一个新需求无法用阶段 1 的统一语言描述，应先记录为 **Domain Gap**，不要直接增加新的 `syncType / sceneType / *Spec / *Task` 体系。
+`SyncDefinition` 是不可变 Value Object：
+
+```text
+SyncDefinition
+├── SourceEndpoint
+├── SinkEndpoint
+├── SyncRoute[]
+├── SyncPolicy
+└── ExecutionPolicy
+```
+
+核心原则：
+
+- Task、Version、Execution 必须分离；
+- Published Version 可以被独立稳定引用；
+- Execution 永远来自 Published Version，不读取当前 Draft；
+- Route / Selector / Policy 优先组合表达单表、多表、规则匹配和未来整库场景；
+- Runtime Environment 不进入 `SyncDefinition`，Definition 保存 Ref，Execution 保存 Snapshot；
+- Flink、YAML、SSH、JDBC 私有调优不进入 Core Domain。
+
+现有 `CdcPipelineSpec`、`DefinitionRow`、`DeploymentRow` 暂不因为文档命名立即重构。阶段 4 会完成详细 Mapping，阶段 6 再执行最小迁移。
+
+如果一个新需求无法映射到当前三个聚合或 `SyncDefinition` 的 Endpoint / Route / Policy 子模型，应先记录为 **Domain Gap**，不要直接增加新的 `syncType / sceneType / *Spec / *Task` 体系。
