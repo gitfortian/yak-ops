@@ -39,9 +39,16 @@ final class SshFlinkCdcCommandRunner {
     if (ssh.getPort() < 1 || ssh.getPort() > 65535) {
       return "SSH port 必须在 1-65535 之间";
     }
-    if (!StringUtils.hasText(properties.getFlinkHome())
-        || !StringUtils.hasText(properties.getFlinkCdcHome())) {
-      return "SSH 模式下必须配置远端 flink-home 和 flink-cdc-home";
+    if (!absoluteUnixPath(properties.getFlinkHome())
+        || !absoluteUnixPath(properties.getFlinkCdcHome())) {
+      return "SSH 模式下 flink-home 和 flink-cdc-home 必须是远端 Linux 绝对路径";
+    }
+    if (StringUtils.hasText(properties.getJavaHome()) && !absoluteUnixPath(properties.getJavaHome())) {
+      return "SSH 模式下 java-home 必须是远端 Linux 绝对路径";
+    }
+    Integer remoteRestPort = ssh.getRemoteRestPort();
+    if (remoteRestPort != null && (remoteRestPort < 1 || remoteRestPort > 65535)) {
+      return "SSH remote-rest-port 必须在 1-65535 之间";
     }
     return null;
   }
@@ -58,6 +65,7 @@ final class SshFlinkCdcCommandRunner {
     if (error != null) {
       throw failure(error, false, null);
     }
+    remoteRestPort(restUri);
     Process process = null;
     try {
       process =
@@ -66,7 +74,8 @@ final class SshFlinkCdcCommandRunner {
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .start();
       process.getOutputStream().close();
-      Duration timeout = properties.getSsh().getConnectTimeout().plusSeconds(5);
+      Duration connectTimeout = positiveDuration(properties.getSsh().getConnectTimeout(), Duration.ofSeconds(5));
+      Duration timeout = connectTimeout.plusSeconds(5);
       if (!process.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS)) {
         destroy(process);
         throw failure("SSH 远端环境探测超时", false, null);
@@ -93,6 +102,7 @@ final class SshFlinkCdcCommandRunner {
     if (error != null) {
       throw failure(error, false, null);
     }
+    Duration effectiveTimeout = positiveDuration(timeout, Duration.ofSeconds(60));
     Process process = null;
     boolean started = false;
     try {
@@ -106,7 +116,7 @@ final class SshFlinkCdcCommandRunner {
         stdin.write(pipelineYaml.getBytes(StandardCharsets.UTF_8));
         stdin.flush();
       }
-      if (!process.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS)) {
+      if (!process.waitFor(Math.max(1, effectiveTimeout.toMillis()), TimeUnit.MILLISECONDS)) {
         destroy(process);
         throw failure("SSH Flink CDC 提交超时，远端结果不确定，请通过状态对账确认", true, null);
       }
@@ -182,7 +192,7 @@ final class SshFlinkCdcCommandRunner {
     StringBuilder command = new StringBuilder();
     command.append("set -eu; umask 077; ");
     command.append("tmp=$(mktemp \"${TMPDIR:-/tmp}/yak-ops-cdc.XXXXXX.yaml\"); ");
-    command.append("cleanup(){ rm -f \"$tmp\"; }; trap cleanup EXIT HUP INT TERM; ");
+    command.append("cleanup(){ rm -f \"$tmp\"; }; trap cleanup 0 HUP INT TERM; ");
     command.append("cat > \"$tmp\"; ");
     command.append("export FLINK_HOME=").append(shellQuote(properties.getFlinkHome())).append("; ");
     if (StringUtils.hasText(properties.getJavaHome())) {
@@ -204,9 +214,14 @@ final class SshFlinkCdcCommandRunner {
   }
 
   private String remoteRestAddress(URI restUri) {
-    return StringUtils.hasText(properties.getSsh().getRemoteRestAddress())
-        ? properties.getSsh().getRemoteRestAddress().trim()
-        : restUri.getHost();
+    String value =
+        StringUtils.hasText(properties.getSsh().getRemoteRestAddress())
+            ? properties.getSsh().getRemoteRestAddress().trim()
+            : restUri.getHost();
+    if (!StringUtils.hasText(value)) {
+      throw new IllegalArgumentException("SSH remote REST address 不能为空");
+    }
+    return value;
   }
 
   private int remoteRestPort(URI restUri) {
@@ -223,11 +238,17 @@ final class SshFlinkCdcCommandRunner {
     return "https".equalsIgnoreCase(restUri.getScheme()) ? 443 : 80;
   }
 
+  private boolean absoluteUnixPath(String value) {
+    return StringUtils.hasText(value) && value.startsWith("/");
+  }
+
+  private Duration positiveDuration(Duration value, Duration fallback) {
+    return value == null || value.isNegative() || value.isZero() ? fallback : value;
+  }
+
   private int seconds(Duration value) {
-    if (value == null || value.isNegative() || value.isZero()) {
-      return 5;
-    }
-    return (int) Math.max(1, Math.min(Integer.MAX_VALUE, (value.toMillis() + 999) / 1000));
+    Duration effective = positiveDuration(value, Duration.ofSeconds(5));
+    return (int) Math.max(1, Math.min(Integer.MAX_VALUE, (effective.toMillis() + 999) / 1000));
   }
 
   private String shellQuote(String value) {
