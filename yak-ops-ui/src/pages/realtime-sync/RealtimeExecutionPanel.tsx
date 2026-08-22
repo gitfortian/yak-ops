@@ -86,7 +86,9 @@ export default function RealtimeExecutionPanel({
         setValidated(true);
         const refreshed = await refreshJob();
         message.success(
-          refreshed.releaseState === 'PUBLISHED' ? '当前定义版本已发布' : '发布请求已完成',
+          refreshed.desiredState === 'RUNNING'
+            ? '当前草稿已发布；正在运行的 SyncExecution 继续使用启动时的 DefinitionVersion'
+            : '当前定义版本已发布',
         );
       } else if (action === 'start') {
         const refreshed = await waitForStartResult();
@@ -138,8 +140,8 @@ export default function RealtimeExecutionPanel({
       },
       {
         title: '运行校验',
-        description: 'Flink CDC / Connector',
-        status: validated || currentDraftPublished || running ? ('finish' as const) : ('process' as const),
+        description: '当前草稿 / Connector',
+        status: validated || currentDraftPublished ? ('finish' as const) : ('process' as const),
       },
       {
         title: '发布版本',
@@ -148,7 +150,7 @@ export default function RealtimeExecutionPanel({
           : hasPublishedVersion
             ? `已发布 v${current.publishedVersion} · 当前草稿未发布`
             : '锁定当前定义版本',
-        status: currentDraftPublished || running
+        status: currentDraftPublished
           ? ('finish' as const)
           : validated
             ? ('process' as const)
@@ -157,12 +159,12 @@ export default function RealtimeExecutionPanel({
               : ('wait' as const),
       },
       {
-        title: '启动任务',
+        title: '运行实例',
         description: running
-          ? stateLabel[current.observedState] || current.observedState
+          ? `${stateLabel[current.observedState] || current.observedState} · 固定启动时 DefinitionVersion`
           : hasUnpublishedChanges
-            ? `将启动已发布 v${current.publishedVersion}`
-            : '提交到 Flink CDC',
+            ? `下一次启动使用已发布 v${current.publishedVersion}`
+            : '等待启动',
         status: current.observedState === 'RUNNING'
           ? ('finish' as const)
           : hasPublishedVersion
@@ -181,7 +183,7 @@ export default function RealtimeExecutionPanel({
             <div>
               <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--yak-brand-color)]">
                 <CheckCircleOutlined />
-                配置已保存 · 统一执行链路
+                配置已保存 · 定义与运行解耦
               </div>
               <h1 className="mb-0 mt-1 text-[20px] font-semibold text-[#101828]">{current.name}</h1>
               <div className="mt-1 text-[12px] text-[#98a2b3]">
@@ -203,7 +205,7 @@ export default function RealtimeExecutionPanel({
             <Steps responsive items={steps} />
           </Card>
 
-          {hasUnpublishedChanges && (
+          {hasUnpublishedChanges && !running && (
             <Alert
               className="mb-5"
               type="info"
@@ -213,12 +215,40 @@ export default function RealtimeExecutionPanel({
             />
           )}
 
+          {running && (
+            <Alert
+              className="mb-5"
+              type={hasUnpublishedChanges ? 'info' : 'success'}
+              showIcon
+              message={
+                hasUnpublishedChanges
+                  ? `当前 SyncExecution 正在运行，草稿 v${current.definitionVersion} 可继续编辑`
+                  : '当前 SyncExecution 与任务定义生命周期已解耦'
+              }
+              description={
+                hasUnpublishedChanges
+                  ? '保存草稿不会修改当前运行实例。发布草稿只会推进 Published DefinitionVersion；当前 Flink Job 继续使用启动时固定的 DefinitionVersion。'
+                  : '即使继续编辑或重新发布任务，当前运行实例仍保持启动时的 DefinitionVersion 与 RuntimeEnvironmentSnapshot，不会发生热更新。'
+              }
+            />
+          )}
+
+          {running && currentDraftPublished && (
+            <Alert
+              className="mb-5"
+              type="warning"
+              showIcon
+              message="发布不会热更新当前 SyncExecution"
+              description="Wave 4 的 Restart 也不会隐式升级版本：后端会用 immutable DefinitionVersionId 校验运行版本与最新 Published Ref；若不同会在停止前拒绝。Wave 5 会把 RestartExecution 与 ApplyPublishedVersion 正式拆成两个命令。"
+            />
+          )}
+
           {runtimeDisabled && currentDraftPublished && (
             <Alert
               className="mb-5"
               type="warning"
               showIcon
-              message="当前已发布版本绑定的运行环境暂不可提交任务"
+              message="当前草稿绑定的运行环境暂不可提交任务"
               description={runtimeDisabledReason}
             />
           )}
@@ -230,10 +260,10 @@ export default function RealtimeExecutionPanel({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 text-[14px] font-semibold text-[#101828]">
-                        <SafetyOutlined /> 1. 校验运行环境
+                        <SafetyOutlined /> 1. 校验当前草稿
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        校验当前草稿绑定的运行环境和 Connector；启动时后端会再次按实际 Published Version 独立校验。
+                        校验当前草稿绑定的运行环境和 Connector；已有 SyncExecution 不参与这次定义校验。
                       </div>
                     </div>
                     <Button
@@ -253,16 +283,20 @@ export default function RealtimeExecutionPanel({
                         <CloudServerOutlined /> 2. 发布当前版本
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        发布会再次运行完整校验，并创建不可变的 DefinitionVersion。
+                        发布形成不可变 DefinitionVersion；运行中发布只推进 Task 的 Published Ref，不修改当前 SyncExecution。
                       </div>
                     </div>
                     <Button
                       type="primary"
                       loading={acting === 'publish'}
-                      disabled={Boolean(acting) || currentDraftPublished || running || !current.spec || runtimeDisabled}
+                      disabled={Boolean(acting) || currentDraftPublished || !current.spec || runtimeDisabled}
                       onClick={() => void run('publish')}
                     >
-                      {currentDraftPublished ? '已发布' : '发布当前版本'}
+                      {currentDraftPublished
+                        ? '已发布'
+                        : running
+                          ? '发布当前版本（不影响运行）'
+                          : '发布当前版本'}
                     </Button>
                   </div>
                 </div>
@@ -271,10 +305,10 @@ export default function RealtimeExecutionPanel({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 text-[14px] font-semibold text-[#101828]">
-                        <PlayCircleOutlined /> 3. 启动实时任务
+                        <PlayCircleOutlined /> 3. 运行实例
                       </div>
                       <div className="mt-1 text-[12px] leading-5 text-[#667085]">
-                        启动只读取不可变的 Published DefinitionVersion，由 PipelineYamlCompiler 生成临时 Flink CDC YAML 后通过 LOCAL / SSH 提交。
+                        新 Start 只读取不可变 Published DefinitionVersion；已有运行实例始终保持自己的启动快照。
                       </div>
                     </div>
                     {running ? (
@@ -305,7 +339,7 @@ export default function RealtimeExecutionPanel({
             </Card>
 
             <div className="space-y-5">
-              <Card title="当前执行状态">
+              <Card title="当前状态">
                 <Descriptions size="small" column={1}>
                   <Descriptions.Item label="当前草稿">
                     v{current.definitionVersion} · {current.releaseState}
@@ -313,17 +347,17 @@ export default function RealtimeExecutionPanel({
                   <Descriptions.Item label="已发布版本">
                     {hasPublishedVersion ? `v${current.publishedVersion}` : '未发布'}
                   </Descriptions.Item>
+                  <Descriptions.Item label="当前运行定义">
+                    {running ? '启动时 DefinitionVersion 快照（保持不变）' : '无活动运行'}
+                  </Descriptions.Item>
                   <Descriptions.Item label="运行状态">
                     <Tag>{stateLabel[current.observedState] || current.observedState}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="当前草稿运行环境">
                     {capabilities.runtimeEnvironmentName || `环境 #${current.runtimeEnvironmentId}`}
                   </Descriptions.Item>
-                  <Descriptions.Item label="提交方式">
-                    {capabilities.submissionMode || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Flink / CDC">
-                    {capabilities.flinkVersion || '-'} / {capabilities.flinkCdcVersion || '-'}
+                  <Descriptions.Item label="运行实例环境">
+                    {current.latestDeployment?.runtimeEnvironment?.name || '无活动运行'}
                   </Descriptions.Item>
                   <Descriptions.Item label="Engine JobId">
                     {current.latestDeployment?.engineJobId || '-'}
@@ -343,8 +377,8 @@ export default function RealtimeExecutionPanel({
               <Alert
                 type="info"
                 showIcon
-                message="Wizard 与 YAML 共用这一条执行链路"
-                description="编辑方式不会写入任务运行定义。发布形成不可变 DefinitionVersion；启动只读取该版本快照，数据库不保存原生 Flink CDC YAML。"
+                message="Wizard 与 YAML 共用同一个 SyncDefinition"
+                description="编辑方式不会进入运行领域。发布形成不可变 DefinitionVersion；SyncExecution 只引用启动时的版本和运行环境快照。"
               />
             </div>
           </div>

@@ -97,7 +97,8 @@ public class RealtimeJobService {
                 return created;
               }
               DefinitionRow locked = store.lockDefinition(id); // cross-instance command mutex
-              requireDefinitionMutable(id);
+              // Draft belongs to RealtimeSyncTask, not SyncExecution. Active executions keep their
+              // immutable DefinitionVersion and RuntimeEnvironmentSnapshot while this draft evolves.
               store.updateDefinition(
                   id, name.trim(), description, spec, digest, runtimeEnvironmentId);
               store.event(
@@ -106,7 +107,7 @@ public class RealtimeJobService {
                   "DRAFT_SAVED",
                   locked.releaseState(),
                   "DRAFT",
-                  "已保存草稿并生成新定义版本");
+                  "已保存草稿并生成新定义版本；当前 SyncExecution 不受影响");
               return id;
             });
     return saved == null ? 0 : saved;
@@ -134,12 +135,12 @@ public class RealtimeJobService {
 
   public void publish(long id) {
     Prepared prepared = prepare(id, false);
-    requireDefinitionMutable(id);
     gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
     transactions.executeWithoutResult(
         status -> {
           DefinitionRow locked = store.lockDefinition(id); // cross-instance command mutex
-          requireDefinitionMutable(id);
+          // Publishing advances Task.publishedDefinitionRef only. Any active SyncExecution stays
+          // pinned to the immutable DefinitionVersion recorded when that execution was created.
           requirePreparedDefinitionCurrent(prepared, locked);
           store.publish(
               id, prepared.definition().definitionVersion(), prepared.definition().configDigest());
@@ -149,7 +150,7 @@ public class RealtimeJobService {
               "PUBLISHED",
               locked.releaseState(),
               "PUBLISHED",
-              "Flink CDC 校验通过，任务已发布");
+              "Flink CDC 校验通过，当前草稿已发布；已有 SyncExecution 继续运行原 DefinitionVersion");
         });
   }
 
@@ -440,12 +441,26 @@ public class RealtimeJobService {
       }
 
       PublishedDefinitionRow restartPublished = requirePublishedDefinition(id);
+      SyncExecution restartExecution =
+          store.latestExecution(id).orElseThrow(() -> new IllegalStateException("当前没有可重启的 SyncExecution"));
+      if (restartExecution.terminal()) {
+        throw new IllegalStateException("当前 SyncExecution 已结束，请直接启动已发布版本");
+      }
+      Long runningVersionId = restartExecution.definitionVersionId();
+      if (runningVersionId == null) {
+        throw new IllegalStateException("当前 SyncExecution 缺少 DefinitionVersionRef，无法安全重启");
+      }
+      if (runningVersionId.longValue() != restartPublished.id()) {
+        throw new IllegalStateException(
+            "当前运行版本与最新发布版本不同，拒绝通过重启隐式升级；请停止后显式启动最新发布版本");
+      }
+
       stopLocked(id);
       SyncExecution settled = store.latestExecution(id).orElse(null);
       if (settled != null && settled.activeOrUncertain()) {
         throw new IllegalStateException("Execution 仍在停止中，请稍后使用相同 Idempotency-Key 重试重启");
       }
-      return startLocked(id, key, restartPublished.id());
+      return startLocked(id, key, runningVersionId);
     } finally {
       lock.unlock();
     }
