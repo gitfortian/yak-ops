@@ -40,9 +40,12 @@ public class RecoverableRealtimeEngineGateway implements RealtimeEngineGateway {
   @Override
   public DeployResult deploy(RealtimeDeployRequest request) {
     String runtimeJobName = RealtimeRuntimeIdentity.jobName(request.idempotencyKey());
-    identityStore.bind(request.idempotencyKey(), runtimeJobName);
     String recoverableYaml =
         RealtimeRuntimeIdentity.decoratePipeline(request.pipelineYaml(), request.idempotencyKey());
+
+    // This is the last durable step before entering the CLI. REQUIRED means the CLI never started;
+    // BOUND means an orphan Flink job is possible and exact-name recovery must be attempted.
+    identityStore.bind(request.idempotencyKey(), runtimeJobName);
     RealtimeDeployRequest recoverable =
         new RealtimeDeployRequest(
             recoverableYaml,
