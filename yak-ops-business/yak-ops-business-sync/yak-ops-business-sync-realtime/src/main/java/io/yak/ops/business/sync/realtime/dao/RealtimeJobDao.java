@@ -26,6 +26,7 @@ public interface RealtimeJobDao {
   void markStopping(long definitionId, Long deploymentId);
   void reconcile(long definitionId, Long deploymentId, String observedState, String deploymentState, String engineJobId, String error);
   void markTerminalFailure(long definitionId, Long deploymentId, String message);
+  List<RealtimeJobDeploymentPO> reconcileExecutions();
   List<RealtimeJobDefinitionPO> desiredJobs();
   boolean hasOtherDesiredRunning(long id);
   int deleteDefinition(long id);

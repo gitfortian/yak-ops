@@ -14,6 +14,7 @@ import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationSnapshot;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.StoredVersion;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
+import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -158,6 +159,20 @@ class VersioningRealtimeJobStoreTest {
     assertThatThrownBy(() -> store.publishedDefinition(TASK_ID))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("不属于当前实时同步任务");
+  }
+
+  @Test
+  void primaryVersioningStoreDelegatesExecutionReconcileCandidates() {
+    RealtimeJobStoreAdapter delegate = mock(RealtimeJobStoreAdapter.class);
+    DefinitionVersionRepository versions = mock(DefinitionVersionRepository.class);
+    VersioningRealtimeJobStore store =
+        new VersioningRealtimeJobStore(
+            delegate, versions, new CdcPipelineSpecCompatibilityMapper());
+    DeploymentRow execution = mock(DeploymentRow.class);
+    when(delegate.reconcileCandidates()).thenReturn(List.of(execution));
+
+    assertThat(store.reconcileCandidates()).containsExactly(execution);
+    verify(delegate).reconcileCandidates();
   }
 
   private DefinitionRow definitionRow(CdcPipelineSpec spec) {

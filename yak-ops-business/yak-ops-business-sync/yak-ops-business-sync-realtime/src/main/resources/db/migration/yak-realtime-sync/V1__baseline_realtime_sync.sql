@@ -1,5 +1,5 @@
 -- Consolidated Realtime Sync schema baseline.
--- Runtime/definition/version/deployment/event references are logical and enforced by application services.
+-- Runtime/definition/version/execution/event references are logical and enforced by application services.
 CREATE TABLE IF NOT EXISTS yak_compute_environment (
     id BIGINT NOT NULL AUTO_INCREMENT,
     name VARCHAR(120) NOT NULL,
@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     spec_summary VARCHAR(1000) NULL,
     config_digest CHAR(64) NOT NULL,
     idempotency_key VARCHAR(128) NOT NULL,
+    engine_type VARCHAR(32) NOT NULL DEFAULT 'FLINK_CDC',
+    desired_state VARCHAR(16) NOT NULL DEFAULT 'RUNNING',
+    observed_state VARCHAR(32) NOT NULL DEFAULT 'STARTING',
     runtime_job_name VARCHAR(128) NULL,
     runtime_identity_state VARCHAR(16) NOT NULL DEFAULT 'REQUIRED',
     gateway_job_id VARCHAR(128) NULL,
@@ -88,6 +91,7 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     UNIQUE KEY uk_realtime_runtime_job_name (runtime_job_name),
     KEY idx_realtime_deployment_definition (definition_id, id),
     KEY idx_realtime_deployment_definition_version (definition_version_id, id),
+    KEY idx_realtime_execution_state (definition_id, observed_state, id),
     KEY idx_realtime_deployment_environment (runtime_environment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

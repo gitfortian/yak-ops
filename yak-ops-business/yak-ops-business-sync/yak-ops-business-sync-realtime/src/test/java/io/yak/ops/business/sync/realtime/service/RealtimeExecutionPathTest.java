@@ -16,7 +16,7 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
-import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
+import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPipeline;
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
@@ -95,10 +95,13 @@ class RealtimeExecutionPathTest {
     CdcPipelineSpec spec = spec();
     ComputeEnvironmentSnapshot environment = environment();
     ResolvedCdcPipeline resolved = resolved();
-    DefinitionRow publishedStopped = definition(spec, environment.id(), "PUBLISHED", "STOPPED", "STOPPED", 1, 1);
-    DefinitionRow starting = definition(spec, environment.id(), "PUBLISHED", "RUNNING", "STARTING", 1, 1);
+    DefinitionRow publishedStopped =
+        definition(spec, environment.id(), "PUBLISHED", "STOPPED", "STOPPED", 1, 1);
+    DefinitionRow starting =
+        definition(spec, environment.id(), "PUBLISHED", "RUNNING", "STARTING", 1, 1);
     PublishedDefinitionRow published = published(spec, environment.id(), 1, 1);
-    DeploymentRow deployment = deployment(spec, environment, DEFINITION_VERSION_ID, 1);
+    DeploymentRow startingExecution =
+        deployment(spec, environment, DEFINITION_VERSION_ID, 1, "SUBMITTING");
 
     ObjectNode capabilities = capabilities(json);
 
@@ -106,11 +109,12 @@ class RealtimeExecutionPathTest {
     when(store.spec(any())).thenReturn(spec);
     when(store.runtimeEnvironmentId(JOB_ID)).thenReturn(environment.id());
     when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.of(published));
+    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
     when(store.lockDefinition(JOB_ID)).thenReturn(publishedStopped, publishedStopped, starting);
     when(store.deploymentByIdempotencyKey("exec-1")).thenReturn(Optional.empty());
     when(store.insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("exec-1")))
         .thenReturn(DEPLOYMENT_ID);
-    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(startingExecution));
     when(runtimeResolver.definition(any(), eq(true))).thenReturn(environment);
     when(runtimeResolver.environment(environment.id(), true)).thenReturn(environment);
     when(dataSourceResolver.resolve(spec)).thenReturn(resolved);
@@ -123,16 +127,17 @@ class RealtimeExecutionPathTest {
     when(gateway.deploy(eq(environment), any()))
         .thenReturn(new DeployResult(FLINK_JOB_ID, "at-least-once"));
 
-    RealtimeJobService service = service(
-        store,
-        json,
-        specValidator,
-        dataSourceResolver,
-        capabilityResolver,
-        compiler,
-        gateway,
-        runtimeResolver,
-        transactionManager);
+    RealtimeJobService service =
+        service(
+            store,
+            json,
+            specValidator,
+            dataSourceResolver,
+            capabilityResolver,
+            compiler,
+            gateway,
+            runtimeResolver,
+            transactionManager);
 
     service.publish(JOB_ID);
     service.start(JOB_ID, "exec-1");
@@ -149,7 +154,9 @@ class RealtimeExecutionPathTest {
 
     verify(store)
         .insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("exec-1"));
-    verify(store).markDeploymentRunning(JOB_ID, DEPLOYMENT_ID, FLINK_JOB_ID, environment.runtimeRevision());
+    verify(store)
+        .markDeploymentRunning(
+            JOB_ID, DEPLOYMENT_ID, FLINK_JOB_ID, environment.runtimeRevision());
   }
 
   @Test
@@ -184,23 +191,40 @@ class RealtimeExecutionPathTest {
     long newerDraftEnvironmentId = 4L;
     ResolvedCdcPipeline resolved = resolved();
     DefinitionRow draftStopped =
-        definition(newerDraft, newerDraftEnvironmentId, "DRAFT", "STOPPED", "STOPPED", 2, 1);
-    DefinitionRow starting =
-        definition(newerDraft, newerDraftEnvironmentId, "DRAFT", "RUNNING", "STARTING", 2, 1);
-    PublishedDefinitionRow published = published(publishedSpec, publishedEnvironment.id(), 1, 1);
-    DeploymentRow deployment =
-        deployment(publishedSpec, publishedEnvironment, DEFINITION_VERSION_ID, 1);
+        definition(
+            newerDraft,
+            newerDraftEnvironmentId,
+            "DRAFT",
+            "STOPPED",
+            "STOPPED",
+            2,
+            1);
+    DefinitionRow staleStartingProjection =
+        definition(
+            newerDraft,
+            newerDraftEnvironmentId,
+            "DRAFT",
+            "RUNNING",
+            "STARTING",
+            2,
+            1);
+    PublishedDefinitionRow published =
+        published(publishedSpec, publishedEnvironment.id(), 1, 1);
+    DeploymentRow startingExecution =
+        deployment(publishedSpec, publishedEnvironment, DEFINITION_VERSION_ID, 1, "SUBMITTING");
     ObjectNode capabilities = capabilities(json);
 
     when(store.definition(JOB_ID)).thenReturn(Optional.of(draftStopped));
     when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.of(published));
-    when(store.lockDefinition(JOB_ID)).thenReturn(draftStopped, starting);
+    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
+    when(store.lockDefinition(JOB_ID)).thenReturn(draftStopped, staleStartingProjection);
     when(store.deploymentByIdempotencyKey("published-v1")).thenReturn(Optional.empty());
     when(store.insertDeployment(
             any(), eq(publishedSpec), any(), any(), eq(publishedEnvironment), eq("published-v1")))
         .thenReturn(DEPLOYMENT_ID);
-    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
-    when(runtimeResolver.environment(publishedEnvironment.id(), true)).thenReturn(publishedEnvironment);
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(startingExecution));
+    when(runtimeResolver.environment(publishedEnvironment.id(), true))
+        .thenReturn(publishedEnvironment);
     when(dataSourceResolver.resolve(publishedSpec)).thenReturn(resolved);
     when(dataSourceResolver.resolveCredentials(publishedSpec)).thenReturn(credentials());
     when(gateway.capabilities(publishedEnvironment)).thenReturn(capabilities);
@@ -211,16 +235,17 @@ class RealtimeExecutionPathTest {
     when(gateway.deploy(eq(publishedEnvironment), any()))
         .thenReturn(new DeployResult(FLINK_JOB_ID, "at-least-once"));
 
-    RealtimeJobService service = service(
-        store,
-        json,
-        specValidator,
-        dataSourceResolver,
-        capabilityResolver,
-        compiler,
-        gateway,
-        runtimeResolver,
-        transactionManager);
+    RealtimeJobService service =
+        service(
+            store,
+            json,
+            specValidator,
+            dataSourceResolver,
+            capabilityResolver,
+            compiler,
+            gateway,
+            runtimeResolver,
+            transactionManager);
 
     service.start(JOB_ID, "published-v1");
 
@@ -230,7 +255,12 @@ class RealtimeExecutionPathTest {
     verify(runtimeResolver, never()).environment(newerDraftEnvironmentId, true);
     verify(store)
         .insertDeployment(
-            any(), eq(publishedSpec), any(), any(), eq(publishedEnvironment), eq("published-v1"));
+            any(),
+            eq(publishedSpec),
+            any(),
+            any(),
+            eq(publishedEnvironment),
+            eq("published-v1"));
     verify(store).bindDeploymentDefinitionVersion(DEPLOYMENT_ID, DEFINITION_VERSION_ID, 1);
   }
 
@@ -248,7 +278,7 @@ class RealtimeExecutionPathTest {
         store,
         json,
         specValidator,
-        new RealtimeStateMachine(),
+        new SyncExecutionStateMachine(),
         dataSourceResolver,
         capabilityResolver,
         compiler,
@@ -369,7 +399,8 @@ class RealtimeExecutionPathTest {
       CdcPipelineSpec spec,
       ComputeEnvironmentSnapshot environment,
       Long definitionVersionId,
-      int sourceDraftRevision) {
+      int sourceDraftRevision,
+      String status) {
     LocalDateTime now = LocalDateTime.now();
     return new DeploymentRow(
         DEPLOYMENT_ID,
@@ -380,10 +411,10 @@ class RealtimeExecutionPathTest {
         "mysql#1 -> mysql#2, tables=1",
         "pipeline-digest",
         "exec-1",
-        FLINK_JOB_ID,
+        null,
         environment.runtimeRevision(),
         environment,
-        "RUNNING",
+        status,
         false,
         null,
         now,

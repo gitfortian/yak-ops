@@ -5,9 +5,29 @@
     SELECT * FROM yak_realtime_job_definition WHERE id = #{id} FOR UPDATE
   </select>
   <select id="lockOtherDesiredRunning" resultType="long">
-    SELECT id FROM yak_realtime_job_definition
-    WHERE id &lt;&gt; #{id} AND desired_state = 'RUNNING'
+    SELECT p.id
+    FROM yak_realtime_job_deployment p
+    WHERE p.definition_id &lt;&gt; #{id}
+      AND p.id = (
+        SELECT MAX(p2.id)
+        FROM yak_realtime_job_deployment p2
+        WHERE p2.definition_id = p.definition_id
+      )
+      AND p.desired_state = 'RUNNING'
+      AND p.observed_state IN ('STARTING','RUNNING','STOPPING','UNKNOWN','CONFLICT')
     FOR UPDATE
+  </select>
+  <select id="reconcileExecutions"
+          resultType="io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDeploymentPO">
+    SELECT p.*
+    FROM yak_realtime_job_deployment p
+    WHERE p.id = (
+      SELECT MAX(p2.id)
+      FROM yak_realtime_job_deployment p2
+      WHERE p2.definition_id = p.definition_id
+    )
+      AND p.observed_state IN ('STARTING','RUNNING','STOPPING','UNKNOWN','CONFLICT')
+    ORDER BY p.definition_id ASC
   </select>
   <update id="tryAcquireLease">
     UPDATE yak_realtime_runtime_lease
@@ -17,8 +37,10 @@
   </update>
   <update id="reconcileDeployment">
     UPDATE yak_realtime_job_deployment
-    SET status = #{deploymentState},
+    SET observed_state = #{observedState},
+        status = #{deploymentState},
         gateway_job_id = COALESCE(gateway_job_id, #{engineJobId}),
+        result_uncertain = CASE WHEN #{observedState} = 'UNKNOWN' THEN result_uncertain ELSE 0 END,
         error_message = #{error}
     WHERE id = #{deploymentId}
   </update>

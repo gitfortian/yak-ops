@@ -23,10 +23,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Stage-6 compatibility decorator that adds immutable DefinitionVersion persistence without
- * rewriting the existing RealtimeJobService lifecycle path.
- */
+/** Compatibility decorator for immutable DefinitionVersion plus the evolving execution store. */
 @Primary
 @Repository
 public class VersioningRealtimeJobStore implements RealtimeJobStore {
@@ -44,10 +41,7 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
     this.compatibilityMapper = compatibilityMapper;
   }
 
-  /**
-   * Publish remains guarded by the legacy Task-row CAS in Wave 1. The new immutable version and the
-   * legacy publish marker are written in the same business transaction.
-   */
+  /** Immutable version creation and legacy release projection remain one transaction. */
   @Override
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public void publish(long id, int expectedDefinitionVersion, String expectedDigest) {
@@ -61,10 +55,7 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
     }
 
     PublicationCandidate candidate = publicationCandidate(current, expectedDigest);
-
-    // Keep the existing STOPPED/FAILED CAS and legacy release projection unchanged in Wave 1.
     delegate.publish(id, expectedDefinitionVersion, expectedDigest);
-
     StoredVersion version = definitionVersions.findOrCreate(candidate);
     definitionVersions.bindPublishedReference(
         id, version.id(), expectedDefinitionVersion, expectedDigest);
@@ -88,8 +79,6 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
           digest,
           DomainMappingState.MAPPED);
     } catch (UnsupportedLegacyDefinitionException exception) {
-      // Preserve existing behavior: the immutable compatibility snapshot is still published, but we
-      // refuse to pretend an incomplete legacy policy is a valid Core Domain value object.
       return new PublicationCandidate(
           current.id(),
           current.definitionVersion(),
@@ -255,6 +244,12 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
   }
 
   @Override
+  public List<DeploymentRow> reconcileCandidates() {
+    return delegate.reconcileCandidates();
+  }
+
+  @Override
+  @Deprecated
   public List<DefinitionRow> desiredJobs() {
     return delegate.desiredJobs();
   }

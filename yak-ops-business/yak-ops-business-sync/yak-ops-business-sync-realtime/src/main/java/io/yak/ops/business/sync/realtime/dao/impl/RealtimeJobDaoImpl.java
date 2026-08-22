@@ -58,8 +58,6 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, id)
-            .eq(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
-            .in(RealtimeJobDefinitionPO::getObservedState, List.of("STOPPED", "FAILED"))
             .set(RealtimeJobDefinitionPO::getJobName, name)
             .set(RealtimeJobDefinitionPO::getDescription, description)
             .set(RealtimeJobDefinitionPO::getRuntimeEnvironmentId, environmentId)
@@ -75,8 +73,6 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, id)
-            .eq(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
-            .in(RealtimeJobDefinitionPO::getObservedState, List.of("STOPPED", "FAILED"))
             .eq(RealtimeJobDefinitionPO::getDefinitionVersion, expectedDefinitionVersion)
             .eq(RealtimeJobDefinitionPO::getConfigDigest, expectedDigest)
             .set(RealtimeJobDefinitionPO::getReleaseState, "PUBLISHED")
@@ -149,8 +145,6 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, definitionId)
-            .eq(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
-            .in(RealtimeJobDefinitionPO::getObservedState, List.of("STOPPED", "FAILED"))
             .set(RealtimeJobDefinitionPO::getDesiredState, "RUNNING")
             .set(RealtimeJobDefinitionPO::getObservedState, "STARTING")
             .set(RealtimeJobDefinitionPO::getLastError, null));
@@ -159,24 +153,31 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   @Override
   public int markDeploymentRunning(
       long definitionId, long deploymentId, String engineJobId, String runtimeRevision) {
-    deploymentMapper.update(
-        null,
-        Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
-            .eq(RealtimeJobDeploymentPO::getId, deploymentId)
-            .set(RealtimeJobDeploymentPO::getGatewayJobId, engineJobId)
-            .set(RealtimeJobDeploymentPO::getRuntimeVersion, runtimeRevision)
-            .set(RealtimeJobDeploymentPO::getRuntimeRevision, runtimeRevision)
-            .set(RealtimeJobDeploymentPO::getStatus, "RUNNING")
-            .set(RealtimeJobDeploymentPO::getResultUncertain, false)
-            .set(RealtimeJobDeploymentPO::getErrorMessage, null));
-    return definitionMapper.update(
+    int executionUpdated =
+        deploymentMapper.update(
+            null,
+            Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
+                .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+                .eq(RealtimeJobDeploymentPO::getDesiredState, "RUNNING")
+                .eq(RealtimeJobDeploymentPO::getObservedState, "STARTING")
+                .set(RealtimeJobDeploymentPO::getGatewayJobId, engineJobId)
+                .set(RealtimeJobDeploymentPO::getRuntimeVersion, runtimeRevision)
+                .set(RealtimeJobDeploymentPO::getRuntimeRevision, runtimeRevision)
+                .set(RealtimeJobDeploymentPO::getObservedState, "RUNNING")
+                .set(RealtimeJobDeploymentPO::getStatus, "RUNNING")
+                .set(RealtimeJobDeploymentPO::getResultUncertain, false)
+                .set(RealtimeJobDeploymentPO::getErrorMessage, null));
+    if (executionUpdated != 1) return executionUpdated;
+
+    definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, definitionId)
-            .eq(RealtimeJobDefinitionPO::getDesiredState, "RUNNING")
-            .eq(RealtimeJobDefinitionPO::getObservedState, "STARTING")
+            .set(RealtimeJobDefinitionPO::getDesiredState, "RUNNING")
             .set(RealtimeJobDefinitionPO::getObservedState, "RUNNING")
             .set(RealtimeJobDefinitionPO::getLastError, null));
+    return executionUpdated;
   }
 
   @Override
@@ -200,38 +201,49 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       boolean uncertain,
       boolean stopRequested,
       String message) {
+    String desiredState = stopRequested ? "STOPPED" : (uncertain ? "RUNNING" : "STOPPED");
+    String observedState = uncertain ? "UNKNOWN" : "FAILED";
     deploymentMapper.update(
         null,
         Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
             .eq(RealtimeJobDeploymentPO::getId, deploymentId)
-            .set(RealtimeJobDeploymentPO::getStatus, uncertain ? "UNKNOWN" : "FAILED")
+            .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+            .set(RealtimeJobDeploymentPO::getDesiredState, desiredState)
+            .set(RealtimeJobDeploymentPO::getObservedState, observedState)
+            .set(RealtimeJobDeploymentPO::getStatus, observedState)
             .set(RealtimeJobDeploymentPO::getResultUncertain, uncertain)
             .set(RealtimeJobDeploymentPO::getErrorMessage, message));
-    String desiredState = stopRequested ? "STOPPED" : (uncertain ? "RUNNING" : "STOPPED");
     definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, definitionId)
             .set(RealtimeJobDefinitionPO::getDesiredState, desiredState)
-            .set(RealtimeJobDefinitionPO::getObservedState, uncertain ? "UNKNOWN" : "FAILED")
+            .set(RealtimeJobDefinitionPO::getObservedState, observedState)
             .set(RealtimeJobDefinitionPO::getLastError, message));
   }
 
   @Override
   public void markStopping(long definitionId, Long deploymentId) {
+    if (deploymentId != null) {
+      int updated =
+          deploymentMapper.update(
+              null,
+              Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
+                  .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                  .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+                  .set(RealtimeJobDeploymentPO::getDesiredState, "STOPPED")
+                  .set(RealtimeJobDeploymentPO::getObservedState, "STOPPING")
+                  .set(RealtimeJobDeploymentPO::getStatus, "STOPPING"));
+      if (updated != 1) {
+        throw new IllegalStateException("Execution 不存在或已变化，无法记录停止意图：" + deploymentId);
+      }
+    }
     definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, definitionId)
             .set(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
-            .set(RealtimeJobDefinitionPO::getObservedState, "STOPPING"));
-    if (deploymentId != null) {
-      deploymentMapper.update(
-          null,
-          Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
-              .eq(RealtimeJobDeploymentPO::getId, deploymentId)
-              .set(RealtimeJobDeploymentPO::getStatus, "STOPPING"));
-    }
+            .set(RealtimeJobDefinitionPO::getObservedState, deploymentId == null ? "STOPPED" : "STOPPING"));
   }
 
   @Override
@@ -242,19 +254,31 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       String deploymentState,
       String engineJobId,
       String error) {
+    if (deploymentId != null) {
+      commandMapper.reconcileDeployment(
+          deploymentId, observedState, deploymentState, engineJobId, error);
+    }
     definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, definitionId)
             .set(RealtimeJobDefinitionPO::getObservedState, observedState)
             .set(RealtimeJobDefinitionPO::getLastError, error));
-    if (deploymentId != null) {
-      commandMapper.reconcileDeployment(deploymentId, deploymentState, engineJobId, error);
-    }
   }
 
   @Override
   public void markTerminalFailure(long definitionId, Long deploymentId, String message) {
+    if (deploymentId != null) {
+      deploymentMapper.update(
+          null,
+          Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
+              .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+              .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+              .set(RealtimeJobDeploymentPO::getDesiredState, "STOPPED")
+              .set(RealtimeJobDeploymentPO::getObservedState, "FAILED")
+              .set(RealtimeJobDeploymentPO::getStatus, "FAILED")
+              .set(RealtimeJobDeploymentPO::getErrorMessage, message));
+    }
     definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
@@ -262,27 +286,24 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
             .set(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
             .set(RealtimeJobDefinitionPO::getObservedState, "FAILED")
             .set(RealtimeJobDefinitionPO::getLastError, message));
-    if (deploymentId != null) {
-      deploymentMapper.update(
-          null,
-          Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
-              .eq(RealtimeJobDeploymentPO::getId, deploymentId)
-              .set(RealtimeJobDeploymentPO::getStatus, "FAILED")
-              .set(RealtimeJobDeploymentPO::getErrorMessage, message));
-    }
+  }
+
+  @Override
+  public List<RealtimeJobDeploymentPO> reconcileExecutions() {
+    return commandMapper.reconcileExecutions();
   }
 
   @Override
   public List<RealtimeJobDefinitionPO> desiredJobs() {
-    return definitionMapper.selectList(
-        Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
-            .and(q ->
-                q.eq(RealtimeJobDefinitionPO::getDesiredState, "RUNNING")
-                    .or()
-                    .in(
-                        RealtimeJobDefinitionPO::getObservedState,
-                        List.of("STARTING", "STOPPING", "UNKNOWN", "CONFLICT")))
-            .orderByAsc(RealtimeJobDefinitionPO::getId));
+    List<Long> ids =
+        reconcileExecutions().stream()
+            .map(RealtimeJobDeploymentPO::getDefinitionId)
+            .distinct()
+            .toList();
+    if (ids.isEmpty()) return List.of();
+    return definitionMapper.selectBatchIds(ids).stream()
+        .sorted((left, right) -> Long.compare(left.getId(), right.getId()))
+        .toList();
   }
 
   @Override
@@ -292,13 +313,12 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public int deleteDefinition(long id) {
-    int deleted = definitionMapper.delete(
-        Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
-            .eq(RealtimeJobDefinitionPO::getId, id)
-            .eq(RealtimeJobDefinitionPO::getDesiredState, "STOPPED")
-            .in(RealtimeJobDefinitionPO::getObservedState, List.of("STOPPED", "FAILED")));
+    int deleted =
+        definitionMapper.delete(
+            Wrappers.<RealtimeJobDefinitionPO>lambdaQuery().eq(RealtimeJobDefinitionPO::getId, id));
     if (deleted != 1) return deleted;
 
+    // Audit-safe deletion is tracked separately as GAP-08 and is intentionally not changed in Wave 3.
     eventMapper.delete(
         Wrappers.<RealtimeJobEventPO>lambdaQuery()
             .eq(RealtimeJobEventPO::getDefinitionId, id));
@@ -335,10 +355,11 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
             .eq(RealtimeJobDeploymentPO::getIdempotencyKey, idempotencyKey)
             .isNull(RealtimeJobDeploymentPO::getGatewayJobId)
             .eq(RealtimeJobDeploymentPO::getRuntimeIdentityState, "REQUIRED")
-            .and(q ->
-                q.isNull(RealtimeJobDeploymentPO::getRuntimeJobName)
-                    .or()
-                    .eq(RealtimeJobDeploymentPO::getRuntimeJobName, runtimeJobName))
+            .and(
+                q ->
+                    q.isNull(RealtimeJobDeploymentPO::getRuntimeJobName)
+                        .or()
+                        .eq(RealtimeJobDeploymentPO::getRuntimeJobName, runtimeJobName))
             .set(RealtimeJobDeploymentPO::getRuntimeJobName, runtimeJobName)
             .set(RealtimeJobDeploymentPO::getRuntimeIdentityState, "BOUND"));
   }

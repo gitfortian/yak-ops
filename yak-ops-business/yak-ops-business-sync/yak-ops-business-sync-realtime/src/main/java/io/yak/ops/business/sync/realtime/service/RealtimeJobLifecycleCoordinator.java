@@ -2,8 +2,10 @@ package io.yak.ops.business.sync.realtime.service;
 
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
-import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
+import io.yak.ops.business.sync.realtime.domain.SyncExecution;
+import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
 import io.yak.ops.business.sync.realtime.engine.FlinkJobDiscoveryClient;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineException;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
@@ -26,7 +28,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/** Authoritative scheduled/manual reconciliation against the real Flink runtime. */
+/** Authoritative reconciliation between SyncExecution state and the real Flink runtime. */
 @Service
 public class RealtimeJobLifecycleCoordinator {
 
@@ -37,7 +39,7 @@ public class RealtimeJobLifecycleCoordinator {
   private final FlinkJobDiscoveryClient discovery;
   private final RealtimeEngineGateway gateway;
   private final RealtimeRuntimeResolver runtimeResolver;
-  private final RealtimeStateMachine stateMachine;
+  private final SyncExecutionStateMachine executionStateMachine;
   private final RealtimeSyncProperties properties;
   private final TransactionTemplate transactions;
   private final long orphanGraceSeconds;
@@ -50,7 +52,7 @@ public class RealtimeJobLifecycleCoordinator {
       FlinkJobDiscoveryClient discovery,
       RealtimeEngineGateway gateway,
       RealtimeRuntimeResolver runtimeResolver,
-      RealtimeStateMachine stateMachine,
+      SyncExecutionStateMachine executionStateMachine,
       RealtimeSyncProperties properties,
       @Value("${yak.sync.realtime.orphan-recovery-grace-seconds:120}") long orphanGraceSeconds,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager) {
@@ -59,27 +61,28 @@ public class RealtimeJobLifecycleCoordinator {
     this.discovery = discovery;
     this.gateway = gateway;
     this.runtimeResolver = runtimeResolver;
-    this.stateMachine = stateMachine;
+    this.executionStateMachine = executionStateMachine;
     this.properties = properties;
     this.orphanGraceSeconds = Math.max(10, orphanGraceSeconds);
     this.transactions = new TransactionTemplate(transactionManager);
   }
 
   public void reconcileAll() {
-    for (DefinitionRow candidate : store.desiredJobs()) {
+    for (DeploymentRow candidate : store.reconcileCandidates()) {
+      long taskId = candidate.definitionId();
       try {
-        reconcile(candidate.id());
-        consecutiveEngineFailures.remove(candidate.id());
+        reconcile(taskId);
+        consecutiveEngineFailures.remove(taskId);
       } catch (RealtimeEngineException exception) {
         int failures =
             consecutiveEngineFailures
-                .computeIfAbsent(candidate.id(), ignored -> new AtomicInteger())
+                .computeIfAbsent(taskId, ignored -> new AtomicInteger())
                 .incrementAndGet();
         if (failures >= Math.max(1, properties.getReconcileFailureThreshold())) {
-          markEngineUnavailable(candidate.id(), exception.getMessage());
+          markEngineUnavailable(taskId, exception.getMessage());
         }
       } catch (RuntimeException exception) {
-        LOG.warn("Realtime job {} reconciliation failed", candidate.id(), exception);
+        LOG.warn("Realtime execution for task {} reconciliation failed", taskId, exception);
       }
     }
   }
@@ -106,14 +109,13 @@ public class RealtimeJobLifecycleCoordinator {
     return store.view(id);
   }
 
-  /** Refuses metadata deletion unless the deployment's Flink runtime proves no job is active. */
+  /** Refuses metadata deletion unless the latest execution is terminal and Flink is inactive. */
   public void assertSafeToDelete(long id) {
     DefinitionRow definition = requireDefinition(id);
-    stateMachine.requireDefinitionMutable(definition.desiredState(), definition.observedState());
     DeploymentRow deployment = store.latestDeployment(id).orElse(null);
-    if (deployment == null) {
-      return;
-    }
+    if (deployment == null) return;
+
+    executionStateMachine.requireDefinitionMutable(deployment.execution());
     ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.deployment(definition, deployment);
     if (StringUtils.hasText(deployment.engineJobId())) {
       requireInactive(gateway.status(runtimeEnvironment, deployment.engineJobId()));
@@ -121,8 +123,6 @@ public class RealtimeJobLifecycleCoordinator {
     }
     String runtimeName = identityStore.findByDeploymentId(deployment.id()).orElse(null);
     if (!StringUtils.hasText(runtimeName)) {
-      // Runtime identity is bound immediately before entering the CLI. If it is absent, submission
-      // never crossed that boundary and there cannot be an orphan Flink job from this deployment.
       return;
     }
     for (String jobId : discovery.findJobIds(runtimeEnvironment, runtimeName)) {
@@ -155,24 +155,25 @@ public class RealtimeJobLifecycleCoordinator {
     String recoveredJobId = matches.get(0);
     transactions.executeWithoutResult(
         ignored -> {
-          DefinitionRow current = store.lockDefinition(definition.id());
+          store.lockDefinition(definition.id());
           DeploymentRow latest = store.latestDeployment(definition.id()).orElse(null);
           if (!sameDeployment(deployment, latest) || StringUtils.hasText(latest.engineJobId())) {
             return;
           }
+          SyncExecution execution = latest.execution();
           store.reconcile(
-              current.id(),
+              definition.id(),
               latest.id(),
-              current.observedState(),
+              execution.observedState().name(),
               latest.status(),
               recoveredJobId,
-              current.lastError());
+              execution.errorMessage());
           store.event(
-              current.id(),
+              definition.id(),
               latest.id(),
               "FLINK_JOB_ID_RECOVERED",
-              current.observedState(),
-              current.observedState(),
+              execution.observedState().name(),
+              execution.observedState().name(),
               "已通过 runtime job identity 找回 Flink JobId：" + recoveredJobId);
         });
     return recoveredJobId;
@@ -187,7 +188,7 @@ public class RealtimeJobLifecycleCoordinator {
     Boolean stop =
         transactions.execute(
             ignored -> {
-              DefinitionRow current = store.lockDefinition(definitionId);
+              store.lockDefinition(definitionId);
               DeploymentRow latest = store.latestDeployment(definitionId).orElse(null);
               if (latest == null
                   || latest.id() != deploymentId
@@ -195,10 +196,11 @@ public class RealtimeJobLifecycleCoordinator {
                       && !Objects.equals(latest.engineJobId(), jobId))) {
                 return false;
               }
+              SyncExecution execution = latest.execution();
 
               if (runtime.state() == RuntimeStatus.State.UNKNOWN) {
                 transition(
-                    current,
+                    definitionId,
                     latest,
                     "UNKNOWN",
                     "UNKNOWN",
@@ -206,12 +208,12 @@ public class RealtimeJobLifecycleCoordinator {
                     "Flink 当前运行状态未知");
                 return false;
               }
-              if ("RUNNING".equals(current.desiredState())) {
+              if (execution.desiredState().name().equals("RUNNING")) {
                 if (runtime.state() == RuntimeStatus.State.RUNNING) {
-                  transition(current, latest, "RUNNING", "RUNNING", jobId, null);
+                  transition(definitionId, latest, "RUNNING", "RUNNING", jobId, null);
                 } else {
                   failExpectedRunning(
-                      current,
+                      definitionId,
                       latest,
                       runtime.state() == RuntimeStatus.State.TERMINATED
                           ? "Flink 任务已终止"
@@ -220,10 +222,10 @@ public class RealtimeJobLifecycleCoordinator {
                 return false;
               }
               if (runtime.state() == RuntimeStatus.State.RUNNING) {
-                transition(current, latest, "STOPPING", "STOPPING", jobId, null);
+                transition(definitionId, latest, "STOPPING", "STOPPING", jobId, null);
                 return true;
               }
-              toStopped(current, latest, jobId, "Flink 已确认无活动任务");
+              toStopped(definitionId, latest, jobId, "Flink 已确认无活动任务");
               return false;
             });
 
@@ -240,15 +242,16 @@ public class RealtimeJobLifecycleCoordinator {
   private void settleMissing(long definitionId, DeploymentRow deployment, String reason) {
     transactions.executeWithoutResult(
         ignored -> {
-          DefinitionRow current = store.lockDefinition(definitionId);
+          store.lockDefinition(definitionId);
           DeploymentRow latest = store.latestDeployment(definitionId).orElse(null);
           if (!sameDeployment(deployment, latest) || StringUtils.hasText(latest.engineJobId())) {
             return;
           }
-          if ("RUNNING".equals(current.desiredState())) {
-            failExpectedRunning(current, latest, "提交结果不确定，" + reason);
+          SyncExecution execution = latest.execution();
+          if (execution.desiredState().name().equals("RUNNING")) {
+            failExpectedRunning(definitionId, latest, "提交结果不确定，" + reason);
           } else {
-            toStopped(current, latest, null, reason + "，已确认停止");
+            toStopped(definitionId, latest, null, reason + "，已确认停止");
           }
         });
   }
@@ -256,26 +259,29 @@ public class RealtimeJobLifecycleCoordinator {
   private void markConflict(long definitionId, DeploymentRow deployment, int count) {
     transactions.executeWithoutResult(
         ignored -> {
-          DefinitionRow current = store.lockDefinition(definitionId);
+          store.lockDefinition(definitionId);
           DeploymentRow latest = store.latestDeployment(definitionId).orElse(null);
           if (!sameDeployment(deployment, latest) || StringUtils.hasText(latest.engineJobId())) {
             return;
           }
-          String target = "STOPPING".equals(current.observedState()) ? "UNKNOWN" : "CONFLICT";
+          SyncExecution execution = latest.execution();
+          String target =
+              execution.observedState() == ObservedState.STOPPING ? "UNKNOWN" : "CONFLICT";
           String message = "runtime job identity 匹配到 " + count + " 个 Flink Job，拒绝自动绑定";
-          transition(current, latest, target, "UNKNOWN", null, message);
+          transition(definitionId, latest, target, "UNKNOWN", null, message);
         });
   }
 
   private void failExpectedRunning(
-      DefinitionRow current, DeploymentRow deployment, String message) {
-    stateMachine.requireTransition(current.observedState(), "FAILED");
-    store.markTerminalFailure(current.id(), deployment.id(), message);
+      long definitionId, DeploymentRow deployment, String message) {
+    SyncExecution execution = deployment.execution();
+    executionStateMachine.requireTransition(execution, "FAILED");
+    store.markTerminalFailure(definitionId, deployment.id(), message);
     store.event(
-        current.id(),
+        definitionId,
         deployment.id(),
         "FLINK_JOB_LOST",
-        current.observedState(),
+        execution.observedState().name(),
         "FAILED",
         message);
   }
@@ -284,80 +290,88 @@ public class RealtimeJobLifecycleCoordinator {
     try {
       transactions.executeWithoutResult(
           ignored -> {
-            DefinitionRow current = store.lockDefinition(definitionId);
-            if ("UNKNOWN".equals(current.observedState())) {
+            store.lockDefinition(definitionId);
+            DeploymentRow deployment = store.latestDeployment(definitionId).orElse(null);
+            if (deployment == null) return;
+            SyncExecution execution = deployment.execution();
+            if (execution.terminal() || execution.observedState() == ObservedState.UNKNOWN) {
               return;
             }
-            DeploymentRow deployment = store.latestDeployment(definitionId).orElse(null);
-            stateMachine.requireTransition(current.observedState(), "UNKNOWN");
+            executionStateMachine.requireTransition(execution, "UNKNOWN");
             String message = "Flink 状态不可用" + (detail == null ? "" : "：" + detail);
             store.reconcile(
                 definitionId,
-                deployment == null ? null : deployment.id(),
+                deployment.id(),
                 "UNKNOWN",
                 "UNKNOWN",
-                deployment == null ? null : deployment.engineJobId(),
+                deployment.engineJobId(),
                 message);
             store.event(
                 definitionId,
-                deployment == null ? null : deployment.id(),
+                deployment.id(),
                 "FLINK_UNAVAILABLE",
-                current.observedState(),
+                execution.observedState().name(),
                 "UNKNOWN",
                 message);
           });
     } catch (RuntimeException exception) {
-      LOG.debug("Unable to mark realtime job {} UNKNOWN", definitionId, exception);
+      LOG.debug("Unable to mark realtime execution for task {} UNKNOWN", definitionId, exception);
     }
   }
 
   private void markUnknown(long definitionId, long deploymentId, String jobId, String message) {
     transactions.executeWithoutResult(
         ignored -> {
-          DefinitionRow current = store.lockDefinition(definitionId);
+          store.lockDefinition(definitionId);
           DeploymentRow latest = store.latestDeployment(definitionId).orElse(null);
           if (latest == null || latest.id() != deploymentId) {
             return;
           }
-          transition(current, latest, "UNKNOWN", "UNKNOWN", jobId, message);
+          transition(definitionId, latest, "UNKNOWN", "UNKNOWN", jobId, message);
         });
   }
 
   private void transition(
-      DefinitionRow current,
+      long definitionId,
       DeploymentRow deployment,
       String observed,
       String deploymentState,
       String jobId,
       String error) {
-    if (!observed.equals(current.observedState())) {
-      stateMachine.requireTransition(current.observedState(), observed);
-    }
-    store.reconcile(current.id(), deployment.id(), observed, deploymentState, jobId, error);
-    if (!observed.equals(current.observedState()) || !Objects.equals(error, current.lastError())) {
+    SyncExecution execution = deployment.execution();
+    executionStateMachine.requireTransition(execution, observed);
+    store.reconcile(definitionId, deployment.id(), observed, deploymentState, jobId, error);
+    if (!observed.equals(execution.observedState().name())
+        || !Objects.equals(error, execution.errorMessage())) {
       store.event(
-          current.id(),
+          definitionId,
           deployment.id(),
           "STATE_RECONCILED",
-          current.observedState(),
+          execution.observedState().name(),
           observed,
           error == null ? "Flink 状态已对账" : error);
     }
   }
 
   private void toStopped(
-      DefinitionRow current, DeploymentRow deployment, String jobId, String message) {
-    String from = current.observedState();
-    if ("STARTING".equals(from) || "RUNNING".equals(from)) {
-      stateMachine.requireTransition(from, "STOPPING");
-      store.reconcile(current.id(), deployment.id(), "STOPPING", "STOPPING", jobId, null);
-      from = "STOPPING";
+      long definitionId, DeploymentRow deployment, String jobId, String message) {
+    ObservedState from = deployment.execution().observedState();
+    if (from == ObservedState.STARTING || from == ObservedState.RUNNING) {
+      executionStateMachine.requireTransition(from, ObservedState.STOPPING);
+      store.reconcile(definitionId, deployment.id(), "STOPPING", "STOPPING", jobId, null);
+      from = ObservedState.STOPPING;
     }
-    if (!"STOPPED".equals(from)) {
-      stateMachine.requireTransition(from, "STOPPED");
+    if (from != ObservedState.STOPPED) {
+      executionStateMachine.requireTransition(from, ObservedState.STOPPED);
     }
-    store.reconcile(current.id(), deployment.id(), "STOPPED", "STOPPED", jobId, null);
-    store.event(current.id(), deployment.id(), "STOPPED", from, "STOPPED", message);
+    store.reconcile(definitionId, deployment.id(), "STOPPED", "STOPPED", jobId, null);
+    store.event(
+        definitionId,
+        deployment.id(),
+        "STOPPED",
+        from.name(),
+        "STOPPED",
+        message);
   }
 
   private void requireInactive(RuntimeStatus runtime) {

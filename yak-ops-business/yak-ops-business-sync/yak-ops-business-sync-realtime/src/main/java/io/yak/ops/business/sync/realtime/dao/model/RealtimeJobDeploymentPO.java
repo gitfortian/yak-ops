@@ -21,6 +21,9 @@ public class RealtimeJobDeploymentPO {
   private String specSummary;
   private String configDigest;
   private String idempotencyKey;
+  private String engineType;
+  private String desiredState;
+  private String observedState;
   private String runtimeJobName;
   private String runtimeIdentityState;
   private String gatewayJobId;

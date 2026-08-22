@@ -22,7 +22,11 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
-import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.DesiredState;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
+import io.yak.ops.business.sync.realtime.domain.SyncExecution;
+import io.yak.ops.business.sync.realtime.domain.SyncExecution.EngineExecutionRef;
+import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPipeline;
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
@@ -75,54 +79,69 @@ class RealtimeJobServiceConcurrencyTest {
 
     ObjectMapper json = new ObjectMapper();
     ObjectNode capabilities = json.createObjectNode().put("runtimeVersion", "flink-cdc-cli-3.6.0");
-    environment = new ComputeEnvironmentSnapshot(
-        3L,
-        "test-env",
-        ComputeEnvironment.ENGINE_FLINK_CDC,
-        ComputeEnvironment.DEPLOYMENT_REMOTE,
-        ComputeEnvironment.SUBMITTER_LOCAL,
-        new RuntimeConfig("http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
-        2);
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L,
+            "test-env",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://127.0.0.1:8081",
+                "/opt/flink",
+                "/opt/flink-cdc",
+                null,
+                "1.20.5",
+                "3.6.0"),
+            2);
     when(runtimeResolver.definition(any(), eq(true))).thenReturn(environment);
     when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     when(runtimeResolver.environment(anyLong(), eq(true))).thenReturn(environment);
     when(gateway.capabilities(environment)).thenReturn(capabilities);
-    when(gateway.validate(eq(environment), any())).thenReturn(new ValidationResult(true, "exactly-once"));
-    when(compiler.compile(any(), any(), any())).thenReturn(new CompiledPipeline("pipeline: test", "test"));
+    when(gateway.validate(eq(environment), any()))
+        .thenReturn(new ValidationResult(true, "exactly-once"));
+    when(compiler.compile(any(), any(), any()))
+        .thenReturn(new CompiledPipeline("pipeline: test", "test"));
 
-    spec = new CdcPipelineSpec(
-        1L,
-        2L,
-        List.of(new TableRoute("source_table", "sink_table", MatchMode.EXACT, List.of("id"))),
-        "initial",
-        SchemaEvolution.EVOLVE,
-        1,
-        10_000,
-        new RestartPolicy("none", 0, 0),
-        new SinkTuning(0, 100, 1000, 1024, 16, true));
+    spec =
+        new CdcPipelineSpec(
+            1L,
+            2L,
+            List.of(
+                new TableRoute(
+                    "source_table", "sink_table", MatchMode.EXACT, List.of("id"))),
+            "initial",
+            SchemaEvolution.EVOLVE,
+            1,
+            10_000,
+            new RestartPolicy("none", 0, 0),
+            new SinkTuning(0, 100, 1000, 1024, 16, true));
     stopped = definition("STOPPED", "STOPPED");
     when(store.spec(any())).thenReturn(spec);
     when(store.runtimeEnvironmentId(JOB_ID)).thenReturn(environment.id());
     when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.of(published()));
 
-    service = new RealtimeJobService(
-        store,
-        json,
-        specValidator,
-        new RealtimeStateMachine(),
-        dataSourceResolver,
-        capabilityResolver,
-        compiler,
-        gateway,
-        runtimeResolver,
-        transactionManager);
+    service =
+        new RealtimeJobService(
+            store,
+            json,
+            specValidator,
+            new SyncExecutionStateMachine(),
+            dataSourceResolver,
+            capabilityResolver,
+            compiler,
+            gateway,
+            runtimeResolver,
+            transactionManager);
   }
 
   @Test
-  void rejectsDifferentKeyWhenAnotherInstanceAlreadyClaimedStarting() {
+  void activeExecutionBlocksAnotherStartEvenWhenTaskProjectionSaysStopped() {
     when(store.deploymentByIdempotencyKey("start-2")).thenReturn(Optional.empty());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
-    when(store.lockDefinition(JOB_ID)).thenReturn(definition("RUNNING", "STARTING"));
+    when(store.lockDefinition(JOB_ID)).thenReturn(stopped);
+    when(store.latestExecution(JOB_ID))
+        .thenReturn(Optional.of(execution(DesiredState.RUNNING, ObservedState.RUNNING, null)));
 
     assertThatThrownBy(() -> service.start(JOB_ID, "start-2"))
         .isInstanceOf(IllegalStateException.class)
@@ -130,6 +149,37 @@ class RealtimeJobServiceConcurrencyTest {
 
     verify(store, never()).insertDeployment(any(), any(), any(), any(), any(), any());
     verify(gateway, never()).deploy(any(), any());
+  }
+
+  @Test
+  void terminalExecutionAllowsNewStartEvenWhenTaskProjectionIsStaleActive() {
+    DefinitionRow staleTaskProjection = definition("RUNNING", "STARTING");
+    DeploymentRow failed = deployment(null, "FAILED");
+    DeploymentRow starting = deployment(null, "SUBMITTING");
+
+    when(store.deploymentByIdempotencyKey("terminal-restart")).thenReturn(Optional.empty());
+    when(store.definition(JOB_ID)).thenReturn(Optional.of(staleTaskProjection));
+    when(store.lockDefinition(JOB_ID)).thenReturn(staleTaskProjection, staleTaskProjection);
+    when(store.latestExecution(JOB_ID))
+        .thenReturn(Optional.of(execution(DesiredState.STOPPED, ObservedState.FAILED, null)));
+    when(store.insertDeployment(any(), any(), any(), any(), eq(environment), eq("terminal-restart")))
+        .thenReturn(DEPLOYMENT_ID);
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(starting));
+    when(dataSourceResolver.resolveCredentials(spec))
+        .thenReturn(
+            new CredentialBinding[] {
+              new CredentialBinding("source", "secret"),
+              new CredentialBinding("sink", "secret")
+            });
+    when(gateway.deploy(eq(environment), any()))
+        .thenReturn(new DeployResult("job-new", "exactly-once"));
+
+    // completeStart sees the newly created execution as STARTING/RUNNING desired.
+    assertThatCode(() -> service.start(JOB_ID, "terminal-restart")).doesNotThrowAnyException();
+
+    verify(store).insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("terminal-restart"));
+    verify(store).markDeploymentRunning(JOB_ID, DEPLOYMENT_ID, "job-new", environment.runtimeRevision());
+    verify(store, never()).markTerminalFailure(eq(JOB_ID), eq(failed.id()), any());
   }
 
   @Test
@@ -149,34 +199,43 @@ class RealtimeJobServiceConcurrencyTest {
 
   @Test
   void cancelsSubmittedJobWhenStopWinsDuringCliSubmission() {
-    DefinitionRow stopping = definition("STOPPED", "STOPPING");
-    DeploymentRow deployment = deployment("job-123", "STOPPING");
+    DeploymentRow stopping = deployment("job-123", "STOPPING");
 
     when(store.deploymentByIdempotencyKey("restart-safe")).thenReturn(Optional.empty());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
-    when(store.lockDefinition(JOB_ID)).thenReturn(stopped, stopping, stopping);
+    when(store.lockDefinition(JOB_ID)).thenReturn(stopped, stopped, stopped);
+    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
     when(store.insertDeployment(any(), any(), any(), any(), eq(environment), eq("restart-safe")))
         .thenReturn(DEPLOYMENT_ID);
     when(dataSourceResolver.resolveCredentials(spec))
-        .thenReturn(new CredentialBinding[] {
-          new CredentialBinding("source", "secret"),
-          new CredentialBinding("sink", "secret")
-        });
-    when(gateway.deploy(eq(environment), any())).thenReturn(new DeployResult("job-123", "exactly-once"));
+        .thenReturn(
+            new CredentialBinding[] {
+              new CredentialBinding("source", "secret"),
+              new CredentialBinding("sink", "secret")
+            });
+    when(gateway.deploy(eq(environment), any()))
+        .thenReturn(new DeployResult("job-123", "exactly-once"));
     when(gateway.status(environment, "job-123"))
         .thenReturn(
             new RuntimeStatus("job-123", RuntimeStatus.State.RUNNING),
             new RuntimeStatus("job-123", RuntimeStatus.State.TERMINATED));
-    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
+    when(store.latestDeployment(JOB_ID))
+        .thenReturn(
+            Optional.of(stopping),
+            Optional.of(stopping),
+            Optional.of(stopping));
 
     assertThatCode(() -> service.start(JOB_ID, "restart-safe")).doesNotThrowAnyException();
 
     verify(store)
         .bindDeploymentDefinitionVersion(DEPLOYMENT_ID, DEFINITION_VERSION_ID, 1);
     verify(store, never()).markDeploymentRunning(anyLong(), anyLong(), any(), any());
-    verify(store).bindDeploymentForStop(DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
+    verify(store)
+        .bindDeploymentForStop(
+            DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
     verify(gateway).stop(environment, "job-123");
-    verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
+    verify(store)
+        .reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
   }
 
   @Test
@@ -197,7 +256,7 @@ class RealtimeJobServiceConcurrencyTest {
         .thenReturn(Optional.of(original), Optional.of(changed));
     when(store.lockDefinition(JOB_ID)).thenReturn(stopped);
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.empty());
-    when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
+    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.restart(JOB_ID, "restart-pin"))
         .isInstanceOf(IllegalStateException.class)
@@ -254,6 +313,19 @@ class RealtimeJobServiceConcurrencyTest {
         false,
         null,
         null,
+        null);
+  }
+
+  private SyncExecution execution(
+      DesiredState desired, ObservedState observed, String engineJobId) {
+    return new SyncExecution(
+        DEPLOYMENT_ID,
+        JOB_ID,
+        DEFINITION_VERSION_ID,
+        desired,
+        observed,
+        new EngineExecutionRef("FLINK_CDC", engineJobId),
+        observed == ObservedState.UNKNOWN,
         null);
   }
 }
