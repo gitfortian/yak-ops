@@ -103,7 +103,9 @@ export default function YamlJobEditor({
     setParsing(true);
     setValidationMessage(undefined);
     try {
-      await parseCurrentYaml();
+      const spec = await parseCurrentYaml();
+      await realtimeApi.validateDefinition(spec, job.runtimeEnvironmentId);
+      setValidationMessage('YAML 已通过解析、Spec、运行环境与数据源预校验');
       message.success('YAML 校验通过');
     } catch (error: any) {
       setValidatedSpec(undefined);
@@ -143,7 +145,7 @@ export default function YamlJobEditor({
         runtimeEnvironmentId: job.runtimeEnvironmentId,
         spec,
       });
-      setValidationMessage('YAML 已解析为统一 Spec 并保存为实时同步草稿');
+      setValidationMessage('YAML 已通过统一预校验并保存为实时同步草稿');
       message.success('YAML 配置已保存');
       onSaved();
     } catch (error: any) {
@@ -238,7 +240,7 @@ export default function YamlJobEditor({
               <section className="rounded-xl bg-white p-5">
                 <div className="text-[13px] font-semibold text-[#101828]">校验状态</div>
                 <div className="mt-3 rounded-lg bg-[#f9fafb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-                  {validationMessage || '编辑后点击“校验”，确认 YAML 可以转换为统一 CdcPipelineSpec。'}
+                  {validationMessage || '编辑后点击“校验”，确认 YAML 可以转换并通过统一定义预校验。'}
                 </div>
                 {validatedSpec && (
                   <div className="mt-3 rounded-lg border border-[#abefc6] bg-[#ecfdf3] px-4 py-3 text-[12px] text-[#027a48]">
