@@ -1,6 +1,8 @@
 package io.yak.ops.business.sync.realtime.controller;
 
 import io.yak.framework.common.Result;
+import io.yak.ops.business.sync.realtime.controller.v1.ComputeEnvironmentController;
+import io.yak.ops.business.sync.realtime.controller.v1.RealtimeJobController;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +36,7 @@ public class RealtimeExceptionHandler {
 
   @ExceptionHandler(RealtimeEngineException.class)
   ResponseEntity<Result<Void>> gateway(RealtimeEngineException exception) {
-    HttpStatus status =
-        exception.uncertain() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY;
+    HttpStatus status = exception.uncertain() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY;
     return response(status, exception.getMessage());
   }
 

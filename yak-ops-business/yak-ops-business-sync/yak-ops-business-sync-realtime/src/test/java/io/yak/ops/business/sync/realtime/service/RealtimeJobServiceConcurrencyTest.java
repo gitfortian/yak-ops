@@ -73,16 +73,14 @@ class RealtimeJobServiceConcurrencyTest {
 
     ObjectMapper json = new ObjectMapper();
     ObjectNode capabilities = json.createObjectNode().put("runtimeVersion", "flink-cdc-cli-3.6.0");
-    environment =
-        new ComputeEnvironmentSnapshot(
-            3L,
-            "test-env",
-            ComputeEnvironment.ENGINE_FLINK_CDC,
-            ComputeEnvironment.DEPLOYMENT_REMOTE,
-            ComputeEnvironment.SUBMITTER_LOCAL,
-            new RuntimeConfig(
-                "http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
-            2);
+    environment = new ComputeEnvironmentSnapshot(
+        3L,
+        "test-env",
+        ComputeEnvironment.ENGINE_FLINK_CDC,
+        ComputeEnvironment.DEPLOYMENT_REMOTE,
+        ComputeEnvironment.SUBMITTER_LOCAL,
+        new RuntimeConfig("http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
+        2);
     when(runtimeResolver.definition(any(), eq(true))).thenReturn(environment);
     when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     when(runtimeResolver.environment(anyLong(), eq(true))).thenReturn(environment);
@@ -90,33 +88,31 @@ class RealtimeJobServiceConcurrencyTest {
     when(gateway.validate(eq(environment), any())).thenReturn(new ValidationResult(true, "exactly-once"));
     when(compiler.compile(any(), any(), any())).thenReturn(new CompiledPipeline("pipeline: test", "test"));
 
-    spec =
-        new CdcPipelineSpec(
-            1L,
-            2L,
-            List.of(new TableRoute("source_table", "sink_table", MatchMode.EXACT, List.of("id"))),
-            "initial",
-            SchemaEvolution.EVOLVE,
-            1,
-            10_000,
-            new RestartPolicy("none", 0, 0),
-            new SinkTuning(0, 100, 1000, 1024, 16, true));
+    spec = new CdcPipelineSpec(
+        1L,
+        2L,
+        List.of(new TableRoute("source_table", "sink_table", MatchMode.EXACT, List.of("id"))),
+        "initial",
+        SchemaEvolution.EVOLVE,
+        1,
+        10_000,
+        new RestartPolicy("none", 0, 0),
+        new SinkTuning(0, 100, 1000, 1024, 16, true));
     stopped = definition("STOPPED", "STOPPED");
     when(store.spec(any())).thenReturn(spec);
     when(store.runtimeEnvironmentId(JOB_ID)).thenReturn(environment.id());
 
-    service =
-        new RealtimeJobService(
-            store,
-            json,
-            specValidator,
-            new RealtimeStateMachine(),
-            dataSourceResolver,
-            capabilityResolver,
-            compiler,
-            gateway,
-            runtimeResolver,
-            transactionManager);
+    service = new RealtimeJobService(
+        store,
+        json,
+        specValidator,
+        new RealtimeStateMachine(),
+        dataSourceResolver,
+        capabilityResolver,
+        compiler,
+        gateway,
+        runtimeResolver,
+        transactionManager);
   }
 
   @Test
@@ -144,13 +140,11 @@ class RealtimeJobServiceConcurrencyTest {
     when(store.insertDeployment(any(), any(), any(), any(), eq(environment), eq("restart-safe")))
         .thenReturn(DEPLOYMENT_ID);
     when(dataSourceResolver.resolveCredentials(spec))
-        .thenReturn(
-            new CredentialBinding[] {
-              new CredentialBinding("source", "secret"),
-              new CredentialBinding("sink", "secret")
-            });
-    when(gateway.deploy(eq(environment), any()))
-        .thenReturn(new DeployResult("job-123", "exactly-once"));
+        .thenReturn(new CredentialBinding[] {
+          new CredentialBinding("source", "secret"),
+          new CredentialBinding("sink", "secret")
+        });
+    when(gateway.deploy(eq(environment), any())).thenReturn(new DeployResult("job-123", "exactly-once"));
     when(gateway.status(environment, "job-123"))
         .thenReturn(
             new RuntimeStatus("job-123", RuntimeStatus.State.RUNNING),
@@ -160,9 +154,7 @@ class RealtimeJobServiceConcurrencyTest {
     assertThatCode(() -> service.start(JOB_ID, "restart-safe")).doesNotThrowAnyException();
 
     verify(store, never()).markDeploymentRunning(anyLong(), anyLong(), any(), any());
-    verify(store)
-        .bindDeploymentForStop(
-            DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
+    verify(store).bindDeploymentForStop(DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
     verify(gateway).stop(environment, "job-123");
     verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
   }
@@ -172,7 +164,8 @@ class RealtimeJobServiceConcurrencyTest {
         JOB_ID,
         "test-job",
         null,
-        "{}",
+        spec,
+        environment.id(),
         "PUBLISHED",
         desired,
         observed,
@@ -189,12 +182,13 @@ class RealtimeJobServiceConcurrencyTest {
         DEPLOYMENT_ID,
         JOB_ID,
         1,
-        "{}",
+        spec,
         "test",
         "digest",
         "restart-safe",
         engineJobId,
         "flink-cdc-cli-3.6.0@env-3-v2",
+        environment,
         status,
         false,
         null,

@@ -48,32 +48,22 @@ class RealtimeJobLifecycleCoordinatorTest {
     discovery = mock(FlinkJobDiscoveryClient.class);
     gateway = mock(RealtimeEngineGateway.class);
     runtimeResolver = mock(RealtimeRuntimeResolver.class);
-    environment =
-        new ComputeEnvironmentSnapshot(
-            3L,
-            "test-env",
-            ComputeEnvironment.ENGINE_FLINK_CDC,
-            ComputeEnvironment.DEPLOYMENT_REMOTE,
-            ComputeEnvironment.SUBMITTER_LOCAL,
-            new RuntimeConfig(
-                "http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
-            2);
+    environment = snapshot();
     when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     RealtimeSyncProperties properties = new RealtimeSyncProperties();
     properties.setReconcileFailureThreshold(3);
-    coordinator =
-        new RealtimeJobLifecycleCoordinator(
-            store,
-            identityStore,
-            discovery,
-            gateway,
-            runtimeResolver,
-            new RealtimeStateMachine(),
-            properties,
-            10,
-            transactionManager);
+    coordinator = new RealtimeJobLifecycleCoordinator(
+        store,
+        identityStore,
+        discovery,
+        gateway,
+        runtimeResolver,
+        new RealtimeStateMachine(),
+        properties,
+        10,
+        transactionManager);
   }
 
   @Test
@@ -85,23 +75,13 @@ class RealtimeJobLifecycleCoordinatorTest {
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
     when(identityStore.findByDeploymentId(DEPLOYMENT_ID)).thenReturn(Optional.of("yak-rt-test"));
     when(discovery.findJobIds(environment, "yak-rt-test")).thenReturn(List.of(FLINK_JOB_ID));
-    when(gateway.status(environment, FLINK_JOB_ID))
-        .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
+    when(gateway.status(environment, FLINK_JOB_ID)).thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
 
     coordinator.reconcile(JOB_ID);
 
-    verify(store)
-        .reconcile(JOB_ID, DEPLOYMENT_ID, "UNKNOWN", "UNKNOWN", FLINK_JOB_ID, null);
-    verify(store)
-        .reconcile(JOB_ID, DEPLOYMENT_ID, "RUNNING", "RUNNING", FLINK_JOB_ID, null);
-    verify(store)
-        .event(
-            JOB_ID,
-            DEPLOYMENT_ID,
-            "FLINK_JOB_ID_RECOVERED",
-            "UNKNOWN",
-            "UNKNOWN",
-            "已通过 runtime job identity 找回 Flink JobId：" + FLINK_JOB_ID);
+    verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "UNKNOWN", "UNKNOWN", FLINK_JOB_ID, null);
+    verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "RUNNING", "RUNNING", FLINK_JOB_ID, null);
+    verify(store).event(JOB_ID, DEPLOYMENT_ID, "FLINK_JOB_ID_RECOVERED", "UNKNOWN", "UNKNOWN", "已通过 runtime job identity 找回 Flink JobId：" + FLINK_JOB_ID);
   }
 
   @Test
@@ -117,14 +97,7 @@ class RealtimeJobLifecycleCoordinatorTest {
     coordinator.reconcile(JOB_ID);
 
     verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", null, null);
-    verify(store)
-        .event(
-            JOB_ID,
-            DEPLOYMENT_ID,
-            "STOPPED",
-            "STOPPING",
-            "STOPPED",
-            "恢复窗口内未发现匹配的 Flink runtime job，已确认停止");
+    verify(store).event(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPING", "STOPPED", "恢复窗口内未发现匹配的 Flink runtime job，已确认停止");
   }
 
   @Test
@@ -134,21 +107,12 @@ class RealtimeJobLifecycleCoordinatorTest {
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
     when(store.lockDefinition(JOB_ID)).thenReturn(definition);
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
-    when(gateway.status(environment, FLINK_JOB_ID))
-        .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.UNKNOWN));
+    when(gateway.status(environment, FLINK_JOB_ID)).thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.UNKNOWN));
 
     coordinator.reconcile(JOB_ID);
 
-    verify(store)
-        .reconcile(
-            JOB_ID,
-            DEPLOYMENT_ID,
-            "UNKNOWN",
-            "UNKNOWN",
-            FLINK_JOB_ID,
-            "Flink 当前运行状态未知");
-    verify(store, never())
-        .reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", FLINK_JOB_ID, null);
+    verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "UNKNOWN", "UNKNOWN", FLINK_JOB_ID, "Flink 当前运行状态未知");
+    verify(store, never()).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", FLINK_JOB_ID, null);
   }
 
   @Test
@@ -157,8 +121,7 @@ class RealtimeJobLifecycleCoordinatorTest {
     DeploymentRow deployment = deployment(FLINK_JOB_ID, "FAILED", LocalDateTime.now());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
-    when(gateway.status(environment, FLINK_JOB_ID))
-        .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
+    when(gateway.status(environment, FLINK_JOB_ID)).thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
 
     assertThatThrownBy(() -> coordinator.assertSafeToDelete(JOB_ID))
         .isInstanceOf(IllegalStateException.class)
@@ -166,37 +129,21 @@ class RealtimeJobLifecycleCoordinatorTest {
   }
 
   private DefinitionRow definition(String desired, String observed) {
-    return new DefinitionRow(
-        JOB_ID,
-        "test-job",
-        null,
-        "{}",
-        "PUBLISHED",
-        desired,
-        observed,
-        1,
-        1,
-        "digest",
-        null,
-        null,
-        null);
+    return new DefinitionRow(JOB_ID, "test-job", null, null, environment.id(), "PUBLISHED", desired, observed, 1, 1, "digest", null, null, null);
   }
 
   private DeploymentRow deployment(String engineJobId, String status, LocalDateTime createTime) {
-    return new DeploymentRow(
-        DEPLOYMENT_ID,
-        JOB_ID,
-        1,
-        "{}",
-        "summary",
-        "digest",
-        "key",
-        engineJobId,
-        null,
-        status,
-        true,
-        null,
-        createTime,
-        createTime);
+    return new DeploymentRow(DEPLOYMENT_ID, JOB_ID, 1, null, "summary", "digest", "key", engineJobId, null, environment, status, true, null, createTime, createTime);
+  }
+
+  private ComputeEnvironmentSnapshot snapshot() {
+    return new ComputeEnvironmentSnapshot(
+        3L,
+        "test-env",
+        ComputeEnvironment.ENGINE_FLINK_CDC,
+        ComputeEnvironment.DEPLOYMENT_REMOTE,
+        ComputeEnvironment.SUBMITTER_LOCAL,
+        new RuntimeConfig("http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
+        2);
   }
 }

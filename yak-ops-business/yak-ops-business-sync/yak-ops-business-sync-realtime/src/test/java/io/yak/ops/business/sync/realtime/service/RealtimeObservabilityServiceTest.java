@@ -33,16 +33,10 @@ class RealtimeObservabilityServiceTest {
     store = mock(RealtimeJobStore.class);
     flink = mock(FlinkObservabilityClient.class);
     runtimeResolver = mock(RealtimeRuntimeResolver.class);
-    environment =
-        new ComputeEnvironmentSnapshot(
-            3L,
-            "test-env",
-            ComputeEnvironment.ENGINE_FLINK_CDC,
-            ComputeEnvironment.DEPLOYMENT_REMOTE,
-            ComputeEnvironment.SUBMITTER_LOCAL,
-            new RuntimeConfig(
-                "http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
-            2);
+    environment = new ComputeEnvironmentSnapshot(
+        3L, "test-env", ComputeEnvironment.ENGINE_FLINK_CDC, ComputeEnvironment.DEPLOYMENT_REMOTE,
+        ComputeEnvironment.SUBMITTER_LOCAL,
+        new RuntimeConfig("http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"), 2);
     when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     service = new RealtimeObservabilityService(store, runtimeResolver, flink);
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition()));
@@ -52,7 +46,6 @@ class RealtimeObservabilityServiceTest {
   void readsSubmissionLogBeforeFlinkJobIdIsRecovered() {
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment(null)));
     when(flink.submissionLog("start-key", 500)).thenReturn("submitting");
-
     assertThat(service.submissionLog(JOB_ID, 500)).isEqualTo("submitting");
     verify(flink).submissionLog("start-key", 500);
   }
@@ -60,7 +53,6 @@ class RealtimeObservabilityServiceTest {
   @Test
   void runtimeObservabilityStillRequiresFlinkJobId() {
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment(null)));
-
     assertThatThrownBy(() -> service.runtimeLog(JOB_ID, 50))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("尚无 Flink jobId");
@@ -68,38 +60,11 @@ class RealtimeObservabilityServiceTest {
 
   private DefinitionRow definition() {
     LocalDateTime now = LocalDateTime.now();
-    return new DefinitionRow(
-        JOB_ID,
-        "test-job",
-        null,
-        "{}",
-        "PUBLISHED",
-        "RUNNING",
-        "STARTING",
-        1,
-        1,
-        "digest",
-        null,
-        now,
-        now);
+    return new DefinitionRow(JOB_ID, "test-job", null, null, environment.id(), "PUBLISHED", "RUNNING", "STARTING", 1, 1, "digest", null, now, now);
   }
 
   private DeploymentRow deployment(String engineJobId) {
     LocalDateTime now = LocalDateTime.now();
-    return new DeploymentRow(
-        19L,
-        JOB_ID,
-        1,
-        "{}",
-        "summary",
-        "digest",
-        "start-key",
-        engineJobId,
-        null,
-        "SUBMITTING",
-        true,
-        null,
-        now,
-        now);
+    return new DeploymentRow(19L, JOB_ID, 1, null, "summary", "digest", "start-key", engineJobId, null, environment, "SUBMITTING", true, null, now, now);
   }
 }

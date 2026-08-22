@@ -32,11 +32,13 @@ public class RealtimeRuntimeResolver {
   }
 
   public ComputeEnvironmentSnapshot definition(DefinitionRow definition, boolean requireEnabled) {
-    return environment(jobs.runtimeEnvironmentId(definition.id()), requireEnabled);
+    return environment(definition.runtimeEnvironmentId(), requireEnabled);
   }
 
-  public ComputeEnvironmentSnapshot deployment(
-      DefinitionRow definition, DeploymentRow deployment) {
+  public ComputeEnvironmentSnapshot deployment(DefinitionRow definition, DeploymentRow deployment) {
+    if (deployment.runtimeEnvironment() != null) {
+      return deployment.runtimeEnvironment();
+    }
     return jobs
         .deploymentEnvironment(deployment.id())
         .orElseThrow(() -> new IllegalStateException("实时同步部署缺少运行环境快照：" + deployment.id()));
