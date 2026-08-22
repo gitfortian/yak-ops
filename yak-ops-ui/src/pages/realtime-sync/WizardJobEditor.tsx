@@ -27,6 +27,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BRAND_THEME } from '@/styles/brand';
 import { realtimeApi } from './api';
+import RealtimeEditorModeSwitch from './RealtimeEditorModeSwitch';
+import type { RealtimeEditorMode } from './realtimeEditorMode';
 import type {
   CdcPipelineSpec,
   DataSourceCatalogTable,
@@ -130,11 +132,13 @@ export default function WizardJobEditor({
   dataSources,
   onClose,
   onSaved,
+  onSwitchMode,
 }: {
   job: RealtimeJob;
   dataSources: DataSourceOption[];
   onClose: () => void;
   onSaved: () => void;
+  onSwitchMode?: (mode: RealtimeEditorMode, spec: CdcPipelineSpec) => void;
 }) {
   const [sourceId, setSourceId] = useState<number | undefined>(job.spec?.sourceDataSourceRef);
   const [sinkId, setSinkId] = useState<number | undefined>(job.spec?.sinkDataSourceRef);
@@ -165,7 +169,6 @@ export default function WizardJobEditor({
         })),
     [dataSources, sourceId],
   );
-
   const selectedNameSet = useMemo(
     () => new Set(selectedTables.map((item) => item.table.name)),
     [selectedTables],
@@ -195,7 +198,6 @@ export default function WizardJobEditor({
     try {
       const response = await realtimeApi.catalogTables(dataSourceId);
       if (requestId !== catalogRequestRef.current || sourceIdRef.current !== dataSourceId) return;
-
       const uniqueTables = Array.from(
         new Map(
           (response.data || [])
@@ -203,12 +205,11 @@ export default function WizardJobEditor({
             .map((table) => [table.name, table] as const),
         ).values(),
       ).sort((left, right) => left.name.localeCompare(right.name));
-
       setTables(uniqueTables);
       setSelectedTables((previous) =>
         previous.map((selected) => {
-          const catalogTable = uniqueTables.find((table) => table.name === selected.table.name);
-          return catalogTable ? { ...selected, table: catalogTable } : selected;
+          const current = uniqueTables.find((table) => table.name === selected.table.name);
+          return current ? { ...selected, table: current } : selected;
         }),
       );
     } catch (error: any) {
@@ -235,7 +236,6 @@ export default function WizardJobEditor({
           : selected,
       ),
     );
-
     try {
       const response = await realtimeApi.catalogColumns(dataSourceId, table);
       if (sourceIdRef.current !== dataSourceId) return;
@@ -243,34 +243,30 @@ export default function WizardJobEditor({
         .filter((column) => column.primaryKey)
         .sort((left, right) => (left.ordinalPosition || 0) - (right.ordinalPosition || 0))
         .map((column) => column.name);
-
       setSelectedTables((previous) =>
-        previous.map((selected) => {
-          if (selected.table.name !== table.name) return selected;
-          return {
-            ...selected,
-            table,
-            route: {
-              sourceTable: table.name,
-              sinkTable: selected.route.sinkTable || table.name,
-              matchMode: 'EXACT',
-              keyColumns,
-            },
-            status: keyColumns.length > 0 ? 'ready' : 'missing',
-            error: undefined,
-          };
-        }),
+        previous.map((selected) =>
+          selected.table.name === table.name
+            ? {
+                ...selected,
+                table,
+                route: {
+                  sourceTable: table.name,
+                  sinkTable: selected.route.sinkTable || table.name,
+                  matchMode: 'EXACT',
+                  keyColumns,
+                },
+                status: keyColumns.length > 0 ? 'ready' : 'missing',
+                error: undefined,
+              }
+            : selected,
+        ),
       );
     } catch (error: any) {
       if (sourceIdRef.current !== dataSourceId) return;
       setSelectedTables((previous) =>
         previous.map((selected) =>
           selected.table.name === table.name
-            ? {
-                ...selected,
-                status: 'error',
-                error: error?.message || '主键元数据读取失败',
-              }
+            ? { ...selected, status: 'error', error: error?.message || '主键元数据读取失败' }
             : selected,
         ),
       );
@@ -296,7 +292,6 @@ export default function WizardJobEditor({
       return;
     }
     if (selectedNameSet.has(table.name)) return;
-
     setSelectedTables((previous) => [
       ...previous,
       {
@@ -313,60 +308,43 @@ export default function WizardJobEditor({
     void resolvePrimaryKey(table, sourceId);
   };
 
-  const updateSinkTable = (sourceTable: string, sinkTable: string) => {
-    setSelectedTables((previous) =>
-      previous.map((selected) =>
-        selected.table.name === sourceTable
-          ? { ...selected, route: { ...selected.route, sinkTable } }
-          : selected,
-      ),
-    );
-  };
-
-  const updateAdvanced = <K extends keyof AdvancedSettings>(
-    key: K,
-    value: AdvancedSettings[K],
-  ) => {
-    setAdvanced((previous) => ({ ...previous, [key]: value }));
-  };
-
-  const save = async () => {
+  const buildCurrentSpec = (): CdcPipelineSpec | undefined => {
     if (!sourceId) {
       message.warning('请选择 Source 数据源');
-      return;
+      return undefined;
     }
     if (!sinkId) {
       message.warning('请选择 Sink 数据源');
-      return;
+      return undefined;
     }
     if (sourceId === sinkId) {
       message.warning('Source 与 Sink 不能使用同一个数据源');
-      return;
+      return undefined;
     }
     if (selectedTables.length === 0) {
       message.warning('请至少选择一张同步表');
-      return;
+      return undefined;
     }
     if (hasUnsupportedRoutes) {
-      message.warning('当前任务包含向导暂不支持的正则表规则，请使用原编辑器处理');
-      return;
+      message.warning('当前任务包含向导暂不支持的正则表规则，请切换到 YAML 模式编辑');
+      return undefined;
     }
     if (primaryKeyPending) {
-      message.warning('主键仍在识别中，请稍后再保存');
-      return;
+      message.warning('主键仍在识别中，请稍后再操作');
+      return undefined;
     }
     const invalidTables = selectedTables.filter((item) => item.status !== 'ready');
     if (invalidTables.length > 0) {
-      message.warning(`以下表暂不能保存：${invalidTables.map((item) => item.table.name).join('、')}`);
-      return;
+      message.warning(`以下表暂不能继续：${invalidTables.map((item) => item.table.name).join('、')}`);
+      return undefined;
     }
     if (sinkMappingInvalid) {
       message.warning('目标表名不能为空，也不能包含换行');
-      return;
+      return undefined;
     }
 
     const baseSpec = job.spec || DEFAULT_SPEC;
-    const spec: CdcPipelineSpec = {
+    return {
       ...baseSpec,
       sourceDataSourceRef: sourceId,
       sinkDataSourceRef: sinkId,
@@ -390,7 +368,21 @@ export default function WizardJobEditor({
         strictReplaySafety: true,
       },
     };
+  };
 
+  const switchToYaml = () => {
+    if (!onSwitchMode) return;
+    if (hasUnsupportedRoutes && job.spec) {
+      onSwitchMode('yaml', job.spec);
+      return;
+    }
+    const spec = buildCurrentSpec();
+    if (spec) onSwitchMode('yaml', spec);
+  };
+
+  const save = async () => {
+    const spec = buildCurrentSpec();
+    if (!spec) return;
     setSaving(true);
     try {
       await realtimeApi.update(job.id, {
@@ -412,22 +404,31 @@ export default function WizardJobEditor({
     <ConfigProvider theme={BRAND_THEME} variant="filled">
       <div className="min-h-[calc(100vh-64px)] bg-[#f7f8fa] text-[#161823]">
         <div className="mx-auto w-full max-w-[1180px] px-6 pb-28 pt-6">
-          <header className="mb-5 flex items-start justify-between gap-4 rounded-xl bg-white px-7 py-6">
+          <header className="mb-5 flex flex-wrap items-start justify-between gap-4 rounded-xl bg-white px-7 py-6">
             <div>
-              <div className="mb-1 text-[12px] font-medium text-[var(--yak-brand-color)]">向导模式 · 流程 3</div>
+              <div className="mb-1 text-[12px] font-medium text-[var(--yak-brand-color)]">实时同步编辑器</div>
               <h1 className="m-0 text-[20px] font-semibold text-[#101828]">配置实时同步任务</h1>
               <div className="mt-2 text-[13px] text-[#667085]">
                 {job.name} · 运行环境 #{job.runtimeEnvironmentId}
               </div>
             </div>
-            <div className="rounded-lg bg-[#f9fafb] px-4 py-2 text-[12px] text-[#667085]">
-              选数据源、选表、确认映射和同步方式即可完成配置
+            <div className="flex items-center gap-3">
+              <RealtimeEditorModeSwitch
+                value="wizard"
+                disabled={saving || primaryKeyPending}
+                onChange={(mode) => {
+                  if (mode === 'yaml') switchToYaml();
+                }}
+              />
+              <div className="rounded-lg bg-[#f9fafb] px-4 py-2 text-[12px] text-[#667085]">
+                切换模式不会自动保存
+              </div>
             </div>
           </header>
 
           {hasUnsupportedRoutes && (
             <div className="mb-5 rounded-xl border border-[#fedf89] bg-[#fffaeb] px-5 py-4 text-[13px] text-[#93370d]">
-              当前任务包含正则表规则，向导模式暂不能安全表达这些配置。本页可查看，但不会允许覆盖保存。
+              当前任务包含向导暂不支持的 REGEX 表规则。请切换到 YAML 模式继续编辑，向导不会覆盖这些配置。
             </div>
           )}
 
@@ -476,9 +477,7 @@ export default function WizardJobEditor({
                   <TableOutlined className="text-[var(--yak-brand-color)]" />
                   <h2 className="m-0 text-[16px] font-semibold text-[#101828]">同步表与目标映射</h2>
                 </div>
-                <div className="mt-1 text-[12px] text-[#98a2b3]">
-                  选择 1 张就是单表同步，选择多张就是多表同步；目标表默认同名，可按需修改。
-                </div>
+                <div className="mt-1 text-[12px] text-[#98a2b3]">目标表默认同名，可按需修改。</div>
               </div>
               <div className="flex items-center gap-2">
                 <Tag>{selectedTables.length} 张已选</Tag>
@@ -511,28 +510,19 @@ export default function WizardJobEditor({
                   </div>
                   <div className="max-h-[480px] overflow-y-auto">
                     {tableLoading ? (
-                      <div className="flex min-h-[220px] items-center justify-center">
-                        <Spin tip="正在读取 Source Catalog..." />
-                      </div>
+                      <div className="flex min-h-[220px] items-center justify-center"><Spin /></div>
                     ) : filteredTables.length === 0 ? (
-                      <div className="py-12">
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到可同步的数据表" />
-                      </div>
+                      <div className="py-12"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到可同步的数据表" /></div>
                     ) : (
                       filteredTables.map((table) => (
-                        <label
-                          key={table.name}
-                          className="flex cursor-pointer items-start gap-3 border-b border-[#f2f4f7] px-4 py-3 last:border-b-0 hover:bg-[#fafbfc]"
-                        >
+                        <label key={table.name} className="flex cursor-pointer items-start gap-3 border-b border-[#f2f4f7] px-4 py-3 last:border-b-0 hover:bg-[#fafbfc]">
                           <Checkbox
                             checked={selectedNameSet.has(table.name)}
                             onChange={(event) => handleTableToggle(table, event.target.checked)}
                           />
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[13px] font-medium text-[#344054]">{table.name}</div>
-                            <div className="mt-0.5 truncate text-[11px] text-[#98a2b3]">
-                              {table.remarks || table.type || 'TABLE'}
-                            </div>
+                            <div className="mt-0.5 truncate text-[11px] text-[#98a2b3]">{table.remarks || table.type || 'TABLE'}</div>
                           </div>
                         </label>
                       ))
@@ -547,53 +537,27 @@ export default function WizardJobEditor({
                   </div>
                   <div className="max-h-[480px] overflow-y-auto">
                     {selectedTables.length === 0 ? (
-                      <div className="py-12">
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有选择数据表" />
-                      </div>
+                      <div className="py-12"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有选择数据表" /></div>
                     ) : (
                       selectedTables.map((selected) => (
                         <div key={selected.table.name} className="border-b border-[#f2f4f7] px-4 py-4 last:border-b-0">
                           <div className="mb-2 flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="truncate text-[13px] font-medium text-[#344054]">
-                                {selected.table.name}
-                              </div>
+                              <div className="truncate text-[13px] font-medium text-[#344054]">{selected.table.name}</div>
                               <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                {selected.status === 'loading' && (
-                                  <span className="inline-flex items-center gap-1 text-[11px] text-[#667085]">
-                                    <Spin size="small" /> 正在识别主键
-                                  </span>
-                                )}
+                                {selected.status === 'loading' && <span className="text-[11px] text-[#667085]"><Spin size="small" /> 正在识别主键</span>}
                                 {selected.status === 'ready' && (
                                   <>
                                     <CheckCircleOutlined className="text-[#12b76a]" />
-                                    {selected.route.keyColumns.map((column) => (
-                                      <Tag key={column} icon={<KeyOutlined />}>
-                                        {column}
-                                      </Tag>
-                                    ))}
+                                    {selected.route.keyColumns.map((column) => <Tag key={column} icon={<KeyOutlined />}>{column}</Tag>)}
                                   </>
                                 )}
-                                {selected.status === 'missing' && (
-                                  <span className="inline-flex items-center gap-1 text-[11px] text-[#b54708]">
-                                    <WarningOutlined /> 未检测到主键，一期暂不支持保存
-                                  </span>
-                                )}
-                                {selected.status === 'error' && (
-                                  <span className="text-[11px] text-[#b42318]">
-                                    {selected.error || '主键识别失败'}
-                                  </span>
-                                )}
+                                {selected.status === 'missing' && <span className="text-[11px] text-[#b54708]"><WarningOutlined /> 未检测到主键</span>}
+                                {selected.status === 'error' && <span className="text-[11px] text-[#b42318]">{selected.error || '主键识别失败'}</span>}
                               </div>
                             </div>
                             {selected.status === 'error' && sourceId && (
-                              <Button
-                                size="small"
-                                type="link"
-                                onClick={() => void resolvePrimaryKey(selected.table, sourceId)}
-                              >
-                                重试
-                              </Button>
+                              <Button size="small" type="link" onClick={() => void resolvePrimaryKey(selected.table, sourceId)}>重试</Button>
                             )}
                           </div>
                           <div className="grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-2">
@@ -604,7 +568,13 @@ export default function WizardJobEditor({
                               status={!selected.route.sinkTable.trim() ? 'error' : undefined}
                               placeholder="目标表名，例如 public.orders"
                               onChange={(event) =>
-                                updateSinkTable(selected.table.name, event.target.value)
+                                setSelectedTables((previous) =>
+                                  previous.map((item) =>
+                                    item.table.name === selected.table.name
+                                      ? { ...item, route: { ...item.route, sinkTable: event.target.value } }
+                                      : item,
+                                  ),
+                                )
                               }
                             />
                           </div>
@@ -635,126 +605,43 @@ export default function WizardJobEditor({
                     className={[
                       'relative min-h-[120px] rounded-xl border p-4 text-left transition-all',
                       selected
-                        ? 'border-[var(--yak-brand-color)] bg-[rgba(254,44,85,0.04)] shadow-[0_0_0_2px_rgba(254,44,85,0.06)]'
+                        ? 'border-[var(--yak-brand-color)] bg-[rgba(254,44,85,0.04)]'
                         : 'border-[#e4e7ec] bg-white hover:border-[#fda29b]',
                     ].join(' ')}
                     onClick={() => setStartupMode(mode.value)}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[14px] font-semibold text-[#101828]">{mode.title}</div>
-                      {mode.badge && (
-                        <span className="rounded-full bg-[#fff1f0] px-2 py-0.5 text-[10px] font-medium text-[var(--yak-brand-color)]">
-                          {mode.badge}
-                        </span>
-                      )}
+                      {mode.badge && <Tag>{mode.badge}</Tag>}
                     </div>
                     <div className="mt-2 text-[12px] leading-5 text-[#667085]">{mode.description}</div>
                   </button>
                 );
               })}
-              <div className="relative min-h-[120px] rounded-xl border border-dashed border-[#d0d5dd] bg-[#f9fafb] p-4 opacity-75">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[14px] font-semibold text-[#667085]">仅初始化数据</div>
-                  <Tag>后续</Tag>
-                </div>
-                <div className="mt-2 text-[12px] leading-5 text-[#98a2b3]">
-                  Flink CDC 支持 snapshot，但 Yak 当前需先补齐 FINISHED 正常完成态语义，本流程暂不开放。
-                </div>
+              <div className="min-h-[120px] rounded-xl border border-dashed border-[#d0d5dd] bg-[#f9fafb] p-4 opacity-75">
+                <div className="flex items-center justify-between gap-2"><div className="text-[14px] font-semibold text-[#667085]">仅初始化数据</div><Tag>后续</Tag></div>
+                <div className="mt-2 text-[12px] leading-5 text-[#98a2b3]">需先补齐 FINISHED 正常完成态语义，本期暂不开放。</div>
               </div>
             </div>
           </section>
 
           <section className="rounded-xl bg-white px-7 py-6">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between border-0 bg-transparent p-0 text-left"
-              onClick={() => setAdvancedOpen((value) => !value)}
-            >
+            <button type="button" className="flex w-full items-center justify-between border-0 bg-transparent p-0 text-left" onClick={() => setAdvancedOpen((value) => !value)}>
               <div className="flex items-center gap-2">
                 <SettingOutlined className="text-[var(--yak-brand-color)]" />
-                <div>
-                  <h2 className="m-0 text-[16px] font-semibold text-[#101828]">高级配置</h2>
-                  <div className="mt-1 text-[12px] text-[#98a2b3]">普通场景保持默认值即可。</div>
-                </div>
+                <div><h2 className="m-0 text-[16px] font-semibold text-[#101828]">高级配置</h2><div className="mt-1 text-[12px] text-[#98a2b3]">普通场景保持默认值即可。</div></div>
               </div>
-              {advancedOpen ? <UpOutlined className="text-[#98a2b3]" /> : <DownOutlined className="text-[#98a2b3]" />}
+              {advancedOpen ? <UpOutlined /> : <DownOutlined />}
             </button>
-
             {advancedOpen && (
-              <div className="mt-6 border-t border-[#f0f2f5] pt-6">
-                <div className="grid grid-cols-3 gap-x-5 gap-y-4 max-lg:grid-cols-2 max-md:grid-cols-1">
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">Schema Evolution</div>
-                    <Select
-                      className="w-full"
-                      value={advanced.schemaEvolution}
-                      options={[
-                        { value: 'EVOLVE', label: '自动同步结构变更（EVOLVE）' },
-                        { value: 'IGNORE', label: '忽略结构变更（IGNORE）' },
-                        { value: 'FAIL', label: '遇到结构变更失败（FAIL）' },
-                      ]}
-                      onChange={(value) => updateAdvanced('schemaEvolution', value)}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">并行度</div>
-                    <InputNumber
-                      min={1}
-                      max={256}
-                      className="w-full"
-                      value={advanced.parallelism}
-                      onChange={(value) => updateAdvanced('parallelism', Number(value || 1))}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">Sink Batch Size</div>
-                    <InputNumber
-                      min={1}
-                      className="w-full"
-                      value={advanced.batchSize}
-                      onChange={(value) => updateAdvanced('batchSize', Number(value || 1))}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">Flush 间隔（ms）</div>
-                    <InputNumber
-                      min={1}
-                      className="w-full"
-                      value={advanced.flushIntervalMs}
-                      onChange={(value) => updateAdvanced('flushIntervalMs', Number(value || 1))}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">Sink 重试次数</div>
-                    <InputNumber
-                      min={0}
-                      className="w-full"
-                      value={advanced.maxRetries}
-                      onChange={(value) => updateAdvanced('maxRetries', Number(value || 0))}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">最大批次字节</div>
-                    <InputNumber
-                      min={1}
-                      className="w-full"
-                      value={advanced.maxBatchBytes}
-                      onChange={(value) => updateAdvanced('maxBatchBytes', Number(value || 1))}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[12px] font-medium text-[#475467]">Statement Cache</div>
-                    <InputNumber
-                      min={1}
-                      className="w-full"
-                      value={advanced.statementCacheSize}
-                      onChange={(value) => updateAdvanced('statementCacheSize', Number(value || 1))}
-                    />
-                  </div>
-                </div>
-                <div className="mt-5 rounded-lg bg-[#f9fafb] px-4 py-3 text-[11px] leading-5 text-[#667085]">
-                  Checkpoint、重启策略继续使用一期稳定默认值；Strict Replay Safety 固定启用。已有任务进入向导时，会保留未在本页编辑的运行参数。
-                </div>
+              <div className="mt-6 grid grid-cols-3 gap-5 border-t border-[#f0f2f5] pt-6 max-lg:grid-cols-2 max-md:grid-cols-1">
+                <div><div className="mb-2 text-[12px] text-[#475467]">Schema Evolution</div><Select className="w-full" value={advanced.schemaEvolution} options={[{ value: 'EVOLVE', label: 'EVOLVE' }, { value: 'IGNORE', label: 'IGNORE' }, { value: 'FAIL', label: 'FAIL' }]} onChange={(value) => setAdvanced((previous) => ({ ...previous, schemaEvolution: value }))} /></div>
+                <div><div className="mb-2 text-[12px] text-[#475467]">并行度</div><InputNumber min={1} max={256} className="w-full" value={advanced.parallelism} onChange={(value) => setAdvanced((previous) => ({ ...previous, parallelism: Number(value || 1) }))} /></div>
+                <div><div className="mb-2 text-[12px] text-[#475467]">Sink Batch Size</div><InputNumber min={1} className="w-full" value={advanced.batchSize} onChange={(value) => setAdvanced((previous) => ({ ...previous, batchSize: Number(value || 1) }))} /></div>
+                <div><div className="mb-2 text-[12px] text-[#475467]">Flush 间隔（ms）</div><InputNumber min={1} className="w-full" value={advanced.flushIntervalMs} onChange={(value) => setAdvanced((previous) => ({ ...previous, flushIntervalMs: Number(value || 1) }))} /></div>
+                <div><div className="mb-2 text-[12px] text-[#475467]">Sink 重试次数</div><InputNumber min={0} className="w-full" value={advanced.maxRetries} onChange={(value) => setAdvanced((previous) => ({ ...previous, maxRetries: Number(value || 0) }))} /></div>
+                <div><div className="mb-2 text-[12px] text-[#475467]">最大批次字节</div><InputNumber min={1} className="w-full" value={advanced.maxBatchBytes} onChange={(value) => setAdvanced((previous) => ({ ...previous, maxBatchBytes: Number(value || 1) }))} /></div>
+                <div><div className="mb-2 text-[12px] text-[#475467]">Statement Cache</div><InputNumber min={1} className="w-full" value={advanced.statementCacheSize} onChange={(value) => setAdvanced((previous) => ({ ...previous, statementCacheSize: Number(value || 1) }))} /></div>
               </div>
             )}
           </section>
@@ -766,7 +653,7 @@ export default function WizardJobEditor({
               {primaryKeyPending
                 ? '正在读取主键元数据…'
                 : primaryKeyInvalid && selectedTables.length > 0
-                  ? '存在未识别主键的数据表，暂不能保存。'
+                  ? '存在未识别主键的数据表，暂不能保存或切换。'
                   : sinkMappingInvalid && selectedTables.length > 0
                     ? '请完善目标表映射。'
                     : selectedTables.length > 0
@@ -774,18 +661,8 @@ export default function WizardJobEditor({
                       : '请选择 Source、Sink 和至少一张数据表。'}
             </div>
             <div className="flex items-center gap-2">
-              <Button disabled={saving} onClick={onClose}>
-                取消
-              </Button>
-              <Button
-                type="primary"
-                danger
-                loading={saving}
-                disabled={hasUnsupportedRoutes || primaryKeyPending}
-                onClick={() => void save()}
-              >
-                保存向导配置
-              </Button>
+              <Button disabled={saving} onClick={onClose}>取消</Button>
+              <Button type="primary" danger loading={saving} disabled={hasUnsupportedRoutes || primaryKeyPending} onClick={() => void save()}>保存向导配置</Button>
             </div>
           </div>
         </footer>
