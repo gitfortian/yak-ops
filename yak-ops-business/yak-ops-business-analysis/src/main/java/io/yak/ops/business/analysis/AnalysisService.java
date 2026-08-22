@@ -4,6 +4,7 @@ import io.yak.ops.business.analysis.repository.AnalysisRepository;
 import io.yak.ops.business.analysis.service.event.AnalysisLineageRefreshRequested;
 import io.yak.ops.business.analysis.service.support.AnalysisDefinitionNormalizer;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,14 +16,26 @@ public class AnalysisService {
   private final AnalysisRepository repository;
   private final AnalysisDefinitionNormalizer normalizer;
   private final ApplicationEventPublisher eventPublisher;
+  private final List<AnalysisDeletionGuard> deletionGuards;
 
+  @Autowired
+  public AnalysisService(
+      AnalysisRepository repository,
+      AnalysisDefinitionNormalizer normalizer,
+      ApplicationEventPublisher eventPublisher,
+      List<AnalysisDeletionGuard> deletionGuards) {
+    this.repository = repository;
+    this.normalizer = normalizer;
+    this.eventPublisher = eventPublisher;
+    this.deletionGuards = deletionGuards == null ? List.of() : List.copyOf(deletionGuards);
+  }
+
+  /** Focused tests and callers without cross-domain deletion guards retain the lightweight path. */
   public AnalysisService(
       AnalysisRepository repository,
       AnalysisDefinitionNormalizer normalizer,
       ApplicationEventPublisher eventPublisher) {
-    this.repository = repository;
-    this.normalizer = normalizer;
-    this.eventPublisher = eventPublisher;
+    this(repository, normalizer, eventPublisher, List.of());
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", readOnly = true)
@@ -59,6 +72,7 @@ public class AnalysisService {
   public void delete(long analysisId) {
     requireAnalysisId(analysisId);
     get(analysisId);
+    deletionGuards.forEach(guard -> guard.requireDeletable(analysisId));
     repository.delete(analysisId);
     eventPublisher.publishEvent(AnalysisLineageRefreshRequested.deleted(analysisId));
   }
