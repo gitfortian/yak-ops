@@ -89,24 +89,37 @@ public class ComputeEnvironmentService {
     }
   }
 
-  public void update(long id, String name, RuntimeConfig config, boolean enabled) {
+  public void update(
+      long id, String name, RuntimeConfig config, boolean enabled, boolean makeDefault) {
     ComputeEnvironment current = require(id);
     String normalizedName = normalizeName(name);
     RuntimeConfig normalizedConfig = normalizeConfig(config);
+    boolean switchingDefault = makeDefault && !current.defaultEnvironment();
 
     if (current.defaultEnvironment() && !enabled) {
       throw new IllegalStateException("默认运行环境不能停用，请先切换默认环境");
     }
-    if (current.defaultEnvironment() && !current.config().equals(normalizedConfig)) {
-      requireRuntimeStable("修改默认运行环境");
+    if (switchingDefault && !enabled) {
+      throw new IllegalArgumentException("默认运行环境必须保持启用");
+    }
+    if ((current.defaultEnvironment() && !current.config().equals(normalizedConfig))
+        || switchingDefault) {
+      requireRuntimeStable(switchingDefault ? "切换默认运行环境" : "修改默认运行环境");
     }
 
     try {
-      store.update(id, normalizedName, normalizedConfig, enabled);
+      transactions.executeWithoutResult(
+          status -> {
+            store.update(id, normalizedName, normalizedConfig, enabled);
+            if (switchingDefault) {
+              store.clearDefault();
+              store.setDefault(id);
+            }
+          });
     } catch (DuplicateKeyException exception) {
       throw new IllegalArgumentException("运行环境名称已存在：" + normalizedName, exception);
     }
-    if (current.defaultEnvironment()) {
+    if (current.defaultEnvironment() || switchingDefault) {
       refreshRuntimeOverrides();
     }
   }
