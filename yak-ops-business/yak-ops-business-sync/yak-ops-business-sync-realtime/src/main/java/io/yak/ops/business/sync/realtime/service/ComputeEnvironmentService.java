@@ -20,7 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/** Manages the small, user-facing runtime environment model for realtime Flink CDC. */
+/** Manages the user-facing runtime environment model for realtime Flink CDC. */
 @Service
 @DependsOn("realtimeSyncFlyway")
 public class ComputeEnvironmentService {
@@ -43,6 +43,7 @@ public class ComputeEnvironmentService {
   @PostConstruct
   void initialize() {
     bootstrapDefaultEnvironment();
+    backfillLegacyRuntimeBindings();
     refreshRuntimeOverrides();
   }
 
@@ -59,9 +60,6 @@ public class ComputeEnvironmentService {
     RuntimeConfig normalizedConfig = normalizeConfig(config);
     if (makeDefault && !enabled) {
       throw new IllegalArgumentException("默认运行环境必须保持启用");
-    }
-    if (makeDefault) {
-      requireRuntimeStable("切换默认运行环境");
     }
 
     try {
@@ -102,10 +100,6 @@ public class ComputeEnvironmentService {
     if (switchingDefault && !enabled) {
       throw new IllegalArgumentException("默认运行环境必须保持启用");
     }
-    if ((current.defaultEnvironment() && !current.config().equals(normalizedConfig))
-        || switchingDefault) {
-      requireRuntimeStable(switchingDefault ? "切换默认运行环境" : "修改默认运行环境");
-    }
 
     try {
       transactions.executeWithoutResult(
@@ -140,7 +134,6 @@ public class ComputeEnvironmentService {
     if (!target.enabled()) {
       throw new IllegalStateException("只有已启用的运行环境才能设为默认环境");
     }
-    requireRuntimeStable("切换默认运行环境");
     transactions.executeWithoutResult(
         status -> {
           store.clearDefault();
@@ -154,12 +147,16 @@ public class ComputeEnvironmentService {
     if (current.defaultEnvironment()) {
       throw new IllegalStateException("默认运行环境不能删除，请先切换默认环境");
     }
+    if (store.hasBoundRealtimeJobs(id)) {
+      throw new IllegalStateException("运行环境仍被实时同步任务引用，请先将这些任务切换到其他运行环境");
+    }
     store.delete(id);
   }
 
   /**
-   * Keeps every Yak Ops instance aligned with the database-selected default environment. Runtime
-   * environments cannot be changed while jobs are active, so the refresh is safe for running jobs.
+   * The application/default override remains as a compatibility fallback for older integrations.
+   * Stage two runtime operations use the task/deployment environment explicitly and no longer rely
+   * on this mutable global value.
    */
   @Scheduled(fixedDelayString = "${yak.sync.realtime.environment-refresh-delay:5000}")
   public void refreshRuntimeOverrides() {
@@ -212,14 +209,16 @@ public class ComputeEnvironmentService {
     }
   }
 
-  private ComputeEnvironment require(long id) {
-    return store.find(id).orElseThrow(() -> new IllegalArgumentException("运行环境不存在：" + id));
+  private void backfillLegacyRuntimeBindings() {
+    ComputeEnvironment environment = store.defaultEnvironment().orElse(null);
+    if (environment == null) {
+      return;
+    }
+    transactions.executeWithoutResult(status -> store.bindLegacyRealtimeJobs(environment));
   }
 
-  private void requireRuntimeStable(String action) {
-    if (store.hasActiveRealtimeJobs()) {
-      throw new IllegalStateException(action + "前请先停止所有实时同步任务");
-    }
+  private ComputeEnvironment require(long id) {
+    return store.find(id).orElseThrow(() -> new IllegalArgumentException("运行环境不存在：" + id));
   }
 
   private String normalizeName(String value) {
