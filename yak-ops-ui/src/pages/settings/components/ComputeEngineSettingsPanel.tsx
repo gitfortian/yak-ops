@@ -192,7 +192,7 @@ const ComputeEngineSettingsPanel = () => {
         <div>
           <div className="text-[18px] font-semibold text-[#161823]">计算引擎</div>
           <div className="mt-1.5 max-w-[680px] text-[12px] leading-5 text-[#667085]">
-            集中管理实时同步使用的运行环境。任务默认使用标记为“默认”的环境，Flink 的连接与本机运行路径只需配置一次。
+            集中管理实时同步使用的运行环境。新建任务默认使用标记为“默认”的环境，也可以为每个任务单独选择运行环境。
           </div>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -201,7 +201,7 @@ const ComputeEngineSettingsPanel = () => {
       </div>
 
       <div className="mb-5 rounded-lg border border-[#e4e7ec] bg-[#f9fafb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-        当前阶段采用 Flink CDC + Remote Cluster。切换或修改默认环境前，需要先停止正在运行的实时同步任务，避免任务被错误地管理到其他 Flink 集群。
+        当前阶段采用 Flink CDC + Remote Cluster。实时任务会显式绑定运行环境，并在每次部署时保存环境快照；切换默认环境或修改环境配置不会把已经运行的任务重定向到其他 Flink 集群。
       </div>
 
       {loading ? (
@@ -336,7 +336,7 @@ const ComputeEngineSettingsPanel = () => {
                   description={
                     environment.defaultEnvironment
                       ? '默认运行环境不能删除，请先切换默认环境。'
-                      : `确定删除 ${environment.name} 吗？`
+                      : `确定删除 ${environment.name} 吗？如果仍有实时任务绑定该环境，系统会拒绝删除。`
                   }
                   disabled={environment.defaultEnvironment}
                   okText="删除"
