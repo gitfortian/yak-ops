@@ -1,6 +1,7 @@
 package io.yak.ops.business.lineage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.yak.ops.business.lineage.repository.LineageRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -26,126 +27,47 @@ public class LineageService {
     this.repository = repository;
   }
 
-  @Transactional
+  @Transactional("yakBusinessTransactionManager")
   public LineageAsset registerAsset(RegisterAssetCommand command) {
-    Objects.requireNonNull(command, "command");
-    String assetKey = required(command.assetKey(), "assetKey", 512);
-    LineageAssetType assetType = Objects.requireNonNull(command.assetType(), "assetType");
-    String name = optional(command.name(), 200);
-    if (name == null) name = assetKey;
-
-    Long parentAssetId = command.parentAssetId();
-    if (parentAssetId != null) {
-      requirePositive(parentAssetId, "parentAssetId");
-      getAsset(parentAssetId);
-    }
-
-    return repository.upsertAsset(new LineageRepository.AssetWrite(
-        assetKey,
-        assetType,
-        name,
-        valueOrEmpty(command.sourceType(), 64),
-        valueOrEmpty(command.sourceId(), 200),
-        parentAssetId,
-        optional(command.dataSourceId(), 64),
-        optional(command.databaseName(), 256),
-        optional(command.schemaName(), 256),
-        optional(command.tableName(), 256),
-        optional(command.columnName(), 256),
-        command.properties()));
+    return repository.upsertAsset(toAssetDraft(command, true));
   }
 
-  @Transactional
+  @Transactional("yakBusinessTransactionManager")
   public LineageRelation registerRelation(RegisterRelationCommand command) {
-    Objects.requireNonNull(command, "command");
-    requirePositive(command.sourceAssetId(), "sourceAssetId");
-    requirePositive(command.targetAssetId(), "targetAssetId");
-    if (command.sourceAssetId() == command.targetAssetId()) {
-      throw new IllegalArgumentException("血缘关系不能指向资产自身");
-    }
-    getAsset(command.sourceAssetId());
-    getAsset(command.targetAssetId());
-
-    LineageRelationType relationType =
-        Objects.requireNonNull(command.relationType(), "relationType");
-    BigDecimal confidence = command.confidence() == null ? BigDecimal.ONE : command.confidence();
-    if (confidence.compareTo(BigDecimal.ZERO) < 0 || confidence.compareTo(BigDecimal.ONE) > 0) {
-      throw new IllegalArgumentException("confidence 必须在 0 到 1 之间");
-    }
-
-    return repository.upsertRelation(new LineageRepository.RelationWrite(
-        command.sourceAssetId(),
-        command.targetAssetId(),
-        relationType,
-        valueOrEmpty(command.sourceType(), 64),
-        valueOrEmpty(command.sourceId(), 200),
-        optional(command.expression(), 16000),
-        confidence,
-        valueOrEmpty(command.version(), 128),
-        command.observedAt() == null ? Instant.now() : command.observedAt(),
-        command.properties()));
+    return repository.upsertRelation(toRelationDraft(command, true));
   }
 
-  /** Registers deduplicated assets with JDBC batches and returns their database identities. */
-  @Transactional
+  /** Registers deduplicated assets in bounded persistence batches. */
+  @Transactional("yakBusinessTransactionManager")
   public Map<String, LineageAsset> registerAssetsBatch(
       List<RegisterAssetCommand> commands, int batchSize) {
     requireBatchSize(batchSize);
     if (commands == null || commands.isEmpty()) return Map.of();
-    Map<String, LineageRepository.AssetWrite> writes = new LinkedHashMap<>();
+    Map<String, LineageAssetDraft> drafts = new LinkedHashMap<>();
     for (RegisterAssetCommand command : commands) {
-      Objects.requireNonNull(command, "command");
-      String assetKey = required(command.assetKey(), "assetKey", 512);
-      LineageAssetType assetType = Objects.requireNonNull(command.assetType(), "assetType");
-      String name = optional(command.name(), 200);
-      if (name == null) name = assetKey;
-      if (command.parentAssetId() != null) requirePositive(command.parentAssetId(), "parentAssetId");
-      writes.putIfAbsent(assetKey, new LineageRepository.AssetWrite(
-          assetKey, assetType, name, valueOrEmpty(command.sourceType(), 64),
-          valueOrEmpty(command.sourceId(), 200), command.parentAssetId(),
-          optional(command.dataSourceId(), 64), optional(command.databaseName(), 256),
-          optional(command.schemaName(), 256), optional(command.tableName(), 256),
-          optional(command.columnName(), 256), command.properties()));
+      LineageAssetDraft draft = toAssetDraft(command, false);
+      drafts.putIfAbsent(draft.assetKey(), draft);
     }
-    return repository.upsertAssets(List.copyOf(writes.values()), batchSize);
+    return repository.upsertAssets(List.copyOf(drafts.values()), batchSize);
   }
 
-  /** Registers deduplicated relations using real JDBC batch execution. */
-  @Transactional
+  /** Registers deduplicated relations in bounded persistence batches. */
+  @Transactional("yakBusinessTransactionManager")
   public void registerRelationsBatch(List<RegisterRelationCommand> commands, int batchSize) {
     requireBatchSize(batchSize);
     if (commands == null || commands.isEmpty()) return;
-    Map<String, LineageRepository.RelationWrite> writes = new LinkedHashMap<>();
+    Map<String, LineageRelationDraft> drafts = new LinkedHashMap<>();
     for (RegisterRelationCommand command : commands) {
-      Objects.requireNonNull(command, "command");
-      requirePositive(command.sourceAssetId(), "sourceAssetId");
-      requirePositive(command.targetAssetId(), "targetAssetId");
-      if (command.sourceAssetId() == command.targetAssetId()) {
-        throw new IllegalArgumentException("血缘关系不能指向资产自身");
-      }
-      LineageRelationType type = Objects.requireNonNull(command.relationType(), "relationType");
-      BigDecimal confidence = command.confidence() == null ? BigDecimal.ONE : command.confidence();
-      if (confidence.compareTo(BigDecimal.ZERO) < 0 || confidence.compareTo(BigDecimal.ONE) > 0) {
-        throw new IllegalArgumentException("confidence 必须在 0 到 1 之间");
-      }
-      String sourceType = valueOrEmpty(command.sourceType(), 64);
-      String sourceId = valueOrEmpty(command.sourceId(), 200);
-      String version = valueOrEmpty(command.version(), 128);
-      String identity = command.sourceAssetId() + "\u0000" + command.targetAssetId() + "\u0000"
-          + type + "\u0000" + sourceType + "\u0000" + sourceId + "\u0000" + version;
-      writes.putIfAbsent(identity, new LineageRepository.RelationWrite(
-          command.sourceAssetId(), command.targetAssetId(), type, sourceType, sourceId,
-          optional(command.expression(), 16000), confidence, version,
-          command.observedAt() == null ? Instant.now() : command.observedAt(), command.properties()));
+      LineageRelationDraft draft = toRelationDraft(command, false);
+      String identity = draft.sourceAssetId() + "\u0000" + draft.targetAssetId() + "\u0000"
+          + draft.relationType() + "\u0000" + draft.sourceType() + "\u0000"
+          + draft.sourceId() + "\u0000" + draft.version();
+      drafts.putIfAbsent(identity, draft);
     }
-    repository.upsertRelations(List.copyOf(writes.values()), batchSize);
+    repository.upsertRelations(List.copyOf(drafts.values()), batchSize);
   }
 
-  private static void requireBatchSize(int batchSize) {
-    if (batchSize < 1) throw new IllegalArgumentException("batchSize 必须大于 0");
-  }
-
-  @Transactional(readOnly = true)
+  @Transactional(value = "yakBusinessTransactionManager", readOnly = true)
   public LineageAsset getAsset(long assetId) {
     requirePositive(assetId, "assetId");
     return repository.findAsset(assetId)
@@ -153,34 +75,34 @@ public class LineageService {
   }
 
   /** Missing-by-key is a normal fallback branch for derived metadata registration. */
-  @Transactional(readOnly = true, noRollbackFor = IllegalArgumentException.class)
+  @Transactional(
+      value = "yakBusinessTransactionManager",
+      readOnly = true,
+      noRollbackFor = IllegalArgumentException.class)
   public LineageAsset getAssetByKey(String assetKey) {
     String normalized = required(assetKey, "assetKey", 512);
     return repository.findAssetByKey(normalized)
         .orElseThrow(() -> new IllegalArgumentException("血缘资产不存在：" + normalized));
   }
 
-  @Transactional(readOnly = true)
-  public List<LineageAsset> searchAssets(
-      String keyword,
-      LineageAssetType assetType,
-      int limit) {
+  @Transactional(value = "yakBusinessTransactionManager", readOnly = true)
+  public List<LineageAsset> searchAssets(String keyword, LineageAssetType assetType, int limit) {
     String normalizedKeyword = optional(keyword, 200);
     int actualLimit = Math.min(MAX_ASSET_SEARCH_LIMIT, Math.max(1, limit));
     return repository.searchAssets(normalizedKeyword, assetType, actualLimit);
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(value = "yakBusinessTransactionManager", readOnly = true)
   public LineageGraph upstream(long assetId, int depth) {
     return graph(assetId, LineageDirection.UPSTREAM, depth);
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(value = "yakBusinessTransactionManager", readOnly = true)
   public LineageGraph downstream(long assetId, int depth) {
     return graph(assetId, LineageDirection.DOWNSTREAM, depth);
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(value = "yakBusinessTransactionManager", readOnly = true)
   public LineageGraph graph(long assetId, LineageDirection direction, int depth) {
     LineageAsset root = getAsset(assetId);
     LineageDirection actualDirection = direction == null ? LineageDirection.BOTH : direction;
@@ -216,9 +138,8 @@ public class LineageService {
         if (!visited.contains(relation.targetAssetId())) nextFrontier.add(relation.targetAssetId());
       }
 
-      for (LineageAsset asset : repository.findAssetsByIds(endpointIds)) {
-        nodes.putIfAbsent(asset.id(), asset);
-      }
+      repository.findAssetsByIds(endpointIds)
+          .forEach(asset -> nodes.putIfAbsent(asset.id(), asset));
       nextFrontier.removeAll(visited);
       visited.addAll(nextFrontier);
       frontier = nextFrontier;
@@ -230,6 +151,66 @@ public class LineageService {
         depth,
         List.copyOf(nodes.values()),
         List.copyOf(relations.values()));
+  }
+
+  private LineageAssetDraft toAssetDraft(RegisterAssetCommand command, boolean validateParent) {
+    Objects.requireNonNull(command, "command");
+    String assetKey = required(command.assetKey(), "assetKey", 512);
+    LineageAssetType assetType = Objects.requireNonNull(command.assetType(), "assetType");
+    String name = optional(command.name(), 200);
+    if (name == null) name = assetKey;
+    Long parentAssetId = command.parentAssetId();
+    if (parentAssetId != null) {
+      requirePositive(parentAssetId, "parentAssetId");
+      if (validateParent) getAsset(parentAssetId);
+    }
+    return new LineageAssetDraft(
+        assetKey,
+        assetType,
+        name,
+        valueOrEmpty(command.sourceType(), 64),
+        valueOrEmpty(command.sourceId(), 200),
+        parentAssetId,
+        optional(command.dataSourceId(), 64),
+        optional(command.databaseName(), 256),
+        optional(command.schemaName(), 256),
+        optional(command.tableName(), 256),
+        optional(command.columnName(), 256),
+        command.properties());
+  }
+
+  private LineageRelationDraft toRelationDraft(
+      RegisterRelationCommand command, boolean validateAssets) {
+    Objects.requireNonNull(command, "command");
+    requirePositive(command.sourceAssetId(), "sourceAssetId");
+    requirePositive(command.targetAssetId(), "targetAssetId");
+    if (command.sourceAssetId() == command.targetAssetId()) {
+      throw new IllegalArgumentException("血缘关系不能指向资产自身");
+    }
+    if (validateAssets) {
+      getAsset(command.sourceAssetId());
+      getAsset(command.targetAssetId());
+    }
+    LineageRelationType type = Objects.requireNonNull(command.relationType(), "relationType");
+    BigDecimal confidence = command.confidence() == null ? BigDecimal.ONE : command.confidence();
+    if (confidence.compareTo(BigDecimal.ZERO) < 0 || confidence.compareTo(BigDecimal.ONE) > 0) {
+      throw new IllegalArgumentException("confidence 必须在 0 到 1 之间");
+    }
+    return new LineageRelationDraft(
+        command.sourceAssetId(),
+        command.targetAssetId(),
+        type,
+        valueOrEmpty(command.sourceType(), 64),
+        valueOrEmpty(command.sourceId(), 200),
+        optional(command.expression(), 16000),
+        confidence,
+        valueOrEmpty(command.version(), 128),
+        command.observedAt() == null ? Instant.now() : command.observedAt(),
+        command.properties());
+  }
+
+  private static void requireBatchSize(int batchSize) {
+    if (batchSize < 1) throw new IllegalArgumentException("batchSize 必须大于 0");
   }
 
   private static long requirePositive(long value, String field) {

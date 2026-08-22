@@ -4,9 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** Directed upstream-to-downstream edge with optional provenance evidence. */
-public record LineageRelation(
-    long id,
+/** Validated domain write model for registering a lineage relation. */
+public record LineageRelationDraft(
     long sourceAssetId,
     long targetAssetId,
     LineageRelationType relationType,
@@ -16,7 +15,5 @@ public record LineageRelation(
     BigDecimal confidence,
     String version,
     Instant observedAt,
-    JsonNode properties,
-    Instant createTime,
-    Instant updateTime) {
+    JsonNode properties) {
 }

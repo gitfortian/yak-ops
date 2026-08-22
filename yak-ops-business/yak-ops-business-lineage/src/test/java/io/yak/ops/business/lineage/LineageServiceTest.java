@@ -3,6 +3,8 @@ package io.yak.ops.business.lineage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.business.lineage.dao.support.LineageBatchSupport;
+import io.yak.ops.business.lineage.repository.LineageRepository;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -72,11 +74,10 @@ class LineageServiceTest {
 
   @Test
   void batchSizingMakesThousandColumnLineageWritesBounded() {
-    // 1,000 unique edges with two unique endpoints each: asset batch + identity read + edge batch.
-    assertEquals(25, 2 * JdbcLineageRepository.batchExecutionCount(2_000, 200)
-        + JdbcLineageRepository.batchExecutionCount(1_000, 200));
-    assertEquals(5, JdbcLineageRepository.batchExecutionCount(1_000, 256));
-    assertEquals(0, JdbcLineageRepository.batchExecutionCount(0, 200));
+    assertEquals(25, 2 * LineageBatchSupport.batchExecutionCount(2_000, 200)
+        + LineageBatchSupport.batchExecutionCount(1_000, 200));
+    assertEquals(5, LineageBatchSupport.batchExecutionCount(1_000, 256));
+    assertEquals(0, LineageBatchSupport.batchExecutionCount(0, 200));
   }
 
   @Test
@@ -127,43 +128,63 @@ class LineageServiceTest {
     private final Map<Long, LineageRelation> relations = new LinkedHashMap<>();
 
     @Override
-    public LineageAsset upsertAsset(AssetWrite write) {
-      Long existingId = assetKeys.get(write.assetKey());
+    public LineageAsset upsertAsset(LineageAssetDraft draft) {
+      Long existingId = assetKeys.get(draft.assetKey());
       long id = existingId == null ? assetIds.getAndIncrement() : existingId;
       Instant now = Instant.parse("2026-08-20T00:00:00Z");
       LineageAsset existing = assets.get(id);
       LineageAsset asset = new LineageAsset(
-          id, write.assetKey(), write.assetType(), write.name(), write.sourceType(), write.sourceId(),
-          write.parentAssetId(), write.dataSourceId(), write.databaseName(), write.schemaName(),
-          write.tableName(), write.columnName(), write.properties(),
+          id, draft.assetKey(), draft.assetType(), draft.name(), draft.sourceType(), draft.sourceId(),
+          draft.parentAssetId(), draft.dataSourceId(), draft.databaseName(), draft.schemaName(),
+          draft.tableName(), draft.columnName(), draft.properties(),
           existing == null ? now : existing.createTime(), now);
       assets.put(id, asset);
-      assetKeys.put(write.assetKey(), id);
+      assetKeys.put(draft.assetKey(), id);
       return asset;
     }
 
     @Override
-    public LineageRelation upsertRelation(RelationWrite write) {
+    public LineageRelation upsertRelation(LineageRelationDraft draft) {
       long id = relationIds.getAndIncrement();
       Instant now = Instant.parse("2026-08-20T00:00:00Z");
       LineageRelation relation = new LineageRelation(
-          id, write.sourceAssetId(), write.targetAssetId(), write.relationType(),
-          write.sourceType(), write.sourceId(), write.expression(), write.confidence(),
-          write.version(), write.observedAt(), write.properties(), now, now);
+          id, draft.sourceAssetId(), draft.targetAssetId(), draft.relationType(),
+          draft.sourceType(), draft.sourceId(), draft.expression(), draft.confidence(),
+          draft.version(), draft.observedAt(), draft.properties(), now, now);
       relations.put(id, relation);
       return relation;
     }
 
     @Override
-    public Map<String, LineageAsset> upsertAssets(List<AssetWrite> writes, int batchSize) {
+    public Map<String, LineageAsset> upsertAssets(List<LineageAssetDraft> drafts, int batchSize) {
       Map<String, LineageAsset> result = new LinkedHashMap<>();
-      for (AssetWrite write : writes) result.put(write.assetKey(), upsertAsset(write));
+      for (LineageAssetDraft draft : drafts) result.put(draft.assetKey(), upsertAsset(draft));
       return result;
     }
 
     @Override
-    public void upsertRelations(List<RelationWrite> writes, int batchSize) {
-      for (RelationWrite write : writes) upsertRelation(write);
+    public void upsertRelations(List<LineageRelationDraft> drafts, int batchSize) {
+      for (LineageRelationDraft draft : drafts) upsertRelation(draft);
+    }
+
+    @Override
+    public int deleteRelationsByEvidence(String sourceType, String sourceId) {
+      return 0;
+    }
+
+    @Override
+    public Set<Long> findAssetIdsByEvidence(String sourceType, String sourceId) {
+      return Set.of();
+    }
+
+    @Override
+    public int deleteUnreferencedOwnedAssets(Set<Long> assetIds, String ownerType, String ownerId) {
+      return 0;
+    }
+
+    @Override
+    public Optional<LineageAsset> lockAssetByKey(String assetKey) {
+      return findAssetByKey(assetKey);
     }
 
     @Override
