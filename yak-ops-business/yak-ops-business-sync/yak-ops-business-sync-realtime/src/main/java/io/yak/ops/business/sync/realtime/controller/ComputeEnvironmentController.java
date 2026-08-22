@@ -58,10 +58,12 @@ public class ComputeEnvironmentController {
   @PutMapping("/{id}")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<Boolean> update(@PathVariable long id, @RequestBody SaveRequest request) {
-    service.update(id, request.name(), request.config(), request.enabled());
-    if (request.makeDefault()) {
-      service.setDefault(id);
-    }
+    service.update(
+        id,
+        request.name(),
+        request.config(),
+        request.enabled(),
+        request.makeDefault());
     return Result.success(true);
   }
 
