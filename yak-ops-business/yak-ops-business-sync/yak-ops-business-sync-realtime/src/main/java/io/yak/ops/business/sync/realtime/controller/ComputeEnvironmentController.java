@@ -6,6 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentDiagnosis;
 import io.yak.ops.business.sync.realtime.service.ComputeEnvironmentService;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -61,6 +62,21 @@ public class ComputeEnvironmentController {
             request.config(),
             request.enabled(),
             request.makeDefault()));
+  }
+
+  @Operation(summary = "预检测未保存的运行环境")
+  @PostMapping("/diagnose")
+  @RequiresPermission(RealtimePermissionCode.UPDATE)
+  public Result<ComputeEnvironmentDiagnosis> diagnosePreview(@RequestBody SaveRequest request) {
+    return Result.success(
+        service.diagnosePreview(request.name(), request.submitterType(), request.config()));
+  }
+
+  @Operation(summary = "检测已保存的运行环境")
+  @PostMapping("/{id}/diagnose")
+  @RequiresPermission(RealtimePermissionCode.UPDATE)
+  public Result<ComputeEnvironmentDiagnosis> diagnose(@PathVariable long id) {
+    return Result.success(service.diagnose(id));
   }
 
   @Operation(summary = "更新运行环境")
