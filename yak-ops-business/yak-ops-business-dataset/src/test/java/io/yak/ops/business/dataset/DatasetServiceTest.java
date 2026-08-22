@@ -2,8 +2,6 @@ package io.yak.ops.business.dataset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,7 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.dataset.repository.DatasetRepository;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.spi.task.model.TaskAssetSource;
@@ -28,20 +26,20 @@ class DatasetServiceTest {
   void publishSnapshotsCurrentTaskRevisionWithoutOwningTaskExecution() {
     DatasetRepository repository = mock(DatasetRepository.class);
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DatasetService service = new DatasetService(repository, catalog, new ObjectMapper());
+    DatasetService service = new DatasetService(repository, catalog);
 
     TaskAsset asset = taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 71L, 3);
     when(catalog.get(11L)).thenReturn(asset);
     when(repository.insertDataset("sales", "sales dataset")).thenReturn(21L);
     when(repository.nextVersionNo(21L)).thenReturn(1);
-    when(repository.insertVersion(
-        eq(21L),
-        eq(1),
-        eq(DatasetSourceType.QUERY_REVISION),
-        eq(11L),
-        eq(71L),
-        eq(3),
-        eq("[]"))).thenReturn(31L);
+    when(repository.appendVersion(argThat(draft ->
+        draft.datasetId() == 21L
+            && draft.versionNo() == 1
+            && draft.sourceType() == DatasetSourceType.QUERY_REVISION
+            && draft.sourceTaskAssetId() == 11L
+            && draft.sourceTaskRevisionId() == 71L
+            && draft.sourceTaskRevisionNo() == 3
+            && draft.fields().isEmpty()))).thenReturn(31L);
     when(repository.findDataset(21L)).thenReturn(Optional.of(new Dataset(
         21L, "sales", "sales dataset", DatasetStatus.ONLINE, 31L, Instant.EPOCH, Instant.EPOCH)));
     DatasetVersion version = new DatasetVersion(
@@ -56,14 +54,13 @@ class DatasetServiceTest {
     assertEquals(71L, result.currentVersion().sourceTaskRevisionId());
     assertEquals(3, result.currentVersion().sourceTaskRevisionNo());
     verify(repository).updateCurrentVersion(21L, 31L);
-    verify(repository).insertFields(eq(31L), anyList());
   }
 
   @Test
   void publishFromReleaseIsIdempotentForCurrentTaskRevision() {
     DatasetRepository repository = mock(DatasetRepository.class);
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DatasetService service = new DatasetService(repository, catalog, new ObjectMapper());
+    DatasetService service = new DatasetService(repository, catalog);
 
     TaskAsset asset = taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 71L, 3);
     Dataset dataset = new Dataset(
@@ -89,7 +86,7 @@ class DatasetServiceTest {
   void publishFromReleaseAppendsDatasetVersionForNewTaskRevision() {
     DatasetRepository repository = mock(DatasetRepository.class);
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DatasetService service = new DatasetService(repository, catalog, new ObjectMapper());
+    DatasetService service = new DatasetService(repository, catalog);
 
     TaskAsset asset = taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 72L, 4);
     Dataset before = new Dataset(
@@ -103,24 +100,18 @@ class DatasetServiceTest {
 
     when(catalog.get(11L)).thenReturn(asset);
     when(repository.findDatasetBySourceTaskAssetId(11L)).thenReturn(Optional.of(before));
-    when(repository.findDataset(21L)).thenReturn(
-        Optional.of(before),
-        Optional.of(before),
-        Optional.of(after));
+    when(repository.findDataset(21L)).thenReturn(Optional.of(before), Optional.of(before), Optional.of(after));
     when(repository.findVersion(31L)).thenReturn(Optional.of(version1));
     when(repository.findVersion(32L)).thenReturn(Optional.of(version2));
     when(repository.listVersions(21L)).thenReturn(List.of(version1), List.of(version2, version1));
     when(repository.listFields(31L)).thenReturn(List.of());
     when(repository.listFields(32L)).thenReturn(List.of());
     when(repository.nextVersionNo(21L)).thenReturn(2);
-    when(repository.insertVersion(
-        eq(21L),
-        eq(2),
-        eq(DatasetSourceType.QUERY_REVISION),
-        eq(11L),
-        eq(72L),
-        eq(4),
-        eq("[]"))).thenReturn(32L);
+    when(repository.appendVersion(argThat(draft ->
+        draft.datasetId() == 21L
+            && draft.versionNo() == 2
+            && draft.sourceTaskRevisionId() == 72L
+            && draft.sourceTaskRevisionNo() == 4))).thenReturn(32L);
 
     DatasetDetail result = service.publishFromRelease(new DatasetService.PublishCommand(
         11L, null, null, List.of()));
@@ -128,14 +119,13 @@ class DatasetServiceTest {
     assertEquals(2, result.currentVersion().versionNo());
     assertEquals(4, result.currentVersion().sourceTaskRevisionNo());
     verify(repository).updateCurrentVersion(21L, 32L);
-    verify(repository).insertFields(eq(32L), anyList());
   }
 
   @Test
   void publishFromReleasePreservesFieldIdAcrossCustomizedVersion() {
     DatasetRepository repository = mock(DatasetRepository.class);
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DatasetService service = new DatasetService(repository, catalog, new ObjectMapper());
+    DatasetService service = new DatasetService(repository, catalog);
 
     TaskAsset asset = taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 72L, 4);
     Dataset before = new Dataset(
@@ -147,47 +137,25 @@ class DatasetServiceTest {
     DatasetVersion version2 = new DatasetVersion(
         32L, 21L, 2, DatasetSourceType.QUERY_REVISION, 11L, 72L, 4, "[]", Instant.EPOCH);
     DatasetField oldField = new DatasetField(
-        "field-sales-amount",
-        31L,
-        "sales_amount",
-        "销售额",
-        DatasetFieldDataType.NUMBER,
-        true,
-        null,
-        DatasetFieldRole.MEASURE,
-        1);
+        "field-sales-amount", 31L, "sales_amount", "销售额", DatasetFieldDataType.NUMBER,
+        true, null, DatasetFieldRole.MEASURE, 1);
     DatasetField newField = new DatasetField(
-        "field-sales-amount",
-        32L,
-        "sales_amount",
-        "销售金额",
-        DatasetFieldDataType.NUMBER,
-        true,
-        null,
-        DatasetFieldRole.MEASURE,
-        1);
+        "field-sales-amount", 32L, "sales_amount", "销售金额", DatasetFieldDataType.NUMBER,
+        true, null, DatasetFieldRole.MEASURE, 1);
 
     when(catalog.get(11L)).thenReturn(asset);
     when(repository.findDatasetBySourceTaskAssetId(11L)).thenReturn(Optional.of(before));
     when(repository.findDataset(21L)).thenReturn(
-        Optional.of(before),
-        Optional.of(before),
-        Optional.of(before),
-        Optional.of(after));
+        Optional.of(before), Optional.of(before), Optional.of(before), Optional.of(after));
     when(repository.findVersion(31L)).thenReturn(Optional.of(version1));
     when(repository.findVersion(32L)).thenReturn(Optional.of(version2));
     when(repository.listVersions(21L)).thenReturn(List.of(version1), List.of(version2, version1));
     when(repository.listFields(31L)).thenReturn(List.of(oldField));
     when(repository.listFields(32L)).thenReturn(List.of(newField));
     when(repository.nextVersionNo(21L)).thenReturn(2);
-    when(repository.insertVersion(
-        eq(21L),
-        eq(2),
-        eq(DatasetSourceType.QUERY_REVISION),
-        eq(11L),
-        eq(72L),
-        eq(4),
-        anyString())).thenReturn(32L);
+    when(repository.appendVersion(argThat(draft ->
+        draft.fields().size() == 1
+            && "field-sales-amount".equals(draft.fields().get(0).fieldId())))).thenReturn(32L);
 
     DatasetDetail result = service.publishFromRelease(new DatasetService.PublishCommand(
         11L,
@@ -203,15 +171,16 @@ class DatasetServiceTest {
             DatasetFieldRole.MEASURE))));
 
     assertEquals("field-sales-amount", result.fields().get(0).fieldId());
-    verify(repository).insertFields(eq(32L), argThat(fields ->
-        fields.size() == 1 && "field-sales-amount".equals(fields.get(0).fieldId())));
+    verify(repository).appendVersion(argThat(draft ->
+        draft.fields().size() == 1
+            && "field-sales-amount".equals(draft.fields().get(0).fieldId())));
   }
 
   @Test
   void publishRejectsOfflineAsset() {
     DatasetRepository repository = mock(DatasetRepository.class);
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DatasetService service = new DatasetService(repository, catalog, new ObjectMapper());
+    DatasetService service = new DatasetService(repository, catalog);
     when(catalog.get(11L)).thenReturn(taskAsset(11L, TaskAssetStatus.OFFLINE, "SQL", 71L, 3));
 
     IllegalArgumentException error = assertThrows(
@@ -225,7 +194,7 @@ class DatasetServiceTest {
   void publishRejectsNonSqlTask() {
     DatasetRepository repository = mock(DatasetRepository.class);
     TaskCatalogService catalog = mock(TaskCatalogService.class);
-    DatasetService service = new DatasetService(repository, catalog, new ObjectMapper());
+    DatasetService service = new DatasetService(repository, catalog);
     when(catalog.get(11L)).thenReturn(taskAsset(11L, TaskAssetStatus.ONLINE, "SHELL", 71L, 3));
 
     assertThrows(

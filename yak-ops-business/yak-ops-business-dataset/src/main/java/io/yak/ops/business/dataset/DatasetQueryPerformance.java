@@ -1,15 +1,13 @@
 package io.yak.ops.business.dataset;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.Instant;
 
 /** Diagnostic trace for one Dataset Query Runtime execution. */
 public record DatasetQueryPerformance(
     String queryId,
-    @JsonSerialize(using = ToStringSerializer.class) long datasetId,
+    long datasetId,
     String datasetName,
-    @JsonSerialize(using = ToStringSerializer.class) long datasetVersionId,
+    long datasetVersionId,
     int datasetVersionNo,
     String sourceType,
     String dataSourceId,

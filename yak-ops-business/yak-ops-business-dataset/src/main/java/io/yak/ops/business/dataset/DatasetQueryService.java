@@ -1,5 +1,6 @@
 package io.yak.ops.business.dataset;
 
+import io.yak.ops.business.dataset.repository.DatasetRepository;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,9 +26,7 @@ public class DatasetQueryService {
     Map<DatasetSourceType, DatasetSourceQueryAdapter> discovered = new LinkedHashMap<>();
     for (DatasetSourceQueryAdapter adapter : adapters) {
       DatasetSourceQueryAdapter existing = discovered.putIfAbsent(adapter.sourceType(), adapter);
-      if (existing != null) {
-        throw new IllegalStateException("重复的 Dataset query adapter：" + adapter.sourceType());
-      }
+      if (existing != null) throw new IllegalStateException("重复的 Dataset query adapter：" + adapter.sourceType());
     }
     this.adapters = Map.copyOf(discovered);
   }

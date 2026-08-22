@@ -1,5 +1,6 @@
 package io.yak.ops.business.dataset;
 
+import io.yak.ops.business.dataset.service.event.DatasetLineageRefreshRequested;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +25,6 @@ class DatasetLineageRefreshListener {
     this(datasetService, transactionRunner::sync);
   }
 
-  /** Keeps focused tests source-compatible while production uses the REQUIRES_NEW runner. */
   DatasetLineageRefreshListener(
       DatasetService datasetService,
       DatasetLineageService lineageService) {
@@ -46,19 +46,11 @@ class DatasetLineageRefreshListener {
     try {
       syncOperation.accept(datasetService.get(event.datasetId()));
     } catch (RuntimeException exception) {
-      // Lineage is derived metadata. A refresh failure must never turn a committed Dataset publish
-      // into an apparent business failure for the caller.
       LOGGER.warn(
           "Dataset lineage refresh failed after commit for dataset {}: {}",
           event.datasetId(),
           exception.getMessage(),
           exception);
     }
-  }
-}
-
-record DatasetLineageRefreshRequested(long datasetId) {
-  DatasetLineageRefreshRequested {
-    if (datasetId <= 0L) throw new IllegalArgumentException("datasetId 必须大于 0");
   }
 }
