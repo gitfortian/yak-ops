@@ -12,6 +12,7 @@ import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.repository.support.RealtimeJsonCodec;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Repository;
@@ -276,6 +277,7 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
     String desired = latest == null ? definition.desiredState() : latest.desiredState();
     String observed = latest == null ? definition.observedState() : latest.observedState();
     String error = latest == null ? definition.lastError() : latest.errorMessage();
+    boolean publishedUpdateAvailable = publishedUpdateAvailable(definition, latest);
     return new RealtimeJobView(
         definition.id(),
         definition.name(),
@@ -291,6 +293,7 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         error,
         definition.createTime(),
         definition.updateTime(),
+        publishedUpdateAvailable,
         deploymentView(latest));
   }
 
@@ -325,6 +328,7 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         po.getObservedState(),
         po.getDefinitionVersion() == null ? 0 : po.getDefinitionVersion(),
         po.getPublishedVersion(),
+        po.getPublishedDefinitionVersionId(),
         po.getConfigDigest(),
         po.getLastError(),
         po.getCreateTime(),
@@ -352,5 +356,17 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         po.getErrorMessage(),
         po.getCreateTime(),
         po.getUpdateTime());
+  }
+
+  private boolean publishedUpdateAvailable(DefinitionRow definition, DeploymentRow latest) {
+    if (latest == null
+        || !"RUNNING".equals(latest.desiredState())
+        || !"RUNNING".equals(latest.observedState())
+        || latest.definitionVersionId() == null
+        || definition.publishedDefinitionVersionId() == null) {
+      return false;
+    }
+    return !Objects.equals(
+        latest.definitionVersionId(), definition.publishedDefinitionVersionId());
   }
 }

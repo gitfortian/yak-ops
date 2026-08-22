@@ -117,14 +117,22 @@ public class RealtimeJobController {
   @Operation(summary = "使用任务绑定的 Flink CDC 运行环境校验当前定义") @PostMapping("/{id}/validate") @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<RealtimeViews.Validation> validate(@PathVariable long id) { return Result.success(viewMapper.toView(validationService.validate(id))); }
 
-  @Operation(summary = "启动实时同步任务") @PostMapping("/{id}/start") @RequiresPermission(RealtimePermissionCode.EXECUTE)
+  @Operation(summary = "启动最新已发布实时同步版本") @PostMapping("/{id}/start") @RequiresPermission(RealtimePermissionCode.EXECUTE)
   public Result<RealtimeViews.Deployment> start(@PathVariable long id, @RequestHeader(value = "Idempotency-Key", required = false) String key) { return Result.success(viewMapper.toView(service.start(id, key))); }
 
   @Operation(summary = "停止实时同步任务") @PostMapping("/{id}/stop") @RequiresPermission(RealtimePermissionCode.EXECUTE)
   public Result<Boolean> stop(@PathVariable long id) { service.stop(id); return Result.success(true); }
 
-  @Operation(summary = "重启实时同步任务") @PostMapping("/{id}/restart") @RequiresPermission(RealtimePermissionCode.EXECUTE)
-  public Result<RealtimeViews.Deployment> restart(@PathVariable long id, @RequestHeader(value = "Idempotency-Key", required = false) String key) { return Result.success(viewMapper.toView(service.restart(id, key))); }
+  @Operation(summary = "重启当前 SyncExecution（保持同一 DefinitionVersion）") @PostMapping("/{id}/restart-execution") @RequiresPermission(RealtimePermissionCode.EXECUTE)
+  public Result<RealtimeViews.Deployment> restartExecution(@PathVariable long id, @RequestHeader(value = "Idempotency-Key", required = false) String key) { return Result.success(viewMapper.toView(service.restartExecution(id, key))); }
+
+  @Operation(summary = "应用最新已发布 DefinitionVersion") @PostMapping("/{id}/apply-published-version") @RequiresPermission(RealtimePermissionCode.EXECUTE)
+  public Result<RealtimeViews.Deployment> applyPublishedVersion(@PathVariable long id, @RequestHeader(value = "Idempotency-Key", required = false) String key) { return Result.success(viewMapper.toView(service.applyPublishedVersion(id, key))); }
+
+  /** Compatibility endpoint. Semantics are RestartExecution and never upgrade to latest Published. */
+  @Deprecated
+  @Operation(summary = "兼容入口：重启当前 SyncExecution") @PostMapping("/{id}/restart") @RequiresPermission(RealtimePermissionCode.EXECUTE)
+  public Result<RealtimeViews.Deployment> restart(@PathVariable long id, @RequestHeader(value = "Idempotency-Key", required = false) String key) { return Result.success(viewMapper.toView(service.restartExecution(id, key))); }
 
   @Operation(summary = "立即对账实时同步任务") @PostMapping("/{id}/reconcile") @RequiresPermission(RealtimePermissionCode.EXECUTE)
   public Result<RealtimeViews.Job> reconcile(@PathVariable long id) { return Result.success(viewMapper.toView(lifecycleCoordinator.reconcile(id))); }

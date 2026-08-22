@@ -27,6 +27,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CustomPagination from '../batch-link-up/CustomPagination';
 import { realtimeApi } from './api';
+import type { RealtimeAction } from './api';
 import JobEditor from './JobEditor';
 import CreateRealtimeTaskDrawer from './CreateRealtimeTaskDrawer';
 import RealtimeRuntimeDetail from './RealtimeRuntimeDetail';
@@ -110,6 +111,10 @@ const StateBadge = ({ state, label }: { state?: string; label?: string }) => {
 };
 
 const initialFilters: FilterState = { stateGroup: 'ALL' };
+const createsExecution = (action: RealtimeAction) =>
+  action === 'start' ||
+  action === 'restart-execution' ||
+  action === 'apply-published-version';
 
 export default function RealtimeSync() {
   const [jobs, setJobs] = useState<RealtimeJob[]>([]);
@@ -249,17 +254,24 @@ export default function RealtimeSync() {
     return 'STARTING';
   };
 
-  const action = async (
-    job: RealtimeJob,
-    name: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile',
-  ) => {
+  const action = async (job: RealtimeJob, name: RealtimeAction) => {
     try {
       await realtimeApi.action(job.id, name);
-      if (name === 'start') {
+      if (createsExecution(name)) {
         const state = await waitForStartResult(job.id);
-        if (state === 'RUNNING') message.success('实时同步任务已启动');
-        else if (state === 'STARTING') message.warning('Flink 任务仍在启动，请稍后刷新状态');
-        else message.warning(`Flink 启动结果：${observedStateLabel[state] || state}`);
+        if (state === 'RUNNING') {
+          if (name === 'restart-execution') {
+            message.success('已按当前 DefinitionVersion 重启 SyncExecution');
+          } else if (name === 'apply-published-version') {
+            message.success('已显式应用新的 Published DefinitionVersion');
+          } else {
+            message.success('实时同步任务已启动');
+          }
+        } else if (state === 'STARTING') {
+          message.warning('Flink 任务仍在启动，请稍后刷新状态');
+        } else {
+          message.warning(`Flink 执行结果：${observedStateLabel[state] || state}`);
+        }
       } else if (name === 'publish') {
         message.success(
           job.desiredState === 'RUNNING'
@@ -387,14 +399,21 @@ export default function RealtimeSync() {
       deleteJob(job);
       return;
     }
-    if (key === 'validate' || key === 'publish' || key === 'restart' || key === 'reconcile') {
+    if (
+      key === 'validate' ||
+      key === 'publish' ||
+      key === 'restart-execution' ||
+      key === 'apply-published-version' ||
+      key === 'reconcile'
+    ) {
       void action(job, key);
     }
   };
 
   const moreItems = (job: RealtimeJob): MenuProps['items'] => {
     const running = job.desiredState === 'RUNNING';
-    return [
+    const stableRunning = running && job.observedState === 'RUNNING';
+    const items: MenuProps['items'] = [
       { key: 'detail', label: '查看运行详情' },
       {
         key: 'validate',
@@ -407,10 +426,19 @@ export default function RealtimeSync() {
         disabled: job.releaseState === 'PUBLISHED',
       },
       {
-        key: 'restart',
-        label: '重启任务',
-        disabled: !running,
+        key: 'restart-execution',
+        label: '重启当前版本',
+        disabled: !stableRunning,
       },
+    ];
+    if (job.publishedUpdateAvailable) {
+      items.push({
+        key: 'apply-published-version',
+        label: '应用已发布版本',
+        disabled: !stableRunning,
+      });
+    }
+    items.push(
       {
         key: 'reconcile',
         label: '立即状态对账',
@@ -422,7 +450,8 @@ export default function RealtimeSync() {
         label: <span className="text-[#d92d20]">删除任务</span>,
         disabled: job.desiredState !== 'STOPPED',
       },
-    ];
+    );
+    return items;
   };
 
   const columns: ColumnsType<RealtimeJob> = [
@@ -484,7 +513,14 @@ export default function RealtimeSync() {
       dataIndex: 'releaseState',
       width: 115,
       align: 'center',
-      render: (value) => <StateBadge state={value} label={releaseStateLabel[value] || value} />,
+      render: (value, job) => (
+        <div className="flex flex-col items-center gap-1">
+          <StateBadge state={value} label={releaseStateLabel[value] || value} />
+          {job.publishedUpdateAvailable && (
+            <span className="text-[10px] leading-4 text-[#b54708]">有更新可应用</span>
+          )}
+        </div>
+      ),
     },
     {
       title: '运行状态',

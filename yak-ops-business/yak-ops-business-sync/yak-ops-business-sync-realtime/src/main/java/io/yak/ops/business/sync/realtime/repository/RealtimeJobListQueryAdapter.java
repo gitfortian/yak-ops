@@ -101,6 +101,7 @@ public class RealtimeJobListQueryAdapter implements RealtimeJobListQuery {
         row.getLastError(),
         row.getCreateTime(),
         row.getUpdateTime(),
+        Boolean.TRUE.equals(row.getPublishedUpdateAvailable()),
         deployment);
   }
 

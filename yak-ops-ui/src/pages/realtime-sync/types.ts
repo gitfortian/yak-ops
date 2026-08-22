@@ -92,6 +92,7 @@ export interface RealtimeJob {
   observedState: ObservedState;
   definitionVersion: number;
   publishedVersion?: number;
+  publishedUpdateAvailable: boolean;
   configDigest?: string;
   lastError?: string;
   createTime: string;

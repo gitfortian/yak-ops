@@ -174,7 +174,6 @@ class RealtimeJobServiceConcurrencyTest {
     when(gateway.deploy(eq(environment), any()))
         .thenReturn(new DeployResult("job-new", "exactly-once"));
 
-    // completeStart sees the newly created execution as STARTING/RUNNING desired.
     assertThatCode(() -> service.start(JOB_ID, "terminal-restart")).doesNotThrowAnyException();
 
     verify(store).insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("terminal-restart"));
@@ -239,28 +238,13 @@ class RealtimeJobServiceConcurrencyTest {
   }
 
   @Test
-  void restartRefusesToSilentlySwitchPublishedVersion() {
-    PublishedDefinitionRow original = published();
-    PublishedDefinitionRow changed =
-        new PublishedDefinitionRow(
-            DEFINITION_VERSION_ID + 1,
-            JOB_ID,
-            2,
-            2,
-            spec,
-            environment.id(),
-            "c".repeat(64),
-            "d".repeat(64));
-    when(store.deploymentByIdempotencyKey("restart-pin")).thenReturn(Optional.empty());
-    when(store.publishedDefinition(JOB_ID))
-        .thenReturn(Optional.of(original), Optional.of(changed));
-    when(store.lockDefinition(JOB_ID)).thenReturn(stopped);
+  void restartExecutionRequiresCurrentRunningExecution() {
+    when(store.deploymentByIdempotencyKey("restart-missing")).thenReturn(Optional.empty());
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.empty());
-    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.restart(JOB_ID, "restart-pin"))
+    assertThatThrownBy(() -> service.restartExecution(JOB_ID, "restart-missing"))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("重启期间已发布版本发生变化");
+        .hasMessageContaining("当前没有可重启的 SyncExecution");
 
     verify(store, never()).insertDeployment(any(), any(), any(), any(), any(), any());
     verify(gateway, never()).deploy(any(), any());

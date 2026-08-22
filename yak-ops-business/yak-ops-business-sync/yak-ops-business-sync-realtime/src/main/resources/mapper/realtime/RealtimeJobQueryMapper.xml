@@ -43,6 +43,15 @@
            COALESCE(p.observed_state, d.observed_state) AS observed_state,
            d.definition_version,
            d.published_version,
+           CASE
+             WHEN p.id IS NOT NULL
+              AND p.desired_state = 'RUNNING'
+              AND p.observed_state = 'RUNNING'
+              AND p.definition_version_id IS NOT NULL
+              AND d.published_definition_version_id IS NOT NULL
+              AND p.definition_version_id &lt;&gt; d.published_definition_version_id
+             THEN TRUE ELSE FALSE
+           END AS published_update_available,
            d.config_digest,
            CASE WHEN p.id IS NULL THEN d.last_error ELSE p.error_message END AS last_error,
            d.create_time,

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 public class RealtimeViewMapper {
   public RealtimeViews.Job toView(RealtimeJobView value) {
     if (value == null) return null;
-    return new RealtimeViews.Job(value.id(), value.name(), value.description(), toView(value.spec()), value.runtimeEnvironmentId(), value.releaseState(), value.desiredState(), value.observedState(), value.definitionVersion(), value.publishedVersion(), value.configDigest(), value.lastError(), value.createTime(), value.updateTime(), toView(value.latestDeployment()));
+    return new RealtimeViews.Job(value.id(), value.name(), value.description(), toView(value.spec()), value.runtimeEnvironmentId(), value.releaseState(), value.desiredState(), value.observedState(), value.definitionVersion(), value.publishedVersion(), value.configDigest(), value.lastError(), value.createTime(), value.updateTime(), value.publishedUpdateAvailable(), toView(value.latestDeployment()));
   }
   public RealtimeViews.Page toView(RealtimeJobPage value) { return new RealtimeViews.Page(value.records().stream().map(this::toView).toList(), value.total(), value.pageNo(), value.pageSize()); }
   public RealtimeViews.Event toView(RealtimeJobEventView value) { return new RealtimeViews.Event(value.id(), value.deploymentId(), value.eventType(), value.fromState(), value.toState(), value.message(), value.createTime()); }

@@ -1,6 +1,5 @@
 package io.yak.ops.business.sync.realtime.service;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -29,7 +28,6 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.Validation
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
-import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -42,7 +40,6 @@ class RealtimeWave4DefinitionMutationTest {
 
   private static final long TASK_ID = 7L;
   private static final long RUNNING_VERSION_ID = 31L;
-  private static final long NEW_PUBLISHED_VERSION_ID = 32L;
 
   private RealtimeJobStore store;
   private CdcPipelineSpecValidator specValidator;
@@ -123,32 +120,6 @@ class RealtimeWave4DefinitionMutationTest {
     verify(store).publish(TASK_ID, task.definitionVersion(), task.configDigest());
     verify(store, never()).markStopping(anyLong(), any());
     verify(store, never()).markDeploymentRunning(anyLong(), anyLong(), any(), any());
-  }
-
-  @Test
-  void restartRejectsImplicitUpgradeWhenPublishedRefAdvanced() {
-    SyncExecution running = runningExecution(RUNNING_VERSION_ID);
-    PublishedDefinitionRow latestPublished =
-        new PublishedDefinitionRow(
-            NEW_PUBLISHED_VERSION_ID,
-            TASK_ID,
-            4,
-            4,
-            spec,
-            environment.id(),
-            "a".repeat(64),
-            "b".repeat(64));
-
-    when(store.deploymentByIdempotencyKey("restart-v3")).thenReturn(Optional.empty());
-    when(store.publishedDefinition(TASK_ID)).thenReturn(Optional.of(latestPublished));
-    when(store.latestExecution(TASK_ID)).thenReturn(Optional.of(running));
-
-    assertThatThrownBy(() -> service.restart(TASK_ID, "restart-v3"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("拒绝通过重启隐式升级");
-
-    verify(store, never()).markStopping(anyLong(), any());
-    verify(gateway, never()).stop(any(), any());
   }
 
   private DefinitionRow task(String releaseState, int draftRevision, Integer publishedRevision) {

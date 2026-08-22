@@ -16,6 +16,7 @@ public class RealtimeJobListRow {
   private String observedState;
   private Integer definitionVersion;
   private Integer publishedVersion;
+  private Boolean publishedUpdateAvailable;
   private String configDigest;
   private String lastError;
   private LocalDateTime createTime;
