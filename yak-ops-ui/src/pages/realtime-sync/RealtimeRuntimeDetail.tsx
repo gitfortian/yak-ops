@@ -20,7 +20,6 @@ import type {
   RealtimeJob,
   RealtimeObservability,
   RealtimeRuntimeLog,
-  RuntimeCapabilities,
 } from './types';
 
 const ACTIVE_STATES = new Set(['STARTING', 'RUNNING', 'STOPPING', 'UNKNOWN']);
@@ -89,10 +88,9 @@ function CodeBlock({ children, empty }: { children?: string; empty: string }) {
 interface Props {
   job: RealtimeJob;
   events: RealtimeEvent[];
-  capabilities: RuntimeCapabilities;
 }
 
-export default function RealtimeRuntimeDetail({ job, events, capabilities }: Props) {
+export default function RealtimeRuntimeDetail({ job, events }: Props) {
   const [observability, setObservability] = useState<RealtimeObservability>();
   const [observabilityLoading, setObservabilityLoading] = useState(false);
   const [submissionLog, setSubmissionLog] = useState('');
@@ -101,6 +99,7 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
   const [runtimeLoading, setRuntimeLoading] = useState(false);
 
   const engineJobId = job.latestDeployment?.engineJobId;
+  const runtimeEnvironment = job.latestDeployment?.runtimeEnvironment;
   const hasDeployment = Boolean(job.latestDeployment);
   const canObserve = Boolean(engineJobId);
 
@@ -159,9 +158,10 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
 
   const flinkWebUrl = useMemo(() => {
     if (observability?.flinkWebUrl) return observability.flinkWebUrl;
-    if (!engineJobId || !capabilities.restUrl) return undefined;
-    return `${capabilities.restUrl.replace(/\/+$/, '')}/#/job/${engineJobId}/overview`;
-  }, [capabilities.restUrl, engineJobId, observability?.flinkWebUrl]);
+    const restUrl = runtimeEnvironment?.config.restUrl;
+    if (!engineJobId || !restUrl) return undefined;
+    return `${restUrl.replace(/\/+$/, '')}/#/job/${engineJobId}/overview`;
+  }, [engineJobId, observability?.flinkWebUrl, runtimeEnvironment?.config.restUrl]);
 
   const checkpoint = observability?.checkpoints;
   const latestCheckpoint = checkpoint?.latestCompleted;
@@ -220,6 +220,14 @@ export default function RealtimeRuntimeDetail({ job, events, capabilities }: Pro
           </Descriptions.Item>
           <Descriptions.Item label="运行意图">
             {job.desiredState} / {job.observedState}
+          </Descriptions.Item>
+          <Descriptions.Item label="运行环境">
+            {runtimeEnvironment
+              ? `${runtimeEnvironment.name} · env v${runtimeEnvironment.version}`
+              : `环境 #${job.runtimeEnvironmentId || '-'}`}
+          </Descriptions.Item>
+          <Descriptions.Item label="Flink REST">
+            {runtimeEnvironment?.config.restUrl || '-'}
           </Descriptions.Item>
           <Descriptions.Item label="Flink JobId">{engineJobId || '-'}</Descriptions.Item>
           <Descriptions.Item label="Flink CDC Revision">

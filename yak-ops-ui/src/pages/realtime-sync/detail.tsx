@@ -3,17 +3,19 @@ import { message, Spin } from 'antd';
 import { useEffect, useState } from 'react';
 import { realtimeApi } from './api';
 import JobEditor from './JobEditor';
-import type { DataSourceOption, RealtimeJob } from './types';
+import type { ComputeEnvironmentOption, DataSourceOption, RealtimeJob } from './types';
 
 export default function RealtimeSyncDetail() {
   const { id } = useParams<{ id: string }>();
   const [job, setJob] = useState<RealtimeJob>();
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
+  const [environments, setEnvironments] = useState<ComputeEnvironmentOption[]>([]);
   useEffect(() => {
-    Promise.all([realtimeApi.detail(Number(id)), realtimeApi.dataSources()])
-      .then(([detail, sources]) => {
+    Promise.all([realtimeApi.detail(Number(id)), realtimeApi.dataSources(), realtimeApi.environments()])
+      .then(([detail, sources, runtimeEnvironments]) => {
         setJob(detail.data);
         setDataSources(sources.data || []);
+        setEnvironments(runtimeEnvironments.data || []);
       })
       .catch((error) => message.error(error?.message || '加载实时同步配置失败'));
   }, [id]);
@@ -28,6 +30,7 @@ export default function RealtimeSyncDetail() {
       open
       job={job}
       dataSources={dataSources}
+      environments={environments}
       onClose={() => history.push('/sync/realtime')}
       onSaved={() => history.push('/sync/realtime')}
     />

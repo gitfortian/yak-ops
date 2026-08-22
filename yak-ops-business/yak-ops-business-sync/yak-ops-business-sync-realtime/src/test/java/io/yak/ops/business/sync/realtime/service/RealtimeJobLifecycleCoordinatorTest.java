@@ -8,6 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
 import io.yak.ops.business.sync.realtime.engine.FlinkJobDiscoveryClient;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
@@ -34,7 +37,9 @@ class RealtimeJobLifecycleCoordinatorTest {
   private RealtimeRuntimeIdentityStore identityStore;
   private FlinkJobDiscoveryClient discovery;
   private RealtimeEngineGateway gateway;
+  private RealtimeRuntimeResolver runtimeResolver;
   private RealtimeJobLifecycleCoordinator coordinator;
+  private ComputeEnvironmentSnapshot environment;
 
   @BeforeEach
   void setUp() {
@@ -42,6 +47,18 @@ class RealtimeJobLifecycleCoordinatorTest {
     identityStore = mock(RealtimeRuntimeIdentityStore.class);
     discovery = mock(FlinkJobDiscoveryClient.class);
     gateway = mock(RealtimeEngineGateway.class);
+    runtimeResolver = mock(RealtimeRuntimeResolver.class);
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L,
+            "test-env",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
+            2);
+    when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     RealtimeSyncProperties properties = new RealtimeSyncProperties();
@@ -52,6 +69,7 @@ class RealtimeJobLifecycleCoordinatorTest {
             identityStore,
             discovery,
             gateway,
+            runtimeResolver,
             new RealtimeStateMachine(),
             properties,
             10,
@@ -66,8 +84,8 @@ class RealtimeJobLifecycleCoordinatorTest {
     when(store.lockDefinition(JOB_ID)).thenReturn(definition);
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
     when(identityStore.findByDeploymentId(DEPLOYMENT_ID)).thenReturn(Optional.of("yak-rt-test"));
-    when(discovery.findJobIds("yak-rt-test")).thenReturn(List.of(FLINK_JOB_ID));
-    when(gateway.status(FLINK_JOB_ID))
+    when(discovery.findJobIds(environment, "yak-rt-test")).thenReturn(List.of(FLINK_JOB_ID));
+    when(gateway.status(environment, FLINK_JOB_ID))
         .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
 
     coordinator.reconcile(JOB_ID);
@@ -89,13 +107,12 @@ class RealtimeJobLifecycleCoordinatorTest {
   @Test
   void confirmsStoppedOnlyAfterRecoveryWindowAndNoMatchingFlinkJob() {
     DefinitionRow definition = definition("STOPPED", "STOPPING");
-    DeploymentRow deployment =
-        deployment(null, "UNKNOWN", LocalDateTime.now().minusMinutes(5));
+    DeploymentRow deployment = deployment(null, "UNKNOWN", LocalDateTime.now().minusMinutes(5));
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
     when(store.lockDefinition(JOB_ID)).thenReturn(definition);
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
     when(identityStore.findByDeploymentId(DEPLOYMENT_ID)).thenReturn(Optional.of("yak-rt-test"));
-    when(discovery.findJobIds("yak-rt-test")).thenReturn(List.of());
+    when(discovery.findJobIds(environment, "yak-rt-test")).thenReturn(List.of());
 
     coordinator.reconcile(JOB_ID);
 
@@ -117,7 +134,7 @@ class RealtimeJobLifecycleCoordinatorTest {
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
     when(store.lockDefinition(JOB_ID)).thenReturn(definition);
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
-    when(gateway.status(FLINK_JOB_ID))
+    when(gateway.status(environment, FLINK_JOB_ID))
         .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.UNKNOWN));
 
     coordinator.reconcile(JOB_ID);
@@ -140,7 +157,7 @@ class RealtimeJobLifecycleCoordinatorTest {
     DeploymentRow deployment = deployment(FLINK_JOB_ID, "FAILED", LocalDateTime.now());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
     when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
-    when(gateway.status(FLINK_JOB_ID))
+    when(gateway.status(environment, FLINK_JOB_ID))
         .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
 
     assertThatThrownBy(() -> coordinator.assertSafeToDelete(JOB_ID))
@@ -165,8 +182,7 @@ class RealtimeJobLifecycleCoordinatorTest {
         null);
   }
 
-  private DeploymentRow deployment(
-      String engineJobId, String status, LocalDateTime createTime) {
+  private DeploymentRow deployment(String engineJobId, String status, LocalDateTime createTime) {
     return new DeploymentRow(
         DEPLOYMENT_ID,
         JOB_ID,

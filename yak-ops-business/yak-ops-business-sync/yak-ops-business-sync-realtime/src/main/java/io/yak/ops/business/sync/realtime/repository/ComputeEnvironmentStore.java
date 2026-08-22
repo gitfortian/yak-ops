@@ -3,6 +3,7 @@ package io.yak.ops.business.sync.realtime.repository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -133,6 +134,35 @@ public class ComputeEnvironmentStore {
     }
   }
 
+  /**
+   * Stage two makes the runtime binding explicit. Rows created before V7 are bound to the current
+   * default environment once during application startup. Legacy deployment snapshots are a
+   * best-effort reconstruction because stage one did not persist the historical environment.
+   */
+  public void bindLegacyRealtimeJobs(ComputeEnvironment environment) {
+    ComputeEnvironmentSnapshot snapshot = ComputeEnvironmentSnapshot.from(environment);
+    db.update(
+        "update yak_realtime_job_definition set runtime_environment_id=? "
+            + "where runtime_environment_id is null",
+        environment.id());
+    db.update(
+        "update yak_realtime_job_deployment set runtime_environment_id=?,"
+            + "runtime_environment_version=?,runtime_environment_snapshot_json=? "
+            + "where runtime_environment_snapshot_json is null",
+        environment.id(),
+        environment.version(),
+        write(snapshot));
+  }
+
+  public boolean hasBoundRealtimeJobs(long id) {
+    Long count =
+        db.queryForObject(
+            "select count(*) from yak_realtime_job_definition where runtime_environment_id=?",
+            Long.class,
+            id);
+    return count != null && count > 0;
+  }
+
   public boolean hasActiveRealtimeJobs() {
     Long count =
         db.queryForObject(
@@ -157,9 +187,9 @@ public class ComputeEnvironmentStore {
         time(result.getTimestamp("update_time")));
   }
 
-  private String write(RuntimeConfig config) {
+  private String write(Object value) {
     try {
-      return json.writeValueAsString(config);
+      return json.writeValueAsString(value);
     } catch (Exception exception) {
       throw new IllegalArgumentException("无法序列化运行环境配置", exception);
     }

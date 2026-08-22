@@ -1,6 +1,9 @@
 package io.yak.ops.business.sync.realtime.engine;
 
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
@@ -26,7 +29,12 @@ final class SshFlinkCdcCommandRunner {
   }
 
   String configurationError() {
+    return configurationError(bootstrapEnvironment());
+  }
+
+  String configurationError(ComputeEnvironmentSnapshot environment) {
     RealtimeSyncProperties.Ssh ssh = properties.getSsh();
+    RuntimeConfig config = requireConfig(environment);
     if (!StringUtils.hasText(ssh.getExecutable())) {
       return "SSH executable 不能为空";
     }
@@ -39,12 +47,10 @@ final class SshFlinkCdcCommandRunner {
     if (ssh.getPort() < 1 || ssh.getPort() > 65535) {
       return "SSH port 必须在 1-65535 之间";
     }
-    if (!absoluteUnixPath(properties.getFlinkHome())
-        || !absoluteUnixPath(properties.getFlinkCdcHome())) {
+    if (!absoluteUnixPath(config.flinkHome()) || !absoluteUnixPath(config.flinkCdcHome())) {
       return "SSH 模式下 flink-home 和 flink-cdc-home 必须是远端 Linux 绝对路径";
     }
-    if (StringUtils.hasText(properties.getJavaHome())
-        && !absoluteUnixPath(properties.getJavaHome())) {
+    if (StringUtils.hasText(config.javaHome()) && !absoluteUnixPath(config.javaHome())) {
       return "SSH 模式下 java-home 必须是远端 Linux 绝对路径";
     }
     Integer remoteRestPort = ssh.getRemoteRestPort();
@@ -62,7 +68,11 @@ final class SshFlinkCdcCommandRunner {
   }
 
   void validateReady(URI restUri) {
-    String error = configurationError();
+    validateReady(bootstrapEnvironment(), restUri);
+  }
+
+  void validateReady(ComputeEnvironmentSnapshot environment, URI restUri) {
+    String error = configurationError(environment);
     if (error != null) {
       throw failure(error, false, null);
     }
@@ -70,7 +80,7 @@ final class SshFlinkCdcCommandRunner {
     Process process = null;
     try {
       process =
-          new ProcessBuilder(sshCommand(remoteProbeCommand(restUri)))
+          new ProcessBuilder(sshCommand(remoteProbeCommand(environment, restUri)))
               .redirectErrorStream(true)
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .start();
@@ -96,7 +106,16 @@ final class SshFlinkCdcCommandRunner {
   }
 
   ExecutionResult submit(String pipelineYaml, Path outputLog, URI restUri, Duration timeout) {
-    String error = configurationError();
+    return submit(bootstrapEnvironment(), pipelineYaml, outputLog, restUri, timeout);
+  }
+
+  ExecutionResult submit(
+      ComputeEnvironmentSnapshot environment,
+      String pipelineYaml,
+      Path outputLog,
+      URI restUri,
+      Duration timeout) {
+    String error = configurationError(environment);
     if (error != null) {
       throw failure(error, false, null);
     }
@@ -105,7 +124,7 @@ final class SshFlinkCdcCommandRunner {
     boolean started = false;
     try {
       ProcessBuilder builder =
-          new ProcessBuilder(sshCommand(remoteSubmitCommand(restUri)))
+          new ProcessBuilder(sshCommand(remoteSubmitCommand(environment, restUri)))
               .redirectErrorStream(true)
               .redirectOutput(outputLog.toFile());
       process = builder.start();
@@ -169,22 +188,20 @@ final class SshFlinkCdcCommandRunner {
     return command;
   }
 
-  private String remoteProbeCommand(URI restUri) {
-    String cdc = remoteCdcCli();
+  private String remoteProbeCommand(ComputeEnvironmentSnapshot environment, URI restUri) {
+    RuntimeConfig config = requireConfig(environment);
+    String cdc = remoteCdcCli(environment);
     StringBuilder command = new StringBuilder("set -eu; ");
-    command
-        .append("test -x ")
-        .append(shellQuote(cdc))
-        .append(" || exit 41; ");
+    command.append("test -x ").append(shellQuote(cdc)).append(" || exit 41; ");
     command
         .append("test -d ")
-        .append(shellQuote(properties.getFlinkHome()))
+        .append(shellQuote(config.flinkHome()))
         .append(" || exit 42; ");
     command.append("command -v mktemp >/dev/null 2>&1 || exit 43; ");
-    if (StringUtils.hasText(properties.getJavaHome())) {
+    if (StringUtils.hasText(config.javaHome())) {
       command
           .append("test -x ")
-          .append(shellQuote(properties.getJavaHome() + "/bin/java"))
+          .append(shellQuote(config.javaHome() + "/bin/java"))
           .append(" || exit 44; ");
     }
     command.append("test -n ").append(shellQuote(remoteRestAddress(restUri))).append("; ");
@@ -192,29 +209,28 @@ final class SshFlinkCdcCommandRunner {
     return command.toString();
   }
 
-  private String remoteSubmitCommand(URI restUri) {
+  private String remoteSubmitCommand(ComputeEnvironmentSnapshot environment, URI restUri) {
+    RuntimeConfig config = requireConfig(environment);
     StringBuilder command = new StringBuilder();
     command.append("set -eu; umask 077; ");
     command.append("tmp=$(mktemp \"${TMPDIR:-/tmp}/yak-ops-cdc.XXXXXX.yaml\"); ");
     command.append("cleanup(){ rm -f \"$tmp\"; }; trap cleanup 0; ");
     command.append("trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM; ");
     command.append("cat > \"$tmp\"; ");
-    command.append("export FLINK_HOME=").append(shellQuote(properties.getFlinkHome())).append("; ");
-    if (StringUtils.hasText(properties.getJavaHome())) {
-      command.append("export JAVA_HOME=").append(shellQuote(properties.getJavaHome())).append("; ");
+    command.append("export FLINK_HOME=").append(shellQuote(config.flinkHome())).append("; ");
+    if (StringUtils.hasText(config.javaHome())) {
+      command.append("export JAVA_HOME=").append(shellQuote(config.javaHome())).append("; ");
     }
-    command.append(shellQuote(remoteCdcCli())).append(" \"$tmp\"");
-    command.append(" --flink-home ").append(shellQuote(properties.getFlinkHome()));
+    command.append(shellQuote(remoteCdcCli(environment))).append(" \"$tmp\"");
+    command.append(" --flink-home ").append(shellQuote(config.flinkHome()));
     command.append(" --target remote");
-    command
-        .append(" ")
-        .append(shellQuote("-Drest.address=" + remoteRestAddress(restUri)));
+    command.append(" ").append(shellQuote("-Drest.address=" + remoteRestAddress(restUri)));
     command.append(" ").append(shellQuote("-Drest.port=" + remoteRestPort(restUri)));
     return command.toString();
   }
 
-  private String remoteCdcCli() {
-    String home = properties.getFlinkCdcHome().replaceAll("/+$", "");
+  private String remoteCdcCli(ComputeEnvironmentSnapshot environment) {
+    String home = requireConfig(environment).flinkCdcHome().replaceAll("/+$", "");
     return home + "/bin/flink-cdc.sh";
   }
 
@@ -252,6 +268,32 @@ final class SshFlinkCdcCommandRunner {
       case 255 -> "SSH 连接或认证失败，请检查 host key、用户和密钥配置";
       default -> "SSH 远端运行环境未通过检查，exitCode=" + exitCode;
     };
+  }
+
+  private RuntimeConfig requireConfig(ComputeEnvironmentSnapshot environment) {
+    if (environment == null || environment.config() == null) {
+      throw new IllegalArgumentException("运行环境配置不能为空");
+    }
+    return environment.config();
+  }
+
+  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
+    RuntimeConfig config =
+        new RuntimeConfig(
+            properties.getRestUrl(),
+            properties.getFlinkHome(),
+            properties.getFlinkCdcHome(),
+            properties.getJavaHome(),
+            properties.getFlinkVersion(),
+            properties.getFlinkCdcVersion());
+    return new ComputeEnvironmentSnapshot(
+        0L,
+        "application/default",
+        ComputeEnvironment.ENGINE_FLINK_CDC,
+        ComputeEnvironment.DEPLOYMENT_REMOTE,
+        properties.getSubmissionMode().name(),
+        config,
+        0);
   }
 
   private boolean absoluteUnixPath(String value) {

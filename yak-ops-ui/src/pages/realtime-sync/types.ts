@@ -9,6 +9,39 @@ export interface TableRoute {
   keyColumns: string[];
 }
 
+export interface RuntimeEnvironmentConfig {
+  restUrl: string;
+  flinkHome: string;
+  flinkCdcHome: string;
+  javaHome?: string;
+  flinkVersion: string;
+  flinkCdcVersion: string;
+}
+
+export interface ComputeEnvironmentOption {
+  id: number;
+  name: string;
+  engineType: 'FLINK_CDC';
+  deploymentMode: 'REMOTE';
+  submitterType: 'LOCAL' | 'SSH';
+  config: RuntimeEnvironmentConfig;
+  enabled: boolean;
+  defaultEnvironment: boolean;
+  version: number;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface ComputeEnvironmentSnapshot {
+  id: number;
+  name: string;
+  engineType: string;
+  deploymentMode: string;
+  submitterType: string;
+  config: RuntimeEnvironmentConfig;
+  version: number;
+}
+
 export interface CdcPipelineSpec {
   sourceDataSourceRef: number;
   sinkDataSourceRef: number;
@@ -40,6 +73,7 @@ export interface RealtimeDeployment {
   idempotencyKey: string;
   engineJobId?: string;
   runtimeRevision?: string;
+  runtimeEnvironment?: ComputeEnvironmentSnapshot;
   status: string;
   resultUncertain: boolean;
   errorMessage?: string;
@@ -52,6 +86,7 @@ export interface RealtimeJob {
   name: string;
   description?: string;
   spec?: CdcPipelineSpec;
+  runtimeEnvironmentId?: number;
   releaseState: ReleaseState;
   desiredState: DesiredState;
   observedState: ObservedState;
@@ -163,6 +198,9 @@ export interface DataSourceOption {
 export interface RuntimeCapabilities {
   engineType?: string;
   runtimeVersion?: string;
+  runtimeEnvironmentId?: number;
+  runtimeEnvironmentName?: string;
+  runtimeEnvironmentVersion?: number;
   restUrl?: string;
   restTransport?: 'DIRECT';
   submissionMode?: 'LOCAL' | 'SSH';

@@ -1,6 +1,7 @@
 package io.yak.ops.business.sync.realtime.service;
 
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
 import io.yak.ops.business.sync.realtime.engine.FlinkJobDiscoveryClient;
@@ -35,6 +36,7 @@ public class RealtimeJobLifecycleCoordinator {
   private final RealtimeRuntimeIdentityStore identityStore;
   private final FlinkJobDiscoveryClient discovery;
   private final RealtimeEngineGateway gateway;
+  private final RealtimeRuntimeResolver runtimeResolver;
   private final RealtimeStateMachine stateMachine;
   private final RealtimeSyncProperties properties;
   private final TransactionTemplate transactions;
@@ -47,6 +49,7 @@ public class RealtimeJobLifecycleCoordinator {
       RealtimeRuntimeIdentityStore identityStore,
       FlinkJobDiscoveryClient discovery,
       RealtimeEngineGateway gateway,
+      RealtimeRuntimeResolver runtimeResolver,
       RealtimeStateMachine stateMachine,
       RealtimeSyncProperties properties,
       @Value("${yak.sync.realtime.orphan-recovery-grace-seconds:120}") long orphanGraceSeconds,
@@ -55,6 +58,7 @@ public class RealtimeJobLifecycleCoordinator {
     this.identityStore = identityStore;
     this.discovery = discovery;
     this.gateway = gateway;
+    this.runtimeResolver = runtimeResolver;
     this.stateMachine = stateMachine;
     this.properties = properties;
     this.orphanGraceSeconds = Math.max(10, orphanGraceSeconds);
@@ -96,12 +100,13 @@ public class RealtimeJobLifecycleCoordinator {
       deployment = store.latestDeployment(id).orElse(deployment);
     }
 
-    RuntimeStatus runtime = gateway.status(jobId);
-    applyRuntimeState(id, deployment.id(), jobId, runtime);
+    ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.deployment(definition, deployment);
+    RuntimeStatus runtime = gateway.status(runtimeEnvironment, jobId);
+    applyRuntimeState(id, deployment.id(), jobId, runtimeEnvironment, runtime);
     return store.view(id);
   }
 
-  /** Refuses metadata deletion unless Flink proves that no matching runtime job is active. */
+  /** Refuses metadata deletion unless the deployment's Flink runtime proves no job is active. */
   public void assertSafeToDelete(long id) {
     DefinitionRow definition = requireDefinition(id);
     stateMachine.requireDefinitionMutable(definition.desiredState(), definition.observedState());
@@ -109,14 +114,15 @@ public class RealtimeJobLifecycleCoordinator {
     if (deployment == null) {
       return;
     }
+    ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.deployment(definition, deployment);
     if (StringUtils.hasText(deployment.engineJobId())) {
-      requireInactive(gateway.status(deployment.engineJobId()));
+      requireInactive(gateway.status(runtimeEnvironment, deployment.engineJobId()));
       return;
     }
     String runtimeName = identityStore.findByDeploymentId(deployment.id()).orElse(null);
     if (StringUtils.hasText(runtimeName)) {
-      for (String jobId : discovery.findJobIds(runtimeName)) {
-        requireInactive(gateway.status(jobId));
+      for (String jobId : discovery.findJobIds(runtimeEnvironment, runtimeName)) {
+        requireInactive(gateway.status(runtimeEnvironment, jobId));
       }
       return;
     }
@@ -140,7 +146,8 @@ public class RealtimeJobLifecycleCoordinator {
       }
       return null;
     }
-    List<String> matches = discovery.findJobIds(runtimeName);
+    ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.deployment(definition, deployment);
+    List<String> matches = discovery.findJobIds(runtimeEnvironment, runtimeName);
     if (matches.size() > 1) {
       markConflict(definition.id(), deployment, matches.size());
       return null;
@@ -179,7 +186,11 @@ public class RealtimeJobLifecycleCoordinator {
   }
 
   private void applyRuntimeState(
-      long definitionId, long deploymentId, String jobId, RuntimeStatus runtime) {
+      long definitionId,
+      long deploymentId,
+      String jobId,
+      ComputeEnvironmentSnapshot runtimeEnvironment,
+      RuntimeStatus runtime) {
     Boolean stop =
         transactions.execute(
             ignored -> {
@@ -225,7 +236,7 @@ public class RealtimeJobLifecycleCoordinator {
 
     if (Boolean.TRUE.equals(stop)) {
       try {
-        gateway.stop(jobId);
+        gateway.stop(runtimeEnvironment, jobId);
       } catch (RealtimeEngineException exception) {
         markUnknown(definitionId, deploymentId, jobId, exception.getMessage());
         throw exception;
