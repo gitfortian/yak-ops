@@ -55,11 +55,10 @@ class RealtimeDefinitionValidatorTest {
     when(dataSourceResolver.resolve(any(CdcPipelineSpec.class))).thenReturn(resolved);
     ObjectNode manifest = new ObjectMapper().createObjectNode();
     manifest.put("deliverySemantics", "at-least-once");
-    manifest.putObject("connectors")
-        .putArray("sources")
-        .add("mysql");
-    manifest.withObject("connectors").putArray("sinks").add("yak-jdbc:mysql");
-    manifest.withObject("connectors").putArray("schemaEvolution").add("evolve");
+    ObjectNode connectors = manifest.putObject("connectors");
+    connectors.putArray("sources").add("mysql");
+    connectors.putArray("sinks").add("yak-jdbc:mysql");
+    connectors.putArray("schemaEvolution").add("evolve");
     when(gateway.capabilities(environment)).thenReturn(manifest);
 
     validator =
