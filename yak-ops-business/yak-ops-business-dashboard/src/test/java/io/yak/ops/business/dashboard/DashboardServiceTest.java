@@ -7,6 +7,24 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.analysis.AnalysisReferenceService;
+import io.yak.ops.business.dashboard.domain.DashboardAsset;
+import io.yak.ops.business.dashboard.domain.DashboardDetail;
+import io.yak.ops.business.dashboard.domain.DashboardDraft;
+import io.yak.ops.business.dashboard.domain.DashboardGlobalFilterBindingSnapshot;
+import io.yak.ops.business.dashboard.domain.DashboardGlobalFilterOperator;
+import io.yak.ops.business.dashboard.domain.DashboardGlobalFilterSnapshot;
+import io.yak.ops.business.dashboard.domain.DashboardInteractionEvent;
+import io.yak.ops.business.dashboard.domain.DashboardInteractionSnapshot;
+import io.yak.ops.business.dashboard.domain.DashboardVersion;
+import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
+import io.yak.ops.business.dashboard.domain.DashboardWidgetSnapshot;
+import io.yak.ops.business.dashboard.domain.FilterBindingSpec;
+import io.yak.ops.business.dashboard.domain.GlobalFilterSpec;
+import io.yak.ops.business.dashboard.domain.InteractionSpec;
+import io.yak.ops.business.dashboard.domain.WidgetSpec;
+import io.yak.ops.business.dashboard.repository.DashboardRepository;
+import io.yak.ops.business.dashboard.service.DashboardService;
+import io.yak.ops.business.dashboard.service.support.DashboardDraftValidator;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class DashboardServiceTest {
 
@@ -21,22 +40,22 @@ class DashboardServiceTest {
   void createPersistsDraftV1AndValidatesAnalysisReference() {
     FakeRepository repository = new FakeRepository();
     AnalysisReferenceService analysisReferences = mock(AnalysisReferenceService.class);
-    DashboardService service = new DashboardService(repository, analysisReferences, new ObjectMapper());
+    DashboardService service = service(repository, analysisReferences);
 
-    DashboardDetail detail = service.create(new DashboardService.SaveCommand(
-        "销售驾驶舱", "核心销售分析", 12L,
-        List.of(new DashboardService.WidgetSpec("w1", 99L, null, null, 0, 0, 10, 7, 6, 5)),
-        List.of(new DashboardService.GlobalFilterSpec(
+    DashboardDetail detail = service.create(new DashboardDraft(
+        "销售驾驶舱", "核心销售分析", 12L, Map.of("mode", "dark"),
+        List.of(new WidgetSpec("w1", 99L, null, null, 0, 0, 10, 7, 6, 5)),
+        List.of(new GlobalFilterSpec(
             "region", "区域", DashboardGlobalFilterOperator.EQ, "华南",
-            List.of(new DashboardService.FilterBindingSpec("w1", "region-field")))),
-        List.of(new DashboardService.InteractionSpec(
+            List.of(new FilterBindingSpec("w1", "region-field")))),
+        List.of(new InteractionSpec(
             "link-region", DashboardInteractionEvent.SELECT, "w1", "region-field", "region"))));
 
     assertEquals(1, detail.dashboard().currentVersionNo());
     assertEquals(0, detail.dashboard().publishedVersionNo());
     assertEquals(1, detail.versions().size());
     assertEquals(1, detail.widgets().size());
-    assertEquals(1, detail.globalFilters().size());
+    assertEquals("dark", ((Map<?, ?>) detail.theme()).get("mode"));
     assertEquals("华南", detail.globalFilters().get(0).defaultValue());
     assertEquals(1, detail.interactions().size());
     verify(analysisReferences).requireExists(99L);
@@ -45,10 +64,10 @@ class DashboardServiceTest {
   @Test
   void publishPointsToCurrentDraftWithoutCreatingAnotherVersion() {
     FakeRepository repository = new FakeRepository();
-    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardService service = service(repository, mock(AnalysisReferenceService.class));
     DashboardDetail created = service.create(command(
         "A",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
 
     DashboardDetail published = service.publish(created.dashboard().id());
 
@@ -62,15 +81,15 @@ class DashboardServiceTest {
   @Test
   void savingDraftAfterPublishDoesNotMovePublishedPointer() {
     FakeRepository repository = new FakeRepository();
-    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardService service = service(repository, mock(AnalysisReferenceService.class));
     DashboardDetail created = service.create(command(
         "A",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
     service.publish(created.dashboard().id());
 
     DashboardDetail saved = service.saveVersion(created.dashboard().id(), command(
         "A2",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "line"), 1, 1, 10, 7, 6, 5))));
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "line"), 1, 1, 10, 7, 6, 5))));
 
     assertEquals(2, saved.dashboard().currentVersionNo());
     assertEquals(1, saved.dashboard().publishedVersionNo());
@@ -79,16 +98,18 @@ class DashboardServiceTest {
   }
 
   @Test
-  void restoreHistoricalVersionCreatesNewDraftAndKeepsPublishedVersion() {
+  void restoreHistoricalVersionCreatesNewDraftAndKeepsPublishedVersionAndTheme() {
     FakeRepository repository = new FakeRepository();
-    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
-    DashboardDetail created = service.create(command(
-        "A",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+    DashboardService service = service(repository, mock(AnalysisReferenceService.class));
+    DashboardDraft first = new DashboardDraft(
+        "A", null, null, Map.of("palette", "classic"),
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)),
+        List.of(), List.of());
+    DashboardDetail created = service.create(first);
     service.publish(created.dashboard().id());
     service.saveVersion(created.dashboard().id(), command(
         "A2",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "line"), 1, 1, 10, 7, 6, 5))));
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "line"), 1, 1, 10, 7, 6, 5))));
 
     DashboardDetail restored = service.restoreVersion(created.dashboard().id(), 1);
 
@@ -96,21 +117,22 @@ class DashboardServiceTest {
     assertEquals(1, restored.dashboard().publishedVersionNo());
     assertEquals("A", restored.currentVersion().name());
     assertEquals("bar", ((Map<?, ?>) restored.widgets().get(0).inlineAnalysis()).get("type"));
+    assertEquals("classic", ((Map<?, ?>) restored.theme()).get("palette"));
     assertEquals(3, restored.versions().size());
   }
 
   @Test
   void versionDetailReadsHistoricalSnapshotWithoutChangingDraftPointer() {
     FakeRepository repository = new FakeRepository();
-    DashboardService service = new DashboardService(repository, mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardService service = service(repository, mock(AnalysisReferenceService.class));
     DashboardDetail created = service.create(command(
         "A",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5))));
     service.saveVersion(created.dashboard().id(), command(
         "A2",
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "line"), 2, 3, 10, 7, 6, 5))));
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "line"), 2, 3, 10, 7, 6, 5))));
 
-    DashboardVersionDetail v1 = service.version(created.dashboard().id(), 1);
+    var v1 = service.version(created.dashboard().id(), 1);
 
     assertEquals(1, v1.version().versionNo());
     assertEquals("A", v1.version().name());
@@ -120,40 +142,46 @@ class DashboardServiceTest {
 
   @Test
   void widgetCannotCarryLinkedAndInlineDefinitionsTogether() {
-    DashboardService service = new DashboardService(
-        new FakeRepository(), mock(AnalysisReferenceService.class), new ObjectMapper());
+    DashboardService service = service(new FakeRepository(), mock(AnalysisReferenceService.class));
     assertThrows(IllegalArgumentException.class, () -> service.create(command(
         "bad",
-        List.of(new DashboardService.WidgetSpec("w1", 9L, null, Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)))));
+        List.of(new WidgetSpec("w1", 9L, null, Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)))));
   }
 
   @Test
   void globalFilterCannotBindUnknownWidget() {
-    DashboardService service = new DashboardService(
-        new FakeRepository(), mock(AnalysisReferenceService.class), new ObjectMapper());
-    assertThrows(IllegalArgumentException.class, () -> service.create(new DashboardService.SaveCommand(
-        "bad-filter", null, null,
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)),
-        List.of(new DashboardService.GlobalFilterSpec(
+    DashboardService service = service(new FakeRepository(), mock(AnalysisReferenceService.class));
+    assertThrows(IllegalArgumentException.class, () -> service.create(new DashboardDraft(
+        "bad-filter", null, null, null,
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)),
+        List.of(new GlobalFilterSpec(
             "region", "区域", DashboardGlobalFilterOperator.EQ, null,
-            List.of(new DashboardService.FilterBindingSpec("missing", "region-field")))),
+            List.of(new FilterBindingSpec("missing", "region-field")))),
         List.of())));
   }
 
   @Test
   void interactionMustTargetExistingFilter() {
-    DashboardService service = new DashboardService(
-        new FakeRepository(), mock(AnalysisReferenceService.class), new ObjectMapper());
-    assertThrows(IllegalArgumentException.class, () -> service.create(new DashboardService.SaveCommand(
-        "bad-link", null, null,
-        List.of(new DashboardService.WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)),
+    DashboardService service = service(new FakeRepository(), mock(AnalysisReferenceService.class));
+    assertThrows(IllegalArgumentException.class, () -> service.create(new DashboardDraft(
+        "bad-link", null, null, null,
+        List.of(new WidgetSpec("w1", null, "临时", Map.of("type", "bar"), 0, 0, 10, 7, 6, 5)),
         List.of(),
-        List.of(new DashboardService.InteractionSpec(
+        List.of(new InteractionSpec(
             "link", DashboardInteractionEvent.SELECT, "w1", "region", "missing")))));
   }
 
-  private DashboardService.SaveCommand command(String name, List<DashboardService.WidgetSpec> widgets) {
-    return new DashboardService.SaveCommand(name, null, null, widgets, List.of(), List.of());
+  private DashboardService service(
+      DashboardRepository repository,
+      AnalysisReferenceService analysisReferences) {
+    return new DashboardService(
+        repository,
+        new DashboardDraftValidator(analysisReferences, new ObjectMapper()),
+        mock(ApplicationEventPublisher.class));
+  }
+
+  private DashboardDraft command(String name, List<WidgetSpec> widgets) {
+    return new DashboardDraft(name, null, null, null, widgets, List.of(), List.of());
   }
 
   private static final class FakeRepository implements DashboardRepository {
@@ -161,99 +189,126 @@ class DashboardServiceTest {
     private long nextVersionId = 100;
     private final Map<Long, DashboardAsset> dashboards = new LinkedHashMap<>();
     private final Map<Long, DashboardVersion> versions = new LinkedHashMap<>();
+    private final Map<Long, Object> themes = new LinkedHashMap<>();
     private final Map<Long, List<DashboardWidgetSnapshot>> widgets = new LinkedHashMap<>();
     private final Map<Long, List<DashboardGlobalFilterSnapshot>> filters = new LinkedHashMap<>();
     private final Map<Long, List<DashboardInteractionSnapshot>> interactions = new LinkedHashMap<>();
 
-    @Override public long insertDashboard(String name, String description) {
+    @Override
+    public long insertDashboard(String name, String description) {
       long id = nextDashboardId++;
       dashboards.put(id, new DashboardAsset(
           id, name, description, null, 0, null, 0, null, Instant.now(), Instant.now()));
       return id;
     }
 
-    @Override public long insertVersion(long dashboardId, int versionNo, String name, String description, Long activeDatasetId) {
+    @Override
+    public long appendVersion(long dashboardId, int versionNo, DashboardDraft draft) {
       long id = nextVersionId++;
-      versions.put(id, new DashboardVersion(id, dashboardId, versionNo, name, description, activeDatasetId, Instant.now()));
-      return id;
-    }
+      versions.put(id, new DashboardVersion(
+          id, dashboardId, versionNo, draft.name(), draft.description(), draft.activeDatasetId(), Instant.now()));
+      themes.put(id, draft.theme());
 
-    @Override public void insertWidgets(long versionId, List<DashboardService.WidgetSpec> specs, List<String> json) {
-      List<DashboardWidgetSnapshot> rows = new ArrayList<>();
-      for (int i = 0; i < specs.size(); i++) {
-        DashboardService.WidgetSpec value = specs.get(i);
-        rows.add(new DashboardWidgetSnapshot(
-            i + 1L, versionId, value.widgetKey(), value.analysisId(), value.title(), value.inlineAnalysis(),
+      List<DashboardWidgetSnapshot> widgetRows = new ArrayList<>();
+      for (int i = 0; i < draft.widgets().size(); i++) {
+        WidgetSpec value = draft.widgets().get(i);
+        widgetRows.add(new DashboardWidgetSnapshot(
+            i + 1L, id, value.widgetKey(), value.analysisId(), value.title(), value.inlineAnalysis(),
             value.x(), value.y(), value.w(), value.h(), value.minW(), value.minH(), i + 1));
       }
-      widgets.put(versionId, rows);
-    }
+      widgets.put(id, widgetRows);
 
-    @Override public void insertGlobalFilters(long versionId, List<DashboardService.GlobalFilterSpec> specs, List<String> json) {
-      List<DashboardGlobalFilterSnapshot> rows = new ArrayList<>();
-      for (int i = 0; i < specs.size(); i++) {
-        DashboardService.GlobalFilterSpec value = specs.get(i);
+      List<DashboardGlobalFilterSnapshot> filterRows = new ArrayList<>();
+      for (int i = 0; i < draft.globalFilters().size(); i++) {
+        GlobalFilterSpec value = draft.globalFilters().get(i);
         List<DashboardGlobalFilterBindingSnapshot> bindings = new ArrayList<>();
         for (int j = 0; j < value.bindings().size(); j++) {
-          DashboardService.FilterBindingSpec binding = value.bindings().get(j);
-          bindings.add(new DashboardGlobalFilterBindingSnapshot(binding.widgetKey(), binding.fieldId(), j + 1));
+          FilterBindingSpec binding = value.bindings().get(j);
+          bindings.add(new DashboardGlobalFilterBindingSnapshot(
+              binding.widgetKey(), binding.fieldId(), j + 1));
         }
-        rows.add(new DashboardGlobalFilterSnapshot(
+        filterRows.add(new DashboardGlobalFilterSnapshot(
             value.filterKey(), value.name(), value.operator(), value.defaultValue(), bindings, i + 1));
       }
-      filters.put(versionId, rows);
-    }
+      filters.put(id, filterRows);
 
-    @Override public void insertInteractions(long versionId, List<DashboardService.InteractionSpec> specs) {
-      List<DashboardInteractionSnapshot> rows = new ArrayList<>();
-      for (int i = 0; i < specs.size(); i++) {
-        DashboardService.InteractionSpec value = specs.get(i);
-        rows.add(new DashboardInteractionSnapshot(
+      List<DashboardInteractionSnapshot> interactionRows = new ArrayList<>();
+      for (int i = 0; i < draft.interactions().size(); i++) {
+        InteractionSpec value = draft.interactions().get(i);
+        interactionRows.add(new DashboardInteractionSnapshot(
             value.interactionKey(), value.event(), value.sourceWidgetKey(), value.sourceFieldId(),
             value.targetFilterKey(), i + 1));
       }
-      interactions.put(versionId, rows);
+      interactions.put(id, interactionRows);
+      return id;
     }
 
-    @Override public void updateCurrentVersion(long dashboardId, long versionId, int versionNo, String name, String description) {
+    @Override
+    public void updateCurrentVersion(long dashboardId, long versionId, int versionNo, String name, String description) {
       DashboardAsset old = dashboards.get(dashboardId);
       dashboards.put(dashboardId, new DashboardAsset(
-          dashboardId,
-          name,
-          description,
-          versionId,
-          versionNo,
-          old.publishedVersionId(),
-          old.publishedVersionNo(),
-          old.publishedTime(),
-          old.createTime(),
-          Instant.now()));
+          dashboardId, name, description, versionId, versionNo,
+          old.publishedVersionId(), old.publishedVersionNo(), old.publishedTime(),
+          old.createTime(), Instant.now()));
     }
 
-    @Override public void updatePublishedVersion(long dashboardId, long versionId, int versionNo) {
+    @Override
+    public void updatePublishedVersion(long dashboardId, long versionId, int versionNo) {
       DashboardAsset old = dashboards.get(dashboardId);
       dashboards.put(dashboardId, new DashboardAsset(
-          dashboardId,
-          old.name(),
-          old.description(),
-          old.currentVersionId(),
-          old.currentVersionNo(),
-          versionId,
-          versionNo,
-          Instant.now(),
-          old.createTime(),
-          Instant.now()));
+          dashboardId, old.name(), old.description(), old.currentVersionId(), old.currentVersionNo(),
+          versionId, versionNo, Instant.now(), old.createTime(), Instant.now()));
     }
 
-    @Override public Optional<DashboardAsset> findDashboard(long id) { return Optional.ofNullable(dashboards.get(id)); }
-    @Override public List<DashboardAsset> listDashboards() { return new ArrayList<>(dashboards.values()); }
-    @Override public Optional<DashboardVersion> findVersion(long id) { return Optional.ofNullable(versions.get(id)); }
-    @Override public Optional<DashboardVersion> findVersionByNo(long dashboardId, int versionNo) { return versions.values().stream().filter(v -> v.dashboardId() == dashboardId && v.versionNo() == versionNo).findFirst(); }
-    @Override public List<DashboardVersion> listVersions(long dashboardId) { return versions.values().stream().filter(v -> v.dashboardId() == dashboardId).sorted((a,b) -> Integer.compare(b.versionNo(), a.versionNo())).toList(); }
-    @Override public List<DashboardWidgetSnapshot> listWidgets(long versionId) { return widgets.getOrDefault(versionId, List.of()); }
-    @Override public List<DashboardGlobalFilterSnapshot> listGlobalFilters(long versionId) { return filters.getOrDefault(versionId, List.of()); }
-    @Override public List<DashboardInteractionSnapshot> listInteractions(long versionId) { return interactions.getOrDefault(versionId, List.of()); }
-    @Override public int nextVersionNo(long dashboardId) { return listVersions(dashboardId).stream().mapToInt(DashboardVersion::versionNo).max().orElse(0) + 1; }
-    @Override public void deleteDashboard(long dashboardId) { dashboards.remove(dashboardId); }
+    @Override
+    public Optional<DashboardAsset> findDashboard(long id) {
+      return Optional.ofNullable(dashboards.get(id));
+    }
+
+    @Override
+    public List<DashboardAsset> listDashboards() {
+      return new ArrayList<>(dashboards.values());
+    }
+
+    @Override
+    public Optional<DashboardVersionSnapshot> findVersionSnapshot(long id) {
+      DashboardVersion version = versions.get(id);
+      if (version == null) return Optional.empty();
+      return Optional.of(new DashboardVersionSnapshot(
+          version,
+          themes.get(id),
+          widgets.getOrDefault(id, List.of()),
+          filters.getOrDefault(id, List.of()),
+          interactions.getOrDefault(id, List.of())));
+    }
+
+    @Override
+    public Optional<DashboardVersionSnapshot> findVersionSnapshotByNo(long dashboardId, int versionNo) {
+      return versions.values().stream()
+          .filter(version -> version.dashboardId() == dashboardId && version.versionNo() == versionNo)
+          .findFirst()
+          .flatMap(version -> findVersionSnapshot(version.id()));
+    }
+
+    @Override
+    public List<DashboardVersion> listVersions(long dashboardId) {
+      return versions.values().stream()
+          .filter(version -> version.dashboardId() == dashboardId)
+          .sorted((a, b) -> Integer.compare(b.versionNo(), a.versionNo()))
+          .toList();
+    }
+
+    @Override
+    public int nextVersionNo(long dashboardId) {
+      return listVersions(dashboardId).stream()
+          .mapToInt(DashboardVersion::versionNo)
+          .max()
+          .orElse(0) + 1;
+    }
+
+    @Override
+    public void deleteDashboard(long dashboardId) {
+      dashboards.remove(dashboardId);
+    }
   }
 }

@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.dashboard.domain.DashboardAsset;
+import io.yak.ops.business.dashboard.domain.DashboardVersion;
+import io.yak.ops.business.dashboard.domain.DashboardWidgetSnapshot;
 import io.yak.ops.business.lineage.LineageAsset;
 import io.yak.ops.business.lineage.LineageAssetType;
 import io.yak.ops.business.lineage.LineageMaintenanceService;

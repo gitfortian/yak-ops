@@ -1,5 +1,12 @@
 package io.yak.ops.business.dashboard;
 
+import io.yak.ops.business.dashboard.domain.DashboardAsset;
+import io.yak.ops.business.dashboard.domain.DashboardDetail;
+import io.yak.ops.business.dashboard.domain.DashboardVersion;
+import io.yak.ops.business.dashboard.domain.DashboardVersionDetail;
+import io.yak.ops.business.dashboard.domain.DashboardWidgetSnapshot;
+import io.yak.ops.business.dashboard.service.DashboardService;
+import io.yak.ops.business.dashboard.service.event.DashboardLineageRefreshRequested;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,19 +117,5 @@ class DashboardLineageRefreshListener {
         boolean published);
 
     void clear(long dashboardId);
-  }
-}
-
-record DashboardLineageRefreshRequested(long dashboardId, boolean deleted) {
-  DashboardLineageRefreshRequested {
-    if (dashboardId <= 0L) throw new IllegalArgumentException("dashboardId 必须大于 0");
-  }
-
-  static DashboardLineageRefreshRequested refresh(long dashboardId) {
-    return new DashboardLineageRefreshRequested(dashboardId, false);
-  }
-
-  static DashboardLineageRefreshRequested deleted(long dashboardId) {
-    return new DashboardLineageRefreshRequested(dashboardId, true);
   }
 }

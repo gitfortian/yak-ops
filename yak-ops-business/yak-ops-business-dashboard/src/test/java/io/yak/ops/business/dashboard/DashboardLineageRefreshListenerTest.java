@@ -5,6 +5,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.dashboard.domain.DashboardAsset;
+import io.yak.ops.business.dashboard.domain.DashboardDetail;
+import io.yak.ops.business.dashboard.domain.DashboardVersion;
+import io.yak.ops.business.dashboard.domain.DashboardVersionDetail;
+import io.yak.ops.business.dashboard.domain.DashboardWidgetSnapshot;
+import io.yak.ops.business.dashboard.service.DashboardService;
+import io.yak.ops.business.dashboard.service.event.DashboardLineageRefreshRequested;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
