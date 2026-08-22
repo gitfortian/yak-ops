@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.realtime.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import java.sql.ResultSet;
@@ -84,6 +85,7 @@ public class RealtimeJobListQuery {
             + " p.idempotency_key as deployment_idempotency_key,"
             + " p.gateway_job_id as deployment_gateway_job_id,"
             + " p.runtime_revision as deployment_runtime_revision,"
+            + " p.runtime_environment_snapshot_json as deployment_runtime_environment_snapshot_json,"
             + " p.status as deployment_status,"
             + " p.result_uncertain as deployment_result_uncertain,"
             + " p.error_message as deployment_error_message,"
@@ -138,6 +140,8 @@ public class RealtimeJobListQuery {
               result.getString("deployment_idempotency_key"),
               result.getString("deployment_gateway_job_id"),
               result.getString("deployment_runtime_revision"),
+              readEnvironmentSnapshot(
+                  result.getString("deployment_runtime_environment_snapshot_json")),
               result.getString("deployment_status"),
               result.getBoolean("deployment_result_uncertain"),
               result.getString("deployment_error_message"),
@@ -150,6 +154,7 @@ public class RealtimeJobListQuery {
         result.getString("job_name"),
         result.getString("description"),
         readSpec(result.getString("spec_json")),
+        result.getObject("runtime_environment_id", Long.class),
         result.getString("release_state"),
         result.getString("desired_state"),
         result.getString("observed_state"),
@@ -163,8 +168,6 @@ public class RealtimeJobListQuery {
   }
 
   private CdcPipelineSpec readSpec(String value) {
-    // Two-stage drafts intentionally have no spec until the configuration page is saved.
-    // Keep those rows visible in list queries instead of attempting to deserialize SQL NULL.
     if (!StringUtils.hasText(value)) {
       return null;
     }
@@ -172,6 +175,17 @@ public class RealtimeJobListQuery {
       return json.readValue(value, CdcPipelineSpec.class);
     } catch (Exception exception) {
       throw new IllegalArgumentException("实时同步 Spec 无效", exception);
+    }
+  }
+
+  private ComputeEnvironmentSnapshot readEnvironmentSnapshot(String value) {
+    if (!StringUtils.hasText(value)) {
+      return null;
+    }
+    try {
+      return json.readValue(value, ComputeEnvironmentSnapshot.class);
+    } catch (Exception exception) {
+      throw new IllegalStateException("实时同步运行环境快照无效", exception);
     }
   }
 
