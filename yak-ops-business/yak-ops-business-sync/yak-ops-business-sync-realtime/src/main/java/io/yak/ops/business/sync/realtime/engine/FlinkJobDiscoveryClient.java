@@ -3,6 +3,9 @@ package io.yak.ops.business.sync.realtime.engine;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -36,12 +39,17 @@ public class FlinkJobDiscoveryClient {
   }
 
   public List<String> findJobIds(String exactRuntimeJobName) {
+    return findJobIds(bootstrapEnvironment(), exactRuntimeJobName);
+  }
+
+  public List<String> findJobIds(
+      ComputeEnvironmentSnapshot environment, String exactRuntimeJobName) {
     if (exactRuntimeJobName == null || exactRuntimeJobName.isBlank()) {
       throw new IllegalArgumentException("runtime job name 不能为空");
     }
     try {
       HttpRequest request =
-          HttpRequest.newBuilder(URI.create(baseUrl() + "/jobs/overview"))
+          HttpRequest.newBuilder(URI.create(baseUrl(environment) + "/jobs/overview"))
               .timeout(properties.getRequestTimeout())
               .header("Accept", "application/json")
               .GET()
@@ -80,8 +88,30 @@ public class FlinkJobDiscoveryClient {
     }
   }
 
-  private String baseUrl() {
-    return properties.getRestUrl().replaceAll("/+$", "");
+  private String baseUrl(ComputeEnvironmentSnapshot environment) {
+    if (environment == null || environment.config() == null) {
+      throw new IllegalArgumentException("运行环境配置不能为空");
+    }
+    return environment.config().restUrl().replaceAll("/+$", "");
+  }
+
+  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
+    RuntimeConfig config =
+        new RuntimeConfig(
+            properties.getRestUrl(),
+            properties.getFlinkHome(),
+            properties.getFlinkCdcHome(),
+            properties.getJavaHome(),
+            properties.getFlinkVersion(),
+            properties.getFlinkCdcVersion());
+    return new ComputeEnvironmentSnapshot(
+        0L,
+        "application/default",
+        ComputeEnvironment.ENGINE_FLINK_CDC,
+        ComputeEnvironment.DEPLOYMENT_REMOTE,
+        properties.getSubmissionMode().name(),
+        config,
+        0);
   }
 
   private RealtimeEngineException failure(String message, Throwable cause) {
