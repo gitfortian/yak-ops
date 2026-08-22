@@ -2,10 +2,14 @@ package io.yak.ops.business.sync.realtime.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.engine.FlinkObservabilityClient;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
@@ -20,13 +24,27 @@ class RealtimeObservabilityServiceTest {
   private static final long JOB_ID = 7L;
   private RealtimeJobStore store;
   private FlinkObservabilityClient flink;
+  private RealtimeRuntimeResolver runtimeResolver;
   private RealtimeObservabilityService service;
+  private ComputeEnvironmentSnapshot environment;
 
   @BeforeEach
   void setUp() {
     store = mock(RealtimeJobStore.class);
     flink = mock(FlinkObservabilityClient.class);
-    service = new RealtimeObservabilityService(store, flink);
+    runtimeResolver = mock(RealtimeRuntimeResolver.class);
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L,
+            "test-env",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
+            2);
+    when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
+    service = new RealtimeObservabilityService(store, runtimeResolver, flink);
     when(store.definition(JOB_ID)).thenReturn(Optional.of(definition()));
   }
 
