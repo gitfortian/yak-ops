@@ -70,11 +70,11 @@ class FlinkObservabilityClientTest {
   void separatesSubmissionLogFromRuntimeExceptionHistory() throws Exception {
     Path logs = Files.createDirectories(temp.resolve("work/logs"));
     Files.writeString(
-        logs.resolve(JOB_ID + ".submit.log"),
+        logs.resolve("submit-test-key.log"),
         "submitted\npassword=plain-secret\n",
         StandardCharsets.UTF_8);
 
-    assertThat(client.submissionLog(JOB_ID, 20))
+    assertThat(client.submissionLog("test-key", 20))
         .contains("submitted")
         .contains("password=******")
         .doesNotContain("plain-secret");
@@ -154,7 +154,15 @@ class FlinkObservabilityClientTest {
   }
 
   private String metric(String id, double sum, double max) {
-    return "{\"id\":\"" + id + "\",\"sum\":\"" + sum + "\",\"avg\":\"" + sum + "\",\"max\":\"" + max + "\"}";
+    return "{\"id\":\""
+        + id
+        + "\",\"sum\":\""
+        + sum
+        + "\",\"avg\":\""
+        + sum
+        + "\",\"max\":\""
+        + max
+        + "\"}";
   }
 
   private void json(HttpExchange exchange, int status, String body) throws IOException {
