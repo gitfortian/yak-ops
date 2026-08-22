@@ -37,7 +37,10 @@ export const realtimeApi = {
   action: (id: number, action: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile') =>
     request<ApiResponse<RealtimeDeployment | boolean>>(`${PREFIX}/${id}/${action}`, {
       method: 'POST',
-      headers: action === 'start' ? { 'Idempotency-Key': crypto.randomUUID() } : undefined,
+      headers:
+        action === 'start' || action === 'restart'
+          ? { 'Idempotency-Key': crypto.randomUUID() }
+          : undefined,
     }),
   remove: (id: number) => request<ApiResponse<boolean>>(`${PREFIX}/${id}`, { method: 'DELETE' }),
   events: (id: number) => request<ApiResponse<RealtimeEvent[]>>(`${PREFIX}/${id}/events`),
