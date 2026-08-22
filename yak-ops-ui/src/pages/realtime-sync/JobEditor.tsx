@@ -16,7 +16,12 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BRAND_THEME } from '@/styles/brand';
 import { realtimeApi } from './api';
-import type { CdcPipelineSpec, DataSourceOption, RealtimeJob } from './types';
+import type {
+  CdcPipelineSpec,
+  ComputeEnvironmentOption,
+  DataSourceOption,
+  RealtimeJob,
+} from './types';
 
 interface RouteFormValue {
   sourceTable: string;
@@ -27,12 +32,14 @@ interface RouteFormValue {
 interface FormValue extends Omit<CdcPipelineSpec, 'tables'> {
   name: string;
   description?: string;
+  runtimeEnvironmentId: number;
   tables: RouteFormValue[];
 }
 
 const defaults: FormValue = {
   name: '',
   description: '',
+  runtimeEnvironmentId: undefined as unknown as number,
   sourceDataSourceRef: undefined as unknown as number,
   sinkDataSourceRef: undefined as unknown as number,
   tables: [{ sourceTable: '', sinkTable: '', matchMode: 'EXACT', keyColumnsText: 'id' }],
@@ -62,15 +69,33 @@ type SectionKey = (typeof sections)[number]['key'];
 const SECTION_SCROLL_OFFSET = 24;
 const ACTIVE_SECTION_OFFSET = SECTION_SCROLL_OFFSET + 8;
 
-const toFormValue = (job?: RealtimeJob): FormValue =>
+const defaultEnvironmentId = (environments: ComputeEnvironmentOption[]) =>
+  environments.find((item) => item.defaultEnvironment && item.enabled)?.id ??
+  environments.find((item) => item.enabled)?.id;
+
+const toFormValue = (
+  job: RealtimeJob | undefined,
+  environments: ComputeEnvironmentOption[],
+): FormValue =>
   job?.spec
     ? {
         name: job.name,
         description: job.description,
+        runtimeEnvironmentId:
+          job.runtimeEnvironmentId ?? (defaultEnvironmentId(environments) as number),
         ...job.spec,
-        tables: job.spec.tables.map((route) => ({ ...route, keyColumnsText: route.keyColumns.join(',') })),
+        tables: job.spec.tables.map((route) => ({
+          ...route,
+          keyColumnsText: route.keyColumns.join(','),
+        })),
       }
-    : { ...defaults, name: job?.name || '', description: job?.description || '' };
+    : {
+        ...defaults,
+        name: job?.name || '',
+        description: job?.description || '',
+        runtimeEnvironmentId:
+          job?.runtimeEnvironmentId ?? (defaultEnvironmentId(environments) as number),
+      };
 
 const Card = ({ id, title, children }: { id: SectionKey; title: string; children: React.ReactNode }) => (
   <section id={id} className="scroll-mt-6 rounded-xl bg-white px-7 py-6">
@@ -83,12 +108,14 @@ export default function JobEditor({
   open,
   job,
   dataSources,
+  environments,
   onClose,
   onSaved,
 }: {
   open: boolean;
   job?: RealtimeJob;
   dataSources: DataSourceOption[];
+  environments: ComputeEnvironmentOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -97,15 +124,27 @@ export default function JobEditor({
   const [active, setActive] = useState<SectionKey>('task-basic');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollingToRef = useRef<SectionKey | null>(null);
-  const sourceOptions = useMemo(() => dataSources.filter((item) => item.dbType === 'MYSQL'), [dataSources]);
+  const sourceOptions = useMemo(
+    () => dataSources.filter((item) => item.dbType === 'MYSQL'),
+    [dataSources],
+  );
   const sinkOptions = useMemo(
     () => dataSources.filter((item) => ['MYSQL', 'POSTGRE_SQL', 'POSTGRESQL'].includes(item.dbType)),
     [dataSources],
   );
+  const environmentOptions = useMemo(
+    () =>
+      environments.map((environment) => ({
+        value: environment.id,
+        disabled: !environment.enabled,
+        label: `${environment.name}${environment.defaultEnvironment ? ' · 默认' : ''} · Flink ${environment.config.flinkVersion} / CDC ${environment.config.flinkCdcVersion}${environment.enabled ? '' : ' · 已停用'}`,
+      })),
+    [environments],
+  );
 
   useEffect(() => {
-    if (open) form.setFieldsValue(toFormValue(job));
-  }, [form, job, open]);
+    if (open) form.setFieldsValue(toFormValue(job, environments));
+  }, [environments, form, job, open]);
   useEffect(() => {
     if (!open) return;
     const root = scrollContainerRef.current;
@@ -180,7 +219,12 @@ export default function JobEditor({
         sink: { ...values.sink, strictReplaySafety: true },
       };
       setSaving(true);
-      const payload = { name: values.name.trim(), description: values.description?.trim(), spec };
+      const payload = {
+        name: values.name.trim(),
+        description: values.description?.trim(),
+        runtimeEnvironmentId: Number(values.runtimeEnvironmentId),
+        spec,
+      };
       if (job) await realtimeApi.update(job.id, payload);
       else await realtimeApi.create(payload);
       message.success('实时同步草稿已保存');
@@ -193,7 +237,10 @@ export default function JobEditor({
   };
 
   if (!open) return null;
-  const option = (item: DataSourceOption) => ({ label: `${item.label} (${item.dbType})`, value: Number(item.value) });
+  const option = (item: DataSourceOption) => ({
+    label: `${item.label} (${item.dbType})`,
+    value: Number(item.value),
+  });
   return (
     <ConfigProvider theme={BRAND_THEME} variant="filled">
       <div ref={scrollContainerRef} className="h-[calc(100vh-64px)] overflow-y-auto bg-[#f7f8fa] text-[#161823]">
@@ -323,6 +370,35 @@ export default function JobEditor({
               </Card>
 
               <Card id="runtime-params" title="运行参数">
+                <div className="mb-5 rounded-xl border border-[#e4e7ec] bg-[#fcfcfd] p-5">
+                  <Form.Item
+                    name="runtimeEnvironmentId"
+                    label="运行环境"
+                    rules={[
+                      { required: true, message: '请选择运行环境' },
+                      {
+                        validator: async (_, value) => {
+                          const environment = environments.find((item) => item.id === Number(value));
+                          if (!environment) throw new Error('运行环境不存在，请刷新后重试');
+                          if (!environment.enabled) throw new Error('当前运行环境已停用，请切换运行环境');
+                        },
+                      },
+                    ]}
+                    className="!mb-2"
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder="请选择 Flink CDC 运行环境"
+                      options={environmentOptions}
+                      notFoundContent="请先到 设置 → 计算引擎 创建运行环境"
+                    />
+                  </Form.Item>
+                  <div className="text-[12px] leading-5 text-[#667085]">
+                    任务会显式绑定运行环境；每次启动都会固化一份环境快照。之后修改默认环境或环境配置，不会把已经运行的 Flink Job 重定向到其他集群。
+                  </div>
+                </div>
+
                 <Row gutter={16}>
                   <Col xs={24} md={8}>
                     <Form.Item name="startupMode" label="启动模式">
