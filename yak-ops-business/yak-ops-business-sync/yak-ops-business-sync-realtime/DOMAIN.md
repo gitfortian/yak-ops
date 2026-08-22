@@ -155,7 +155,7 @@ If legacy Published content cannot be reconstructed reliably, do not guess and d
 
 ---
 
-# 4. Draft and Published may coexist
+# 4. Draft, Published, and active Execution may coexist
 
 The following is valid and expected:
 
@@ -171,7 +171,27 @@ A newer Draft MUST NOT mutate or invalidate historical Published versions or run
 
 A newer Draft MUST NOT automatically become the version used by an existing Execution.
 
-After Stage-4 migration reaches the required wave, a newer Draft SHOULD NOT prevent starting the explicit Published version.
+Wave 4 current rule:
+
+```text
+Active/uncertain SyncExecution
+    MUST NOT block saving a newer Draft
+    MUST NOT block publishing a newer DefinitionVersion
+```
+
+Save/Publish MUST NOT mutate the active Execution's:
+
+```text
+DefinitionVersionRef
+RuntimeEnvironmentSnapshot
+DesiredState
+ObservedState
+EngineExecutionRef
+```
+
+Publishing while an Execution is active only advances `RealtimeSyncTask.publishedDefinitionRef`.
+
+Delete remains lifecycle-guarded and is NOT made safe merely because Save/Publish are now independent from execution state.
 
 Do not model Draft/Published as a permanent mutually-exclusive domain state.
 
@@ -248,9 +268,11 @@ Rules:
 - `CONFLICT` means ambiguous runtime identity; do not guess which external job is correct.
 - A submission timeout with uncertain external result MUST NOT immediately become a fresh retry that can double-run the task.
 
-Target ownership: Desired/Observed lifecycle belongs to `SyncExecution`, not `RealtimeSyncTask`.
+Current ownership (Wave 3+): Desired/Observed lifecycle belongs to `SyncExecution`, not `RealtimeSyncTask`.
 
-Legacy task-row state fields are compatibility/persistence shortcuts, not the final domain ownership model.
+Task-row `desired_state / observed_state / last_error` are compatibility projections only. They MUST NOT be used as command truth for Start/Stop/Reconcile or for deciding whether an Execution is active.
+
+Task row locking may remain a cross-instance command mutex; lock location does not imply lifecycle ownership.
 
 ---
 
@@ -271,6 +293,18 @@ E100(v3) -> stop -> E101(v4)
 MUST NOT implement a generic `restart()` that silently reads whatever version is currently published and upgrades the task.
 
 Restart MUST pin the DefinitionVersion of the Execution being restarted.
+
+Wave 4 transitional rule, until Wave 5 introduces explicit commands:
+
+```text
+active Execution.definitionVersionRef
+        !=
+Task.publishedDefinitionRef
+```
+
+MUST cause Restart to reject **before Stop is issued**. Do not stop the old version first and only then discover that Restart would upgrade it.
+
+Do not infer this comparison from legacy `definition_version / published_version` integers. Domain version identity is the immutable `DefinitionVersionId`.
 
 ---
 
@@ -564,20 +598,28 @@ Do not rewrite working Flink/SSH/recovery code merely to make packages look more
 Do not skip migration waves casually.
 
 ```text
-Wave 0  New Core VOs + legacy mapper, no behavior change
-Wave 1  Immutable DefinitionVersion persistence + publish dual-write
-Wave 2  Start by Published DefinitionVersion
-Wave 3  Deployment evolves to SyncExecution; move desired/observed ownership
-Wave 4  Only now allow editing/publishing while execution is active
-Wave 5  Separate RestartExecution from ApplyPublishedVersion
-Wave 6  Cleanup legacy fields/package/names
+Wave 0  New Core VOs + legacy mapper, no behavior change                     ✅
+Wave 1  Immutable DefinitionVersion persistence + publish dual-write          ✅
+Wave 2  Start by Published DefinitionVersion                                  ✅
+Wave 3  Deployment evolves to SyncExecution; move desired/observed ownership  ✅
+Wave 4  Allow editing/publishing while execution is active                     ✅ current
+Wave 5  Separate RestartExecution from ApplyPublishedVersion                   pending
+Wave 6  Cleanup legacy fields/package/names                                    pending
 ```
 
-Critical rule:
+Critical ordering rule:
 
 > **Wave 4 MUST NOT be implemented before Wave 3.**
 
-Today runtime state is still used in task-row/DAO CAS conditions. Removing only service-level guards would produce inconsistent concurrency semantics.
+Historical reason: before Wave 3, task-row state and DAO predicates participated in lifecycle ownership. Removing only service-level Save/Publish guards at that time would have produced inconsistent concurrency semantics.
+
+Current rule after Wave 3:
+
+```text
+Save Draft / Publish -> RealtimeSyncTask + DefinitionVersion lifecycle
+Start / Stop / Reconcile -> SyncExecution lifecycle
+Delete -> requires terminal Execution and runtime safety checks
+```
 
 Database migration MUST use:
 
@@ -598,12 +640,14 @@ CdcPipelineSpec                 -> compatibility definition model
 TableRoute                      -> compatibility route model
 definition_version              -> DraftRevision / legacy revision
 published_version               -> legacy published marker
-DefinitionRow desired/observed  -> latest execution projection / legacy ownership
-DeploymentRow                   -> close to SyncExecution persistence
+DefinitionRow desired/observed  -> latest SyncExecution compatibility projection
+DeploymentRow                   -> SyncExecution persistence compatibility row
 configDigest on definition      -> draft DefinitionDigest-like value
 configDigest on deployment      -> ExecutionArtifactDigest
 ReleaseState DRAFT/PUBLISHED    -> legacy/derived presentation state
 ```
+
+Do not compare legacy `definition_version / published_version` as if they were immutable Domain `DefinitionVersionId` values.
 
 Do not infer the target domain model solely from current class/table/field names.
 

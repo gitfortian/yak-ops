@@ -260,6 +260,12 @@ export default function RealtimeSync() {
         if (state === 'RUNNING') message.success('实时同步任务已启动');
         else if (state === 'STARTING') message.warning('Flink 任务仍在启动，请稍后刷新状态');
         else message.warning(`Flink 启动结果：${observedStateLabel[state] || state}`);
+      } else if (name === 'publish') {
+        message.success(
+          job.desiredState === 'RUNNING'
+            ? '当前草稿已发布，运行中的 SyncExecution 继续使用启动时的 DefinitionVersion'
+            : '当前草稿已发布',
+        );
       } else {
         message.success(name === 'validate' ? 'Flink CDC 校验通过' : '操作成功');
       }
@@ -387,7 +393,7 @@ export default function RealtimeSync() {
   };
 
   const moreItems = (job: RealtimeJob): MenuProps['items'] => {
-    const environment = boundEnvironment(job);
+    const running = job.desiredState === 'RUNNING';
     return [
       { key: 'detail', label: '查看运行详情' },
       {
@@ -397,13 +403,13 @@ export default function RealtimeSync() {
       },
       {
         key: 'publish',
-        label: '发布当前版本',
-        disabled: job.releaseState === 'PUBLISHED' || job.desiredState === 'RUNNING',
+        label: running ? '发布当前版本（不影响运行）' : '发布当前版本',
+        disabled: job.releaseState === 'PUBLISHED',
       },
       {
         key: 'restart',
         label: '重启任务',
-        disabled: job.desiredState !== 'RUNNING' || environment?.enabled === false,
+        disabled: !running,
       },
       {
         key: 'reconcile',
@@ -551,15 +557,16 @@ export default function RealtimeSync() {
 
         return (
           <div className="flex min-h-7 items-center gap-0.5 whitespace-nowrap">
-            <Button
-              type="link"
-              size="small"
-              className="!h-7 !px-1.5 !text-[12px]"
-              disabled={running}
-              onClick={() => history.push(`/sync/realtime/${job.id}/detail?scene=edit`)}
-            >
-              编辑
-            </Button>
+            <Tooltip title={running ? '运行中编辑只修改草稿，不影响当前 SyncExecution' : undefined}>
+              <Button
+                type="link"
+                size="small"
+                className="!h-7 !px-1.5 !text-[12px]"
+                onClick={() => history.push(`/sync/realtime/${job.id}/detail?scene=edit`)}
+              >
+                编辑
+              </Button>
+            </Tooltip>
             {running ? (
               <Button
                 type="link"
