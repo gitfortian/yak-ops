@@ -9,6 +9,8 @@ import { Button, ConfigProvider, Input, message, Spin, Tag } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { BRAND_THEME } from '@/styles/brand';
 import { realtimeApi } from './api';
+import RealtimeEditorModeSwitch from './RealtimeEditorModeSwitch';
+import type { RealtimeEditorMode } from './realtimeEditorMode';
 import type { CdcPipelineSpec, RealtimeJob } from './types';
 
 const EMPTY_TEMPLATE = `version: 1
@@ -44,16 +46,19 @@ export default function YamlJobEditor({
   job,
   onClose,
   onSaved,
+  onSwitchMode,
 }: {
   job: RealtimeJob;
   onClose: () => void;
   onSaved: () => void;
+  onSwitchMode?: (mode: RealtimeEditorMode, spec: CdcPipelineSpec) => void;
 }) {
   const [yamlText, setYamlText] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);
   const [parsing, setParsing] = useState(false);
   const [formatting, setFormatting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [validatedSpec, setValidatedSpec] = useState<CdcPipelineSpec>();
   const [validationMessage, setValidationMessage] = useState<string>();
 
@@ -134,6 +139,22 @@ export default function YamlJobEditor({
     }
   };
 
+  const switchToWizard = async () => {
+    if (!onSwitchMode) return;
+    setSwitching(true);
+    setValidationMessage(undefined);
+    try {
+      const spec = await parseCurrentYaml();
+      onSwitchMode('wizard', spec);
+    } catch (error: any) {
+      setValidatedSpec(undefined);
+      setValidationMessage(error?.message || '当前 YAML 无法切换到向导模式');
+      message.error(error?.message || '当前 YAML 无法切换到向导模式');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     setValidationMessage(undefined);
@@ -157,23 +178,38 @@ export default function YamlJobEditor({
     }
   };
 
+  const busy = initialLoading || parsing || formatting || saving || switching;
+
   return (
     <ConfigProvider theme={BRAND_THEME} variant="filled">
       <div className="min-h-[calc(100vh-64px)] bg-[#f7f8fa] px-6 py-6 text-[#161823]">
         <div className="mx-auto w-full max-w-[1180px]">
-          <header className="mb-5 flex items-start justify-between gap-4 rounded-xl bg-white px-7 py-6">
+          <header className="mb-5 flex flex-wrap items-start justify-between gap-4 rounded-xl bg-white px-7 py-6">
             <div>
               <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--yak-brand-color)]">
                 <CodeOutlined />
-                YAML 模式 · Yak Realtime YAML v1
+                实时同步编辑器 · Yak Realtime YAML v1
               </div>
               <h1 className="mb-0 mt-1 text-[20px] font-semibold text-[#101828]">{job.name}</h1>
               <div className="mt-1 text-[12px] text-[#98a2b3]">
                 任务 ID：{job.id} · 运行环境 #{job.runtimeEnvironmentId}
               </div>
             </div>
-            <Button disabled={saving} onClick={onClose}>返回任务列表</Button>
+            <div className="flex items-center gap-3">
+              <RealtimeEditorModeSwitch
+                value="yaml"
+                disabled={busy}
+                onChange={(mode) => {
+                  if (mode === 'wizard') void switchToWizard();
+                }}
+              />
+              <Button disabled={busy} onClick={onClose}>返回任务列表</Button>
+            </div>
           </header>
+
+          <div className="mb-5 rounded-xl border border-[#b2ddff] bg-[#eff8ff] px-5 py-3 text-[12px] leading-5 text-[#175cd3]">
+            模式切换只传递当前 Spec，不会自动保存数据库。YAML → 向导时会先解析当前文本；再次切回 YAML 时会生成规范化 YAML，因此注释和原始排版不会保留，但配置语义保持一致。
+          </div>
 
           <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-5 max-lg:grid-cols-1">
             <section className="overflow-hidden rounded-xl bg-white">
@@ -189,7 +225,7 @@ export default function YamlJobEditor({
                     size="small"
                     icon={<SafetyOutlined />}
                     loading={parsing}
-                    disabled={initialLoading || saving || formatting}
+                    disabled={initialLoading || saving || formatting || switching}
                     onClick={() => void validate()}
                   >
                     校验
@@ -198,7 +234,7 @@ export default function YamlJobEditor({
                     size="small"
                     icon={<FormatPainterOutlined />}
                     loading={formatting}
-                    disabled={initialLoading || saving || parsing}
+                    disabled={initialLoading || saving || parsing || switching}
                     onClick={() => void format()}
                   >
                     格式化
@@ -209,7 +245,7 @@ export default function YamlJobEditor({
                     size="small"
                     icon={<SaveOutlined />}
                     loading={saving}
-                    disabled={initialLoading || parsing || formatting}
+                    disabled={initialLoading || parsing || formatting || switching}
                     onClick={() => void save()}
                   >
                     保存配置
@@ -264,7 +300,7 @@ export default function YamlJobEditor({
               </section>
 
               <section className="rounded-xl border border-[#fedf89] bg-[#fffaeb] p-5 text-[12px] leading-5 text-[#93370d]">
-                这里编辑的是 Yak Realtime YAML，不是原生 Flink CDC Pipeline YAML。最终启动时仍由现有 PipelineYamlCompiler 临时编译，并继续使用 SECRET 注入边界。
+                如果 YAML 包含 REGEX 表规则，向导模式会拒绝切换，避免静默丢失高级配置。这里编辑的仍是 Yak Realtime YAML，不是原生 Flink CDC Pipeline YAML。
               </section>
             </aside>
           </div>
