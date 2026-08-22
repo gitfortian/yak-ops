@@ -12,7 +12,13 @@ import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentDiagnosis;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
+import io.yak.ops.business.sync.realtime.engine.FlinkRuntimeEnvironmentProbe;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,15 +28,18 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 class ComputeEnvironmentServiceTest {
 
   private ComputeEnvironmentStore store;
+  private FlinkRuntimeEnvironmentProbe probe;
   private ComputeEnvironmentService service;
 
   @BeforeEach
   void setUp() {
     store = mock(ComputeEnvironmentStore.class);
+    probe = mock(FlinkRuntimeEnvironmentProbe.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     service =
-        new ComputeEnvironmentService(store, new RealtimeSyncProperties(), transactionManager);
+        new ComputeEnvironmentService(
+            store, new RealtimeSyncProperties(), probe, transactionManager);
   }
 
   @Test
@@ -107,5 +116,48 @@ class ComputeEnvironmentServiceTest {
     assertThatThrownBy(() -> service.create("bad-path", "SSH", config, true, false))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Linux 绝对路径");
+  }
+
+  @Test
+  void persistsDiagnosisSummaryForSavedEnvironment() {
+    LocalDateTime checkedAt = LocalDateTime.of(2026, 8, 22, 10, 0);
+    ComputeEnvironment environment =
+        new ComputeEnvironment(
+            11L,
+            "生产实时环境",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://flink:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
+            true,
+            false,
+            3,
+            checkedAt.minusDays(1),
+            checkedAt.minusDays(1));
+    ComputeEnvironmentDiagnosis diagnosis =
+        new ComputeEnvironmentDiagnosis(
+            11L,
+            environment.name(),
+            ComputeEnvironmentDiagnosis.STATUS_HEALTHY,
+            true,
+            "环境检查通过，可以提交实时同步任务",
+            "1.20.5",
+            "3.6.0",
+            "17.0.12",
+            checkedAt,
+            List.of());
+    when(store.find(11L)).thenReturn(Optional.of(environment));
+    when(probe.diagnose(any(ComputeEnvironmentSnapshot.class))).thenReturn(diagnosis);
+
+    ComputeEnvironmentDiagnosis result = service.diagnose(11L);
+
+    assertThat(result).isEqualTo(diagnosis);
+    verify(store)
+        .saveDiagnosis(
+            11L,
+            ComputeEnvironmentDiagnosis.STATUS_HEALTHY,
+            "环境检查通过，可以提交实时同步任务",
+            checkedAt);
   }
 }
