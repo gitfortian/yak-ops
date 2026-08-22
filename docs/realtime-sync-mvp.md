@@ -67,7 +67,7 @@ Yak Ops 需要和上述目录位于同一台机器或同一个挂载命名空间
 6. CLI 退出后立即删除临时 YAML，提交日志按 `jobId` 保存且经过接口脱敏。
 
 停止任务调用 `PATCH /jobs/{jobId}`。Yak Ops 不管理 CLI PID，因为 CLI 完成提交后会退出；
-真正的运行实体是 Flink Job。
+Flink 侧实际执行实体是 Flink Job，领域中的运行实例仍统一称为 `SyncExecution`。
 
 ## 状态、日志和指标
 
