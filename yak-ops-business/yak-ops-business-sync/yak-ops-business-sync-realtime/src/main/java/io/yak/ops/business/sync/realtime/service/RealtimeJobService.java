@@ -269,12 +269,7 @@ public class RealtimeJobService {
 
               String from = current.observedState();
               if (!"STOPPING".equals(from)) {
-                try {
-                  stateMachine.requireTransition(from, "STOPPING");
-                } catch (IllegalStateException ignored) {
-                  // A concurrent reconciler may already have moved the state to a terminal or
-                  // uncertain value. Never restore RUNNING from that stale STARTING snapshot.
-                }
+                stateMachine.requireTransition(from, "STOPPING");
                 store.markStopping(id, deploymentId);
               }
               store.bindDeploymentForStop(deploymentId, result.jobId(), prepared.runtimeRevision());
@@ -487,7 +482,9 @@ public class RealtimeJobService {
           // Another Yak Ops instance may still be inside the synchronous CLI submission. An
           // uncertain submission without a jobId also requires operator verification in Flink UI;
           // it must not be converted into a definite failure by the reconciler.
-          if (!"STARTING".equals(job.observedState()) && !"UNKNOWN".equals(job.observedState())) {
+          if (!"STARTING".equals(job.observedState())
+              && !"STOPPING".equals(job.observedState())
+              && !"UNKNOWN".equals(job.observedState())) {
             reconcile(job, deployment, new RuntimeStatus(null, RuntimeStatus.State.NONE));
           }
           continue;
@@ -563,7 +560,8 @@ public class RealtimeJobService {
     transactions.executeWithoutResult(
         status -> {
           DefinitionRow current = store.lockDefinition(job.id());
-          if (!sameLifecycleSnapshot(job, current)) {
+          if (!sameLifecycleSnapshot(job, current)
+              || !sameDeploymentSnapshot(job.id(), deployment)) {
             return;
           }
           stateMachine.requireTransition(current.observedState(), "FAILED");
@@ -587,7 +585,8 @@ public class RealtimeJobService {
     transactions.executeWithoutResult(
         status -> {
           DefinitionRow current = store.lockDefinition(job.id());
-          if (!sameLifecycleSnapshot(job, current)) {
+          if (!sameLifecycleSnapshot(job, current)
+              || !sameDeploymentSnapshot(job.id(), deployment)) {
             return;
           }
           stateMachine.requireTransition(current.observedState(), observed);
@@ -657,10 +656,10 @@ public class RealtimeJobService {
         Thread.sleep(250);
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
-        throw new IllegalStateException("等待 Flink 停止时被中断", exception);
+        throw new RealtimeEngineException("等待 Flink 停止时被中断", true, null, exception);
       }
     }
-    throw new IllegalStateException("Flink 任务未在 5 秒内停止，请稍后再重启");
+    throw new RealtimeEngineException("Flink 任务未在 5 秒内停止，等待后续对账", true, null, null);
   }
 
   private void markStopped(long definitionId, long deploymentId, String jobId, String message) {
@@ -700,6 +699,16 @@ public class RealtimeJobService {
   private boolean sameLifecycleSnapshot(DefinitionRow expected, DefinitionRow current) {
     return Objects.equals(expected.desiredState(), current.desiredState())
         && Objects.equals(expected.observedState(), current.observedState());
+  }
+
+  private boolean sameDeploymentSnapshot(long definitionId, DeploymentRow expected) {
+    DeploymentRow current = store.latestDeployment(definitionId).orElse(null);
+    if (expected == null) {
+      return current == null;
+    }
+    return current != null
+        && current.id() == expected.id()
+        && Objects.equals(current.engineJobId(), expected.engineJobId());
   }
 
   private ReentrantLock lifecycleLock(long id) {
