@@ -62,16 +62,20 @@ public class RealtimeJobController {
   public record SaveRequest(
       @NotBlank @Size(max = 200) String name,
       @Size(max = 1000) String description,
+      Long runtimeEnvironmentId,
       @Valid CdcPipelineSpec spec) {}
 
   public record CreateRequest(
-      @NotBlank @Size(max = 200) String name, @Size(max = 1000) String description) {}
+      @NotBlank @Size(max = 200) String name,
+      @Size(max = 1000) String description,
+      Long runtimeEnvironmentId) {}
 
   @Operation(summary = "创建实时同步基础任务")
   @PostMapping
   @RequiresPermission(RealtimePermissionCode.CREATE)
   public Result<Long> create(@Valid @RequestBody CreateRequest request) {
-    return Result.success(service.create(request.name(), request.description()));
+    return Result.success(
+        service.create(request.name(), request.description(), request.runtimeEnvironmentId()));
   }
 
   @Operation(summary = "新建实时同步草稿")
@@ -79,14 +83,25 @@ public class RealtimeJobController {
   @RequiresPermission(RealtimePermissionCode.CREATE)
   public Result<Long> draft(@Valid @RequestBody SaveRequest request) {
     return Result.success(
-        service.save(null, request.name(), request.description(), request.spec()));
+        service.save(
+            null,
+            request.name(),
+            request.description(),
+            request.spec(),
+            request.runtimeEnvironmentId()));
   }
 
   @Operation(summary = "保存实时同步草稿")
   @PutMapping("/{id}")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<Long> save(@PathVariable long id, @Valid @RequestBody SaveRequest request) {
-    return Result.success(service.save(id, request.name(), request.description(), request.spec()));
+    return Result.success(
+        service.save(
+            id,
+            request.name(),
+            request.description(),
+            request.spec(),
+            request.runtimeEnvironmentId()));
   }
 
   @Operation(summary = "实时同步任务详情")
@@ -121,7 +136,7 @@ public class RealtimeJobController {
     return Result.success(true);
   }
 
-  @Operation(summary = "使用 Flink CDC 配置校验当前定义")
+  @Operation(summary = "使用任务绑定的 Flink CDC 运行环境校验当前定义")
   @PostMapping("/{id}/validate")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<RealtimeEngineGateway.ValidationResult> validate(@PathVariable long id) {
@@ -176,10 +191,11 @@ public class RealtimeJobController {
     return Result.success(service.events(id));
   }
 
-  @Operation(summary = "查询 Flink CDC 运行能力")
+  @Operation(summary = "查询指定 Flink CDC 运行环境能力")
   @GetMapping("/runtime/capabilities")
-  public Result<JsonNode> capabilities() {
-    return Result.success(service.capabilities());
+  public Result<JsonNode> capabilities(
+      @RequestParam(required = false) Long environmentId) {
+    return Result.success(service.capabilities(environmentId));
   }
 
   @Operation(summary = "查询归一化运行概览、Checkpoint 和 Metrics")
