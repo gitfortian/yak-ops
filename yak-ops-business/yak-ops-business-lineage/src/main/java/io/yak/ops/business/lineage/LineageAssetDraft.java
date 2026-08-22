@@ -1,11 +1,9 @@
 package io.yak.ops.business.lineage;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.time.Instant;
 
-/** Stable identity for an object participating in the Yak Ops metadata graph. */
-public record LineageAsset(
-    long id,
+/** Validated domain write model for registering a metadata asset. */
+public record LineageAssetDraft(
     String assetKey,
     LineageAssetType assetType,
     String name,
@@ -17,7 +15,5 @@ public record LineageAsset(
     String schemaName,
     String tableName,
     String columnName,
-    JsonNode properties,
-    Instant createTime,
-    Instant updateTime) {
+    JsonNode properties) {
 }

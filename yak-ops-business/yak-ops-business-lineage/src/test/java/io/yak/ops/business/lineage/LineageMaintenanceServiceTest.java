@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.lineage.repository.LineageRepository;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
