@@ -2,6 +2,7 @@ import { request } from '@umijs/max';
 import type {
   ApiResponse,
   CdcPipelineSpec,
+  ComputeEnvironmentOption,
   DataSourceOption,
   RealtimeDeployment,
   RealtimeEvent,
@@ -24,17 +25,24 @@ export interface RealtimePageQuery {
   stateGroup?: 'RUNNING' | 'STOPPED' | 'ABNORMAL';
 }
 
+interface RealtimeDefinitionPayload {
+  name: string;
+  description?: string;
+  runtimeEnvironmentId: number;
+  spec: CdcPipelineSpec;
+}
+
 export const realtimeApi = {
   page: (params: RealtimePageQuery) =>
     request<ApiResponse<RealtimeJobPage>>(PREFIX, {
       params,
     }),
   detail: (id: number) => request<ApiResponse<RealtimeJob>>(`${PREFIX}/${id}`),
-  createBasic: (payload: { name: string; description?: string }) =>
+  createBasic: (payload: { name: string; description?: string; runtimeEnvironmentId?: number }) =>
     request<ApiResponse<number>>(PREFIX, { method: 'POST', data: payload }),
-  create: (payload: { name: string; description?: string; spec: CdcPipelineSpec }) =>
+  create: (payload: RealtimeDefinitionPayload) =>
     request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
-  update: (id: number, payload: { name: string; description?: string; spec: CdcPipelineSpec }) =>
+  update: (id: number, payload: RealtimeDefinitionPayload) =>
     request<ApiResponse<number>>(`${PREFIX}/${id}`, { method: 'PUT', data: payload }),
   action: (id: number, action: 'publish' | 'validate' | 'start' | 'stop' | 'restart' | 'reconcile') =>
     request<ApiResponse<RealtimeDeployment | boolean>>(`${PREFIX}/${id}/${action}`, {
@@ -59,6 +67,11 @@ export const realtimeApi = {
     request<ApiResponse<{ logs: string }>>(`${PREFIX}/${id}/logs`, { params: { tail: 500 } }),
   checkpoints: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/checkpoints`),
   metrics: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/metrics`),
-  capabilities: () => request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`),
+  capabilities: (environmentId?: number) =>
+    request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`, {
+      params: environmentId ? { environmentId } : undefined,
+    }),
+  environments: () =>
+    request<ApiResponse<ComputeEnvironmentOption[]>>('/api/v1/compute-environments'),
   dataSources: () => request<ApiResponse<DataSourceOption[]>>('/api/v1/data-source/option'),
 };
