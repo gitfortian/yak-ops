@@ -89,11 +89,14 @@ public class ComputeEnvironmentStore {
     return Objects.requireNonNull(keys.getKey(), "新增运行环境未返回主键").longValue();
   }
 
-  public void update(long id, String name, RuntimeConfig config, boolean enabled) {
+  public void update(
+      long id, String name, String submitterType, RuntimeConfig config, boolean enabled) {
     int changed =
         db.update(
-            "update yak_compute_environment set name=?,config_json=?,enabled=?,version=version+1 where id=?",
+            "update yak_compute_environment set name=?,submitter_type=?,config_json=?,enabled=?,"
+                + "version=version+1 where id=?",
             name,
+            submitterType,
             write(config),
             enabled,
             id);
