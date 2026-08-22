@@ -32,7 +32,19 @@ public record ComputeEnvironment(
       String javaHome,
       String flinkVersion,
       String flinkCdcVersion,
-      SshConfig ssh) {}
+      SshConfig ssh) {
+
+    /** Source-compatible constructor for local/legacy environments that do not carry SSH config. */
+    public RuntimeConfig(
+        String restUrl,
+        String flinkHome,
+        String flinkCdcHome,
+        String javaHome,
+        String flinkVersion,
+        String flinkCdcVersion) {
+      this(restUrl, flinkHome, flinkCdcHome, javaHome, flinkVersion, flinkCdcVersion, null);
+    }
+  }
 
   /**
    * OpenSSH client settings for remote submission. Private key material is never stored here: the
