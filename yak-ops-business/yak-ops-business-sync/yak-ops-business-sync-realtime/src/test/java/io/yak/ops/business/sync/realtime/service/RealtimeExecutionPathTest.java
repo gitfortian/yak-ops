@@ -29,6 +29,8 @@ import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
+import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import jakarta.validation.Validation;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +46,55 @@ class RealtimeExecutionPathTest {
   private static final String FLINK_JOB_ID = "0123456789abcdef0123456789abcdef";
   private static final String CANONICAL_YAML =
       "source:\n  type: mysql\nsink:\n  type: yak-jdbc\npipeline:\n  name: test-job\n";
+
+  @Test
+  void wizardAndYamlSpecsCompileToTheSameRuntimePipeline() {
+    CdcPipelineSpec wizardSpec = spec();
+    RealtimeDefinitionValidator specValidator =
+        new RealtimeDefinitionValidator(
+            Validation.buildDefaultValidatorFactory().getValidator(),
+            new CdcPipelineSpecValidator(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    RealtimeYamlCodec yamlCodec = new RealtimeYamlCodec(specValidator);
+
+    String logicalYaml = yamlCodec.render(wizardSpec);
+    CdcPipelineSpec yamlSpec = yamlCodec.parse(logicalYaml);
+
+    ResolvedCdcPipeline resolved =
+        new ResolvedCdcPipeline(
+            new ResolvedCdcPipeline.Endpoint(
+                1L,
+                "source",
+                DataSourceDbType.MYSQL,
+                "mysql-source",
+                3306,
+                "jdbc:mysql://mysql-source:3306/shop",
+                "com.mysql.cj.jdbc.Driver",
+                "reader",
+                "shop"),
+            new ResolvedCdcPipeline.Endpoint(
+                2L,
+                "sink",
+                DataSourceDbType.MYSQL,
+                "mysql-sink",
+                3306,
+                "jdbc:mysql://mysql-sink:3306/dw",
+                "com.mysql.cj.jdbc.Driver",
+                "writer",
+                "dw"));
+    PipelineYamlCompiler compiler = new PipelineYamlCompiler();
+
+    String wizardPipeline = compiler.compile("test-job", wizardSpec, resolved).yaml();
+    String yamlPipeline = compiler.compile("test-job", yamlSpec, resolved).yaml();
+
+    assertThat(yamlSpec).isEqualTo(wizardSpec);
+    assertThat(yamlPipeline).isEqualTo(wizardPipeline);
+  }
 
   @Test
   void publishAndStartUseTheSameCompiledPipelineYaml() {
