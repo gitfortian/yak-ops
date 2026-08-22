@@ -8,19 +8,21 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Periodically recovers observed state after Yak Ops restarts or uncertain Gateway calls. */
+/** Periodically recovers JobIds and reconciles Yak Ops state against the real Flink runtime. */
 @Component
 public class RealtimeJobReconciler {
 
   private static final Logger LOG = LoggerFactory.getLogger(RealtimeJobReconciler.class);
-  private final RealtimeJobService service;
+  private final RealtimeJobLifecycleCoordinator lifecycleCoordinator;
   private final RealtimeJobStore store;
   private final RealtimeSyncProperties properties;
   private final String leaseOwner = UUID.randomUUID().toString();
 
   public RealtimeJobReconciler(
-      RealtimeJobService service, RealtimeJobStore store, RealtimeSyncProperties properties) {
-    this.service = service;
+      RealtimeJobLifecycleCoordinator lifecycleCoordinator,
+      RealtimeJobStore store,
+      RealtimeSyncProperties properties) {
+    this.lifecycleCoordinator = lifecycleCoordinator;
     this.store = store;
     this.properties = properties;
   }
@@ -31,7 +33,7 @@ public class RealtimeJobReconciler {
       if (!store.tryAcquireReconcileLease(leaseOwner, properties.getReconcileLeaseSeconds())) {
         return;
       }
-      service.reconcile();
+      lifecycleCoordinator.reconcileAll();
     } catch (RuntimeException exception) {
       LOG.warn("Realtime state reconciliation failed", exception);
     }

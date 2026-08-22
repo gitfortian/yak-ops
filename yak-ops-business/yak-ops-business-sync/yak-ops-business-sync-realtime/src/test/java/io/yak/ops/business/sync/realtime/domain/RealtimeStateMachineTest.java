@@ -24,6 +24,16 @@ class RealtimeStateMachineTest {
   }
 
   @Test
+  void acceptsRecoveryEvidenceSettlingFailureAndConflict() {
+    assertThatCode(() -> stateMachine.requireTransition("FAILED", "UNKNOWN"))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> stateMachine.requireTransition("FAILED", "CONFLICT"))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> stateMachine.requireTransition("CONFLICT", "FAILED"))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
   void rejectsImpossibleDirectTransition() {
     assertThatThrownBy(() -> stateMachine.requireTransition("STOPPED", "RUNNING"))
         .isInstanceOf(IllegalStateException.class)
