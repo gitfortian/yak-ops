@@ -20,6 +20,7 @@ public class RealtimeJobDefinitionPO {
   private String observedState;
   private Integer definitionVersion;
   private Integer publishedVersion;
+  private Long publishedDefinitionVersionId;
   private String configDigest;
   private String lastError;
   private LocalDateTime createTime;
