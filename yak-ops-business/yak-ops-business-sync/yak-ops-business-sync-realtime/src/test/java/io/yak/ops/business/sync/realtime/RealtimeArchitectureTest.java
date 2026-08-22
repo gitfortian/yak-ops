@@ -16,6 +16,9 @@ import io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService;
 import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 class RealtimeArchitectureTest {
@@ -53,6 +56,22 @@ class RealtimeArchitectureTest {
         for (Class<?> parameterType : method.getParameterTypes()) assertTypeBoundary(parameterType);
       }
     }
+  }
+
+  @Test
+  void migratedExecutionContractCannotReintroduceTaskRuntimeSidePaths() {
+    Set<String> storeMethods = methodNames(RealtimeJobStore.class);
+    assertThat(storeMethods)
+        .doesNotContain("desiredJobs", "hasOtherDesiredRunning", "markStarting");
+
+    Set<String> serviceMethods = methodNames(RealtimeJobService.class);
+    assertThat(serviceMethods)
+        .contains("restartExecution", "applyPublishedVersion")
+        .doesNotContain("restart");
+  }
+
+  private static Set<String> methodNames(Class<?> type) {
+    return Arrays.stream(type.getDeclaredMethods()).map(Method::getName).collect(Collectors.toSet());
   }
 
   private static void assertFieldsAvoid(Class<?> type, String... forbidden) {

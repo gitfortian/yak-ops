@@ -19,7 +19,6 @@ public interface RealtimeJobDao {
   long insertDeployment(RealtimeJobDeploymentPO deployment);
   void bindDeploymentDefinitionVersion(
       long deploymentId, long definitionVersionId, int sourceDraftRevision);
-  int markStarting(long definitionId);
   int markDeploymentRunning(long definitionId, long deploymentId, String engineJobId, String runtimeRevision);
   void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision);
   void markDeployFailure(long definitionId, long deploymentId, boolean uncertain, boolean stopRequested, String message);
@@ -27,8 +26,6 @@ public interface RealtimeJobDao {
   void reconcile(long definitionId, Long deploymentId, String observedState, String deploymentState, String engineJobId, String error);
   void markTerminalFailure(long definitionId, Long deploymentId, String message);
   List<RealtimeJobDeploymentPO> reconcileExecutions();
-  List<RealtimeJobDefinitionPO> desiredJobs();
-  boolean hasOtherDesiredRunning(long id);
   int deleteDefinition(long id);
   void insertEvent(RealtimeJobEventPO event);
   boolean tryAcquireReconcileLease(String owner, int leaseSeconds);

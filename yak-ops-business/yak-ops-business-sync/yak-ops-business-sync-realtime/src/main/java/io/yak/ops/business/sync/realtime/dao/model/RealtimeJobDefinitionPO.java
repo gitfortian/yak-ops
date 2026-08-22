@@ -6,6 +6,12 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 import lombok.Data;
 
+/**
+ * Physical persistence row for RealtimeSyncTask/current Draft.
+ *
+ * <p>desiredState/observedState/lastError are retained only because existing schemas still contain
+ * those columns. Wave 6 application code does not read or dual-write them as runtime truth.
+ */
 @Data
 @TableName("yak_realtime_job_definition")
 public class RealtimeJobDefinitionPO {

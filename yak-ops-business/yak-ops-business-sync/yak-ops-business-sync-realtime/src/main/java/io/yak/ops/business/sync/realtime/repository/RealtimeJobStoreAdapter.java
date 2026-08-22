@@ -118,7 +118,7 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
       DefinitionRow definition,
       CdcPipelineSpec spec,
       String summary,
-      String digest,
+      String artifactDigest,
       ComputeEnvironmentSnapshot environment,
       String idempotencyKey) {
     if (environment == null) {
@@ -126,13 +126,14 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
     }
     RealtimeJobDeploymentPO po = new RealtimeJobDeploymentPO();
     po.setDefinitionId(definition.id());
-    po.setDefinitionVersion(definition.definitionVersion());
+    po.setDefinitionVersion(definition.draftRevision());
     po.setRuntimeEnvironmentId(environment.id());
     po.setRuntimeEnvironmentVersion(environment.version());
     po.setRuntimeEnvironmentSnapshotJson(json.write(environment));
     po.setSpecSnapshotJson(json.write(spec));
     po.setSpecSummary(summary);
-    po.setConfigDigest(digest);
+    // Physical column is still config_digest; semantically this is ExecutionArtifactDigest.
+    po.setConfigDigest(artifactDigest);
     po.setIdempotencyKey(idempotencyKey);
     po.setEngineType("FLINK_CDC");
     po.setDesiredState("RUNNING");
@@ -147,13 +148,6 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
   public void bindDeploymentDefinitionVersion(
       long deploymentId, long definitionVersionId, int sourceDraftRevision) {
     dao.bindDeploymentDefinitionVersion(deploymentId, definitionVersionId, sourceDraftRevision);
-  }
-
-  @Override
-  public void markStarting(long definitionId) {
-    if (dao.markStarting(definitionId) != 1) {
-      throw new IllegalStateException("无法同步 Task 的 STARTING 兼容投影，请刷新后重试");
-    }
   }
 
   @Override
@@ -211,17 +205,6 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
   }
 
   @Override
-  @Deprecated
-  public List<DefinitionRow> desiredJobs() {
-    return dao.desiredJobs().stream().map(this::definitionRow).toList();
-  }
-
-  @Override
-  public boolean hasOtherDesiredRunning(long id) {
-    return dao.hasOtherDesiredRunning(id);
-  }
-
-  @Override
   public void delete(long id) {
     if (dao.deleteDefinition(id) != 1) {
       throw new IllegalStateException("实时同步任务不存在或已被其他操作删除");
@@ -274,9 +257,9 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         definition(id)
             .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
     DeploymentRow latest = latestDeployment(id).orElse(null);
-    String desired = latest == null ? definition.desiredState() : latest.desiredState();
-    String observed = latest == null ? definition.observedState() : latest.observedState();
-    String error = latest == null ? definition.lastError() : latest.errorMessage();
+    String desired = latest == null ? "STOPPED" : latest.desiredState();
+    String observed = latest == null ? "STOPPED" : latest.observedState();
+    String error = latest == null ? null : latest.errorMessage();
     boolean publishedUpdateAvailable = publishedUpdateAvailable(definition, latest);
     return new RealtimeJobView(
         definition.id(),
@@ -287,9 +270,9 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         definition.releaseState(),
         desired,
         observed,
-        definition.definitionVersion(),
-        definition.publishedVersion(),
-        definition.configDigest(),
+        definition.draftRevision(),
+        definition.publishedDraftRevision(),
+        definition.sourceConfigDigest(),
         error,
         definition.createTime(),
         definition.updateTime(),
@@ -302,9 +285,9 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
     if (deployment == null) return null;
     return new RealtimeJobView.Deployment(
         deployment.id(),
-        deployment.definitionVersion(),
+        deployment.sourceDraftRevision(),
         deployment.specSummary(),
-        deployment.configDigest(),
+        deployment.artifactDigest(),
         deployment.idempotencyKey(),
         deployment.engineJobId(),
         deployment.runtimeRevision(),
@@ -324,13 +307,14 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         json.readSpec(po.getSpecJson()),
         po.getRuntimeEnvironmentId(),
         po.getReleaseState(),
-        po.getDesiredState(),
-        po.getObservedState(),
+        // Wave 6: Task runtime columns are inert compatibility storage, never application truth.
+        "STOPPED",
+        "STOPPED",
         po.getDefinitionVersion() == null ? 0 : po.getDefinitionVersion(),
         po.getPublishedVersion(),
         po.getPublishedDefinitionVersionId(),
         po.getConfigDigest(),
-        po.getLastError(),
+        null,
         po.getCreateTime(),
         po.getUpdateTime());
   }

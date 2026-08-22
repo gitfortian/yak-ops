@@ -14,13 +14,13 @@
       <if test="id != null">AND d.id = #{id}</if>
       <if test="releaseState != null and releaseState != ''">AND d.release_state = #{releaseState}</if>
       <if test="stateGroup == 'RUNNING'">
-        AND COALESCE(p.observed_state, d.observed_state) IN ('STARTING','RUNNING','STOPPING')
+        AND p.observed_state IN ('STARTING','RUNNING','STOPPING')
       </if>
       <if test="stateGroup == 'STOPPED'">
-        AND COALESCE(p.observed_state, d.observed_state) = 'STOPPED'
+        AND (p.id IS NULL OR p.observed_state = 'STOPPED')
       </if>
       <if test="stateGroup == 'ABNORMAL'">
-        AND COALESCE(p.observed_state, d.observed_state) IN ('FAILED','UNKNOWN','CONFLICT')
+        AND p.observed_state IN ('FAILED','UNKNOWN','CONFLICT')
       </if>
     </where>
   </sql>
@@ -39,8 +39,8 @@
            d.runtime_environment_id,
            d.spec_json,
            d.release_state,
-           COALESCE(p.desired_state, d.desired_state) AS desired_state,
-           COALESCE(p.observed_state, d.observed_state) AS observed_state,
+           CASE WHEN p.id IS NULL THEN 'STOPPED' ELSE p.desired_state END AS desired_state,
+           CASE WHEN p.id IS NULL THEN 'STOPPED' ELSE p.observed_state END AS observed_state,
            d.definition_version,
            d.published_version,
            CASE
@@ -53,7 +53,7 @@
              THEN TRUE ELSE FALSE
            END AS published_update_available,
            d.config_digest,
-           CASE WHEN p.id IS NULL THEN d.last_error ELSE p.error_message END AS last_error,
+           p.error_message AS last_error,
            d.create_time,
            d.update_time,
            p.id AS deployment_id,

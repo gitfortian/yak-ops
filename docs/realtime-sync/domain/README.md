@@ -4,10 +4,10 @@
 
 这组文档描述的是 **Realtime Sync Domain**，不是 Flink CDC 使用手册，也不是前端页面说明。
 
-任何实时同步需求在进入代码实现前，都应先判断它属于：
+任何实时同步需求进入代码前，都应先判断它属于：
 
-- Domain：实时同步本身的业务概念与规则；
-- Application：用例编排、发布、启动、停止等应用流程；
+- Domain：实时同步业务概念与规则；
+- Application：用例编排、发布、启动、停止、重启、版本切换；
 - Infrastructure：Flink、CDC Connector、SSH、REST、YAML 编译、数据库持久化；
 - Interface/UI：Controller、DTO、Wizard、YAML Editor 等交互适配。
 
@@ -18,21 +18,23 @@
 | 1 | [领域边界与统一语言](./01-domain-boundary-and-language.md) | 定义实时同步负责什么、绝不负责什么，以及统一术语 |
 | 2 | [核心领域模型 v1](./02-core-domain-model.md) | 确定聚合根、Entity、Value Object 和核心对象关系 |
 | 3 | [领域不变量与生命周期](./03-invariants-and-lifecycle.md) | 固定 Draft / Publish / Execution 不变量、状态机、并发和快照规则 |
-| 4 | [现有代码到领域模型 Mapping](./04-current-code-mapping.md) | 逐类标记 KEEP / ADAPT / MIGRATE / REMOVE FROM DOMAIN / IMPLEMENTATION GAP，并形成最小迁移施工顺序 |
-| 5 | [AI 领域开发宪法](./05-ai-domain-rules.md) | 把阶段 1～4 转换成 AI 必须执行的前置分析、禁止项、停止条件、迁移规则和 Review Checklist |
-| 6 | 待补充 | 最小领域重构 |
-| 7 | 待补充 | 自动化领域护栏 |
+| 4 | [现有代码到领域模型 Mapping](./04-current-code-mapping.md) | 迁移前/迁移中的代码 Mapping、Gap 与施工顺序 |
+| 5 | [AI 领域开发宪法](./05-ai-domain-rules.md) | 把阶段 1～4 转换成 AI 强制执行规则 |
+| 6 | [Stage 6 Migration Completion](./06-stage6-migration-completion.md) | 记录 Wave 0～6 完成后的当前实现事实、兼容边界和剩余 Gap |
+| 7 | 待补充 | 自动化领域护栏扩展 |
 
-模块级硬规则入口：
+模块级最高优先级硬规则入口：
 
 ```text
 yak-ops-business/yak-ops-business-sync/
 yak-ops-business-sync-realtime/DOMAIN.md
 ```
 
-任何 AI / Codex / 开发者修改 realtime-sync 代码前，都应先读取该 `DOMAIN.md`。
+任何 AI / Codex / 开发者修改 realtime-sync 代码前，都必须先读 `DOMAIN.md`。
 
-## 当前已接受的模型方向
+---
+
+## 当前领域模型
 
 Realtime Sync Core Domain 使用三个聚合根：
 
@@ -42,7 +44,7 @@ DefinitionVersion
 SyncExecution
 ```
 
-`SyncDefinition` 是不可变 Value Object：
+`SyncDefinition` 是唯一配置事实模型：
 
 ```text
 SyncDefinition
@@ -53,123 +55,140 @@ SyncDefinition
 └── ExecutionPolicy
 ```
 
-阶段 3 固定生命周期规则：
+核心生命周期：
 
 ```text
-Task Draft
+Task.currentDraft
    ↓ publish
-DefinitionVersion vN (immutable)
+DefinitionVersion (immutable)
    ↓ start
-SyncExecution EN
+SyncExecution
 ```
 
 核心原则：
 
-- Task、Version、Execution 生命周期分离；
-- Draft 可以在旧 Execution 运行时继续编辑和发布，新版本不会自动影响旧 Execution；
-- Start 只读取 `PublishedDefinitionRef`，不读取当前 Draft；Draft 有未发布修改不使旧 Published Version 自动失效；
-- 同一个 Task v1 最多一个 Active / Uncertain Execution；
-- 每次 Start / Restart 都创建新的 SyncExecution，单个 Execution 的 `STOPPED / FAILED` 是终态；
-- `UNKNOWN` 表示外部事实尚不可确认，`CONFLICT` 表示存在歧义，二者都禁止自动创建第二个运行实例；
-- Restart 同版本与 Apply Published Version 必须是两种不同语义，禁止重启时偷偷升级；
-- Published Version、Execution Definition Snapshot、Runtime Environment Snapshot 都是不可变运行证据；
-- Route / Selector / Policy 优先组合表达单表、多表、规则匹配和未来整库场景；
-- ReplayKey 是 v1 强制领域语义，不存在 `strictReplaySafety=false` 的 Core Model；
-- Runtime Environment 不进入 `SyncDefinition`，Definition 保存 Ref，Execution 保存 Snapshot；
-- Flink、YAML、SSH、JDBC 私有调优不进入 Core Domain。
+- `Task ≠ Definition ≠ Version ≠ Execution`；
+- Draft 可以在旧 Execution 运行时继续编辑/发布；
+- Start 只读取不可变 Published DefinitionVersion；
+- RestartExecution 固定旧 Execution 的 VersionRef；
+- ApplyPublishedVersion 显式使用命令开始时捕获的 Published Ref；
+- 每次 Start/Restart/Apply 都创建新的 SyncExecution；
+- 单个 Execution 的 `STOPPED / FAILED` 是终态；
+- `UNKNOWN / CONFLICT` 禁止自动创建第二个运行实例；
+- Runtime Environment：Definition 存 Ref，Execution 存 Snapshot；
+- Flink / YAML / SSH / JDBC credentials / adapter-private tuning 不进入 Core Domain；
+- 新场景优先扩 Selector / Route / Target / Policy，不优先增加 sceneType/syncType。
 
-## 阶段 4 已确认的当前实现事实
+---
 
-阶段 4 对现有 realtime 模块做了代码、持久化和运行链路 Mapping，几个最关键的结论是：
+## Stage 6 当前实现事实
+
+Stage 6 已按既定顺序完成：
 
 ```text
-current definition_version
-    = DraftRevision
-    ≠ immutable DefinitionVersion
+Wave 0  Core VO + compatibility mapper                         ✅
+Wave 1  Immutable DefinitionVersion                            ✅
+Wave 2  Start by Published DefinitionVersion                   ✅
+Wave 3  SyncExecution lifecycle ownership                      ✅
+Wave 4  Active Execution 下继续编辑 / 发布                      ✅
+Wave 5  RestartExecution / ApplyPublishedVersion               ✅
+Wave 6  Legacy runtime projection / contract cleanup           ✅
 ```
 
-当前 `published_version` 只是“曾发布过哪次 Draft revision”的 marker；仓库目前没有独立的不可变 `DefinitionVersion` 聚合/表，因此 `Published + newer Draft` 无法真正保存两份定义内容。
-
-现有：
+当前可以稳定表达：
 
 ```text
+Running E100(V3)
++
+Draft r4
++
+Published V4
+```
+
+并满足：
+
+```text
+Save Draft       != mutate E100
+Publish V4       != mutate E100
+RestartExecution -> E101(V3)
+ApplyPublished   -> E101(V4)
+Runtime state    -> SyncExecution only
+Version identity -> immutable DefinitionVersionId only
+```
+
+### Task runtime legacy columns
+
+物理表仍可能存在：
+
+```text
+desired_state
+observed_state
+last_error
+```
+
+但 Wave 6 后它们是 inert compatibility storage：
+
+- Application 不写；
+- Runtime command 不读；
+- Read model 不 fallback；
+- 无 Execution 的 Task 派生为 STOPPED / STOPPED / null。
+
+### Legacy names still physically/API-visible
+
+为了兼容，以下名字可以暂时存在：
+
+```text
+yak_realtime_job_definition
 yak_realtime_job_deployment
-RealtimeJobDeploymentPO
-DeploymentRow
+definition_version
+published_version
+config_digest
+status
+latestDeployment
+HTTP /restart alias
 ```
 
-已经非常接近目标 `SyncExecution`，应增量演进，不应推倒后重新建设第二套 Execution History。
+它们不再决定领域语义。
 
-另外阶段 4 明确发现：
+当前 Mapping 以 [Stage 6 Migration Completion](./06-stage6-migration-completion.md) 为准；阶段 4 文档中的“当前实现事实”是当时的**历史迁移快照**，不能覆盖 Stage 6 后的新事实。
 
-- `DefinitionRow.configDigest` 与 `DeploymentRow.configDigest` 实际表示两种不同摘要，未来应拆为 `DefinitionDigest` 与 `ExecutionArtifactDigest`；
-- `desiredState / observedState` 目前压在 Task/Definition row 上，目标 ownership 属于 `SyncExecution`；
-- `RealtimeStateMachine` 的显式转换思想应保留，但 `requireDefinitionMutable()` 属于当前 Task/Execution 耦合；
-- `RealtimeDefinitionValidator` 当前同时包含 Intrinsic、Contextual 和 Flink Adapter validation，后续需要分层；
-- `ComputeEnvironment` 虽然当前物理上位于 realtime Maven module/domain package，但领域 ownership 属于邻接 Compute Environment Context；
-- `RealtimeJobView / Page / ObservabilityView / ValidationResult / SSE ChangeEvent` 都是 Read Model / Application Notification，不是 Core Domain；
-- `FlinkCdcEngineGateway`、SSH、runtime identity recovery、credential lifetime、UNKNOWN/CONFLICT 恢复逻辑是应保护的 Infrastructure 安全资产，不应为了 DDD 重写；
-- `checkpointInterval / restart` 当前进入 Spec 但未真正被 `PipelineYamlCompiler` 应用，属于 ExecutionPolicy Implementation Gap；
-- 当前硬删除会删除 Deployment/Event 历史，与阶段 3 审计不变量冲突。
+---
 
-阶段 4 给阶段 6 的迁移优先级是：
+## 仍然存在的独立 Gap
+
+Stage 6 完成不代表所有技术债清零。以下问题必须单独评审：
 
 ```text
-P0  先补 immutable DefinitionVersion + Start-by-Version
- ↓
-P1  再把 Deployment 演进为 SyncExecution，并迁 desired/observed ownership
- ↓
-P2  最后清理 package、类名、legacy state/digest 字段
+Audit-safe Archive/Tombstone delete
+ExecutionPolicy checkpoint/restart runtime application
+Flink FINISHED normal completion / snapshot-only
+legacy failure-rate mapping
+Read-model package hygiene
+Compute Environment physical context/package cleanup
+API v2 / physical schema naming cleanup
 ```
 
-推荐数据迁移采用：
+这些问题不能以“cleanup”名义偷偷进入普通功能 PR。
+
+---
+
+## AI 使用顺序
+
+以后修改 realtime-sync：
 
 ```text
-expand -> dual write/read -> verify -> switch -> contract
+1. 读 DOMAIN.md
+2. 做 Domain Impact Analysis
+3. 查 06-stage6-migration-completion.md 当前事实
+4. 需要设计依据时再查 01～05 文档
+5. 对照测试与现有 Adapter
+6. 实现前确认没有 Domain Gap
 ```
 
-而不是 Big Bang rename/drop。
-
-现有 `CdcPipelineSpec`、REST v1、Yak YAML v1、Flink/SSH 执行实现都应通过 compatibility adapter 渐进迁移，而不是一次性推翻。
-
-## 阶段 5：AI 强制执行方式
-
-阶段 5 不再只要求“理解领域文档”，而是规定 AI 在编码前必须先输出：
-
-```text
-Domain Impact Analysis
-- Bounded Context
-- Aggregate(s)
-- SyncDefinition Area
-- Invariant/Lifecycle Impact
-- Layer
-- Stage-4 Mapping/Gap
-- Migration Wave
-- Safety Protection List
-- Domain Gap: yes/no
-```
-
-如果：
+如果一个新需求无法映射到三个聚合、`SyncDefinition` 子模型、现有生命周期或明确的邻接上下文：
 
 ```text
 Domain Gap = yes
 ```
 
-AI 必须先停止编码，提出领域模型扩展方案，不能通过临时 `*Spec / *Task / syncType / sceneType / boolean` 绕过。
-
-阶段 5 同时把以下内容升级为硬规则：
-
-- `SyncDefinition` 是唯一配置事实模型；
-- `Task ≠ Version ≠ Execution`；
-- Execution 只能读取不可变 Published Version；
-- terminal Execution 不复活；
-- Restart 必须 pin 原 Version，升级版本是另一 use case；
-- `UNKNOWN / CONFLICT` 不能为了重试被粗暴转成失败；
-- Flink / SSH / JDBC Credential / Adapter Tuning 不进入 Core Domain；
-- 新场景优先扩 Selector / Route / Target / Policy，不优先新增 scene/sync type；
-- Domain 接受的 ExecutionPolicy 必须真正执行或明确拒绝，禁止 silent ignore；
-- 历史 Version / Execution / Event 默认不可业务级硬删除；
-- Stage-4 Wave 顺序不可随意跳过，尤其 Wave 4（运行中编辑/发布）不能早于 Wave 3（Execution lifecycle ownership）；
-- 后续领域重构必须保护现有 Idempotency、CAS、stop-during-start、UNKNOWN recovery、runtime identity、environment snapshot、credential zeroize 和 log redaction。
-
-如果一个新需求无法映射到当前三个聚合、`SyncDefinition` 子模型、阶段 3 生命周期或阶段 4 的现有代码位置，应先记录为 **Domain Gap**，不要直接增加新的 `syncType / sceneType / *Spec / *Task` 体系，也不要绕过已有的幂等、快照、不确定性和恢复机制。
+先讨论模型，不允许直接增加新的 `syncType / sceneType / *Spec / *Task` 体系，也不能绕过幂等、快照、UNKNOWN/CONFLICT、runtime identity、credential zeroize 等安全机制。

@@ -85,14 +85,14 @@ public class RealtimeJobService {
     requireName(name);
     specValidator.validate(spec);
     runtimeResolver.environment(runtimeEnvironmentId, true);
-    String digest = definitionDigest(spec, runtimeEnvironmentId);
+    String sourceConfigDigest = sourceConfigDigest(spec, runtimeEnvironmentId);
     Long saved =
         transactions.execute(
             status -> {
               if (id == null) {
                 long created =
                     store.insertDefinition(
-                        name.trim(), description, spec, digest, runtimeEnvironmentId);
+                        name.trim(), description, spec, sourceConfigDigest, runtimeEnvironmentId);
                 store.event(created, null, "DRAFT_CREATED", null, "DRAFT", "已创建实时同步草稿");
                 return created;
               }
@@ -100,7 +100,12 @@ public class RealtimeJobService {
               // Draft belongs to RealtimeSyncTask, not SyncExecution. Active executions keep their
               // immutable DefinitionVersion and RuntimeEnvironmentSnapshot while this draft evolves.
               store.updateDefinition(
-                  id, name.trim(), description, spec, digest, runtimeEnvironmentId);
+                  id,
+                  name.trim(),
+                  description,
+                  spec,
+                  sourceConfigDigest,
+                  runtimeEnvironmentId);
               store.event(
                   id,
                   null,
@@ -141,7 +146,9 @@ public class RealtimeJobService {
           DefinitionRow locked = store.lockDefinition(id); // cross-instance command mutex
           requirePreparedDefinitionCurrent(prepared, locked);
           store.publish(
-              id, prepared.definition().definitionVersion(), prepared.definition().configDigest());
+              id,
+              prepared.definition().draftRevision(),
+              prepared.definition().sourceConfigDigest());
           store.event(
               id,
               null,
@@ -221,14 +228,13 @@ public class RealtimeJobService {
                         locked,
                         prepared.spec(),
                         prepared.compiled().summary(),
-                        digest(prepared.compiled().yaml()),
+                        artifactDigest(prepared.compiled().yaml()),
                         prepared.runtimeEnvironment(),
                         key);
                 store.bindDeploymentDefinitionVersion(
                     created,
                     prepared.definitionVersion().id(),
                     prepared.definitionVersion().sourceDraftRevision());
-                store.markStarting(id); // Task-row compatibility projection only
                 store.event(
                     id,
                     created,
@@ -443,12 +449,6 @@ public class RealtimeJobService {
         });
   }
 
-  /** Compatibility alias. Domain semantics are RestartExecution, not generic restart-to-latest. */
-  @Deprecated
-  public RealtimeJobView.Deployment restart(long id, String requestedKey) {
-    return restartExecution(id, requestedKey);
-  }
-
   /** Stop the current RUNNING execution and create a new execution pinned to the same version. */
   public RealtimeJobView.Deployment restartExecution(long id, String requestedKey) {
     ReentrantLock lock = lifecycleLock(id);
@@ -614,8 +614,8 @@ public class RealtimeJobService {
   private void requirePreparedDefinitionCurrent(Prepared prepared, DefinitionRow current) {
     DefinitionRow snapshot = prepared.definition();
     long currentRuntimeEnvironmentId = store.runtimeEnvironmentId(current.id());
-    if (snapshot.definitionVersion() != current.definitionVersion()
-        || !Objects.equals(snapshot.configDigest(), current.configDigest())
+    if (snapshot.draftRevision() != current.draftRevision()
+        || !Objects.equals(snapshot.sourceConfigDigest(), current.sourceConfigDigest())
         || prepared.runtimeEnvironment().id() != currentRuntimeEnvironmentId) {
       throw new IllegalStateException("任务定义在校验期间已变化，请刷新后重试");
     }
@@ -812,8 +812,12 @@ public class RealtimeJobService {
     }
   }
 
-  private String definitionDigest(CdcPipelineSpec spec, long runtimeEnvironmentId) {
-    return digest(write(spec) + "\n@runtime-environment:" + runtimeEnvironmentId);
+  private String sourceConfigDigest(CdcPipelineSpec spec, long runtimeEnvironmentId) {
+    return sha256(write(spec) + "\n@runtime-environment:" + runtimeEnvironmentId);
+  }
+
+  private String artifactDigest(String compiledYaml) {
+    return sha256(compiledYaml);
   }
 
   private String write(Object value) {
@@ -824,13 +828,13 @@ public class RealtimeJobService {
     }
   }
 
-  private String digest(String value) {
+  private String sha256(String value) {
     try {
       byte[] bytes =
           MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(bytes);
     } catch (Exception exception) {
-      throw new IllegalStateException("无法计算 Spec 摘要", exception);
+      throw new IllegalStateException("无法计算 SHA-256 摘要", exception);
     }
   }
 

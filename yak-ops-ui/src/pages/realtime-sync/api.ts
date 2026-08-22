@@ -6,8 +6,8 @@ import type {
   DataSourceCatalogColumn,
   DataSourceCatalogTable,
   DataSourceOption,
-  RealtimeDeployment,
   RealtimeEvent,
+  RealtimeExecution,
   RealtimeJob,
   RealtimeJobPage,
   RealtimeObservability,
@@ -47,8 +47,7 @@ export type RealtimeAction =
   | 'stop'
   | 'restart-execution'
   | 'apply-published-version'
-  | 'reconcile'
-  | 'restart';
+  | 'reconcile';
 
 const validateDefinition = (spec: CdcPipelineSpec, runtimeEnvironmentId: number) =>
   request<ApiResponse<DefinitionValidationResult>>(`${PREFIX}/spec/validate`, {
@@ -77,7 +76,7 @@ const capabilities = async (environmentId?: number) => {
 };
 
 const needsIdempotencyKey = (action: RealtimeAction) =>
-  ['start', 'restart', 'restart-execution', 'apply-published-version'].includes(action);
+  ['start', 'restart-execution', 'apply-published-version'].includes(action);
 
 export const realtimeApi = {
   page: (params: RealtimePageQuery) =>
@@ -103,7 +102,7 @@ export const realtimeApi = {
       data: { spec },
     }),
   action: (id: number, action: RealtimeAction) =>
-    request<ApiResponse<RealtimeDeployment | boolean>>(`${PREFIX}/${id}/${action}`, {
+    request<ApiResponse<RealtimeExecution | boolean>>(`${PREFIX}/${id}/${action}`, {
       method: 'POST',
       headers: needsIdempotencyKey(action)
         ? { 'Idempotency-Key': crypto.randomUUID() }
