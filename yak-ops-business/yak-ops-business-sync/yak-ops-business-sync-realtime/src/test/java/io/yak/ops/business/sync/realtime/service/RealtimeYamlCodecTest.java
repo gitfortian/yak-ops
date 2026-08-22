@@ -19,6 +19,7 @@ class RealtimeYamlCodecTest {
           null,
           null,
           null,
+          null,
           null);
 
   private final RealtimeYamlCodec codec = new RealtimeYamlCodec(definitionValidator);
