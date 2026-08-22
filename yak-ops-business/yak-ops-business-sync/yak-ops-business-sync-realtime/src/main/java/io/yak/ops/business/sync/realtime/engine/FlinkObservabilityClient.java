@@ -3,6 +3,9 @@ package io.yak.ops.business.sync.realtime.engine;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView.CheckpointDetail;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView.CheckpointSummary;
@@ -66,8 +69,13 @@ public class FlinkObservabilityClient {
   }
 
   public RealtimeObservabilityView snapshot(String jobId) {
+    return snapshot(bootstrapEnvironment(), jobId);
+  }
+
+  public RealtimeObservabilityView snapshot(
+      ComputeEnvironmentSnapshot environment, String jobId) {
     requireJobId(jobId);
-    JsonNode job = getJson("/jobs/" + jobId, true);
+    JsonNode job = getJson(environment, "/jobs/" + jobId, true);
     long sampledAt = System.currentTimeMillis();
     if (job == null) {
       return new RealtimeObservabilityView(
@@ -76,23 +84,23 @@ public class FlinkObservabilityClient {
           "NOT_FOUND",
           null,
           null,
-          flinkWebUrl(jobId),
+          flinkWebUrl(environment, jobId),
           sampledAt,
           emptyCheckpointSummary(),
           emptyMetricSummary());
     }
 
-    JsonNode checkpointBody = getJson("/jobs/" + jobId + "/checkpoints", true);
+    JsonNode checkpointBody = getJson(environment, "/jobs/" + jobId + "/checkpoints", true);
     return new RealtimeObservabilityView(
         jobId,
         text(job, "name"),
         text(job, "state"),
         number(job, "start-time"),
         number(job, "duration"),
-        flinkWebUrl(jobId),
+        flinkWebUrl(environment, jobId),
         sampledAt,
         checkpointSummary(checkpointBody),
-        metricSummary(jobId, job));
+        metricSummary(environment, jobId, job));
   }
 
   public String submissionLog(String idempotencyKey, int tailLines) {
@@ -118,9 +126,15 @@ public class FlinkObservabilityClient {
   }
 
   public RuntimeLog runtimeLog(String jobId, int maxExceptions) {
+    return runtimeLog(bootstrapEnvironment(), jobId, maxExceptions);
+  }
+
+  public RuntimeLog runtimeLog(
+      ComputeEnvironmentSnapshot environment, String jobId, int maxExceptions) {
     requireJobId(jobId);
     int limit = Math.max(1, Math.min(maxExceptions, 100));
-    JsonNode body = getJson("/jobs/" + jobId + "/exceptions?maxExceptions=" + limit, true);
+    JsonNode body =
+        getJson(environment, "/jobs/" + jobId + "/exceptions?maxExceptions=" + limit, true);
     if (body == null) {
       return new RuntimeLog(null, null, false, List.of());
     }
@@ -192,7 +206,8 @@ public class FlinkObservabilityClient {
         redactor.redact(firstText(node, "failure_message", "failure-message")));
   }
 
-  private MetricSummary metricSummary(String jobId, JsonNode job) {
+  private MetricSummary metricSummary(
+      ComputeEnvironmentSnapshot environment, String jobId, JsonNode job) {
     JsonNode vertices = job.path("vertices");
     if (!vertices.isArray()) {
       return emptyMetricSummary();
@@ -219,7 +234,7 @@ public class FlinkObservabilityClient {
       vertexCount++;
       Map<String, MetricAggregate> metrics;
       try {
-        metrics = vertexMetrics(jobId, vertexId);
+        metrics = vertexMetrics(environment, jobId, vertexId);
       } catch (RealtimeEngineException ignored) {
         // Jobs can change state while the UI snapshot is being sampled. Return partial metrics.
         continue;
@@ -260,9 +275,11 @@ public class FlinkObservabilityClient {
         vertexCount);
   }
 
-  private Map<String, MetricAggregate> vertexMetrics(String jobId, String vertexId) {
+  private Map<String, MetricAggregate> vertexMetrics(
+      ComputeEnvironmentSnapshot environment, String jobId, String vertexId) {
     JsonNode body =
         getJson(
+            environment,
             "/jobs/"
                 + jobId
                 + "/vertices/"
@@ -362,10 +379,11 @@ public class FlinkObservabilityClient {
     }
   }
 
-  private JsonNode getJson(String path, boolean allowNotFound) {
+  private JsonNode getJson(
+      ComputeEnvironmentSnapshot environment, String path, boolean allowNotFound) {
     try {
       HttpRequest request =
-          HttpRequest.newBuilder(URI.create(baseUrl() + path))
+          HttpRequest.newBuilder(URI.create(baseUrl(environment) + path))
               .timeout(properties.getRequestTimeout())
               .header("Accept", "application/json")
               .GET()
@@ -398,12 +416,38 @@ public class FlinkObservabilityClient {
     return new MetricSummary(null, null, null, null, null, null, null, null, null, null, null, 0);
   }
 
-  private String flinkWebUrl(String jobId) {
-    return baseUrl() + "/#/job/" + jobId + "/overview";
+  private String flinkWebUrl(ComputeEnvironmentSnapshot environment, String jobId) {
+    return baseUrl(environment) + "/#/job/" + jobId + "/overview";
   }
 
-  private String baseUrl() {
-    return properties.getRestUrl().replaceAll("/+$", "");
+  private String baseUrl(ComputeEnvironmentSnapshot environment) {
+    return requireConfig(environment).restUrl().replaceAll("/+$", "");
+  }
+
+  private RuntimeConfig requireConfig(ComputeEnvironmentSnapshot environment) {
+    if (environment == null || environment.config() == null) {
+      throw new IllegalArgumentException("运行环境配置不能为空");
+    }
+    return environment.config();
+  }
+
+  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
+    RuntimeConfig config =
+        new RuntimeConfig(
+            properties.getRestUrl(),
+            properties.getFlinkHome(),
+            properties.getFlinkCdcHome(),
+            properties.getJavaHome(),
+            properties.getFlinkVersion(),
+            properties.getFlinkCdcVersion());
+    return new ComputeEnvironmentSnapshot(
+        0L,
+        "application/default",
+        ComputeEnvironment.ENGINE_FLINK_CDC,
+        ComputeEnvironment.DEPLOYMENT_REMOTE,
+        properties.getSubmissionMode().name(),
+        config,
+        0);
   }
 
   private String safeKey(String idempotencyKey) {
