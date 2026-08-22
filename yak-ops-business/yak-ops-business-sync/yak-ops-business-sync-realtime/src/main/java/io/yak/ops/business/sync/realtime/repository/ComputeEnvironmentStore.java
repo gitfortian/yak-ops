@@ -94,7 +94,8 @@ public class ComputeEnvironmentStore {
     int changed =
         db.update(
             "update yak_compute_environment set name=?,submitter_type=?,config_json=?,enabled=?,"
-                + "version=version+1 where id=?",
+                + "version=version+1,last_check_status=null,last_check_message=null,last_check_time=null "
+                + "where id=?",
             name,
             submitterType,
             write(config),
@@ -110,6 +111,21 @@ public class ComputeEnvironmentStore {
         db.update(
             "update yak_compute_environment set enabled=?,version=version+1 where id=?",
             enabled,
+            id);
+    if (changed != 1) {
+      throw new IllegalArgumentException("运行环境不存在：" + id);
+    }
+  }
+
+  public void saveDiagnosis(
+      long id, String status, String message, LocalDateTime checkedAt) {
+    int changed =
+        db.update(
+            "update yak_compute_environment set last_check_status=?,last_check_message=?,"
+                + "last_check_time=? where id=?",
+            status,
+            message,
+            checkedAt == null ? null : Timestamp.valueOf(checkedAt),
             id);
     if (changed != 1) {
       throw new IllegalArgumentException("运行环境不存在：" + id);
@@ -187,7 +203,10 @@ public class ComputeEnvironmentStore {
         result.getBoolean("is_default"),
         result.getInt("version"),
         time(result.getTimestamp("create_time")),
-        time(result.getTimestamp("update_time")));
+        time(result.getTimestamp("update_time")),
+        result.getString("last_check_status"),
+        result.getString("last_check_message"),
+        time(result.getTimestamp("last_check_time")));
   }
 
   private String write(Object value) {
