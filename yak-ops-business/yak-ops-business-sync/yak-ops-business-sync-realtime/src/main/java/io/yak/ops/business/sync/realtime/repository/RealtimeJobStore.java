@@ -4,12 +4,16 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.DesiredState;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
+import io.yak.ops.business.sync.realtime.domain.SyncExecution;
+import io.yak.ops.business.sync.realtime.domain.SyncExecution.EngineExecutionRef;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/** Domain-facing repository contract for realtime definitions, deployments and lifecycle evidence. */
+/** Compatibility persistence contract while Task / Version / Execution are migrated independently. */
 public interface RealtimeJobStore {
   long insertDefinition(String name, String description, CdcPipelineSpec spec, String digest, long runtimeEnvironmentId);
   void updateDefinition(long id, String name, String description, CdcPipelineSpec spec, String digest, long runtimeEnvironmentId);
@@ -27,6 +31,9 @@ public interface RealtimeJobStore {
   }
   Optional<DeploymentRow> deploymentByIdempotencyKey(String key);
   Optional<DeploymentRow> latestDeployment(long definitionId);
+  default Optional<SyncExecution> latestExecution(long definitionId) {
+    return latestDeployment(definitionId).map(DeploymentRow::execution);
+  }
   default Optional<ComputeEnvironmentSnapshot> deploymentEnvironment(long deploymentId) {
     return Optional.empty();
   }
@@ -42,7 +49,16 @@ public interface RealtimeJobStore {
   void markStopping(long definitionId, Long deploymentId);
   void reconcile(long definitionId, Long deploymentId, String observedState, String deploymentState, String engineJobId, String error);
   void markTerminalFailure(long definitionId, Long deploymentId, String message);
+
+  /** Active/uncertain executions that require authoritative runtime reconciliation. */
+  default List<DeploymentRow> reconcileCandidates() {
+    return List.of();
+  }
+
+  /** Legacy compatibility query. New runtime logic must use reconcileCandidates/latestExecution. */
+  @Deprecated
   List<DefinitionRow> desiredJobs();
+
   boolean hasOtherDesiredRunning(long id);
   void delete(long id);
   void event(long definitionId, Long deploymentId, String type, String from, String to, String message);
@@ -91,6 +107,10 @@ public interface RealtimeJobStore {
       LocalDateTime createTime,
       LocalDateTime updateTime) {}
 
+  /**
+   * Persistence/read compatibility row. From Wave 3 onward desiredState/observedState are the
+   * authoritative lifecycle fields; status remains a legacy submission/read projection.
+   */
   record DeploymentRow(
       long id,
       long definitionId,
@@ -103,13 +123,74 @@ public interface RealtimeJobStore {
       String engineJobId,
       String runtimeRevision,
       ComputeEnvironmentSnapshot runtimeEnvironment,
+      String engineType,
+      String desiredState,
+      String observedState,
       String status,
       boolean resultUncertain,
       String errorMessage,
       LocalDateTime createTime,
       LocalDateTime updateTime) {
 
-    /** Compatibility constructor for tests/callers created before Wave 2 added the immutable ref. */
+    public DeploymentRow {
+      engineType = hasText(engineType) ? engineType.trim() : "FLINK_CDC";
+      desiredState = hasText(desiredState) ? desiredState.trim() : legacyDesiredState(status);
+      observedState = hasText(observedState) ? observedState.trim() : legacyObservedState(status);
+    }
+
+    public SyncExecution execution() {
+      return new SyncExecution(
+          id,
+          definitionId,
+          definitionVersionId,
+          DesiredState.valueOf(desiredState),
+          ObservedState.valueOf(observedState),
+          new EngineExecutionRef(engineType, engineJobId),
+          resultUncertain,
+          errorMessage);
+    }
+
+    /** Compatibility constructor for Wave-2 callers before execution lifecycle columns existed. */
+    public DeploymentRow(
+        long id,
+        long definitionId,
+        Long definitionVersionId,
+        int definitionVersion,
+        CdcPipelineSpec specSnapshot,
+        String specSummary,
+        String configDigest,
+        String idempotencyKey,
+        String engineJobId,
+        String runtimeRevision,
+        ComputeEnvironmentSnapshot runtimeEnvironment,
+        String status,
+        boolean resultUncertain,
+        String errorMessage,
+        LocalDateTime createTime,
+        LocalDateTime updateTime) {
+      this(
+          id,
+          definitionId,
+          definitionVersionId,
+          definitionVersion,
+          specSnapshot,
+          specSummary,
+          configDigest,
+          idempotencyKey,
+          engineJobId,
+          runtimeRevision,
+          runtimeEnvironment,
+          "FLINK_CDC",
+          legacyDesiredState(status),
+          legacyObservedState(status),
+          status,
+          resultUncertain,
+          errorMessage,
+          createTime,
+          updateTime);
+    }
+
+    /** Compatibility constructor for callers created before Wave 2 added DefinitionVersionId. */
     public DeploymentRow(
         long id,
         long definitionId,
@@ -143,6 +224,29 @@ public interface RealtimeJobStore {
           errorMessage,
           createTime,
           updateTime);
+    }
+
+    private static boolean hasText(String value) {
+      return value != null && !value.isBlank();
+    }
+
+    private static String legacyDesiredState(String status) {
+      return switch (status == null ? "" : status) {
+        case "STOPPING", "STOPPED", "FAILED", "REJECTED" -> "STOPPED";
+        default -> "RUNNING";
+      };
+    }
+
+    private static String legacyObservedState(String status) {
+      return switch (status == null ? "" : status) {
+        case "SUBMITTING" -> "STARTING";
+        case "RUNNING" -> "RUNNING";
+        case "STOPPING" -> "STOPPING";
+        case "STOPPED" -> "STOPPED";
+        case "FAILED", "REJECTED" -> "FAILED";
+        case "UNKNOWN" -> "UNKNOWN";
+        default -> "UNKNOWN";
+      };
     }
   }
 }

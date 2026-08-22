@@ -7,7 +7,8 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
-import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
+import io.yak.ops.business.sync.realtime.domain.SyncExecution;
+import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPipeline;
 import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
@@ -36,14 +37,14 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/** Application service for realtime job definitions and lifecycle commands. */
+/** Application service for realtime task definitions and SyncExecution lifecycle commands. */
 @Service
 public class RealtimeJobService {
 
   private final RealtimeJobStore store;
   private final ObjectMapper json;
   private final CdcPipelineSpecValidator specValidator;
-  private final RealtimeStateMachine stateMachine;
+  private final SyncExecutionStateMachine executionStateMachine;
   private final RealtimeDataSourceResolver dataSourceResolver;
   private final RealtimeConnectorCapabilityResolver capabilityResolver;
   private final PipelineYamlCompiler compiler;
@@ -56,7 +57,7 @@ public class RealtimeJobService {
       RealtimeJobStore store,
       @Qualifier("realtimeObjectMapper") ObjectMapper json,
       CdcPipelineSpecValidator specValidator,
-      RealtimeStateMachine stateMachine,
+      SyncExecutionStateMachine executionStateMachine,
       RealtimeDataSourceResolver dataSourceResolver,
       RealtimeConnectorCapabilityResolver capabilityResolver,
       PipelineYamlCompiler compiler,
@@ -66,7 +67,7 @@ public class RealtimeJobService {
     this.store = store;
     this.json = json;
     this.specValidator = specValidator;
-    this.stateMachine = stateMachine;
+    this.executionStateMachine = executionStateMachine;
     this.dataSourceResolver = dataSourceResolver;
     this.capabilityResolver = capabilityResolver;
     this.compiler = compiler;
@@ -95,8 +96,8 @@ public class RealtimeJobService {
                 store.event(created, null, "DRAFT_CREATED", null, "DRAFT", "已创建实时同步草稿");
                 return created;
               }
-              DefinitionRow locked = store.lockDefinition(id);
-              stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
+              DefinitionRow locked = store.lockDefinition(id); // cross-instance command mutex
+              requireDefinitionMutable(id);
               store.updateDefinition(
                   id, name.trim(), description, spec, digest, runtimeEnvironmentId);
               store.event(
@@ -133,13 +134,12 @@ public class RealtimeJobService {
 
   public void publish(long id) {
     Prepared prepared = prepare(id, false);
-    stateMachine.requireDefinitionMutable(
-        prepared.definition().desiredState(), prepared.definition().observedState());
+    requireDefinitionMutable(id);
     gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
     transactions.executeWithoutResult(
         status -> {
-          DefinitionRow locked = store.lockDefinition(id);
-          stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
+          DefinitionRow locked = store.lockDefinition(id); // cross-instance command mutex
+          requireDefinitionMutable(id);
           requirePreparedDefinitionCurrent(prepared, locked);
           store.publish(
               id, prepared.definition().definitionVersion(), prepared.definition().configDigest());
@@ -184,10 +184,8 @@ public class RealtimeJobService {
       reservation =
           transactions.execute(
               status -> {
-                DefinitionRow locked = store.lockDefinition(id);
+                DefinitionRow locked = store.lockDefinition(id); // mutex, not lifecycle truth
 
-                // The first check happens outside the transaction for the common retry path. This
-                // second check is required for two Yak Ops instances racing with the same key.
                 DeploymentRow duplicate = idempotentDeployment(id, key);
                 if (duplicate != null) {
                   return new StartReservation(duplicate.id(), false);
@@ -195,8 +193,14 @@ public class RealtimeJobService {
 
                 PublishedDefinitionRow currentPublished = requirePublishedDefinition(id);
                 requirePreparedPublishedCurrent(prepared, currentPublished);
-                stateMachine.requireStartable(locked.desiredState(), locked.observedState());
-                stateMachine.requireTransition(locked.observedState(), "STARTING");
+
+                SyncExecution previous = store.latestExecution(id).orElse(null);
+                executionStateMachine.requireNewExecutionAllowed(previous);
+                String previousDescription =
+                    previous == null
+                        ? ""
+                        : "；上一 Execution 终态为 " + previous.observedState().name();
+
                 long created =
                     store.insertDeployment(
                         locked,
@@ -209,37 +213,38 @@ public class RealtimeJobService {
                     created,
                     prepared.publishedDefinition().id(),
                     prepared.publishedDefinition().sourceDraftRevision());
-                store.markStarting(id);
+                store.markStarting(id); // Task-row compatibility projection only
                 store.event(
                     id,
                     created,
                     "START_REQUESTED",
-                    locked.observedState(),
+                    null,
                     "STARTING",
                     "开始使用已发布版本 v"
                         + prepared.publishedDefinition().versionNo()
                         + "，通过运行环境「"
                         + prepared.runtimeEnvironment().name()
-                        + "」提交 Flink CDC 任务");
+                        + "」提交 Flink CDC 任务"
+                        + previousDescription);
                 return new StartReservation(created, true);
               });
     } catch (DuplicateKeyException exception) {
       DeploymentRow raced =
           store
               .deploymentByIdempotencyKey(key)
-              .orElseThrow(() -> new IllegalStateException("幂等部署冲突", exception));
+              .orElseThrow(() -> new IllegalStateException("幂等 Execution 冲突", exception));
       requireIdempotencyOwner(id, raced);
       return store.deploymentView(raced);
     }
 
     if (reservation == null) {
-      throw new IllegalStateException("未能创建实时同步启动预留");
+      throw new IllegalStateException("未能创建实时同步 Execution 启动预留");
     }
     if (!reservation.created()) {
       DeploymentRow duplicate =
           store
               .deploymentByIdempotencyKey(key)
-              .orElseThrow(() -> new IllegalStateException("幂等部署记录不存在"));
+              .orElseThrow(() -> new IllegalStateException("幂等 Execution 记录不存在"));
       requireIdempotencyOwner(id, duplicate);
       return store.deploymentView(duplicate);
     }
@@ -257,8 +262,8 @@ public class RealtimeJobService {
 
   /**
    * Finishes a successful CLI submission without overwriting a concurrent stop request. If stop
-   * won the race while the CLI was running, bind the returned JobId first and immediately cancel
-   * that exact Flink job.
+   * won while the CLI was running, bind the returned JobId first and immediately cancel that exact
+   * external execution.
    */
   private RealtimeJobView.Deployment completeStart(
       long id,
@@ -268,9 +273,13 @@ public class RealtimeJobService {
     Boolean cancelAfterSubmit =
         transactions.execute(
             status -> {
-              DefinitionRow current = store.lockDefinition(id);
-              if ("RUNNING".equals(current.desiredState())
-                  && "STARTING".equals(current.observedState())) {
+              store.lockDefinition(id); // cross-instance command mutex
+              DeploymentRow row = requireCurrentExecutionRow(id, deploymentId);
+              SyncExecution execution = row.execution();
+
+              if (execution.desiredState().name().equals("RUNNING")
+                  && execution.observedState().name().equals("STARTING")) {
+                executionStateMachine.requireTransition(execution, "RUNNING");
                 store.markDeploymentRunning(
                     id,
                     deploymentId,
@@ -281,9 +290,9 @@ public class RealtimeJobService {
                 return false;
               }
 
-              String from = current.observedState();
+              String from = execution.observedState().name();
               if (!"STOPPING".equals(from)) {
-                stateMachine.requireTransition(from, "STOPPING");
+                executionStateMachine.requireTransition(execution, "STOPPING");
                 store.markStopping(id, deploymentId);
               }
               store.bindDeploymentForStop(
@@ -294,24 +303,25 @@ public class RealtimeJobService {
                   "START_CANCEL_PENDING",
                   from,
                   "STOPPING",
-                  "启动提交已返回，但期间运行意图已变化，立即取消该 Flink 任务");
+                  "启动提交已返回，但期间 Execution 停止意图已生效，立即取消该 Flink 任务");
               return true;
             });
 
     if (Boolean.TRUE.equals(cancelAfterSubmit)) {
       stopBoundJob(id, deploymentId, result.jobId(), "并发停止请求已取消刚提交的 Flink 任务");
     }
-    return store.deploymentView(
-        store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("部署记录不存在")));
+    return store.deploymentView(requireCurrentExecutionRow(id, deploymentId));
   }
 
   private void markStartFailure(long id, long deploymentId, RealtimeEngineException exception) {
     transactions.executeWithoutResult(
         status -> {
-          DefinitionRow current = store.lockDefinition(id);
-          boolean stopRequested = "STOPPED".equals(current.desiredState());
+          store.lockDefinition(id); // mutex
+          DeploymentRow row = requireCurrentExecutionRow(id, deploymentId);
+          SyncExecution execution = row.execution();
+          boolean stopRequested = execution.desiredState().name().equals("STOPPED");
           String target = exception.uncertain() ? "UNKNOWN" : "FAILED";
-          stateMachine.requireTransition(current.observedState(), target);
+          executionStateMachine.requireTransition(execution, target);
           store.markDeployFailure(
               id,
               deploymentId,
@@ -322,7 +332,7 @@ public class RealtimeJobService {
               id,
               deploymentId,
               exception.uncertain() ? "START_UNCERTAIN" : "START_FAILED",
-              current.observedState(),
+              execution.observedState().name(),
               target,
               exception.getMessage());
         });
@@ -342,28 +352,29 @@ public class RealtimeJobService {
     StopReservation reservation =
         transactions.execute(
             status -> {
-              DefinitionRow current = store.lockDefinition(id);
+              store.lockDefinition(id); // mutex
               DeploymentRow deployment = store.latestDeployment(id).orElse(null);
-
-              if ("STOPPED".equals(current.desiredState())
-                  && ("STOPPED".equals(current.observedState())
-                      || "FAILED".equals(current.observedState()))) {
+              if (deployment == null) {
+                return new StopReservation(null, true, false);
+              }
+              SyncExecution execution = deployment.execution();
+              if (execution.terminal()) {
                 return new StopReservation(deployment, true, false);
               }
-              if ("STOPPED".equals(current.desiredState())
-                  && "STOPPING".equals(current.observedState())) {
+              if (execution.desiredState().name().equals("STOPPED")
+                  && execution.observedState().name().equals("STOPPING")) {
                 return new StopReservation(deployment, false, true);
               }
 
-              stateMachine.requireTransition(current.observedState(), "STOPPING");
-              store.markStopping(id, deployment == null ? null : deployment.id());
+              executionStateMachine.requireTransition(execution, "STOPPING");
+              store.markStopping(id, deployment.id());
               store.event(
                   id,
-                  deployment == null ? null : deployment.id(),
+                  deployment.id(),
                   "STOP_REQUESTED",
-                  current.observedState(),
+                  execution.observedState().name(),
                   "STOPPING",
-                  "已请求 Flink 停止当前任务");
+                  "已请求停止当前 SyncExecution");
               return new StopReservation(deployment, false, false);
             });
 
@@ -373,9 +384,8 @@ public class RealtimeJobService {
 
     DeploymentRow deployment = reservation.deployment();
     if (deployment == null || !StringUtils.hasText(deployment.engineJobId())) {
-      // STARTING may still be blocked inside the synchronous Flink CDC CLI. Keep STOPPING instead
-      // of pretending the task is stopped. The start owner will bind the returned JobId and cancel
-      // it in completeStart().
+      // STARTING may still be blocked in the synchronous CLI. Keep Execution STOPPING; the start
+      // owner will bind the returned JobId and cancel it in completeStart().
       return;
     }
 
@@ -383,8 +393,7 @@ public class RealtimeJobService {
   }
 
   private void stopBoundJob(long id, long deploymentId, String jobId, String successMessage) {
-    DeploymentRow deployment =
-        store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("部署记录不存在"));
+    DeploymentRow deployment = requireCurrentExecutionRow(id, deploymentId);
     ComputeEnvironmentSnapshot runtimeEnvironment = deploymentRuntime(id, deployment);
     try {
       RuntimeStatus runtime = gateway.status(runtimeEnvironment, jobId);
@@ -396,23 +405,25 @@ public class RealtimeJobService {
       }
       markStopped(id, deploymentId, jobId, successMessage);
     } catch (RealtimeEngineException exception) {
-      markStopUncertain(id, deployment, deploymentId, jobId, exception.getMessage());
+      markStopUncertain(id, deploymentId, jobId, exception.getMessage());
       throw exception;
     }
   }
 
   private void markStopUncertain(
-      long id, DeploymentRow deployment, long deploymentId, String jobId, String message) {
+      long id, long deploymentId, String jobId, String message) {
     transactions.executeWithoutResult(
         status -> {
-          DefinitionRow current = store.lockDefinition(id);
-          stateMachine.requireTransition(current.observedState(), "UNKNOWN");
+          store.lockDefinition(id);
+          DeploymentRow row = requireCurrentExecutionRow(id, deploymentId);
+          SyncExecution execution = row.execution();
+          executionStateMachine.requireTransition(execution, "UNKNOWN");
           store.reconcile(id, deploymentId, "UNKNOWN", "UNKNOWN", jobId, message);
           store.event(
               id,
-              deployment == null ? deploymentId : deployment.id(),
+              deploymentId,
               "STOP_UNCERTAIN",
-              current.observedState(),
+              execution.observedState().name(),
               "UNKNOWN",
               message);
         });
@@ -430,12 +441,9 @@ public class RealtimeJobService {
 
       PublishedDefinitionRow restartPublished = requirePublishedDefinition(id);
       stopLocked(id);
-      DefinitionRow current =
-          store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
-      if (!"STOPPED".equals(current.desiredState())
-          || !("STOPPED".equals(current.observedState())
-              || "FAILED".equals(current.observedState()))) {
-        throw new IllegalStateException("任务仍在停止中，请稍后使用相同 Idempotency-Key 重试重启");
+      SyncExecution settled = store.latestExecution(id).orElse(null);
+      if (settled != null && settled.activeOrUncertain()) {
+        throw new IllegalStateException("Execution 仍在停止中，请稍后使用相同 Idempotency-Key 重试重启");
       }
       return startLocked(id, key, restartPublished.id());
     } finally {
@@ -446,8 +454,8 @@ public class RealtimeJobService {
   public void delete(long id) {
     transactions.executeWithoutResult(
         status -> {
-          DefinitionRow locked = store.lockDefinition(id);
-          stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
+          store.lockDefinition(id);
+          requireDefinitionMutable(id);
           store.delete(id);
         });
   }
@@ -534,6 +542,20 @@ public class RealtimeJobService {
     }
   }
 
+  private void requireDefinitionMutable(long id) {
+    executionStateMachine.requireDefinitionMutable(store.latestExecution(id).orElse(null));
+  }
+
+  private DeploymentRow requireCurrentExecutionRow(long taskId, long executionId) {
+    DeploymentRow latest =
+        store.latestDeployment(taskId)
+            .orElseThrow(() -> new IllegalStateException("SyncExecution 不存在：" + executionId));
+    if (latest.id() != executionId) {
+      throw new IllegalStateException("当前 SyncExecution 已变化，请刷新后重试");
+    }
+    return latest;
+  }
+
   private void waitForRuntimeStop(ComputeEnvironmentSnapshot runtimeEnvironment, String jobId) {
     for (int attempt = 0; attempt < 20; attempt++) {
       RuntimeStatus status = gateway.status(runtimeEnvironment, jobId);
@@ -557,18 +579,20 @@ public class RealtimeJobService {
   private void markStopped(long definitionId, long deploymentId, String jobId, String message) {
     transactions.executeWithoutResult(
         status -> {
-          DefinitionRow current = store.lockDefinition(definitionId);
-          if ("STOPPED".equals(current.desiredState())
-              && "STOPPED".equals(current.observedState())) {
+          store.lockDefinition(definitionId);
+          DeploymentRow row = requireCurrentExecutionRow(definitionId, deploymentId);
+          SyncExecution execution = row.execution();
+          if (execution.desiredState().name().equals("STOPPED")
+              && execution.observedState().name().equals("STOPPED")) {
             return;
           }
-          stateMachine.requireTransition(current.observedState(), "STOPPED");
+          executionStateMachine.requireTransition(execution, "STOPPED");
           store.reconcile(definitionId, deploymentId, "STOPPED", "STOPPED", jobId, null);
           store.event(
               definitionId,
               deploymentId,
               "STOPPED",
-              current.observedState(),
+              execution.observedState().name(),
               "STOPPED",
               message);
         });
@@ -613,7 +637,7 @@ public class RealtimeJobService {
 
   private ComputeEnvironmentSnapshot deploymentRuntime(long id, DeploymentRow deployment) {
     if (deployment == null) {
-      throw new IllegalStateException("任务尚无部署记录");
+      throw new IllegalStateException("任务尚无 Execution 记录");
     }
     DefinitionRow definition =
         store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
