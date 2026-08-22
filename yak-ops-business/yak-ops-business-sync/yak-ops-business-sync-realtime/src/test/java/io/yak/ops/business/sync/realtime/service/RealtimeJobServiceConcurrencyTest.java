@@ -20,6 +20,9 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec.SchemaEvolution;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec.SinkTuning;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec.TableRoute;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler.CompiledPipeline;
@@ -52,9 +55,11 @@ class RealtimeJobServiceConcurrencyTest {
   private RealtimeConnectorCapabilityResolver capabilityResolver;
   private PipelineYamlCompiler compiler;
   private RealtimeEngineGateway gateway;
+  private RealtimeRuntimeResolver runtimeResolver;
   private RealtimeJobService service;
   private CdcPipelineSpec spec;
   private DefinitionRow stopped;
+  private ComputeEnvironmentSnapshot environment;
 
   @BeforeEach
   void setUp() {
@@ -64,14 +69,29 @@ class RealtimeJobServiceConcurrencyTest {
     capabilityResolver = mock(RealtimeConnectorCapabilityResolver.class);
     compiler = mock(PipelineYamlCompiler.class);
     gateway = mock(RealtimeEngineGateway.class);
+    runtimeResolver = mock(RealtimeRuntimeResolver.class);
     RealtimeLogRedactor logRedactor = mock(RealtimeLogRedactor.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenAnswer(ignored -> new SimpleTransactionStatus());
 
     ObjectMapper json = new ObjectMapper();
-    ObjectNode capabilities = json.createObjectNode().put("runtimeVersion", "3.6.0");
-    when(gateway.capabilities()).thenReturn(capabilities);
-    when(gateway.validate(any())).thenReturn(new ValidationResult(true, "exactly-once"));
+    ObjectNode capabilities = json.createObjectNode().put("runtimeVersion", "flink-cdc-cli-3.6.0");
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L,
+            "test-env",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://127.0.0.1:8081", "/opt/flink", "/opt/flink-cdc", null, "1.20.5", "3.6.0"),
+            2);
+    when(runtimeResolver.definition(any(), eq(true))).thenReturn(environment);
+    when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
+    when(runtimeResolver.environment(anyLong(), eq(true))).thenReturn(environment);
+    when(runtimeResolver.defaultEnvironmentId()).thenReturn(environment.id());
+    when(gateway.capabilities(environment)).thenReturn(capabilities);
+    when(gateway.validate(eq(environment), any())).thenReturn(new ValidationResult(true, "exactly-once"));
     when(compiler.compile(any(), any(), any())).thenReturn(new CompiledPipeline("pipeline: test", "test"));
 
     spec =
@@ -87,6 +107,7 @@ class RealtimeJobServiceConcurrencyTest {
             new SinkTuning(0, 100, 1000, 1024, 16, true));
     stopped = definition("STOPPED", "STOPPED");
     when(store.spec(any())).thenReturn(spec);
+    when(store.runtimeEnvironmentId(JOB_ID)).thenReturn(environment.id());
 
     service =
         new RealtimeJobService(
@@ -99,6 +120,7 @@ class RealtimeJobServiceConcurrencyTest {
             compiler,
             gateway,
             logRedactor,
+            runtimeResolver,
             new RealtimeSyncProperties(),
             transactionManager);
   }
@@ -113,8 +135,8 @@ class RealtimeJobServiceConcurrencyTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("请勿重复启动");
 
-    verify(store, never()).insertDeployment(any(), any(), any(), any(), any());
-    verify(gateway, never()).deploy(any());
+    verify(store, never()).insertDeployment(any(), any(), any(), any(), any(), any());
+    verify(gateway, never()).deploy(any(), any());
   }
 
   @Test
@@ -125,7 +147,7 @@ class RealtimeJobServiceConcurrencyTest {
     when(store.deploymentByIdempotencyKey("restart-safe")).thenReturn(Optional.empty());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
     when(store.lockDefinition(JOB_ID)).thenReturn(stopped, stopping, stopping);
-    when(store.insertDeployment(any(), any(), any(), any(), eq("restart-safe")))
+    when(store.insertDeployment(any(), any(), any(), any(), eq(environment), eq("restart-safe")))
         .thenReturn(DEPLOYMENT_ID);
     when(dataSourceResolver.resolveCredentials(spec))
         .thenReturn(
@@ -133,8 +155,9 @@ class RealtimeJobServiceConcurrencyTest {
               new CredentialBinding("source", "secret"),
               new CredentialBinding("sink", "secret")
             });
-    when(gateway.deploy(any())).thenReturn(new DeployResult("job-123", "exactly-once"));
-    when(gateway.status("job-123"))
+    when(gateway.deploy(eq(environment), any()))
+        .thenReturn(new DeployResult("job-123", "exactly-once"));
+    when(gateway.status(environment, "job-123"))
         .thenReturn(
             new RuntimeStatus("job-123", RuntimeStatus.State.RUNNING),
             new RuntimeStatus("job-123", RuntimeStatus.State.TERMINATED));
@@ -143,8 +166,10 @@ class RealtimeJobServiceConcurrencyTest {
     assertThatCode(() -> service.start(JOB_ID, "restart-safe")).doesNotThrowAnyException();
 
     verify(store, never()).markDeploymentRunning(anyLong(), anyLong(), any(), any());
-    verify(store).bindDeploymentForStop(DEPLOYMENT_ID, "job-123", "3.6.0");
-    verify(gateway).stop("job-123");
+    verify(store)
+        .bindDeploymentForStop(
+            DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
+    verify(gateway).stop(environment, "job-123");
     verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
   }
 
@@ -175,7 +200,7 @@ class RealtimeJobServiceConcurrencyTest {
         "digest",
         "restart-safe",
         engineJobId,
-        "3.6.0",
+        "flink-cdc-cli-3.6.0@env-3-v2",
         status,
         false,
         null,
