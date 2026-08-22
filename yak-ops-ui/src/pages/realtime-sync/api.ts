@@ -7,6 +7,8 @@ import type {
   RealtimeEvent,
   RealtimeJob,
   RealtimeJobPage,
+  RealtimeObservability,
+  RealtimeRuntimeLog,
   ReleaseState,
   RuntimeCapabilities,
 } from './types';
@@ -44,7 +46,17 @@ export const realtimeApi = {
     }),
   remove: (id: number) => request<ApiResponse<boolean>>(`${PREFIX}/${id}`, { method: 'DELETE' }),
   events: (id: number) => request<ApiResponse<RealtimeEvent[]>>(`${PREFIX}/${id}/events`),
-  logs: (id: number) => request<ApiResponse<{ logs: string }>>(`${PREFIX}/${id}/logs`, { params: { tail: 500 } }),
+  observability: (id: number) =>
+    request<ApiResponse<RealtimeObservability>>(`${PREFIX}/${id}/observability`),
+  submissionLog: (id: number, tail = 500) =>
+    request<ApiResponse<{ logs: string }>>(`${PREFIX}/${id}/logs/submission`, { params: { tail } }),
+  runtimeLog: (id: number, maxExceptions = 50) =>
+    request<ApiResponse<RealtimeRuntimeLog>>(`${PREFIX}/${id}/logs/runtime`, {
+      params: { maxExceptions },
+    }),
+  // Compatibility calls retained for older screens/integrations.
+  logs: (id: number) =>
+    request<ApiResponse<{ logs: string }>>(`${PREFIX}/${id}/logs`, { params: { tail: 500 } }),
   checkpoints: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/checkpoints`),
   metrics: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/metrics`),
   capabilities: () => request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`),
