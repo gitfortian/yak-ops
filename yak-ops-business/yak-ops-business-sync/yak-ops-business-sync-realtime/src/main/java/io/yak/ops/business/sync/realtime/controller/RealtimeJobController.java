@@ -12,6 +12,7 @@ import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.service.RealtimeEventStreamService;
+import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -38,14 +39,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class RealtimeJobController {
 
   private final RealtimeJobService service;
+  private final RealtimeJobLifecycleCoordinator lifecycleCoordinator;
   private final RealtimeJobListQuery listQuery;
   private final RealtimeEventStreamService eventStream;
 
   public RealtimeJobController(
       RealtimeJobService service,
+      RealtimeJobLifecycleCoordinator lifecycleCoordinator,
       RealtimeJobListQuery listQuery,
       RealtimeEventStreamService eventStream) {
     this.service = service;
+    this.lifecycleCoordinator = lifecycleCoordinator;
     this.listQuery = listQuery;
     this.eventStream = eventStream;
   }
@@ -149,13 +153,14 @@ public class RealtimeJobController {
   @PostMapping("/{id}/reconcile")
   @RequiresPermission(RealtimePermissionCode.EXECUTE)
   public Result<RealtimeJobView> reconcile(@PathVariable long id) {
-    return Result.success(service.reconcile(id));
+    return Result.success(lifecycleCoordinator.reconcile(id));
   }
 
   @Operation(summary = "删除已停止的实时同步任务")
   @DeleteMapping("/{id}")
   @RequiresPermission(RealtimePermissionCode.DELETE)
   public Result<Boolean> delete(@PathVariable long id) {
+    lifecycleCoordinator.assertSafeToDelete(id);
     service.delete(id);
     return Result.success(true);
   }
