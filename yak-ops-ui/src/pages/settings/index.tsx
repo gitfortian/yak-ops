@@ -1,16 +1,18 @@
-import { Bell, Braces, LayoutTemplate, SlidersHorizontal } from 'lucide-react';
+import { Bell, Braces, Cpu, LayoutTemplate, SlidersHorizontal } from 'lucide-react';
 import { history, useLocation } from '@umijs/max';
 
 import AlertSettingsPanel from './components/AlertSettingsPanel';
+import ComputeEngineSettingsPanel from './components/ComputeEngineSettingsPanel';
 import EditorSettingsPanel from './components/EditorSettingsPanel';
 import EnvironmentSettingsPanel from './components/EnvironmentSettingsPanel';
 import ScreenTemplateSettingsPanel from './components/ScreenTemplateSettingsPanel';
 
-type SettingsTab = 'editor' | 'environment' | 'screen-template' | 'alert';
+type SettingsTab = 'editor' | 'environment' | 'compute' | 'screen-template' | 'alert';
 
 const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { key: 'editor', label: '编辑器设置', icon: <SlidersHorizontal size={15} strokeWidth={1.8} /> },
   { key: 'environment', label: '环境变量', icon: <Braces size={15} strokeWidth={1.8} /> },
+  { key: 'compute', label: '计算引擎', icon: <Cpu size={15} strokeWidth={1.8} /> },
   { key: 'screen-template', label: '大屏模板', icon: <LayoutTemplate size={15} strokeWidth={1.8} /> },
   { key: 'alert', label: '告警设置', icon: <Bell size={15} strokeWidth={1.8} /> },
 ];
@@ -54,12 +56,19 @@ const SettingsPage = () => {
       </aside>
 
       <section className="min-w-0 flex-1 overflow-auto">
-        <div className={[
-          'mx-auto w-full px-10 py-8 xl:px-14',
-          activeTab === 'screen-template' ? 'max-w-[1220px]' : 'max-w-[920px]',
-        ].join(' ')}>
+        <div
+          className={[
+            'mx-auto w-full px-10 py-8 xl:px-14',
+            activeTab === 'screen-template'
+              ? 'max-w-[1220px]'
+              : activeTab === 'compute'
+                ? 'max-w-[1080px]'
+                : 'max-w-[920px]',
+          ].join(' ')}
+        >
           {activeTab === 'editor' && <EditorSettingsPanel />}
           {activeTab === 'environment' && <EnvironmentSettingsPanel />}
+          {activeTab === 'compute' && <ComputeEngineSettingsPanel />}
           {activeTab === 'screen-template' && <ScreenTemplateSettingsPanel />}
           {activeTab === 'alert' && <AlertSettingsPanel />}
         </div>
