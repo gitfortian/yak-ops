@@ -12,6 +12,7 @@ import {
 import {
   Alert,
   Button,
+  Drawer,
   Empty,
   Form,
   Input,
@@ -326,19 +327,10 @@ const ComputeEngineSettingsPanel = () => {
   return (
     <div className="text-[13px] text-[#344054]">
       <div className="mb-6 flex items-start justify-between gap-6">
-        <div>
-          <div className="text-[18px] font-semibold text-[#161823]">计算引擎</div>
-          <div className="mt-1.5 max-w-[700px] text-[12px] leading-5 text-[#667085]">
-            集中管理实时同步使用的运行环境。配置完成后可以一键检测 SSH、Flink REST、CLI、Java 和工作目录，并自动识别运行版本。
-          </div>
-        </div>
+        <div className="text-[18px] font-semibold text-[#161823]">计算引擎</div>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           新建运行环境
         </Button>
-      </div>
-
-      <div className="mb-5 rounded-lg border border-[#e4e7ec] bg-[#f9fafb] px-4 py-3 text-[12px] leading-5 text-[#667085]">
-        任务只需要选择运行环境。检测只做连通性和只读运行检查，不会提交 Flink Job；修改环境配置后，历史检测状态会自动失效，建议重新检测。
       </div>
 
       {loading ? (
@@ -533,22 +525,36 @@ const ComputeEngineSettingsPanel = () => {
         </div>
       )}
 
-      <Modal
+      <Drawer
         title={editing ? '编辑运行环境' : '新建运行环境'}
+        placement="right"
         open={modalOpen}
         width={760}
-        okText="保存"
-        cancelText="取消"
-        confirmLoading={saving}
-        onOk={() => void save()}
-        onCancel={() => !saving && !previewDiagnosing && setModalOpen(false)}
+        onClose={() => !saving && !previewDiagnosing && setModalOpen(false)}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              disabled={saving || previewDiagnosing}
+              onClick={() => setModalOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={saving}
+              disabled={previewDiagnosing}
+              onClick={() => void save()}
+            >
+              保存
+            </Button>
+          </div>
+        }
       >
         <Form<FormValues>
           form={form}
           layout="vertical"
           variant="filled"
           initialValues={DEFAULT_FORM_VALUES}
-          className="mt-5"
         >
           <div className="rounded-lg border border-[#eaecf0] px-4 py-4">
             <div className="mb-4 text-[13px] font-semibold text-[#1d2939]">基础信息</div>
@@ -594,7 +600,7 @@ const ComputeEngineSettingsPanel = () => {
                 <div className="mt-1 font-medium text-[#344054]">Remote Cluster</div>
               </div>
             </div>
-            <Form.Item name="submitterType" label="任务提交方式" className="!mb-3">
+            <Form.Item name="submitterType" label="任务提交方式" className="!mb-0">
               <Radio.Group
                 optionType="button"
                 buttonStyle="solid"
@@ -604,21 +610,11 @@ const ComputeEngineSettingsPanel = () => {
                 ]}
               />
             </Form.Item>
-            <div className="rounded-lg bg-[#f9fafb] px-3 py-2.5 text-[11px] leading-5 text-[#667085]">
-              {submitterType === 'SSH'
-                ? 'Yak Ops 使用本机 OpenSSH 客户端连接远端提交节点，在远端执行 flink-cdc.sh；任务状态、停止和指标仍通过 Flink REST 管理。'
-                : 'Yak Ops 直接在当前服务器执行 flink-cdc.sh，适合 Yak Ops 与 Flink CDC Client 部署在同一台机器的场景。'}
-            </div>
           </div>
 
           <div className="mt-4 rounded-lg border border-[#eaecf0] px-4 py-4">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[13px] font-semibold text-[#1d2939]">Flink 集群</div>
-                <div className="mt-1 text-[11px] text-[#98a2b3]">
-                  可先填写连接和路径，再点击检测自动识别 Flink / CDC 版本。
-                </div>
-              </div>
+              <div className="text-[13px] font-semibold text-[#1d2939]">Flink 集群</div>
               <Button
                 size="small"
                 icon={<ReloadOutlined />}
@@ -655,10 +651,7 @@ const ComputeEngineSettingsPanel = () => {
 
           {submitterType === 'SSH' && (
             <div className="mt-4 rounded-lg border border-[#eaecf0] px-4 py-4">
-              <div className="mb-1 text-[13px] font-semibold text-[#1d2939]">SSH 提交节点</div>
-              <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
-                当前只支持 OpenSSH 免密认证，不保存 SSH 密码或私钥内容。私钥文件字段只保存 Yak Ops 服务器上的文件路径；留空时使用系统 SSH 配置或 ssh-agent。
-              </div>
+              <div className="mb-4 text-[13px] font-semibold text-[#1d2939]">SSH 提交节点</div>
               <div className="grid gap-4 sm:grid-cols-[1fr_120px]">
                 <Form.Item
                   name="sshHost"
@@ -688,7 +681,7 @@ const ComputeEngineSettingsPanel = () => {
                 </Form.Item>
               </div>
               <Form.Item name="sshIdentityFile" label="私钥文件路径（可选）">
-                <Input placeholder="C:\\Users\\yak\\.ssh\\id_ed25519 或 /home/yak/.ssh/id_ed25519" />
+                <Input placeholder="C:/Users/yak/.ssh/id_ed25519 或 /home/yak/.ssh/id_ed25519" />
               </Form.Item>
               <Form.Item name="sshKnownHostsFile" label="known_hosts 文件（可选）">
                 <Input placeholder="留空使用 OpenSSH 默认 known_hosts" />
@@ -712,9 +705,8 @@ const ComputeEngineSettingsPanel = () => {
               </div>
 
               <div className="mt-5 border-t border-[#f2f4f7] pt-4">
-                <div className="text-[12px] font-medium text-[#344054]">远端访问 Flink（可选）</div>
-                <div className="mb-3 mt-1 text-[11px] leading-5 text-[#98a2b3]">
-                  只有 SSH 提交节点访问 JobManager 的地址与上面的 REST URL 不同时才需要填写，例如 Yak Ops 访问 10.0.0.20，但远端提交机需要使用 flink-jm.internal。
+                <div className="mb-3 text-[12px] font-medium text-[#344054]">
+                  远端访问 Flink（可选）
                 </div>
                 <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
                   <Form.Item name="sshRemoteRestAddress" label="远端 REST 地址" className="!mb-0">
@@ -729,13 +721,8 @@ const ComputeEngineSettingsPanel = () => {
           )}
 
           <div className="mt-4 rounded-lg border border-[#eaecf0] px-4 py-4">
-            <div className="mb-1 text-[13px] font-semibold text-[#1d2939]">
+            <div className="mb-4 text-[13px] font-semibold text-[#1d2939]">
               {submitterType === 'SSH' ? '远端运行路径' : '本机运行路径'}
-            </div>
-            <div className="mb-4 text-[11px] leading-5 text-[#98a2b3]">
-              {submitterType === 'SSH'
-                ? '以下路径填写 SSH 服务器上的 Linux 路径。环境检测会检查 CLI、Java 和远端临时目录。'
-                : '以下路径填写 Yak Ops 所在服务器上的运行路径。环境检测会检查 CLI、Java 和 Yak Ops 工作目录。'}
             </div>
             <Form.Item
               name="flinkHome"
@@ -756,7 +743,7 @@ const ComputeEngineSettingsPanel = () => {
             </Form.Item>
           </div>
         </Form>
-      </Modal>
+      </Drawer>
 
       <Modal
         title="运行环境检测"
