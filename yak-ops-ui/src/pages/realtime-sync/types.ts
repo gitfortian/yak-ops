@@ -89,6 +89,71 @@ export interface RealtimeJobChange {
   message?: string;
 }
 
+export interface RealtimeCheckpointDetail {
+  id?: number;
+  triggerTimestamp?: number;
+  latestAckTimestamp?: number;
+  durationMs?: number;
+  stateSizeBytes?: number;
+  checkpointedSizeBytes?: number;
+  acknowledgedSubtasks?: number;
+  totalSubtasks?: number;
+  failureMessage?: string;
+}
+
+export interface RealtimeCheckpointSummary {
+  total: number;
+  completed: number;
+  failed: number;
+  inProgress: number;
+  restored: number;
+  latestCompleted?: RealtimeCheckpointDetail;
+  latestFailed?: RealtimeCheckpointDetail;
+}
+
+export interface RealtimeMetricSummary {
+  recordsRead?: number;
+  recordsReadPerSecond?: number;
+  recordsWritten?: number;
+  recordsWrittenPerSecond?: number;
+  bytesRead?: number;
+  bytesReadPerSecond?: number;
+  bytesWritten?: number;
+  bytesWrittenPerSecond?: number;
+  maxBusyMsPerSecond?: number;
+  maxBackpressuredMsPerSecond?: number;
+  maxIdleMsPerSecond?: number;
+  vertexCount: number;
+}
+
+export interface RealtimeObservability {
+  engineJobId: string;
+  flinkJobName?: string;
+  flinkState?: string;
+  startTime?: number;
+  durationMs?: number;
+  flinkWebUrl?: string;
+  sampledAt: number;
+  checkpoints: RealtimeCheckpointSummary;
+  metrics: RealtimeMetricSummary;
+}
+
+export interface RealtimeRuntimeException {
+  exceptionName?: string;
+  stacktrace?: string;
+  timestamp?: number;
+  taskName?: string;
+  taskManagerId?: string;
+  endpoint?: string;
+}
+
+export interface RealtimeRuntimeLog {
+  rootException?: string;
+  timestamp?: number;
+  truncated: boolean;
+  exceptions: RealtimeRuntimeException[];
+}
+
 export interface DataSourceOption {
   label: string;
   value: string;

@@ -12,12 +12,8 @@ import {
   Modal,
   Popover,
   Select,
-  Space,
   Table,
-  Tabs,
-  Timeline,
   Tooltip,
-  Typography,
 } from 'antd';
 import { CopyOutlined, FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
@@ -27,6 +23,7 @@ import CustomPagination from '../batch-link-up/CustomPagination';
 import { realtimeApi } from './api';
 import JobEditor from './JobEditor';
 import CreateRealtimeTaskDrawer from './CreateRealtimeTaskDrawer';
+import RealtimeRuntimeDetail from './RealtimeRuntimeDetail';
 import type {
   DataSourceOption,
   RealtimeEvent,
@@ -122,9 +119,6 @@ export default function RealtimeSync() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<RealtimeJob>();
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
-  const [logs, setLogs] = useState('');
-  const [checkpointData, setCheckpointData] = useState<unknown>();
-  const [metricsData, setMetricsData] = useState<unknown>();
   const [streamConnected, setStreamConnected] = useState(false);
 
   const dataSourceMap = useMemo(
@@ -267,9 +261,6 @@ export default function RealtimeSync() {
       ]);
       setDetail(jobResult.data);
       setEvents(eventResult.data || []);
-      setLogs('');
-      setCheckpointData(undefined);
-      setMetricsData(undefined);
     } catch (error: any) {
       message.error(error?.message || '加载运行详情失败');
     }
@@ -845,126 +836,13 @@ export default function RealtimeSync() {
         <CreateRealtimeTaskDrawer open={createOpen} onClose={() => setCreateOpen(false)} />
 
         <Drawer
-          width={820}
+          width={960}
           title={detail?.name}
           open={Boolean(detail)}
           onClose={() => setDetail(undefined)}
         >
           {detail && (
-            <Tabs
-              items={[
-                {
-                  key: 'overview',
-                  label: '运行概览',
-                  children: (
-                    <Descriptions column={1} bordered size="small">
-                      <Descriptions.Item label="定义版本">
-                        v{detail.definitionVersion} / 已发布 v{detail.publishedVersion || '-'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="状态">
-                        {detail.releaseState} · {detail.desiredState} · {detail.observedState}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="部署摘要">
-                        {detail.latestDeployment?.specSummary || '-'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Engine Job ID">
-                        {detail.latestDeployment?.engineJobId || '-'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Flink CDC Revision">
-                        {detail.latestDeployment?.runtimeRevision || '-'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="最近错误">{detail.lastError || '-'}</Descriptions.Item>
-                    </Descriptions>
-                  ),
-                },
-                {
-                  key: 'events',
-                  label: '状态事件',
-                  children: (
-                    <Timeline
-                      items={events.map((event) => ({
-                        color:
-                          event.toState === 'FAILED' || event.toState === 'CONFLICT'
-                            ? 'red'
-                            : 'blue',
-                        children: (
-                          <div>
-                            <Typography.Text strong>{event.eventType}</Typography.Text>{' '}
-                            <Typography.Text type="secondary">{event.createTime}</Typography.Text>
-                            <div>
-                              {event.fromState || '-'} → {event.toState || '-'} · {event.message}
-                            </div>
-                          </div>
-                        ),
-                      }))}
-                    />
-                  ),
-                },
-                {
-                  key: 'logs',
-                  label: '任务日志',
-                  children: (
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            setLogs((await realtimeApi.logs(detail.id)).data.logs);
-                          } catch (error: any) {
-                            message.error(error?.message || '日志不可用');
-                          }
-                        }}
-                      >
-                        读取最近日志
-                      </Button>
-                      <pre
-                        style={{
-                          whiteSpace: 'pre-wrap',
-                          maxHeight: 520,
-                          overflow: 'auto',
-                          background: '#111',
-                          color: '#ddd',
-                          padding: 12,
-                        }}
-                      >
-                        {logs || '尚未读取'}
-                      </pre>
-                    </Space>
-                  ),
-                },
-                {
-                  key: 'observability',
-                  label: 'Checkpoint / Metrics',
-                  children: (
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            const [checkpoints, metrics] = await Promise.all([
-                              realtimeApi.checkpoints(detail.id),
-                              realtimeApi.metrics(detail.id),
-                            ]);
-                            setCheckpointData(checkpoints.data);
-                            setMetricsData(metrics.data);
-                          } catch (error: any) {
-                            message.error(error?.message || 'Checkpoint / Metrics 不可用');
-                          }
-                        }}
-                      >
-                        刷新 Flink 观测数据
-                      </Button>
-                      <Typography.Text strong>Checkpoints</Typography.Text>
-                      <pre className="max-h-[300px] overflow-auto rounded bg-[#f8f9fb] p-3 text-[12px]">
-                        {checkpointData ? JSON.stringify(checkpointData, null, 2) : '尚未读取'}
-                      </pre>
-                      <Typography.Text strong>Job Metrics</Typography.Text>
-                      <pre className="max-h-[300px] overflow-auto rounded bg-[#f8f9fb] p-3 text-[12px]">
-                        {metricsData ? JSON.stringify(metricsData, null, 2) : '尚未读取'}
-                      </pre>
-                    </Space>
-                  ),
-                },
-              ]}
-            />
+            <RealtimeRuntimeDetail job={detail} events={events} capabilities={capabilities} />
           )}
         </Drawer>
       </div>

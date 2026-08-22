@@ -9,11 +9,13 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
+import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.service.RealtimeEventStreamService;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
+import io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -40,16 +42,19 @@ public class RealtimeJobController {
 
   private final RealtimeJobService service;
   private final RealtimeJobLifecycleCoordinator lifecycleCoordinator;
+  private final RealtimeObservabilityService observabilityService;
   private final RealtimeJobListQuery listQuery;
   private final RealtimeEventStreamService eventStream;
 
   public RealtimeJobController(
       RealtimeJobService service,
       RealtimeJobLifecycleCoordinator lifecycleCoordinator,
+      RealtimeObservabilityService observabilityService,
       RealtimeJobListQuery listQuery,
       RealtimeEventStreamService eventStream) {
     this.service = service;
     this.lifecycleCoordinator = lifecycleCoordinator;
+    this.observabilityService = observabilityService;
     this.listQuery = listQuery;
     this.eventStream = eventStream;
   }
@@ -177,20 +182,43 @@ public class RealtimeJobController {
     return Result.success(service.capabilities());
   }
 
-  @Operation(summary = "查询当前任务提交日志和 Flink 异常")
+  @Operation(summary = "查询归一化运行概览、Checkpoint 和 Metrics")
+  @GetMapping("/{id}/observability")
+  public Result<RealtimeObservabilityView> observability(@PathVariable long id) {
+    return Result.success(observabilityService.snapshot(id));
+  }
+
+  @Operation(summary = "查询 Flink CDC 提交日志")
+  @GetMapping("/{id}/logs/submission")
+  public Result<Map<String, String>> submissionLog(
+      @PathVariable long id, @RequestParam(defaultValue = "500") int tail) {
+    return Result.success(Map.of("logs", observabilityService.submissionLog(id, tail)));
+  }
+
+  @Operation(summary = "查询 Flink 运行异常历史")
+  @GetMapping("/{id}/logs/runtime")
+  public Result<RealtimeObservabilityView.RuntimeLog> runtimeLog(
+      @PathVariable long id, @RequestParam(defaultValue = "50") int maxExceptions) {
+    return Result.success(observabilityService.runtimeLog(id, maxExceptions));
+  }
+
+  /** Compatibility endpoint retained for existing clients. */
+  @Operation(summary = "查询当前任务提交日志和 Flink 异常（兼容接口）")
   @GetMapping("/{id}/logs")
   public Result<Map<String, String>> logs(
       @PathVariable long id, @RequestParam(defaultValue = "200") int tail) {
     return Result.success(Map.of("logs", service.logs(id, tail)));
   }
 
-  @Operation(summary = "查询当前任务 Checkpoint 统计")
+  /** Compatibility endpoint retained for existing clients. */
+  @Operation(summary = "查询当前任务原始 Checkpoint 统计")
   @GetMapping("/{id}/checkpoints")
   public Result<JsonNode> checkpoints(@PathVariable long id) {
     return Result.success(service.checkpoints(id));
   }
 
-  @Operation(summary = "查询当前任务 Flink 指标")
+  /** Compatibility endpoint retained for existing clients. */
+  @Operation(summary = "查询当前任务原始 Flink 指标")
   @GetMapping("/{id}/metrics")
   public Result<JsonNode> metrics(@PathVariable long id) {
     return Result.success(service.metrics(id));

@@ -89,6 +89,10 @@ class FlinkCdcEngineGatewayTest {
         .contains("Flink job exceptions")
         .doesNotContain("source-secret", "sink-secret");
 
+    Path logs = temp.resolve("work/logs");
+    assertThat(logs.resolve("submit-test-key.log")).exists();
+    assertThat(logs.resolve(JOB_ID + ".submit.log")).exists();
+
     gateway.stop(JOB_ID);
     assertThat(cancelled).isTrue();
     try (var files = Files.list(temp.resolve("work/pipelines"))) {
@@ -104,7 +108,7 @@ class FlinkCdcEngineGatewayTest {
   }
 
   @Test
-  void redactsFailedSubmitOutputAndDeletesPipelineFile() throws Exception {
+  void redactsFailedSubmitOutputRetainsLogAndDeletesPipelineFile() throws Exception {
     Path cli = temp.resolve("flink-cdc/bin/flink-cdc.sh");
     Files.writeString(
         cli,
@@ -129,6 +133,12 @@ class FlinkCdcEngineGatewayTest {
           .hasMessageNotContaining("source-secret")
           .hasMessageNotContaining("sink-secret");
     }
+
+    Path retained = temp.resolve("work/logs/submit-failed-key.log");
+    assertThat(retained).exists();
+    assertThat(Files.readString(retained, StandardCharsets.UTF_8))
+        .contains("password=******")
+        .doesNotContain("source-secret");
     try (var files = Files.list(temp.resolve("work/pipelines"))) {
       assertThat(files).isEmpty();
     }
