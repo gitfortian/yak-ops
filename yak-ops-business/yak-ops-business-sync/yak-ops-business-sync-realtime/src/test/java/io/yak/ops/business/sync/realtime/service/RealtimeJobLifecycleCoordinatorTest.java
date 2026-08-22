@@ -1,10 +1,13 @@
 package io.yak.ops.business.sync.realtime.service;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
 import io.yak.ops.business.sync.realtime.engine.FlinkJobDiscoveryClient;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
@@ -41,6 +44,8 @@ class RealtimeJobLifecycleCoordinatorTest {
     gateway = mock(RealtimeEngineGateway.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    RealtimeSyncProperties properties = new RealtimeSyncProperties();
+    properties.setReconcileFailureThreshold(3);
     coordinator =
         new RealtimeJobLifecycleCoordinator(
             store,
@@ -48,6 +53,7 @@ class RealtimeJobLifecycleCoordinatorTest {
             discovery,
             gateway,
             new RealtimeStateMachine(),
+            properties,
             10,
             transactionManager);
   }
@@ -102,6 +108,44 @@ class RealtimeJobLifecycleCoordinatorTest {
             "STOPPING",
             "STOPPED",
             "恢复窗口内未发现匹配的 Flink runtime job，已确认停止");
+  }
+
+  @Test
+  void keepsRuntimeUnknownInsteadOfPretendingStopped() {
+    DefinitionRow definition = definition("STOPPED", "STOPPING");
+    DeploymentRow deployment = deployment(FLINK_JOB_ID, "STOPPING", LocalDateTime.now());
+    when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
+    when(store.lockDefinition(JOB_ID)).thenReturn(definition);
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
+    when(gateway.status(FLINK_JOB_ID))
+        .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.UNKNOWN));
+
+    coordinator.reconcile(JOB_ID);
+
+    verify(store)
+        .reconcile(
+            JOB_ID,
+            DEPLOYMENT_ID,
+            "UNKNOWN",
+            "UNKNOWN",
+            FLINK_JOB_ID,
+            "Flink 当前运行状态未知");
+    verify(store, never())
+        .reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", FLINK_JOB_ID, null);
+  }
+
+  @Test
+  void refusesDeleteWhenFlinkJobIsStillActive() {
+    DefinitionRow definition = definition("STOPPED", "FAILED");
+    DeploymentRow deployment = deployment(FLINK_JOB_ID, "FAILED", LocalDateTime.now());
+    when(store.definition(JOB_ID)).thenReturn(Optional.of(definition));
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(deployment));
+    when(gateway.status(FLINK_JOB_ID))
+        .thenReturn(new RuntimeStatus(FLINK_JOB_ID, RuntimeStatus.State.RUNNING));
+
+    assertThatThrownBy(() -> coordinator.assertSafeToDelete(JOB_ID))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("仍存在活动任务");
   }
 
   private DefinitionRow definition(String desired, String observed) {
