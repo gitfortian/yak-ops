@@ -13,7 +13,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/** Compatibility persistence contract while Task / Version / Execution are migrated independently. */
+/**
+ * Persistence facade for the migrated realtime model.
+ *
+ * <p>The physical schema still uses legacy "job/definition/deployment" names, but application
+ * lifecycle truth is DefinitionVersion + SyncExecution. Task-row runtime columns are not part of
+ * this contract anymore.
+ */
 public interface RealtimeJobStore {
   long insertDefinition(String name, String description, CdcPipelineSpec spec, String digest, long runtimeEnvironmentId);
   void updateDefinition(long id, String name, String description, CdcPipelineSpec spec, String digest, long runtimeEnvironmentId);
@@ -41,12 +47,11 @@ public interface RealtimeJobStore {
   default Optional<ComputeEnvironmentSnapshot> deploymentEnvironment(long deploymentId) {
     return Optional.empty();
   }
-  long insertDeployment(DefinitionRow definition, CdcPipelineSpec spec, String summary, String digest, ComputeEnvironmentSnapshot environment, String idempotencyKey);
+  long insertDeployment(DefinitionRow definition, CdcPipelineSpec spec, String summary, String artifactDigest, ComputeEnvironmentSnapshot environment, String idempotencyKey);
   default void bindDeploymentDefinitionVersion(
       long deploymentId, long definitionVersionId, int sourceDraftRevision) {
     throw new UnsupportedOperationException("当前 RealtimeJobStore 不支持 DefinitionVersion 绑定");
   }
-  void markStarting(long definitionId);
   void markDeploymentRunning(long definitionId, long deploymentId, String engineJobId, String runtimeRevision);
   void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision);
   void markDeployFailure(long definitionId, long deploymentId, boolean uncertain, boolean stopRequested, String message);
@@ -54,16 +59,11 @@ public interface RealtimeJobStore {
   void reconcile(long definitionId, Long deploymentId, String observedState, String deploymentState, String engineJobId, String error);
   void markTerminalFailure(long definitionId, Long deploymentId, String message);
 
-  /** Active/uncertain executions that require authoritative runtime reconciliation. */
+  /** Latest active/uncertain executions that require authoritative runtime reconciliation. */
   default List<DeploymentRow> reconcileCandidates() {
     return List.of();
   }
 
-  /** Legacy compatibility query. New runtime logic must use reconcileCandidates/latestExecution. */
-  @Deprecated
-  List<DefinitionRow> desiredJobs();
-
-  boolean hasOtherDesiredRunning(long id);
   void delete(long id);
   void event(long definitionId, Long deploymentId, String type, String from, String to, String message);
   boolean tryAcquireReconcileLease(String owner, int leaseSeconds);
@@ -95,6 +95,12 @@ public interface RealtimeJobStore {
     }
   }
 
+  /**
+   * Current RealtimeSyncTask + mutable Draft persistence row.
+   *
+   * <p>desiredState/observedState/lastError remain physical compatibility values only. New
+   * application code MUST use latest SyncExecution instead.
+   */
   record DefinitionRow(
       long id,
       String name,
@@ -112,7 +118,22 @@ public interface RealtimeJobStore {
       LocalDateTime createTime,
       LocalDateTime updateTime) {
 
-    /** Compatibility constructor for callers created before Wave 5 surfaced the immutable ref. */
+    /** Semantic name for the mutable Draft revision. */
+    public int draftRevision() {
+      return definitionVersion;
+    }
+
+    /** Legacy marker only; not DefinitionVersion.versionNo. */
+    public Integer publishedDraftRevision() {
+      return publishedVersion;
+    }
+
+    /** Exact compatibility digest used for optimistic Draft/Publish CAS. */
+    public String sourceConfigDigest() {
+      return configDigest;
+    }
+
+    /** Compatibility constructor retained only for older tests/adapters during contract cleanup. */
     public DefinitionRow(
         long id,
         String name,
@@ -148,8 +169,10 @@ public interface RealtimeJobStore {
   }
 
   /**
-   * Persistence/read compatibility row. From Wave 3 onward desiredState/observedState are the
-   * authoritative lifecycle fields; status remains a legacy submission/read projection.
+   * SyncExecution persistence compatibility row.
+   *
+   * <p>The physical table is still named yak_realtime_job_deployment. desiredState/observedState
+   * are authoritative. status/configDigest are compatibility storage names only.
    */
   record DeploymentRow(
       long id,
@@ -178,6 +201,16 @@ public interface RealtimeJobStore {
       observedState = hasText(observedState) ? observedState.trim() : legacyObservedState(status);
     }
 
+    /** Legacy source DraftRevision evidence; not immutable DefinitionVersionId. */
+    public int sourceDraftRevision() {
+      return definitionVersion;
+    }
+
+    /** Digest of the compiled execution artifact; not DefinitionDigest. */
+    public String artifactDigest() {
+      return configDigest;
+    }
+
     public SyncExecution execution() {
       return new SyncExecution(
           id,
@@ -190,7 +223,7 @@ public interface RealtimeJobStore {
           errorMessage);
     }
 
-    /** Compatibility constructor for Wave-2 callers before execution lifecycle columns existed. */
+    /** Compatibility constructor for persisted rows created before execution lifecycle columns. */
     public DeploymentRow(
         long id,
         long definitionId,
@@ -230,7 +263,7 @@ public interface RealtimeJobStore {
           updateTime);
     }
 
-    /** Compatibility constructor for callers created before Wave 2 added DefinitionVersionId. */
+    /** Compatibility constructor for historical rows without DefinitionVersionId. */
     public DeploymentRow(
         long id,
         long definitionId,

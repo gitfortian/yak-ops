@@ -6,6 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 import lombok.Data;
 
+/**
+ * Physical persistence row for SyncExecution.
+ *
+ * <p>The table keeps its legacy "deployment" name for schema compatibility. desiredState and
+ * observedState are authoritative lifecycle columns. status is only a physical compatibility mirror,
+ * and configDigest stores the ExecutionArtifactDigest.
+ */
 @Data
 @TableName("yak_realtime_job_deployment")
 public class RealtimeJobDeploymentPO {

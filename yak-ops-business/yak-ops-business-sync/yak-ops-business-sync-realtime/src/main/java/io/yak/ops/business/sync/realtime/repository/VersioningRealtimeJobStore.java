@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Compatibility decorator for immutable DefinitionVersion plus the evolving execution store. */
+/** Compatibility decorator for immutable DefinitionVersion plus the migrated execution store. */
 @Primary
 @Repository
 public class VersioningRealtimeJobStore implements RealtimeJobStore {
@@ -46,8 +46,8 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public void publish(long id, int expectedDefinitionVersion, String expectedDigest) {
     DefinitionRow current = delegate.lockDefinition(id);
-    if (current.definitionVersion() != expectedDefinitionVersion
-        || !Objects.equals(current.configDigest(), expectedDigest)) {
+    if (current.draftRevision() != expectedDefinitionVersion
+        || !Objects.equals(current.sourceConfigDigest(), expectedDigest)) {
       throw new IllegalStateException("任务状态或定义版本已变化，请刷新后重新校验并发布");
     }
     if (current.spec() == null) {
@@ -71,7 +71,7 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
               definition, new RuntimeEnvironmentRef(current.runtimeEnvironmentId()));
       return new PublicationCandidate(
           current.id(),
-          current.definitionVersion(),
+          current.draftRevision(),
           current.runtimeEnvironmentId(),
           current.spec(),
           sourceConfigDigest,
@@ -81,7 +81,7 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
     } catch (UnsupportedLegacyDefinitionException exception) {
       return new PublicationCandidate(
           current.id(),
-          current.definitionVersion(),
+          current.draftRevision(),
           current.runtimeEnvironmentId(),
           current.spec(),
           sourceConfigDigest,
@@ -179,11 +179,11 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
       DefinitionRow definition,
       CdcPipelineSpec spec,
       String summary,
-      String digest,
+      String artifactDigest,
       ComputeEnvironmentSnapshot environment,
       String idempotencyKey) {
     return delegate.insertDeployment(
-        definition, spec, summary, digest, environment, idempotencyKey);
+        definition, spec, summary, artifactDigest, environment, idempotencyKey);
   }
 
   @Override
@@ -191,11 +191,6 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
       long deploymentId, long definitionVersionId, int sourceDraftRevision) {
     delegate.bindDeploymentDefinitionVersion(
         deploymentId, definitionVersionId, sourceDraftRevision);
-  }
-
-  @Override
-  public void markStarting(long definitionId) {
-    delegate.markStarting(definitionId);
   }
 
   @Override
@@ -250,17 +245,6 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
   @Override
   public List<DeploymentRow> reconcileCandidates() {
     return delegate.reconcileCandidates();
-  }
-
-  @Override
-  @Deprecated
-  public List<DefinitionRow> desiredJobs() {
-    return delegate.desiredJobs();
-  }
-
-  @Override
-  public boolean hasOtherDesiredRunning(long id) {
-    return delegate.hasOtherDesiredRunning(id);
   }
 
   @Override

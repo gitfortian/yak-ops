@@ -2,9 +2,9 @@
 
 > Scope: `yak-ops-business-sync-realtime` and any change that creates, publishes, executes, observes, serializes, or persists realtime sync tasks.
 >
-> This file is the **module-level mandatory domain contract**. Before changing realtime sync code, read this file and the detailed design under `docs/realtime-sync/domain/`.
+> This file is the **module-level mandatory domain contract**. Before changing realtime-sync code, read this file and `docs/realtime-sync/domain/`.
 
-## 0. Mandatory rule
+## 0. Mandatory Domain Impact Analysis
 
 **Do not start coding before performing a Domain Impact Analysis.**
 
@@ -16,7 +16,7 @@ Every realtime-sync change MUST first answer:
    - RealtimeSyncTask
    - DefinitionVersion
    - SyncExecution
-   - none of them / adjacent context
+   - adjacent context / none
 3. If SyncDefinition changes, which part changes?
    - Endpoint
    - Route / Selector / Target / ReplayKey
@@ -24,14 +24,14 @@ Every realtime-sync change MUST first answer:
    - ExecutionPolicy
 4. Which invariant or lifecycle transition changes?
 5. Is the change Domain, Application, Infrastructure, or Interface/UI?
-6. Does the change introduce another source of truth for sync definition?
-7. Does the change introduce a new syncType / sceneType / task subclass?
-8. Does the change put Flink/YAML/SSH/JDBC credentials or adapter tuning into Core Domain?
-9. Which Stage-4 migration wave does this change belong to?
-10. Which existing safety properties must remain protected?
+6. Does it create another editable definition source of truth?
+7. Does it introduce a new syncType / sceneType / task subclass?
+8. Does it leak Flink/YAML/SSH/JDBC credentials or adapter tuning into Core Domain?
+9. Which accepted migration/current implementation boundary is affected?
+10. Which safety properties must remain protected?
 ```
 
-If items 2–4 cannot be answered, mark the requirement as:
+If items 2–4 cannot be answered, mark:
 
 ```text
 Domain Gap
@@ -62,7 +62,7 @@ SyncDefinition
 └── ExecutionPolicy
 ```
 
-The conceptual lifecycle is:
+Lifecycle coordinate:
 
 ```text
 RealtimeSyncTask.currentDraft
@@ -74,18 +74,18 @@ DefinitionVersion (immutable)
 SyncExecution
 ```
 
-Keep the following meanings separate:
+Meanings MUST remain separate:
 
 ```text
-RealtimeSyncTask = long-lived task identity and current draft
-SyncDefinition   = what/how to synchronize
+RealtimeSyncTask  = long-lived task identity + current Draft + PublishedDefinitionRef
+SyncDefinition    = what/how to synchronize
 DefinitionVersion = immutable published fact
-SyncExecution    = one actual run of one published version
+SyncExecution     = one actual run of one immutable published version
 ```
 
 **Task ≠ Definition ≠ Version ≠ Execution.**
 
-Do not collapse them back into one giant `RealtimeJob` object.
+Do not collapse them back into one giant `RealtimeJob` model.
 
 ---
 
@@ -93,18 +93,17 @@ Do not collapse them back into one giant `RealtimeJob` object.
 
 `SyncDefinition` is the single domain source of truth for realtime sync configuration.
 
-The following are adapters/projections only:
+These are adapters/projections only:
 
 ```text
 Wizard
 Yak Realtime YAML
-HTTP Request DTO
-HTTP Response VO
+HTTP DTO / VO
 DB JSON representation
 Flink CDC Pipeline YAML
 ```
 
-MUST NOT create domain truth models such as:
+MUST NOT create editable domain truths such as:
 
 ```text
 WizardSpec
@@ -115,9 +114,9 @@ PostgresSyncSpec
 KafkaSyncDefinition
 ```
 
-A serializer/editor may have its own DTO/document model, but it MUST map to/from `SyncDefinition` and MUST NOT become a second editable business definition.
+A serializer/editor may have a document DTO, but it MUST map to/from `SyncDefinition` and MUST NOT become a second business definition.
 
-Flink Pipeline YAML MUST remain a transient compiled artifact. It MUST NOT become the persisted domain source of truth.
+Flink Pipeline YAML is a transient compiled artifact. It MUST NOT become persisted domain truth.
 
 ---
 
@@ -128,55 +127,57 @@ A published version is an immutable domain fact.
 MUST:
 
 ```text
-Publish -> create DefinitionVersion
+Publish -> create/reuse immutable DefinitionVersion
 DefinitionVersion -> immutable after creation
-Execution -> reference explicit DefinitionVersion
+Execution -> reference explicit DefinitionVersionId
 ```
 
 MUST NOT:
 
 ```text
-publish by only toggling a marker on mutable draft content
-modify a published version in place
+publish by only toggling a marker on mutable Draft content
+modify a Published DefinitionVersion in place
 make an Execution read the latest mutable Draft
 replace historical Published content with current Draft
 ```
 
-Important legacy warning:
+Legacy warning:
 
 ```text
-current definition_version = DraftRevision / legacy revision
-current published_version  = legacy published-revision marker
+definition_version = DraftRevision compatibility field
+published_version  = published DraftRevision compatibility marker
 ```
 
-They are NOT the final `DefinitionVersion` aggregate semantics.
+They are **not** immutable DefinitionVersion identity.
 
-If legacy Published content cannot be reconstructed reliably, do not guess and do not use the current Draft as a substitute.
+Authoritative identity is:
+
+```text
+published_definition_version_id
+execution.definition_version_id
+```
+
+If historical Published content cannot be reconstructed reliably, do not guess and do not use the current Draft as a substitute.
 
 ---
 
 # 4. Draft, Published, and active Execution may coexist
 
-The following is valid and expected:
+This is valid and expected:
 
 ```text
-Published v3
+Published V3
 +
-Draft v4 candidate
+Draft r4 candidate
 +
-Execution E100(v3)
+Execution E100(V3)
 ```
 
-A newer Draft MUST NOT mutate or invalidate historical Published versions or running Executions.
-
-A newer Draft MUST NOT automatically become the version used by an existing Execution.
-
-Wave 4+ current rule:
+Active/uncertain SyncExecution MUST NOT block:
 
 ```text
-Active/uncertain SyncExecution
-    MUST NOT block saving a newer Draft
-    MUST NOT block publishing a newer DefinitionVersion
+Save newer Draft
+Publish newer DefinitionVersion
 ```
 
 Save/Publish MUST NOT mutate the active Execution's:
@@ -191,9 +192,7 @@ EngineExecutionRef
 
 Publishing while an Execution is active only advances `RealtimeSyncTask.publishedDefinitionRef`.
 
-Delete remains lifecycle-guarded and is NOT made safe merely because Save/Publish are now independent from execution state.
-
-Do not model Draft/Published as a permanent mutually-exclusive domain state.
+Delete remains lifecycle-guarded. Definition/Execution independence does not make active-runtime deletion safe.
 
 ---
 
@@ -206,7 +205,7 @@ MUST:
 ```text
 Start -> new Execution
 RestartExecution -> new Execution pinned to the same DefinitionVersion
-ApplyPublishedVersion -> separate use case that starts the explicitly captured Published version
+ApplyPublishedVersion -> new Execution pinned to the explicitly captured Published version
 ```
 
 MUST NOT resurrect a terminal Execution.
@@ -217,8 +216,6 @@ For one Execution:
 STOPPED = terminal
 FAILED  = terminal
 ```
-
-A later Start creates another Execution ID.
 
 For v1, one Task may have at most one Active / Uncertain Execution:
 
@@ -232,11 +229,11 @@ CONFLICT
 
 Do not create a second Execution while one of the above exists.
 
-Version-changing lifecycle commands MUST NOT be used to bypass an uncertain runtime state. `RestartExecution` and `ApplyPublishedVersion` require a stable `RUNNING/RUNNING` execution in Wave 5.
+Version-changing/replacement commands MUST NOT bypass uncertain runtime state. `RestartExecution` and `ApplyPublishedVersion` require a stable `RUNNING/RUNNING` Execution with a bound EngineExecutionRef.
 
 ---
 
-# 6. DesiredState and ObservedState are different facts
+# 6. DesiredState and ObservedState belong to SyncExecution
 
 ```text
 DesiredState  = control-plane/user intent
@@ -264,15 +261,41 @@ CONFLICT
 
 Rules:
 
-- Stop MUST persist `desired = STOPPED` before waiting for the engine to converge.
-- Reconcile MUST update observed/runtime facts; it MUST NOT rewrite user intent merely to match the engine.
+- Stop MUST persist `desired = STOPPED` before waiting for engine convergence.
+- Reconcile updates observed/runtime facts; it MUST NOT rewrite user intent merely to match the engine.
 - `UNKNOWN` means insufficient knowledge, not failure.
-- `CONFLICT` means ambiguous runtime identity; do not guess which external job is correct.
-- A submission timeout with uncertain external result MUST NOT immediately become a fresh retry that can double-run the task.
+- `CONFLICT` means ambiguous runtime identity; do not guess.
+- uncertain external submission MUST NOT become a fresh retry that can double-run the task.
 
-Current ownership (Wave 3+): Desired/Observed lifecycle belongs to `SyncExecution`, not `RealtimeSyncTask`.
+## Wave 6 current ownership
 
-Task-row `desired_state / observed_state / last_error` are compatibility projections only. They MUST NOT be used as command truth for Start/Stop/Reconcile or for deciding whether an Execution is active.
+Runtime lifecycle truth is **SyncExecution only**.
+
+Physical Task columns:
+
+```text
+yak_realtime_job_definition.desired_state
+yak_realtime_job_definition.observed_state
+yak_realtime_job_definition.last_error
+```
+
+are now **inert compatibility storage**.
+
+MUST NOT:
+
+```text
+dual-write Execution lifecycle into those Task columns
+read those Task columns as Application command truth
+fallback API runtime state to those Task columns
+reintroduce desiredJobs / hasOtherDesiredRunning style Task-runtime queries
+```
+
+Read model rule:
+
+```text
+latest SyncExecution exists -> derive desired/observed/error from that Execution
+no SyncExecution            -> STOPPED / STOPPED / null
+```
 
 Task row locking may remain a cross-instance command mutex; lock location does not imply lifecycle ownership.
 
@@ -280,23 +303,27 @@ Task row locking may remain a cross-instance command mutex; lock location does n
 
 # 7. RestartExecution and ApplyPublishedVersion are distinct commands
 
-These are different domain commands and MUST remain different in Application/API/UI semantics.
+These commands MUST remain different in Application/API/UI semantics.
 
 ```text
 RestartExecution
-E100(v3) -> stop -> E101(v3)
+E100(V3) -> stop -> E101(V3)
 ```
 
 ```text
 ApplyPublishedVersion
-E100(v3) -> stop -> E101(v4)
+E100(V3) -> stop -> E101(V4)
 ```
 
 ## 7.1 RestartExecution
 
-Restart MUST pin the immutable `DefinitionVersionId` from the Execution being restarted.
+Target MUST come from:
 
-It MUST NOT depend on the current `RealtimeSyncTask.publishedDefinitionRef`.
+```text
+current SyncExecution.definitionVersionId
+```
+
+It MUST NOT depend on current `Task.publishedDefinitionRef`.
 
 Therefore this is valid:
 
@@ -307,57 +334,41 @@ RestartExecution(E100)
   -> E101(V3)
 ```
 
-The legacy `/restart` endpoint, while it exists for compatibility, MUST delegate to `RestartExecution` semantics and MUST NEVER become a restart-to-latest shortcut.
-
 ## 7.2 ApplyPublishedVersion
 
-ApplyPublishedVersion explicitly captures `RealtimeSyncTask.publishedDefinitionRef` at command start.
+Target MUST be captured from `Task.publishedDefinitionRef` at command start.
 
-That captured immutable target MUST remain pinned for the entire command. If another Publish advances the Task to V5 while an Apply of V4 is already in progress, the existing command MUST NOT drift from V4 to V5.
+That immutable target remains pinned for the command. If another Publish advances to V5 while Apply V4 is in progress, the existing command MUST remain V4.
 
-If the active Execution already uses the captured Published `DefinitionVersionId`, Apply MUST reject as unnecessary.
+If the active Execution already uses the captured VersionId, Apply MUST reject as unnecessary.
 
 ## 7.3 Preflight before Stop
 
-Both commands MUST resolve and preflight their exact target DefinitionVersion **before** stopping the currently healthy Execution.
+Both commands MUST resolve/validate/compile their exact target DefinitionVersion **before** stopping a healthy Execution.
 
-If target datasource/runtime/connector validation fails, the command MUST fail before `STOPPING` is persisted or an engine Stop is issued.
+If target datasource/runtime/connector validation fails, the old Execution stays running.
 
-After target preflight succeeds, runtime Stop uncertainty continues to use the normal `STOPPING/UNKNOWN` rules; do not start a replacement Execution unless the old one is definitely terminal.
+After preflight, a DB-lock replacement-stop reservation MUST re-check the same stable Execution before persisting STOPPING. A competing Stop/Restart/Apply that already won makes the later command fail.
 
-## 7.4 Version identity
+## 7.4 Compatibility `/restart`
 
-Do not infer version identity from legacy `definition_version / published_version` integers.
+The HTTP v1 `/restart` endpoint may remain as an external compatibility alias, but it MUST delegate to `RestartExecution` semantics.
 
-The authoritative comparison is:
-
-```text
-SyncExecution.definitionVersionId
-vs
-RealtimeSyncTask.publishedDefinitionVersionId
-```
-
-The UI/query projection may expose a derived fact such as:
-
-```text
-publishedUpdateAvailable
-```
-
-but that flag MUST be derived server-side from immutable VersionIds. It is not another version source of truth.
+Internal Application/UI code MUST NOT use a generic `restart-to-latest` action.
 
 ---
 
 # 8. Route/Selector/Policy composition comes before scene enums
 
-Do not model product labels directly as task types.
+Do not model product labels directly as Task types.
 
 Prefer:
 
 ```text
-1 Exact Route       -> UI may call it single-table
-N Exact Routes      -> UI may call it multi-table
-Pattern Selector    -> rule matching
-future DatabaseSelector -> whole-database capability
+1 Exact Route            -> UI may call it single-table
+N Exact Routes           -> UI may call it multi-table
+Pattern Selector         -> rule matching
+future DatabaseSelector  -> whole-database capability
 ```
 
 MUST NOT add without explicit domain review:
@@ -373,7 +384,7 @@ MysqlRealtimeTask
 KafkaRealtimeTask
 ```
 
-New synchronization scenarios SHOULD first be expressed by extending:
+New scenarios SHOULD first extend:
 
 ```text
 SourceSelector
@@ -383,11 +394,11 @@ SyncPolicy
 ExecutionPolicy
 ```
 
-If composition cannot express the scenario, mark `Domain Gap` and redesign the model first.
+If composition cannot express the scenario, mark `Domain Gap` first.
 
 ---
 
-# 9. Replay safety is an invariant, not an optional boolean
+# 9. Replay safety is an invariant
 
 v1 requires each route to have a non-empty `ReplayKey`.
 
@@ -395,7 +406,7 @@ MUST:
 
 - ReplayKey is non-empty;
 - ReplayKey fields are unique;
-- contextual preflight verifies the key against the actual source uniqueness semantics supported by the current implementation;
+- contextual preflight verifies actual source uniqueness semantics supported by the implementation;
 - ambiguous routing is rejected before Publish/Start.
 
 Core Domain MUST NOT introduce:
@@ -404,7 +415,7 @@ Core Domain MUST NOT introduce:
 strictReplaySafety = false
 ```
 
-The current legacy boolean is a compatibility field, not a desired permanent domain policy.
+The legacy boolean is a compatibility field, not a desired Core policy.
 
 ---
 
@@ -462,9 +473,7 @@ connectionJson
 driver
 ```
 
-Credentials MUST only be resolved at the submission boundary and MUST retain current short-lifetime/zeroization behavior.
-
-Do not put datasource connectivity or password material into `SyncDefinition` for convenience.
+Credentials are resolved at the submission boundary and MUST retain short lifetime / zeroization behavior.
 
 ---
 
@@ -483,17 +492,17 @@ SSH submission mode as task type
 Connector JAR path as definition field
 ```
 
-Keep the translation boundary:
+Keep translation boundary:
 
 ```text
 SyncDefinition / DefinitionVersion
-        ↓ Application/Compiler boundary
+        ↓ Application/Compiler
 Compiled engine artifact
         ↓
 Flink CDC Adapter
 ```
 
-`EngineExecutionRef` is the engine-neutral domain/application reference. A Flink JobId is one adapter-specific external ID.
+`EngineExecutionRef` is the engine-neutral reference. A Flink JobId is one adapter-specific external ID.
 
 ---
 
@@ -501,16 +510,7 @@ Flink CDC Adapter
 
 Only engine-neutral execution semantics belong in `ExecutionPolicy`.
 
-Examples acceptable in Core Domain when semantics are actually supported:
-
-```text
-parallelism
-checkpoint policy
-restart policy
-sink write batching/retry semantics
-```
-
-Adapter-private knobs MUST stay outside Core Domain, for example:
+Adapter-private knobs stay outside Core Domain, including:
 
 ```text
 statementCacheSize
@@ -520,7 +520,7 @@ ssh options
 JDBC driver-specific cache settings
 ```
 
-If a Core `ExecutionPolicy` is accepted by the domain/API, the current engine adapter MUST either:
+If Core `ExecutionPolicy` accepts a setting, the current engine adapter MUST either:
 
 ```text
 apply it correctly
@@ -528,9 +528,9 @@ or
 reject it explicitly during preflight
 ```
 
-MUST NOT silently persist a policy that has no runtime effect.
+MUST NOT silently persist a policy with no runtime effect.
 
-Current known gap: checkpoint/restart settings are persisted but not fully applied by the current compiler/runtime path.
+Known gap: checkpoint/restart settings are not yet fully applied by the compiler/runtime path.
 
 ---
 
@@ -540,7 +540,7 @@ Do not merge all failures into “domain invalid”.
 
 ```text
 1. Intrinsic Domain Validation
-   - value/object invariants
+   - object/value invariants
    - no external I/O
 
 2. Contextual Preflight
@@ -552,12 +552,10 @@ Do not merge all failures into “domain invalid”.
 3. Adapter/Artifact Validation
    - Flink connector support
    - compiled YAML shape
-   - engine readiness/health where required
+   - engine readiness where required
 ```
 
-A source database being temporarily offline does not mutate the historical `SyncDefinition` into an intrinsically invalid object.
-
-Product policy may require live preflight on Draft Save, but code/comments MUST call it an Application Policy, not a permanent Core Domain invariant.
+A source DB being temporarily offline does not mutate historical `SyncDefinition` into an intrinsically invalid object.
 
 ---
 
@@ -568,20 +566,29 @@ MUST distinguish:
 ```text
 DefinitionDigest
 = semantic canonical digest of SyncDefinition + RuntimeEnvironmentRef
+
+sourceConfigDigest
+= exact compatibility digest used for mutable Draft / publish CAS
+
+ExecutionArtifactDigest / artifactDigest
+= digest of compiled runtime artifact for one Execution
 ```
 
-from:
+Physical schema may still contain two columns both named `config_digest`. That physical name does **not** collapse the semantics.
+
+New Application/Domain code MUST use semantic names such as:
 
 ```text
-ExecutionArtifactDigest
-= digest of the compiled/runtime artifact used for one execution
+sourceConfigDigest
+artifactDigest
+DefinitionDigest
 ```
 
-Do not call both `configDigest` in new domain code.
+and MUST NOT introduce a new ambiguous generic digest concept.
 
-Definition canonicalization MUST ignore ordering that has no business semantics, including at least route ordering and ReplayKey field ordering when order is not meaningful.
+Definition canonicalization MUST ignore ordering with no business semantics, including route order and ReplayKey field order where order is not meaningful.
 
-Do not use YAML formatting/comments/editor mode/task display name as DefinitionDigest inputs.
+Do not use YAML comments/formatting/editor mode/task display name as DefinitionDigest inputs.
 
 ---
 
@@ -601,13 +608,13 @@ Hard delete is only suitable for a never-published, never-executed, externally-u
 
 Otherwise prefer Archive/Tombstone semantics.
 
-Do not cascade-delete Deployment/Execution/Event history just because the user removes a task from the normal UI.
+Current hard-delete behavior remains a known gap; do not treat Stage 6 cleanup as solving it.
 
 ---
 
-# 17. Preserve the existing safety protection list
+# 17. Preserve the safety protection list
 
-Domain refactoring MUST preserve these current safety properties unless an explicit replacement is proven equivalent or safer:
+Refactoring MUST preserve these safety properties unless an explicit replacement is proven equivalent or safer:
 
 ```text
 Idempotency-Key
@@ -615,7 +622,7 @@ unique persistence constraint for start idempotency
 DB locking / CAS around lifecycle commands
 start reservation before external submit
 same-key race recovery
-prepared-definition/version re-check before commit/submit
+prepared-definition/version re-check
 stop-during-start safety
 uncertain submission -> UNKNOWN
 runtime identity persistence before CLI boundary
@@ -626,114 +633,179 @@ submission-scoped credentials and zeroization
 secret-free persistent definition/snapshot
 submission log redaction
 reconcile lease for multi-instance reconciliation
+replacement-stop reservation for Restart/Apply
 ```
 
 Do not rewrite working Flink/SSH/recovery code merely to make packages look more DDD-like.
 
 ---
 
-# 18. Stage-4 migration order is mandatory
+# 18. Stage 6 migration is complete
 
-Do not skip migration waves casually.
-
-```text
-Wave 0  New Core VOs + legacy mapper, no behavior change                     ✅
-Wave 1  Immutable DefinitionVersion persistence + publish dual-write          ✅
-Wave 2  Start by Published DefinitionVersion                                  ✅
-Wave 3  Deployment evolves to SyncExecution; move desired/observed ownership  ✅
-Wave 4  Allow editing/publishing while execution is active                     ✅
-Wave 5  Separate RestartExecution from ApplyPublishedVersion                   ✅ current
-Wave 6  Cleanup legacy fields/package/names                                    pending
-```
-
-Critical ordering rule:
-
-> **Wave 4 MUST NOT be implemented before Wave 3.**
-
-Historical reason: before Wave 3, task-row state and DAO predicates participated in lifecycle ownership. Removing only service-level Save/Publish guards at that time would have produced inconsistent concurrency semantics.
-
-Current rule after Wave 5:
+Accepted migration sequence:
 
 ```text
-Save Draft / Publish -> RealtimeSyncTask + DefinitionVersion lifecycle
-Start                -> current PublishedDefinitionRef -> new SyncExecution
-RestartExecution     -> current Execution VersionRef -> new same-version SyncExecution
-ApplyPublishedVersion-> command-time PublishedDefinitionRef -> new versioned SyncExecution
-Stop / Reconcile     -> SyncExecution lifecycle
-Delete               -> requires terminal Execution and runtime safety checks
+Wave 0  Core VOs + compatibility mapper                                ✅
+Wave 1  Immutable DefinitionVersion persistence                         ✅
+Wave 2  Start by Published DefinitionVersion                            ✅
+Wave 3  SyncExecution owns desired/observed lifecycle                   ✅
+Wave 4  Active Execution no longer blocks Draft Save / Publish          ✅
+Wave 5  RestartExecution / ApplyPublishedVersion explicit split          ✅
+Wave 6  Contract cleanup / legacy runtime projection isolation           ✅
 ```
 
-Database migration MUST use:
+Current command ownership:
 
 ```text
-expand -> dual write/read -> verify -> switch -> contract
+Save Draft             -> RealtimeSyncTask.currentDraft
+Publish                -> DefinitionVersion + Task.publishedDefinitionRef
+Start                  -> command-time PublishedDefinitionRef -> new SyncExecution
+RestartExecution       -> current Execution VersionRef -> new same-version Execution
+ApplyPublishedVersion  -> command-time PublishedDefinitionRef -> new versioned Execution
+Stop / Reconcile       -> SyncExecution lifecycle
+Delete                 -> terminal Execution + runtime safety guard
 ```
 
-Do not perform a Big-Bang rename/drop migration.
+## 18.1 Contract-but-not-drop
+
+Stage 6 does **not** perform a Big-Bang physical schema/API rename.
+
+These physical/v1 names may remain temporarily:
+
+```text
+yak_realtime_job_definition
+yak_realtime_job_deployment
+Task desired_state / observed_state / last_error
+Deployment status
+Definition/Deployment config_digest
+definition_version / published_version
+latestDeployment JSON
+legacy HTTP /restart
+```
+
+But existing compatibility names MUST NOT be used to infer domain ownership.
+
+Database/API contract removal must remain incremental:
+
+```text
+expand -> switch readers/writers -> verify -> contract
+```
+
+Never edit/drop an already-applied schema merely to make names look cleaner.
 
 ---
 
-# 19. Current legacy names are not authoritative domain semantics
+# 19. Current legacy-name mapping
 
-When reading existing code, remember:
+When reading current code/schema, interpret these names as follows:
 
 ```text
-CdcPipelineSpec                 -> compatibility definition model
-TableRoute                      -> compatibility route model
-definition_version              -> DraftRevision / legacy revision
-published_version               -> legacy published marker
-DefinitionRow desired/observed  -> latest SyncExecution compatibility projection
-DeploymentRow                   -> SyncExecution persistence compatibility row
-configDigest on definition      -> draft DefinitionDigest-like value
-configDigest on deployment      -> ExecutionArtifactDigest
-ReleaseState DRAFT/PUBLISHED    -> legacy/derived presentation state
-legacy /restart endpoint        -> compatibility alias for RestartExecution
+CdcPipelineSpec
+  -> compatibility definition representation; SyncDefinition is Core truth
+
+TableRoute
+  -> compatibility route representation
+
+definition_version
+  -> DraftRevision compatibility field
+
+published_version
+  -> published DraftRevision compatibility marker
+
+published_definition_version_id
+  -> immutable Published DefinitionVersion identity
+
+DefinitionRow desired/observed/lastError
+  -> inert compatibility values; not runtime truth
+
+RealtimeJobDeploymentPO / DeploymentRow
+  -> SyncExecution persistence compatibility row
+
+Deployment.status
+  -> physical compatibility mirror; not lifecycle truth
+
+DefinitionRow.configDigest
+  -> sourceConfigDigest compatibility storage
+
+DeploymentRow.configDigest
+  -> ExecutionArtifactDigest compatibility storage
+
+latestDeployment JSON
+  -> latest SyncExecution read projection
+
+ReleaseState DRAFT/PUBLISHED
+  -> legacy/derived presentation state
+
+HTTP /restart
+  -> compatibility alias for RestartExecution only
 ```
 
-Do not compare legacy `definition_version / published_version` as if they were immutable Domain `DefinitionVersionId` values.
+Do not compare `definition_version / published_version` as immutable VersionIds.
 
-Do not infer the target domain model solely from current class/table/field names.
+Do not introduce a new dependency on inert Task runtime columns.
 
-The accepted domain documents have higher semantic authority than legacy naming.
+Accepted domain documents have higher semantic authority than legacy naming.
 
 ---
 
-# 20. AI coding contract
+# 20. Known gaps after Stage 6
 
-Before proposing code changes, the AI MUST produce a short block like:
+Stage 6 completion does not mean all architecture work is finished.
+
+Keep these as explicit independent gaps:
+
+```text
+Audit-safe Archive/Tombstone delete
+ExecutionPolicy checkpoint/restart runtime application
+Flink FINISHED normal completion / snapshot-only
+legacy failure-rate mapping
+Read-model package hygiene
+Compute Environment physical context/package cleanup
+API v2 / physical schema naming cleanup
+```
+
+Do not sneak these changes into unrelated feature PRs. Each needs its own Domain Impact Analysis.
+
+---
+
+# 21. AI coding contract
+
+Before proposing code changes, AI MUST output:
 
 ```text
 Domain Impact Analysis
-- Bounded context:
-- Aggregate(s):
-- SyncDefinition area (if any):
-- Invariant/lifecycle impact:
-- Layer: Domain / Application / Infrastructure / Interface
-- Existing Stage-4 mapping/gap:
-- Migration wave:
-- Safety properties to preserve:
+- Bounded context
+- Aggregate(s)
+- SyncDefinition area (if any)
+- Invariant/lifecycle impact
+- Layer
+- Current mapping/gap
+- Safety properties to preserve
 - Domain Gap: yes/no
 ```
 
-If `Domain Gap: yes`, implementation MUST stop at domain-design proposal unless the user explicitly approves the domain extension.
+If `Domain Gap: yes`, implementation stops at domain-design proposal unless the user explicitly approves the extension.
 
-After implementation, the AI MUST report:
+After implementation, report:
 
 ```text
-- Which domain rule was implemented
-- Which legacy compatibility behavior remains
-- Which protection-list tests were added/preserved
-- Whether DB dual-read/dual-write is involved
-- Which known gaps remain
+- Domain rule implemented
+- Aggregates changed
+- Invariants/lifecycle affected
+- Legacy compatibility retained
+- Safety properties preserved
+- DB/API migration mode
+- Tests added/updated
+- Known gaps remaining
 ```
 
 Do not claim “domain-compliant” merely because class names were renamed.
 
 ---
 
-# 21. Review rejection triggers
+# 22. Review rejection triggers
 
-A realtime-sync PR should be rejected or returned for domain review if it introduces any of the following without an explicit domain decision:
+Return a realtime-sync PR for domain review if it introduces any of these without an explicit decision:
 
 ```text
 new WizardSpec / YamlSpec / engine-specific domain Spec
@@ -742,39 +814,44 @@ Flink/SSH/JDBC credential fields in Core Domain
 Execution reading current Draft
 in-place mutation of Published Version
 Restart that may silently upgrade version
-ApplyPublishedVersion that re-reads a newer Published target after command start
-target-version command that stops a healthy Execution before target preflight succeeds
+ApplyPublishedVersion that re-reads a newer target after command start
+target-version command that stops healthy Execution before target preflight
 second active Execution while UNKNOWN/CONFLICT exists
 UNKNOWN treated as FAILED solely to permit retry
-hard deletion of execution/version/audit history
+new read/write dependency on Task runtime compatibility columns
+Deployment.status used as lifecycle truth
+legacy revision integer used as DefinitionVersion identity
+ambiguous generic configDigest introduced into new domain/application code
+hard deletion of execution/version/audit history presented as a harmless cleanup
 adapter-private tuning added to SyncDefinition
 accepted ExecutionPolicy silently ignored by runtime adapter
-business rules changed only in Service but not corresponding DAO CAS/DB constraints
-Big-Bang schema rename/drop before migration switch is verified
+Big-Bang schema/API rename/drop without migration verification
 ```
 
 ---
 
-# 22. Source documents
+# 23. Source documents
 
-Detailed accepted design lives at:
+Detailed accepted design/current migration status:
 
 ```text
 docs/realtime-sync/domain/01-domain-boundary-and-language.md
 docs/realtime-sync/domain/02-core-domain-model.md
 docs/realtime-sync/domain/03-invariants-and-lifecycle.md
-docs/realtime-sync/domain/04-current-code-mapping.md
+docs/realtime-sync/domain/04-current-code-mapping.md       # historical mapping snapshot
 docs/realtime-sync/domain/05-ai-domain-rules.md
+docs/realtime-sync/domain/06-stage6-migration-completion.md # current Stage 6 implementation facts
 ```
 
-Conflict resolution order for realtime-sync design intent:
+Conflict resolution order:
 
 ```text
 1. Explicit newest approved user/domain decision
 2. DOMAIN.md hard guardrails
-3. Accepted docs/realtime-sync/domain/* design
-4. Tests that encode approved invariants
-5. Current implementation details / legacy names
+3. 06-stage6-migration-completion.md current implementation facts
+4. Accepted domain design docs
+5. Tests encoding approved invariants
+6. Current legacy names / physical schema details
 ```
 
-Current implementation is evidence of behavior and compatibility requirements; it is not automatically the source of truth for target domain semantics.
+Current implementation is compatibility evidence; legacy naming is not automatically domain truth.

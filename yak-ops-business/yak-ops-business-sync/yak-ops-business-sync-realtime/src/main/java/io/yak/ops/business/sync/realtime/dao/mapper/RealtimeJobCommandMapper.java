@@ -9,7 +9,6 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface RealtimeJobCommandMapper {
   RealtimeJobDefinitionPO lockDefinition(@Param("id") long id);
-  List<Long> lockOtherDesiredRunning(@Param("id") long id);
   List<RealtimeJobDeploymentPO> reconcileExecutions();
   int tryAcquireLease(@Param("owner") String owner, @Param("leaseSeconds") int leaseSeconds);
   int reconcileDeployment(

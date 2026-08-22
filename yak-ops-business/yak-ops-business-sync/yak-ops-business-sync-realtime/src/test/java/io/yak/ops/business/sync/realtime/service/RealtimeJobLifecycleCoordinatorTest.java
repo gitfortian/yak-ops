@@ -70,7 +70,6 @@ class RealtimeJobLifecycleCoordinatorTest {
 
   @Test
   void recoversMissingJobIdThenReconcilesRunningFromExecutionEvenIfTaskProjectionIsStale() {
-    // Deliberately stale Task projection. Execution remains the lifecycle source of truth.
     DefinitionRow definition = definition("STOPPED", "STOPPED");
     DeploymentRow execution =
         execution(null, "RUNNING", "UNKNOWN", "UNKNOWN", LocalDateTime.now());
@@ -167,7 +166,6 @@ class RealtimeJobLifecycleCoordinatorTest {
     coordinator.reconcileAll();
 
     verify(store).reconcileCandidates();
-    verify(store, never()).desiredJobs();
     verify(store)
         .reconcile(JOB_ID, DEPLOYMENT_ID, "RUNNING", "RUNNING", FLINK_JOB_ID, null);
   }

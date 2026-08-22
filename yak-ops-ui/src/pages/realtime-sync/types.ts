@@ -65,7 +65,11 @@ export interface CdcPipelineSpec {
   };
 }
 
-export interface RealtimeDeployment {
+/**
+ * One SyncExecution read projection. The JSON property is still named latestDeployment for API
+ * compatibility, but UI code should reason about it as an execution rather than a task definition.
+ */
+export interface RealtimeExecution {
   id: number;
   definitionVersion: number;
   specSummary?: string;
@@ -80,6 +84,9 @@ export interface RealtimeDeployment {
   createTime: string;
   updateTime: string;
 }
+
+/** @deprecated Use RealtimeExecution. */
+export type RealtimeDeployment = RealtimeExecution;
 
 export interface RealtimeJob {
   id: number;
@@ -97,7 +104,7 @@ export interface RealtimeJob {
   lastError?: string;
   createTime: string;
   updateTime: string;
-  latestDeployment?: RealtimeDeployment;
+  latestDeployment?: RealtimeExecution;
 }
 
 export interface RealtimeJobPage {

@@ -4,19 +4,6 @@
   <select id="lockDefinition" resultType="io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDefinitionPO">
     SELECT * FROM yak_realtime_job_definition WHERE id = #{id} FOR UPDATE
   </select>
-  <select id="lockOtherDesiredRunning" resultType="long">
-    SELECT p.id
-    FROM yak_realtime_job_deployment p
-    WHERE p.definition_id &lt;&gt; #{id}
-      AND p.id = (
-        SELECT MAX(p2.id)
-        FROM yak_realtime_job_deployment p2
-        WHERE p2.definition_id = p.definition_id
-      )
-      AND p.desired_state = 'RUNNING'
-      AND p.observed_state IN ('STARTING','RUNNING','STOPPING','UNKNOWN','CONFLICT')
-    FOR UPDATE
-  </select>
   <select id="reconcileExecutions"
           resultType="io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDeploymentPO">
     SELECT p.*

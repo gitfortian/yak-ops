@@ -41,6 +41,22 @@ class RealtimeJobStoreAdapterExecutionProjectionTest {
   }
 
   @Test
+  void taskWithoutExecutionDerivesStoppedAndIgnoresLegacyRuntimeColumns() {
+    Fixture fixture = fixture();
+    fixture.task.setDesiredState("RUNNING");
+    fixture.task.setObservedState("UNKNOWN");
+    fixture.task.setLastError("legacy projection must not leak");
+    when(fixture.dao.latestDeployment(7L)).thenReturn(Optional.empty());
+
+    RealtimeJobView view = fixture.store.view(7L);
+
+    assertThat(view.desiredState()).isEqualTo("STOPPED");
+    assertThat(view.observedState()).isEqualTo("STOPPED");
+    assertThat(view.lastError()).isNull();
+    assertThat(view.latestDeployment()).isNull();
+  }
+
+  @Test
   void publishedUpdateAvailableUsesImmutableVersionIdsNotLegacyRevisions() {
     Fixture fixture = fixture();
     fixture.task.setPublishedDefinitionVersionId(32L);
@@ -116,11 +132,12 @@ class RealtimeJobStoreAdapterExecutionProjectionTest {
     when(dao.findDefinition(7L)).thenReturn(Optional.of(task));
     when(dao.latestDeployment(7L)).thenReturn(Optional.of(execution));
     when(json.readEnvironmentSnapshot("{}")).thenReturn(runtime);
-    return new Fixture(store, task, execution);
+    return new Fixture(store, dao, task, execution);
   }
 
   private record Fixture(
       RealtimeJobStoreAdapter store,
+      RealtimeJobDao dao,
       RealtimeJobDefinitionPO task,
       RealtimeJobDeploymentPO execution) {}
 }
