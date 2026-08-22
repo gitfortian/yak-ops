@@ -95,11 +95,16 @@ public class FlinkObservabilityClient {
         metricSummary(jobId, job));
   }
 
-  public String submissionLog(String jobId, int tailLines) {
-    requireJobId(jobId);
+  public String submissionLog(String idempotencyKey, int tailLines) {
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+      throw new IllegalArgumentException("Idempotency-Key 不能为空");
+    }
     int tail = Math.max(1, Math.min(tailLines, properties.getMaxLogLines()));
     Path log =
-        Path.of(properties.getWorkDirectory(), "logs", jobId + ".submit.log")
+        Path.of(
+                properties.getWorkDirectory(),
+                "logs",
+                "submit-" + safeKey(idempotencyKey) + ".log")
             .toAbsolutePath()
             .normalize();
     if (!Files.isRegularFile(log)) {
@@ -399,6 +404,10 @@ public class FlinkObservabilityClient {
 
   private String baseUrl() {
     return properties.getRestUrl().replaceAll("/+$", "");
+  }
+
+  private String safeKey(String idempotencyKey) {
+    return idempotencyKey.replaceAll("[^A-Za-z0-9._-]", "_");
   }
 
   private void requireJobId(String jobId) {
