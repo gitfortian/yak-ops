@@ -73,7 +73,7 @@ export interface RealtimeDeployment {
   idempotencyKey: string;
   engineJobId?: string;
   runtimeRevision?: string;
-  runtimeEnvironment?: ComputeEnvironmentSnapshot;
+  runtimeEnvironment: ComputeEnvironmentSnapshot;
   status: string;
   resultUncertain: boolean;
   errorMessage?: string;
@@ -86,13 +86,13 @@ export interface RealtimeJob {
   name: string;
   description?: string;
   spec?: CdcPipelineSpec;
-  runtimeEnvironmentId?: number;
+  runtimeEnvironmentId: number;
   releaseState: ReleaseState;
   desiredState: DesiredState;
   observedState: ObservedState;
   definitionVersion: number;
   publishedVersion?: number;
-  configDigest: string;
+  configDigest?: string;
   lastError?: string;
   createTime: string;
   updateTime: string;

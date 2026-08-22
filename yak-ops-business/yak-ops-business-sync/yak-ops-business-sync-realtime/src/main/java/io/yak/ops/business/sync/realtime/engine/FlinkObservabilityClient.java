@@ -3,7 +3,6 @@ package io.yak.ops.business.sync.realtime.engine;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
-import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView;
@@ -68,10 +67,6 @@ public class FlinkObservabilityClient {
     this.redactor = redactor;
   }
 
-  public RealtimeObservabilityView snapshot(String jobId) {
-    return snapshot(bootstrapEnvironment(), jobId);
-  }
-
   public RealtimeObservabilityView snapshot(
       ComputeEnvironmentSnapshot environment, String jobId) {
     requireJobId(jobId);
@@ -123,10 +118,6 @@ public class FlinkObservabilityClient {
     } catch (IOException exception) {
       throw failure("无法读取 Flink CDC 提交日志", false, exception);
     }
-  }
-
-  public RuntimeLog runtimeLog(String jobId, int maxExceptions) {
-    return runtimeLog(bootstrapEnvironment(), jobId, maxExceptions);
   }
 
   public RuntimeLog runtimeLog(
@@ -236,7 +227,6 @@ public class FlinkObservabilityClient {
       try {
         metrics = vertexMetrics(environment, jobId, vertexId);
       } catch (RealtimeEngineException ignored) {
-        // Jobs can change state while the UI snapshot is being sampled. Return partial metrics.
         continue;
       }
       String name = String.valueOf(text(vertex, "name")).toLowerCase(Locale.ROOT);
@@ -429,25 +419,6 @@ public class FlinkObservabilityClient {
       throw new IllegalArgumentException("运行环境配置不能为空");
     }
     return environment.config();
-  }
-
-  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
-    RuntimeConfig config =
-        new RuntimeConfig(
-            properties.getRestUrl(),
-            properties.getFlinkHome(),
-            properties.getFlinkCdcHome(),
-            properties.getJavaHome(),
-            properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion());
-    return new ComputeEnvironmentSnapshot(
-        0L,
-        "application/default",
-        ComputeEnvironment.ENGINE_FLINK_CDC,
-        ComputeEnvironment.DEPLOYMENT_REMOTE,
-        properties.getSubmissionMode().name(),
-        config,
-        0);
   }
 
   private String safeKey(String idempotencyKey) {

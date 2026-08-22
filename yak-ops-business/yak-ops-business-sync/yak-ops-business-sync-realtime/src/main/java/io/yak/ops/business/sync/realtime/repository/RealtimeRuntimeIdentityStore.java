@@ -43,15 +43,4 @@ public class RealtimeRuntimeIdentityStore {
         .filter(value -> value != null && !value.isBlank())
         .findFirst();
   }
-
-  public Optional<String> state(long deploymentId) {
-    return db
-        .query(
-            "select runtime_identity_state from yak_realtime_job_deployment where id=?",
-            (result, row) -> result.getString("runtime_identity_state"),
-            deploymentId)
-        .stream()
-        .filter(value -> value != null && !value.isBlank())
-        .findFirst();
-  }
 }

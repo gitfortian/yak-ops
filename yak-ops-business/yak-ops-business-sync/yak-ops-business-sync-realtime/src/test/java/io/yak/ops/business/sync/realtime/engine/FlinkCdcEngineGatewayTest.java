@@ -7,6 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -28,6 +31,7 @@ class FlinkCdcEngineGatewayTest {
 
   private HttpServer server;
   private FlinkCdcEngineGateway gateway;
+  private ComputeEnvironmentSnapshot environment;
   private final AtomicBoolean cancelled = new AtomicBoolean();
 
   @BeforeEach
@@ -51,11 +55,23 @@ class FlinkCdcEngineGatewayTest {
     Files.setPosixFilePermissions(cli, PosixFilePermissions.fromString("rwx------"));
 
     RealtimeSyncProperties properties = new RealtimeSyncProperties();
-    properties.setRestUrl("http://127.0.0.1:" + server.getAddress().getPort());
-    properties.setFlinkHome(temp.resolve("flink").toString());
-    properties.setFlinkCdcHome(cdcHome.toString());
     properties.setWorkDirectory(temp.resolve("work").toString());
     gateway = new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L,
+            "local-env",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                temp.resolve("flink").toString(),
+                cdcHome.toString(),
+                null,
+                "1.20.5",
+                "3.6.0"),
+            1);
   }
 
   @AfterEach
@@ -64,50 +80,31 @@ class FlinkCdcEngineGatewayTest {
   }
 
   @Test
-  void submitsWithCliThenUsesJobScopedRestApis() throws Exception {
-    String yaml =
-        "source:\n  password: ${SECRET:source.password}\n"
-            + "sink:\n  password: ${SECRET:sink.password}\n"
-            + "pipeline:\n  name: test\n";
+  void submitsWithExplicitEnvironmentThenUsesJobScopedRestApis() throws Exception {
+    String yaml = pipelineYaml();
     RealtimeEngineGateway.DeployResult deployed;
-    try (RealtimeDeployRequest request =
-        new RealtimeDeployRequest(
-            yaml,
-            "test-key",
-            new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
-            new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"))) {
-      deployed = gateway.deploy(request);
+    try (RealtimeDeployRequest request = request(yaml, "test-key")) {
+      deployed = gateway.deploy(environment, request);
     }
 
     assertThat(deployed.jobId()).isEqualTo(JOB_ID);
-    assertThat(gateway.status(JOB_ID).state())
+    assertThat(gateway.status(environment, JOB_ID).state())
         .isEqualTo(RealtimeEngineGateway.RuntimeStatus.State.RUNNING);
-    assertThat(gateway.checkpoints(JOB_ID).path("counts").path("completed").asInt()).isEqualTo(3);
-    assertThat(gateway.metrics(JOB_ID).path("metrics").isArray()).isTrue();
-    assertThat(gateway.logs(JOB_ID, 20))
-        .contains("Pipeline has been submitted")
-        .contains("Flink job exceptions")
-        .doesNotContain("source-secret", "sink-secret");
+    assertThat(gateway.health(environment).path("jobs-running").asInt()).isEqualTo(1);
+    assertThat(gateway.capabilities(environment).path("deployEnabled").asBoolean()).isTrue();
+    assertThat(gateway.capabilities(environment).path("submissionMode").asText()).isEqualTo("LOCAL");
 
     Path logs = temp.resolve("work/logs");
     assertThat(logs.resolve("submit-test-key.log")).exists();
     assertThat(logs.resolve(JOB_ID + ".submit.log")).exists();
+    assertThat(Files.readString(logs.resolve("submit-test-key.log"), StandardCharsets.UTF_8))
+        .doesNotContain("source-secret", "sink-secret");
 
-    gateway.stop(JOB_ID);
+    gateway.stop(environment, JOB_ID);
     assertThat(cancelled).isTrue();
     try (var files = Files.list(temp.resolve("work/pipelines"))) {
       assertThat(files).isEmpty();
     }
-  }
-
-  @Test
-  void exposesCliAndFlinkCapabilities() {
-    assertThat(gateway.health().path("jobs-running").asInt()).isEqualTo(1);
-    assertThat(gateway.capabilities().path("deployEnabled").asBoolean()).isTrue();
-    assertThat(gateway.capabilities().path("checkpointsApi").asBoolean()).isTrue();
-    assertThat(gateway.capabilities().path("submissionMode").asText()).isEqualTo("LOCAL");
-    assertThat(gateway.capabilities().path("submissionEndpoint").asText()).isEqualTo("local");
-    assertThat(gateway.capabilities().path("restTransport").asText()).isEqualTo("DIRECT");
   }
 
   @Test
@@ -118,18 +115,9 @@ class FlinkCdcEngineGatewayTest {
         "#!/bin/sh\necho 'password=source-secret connector rejected configuration'\nexit 7\n",
         StandardCharsets.UTF_8);
     Files.setPosixFilePermissions(cli, PosixFilePermissions.fromString("rwx------"));
-    String yaml =
-        "source:\n  password: ${SECRET:source.password}\n"
-            + "sink:\n  password: ${SECRET:sink.password}\n"
-            + "pipeline:\n  name: test\n";
 
-    try (RealtimeDeployRequest request =
-        new RealtimeDeployRequest(
-            yaml,
-            "failed-key",
-            new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
-            new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"))) {
-      assertThatThrownBy(() -> gateway.deploy(request))
+    try (RealtimeDeployRequest request = request(pipelineYaml(), "failed-key")) {
+      assertThatThrownBy(() -> gateway.deploy(environment, request))
           .isInstanceOf(RealtimeEngineException.class)
           .hasMessageContaining("exitCode=7")
           .hasMessageContaining("password=******")
@@ -147,17 +135,25 @@ class FlinkCdcEngineGatewayTest {
     }
   }
 
+  private RealtimeDeployRequest request(String yaml, String key) {
+    return new RealtimeDeployRequest(
+        yaml,
+        key,
+        new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
+        new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"));
+  }
+
+  private String pipelineYaml() {
+    return "source:\n  password: ${SECRET:source.password}\n"
+        + "sink:\n  password: ${SECRET:sink.password}\n"
+        + "pipeline:\n  name: test\n";
+  }
+
   private void jobApi(HttpExchange exchange) throws IOException {
     String path = exchange.getRequestURI().getPath();
     if ("PATCH".equals(exchange.getRequestMethod()) && path.equals("/jobs/" + JOB_ID)) {
       cancelled.set(true);
       json(exchange, 202, "{}");
-    } else if (path.endsWith("/exceptions")) {
-      json(exchange, 200, "{\"root-exception\":null,\"all-exceptions\":[]}");
-    } else if (path.endsWith("/checkpoints")) {
-      json(exchange, 200, "{\"counts\":{\"completed\":3}}");
-    } else if (path.endsWith("/metrics")) {
-      json(exchange, 200, "[]");
     } else if (path.equals("/jobs/" + JOB_ID)) {
       json(exchange, 200, "{\"jid\":\"" + JOB_ID + "\",\"state\":\"RUNNING\"}");
     } else {

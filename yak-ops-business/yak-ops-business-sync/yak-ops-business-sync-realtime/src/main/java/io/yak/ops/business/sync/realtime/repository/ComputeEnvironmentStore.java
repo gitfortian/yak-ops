@@ -3,7 +3,6 @@ package io.yak.ops.business.sync.realtime.repository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
-import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -31,11 +30,6 @@ public class ComputeEnvironmentStore {
       @Qualifier("realtimeObjectMapper") ObjectMapper json) {
     this.db = new JdbcTemplate(dataSource);
     this.json = json;
-  }
-
-  public long count() {
-    Long value = db.queryForObject("select count(*) from yak_compute_environment", Long.class);
-    return value == null ? 0 : value;
   }
 
   public List<ComputeEnvironment> list() {
@@ -117,8 +111,7 @@ public class ComputeEnvironmentStore {
     }
   }
 
-  public void saveDiagnosis(
-      long id, String status, String message, LocalDateTime checkedAt) {
+  public void saveDiagnosis(long id, String status, String message, LocalDateTime checkedAt) {
     int changed =
         db.update(
             "update yak_compute_environment set last_check_status=?,last_check_message=?,"
@@ -151,26 +144,6 @@ public class ComputeEnvironmentStore {
     if (changed != 1) {
       throw new IllegalStateException("默认运行环境不能删除，请先切换默认环境");
     }
-  }
-
-  /**
-   * Stage two makes the runtime binding explicit. Rows created before V7 are bound to the current
-   * default environment once during application startup. Legacy deployment snapshots are a
-   * best-effort reconstruction because stage one did not persist the historical environment.
-   */
-  public void bindLegacyRealtimeJobs(ComputeEnvironment environment) {
-    ComputeEnvironmentSnapshot snapshot = ComputeEnvironmentSnapshot.from(environment);
-    db.update(
-        "update yak_realtime_job_definition set runtime_environment_id=? "
-            + "where runtime_environment_id is null",
-        environment.id());
-    db.update(
-        "update yak_realtime_job_deployment set runtime_environment_id=?,"
-            + "runtime_environment_version=?,runtime_environment_snapshot_json=? "
-            + "where runtime_environment_snapshot_json is null",
-        environment.id(),
-        environment.version(),
-        write(snapshot));
   }
 
   public boolean hasBoundRealtimeJobs(long id) {

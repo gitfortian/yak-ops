@@ -18,6 +18,7 @@ import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
 import io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
@@ -62,13 +63,13 @@ public class RealtimeJobController {
   public record SaveRequest(
       @NotBlank @Size(max = 200) String name,
       @Size(max = 1000) String description,
-      Long runtimeEnvironmentId,
+      @NotNull Long runtimeEnvironmentId,
       @Valid CdcPipelineSpec spec) {}
 
   public record CreateRequest(
       @NotBlank @Size(max = 200) String name,
       @Size(max = 1000) String description,
-      Long runtimeEnvironmentId) {}
+      @NotNull Long runtimeEnvironmentId) {}
 
   @Operation(summary = "创建实时同步基础任务")
   @PostMapping
@@ -193,8 +194,7 @@ public class RealtimeJobController {
 
   @Operation(summary = "查询指定 Flink CDC 运行环境能力")
   @GetMapping("/runtime/capabilities")
-  public Result<JsonNode> capabilities(
-      @RequestParam(required = false) Long environmentId) {
+  public Result<JsonNode> capabilities(@RequestParam long environmentId) {
     return Result.success(service.capabilities(environmentId));
   }
 
@@ -216,27 +216,5 @@ public class RealtimeJobController {
   public Result<RealtimeObservabilityView.RuntimeLog> runtimeLog(
       @PathVariable long id, @RequestParam(defaultValue = "50") int maxExceptions) {
     return Result.success(observabilityService.runtimeLog(id, maxExceptions));
-  }
-
-  /** Compatibility endpoint retained for existing clients. */
-  @Operation(summary = "查询当前任务提交日志和 Flink 异常（兼容接口）")
-  @GetMapping("/{id}/logs")
-  public Result<Map<String, String>> logs(
-      @PathVariable long id, @RequestParam(defaultValue = "200") int tail) {
-    return Result.success(Map.of("logs", service.logs(id, tail)));
-  }
-
-  /** Compatibility endpoint retained for existing clients. */
-  @Operation(summary = "查询当前任务原始 Checkpoint 统计")
-  @GetMapping("/{id}/checkpoints")
-  public Result<JsonNode> checkpoints(@PathVariable long id) {
-    return Result.success(service.checkpoints(id));
-  }
-
-  /** Compatibility endpoint retained for existing clients. */
-  @Operation(summary = "查询当前任务原始 Flink 指标")
-  @GetMapping("/{id}/metrics")
-  public Result<JsonNode> metrics(@PathVariable long id) {
-    return Result.success(service.metrics(id));
   }
 }

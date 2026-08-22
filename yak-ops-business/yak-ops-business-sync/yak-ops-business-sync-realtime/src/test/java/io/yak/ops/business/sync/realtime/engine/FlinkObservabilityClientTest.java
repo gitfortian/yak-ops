@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -25,6 +28,7 @@ class FlinkObservabilityClientTest {
   @TempDir Path temp;
   private HttpServer server;
   private FlinkObservabilityClient client;
+  private ComputeEnvironmentSnapshot environment;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -33,7 +37,6 @@ class FlinkObservabilityClientTest {
     server.start();
 
     RealtimeSyncProperties properties = new RealtimeSyncProperties();
-    properties.setRestUrl("http://127.0.0.1:" + server.getAddress().getPort());
     properties.setWorkDirectory(temp.resolve("work").toString());
     client =
         new FlinkObservabilityClient(
@@ -41,6 +44,21 @@ class FlinkObservabilityClientTest {
             new ObjectMapper(),
             properties,
             new RealtimeLogRedactor());
+    environment =
+        new ComputeEnvironmentSnapshot(
+            3L,
+            "test-env",
+            ComputeEnvironment.ENGINE_FLINK_CDC,
+            ComputeEnvironment.DEPLOYMENT_REMOTE,
+            ComputeEnvironment.SUBMITTER_LOCAL,
+            new RuntimeConfig(
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "/opt/flink",
+                "/opt/flink-cdc",
+                null,
+                "1.20.5",
+                "3.6.0"),
+            1);
   }
 
   @AfterEach
@@ -50,7 +68,7 @@ class FlinkObservabilityClientTest {
 
   @Test
   void normalizesJobCheckpointAndVertexMetrics() {
-    RealtimeObservabilityView view = client.snapshot(JOB_ID);
+    RealtimeObservabilityView view = client.snapshot(environment, JOB_ID);
 
     assertThat(view.flinkState()).isEqualTo("RUNNING");
     assertThat(view.durationMs()).isEqualTo(5000L);
@@ -79,7 +97,7 @@ class FlinkObservabilityClientTest {
         .contains("password=******")
         .doesNotContain("plain-secret");
 
-    RealtimeObservabilityView.RuntimeLog runtime = client.runtimeLog(JOB_ID, 20);
+    RealtimeObservabilityView.RuntimeLog runtime = client.runtimeLog(environment, JOB_ID, 20);
     assertThat(runtime.rootException()).contains("boom");
     assertThat(runtime.exceptions()).hasSize(1);
     assertThat(runtime.exceptions().get(0).taskName()).isEqualTo("Sink: yak-jdbc");

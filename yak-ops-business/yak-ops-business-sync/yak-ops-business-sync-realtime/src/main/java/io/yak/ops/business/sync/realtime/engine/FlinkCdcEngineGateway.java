@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.SubmissionMode;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
@@ -32,7 +31,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Submits Flink CDC YAML locally or through SSH and manages jobs through direct Flink REST. */
+/** Submits Flink CDC YAML for an explicit environment and manages jobs through direct Flink REST. */
 @Component
 public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
 
@@ -55,7 +54,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   private final HttpClient client;
   private final ObjectMapper json;
   private final RealtimeSyncProperties properties;
-  private final SshFlinkCdcCommandRunner sshRunner;
+  private final SshFlinkCdcCommandRunner sshRunner = new SshFlinkCdcCommandRunner();
 
   public FlinkCdcEngineGateway(
       @Qualifier("realtimeHttpClient") HttpClient client,
@@ -64,12 +63,6 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     this.client = client;
     this.json = json;
     this.properties = properties;
-    this.sshRunner = new SshFlinkCdcCommandRunner(properties);
-  }
-
-  @Override
-  public JsonNode health() {
-    return health(bootstrapEnvironment());
   }
 
   @Override
@@ -78,18 +71,13 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   }
 
   @Override
-  public JsonNode capabilities() {
-    return capabilities(bootstrapEnvironment());
-  }
-
-  @Override
   public JsonNode capabilities(ComputeEnvironmentSnapshot environment) {
     RuntimeConfig config = requireConfig(environment);
+    boolean ssh = sshSubmission(environment);
     ObjectNode result = json.createObjectNode();
-    SubmissionMode mode = submissionMode(environment);
     boolean deployEnabled;
     String disabledReason = null;
-    if (mode == SubmissionMode.SSH) {
+    if (ssh) {
       disabledReason = sshRunner.configurationError(environment);
       deployEnabled = disabledReason == null;
     } else {
@@ -109,12 +97,8 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     result.put("flinkCdcVersion", config.flinkCdcVersion());
     result.put("restUrl", config.restUrl());
     result.put("restTransport", "DIRECT");
-    result.put("submissionMode", mode.name());
-    if (mode == SubmissionMode.SSH) {
-      result.put("submissionEndpoint", sshRunner.endpoint(environment));
-    } else {
-      result.put("submissionEndpoint", "local");
-    }
+    result.put("submissionMode", ssh ? "SSH" : "LOCAL");
+    result.put("submissionEndpoint", ssh ? sshRunner.endpoint(environment) : "local");
     result.put("deliverySemantics", "at-least-once");
     result.put("checkpointsApi", true);
     result.put("metricsApi", true);
@@ -133,28 +117,19 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   }
 
   @Override
-  public ValidationResult validate(String pipelineYaml) {
-    return validate(bootstrapEnvironment(), pipelineYaml);
-  }
-
-  @Override
   public ValidationResult validate(ComputeEnvironmentSnapshot environment, String pipelineYaml) {
     validatePipelineShape(pipelineYaml);
     URI rest = restUri(environment);
-    if (submissionMode(environment) == SubmissionMode.SSH) {
+    if (sshSubmission(environment)) {
       sshRunner.validateReady(environment, rest);
-    } else if (!Files.isRegularFile(cliPath(environment))
-        || !Files.isExecutable(cliPath(environment))) {
-      throw failure(
-          "Flink CDC CLI 不存在或不可执行：" + cliPath(environment), false, null, null);
+    } else {
+      Path cli = cliPath(environment);
+      if (!Files.isRegularFile(cli) || !Files.isExecutable(cli)) {
+        throw failure("Flink CDC CLI 不存在或不可执行：" + cli, false, null, null);
+      }
     }
     health(environment);
     return new ValidationResult(true, "at-least-once");
-  }
-
-  @Override
-  public DeployResult deploy(RealtimeDeployRequest request) {
-    return deploy(bootstrapEnvironment(), request);
   }
 
   @Override
@@ -172,7 +147,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
 
       URI rest = restUri(environment);
       CommandResult result;
-      if (submissionMode(environment) == SubmissionMode.SSH) {
+      if (sshSubmission(environment)) {
         SshFlinkCdcCommandRunner.ExecutionResult sshResult =
             sshRunner.submit(
                 environment,
@@ -194,8 +169,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       writePrivate(submissionLog, output);
       if (result.exitCode() != 0) {
         String excerpt = tail(output, 20);
-        String prefix =
-            submissionMode(environment) == SubmissionMode.SSH ? "SSH Flink CDC" : "Flink CDC";
+        String prefix = sshSubmission(environment) ? "SSH Flink CDC" : "Flink CDC";
         throw failure(
             prefix
                 + " 提交失败，exitCode="
@@ -266,11 +240,6 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   }
 
   @Override
-  public RuntimeStatus status(String jobId) {
-    return status(bootstrapEnvironment(), jobId);
-  }
-
-  @Override
   public RuntimeStatus status(ComputeEnvironmentSnapshot environment, String jobId) {
     requireJobId(jobId);
     JsonNode body = getJson(environment, "/jobs/" + jobId, true, true);
@@ -288,65 +257,9 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   }
 
   @Override
-  public void stop(String jobId) {
-    stop(bootstrapEnvironment(), jobId);
-  }
-
-  @Override
   public void stop(ComputeEnvironmentSnapshot environment, String jobId) {
     requireJobId(jobId);
     send(environment, "/jobs/" + jobId, "PATCH", true, true);
-  }
-
-  @Override
-  public String logs(String jobId, int tailLines) {
-    return logs(bootstrapEnvironment(), jobId, tailLines);
-  }
-
-  @Override
-  public String logs(
-      ComputeEnvironmentSnapshot environment, String jobId, int tailLines) {
-    requireJobId(jobId);
-    int tail = Math.max(1, Math.min(tailLines, properties.getMaxLogLines()));
-    StringBuilder result = new StringBuilder();
-    Path log = submitLog(jobId);
-    if (Files.isRegularFile(log)) {
-      result.append("=== Flink CDC submit ===\n").append(tail(log, tail));
-    }
-    JsonNode exceptions =
-        getJson(environment, "/jobs/" + jobId + "/exceptions", false, true);
-    if (exceptions != null) {
-      if (!result.isEmpty()) {
-        result.append('\n');
-      }
-      result.append("=== Flink job exceptions ===\n").append(exceptions.toPrettyString());
-    }
-    return result.toString();
-  }
-
-  @Override
-  public JsonNode checkpoints(String jobId) {
-    return checkpoints(bootstrapEnvironment(), jobId);
-  }
-
-  @Override
-  public JsonNode checkpoints(ComputeEnvironmentSnapshot environment, String jobId) {
-    requireJobId(jobId);
-    return getJson(environment, "/jobs/" + jobId + "/checkpoints", false, false);
-  }
-
-  @Override
-  public JsonNode metrics(String jobId) {
-    return metrics(bootstrapEnvironment(), jobId);
-  }
-
-  @Override
-  public JsonNode metrics(ComputeEnvironmentSnapshot environment, String jobId) {
-    requireJobId(jobId);
-    ObjectNode result = json.createObjectNode();
-    result.set("job", getJson(environment, "/jobs/" + jobId, false, false));
-    result.set("metrics", getJson(environment, "/jobs/" + jobId + "/metrics", false, false));
-    return result;
   }
 
   private String resolveSecrets(RealtimeDeployRequest request) {
@@ -433,8 +346,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       }
       JsonNode body = parse(response.body(), uncertain);
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
-        throw failure(
-            "Flink REST HTTP " + response.statusCode(), uncertain, response.statusCode(), null);
+        throw failure("Flink REST HTTP " + response.statusCode(), uncertain, response.statusCode(), null);
       }
       return new Response(response.statusCode(), body);
     } catch (HttpTimeoutException exception) {
@@ -452,14 +364,6 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       return value == null || value.isBlank() ? json.createObjectNode() : json.readTree(value);
     } catch (Exception exception) {
       throw failure("Flink REST 返回了无效 JSON", uncertain, null, exception);
-    }
-  }
-
-  private String tail(Path path, int lines) {
-    try (var stream = Files.lines(path, StandardCharsets.UTF_8)) {
-      return tail(stream.toList(), lines);
-    } catch (IOException exception) {
-      throw failure("无法读取 Flink CDC 提交日志", false, null, exception);
     }
   }
 
@@ -521,31 +425,14 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     return environment.config();
   }
 
-  private SubmissionMode submissionMode(ComputeEnvironmentSnapshot environment) {
-    try {
-      return SubmissionMode.valueOf(environment.submitterType());
-    } catch (Exception exception) {
-      throw new IllegalArgumentException("不支持的任务提交方式：" + environment.submitterType(), exception);
+  private boolean sshSubmission(ComputeEnvironmentSnapshot environment) {
+    if (ComputeEnvironment.SUBMITTER_SSH.equals(environment.submitterType())) {
+      return true;
     }
-  }
-
-  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
-    RuntimeConfig config =
-        new RuntimeConfig(
-            properties.getRestUrl(),
-            properties.getFlinkHome(),
-            properties.getFlinkCdcHome(),
-            properties.getJavaHome(),
-            properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion());
-    return new ComputeEnvironmentSnapshot(
-        0L,
-        "application/default",
-        ComputeEnvironment.ENGINE_FLINK_CDC,
-        ComputeEnvironment.DEPLOYMENT_REMOTE,
-        properties.getSubmissionMode().name(),
-        config,
-        0);
+    if (ComputeEnvironment.SUBMITTER_LOCAL.equals(environment.submitterType())) {
+      return false;
+    }
+    throw new IllegalArgumentException("不支持的任务提交方式：" + environment.submitterType());
   }
 
   private int defaultPort(URI uri) {

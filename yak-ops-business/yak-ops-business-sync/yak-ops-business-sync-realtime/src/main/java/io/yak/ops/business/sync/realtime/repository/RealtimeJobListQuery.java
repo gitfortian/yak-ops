@@ -154,7 +154,7 @@ public class RealtimeJobListQuery {
         result.getString("job_name"),
         result.getString("description"),
         readSpec(result.getString("spec_json")),
-        result.getObject("runtime_environment_id", Long.class),
+        result.getLong("runtime_environment_id"),
         result.getString("release_state"),
         result.getString("desired_state"),
         result.getString("observed_state"),
@@ -180,7 +180,7 @@ public class RealtimeJobListQuery {
 
   private ComputeEnvironmentSnapshot readEnvironmentSnapshot(String value) {
     if (!StringUtils.hasText(value)) {
-      return null;
+      throw new IllegalStateException("实时同步部署缺少运行环境快照");
     }
     try {
       return json.readValue(value, ComputeEnvironmentSnapshot.class);

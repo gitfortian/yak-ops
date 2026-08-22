@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
@@ -37,9 +36,7 @@ class ComputeEnvironmentServiceTest {
     probe = mock(FlinkRuntimeEnvironmentProbe.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-    service =
-        new ComputeEnvironmentService(
-            store, new RealtimeSyncProperties(), probe, transactionManager);
+    service = new ComputeEnvironmentService(store, probe, transactionManager);
   }
 
   @Test
