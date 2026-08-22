@@ -14,6 +14,7 @@ import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -103,6 +104,29 @@ class FlinkCdcEngineGatewaySshTest {
   }
 
   @Test
+  void probesSshRuntimeWithoutSubmittingPipeline() throws Exception {
+    Path captured = temp.resolve("should-not-contain-pipeline.yaml");
+    Path ssh = fakeSsh(captured, 0);
+    RealtimeSyncProperties properties = new RealtimeSyncProperties();
+    properties.getSsh().setExecutable(temp.resolve("fallback-missing-ssh").toString());
+    SshFlinkCdcCommandRunner runner = new SshFlinkCdcCommandRunner(properties);
+    ComputeEnvironmentSnapshot environment = sshEnvironment(ssh, "10.0.0.99", 2202);
+
+    SshFlinkCdcCommandRunner.RemoteProbe result =
+        runner.probe(environment, URI.create(environment.config().restUrl()));
+
+    assertThat(result.cdcExecutable()).isTrue();
+    assertThat(result.cdcVersionCommandOk()).isTrue();
+    assertThat(result.cdcVersionOutput()).contains("3.6.0");
+    assertThat(result.flinkExecutable()).isTrue();
+    assertThat(result.flinkVersionOutput()).contains("1.20.5");
+    assertThat(result.javaExecutable()).isTrue();
+    assertThat(result.javaVersionOutput()).contains("17.0.12");
+    assertThat(result.tempWritable()).isTrue();
+    assertThat(captured).doesNotExist();
+  }
+
+  @Test
   void propagatesSsh255AsUncertainEngineFailureAndRetainsLog() throws Exception {
     Path ssh = fakeSsh(temp.resolve("remote-uncertain.yaml"), 255);
     RealtimeSyncProperties properties = sshProperties(ssh);
@@ -189,6 +213,19 @@ class FlinkCdcEngineGatewaySshTest {
         "#!/bin/sh\n"
             + "case \"$*\" in\n"
             + "  *YAK_REALTIME_SSH_READY*) exit 0 ;;\n"
+            + "  *YAK_CDC_EXEC*)\n"
+            + "    echo 'YAK_SSH=1'\n"
+            + "    echo 'YAK_CDC_EXEC=1'\n"
+            + "    echo 'YAK_CDC_VERSION_OK=1'\n"
+            + "    echo 'YAK_CDC_VERSION=Flink CDC version 3.6.0'\n"
+            + "    echo 'YAK_FLINK_EXEC=1'\n"
+            + "    echo 'YAK_FLINK_VERSION_OK=1'\n"
+            + "    echo 'YAK_FLINK_VERSION=Version: 1.20.5'\n"
+            + "    echo 'YAK_JAVA_EXEC=1'\n"
+            + "    echo 'YAK_JAVA_VERSION_OK=1'\n"
+            + "    echo 'YAK_JAVA_VERSION=openjdk version 17.0.12'\n"
+            + "    echo 'YAK_TEMP=1'\n"
+            + "    exit 0 ;;\n"
             + "esac\n"
             + "cat > "
             + shell(captured)
