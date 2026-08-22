@@ -2,6 +2,19 @@ import { request } from '@umijs/max';
 
 const PREFIX = '/api/v1/compute-environments';
 
+export interface ComputeEnvironmentSshConfig {
+  executable?: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  identityFile?: string;
+  knownHostsFile?: string;
+  strictHostKeyChecking?: boolean;
+  connectTimeoutSeconds?: number;
+  remoteRestAddress?: string;
+  remoteRestPort?: number;
+}
+
 export interface ComputeEnvironmentRuntimeConfig {
   restUrl: string;
   flinkHome: string;
@@ -9,6 +22,7 @@ export interface ComputeEnvironmentRuntimeConfig {
   javaHome?: string;
   flinkVersion: string;
   flinkCdcVersion: string;
+  ssh?: ComputeEnvironmentSshConfig;
 }
 
 export interface ComputeEnvironment {
@@ -27,6 +41,7 @@ export interface ComputeEnvironment {
 
 export interface ComputeEnvironmentPayload {
   name: string;
+  submitterType: 'LOCAL' | 'SSH';
   config: ComputeEnvironmentRuntimeConfig;
   enabled: boolean;
   makeDefault: boolean;
