@@ -1,4 +1,4 @@
-package io.yak.ops.business.analysis;
+package io.yak.ops.business.analysis.config;
 
 import io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;

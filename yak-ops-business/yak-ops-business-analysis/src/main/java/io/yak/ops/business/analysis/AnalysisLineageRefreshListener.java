@@ -1,5 +1,6 @@
 package io.yak.ops.business.analysis;
 
+import io.yak.ops.business.analysis.service.event.AnalysisLineageRefreshRequested;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -22,37 +23,16 @@ class AnalysisLineageRefreshListener {
     this.lineageService = lineageService;
   }
 
-  @TransactionalEventListener(
-      phase = TransactionPhase.AFTER_COMMIT,
-      fallbackExecution = true)
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   public void refresh(AnalysisLineageRefreshRequested event) {
     if (event == null || event.analysisId() <= 0L) return;
     try {
-      if (event.deleted()) {
-        lineageService.clear(event.analysisId());
-      } else {
-        lineageService.syncCurrent(analysisService.get(event.analysisId()));
-      }
+      if (event.deleted()) lineageService.clear(event.analysisId());
+      else lineageService.syncCurrent(analysisService.get(event.analysisId()));
     } catch (RuntimeException exception) {
       LOGGER.warn(
           "Analysis lineage refresh failed after commit for analysis {}: {}",
-          event.analysisId(),
-          exception.getMessage(),
-          exception);
+          event.analysisId(), exception.getMessage(), exception);
     }
-  }
-}
-
-record AnalysisLineageRefreshRequested(long analysisId, boolean deleted) {
-  AnalysisLineageRefreshRequested {
-    if (analysisId <= 0L) throw new IllegalArgumentException("analysisId 必须大于 0");
-  }
-
-  static AnalysisLineageRefreshRequested refresh(long analysisId) {
-    return new AnalysisLineageRefreshRequested(analysisId, false);
-  }
-
-  static AnalysisLineageRefreshRequested deleted(long analysisId) {
-    return new AnalysisLineageRefreshRequested(analysisId, true);
   }
 }
