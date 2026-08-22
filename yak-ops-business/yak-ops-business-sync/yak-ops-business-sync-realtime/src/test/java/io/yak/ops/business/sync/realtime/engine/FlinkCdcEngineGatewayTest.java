@@ -105,6 +105,9 @@ class FlinkCdcEngineGatewayTest {
     assertThat(gateway.health().path("jobs-running").asInt()).isEqualTo(1);
     assertThat(gateway.capabilities().path("deployEnabled").asBoolean()).isTrue();
     assertThat(gateway.capabilities().path("checkpointsApi").asBoolean()).isTrue();
+    assertThat(gateway.capabilities().path("submissionMode").asText()).isEqualTo("LOCAL");
+    assertThat(gateway.capabilities().path("submissionEndpoint").asText()).isEqualTo("local");
+    assertThat(gateway.capabilities().path("restTransport").asText()).isEqualTo("DIRECT");
   }
 
   @Test

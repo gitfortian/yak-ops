@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.SubmissionMode;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,7 +29,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Submits Flink CDC YAML with the local CLI and manages each job through Flink REST. */
+/** Submits Flink CDC YAML locally or through SSH and manages jobs through direct Flink REST. */
 @Component
 public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
 
@@ -51,6 +52,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   private final HttpClient client;
   private final ObjectMapper json;
   private final RealtimeSyncProperties properties;
+  private final SshFlinkCdcCommandRunner sshRunner;
 
   public FlinkCdcEngineGateway(
       @Qualifier("realtimeHttpClient") HttpClient client,
@@ -59,6 +61,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     this.client = client;
     this.json = json;
     this.properties = properties;
+    this.sshRunner = new SshFlinkCdcCommandRunner(properties);
   }
 
   @Override
@@ -69,13 +72,32 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   @Override
   public JsonNode capabilities() {
     ObjectNode result = json.createObjectNode();
-    Path cli = cliPath();
-    boolean deployEnabled = Files.isRegularFile(cli) && Files.isExecutable(cli);
+    SubmissionMode mode = properties.getSubmissionMode();
+    boolean deployEnabled;
+    String disabledReason = null;
+    if (mode == SubmissionMode.SSH) {
+      disabledReason = sshRunner.configurationError();
+      deployEnabled = disabledReason == null;
+    } else {
+      Path cli = cliPath();
+      deployEnabled = Files.isRegularFile(cli) && Files.isExecutable(cli);
+      if (!deployEnabled) {
+        disabledReason = "未找到可执行的 Flink CDC CLI：" + cli;
+      }
+    }
+
     result.put("engineType", "flink-cdc-cli");
     result.put("runtimeVersion", "flink-cdc-cli-" + properties.getFlinkCdcVersion());
     result.put("flinkVersion", properties.getFlinkVersion());
     result.put("flinkCdcVersion", properties.getFlinkCdcVersion());
     result.put("restUrl", properties.getRestUrl());
+    result.put("restTransport", "DIRECT");
+    result.put("submissionMode", mode.name());
+    if (mode == SubmissionMode.SSH) {
+      result.put("submissionEndpoint", sshRunner.endpoint());
+    } else {
+      result.put("submissionEndpoint", "local");
+    }
     result.put("deliverySemantics", "at-least-once");
     result.put("checkpointsApi", true);
     result.put("metricsApi", true);
@@ -84,7 +106,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     result.put("protocolCompatible", true);
     result.put("deployEnabled", deployEnabled);
     if (!deployEnabled) {
-      result.put("deployDisabledReason", "未找到可执行的 Flink CDC CLI：" + cli);
+      result.put("deployDisabledReason", disabledReason);
     }
     ObjectNode connectors = result.putObject("connectors");
     connectors.putArray("sources").add("mysql");
@@ -95,13 +117,11 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
 
   @Override
   public ValidationResult validate(String pipelineYaml) {
-    if (!StringUtils.hasText(pipelineYaml)
-        || !pipelineYaml.contains("source:")
-        || !pipelineYaml.contains("sink:")
-        || !pipelineYaml.contains("pipeline:")) {
-      throw failure("Pipeline YAML 缺少 source、sink 或 pipeline 配置", false, null, null);
-    }
-    if (!Files.isRegularFile(cliPath()) || !Files.isExecutable(cliPath())) {
+    validatePipelineShape(pipelineYaml);
+    URI rest = restUri();
+    if (properties.getSubmissionMode() == SubmissionMode.SSH) {
+      sshRunner.validateReady(rest);
+    } else if (!Files.isRegularFile(cliPath()) || !Files.isExecutable(cliPath())) {
       throw failure("Flink CDC CLI 不存在或不可执行：" + cliPath(), false, null, null);
     }
     health();
@@ -115,50 +135,37 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     Path submissionLog = null;
     Path pipelineFile = null;
     try {
-      Path pipelines = Files.createDirectories(work.resolve("pipelines"));
       Files.createDirectories(work.resolve("logs"));
-      String safeKey = safeKey(request.idempotencyKey());
-      pipelineFile = pipelines.resolve("pipeline-" + safeKey + "-" + System.nanoTime() + ".yaml");
       submissionLog = submitLogByKey(request.idempotencyKey());
       String resolved = resolveSecrets(request);
-      writePrivate(pipelineFile, resolved);
       writePrivate(submissionLog, "");
 
       URI rest = restUri();
-      int port = rest.getPort() < 0 ? defaultPort(rest) : rest.getPort();
-      ProcessBuilder builder =
-          new ProcessBuilder(
-                  cliPath().toString(),
-                  pipelineFile.toString(),
-                  "--flink-home",
-                  Path.of(properties.getFlinkHome()).toAbsolutePath().normalize().toString(),
-                  "--target",
-                  "remote",
-                  "-Drest.address=" + rest.getHost(),
-                  "-Drest.port=" + port)
-              .redirectErrorStream(true)
-              .redirectOutput(submissionLog.toFile());
-      builder.environment().put("FLINK_HOME", properties.getFlinkHome());
-      if (StringUtils.hasText(properties.getJavaHome())) {
-        builder.environment().put("JAVA_HOME", properties.getJavaHome());
+      CommandResult result;
+      if (properties.getSubmissionMode() == SubmissionMode.SSH) {
+        SshFlinkCdcCommandRunner.ExecutionResult sshResult =
+            sshRunner.submit(resolved, submissionLog, rest, properties.getSubmitTimeout());
+        result = new CommandResult(sshResult.exitCode(), sshResult.uncertain());
+      } else {
+        Path pipelines = Files.createDirectories(work.resolve("pipelines"));
+        String safeKey = safeKey(request.idempotencyKey());
+        pipelineFile = pipelines.resolve("pipeline-" + safeKey + "-" + System.nanoTime() + ".yaml");
+        writePrivate(pipelineFile, resolved);
+        result = submitLocal(pipelineFile, submissionLog, rest);
       }
-      Process process = builder.start();
-      Duration timeout = properties.getSubmitTimeout();
-      if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-        process.destroyForcibly();
-        process.waitFor(5, TimeUnit.SECONDS);
-        throw failure("Flink CDC 提交超时，结果不确定，请在 Flink UI 中核对", true, null, null);
-      }
+
       String output = Files.readString(submissionLog, StandardCharsets.UTF_8);
       output = sanitizeOutput(output, request);
       writePrivate(submissionLog, output);
-      if (process.exitValue() != 0) {
+      if (result.exitCode() != 0) {
         String excerpt = tail(output, 20);
+        String prefix = properties.getSubmissionMode() == SubmissionMode.SSH ? "SSH Flink CDC" : "Flink CDC";
         throw failure(
-            "Flink CDC 提交失败，exitCode="
-                + process.exitValue()
+            prefix
+                + " 提交失败，exitCode="
+                + result.exitCode()
                 + (excerpt.isBlank() ? "" : "：\n" + excerpt),
-            false,
+            result.uncertain(),
             null,
             null);
       }
@@ -175,10 +182,48 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       Thread.currentThread().interrupt();
       throw failure("Flink CDC 提交被中断，结果不确定", true, null, exception);
     } catch (IOException exception) {
-      throw failure("无法执行 Flink CDC CLI：" + exception.getMessage(), false, null, exception);
+      throw failure("无法执行 Flink CDC 提交命令：" + exception.getMessage(), false, null, exception);
     } finally {
       sanitizeLogQuietly(submissionLog, request);
       deleteQuietly(pipelineFile);
+    }
+  }
+
+  private CommandResult submitLocal(Path pipelineFile, Path submissionLog, URI rest)
+      throws IOException, InterruptedException {
+    int port = rest.getPort() < 0 ? defaultPort(rest) : rest.getPort();
+    ProcessBuilder builder =
+        new ProcessBuilder(
+                cliPath().toString(),
+                pipelineFile.toString(),
+                "--flink-home",
+                Path.of(properties.getFlinkHome()).toAbsolutePath().normalize().toString(),
+                "--target",
+                "remote",
+                "-Drest.address=" + rest.getHost(),
+                "-Drest.port=" + port)
+            .redirectErrorStream(true)
+            .redirectOutput(submissionLog.toFile());
+    builder.environment().put("FLINK_HOME", properties.getFlinkHome());
+    if (StringUtils.hasText(properties.getJavaHome())) {
+      builder.environment().put("JAVA_HOME", properties.getJavaHome());
+    }
+    Process process = builder.start();
+    Duration timeout = properties.getSubmitTimeout();
+    if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+      process.destroyForcibly();
+      process.waitFor(5, TimeUnit.SECONDS);
+      throw failure("Flink CDC 提交超时，结果不确定，请在 Flink UI 中核对", true, null, null);
+    }
+    return new CommandResult(process.exitValue(), false);
+  }
+
+  private void validatePipelineShape(String pipelineYaml) {
+    if (!StringUtils.hasText(pipelineYaml)
+        || !pipelineYaml.contains("source:")
+        || !pipelineYaml.contains("sink:")
+        || !pipelineYaml.contains("pipeline:")) {
+      throw failure("Pipeline YAML 缺少 source、sink 或 pipeline 配置", false, null, null);
     }
   }
 
@@ -419,6 +464,8 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       String message, boolean uncertain, Integer status, Throwable cause) {
     return new RealtimeEngineException(message, uncertain, status, cause);
   }
+
+  private record CommandResult(int exitCode, boolean uncertain) {}
 
   private record Response(int status, JsonNode body) {}
 }
