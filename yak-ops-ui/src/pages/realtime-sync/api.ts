@@ -38,7 +38,7 @@ export const realtimeApi = {
       params,
     }),
   detail: (id: number) => request<ApiResponse<RealtimeJob>>(`${PREFIX}/${id}`),
-  createBasic: (payload: { name: string; description?: string; runtimeEnvironmentId?: number }) =>
+  createBasic: (payload: { name: string; description?: string; runtimeEnvironmentId: number }) =>
     request<ApiResponse<number>>(PREFIX, { method: 'POST', data: payload }),
   create: (payload: RealtimeDefinitionPayload) =>
     request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
@@ -62,14 +62,9 @@ export const realtimeApi = {
     request<ApiResponse<RealtimeRuntimeLog>>(`${PREFIX}/${id}/logs/runtime`, {
       params: { maxExceptions },
     }),
-  // Compatibility calls retained for older screens/integrations.
-  logs: (id: number) =>
-    request<ApiResponse<{ logs: string }>>(`${PREFIX}/${id}/logs`, { params: { tail: 500 } }),
-  checkpoints: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/checkpoints`),
-  metrics: (id: number) => request<ApiResponse<unknown>>(`${PREFIX}/${id}/metrics`),
-  capabilities: (environmentId?: number) =>
+  capabilities: (environmentId: number) =>
     request<ApiResponse<RuntimeCapabilities>>(`${PREFIX}/runtime/capabilities`, {
-      params: environmentId ? { environmentId } : undefined,
+      params: { environmentId },
     }),
   environments: () =>
     request<ApiResponse<ComputeEnvironmentOption[]>>('/api/v1/compute-environments'),

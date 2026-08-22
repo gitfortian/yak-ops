@@ -1,8 +1,5 @@
 package io.yak.ops.business.sync.realtime.service;
 
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.RuntimeOverrides;
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.SubmissionMode;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
@@ -10,9 +7,7 @@ import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentDiagnosis;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.engine.FlinkRuntimeEnvironmentProbe;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
-import jakarta.annotation.PostConstruct;
 import java.net.URI;
-import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -20,7 +15,6 @@ import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -31,32 +25,20 @@ import org.springframework.util.StringUtils;
 @DependsOn("realtimeSyncFlyway")
 public class ComputeEnvironmentService {
 
-  private static final String BOOTSTRAP_NAME = "默认实时环境";
   private static final Pattern SSH_USER = Pattern.compile("[A-Za-z0-9._-]+");
   private static final Pattern SSH_HOST = Pattern.compile("[A-Za-z0-9._:%-]+");
 
   private final ComputeEnvironmentStore store;
-  private final RealtimeSyncProperties properties;
   private final FlinkRuntimeEnvironmentProbe probe;
   private final TransactionTemplate transactions;
 
   public ComputeEnvironmentService(
       ComputeEnvironmentStore store,
-      RealtimeSyncProperties properties,
       FlinkRuntimeEnvironmentProbe probe,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager) {
     this.store = store;
-    this.properties = properties;
     this.probe = probe;
     this.transactions = new TransactionTemplate(transactionManager);
-  }
-
-  @PostConstruct
-  void initialize() {
-    bootstrapDefaultEnvironment();
-    backfillLegacySshConfigurations();
-    backfillLegacyRuntimeBindings();
-    refreshRuntimeOverrides();
   }
 
   public List<ComputeEnvironment> list() {
@@ -97,9 +79,6 @@ public class ComputeEnvironmentService {
                     enabled,
                     makeDefault);
               });
-      if (makeDefault) {
-        refreshRuntimeOverrides();
-      }
       return Objects.requireNonNull(id, "新增运行环境失败");
     } catch (DuplicateKeyException exception) {
       throw new IllegalArgumentException("运行环境名称已存在：" + normalizedName, exception);
@@ -139,9 +118,6 @@ public class ComputeEnvironmentService {
           });
     } catch (DuplicateKeyException exception) {
       throw new IllegalArgumentException("运行环境名称已存在：" + normalizedName, exception);
-    }
-    if (current.defaultEnvironment() || switchingDefault) {
-      refreshRuntimeOverrides();
     }
   }
 
@@ -196,7 +172,6 @@ public class ComputeEnvironmentService {
           store.clearDefault();
           store.setDefault(id);
         });
-    refreshRuntimeOverrides();
   }
 
   public void delete(long id) {
@@ -208,103 +183,6 @@ public class ComputeEnvironmentService {
       throw new IllegalStateException("运行环境仍被实时同步任务引用，请先将这些任务切换到其他运行环境");
     }
     store.delete(id);
-  }
-
-  /**
-   * The application/default override remains as a compatibility fallback for older integrations.
-   * Task lifecycle operations use the task/deployment environment explicitly.
-   */
-  @Scheduled(fixedDelayString = "${yak.sync.realtime.environment-refresh-delay:5000}")
-  public void refreshRuntimeOverrides() {
-    ComputeEnvironment environment = store.defaultEnvironment().orElse(null);
-    if (environment == null) {
-      properties.clearRuntimeOverrides();
-      return;
-    }
-    RuntimeConfig config = environment.config();
-    SubmissionMode mode = submissionMode(environment.submitterType());
-    properties.applyRuntimeOverrides(
-        new RuntimeOverrides(
-            config.restUrl(),
-            config.flinkHome(),
-            config.flinkCdcHome(),
-            config.javaHome(),
-            config.flinkVersion(),
-            config.flinkCdcVersion(),
-            mode));
-  }
-
-  private void bootstrapDefaultEnvironment() {
-    if (store.count() > 0) {
-      return;
-    }
-    String submitterType = properties.getSubmissionMode().name();
-    RuntimeConfig config =
-        new RuntimeConfig(
-            properties.getRestUrl(),
-            properties.getFlinkHome(),
-            properties.getFlinkCdcHome(),
-            properties.getJavaHome(),
-            properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion(),
-            ComputeEnvironment.SUBMITTER_SSH.equals(submitterType) ? bootstrapSshConfig() : null);
-    try {
-      transactions.executeWithoutResult(
-          status -> {
-            if (store.count() == 0) {
-              store.insert(
-                  BOOTSTRAP_NAME,
-                  ComputeEnvironment.ENGINE_FLINK_CDC,
-                  ComputeEnvironment.DEPLOYMENT_REMOTE,
-                  submitterType,
-                  normalizeConfig(config, submitterType, true),
-                  true,
-                  true);
-            }
-          });
-    } catch (DuplicateKeyException ignored) {
-      // Another Yak Ops instance won the bootstrap race.
-    }
-  }
-
-  /**
-   * Stage one/two could create an SSH environment whose SSH client settings still lived only in
-   * application.yml. Copy that non-secret connection metadata into config_json once so the stage
-   * three editor can manage it. Historical deployment snapshots remain unchanged.
-   */
-  private void backfillLegacySshConfigurations() {
-    SshConfig fallback = bootstrapSshConfig();
-    for (ComputeEnvironment environment : store.list()) {
-      RuntimeConfig config = environment.config();
-      if (!ComputeEnvironment.SUBMITTER_SSH.equals(environment.submitterType())
-          || config == null
-          || config.ssh() != null) {
-        continue;
-      }
-      RuntimeConfig migrated =
-          new RuntimeConfig(
-              config.restUrl(),
-              config.flinkHome(),
-              config.flinkCdcHome(),
-              config.javaHome(),
-              config.flinkVersion(),
-              config.flinkCdcVersion(),
-              fallback);
-      store.update(
-          environment.id(),
-          environment.name(),
-          environment.submitterType(),
-          migrated,
-          environment.enabled());
-    }
-  }
-
-  private void backfillLegacyRuntimeBindings() {
-    ComputeEnvironment environment = store.defaultEnvironment().orElse(null);
-    if (environment == null) {
-      return;
-    }
-    transactions.executeWithoutResult(status -> store.bindLegacyRealtimeJobs(environment));
   }
 
   private ComputeEnvironment require(long id) {
@@ -432,24 +310,6 @@ public class ComputeEnvironmentService {
         remoteRestPort);
   }
 
-  private SshConfig bootstrapSshConfig() {
-    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
-    Duration timeout = ssh.getConnectTimeout();
-    int timeoutSeconds =
-        timeout == null ? 5 : (int) Math.max(1, Math.min(120, timeout.toSeconds()));
-    return new SshConfig(
-        ssh.getExecutable(),
-        ssh.getHost(),
-        ssh.getPort(),
-        ssh.getUser(),
-        ssh.getIdentityFile(),
-        ssh.getKnownHostsFile(),
-        ssh.isStrictHostKeyChecking(),
-        timeoutSeconds,
-        ssh.getRemoteRestAddress(),
-        ssh.getRemoteRestPort());
-  }
-
   private void validateRestUrl(String value) {
     try {
       URI uri = URI.create(value);
@@ -495,13 +355,5 @@ public class ComputeEnvironmentService {
 
   private boolean absoluteUnixPath(String value) {
     return StringUtils.hasText(value) && value.startsWith("/");
-  }
-
-  private SubmissionMode submissionMode(String value) {
-    try {
-      return SubmissionMode.valueOf(value);
-    } catch (Exception exception) {
-      throw new IllegalStateException("不支持的任务提交方式：" + value, exception);
-    }
   }
 }

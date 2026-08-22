@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties.SubmissionMode;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
@@ -46,24 +45,23 @@ class FlinkCdcEngineGatewaySshTest {
   }
 
   @Test
-  void submitsThroughSshWithoutCreatingLocalPipelineFile() throws Exception {
+  void submitsThroughExplicitSshEnvironmentWithoutCreatingLocalPipelineFile() throws Exception {
     Path captured = temp.resolve("remote-pipeline.yaml");
     Path ssh = fakeSsh(captured, 0);
-    RealtimeSyncProperties properties = sshProperties(ssh);
+    RealtimeSyncProperties properties = appProperties("work");
     FlinkCdcEngineGateway gateway =
         new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
+    ComputeEnvironmentSnapshot environment = sshEnvironment(ssh, "10.0.0.20", 22);
 
-    String yaml = pipelineYaml();
     RealtimeEngineGateway.DeployResult result;
-    try (RealtimeDeployRequest request = request(yaml, "ssh-key")) {
-      result = gateway.deploy(request);
+    try (RealtimeDeployRequest request = request(pipelineYaml(), "ssh-key")) {
+      result = gateway.deploy(environment, request);
     }
 
     assertThat(result.jobId()).isEqualTo(JOB_ID);
-    assertThat(gateway.capabilities().path("submissionMode").asText()).isEqualTo("SSH");
-    assertThat(gateway.capabilities().path("submissionEndpoint").asText())
+    assertThat(gateway.capabilities(environment).path("submissionMode").asText()).isEqualTo("SSH");
+    assertThat(gateway.capabilities(environment).path("submissionEndpoint").asText())
         .isEqualTo("flink@10.0.0.20:22");
-    assertThat(gateway.capabilities().path("restTransport").asText()).isEqualTo("DIRECT");
     assertThat(Files.readString(captured, StandardCharsets.UTF_8))
         .contains("password: 'source-secret'")
         .contains("password: 'sink-secret'")
@@ -74,42 +72,10 @@ class FlinkCdcEngineGatewaySshTest {
   }
 
   @Test
-  void usesEnvironmentScopedSshSettingsInsteadOfApplicationFallback() throws Exception {
-    Path captured = temp.resolve("environment-pipeline.yaml");
-    Path ssh = fakeSsh(captured, 0);
-    RealtimeSyncProperties properties = new RealtimeSyncProperties();
-    properties.setSubmissionMode(SubmissionMode.SSH);
-    properties.setWorkDirectory(temp.resolve("work-env").toString());
-    properties.setSubmitTimeout(Duration.ofSeconds(5));
-    // Deliberately unusable application fallback. The explicit environment must win.
-    properties.getSsh().setExecutable(temp.resolve("missing-ssh").toString());
-    properties.getSsh().setHost("fallback.invalid");
-    properties.getSsh().setUser("fallback");
-
-    FlinkCdcEngineGateway gateway =
-        new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
-    ComputeEnvironmentSnapshot environment = sshEnvironment(ssh, "10.0.0.88", 2222);
-
-    RealtimeEngineGateway.DeployResult result;
-    try (RealtimeDeployRequest request = request(pipelineYaml(), "environment-key")) {
-      result = gateway.deploy(environment, request);
-    }
-
-    assertThat(result.jobId()).isEqualTo(JOB_ID);
-    assertThat(gateway.capabilities(environment).path("submissionEndpoint").asText())
-        .isEqualTo("flink@10.0.0.88:2222");
-    assertThat(Files.readString(captured, StandardCharsets.UTF_8))
-        .contains("password: 'source-secret'")
-        .doesNotContain("${SECRET:");
-  }
-
-  @Test
   void probesSshRuntimeWithoutSubmittingPipeline() throws Exception {
     Path captured = temp.resolve("should-not-contain-pipeline.yaml");
     Path ssh = fakeSsh(captured, 0);
-    RealtimeSyncProperties properties = new RealtimeSyncProperties();
-    properties.getSsh().setExecutable(temp.resolve("fallback-missing-ssh").toString());
-    SshFlinkCdcCommandRunner runner = new SshFlinkCdcCommandRunner(properties);
+    SshFlinkCdcCommandRunner runner = new SshFlinkCdcCommandRunner();
     ComputeEnvironmentSnapshot environment = sshEnvironment(ssh, "10.0.0.99", 2202);
 
     SshFlinkCdcCommandRunner.RemoteProbe result =
@@ -129,19 +95,26 @@ class FlinkCdcEngineGatewaySshTest {
   @Test
   void propagatesSsh255AsUncertainEngineFailureAndRetainsLog() throws Exception {
     Path ssh = fakeSsh(temp.resolve("remote-uncertain.yaml"), 255);
-    RealtimeSyncProperties properties = sshProperties(ssh);
+    RealtimeSyncProperties properties = appProperties("work-uncertain");
     FlinkCdcEngineGateway gateway =
         new FlinkCdcEngineGateway(HttpClient.newHttpClient(), new ObjectMapper(), properties);
+    ComputeEnvironmentSnapshot environment = sshEnvironment(ssh, "10.0.0.20", 22);
 
     try (RealtimeDeployRequest request = request(pipelineYaml(), "ssh-uncertain")) {
-      assertThatThrownBy(() -> gateway.deploy(request))
+      assertThatThrownBy(() -> gateway.deploy(environment, request))
           .isInstanceOf(RealtimeEngineException.class)
-          .satisfies(
-              error -> assertThat(((RealtimeEngineException) error).uncertain()).isTrue())
+          .satisfies(error -> assertThat(((RealtimeEngineException) error).uncertain()).isTrue())
           .hasMessageContaining("exitCode=255");
     }
 
-    assertThat(temp.resolve("work/logs/submit-ssh-uncertain.log")).exists();
+    assertThat(temp.resolve("work-uncertain/logs/submit-ssh-uncertain.log")).exists();
+  }
+
+  private RealtimeSyncProperties appProperties(String workDirectory) {
+    RealtimeSyncProperties properties = new RealtimeSyncProperties();
+    properties.setWorkDirectory(temp.resolve(workDirectory).toString());
+    properties.setSubmitTimeout(Duration.ofSeconds(5));
+    return properties;
   }
 
   private ComputeEnvironmentSnapshot sshEnvironment(Path executable, String host, int port) {
@@ -175,24 +148,6 @@ class FlinkCdcEngineGatewaySshTest {
         3);
   }
 
-  private RealtimeSyncProperties sshProperties(Path executable) {
-    RealtimeSyncProperties properties = new RealtimeSyncProperties();
-    properties.setSubmissionMode(SubmissionMode.SSH);
-    properties.setRestUrl("http://127.0.0.1:" + server.getAddress().getPort());
-    properties.setFlinkHome("/opt/flink");
-    properties.setFlinkCdcHome("/opt/flink-cdc");
-    properties.setWorkDirectory(temp.resolve("work").toString());
-    properties.setSubmitTimeout(Duration.ofSeconds(5));
-    properties.getSsh().setExecutable(executable.toString());
-    properties.getSsh().setHost("10.0.0.20");
-    properties.getSsh().setPort(22);
-    properties.getSsh().setUser("flink");
-    properties.getSsh().setConnectTimeout(Duration.ofSeconds(1));
-    properties.getSsh().setRemoteRestAddress("127.0.0.1");
-    properties.getSsh().setRemoteRestPort(server.getAddress().getPort());
-    return properties;
-  }
-
   private RealtimeDeployRequest request(String yaml, String key) {
     return new RealtimeDeployRequest(
         yaml,
@@ -208,7 +163,8 @@ class FlinkCdcEngineGatewaySshTest {
   }
 
   private Path fakeSsh(Path captured, int submitExitCode) throws Exception {
-    Path script = temp.resolve("gateway-fake-ssh-" + submitExitCode + "-" + captured.getFileName() + ".sh");
+    Path script =
+        temp.resolve("gateway-fake-ssh-" + submitExitCode + "-" + captured.getFileName() + ".sh");
     String content =
         "#!/bin/sh\n"
             + "case \"$*\" in\n"

@@ -3,8 +3,6 @@ package io.yak.ops.business.sync.realtime.engine;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
-import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
-import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import java.io.IOException;
 import java.net.URI;
@@ -36,10 +34,6 @@ public class FlinkJobDiscoveryClient {
     this.client = client;
     this.json = json;
     this.properties = properties;
-  }
-
-  public List<String> findJobIds(String exactRuntimeJobName) {
-    return findJobIds(bootstrapEnvironment(), exactRuntimeJobName);
   }
 
   public List<String> findJobIds(
@@ -93,25 +87,6 @@ public class FlinkJobDiscoveryClient {
       throw new IllegalArgumentException("运行环境配置不能为空");
     }
     return environment.config().restUrl().replaceAll("/+$", "");
-  }
-
-  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
-    RuntimeConfig config =
-        new RuntimeConfig(
-            properties.getRestUrl(),
-            properties.getFlinkHome(),
-            properties.getFlinkCdcHome(),
-            properties.getJavaHome(),
-            properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion());
-    return new ComputeEnvironmentSnapshot(
-        0L,
-        "application/default",
-        ComputeEnvironment.ENGINE_FLINK_CDC,
-        ComputeEnvironment.DEPLOYMENT_REMOTE,
-        properties.getSubmissionMode().name(),
-        config,
-        0);
   }
 
   private RealtimeEngineException failure(String message, Throwable cause) {

@@ -1,7 +1,5 @@
 package io.yak.ops.business.sync.realtime.engine;
 
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
-import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.RuntimeConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment.SshConfig;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
@@ -24,16 +22,6 @@ final class SshFlinkCdcCommandRunner {
 
   private static final Pattern SSH_USER = Pattern.compile("[A-Za-z0-9._-]+");
   private static final Pattern SSH_HOST = Pattern.compile("[A-Za-z0-9._:%-]+");
-
-  private final RealtimeSyncProperties properties;
-
-  SshFlinkCdcCommandRunner(RealtimeSyncProperties properties) {
-    this.properties = properties;
-  }
-
-  String configurationError() {
-    return configurationError(bootstrapEnvironment());
-  }
 
   String configurationError(ComputeEnvironmentSnapshot environment) {
     SshConfig ssh = sshConfig(environment);
@@ -64,10 +52,6 @@ final class SshFlinkCdcCommandRunner {
     return null;
   }
 
-  String endpoint() {
-    return endpoint(bootstrapEnvironment());
-  }
-
   String endpoint(ComputeEnvironmentSnapshot environment) {
     SshConfig ssh = sshConfig(environment);
     if (!StringUtils.hasText(ssh.user()) || !StringUtils.hasText(ssh.host())) {
@@ -75,10 +59,6 @@ final class SshFlinkCdcCommandRunner {
     }
     int port = ssh.port() == null ? 22 : ssh.port();
     return ssh.user() + "@" + ssh.host() + ":" + port;
-  }
-
-  void validateReady(URI restUri) {
-    validateReady(bootstrapEnvironment(), restUri);
   }
 
   void validateReady(ComputeEnvironmentSnapshot environment, URI restUri) {
@@ -90,8 +70,7 @@ final class SshFlinkCdcCommandRunner {
     Process process = null;
     try {
       process =
-          new ProcessBuilder(
-                  sshCommand(environment, remoteProbeCommand(environment, restUri)))
+          new ProcessBuilder(sshCommand(environment, remoteProbeCommand(environment, restUri)))
               .redirectErrorStream(true)
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .start();
@@ -124,8 +103,7 @@ final class SshFlinkCdcCommandRunner {
     Process process = null;
     try {
       process =
-          new ProcessBuilder(
-                  sshCommand(environment, remoteDiagnosticCommand(environment, restUri)))
+          new ProcessBuilder(sshCommand(environment, remoteDiagnosticCommand(environment, restUri)))
               .redirectErrorStream(true)
               .start();
       process.getOutputStream().close();
@@ -134,8 +112,7 @@ final class SshFlinkCdcCommandRunner {
         destroy(process);
         throw failure("SSH 运行环境检测超时", false, null);
       }
-      String output =
-          new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+      String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
       if (process.exitValue() != 0) {
         throw failure(probeFailureMessage(process.exitValue()), false, null);
       }
@@ -148,10 +125,6 @@ final class SshFlinkCdcCommandRunner {
       destroy(process);
       throw failure("无法启动 OpenSSH 客户端：" + exception.getMessage(), false, exception);
     }
-  }
-
-  ExecutionResult submit(String pipelineYaml, Path outputLog, URI restUri, Duration timeout) {
-    return submit(bootstrapEnvironment(), pipelineYaml, outputLog, restUri, timeout);
   }
 
   ExecutionResult submit(
@@ -218,8 +191,7 @@ final class SshFlinkCdcCommandRunner {
     command.add("LogLevel=ERROR");
     command.add("-o");
     command.add(
-        "StrictHostKeyChecking="
-            + (strictHostKeyChecking(ssh) ? "yes" : "accept-new"));
+        "StrictHostKeyChecking=" + (strictHostKeyChecking(ssh) ? "yes" : "accept-new"));
     if (StringUtils.hasText(ssh.knownHostsFile())) {
       command.add("-o");
       command.add("UserKnownHostsFile=" + ssh.knownHostsFile());
@@ -240,10 +212,7 @@ final class SshFlinkCdcCommandRunner {
     String cdc = remoteCdcCli(environment);
     StringBuilder command = new StringBuilder("set -eu; ");
     command.append("test -x ").append(shellQuote(cdc)).append(" || exit 41; ");
-    command
-        .append("test -d ")
-        .append(shellQuote(config.flinkHome()))
-        .append(" || exit 42; ");
+    command.append("test -d ").append(shellQuote(config.flinkHome())).append(" || exit 42; ");
     command.append("command -v mktemp >/dev/null 2>&1 || exit 43; ");
     if (StringUtils.hasText(config.javaHome())) {
       command
@@ -251,10 +220,7 @@ final class SshFlinkCdcCommandRunner {
           .append(shellQuote(config.javaHome() + "/bin/java"))
           .append(" || exit 44; ");
     }
-    command
-        .append("test -n ")
-        .append(shellQuote(remoteRestAddress(environment, restUri)))
-        .append("; ");
+    command.append("test -n ").append(shellQuote(remoteRestAddress(environment, restUri))).append("; ");
     command.append("echo YAK_REALTIME_SSH_READY");
     return command.toString();
   }
@@ -359,12 +325,8 @@ final class SshFlinkCdcCommandRunner {
     command.append(shellQuote(remoteCdcCli(environment))).append(" \"$tmp\"");
     command.append(" --flink-home ").append(shellQuote(config.flinkHome()));
     command.append(" --target remote");
-    command
-        .append(" ")
-        .append(shellQuote("-Drest.address=" + remoteRestAddress(environment, restUri)));
-    command
-        .append(" ")
-        .append(shellQuote("-Drest.port=" + remoteRestPort(environment, restUri)));
+    command.append(" ").append(shellQuote("-Drest.address=" + remoteRestAddress(environment, restUri)));
+    command.append(" ").append(shellQuote("-Drest.port=" + remoteRestPort(environment, restUri)));
     return command.toString();
   }
 
@@ -376,9 +338,7 @@ final class SshFlinkCdcCommandRunner {
   private String remoteRestAddress(ComputeEnvironmentSnapshot environment, URI restUri) {
     SshConfig ssh = sshConfig(environment);
     String value =
-        StringUtils.hasText(ssh.remoteRestAddress())
-            ? ssh.remoteRestAddress().trim()
-            : restUri.getHost();
+        StringUtils.hasText(ssh.remoteRestAddress()) ? ssh.remoteRestAddress().trim() : restUri.getHost();
     if (!StringUtils.hasText(value)) {
       throw new IllegalArgumentException("SSH remote REST address 不能为空");
     }
@@ -418,46 +378,11 @@ final class SshFlinkCdcCommandRunner {
   }
 
   private SshConfig sshConfig(ComputeEnvironmentSnapshot environment) {
-    RuntimeConfig config = requireConfig(environment);
-    return config.ssh() == null ? bootstrapSshConfig() : config.ssh();
-  }
-
-  private SshConfig bootstrapSshConfig() {
-    RealtimeSyncProperties.Ssh ssh = properties.getSsh();
-    Duration timeout = ssh.getConnectTimeout();
-    int timeoutSeconds =
-        timeout == null ? 5 : (int) Math.max(1, Math.min(120, timeout.toSeconds()));
-    return new SshConfig(
-        ssh.getExecutable(),
-        ssh.getHost(),
-        ssh.getPort(),
-        ssh.getUser(),
-        ssh.getIdentityFile(),
-        ssh.getKnownHostsFile(),
-        ssh.isStrictHostKeyChecking(),
-        timeoutSeconds,
-        ssh.getRemoteRestAddress(),
-        ssh.getRemoteRestPort());
-  }
-
-  private ComputeEnvironmentSnapshot bootstrapEnvironment() {
-    RuntimeConfig config =
-        new RuntimeConfig(
-            properties.getRestUrl(),
-            properties.getFlinkHome(),
-            properties.getFlinkCdcHome(),
-            properties.getJavaHome(),
-            properties.getFlinkVersion(),
-            properties.getFlinkCdcVersion(),
-            bootstrapSshConfig());
-    return new ComputeEnvironmentSnapshot(
-        0L,
-        "application/default",
-        ComputeEnvironment.ENGINE_FLINK_CDC,
-        ComputeEnvironment.DEPLOYMENT_REMOTE,
-        properties.getSubmissionMode().name(),
-        config,
-        0);
+    SshConfig ssh = requireConfig(environment).ssh();
+    if (ssh == null) {
+      throw new IllegalArgumentException("SSH 运行环境缺少提交节点配置");
+    }
+    return ssh;
   }
 
   private boolean absoluteUnixPath(String value) {

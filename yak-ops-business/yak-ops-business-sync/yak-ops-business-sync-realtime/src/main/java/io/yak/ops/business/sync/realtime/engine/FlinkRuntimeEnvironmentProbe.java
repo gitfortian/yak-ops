@@ -38,7 +38,7 @@ public class FlinkRuntimeEnvironmentProbe {
       RealtimeEngineGateway gateway, RealtimeSyncProperties properties) {
     this.gateway = gateway;
     this.properties = properties;
-    this.sshRunner = new SshFlinkCdcCommandRunner(properties);
+    this.sshRunner = new SshFlinkCdcCommandRunner();
   }
 
   public ComputeEnvironmentDiagnosis diagnose(ComputeEnvironmentSnapshot environment) {
@@ -107,7 +107,9 @@ public class FlinkRuntimeEnvironmentProbe {
     } else {
       CommandOutput output = run(List.of(cdc.toString(), "--version"), 8);
       cdcVersion = extractVersion(output.output());
-      checks.add(versionCheck("FLINK_CDC_CLI", "Flink CDC CLI", output, cdcVersion, config.flinkCdcVersion()));
+      checks.add(
+          versionCheck(
+              "FLINK_CDC_CLI", "Flink CDC CLI", output, cdcVersion, config.flinkCdcVersion()));
     }
 
     String flinkVersion = null;
@@ -116,7 +118,8 @@ public class FlinkRuntimeEnvironmentProbe {
     } else {
       CommandOutput output = run(List.of(flink.toString(), "--version"), 8);
       flinkVersion = extractVersion(output.output());
-      checks.add(versionCheck("FLINK_CLI", "Flink CLI", output, flinkVersion, config.flinkVersion()));
+      checks.add(
+          versionCheck("FLINK_CLI", "Flink CLI", output, flinkVersion, config.flinkVersion()));
     }
 
     String javaExecutable =

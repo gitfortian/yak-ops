@@ -38,18 +38,12 @@ public class RealtimeJobStore {
     this.events = events;
   }
 
-  /** Compatibility overload retained for callers that do not yet bind a runtime environment. */
-  public long insertDefinition(
-      String name, String description, CdcPipelineSpec spec, String digest) {
-    return insertDefinition(name, description, spec, digest, null);
-  }
-
   public long insertDefinition(
       String name,
       String description,
       CdcPipelineSpec spec,
       String digest,
-      Long runtimeEnvironmentId) {
+      long runtimeEnvironmentId) {
     GeneratedKeyHolder keys = new GeneratedKeyHolder();
     db.update(
         connection -> {
@@ -61,36 +55,13 @@ public class RealtimeJobStore {
                   Statement.RETURN_GENERATED_KEYS);
           statement.setString(1, name);
           statement.setString(2, description);
-          if (runtimeEnvironmentId == null) {
-            statement.setObject(3, null);
-          } else {
-            statement.setLong(3, runtimeEnvironmentId);
-          }
+          statement.setLong(3, runtimeEnvironmentId);
           statement.setString(4, spec == null ? null : write(spec));
           statement.setString(5, digest);
           return statement;
         },
         keys);
     return Objects.requireNonNull(keys.getKey(), "新增实时任务未返回主键").longValue();
-  }
-
-  /** Compatibility overload that preserves the current runtime environment binding. */
-  public void updateDefinition(
-      long id, String name, String description, CdcPipelineSpec spec, String digest) {
-    int changed =
-        db.update(
-            "update yak_realtime_job_definition set job_name=?,description=?,spec_json=?,"
-                + "config_digest=?,definition_version=definition_version+1,release_state='DRAFT' "
-                + "where id=? and desired_state='STOPPED' "
-                + "and observed_state in ('STOPPED','FAILED')",
-            name,
-            description,
-            write(spec),
-            digest,
-            id);
-    if (changed != 1) {
-      throw new IllegalStateException("任务运行态未稳定，只有已停止或明确失败的任务才能编辑");
-    }
   }
 
   public void updateDefinition(
@@ -141,11 +112,11 @@ public class RealtimeJobStore {
     return rows.stream().findFirst();
   }
 
-  public Long runtimeEnvironmentId(long definitionId) {
+  public long runtimeEnvironmentId(long definitionId) {
     List<Long> rows =
         db.query(
             "select runtime_environment_id from yak_realtime_job_definition where id=?",
-            (result, row) -> result.getObject("runtime_environment_id", Long.class),
+            (result, row) -> result.getLong("runtime_environment_id"),
             definitionId);
     if (rows.isEmpty()) {
       throw new IllegalArgumentException("实时同步任务不存在：" + definitionId);
@@ -227,16 +198,6 @@ public class RealtimeJobStore {
     return Optional.of(readEnvironmentSnapshot(rows.get(0)));
   }
 
-  /** Compatibility overload retained for tests and integrations compiled before Stage 2. */
-  public long insertDeployment(
-      DefinitionRow definition,
-      CdcPipelineSpec spec,
-      String summary,
-      String digest,
-      String idempotencyKey) {
-    return insertDeployment(definition, spec, summary, digest, null, idempotencyKey);
-  }
-
   public long insertDeployment(
       DefinitionRow definition,
       CdcPipelineSpec spec,
@@ -244,6 +205,7 @@ public class RealtimeJobStore {
       String digest,
       ComputeEnvironmentSnapshot environment,
       String idempotencyKey) {
+    Objects.requireNonNull(environment, "实时同步部署必须绑定运行环境快照");
     GeneratedKeyHolder keys = new GeneratedKeyHolder();
     db.update(
         connection -> {
@@ -252,20 +214,14 @@ public class RealtimeJobStore {
                   "insert into yak_realtime_job_deployment"
                       + "(definition_id,definition_version,runtime_environment_id,"
                       + "runtime_environment_version,runtime_environment_snapshot_json,"
-                      + "spec_snapshot_json,pipeline_yaml,spec_summary,config_digest,"
-                      + "idempotency_key,status) values(?,?,?,?,?,?,null,?,?,?,'SUBMITTING')",
+                      + "spec_snapshot_json,spec_summary,config_digest,idempotency_key,status) "
+                      + "values(?,?,?,?,?,?,?,?,?,'SUBMITTING')",
                   Statement.RETURN_GENERATED_KEYS);
           statement.setLong(1, definition.id());
           statement.setInt(2, definition.definitionVersion());
-          if (environment == null) {
-            statement.setObject(3, null);
-            statement.setObject(4, null);
-            statement.setObject(5, null);
-          } else {
-            statement.setLong(3, environment.id());
-            statement.setInt(4, environment.version());
-            statement.setString(5, write(environment));
-          }
+          statement.setLong(3, environment.id());
+          statement.setInt(4, environment.version());
+          statement.setString(5, write(environment));
           statement.setString(6, write(spec));
           statement.setString(7, summary);
           statement.setString(8, digest);
@@ -484,7 +440,11 @@ public class RealtimeJobStore {
             deployment.idempotencyKey(),
             deployment.engineJobId(),
             deployment.runtimeRevision(),
-            deploymentEnvironment(deployment.id()).orElse(null),
+            deploymentEnvironment(deployment.id())
+                .orElseThrow(
+                    () ->
+                        new IllegalStateException(
+                            "实时同步部署缺少运行环境快照：" + deployment.id())),
             deployment.status(),
             deployment.resultUncertain(),
             deployment.errorMessage(),

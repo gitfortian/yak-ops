@@ -8,7 +8,7 @@ import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionR
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
 import org.springframework.stereotype.Service;
 
-/** Resolves the mutable task binding and the immutable deployment runtime snapshot. */
+/** Resolves the task runtime binding and immutable deployment environment snapshot. */
 @Service
 public class RealtimeRuntimeResolver {
 
@@ -18,13 +18,6 @@ public class RealtimeRuntimeResolver {
   public RealtimeRuntimeResolver(ComputeEnvironmentStore environments, RealtimeJobStore jobs) {
     this.environments = environments;
     this.jobs = jobs;
-  }
-
-  public long defaultEnvironmentId() {
-    return environments
-        .defaultEnvironment()
-        .orElseThrow(() -> new IllegalStateException("请先在设置 → 计算引擎中配置默认运行环境"))
-        .id();
   }
 
   public ComputeEnvironmentSnapshot environment(long environmentId, boolean requireEnabled) {
@@ -39,20 +32,13 @@ public class RealtimeRuntimeResolver {
   }
 
   public ComputeEnvironmentSnapshot definition(DefinitionRow definition, boolean requireEnabled) {
-    Long environmentId = jobs.runtimeEnvironmentId(definition.id());
-    if (environmentId == null) {
-      environmentId = defaultEnvironmentId();
-    }
-    return environment(environmentId, requireEnabled);
+    return environment(jobs.runtimeEnvironmentId(definition.id()), requireEnabled);
   }
 
   public ComputeEnvironmentSnapshot deployment(
       DefinitionRow definition, DeploymentRow deployment) {
-    ComputeEnvironmentSnapshot snapshot = jobs.deploymentEnvironment(deployment.id()).orElse(null);
-    if (snapshot != null) {
-      return snapshot;
-    }
-    // Compatibility fallback for deployments created before V7. New deployments always snapshot.
-    return definition(definition, false);
+    return jobs
+        .deploymentEnvironment(deployment.id())
+        .orElseThrow(() -> new IllegalStateException("实时同步部署缺少运行环境快照：" + deployment.id()));
   }
 }

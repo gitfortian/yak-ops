@@ -120,27 +120,20 @@ public class RealtimeJobLifecycleCoordinator {
       return;
     }
     String runtimeName = identityStore.findByDeploymentId(deployment.id()).orElse(null);
-    if (StringUtils.hasText(runtimeName)) {
-      for (String jobId : discovery.findJobIds(runtimeEnvironment, runtimeName)) {
-        requireInactive(gateway.status(runtimeEnvironment, jobId));
-      }
+    if (!StringUtils.hasText(runtimeName)) {
+      // Runtime identity is bound immediately before entering the CLI. If it is absent, submission
+      // never crossed that boundary and there cannot be an orphan Flink job from this deployment.
       return;
     }
-    String identityState = identityStore.state(deployment.id()).orElse("LEGACY");
-    if ("REQUIRED".equals(identityState)) {
-      return;
-    }
-    if (deployment.resultUncertain()) {
-      throw new IllegalStateException(
-          "历史部署结果不确定且缺少 runtime job identity，请先在 Flink UI 确认无活动任务");
+    for (String jobId : discovery.findJobIds(runtimeEnvironment, runtimeName)) {
+      requireInactive(gateway.status(runtimeEnvironment, jobId));
     }
   }
 
   private String recoverJobId(DefinitionRow definition, DeploymentRow deployment) {
     String runtimeName = identityStore.findByDeploymentId(deployment.id()).orElse(null);
     if (!StringUtils.hasText(runtimeName)) {
-      String identityState = identityStore.state(deployment.id()).orElse("LEGACY");
-      if ("REQUIRED".equals(identityState) && graceExpired(deployment)) {
+      if (graceExpired(deployment)) {
         settleMissing(
             definition.id(), deployment, "Gateway 尚未绑定 runtime identity，确认 CLI 未开始提交");
       }

@@ -2,12 +2,10 @@ package io.yak.ops.business.sync.realtime.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
-import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeStateMachine;
 import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
@@ -18,7 +16,6 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeDeployRequest;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineException;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
-import io.yak.ops.business.sync.realtime.engine.RealtimeLogRedactor;
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
@@ -30,7 +27,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DuplicateKeyException;
@@ -51,13 +47,9 @@ public class RealtimeJobService {
   private final RealtimeConnectorCapabilityResolver capabilityResolver;
   private final PipelineYamlCompiler compiler;
   private final RealtimeEngineGateway gateway;
-  private final RealtimeLogRedactor logRedactor;
   private final RealtimeRuntimeResolver runtimeResolver;
   private final TransactionTemplate transactions;
-  private final RealtimeSyncProperties properties;
   private final ConcurrentHashMap<Long, ReentrantLock> lifecycleLocks = new ConcurrentHashMap<>();
-  private final ConcurrentHashMap<Long, AtomicInteger> consecutiveEngineFailures =
-      new ConcurrentHashMap<>();
 
   public RealtimeJobService(
       RealtimeJobStore store,
@@ -68,9 +60,7 @@ public class RealtimeJobService {
       RealtimeConnectorCapabilityResolver capabilityResolver,
       PipelineYamlCompiler compiler,
       RealtimeEngineGateway gateway,
-      RealtimeLogRedactor logRedactor,
       RealtimeRuntimeResolver runtimeResolver,
-      RealtimeSyncProperties properties,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager) {
     this.store = store;
     this.json = json;
@@ -80,15 +70,8 @@ public class RealtimeJobService {
     this.capabilityResolver = capabilityResolver;
     this.compiler = compiler;
     this.gateway = gateway;
-    this.logRedactor = logRedactor;
     this.runtimeResolver = runtimeResolver;
-    this.properties = properties;
     this.transactions = new TransactionTemplate(transactionManager);
-  }
-
-  /** Compatibility entry point: existing clients keep the current binding or use the default. */
-  public long save(Long id, String name, String description, CdcPipelineSpec spec) {
-    return save(id, name, description, spec, null);
   }
 
   public long save(
@@ -96,11 +79,9 @@ public class RealtimeJobService {
       String name,
       String description,
       CdcPipelineSpec spec,
-      Long requestedRuntimeEnvironmentId) {
+      long runtimeEnvironmentId) {
     requireName(name);
     specValidator.validate(spec);
-    long runtimeEnvironmentId =
-        resolveDefinitionEnvironmentId(id, requestedRuntimeEnvironmentId);
     runtimeResolver.environment(runtimeEnvironmentId, true);
     String digest = definitionDigest(spec, runtimeEnvironmentId);
     Long saved =
@@ -130,16 +111,8 @@ public class RealtimeJobService {
   }
 
   /** Creates the shell first; the editor supplies the pipeline spec in the second stage. */
-  public long create(String name, String description) {
-    return create(name, description, null);
-  }
-
-  public long create(String name, String description, Long requestedRuntimeEnvironmentId) {
+  public long create(String name, String description, long runtimeEnvironmentId) {
     requireName(name);
-    long runtimeEnvironmentId =
-        requestedRuntimeEnvironmentId == null
-            ? runtimeResolver.defaultEnvironmentId()
-            : requestedRuntimeEnvironmentId;
     runtimeResolver.environment(runtimeEnvironmentId, true);
     Long saved =
         transactions.execute(
@@ -155,10 +128,6 @@ public class RealtimeJobService {
 
   public RealtimeJobView get(long id) {
     return store.view(id);
-  }
-
-  public RealtimeJobPage page(int pageNo, int pageSize, String keyword) {
-    return store.page(pageNo, pageSize, keyword);
   }
 
   public void publish(long id) {
@@ -465,11 +434,6 @@ public class RealtimeJobService {
     }
   }
 
-  /** Compatibility entry point for callers that do not yet send an idempotency key. */
-  public RealtimeJobView.Deployment restart(long id) {
-    return restart(id, null);
-  }
-
   public void delete(long id) {
     transactions.executeWithoutResult(
         status -> {
@@ -484,179 +448,8 @@ public class RealtimeJobService {
     return store.events(id);
   }
 
-  public JsonNode capabilities() {
-    return capabilities(null);
-  }
-
-  public JsonNode capabilities(Long runtimeEnvironmentId) {
-    long resolvedId =
-        runtimeEnvironmentId == null
-            ? runtimeResolver.defaultEnvironmentId()
-            : runtimeEnvironmentId;
-    return gateway.capabilities(runtimeResolver.environment(resolvedId, true));
-  }
-
-  public String logs(long id, int tail) {
-    DeploymentRow deployment = latestDeploymentWithJobId(id);
-    ComputeEnvironmentSnapshot runtimeEnvironment = deploymentRuntime(id, deployment);
-    return logRedactor.redact(
-        gateway.logs(runtimeEnvironment, deployment.engineJobId(), tail));
-  }
-
-  public JsonNode checkpoints(long id) {
-    DeploymentRow deployment = latestDeploymentWithJobId(id);
-    return gateway.checkpoints(
-        deploymentRuntime(id, deployment), deployment.engineJobId());
-  }
-
-  public JsonNode metrics(long id) {
-    DeploymentRow deployment = latestDeploymentWithJobId(id);
-    return gateway.metrics(deploymentRuntime(id, deployment), deployment.engineJobId());
-  }
-
-  /** Compatibility reconciler retained for existing internal callers. */
-  public void reconcile() {
-    List<DefinitionRow> candidates = store.desiredJobs();
-    for (DefinitionRow snapshot : candidates) {
-      ReentrantLock lock = lifecycleLock(snapshot.id());
-      if (!lock.tryLock()) {
-        continue;
-      }
-      try {
-        DefinitionRow job = store.definition(snapshot.id()).orElse(null);
-        if (job == null) {
-          continue;
-        }
-        DeploymentRow deployment = store.latestDeployment(job.id()).orElse(null);
-        if (deployment == null || !StringUtils.hasText(deployment.engineJobId())) {
-          if (!"STARTING".equals(job.observedState())
-              && !"STOPPING".equals(job.observedState())
-              && !"UNKNOWN".equals(job.observedState())) {
-            reconcile(job, deployment, new RuntimeStatus(null, RuntimeStatus.State.NONE));
-          }
-          continue;
-        }
-        try {
-          RuntimeStatus runtime =
-              gateway.status(deploymentRuntime(job.id(), deployment), deployment.engineJobId());
-          consecutiveEngineFailures.remove(job.id());
-          reconcile(job, deployment, runtime);
-        } catch (RealtimeEngineException exception) {
-          int failures =
-              consecutiveEngineFailures
-                  .computeIfAbsent(job.id(), ignored -> new AtomicInteger())
-                  .incrementAndGet();
-          if (failures >= Math.max(1, properties.getReconcileFailureThreshold())
-              && !"UNKNOWN".equals(job.observedState())) {
-            changeState(
-                job, deployment, "UNKNOWN", "UNKNOWN", deployment.engineJobId(), "Flink 状态不可用");
-          }
-        }
-      } finally {
-        lock.unlock();
-      }
-    }
-  }
-
-  /** Performs an operator-requested reconciliation without submitting a new Flink job. */
-  public RealtimeJobView reconcile(long id) {
-    ReentrantLock lock = lifecycleLock(id);
-    lock.lock();
-    try {
-      DefinitionRow definition =
-          store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
-      DeploymentRow deployment = latestDeploymentWithJobId(id);
-      ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.deployment(definition, deployment);
-      reconcile(
-          definition,
-          deployment,
-          gateway.status(runtimeEnvironment, deployment.engineJobId()));
-      consecutiveEngineFailures.remove(id);
-      return store.view(id);
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  private void reconcile(DefinitionRow job, DeploymentRow deployment, RuntimeStatus runtime) {
-    Long deploymentId = deployment == null ? null : deployment.id();
-    String expectedJobId = deployment == null ? null : deployment.engineJobId();
-
-    if (runtime.state() == RuntimeStatus.State.RUNNING) {
-      if (!StringUtils.hasText(expectedJobId)) {
-        changeState(job, deployment, "CONFLICT", "UNKNOWN", null, "无法证明 Flink jobId 归属于当前部署");
-      } else if (!expectedJobId.equals(runtime.jobId())) {
-        changeState(
-            job, deployment, "CONFLICT", "UNKNOWN", runtime.jobId(), "Flink jobId 与部署记录不一致");
-      } else if ("RUNNING".equals(job.desiredState())) {
-        changeState(job, deployment, "RUNNING", "RUNNING", runtime.jobId(), null);
-      } else {
-        try {
-          gateway.stop(deploymentRuntime(job.id(), deployment), expectedJobId);
-        } catch (RealtimeEngineException ignored) {
-          changeState(job, deployment, "UNKNOWN", "UNKNOWN", runtime.jobId(), "停止状态对账失败");
-        }
-      }
-      return;
-    }
-
-    if ("STOPPED".equals(job.desiredState())) {
-      changeState(job, deployment, "STOPPED", "STOPPED", expectedJobId, null);
-      return;
-    }
-
-    String message =
-        runtime.state() == RuntimeStatus.State.TERMINATED
-            ? "Flink 任务已终止"
-            : "Flink 中未找到期望运行的任务；为避免重复回放，不自动重新提交";
-    transactions.executeWithoutResult(
-        status -> {
-          DefinitionRow current = store.lockDefinition(job.id());
-          if (!sameLifecycleSnapshot(job, current)
-              || !sameDeploymentSnapshot(job.id(), deployment)) {
-            return;
-          }
-          stateMachine.requireTransition(current.observedState(), "FAILED");
-          store.markTerminalFailure(job.id(), deploymentId, message);
-          store.event(
-              job.id(), deploymentId, "FLINK_JOB_LOST", current.observedState(), "FAILED", message);
-        });
-  }
-
-  private void changeState(
-      DefinitionRow job,
-      DeploymentRow deployment,
-      String observed,
-      String deploymentState,
-      String engineJobId,
-      String error) {
-    if (observed.equals(job.observedState())
-        && (error == null ? job.lastError() == null : error.equals(job.lastError()))) {
-      return;
-    }
-    transactions.executeWithoutResult(
-        status -> {
-          DefinitionRow current = store.lockDefinition(job.id());
-          if (!sameLifecycleSnapshot(job, current)
-              || !sameDeploymentSnapshot(job.id(), deployment)) {
-            return;
-          }
-          stateMachine.requireTransition(current.observedState(), observed);
-          store.reconcile(
-              job.id(),
-              deployment == null ? null : deployment.id(),
-              observed,
-              deploymentState,
-              engineJobId,
-              error);
-          store.event(
-              job.id(),
-              deployment == null ? null : deployment.id(),
-              "STATE_RECONCILED",
-              current.observedState(),
-              observed,
-              error == null ? "Flink 状态已对账" : error);
-        });
+  public JsonNode capabilities(long runtimeEnvironmentId) {
+    return gateway.capabilities(runtimeResolver.environment(runtimeEnvironmentId, true));
   }
 
   private Prepared prepare(long id, boolean requirePublished) {
@@ -689,10 +482,10 @@ public class RealtimeJobService {
 
   private void requirePreparedDefinitionCurrent(Prepared prepared, DefinitionRow current) {
     DefinitionRow snapshot = prepared.definition();
-    Long currentRuntimeEnvironmentId = store.runtimeEnvironmentId(current.id());
+    long currentRuntimeEnvironmentId = store.runtimeEnvironmentId(current.id());
     if (snapshot.definitionVersion() != current.definitionVersion()
         || !Objects.equals(snapshot.configDigest(), current.configDigest())
-        || !Objects.equals(prepared.runtimeEnvironment().id(), currentRuntimeEnvironmentId)) {
+        || prepared.runtimeEnvironment().id() != currentRuntimeEnvironmentId) {
       throw new IllegalStateException("任务定义在校验期间已变化，请刷新后重试");
     }
   }
@@ -751,21 +544,6 @@ public class RealtimeJobService {
     }
   }
 
-  private boolean sameLifecycleSnapshot(DefinitionRow expected, DefinitionRow current) {
-    return Objects.equals(expected.desiredState(), current.desiredState())
-        && Objects.equals(expected.observedState(), current.observedState());
-  }
-
-  private boolean sameDeploymentSnapshot(long definitionId, DeploymentRow expected) {
-    DeploymentRow current = store.latestDeployment(definitionId).orElse(null);
-    if (expected == null) {
-      return current == null;
-    }
-    return current != null
-        && current.id() == expected.id()
-        && Objects.equals(current.engineJobId(), expected.engineJobId());
-  }
-
   private ReentrantLock lifecycleLock(long id) {
     return lifecycleLocks.computeIfAbsent(id, ignored -> new ReentrantLock());
   }
@@ -789,13 +567,6 @@ public class RealtimeJobService {
     }
   }
 
-  private DeploymentRow latestDeploymentWithJobId(long id) {
-    DeploymentRow deployment =
-        store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
-    requireEngineJobId(deployment);
-    return deployment;
-  }
-
   private ComputeEnvironmentSnapshot deploymentRuntime(long id, DeploymentRow deployment) {
     if (deployment == null) {
       throw new IllegalStateException("任务尚无部署记录");
@@ -803,25 +574,6 @@ public class RealtimeJobService {
     DefinitionRow definition =
         store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
     return runtimeResolver.deployment(definition, deployment);
-  }
-
-  private long resolveDefinitionEnvironmentId(Long id, Long requestedRuntimeEnvironmentId) {
-    if (requestedRuntimeEnvironmentId != null) {
-      return requestedRuntimeEnvironmentId;
-    }
-    if (id != null) {
-      Long current = store.runtimeEnvironmentId(id);
-      if (current != null) {
-        return current;
-      }
-    }
-    return runtimeResolver.defaultEnvironmentId();
-  }
-
-  private void requireEngineJobId(DeploymentRow deployment) {
-    if (!StringUtils.hasText(deployment.engineJobId())) {
-      throw new IllegalStateException("部署记录尚无 Flink jobId");
-    }
   }
 
   private void requireName(String name) {

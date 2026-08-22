@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec.MatchMode;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec.RestartPolicy;
@@ -33,7 +32,6 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.DeployResult;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.ValidationResult;
-import io.yak.ops.business.sync.realtime.engine.RealtimeLogRedactor;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
@@ -70,7 +68,6 @@ class RealtimeJobServiceConcurrencyTest {
     compiler = mock(PipelineYamlCompiler.class);
     gateway = mock(RealtimeEngineGateway.class);
     runtimeResolver = mock(RealtimeRuntimeResolver.class);
-    RealtimeLogRedactor logRedactor = mock(RealtimeLogRedactor.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenAnswer(ignored -> new SimpleTransactionStatus());
 
@@ -89,7 +86,6 @@ class RealtimeJobServiceConcurrencyTest {
     when(runtimeResolver.definition(any(), eq(true))).thenReturn(environment);
     when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     when(runtimeResolver.environment(anyLong(), eq(true))).thenReturn(environment);
-    when(runtimeResolver.defaultEnvironmentId()).thenReturn(environment.id());
     when(gateway.capabilities(environment)).thenReturn(capabilities);
     when(gateway.validate(eq(environment), any())).thenReturn(new ValidationResult(true, "exactly-once"));
     when(compiler.compile(any(), any(), any())).thenReturn(new CompiledPipeline("pipeline: test", "test"));
@@ -119,9 +115,7 @@ class RealtimeJobServiceConcurrencyTest {
             capabilityResolver,
             compiler,
             gateway,
-            logRedactor,
             runtimeResolver,
-            new RealtimeSyncProperties(),
             transactionManager);
   }
 

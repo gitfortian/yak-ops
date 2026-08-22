@@ -35,11 +35,8 @@ class RealtimeRuntimeResolverTest {
 
   @Test
   void deploymentUsesPersistedSnapshotEvenAfterEnvironmentChanges() {
-    ComputeEnvironmentSnapshot deployed =
-        snapshot(3L, "prod-a", "http://flink-a:8081", 2);
+    ComputeEnvironmentSnapshot deployed = snapshot(3L, "prod-a", "http://flink-a:8081", 2);
     when(jobs.deploymentEnvironment(DEPLOYMENT_ID)).thenReturn(Optional.of(deployed));
-
-    // The mutable environment can move on to another version/endpoint after this deployment.
     when(environments.find(3L))
         .thenReturn(Optional.of(environment(3L, "prod-a", "http://flink-b:8081", 9, true)));
 
@@ -62,13 +59,12 @@ class RealtimeRuntimeResolverTest {
   }
 
   @Test
-  void definitionFallsBackToDefaultForLegacyUnboundTask() {
-    ComputeEnvironment fallback = environment(8L, "default", "http://flink:8081", 4, true);
-    when(jobs.runtimeEnvironmentId(JOB_ID)).thenReturn(null);
-    when(environments.defaultEnvironment()).thenReturn(Optional.of(fallback));
-    when(environments.find(8L)).thenReturn(Optional.of(fallback));
+  void deploymentRejectsMissingRuntimeSnapshot() {
+    when(jobs.deploymentEnvironment(DEPLOYMENT_ID)).thenReturn(Optional.empty());
 
-    assertThat(resolver.definition(definition(), true).id()).isEqualTo(8L);
+    assertThatThrownBy(() -> resolver.deployment(definition(), deployment()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("缺少运行环境快照");
   }
 
   private ComputeEnvironment environment(
