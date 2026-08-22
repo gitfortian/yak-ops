@@ -1,5 +1,5 @@
 -- Consolidated Realtime Sync schema baseline.
--- Runtime/definition/deployment/event references are logical and enforced by application services.
+-- Runtime/definition/version/deployment/event references are logical and enforced by application services.
 CREATE TABLE IF NOT EXISTS yak_compute_environment (
     id BIGINT NOT NULL AUTO_INCREMENT,
     name VARCHAR(120) NOT NULL,
@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_definition (
     observed_state VARCHAR(32) NOT NULL DEFAULT 'STOPPED',
     definition_version INT NOT NULL DEFAULT 1,
     published_version INT NULL,
+    published_definition_version_id BIGINT NULL,
     config_digest CHAR(64) NULL,
     last_error TEXT NULL,
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -38,7 +39,26 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_definition (
     PRIMARY KEY (id),
     UNIQUE KEY uk_realtime_name (job_name),
     KEY idx_realtime_states (desired_state, observed_state),
-    KEY idx_realtime_definition_environment (runtime_environment_id)
+    KEY idx_realtime_definition_environment (runtime_environment_id),
+    KEY idx_realtime_published_definition_version (published_definition_version_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS yak_realtime_definition_version (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    task_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    source_draft_revision INT NOT NULL,
+    runtime_environment_id BIGINT NOT NULL,
+    definition_json LONGTEXT NOT NULL,
+    definition_digest CHAR(64) NULL,
+    source_config_digest CHAR(64) NOT NULL,
+    domain_mapping_state VARCHAR(32) NOT NULL,
+    create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_realtime_definition_version_no (task_id, version_no),
+    UNIQUE KEY uk_realtime_definition_source_digest (task_id, source_config_digest),
+    KEY idx_realtime_definition_version_task_revision (task_id, source_draft_revision),
+    KEY idx_realtime_definition_version_environment (runtime_environment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
