@@ -1,5 +1,7 @@
 # 实时同步一期
 
+> 领域设计入口：[Realtime Sync Domain Design](./realtime-sync/domain/README.md)。本文件描述一期 Flink CDC 运行实现，不作为实时同步核心领域模型定义。
+
 ## 设计边界
 
 一期不引入 `yak-cdc-runtime`。Yak Ops 负责控制面，复用现有 Flink Standalone Session
