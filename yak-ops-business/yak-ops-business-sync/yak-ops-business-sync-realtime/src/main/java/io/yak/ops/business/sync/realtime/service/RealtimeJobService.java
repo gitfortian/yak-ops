@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
@@ -51,6 +52,7 @@ public class RealtimeJobService {
   private final PipelineYamlCompiler compiler;
   private final RealtimeEngineGateway gateway;
   private final RealtimeLogRedactor logRedactor;
+  private final RealtimeRuntimeResolver runtimeResolver;
   private final TransactionTemplate transactions;
   private final RealtimeSyncProperties properties;
   private final ConcurrentHashMap<Long, ReentrantLock> lifecycleLocks = new ConcurrentHashMap<>();
@@ -67,6 +69,7 @@ public class RealtimeJobService {
       PipelineYamlCompiler compiler,
       RealtimeEngineGateway gateway,
       RealtimeLogRedactor logRedactor,
+      RealtimeRuntimeResolver runtimeResolver,
       RealtimeSyncProperties properties,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager) {
     this.store = store;
@@ -78,25 +81,42 @@ public class RealtimeJobService {
     this.compiler = compiler;
     this.gateway = gateway;
     this.logRedactor = logRedactor;
+    this.runtimeResolver = runtimeResolver;
     this.properties = properties;
     this.transactions = new TransactionTemplate(transactionManager);
   }
 
+  /** Compatibility entry point: existing clients keep the current binding or use the default. */
   public long save(Long id, String name, String description, CdcPipelineSpec spec) {
+    return save(id, name, description, spec, null);
+  }
+
+  public long save(
+      Long id,
+      String name,
+      String description,
+      CdcPipelineSpec spec,
+      Long requestedRuntimeEnvironmentId) {
     requireName(name);
     specValidator.validate(spec);
-    String digest = digest(write(spec));
+    long runtimeEnvironmentId =
+        resolveDefinitionEnvironmentId(id, requestedRuntimeEnvironmentId);
+    runtimeResolver.environment(runtimeEnvironmentId, true);
+    String digest = definitionDigest(spec, runtimeEnvironmentId);
     Long saved =
         transactions.execute(
             status -> {
               if (id == null) {
-                long created = store.insertDefinition(name.trim(), description, spec, digest);
+                long created =
+                    store.insertDefinition(
+                        name.trim(), description, spec, digest, runtimeEnvironmentId);
                 store.event(created, null, "DRAFT_CREATED", null, "DRAFT", "已创建实时同步草稿");
                 return created;
               }
               DefinitionRow locked = store.lockDefinition(id);
               stateMachine.requireDefinitionMutable(locked.desiredState(), locked.observedState());
-              store.updateDefinition(id, name.trim(), description, spec, digest);
+              store.updateDefinition(
+                  id, name.trim(), description, spec, digest, runtimeEnvironmentId);
               store.event(
                   id,
                   null,
@@ -111,11 +131,22 @@ public class RealtimeJobService {
 
   /** Creates the shell first; the editor supplies the pipeline spec in the second stage. */
   public long create(String name, String description) {
+    return create(name, description, null);
+  }
+
+  public long create(String name, String description, Long requestedRuntimeEnvironmentId) {
     requireName(name);
+    long runtimeEnvironmentId =
+        requestedRuntimeEnvironmentId == null
+            ? runtimeResolver.defaultEnvironmentId()
+            : requestedRuntimeEnvironmentId;
+    runtimeResolver.environment(runtimeEnvironmentId, true);
     Long saved =
         transactions.execute(
             status -> {
-              long created = store.insertDefinition(name.trim(), description, null, null);
+              long created =
+                  store.insertDefinition(
+                      name.trim(), description, null, null, runtimeEnvironmentId);
               store.event(created, null, "DRAFT_CREATED", null, "DRAFT", "已创建实时同步基础任务");
               return created;
             });
@@ -134,7 +165,7 @@ public class RealtimeJobService {
     Prepared prepared = prepare(id, false);
     stateMachine.requireDefinitionMutable(
         prepared.definition().desiredState(), prepared.definition().observedState());
-    gateway.validate(prepared.compiled().yaml());
+    gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
     transactions.executeWithoutResult(
         status -> {
           DefinitionRow locked = store.lockDefinition(id);
@@ -154,7 +185,7 @@ public class RealtimeJobService {
 
   public RealtimeEngineGateway.ValidationResult validate(long id) {
     Prepared prepared = prepare(id, false);
-    return gateway.validate(prepared.compiled().yaml());
+    return gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
   }
 
   public RealtimeJobView.Deployment start(long id, String requestedKey) {
@@ -175,7 +206,7 @@ public class RealtimeJobService {
     }
 
     Prepared prepared = prepare(id, true);
-    gateway.validate(prepared.compiled().yaml());
+    gateway.validate(prepared.runtimeEnvironment(), prepared.compiled().yaml());
 
     StartReservation reservation;
     try {
@@ -201,6 +232,7 @@ public class RealtimeJobService {
                         prepared.spec(),
                         prepared.compiled().summary(),
                         digest(prepared.compiled().yaml()),
+                        prepared.runtimeEnvironment(),
                         key);
                 store.markStarting(id);
                 store.event(
@@ -209,7 +241,9 @@ public class RealtimeJobService {
                     "START_REQUESTED",
                     locked.observedState(),
                     "STARTING",
-                    "开始通过 Flink CDC CLI 提交任务");
+                    "开始通过运行环境「"
+                        + prepared.runtimeEnvironment().name()
+                        + "」提交 Flink CDC 任务");
                 return new StartReservation(created, true);
               });
     } catch (DuplicateKeyException exception) {
@@ -261,7 +295,10 @@ public class RealtimeJobService {
               if ("RUNNING".equals(current.desiredState())
                   && "STARTING".equals(current.observedState())) {
                 store.markDeploymentRunning(
-                    id, deploymentId, result.jobId(), prepared.runtimeRevision());
+                    id,
+                    deploymentId,
+                    result.jobId(),
+                    prepared.runtimeEnvironment().runtimeRevision());
                 store.event(
                     id, deploymentId, "STARTED", "STARTING", "RUNNING", "Flink 已接受任务");
                 return false;
@@ -272,7 +309,8 @@ public class RealtimeJobService {
                 stateMachine.requireTransition(from, "STOPPING");
                 store.markStopping(id, deploymentId);
               }
-              store.bindDeploymentForStop(deploymentId, result.jobId(), prepared.runtimeRevision());
+              store.bindDeploymentForStop(
+                  deploymentId, result.jobId(), prepared.runtimeEnvironment().runtimeRevision());
               store.event(
                   id,
                   deploymentId,
@@ -368,12 +406,14 @@ public class RealtimeJobService {
   }
 
   private void stopBoundJob(long id, long deploymentId, String jobId, String successMessage) {
-    DeploymentRow deployment = store.latestDeployment(id).orElse(null);
+    DeploymentRow deployment =
+        store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("部署记录不存在"));
+    ComputeEnvironmentSnapshot runtimeEnvironment = deploymentRuntime(id, deployment);
     try {
-      RuntimeStatus runtime = gateway.status(jobId);
+      RuntimeStatus runtime = gateway.status(runtimeEnvironment, jobId);
       if (runtime.state() == RuntimeStatus.State.RUNNING) {
-        gateway.stop(jobId);
-        waitForRuntimeStop(jobId);
+        gateway.stop(runtimeEnvironment, jobId);
+        waitForRuntimeStop(runtimeEnvironment, jobId);
       } else if (runtime.state() == RuntimeStatus.State.UNKNOWN) {
         throw new RealtimeEngineException("Flink 状态未知，无法确认停止结果", true, null, null);
       }
@@ -445,26 +485,36 @@ public class RealtimeJobService {
   }
 
   public JsonNode capabilities() {
-    return gateway.capabilities();
+    return capabilities(null);
+  }
+
+  public JsonNode capabilities(Long runtimeEnvironmentId) {
+    long resolvedId =
+        runtimeEnvironmentId == null
+            ? runtimeResolver.defaultEnvironmentId()
+            : runtimeEnvironmentId;
+    return gateway.capabilities(runtimeResolver.environment(resolvedId, true));
   }
 
   public String logs(long id, int tail) {
-    DeploymentRow deployment =
-        store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
-    requireEngineJobId(deployment);
-    return logRedactor.redact(gateway.logs(deployment.engineJobId(), tail));
+    DeploymentRow deployment = latestDeploymentWithJobId(id);
+    ComputeEnvironmentSnapshot runtimeEnvironment = deploymentRuntime(id, deployment);
+    return logRedactor.redact(
+        gateway.logs(runtimeEnvironment, deployment.engineJobId(), tail));
   }
 
   public JsonNode checkpoints(long id) {
     DeploymentRow deployment = latestDeploymentWithJobId(id);
-    return gateway.checkpoints(deployment.engineJobId());
+    return gateway.checkpoints(
+        deploymentRuntime(id, deployment), deployment.engineJobId());
   }
 
   public JsonNode metrics(long id) {
     DeploymentRow deployment = latestDeploymentWithJobId(id);
-    return gateway.metrics(deployment.engineJobId());
+    return gateway.metrics(deploymentRuntime(id, deployment), deployment.engineJobId());
   }
 
+  /** Compatibility reconciler retained for existing internal callers. */
   public void reconcile() {
     List<DefinitionRow> candidates = store.desiredJobs();
     for (DefinitionRow snapshot : candidates) {
@@ -479,9 +529,6 @@ public class RealtimeJobService {
         }
         DeploymentRow deployment = store.latestDeployment(job.id()).orElse(null);
         if (deployment == null || !StringUtils.hasText(deployment.engineJobId())) {
-          // Another Yak Ops instance may still be inside the synchronous CLI submission. An
-          // uncertain submission without a jobId also requires operator verification in Flink UI;
-          // it must not be converted into a definite failure by the reconciler.
           if (!"STARTING".equals(job.observedState())
               && !"STOPPING".equals(job.observedState())
               && !"UNKNOWN".equals(job.observedState())) {
@@ -490,7 +537,8 @@ public class RealtimeJobService {
           continue;
         }
         try {
-          RuntimeStatus runtime = gateway.status(deployment.engineJobId());
+          RuntimeStatus runtime =
+              gateway.status(deploymentRuntime(job.id(), deployment), deployment.engineJobId());
           consecutiveEngineFailures.remove(job.id());
           reconcile(job, deployment, runtime);
         } catch (RealtimeEngineException exception) {
@@ -518,7 +566,11 @@ public class RealtimeJobService {
       DefinitionRow definition =
           store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
       DeploymentRow deployment = latestDeploymentWithJobId(id);
-      reconcile(definition, deployment, gateway.status(deployment.engineJobId()));
+      ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.deployment(definition, deployment);
+      reconcile(
+          definition,
+          deployment,
+          gateway.status(runtimeEnvironment, deployment.engineJobId()));
       consecutiveEngineFailures.remove(id);
       return store.view(id);
     } finally {
@@ -540,7 +592,7 @@ public class RealtimeJobService {
         changeState(job, deployment, "RUNNING", "RUNNING", runtime.jobId(), null);
       } else {
         try {
-          gateway.stop(expectedJobId);
+          gateway.stop(deploymentRuntime(job.id(), deployment), expectedJobId);
         } catch (RealtimeEngineException ignored) {
           changeState(job, deployment, "UNKNOWN", "UNKNOWN", runtime.jobId(), "停止状态对账失败");
         }
@@ -615,14 +667,15 @@ public class RealtimeJobService {
     }
     CdcPipelineSpec spec = store.spec(definition);
     specValidator.validate(spec);
+    ComputeEnvironmentSnapshot runtimeEnvironment = runtimeResolver.definition(definition, true);
     ResolvedCdcPipeline resolved = dataSourceResolver.resolve(spec);
-    JsonNode manifest = gateway.capabilities();
+    JsonNode manifest = gateway.capabilities(runtimeEnvironment);
     capabilityResolver.requireSupported(manifest, resolved, spec);
     return new Prepared(
         definition,
         spec,
         compiler.compile(definition.name(), spec, resolved),
-        manifest.path("runtimeVersion").asText("unknown"),
+        runtimeEnvironment,
         manifest);
   }
 
@@ -636,15 +689,17 @@ public class RealtimeJobService {
 
   private void requirePreparedDefinitionCurrent(Prepared prepared, DefinitionRow current) {
     DefinitionRow snapshot = prepared.definition();
+    Long currentRuntimeEnvironmentId = store.runtimeEnvironmentId(current.id());
     if (snapshot.definitionVersion() != current.definitionVersion()
-        || !Objects.equals(snapshot.configDigest(), current.configDigest())) {
+        || !Objects.equals(snapshot.configDigest(), current.configDigest())
+        || !Objects.equals(prepared.runtimeEnvironment().id(), currentRuntimeEnvironmentId)) {
       throw new IllegalStateException("任务定义在校验期间已变化，请刷新后重试");
     }
   }
 
-  private void waitForRuntimeStop(String jobId) {
+  private void waitForRuntimeStop(ComputeEnvironmentSnapshot runtimeEnvironment, String jobId) {
     for (int attempt = 0; attempt < 20; attempt++) {
-      RuntimeStatus status = gateway.status(jobId);
+      RuntimeStatus status = gateway.status(runtimeEnvironment, jobId);
       if (status.state() == RuntimeStatus.State.TERMINATED
           || status.state() == RuntimeStatus.State.NONE) {
         return;
@@ -730,7 +785,7 @@ public class RealtimeJobService {
     try (RealtimeDeployRequest request =
         new RealtimeDeployRequest(
             prepared.compiled().yaml(), key, credentials[0], credentials[1])) {
-      return gateway.deploy(request);
+      return gateway.deploy(prepared.runtimeEnvironment(), request);
     }
   }
 
@@ -739,6 +794,28 @@ public class RealtimeJobService {
         store.latestDeployment(id).orElseThrow(() -> new IllegalStateException("任务尚无部署记录"));
     requireEngineJobId(deployment);
     return deployment;
+  }
+
+  private ComputeEnvironmentSnapshot deploymentRuntime(long id, DeploymentRow deployment) {
+    if (deployment == null) {
+      throw new IllegalStateException("任务尚无部署记录");
+    }
+    DefinitionRow definition =
+        store.definition(id).orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
+    return runtimeResolver.deployment(definition, deployment);
+  }
+
+  private long resolveDefinitionEnvironmentId(Long id, Long requestedRuntimeEnvironmentId) {
+    if (requestedRuntimeEnvironmentId != null) {
+      return requestedRuntimeEnvironmentId;
+    }
+    if (id != null) {
+      Long current = store.runtimeEnvironmentId(id);
+      if (current != null) {
+        return current;
+      }
+    }
+    return runtimeResolver.defaultEnvironmentId();
   }
 
   private void requireEngineJobId(DeploymentRow deployment) {
@@ -751,6 +828,10 @@ public class RealtimeJobService {
     if (!StringUtils.hasText(name) || name.trim().length() > 200) {
       throw new IllegalArgumentException("任务名称不能为空且不能超过 200 个字符");
     }
+  }
+
+  private String definitionDigest(CdcPipelineSpec spec, long runtimeEnvironmentId) {
+    return digest(write(spec) + "\n@runtime-environment:" + runtimeEnvironmentId);
   }
 
   private String write(Object value) {
@@ -775,7 +856,7 @@ public class RealtimeJobService {
       DefinitionRow definition,
       CdcPipelineSpec spec,
       CompiledPipeline compiled,
-      String runtimeRevision,
+      ComputeEnvironmentSnapshot runtimeEnvironment,
       JsonNode manifest) {}
 
   private record StartReservation(long deploymentId, boolean created) {}
