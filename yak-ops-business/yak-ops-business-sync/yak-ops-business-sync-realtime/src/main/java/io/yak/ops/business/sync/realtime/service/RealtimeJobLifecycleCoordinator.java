@@ -101,7 +101,13 @@ public class RealtimeJobLifecycleCoordinator {
       for (String jobId : discovery.findJobIds(runtimeName)) {
         requireInactive(gateway.status(jobId));
       }
-    } else if (deployment.resultUncertain()) {
+      return;
+    }
+    String identityState = identityStore.state(deployment.id()).orElse("LEGACY");
+    if ("REQUIRED".equals(identityState)) {
+      return;
+    }
+    if (deployment.resultUncertain()) {
       throw new IllegalStateException(
           "历史部署结果不确定且缺少 runtime job identity，请先在 Flink UI 确认无活动任务");
     }
@@ -110,6 +116,11 @@ public class RealtimeJobLifecycleCoordinator {
   private String recoverJobId(DefinitionRow definition, DeploymentRow deployment) {
     String runtimeName = identityStore.findByDeploymentId(deployment.id()).orElse(null);
     if (!StringUtils.hasText(runtimeName)) {
+      String identityState = identityStore.state(deployment.id()).orElse("LEGACY");
+      if ("REQUIRED".equals(identityState) && graceExpired(deployment)) {
+        settleMissing(
+            definition.id(), deployment, "Gateway 尚未绑定 runtime identity，确认 CLI 未开始提交");
+      }
       return null;
     }
     List<String> matches = discovery.findJobIds(runtimeName);
@@ -119,7 +130,8 @@ public class RealtimeJobLifecycleCoordinator {
     }
     if (matches.isEmpty()) {
       if (graceExpired(deployment)) {
-        settleMissing(definition.id(), deployment);
+        settleMissing(
+            definition.id(), deployment, "恢复窗口内未发现匹配的 Flink runtime job");
       }
       return null;
     }
@@ -187,7 +199,7 @@ public class RealtimeJobLifecycleCoordinator {
     }
   }
 
-  private void settleMissing(long definitionId, DeploymentRow deployment) {
+  private void settleMissing(long definitionId, DeploymentRow deployment, String reason) {
     transactions.executeWithoutResult(
         ignored -> {
           DefinitionRow current = store.lockDefinition(definitionId);
@@ -196,10 +208,9 @@ public class RealtimeJobLifecycleCoordinator {
             return;
           }
           if ("RUNNING".equals(current.desiredState())) {
-            failExpectedRunning(current, latest,
-                "提交结果不确定，恢复窗口内未发现匹配的 Flink runtime job");
+            failExpectedRunning(current, latest, "提交结果不确定，" + reason);
           } else {
-            toStopped(current, latest, null, "Flink jobs overview 未发现匹配任务，已确认停止");
+            toStopped(current, latest, null, reason + "，已确认停止");
           }
         });
   }
