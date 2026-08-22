@@ -111,7 +111,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     result.put("restTransport", "DIRECT");
     result.put("submissionMode", mode.name());
     if (mode == SubmissionMode.SSH) {
-      result.put("submissionEndpoint", sshRunner.endpoint());
+      result.put("submissionEndpoint", sshRunner.endpoint(environment));
     } else {
       result.put("submissionEndpoint", "local");
     }
