@@ -17,7 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RealtimeJobReconcilerTest {
 
-  @Mock private RealtimeJobService service;
+  @Mock private RealtimeJobLifecycleCoordinator lifecycleCoordinator;
   @Mock private RealtimeJobStore store;
   private RealtimeJobReconciler reconciler;
 
@@ -25,26 +25,24 @@ class RealtimeJobReconcilerTest {
   void setUp() {
     RealtimeSyncProperties properties = new RealtimeSyncProperties();
     properties.setReconcileLeaseSeconds(30);
-    reconciler = new RealtimeJobReconciler(service, store, properties);
+    reconciler = new RealtimeJobReconciler(lifecycleCoordinator, store, properties);
   }
 
   @Test
   void skipsReconciliationWhenAnotherInstanceOwnsTheLease() {
-    when(store.tryAcquireReconcileLease(anyString(), eq(30)))
-        .thenReturn(false);
+    when(store.tryAcquireReconcileLease(anyString(), eq(30))).thenReturn(false);
 
     reconciler.reconcile();
 
-    verify(service, never()).reconcile();
+    verify(lifecycleCoordinator, never()).reconcileAll();
   }
 
   @Test
   void reconcilesWhenThisInstanceOwnsTheLease() {
-    when(store.tryAcquireReconcileLease(anyString(), eq(30)))
-        .thenReturn(true);
+    when(store.tryAcquireReconcileLease(anyString(), eq(30))).thenReturn(true);
 
     reconciler.reconcile();
 
-    verify(service).reconcile();
+    verify(lifecycleCoordinator).reconcileAll();
   }
 }
