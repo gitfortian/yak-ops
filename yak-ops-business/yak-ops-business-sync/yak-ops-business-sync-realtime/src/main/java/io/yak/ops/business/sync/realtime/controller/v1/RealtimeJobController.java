@@ -10,6 +10,7 @@ import io.yak.ops.business.sync.realtime.controller.v1.dto.RealtimeJobRequests;
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeRequestMapper;
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeViewMapper;
 import io.yak.ops.business.sync.realtime.controller.v1.vo.RealtimeViews;
+import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.service.RealtimeEventStreamService;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobQueryService;
@@ -73,7 +74,16 @@ public class RealtimeJobController {
   public Result<Long> create(@Valid @RequestBody RealtimeJobRequests.CreateRequest request) { return Result.success(service.create(request.name(), request.description(), request.runtimeEnvironmentId())); }
 
   @Operation(summary = "新建实时同步草稿") @PostMapping("/draft") @RequiresPermission(RealtimePermissionCode.CREATE)
-  public Result<Long> draft(@Valid @RequestBody RealtimeJobRequests.SaveRequest request) { return Result.success(service.save(null, request.name(), request.description(), requestMapper.toSpec(request.spec()), request.runtimeEnvironmentId())); }
+  public Result<Long> draft(@Valid @RequestBody RealtimeJobRequests.SaveRequest request) {
+    CdcPipelineSpec spec = requestMapper.toSpec(request.spec());
+    validationService.validateDefinition(spec, request.runtimeEnvironmentId());
+    return Result.success(service.save(null, request.name(), request.description(), spec, request.runtimeEnvironmentId()));
+  }
+
+  @Operation(summary = "校验未保存的实时同步定义") @PostMapping("/spec/validate") @RequiresPermission(RealtimePermissionCode.UPDATE)
+  public Result<RealtimeViews.Validation> validateDefinition(@Valid @RequestBody RealtimeJobRequests.DefinitionValidationRequest request) {
+    return Result.success(viewMapper.toView(validationService.validateDefinition(requestMapper.toSpec(request.spec()), request.runtimeEnvironmentId())));
+  }
 
   @Operation(summary = "解析 Yak Realtime YAML") @PostMapping("/yaml/parse")
   public Result<RealtimeViews.PipelineSpec> parseYaml(@Valid @RequestBody RealtimeJobRequests.YamlRequest request) {
@@ -86,7 +96,11 @@ public class RealtimeJobController {
   }
 
   @Operation(summary = "保存实时同步草稿") @PutMapping("/{id}") @RequiresPermission(RealtimePermissionCode.UPDATE)
-  public Result<Long> save(@PathVariable long id, @Valid @RequestBody RealtimeJobRequests.SaveRequest request) { return Result.success(service.save(id, request.name(), request.description(), requestMapper.toSpec(request.spec()), request.runtimeEnvironmentId())); }
+  public Result<Long> save(@PathVariable long id, @Valid @RequestBody RealtimeJobRequests.SaveRequest request) {
+    CdcPipelineSpec spec = requestMapper.toSpec(request.spec());
+    validationService.validateDefinition(spec, request.runtimeEnvironmentId());
+    return Result.success(service.save(id, request.name(), request.description(), spec, request.runtimeEnvironmentId()));
+  }
 
   @Operation(summary = "实时同步任务详情") @GetMapping("/{id}")
   public Result<RealtimeViews.Job> detail(@PathVariable long id) { return Result.success(viewMapper.toView(service.get(id))); }

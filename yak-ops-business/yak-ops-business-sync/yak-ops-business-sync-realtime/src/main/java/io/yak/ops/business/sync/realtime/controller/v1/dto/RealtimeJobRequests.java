@@ -22,7 +22,11 @@ public final class RealtimeJobRequests {
       @NotBlank @Size(max = 200) String name,
       @Size(max = 1000) String description,
       @NotNull Long runtimeEnvironmentId,
-      @Valid PipelineSpec spec) {}
+      @Valid @NotNull PipelineSpec spec) {}
+
+  public record DefinitionValidationRequest(
+      @NotNull Long runtimeEnvironmentId,
+      @Valid @NotNull PipelineSpec spec) {}
 
   public record YamlRequest(@NotBlank @Size(max = 65_536) String yaml) {}
 

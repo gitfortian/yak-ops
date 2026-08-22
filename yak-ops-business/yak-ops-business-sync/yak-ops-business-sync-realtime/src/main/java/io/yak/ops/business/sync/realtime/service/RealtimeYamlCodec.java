@@ -7,10 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validator;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.stereotype.Component;
@@ -36,17 +32,15 @@ public class RealtimeYamlCodec {
           new CdcPipelineSpec.SinkTuning(3, 1_000, 2_000, 16_777_216, 128, true));
 
   private final ObjectMapper yaml;
-  private final Validator beanValidator;
-  private final CdcPipelineSpecValidator specValidator;
+  private final RealtimeDefinitionValidator definitionValidator;
 
-  public RealtimeYamlCodec(Validator beanValidator, CdcPipelineSpecValidator specValidator) {
+  public RealtimeYamlCodec(RealtimeDefinitionValidator definitionValidator) {
     YAMLFactory factory = new YAMLFactory();
     factory.disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER);
     this.yaml = new ObjectMapper(factory);
     this.yaml.setSerializationInclusion(JsonInclude.Include.NON_NULL);
     this.yaml.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
-    this.beanValidator = beanValidator;
-    this.specValidator = specValidator;
+    this.definitionValidator = definitionValidator;
   }
 
   public CdcPipelineSpec parse(String source) {
@@ -68,7 +62,7 @@ public class RealtimeYamlCodec {
       }
 
       CdcPipelineSpec spec = toSpec(document);
-      validate(spec);
+      definitionValidator.validateSpec(spec);
       return spec;
     } catch (IllegalArgumentException exception) {
       throw exception;
@@ -81,16 +75,18 @@ public class RealtimeYamlCodec {
                   + " 行，第 "
                   + exception.getLocation().getColumnNr()
                   + " 列）";
-      throw new IllegalArgumentException("Yak Realtime YAML 解析失败" + location + "：" + exception.getOriginalMessage());
+      throw new IllegalArgumentException(
+          "Yak Realtime YAML 解析失败" + location + "：" + exception.getOriginalMessage());
     }
   }
 
   public String render(CdcPipelineSpec spec) {
-    validate(spec);
+    definitionValidator.validateSpec(spec);
     try {
       return yaml.writeValueAsString(fromSpec(spec));
     } catch (JsonProcessingException exception) {
-      throw new IllegalArgumentException("Yak Realtime YAML 生成失败：" + exception.getOriginalMessage());
+      throw new IllegalArgumentException(
+          "Yak Realtime YAML 生成失败：" + exception.getOriginalMessage());
     }
   }
 
@@ -120,14 +116,17 @@ public class RealtimeYamlCodec {
         new CdcPipelineSpec.RestartPolicy(
             textOrDefault(
                 restart == null ? null : restart.strategy(), DEFAULT_SPEC.restart().strategy()),
-            intOrDefault(restart == null ? null : restart.attempts(), DEFAULT_SPEC.restart().attempts()),
-            longOrDefault(restart == null ? null : restart.delayMs(), DEFAULT_SPEC.restart().delayMs())),
+            intOrDefault(
+                restart == null ? null : restart.attempts(), DEFAULT_SPEC.restart().attempts()),
+            longOrDefault(
+                restart == null ? null : restart.delayMs(), DEFAULT_SPEC.restart().delayMs())),
         new CdcPipelineSpec.SinkTuning(
             intOrDefault(
                 sinkOptions == null ? null : sinkOptions.maxRetries(),
                 DEFAULT_SPEC.sink().maxRetries()),
             intOrDefault(
-                sinkOptions == null ? null : sinkOptions.batchSize(), DEFAULT_SPEC.sink().batchSize()),
+                sinkOptions == null ? null : sinkOptions.batchSize(),
+                DEFAULT_SPEC.sink().batchSize()),
             longOrDefault(
                 sinkOptions == null ? null : sinkOptions.flushIntervalMs(),
                 DEFAULT_SPEC.sink().flushIntervalMs()),
@@ -187,23 +186,6 @@ public class RealtimeYamlCodec {
                 spec.sink().maxBatchBytes(),
                 spec.sink().statementCacheSize(),
                 spec.sink().strictReplaySafety())));
-  }
-
-  private void validate(CdcPipelineSpec spec) {
-    List<String> violations =
-        beanValidator.validate(spec).stream()
-            .sorted(Comparator.comparing(v -> v.getPropertyPath().toString()))
-            .map(this::violationMessage)
-            .toList();
-    if (!violations.isEmpty()) {
-      throw new IllegalArgumentException("Yak Realtime YAML 配置无效：" + String.join("；", violations));
-    }
-    specValidator.validate(spec);
-  }
-
-  private String violationMessage(ConstraintViolation<CdcPipelineSpec> violation) {
-    String path = violation.getPropertyPath().toString();
-    return (path.isBlank() ? "配置" : path) + " " + violation.getMessage();
   }
 
   private CdcPipelineSpec.SchemaEvolution schemaEvolution(String value) {

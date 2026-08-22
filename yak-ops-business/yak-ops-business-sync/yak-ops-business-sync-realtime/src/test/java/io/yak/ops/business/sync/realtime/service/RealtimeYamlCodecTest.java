@@ -11,10 +11,18 @@ import org.junit.jupiter.api.Test;
 
 class RealtimeYamlCodecTest {
 
-  private final RealtimeYamlCodec codec =
-      new RealtimeYamlCodec(
+  private final RealtimeDefinitionValidator definitionValidator =
+      new RealtimeDefinitionValidator(
           Validation.buildDefaultValidatorFactory().getValidator(),
-          new CdcPipelineSpecValidator());
+          new CdcPipelineSpecValidator(),
+          null,
+          null,
+          null,
+          null,
+          null,
+          null);
+
+  private final RealtimeYamlCodec codec = new RealtimeYamlCodec(definitionValidator);
 
   @Test
   void parsesConciseYamlAndAppliesStableDefaults() {
@@ -37,9 +45,10 @@ class RealtimeYamlCodecTest {
     assertThat(spec.startupMode()).isEqualTo("initial");
     assertThat(spec.schemaEvolution()).isEqualTo(CdcPipelineSpec.SchemaEvolution.EVOLVE);
     assertThat(spec.parallelism()).isEqualTo(1);
-    assertThat(spec.tables()).containsExactly(
-        new CdcPipelineSpec.TableRoute(
-            "orders", "orders", CdcPipelineSpec.MatchMode.EXACT, List.of("id")));
+    assertThat(spec.tables())
+        .containsExactly(
+            new CdcPipelineSpec.TableRoute(
+                "orders", "orders", CdcPipelineSpec.MatchMode.EXACT, List.of("id")));
     assertThat(spec.sink().batchSize()).isEqualTo(1_000);
     assertThat(spec.sink().strictReplaySafety()).isTrue();
   }
@@ -52,7 +61,10 @@ class RealtimeYamlCodecTest {
             22L,
             List.of(
                 new CdcPipelineSpec.TableRoute(
-                    "orders", "public.ods_orders", CdcPipelineSpec.MatchMode.EXACT, List.of("id")),
+                    "orders",
+                    "public.ods_orders",
+                    CdcPipelineSpec.MatchMode.EXACT,
+                    List.of("id")),
                 new CdcPipelineSpec.TableRoute(
                     "user_.*", "public.users", CdcPipelineSpec.MatchMode.REGEX, List.of("id"))),
             "latest-offset",

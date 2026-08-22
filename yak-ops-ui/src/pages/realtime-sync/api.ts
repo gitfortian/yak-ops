@@ -35,6 +35,17 @@ interface RealtimeDefinitionPayload {
   spec: CdcPipelineSpec;
 }
 
+interface DefinitionValidationResult {
+  valid: boolean;
+  deliverySemantics: string;
+}
+
+const validateDefinition = (spec: CdcPipelineSpec, runtimeEnvironmentId: number) =>
+  request<ApiResponse<DefinitionValidationResult>>(`${PREFIX}/spec/validate`, {
+    method: 'POST',
+    data: { spec, runtimeEnvironmentId },
+  });
+
 export const realtimeApi = {
   page: (params: RealtimePageQuery) =>
     request<ApiResponse<RealtimeJobPage>>(PREFIX, {
@@ -47,6 +58,7 @@ export const realtimeApi = {
     request<ApiResponse<number>>(`${PREFIX}/draft`, { method: 'POST', data: payload }),
   update: (id: number, payload: RealtimeDefinitionPayload) =>
     request<ApiResponse<number>>(`${PREFIX}/${id}`, { method: 'PUT', data: payload }),
+  validateDefinition,
   parseYaml: (yaml: string) =>
     request<ApiResponse<CdcPipelineSpec>>(`${PREFIX}/yaml/parse`, {
       method: 'POST',

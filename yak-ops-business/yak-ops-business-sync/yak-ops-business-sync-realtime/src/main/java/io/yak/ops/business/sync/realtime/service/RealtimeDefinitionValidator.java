@@ -1,0 +1,195 @@
+package io.yak.ops.business.sync.realtime.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
+import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
+import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
+import io.yak.ops.business.sync.realtime.domain.RealtimeValidationResult;
+import io.yak.ops.business.sync.realtime.engine.PipelineYamlCompiler;
+import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResolver;
+import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
+import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
+import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
+import org.springframework.stereotype.Service;
+
+/**
+ * Unified definition-level validation boundary shared by draft preflight and save flows.
+ *
+ * <p>This deliberately does not call Flink REST health checks. A draft must remain saveable when the
+ * remote Flink cluster is temporarily offline; publish/start still perform runtime validation through
+ * the existing job lifecycle path. Source metadata is validated because table/key drift is part of
+ * the definition itself, not a Flink runtime concern.
+ */
+@Service
+public class RealtimeDefinitionValidator {
+
+  private final Validator beanValidator;
+  private final CdcPipelineSpecValidator specValidator;
+  private final RealtimeRuntimeResolver runtimeResolver;
+  private final RealtimeDataSourceResolver dataSourceResolver;
+  private final DataSourceCatalogService catalogService;
+  private final RealtimeConnectorCapabilityResolver capabilityResolver;
+  private final PipelineYamlCompiler compiler;
+  private final RealtimeEngineGateway gateway;
+
+  public RealtimeDefinitionValidator(
+      Validator beanValidator,
+      CdcPipelineSpecValidator specValidator,
+      RealtimeRuntimeResolver runtimeResolver,
+      RealtimeDataSourceResolver dataSourceResolver,
+      DataSourceCatalogService catalogService,
+      RealtimeConnectorCapabilityResolver capabilityResolver,
+      PipelineYamlCompiler compiler,
+      RealtimeEngineGateway gateway) {
+    this.beanValidator = beanValidator;
+    this.specValidator = specValidator;
+    this.runtimeResolver = runtimeResolver;
+    this.dataSourceResolver = dataSourceResolver;
+    this.catalogService = catalogService;
+    this.capabilityResolver = capabilityResolver;
+    this.compiler = compiler;
+    this.gateway = gateway;
+  }
+
+  public RealtimeValidationResult validate(CdcPipelineSpec spec, long runtimeEnvironmentId) {
+    validateSpec(spec);
+    ComputeEnvironmentSnapshot environment = runtimeResolver.environment(runtimeEnvironmentId, true);
+    ResolvedCdcPipeline resolved = dataSourceResolver.resolve(spec);
+    validateSourceCatalog(spec);
+    JsonNode manifest = gateway.capabilities(environment);
+    capabilityResolver.requireSupported(manifest, resolved, spec);
+
+    // Compile the logical definition as part of preflight so route escaping and connector YAML shape
+    // fail before persistence. No secrets are resolved and no Flink REST call is made here.
+    compiler.compile("definition-preflight", spec, resolved);
+
+    return new RealtimeValidationResult(
+        true, manifest.path("deliverySemantics").asText("at-least-once"));
+  }
+
+  public void validateSpec(CdcPipelineSpec spec) {
+    if (spec == null) {
+      throw new IllegalArgumentException("实时同步 Spec 不能为空");
+    }
+    List<String> violations =
+        beanValidator.validate(spec).stream()
+            .sorted(Comparator.comparing(value -> value.getPropertyPath().toString()))
+            .map(this::violationMessage)
+            .toList();
+    if (!violations.isEmpty()) {
+      throw new IllegalArgumentException("实时同步 Spec 配置无效：" + String.join("；", violations));
+    }
+    specValidator.validate(spec);
+  }
+
+  private void validateSourceCatalog(CdcPipelineSpec spec) {
+    List<DataSourceCatalogTableVO> physicalTables;
+    try {
+      physicalTables =
+          catalogService.listTables(spec.sourceDataSourceRef(), null, null, null).stream()
+              .filter(this::isPhysicalTable)
+              .toList();
+    } catch (RuntimeException exception) {
+      throw new IllegalArgumentException(
+          "Source 数据源元数据读取失败：" + message(exception), exception);
+    }
+
+    for (CdcPipelineSpec.TableRoute route : spec.tables()) {
+      List<DataSourceCatalogTableVO> matched = matchTables(route, physicalTables);
+      if (matched.isEmpty()) {
+        throw new IllegalArgumentException(
+            route.matchMode() == CdcPipelineSpec.MatchMode.EXACT
+                ? "Source 表不存在：" + route.sourceTable()
+                : "Source 表正则未匹配到任何物理表：" + route.sourceTable());
+      }
+      for (DataSourceCatalogTableVO table : matched) {
+        validatePrimaryKey(spec.sourceDataSourceRef(), table, route.keyColumns());
+      }
+    }
+  }
+
+  private List<DataSourceCatalogTableVO> matchTables(
+      CdcPipelineSpec.TableRoute route, List<DataSourceCatalogTableVO> tables) {
+    if (route.matchMode() == CdcPipelineSpec.MatchMode.EXACT) {
+      return tables.stream().filter(table -> route.sourceTable().equals(table.getName())).toList();
+    }
+    Pattern pattern = Pattern.compile(route.sourceTable());
+    return tables.stream()
+        .filter(table -> table.getName() != null && pattern.matcher(table.getName()).matches())
+        .toList();
+  }
+
+  private void validatePrimaryKey(
+      Long dataSourceId, DataSourceCatalogTableVO table, List<String> configuredKeys) {
+    List<DataSourceCatalogColumnVO> columns;
+    try {
+      columns =
+          catalogService.listColumns(
+              dataSourceId, table.getDatabase(), table.getSchema(), table.getName());
+    } catch (RuntimeException exception) {
+      throw new IllegalArgumentException(
+          "Source 表字段元数据读取失败：" + table.getName() + "，" + message(exception), exception);
+    }
+    if (columns == null || columns.isEmpty()) {
+      throw new IllegalArgumentException("Source 表不存在或无可读字段：" + table.getName());
+    }
+
+    List<String> actualKeys =
+        columns.stream()
+            .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
+            .sorted(
+                Comparator.comparing(
+                    column ->
+                        column.getOrdinalPosition() == null
+                            ? Integer.MAX_VALUE
+                            : column.getOrdinalPosition()))
+            .map(DataSourceCatalogColumnVO::getName)
+            .toList();
+    if (actualKeys.isEmpty()) {
+      throw new IllegalArgumentException("Source 表未检测到主键：" + table.getName());
+    }
+
+    Set<String> configured = new LinkedHashSet<>(configuredKeys);
+    if (configured.size() != configuredKeys.size()) {
+      throw new IllegalArgumentException("表规则主键字段不能重复：" + table.getName());
+    }
+    Set<String> actual = new LinkedHashSet<>(actualKeys);
+    if (!actual.equals(configured)) {
+      throw new IllegalArgumentException(
+          "Source 表主键与任务配置不一致："
+              + table.getName()
+              + "，当前主键="
+              + actualKeys
+              + "，配置主键="
+              + configuredKeys);
+    }
+  }
+
+  private boolean isPhysicalTable(DataSourceCatalogTableVO table) {
+    return table != null
+        && table.getName() != null
+        && (table.getType() == null
+            || !table.getType().toUpperCase().contains("VIEW"));
+  }
+
+  private String violationMessage(ConstraintViolation<CdcPipelineSpec> violation) {
+    String path = violation.getPropertyPath().toString();
+    return (path.isBlank() ? "配置" : path) + " " + violation.getMessage();
+  }
+
+  private String message(RuntimeException exception) {
+    return exception.getMessage() == null || exception.getMessage().isBlank()
+        ? exception.getClass().getSimpleName()
+        : exception.getMessage();
+  }
+}
