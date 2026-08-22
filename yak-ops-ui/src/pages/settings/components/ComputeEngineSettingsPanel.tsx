@@ -18,7 +18,7 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { Database, Server, TerminalSquare } from 'lucide-react';
+import { Database, Server, SquareTerminal } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -108,7 +108,13 @@ const ComputeEngineSettingsPanel = () => {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+
     const payload: ComputeEnvironmentPayload = {
       name: values.name.trim(),
       enabled: values.enabled,
@@ -204,10 +210,7 @@ const ComputeEngineSettingsPanel = () => {
         </div>
       ) : environments.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#d0d5dd] py-14">
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无运行环境"
-          >
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行环境">
             <Button type="primary" onClick={openCreate}>
               新建运行环境
             </Button>
@@ -244,7 +247,7 @@ const ComputeEngineSettingsPanel = () => {
                       <Server size={13} /> Remote Cluster
                     </span>
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-[#f2f4f7] px-2.5 py-1 text-[12px] text-[#475467]">
-                      <TerminalSquare size={13} /> {runtimeLabel(environment)}
+                      <SquareTerminal size={13} /> {runtimeLabel(environment)}
                     </span>
                   </div>
                 </div>
@@ -272,7 +275,10 @@ const ComputeEngineSettingsPanel = () => {
               <div className="mt-5 grid gap-x-8 gap-y-3 border-t border-[#f2f4f7] pt-4 md:grid-cols-2">
                 <div>
                   <div className="text-[11px] text-[#98a2b3]">Flink REST</div>
-                  <div className="mt-1 truncate font-mono text-[12px] text-[#344054]" title={environment.config.restUrl}>
+                  <div
+                    className="mt-1 truncate font-mono text-[12px] text-[#344054]"
+                    title={environment.config.restUrl}
+                  >
                     {environment.config.restUrl}
                   </div>
                 </div>
@@ -284,13 +290,19 @@ const ComputeEngineSettingsPanel = () => {
                 </div>
                 <div>
                   <div className="text-[11px] text-[#98a2b3]">Flink Home</div>
-                  <div className="mt-1 truncate font-mono text-[12px] text-[#344054]" title={environment.config.flinkHome}>
+                  <div
+                    className="mt-1 truncate font-mono text-[12px] text-[#344054]"
+                    title={environment.config.flinkHome}
+                  >
                     {environment.config.flinkHome}
                   </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-[#98a2b3]">Flink CDC Home</div>
-                  <div className="mt-1 truncate font-mono text-[12px] text-[#344054]" title={environment.config.flinkCdcHome}>
+                  <div
+                    className="mt-1 truncate font-mono text-[12px] text-[#344054]"
+                    title={environment.config.flinkCdcHome}
+                  >
                     {environment.config.flinkCdcHome}
                   </div>
                 </div>
@@ -380,10 +392,20 @@ const ComputeEngineSettingsPanel = () => {
               <Input placeholder="例如：生产实时环境" />
             </Form.Item>
             <div className="grid grid-cols-2 gap-5">
-              <Form.Item name="enabled" label="启用环境" valuePropName="checked" className="!mb-0">
+              <Form.Item
+                name="enabled"
+                label="启用环境"
+                valuePropName="checked"
+                className="!mb-0"
+              >
                 <Switch disabled={editing?.defaultEnvironment} />
               </Form.Item>
-              <Form.Item name="makeDefault" label="设为默认" valuePropName="checked" className="!mb-0">
+              <Form.Item
+                name="makeDefault"
+                label="设为默认"
+                valuePropName="checked"
+                className="!mb-0"
+              >
                 <Switch disabled={editing?.defaultEnvironment} />
               </Form.Item>
             </div>
