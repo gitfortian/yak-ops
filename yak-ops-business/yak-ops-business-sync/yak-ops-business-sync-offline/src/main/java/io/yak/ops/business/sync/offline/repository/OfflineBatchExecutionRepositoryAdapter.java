@@ -3,12 +3,15 @@ package io.yak.ops.business.sync.offline.repository;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineBatchExecutionDao;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
-import io.yak.ops.business.sync.offline.domain.compat.LegacyOfflineExecutionCompatibilityMapper;
+import io.yak.ops.business.sync.offline.domain.core.AttemptMetrics;
+import io.yak.ops.business.sync.offline.domain.core.AttemptReason;
+import io.yak.ops.business.sync.offline.domain.core.AttemptStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchKey;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.EngineExecutionRef;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionAttempt;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
@@ -111,7 +114,7 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
       throw new IllegalStateException("BatchScope fingerprint 与持久化内容不一致");
     }
 
-    List<OfflineJobExecution> legacyAttempts = executionRepository.findByBatchId(po.getId());
+    List<OfflineJobExecution> persistedAttempts = executionRepository.findByBatchId(po.getId());
     String logicalJobSpec =
         requireText(po.getLogicalJobSpecJson(), "Batch 缺少冻结 logicalJobSpec：" + po.getId());
 
@@ -124,9 +127,7 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
         retryPolicy,
         requireText(po.getConfigDigest(), "configDigest 不能为空"),
         logicalJobSpec);
-    List<ExecutionAttempt> attempts = legacyAttempts.stream()
-        .map(LegacyOfflineExecutionCompatibilityMapper::toAttempt)
-        .toList();
+    List<ExecutionAttempt> attempts = persistedAttempts.stream().map(this::toAttempt).toList();
     return new BatchExecution(
         positive(po.getId(), "BatchExecutionId"),
         positive(po.getJobDefinitionId(), "TaskId"),
@@ -136,6 +137,73 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
         snapshot,
         enumValue(BatchStatus.class, po.getStatus(), "status"),
         attempts);
+  }
+
+  private ExecutionAttempt toAttempt(OfflineJobExecution source) {
+    Objects.requireNonNull(source, "execution persistence 不能为空");
+    return new ExecutionAttempt(
+        source.getId(),
+        attemptPositive(source.getAttemptNo(), "attemptNo"),
+        attemptReason(source),
+        attemptRequireText(source.getIdempotencyKey(), "idempotencyKey 不能为空"),
+        attemptRequireText(source.getExternalExecutionId(), "externalExecutionId 不能为空"),
+        attemptStatus(source.getStatus()),
+        engineRef(source),
+        attemptMetrics(source),
+        source.getErrorMessage(),
+        Objects.requireNonNull(source.getCreateTime(), "createTime 不能为空"),
+        source.getStartTime(),
+        source.getEndTime());
+  }
+
+  private AttemptStatus attemptStatus(String value) {
+    if (value == null || value.trim().isEmpty()) return AttemptStatus.CREATED;
+    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    return switch (normalized) {
+      case "CREATED" -> AttemptStatus.CREATED;
+      case "SUBMITTING" -> AttemptStatus.SUBMITTING;
+      case "SUBMITTED" -> AttemptStatus.SUBMITTED;
+      case "QUEUED" -> AttemptStatus.QUEUED;
+      case "RUNNING" -> AttemptStatus.RUNNING;
+      case "SUCCEEDED", "FINISHED", "COMPLETED" -> AttemptStatus.SUCCEEDED;
+      case "FAILED" -> AttemptStatus.FAILED;
+      case "CANCELED", "CANCELLED" -> AttemptStatus.CANCELED;
+      case "CANCELING", "CANCELLING" -> AttemptStatus.CANCELING;
+      case "UNKNOWN", "LOST" -> AttemptStatus.UNKNOWN;
+      default -> AttemptStatus.UNKNOWN;
+    };
+  }
+
+  private AttemptReason attemptReason(OfflineJobExecution source) {
+    return value(source.getAttemptNo(), 1) > 1
+            || source.getRetryFromExecutionId() != null
+            || "RETRY".equalsIgnoreCase(source.getTriggerType())
+        ? AttemptReason.RETRY
+        : AttemptReason.INITIAL;
+  }
+
+  private EngineExecutionRef engineRef(OfflineJobExecution source) {
+    String jobId = trim(source.getEngineJobId());
+    String workerId = trim(source.getWorkerInstanceId());
+    return jobId == null && workerId == null ? null : new EngineExecutionRef(jobId, workerId);
+  }
+
+  private AttemptMetrics attemptMetrics(OfflineJobExecution source) {
+    return new AttemptMetrics(
+        value(source.getSourceRecordCount(), 0L),
+        value(source.getSinkAttemptedRecordCount(), 0L),
+        value(source.getSinkSuccessRecordCount(), 0L),
+        value(source.getSinkCommittedRecordCount(), 0L),
+        value(source.getSourceReadBytes(), 0L),
+        value(source.getSinkWrittenBytes(), 0L),
+        value(source.getSourceAverageQps(), 0D),
+        value(source.getSinkAverageQps(), 0D),
+        value(source.getFailedRecordCount(), 0L),
+        value(source.getSkippedRecordCount(), 0L),
+        value(source.getDatabaseCommitMillis(), 0L),
+        value(source.getSqlExecutionMillis(), 0L),
+        value(source.getQps(), 0D),
+        value(source.getDurationMillis(), 0L));
   }
 
   private OfflineBatchExecutionPO toPO(BatchExecution batch) {
@@ -233,6 +301,17 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     return normalized;
   }
 
+  private String attemptRequireText(String value, String message) {
+    String normalized = trim(value);
+    if (normalized == null) throw new IllegalArgumentException(message);
+    return normalized;
+  }
+
+  private int attemptPositive(Integer value, String field) {
+    if (value == null || value < 1) throw new IllegalArgumentException(field + " 必须大于 0");
+    return value;
+  }
+
   private long positive(Long value, String field) {
     if (value == null || value <= 0L) throw new IllegalStateException(field + " 必须大于 0");
     return value;
@@ -246,5 +325,17 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
   private int nonNegative(Integer value, String field) {
     if (value == null || value < 0) throw new IllegalStateException(field + " 不能小于 0");
     return value;
+  }
+
+  private int value(Integer value, int fallback) {
+    return value == null ? fallback : value;
+  }
+
+  private long value(Long value, long fallback) {
+    return value == null ? fallback : value;
+  }
+
+  private double value(Double value, double fallback) {
+    return value == null ? fallback : value;
   }
 }
