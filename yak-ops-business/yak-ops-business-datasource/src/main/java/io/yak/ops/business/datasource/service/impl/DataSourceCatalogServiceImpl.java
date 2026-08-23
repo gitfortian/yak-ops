@@ -4,7 +4,12 @@ import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
+import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway;
+import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.Column;
+import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.QueryResult;
+import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.Table;
+import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.TablePath;
+import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.TableQuery;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnOptionVO;
@@ -14,25 +19,17 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePreviewColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
-import io.yak.ops.spi.datasource.DataSourceCatalog;
-import io.yak.ops.spi.datasource.DataSourceConnection;
-import io.yak.ops.spi.datasource.DataSourcePlugin;
-import io.yak.ops.spi.datasource.DataSourcePluginException;
-import io.yak.ops.spi.datasource.catalog.DataSourceCatalogQuery;
-import io.yak.ops.spi.datasource.catalog.DataSourceTablePath;
-import io.yak.ops.spi.datasource.query.DataSourceQueryResult;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Catalog 服务实现，业务层只负责领域数据源加载、插件路由和响应转换。 */
+/** Catalog 应用服务；Catalog 物理访问和 SPI 模型转换统一由 Gateway Adapter 负责。 */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -43,17 +40,22 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
   private static final Pattern READ_ONLY_SELECT = Pattern.compile("(?is)^SELECT\\b.*");
 
   private final DataSourceRepository repository;
-  private final DataSourcePluginRegistry pluginRegistry;
+  private final DataSourceCatalogGateway catalogGateway;
   private final DataSourceProperties properties;
 
   @Override
   public List<String> listDatabases(Long dataSourceId) {
-    return execute(dataSourceId, DataSourceCatalog::listDatabases);
+    return catalogGateway.listDatabases(
+        getDataSourceOrThrow(dataSourceId),
+        connectionTimeoutSeconds());
   }
 
   @Override
   public List<String> listSchemas(Long dataSourceId, String database) {
-    return execute(dataSourceId, catalog -> catalog.listSchemas(database));
+    return catalogGateway.listSchemas(
+        getDataSourceOrThrow(dataSourceId),
+        database,
+        connectionTimeoutSeconds());
   }
 
   @Override
@@ -62,19 +64,14 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
       String database,
       String schema,
       String keyword) {
-    return execute(
-        dataSourceId,
-        catalog ->
-            catalog.listTables(new DataSourceCatalogQuery(database, schema, keyword)).stream()
-                .map(
-                    table ->
-                        new DataSourceCatalogTableVO(
-                            table.getDatabase(),
-                            table.getSchema(),
-                            table.getName(),
-                            table.getType(),
-                            table.getRemarks()))
-                .collect(Collectors.toList()));
+    return catalogGateway
+        .listTables(
+            getDataSourceOrThrow(dataSourceId),
+            new TableQuery(database, schema, keyword),
+            connectionTimeoutSeconds())
+        .stream()
+        .map(this::toTableVO)
+        .toList();
   }
 
   @Override
@@ -83,38 +80,31 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
       String database,
       String schema,
       String table) {
-    return execute(
-        dataSourceId,
-        catalog ->
-            catalog.listColumns(new DataSourceTablePath(database, schema, table)).stream()
-                .map(
-                    column ->
-                        new DataSourceCatalogColumnVO(
-                            column.getName(),
-                            column.getTypeName(),
-                            column.getJdbcType(),
-                            column.getSize(),
-                            column.getScale(),
-                            column.isNullable(),
-                            column.getOrdinalPosition(),
-                            column.isPrimaryKey(),
-                            column.getRemarks()))
-                .collect(Collectors.toList()));
+    return catalogGateway
+        .listColumns(
+            getDataSourceOrThrow(dataSourceId),
+            new TablePath(database, schema, table),
+            connectionTimeoutSeconds())
+        .stream()
+        .map(this::toColumnVO)
+        .toList();
   }
 
   @Override
   public List<DataSourceCatalogOptionVO> listTable(Long dataSourceId) {
-    return execute(
-        dataSourceId,
-        catalog ->
-            catalog.listTables(new DataSourceCatalogQuery(null, null, null)).stream()
-                .map(
-                    table -> {
-                      String label = isBlank(table.getRemarks()) ? table.getName() : table.getRemarks();
-                      return new DataSourceCatalogOptionVO(
-                          table.getName(), label, table.getRemarks());
-                    })
-                .collect(Collectors.toList()));
+    return catalogGateway
+        .listTables(
+            getDataSourceOrThrow(dataSourceId),
+            new TableQuery(null, null, null),
+            connectionTimeoutSeconds())
+        .stream()
+        .map(
+            table -> {
+              String label = isBlank(table.remarks()) ? table.name() : table.remarks();
+              return new DataSourceCatalogOptionVO(
+                  table.name(), label, table.remarks());
+            })
+        .toList();
   }
 
   @Override
@@ -164,21 +154,14 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
       Map<String, Object> requestBody) {
     Map<String, Object> request = requireRequest(requestBody);
     validateReadOnlyRequest(request);
-    return execute(
-        dataSourceId,
-        catalog ->
-            catalog.describe(request).stream()
-                .map(
-                    column ->
-                        new DataSourceCatalogColumnOptionVO(
-                            column.getOrdinalPosition(),
-                            column.getName(),
-                            column.getTypeName(),
-                            column.getOrdinalPosition(),
-                            column.isNullable() ? "YES" : "NO",
-                            column.getRemarks(),
-                            column.isPrimaryKey() ? "PRI" : ""))
-                .collect(Collectors.toList()));
+    return catalogGateway
+        .describe(
+            getDataSourceOrThrow(dataSourceId),
+            request,
+            connectionTimeoutSeconds())
+        .stream()
+        .map(this::toColumnOptionVO)
+        .toList();
   }
 
   @Override
@@ -187,68 +170,94 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
       Map<String, Object> requestBody) {
     Map<String, Object> request = requireRequest(requestBody);
     validateReadOnlyRequest(request);
-    return execute(
-        dataSourceId,
-        catalog -> toPreviewVO(catalog.preview(request, PREVIEW_LIMIT)));
+    QueryResult result =
+        catalogGateway.preview(
+            getDataSourceOrThrow(dataSourceId),
+            request,
+            PREVIEW_LIMIT,
+            connectionTimeoutSeconds());
+    return toPreviewVO(result);
   }
 
   @Override
   public Long count(Long dataSourceId, Map<String, Object> requestBody) {
     Map<String, Object> request = requireRequest(requestBody);
     validateReadOnlyRequest(request);
-    return execute(dataSourceId, catalog -> catalog.count(request));
+    return catalogGateway.count(
+        getDataSourceOrThrow(dataSourceId),
+        request,
+        connectionTimeoutSeconds());
   }
 
   @Override
   public String buildSqlTemplate(Long dataSourceId, Map<String, Object> requestBody) {
     String tablePath = requiredText(requireRequest(requestBody), "table_path", "tablePath", "table");
-    return execute(dataSourceId, catalog -> catalog.buildSqlTemplate(tablePath));
+    return catalogGateway.buildSqlTemplate(
+        getDataSourceOrThrow(dataSourceId),
+        tablePath,
+        connectionTimeoutSeconds());
   }
 
   @Override
   public String resolveSql(Long dataSourceId, Map<String, Object> requestBody) {
     Map<String, Object> request = requireRequest(requestBody);
     String query = requiredText(request, "query", "sql");
-    return execute(dataSourceId, catalog -> catalog.resolveSql(query, request));
+    return catalogGateway.resolveSql(
+        getDataSourceOrThrow(dataSourceId),
+        query,
+        request,
+        connectionTimeoutSeconds());
   }
 
-  private DataSourceQueryResultVO toPreviewVO(DataSourceQueryResult result) {
+  private DataSourceCatalogTableVO toTableVO(Table table) {
+    return new DataSourceCatalogTableVO(
+        table.database(),
+        table.schema(),
+        table.name(),
+        table.type(),
+        table.remarks());
+  }
+
+  private DataSourceCatalogColumnVO toColumnVO(Column column) {
+    return new DataSourceCatalogColumnVO(
+        column.name(),
+        column.typeName(),
+        column.jdbcType(),
+        column.size(),
+        column.scale(),
+        column.nullable(),
+        column.ordinalPosition(),
+        column.primaryKey(),
+        column.remarks());
+  }
+
+  private DataSourceCatalogColumnOptionVO toColumnOptionVO(Column column) {
+    return new DataSourceCatalogColumnOptionVO(
+        column.ordinalPosition(),
+        column.name(),
+        column.typeName(),
+        column.ordinalPosition(),
+        column.nullable() ? "YES" : "NO",
+        column.remarks(),
+        column.primaryKey() ? "PRI" : "");
+  }
+
+  private DataSourceQueryResultVO toPreviewVO(QueryResult result) {
     List<DataSourcePreviewColumnVO> columns =
-        result.getColumns().stream()
+        result.columns().stream()
             .map(
                 column ->
                     new DataSourcePreviewColumnVO(
-                        column.getTitle(),
-                        column.getDataIndex(),
-                        column.getKey(),
-                        column.isEllipsis()))
-            .collect(Collectors.toList());
-    return new DataSourceQueryResultVO(columns, result.getData(), result.getTotal());
+                        column.title(),
+                        column.dataIndex(),
+                        column.key(),
+                        column.ellipsis()))
+            .toList();
+    return new DataSourceQueryResultVO(columns, result.data(), result.total());
   }
 
-  private <T> T execute(Long dataSourceId, Function<DataSourceCatalog, T> action) {
-    try {
-      DataSourceDefinition definition = getDataSourceOrThrow(dataSourceId);
-      DataSourcePlugin plugin = pluginRegistry.get(definition.getDbType());
-      DataSourceConnection connection = plugin.parseConnection(definition.getConnectionParams());
-      DataSourceCatalog catalog =
-          plugin.createCatalog(
-              connection,
-              Math.max(1, properties.getConnectionTest().getTimeoutSeconds()));
-      return action.apply(catalog);
-    } catch (DataSourceException exception) {
-      throw exception;
-    } catch (DataSourcePluginException exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.CATALOG_FAILED,
-          exception.getMessage(),
-          exception);
-    } catch (RuntimeException exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.CATALOG_FAILED,
-          exception.getMessage(),
-          exception);
-    }
+  private int connectionTimeoutSeconds() {
+    return Math.max(1, properties.getConnectionTest().getTimeoutSeconds());
   }
 
   private DataSourceDefinition getDataSourceOrThrow(Long id) {
