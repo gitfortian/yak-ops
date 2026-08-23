@@ -5,6 +5,7 @@ import io.yak.ops.spi.datasource.DataSourceCatalog;
 import io.yak.ops.spi.datasource.DataSourcePluginException;
 import io.yak.ops.spi.datasource.DataSourcePluginException.Operation;
 import io.yak.ops.spi.datasource.catalog.DataSourceCatalogQuery;
+import io.yak.ops.spi.datasource.catalog.DataSourceCatalogReadRequest;
 import io.yak.ops.spi.datasource.catalog.DataSourceTablePath;
 import io.yak.ops.spi.datasource.metadata.DataSourceColumn;
 import io.yak.ops.spi.datasource.metadata.DataSourceTable;
@@ -35,11 +36,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/** 基于 JDBC {@link DatabaseMetaData} 的通用 Catalog 和轻量预览实现。 */
+/** Generic JDBC Catalog based on {@link DatabaseMetaData} and typed lightweight-read requests. */
 public class GenericJdbcCatalog implements DataSourceCatalog {
 
-  private static final Pattern PLUGIN_VARIABLE_PATTERN =
-      Pattern.compile("\\$\\{var:([^}]+)}");
+  private static final Pattern PLUGIN_VARIABLE_PATTERN = Pattern.compile("\\$\\{var:([^}]+)}");
   private static final DateTimeFormatter DATETIME_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -58,9 +58,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
       try (ResultSet resultSet = opened.getMetaData().getCatalogs()) {
         while (resultSet.next()) {
           String database = resultSet.getString(1);
-          if (includeDatabase(database)) {
-            databases.add(database);
-          }
+          if (includeDatabase(database)) databases.add(database);
         }
       }
       if (databases.isEmpty() && includeDatabase(connection.database())) {
@@ -80,9 +78,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
       try (ResultSet resultSet = schemas(metadata, trimToNull(database))) {
         while (resultSet.next()) {
           String schema = resultSet.getString("TABLE_SCHEM");
-          if (includeSchema(schema)) {
-            schemas.add(schema);
-          }
+          if (includeSchema(schema)) schemas.add(schema);
         }
       }
       if (schemas.isEmpty() && includeSchema(connection.schema())) {
@@ -96,20 +92,15 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   @Override
   public List<DataSourceTable> listTables(DataSourceCatalogQuery query) {
-    String database =
-        firstNonBlank(query == null ? null : query.getDatabase(), connection.database());
-    String schema =
-        firstNonBlank(query == null ? null : query.getSchema(), connection.schema());
+    String database = firstNonBlank(query == null ? null : query.getDatabase(), connection.database());
+    String schema = firstNonBlank(query == null ? null : query.getSchema(), connection.schema());
     String keyword = query == null ? null : trimToNull(query.getKeyword());
     try (Connection opened = openConnection();
-        ResultSet resultSet =
-            opened.getMetaData().getTables(database, schema, "%", tableTypes())) {
+        ResultSet resultSet = opened.getMetaData().getTables(database, schema, "%", tableTypes())) {
       List<DataSourceTable> tables = new ArrayList<>();
       while (resultSet.next()) {
         String name = resultSet.getString("TABLE_NAME");
-        if (!matchesKeyword(name, keyword)) {
-          continue;
-        }
+        if (!matchesKeyword(name, keyword)) continue;
         tables.add(
             new DataSourceTable(
                 resultSet.getString("TABLE_CAT"),
@@ -130,11 +121,9 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String schema = firstNonBlank(tablePath.getSchema(), connection.schema());
     try (Connection opened = openConnection()) {
       DatabaseMetaData metadata = opened.getMetaData();
-      Set<String> primaryKeys =
-          primaryKeys(metadata, database, schema, tablePath.getTable());
+      Set<String> primaryKeys = primaryKeys(metadata, database, schema, tablePath.getTable());
       List<DataSourceColumn> columns = new ArrayList<>();
-      try (ResultSet resultSet =
-          metadata.getColumns(database, schema, tablePath.getTable(), "%")) {
+      try (ResultSet resultSet = metadata.getColumns(database, schema, tablePath.getTable(), "%")) {
         while (resultSet.next()) {
           String name = resultSet.getString("COLUMN_NAME");
           columns.add(
@@ -157,19 +146,17 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   @Override
-  public List<DataSourceColumn> describe(Map<String, Object> request) {
-    CatalogRequest catalogRequest = resolveRequest(request);
-    if (!catalogRequest.sqlMode()) {
-      return listColumns(resolveTablePath(catalogRequest.tablePath()));
+  public List<DataSourceColumn> describe(DataSourceCatalogReadRequest request) {
+    DataSourceCatalogReadRequest value = requireRequest(request);
+    if (!value.sqlMode()) {
+      return listColumns(resolveTablePath(value.tablePath()));
     }
 
-    String query = resolveSql(catalogRequest.query(), request);
+    String query = resolveSql(value.query(), value);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(stripTrailingSemicolon(query))) {
       ResultSetMetaData metadata = statement.getMetaData();
-      if (metadata != null) {
-        return columnsFromMetadata(metadata);
-      }
+      if (metadata != null) return columnsFromMetadata(metadata);
       statement.setMaxRows(1);
       try (ResultSet resultSet = statement.executeQuery()) {
         return columnsFromMetadata(resultSet.getMetaData());
@@ -180,9 +167,10 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   @Override
-  public DataSourceQueryResult preview(Map<String, Object> request, int limit) {
+  public DataSourceQueryResult preview(DataSourceCatalogReadRequest request, int limit) {
+    DataSourceCatalogReadRequest value = requireRequest(request);
     int safeLimit = Math.max(1, Math.min(limit, 200));
-    String query = buildQuery(request);
+    String query = buildQuery(value);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(query)) {
       statement.setMaxRows(safeLimit);
@@ -193,12 +181,11 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
         while (resultSet.next() && rows.size() < safeLimit) {
           Map<String, Object> row = new LinkedHashMap<>();
           for (int index = 1; index <= metadata.getColumnCount(); index++) {
-            String key = columnKey(metadata, index);
-            row.put(key, resultSet.getObject(index));
+            row.put(columnKey(metadata, index), resultSet.getObject(index));
           }
           rows.add(row);
         }
-        return new DataSourceQueryResult(columns, rows, count(request));
+        return new DataSourceQueryResult(columns, rows, count(value));
       }
     } catch (Exception exception) {
       throw catalogError("查询预览数据失败", exception);
@@ -206,8 +193,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   @Override
-  public long count(Map<String, Object> request) {
-    String query = buildQuery(request);
+  public long count(DataSourceCatalogReadRequest request) {
+    String query = buildQuery(requireRequest(request));
     String countSql = "SELECT COUNT(*) FROM (" + query + ") yak_ops_count";
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(countSql);
@@ -222,9 +209,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   public String buildSqlTemplate(String tablePath) {
     DataSourceTablePath resolvedPath = resolveTablePath(tablePath);
     List<DataSourceColumn> columns = listColumns(resolvedPath);
-    if (columns.isEmpty()) {
-      throw catalogError("未找到表字段：" + tablePath, null);
-    }
+    if (columns.isEmpty()) throw catalogError("未找到表字段：" + tablePath, null);
     String columnSql =
         columns.stream()
             .map(DataSourceColumn::getName)
@@ -234,16 +219,14 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   @Override
-  public String resolveSql(String sql, Map<String, Object> request) {
-    if (isBlank(sql)) {
-      return sql;
-    }
+  public String resolveSql(String sql, DataSourceCatalogReadRequest request) {
+    if (isBlank(sql)) return sql;
+    DataSourceCatalogReadRequest value = requireRequest(request);
 
     String resolved = sql;
-    for (Map.Entry<String, String> variable : requestVariables(request).entrySet()) {
+    for (Map.Entry<String, String> variable : value.variables().entrySet()) {
       resolved = resolved.replace("${" + variable.getKey() + "}", variable.getValue());
-      resolved =
-          resolved.replace("${var:" + variable.getKey() + "}", variable.getValue());
+      resolved = resolved.replace("${var:" + variable.getKey() + "}", variable.getValue());
     }
 
     Matcher matcher = PLUGIN_VARIABLE_PATTERN.matcher(resolved);
@@ -284,14 +267,11 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   protected boolean matchesKeyword(String value, String keyword) {
     return keyword == null
-        || (value != null
-            && value.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT)));
+        || (value != null && value.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT)));
   }
 
   protected String quoteIdentifier(String identifier) {
-    if (isBlank(identifier)) {
-      throw new IllegalArgumentException("数据库标识符不能为空");
-    }
+    if (isBlank(identifier)) throw new IllegalArgumentException("数据库标识符不能为空");
     String quote = usesBacktick() ? "`" : "\"";
     return quote + identifier.trim().replace(quote, quote + quote) + quote;
   }
@@ -299,50 +279,30 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   protected DataSourcePluginException catalogError(String action, Throwable throwable) {
     String message = safeMessage(throwable);
     return new DataSourcePluginException(
-        Operation.CATALOG,
-        action + (message == null ? "" : "：" + message),
-        throwable);
+        Operation.CATALOG, action + (message == null ? "" : "：" + message), throwable);
   }
 
   protected String safeMessage(Throwable throwable) {
     String message = throwable == null ? null : throwable.getMessage();
-    if (isBlank(message)) {
-      return throwable == null ? null : throwable.getClass().getSimpleName();
-    }
-    String sanitized =
-        message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
+    if (isBlank(message)) return throwable == null ? null : throwable.getClass().getSimpleName();
+    String sanitized = message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
     return sanitized.length() > 300 ? sanitized.substring(0, 300) : sanitized;
   }
 
-  private String buildQuery(Map<String, Object> request) {
-    CatalogRequest catalogRequest = resolveRequest(request);
-    if (catalogRequest.sqlMode()) {
-      return stripTrailingSemicolon(resolveSql(catalogRequest.query(), request));
+  private String buildQuery(DataSourceCatalogReadRequest request) {
+    if (request.sqlMode()) {
+      return stripTrailingSemicolon(resolveSql(request.query(), request));
     }
-    return "SELECT * FROM " + buildTableReference(resolveTablePath(catalogRequest.tablePath()));
+    return "SELECT * FROM " + buildTableReference(resolveTablePath(request.tablePath()));
   }
 
-  private CatalogRequest resolveRequest(Map<String, Object> request) {
-    if (request == null) {
-      throw catalogError("requestBody 不能为空", null);
-    }
-    String readMode = text(request, "read_mode", "readMode");
-    String tablePath = text(request, "table_path", "tablePath", "table");
-    String query = text(request, "query", "sql");
-    boolean sqlMode = "sql".equalsIgnoreCase(readMode) || (!isBlank(query) && isBlank(tablePath));
-    if (sqlMode && isBlank(query)) {
-      throw catalogError("SQL 模式下 query 不能为空", null);
-    }
-    if (!sqlMode && isBlank(tablePath)) {
-      throw catalogError("表模式下 table_path 不能为空", null);
-    }
-    return new CatalogRequest(sqlMode, trimToNull(tablePath), trimToNull(query));
+  private DataSourceCatalogReadRequest requireRequest(DataSourceCatalogReadRequest request) {
+    if (request == null) throw catalogError("Catalog 读取请求不能为空", null);
+    return request;
   }
 
   private DataSourceTablePath resolveTablePath(String tablePath) {
-    if (isBlank(tablePath)) {
-      throw catalogError("table_path 不能为空", null);
-    }
+    if (isBlank(tablePath)) throw catalogError("table_path 不能为空", null);
     String[] parts =
         java.util.Arrays.stream(tablePath.split("\\."))
             .map(String::trim)
@@ -353,14 +313,10 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
       return new DataSourceTablePath(connection.database(), connection.schema(), parts[0]);
     }
     if (parts.length == 2) {
-      if (usesCatalogAsNamespace()) {
-        return new DataSourceTablePath(parts[0], null, parts[1]);
-      }
+      if (usesCatalogAsNamespace()) return new DataSourceTablePath(parts[0], null, parts[1]);
       return new DataSourceTablePath(connection.database(), parts[0], parts[1]);
     }
-    if (parts.length == 3) {
-      return new DataSourceTablePath(parts[0], parts[1], parts[2]);
-    }
+    if (parts.length == 3) return new DataSourceTablePath(parts[0], parts[1], parts[2]);
     throw catalogError("table_path 格式不正确：" + tablePath, null);
   }
 
@@ -368,21 +324,16 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     List<String> parts = new ArrayList<>();
     if (usesCatalogAsNamespace()) {
       String database = firstNonBlank(tablePath.getDatabase(), connection.database());
-      if (!isBlank(database)) {
-        parts.add(quoteIdentifier(database));
-      }
+      if (!isBlank(database)) parts.add(quoteIdentifier(database));
     } else {
       String schema = firstNonBlank(tablePath.getSchema(), connection.schema());
-      if (!isBlank(schema)) {
-        parts.add(quoteIdentifier(schema));
-      }
+      if (!isBlank(schema)) parts.add(quoteIdentifier(schema));
     }
     parts.add(quoteIdentifier(tablePath.getTable()));
     return String.join(".", parts);
   }
 
-  private List<DataSourceColumn> columnsFromMetadata(ResultSetMetaData metadata)
-      throws SQLException {
+  private List<DataSourceColumn> columnsFromMetadata(ResultSetMetaData metadata) throws SQLException {
     List<DataSourceColumn> columns = new ArrayList<>();
     for (int index = 1; index <= metadata.getColumnCount(); index++) {
       columns.add(
@@ -400,8 +351,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     return columns;
   }
 
-  private List<DataSourceQueryColumn> previewColumns(ResultSetMetaData metadata)
-      throws SQLException {
+  private List<DataSourceQueryColumn> previewColumns(ResultSetMetaData metadata) throws SQLException {
     List<DataSourceQueryColumn> columns = new ArrayList<>();
     for (int index = 1; index <= metadata.getColumnCount(); index++) {
       String key = columnKey(metadata, index);
@@ -424,15 +374,10 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   private Set<String> primaryKeys(
-      DatabaseMetaData metadata,
-      String database,
-      String schema,
-      String table) {
+      DatabaseMetaData metadata, String database, String schema, String table) {
     try (ResultSet resultSet = metadata.getPrimaryKeys(database, schema, table)) {
       Set<String> keys = new LinkedHashSet<>();
-      while (resultSet.next()) {
-        keys.add(resultSet.getString("COLUMN_NAME"));
-      }
+      while (resultSet.next()) keys.add(resultSet.getString("COLUMN_NAME"));
       return keys;
     } catch (Exception ignored) {
       return Collections.emptySet();
@@ -447,37 +392,9 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   private Properties connectionPropertiesInternal() {
     Properties properties = new Properties();
     properties.putAll(connection.properties());
-    if (!isBlank(connection.username())) {
-      properties.setProperty("user", connection.username());
-    }
-    if (connection.password() != null) {
-      properties.setProperty("password", connection.password());
-    }
+    if (!isBlank(connection.username())) properties.setProperty("user", connection.username());
+    if (connection.password() != null) properties.setProperty("password", connection.password());
     return properties;
-  }
-
-  private Map<String, String> requestVariables(Map<String, Object> request) {
-    if (request == null) {
-      return Collections.emptyMap();
-    }
-    Object paramsListObj = request.get("paramsList");
-    if (!(paramsListObj instanceof Iterable<?>)) {
-      return Collections.emptyMap();
-    }
-    Iterable<?> items = (Iterable<?>) paramsListObj;
-    Map<String, String> variables = new LinkedHashMap<>();
-    for (Object item : items) {
-      if (!(item instanceof Map<?, ?>)) {
-        continue;
-      }
-      Map<?, ?> value = (Map<?, ?>) item;
-      String name = mapText(value, "paramName", "name");
-      String variableValue = mapText(value, "paramValue", "value");
-      if (!isBlank(name) && variableValue != null) {
-        variables.put(name.trim(), variableValue);
-      }
-    }
-    return variables;
   }
 
   private String builtInVariable(String name) {
@@ -494,29 +411,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     return value == null ? null : "'" + DATETIME_FORMATTER.format(value) + "'";
   }
 
-  private String text(Map<String, Object> request, String... keys) {
-    for (String key : keys) {
-      Object value = request.get(key);
-      if (value != null) {
-        return String.valueOf(value);
-      }
-    }
-    return null;
-  }
-
-  private String mapText(Map<?, ?> request, String... keys) {
-    for (String key : keys) {
-      Object value = request.get(key);
-      if (value != null) {
-        return String.valueOf(value);
-      }
-    }
-    return null;
-  }
-
   private boolean usesCatalogAsNamespace() {
-    return connection.dbType() == DataSourceDbType.MYSQL
-        || connection.dbType() == DataSourceDbType.DORIS;
+    return connection.dbType() == DataSourceDbType.MYSQL || connection.dbType() == DataSourceDbType.DORIS;
   }
 
   private boolean usesBacktick() {
@@ -551,29 +447,5 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   private boolean isBlank(String value) {
     return value == null || value.trim().isEmpty();
-  }
-
-  private static final class CatalogRequest {
-    private final boolean sqlMode;
-    private final String tablePath;
-    private final String query;
-
-    private CatalogRequest(boolean sqlMode, String tablePath, String query) {
-      this.sqlMode = sqlMode;
-      this.tablePath = tablePath;
-      this.query = query;
-    }
-
-    public boolean sqlMode() {
-      return sqlMode;
-    }
-
-    public String tablePath() {
-      return tablePath;
-    }
-
-    public String query() {
-      return query;
-    }
   }
 }
