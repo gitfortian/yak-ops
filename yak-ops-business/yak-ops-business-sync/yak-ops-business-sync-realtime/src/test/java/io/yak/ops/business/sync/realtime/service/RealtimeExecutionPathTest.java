@@ -11,6 +11,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionPublisher;
+import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionValidator;
+import io.yak.ops.business.sync.realtime.definition.RealtimeYamlCodec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
@@ -127,10 +130,19 @@ class RealtimeExecutionPathTest {
     when(gateway.deploy(eq(environment), any()))
         .thenReturn(new DeployResult(FLINK_JOB_ID, "at-least-once"));
 
+    RealtimeDefinitionPublisher publisher =
+        new RealtimeDefinitionPublisher(
+            store,
+            specValidator,
+            dataSourceResolver,
+            capabilityResolver,
+            compiler,
+            gateway,
+            runtimeResolver,
+            transactionManager);
     RealtimeJobService service =
         service(
             store,
-            json,
             specValidator,
             dataSourceResolver,
             capabilityResolver,
@@ -139,7 +151,7 @@ class RealtimeExecutionPathTest {
             runtimeResolver,
             transactionManager);
 
-    service.publish(JOB_ID);
+    publisher.publish(JOB_ID);
     service.start(JOB_ID, "exec-1");
 
     verify(compiler, times(2)).compile("test-job", spec, resolved);
@@ -238,7 +250,6 @@ class RealtimeExecutionPathTest {
     RealtimeJobService service =
         service(
             store,
-            json,
             specValidator,
             dataSourceResolver,
             capabilityResolver,
@@ -266,7 +277,6 @@ class RealtimeExecutionPathTest {
 
   private RealtimeJobService service(
       RealtimeJobStore store,
-      ObjectMapper json,
       CdcPipelineSpecValidator specValidator,
       RealtimeDataSourceResolver dataSourceResolver,
       RealtimeConnectorCapabilityResolver capabilityResolver,
@@ -276,7 +286,6 @@ class RealtimeExecutionPathTest {
       PlatformTransactionManager transactionManager) {
     return new RealtimeJobService(
         store,
-        json,
         specValidator,
         new SyncExecutionStateMachine(),
         dataSourceResolver,
