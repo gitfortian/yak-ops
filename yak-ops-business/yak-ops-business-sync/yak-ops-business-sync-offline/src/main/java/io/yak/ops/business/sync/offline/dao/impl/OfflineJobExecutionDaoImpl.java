@@ -41,6 +41,16 @@ public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
   }
 
   @Override
+  public List<OfflineJobExecutionPO> selectByBatchId(Long batchId) {
+    if (batchId == null || batchId <= 0L) return List.of();
+    return mapper.selectList(
+        Wrappers.<OfflineJobExecutionPO>lambdaQuery()
+            .eq(OfflineJobExecutionPO::getBatchId, batchId)
+            .orderByAsc(OfflineJobExecutionPO::getAttemptNo)
+            .orderByAsc(OfflineJobExecutionPO::getId));
+  }
+
+  @Override
   public boolean insert(OfflineJobExecutionPO executionPO) {
     return mapper.insert(executionPO) > 0;
   }
@@ -48,6 +58,22 @@ public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
   @Override
   public boolean updateById(OfflineJobExecutionPO executionPO) {
     return mapper.updateById(executionPO) > 0;
+  }
+
+  @Override
+  public boolean bindBatch(Long executionId, Long batchId, LocalDateTime updateTime) {
+    if (executionId == null || executionId <= 0L || batchId == null || batchId <= 0L) return false;
+    return mapper.update(
+        null,
+        Wrappers.<OfflineJobExecutionPO>lambdaUpdate()
+            .eq(OfflineJobExecutionPO::getId, executionId)
+            .and(
+                condition -> condition
+                    .isNull(OfflineJobExecutionPO::getBatchId)
+                    .or()
+                    .eq(OfflineJobExecutionPO::getBatchId, batchId))
+            .set(OfflineJobExecutionPO::getBatchId, batchId)
+            .set(OfflineJobExecutionPO::getUpdateTime, updateTime)) > 0;
   }
 
   @Override

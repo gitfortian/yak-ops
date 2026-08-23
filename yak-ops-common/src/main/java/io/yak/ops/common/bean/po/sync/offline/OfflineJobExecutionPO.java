@@ -14,6 +14,7 @@ public class OfflineJobExecutionPO {
   @TableId(type = IdType.AUTO)
   private Long id;
   private Long jobDefinitionId;
+  private Long batchId;
   private Integer definitionVersion;
   private String engineBaseUrl;
   private String engineJobId;

@@ -59,7 +59,7 @@ BatchExecution
 当前代码尚未完全满足上述目标模型。已确认的主要 Domain Debt：
 
 ```text
-OfflineJobExecution = Batch + Attempt 混合
+OfflineJobExecution = legacy 运行链仍以 execution 为中心
 retryFrom()          = 回读 current Task
 configureRetry()     = 回读 current RetryPolicy
 LOST                  = 当前会自动 Retry，应迁移为 UNKNOWN 语义
@@ -67,14 +67,12 @@ Schedule              = 缺少稳定 BatchKey
 Task last-*           = 仍部分参与生命周期判断
 ```
 
-Wave 0 已完成 Core VO 与兼容映射；现有执行链和数据库仍保持原行为，不得把“Core 已存在”理解成迁移已经完成。
-
-这些问题按迁移波次处理，不允许临时建立第二套真相：
+Wave 0 已完成 Core VO 与兼容映射；Wave 1 已新增 Batch persistence，并给 legacy execution 增加 nullable `batch_id` 与安全绑定能力。现有 Trigger/Retry/Schedule 尚未切换到 Batch，因此不得把“Batch 表已存在”理解成运行真相已经迁移。
 
 ```text
 Wave 0  DONE  Core VO + compatibility mapper
-Wave 1  NEXT  Batch persistence + execution.bind(batch_id)
-Wave 2        Trigger -> Batch -> Attempt 1 + Schedule BatchKey
+Wave 1  DONE  Batch persistence + execution.bind(batch_id)
+Wave 2  NEXT  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
 Wave 3        Retry / UNKNOWN + durable retry reservation
 Wave 4        Runtime truth -> Batch/Attempt; Task last-* projection only
 Wave 5        Backfill / Cursor

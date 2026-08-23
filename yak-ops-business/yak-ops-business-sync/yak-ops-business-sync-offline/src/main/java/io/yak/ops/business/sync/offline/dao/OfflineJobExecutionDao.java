@@ -12,9 +12,13 @@ public interface OfflineJobExecutionDao {
 
   OfflineJobExecutionPO selectByIdempotencyKey(String idempotencyKey);
 
+  List<OfflineJobExecutionPO> selectByBatchId(Long batchId);
+
   boolean insert(OfflineJobExecutionPO executionPO);
 
   boolean updateById(OfflineJobExecutionPO executionPO);
+
+  boolean bindBatch(Long executionId, Long batchId, LocalDateTime updateTime);
 
   boolean hasActiveExecution(Long definitionId);
 

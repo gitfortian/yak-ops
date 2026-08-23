@@ -11,8 +11,10 @@ import java.util.Optional;
 public interface OfflineJobExecutionRepository {
   Optional<OfflineJobExecution> findById(Long id);
   Optional<OfflineJobExecution> findByIdempotencyKey(String idempotencyKey);
+  List<OfflineJobExecution> findByBatchId(Long batchId);
   boolean insert(OfflineJobExecution execution);
   boolean update(OfflineJobExecution execution);
+  boolean bindBatch(Long executionId, Long batchId);
   boolean hasActiveExecution(Long definitionId);
   List<OfflineJobExecution> findActiveExecutions(int limit);
   List<OfflineJobExecution> findRetryCandidates(LocalDateTime now, int limit);
