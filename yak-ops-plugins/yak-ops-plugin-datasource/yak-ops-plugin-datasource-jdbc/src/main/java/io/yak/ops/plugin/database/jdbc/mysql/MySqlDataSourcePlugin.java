@@ -1,12 +1,10 @@
 package io.yak.ops.plugin.database.jdbc.mysql;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
-import io.yak.ops.plugin.database.jdbc.JdbcUrlSchemaSupport;
 
-/** MySQL JDBC 数据源插件。 */
+/** MySQL JDBC datasource plugin. */
 public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
   @Override
@@ -15,10 +13,8 @@ public final class MySqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   }
 
   @Override
-  public DataSourcePluginConfigVO pluginConfig() {
-    return JdbcUrlSchemaSupport.apply(
-        super.pluginConfig(),
-        "jdbc:mysql://{host}:{port}/{database}");
+  protected String jdbcUrlTemplate() {
+    return "jdbc:mysql://{host}:{port}/{database}";
   }
 
   @Override
