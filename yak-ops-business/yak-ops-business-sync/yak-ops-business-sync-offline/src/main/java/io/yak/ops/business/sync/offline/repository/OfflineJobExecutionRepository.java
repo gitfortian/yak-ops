@@ -7,16 +7,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/** 离线同步执行实例领域仓储。 */
+/** ExecutionAttempt 持久化兼容仓储；运行占用真相只允许从 BatchExecution 仓储读取。 */
 public interface OfflineJobExecutionRepository {
   Optional<OfflineJobExecution> findById(Long id);
   Optional<OfflineJobExecution> findByIdempotencyKey(String idempotencyKey);
   List<OfflineJobExecution> findByBatchId(Long batchId);
   boolean insert(OfflineJobExecution execution);
   boolean update(OfflineJobExecution execution);
-  boolean bindBatch(Long executionId, Long batchId);
-  boolean hasActiveExecution(Long definitionId);
+  /** 只返回已绑定 Batch 的活动 Attempt；Wave 1 前 batchless history 不参与 reconcile。 */
   List<OfflineJobExecution> findActiveExecutions(int limit);
+  /** 只返回已绑定 Batch 且到期的 FAILED Attempt。 */
   List<OfflineJobExecution> findRetryCandidates(LocalDateTime now, int limit);
   /** 原子保留一次 FAILED Attempt 的 Retry 创建权。 */
   boolean reserveRetry(Long executionId);
