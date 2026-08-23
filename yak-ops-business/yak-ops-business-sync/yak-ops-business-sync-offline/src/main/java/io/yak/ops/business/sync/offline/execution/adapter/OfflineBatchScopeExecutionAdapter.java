@@ -5,9 +5,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorGateway;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.engine.ConnectorIdResolver;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionScopeValidator;
 import java.time.LocalDateTime;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -17,14 +18,21 @@ import org.springframework.util.StringUtils;
 /** Applies a frozen BatchScope to the frozen logical JobSpec immediately before credential resolution. */
 @ConditionalOnOfflineSyncEnabled
 @Component
-public class OfflineBatchScopeExecutionAdapter {
+public class OfflineBatchScopeExecutionAdapter implements OfflineExecutionScopeValidator {
   private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*");
   private final ObjectMapper objectMapper;
-  private final OfflineCursorManager cursorManager;
+  private final OfflineCursorGateway cursorGateway;
 
-  public OfflineBatchScopeExecutionAdapter(@Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper, OfflineCursorManager cursorManager) {
+  public OfflineBatchScopeExecutionAdapter(
+      @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper,
+      OfflineCursorGateway cursorGateway) {
     this.objectMapper = objectMapper;
-    this.cursorManager = cursorManager;
+    this.cursorGateway = cursorGateway;
+  }
+
+  @Override
+  public void validate(long taskId, String logicalJobSpecJson, BatchScope scope) {
+    apply(taskId, logicalJobSpecJson, scope);
   }
 
   public String apply(long taskId, String logicalJobSpecJson, BatchScope scope) {
@@ -56,7 +64,7 @@ public class OfflineBatchScopeExecutionAdapter {
       return column + " IN (" + values + ")";
     }
     if (scope instanceof BatchScope.CursorRange range) {
-      String column = safeColumn(cursorManager.requireSourceColumn(taskId, range.cursorId()));
+      String column = safeColumn(cursorGateway.requireSourceColumn(taskId, range.cursorId()));
       return column + " > " + literal(range.afterExclusive()) + " AND " + column + " <= " + literal(range.throughInclusive());
     }
     throw new IllegalArgumentException("不支持的 BatchScope：" + scope.getClass().getName());
