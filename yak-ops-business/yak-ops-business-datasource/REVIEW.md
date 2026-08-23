@@ -4,8 +4,6 @@
 
 ## Review 前必读
 
-按顺序读取：
-
 ```text
 REQUIREMENTS.md  -> 模块需要什么
 DOMAIN.md        -> 实现不能违反什么
@@ -13,99 +11,100 @@ REVIEW.md        -> 按什么标准判卷
 PR diff / tests  -> 实际改了什么
 ```
 
-## Review 顺序
+## 1. Requirement Alignment
 
-### 1. Requirement Alignment
+检查：
 
-检查代码是否符合 `REQUIREMENTS.md`：
+- 是否属于 `REQUIREMENTS.md` 已有能力；
+- 是否改变创建、编辑、删除、连接测试或 Catalog 行为；
+- 是否引入未定义的新能力；
+- 是否越过 Datasource 模块边界。
 
-- 是否实现已有能力？
-- 是否改变数据源创建、编辑、删除或连接测试行为？
-- 是否引入文档中没有的新能力？
-- 是否越过 Datasource 的模块边界？
-
-出现未定义的新能力或行为变化时，报告：
+未定义的新能力或行为变化报告：
 
 ```text
 Requirement Gap
 ```
 
-不要替产品或开发者自行补需求。
+## 2. Domain Compliance
 
-### 2. Domain Compliance
-
-检查 `DOMAIN.md`，重点关注：
+重点检查：
 
 - DTO / VO / PO / Plugin SPI Model 是否被当成业务模型；
-- `dbType` 是否可能在更新时被修改；
-- ConnectionProfile 修改后是否仍保留旧 `CONNECTED / DISCONNECTED`；
-- 未保存配置的连接测试是否错误写入状态；
+- `dbType` 是否可能在更新时修改；
+- ConnectionProfile 变更后是否仍保留旧连接状态；
+- 未保存连接测试是否错误写状态；
 - Core Domain 是否引入 Spring / MyBatis / Plugin SPI；
 - Repository 是否泄漏 PO / Mapper / MyBatis 类型；
-- Secret 是否可能进入 `toString()`、日志或响应；
-- 是否继续通过 `Map<String, Object>` key 偷渡新的业务语义。
+- `DataSourceServiceImpl / DataSourceCatalogServiceImpl / DataSourceViewMapper` 是否直接依赖 Plugin SPI、`DataSourcePluginRegistry` 或 SPI Secret helper；
+- `DataSourcePluginGateway / DataSourceCatalogGateway` 是否暴露 Plugin SPI、HTTP DTO / VO 或 PO；
+- SPI Table / Column / QueryResult 是否绕过 Adapter 进入 Application；
+- Secret 是否进入 `toString()`、日志或未脱敏响应；
+- 是否继续通过 `Map<String, Object>` key 偷渡新业务语义。
 
-违反现有领域规则时，报告：
+违反现有规则：
 
 ```text
 Domain Violation
 ```
 
-如果现有领域模型无法表达需求，报告：
+现有模型无法表达需求：
 
 ```text
 Domain Gap
 ```
 
-### 3. Correctness
+## 3. Correctness
 
-检查真实错误，不做泛泛而谈：
+只检查真实风险：
 
-- 空值和边界值；
-- 名称重复校验；
-- 数据源类型解析；
-- 环境解析；
-- 连接配置规范化；
-- Secret 合并；
+- 空值、边界值、名称重复；
+- 类型 / 环境解析；
+- ConnectionProfile 规范化；
+- Secret 合并和脱敏；
+- Gateway Adapter 异常映射；
+- SPI metadata -> Business Gateway Contract 字段映射；
 - 事务边界；
 - 连接测试成功 / 失败状态；
 - Catalog 只读约束；
-- SQL 执行取消、超时和审计一致性。
+- SQL 执行取消、超时、审计一致性。
 
-### 4. Compatibility
+## 4. Compatibility
 
-检查是否破坏：
+不得无迁移方案破坏：
 
-- REST API；
-- `yak_ops_data_source` 表结构；
-- Flyway 历史；
-- 前端已有调用；
-- Datasource Plugin SPI；
-- 已有 MySQL / PostgreSQL / Oracle / Doris 等插件。
+```text
+REST API
+yak_ops_data_source
+Flyway history
+Frontend calls
+Datasource Plugin SPI
+Existing database plugins
+PluginConfig dynamic form contract
+Task Plugin SQL execution provider
+```
 
-破坏性变更必须有明确迁移方案，禁止 Big-Bang 修改。
+禁止 Big-Bang 修改。
 
-### 5. Safety
+## 5. Safety
 
 重点检查：
 
 - Secret 明文输出；
-- 掩码值覆盖真实密码；
-- JDBC URL 中凭据泄漏；
-- 连接测试异常是否吞掉真实失败；
-- 失败连接是否仍显示 `CONNECTED`；
-- 新连接配置是否继承旧连接状态；
-- SQL / Catalog 入口是否绕过只读约束。
+- 掩码覆盖真实密码；
+- JDBC URL 凭据泄漏；
+- Gateway Adapter 吞异常或错误分类；
+- 失败连接仍显示 `CONNECTED`；
+- 新配置继承旧连接状态；
+- SQL / Catalog 绕过只读约束。
 
-### 6. Tests / Guardrails
+## 6. Tests / Guardrails
 
-每个 P0 / P1 问题都回答：
+每个 P0 / P1 都回答：
 
 ```text
 现有哪个测试应该挡住？
 ```
-
-如果没有，指出缺失测试。优先补能锁住领域规则和安全行为的回归测试，不为了覆盖率堆测试。
 
 至少应覆盖：
 
@@ -117,7 +116,26 @@ connection test failure -> DISCONNECTED
 ConnectionProfile toString secret-free
 Core Domain dependency guardrail
 Repository boundary guardrail
+Application -> Business Gateway only
+Gateway Port no Plugin SPI / DTO / VO / PO
+SPI Connection -> ConnectionProfile mapping
+SPI Catalog metadata -> Business Gateway Contract mapping
 ```
+
+## 当前允许的边界例外
+
+```text
+DataSourcePluginConfigServiceImpl
+  -> historical pluginConfig() / VO compatibility bridge
+
+BusinessDataSourceExecutionProvider
+  -> outward Task Plugin SPI adapter
+
+DataSourceSecretCodec
+  -> SPI adapter technical helper
+```
+
+例外不能扩散到新的 Application 主链路。
 
 ## 严重级别
 
@@ -130,8 +148,9 @@ P0 Blocker
 P1 Must Fix
 - 业务结果错误
 - 违反 REQUIREMENTS.md / DOMAIN.md
-- 连接状态错误
-- 类型不可变规则失效
+- Plugin SPI 泄漏进受保护 Application 主链路
+- Gateway Port 暴露 SPI / DTO / VO / PO
+- 连接状态 / 类型不可变规则错误
 - 明确事务 / 兼容性缺陷
 - 高概率导致数据源不可用
 
@@ -140,23 +159,23 @@ P2 Suggestion
 - 不阻塞合并
 ```
 
-纯命名、格式、个人风格偏好不要作为问题提交，除非会造成真实歧义或风险。
+纯命名、格式、个人风格偏好不要作为问题，除非造成真实歧义或风险。
 
-## 每个问题必须有证据
+## 问题证据要求
 
-一个有效 Review 问题至少包含：
+每个有效问题至少包含：
 
 ```text
 位置：文件 / 行或方法
 级别：P0 / P1 / P2
 依据：Requirement / Domain rule / correctness fact
-场景：什么输入或调用顺序会触发
-风险：会造成什么结果
-建议：修复方向，不必替作者重写整段代码
+场景：触发输入或调用顺序
+风险：实际结果
+建议：修复方向
 测试：应补或应命中的测试
 ```
 
-没有可说明的触发场景和风险，就不要凑问题。
+没有触发场景和风险，不要凑问题。
 
 ## 固定输出格式
 
@@ -184,9 +203,6 @@ Conclusion: PASS | CHANGES_REQUIRED
 无 / 说明
 ```
 
-规则：
-
 - 有 P0 / P1 -> `CHANGES_REQUIRED`。
-- 只有 P2 -> 可以 `PASS`，P2 不阻塞。
-- 没发现真实问题 -> 直接 `PASS`，不要为了显得有价值硬凑问题。
-- Review 结论只基于当前需求、领域规则、代码事实和可复现风险，不猜未来需求。
+- 只有 P2 -> 可以 `PASS`。
+- 没有真实问题 -> `PASS`，不要硬凑问题。

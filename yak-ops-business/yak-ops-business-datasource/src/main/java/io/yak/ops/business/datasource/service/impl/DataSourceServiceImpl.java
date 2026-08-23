@@ -8,11 +8,10 @@ import io.yak.ops.business.datasource.domain.ConnectionProfile;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
+import io.yak.ops.business.datasource.gateway.DataSourcePluginGateway;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.business.datasource.service.DataSourceService;
 import io.yak.ops.business.datasource.service.support.DataSourceViewMapper;
-import io.yak.ops.business.datasource.util.DataSourceSecretCodec;
 import io.yak.ops.common.bean.dto.datasource.DataSourceConnectTestDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceDTO;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
@@ -23,25 +22,21 @@ import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
-import io.yak.ops.spi.datasource.DataSourceConnection;
-import io.yak.ops.spi.datasource.DataSourcePlugin;
-import io.yak.ops.spi.datasource.DataSourcePluginException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 数据源管理服务实现。业务层只负责编排，持久化与展示转换由独立边界承担。 */
+/** 数据源管理应用服务；只负责编排 Domain、Repository 和 Business Gateway。 */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataSourceServiceImpl implements DataSourceService {
 
   private final DataSourceRepository repository;
-  private final DataSourcePluginRegistry pluginRegistry;
+  private final DataSourcePluginGateway pluginGateway;
   private final DataSourceProperties properties;
-  private final DataSourceSecretCodec secretCodec;
   private final DataSourceViewMapper viewMapper;
 
   @Override
@@ -55,7 +50,7 @@ public class DataSourceServiceImpl implements DataSourceService {
     DataSourceDbType dbType = parseDbType(dataSourceDTO.getDbType());
     DataSourceEnvironment environment = parseEnvironment(dataSourceDTO.getEnvironment());
     ConnectionProfile connectionProfile =
-        buildConnectionProfile(dbType, dataSourceDTO.getConnectionParams());
+        pluginGateway.normalizeConnection(dbType, dataSourceDTO.getConnectionParams());
     DataSourceDefinition definition =
         DataSourceDefinition.create(
             name,
@@ -89,14 +84,13 @@ public class DataSourceServiceImpl implements DataSourceService {
           exception);
     }
 
-    DataSourcePlugin plugin = pluginRegistry.get(requestedType);
     String mergedConnectionJson =
-        secretCodec.mergeStoredSecrets(
-            plugin,
+        pluginGateway.mergeStoredSecrets(
+            requestedType,
             dataSourceDTO.getConnectionParams(),
             existing.getConnectionParams());
     ConnectionProfile connectionProfile =
-        buildConnectionProfile(requestedType, mergedConnectionJson);
+        pluginGateway.normalizeConnection(requestedType, mergedConnectionJson);
     DataSourceEnvironment environment = parseEnvironment(dataSourceDTO.getEnvironment());
     existing.updateConfiguration(
         name,
@@ -153,18 +147,21 @@ public class DataSourceServiceImpl implements DataSourceService {
   @Override
   public boolean testConnection(Long id) {
     DataSourceDefinition definition = getDataSourceOrThrow(id);
-    DataSourcePlugin plugin = pluginRegistry.get(definition.getDbType());
-    DataSourceConnection connection = parseConnection(plugin, definition.getConnectionParams());
-
     try {
-      plugin.testConnection(connection, connectionTimeoutSeconds());
+      pluginGateway.testConnection(
+          definition.getDbType(),
+          definition.connectionProfile(),
+          connectionTimeoutSeconds());
       definition.markConnected();
       repository.updateConnectionStatus(id, definition.getConnStatus());
       return true;
     } catch (RuntimeException exception) {
-      definition.markDisconnected();
-      repository.updateConnectionStatus(id, definition.getConnStatus());
-      throw connectException(exception);
+      DataSourceException mapped = connectException(exception);
+      if (DataSourceErrorCode.CONNECT_FAILED.equals(mapped.getErrorCode())) {
+        definition.markDisconnected();
+        repository.updateConnectionStatus(id, definition.getConnStatus());
+      }
+      throw mapped;
     }
   }
 
@@ -176,34 +173,33 @@ public class DataSourceServiceImpl implements DataSourceService {
           "连接测试参数不能为空");
     }
 
-    DataSourcePlugin plugin;
     String connectionJson = connectTestDTO.getConnJson();
+    DataSourceDbType dbType;
     if (connectTestDTO.getDataSourceId() != null) {
       DataSourceDefinition existing = getDataSourceOrThrow(connectTestDTO.getDataSourceId());
-      DataSourceDbType existingType = existing.getDbType();
+      dbType = existing.getDbType();
       if (StringUtils.hasText(connectTestDTO.getDbType())
-          && parseDbType(connectTestDTO.getDbType()) != existingType) {
+          && parseDbType(connectTestDTO.getDbType()) != dbType) {
         throw new DataSourceException(
             DataSourceErrorCode.INVALID_DB_TYPE,
             "连接测试的数据源类型与已保存数据源不一致");
       }
-      plugin = pluginRegistry.get(existingType);
       connectionJson =
-          secretCodec.mergeStoredSecrets(
-              plugin,
+          pluginGateway.mergeStoredSecrets(
+              dbType,
               connectionJson,
               existing.getConnectionParams());
     } else {
-      DataSourceDbType dbType =
+      dbType =
           StringUtils.hasText(connectTestDTO.getDbType())
               ? parseDbType(connectTestDTO.getDbType())
-              : pluginRegistry.resolveConnectionType(connectionJson);
-      plugin = pluginRegistry.get(dbType);
+              : pluginGateway.resolveConnectionType(connectionJson);
     }
 
-    DataSourceConnection connection = parseConnection(plugin, connectionJson);
+    ConnectionProfile connectionProfile =
+        pluginGateway.normalizeConnection(dbType, connectionJson);
     try {
-      plugin.testConnection(connection, connectionTimeoutSeconds());
+      pluginGateway.testConnection(dbType, connectionProfile, connectionTimeoutSeconds());
       return true;
     } catch (RuntimeException exception) {
       throw connectException(exception);
@@ -214,33 +210,6 @@ public class DataSourceServiceImpl implements DataSourceService {
   public List<DataSourceOptionVO> getOptions(String dbType) {
     DataSourceDbType normalizedType = StringUtils.hasText(dbType) ? parseDbType(dbType) : null;
     return repository.findAll(normalizedType).stream().map(viewMapper::option).toList();
-  }
-
-  private ConnectionProfile buildConnectionProfile(
-      DataSourceDbType dbType,
-      String connectionJson) {
-    DataSourcePlugin plugin = pluginRegistry.get(dbType);
-    DataSourceConnection connection = parseConnection(plugin, connectionJson);
-    return new ConnectionProfile(
-        connection.jdbcUrl(),
-        connection.normalizedJson(),
-        connection.normalizedJson());
-  }
-
-  private DataSourceConnection parseConnection(DataSourcePlugin plugin, String connectionJson) {
-    try {
-      return plugin.parseConnection(connectionJson);
-    } catch (DataSourcePluginException exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
-          exception.getMessage(),
-          exception);
-    } catch (RuntimeException exception) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
-          exception.getMessage(),
-          exception);
-    }
   }
 
   private DataSourceException connectException(RuntimeException exception) {
