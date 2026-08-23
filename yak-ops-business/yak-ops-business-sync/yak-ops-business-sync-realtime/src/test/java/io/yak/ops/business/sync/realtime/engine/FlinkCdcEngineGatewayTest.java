@@ -135,12 +135,44 @@ class FlinkCdcEngineGatewayTest {
     }
   }
 
+  @Test
+  void redactsRawAndYamlEscapedSecretsBeforeRetainingCliOutput() throws Exception {
+    Path cli = temp.resolve("flink-cdc/bin/flink-cdc.sh");
+    Files.writeString(
+        cli,
+        "#!/bin/sh\ncat \"$1\"\necho \"connector rejected password=source''secret\"\nexit 7\n",
+        StandardCharsets.UTF_8);
+    Files.setPosixFilePermissions(cli, PosixFilePermissions.fromString("rwx------"));
+
+    try (RealtimeDeployRequest request =
+        request(pipelineYaml(), "escaped-secret", "source'secret", "sink'secret")) {
+      assertThatThrownBy(() -> gateway.deploy(environment, request))
+          .isInstanceOf(RealtimeEngineException.class)
+          .hasMessageNotContaining("source'secret")
+          .hasMessageNotContaining("source''secret")
+          .hasMessageNotContaining("sink'secret")
+          .hasMessageNotContaining("sink''secret");
+    }
+
+    String retained =
+        Files.readString(
+            temp.resolve("work/logs/submit-escaped-secret.log"), StandardCharsets.UTF_8);
+    assertThat(retained)
+        .contains("password: ******")
+        .doesNotContain("source'secret", "source''secret", "sink'secret", "sink''secret");
+  }
+
   private RealtimeDeployRequest request(String yaml, String key) {
+    return request(yaml, key, "source-secret", "sink-secret");
+  }
+
+  private RealtimeDeployRequest request(
+      String yaml, String key, String sourcePassword, String sinkPassword) {
     return new RealtimeDeployRequest(
         yaml,
         key,
-        new RealtimeDeployRequest.CredentialBinding("source", "source-secret"),
-        new RealtimeDeployRequest.CredentialBinding("sink", "sink-secret"));
+        new RealtimeDeployRequest.CredentialBinding("source", sourcePassword),
+        new RealtimeDeployRequest.CredentialBinding("sink", sinkPassword));
   }
 
   private String pipelineYaml() {

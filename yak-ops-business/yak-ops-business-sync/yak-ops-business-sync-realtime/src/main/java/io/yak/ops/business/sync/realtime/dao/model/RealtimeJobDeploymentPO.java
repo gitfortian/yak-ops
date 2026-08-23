@@ -39,6 +39,9 @@ public class RealtimeJobDeploymentPO {
   private String status;
   private Boolean resultUncertain;
   private String errorMessage;
+  private String replacementCommandType;
+  private Long replacementTargetDefinitionVersionId;
+  private String replacementIdempotencyKey;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
 }

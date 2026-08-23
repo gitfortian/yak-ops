@@ -132,7 +132,6 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
     po.setRuntimeEnvironmentSnapshotJson(json.write(environment));
     po.setSpecSnapshotJson(json.write(spec));
     po.setSpecSummary(summary);
-    // Physical column is still config_digest; semantically this is ExecutionArtifactDigest.
     po.setConfigDigest(artifactDigest);
     po.setIdempotencyKey(idempotencyKey);
     po.setEngineType("FLINK_CDC");
@@ -174,12 +173,33 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
       boolean uncertain,
       boolean stopRequested,
       String message) {
-    dao.markDeployFailure(definitionId, deploymentId, uncertain, stopRequested, message);
+    dao.markDeployFailure(
+        definitionId, deploymentId, uncertain, stopRequested, message);
   }
 
   @Override
   public void markStopping(long definitionId, Long deploymentId) {
     dao.markStopping(definitionId, deploymentId);
+  }
+
+  @Override
+  public void reserveReplacementStop(
+      long definitionId,
+      long deploymentId,
+      String commandType,
+      long targetDefinitionVersionId,
+      String idempotencyKey) {
+    dao.reserveReplacementStop(
+        definitionId,
+        deploymentId,
+        commandType,
+        targetDefinitionVersionId,
+        idempotencyKey);
+  }
+
+  @Override
+  public void clearReplacementIntent(long deploymentId, String idempotencyKey) {
+    dao.clearReplacementIntent(deploymentId, idempotencyKey);
   }
 
   @Override
@@ -307,7 +327,6 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         json.readSpec(po.getSpecJson()),
         po.getRuntimeEnvironmentId(),
         po.getReleaseState(),
-        // Wave 6: Task runtime columns are inert compatibility storage, never application truth.
         "STOPPED",
         "STOPPED",
         po.getDefinitionVersion() == null ? 0 : po.getDefinitionVersion(),
@@ -338,6 +357,9 @@ public class RealtimeJobStoreAdapter implements RealtimeJobStore {
         po.getStatus(),
         Boolean.TRUE.equals(po.getResultUncertain()),
         po.getErrorMessage(),
+        po.getReplacementCommandType(),
+        po.getReplacementTargetDefinitionVersionId(),
+        po.getReplacementIdempotencyKey(),
         po.getCreateTime(),
         po.getUpdateTime());
   }

@@ -120,27 +120,52 @@ def check_core(g: Guard) -> None:
 
 
 def check_runtime_truth(g: Guard) -> None:
-    dao = g.read(JAVA_ROOT / "dao/impl/RealtimeJobDaoImpl.java")
+    dao_sources = "\n".join(
+        path.read_text(encoding="utf-8") for path in (JAVA_ROOT / "dao").rglob("*.java")
+    )
+    repository_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (JAVA_ROOT / "repository").rglob("*.java")
+    )
     query = g.read(MODULE / "src/main/resources/mapper/realtime/RealtimeJobQueryMapper.xml")
     store = g.read(JAVA_ROOT / "repository/RealtimeJobStore.java")
+    baseline = g.read(
+        MODULE
+        / "src/main/resources/db/migration/yak-realtime-sync/V1__baseline_realtime_sync.sql"
+    )
 
     for token in (
         "RealtimeJobDefinitionPO::getDesiredState",
         "RealtimeJobDefinitionPO::getObservedState",
         "RealtimeJobDefinitionPO::getLastError",
     ):
-        g.check(token not in dao, f"Task runtime dual-write reintroduced: {token}")
+        g.check(token not in dao_sources, f"Task runtime truth reintroduced in DAO layer: {token}")
 
     for token in ("d.desired_state", "d.observed_state", "d.last_error"):
         g.check(token not in query, f"Task runtime fallback reintroduced: {token}")
 
-    for method in ("desiredJobs", "hasOtherDesiredRunning", "markStarting"):
-        g.check(not re.search(rf"\b{method}\s*\(", store), f"Legacy runtime side-path reintroduced: {method}")
+    for method in (
+        "desiredJobs",
+        "hasOtherDesiredRunning",
+        "markStarting",
+        "hasActiveRealtimeJobs",
+    ):
+        text = store + repository_sources + dao_sources
+        g.check(
+            not re.search(rf"\b{method}\s*\(", text),
+            f"Legacy runtime side-path reintroduced: {method}",
+        )
 
     g.check(
         "p.definition_version_id" in query and "d.published_definition_version_id" in query,
         "publishedUpdateAvailable must compare immutable DefinitionVersion IDs",
     )
+    for column in (
+        "replacement_command_type",
+        "replacement_target_definition_version_id",
+        "replacement_idempotency_key",
+    ):
+        g.check(column in baseline, f"Replacement command intent persistence missing: {column}")
 
 
 def check_commands(g: Guard) -> None:
@@ -164,6 +189,9 @@ def check_commands(g: Guard) -> None:
 
     g.check("requirePublishedDefinition(id)" in service, "Start must resolve Published DefinitionVersion")
     g.check("prepare(id, true)" not in service, "Start must not fall back to mutable Draft")
+    g.check("reserveReplacementStop(" in service, "Replacement stop must persist command intent")
+    g.check("resumeReplacement(" in service, "Replacement command must be resumable by Idempotency-Key")
+    g.check("replacementPending()" in service, "Ordinary Start must see pending replacement intent")
 
 
 def check_semantic_names(g: Guard) -> None:

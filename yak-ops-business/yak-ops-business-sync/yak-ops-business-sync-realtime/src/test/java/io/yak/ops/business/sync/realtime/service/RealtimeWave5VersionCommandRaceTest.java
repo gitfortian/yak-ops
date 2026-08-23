@@ -106,9 +106,9 @@ class RealtimeWave5VersionCommandRaceTest {
     ResolvedCdcPipeline resolved = mock(ResolvedCdcPipeline.class);
     CompiledPipeline compiled = new CompiledPipeline("pipeline: v4", "v4");
     when(store.deploymentByIdempotencyKey("apply-race")).thenReturn(Optional.empty());
-    // First read is command preflight. Second read is the DB-lock reservation after another Stop won.
+    // Initial pending check + stable read see RUNNING; DB-lock reservation sees competing Stop.
     when(store.latestDeployment(taskId))
-        .thenReturn(Optional.of(running), Optional.of(stopAlreadyWon));
+        .thenReturn(Optional.of(running), Optional.of(running), Optional.of(stopAlreadyWon));
     when(store.publishedDefinition(taskId)).thenReturn(Optional.of(published));
     when(store.definition(taskId)).thenReturn(Optional.of(task));
     when(store.lockDefinition(taskId)).thenReturn(task);
@@ -136,7 +136,8 @@ class RealtimeWave5VersionCommandRaceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("请先对账");
 
-    verify(store, never()).markStopping(anyLong(), any());
+    verify(store, never())
+        .reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
     verify(store, never()).insertDeployment(any(), any(), any(), any(), any(), any());
     verify(gateway, never()).stop(any(), any());
   }

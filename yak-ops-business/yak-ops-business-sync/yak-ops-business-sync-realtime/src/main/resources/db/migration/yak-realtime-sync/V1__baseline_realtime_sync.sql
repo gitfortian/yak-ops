@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     status VARCHAR(32) NOT NULL,
     result_uncertain TINYINT(1) NOT NULL DEFAULT 0,
     error_message TEXT NULL,
+    replacement_command_type VARCHAR(32) NULL,
+    replacement_target_definition_version_id BIGINT NULL,
+    replacement_idempotency_key VARCHAR(128) NULL,
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     update_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
@@ -92,7 +95,8 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     KEY idx_realtime_deployment_definition (definition_id, id),
     KEY idx_realtime_deployment_definition_version (definition_version_id, id),
     KEY idx_realtime_execution_state (definition_id, observed_state, id),
-    KEY idx_realtime_deployment_environment (runtime_environment_id)
+    KEY idx_realtime_deployment_environment (runtime_environment_id),
+    KEY idx_realtime_replacement_pending (definition_id, replacement_idempotency_key, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_realtime_job_event (

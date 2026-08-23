@@ -37,6 +37,9 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
 
   private static final Pattern JOB_ID = Pattern.compile("(?i)\\b[0-9a-f]{32}\\b");
   private static final Pattern SUBMITTED_JOB_ID = Pattern.compile("(?i)Job ID:\\s*([0-9a-f]{32})");
+  private static final Pattern KEY_VALUE_SECRET =
+      Pattern.compile("(?i)((?:password|pwd|token|secret)\\s*[=:]\\s*)[^\\s,;]+");
+  private static final Pattern URL_PASSWORD = Pattern.compile("(?i)(://[^:/?#\\s]+:)[^@/?#\\s]+@");
   private static final Set<String> ACTIVE_STATES =
       Set.of(
           "CREATED",
@@ -280,16 +283,23 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   }
 
   private String sanitizeOutput(String output, RealtimeDeployRequest request) {
+    String sanitized = redactSecretVariants(output, request.source().password());
+    sanitized = redactSecretVariants(sanitized, request.sink().password());
+    sanitized = KEY_VALUE_SECRET.matcher(sanitized).replaceAll("$1******");
+    return URL_PASSWORD.matcher(sanitized).replaceAll("$1******@");
+  }
+
+  private String redactSecretVariants(String output, char[] value) {
+    String secret = new String(value);
+    if (secret.isEmpty()) {
+      return output;
+    }
+    String yamlEscaped = secret.replace("'", "''");
     String sanitized = output;
-    String sourcePassword = new String(request.source().password());
-    String sinkPassword = new String(request.sink().password());
-    if (!sourcePassword.isEmpty()) {
-      sanitized = sanitized.replace(sourcePassword, "******");
+    if (!yamlEscaped.equals(secret)) {
+      sanitized = sanitized.replace(yamlEscaped, "******");
     }
-    if (!sinkPassword.isEmpty()) {
-      sanitized = sanitized.replace(sinkPassword, "******");
-    }
-    return sanitized;
+    return sanitized.replace(secret, "******");
   }
 
   private void sanitizeLogQuietly(Path log, RealtimeDeployRequest request) {

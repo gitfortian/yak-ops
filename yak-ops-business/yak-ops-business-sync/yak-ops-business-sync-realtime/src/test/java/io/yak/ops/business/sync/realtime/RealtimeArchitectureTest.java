@@ -100,6 +100,9 @@ class RealtimeArchitectureTest {
     assertThat(storeMethods)
         .doesNotContain("desiredJobs", "hasOtherDesiredRunning", "markStarting");
 
+    Set<String> environmentMethods = methodNames(ComputeEnvironmentStore.class);
+    assertThat(environmentMethods).doesNotContain("hasActiveRealtimeJobs");
+
     Set<String> serviceMethods = methodNames(RealtimeJobService.class);
     assertThat(serviceMethods)
         .contains("restartExecution", "applyPublishedVersion")

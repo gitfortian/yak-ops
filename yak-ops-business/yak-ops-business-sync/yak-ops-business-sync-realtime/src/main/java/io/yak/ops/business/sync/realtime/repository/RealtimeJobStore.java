@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution.EngineExecutionRef;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -56,6 +57,13 @@ public interface RealtimeJobStore {
   void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision);
   void markDeployFailure(long definitionId, long deploymentId, boolean uncertain, boolean stopRequested, String message);
   void markStopping(long definitionId, Long deploymentId);
+  void reserveReplacementStop(
+      long definitionId,
+      long deploymentId,
+      String commandType,
+      long targetDefinitionVersionId,
+      String idempotencyKey);
+  void clearReplacementIntent(long deploymentId, String idempotencyKey);
   void reconcile(long definitionId, Long deploymentId, String observedState, String deploymentState, String engineJobId, String error);
   void markTerminalFailure(long definitionId, Long deploymentId, String message);
 
@@ -172,7 +180,8 @@ public interface RealtimeJobStore {
    * SyncExecution persistence compatibility row.
    *
    * <p>The physical table is still named yak_realtime_job_deployment. desiredState/observedState
-   * are authoritative. status/configDigest are compatibility storage names only.
+   * are authoritative. status/configDigest are compatibility storage names only. Replacement fields
+   * persist a RestartExecution/ApplyPublishedVersion intent across the STOPPED -> successor window.
    */
   record DeploymentRow(
       long id,
@@ -192,6 +201,9 @@ public interface RealtimeJobStore {
       String status,
       boolean resultUncertain,
       String errorMessage,
+      String replacementCommandType,
+      Long replacementTargetDefinitionVersionId,
+      String replacementIdempotencyKey,
       LocalDateTime createTime,
       LocalDateTime updateTime) {
 
@@ -199,6 +211,10 @@ public interface RealtimeJobStore {
       engineType = hasText(engineType) ? engineType.trim() : "FLINK_CDC";
       desiredState = hasText(desiredState) ? desiredState.trim() : legacyDesiredState(status);
       observedState = hasText(observedState) ? observedState.trim() : legacyObservedState(status);
+      replacementCommandType =
+          hasText(replacementCommandType) ? replacementCommandType.trim() : null;
+      replacementIdempotencyKey =
+          hasText(replacementIdempotencyKey) ? replacementIdempotencyKey.trim() : null;
     }
 
     /** Legacy source DraftRevision evidence; not immutable DefinitionVersionId. */
@@ -211,6 +227,20 @@ public interface RealtimeJobStore {
       return configDigest;
     }
 
+    public boolean replacementPending() {
+      return replacementCommandType != null
+          && replacementTargetDefinitionVersionId != null
+          && replacementIdempotencyKey != null;
+    }
+
+    public boolean replacementMatches(
+        String commandType, long targetDefinitionVersionId, String key) {
+      return replacementPending()
+          && Objects.equals(replacementCommandType, commandType)
+          && replacementTargetDefinitionVersionId == targetDefinitionVersionId
+          && Objects.equals(replacementIdempotencyKey, key);
+    }
+
     public SyncExecution execution() {
       return new SyncExecution(
           id,
@@ -221,6 +251,52 @@ public interface RealtimeJobStore {
           new EngineExecutionRef(engineType, engineJobId),
           resultUncertain,
           errorMessage);
+    }
+
+    /** Constructor matching the pre-replacement-intent execution row contract. */
+    public DeploymentRow(
+        long id,
+        long definitionId,
+        Long definitionVersionId,
+        int definitionVersion,
+        CdcPipelineSpec specSnapshot,
+        String specSummary,
+        String configDigest,
+        String idempotencyKey,
+        String engineJobId,
+        String runtimeRevision,
+        ComputeEnvironmentSnapshot runtimeEnvironment,
+        String engineType,
+        String desiredState,
+        String observedState,
+        String status,
+        boolean resultUncertain,
+        String errorMessage,
+        LocalDateTime createTime,
+        LocalDateTime updateTime) {
+      this(
+          id,
+          definitionId,
+          definitionVersionId,
+          definitionVersion,
+          specSnapshot,
+          specSummary,
+          configDigest,
+          idempotencyKey,
+          engineJobId,
+          runtimeRevision,
+          runtimeEnvironment,
+          engineType,
+          desiredState,
+          observedState,
+          status,
+          resultUncertain,
+          errorMessage,
+          null,
+          null,
+          null,
+          createTime,
+          updateTime);
     }
 
     /** Compatibility constructor for persisted rows created before execution lifecycle columns. */
@@ -259,6 +335,9 @@ public interface RealtimeJobStore {
           status,
           resultUncertain,
           errorMessage,
+          null,
+          null,
+          null,
           createTime,
           updateTime);
     }

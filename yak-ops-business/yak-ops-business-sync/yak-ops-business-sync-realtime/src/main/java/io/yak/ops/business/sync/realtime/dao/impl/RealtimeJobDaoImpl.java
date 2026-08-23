@@ -153,7 +153,6 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
             .set(RealtimeJobDeploymentPO::getRuntimeVersion, runtimeRevision)
             .set(RealtimeJobDeploymentPO::getRuntimeRevision, runtimeRevision)
             .set(RealtimeJobDeploymentPO::getObservedState, "RUNNING")
-            // Physical status remains a write-only compatibility mirror in Wave 6.
             .set(RealtimeJobDeploymentPO::getStatus, "RUNNING")
             .set(RealtimeJobDeploymentPO::getResultUncertain, false)
             .set(RealtimeJobDeploymentPO::getErrorMessage, null));
@@ -212,6 +211,52 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   }
 
   @Override
+  public void reserveReplacementStop(
+      long definitionId,
+      long deploymentId,
+      String commandType,
+      long targetDefinitionVersionId,
+      String idempotencyKey) {
+    int updated =
+        deploymentMapper.update(
+            null,
+            Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
+                .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+                .eq(RealtimeJobDeploymentPO::getDesiredState, "RUNNING")
+                .eq(RealtimeJobDeploymentPO::getObservedState, "RUNNING")
+                .eq(RealtimeJobDeploymentPO::getResultUncertain, false)
+                .isNull(RealtimeJobDeploymentPO::getReplacementIdempotencyKey)
+                .set(RealtimeJobDeploymentPO::getDesiredState, "STOPPED")
+                .set(RealtimeJobDeploymentPO::getObservedState, "STOPPING")
+                .set(RealtimeJobDeploymentPO::getStatus, "STOPPING")
+                .set(RealtimeJobDeploymentPO::getReplacementCommandType, commandType)
+                .set(
+                    RealtimeJobDeploymentPO::getReplacementTargetDefinitionVersionId,
+                    targetDefinitionVersionId)
+                .set(RealtimeJobDeploymentPO::getReplacementIdempotencyKey, idempotencyKey));
+    if (updated != 1) {
+      throw new IllegalStateException("Execution 已变化，无法预留版本替换命令：" + deploymentId);
+    }
+  }
+
+  @Override
+  public void clearReplacementIntent(long deploymentId, String idempotencyKey) {
+    int updated =
+        deploymentMapper.update(
+            null,
+            Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
+                .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(RealtimeJobDeploymentPO::getReplacementIdempotencyKey, idempotencyKey)
+                .set(RealtimeJobDeploymentPO::getReplacementCommandType, null)
+                .set(RealtimeJobDeploymentPO::getReplacementTargetDefinitionVersionId, null)
+                .set(RealtimeJobDeploymentPO::getReplacementIdempotencyKey, null));
+    if (updated != 1) {
+      throw new IllegalStateException("版本替换命令完成标记失败：" + deploymentId);
+    }
+  }
+
+  @Override
   public void reconcile(
       long definitionId,
       Long deploymentId,
@@ -251,7 +296,7 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
             Wrappers.<RealtimeJobDefinitionPO>lambdaQuery().eq(RealtimeJobDefinitionPO::getId, id));
     if (deleted != 1) return deleted;
 
-    // Audit-safe deletion remains a separate GAP-08; Wave 6 does not pretend to solve it.
+    // Audit-safe deletion remains a separate GAP; this change does not pretend to solve it.
     eventMapper.delete(
         Wrappers.<RealtimeJobEventPO>lambdaQuery()
             .eq(RealtimeJobEventPO::getDefinitionId, id));

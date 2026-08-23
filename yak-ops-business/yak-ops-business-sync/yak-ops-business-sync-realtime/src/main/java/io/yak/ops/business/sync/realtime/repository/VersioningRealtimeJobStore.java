@@ -226,6 +226,26 @@ public class VersioningRealtimeJobStore implements RealtimeJobStore {
   }
 
   @Override
+  public void reserveReplacementStop(
+      long definitionId,
+      long deploymentId,
+      String commandType,
+      long targetDefinitionVersionId,
+      String idempotencyKey) {
+    delegate.reserveReplacementStop(
+        definitionId,
+        deploymentId,
+        commandType,
+        targetDefinitionVersionId,
+        idempotencyKey);
+  }
+
+  @Override
+  public void clearReplacementIntent(long deploymentId, String idempotencyKey) {
+    delegate.clearReplacementIntent(deploymentId, idempotencyKey);
+  }
+
+  @Override
   public void reconcile(
       long definitionId,
       Long deploymentId,

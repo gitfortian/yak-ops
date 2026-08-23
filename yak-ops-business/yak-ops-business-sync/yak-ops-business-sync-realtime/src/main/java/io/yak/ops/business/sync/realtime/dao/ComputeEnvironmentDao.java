@@ -16,6 +16,5 @@ public interface ComputeEnvironmentDao {
   void clearDefault();
   int setDefault(long id);
   int delete(long id);
-  boolean hasBoundRealtimeJobs(long id);
-  boolean hasActiveRealtimeJobs();
+  boolean hasRuntimeEnvironmentReferences(long id);
 }

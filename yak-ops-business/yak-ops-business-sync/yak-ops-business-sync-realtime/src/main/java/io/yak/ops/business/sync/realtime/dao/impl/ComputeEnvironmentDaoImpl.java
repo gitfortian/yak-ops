@@ -3,12 +3,19 @@ package io.yak.ops.business.sync.realtime.dao.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.yak.ops.business.sync.realtime.dao.ComputeEnvironmentDao;
 import io.yak.ops.business.sync.realtime.dao.mapper.ComputeEnvironmentMapper;
+import io.yak.ops.business.sync.realtime.dao.mapper.RealtimeDefinitionVersionMapper;
 import io.yak.ops.business.sync.realtime.dao.mapper.RealtimeJobDefinitionMapper;
+import io.yak.ops.business.sync.realtime.dao.mapper.RealtimeJobDeploymentMapper;
 import io.yak.ops.business.sync.realtime.dao.model.ComputeEnvironmentPO;
+import io.yak.ops.business.sync.realtime.dao.model.RealtimeDefinitionVersionPO;
 import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDefinitionPO;
+import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDeploymentPO;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
@@ -16,14 +23,23 @@ import org.springframework.stereotype.Repository;
 @DependsOn("realtimeSyncFlyway")
 public class ComputeEnvironmentDaoImpl implements ComputeEnvironmentDao {
 
+  private static final List<String> ACTIVE_EXECUTION_STATES =
+      List.of("STARTING", "RUNNING", "STOPPING", "UNKNOWN", "CONFLICT");
+
   private final ComputeEnvironmentMapper environmentMapper;
   private final RealtimeJobDefinitionMapper definitionMapper;
+  private final RealtimeDefinitionVersionMapper definitionVersionMapper;
+  private final RealtimeJobDeploymentMapper deploymentMapper;
 
   public ComputeEnvironmentDaoImpl(
       ComputeEnvironmentMapper environmentMapper,
-      RealtimeJobDefinitionMapper definitionMapper) {
+      RealtimeJobDefinitionMapper definitionMapper,
+      RealtimeDefinitionVersionMapper definitionVersionMapper,
+      RealtimeJobDeploymentMapper deploymentMapper) {
     this.environmentMapper = environmentMapper;
     this.definitionMapper = definitionMapper;
+    this.definitionVersionMapper = definitionVersionMapper;
+    this.deploymentMapper = deploymentMapper;
   }
 
   @Override
@@ -126,18 +142,65 @@ public class ComputeEnvironmentDaoImpl implements ComputeEnvironmentDao {
   }
 
   @Override
-  public boolean hasBoundRealtimeJobs(long id) {
-    return definitionMapper.selectCount(
+  public boolean hasRuntimeEnvironmentReferences(long id) {
+    if (definitionMapper.selectCount(
             Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
-                .eq(RealtimeJobDefinitionPO::getRuntimeEnvironmentId, id)) > 0;
+                .eq(RealtimeJobDefinitionPO::getRuntimeEnvironmentId, id))
+        > 0) {
+      return true;
+    }
+
+    List<Long> publishedVersionIds =
+        definitionMapper.selectList(
+                Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
+                    .isNotNull(RealtimeJobDefinitionPO::getPublishedDefinitionVersionId))
+            .stream()
+            .map(RealtimeJobDefinitionPO::getPublishedDefinitionVersionId)
+            .distinct()
+            .toList();
+    if (versionReferencesEnvironment(publishedVersionIds, id)) {
+      return true;
+    }
+
+    List<Long> pendingTargetVersionIds = latestPendingReplacementTargets();
+    if (versionReferencesEnvironment(pendingTargetVersionIds, id)) {
+      return true;
+    }
+
+    return deploymentMapper.selectCount(
+            Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
+                .eq(RealtimeJobDeploymentPO::getRuntimeEnvironmentId, id)
+                .in(RealtimeJobDeploymentPO::getObservedState, ACTIVE_EXECUTION_STATES))
+        > 0;
   }
 
-  @Override
-  public boolean hasActiveRealtimeJobs() {
-    return definitionMapper.selectCount(
-            Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
-                .and(q -> q.eq(RealtimeJobDefinitionPO::getDesiredState, "RUNNING")
-                    .or()
-                    .notIn(RealtimeJobDefinitionPO::getObservedState, List.of("STOPPED", "FAILED")))) > 0;
+  private List<Long> latestPendingReplacementTargets() {
+    List<RealtimeJobDeploymentPO> rows =
+        deploymentMapper.selectList(
+            Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
+                .orderByAsc(RealtimeJobDeploymentPO::getDefinitionId)
+                .orderByDesc(RealtimeJobDeploymentPO::getId));
+    Set<Long> seenTasks = new HashSet<>();
+    List<Long> result = new ArrayList<>();
+    for (RealtimeJobDeploymentPO row : rows) {
+      if (!seenTasks.add(row.getDefinitionId())) {
+        continue;
+      }
+      if (row.getReplacementTargetDefinitionVersionId() != null
+          && row.getReplacementIdempotencyKey() != null
+          && !row.getReplacementIdempotencyKey().isBlank()) {
+        result.add(row.getReplacementTargetDefinitionVersionId());
+      }
+    }
+    return result.stream().distinct().toList();
+  }
+
+  private boolean versionReferencesEnvironment(List<Long> versionIds, long environmentId) {
+    return !versionIds.isEmpty()
+        && definitionVersionMapper.selectCount(
+                Wrappers.<RealtimeDefinitionVersionPO>lambdaQuery()
+                    .in(RealtimeDefinitionVersionPO::getId, versionIds)
+                    .eq(RealtimeDefinitionVersionPO::getRuntimeEnvironmentId, environmentId))
+            > 0;
   }
 }
