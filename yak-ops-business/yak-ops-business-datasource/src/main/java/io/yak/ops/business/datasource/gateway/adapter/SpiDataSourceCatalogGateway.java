@@ -190,7 +190,11 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
     }
     Map<String, String> variables = new LinkedHashMap<>();
     for (CatalogReadRequest.Variable variable : request.variables()) {
-      variables.put(variable.name(), variable.value());
+      // Historic plugin behavior ignored paramsList entries with null values. Preserve that
+      // compatibility while removing the implicit Map protocol from the stable SPI.
+      if (variable.value() != null) {
+        variables.put(variable.name(), variable.value());
+      }
     }
     return new DataSourceCatalogReadRequest(
         request.sqlMode()
