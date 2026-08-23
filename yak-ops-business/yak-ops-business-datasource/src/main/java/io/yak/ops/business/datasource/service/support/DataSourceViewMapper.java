@@ -3,23 +3,20 @@ package io.yak.ops.business.datasource.service.support;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.DataSourceSummary;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
-import io.yak.ops.business.datasource.util.DataSourceSecretCodec;
+import io.yak.ops.business.datasource.gateway.DataSourcePluginGateway;
 import io.yak.ops.common.bean.vo.datasource.DataSourceOptionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceSummaryVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
-import io.yak.ops.spi.datasource.DataSourcePlugin;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Domain -> VO 纯输出转换，不访问数据库。 */
+/** Domain -> VO 输出转换；插件相关脱敏通过 Business Gateway 完成。 */
 @Component
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataSourceViewMapper {
 
-  private final DataSourcePluginRegistry pluginRegistry;
-  private final DataSourceSecretCodec secretCodec;
+  private final DataSourcePluginGateway pluginGateway;
 
   public DataSourceVO definition(DataSourceDefinition source, boolean includeOriginalJson) {
     if (source == null) return null;
@@ -27,7 +24,7 @@ public class DataSourceViewMapper {
     target.setId(source.getId());
     target.setName(source.getName());
     target.setDbType(source.getDbType() == null ? null : source.getDbType().name());
-    target.setJdbcUrl(secretCodec.maskSensitiveText(source.getJdbcUrl()));
+    target.setJdbcUrl(pluginGateway.maskSensitiveText(source.getJdbcUrl()));
     target.setEnvironment(source.getEnvironment() == null ? null : source.getEnvironment().name());
     target.setEnvironmentName(
         source.getEnvironment() == null ? null : source.getEnvironment().getDisplayName());
@@ -36,8 +33,8 @@ public class DataSourceViewMapper {
     target.setCreateTime(source.getCreateTime());
     target.setUpdateTime(source.getUpdateTime());
     if (includeOriginalJson && source.getDbType() != null) {
-      DataSourcePlugin plugin = pluginRegistry.get(source.getDbType());
-      target.setOriginalJson(secretCodec.maskConnectionJson(plugin, source.getOriginalJson()));
+      target.setOriginalJson(
+          pluginGateway.maskConnectionJson(source.getDbType(), source.getOriginalJson()));
     }
     return target;
   }
