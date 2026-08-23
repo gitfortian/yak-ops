@@ -28,12 +28,16 @@ import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionReservationM
 import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionStarter;
 import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionStateManager;
 import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeDeleteSafetyChecker;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconcileCoordinator;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconciler;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeRuntimeIdentityRecovery;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeRuntimeStateReconciler;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
 import io.yak.ops.business.sync.realtime.service.ComputeEnvironmentService;
-import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobQueryService;
 import io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService;
 import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
@@ -122,6 +126,7 @@ class RealtimeArchitectureTest {
     assertFieldsAvoid(
         RealtimeJobExecutionService.class,
         "RealtimeJobService",
+        "RealtimeJobLifecycleCoordinator",
         ".dao.",
         "JdbcTemplate");
 
@@ -141,6 +146,31 @@ class RealtimeArchitectureTest {
     assertThat(coordinatorMethods)
         .contains("start", "stop", "restartExecution", "applyPublishedVersion")
         .doesNotContain("publish", "save", "delete", "reconcile");
+  }
+
+  @Test
+  void reconcileSubsystemUsesExplicitRolesWithoutApplicationServiceLeakage() {
+    for (Class<?> internal :
+        new Class<?>[] {
+          RealtimeReconcileCoordinator.class,
+          RealtimeRuntimeIdentityRecovery.class,
+          RealtimeRuntimeStateReconciler.class,
+          RealtimeDeleteSafetyChecker.class,
+          RealtimeReconciler.class
+        }) {
+      assertInternalComponent(internal, "reconcile");
+      assertFieldsAvoid(internal, ".dao.", ".dao.mapper.", ".dao.model.", "JdbcTemplate");
+    }
+
+    Set<String> coordinatorMethods = methodNames(RealtimeReconcileCoordinator.class);
+    assertThat(coordinatorMethods)
+        .contains("reconcile", "reconcileAll")
+        .doesNotContain("start", "stop", "restartExecution", "applyPublishedVersion");
+
+    assertFieldsAvoid(
+        RealtimeJobExecutionService.class,
+        ".service.RealtimeJobLifecycleCoordinator",
+        ".service.RealtimeJobReconciler");
   }
 
   @Test
@@ -165,7 +195,6 @@ class RealtimeArchitectureTest {
   void servicesDoNotDependOnDaoMapperPoOrJdbcTemplate() {
     for (Class<?> type :
         new Class<?>[] {
-          RealtimeJobLifecycleCoordinator.class,
           RealtimeJobQueryService.class,
           RealtimeObservabilityService.class,
           RealtimeRuntimeResolver.class,
@@ -184,6 +213,11 @@ class RealtimeArchitectureTest {
           RealtimeExecutionStateManager.class,
           RealtimeExecutionStarter.class,
           RealtimeExecutionReplacementManager.class,
+          RealtimeReconcileCoordinator.class,
+          RealtimeRuntimeIdentityRecovery.class,
+          RealtimeRuntimeStateReconciler.class,
+          RealtimeDeleteSafetyChecker.class,
+          RealtimeReconciler.class,
           io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
           io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
           io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService.class
