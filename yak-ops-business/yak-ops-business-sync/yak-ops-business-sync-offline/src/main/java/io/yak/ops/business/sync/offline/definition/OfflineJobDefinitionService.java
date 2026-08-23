@@ -8,7 +8,7 @@ import io.yak.ops.business.sync.offline.definition.OfflineDefinitionSupport.Draf
 import io.yak.ops.business.sync.offline.definition.OfflineDefinitionSupport.PreparedDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
-import io.yak.ops.business.sync.offline.execution.OfflineBatchRuntimeService;
+import io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
@@ -30,7 +30,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class OfflineJobDefinitionService {
   private final OfflineJobDefinitionRepository definitionRepository;
-  private final OfflineBatchRuntimeService batchRuntimeService;
+  private final OfflineBatchRuntime batchRuntime;
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineDefinitionSupport support;
   private final OfflineScheduleSupport scheduleSupport;
@@ -71,9 +71,9 @@ public class OfflineJobDefinitionService {
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public boolean online(Long id) { OfflineJobDefinition definition = require(id); resolveLogicalJobSpec(definition); definition.setReleaseState("ONLINE"); definition.setUpdateTime(LocalDateTime.now()); boolean updated = definitionRepository.update(definition); if (updated) scheduleLifecycle.sync(id); return updated; }
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
-  public boolean offline(Long id) { OfflineJobDefinition definition = require(id); if (batchRuntimeService.hasOccupyingBatch(id)) throw new IllegalStateException("运行中的 BatchExecution 不能下线，请先停止任务"); definition.setReleaseState("OFFLINE"); definition.setUpdateTime(LocalDateTime.now()); boolean updated = definitionRepository.update(definition); if (updated) scheduleLifecycle.sync(id); return updated; }
+  public boolean offline(Long id) { OfflineJobDefinition definition = require(id); if (batchRuntime.hasOccupyingBatch(id)) throw new IllegalStateException("运行中的 BatchExecution 不能下线，请先停止任务"); definition.setReleaseState("OFFLINE"); definition.setUpdateTime(LocalDateTime.now()); boolean updated = definitionRepository.update(definition); if (updated) scheduleLifecycle.sync(id); return updated; }
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
-  public boolean delete(Long id) { OfflineJobDefinition definition = require(id); if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) throw new IllegalStateException("已上线任务不能删除，请先下线"); if (batchRuntimeService.hasOccupyingBatch(id)) throw new IllegalStateException("运行中的 BatchExecution 不能删除"); scheduleLifecycle.remove(id); return definitionRepository.delete(id); }
+  public boolean delete(Long id) { OfflineJobDefinition definition = require(id); if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) throw new IllegalStateException("已上线任务不能删除，请先下线"); if (batchRuntime.hasOccupyingBatch(id)) throw new IllegalStateException("运行中的 BatchExecution 不能删除"); scheduleLifecycle.remove(id); return definitionRepository.delete(id); }
   public OfflineJobDefinition require(Long id) { if (id == null || id <= 0L) throw new IllegalArgumentException("任务定义 ID 不合法"); return definitionRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("离线同步任务不存在：" + id)); }
-  private void ensureEditable(OfflineJobDefinition definition) { if (definition == null) return; if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) throw new IllegalStateException("已上线任务不能修改，请先下线"); if (batchRuntimeService.hasOccupyingBatch(definition.getId())) throw new IllegalStateException("运行中的 BatchExecution 不能修改"); }
+  private void ensureEditable(OfflineJobDefinition definition) { if (definition == null) return; if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) throw new IllegalStateException("已上线任务不能修改，请先下线"); if (batchRuntime.hasOccupyingBatch(definition.getId())) throw new IllegalStateException("运行中的 BatchExecution 不能修改"); }
 }

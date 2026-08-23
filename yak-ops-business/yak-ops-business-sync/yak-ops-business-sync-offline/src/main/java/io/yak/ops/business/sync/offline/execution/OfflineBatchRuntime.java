@@ -1,7 +1,7 @@
 package io.yak.ops.business.sync.offline.execution;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorService;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
@@ -15,17 +15,17 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Batch runtime truth boundary. */
 @ConditionalOnOfflineSyncEnabled
-@Service
+@Component
 @RequiredArgsConstructor
-public class OfflineBatchRuntimeService {
+public class OfflineBatchRuntime {
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineJobExecutionRepository executionRepository;
-  private final OfflineCursorService cursorService;
+  private final OfflineCursorManager cursorManager;
 
   public boolean hasOccupyingBatch(Long taskId) { return batchRepository.hasOccupyingBatch(positive(taskId, "TaskId")); }
   public Optional<BatchExecution> findLatestOccupyingBatch(Long taskId) { return batchRepository.findLatestOccupyingByTaskId(positive(taskId, "TaskId")); }
@@ -55,10 +55,10 @@ public class OfflineBatchRuntimeService {
     List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId); if (attempts.isEmpty()) return;
     OfflineJobExecution latest = attempts.stream().max(Comparator.comparingInt((OfflineJobExecution value) -> number(value.getAttemptNo(), 1)).thenComparingLong(value -> number(value.getId(), 0L))).orElseThrow();
     BatchStatus target = deriveStatus(latest);
-    if (batch.status() == target) { if (target == BatchStatus.SUCCEEDED) cursorService.advanceAfterSucceededBatch(batch); return; }
+    if (batch.status() == target) { if (target == BatchStatus.SUCCEEDED) cursorManager.advanceAfterSucceededBatch(batch); return; }
     BatchExecution updated = new BatchExecution(batch.id(), batch.taskId(), batch.batchKey(), batch.trigger(), batch.batchScope(), batch.snapshot(), target, batch.attempts());
     if (!batchRepository.update(updated)) throw new IllegalStateException("更新 BatchExecution runtime status 失败：" + batch.id());
-    if (target == BatchStatus.SUCCEEDED) cursorService.advanceAfterSucceededBatch(updated);
+    if (target == BatchStatus.SUCCEEDED) cursorManager.advanceAfterSucceededBatch(updated);
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)

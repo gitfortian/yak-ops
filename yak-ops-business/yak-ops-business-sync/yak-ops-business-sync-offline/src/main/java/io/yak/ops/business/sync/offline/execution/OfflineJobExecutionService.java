@@ -6,8 +6,8 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
-import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogService;
-import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionReadService;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
@@ -29,10 +29,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class OfflineJobExecutionService {
 
-  private final OfflineExecutionOrchestrator orchestrator;
-  private final OfflineBatchRuntimeService batchRuntimeService;
-  private final OfflineExecutionReadService readService;
-  private final OfflineExecutionLogService logService;
+  private final OfflineExecutionCoordinator coordinator;
+  private final OfflineBatchRuntime batchRuntime;
+  private final OfflineExecutionQuery executionQuery;
+  private final OfflineExecutionLogQuery executionLogQuery;
   private final LinkUpClient linkUpClient;
   private final OfflineSyncViewMapper viewMapper;
 
@@ -41,11 +41,11 @@ public class OfflineJobExecutionService {
   }
 
   public boolean hasOccupyingBatch(Long definitionId) {
-    return batchRuntimeService.hasOccupyingBatch(definitionId);
+    return batchRuntime.hasOccupyingBatch(definitionId);
   }
 
   public OfflineJobExecutionVO execute(Long id) {
-    return readService.toVO(orchestrator.execute(id, "MANUAL", null, 1));
+    return executionQuery.toVO(coordinator.execute(id, "MANUAL", null, 1));
   }
 
   /** 工作流按发布时固定的任务版本快照执行。 */
@@ -72,8 +72,8 @@ public class OfflineJobExecutionService {
       String definitionSnapshotJson,
       String logicalJobSpecJson,
       String idempotencyKey) {
-    return readService.toVO(
-        orchestrator.executeSnapshot(
+    return executionQuery.toVO(
+        coordinator.executeSnapshot(
             id,
             version,
             configDigest,
@@ -88,29 +88,29 @@ public class OfflineJobExecutionService {
 
   /** Schedule Handler 保留完整 trigger token，通过 Facade 进入 execution 子系统。 */
   public OfflineJobExecutionVO executeScheduled(Long id, String triggerToken) {
-    return readService.toVO(orchestrator.execute(id, triggerToken, null, 1));
+    return executionQuery.toVO(coordinator.execute(id, triggerToken, null, 1));
   }
 
-  /** Backfill Dispatcher 只负责触发，不直接调用内部 Orchestrator。 */
+  /** Backfill Dispatcher 只负责触发，不直接调用内部 Coordinator。 */
   public OfflineJobExecutionVO executePendingBackfill(Long batchId) {
-    return readService.toVO(orchestrator.executePendingBackfill(batchId));
+    return executionQuery.toVO(coordinator.executePendingBackfill(batchId));
   }
 
   public OfflineJobExecutionVO retry(Long id) {
-    return readService.toVO(orchestrator.retryFrom(readService.require(id)));
+    return executionQuery.toVO(coordinator.retryFrom(executionQuery.require(id)));
   }
 
   public OfflineJobExecutionVO retryFrom(OfflineJobExecution previous) {
-    return readService.toVO(orchestrator.retryFrom(previous));
+    return executionQuery.toVO(coordinator.retryFrom(previous));
   }
 
   public OfflineJobExecutionVO cancel(Long id) {
-    return readService.toVO(orchestrator.cancel(id));
+    return executionQuery.toVO(coordinator.cancel(id));
   }
 
   /** Task 级停止只从 BatchExecution/latest Attempt 选择目标，不读取 Task.lastExecutionId。 */
   public OfflineJobExecutionVO cancelLatest(Long definitionId) {
-    return readService.toVO(orchestrator.cancelLatestBatch(definitionId));
+    return executionQuery.toVO(coordinator.cancelLatestBatch(definitionId));
   }
 
   public OfflineBatchOperationVO batchExecute(OfflineBatchOperationDTO request) {
@@ -122,38 +122,38 @@ public class OfflineJobExecutionService {
   }
 
   public PagingData<OfflineJobExecutionVO> page(OfflineJobExecutionQueryDTO query) {
-    return readService.page(query);
+    return executionQuery.page(query);
   }
 
   public OfflineJobExecutionDetailVO detail(Long id) {
-    return readService.detail(id);
+    return executionQuery.detail(id);
   }
 
   public JsonNode tableMetrics(Long id) {
-    return readService.tableMetrics(id);
+    return executionQuery.tableMetrics(id);
   }
 
   public List<OfflineExecutionEventVO> events(Long id) {
-    return readService.events(id);
+    return executionQuery.events(id);
   }
 
   /** 旧文本接口保留，并直接渲染新的统一时间线。 */
   public String logs(Long id) {
-    return logService.text(readService.require(id));
+    return executionLogQuery.text(executionQuery.require(id));
   }
 
   public OfflineExecutionLogPageVO logs(Long id, String cursor, int limit) {
-    return logService.logs(readService.require(id), cursor, limit);
+    return executionLogQuery.logs(executionQuery.require(id), cursor, limit);
   }
 
-  /** Reconciler 的状态同步入口；内部状态迁移仍由 Orchestrator 负责。 */
+  /** Reconciler 的状态同步入口；内部状态迁移仍由 Coordinator 负责。 */
   public void applySnapshot(OfflineJobExecution execution, LinkUpJobResponse response, String type) {
-    orchestrator.applySnapshot(execution, response, type);
+    coordinator.applySnapshot(execution, response, type);
   }
 
   /** Reconciler 的 UNKNOWN 收口入口。 */
   public void markUnknown(OfflineJobExecution execution, String message) {
-    orchestrator.markUnknown(execution, message);
+    coordinator.markUnknown(execution, message);
   }
 
   private OfflineBatchOperationVO batch(OfflineBatchOperationDTO request, boolean execute) {

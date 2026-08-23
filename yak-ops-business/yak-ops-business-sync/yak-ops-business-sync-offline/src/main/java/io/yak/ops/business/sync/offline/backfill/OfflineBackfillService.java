@@ -2,7 +2,7 @@ package io.yak.ops.business.sync.offline.backfill;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorService;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
@@ -43,7 +43,7 @@ public class OfflineBackfillService {
   private final OfflineJobDefinitionRepository definitionRepository;
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineScheduleRepository scheduleRepository;
-  private final OfflineCursorService cursorService;
+  private final OfflineCursorManager cursorManager;
   private final OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
   private final OfflineSyncProperties properties;
 
@@ -81,8 +81,8 @@ public class OfflineBackfillService {
     Map<String, List<ScopePlan>> byCursor = new LinkedHashMap<>(); for (ScopePlan plan : plans) if (plan.scope() instanceof BatchScope.CursorRange range) byCursor.computeIfAbsent(range.cursorId(), ignored -> new ArrayList<>()).add(plan);
     for (Map.Entry<String, List<ScopePlan>> entry : byCursor.entrySet()) { List<ScopePlan> cursorPlans = entry.getValue(); BatchScope.CursorRange first = (BatchScope.CursorRange) cursorPlans.get(0).scope(); String sourceColumn = cursorPlans.get(0).cursorColumn();
       for (int index = 1; index < cursorPlans.size(); index++) { ScopePlan previousPlan = cursorPlans.get(index - 1); ScopePlan currentPlan = cursorPlans.get(index); BatchScope.CursorRange previous = (BatchScope.CursorRange) previousPlan.scope(); BatchScope.CursorRange current = (BatchScope.CursorRange) currentPlan.scope(); if (!Objects.equals(sourceColumn, currentPlan.cursorColumn())) throw new IllegalArgumentException("同一个 cursorId 不能绑定多个 sourceColumn：" + entry.getKey()); if (!previous.throughInclusive().equals(current.afterExclusive())) throw new IllegalArgumentException("同一 Cursor 的 Backfill ranges 必须连续：" + entry.getKey()); }
-      OfflineSyncCursor existingCursor = cursorService.find(taskId, entry.getKey()).orElse(null); if (existingCursor != null && hasMissing && !existingCursor.position().equals(first.afterExclusive())) { boolean allCursorBatchesAlreadyExist = cursorPlans.stream().allMatch(plan -> existingByFingerprint.containsKey(plan.scope().fingerprint())); if (!allCursorBatchesAlreadyExist) throw new IllegalStateException("Cursor 已离开本 Backfill 起点，禁止追加会改变 Cursor 顺序的新 Batch：" + entry.getKey()); }
-      cursorService.initializeIfAbsent(taskId, entry.getKey(), sourceColumn, first.afterExclusive());
+      OfflineSyncCursor existingCursor = cursorManager.find(taskId, entry.getKey()).orElse(null); if (existingCursor != null && hasMissing && !existingCursor.position().equals(first.afterExclusive())) { boolean allCursorBatchesAlreadyExist = cursorPlans.stream().allMatch(plan -> existingByFingerprint.containsKey(plan.scope().fingerprint())); if (!allCursorBatchesAlreadyExist) throw new IllegalStateException("Cursor 已离开本 Backfill 起点，禁止追加会改变 Cursor 顺序的新 Batch：" + entry.getKey()); }
+      cursorManager.initializeIfAbsent(taskId, entry.getKey(), sourceColumn, first.afterExclusive());
     }
   }
   private void validateExecutionScopes(long taskId, List<ScopePlan> plans, String logicalJobSpec) { for (ScopePlan plan : plans) scopeExecutionAdapter.apply(taskId, logicalJobSpec, plan.scope()); }
