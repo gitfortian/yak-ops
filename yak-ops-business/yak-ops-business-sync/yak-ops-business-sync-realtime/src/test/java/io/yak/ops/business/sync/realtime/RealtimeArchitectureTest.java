@@ -6,7 +6,12 @@ import io.yak.ops.business.sync.realtime.controller.v1.ComputeEnvironmentControl
 import io.yak.ops.business.sync.realtime.controller.v1.RealtimeJobController;
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeRequestMapper;
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeViewMapper;
+import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionManager;
+import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionPublisher;
+import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionValidator;
 import io.yak.ops.business.sync.realtime.definition.RealtimeJobDefinitionService;
+import io.yak.ops.business.sync.realtime.definition.RealtimeSourceConfigDigestCalculator;
+import io.yak.ops.business.sync.realtime.definition.RealtimeYamlCodec;
 import io.yak.ops.business.sync.realtime.domain.DefinitionDigest;
 import io.yak.ops.business.sync.realtime.domain.DefinitionVersion;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobState;
@@ -36,6 +41,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 class RealtimeArchitectureTest {
@@ -89,6 +95,38 @@ class RealtimeArchitectureTest {
   }
 
   @Test
+  void definitionSubsystemUsesRoleComponentsBehindStableFacade() {
+    assertFieldsAvoid(RealtimeJobDefinitionService.class, ".service.", ".dao.", "JdbcTemplate");
+
+    for (Class<?> internal :
+        new Class<?>[] {
+          RealtimeDefinitionManager.class,
+          RealtimeDefinitionPublisher.class,
+          RealtimeDefinitionValidator.class,
+          RealtimeSourceConfigDigestCalculator.class,
+          RealtimeYamlCodec.class
+        }) {
+      assertThat(internal.getAnnotation(Component.class))
+          .as("%s must remain an internal definition role", internal.getSimpleName())
+          .isNotNull();
+      assertThat(internal.getAnnotation(Service.class))
+          .as("%s must not masquerade as an application service", internal.getSimpleName())
+          .isNull();
+    }
+  }
+
+  @Test
+  void legacyJobServiceIsExecutionOnlyAndNotAnApplicationService() {
+    assertThat(RealtimeJobService.class.getAnnotation(Component.class)).isNotNull();
+    assertThat(RealtimeJobService.class.getAnnotation(Service.class)).isNull();
+
+    Set<String> methods = methodNames(RealtimeJobService.class);
+    assertThat(methods)
+        .contains("start", "stop", "restartExecution", "applyPublishedVersion")
+        .doesNotContain("create", "save", "publish", "validate", "delete", "restart");
+  }
+
+  @Test
   void controllersDependOnApplicationBoundariesInsteadOfPersistenceOrEnginePorts() {
     assertFieldsAvoid(
         RealtimeJobController.class,
@@ -117,6 +155,11 @@ class RealtimeArchitectureTest {
           RealtimeRuntimeResolver.class,
           ComputeEnvironmentService.class,
           RealtimeJobDefinitionService.class,
+          RealtimeDefinitionManager.class,
+          RealtimeDefinitionPublisher.class,
+          RealtimeDefinitionValidator.class,
+          RealtimeSourceConfigDigestCalculator.class,
+          RealtimeYamlCodec.class,
           RealtimeJobExecutionService.class,
           io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
           io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
@@ -150,11 +193,6 @@ class RealtimeArchitectureTest {
 
     Set<String> environmentMethods = methodNames(ComputeEnvironmentStore.class);
     assertThat(environmentMethods).doesNotContain("hasActiveRealtimeJobs");
-
-    Set<String> serviceMethods = methodNames(RealtimeJobService.class);
-    assertThat(serviceMethods)
-        .contains("restartExecution", "applyPublishedVersion")
-        .doesNotContain("restart");
   }
 
   @Test
@@ -244,7 +282,9 @@ class RealtimeArchitectureTest {
   private static void assertFieldTypesIn(Class<?> type, Set<Class<?>> allowedTypes) {
     for (Field field : type.getDeclaredFields()) {
       assertThat(field.getType())
-          .as("%s.%s must use a declared application/transport boundary", type.getSimpleName(), field.getName())
+          .as(
+              "%s.%s must use a declared application/transport boundary",
+              type.getSimpleName(), field.getName())
           .isIn(allowedTypes);
     }
   }
