@@ -2,7 +2,7 @@
 
 ## 领域建设
 
-离线同步正在按独立领域逐步建模。当前已完成 Stage 2：核心领域模型；暂不改变现有实现：
+离线同步正在按独立领域逐步建模。当前已完成 Stage 3：生命周期与不变量；暂不改变现有实现：
 
 - [Offline Sync Domain](../../../docs/offline-sync/domain/README.md)
 
