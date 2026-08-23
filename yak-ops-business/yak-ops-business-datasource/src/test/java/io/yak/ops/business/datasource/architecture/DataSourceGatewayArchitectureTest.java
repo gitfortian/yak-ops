@@ -2,10 +2,14 @@ package io.yak.ops.business.datasource.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.yak.ops.business.datasource.execution.DefaultSqlExecutionRuntime;
+import io.yak.ops.business.datasource.execution.domain.SqlExecutionAggregate;
 import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway;
 import io.yak.ops.business.datasource.gateway.DataSourcePluginGateway;
+import io.yak.ops.business.datasource.gateway.SqlExecutionGateway;
 import io.yak.ops.business.datasource.gateway.adapter.SpiDataSourceCatalogGateway;
 import io.yak.ops.business.datasource.gateway.adapter.SpiDataSourcePluginGateway;
+import io.yak.ops.business.datasource.gateway.adapter.SpiSqlExecutionGateway;
 import io.yak.ops.business.datasource.service.impl.DataSourceCatalogServiceImpl;
 import io.yak.ops.business.datasource.service.impl.DataSourceServiceImpl;
 import io.yak.ops.business.datasource.service.support.DataSourceViewMapper;
@@ -28,7 +32,11 @@ class DataSourceGatewayArchitectureTest {
 
   @Test
   void businessGatewayContractsDoNotExposePluginSpiOrTransportPersistenceModels() {
-    for (Class<?> port : List.of(DataSourcePluginGateway.class, DataSourceCatalogGateway.class)) {
+    for (Class<?> port :
+        List.of(
+            DataSourcePluginGateway.class,
+            DataSourceCatalogGateway.class,
+            SqlExecutionGateway.class)) {
       for (Method method : port.getMethods()) {
         assertTypeAvoids(port, method.getName(), method.getGenericReturnType(), PORT_FORBIDDEN);
         for (Type parameter : method.getGenericParameterTypes()) {
@@ -44,7 +52,8 @@ class DataSourceGatewayArchitectureTest {
         List.of(
             DataSourceServiceImpl.class,
             DataSourceCatalogServiceImpl.class,
-            DataSourceViewMapper.class)) {
+            DataSourceViewMapper.class,
+            DefaultSqlExecutionRuntime.class)) {
       for (Field field : type.getDeclaredFields()) {
         String fieldType = field.getGenericType().getTypeName();
         assertThat(fieldType)
@@ -62,6 +71,19 @@ class DataSourceGatewayArchitectureTest {
         .isTrue();
     assertThat(DataSourceCatalogGateway.class.isAssignableFrom(SpiDataSourceCatalogGateway.class))
         .isTrue();
+    assertThat(SqlExecutionGateway.class.isAssignableFrom(SpiSqlExecutionGateway.class)).isTrue();
+  }
+
+  @Test
+  void sqlExecutionAggregateDoesNotOwnPhysicalPluginInfrastructure() {
+    for (Field field : SqlExecutionAggregate.class.getDeclaredFields()) {
+      String fieldType = field.getGenericType().getTypeName();
+      assertThat(fieldType)
+          .as("SqlExecutionAggregate." + field.getName())
+          .doesNotContain(".spi.datasource")
+          .doesNotContain("org.springframework")
+          .doesNotContain("java.util.concurrent");
+    }
   }
 
   private void assertTypeAvoids(
