@@ -4,7 +4,7 @@
 
 需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，Review 标准看 `REVIEW.md`。
 
-> 当前 Definition、Execution、Reconcile application 内部已分别收敛到 `definition/`、`execution/`、`reconcile/`。顶层 `service/` 仍承载 Observability、Environment、RuntimeResolver 等待迁移内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
+> 当前 Definition、Execution、Reconcile、Query / Observability 已分别收敛到 `definition/`、`execution/`、`reconcile/`、`execution/query/`、`observability/`。顶层 `service/` 只剩 Environment / RuntimeResolver 迁移期内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
 
 ## 设计原则
 
@@ -54,8 +54,9 @@ service/
 - Definition 已迁出的 Validation / YAML / Draft / Publish 职责不得重新放回 `service/`；
 - Execution 已迁出的 Start / Stop / Restart / Apply 编排职责不得重新放回 `service/`；
 - Reconcile 已迁出的 runtime identity recovery / state convergence / scheduled reconcile 职责不得重新放回 `service/`；
-- `service/RealtimeJobService`、`service/RealtimeJobLifecycleCoordinator`、`service/RealtimeJobReconciler` 已退出 production，不得重新作为跨子系统入口引入；
-- 后续 PR 应按 Observability / Environment 等职责继续迁出，而不是一次 big-bang rename；
+- Query / Observability 已迁出的 read model / events / logs / SSE 职责不得重新放回 `service/`；
+- `service/RealtimeJobService`、`service/RealtimeJobLifecycleCoordinator`、`service/RealtimeJobReconciler`、`service/RealtimeJobQueryService`、`service/RealtimeObservabilityService`、`service/RealtimeEventStreamService` 已退出 production，不得重新作为跨子系统入口引入；
+- 后续 PR 只继续迁出 Environment / RuntimeResolver，不做新的 `service/` 兼容大桶；
 - 迁出类完成后删除旧入口，不长期保留双路运行语义；
 - transitional package 不是稳定 API，不能据此设计新的跨包依赖。
 
@@ -136,7 +137,7 @@ ComputeEnvironmentController
 
 `@Service` 只用于这种稳定 Application Facade。内部专业角色使用更准确的角色名和 `@Component` / 普通对象。
 
-Definition、Execution、Reconcile 的内部职责已经迁出 `service/`。EventStream、RuntimeResolver、Environment 等内部角色仍需按后续子系统阶段继续迁移。
+Definition、Execution、Reconcile、Query / Observability 的内部职责已经迁出 `service/`。当前只剩 RuntimeResolver、Environment 内部实现需要继续收敛。
 
 ## Definition Subsystem
 
@@ -300,28 +301,47 @@ Reconcile 必须保持：
 
 ## Query / Observability
 
-Query / Observability 是 read side：
+Query / Observability 是纯 read side。它们可以组合持久化投影与 Flink 运行证据，但不能拥有 Execution command truth。
+
+当前协作结构：
 
 ```text
-Task / Definition / Execution persistence
-        +
-Flink REST evidence
-        |
-        ▼
-Read Model / Observability View
+RealtimeJobQueryService                    @Service / stable query facade
+        `-> RealtimeJobReadModelQuery       @Component
+                +-> RealtimeJobListQuery
+                `-> RealtimeJobStore view projection
+
+RealtimeObservabilityService               @Service / stable observability facade
+        +-> RealtimeObservabilityReader     @Component
+        |       +-> RealtimeJobStore
+        |       +-> RuntimeEnvironmentSnapshot resolver
+        |       `-> FlinkObservabilityClient
+        +-> RealtimeEventQuery              @Component
+        |       `-> persisted event projection
+        `-> RealtimeEventStream             @Component
+                `-> AFTER_COMMIT event broadcast + SSE heartbeat
 ```
 
-包括：
+职责固定为：
 
-- 任务分页与详情；
-- Execution 状态投影；
-- Event Stream；
-- submission logs；
-- runtime exception history；
-- checkpoints；
-- metrics。
+- `RealtimeJobReadModelQuery`：任务 detail / page projection，只读 Repository contract；
+- `RealtimeObservabilityReader`：submission log、runtime log、checkpoint / metrics snapshot 等 Flink read evidence；
+- `RealtimeEventQuery`：读取持久化 execution event；
+- `RealtimeEventStream`：广播已提交事务的 change event 与 heartbeat，不修改业务状态；
+- `RealtimeJobQueryService / RealtimeObservabilityService` 是稳定 Application Facade，内部角色使用 `@Component`。
 
-read side 可以组合多个事实来源，但不得拥有 Start / Stop / Retry / Reconcile 的 command 状态迁移。任务详情与 events 直接读取 Repository projection，不再为了 read side 依赖已经退出的 `RealtimeJobService`。
+read-side contract：
+
+- detail / page / events / logs / metrics / checkpoints 都不得触发 Start / Stop / Restart / Apply / Reconcile；
+- Query / Observability 不依赖 `SyncExecutionStateMachine`；
+- Query / Observability 不依赖 Execution Coordinator / Reservation / State / Replacement 角色；
+- Query / Observability 不依赖 Reconcile command 角色；
+- submission log 只依赖 Idempotency-Key，因此 JobId 尚未恢复时仍可读取；
+- runtime log / metrics / checkpoint 等需要精确 Flink Job 时必须要求已绑定 JobId，不能按任务名猜测；
+- SSE 只消费事务提交后的 `RealtimeJobChangeEvent`，不成为新的 state owner；
+- Flink REST 不可用时 read side 可以返回读取失败，但不得反向写 `UNKNOWN / FAILED / STOPPED`。
+
+`service/RealtimeJobQueryService`、`service/RealtimeObservabilityService`、`service/RealtimeEventStreamService` 已从 production 删除。
 
 ## Environment / Engine Boundary
 
