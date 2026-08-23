@@ -9,7 +9,7 @@ import io.yak.ops.business.sync.realtime.controller.v1.dto.ComputeEnvironmentReq
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeRequestMapper;
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeViewMapper;
 import io.yak.ops.business.sync.realtime.controller.v1.vo.ComputeEnvironmentViews;
-import io.yak.ops.business.sync.realtime.service.ComputeEnvironmentService;
+import io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,14 +55,26 @@ public class ComputeEnvironmentController {
   @PostMapping
   @RequiresPermission(RealtimePermissionCode.CREATE)
   public Result<Long> create(@RequestBody ComputeEnvironmentRequests.SaveRequest request) {
-    return Result.success(service.create(request.name(), request.submitterType(), requestMapper.toRuntimeConfig(request.config()), request.enabled(), request.makeDefault()));
+    return Result.success(
+        service.create(
+            request.name(),
+            request.submitterType(),
+            requestMapper.toRuntimeConfig(request.config()),
+            request.enabled(),
+            request.makeDefault()));
   }
 
   @Operation(summary = "预检测未保存的运行环境")
   @PostMapping("/diagnose")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
-  public Result<ComputeEnvironmentViews.Diagnosis> diagnosePreview(@RequestBody ComputeEnvironmentRequests.SaveRequest request) {
-    return Result.success(viewMapper.toView(service.diagnosePreview(request.name(), request.submitterType(), requestMapper.toRuntimeConfig(request.config()))));
+  public Result<ComputeEnvironmentViews.Diagnosis> diagnosePreview(
+      @RequestBody ComputeEnvironmentRequests.SaveRequest request) {
+    return Result.success(
+        viewMapper.toView(
+            service.diagnosePreview(
+                request.name(),
+                request.submitterType(),
+                requestMapper.toRuntimeConfig(request.config()))));
   }
 
   @Operation(summary = "检测已保存的运行环境")
@@ -75,15 +87,23 @@ public class ComputeEnvironmentController {
   @Operation(summary = "更新运行环境")
   @PutMapping("/{id}")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
-  public Result<Boolean> update(@PathVariable long id, @RequestBody ComputeEnvironmentRequests.SaveRequest request) {
-    service.update(id, request.name(), request.submitterType(), requestMapper.toRuntimeConfig(request.config()), request.enabled(), request.makeDefault());
+  public Result<Boolean> update(
+      @PathVariable long id, @RequestBody ComputeEnvironmentRequests.SaveRequest request) {
+    service.update(
+        id,
+        request.name(),
+        request.submitterType(),
+        requestMapper.toRuntimeConfig(request.config()),
+        request.enabled(),
+        request.makeDefault());
     return Result.success(true);
   }
 
   @Operation(summary = "启用或停用运行环境")
   @PutMapping("/{id}/enabled")
   @RequiresPermission(RealtimePermissionCode.UPDATE)
-  public Result<Boolean> setEnabled(@PathVariable long id, @RequestBody ComputeEnvironmentRequests.EnabledRequest request) {
+  public Result<Boolean> setEnabled(
+      @PathVariable long id, @RequestBody ComputeEnvironmentRequests.EnabledRequest request) {
     service.setEnabled(id, request.enabled());
     return Result.success(true);
   }
