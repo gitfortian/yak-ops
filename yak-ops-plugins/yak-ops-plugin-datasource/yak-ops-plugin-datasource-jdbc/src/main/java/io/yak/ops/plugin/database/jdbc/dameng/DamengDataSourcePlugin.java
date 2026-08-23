@@ -1,12 +1,10 @@
 package io.yak.ops.plugin.database.jdbc.dameng;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
-import io.yak.ops.plugin.database.jdbc.JdbcUrlSchemaSupport;
 
-/** 达梦 JDBC 数据源插件。 */
+/** Dameng JDBC datasource plugin. */
 public final class DamengDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
   @Override
@@ -15,10 +13,8 @@ public final class DamengDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   }
 
   @Override
-  public DataSourcePluginConfigVO pluginConfig() {
-    return JdbcUrlSchemaSupport.apply(
-        super.pluginConfig(),
-        "jdbc:dm://{host}:{port}/{database}");
+  protected String jdbcUrlTemplate() {
+    return "jdbc:dm://{host}:{port}/{database}";
   }
 
   @Override
