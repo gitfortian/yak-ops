@@ -9,6 +9,7 @@ import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
+import io.yak.ops.business.sync.offline.schedule.OfflineScheduleExecutionGateway;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationErrorVO;
@@ -23,11 +24,11 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** 离线同步执行门面；Controller、Schedule、Backfill Dispatcher、Reconciler 统一从这里进入 execution 子系统。 */
+/** 离线同步执行门面；Controller、Backfill Dispatcher、Reconciler 统一从这里进入 execution 子系统。 */
 @ConditionalOnOfflineSyncEnabled
 @Service
 @RequiredArgsConstructor
-public class OfflineJobExecutionService {
+public class OfflineJobExecutionService implements OfflineScheduleExecutionGateway {
 
   private final OfflineExecutionCoordinator coordinator;
   private final OfflineBatchRuntime batchRuntime;
@@ -40,6 +41,7 @@ public class OfflineJobExecutionService {
     return viewMapper.engineHealth(linkUpClient.node());
   }
 
+  @Override
   public boolean hasOccupyingBatch(Long definitionId) {
     return batchRuntime.hasOccupyingBatch(definitionId);
   }
@@ -86,9 +88,16 @@ public class OfflineJobExecutionService {
     return executeScheduled(id, "SCHEDULE");
   }
 
-  /** Schedule Handler 保留完整 trigger token，通过 Facade 进入 execution 子系统。 */
+  /** 保留完整 schedule trigger token 的执行入口。 */
   public OfflineJobExecutionVO executeScheduled(Long id, String triggerToken) {
     return executionQuery.toVO(coordinator.execute(id, triggerToken, null, 1));
+  }
+
+  /** Schedule 子系统只通过窄 Gateway 获取 executionId，不依赖 execution VO。 */
+  @Override
+  public Long submitScheduled(Long definitionId, String triggerToken) {
+    OfflineJobExecutionVO execution = executeScheduled(definitionId, triggerToken);
+    return execution == null ? null : execution.getId();
   }
 
   /** Backfill Dispatcher 只负责触发，不直接调用内部 Coordinator。 */
