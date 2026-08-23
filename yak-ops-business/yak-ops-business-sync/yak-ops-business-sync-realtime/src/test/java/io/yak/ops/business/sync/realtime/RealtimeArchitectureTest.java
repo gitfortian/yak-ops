@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.yak.ops.business.sync.realtime.controller.v1.ComputeEnvironmentController;
 import io.yak.ops.business.sync.realtime.controller.v1.RealtimeJobController;
+import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeRequestMapper;
+import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeViewMapper;
+import io.yak.ops.business.sync.realtime.definition.RealtimeJobDefinitionService;
 import io.yak.ops.business.sync.realtime.domain.DefinitionDigest;
 import io.yak.ops.business.sync.realtime.domain.DefinitionVersion;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobState;
@@ -12,6 +15,7 @@ import io.yak.ops.business.sync.realtime.domain.SyncDefinition;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinitionDigestCalculator;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
+import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
@@ -32,6 +36,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.springframework.stereotype.Service;
 
 class RealtimeArchitectureTest {
 
@@ -48,17 +53,55 @@ class RealtimeArchitectureTest {
   };
 
   @Test
+  void controllersUseDeclaredStableApplicationEntries() {
+    assertFieldTypesIn(
+        RealtimeJobController.class,
+        Set.of(
+            RealtimeJobDefinitionService.class,
+            RealtimeJobExecutionService.class,
+            io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
+            io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
+            RealtimeRequestMapper.class,
+            RealtimeViewMapper.class));
+
+    assertFieldTypesIn(
+        ComputeEnvironmentController.class,
+        Set.of(
+            io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService.class,
+            RealtimeRequestMapper.class,
+            RealtimeViewMapper.class));
+  }
+
+  @Test
+  void stableApplicationEntriesUseServiceStereotype() {
+    for (Class<?> facade :
+        new Class<?>[] {
+          RealtimeJobDefinitionService.class,
+          RealtimeJobExecutionService.class,
+          io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
+          io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
+          io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService.class
+        }) {
+      assertThat(facade.getAnnotation(Service.class))
+          .as("%s must remain a stable application facade", facade.getSimpleName())
+          .isNotNull();
+    }
+  }
+
+  @Test
   void controllersDependOnApplicationBoundariesInsteadOfPersistenceOrEnginePorts() {
     assertFieldsAvoid(
         RealtimeJobController.class,
         ".repository.",
         ".dao.",
+        ".service.",
         "RealtimeEngineGateway",
         "JdbcTemplate");
     assertFieldsAvoid(
         ComputeEnvironmentController.class,
         ".repository.",
         ".dao.",
+        ".service.",
         "RealtimeEngineGateway",
         "JdbcTemplate");
   }
@@ -72,7 +115,12 @@ class RealtimeArchitectureTest {
           RealtimeJobQueryService.class,
           RealtimeObservabilityService.class,
           RealtimeRuntimeResolver.class,
-          ComputeEnvironmentService.class
+          ComputeEnvironmentService.class,
+          RealtimeJobDefinitionService.class,
+          RealtimeJobExecutionService.class,
+          io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
+          io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
+          io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService.class
         }) {
       assertFieldsAvoid(type, ".dao.", ".dao.mapper.", ".dao.model.", "JdbcTemplate");
     }
@@ -190,6 +238,14 @@ class RealtimeArchitectureTest {
             .as("%s.%s must not depend on %s", type.getSimpleName(), field.getName(), value)
             .doesNotContain(value);
       }
+    }
+  }
+
+  private static void assertFieldTypesIn(Class<?> type, Set<Class<?>> allowedTypes) {
+    for (Field field : type.getDeclaredFields()) {
+      assertThat(field.getType())
+          .as("%s.%s must use a declared application/transport boundary", type.getSimpleName(), field.getName())
+          .isIn(allowedTypes);
     }
   }
 
