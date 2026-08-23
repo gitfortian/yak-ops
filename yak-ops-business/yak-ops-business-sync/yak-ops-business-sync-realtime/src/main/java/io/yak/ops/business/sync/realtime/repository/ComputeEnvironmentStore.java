@@ -36,7 +36,5 @@ public interface ComputeEnvironmentStore {
 
   void delete(long id);
 
-  boolean hasBoundRealtimeJobs(long id);
-
-  boolean hasActiveRealtimeJobs();
+  boolean hasRuntimeEnvironmentReferences(long id);
 }

@@ -97,13 +97,8 @@ public class ComputeEnvironmentStoreAdapter implements ComputeEnvironmentStore {
   }
 
   @Override
-  public boolean hasBoundRealtimeJobs(long id) {
-    return dao.hasBoundRealtimeJobs(id);
-  }
-
-  @Override
-  public boolean hasActiveRealtimeJobs() {
-    return dao.hasActiveRealtimeJobs();
+  public boolean hasRuntimeEnvironmentReferences(long id) {
+    return dao.hasRuntimeEnvironmentReferences(id);
   }
 
   private ComputeEnvironment map(ComputeEnvironmentPO po) {

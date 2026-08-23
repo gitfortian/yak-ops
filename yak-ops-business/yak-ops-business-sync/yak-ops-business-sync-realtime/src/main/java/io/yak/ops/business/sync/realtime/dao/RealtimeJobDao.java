@@ -23,6 +23,13 @@ public interface RealtimeJobDao {
   void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision);
   void markDeployFailure(long definitionId, long deploymentId, boolean uncertain, boolean stopRequested, String message);
   void markStopping(long definitionId, Long deploymentId);
+  void reserveReplacementStop(
+      long definitionId,
+      long deploymentId,
+      String commandType,
+      long targetDefinitionVersionId,
+      String idempotencyKey);
+  void clearReplacementIntent(long deploymentId, String idempotencyKey);
   void reconcile(long definitionId, Long deploymentId, String observedState, String deploymentState, String engineJobId, String error);
   void markTerminalFailure(long definitionId, Long deploymentId, String message);
   List<RealtimeJobDeploymentPO> reconcileExecutions();

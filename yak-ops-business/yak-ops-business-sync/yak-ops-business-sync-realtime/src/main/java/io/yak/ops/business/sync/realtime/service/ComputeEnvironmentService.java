@@ -179,8 +179,9 @@ public class ComputeEnvironmentService {
     if (current.defaultEnvironment()) {
       throw new IllegalStateException("默认运行环境不能删除，请先切换默认环境");
     }
-    if (store.hasBoundRealtimeJobs(id)) {
-      throw new IllegalStateException("运行环境仍被实时同步任务引用，请先将这些任务切换到其他运行环境");
+    if (store.hasRuntimeEnvironmentReferences(id)) {
+      throw new IllegalStateException(
+          "运行环境仍被实时同步 Draft、Published Version 或活动 Execution 引用，请先解除引用");
     }
     store.delete(id);
   }

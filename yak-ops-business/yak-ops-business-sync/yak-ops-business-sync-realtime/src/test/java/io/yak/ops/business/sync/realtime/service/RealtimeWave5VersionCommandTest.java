@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
@@ -124,7 +123,7 @@ class RealtimeWave5VersionCommandTest {
     verify(store, never()).publishedDefinition(TASK_ID);
     verify(compiler).compile("orders-sync", v3Spec, resolved);
     verify(compiler, never()).compile(eq("orders-sync"), eq(v4Spec), any());
-    verify(store, never()).markStopping(anyLong(), any());
+    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
     verify(gateway, never()).stop(any(), any());
   }
 
@@ -152,7 +151,7 @@ class RealtimeWave5VersionCommandTest {
 
     verify(store).publishedDefinition(TASK_ID);
     verify(compiler).compile("orders-sync", v4Spec, resolved);
-    verify(store, never()).markStopping(anyLong(), any());
+    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
     verify(gateway, never()).stop(any(), any());
   }
 
@@ -170,7 +169,7 @@ class RealtimeWave5VersionCommandTest {
         .hasMessageContaining("已经运行最新已发布");
 
     verify(compiler, never()).compile(any(), any(), any());
-    verify(store, never()).markStopping(anyLong(), any());
+    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
   }
 
   @Test
@@ -193,21 +192,14 @@ class RealtimeWave5VersionCommandTest {
         .hasMessageContaining("请先对账");
 
     verify(store, never()).definitionVersion(anyLong(), anyLong());
-    verify(store, never()).markStopping(anyLong(), any());
+    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
   }
 
   @Test
   void restartExecutionCreatesNewExecutionBoundToSameImmutableVersion() {
     DeploymentRow running = runningRow(V3_ID, v3Spec, "job-v3");
-    DeploymentRow stopping =
-        executionRow(
-            V3_ID,
-            v3Spec,
-            "job-v3",
-            DesiredState.STOPPED,
-            ObservedState.STOPPING,
-            false,
-            "STOPPING");
+    DeploymentRow stopping = replacementRow(DesiredState.STOPPED, ObservedState.STOPPING, "STOPPING");
+    DeploymentRow stopped = replacementRow(DesiredState.STOPPED, ObservedState.STOPPED, "STOPPED");
     DeploymentRow newStarting =
         executionRowWithId(
             NEW_EXECUTION_ID,
@@ -239,6 +231,9 @@ class RealtimeWave5VersionCommandTest {
             Optional.of(running),
             Optional.of(running),
             Optional.of(stopping),
+            Optional.of(stopping),
+            Optional.of(stopping),
+            Optional.of(stopped),
             Optional.of(newStarting),
             Optional.of(newRunning));
     when(store.definitionVersion(TASK_ID, V3_ID)).thenReturn(Optional.of(v3));
@@ -273,6 +268,13 @@ class RealtimeWave5VersionCommandTest {
     assertThatCode(() -> service.restartExecution(TASK_ID, "restart-success"))
         .doesNotThrowAnyException();
 
+    verify(store)
+        .reserveReplacementStop(
+            TASK_ID,
+            OLD_EXECUTION_ID,
+            "RESTART_EXECUTION",
+            V3_ID,
+            "restart-success");
     verify(store).bindDeploymentDefinitionVersion(NEW_EXECUTION_ID, V3_ID, 3);
     verify(store, never()).publishedDefinition(TASK_ID);
     verify(gateway).stop(environment, "job-v3");
@@ -322,6 +324,33 @@ class RealtimeWave5VersionCommandTest {
         ObservedState.RUNNING,
         false,
         "RUNNING");
+  }
+
+  private DeploymentRow replacementRow(
+      DesiredState desired, ObservedState observed, String status) {
+    return new DeploymentRow(
+        OLD_EXECUTION_ID,
+        TASK_ID,
+        V3_ID,
+        3,
+        v3Spec,
+        "test",
+        "d".repeat(64),
+        "old-execution-key",
+        "job-v3",
+        environment.runtimeRevision(),
+        environment,
+        "FLINK_CDC",
+        desired.name(),
+        observed.name(),
+        status,
+        false,
+        null,
+        "RESTART_EXECUTION",
+        V3_ID,
+        "restart-success",
+        LocalDateTime.now(),
+        LocalDateTime.now());
   }
 
   private DeploymentRow executionRow(
