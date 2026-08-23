@@ -4,10 +4,12 @@
 
 离线同步 **Stage 6 已完成**。当前运行模型固定为 `Task -> Batch -> Attempt`，Backfill/Cursor 已进入同一模型，legacy execution 仅保留持久化兼容职责。
 
-修改代码前先读：
+修改代码或 Review 前按顺序阅读：
 
-- [DOMAIN.md](./DOMAIN.md) — 当前硬规则与 runtime contract
-- [Domain Mapping](../../../docs/offline-sync/domain/README.md) — Stage 6 Wave 0-6 迁移映射
+- [REQUIREMENTS.md](./REQUIREMENTS.md) — 当前有效需求：模块需要什么
+- [DOMAIN.md](./DOMAIN.md) — 当前硬规则：实现不能违反什么
+- [REVIEW.md](./REVIEW.md) — Review 标准：按什么规则判卷
+- [Domain Mapping](../../../docs/offline-sync/domain/README.md) — Stage 6 Wave 0-6 历史迁移映射
 
 ```text
 OfflineSyncTask
