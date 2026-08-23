@@ -67,16 +67,18 @@ Schedule              = 缺少稳定 BatchKey
 Task last-*           = 仍部分参与生命周期判断
 ```
 
+Wave 0 已完成 Core VO 与兼容映射；现有执行链和数据库仍保持原行为，不得把“Core 已存在”理解成迁移已经完成。
+
 这些问题按迁移波次处理，不允许临时建立第二套真相：
 
 ```text
-Wave 0  Core VO + compatibility mapper
-Wave 1  Batch persistence + execution.bind(batch_id)
-Wave 2  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
-Wave 3  Retry / UNKNOWN + durable retry reservation
-Wave 4  Runtime truth -> Batch/Attempt; Task last-* projection only
-Wave 5  Backfill / Cursor
-Wave 6  Legacy cleanup
+Wave 0  DONE  Core VO + compatibility mapper
+Wave 1  NEXT  Batch persistence + execution.bind(batch_id)
+Wave 2        Trigger -> Batch -> Attempt 1 + Schedule BatchKey
+Wave 3        Retry / UNKNOWN + durable retry reservation
+Wave 4        Runtime truth -> Batch/Attempt; Task last-* projection only
+Wave 5        Backfill / Cursor
+Wave 6        Legacy cleanup
 ```
 
 迁移原则：`expand -> dual read/write -> switch -> verify -> contract`。

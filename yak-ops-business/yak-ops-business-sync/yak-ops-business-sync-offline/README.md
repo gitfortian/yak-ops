@@ -2,7 +2,7 @@
 
 ## 领域建设
 
-离线同步当前已完成 Stage 5：领域约束已收敛为短小 `DOMAIN.md`。修改代码前先读当前规则，需要迁移背景时再看 Mapping 文档：
+离线同步当前已完成 Stage 6 Wave 0：Core VO + compatibility mapper。现有执行链和数据库尚未切换；修改代码前先读当前规则，需要迁移背景时再看 Mapping 文档：
 
 - [DOMAIN.md](./DOMAIN.md)
 - [Domain Mapping](../../../docs/offline-sync/domain/README.md)
