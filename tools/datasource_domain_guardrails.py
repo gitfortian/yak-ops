@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "yak-ops-business/yak-ops-business-datasource"
 JAVA_ROOT = MODULE / "src/main/java/io/yak/ops/business/datasource"
 DOMAIN_DIR = JAVA_ROOT / "domain"
+CATALOG_DOMAIN_DIR = DOMAIN_DIR / "catalog"
+EXECUTION_DOMAIN_DIR = JAVA_ROOT / "execution/domain"
 GATEWAY_DIR = JAVA_ROOT / "gateway"
 
 CORE_FILES = (
@@ -20,6 +22,15 @@ CORE_FILES = (
     "DataSourceDefinition.java",
     "DataSourceQuery.java",
     "DataSourceSummary.java",
+)
+
+CATALOG_DOMAIN_FILES = (
+    "CatalogReadRequest.java",
+    "CatalogTableQuery.java",
+    "CatalogTablePath.java",
+    "CatalogTable.java",
+    "CatalogColumn.java",
+    "CatalogQueryResult.java",
 )
 
 FORBIDDEN_IMPORTS = (
@@ -51,6 +62,7 @@ PROTECTED_APPLICATION_FILES = (
     "service/impl/DataSourceServiceImpl.java",
     "service/impl/DataSourceCatalogServiceImpl.java",
     "service/support/DataSourceViewMapper.java",
+    "execution/DefaultSqlExecutionRuntime.java",
 )
 
 
@@ -89,14 +101,17 @@ def imports_of(text: str) -> list[str]:
     return re.findall(r"(?m)^\s*import\s+(?:static\s+)?([^;]+);", text)
 
 
+def check_no_forbidden_imports(g: Guard, name: str, text: str) -> None:
+    for imported in imports_of(text):
+        g.check(
+            not imported.startswith(FORBIDDEN_IMPORTS),
+            f"{name}: framework/adapter import is forbidden: {imported}",
+        )
+
+
 def check_core(g: Guard) -> None:
     for name in CORE_FILES:
-        text = g.read(DOMAIN_DIR / name)
-        for imported in imports_of(text):
-            g.check(
-                not imported.startswith(FORBIDDEN_IMPORTS),
-                f"{name}: framework/adapter import is forbidden: {imported}",
-            )
+        check_no_forbidden_imports(g, name, g.read(DOMAIN_DIR / name))
 
     definition = g.read(DOMAIN_DIR / "DataSourceDefinition.java")
     profile = g.read(DOMAIN_DIR / "ConnectionProfile.java")
@@ -124,6 +139,31 @@ def check_core(g: Guard) -> None:
         )
 
 
+def check_catalog_domain(g: Guard) -> None:
+    for name in CATALOG_DOMAIN_FILES:
+        text = g.read(CATALOG_DOMAIN_DIR / name)
+        check_no_forbidden_imports(g, f"catalog/{name}", text)
+
+    request = g.read(CATALOG_DOMAIN_DIR / "CatalogReadRequest.java")
+    g.check("enum ReadMode" in request, "CatalogReadRequest must own explicit TABLE/SQL mode")
+    g.check("TABLE" in request and "SQL" in request, "Catalog read modes must remain explicit")
+
+    gateway = g.read(GATEWAY_DIR / "DataSourceCatalogGateway.java")
+    code = code_only(gateway)
+    g.check("CatalogReadRequest" in gateway, "Catalog gateway must use typed CatalogReadRequest")
+    g.check("Map<String" not in code and "Map<" not in code, "Catalog gateway must not expose Map protocol")
+    for name in ("CatalogTable", "CatalogColumn", "CatalogQueryResult"):
+        g.check(name in gateway, f"Catalog gateway must expose business catalog model: {name}")
+
+    service = g.read(JAVA_ROOT / "service/impl/DataSourceCatalogServiceImpl.java")
+    g.check("toCatalogReadRequest(" in service, "HTTP Catalog Map must be parsed once at application boundary")
+    g.check("CatalogReadRequest" in service, "Catalog application service must use typed request")
+
+    adapter = g.read(GATEWAY_DIR / "adapter/SpiDataSourceCatalogGateway.java")
+    g.check("toPluginRequest(" in adapter, "SPI catalog adapter must own legacy Map projection")
+    g.check("Map<String, Object>" in adapter, "Legacy Plugin Map must stay isolated in SPI adapter")
+
+
 def check_application_mutations(g: Guard) -> None:
     service = g.read(JAVA_ROOT / "service/impl/DataSourceServiceImpl.java")
     code = code_only(service)
@@ -147,13 +187,13 @@ def check_application_mutations(g: Guard) -> None:
 
 
 def check_gateway_boundary(g: Guard) -> None:
-    plugin_port = g.read(GATEWAY_DIR / "DataSourcePluginGateway.java")
-    catalog_port = g.read(GATEWAY_DIR / "DataSourceCatalogGateway.java")
-
-    for name, text in (
-        ("DataSourcePluginGateway.java", plugin_port),
-        ("DataSourceCatalogGateway.java", catalog_port),
-    ):
+    ports = (
+        "DataSourcePluginGateway.java",
+        "DataSourceCatalogGateway.java",
+        "SqlExecutionGateway.java",
+    )
+    for name in ports:
+        text = g.read(GATEWAY_DIR / name)
         for imported in imports_of(text):
             g.check(
                 not imported.startswith(PORT_FORBIDDEN_IMPORTS),
@@ -162,8 +202,7 @@ def check_gateway_boundary(g: Guard) -> None:
 
     for relative in PROTECTED_APPLICATION_FILES:
         text = g.read(JAVA_ROOT / relative)
-        imports = imports_of(text)
-        for imported in imports:
+        for imported in imports_of(text):
             g.check(
                 not imported.startswith("io.yak.ops.spi.datasource."),
                 f"{relative}: Datasource Plugin SPI must stay behind Gateway Adapter: {imported}",
@@ -180,16 +219,66 @@ def check_gateway_boundary(g: Guard) -> None:
     service = g.read(JAVA_ROOT / "service/impl/DataSourceServiceImpl.java")
     catalog_service = g.read(JAVA_ROOT / "service/impl/DataSourceCatalogServiceImpl.java")
     view_mapper = g.read(JAVA_ROOT / "service/support/DataSourceViewMapper.java")
+    runtime = g.read(JAVA_ROOT / "execution/DefaultSqlExecutionRuntime.java")
     g.check("DataSourcePluginGateway" in service, "DataSourceServiceImpl must use DataSourcePluginGateway")
     g.check("DataSourceCatalogGateway" in catalog_service, "DataSourceCatalogServiceImpl must use DataSourceCatalogGateway")
     g.check("DataSourcePluginGateway" in view_mapper, "DataSourceViewMapper must use DataSourcePluginGateway for masking")
+    g.check("SqlExecutionGateway" in runtime, "DefaultSqlExecutionRuntime must use SqlExecutionGateway")
 
-    plugin_adapter = g.read(GATEWAY_DIR / "adapter/SpiDataSourcePluginGateway.java")
-    catalog_adapter = g.read(GATEWAY_DIR / "adapter/SpiDataSourceCatalogGateway.java")
-    g.check("implements DataSourcePluginGateway" in plugin_adapter, "SPI plugin adapter must implement business port")
-    g.check("implements DataSourceCatalogGateway" in catalog_adapter, "SPI catalog adapter must implement business port")
-    g.check("io.yak.ops.spi.datasource" in plugin_adapter, "SPI plugin adapter must own plugin protocol translation")
-    g.check("io.yak.ops.spi.datasource" in catalog_adapter, "SPI catalog adapter must own catalog protocol translation")
+    adapters = (
+        ("adapter/SpiDataSourcePluginGateway.java", "implements DataSourcePluginGateway"),
+        ("adapter/SpiDataSourceCatalogGateway.java", "implements DataSourceCatalogGateway"),
+        ("adapter/SpiSqlExecutionGateway.java", "implements SqlExecutionGateway"),
+    )
+    for relative, marker in adapters:
+        text = g.read(GATEWAY_DIR / relative)
+        g.check(marker in text, f"{relative}: SPI adapter must implement business port")
+        g.check("io.yak.ops.spi.datasource" in text, f"{relative}: adapter must own plugin protocol translation")
+
+
+def check_sql_execution_domain(g: Guard) -> None:
+    aggregate = g.read(EXECUTION_DOMAIN_DIR / "SqlExecutionAggregate.java")
+    for imported in imports_of(aggregate):
+        g.check(
+            not imported.startswith("io.yak.ops.spi.datasource."),
+            f"SqlExecutionAggregate must not import datasource SPI: {imported}",
+        )
+        g.check(
+            not imported.startswith("org.springframework."),
+            f"SqlExecutionAggregate must not import Spring: {imported}",
+        )
+        g.check(
+            not imported.startswith("java.util.concurrent."),
+            f"SqlExecutionAggregate must not own concurrency runtime: {imported}",
+        )
+
+    code = code_only(aggregate)
+    for behavior in (
+        "requestCancel(",
+        "markRunning(",
+        "markStatementRunning(",
+        "markStatementSucceeded(",
+        "finishSucceeded(",
+        "finishFailed(",
+        "finishTimedOut(",
+        "finishCancelled(",
+        "snapshot(",
+    ):
+        g.check(behavior in code, f"SqlExecutionAggregate lifecycle behavior missing: {behavior}")
+
+    runtime = g.read(JAVA_ROOT / "execution/DefaultSqlExecutionRuntime.java")
+    runtime_code = code_only(runtime)
+    for forbidden in (
+        "DataSourceExecutionProvider",
+        "DataSourceSqlExecutor",
+        "DataSourceSqlRequest",
+        "DataSourceSqlResult",
+        "class ManagedExecution",
+        "class MutableStatement",
+    ):
+        g.check(forbidden not in runtime_code, f"DefaultSqlExecutionRuntime leaked physical/lifecycle concern: {forbidden}")
+    g.check("SqlExecutionAggregate" in runtime, "Runtime must delegate lifecycle to SqlExecutionAggregate")
+    g.check("SqlExecutionGateway" in runtime, "Runtime must delegate physical SQL to SqlExecutionGateway")
 
 
 def check_docs(g: Guard) -> None:
@@ -208,7 +297,7 @@ def check_docs(g: Guard) -> None:
             f"{name} exceeds {limit} lines; keep module contracts concise",
         )
 
-    for phrase in ("核心能力", "模块边界", "Requirement Gap"):
+    for phrase in ("核心能力", "模块边界", "Requirement Gap", "CatalogReadRequest", "SQL Execution"):
         g.check(phrase in requirements, f"REQUIREMENTS.md lost required phrase: {phrase}")
 
     for phrase in (
@@ -217,6 +306,9 @@ def check_docs(g: Guard) -> None:
         "12 条硬规则",
         "DataSourcePluginGateway",
         "DataSourceCatalogGateway",
+        "CatalogReadRequest",
+        "SqlExecutionGateway",
+        "SqlExecutionAggregate",
         "Domain Impact Analysis",
         "Domain Compliance Report",
         "Domain Gap",
@@ -232,6 +324,8 @@ def check_docs(g: Guard) -> None:
         "Missing Tests",
         "DataSourcePluginGateway",
         "DataSourceCatalogGateway",
+        "SqlExecutionGateway",
+        "SqlExecutionAggregate",
     ):
         g.check(phrase in review, f"REVIEW.md lost review protocol phrase: {phrase}")
 
@@ -263,8 +357,10 @@ def main() -> int:
 
     g = Guard()
     check_core(g)
+    check_catalog_domain(g)
     check_application_mutations(g)
     check_gateway_boundary(g)
+    check_sql_execution_domain(g)
     check_docs(g)
     check_pr(g, args.event)
     return g.finish()
