@@ -9,12 +9,15 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.cursor.OfflineCursorGateway;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
-import io.yak.ops.business.sync.offline.domain.compat.LegacyOfflineExecutionCompatibilityMapper;
+import io.yak.ops.business.sync.offline.domain.core.AttemptMetrics;
+import io.yak.ops.business.sync.offline.domain.core.AttemptReason;
+import io.yak.ops.business.sync.offline.domain.core.AttemptStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchKey;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.ExecutionAttempt;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
@@ -128,7 +131,7 @@ class OfflineBatchRuntimeTest {
     BatchExecution waiting = batch(
         77L,
         BatchStatus.WAITING_RETRY,
-        List.of(LegacyOfflineExecutionCompatibilityMapper.toAttempt(failed)),
+        List.of(evidence(failed)),
         BatchScope.fullSelection());
     when(attempts.findById(501L)).thenReturn(Optional.of(failed));
     when(attempts.reserveRetry(501L)).thenReturn(true);
@@ -145,10 +148,26 @@ class OfflineBatchRuntimeTest {
     assertThat(captured.getValue().status()).isEqualTo(BatchStatus.CANCELED);
   }
 
+  private ExecutionAttempt evidence(OfflineJobExecution execution) {
+    return new ExecutionAttempt(
+        execution.getId(),
+        execution.getAttemptNo(),
+        execution.getAttemptNo() > 1 ? AttemptReason.RETRY : AttemptReason.INITIAL,
+        execution.getIdempotencyKey(),
+        execution.getExternalExecutionId(),
+        AttemptStatus.valueOf(execution.getStatus()),
+        null,
+        AttemptMetrics.empty(),
+        execution.getErrorMessage(),
+        execution.getCreateTime(),
+        execution.getStartTime(),
+        execution.getEndTime());
+  }
+
   private BatchExecution batch(
       long id,
       BatchStatus status,
-      List<io.yak.ops.business.sync.offline.domain.core.ExecutionAttempt> attempts,
+      List<ExecutionAttempt> attempts,
       BatchScope scope) {
     return new BatchExecution(
         id,
