@@ -4,6 +4,7 @@ import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
+import io.yak.ops.business.datasource.domain.ConnectionProfile;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.exception.DataSourceException;
@@ -51,10 +52,17 @@ public class DataSourceServiceImpl implements DataSourceService {
     String name = normalizeName(dataSourceDTO.getName());
     ensureNameAvailable(name, null);
 
+    DataSourceDbType dbType = parseDbType(dataSourceDTO.getDbType());
+    DataSourceEnvironment environment = parseEnvironment(dataSourceDTO.getEnvironment());
+    ConnectionProfile connectionProfile =
+        buildConnectionProfile(dbType, dataSourceDTO.getConnectionParams());
     DataSourceDefinition definition =
-        buildDefinition(dataSourceDTO, dataSourceDTO.getConnectionParams());
-    definition.setName(name);
-    definition.setConnStatus(DataSourceConnStatus.UNKNOWN);
+        DataSourceDefinition.create(
+            name,
+            dbType,
+            connectionProfile,
+            environment,
+            normalizeNullable(dataSourceDTO.getRemark()));
 
     if (!repository.insert(definition)) {
       throw new DataSourceException(DataSourceErrorCode.CREATE_FAILED);
@@ -72,10 +80,13 @@ public class DataSourceServiceImpl implements DataSourceService {
     ensureNameAvailable(name, id);
 
     DataSourceDbType requestedType = parseDbType(dataSourceDTO.getDbType());
-    if (requestedType != existing.getDbType()) {
+    try {
+      existing.assertTypeUnchanged(requestedType);
+    } catch (IllegalArgumentException exception) {
       throw new DataSourceException(
           DataSourceErrorCode.INVALID_DB_TYPE,
-          "编辑数据源时不允许修改数据源类型");
+          exception.getMessage(),
+          exception);
     }
 
     DataSourcePlugin plugin = pluginRegistry.get(requestedType);
@@ -84,13 +95,17 @@ public class DataSourceServiceImpl implements DataSourceService {
             plugin,
             dataSourceDTO.getConnectionParams(),
             existing.getConnectionParams());
-    DataSourceDefinition definition = buildDefinition(dataSourceDTO, mergedConnectionJson);
-    definition.setId(id);
-    definition.setName(name);
-    definition.setConnStatus(DataSourceConnStatus.UNKNOWN);
-    definition.setCreateTime(existing.getCreateTime());
+    ConnectionProfile connectionProfile =
+        buildConnectionProfile(requestedType, mergedConnectionJson);
+    DataSourceEnvironment environment = parseEnvironment(dataSourceDTO.getEnvironment());
+    existing.updateConfiguration(
+        name,
+        requestedType,
+        connectionProfile,
+        environment,
+        normalizeNullable(dataSourceDTO.getRemark()));
 
-    if (!repository.update(definition)) {
+    if (!repository.update(existing)) {
       throw new DataSourceException(DataSourceErrorCode.UPDATE_FAILED);
     }
     return true;
@@ -143,10 +158,12 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     try {
       plugin.testConnection(connection, connectionTimeoutSeconds());
-      repository.updateConnectionStatus(id, DataSourceConnStatus.CONNECTED);
+      definition.markConnected();
+      repository.updateConnectionStatus(id, definition.getConnStatus());
       return true;
     } catch (RuntimeException exception) {
-      repository.updateConnectionStatus(id, DataSourceConnStatus.DISCONNECTED);
+      definition.markDisconnected();
+      repository.updateConnectionStatus(id, definition.getConnStatus());
       throw connectException(exception);
     }
   }
@@ -199,22 +216,15 @@ public class DataSourceServiceImpl implements DataSourceService {
     return repository.findAll(normalizedType).stream().map(viewMapper::option).toList();
   }
 
-  private DataSourceDefinition buildDefinition(
-      DataSourceDTO dataSourceDTO,
+  private ConnectionProfile buildConnectionProfile(
+      DataSourceDbType dbType,
       String connectionJson) {
-    DataSourceDbType dbType = parseDbType(dataSourceDTO.getDbType());
-    DataSourceEnvironment environment = parseEnvironment(dataSourceDTO.getEnvironment());
     DataSourcePlugin plugin = pluginRegistry.get(dbType);
     DataSourceConnection connection = parseConnection(plugin, connectionJson);
-
-    DataSourceDefinition definition = new DataSourceDefinition();
-    definition.setDbType(dbType);
-    definition.setJdbcUrl(connection.jdbcUrl());
-    definition.setEnvironment(environment);
-    definition.setRemark(normalizeNullable(dataSourceDTO.getRemark()));
-    definition.setConnectionParams(connection.normalizedJson());
-    definition.setOriginalJson(connection.normalizedJson());
-    return definition;
+    return new ConnectionProfile(
+        connection.jdbcUrl(),
+        connection.normalizedJson(),
+        connection.normalizedJson());
   }
 
   private DataSourceConnection parseConnection(DataSourcePlugin plugin, String connectionJson) {
