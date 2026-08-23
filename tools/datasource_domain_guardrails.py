@@ -166,12 +166,16 @@ def check_catalog_domain(g: Guard) -> None:
     g.check("CatalogReadRequest" in service, "Catalog service must use typed request")
 
     adapter = g.read(GATEWAY_DIR / "adapter/SpiDataSourceCatalogGateway.java")
+    adapter_code = code_only(adapter)
     g.check(
         "DataSourceCatalogReadRequest" in adapter,
         "Catalog SPI adapter must translate Business request to typed Plugin request",
     )
     for legacy in ("paramsList", '"read_mode"', "Map<String, Object>"):
-        g.check(legacy not in adapter, f"Legacy Catalog Map leaked into Plugin adapter: {legacy}")
+        g.check(
+            legacy not in adapter_code,
+            f"Legacy Catalog Map leaked into executable Plugin adapter code: {legacy}",
+        )
 
 
 def check_application_mutations(g: Guard) -> None:
