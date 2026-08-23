@@ -156,9 +156,12 @@ public class DataSourceServiceImpl implements DataSourceService {
       repository.updateConnectionStatus(id, definition.getConnStatus());
       return true;
     } catch (RuntimeException exception) {
-      definition.markDisconnected();
-      repository.updateConnectionStatus(id, definition.getConnStatus());
-      throw connectException(exception);
+      DataSourceException mapped = connectException(exception);
+      if (DataSourceErrorCode.CONNECT_FAILED.equals(mapped.getErrorCode())) {
+        definition.markDisconnected();
+        repository.updateConnectionStatus(id, definition.getConnStatus());
+      }
+      throw mapped;
     }
   }
 
