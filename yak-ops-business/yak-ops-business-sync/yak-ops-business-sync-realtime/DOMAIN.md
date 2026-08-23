@@ -2,7 +2,7 @@
 
 > 本文件只保留**实现必须遵守的硬规则**，不记录设计过程。历史演进看 Git / PR。
 >
-> `REQUIREMENTS.md` 定义“需要什么”；`DOMAIN.md` 定义“不能违反什么”；`REVIEW.md` 定义“怎么判卷”。
+> `REQUIREMENTS.md` 定义“需要什么”；`DOMAIN.md` 定义“不能违反什么”；`ARCHITECTURE.md` 定义“代码边界如何收敛”；`REVIEW.md` 定义“怎么判卷”。
 
 ## 核心模型
 
@@ -65,6 +65,29 @@ ApplyPublishedVersion  -> captured Published Version -> new Execution
 Stop / Reconcile       -> SyncExecution lifecycle
 ```
 
+## Runtime Truth
+
+命令侧运行真相固定为：
+
+```text
+RealtimeSyncTask
+    │ publish reference
+    ▼
+DefinitionVersion
+    │ execution reference
+    ▼
+SyncExecution
+```
+
+```text
+Task desired/observed/lastError = compatibility only
+Deployment.status               = compatibility mirror only
+Flink runtime state             = external evidence
+SyncExecution                   = local runtime truth
+```
+
+任何结构重构都不能把运行真相重新搬回 Task、Controller、Engine Adapter 或查询投影。
+
 ## 遗留兼容字段
 
 这些名字可以暂时存在，但**不是领域语义**：
@@ -80,6 +103,8 @@ HTTP /restart                   = restartExecution 的兼容 alias
 ```
 
 禁止用 `definition_version / published_version` 判断真正的 Version identity。
+
+Compatibility 如果必须继续存在，应停在拥有旧协议或旧持久化格式的边界；不得为了结构迁移把 compatibility mapper / facade 扩散回 Core Domain。
 
 ## 安全能力必须保留
 
@@ -99,6 +124,29 @@ secret-free persistence / log redaction
 multi-instance reconcile lease
 ```
 
+这些不是实现细节，可以在重构中换角色或换 package，但不能被删除、弱化或绕过。
+
+## Architecture Boundary
+
+领域模型与工程结构的关系以 `ARCHITECTURE.md` 为准。长期方向固定为业务子系统优先：
+
+```text
+Definition
+Execution
+Reconcile
+Observability
+Environment
+Engine / Persistence boundaries
+```
+
+允许后续 PR 移动类、重命名角色、拆分过宽 Service，但必须满足：
+
+- 不新增第二套 SyncDefinition / Execution 模型；
+- 不改变 Published Version immutable contract；
+- 不把 Query / Observability 变成 command truth owner；
+- 不把 Flink / SSH / Credential / HTTP DTO / MyBatis PO 引入 Core Domain；
+- 不为了和 offline-sync 目录一致提前抽 Shared Sync Kernel。
+
 ## 修改代码前后
 
 修改前先确认 `REQUIREMENTS.md` 中已有对应能力，再写一个短块：
@@ -107,8 +155,18 @@ multi-instance reconcile lease
 Domain Impact Analysis
 - Aggregate(s):
 - Invariant/lifecycle impact:
-- Layer:
+- Layer / subsystem:
 - Domain Gap: yes/no
+```
+
+涉及 package / role / dependency 调整时，再回答：
+
+```text
+Architecture Impact Analysis
+- Target subsystem:
+- Stable entry / gateway:
+- Runtime truth owner:
+- Dependency direction changed: yes/no
 ```
 
 修改后写：
@@ -139,7 +197,9 @@ Framework-free core domain smoke
 
 完整 Maven/JUnit 深层回归依赖 private `yak-framework`；配置 `YAK_FRAMEWORK_TOKEN` 后自动启用。
 
-**不要因为功能被护栏拦住就删护栏。** 如果规则真的变化，同一个 PR 中同步修改 `DOMAIN.md`、`DECISIONS.md`（如需要）和对应测试/guard。
+**不要因为功能或结构调整被护栏拦住就删护栏。** 如果规则真的变化，同一个 PR 中同步修改当前 contract 文档和对应测试 / guardrail。
+
+当前 `RealtimeArchitectureTest` 是迁移期间的基础安全网；完整 package dependency graph 与 explicit corridor guardrails 在目标 package 结构稳定后补齐，不应在结构尚未收敛时提前把临时依赖固化成永久白名单。
 
 ## 已知独立 Gap
 
@@ -152,4 +212,4 @@ Compute Environment physical context cleanup
 API v2 / physical schema naming cleanup
 ```
 
-更多当前模型说明见 `docs/realtime-sync/domain/README.md`；关键决策原因见 `docs/realtime-sync/domain/DECISIONS.md`。
+这些 Gap 需要单独做 Requirement / Domain 设计，不在纯架构重构中顺手解决。
