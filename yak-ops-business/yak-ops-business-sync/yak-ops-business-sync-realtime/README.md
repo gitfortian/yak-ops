@@ -2,7 +2,7 @@
 
 > 开发 / AI 修改本模块前：先读 [`REQUIREMENTS.md`](./REQUIREMENTS.md) 和 [`DOMAIN.md`](./DOMAIN.md)。  
 > Review 本模块代码：按 [`REVIEW.md`](./REVIEW.md) 执行。  
-> 当前领域模型总览：`docs/realtime-sync/domain/`。
+> 当前领域规则以 `DOMAIN.md` 为准；本 README 维护运行环境与运维约束。
 
 实时同步控制面以 **Compute Environment** 作为唯一运行时配置来源。任务在创建时必须绑定一个已启用的运行环境；每次部署都会保存不可变的运行环境快照，后续修改默认环境或环境配置不会把历史部署重定向到其他 Flink 集群。
 

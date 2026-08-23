@@ -1,6 +1,6 @@
 # Offline Sync Requirements
 
-> 本文件只描述**模块需要什么**，不描述怎么实现。历史需求、Stage 6 迁移过程和讨论看 Issue / PR / Git；领域硬规则看 `DOMAIN.md`。
+> 本文件只描述**模块需要什么**，不描述怎么实现。历史需求和迁移讨论看 Issue / PR / Git；领域硬规则看 `DOMAIN.md`。
 
 ## 目标
 
@@ -46,7 +46,7 @@ Retry 的业务含义是“重新尝试同一个批次”，不是“重新执�
 - 手动、Schedule、Workflow、Backfill 最终都必须形成明确的 Batch 身份。
 - 同一逻辑触发重复到达时不能因为请求重试、回调重放或超时造成重复业务批次。
 - Schedule 的同一次计划触发必须保持稳定身份，实际回调早晚不能改变它属于哪一次计划执行。
-- V1 同一个 Task 最多一个 `RUNNING / WAITING_RETRY / UNKNOWN` Batch。
+- 当前同一个 Task 最多一个 `RUNNING / WAITING_RETRY / UNKNOWN` Batch。
 - Backfill 的 PENDING Batch 可以排队，但不能绕过同 Task 的运行占用限制并发提交。
 
 ## Retry / UNKNOWN / Cancel 要求
@@ -129,7 +129,7 @@ Batch(200 -> 300) FAILED    -> Cursor 仍为 200
 
 ```text
 多表 / custom query 的 scoped Backfill 执行语义
-V1 单 Task 单 occupying Batch 之外的 ConcurrencyPolicy
+当前单 Task 单 occupying Batch 之外的 ConcurrencyPolicy
 真正 immutable DefinitionVersion / 发布版本模型
 legacy execution 表列和类名的物理 contract migration
 ```
@@ -144,4 +144,4 @@ Requirement Gap
 
 先确认需求并更新本文件，再实现代码。Reviewer / AI 不得自行补需求。
 
-本文件只维护**当前有效需求**，不要追加 Wave 迁移历史。
+本文件只维护**当前有效需求**，不要追加迁移历史。
