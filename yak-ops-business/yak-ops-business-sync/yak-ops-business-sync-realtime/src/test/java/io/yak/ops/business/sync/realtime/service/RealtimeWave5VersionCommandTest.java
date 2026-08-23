@@ -84,7 +84,6 @@ class RealtimeWave5VersionCommandTest {
     service =
         new RealtimeJobService(
             store,
-            new ObjectMapper(),
             specValidator,
             new SyncExecutionStateMachine(),
             dataSourceResolver,
@@ -123,7 +122,8 @@ class RealtimeWave5VersionCommandTest {
     verify(store, never()).publishedDefinition(TASK_ID);
     verify(compiler).compile("orders-sync", v3Spec, resolved);
     verify(compiler, never()).compile(eq("orders-sync"), eq(v4Spec), any());
-    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
+    verify(store, never())
+        .reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
     verify(gateway, never()).stop(any(), any());
   }
 
@@ -151,7 +151,8 @@ class RealtimeWave5VersionCommandTest {
 
     verify(store).publishedDefinition(TASK_ID);
     verify(compiler).compile("orders-sync", v4Spec, resolved);
-    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
+    verify(store, never())
+        .reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
     verify(gateway, never()).stop(any(), any());
   }
 
@@ -169,7 +170,8 @@ class RealtimeWave5VersionCommandTest {
         .hasMessageContaining("已经运行最新已发布");
 
     verify(compiler, never()).compile(any(), any(), any());
-    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
+    verify(store, never())
+        .reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
   }
 
   @Test
@@ -192,14 +194,17 @@ class RealtimeWave5VersionCommandTest {
         .hasMessageContaining("请先对账");
 
     verify(store, never()).definitionVersion(anyLong(), anyLong());
-    verify(store, never()).reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
+    verify(store, never())
+        .reserveReplacementStop(anyLong(), anyLong(), any(), anyLong(), any());
   }
 
   @Test
   void restartExecutionCreatesNewExecutionBoundToSameImmutableVersion() {
     DeploymentRow running = runningRow(V3_ID, v3Spec, "job-v3");
-    DeploymentRow stopping = replacementRow(DesiredState.STOPPED, ObservedState.STOPPING, "STOPPING");
-    DeploymentRow stopped = replacementRow(DesiredState.STOPPED, ObservedState.STOPPED, "STOPPED");
+    DeploymentRow stopping =
+        replacementRow(DesiredState.STOPPED, ObservedState.STOPPING, "STOPPING");
+    DeploymentRow stopped =
+        replacementRow(DesiredState.STOPPED, ObservedState.STOPPED, "STOPPED");
     DeploymentRow newStarting =
         executionRowWithId(
             NEW_EXECUTION_ID,
@@ -241,8 +246,20 @@ class RealtimeWave5VersionCommandTest {
     when(store.lockDefinition(TASK_ID)).thenReturn(task);
     when(store.latestExecution(TASK_ID))
         .thenReturn(
-            Optional.of(execution(OLD_EXECUTION_ID, V3_ID, DesiredState.STOPPED, ObservedState.STOPPED, "job-v3")),
-            Optional.of(execution(OLD_EXECUTION_ID, V3_ID, DesiredState.STOPPED, ObservedState.STOPPED, "job-v3")));
+            Optional.of(
+                execution(
+                    OLD_EXECUTION_ID,
+                    V3_ID,
+                    DesiredState.STOPPED,
+                    ObservedState.STOPPED,
+                    "job-v3")),
+            Optional.of(
+                execution(
+                    OLD_EXECUTION_ID,
+                    V3_ID,
+                    DesiredState.STOPPED,
+                    ObservedState.STOPPED,
+                    "job-v3")));
     when(runtimeResolver.environment(environment.id(), true)).thenReturn(environment);
     when(runtimeResolver.deployment(any(), any())).thenReturn(environment);
     when(dataSourceResolver.resolve(v3Spec)).thenReturn(resolved);
@@ -260,7 +277,8 @@ class RealtimeWave5VersionCommandTest {
         .thenReturn(
             new RuntimeStatus("job-v3", RuntimeStatus.State.RUNNING),
             new RuntimeStatus("job-v3", RuntimeStatus.State.TERMINATED));
-    when(store.insertDeployment(any(), eq(v3Spec), any(), any(), eq(environment), eq("restart-success")))
+    when(store.insertDeployment(
+            any(), eq(v3Spec), any(), any(), eq(environment), eq("restart-success")))
         .thenReturn(NEW_EXECUTION_ID);
     when(gateway.deploy(eq(environment), any()))
         .thenReturn(new DeployResult("job-new-v3", "at-least-once"));
