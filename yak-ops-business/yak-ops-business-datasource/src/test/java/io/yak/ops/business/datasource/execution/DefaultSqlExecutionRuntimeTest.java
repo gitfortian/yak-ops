@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.business.datasource.gateway.adapter.SpiSqlExecutionGateway;
 import io.yak.ops.core.execution.sql.SqlExecutionCaller;
 import io.yak.ops.core.execution.sql.SqlExecutionContext;
 import io.yak.ops.core.execution.sql.SqlExecutionPlan;
@@ -342,7 +343,9 @@ class DefaultSqlExecutionRuntimeTest {
   }
 
   private static DefaultSqlExecutionRuntime runtime(DataSourceExecutionProvider provider) {
-    return new DefaultSqlExecutionRuntime(provider, new DefaultSqlExecutionPolicy());
+    return new DefaultSqlExecutionRuntime(
+        new SpiSqlExecutionGateway(provider),
+        new DefaultSqlExecutionPolicy());
   }
 
   private record CapturedRequest(String dataSourceId, List<Object> parameters) {}

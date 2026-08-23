@@ -6,7 +6,9 @@ on:
     paths:
       - 'yak-ops-business/yak-ops-business-datasource/**'
       - 'yak-ops-common/src/main/java/io/yak/ops/common/enums/datasource/**'
+      - 'yak-ops-core/src/main/java/io/yak/ops/core/execution/sql/**'
       - 'tools/datasource_domain_guardrails.py'
+      - 'tools/datasource-domain-smoke/**'
       - '.github/PULL_REQUEST_TEMPLATE/datasource-domain.md'
       - '.github/workflows/datasource-domain-guardrails.yml'
   push:
@@ -15,7 +17,9 @@ on:
     paths:
       - 'yak-ops-business/yak-ops-business-datasource/**'
       - 'yak-ops-common/src/main/java/io/yak/ops/common/enums/datasource/**'
+      - 'yak-ops-core/src/main/java/io/yak/ops/core/execution/sql/**'
       - 'tools/datasource_domain_guardrails.py'
+      - 'tools/datasource-domain-smoke/**'
       - '.github/PULL_REQUEST_TEMPLATE/datasource-domain.md'
       - '.github/workflows/datasource-domain-guardrails.yml'
   workflow_dispatch:
@@ -42,10 +46,41 @@ jobs:
       - name: Run zero-dependency datasource domain guard
         run: python3 tools/datasource_domain_guardrails.py --event "$GITHUB_EVENT_PATH"
 
+  phase3-domain-smoke:
+    name: Framework-free Phase 3 domain smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout yak-ops
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compile typed Catalog and SQL lifecycle domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/datasource-domain"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+
+          javac --release 21 -d "$OUT" \
+            yak-ops-core/src/main/java/io/yak/ops/core/execution/sql/*.java \
+            yak-ops-business/yak-ops-business-datasource/src/main/java/io/yak/ops/business/datasource/domain/catalog/*.java \
+            yak-ops-business/yak-ops-business-datasource/src/main/java/io/yak/ops/business/datasource/execution/domain/SqlExecutionAggregate.java \
+            tools/datasource-domain-smoke/DatasourceDomainSmoke.java
+
+          java -cp "$OUT" DatasourceDomainSmoke
+
   backend-domain-regression:
     name: Backend regression hook
     needs:
       - static-domain-contract
+      - phase3-domain-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -57,7 +92,7 @@ jobs:
       - name: Explain private dependency requirement
         if: env.YAK_FRAMEWORK_TOKEN == ''
         run: |
-          echo "::notice title=Backend regression not executed::yak-framework is a private repository. Configure repository secret YAK_FRAMEWORK_TOKEN with read access to enable the full Maven/JUnit regression layer. Static Datasource Domain Contract remains mandatory and runs without this secret."
+          echo "::notice title=Backend regression not executed::yak-framework is a private repository. Configure repository secret YAK_FRAMEWORK_TOKEN with read access to enable the full Maven/JUnit regression layer. Static and framework-free Datasource domain checks remain mandatory without this secret."
 
       - name: Checkout yak-framework SNAPSHOT dependency
         if: env.YAK_FRAMEWORK_TOKEN != ''
@@ -88,6 +123,6 @@ jobs:
         run: >-
           ./mvnw -B -ntp
           -pl "$DATASOURCE_MODULE"
-          -Dtest=DataSourceDomainArchitectureTest,DataSourceGatewayArchitectureTest,DataSourceLayeringConventionTest,DataSourceDefinitionTest,DataSourceRepositoryAdapterTest,DataSourceServiceImplTest,DataSourceCatalogServiceImplTest,DataSourceViewMapperTest,SpiDataSourcePluginGatewayTest,SpiDataSourceCatalogGatewayTest
+          -Dtest=DataSourceDomainArchitectureTest,DataSourceGatewayArchitectureTest,DataSourceLayeringConventionTest,DataSourceDefinitionTest,DataSourceRepositoryAdapterTest,DataSourceServiceImplTest,DataSourceCatalogServiceImplTest,DataSourceViewMapperTest,SpiDataSourcePluginGatewayTest,SpiDataSourceCatalogGatewayTest,DefaultSqlExecutionRuntimeTest,DefaultSqlExecutionTransactionCancellationTest,ObservableSqlExecutionRuntimeTest,SqlExecutionAggregateTest,SpiSqlExecutionGatewayTest
           -Dsurefire.failIfNoSpecifiedTests=false
           test

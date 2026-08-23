@@ -2,12 +2,18 @@ package io.yak.ops.business.datasource.gateway.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.Table;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.TableQuery;
+import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest.ReadMode;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest.Variable;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTable;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTableQuery;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
@@ -15,8 +21,11 @@ import io.yak.ops.spi.datasource.DataSourceConnection;
 import io.yak.ops.spi.datasource.DataSourcePlugin;
 import io.yak.ops.spi.datasource.catalog.DataSourceCatalogQuery;
 import io.yak.ops.spi.datasource.metadata.DataSourceTable;
+import io.yak.ops.spi.datasource.query.DataSourceQueryResult;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class SpiDataSourceCatalogGatewayTest {
 
@@ -24,29 +33,22 @@ class SpiDataSourceCatalogGatewayTest {
   private final DataSourcePlugin plugin = mock(DataSourcePlugin.class);
   private final DataSourceConnection connection = mock(DataSourceConnection.class);
   private final DataSourceCatalog catalog = mock(DataSourceCatalog.class);
-  private final SpiDataSourceCatalogGateway gateway =
-      new SpiDataSourceCatalogGateway(registry);
+  private final SpiDataSourceCatalogGateway gateway = new SpiDataSourceCatalogGateway(registry);
 
   @Test
-  void listTablesTranslatesPluginMetadataToBusinessGatewayContract() {
-    DataSourceDefinition dataSource = dataSource();
-    when(registry.get(DataSourceDbType.MYSQL)).thenReturn(plugin);
-    when(plugin.parseConnection(dataSource.getConnectionParams())).thenReturn(connection);
-    when(plugin.createCatalog(connection, 5)).thenReturn(catalog);
+  void listTablesTranslatesPluginMetadataToCatalogDomain() {
+    DataSourceDefinition dataSource = configuredDataSource();
+    stubCatalog(dataSource);
     when(catalog.listTables(any(DataSourceCatalogQuery.class)))
         .thenReturn(
             List.of(
                 new DataSourceTable(
-                    "orders_db",
-                    "public",
-                    "orders",
-                    "TABLE",
-                    "order table")));
+                    "orders_db", "public", "orders", "TABLE", "order table")));
 
-    List<Table> result =
+    List<CatalogTable> result =
         gateway.listTables(
             dataSource,
-            new TableQuery("orders_db", "public", "ord"),
+            new CatalogTableQuery("orders_db", "public", "ord"),
             5);
 
     assertThat(result).hasSize(1);
@@ -57,7 +59,37 @@ class SpiDataSourceCatalogGatewayTest {
     assertThat(result.getFirst().remarks()).isEqualTo("order table");
   }
 
-  private DataSourceDefinition dataSource() {
+  @Test
+  void typedCatalogRequestIsProjectedToLegacyPluginMapOnlyInsideAdapter() {
+    DataSourceDefinition dataSource = configuredDataSource();
+    stubCatalog(dataSource);
+    when(catalog.preview(any(Map.class), eq(20)))
+        .thenReturn(new DataSourceQueryResult(List.of(), List.of(), 0L));
+    CatalogReadRequest request =
+        new CatalogReadRequest(
+            ReadMode.SQL,
+            null,
+            "select * from orders where day = ${day}",
+            List.of(new Variable("day", "2026-08-23")));
+
+    CatalogQueryResult result = gateway.preview(dataSource, request, 20, 5);
+
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(catalog).preview(captor.capture(), eq(20));
+    Map<String, Object> pluginRequest = captor.getValue();
+    assertThat(pluginRequest.get("read_mode")).isEqualTo("sql");
+    assertThat(pluginRequest.get("query")).isEqualTo(request.sql());
+    assertThat(pluginRequest.get("paramsList")).isInstanceOf(List.class);
+    assertThat(result.total()).isZero();
+  }
+
+  private void stubCatalog(DataSourceDefinition dataSource) {
+    when(registry.get(DataSourceDbType.MYSQL)).thenReturn(plugin);
+    when(plugin.parseConnection(dataSource.getConnectionParams())).thenReturn(connection);
+    when(plugin.createCatalog(connection, 5)).thenReturn(catalog);
+  }
+
+  private DataSourceDefinition configuredDataSource() {
     DataSourceDefinition dataSource = new DataSourceDefinition();
     dataSource.setDbType(DataSourceDbType.MYSQL);
     dataSource.setConnectionParams("{\"database\":\"orders_db\"}");

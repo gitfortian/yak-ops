@@ -3,13 +3,16 @@ package io.yak.ops.business.datasource.service.impl;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
+import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
+import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest.ReadMode;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest.Variable;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTable;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTablePath;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTableQuery;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.Column;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.QueryResult;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.Table;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.TablePath;
-import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway.TableQuery;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnOptionVO;
@@ -19,6 +22,7 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePreviewColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +33,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Catalog 应用服务；Catalog 物理访问和 SPI 模型转换统一由 Gateway Adapter 负责。 */
+/** Catalog 应用服务；HTTP Map 兼容协议在入口解析一次，内部统一使用 typed Catalog Domain。 */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -67,7 +71,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     return catalogGateway
         .listTables(
             getDataSourceOrThrow(dataSourceId),
-            new TableQuery(database, schema, keyword),
+            new CatalogTableQuery(database, schema, keyword),
             connectionTimeoutSeconds())
         .stream()
         .map(this::toTableVO)
@@ -83,7 +87,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     return catalogGateway
         .listColumns(
             getDataSourceOrThrow(dataSourceId),
-            new TablePath(database, schema, table),
+            new CatalogTablePath(database, schema, table),
             connectionTimeoutSeconds())
         .stream()
         .map(this::toColumnVO)
@@ -92,19 +96,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
   @Override
   public List<DataSourceCatalogOptionVO> listTable(Long dataSourceId) {
-    return catalogGateway
-        .listTables(
-            getDataSourceOrThrow(dataSourceId),
-            new TableQuery(null, null, null),
-            connectionTimeoutSeconds())
-        .stream()
-        .map(
-            table -> {
-              String label = isBlank(table.remarks()) ? table.name() : table.remarks();
-              return new DataSourceCatalogOptionVO(
-                  table.name(), label, table.remarks());
-            })
-        .toList();
+    return listAllTables(dataSourceId).stream().map(this::toOptionVO).toList();
   }
 
   @Override
@@ -112,8 +104,8 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
       Long dataSourceId,
       String matchMode,
       String keyword) {
-    List<DataSourceCatalogOptionVO> options = listTable(dataSourceId);
-    if (isBlank(keyword)) return options;
+    List<CatalogTable> tables = listAllTables(dataSourceId);
+    if (isBlank(keyword)) return tables.stream().map(this::toOptionVO).toList();
     if (keyword.length() > MAX_MATCH_KEYWORD_LENGTH) {
       throw new DataSourceException(
           DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
@@ -123,9 +115,10 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     if ("2".equals(matchMode)) {
       try {
         Pattern pattern = Pattern.compile(keyword);
-        return options.stream()
-            .filter(option -> pattern.matcher(String.valueOf(option.getValue())).matches())
-            .collect(Collectors.toList());
+        return tables.stream()
+            .filter(table -> pattern.matcher(table.name()).matches())
+            .map(this::toOptionVO)
+            .toList();
       } catch (PatternSyntaxException exception) {
         throw new DataSourceException(
             DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
@@ -140,19 +133,20 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
               .map(String::trim)
               .filter(name -> !name.isEmpty())
               .collect(Collectors.toSet());
-      return options.stream()
-          .filter(option -> exactNames.contains(String.valueOf(option.getValue())))
-          .collect(Collectors.toList());
+      return tables.stream()
+          .filter(table -> exactNames.contains(table.name()))
+          .map(this::toOptionVO)
+          .toList();
     }
 
-    return options;
+    return tables.stream().map(this::toOptionVO).toList();
   }
 
   @Override
   public List<DataSourceCatalogColumnOptionVO> listColumn(
       Long dataSourceId,
       Map<String, Object> requestBody) {
-    Map<String, Object> request = requireRequest(requestBody);
+    CatalogReadRequest request = toCatalogReadRequest(requestBody);
     validateReadOnlyRequest(request);
     return catalogGateway
         .describe(
@@ -168,9 +162,9 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
   public DataSourceQueryResultVO preview(
       Long dataSourceId,
       Map<String, Object> requestBody) {
-    Map<String, Object> request = requireRequest(requestBody);
+    CatalogReadRequest request = toCatalogReadRequest(requestBody);
     validateReadOnlyRequest(request);
-    QueryResult result =
+    CatalogQueryResult result =
         catalogGateway.preview(
             getDataSourceOrThrow(dataSourceId),
             request,
@@ -181,7 +175,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
   @Override
   public Long count(Long dataSourceId, Map<String, Object> requestBody) {
-    Map<String, Object> request = requireRequest(requestBody);
+    CatalogReadRequest request = toCatalogReadRequest(requestBody);
     validateReadOnlyRequest(request);
     return catalogGateway.count(
         getDataSourceOrThrow(dataSourceId),
@@ -200,16 +194,26 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
 
   @Override
   public String resolveSql(Long dataSourceId, Map<String, Object> requestBody) {
-    Map<String, Object> request = requireRequest(requestBody);
-    String query = requiredText(request, "query", "sql");
+    CatalogReadRequest request = toCatalogReadRequest(requestBody);
+    if (request.sql() == null) {
+      throw new DataSourceException(
+          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
+          "query 不能为空");
+    }
     return catalogGateway.resolveSql(
         getDataSourceOrThrow(dataSourceId),
-        query,
         request,
         connectionTimeoutSeconds());
   }
 
-  private DataSourceCatalogTableVO toTableVO(Table table) {
+  private List<CatalogTable> listAllTables(Long dataSourceId) {
+    return catalogGateway.listTables(
+        getDataSourceOrThrow(dataSourceId),
+        new CatalogTableQuery(null, null, null),
+        connectionTimeoutSeconds());
+  }
+
+  private DataSourceCatalogTableVO toTableVO(CatalogTable table) {
     return new DataSourceCatalogTableVO(
         table.database(),
         table.schema(),
@@ -218,7 +222,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
         table.remarks());
   }
 
-  private DataSourceCatalogColumnVO toColumnVO(Column column) {
+  private DataSourceCatalogColumnVO toColumnVO(CatalogColumn column) {
     return new DataSourceCatalogColumnVO(
         column.name(),
         column.typeName(),
@@ -231,7 +235,7 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
         column.remarks());
   }
 
-  private DataSourceCatalogColumnOptionVO toColumnOptionVO(Column column) {
+  private DataSourceCatalogColumnOptionVO toColumnOptionVO(CatalogColumn column) {
     return new DataSourceCatalogColumnOptionVO(
         column.ordinalPosition(),
         column.name(),
@@ -242,7 +246,12 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
         column.primaryKey() ? "PRI" : "");
   }
 
-  private DataSourceQueryResultVO toPreviewVO(QueryResult result) {
+  private DataSourceCatalogOptionVO toOptionVO(CatalogTable table) {
+    String label = isBlank(table.remarks()) ? table.name() : table.remarks();
+    return new DataSourceCatalogOptionVO(table.name(), label, table.remarks());
+  }
+
+  private DataSourceQueryResultVO toPreviewVO(CatalogQueryResult result) {
     List<DataSourcePreviewColumnVO> columns =
         result.columns().stream()
             .map(
@@ -253,7 +262,54 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
                         column.key(),
                         column.ellipsis()))
             .toList();
-    return new DataSourceQueryResultVO(columns, result.data(), result.total());
+    return new DataSourceQueryResultVO(columns, result.rows(), result.total());
+  }
+
+  private CatalogReadRequest toCatalogReadRequest(Map<String, Object> requestBody) {
+    Map<String, Object> request = requireRequest(requestBody);
+    String readMode = optionalText(request, "read_mode", "readMode");
+    String tablePath = optionalText(request, "table_path", "tablePath", "table");
+    String query = optionalText(request, "query", "sql");
+    ReadMode mode =
+        "sql".equalsIgnoreCase(readMode) || (!isBlank(query) && isBlank(tablePath))
+            ? ReadMode.SQL
+            : ReadMode.TABLE;
+    try {
+      return new CatalogReadRequest(mode, tablePath, query, variables(request));
+    } catch (IllegalArgumentException exception) {
+      throw new DataSourceException(
+          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
+          exception.getMessage(),
+          exception);
+    }
+  }
+
+  private List<Variable> variables(Map<String, Object> request) {
+    Object value = request.get("paramsList");
+    if (!(value instanceof Iterable<?> items)) return List.of();
+    List<Variable> variables = new ArrayList<>();
+    for (Object item : items) {
+      if (!(item instanceof Map<?, ?> map)) continue;
+      String name = mapText(map, "paramName", "name");
+      Object rawValue = mapValue(map, "paramValue", "value");
+      if (!isBlank(name)) {
+        variables.add(new Variable(name, rawValue == null ? null : String.valueOf(rawValue)));
+      }
+    }
+    return List.copyOf(variables);
+  }
+
+  private void validateReadOnlyRequest(CatalogReadRequest request) {
+    if (!request.sqlMode()) return;
+    String normalized = request.sql().trim();
+    if (normalized.endsWith(";")) {
+      normalized = normalized.substring(0, normalized.length() - 1).trim();
+    }
+    if (normalized.indexOf(';') >= 0 || !READ_ONLY_SELECT.matcher(normalized).matches()) {
+      throw new DataSourceException(
+          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
+          "数据预览仅允许执行单条 SELECT 查询");
+    }
   }
 
   private int connectionTimeoutSeconds() {
@@ -277,30 +333,6 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
     return requestBody;
   }
 
-  private void validateReadOnlyRequest(Map<String, Object> request) {
-    String readMode = optionalText(request, "read_mode", "readMode");
-    String tablePath = optionalText(request, "table_path", "tablePath", "table");
-    String query = optionalText(request, "query", "sql");
-    boolean sqlMode =
-        "sql".equalsIgnoreCase(readMode) || (!isBlank(query) && isBlank(tablePath));
-    if (!sqlMode) return;
-    if (isBlank(query)) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
-          "SQL 模式下 query 不能为空");
-    }
-
-    String normalized = query.trim();
-    if (normalized.endsWith(";")) {
-      normalized = normalized.substring(0, normalized.length() - 1).trim();
-    }
-    if (normalized.indexOf(';') >= 0 || !READ_ONLY_SELECT.matcher(normalized).matches()) {
-      throw new DataSourceException(
-          DataSourceErrorCode.INVALID_CONNECTION_PARAMS,
-          "数据预览仅允许执行单条 SELECT 查询");
-    }
-  }
-
   private String requiredText(Map<String, Object> request, String... keys) {
     String value = optionalText(request, keys);
     if (!isBlank(value)) return value;
@@ -310,11 +342,20 @@ public class DataSourceCatalogServiceImpl implements DataSourceCatalogService {
   }
 
   private String optionalText(Map<String, Object> request, String... keys) {
+    Object value = mapValue(request, keys);
+    return value == null || String.valueOf(value).trim().isEmpty()
+        ? null
+        : String.valueOf(value).trim();
+  }
+
+  private String mapText(Map<?, ?> request, String... keys) {
+    Object value = mapValue(request, keys);
+    return value == null ? null : String.valueOf(value).trim();
+  }
+
+  private Object mapValue(Map<?, ?> request, String... keys) {
     for (String key : keys) {
-      Object value = request.get(key);
-      if (value != null && !String.valueOf(value).trim().isEmpty()) {
-        return String.valueOf(value).trim();
-      }
+      if (request.containsKey(key)) return request.get(key);
     }
     return null;
   }

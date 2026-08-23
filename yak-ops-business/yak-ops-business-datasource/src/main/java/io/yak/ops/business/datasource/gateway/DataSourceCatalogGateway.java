@@ -1,17 +1,18 @@
 package io.yak.ops.business.datasource.gateway;
 
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
+import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTable;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTablePath;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTableQuery;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Business Datasource 对 Catalog 插件能力的 Port。
+ * Business Datasource 对 Catalog 物理能力的 Port。
  *
- * <p>这里的模型属于 Business Gateway Contract，不暴露 Datasource Plugin SPI Model。Phase 3 会继续把 Catalog
- * 的 Map 协议类型化并评估哪些模型应提升为正式 Catalog Domain Model。
+ * <p>Gateway 只接受 Business-owned typed catalog models；Plugin SPI 的 Map 协议和 metadata model 必须在 Adapter 内完成转换。
  */
 public interface DataSourceCatalogGateway {
 
@@ -22,30 +23,30 @@ public interface DataSourceCatalogGateway {
       String database,
       int timeoutSeconds);
 
-  List<Table> listTables(
+  List<CatalogTable> listTables(
       DataSourceDefinition dataSource,
-      TableQuery query,
+      CatalogTableQuery query,
       int timeoutSeconds);
 
-  List<Column> listColumns(
+  List<CatalogColumn> listColumns(
       DataSourceDefinition dataSource,
-      TablePath tablePath,
+      CatalogTablePath tablePath,
       int timeoutSeconds);
 
-  List<Column> describe(
+  List<CatalogColumn> describe(
       DataSourceDefinition dataSource,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int timeoutSeconds);
 
-  QueryResult preview(
+  CatalogQueryResult preview(
       DataSourceDefinition dataSource,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int limit,
       int timeoutSeconds);
 
   long count(
       DataSourceDefinition dataSource,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int timeoutSeconds);
 
   String buildSqlTemplate(
@@ -55,57 +56,6 @@ public interface DataSourceCatalogGateway {
 
   String resolveSql(
       DataSourceDefinition dataSource,
-      String sql,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int timeoutSeconds);
-
-  record TableQuery(String database, String schema, String keyword) {}
-
-  record TablePath(String database, String schema, String table) {}
-
-  record Table(
-      String database,
-      String schema,
-      String name,
-      String type,
-      String remarks) {}
-
-  record Column(
-      String name,
-      String typeName,
-      int jdbcType,
-      Integer size,
-      Integer scale,
-      boolean nullable,
-      int ordinalPosition,
-      boolean primaryKey,
-      String remarks) {}
-
-  record QueryColumn(
-      String title,
-      String dataIndex,
-      String key,
-      boolean ellipsis) {}
-
-  record QueryResult(
-      List<QueryColumn> columns,
-      List<Map<String, Object>> data,
-      long total) {
-
-    public QueryResult {
-      columns = columns == null ? List.of() : List.copyOf(columns);
-      if (data == null || data.isEmpty()) {
-        data = List.of();
-      } else {
-        List<Map<String, Object>> copied = new ArrayList<>(data.size());
-        for (Map<String, Object> row : data) {
-          copied.add(
-              row == null
-                  ? Map.of()
-                  : Collections.unmodifiableMap(new LinkedHashMap<>(row)));
-        }
-        data = Collections.unmodifiableList(copied);
-      }
-    }
-  }
 }

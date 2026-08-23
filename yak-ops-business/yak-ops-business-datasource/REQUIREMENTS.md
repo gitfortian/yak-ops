@@ -4,120 +4,132 @@
 
 ## 目标
 
-Datasource 提供 Yak Ops 的统一数据源控制面：注册和维护数据源配置、验证连接可用性、访问 Catalog 元数据，并向上层业务提供稳定的数据源引用和基础查询能力。
+Datasource 提供 Yak Ops 的统一数据源控制面：维护数据源配置、验证连接、访问 Catalog 元数据，并向数据开发、同步、任务等模块提供稳定的数据源引用和 SQL 执行能力。
 
 ## 核心能力
 
 - 创建、编辑、查询和删除数据源。
-- 支持数据源名称、类型、运行环境、备注和连接配置管理。
+- 管理名称、类型、运行环境、备注和连接配置。
 - 支持已保存数据源和未保存配置的连接测试。
-- 记录数据源最近一次连接测试结果：`UNKNOWN / CONNECTED / DISCONNECTED`。
+- 记录最近一次已保存配置的连接测试结果：`UNKNOWN / CONNECTED / DISCONNECTED`。
 - 提供数据库、Schema、表、字段等 Catalog 元数据访问能力。
-- 提供数据预览、数量统计和 SQL 模板等轻量读取能力。
+- 提供数据预览、数量统计、SQL 模板和 SQL 变量解析能力。
+- Catalog 业务内部使用明确的 typed request / metadata / result，不依赖隐式 Map key 扩展语义。
+- 提供统一 SQL Execution contract，支持单语句、多语句、事务、取消、超时和终态观测。
 - 通过 Datasource Plugin SPI 扩展不同数据库或数据源类型。
-- 对连接密码等 Secret 做合并、脱敏和安全输出。
-- 为数据开发、同步、任务等上层模块提供稳定的数据源引用。
+- 对连接 Secret 做合并、脱敏和安全输出。
 
 ## 关键业务行为
 
-### 创建数据源
+### 数据源生命周期
 
 ```text
 Create
-  -> validate name / type / environment / connection
-  -> DataSource aggregate
-  -> connection status = UNKNOWN
-  -> persist
-```
+  -> validate + normalize
+  -> DataSourceDefinition / ConnectionProfile
+  -> UNKNOWN
 
-新建数据源不会因为“配置可被解析”就自动标记为 `CONNECTED`；只有真实连接测试成功后才能进入 `CONNECTED`。
-
-### 编辑数据源
-
-```text
 Update
-  -> load current DataSource
-  -> data source type must remain unchanged
-  -> merge stored Secret when needed
-  -> replace connection profile / metadata
-  -> connection status = UNKNOWN
-  -> persist
+  -> dbType unchanged
+  -> merge Secret + replace ConnectionProfile
+  -> UNKNOWN
+
+Test saved datasource
+  -> success: CONNECTED
+  -> connectivity failure: DISCONNECTED
+
+Test unsaved configuration
+  -> validation only
+  -> no persisted state
 ```
 
-数据源类型创建后不可修改。连接配置发生编辑后，旧连接测试结果不再代表当前配置，因此必须回到 `UNKNOWN`。
+配置可解析不等于连接成功；连接配置变化后旧测试结果失效。
 
-### 连接测试
+### Catalog
 
 ```text
-Test saved datasource
-  -> load aggregate
-  -> execute plugin connection test
-  -> success: CONNECTED
-  -> failure: DISCONNECTED
+HTTP compatibility request
+  -> typed CatalogReadRequest
+  -> read-only validation when executing preview/count/describe SQL
+  -> DataSourceCatalogGateway
+  -> Plugin Adapter
 ```
 
-未保存配置的连接测试只验证输入，不产生持久化状态。
+- 表模式必须有 `table_path`；SQL 模式必须有 `query`。
+- 预览、统计和字段探测的 SQL 模式只允许单条只读 SELECT。
+- 现有 HTTP JSON 和 Plugin SPI Map 协议保持兼容，但 Map 不是新的业务扩展机制。
+
+### SQL Execution
+
+```text
+SqlExecutionRequest / SqlExecutionPlan   (yak-ops-core canonical contract)
+  -> policy validation
+  -> SqlExecutionAggregate lifecycle
+  -> SqlExecutionGateway
+  -> physical datasource session
+```
+
+- Runtime 不自行发明第二套 Request / Plan / Snapshot 真相。
+- 多语句边界由调用方显式提供，不按分号自动拆 SQL。
+- `SINGLE_TRANSACTION` 必须在同一物理 Session 中执行；不支持事务时快速失败。
+- Cancel 是 best-effort 物理动作，但生命周期必须最终收敛到明确终态。
+- Statement timeout 必须提升为 execution `TIMED_OUT`。
+- 终态至少包括 `SUCCEEDED / FAILED / CANCELLED / TIMED_OUT`。
 
 ## 安全要求
 
 - Secret 不得通过普通 DTO / VO、异常文本、`toString()` 或业务日志明文暴露。
 - HTTP 详情中的 JDBC 地址和连接 JSON 必须经过脱敏边界。
-- 数据源编辑时允许复用已保存 Secret，但不能把掩码字符串当成真实凭据覆盖原值。
-- Domain、Repository Contract 和测试夹具不得为了调试方便打印完整连接 JSON。
+- 编辑时掩码、空值或缺失 Secret 可以沿用已保存值，但掩码不得覆盖真实凭据。
+- Dataset / Data Service / Analysis 等只读调用方不得绕过 SQL Policy 执行写操作。
+- Catalog preview/count/describe 不得绕过只读检查。
 
 ## 模块边界
 
 本模块负责：
 
-- 数据源业务定义和生命周期规则；
-- 数据源持久化；
+- DataSource 聚合与持久化；
 - 连接测试编排；
-- Catalog / 轻量读取能力的业务入口；
-- Datasource Plugin 的发现和调用边界。
+- typed Catalog 子域和轻量读取入口；
+- SQL Execution 生命周期与 Datasource 物理执行适配；
+- Datasource Plugin 的发现、调用和反腐边界。
 
 本模块不负责：
 
-- 实时同步任务的定义、发布和运行状态；
-- Flink / Flink CDC 集群生命周期；
+- 实时同步任务定义、发布和 Flink 生命周期；
 - 任意 ETL / 工作流编排；
 - 数据血缘计算；
-- JDBC Driver 或第三方数据源服务的部署；
-- 把某个插件的私有参数升级为全局业务字段。
+- JDBC Driver 或第三方服务部署；
+- 把插件私有参数升级为全局业务字段。
 
 ## 兼容性要求
 
-当前阶段保持以下外部契约兼容：
+当前阶段保持：
 
 - REST API 路径和主要请求/响应结构；
-- `yak_ops_data_source` 现有物理表结构；
-- 现有 Flyway 历史；
-- Datasource Plugin SPI 的现有签名；
-- MySQL / PostgreSQL / Oracle / Doris 等已有插件实现。
+- `yak_ops_data_source` 表结构和 Flyway 历史；
+- Datasource Plugin SPI 现有签名；
+- MySQL / PostgreSQL / Oracle / Doris 等已有插件实现；
+- `yak-ops-core` SQL Execution 对外 contract。
 
-领域改造不得以 Big-Bang 方式同时修改 REST、DB 和 Plugin SPI。
+领域改造不得 Big-Bang 同时修改 REST、DB 和 Plugin SPI。
 
 ## 当前明确未解决
 
-以下能力需要后续阶段单独设计，不在普通 Phase 1 修改中顺手完成：
-
 ```text
-Business Domain 与 Datasource Plugin SPI 的 Gateway / Adapter 隔离
-Catalog Metadata 的完整业务领域模型
-SQL Execution 的领域模型与运行时拆分
 Plugin Capability / Descriptor 标准化
 Plugin API 中 VO 依赖清理
-Map<String, Object> Catalog 协议类型化
+PluginConfig compatibility bridge cleanup
+Plugin Catalog Map SPI 的最终类型化
 DataSourceDefinition 物理命名清理
 ```
 
 ## 需求变更规则
 
-如果 PR 引入本文件没有描述的新业务能力或改变已有业务行为：
+本文件未描述的新能力或行为变化统一报告：
 
 ```text
 Requirement Gap
 ```
 
 先确认需求并更新本文件，再实现代码。Reviewer / AI 不得自行补需求。
-
-本文件只维护**当前有效需求**，不要追加迭代历史。
