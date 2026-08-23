@@ -7,6 +7,7 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
+import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
@@ -62,7 +63,9 @@ public class OfflineScheduleHandler implements ScheduleHandler {
     }
 
     try {
-      OfflineJobExecution execution = orchestrator.execute(definitionId, "SCHEDULE", null, 1);
+      String triggerToken = LegacyBatchTriggerCompatibilityMapper.scheduleToken(
+          context.key().value(), context.scheduledFireTime());
+      OfflineJobExecution execution = orchestrator.execute(definitionId, triggerToken, null, 1);
       return ScheduleExecutionResult.accepted(
           execution.getId() == null ? null : String.valueOf(execution.getId()),
           "离线同步任务已提交 Link-Up 执行");
