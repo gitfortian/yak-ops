@@ -88,6 +88,6 @@ jobs:
         run: >-
           ./mvnw -B -ntp
           -pl "$DATASOURCE_MODULE"
-          -Dtest=DataSourceDomainArchitectureTest,DataSourceGatewayArchitectureTest,DataSourceLayeringConventionTest,DataSourceDefinitionTest,DataSourceRepositoryAdapterTest,DataSourceServiceImplTest,DataSourceCatalogServiceImplTest,DataSourceViewMapperTest,SpiDataSourcePluginGatewayTest,SpiDataSourceCatalogGatewayTest
+          -Dtest=DataSourceDomainArchitectureTest,DataSourceGatewayArchitectureTest,DataSourceLayeringConventionTest,DataSourceDefinitionTest,DataSourceRepositoryAdapterTest,DataSourceServiceImplTest,DataSourceCatalogServiceImplTest,DataSourceViewMapperTest,SpiDataSourcePluginGatewayTest,SpiDataSourceCatalogGatewayTest,DefaultSqlExecutionRuntimeTest,DefaultSqlExecutionTransactionCancellationTest,ObservableSqlExecutionRuntimeTest,SqlExecutionAggregateTest,SpiSqlExecutionGatewayTest
           -Dsurefire.failIfNoSpecifiedTests=false
           test
