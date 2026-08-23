@@ -3,15 +3,19 @@ package io.yak.ops.plugin.database.jdbc;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormSectionVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.RuleVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.VisibilityConditionVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import io.yak.ops.spi.datasource.DataSourceCapability;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
 import io.yak.ops.spi.datasource.DataSourceConnection;
 import io.yak.ops.spi.datasource.DataSourcePlugin;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.ConnectionForm;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FieldType;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormField;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormRule;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormSection;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.VisibilityCondition;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.VisibilityOperator;
 import io.yak.ops.spi.datasource.DataSourcePluginException;
 import io.yak.ops.spi.datasource.DataSourcePluginException.Operation;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlExecutor;
@@ -19,21 +23,23 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
-/** JDBC 数据源插件基座，统一负责参数解析、表单配置、连接测试、SSH 隧道和 SQL 执行。 */
+/** JDBC datasource plugin base: descriptor, connection parsing, connectivity, SSH and SQL. */
 public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   @Override
-  public DataSourcePluginConfigVO pluginConfig() {
-    List<FormFieldVO> connectionFields = new ArrayList<>();
+  public DataSourcePluginDescriptor descriptor() {
+    List<FormField> connectionFields = new ArrayList<>();
     connectionFields.add(
         field(
             "host",
@@ -91,7 +97,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             null,
             Collections.emptyList()));
 
-    List<FormFieldVO> sshFields = new ArrayList<>();
+    List<FormField> sshFields = new ArrayList<>();
     sshFields.add(
         field(
             "sshTunnel",
@@ -101,7 +107,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             sshDefaultValue(),
             Collections.emptyList()));
 
-    List<FormFieldVO> driverFields = new ArrayList<>();
+    List<FormField> driverFields = new ArrayList<>();
     driverFields.add(
         field(
             "driverClassName",
@@ -111,8 +117,8 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             defaultDriverClassName(),
             required("请输入 JDBC 驱动类")));
 
-    List<FormFieldVO> advancedFields = new ArrayList<>();
-    FormFieldVO propertiesField =
+    List<FormField> advancedFields = new ArrayList<>();
+    FormField propertiesField =
         field(
             "properties",
             "扩展属性",
@@ -120,61 +126,54 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
             "可选；请输入 JSON 对象，例如 {\"useSSL\":\"false\"}",
             null,
             Collections.emptyList());
-    propertiesField.setDependsOn(Collections.singletonList("driverClassName"));
-    propertiesField.setVisibleWhen(
-        Collections.singletonList(
-            VisibilityConditionVO.builder().operator("TRUTHY").build()));
+    propertiesField =
+        propertiesField
+            .withDependsOn(Collections.singletonList("driverClassName"))
+            .withVisibleWhen(
+                Collections.singletonList(
+                    new VisibilityCondition(null, VisibilityOperator.TRUTHY, null, List.of())));
     advancedFields.add(propertiesField);
     appendFormFields(advancedFields);
 
-    List<FormSectionVO> sections = new ArrayList<>();
-    sections.add(
-        section(
-            "connection",
-            "连接参数",
-            "",
-            false,
-            true,
-            connectionFields));
-    sections.add(
-        section(
-            "ssh",
-            "SSH 隧道",
-            "",
-            true,
-            false,
-            sshFields));
-    sections.add(
-        section(
-            "driver",
-            "驱动配置",
-            "",
-            true,
-            true,
-            driverFields));
+    List<FormSection> sections = new ArrayList<>();
+    sections.add(section("connection", "连接参数", "", false, true, connectionFields));
+    sections.add(section("ssh", "SSH 隧道", "", true, false, sshFields));
+    sections.add(section("driver", "驱动配置", "", true, true, driverFields));
     if (!advancedFields.isEmpty()) {
-      sections.add(
-          section(
-              "advanced",
-              "高级配置",
-              "",
-              true,
-              false,
-              advancedFields));
+      sections.add(section("advanced", "高级配置", "", true, false, advancedFields));
     }
 
-    // 旧版 formFields 不下发 SSH 对象字段，避免旧前端把复合配置误渲染为普通 Input。
-    List<FormFieldVO> fields = new ArrayList<>();
+    // Legacy flat fields intentionally omit the composite SSH field.
+    List<FormField> fields = new ArrayList<>();
     fields.addAll(connectionFields);
     fields.addAll(driverFields);
     fields.addAll(advancedFields);
 
-    return DataSourcePluginConfigVO.builder()
-        .pluginType(dbType().name())
-        .sections(sections)
-        .formFields(fields)
-        .installRequired(false)
-        .build();
+    DataSourcePluginDescriptor descriptor =
+        new DataSourcePluginDescriptor(
+            dbType(),
+            dbType().getDisplayName(),
+            DataSourcePluginDescriptor.CURRENT_API_VERSION,
+            capabilities(),
+            new ConnectionForm(sections, fields),
+            false,
+            null);
+    return JdbcUrlSchemaSupport.apply(descriptor, jdbcUrlTemplate());
+  }
+
+  protected Set<DataSourceCapability> capabilities() {
+    return EnumSet.of(
+        DataSourceCapability.CONNECTION_TEST,
+        DataSourceCapability.CATALOG_METADATA,
+        DataSourceCapability.CATALOG_READ,
+        DataSourceCapability.SQL_EXECUTION,
+        DataSourceCapability.TRANSACTIONS,
+        DataSourceCapability.SSH_TUNNEL);
+  }
+
+  /** JDBC URL linkage template used by the standard form component. */
+  protected String jdbcUrlTemplate() {
+    return null;
   }
 
   @Override
@@ -194,9 +193,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
       String username = firstText(root, "username", "user");
       String password = firstText(root, "password");
       String driver =
-          defaultIfBlank(
-              firstText(root, "driverClassName", "driver"),
-              defaultDriverClassName());
+          defaultIfBlank(firstText(root, "driverClassName", "driver"), defaultDriverClassName());
       SshTunnelConfig sshTunnel = parseSshTunnel(root);
 
       if (isBlank(username)) {
@@ -204,8 +201,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
       }
       if (sshTunnel.enabled() && !isBlank(explicitUrl)) {
         throw parameterError(
-            "启用 SSH 隧道时请使用 host、port、database 参数，不支持自定义 JDBC 地址",
-            null);
+            "启用 SSH 隧道时请使用 host、port、database 参数，不支持自定义 JDBC 地址", null);
       }
 
       String jdbcUrl = explicitUrl;
@@ -281,10 +277,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
           "数据库驱动未安装：" + jdbcConnection.driverClassName(),
           exception);
     } catch (Exception exception) {
-      throw new DataSourcePluginException(
-          Operation.CONNECTIVITY,
-          safeMessage(exception),
-          exception);
+      throw new DataSourcePluginException(Operation.CONNECTIVITY, safeMessage(exception), exception);
     }
   }
 
@@ -295,8 +288,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
   @Override
   public DataSourceSqlExecutor createSqlExecutor(
-      DataSourceConnection connection,
-      int connectionTimeoutSeconds) {
+      DataSourceConnection connection, int connectionTimeoutSeconds) {
     return new JdbcDataSourceSqlExecutor(
         requireJdbcConnection(connection),
         Math.max(1, connectionTimeoutSeconds),
@@ -304,8 +296,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
   }
 
   protected DataSourceCatalog createJdbcCatalog(
-      JdbcConnectionProperties connection,
-      int timeoutSeconds) {
+      JdbcConnectionProperties connection, int timeoutSeconds) {
     return new GenericJdbcCatalog(connection, timeoutSeconds) {
       @Override
       protected Connection openConnection() throws Exception {
@@ -315,38 +306,24 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
   }
 
   protected Connection openJdbcConnection(
-      JdbcConnectionProperties connection,
-      int timeoutSeconds)
-      throws Exception {
+      JdbcConnectionProperties connection, int timeoutSeconds) throws Exception {
     Class.forName(connection.driverClassName());
     int safeTimeout = Math.max(1, timeoutSeconds);
     DriverManager.setLoginTimeout(safeTimeout);
 
     SshTunnelConfig sshTunnel = connection.sshTunnel();
     if (!sshTunnel.enabled()) {
-      return DriverManager.getConnection(
-          connection.jdbcUrl(),
-          connectionProperties(connection));
+      return DriverManager.getConnection(connection.jdbcUrl(), connectionProperties(connection));
     }
 
     SshTunnel tunnel =
-        SshTunnel.open(
-            sshTunnel,
-            connection.host(),
-            connection.port(),
-            safeTimeout);
+        SshTunnel.open(sshTunnel, connection.host(), connection.port(), safeTimeout);
     try {
       JsonNode normalized = OBJECT_MAPPER.readTree(connection.normalizedJson());
       String tunneledJdbcUrl =
-          buildJdbcUrl(
-              "127.0.0.1",
-              tunnel.localPort(),
-              connection.database(),
-              normalized);
+          buildJdbcUrl("127.0.0.1", tunnel.localPort(), connection.database(), normalized);
       Connection opened =
-          DriverManager.getConnection(
-              tunneledJdbcUrl,
-              connectionProperties(connection));
+          DriverManager.getConnection(tunneledJdbcUrl, connectionProperties(connection));
       return SshTunneledConnection.wrap(opened, tunnel);
     } catch (Exception exception) {
       tunnel.close();
@@ -359,20 +336,15 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
   protected abstract String defaultDriverClassName();
 
   protected abstract String buildJdbcUrl(
-      String host,
-      int port,
-      String database,
-      JsonNode connectionJson);
+      String host, int port, String database, JsonNode connectionJson);
 
   protected String databaseLabel() {
     return "数据库";
   }
 
-  protected void appendFormFields(List<FormFieldVO> fields) {
-  }
+  protected void appendFormFields(List<FormField> fields) {}
 
-  protected void appendNormalizedFields(JsonNode source, ObjectNode normalized) {
-  }
+  protected void appendNormalizedFields(JsonNode source, ObjectNode normalized) {}
 
   protected String inferDatabase(String jdbcUrl) {
     if (isBlank(jdbcUrl)) {
@@ -390,10 +362,9 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
   }
 
   protected JdbcConnectionProperties requireJdbcConnection(DataSourceConnection connection) {
-    if (!(connection instanceof JdbcConnectionProperties)) {
+    if (!(connection instanceof JdbcConnectionProperties jdbcConnection)) {
       throw parameterError("连接参数与插件类型不匹配", null);
     }
-    JdbcConnectionProperties jdbcConnection = (JdbcConnectionProperties) connection;
     if (connection.dbType() != dbType()) {
       throw parameterError("连接参数与插件类型不匹配", null);
     }
@@ -417,53 +388,46 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
     if (isBlank(message)) {
       return throwable == null ? "未知错误" : throwable.getClass().getSimpleName();
     }
-    String sanitized =
-        message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
+    String sanitized = message.replaceAll("(?i)(password|pwd)=([^;&\\s]+)", "$1=******");
     return sanitized.length() > 300 ? sanitized.substring(0, 300) : sanitized;
   }
 
-  protected FormFieldVO field(
+  protected FormField field(
       String key,
       String label,
       String type,
       String placeholder,
       Object defaultValue,
-      List<RuleVO> rules) {
-    return FormFieldVO.builder()
-        .key(key)
-        .label(label)
-        .type(type)
-        .placeholder(placeholder)
-        .defaultValue(defaultValue)
-        .rules(rules)
-        .build();
+      List<FormRule> rules) {
+    return new FormField(
+        key,
+        label,
+        FieldType.valueOf(type),
+        placeholder,
+        defaultValue,
+        List.of(),
+        rules,
+        List.of(),
+        List.of(),
+        null);
   }
 
-  protected FormSectionVO section(
+  protected FormSection section(
       String key,
       String title,
       String description,
       boolean collapsible,
       boolean defaultExpanded,
-      List<FormFieldVO> fields) {
-    return FormSectionVO.builder()
-        .key(key)
-        .title(title)
-        .description(description)
-        .collapsible(collapsible)
-        .defaultExpanded(defaultExpanded)
-        .fields(fields)
-        .build();
+      List<FormField> fields) {
+    return new FormSection(key, title, description, collapsible, defaultExpanded, fields);
   }
 
-  protected List<RuleVO> required(String message) {
-    return Collections.singletonList(
-        RuleVO.builder().required(true).message(message).build());
+  protected List<FormRule> required(String message) {
+    return Collections.singletonList(new FormRule(true, null, null, null, message));
   }
 
-  protected List<RuleVO> rangeRule(int min, int max, String message) {
-    return Collections.singletonList(
-        RuleVO.builder().required(true).min(min).max(max).message(message).build());
+  protected List<FormRule> rangeRule(int min, int max, String message) {
+    return Collections.singletonList(new FormRule(true, null, min, max, message));
   }
 
   private Map<String, Object> sshDefaultValue() {
@@ -508,8 +472,7 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
     String sshPassword = firstText(node, "password");
     String privateKey = firstText(node, "privateKey", "privateKeyContent");
     String passphrase = firstText(node, "passphrase", "privateKeyPassphrase");
-    boolean strictHostKeyChecking =
-        booleanValue(node, false, "strictHostKeyChecking");
+    boolean strictHostKeyChecking = booleanValue(node, false, "strictHostKeyChecking");
     String knownHosts = firstText(node, "knownHosts", "knownHostsContent");
 
     if (isBlank(host)) {
