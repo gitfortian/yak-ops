@@ -5,7 +5,7 @@ import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** 离线同步任务实例数据访问接口，只暴露持久化模型和 DAO 查询条件。 */
+/** ExecutionAttempt 持久化 DAO；不提供 Task 级 runtime truth 查询。 */
 public interface OfflineJobExecutionDao {
 
   OfflineJobExecutionPO selectById(Long id);
@@ -18,12 +18,10 @@ public interface OfflineJobExecutionDao {
 
   boolean updateById(OfflineJobExecutionPO executionPO);
 
-  boolean bindBatch(Long executionId, Long batchId, LocalDateTime updateTime);
-
-  boolean hasActiveExecution(Long definitionId);
-
+  /** 只扫描绑定 Batch 的活动 Attempt。 */
   List<OfflineJobExecutionPO> selectActiveExecutions(int limit);
 
+  /** 只扫描绑定 Batch 的 Retry candidate。 */
   List<OfflineJobExecutionPO> selectRetryCandidates(LocalDateTime now, int limit);
 
   /** 原子保留一次 FAILED Attempt 的 Retry 创建权。 */
