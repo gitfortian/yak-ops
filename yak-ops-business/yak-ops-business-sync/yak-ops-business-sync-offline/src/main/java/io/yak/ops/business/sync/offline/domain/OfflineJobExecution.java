@@ -6,7 +6,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** 离线同步执行实例领域模型。 */
+/**
+ * ExecutionAttempt 的持久化兼容视图。
+ *
+ * <p>Wave 6 约束：新运行链必须绑定 {@code batchId}；{@code batchId == null} 仅代表 Wave 1 前历史记录，
+ * 只能查询，不参与 Retry、Cancel、Reconcile 或 Task runtime projection。
+ *
+ * <p>{@code definitionVersion/configDigest/definitionSnapshotJson/submittedConfig} 继续写入是为了兼容既有表结构、
+ * 历史接口与审计，不是新的运行真相。冻结执行证据只从 BatchExecution.ExecutionSnapshot 读取。
+ */
 @Data
 @Builder
 @NoArgsConstructor
