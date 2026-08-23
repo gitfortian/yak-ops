@@ -1,12 +1,10 @@
 package io.yak.ops.plugin.database.jdbc.postgresql;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
-import io.yak.ops.plugin.database.jdbc.JdbcUrlSchemaSupport;
 
-/** PostgreSQL JDBC 数据源插件。 */
+/** PostgreSQL JDBC datasource plugin. */
 public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
   @Override
@@ -15,10 +13,8 @@ public final class PostgreSqlDataSourcePlugin extends AbstractJdbcDataSourcePlug
   }
 
   @Override
-  public DataSourcePluginConfigVO pluginConfig() {
-    return JdbcUrlSchemaSupport.apply(
-        super.pluginConfig(),
-        "jdbc:postgresql://{host}:{port}/{database}");
+  protected String jdbcUrlTemplate() {
+    return "jdbc:postgresql://{host}:{port}/{database}";
   }
 
   @Override
