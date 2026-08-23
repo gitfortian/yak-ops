@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.business.datasource.gateway.adapter.SpiSqlExecutionGateway;
 import io.yak.ops.core.execution.sql.SqlExecutionCaller;
 import io.yak.ops.core.execution.sql.SqlExecutionContext;
 import io.yak.ops.core.execution.sql.SqlExecutionPlan;
@@ -26,16 +27,19 @@ class DefaultSqlExecutionTransactionCancellationTest {
   @Test
   void rollsBackSingleTransactionWhenActiveStatementIsCancelled() throws Exception {
     BlockingTransactionExecutor executor = new BlockingTransactionExecutor();
-    DefaultSqlExecutionRuntime runtime = new DefaultSqlExecutionRuntime(
-        dataSourceId -> executor,
-        new DefaultSqlExecutionPolicy());
-    SqlExecutionSnapshot started = runtime.start(new SqlExecutionPlan(
-        "42",
-        List.of(
-            new SqlStatementRequest("update orders set status = 'RUNNING'", 10, 30),
-            new SqlStatementRequest("insert into audit_log(id) values (1)", 10, 30)),
-        SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-cancel"),
-        SqlTransactionMode.SINGLE_TRANSACTION));
+    DefaultSqlExecutionRuntime runtime =
+        new DefaultSqlExecutionRuntime(
+            new SpiSqlExecutionGateway(dataSourceId -> executor),
+            new DefaultSqlExecutionPolicy());
+    SqlExecutionSnapshot started =
+        runtime.start(
+            new SqlExecutionPlan(
+                "42",
+                List.of(
+                    new SqlStatementRequest("update orders set status = 'RUNNING'", 10, 30),
+                    new SqlStatementRequest("insert into audit_log(id) values (1)", 10, 30)),
+                SqlExecutionContext.of(SqlExecutionCaller.SQL_TASK, "task-cancel"),
+                SqlTransactionMode.SINGLE_TRANSACTION));
 
     assertTrue(executor.started.await(2, TimeUnit.SECONDS));
     assertTrue(runtime.cancel(started.executionId()));
