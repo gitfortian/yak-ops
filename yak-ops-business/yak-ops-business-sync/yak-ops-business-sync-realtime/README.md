@@ -1,9 +1,8 @@
 # Realtime Sync
 
-> **开发 / AI 修改本模块前必读：[`DOMAIN.md`](./DOMAIN.md)**  
-> Realtime Sync 的领域设计不是从现有 Flink/SSH 实现反推出来的。任何新需求必须先做 Domain Impact Analysis；无法映射到既有领域模型时标记为 `Domain Gap`，先讨论模型，不直接新增 `syncType / sceneType / *Spec / *Task`。
->
-> 完整设计：`docs/realtime-sync/domain/`。
+> 开发 / AI 修改本模块前：先读 [`REQUIREMENTS.md`](./REQUIREMENTS.md) 和 [`DOMAIN.md`](./DOMAIN.md)。  
+> Review 本模块代码：按 [`REVIEW.md`](./REVIEW.md) 执行。  
+> 当前领域模型总览：`docs/realtime-sync/domain/`。
 
 实时同步控制面以 **Compute Environment** 作为唯一运行时配置来源。任务在创建时必须绑定一个已启用的运行环境；每次部署都会保存不可变的运行环境快照，后续修改默认环境或环境配置不会把历史部署重定向到其他 Flink 集群。
 

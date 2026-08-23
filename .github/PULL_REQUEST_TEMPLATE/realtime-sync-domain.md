@@ -1,8 +1,10 @@
 # Realtime Sync Change
 
+> 开发前读 `REQUIREMENTS.md + DOMAIN.md`；Review 按 `REVIEW.md`。
+
 ## Summary
 
-<!-- 这次改什么？ -->
+<!-- 这次改什么？是否属于 REQUIREMENTS.md 已有能力？ -->
 
 ## Domain Impact Analysis
 

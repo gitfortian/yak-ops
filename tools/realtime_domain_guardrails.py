@@ -175,9 +175,24 @@ def check_semantic_names(g: Guard) -> None:
 
 
 def check_docs(g: Guard) -> None:
+    requirements = g.read(MODULE / "REQUIREMENTS.md")
     contract = g.read(MODULE / "DOMAIN.md")
+    review = g.read(MODULE / "REVIEW.md")
     overview = g.read(DOC_DIR / "README.md")
     decisions = g.read(DOC_DIR / "DECISIONS.md")
+
+    for name, text, limit in (
+        ("REQUIREMENTS.md", requirements, 150),
+        ("DOMAIN.md", contract, 180),
+        ("REVIEW.md", review, 200),
+    ):
+        g.check(
+            len(text.splitlines()) <= limit,
+            f"{name} exceeds {limit} lines; keep module contracts concise and move detail to code/tests/Git history",
+        )
+
+    for phrase in ("核心能力", "模块边界", "Requirement Gap"):
+        g.check(phrase in requirements, f"REQUIREMENTS.md lost required phrase: {phrase}")
 
     for phrase in (
         "RealtimeSyncTask",
@@ -187,6 +202,16 @@ def check_docs(g: Guard) -> None:
         "Domain Compliance Report",
     ):
         g.check(phrase in contract, f"DOMAIN.md lost mandatory phrase: {phrase}")
+
+    for phrase in (
+        "Requirement Gap",
+        "Domain Gap",
+        "P0 Blocker",
+        "P1 Must Fix",
+        "Conclusion: PASS | CHANGES_REQUIRED",
+        "Missing Tests",
+    ):
+        g.check(phrase in review, f"REVIEW.md lost review protocol phrase: {phrase}")
 
     g.check("历史设计过程看 Git / PR" in overview, "README.md must describe current model, not stage history")
     g.check("文档保持小" in decisions, "DECISIONS.md must preserve the documentation-budget decision")
