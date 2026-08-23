@@ -12,10 +12,14 @@ Realtime Sync 是 Yak Ops 的持续数据同步控制面，负责定义同步任
 | --- | --- |
 | [`REQUIREMENTS.md`](./REQUIREMENTS.md) | 模块需要什么 |
 | [`DOMAIN.md`](./DOMAIN.md) | 哪些领域规则不能违反 |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 代码要收敛到什么边界、角色如何协作 |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 子系统、truth ownership 与角色如何协作 |
+| [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package 可以依赖谁、跨子系统走哪条 corridor |
+| [`CODE_STYLE.md`](./CODE_STYLE.md) | 类、方法、Spring stereotype 与重构按什么风格写 |
 | [`REVIEW.md`](./REVIEW.md) | PR 按什么标准判卷 |
 
-当前 `service/` package 与职责较宽的 `RealtimeJobService` 属于待迁移工程结构。后续重构以 `ARCHITECTURE.md` 为目标，但不得借结构调整改变现有 REST / DB / Domain runtime behavior。
+当前 production 已完成 Definition / Execution / Reconcile / Query / Observability / Environment 子系统收敛，旧 `service/` 业务大桶已退休。`RealtimeArchitectureTest` 保护角色边界，`RealtimeSyncDependencyBoundaryTest` 扫描真实源码 import，保护无环依赖图、窄 corridor 与稳定 Application Facade。
+
+结构调整不得借机改变现有 REST / DB / Domain runtime behavior；真正的领域或接口变化必须单独评审。
 
 ## Core Model
 
@@ -46,7 +50,7 @@ SyncExecution               = execution lifecycle truth
 RuntimeEnvironmentSnapshot  = execution-time environment truth
 Runtime Identity            = external recovery identity
 Task latest/last-*          = projection / compatibility only
-Flink Job                    = external runtime evidence
+Flink Job                   = external runtime evidence
 ```
 
 运行状态不能重新回到 Task compatibility 字段；`UNKNOWN / CONFLICT` 不能当成 FAILED 猜测处理，必须先 Reconcile。
@@ -87,18 +91,18 @@ db/migration/yak-realtime-sync/V1__create_realtime_sync.sql
 - 未绑定运行环境的实时任务；
 - 长期持久化的 Pipeline YAML。
 
-Pipeline YAML 只在发布/启动时根据任务 Spec 编译，并在提交边界短暂存在。数据库保存结构化 Spec、摘要、部署环境快照和运行标识，不保存带凭据的提交 YAML。
+Pipeline YAML 只在发布/启动时根据任务 Spec 编译，并在提交边界短暂存在。数据库保存结构化 Spec、摘要、部署环境快照和运行标识，不保存带敏感连接信息的提交 YAML。
 
 ## SSH Mode
 
-推荐使用 OpenSSH key 或 ssh-agent，Yak Ops 不保存 SSH 登录密码。SSH 用户不需要 root 权限，但至少需要：
+推荐使用 OpenSSH key 或 ssh-agent。SSH 用户不需要 root 权限，但至少需要：
 
 - 能执行 `${flink-cdc-home}/bin/flink-cdc.sh`；
 - 能读取 Flink CDC connector 和 Flink 安装目录；
 - 能在远端 `${TMPDIR:-/tmp}` 创建临时文件；
 - 能从 Linux 执行节点访问运行环境中配置的 Flink REST 地址（或 `remoteRestAddress/remoteRestPort`）。
 
-Yak Ops 使用 `BatchMode=yes`，因此任何需要交互输入密码、验证码或首次确认 host key 的 SSH 登录都会失败。
+Yak Ops 使用 `BatchMode=yes`，因此需要交互输入的 SSH 登录流程不属于当前支持范围。
 
 典型链路：
 
@@ -112,7 +116,7 @@ Windows / Yak Ops
 
 ## Pipeline YAML Security Boundary
 
-SSH 模式不会在 Yak Ops 本地创建包含数据源密码的 Pipeline YAML 文件：
+SSH 模式不会在 Yak Ops 本地长期保存提交期 Pipeline YAML：
 
 ```text
 Yak Ops memory Pipeline YAML
@@ -124,7 +128,7 @@ Yak Ops memory Pipeline YAML
 
 LOCAL 模式只在应用工作目录创建提交期临时 YAML，提交结束后立即删除。两种模式都只长期保留脱敏后的提交 stdout/stderr。
 
-Credential 只允许在提交边界短暂解析和使用；不得长期进入 SyncDefinition、DefinitionVersion、RuntimeEnvironmentSnapshot 或日志。
+敏感连接配置只允许在提交边界短暂解析和使用；不得长期进入 SyncDefinition、DefinitionVersion、RuntimeEnvironmentSnapshot 或日志。
 
 ## Runtime Identity And Recovery
 
@@ -157,7 +161,7 @@ Observability 属于 read side：可以组合本地持久化与 Flink REST 事�
 - 启动、扩缩容或管理 Flink Cluster 生命周期；
 - SSH 隧道代理 Flink REST；
 - Runtime Agent / 常驻远端进程；
-- SSH 密码托管；
+- 交互式远端凭据托管；
 - JobManager/TaskManager 日志文件通过 SSH 下载；
 - 通用工作流编排；
 - 通用 ETL / 任意复杂转换引擎；
@@ -171,9 +175,9 @@ Observability 属于 read side：可以组合本地持久化与 Flink REST 事�
 新增或移动代码前至少回答：
 
 1. 属于 Definition、Execution、Reconcile、Observability、Environment、Engine 还是 Persistence？
-2. 是什么 role？
+2. 是什么 role，是否符合 `CODE_STYLE.md`？
 3. 谁拥有它读写的 runtime truth？
-4. 允许从哪个 Facade / Gateway 进入？
-5. 哪个测试证明改动没有破坏现有 contract？
+4. 新 import 是否符合 `DEPENDENCIES.md`，跨子系统是否走声明过的 corridor？
+5. 哪个 behavior test 与 architecture test 证明改动没有破坏现有 contract？
 
-答不清楚时，先看 `DOMAIN.md + ARCHITECTURE.md`，不要创建新的 `Common / Helper / Utils` 大桶。
+答不清楚时，不要创建新的 `service / common / helper / utils` 业务大桶，也不要通过扩大 architecture-test 白名单绕过边界设计。
