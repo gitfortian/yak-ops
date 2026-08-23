@@ -37,6 +37,7 @@ public class OfflineExecutionClaimService {
   private final OfflineJobExecutionRepository executionRepository;
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineScheduleRepository scheduleRepository;
+  private final OfflineBatchRuntimeService batchRuntimeService;
   private final OfflineSyncProperties properties;
 
   public OfflineExecutionClaimService(
@@ -45,12 +46,14 @@ public class OfflineExecutionClaimService {
       OfflineJobExecutionRepository executionRepository,
       OfflineBatchExecutionRepository batchRepository,
       OfflineScheduleRepository scheduleRepository,
+      OfflineBatchRuntimeService batchRuntimeService,
       OfflineSyncProperties properties) {
     this.definitionService = definitionService;
     this.definitionRepository = definitionRepository;
     this.executionRepository = executionRepository;
     this.batchRepository = batchRepository;
     this.scheduleRepository = scheduleRepository;
+    this.batchRuntimeService = batchRuntimeService;
     this.properties = properties;
   }
 
@@ -194,6 +197,7 @@ public class OfflineExecutionClaimService {
         .findFirst()
         .orElse(null);
     if (existingNext != null) {
+      batchRuntimeService.refreshBatch(batchId);
       return new ClaimResult(null, frozenLogicalJobSpec(attempts), existingNext, true);
     }
 
@@ -245,6 +249,7 @@ public class OfflineExecutionClaimService {
     if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建 Retry Attempt 失败");
     }
+    batchRuntimeService.refreshBatch(batchId);
     return new ClaimResult(null, logicalJobSpec, execution, false);
   }
 
@@ -257,8 +262,8 @@ public class OfflineExecutionClaimService {
       Mapping trigger,
       String idempotencyKey) {
     Long definitionId = definition.getId();
-    if (executionRepository.hasActiveExecution(definitionId)) {
-      throw new IllegalStateException("任务已有运行中的执行实例，不能重复提交");
+    if (batchRuntimeService.hasOccupyingBatch(definitionId)) {
+      throw new IllegalStateException("任务已有运行中的 BatchExecution，不能重复提交");
     }
 
     String normalizedIdempotencyKey =
@@ -300,6 +305,7 @@ public class OfflineExecutionClaimService {
     if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建离线同步执行实例失败");
     }
+    batchRuntimeService.refreshBatch(batchId);
     return new ClaimResult(definition, logicalJobSpecJson, execution, false);
   }
 

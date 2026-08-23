@@ -9,6 +9,7 @@ import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
@@ -23,6 +24,8 @@ import io.yak.ops.business.sync.offline.service.OfflineExecutionClaimService.Cla
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -37,6 +40,7 @@ public class OfflineExecutionOrchestrator {
   private final OfflineJobDefinitionRepository definitionRepository;
   private final OfflineJobExecutionRepository executionRepository;
   private final OfflineBatchExecutionRepository batchRepository;
+  private final OfflineBatchRuntimeService batchRuntimeService;
   private final OfflineExecutionEventRepository eventRepository;
   private final LinkUpClient linkUpClient;
   private final ObjectMapper objectMapper;
@@ -47,6 +51,7 @@ public class OfflineExecutionOrchestrator {
       OfflineJobDefinitionRepository definitionRepository,
       OfflineJobExecutionRepository executionRepository,
       OfflineBatchExecutionRepository batchRepository,
+      OfflineBatchRuntimeService batchRuntimeService,
       OfflineExecutionEventRepository eventRepository,
       LinkUpClient linkUpClient,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
@@ -55,6 +60,7 @@ public class OfflineExecutionOrchestrator {
     this.definitionRepository = definitionRepository;
     this.executionRepository = executionRepository;
     this.batchRepository = batchRepository;
+    this.batchRuntimeService = batchRuntimeService;
     this.eventRepository = eventRepository;
     this.linkUpClient = linkUpClient;
     this.objectMapper = objectMapper;
@@ -119,7 +125,7 @@ public class OfflineExecutionOrchestrator {
       LinkUpNodeResponse node = linkUpClient.node();
       execution.setWorkerInstanceId(node.getInstanceId());
       execution.setUpdateTime(LocalDateTime.now());
-      executionRepository.update(execution);
+      batchRuntimeService.persistAttempt(execution);
 
       JsonNode jobSpec = readJobSpec(resolvedExecutionJobSpec);
       transition(
@@ -145,14 +151,19 @@ public class OfflineExecutionOrchestrator {
       throw exception;
     } catch (LinkUpTransportException exception) {
       if (exception.isUncertain()) {
+        String previous = execution.getStatus();
+        execution.setStatus(OfflineExecutionStatus.UNKNOWN.name());
         execution.setErrorMessage(exception.getMessage());
+        execution.setNextRetryTime(null);
+        execution.setEndTime(null);
         execution.setLastSyncTime(LocalDateTime.now());
         execution.setUpdateTime(LocalDateTime.now());
-        executionRepository.update(execution);
+        batchRuntimeService.persistAttempt(execution);
+        projectTaskLastState(execution, OfflineExecutionStatus.UNKNOWN.name());
         record(
             execution,
-            execution.getStatus(),
-            execution.getStatus(),
+            previous,
+            OfflineExecutionStatus.UNKNOWN.name(),
             "SUBMIT_UNCERTAIN",
             exception.getMessage(),
             null);
@@ -182,14 +193,34 @@ public class OfflineExecutionOrchestrator {
         definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));
   }
 
+  /** Task 级停止命令从 Batch runtime truth 选择 latest Attempt，不读取 Task.lastExecutionId。 */
+  public OfflineJobExecution cancelLatestBatch(Long definitionId) {
+    BatchExecution batch = batchRuntimeService.requireLatestOccupyingBatch(definitionId);
+    if (batch.status() == BatchStatus.WAITING_RETRY) {
+      OfflineJobExecution latest = batchRuntimeService.cancelWaitingRetry(batch);
+      projectTaskLastState(latest, BatchStatus.CANCELED.name());
+      record(
+          latest,
+          latest.getStatus(),
+          latest.getStatus(),
+          "BATCH_CANCELLED_WAITING_RETRY",
+          "已取消 Batch 的 Retry 等待，不再创建新的 Attempt",
+          null);
+      return latest;
+    }
+    OfflineJobExecution latest = batchRuntimeService.requireLatestAttempt(batch);
+    return cancel(latest.getId());
+  }
+
   public OfflineJobExecution cancel(Long id) {
     OfflineJobExecution execution = require(id);
+    ensureLatestAttemptForCancel(execution);
     if (!OfflineExecutionStatus.isActive(execution.getStatus())) {
       throw new IllegalStateException("当前执行实例已结束，无需停止");
     }
     execution.setCancellationRequested(true);
     execution.setUpdateTime(LocalDateTime.now());
-    executionRepository.update(execution);
+    batchRuntimeService.persistAttempt(execution);
     record(
         execution,
         execution.getStatus(),
@@ -231,8 +262,8 @@ public class OfflineExecutionOrchestrator {
     execution.setLastSyncTime(LocalDateTime.now());
     execution.setUpdateTime(LocalDateTime.now());
     configureRetry(execution, next, retryable(response, next));
-    executionRepository.update(execution);
-    updateDefinition(execution, next);
+    batchRuntimeService.persistAttempt(execution);
+    projectTaskLastState(execution, next.name());
 
     if (!next.name().equals(previous)) {
       record(
@@ -285,8 +316,8 @@ public class OfflineExecutionOrchestrator {
     execution.setEndTime(null);
     execution.setLastSyncTime(LocalDateTime.now());
     execution.setUpdateTime(LocalDateTime.now());
-    executionRepository.update(execution);
-    updateDefinition(execution, OfflineExecutionStatus.UNKNOWN);
+    batchRuntimeService.persistAttempt(execution);
+    projectTaskLastState(execution, OfflineExecutionStatus.UNKNOWN.name());
     record(
         execution,
         previous,
@@ -316,17 +347,37 @@ public class OfflineExecutionOrchestrator {
     execution.setLastSyncTime(LocalDateTime.now());
     execution.setUpdateTime(LocalDateTime.now());
     configureRetry(execution, status, retryable);
-    executionRepository.update(execution);
-    updateDefinition(execution, status);
+    batchRuntimeService.persistAttempt(execution);
+    projectTaskLastState(execution, status.name());
     record(execution, previous, status.name(), status.name(), message, payload);
   }
 
-  private void updateDefinition(OfflineJobExecution execution, OfflineExecutionStatus status) {
+  /**
+   * Task last-* 只维护 latest Attempt / Batch 的查询投影。旧 Attempt 的晚到事件不得覆盖最新投影，
+   * 且任何运行判断都禁止反向读取这些字段。
+   */
+  private void projectTaskLastState(OfflineJobExecution execution, String fallbackStatus) {
+    String projectedStatus = fallbackStatus;
+    Long batchId = execution.getBatchId();
+    if (batchId != null && batchId > 0L) {
+      List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId);
+      if (!attempts.isEmpty()) {
+        OfflineJobExecution latest = attempts.stream()
+            .max(
+                Comparator.comparingInt((OfflineJobExecution value) -> value(value.getAttemptNo(), 1))
+                    .thenComparingLong(value -> value(value.getId(), 0L)))
+            .orElseThrow();
+        if (!Objects.equals(latest.getId(), execution.getId())) return;
+      }
+      BatchExecution batch = batchRepository.findById(batchId).orElse(null);
+      if (batch != null) projectedStatus = batch.status().name();
+    }
+
     OfflineJobDefinition definition = definitionRepository.findById(execution.getJobDefinitionId()).orElse(null);
     if (definition == null) return;
     definition.setLastExecutionId(execution.getId());
     definition.setLastEngineJobId(execution.getEngineJobId());
-    definition.setLastJobStatus(status.name());
+    definition.setLastJobStatus(projectedStatus);
     definition.setLastErrorMessage(execution.getErrorMessage());
     definition.setLastDurationMillis(execution.getDurationMillis());
     definition.setLastReadRowCount(execution.getSourceRecordCount());
@@ -349,7 +400,7 @@ public class OfflineExecutionOrchestrator {
     execution.setStatus(target.name());
     execution.setStateVersion(value(execution.getStateVersion(), 0L) + 1L);
     execution.setUpdateTime(LocalDateTime.now());
-    executionRepository.update(execution);
+    batchRuntimeService.persistAttempt(execution);
     record(execution, previous, target.name(), type, message, payload);
   }
 
@@ -374,6 +425,17 @@ public class OfflineExecutionOrchestrator {
     BatchExecution batch = batchRepository.findById(batchId).orElse(null);
     if (batch == null || !Objects.equals(execution.getJobDefinitionId(), batch.taskId())) return null;
     return batch.snapshot().retryPolicy();
+  }
+
+  private void ensureLatestAttemptForCancel(OfflineJobExecution execution) {
+    Long batchId = execution.getBatchId();
+    if (batchId == null || batchId <= 0L) return;
+    BatchExecution batch = batchRepository.findById(batchId)
+        .orElseThrow(() -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
+    Long latestId = batch.latestAttempt().map(attempt -> attempt.id()).orElse(null);
+    if (!Objects.equals(latestId, execution.getId())) {
+      throw new IllegalStateException("只能停止 Batch 的 latest Attempt");
+    }
   }
 
   private boolean retryable(LinkUpJobResponse response, OfflineExecutionStatus status) {

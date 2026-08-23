@@ -5,10 +5,8 @@ import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
-import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import io.yak.ops.business.sync.offline.schedule.OfflineScheduleLifecycle;
 import io.yak.ops.business.sync.offline.service.OfflineDefinitionSupport.DraftDefinition;
@@ -31,7 +29,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class OfflineJobDefinitionService {
   private final OfflineJobDefinitionRepository definitionRepository;
-  private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineBatchRuntimeService batchRuntimeService;
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineDefinitionSupport support;
   private final OfflineScheduleSupport scheduleSupport;
@@ -192,8 +190,8 @@ public class OfflineJobDefinitionService {
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public boolean offline(Long id) {
     OfflineJobDefinition definition = require(id);
-    if (executionRepository.hasActiveExecution(id)) {
-      throw new IllegalStateException("运行中的任务不能下线，请先停止任务");
+    if (batchRuntimeService.hasOccupyingBatch(id)) {
+      throw new IllegalStateException("运行中的 BatchExecution 不能下线，请先停止任务");
     }
     definition.setReleaseState("OFFLINE");
     definition.setUpdateTime(LocalDateTime.now());
@@ -208,8 +206,8 @@ public class OfflineJobDefinitionService {
     if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("已上线任务不能删除，请先下线");
     }
-    if (executionRepository.hasActiveExecution(id)) {
-      throw new IllegalStateException("运行中的任务不能删除");
+    if (batchRuntimeService.hasOccupyingBatch(id)) {
+      throw new IllegalStateException("运行中的 BatchExecution 不能删除");
     }
     scheduleLifecycle.remove(id);
     return definitionRepository.delete(id);
@@ -226,9 +224,8 @@ public class OfflineJobDefinitionService {
     if ("ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("已上线任务不能修改，请先下线");
     }
-    if (OfflineExecutionStatus.isActive(definition.getLastJobStatus())
-        || executionRepository.hasActiveExecution(definition.getId())) {
-      throw new IllegalStateException("运行中的任务不能修改");
+    if (batchRuntimeService.hasOccupyingBatch(definition.getId())) {
+      throw new IllegalStateException("运行中的 BatchExecution 不能修改");
     }
   }
 }

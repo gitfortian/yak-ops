@@ -14,6 +14,7 @@ import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.common.bean.po.sync.offline.OfflineBatchExecutionPO;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
@@ -22,11 +23,17 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-/** BatchExecution 与 Wave 1 持久化模型之间的适配器。 */
+/** BatchExecution 与持久化模型之间的适配器。 */
 @ConditionalOnOfflineSyncEnabled
 @Repository
 @RequiredArgsConstructor
 public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecutionRepository {
+
+  private static final List<String> OCCUPYING_STATUSES =
+      Arrays.stream(BatchStatus.values())
+          .filter(BatchStatus::occupiesTaskExecutionSlot)
+          .map(Enum::name)
+          .toList();
 
   private final OfflineBatchExecutionDao dao;
   private final OfflineJobExecutionRepository executionRepository;
@@ -44,11 +51,23 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
   }
 
   @Override
+  public boolean hasOccupyingBatch(long taskId) {
+    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    return dao.existsByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES);
+  }
+
+  @Override
+  public Optional<BatchExecution> findLatestOccupyingByTaskId(long taskId) {
+    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    return Optional.ofNullable(toDomain(dao.selectLatestByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES)));
+  }
+
+  @Override
   public BatchExecution insert(BatchExecution batch) {
     Objects.requireNonNull(batch, "BatchExecution 不能为空");
     if (batch.id() != null) throw new IllegalArgumentException("新 Batch 不应预先包含 ID");
     if (!batch.attempts().isEmpty()) {
-      throw new IllegalArgumentException("Wave 1 创建 Batch 时不能同时持久化 Attempt");
+      throw new IllegalArgumentException("创建 Batch 时不能同时持久化 Attempt");
     }
     OfflineBatchExecutionPO po = toPO(batch);
     if (!dao.insert(po) || po.getId() == null) {
