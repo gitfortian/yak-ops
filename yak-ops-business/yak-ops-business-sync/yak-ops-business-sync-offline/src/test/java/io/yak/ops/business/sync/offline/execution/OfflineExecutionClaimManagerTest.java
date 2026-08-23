@@ -1,20 +1,251 @@
 package io.yak.ops.business.sync.offline.execution;
 
-import static org.assertj.core.api.Assertions.assertThat;import static org.assertj.core.api.Assertions.assertThatThrownBy;import static org.mockito.ArgumentMatchers.any;import static org.mockito.Mockito.inOrder;import static org.mockito.Mockito.never;import static org.mockito.Mockito.verify;import static org.mockito.Mockito.verifyNoInteractions;import static org.mockito.Mockito.when;
-import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;import io.yak.ops.business.sync.offline.domain.core.BatchExecution;import io.yak.ops.business.sync.offline.domain.core.BatchKey;import io.yak.ops.business.sync.offline.domain.core.BatchScope;import io.yak.ops.business.sync.offline.domain.core.BatchStatus;import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;import io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager.ClaimResult;import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;import java.util.List;import java.util.Optional;import java.util.concurrent.atomic.AtomicReference;import org.junit.jupiter.api.BeforeEach;import org.junit.jupiter.api.Test;import org.junit.jupiter.api.extension.ExtendWith;import org.mockito.InOrder;import org.mockito.Mock;import org.mockito.junit.jupiter.MockitoExtension;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
+import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchKey;
+import io.yak.ops.business.sync.offline.domain.core.BatchScope;
+import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
+import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
+import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
+import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class OfflineExecutionClaimManagerTest {
-  @Mock private OfflineJobDefinitionService definitionService;@Mock private OfflineJobDefinitionRepository definitionRepository;@Mock private OfflineJobExecutionRepository executionRepository;@Mock private OfflineBatchExecutionRepository batchRepository;@Mock private OfflineScheduleRepository scheduleRepository;@Mock private OfflineBatchRuntime batchRuntime;private OfflineExecutionClaimManager manager;
-  @BeforeEach void setUp(){manager=new OfflineExecutionClaimManager(definitionService,definitionRepository,executionRepository,batchRepository,scheduleRepository,batchRuntime,new OfflineSyncProperties());}
-  @Test void shouldPersistCreatedExecutionBeforeAnyEngineProbe(){OfflineJobDefinition definition=definition();when(definitionService.require(10L)).thenReturn(definition);when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{\"job\":\"spec\"}");stubBatchInsert(77L);stubExecutionInsert(99L);ClaimResult result=manager.claim(10L,"WORKFLOW",null,1);assertThat(result.getExecution().getId()).isEqualTo(99L);assertThat(result.getExecution().getBatchId()).isEqualTo(77L);assertThat(result.getExecution().getStatus()).isEqualTo("CREATED");verify(definitionRepository).lock(10L);verify(batchRuntime).hasOccupyingBatch(10L);verify(batchRepository).insert(any(BatchExecution.class));verify(executionRepository).insert(result.getExecution());verify(batchRuntime).refreshBatch(77L);}
-  @Test void shouldPersistWorkflowAttemptAsSnapshotIdempotencyKey(){OfflineJobDefinition definition=definition();when(definitionService.require(10L)).thenReturn(definition);when(executionRepository.findByIdempotencyKey("attempt-123")).thenReturn(Optional.empty());stubBatchInsert(78L);stubExecutionInsert(100L);ClaimResult result=manager.claimSnapshot(10L,3L,"digest","{}","{\"job\":\"spec\"}","WORKFLOW","attempt-123");assertThat(result.getExecution().getIdempotencyKey()).isEqualTo("attempt-123");assertThat(result.getExecution().getBatchId()).isEqualTo(78L);assertThat(result.getExecution().getTriggerType()).isEqualTo("WORKFLOW");assertThat(result.isReused()).isFalse();verify(definitionRepository).lock(10L);verify(batchRuntime).hasOccupyingBatch(10L);verify(batchRepository).insert(any(BatchExecution.class));verify(batchRuntime).refreshBatch(78L);}
-  @Test void shouldReuseWorkflowAttemptFromBatchSnapshotInsteadOfAttemptCompatibilityCopies(){OfflineJobDefinition definition=definition();when(definitionService.require(10L)).thenReturn(definition);OfflineJobExecution existing=new OfflineJobExecution();existing.setId(101L);existing.setJobDefinitionId(10L);existing.setBatchId(77L);existing.setDefinitionVersion(999);existing.setConfigDigest("stale-attempt-digest");existing.setDefinitionSnapshotJson("{\"stale\":true}");existing.setSubmittedConfig("{\"job\":\"stale-attempt-copy\"}");existing.setIdempotencyKey("attempt-123");existing.setStatus("SUBMITTED");when(executionRepository.findByIdempotencyKey("attempt-123")).thenReturn(Optional.of(existing));when(batchRepository.findById(77L)).thenReturn(Optional.of(workflowBatch()));ClaimResult result=manager.claimSnapshot(10L,3L,"digest","{}","{\"job\":\"spec\"}","WORKFLOW","attempt-123");assertThat(result.getExecution()).isSameAs(existing);assertThat(result.getLogicalJobSpecJson()).isEqualTo("{\"job\":\"spec\"}");assertThat(result.isReused()).isTrue();verify(batchRuntime,never()).hasOccupyingBatch(10L);verify(batchRepository,never()).insert(any(BatchExecution.class));verify(executionRepository,never()).insert(any(OfflineJobExecution.class));}
-  @Test void shouldRejectLegacyIdempotencyReuseWithoutBatchIdentity(){OfflineJobDefinition definition=definition();when(definitionService.require(10L)).thenReturn(definition);OfflineJobExecution history=new OfflineJobExecution();history.setId(101L);history.setJobDefinitionId(10L);history.setIdempotencyKey("attempt-123");history.setStatus("SUCCEEDED");when(executionRepository.findByIdempotencyKey("attempt-123")).thenReturn(Optional.of(history));assertThatThrownBy(()->manager.claimSnapshot(10L,3L,"digest","{}","{\"job\":\"spec\"}","WORKFLOW","attempt-123")).isInstanceOf(IllegalStateException.class).hasMessageContaining("未绑定 Batch").hasMessageContaining("仅支持查询");verify(batchRepository,never()).insert(any(BatchExecution.class));verify(executionRepository,never()).insert(any(OfflineJobExecution.class));}
-  @Test void retryReadsLogicalJobSpecFromBatchSnapshotNotLegacyAttemptCopy(){OfflineJobExecution previous=failedAttempt(99L,77L,1,"{\"job\":\"stale-attempt-copy\"}");BatchExecution batch=frozenBatch(77L,3,BatchStatus.WAITING_RETRY);when(executionRepository.findById(99L)).thenReturn(Optional.of(previous));when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));when(executionRepository.findByBatchId(77L)).thenReturn(List.of(previous));when(executionRepository.reserveRetry(99L)).thenReturn(true);stubExecutionInsert(100L);ClaimResult result=manager.claimRetry(99L);OfflineJobExecution retry=result.getExecution();assertThat(retry.getBatchId()).isEqualTo(77L);assertThat(retry.getAttemptNo()).isEqualTo(2);assertThat(retry.getRetryFromExecutionId()).isEqualTo(99L);assertThat(retry.getTriggerType()).isEqualTo("RETRY");assertThat(retry.getDefinitionVersion()).isEqualTo(3);assertThat(retry.getConfigDigest()).isEqualTo("frozen-digest");assertThat(retry.getDefinitionSnapshotJson()).isEqualTo("{\"definition\":\"frozen\"}");assertThat(retry.getSubmittedConfig()).isEqualTo("{\"job\":\"batch-frozen\"}");assertThat(retry.getIdempotencyKey()).isEqualTo("offline-retry:77:2");InOrder order=inOrder(executionRepository);order.verify(executionRepository).reserveRetry(99L);order.verify(executionRepository).insert(retry);verify(batchRuntime).refreshBatch(77L);verifyNoInteractions(definitionService,definitionRepository,scheduleRepository);}
-  @Test void pendingBackfillReservationPrecedesAttemptOneInsertAndUsesFrozenSnapshot(){BatchExecution pending=new BatchExecution(77L,10L,BatchKey.backfill("bf-1",BatchScope.partitions(List.of("2026-08-01")).fingerprint()),BatchTrigger.BACKFILL,BatchScope.partitions(List.of("2026-08-01")),snapshot(3),BatchStatus.PENDING,List.of());when(batchRepository.findById(77L)).thenReturn(Optional.of(pending));when(executionRepository.findByBatchId(77L)).thenReturn(List.of());when(batchRuntime.hasOccupyingBatch(10L)).thenReturn(false);when(batchRepository.reservePendingBackfill(77L)).thenReturn(true);stubExecutionInsert(501L);ClaimResult result=manager.claimPendingBackfill(77L);assertThat(result.getExecution().getAttemptNo()).isEqualTo(1);assertThat(result.getExecution().getTriggerType()).isEqualTo("BACKFILL");assertThat(result.getExecution().getIdempotencyKey()).isEqualTo("offline-backfill:77:1");InOrder order=inOrder(batchRepository,executionRepository);order.verify(batchRepository).reservePendingBackfill(77L);order.verify(executionRepository).insert(result.getExecution());verify(definitionRepository).lock(10L);verifyNoInteractions(definitionService,scheduleRepository);verify(batchRuntime).refreshBatch(77L);}
-  @Test void shouldRejectUnknownWithoutBlindRetry(){OfflineJobExecution previous=failedAttempt(99L,77L,1,"{}");previous.setStatus("UNKNOWN");when(executionRepository.findById(99L)).thenReturn(Optional.of(previous));when(batchRepository.findById(77L)).thenReturn(Optional.of(frozenBatch(77L,3,BatchStatus.UNKNOWN)));assertThatThrownBy(()->manager.claimRetry(99L)).isInstanceOf(IllegalStateException.class).hasMessageContaining("UNKNOWN").hasMessageContaining("reconcile");verify(executionRepository,never()).reserveRetry(99L);}
-  @Test void shouldRespectFrozenRetryMaxAttempts(){OfflineJobExecution previous=failedAttempt(99L,77L,1,"{}");when(executionRepository.findById(99L)).thenReturn(Optional.of(previous));when(batchRepository.findById(77L)).thenReturn(Optional.of(frozenBatch(77L,1,BatchStatus.WAITING_RETRY)));when(executionRepository.findByBatchId(77L)).thenReturn(List.of(previous));assertThatThrownBy(()->manager.claimRetry(99L)).isInstanceOf(IllegalStateException.class).hasMessageContaining("最大 Attempt");verify(executionRepository,never()).reserveRetry(99L);}
-  @Test void shouldRejectLegacyRetryWithoutBatchIdentity(){OfflineJobExecution previous=failedAttempt(99L,null,1,"{}");when(executionRepository.findById(99L)).thenReturn(Optional.of(previous));assertThatThrownBy(()->manager.claimRetry(99L)).isInstanceOf(IllegalStateException.class).hasMessageContaining("未绑定 Batch").hasMessageContaining("历史查询");}
-  private OfflineJobDefinition definition(){OfflineJobDefinition definition=new OfflineJobDefinition();definition.setId(10L);definition.setReleaseState("ONLINE");definition.setVersion(3);definition.setConfigDigest("digest");definition.setDefinitionJson("{}");return definition;}private OfflineJobExecution failedAttempt(Long id,Long batchId,int attemptNo,String submittedConfig){OfflineJobExecution execution=new OfflineJobExecution();execution.setId(id);execution.setJobDefinitionId(10L);execution.setBatchId(batchId);execution.setAttemptNo(attemptNo);execution.setStatus("FAILED");execution.setSubmittedConfig(submittedConfig);execution.setRetryCreated(false);return execution;}private BatchExecution workflowBatch(){return new BatchExecution(77L,10L,BatchKey.workflow("attempt-123"),BatchTrigger.WORKFLOW,BatchScope.fullSelection(),new ExecutionSnapshot("{}",3,new RetryPolicySnapshot(1,0),"digest","{\"job\":\"spec\"}"),BatchStatus.RUNNING,List.of());}private BatchExecution frozenBatch(long id,int maxAttempts,BatchStatus status){return new BatchExecution(id,10L,new BatchKey("manual:test"),BatchTrigger.MANUAL,BatchScope.fullSelection(),snapshot(maxAttempts),status,List.of());}private ExecutionSnapshot snapshot(int maxAttempts){return new ExecutionSnapshot("{\"definition\":\"frozen\"}",3,new RetryPolicySnapshot(maxAttempts,30),"frozen-digest","{\"job\":\"batch-frozen\"}");}
-  private void stubBatchInsert(long id){AtomicReference<BatchExecution> saved=new AtomicReference<>();when(batchRepository.insert(any(BatchExecution.class))).thenAnswer(invocation->{BatchExecution batch=invocation.getArgument(0);BatchExecution inserted=new BatchExecution(id,batch.taskId(),batch.batchKey(),batch.trigger(),batch.batchScope(),batch.snapshot(),batch.status(),batch.attempts());saved.set(inserted);return inserted;});when(batchRepository.findById(id)).thenAnswer(ignored->Optional.ofNullable(saved.get()));}private void stubExecutionInsert(long id){when(executionRepository.insert(any(OfflineJobExecution.class))).thenAnswer(invocation->{OfflineJobExecution execution=invocation.getArgument(0);execution.setId(id);return true;});}
+
+  @Mock private OfflineJobDefinitionService definitionService;
+  @Mock private OfflineJobDefinitionRepository definitionRepository;
+  @Mock private OfflineJobExecutionRepository executionRepository;
+  @Mock private OfflineBatchExecutionRepository batchRepository;
+  @Mock private OfflineScheduleRepository scheduleRepository;
+  @Mock private OfflineBatchRuntime batchRuntime;
+  @Mock private OfflineExecutionAttemptFactory attemptFactory;
+  @Mock private OfflineExistingBatchClaimManager existingBatchClaimManager;
+
+  private OfflineExecutionClaimManager manager;
+
+  @BeforeEach
+  void setUp() {
+    manager = new OfflineExecutionClaimManager(
+        definitionService,
+        definitionRepository,
+        executionRepository,
+        batchRepository,
+        scheduleRepository,
+        batchRuntime,
+        new OfflineSyncProperties(),
+        attemptFactory,
+        existingBatchClaimManager);
+  }
+
+  @Test
+  void initialClaimCreatesBatchThenAttemptThroughFactory() {
+    OfflineJobDefinition definition = definition();
+    OfflineJobExecution execution = execution();
+    when(definitionService.require(10L)).thenReturn(definition);
+    when(definitionService.resolveLogicalJobSpec(definition))
+        .thenReturn("{\"job\":\"spec\"}");
+    stubBatchInsert(77L);
+    when(attemptFactory.create(any(BatchExecution.class), eq(1), eq("WORKFLOW"), eq(null), anyString()))
+        .thenReturn(execution);
+    when(executionRepository.insert(execution))
+        .thenAnswer(ignored -> {
+          execution.setId(99L);
+          return true;
+        });
+
+    OfflineExecutionClaim result = manager.claim(10L, "WORKFLOW", null, 1);
+
+    assertThat(result.getExecution().getId()).isEqualTo(99L);
+    verify(definitionRepository).lock(10L);
+    verify(batchRuntime).hasOccupyingBatch(10L);
+    verify(batchRepository).insert(any(BatchExecution.class));
+    verify(attemptFactory)
+        .create(any(BatchExecution.class), eq(1), eq("WORKFLOW"), eq(null), anyString());
+    verify(executionRepository).insert(execution);
+    verify(batchRuntime).refreshBatch(77L);
+    verifyNoInteractions(existingBatchClaimManager);
+  }
+
+  @Test
+  void workflowSnapshotKeepsAttemptIdempotencyKey() {
+    OfflineJobDefinition definition = definition();
+    OfflineJobExecution execution = execution();
+    when(definitionService.require(10L)).thenReturn(definition);
+    when(executionRepository.findByIdempotencyKey("attempt-123")).thenReturn(Optional.empty());
+    stubBatchInsert(78L);
+    when(attemptFactory.create(
+            any(BatchExecution.class),
+            eq(1),
+            eq("WORKFLOW"),
+            eq(null),
+            eq("attempt-123")))
+        .thenReturn(execution);
+    when(executionRepository.insert(execution))
+        .thenAnswer(ignored -> {
+          execution.setId(100L);
+          return true;
+        });
+
+    OfflineExecutionClaim result = manager.claimSnapshot(
+        10L,
+        3L,
+        "digest",
+        "{}",
+        "{\"job\":\"spec\"}",
+        "WORKFLOW",
+        "attempt-123");
+
+    assertThat(result.isReused()).isFalse();
+    verify(attemptFactory)
+        .create(any(BatchExecution.class), 1, "WORKFLOW", null, "attempt-123");
+    verify(batchRuntime).refreshBatch(78L);
+  }
+
+  @Test
+  void workflowIdempotencyReuseReadsFrozenBatchSnapshot() {
+    OfflineJobDefinition definition = definition();
+    when(definitionService.require(10L)).thenReturn(definition);
+    OfflineJobExecution existing = execution();
+    existing.setId(101L);
+    existing.setJobDefinitionId(10L);
+    existing.setBatchId(77L);
+    existing.setIdempotencyKey("attempt-123");
+    existing.setStatus("SUBMITTED");
+    when(executionRepository.findByIdempotencyKey("attempt-123"))
+        .thenReturn(Optional.of(existing));
+    when(batchRepository.findById(77L)).thenReturn(Optional.of(workflowBatch()));
+
+    OfflineExecutionClaim result = manager.claimSnapshot(
+        10L,
+        3L,
+        "digest",
+        "{}",
+        "{\"job\":\"spec\"}",
+        "WORKFLOW",
+        "attempt-123");
+
+    assertThat(result.getExecution()).isSameAs(existing);
+    assertThat(result.getLogicalJobSpecJson()).isEqualTo("{\"job\":\"spec\"}");
+    assertThat(result.isReused()).isTrue();
+    verify(batchRuntime, never()).hasOccupyingBatch(10L);
+    verify(attemptFactory, never()).create(any(), any(Integer.class), anyString(), any(), anyString());
+  }
+
+  @Test
+  void legacyIdempotencyReuseWithoutBatchIdentityIsRejected() {
+    OfflineJobDefinition definition = definition();
+    when(definitionService.require(10L)).thenReturn(definition);
+    OfflineJobExecution history = execution();
+    history.setId(101L);
+    history.setJobDefinitionId(10L);
+    history.setIdempotencyKey("attempt-123");
+    history.setStatus("SUCCEEDED");
+    when(executionRepository.findByIdempotencyKey("attempt-123"))
+        .thenReturn(Optional.of(history));
+
+    assertThatThrownBy(
+            () -> manager.claimSnapshot(
+                10L,
+                3L,
+                "digest",
+                "{}",
+                "{\"job\":\"spec\"}",
+                "WORKFLOW",
+                "attempt-123"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("未绑定 Batch")
+        .hasMessageContaining("仅支持查询");
+  }
+
+  @Test
+  void existingBatchClaimsDelegateToSpecializedManager() {
+    OfflineExecutionClaim retry = new OfflineExecutionClaim(null, "retry", execution());
+    OfflineExecutionClaim backfill = new OfflineExecutionClaim(null, "backfill", execution());
+    when(existingBatchClaimManager.claimRetry(99L)).thenReturn(retry);
+    when(existingBatchClaimManager.claimPendingBackfill(77L)).thenReturn(backfill);
+
+    assertThat(manager.claimRetry(99L)).isSameAs(retry);
+    assertThat(manager.claimPendingBackfill(77L)).isSameAs(backfill);
+
+    verify(existingBatchClaimManager).claimRetry(99L);
+    verify(existingBatchClaimManager).claimPendingBackfill(77L);
+  }
+
+  private OfflineJobDefinition definition() {
+    OfflineJobDefinition definition = new OfflineJobDefinition();
+    definition.setId(10L);
+    definition.setReleaseState("ONLINE");
+    definition.setVersion(3);
+    definition.setConfigDigest("digest");
+    definition.setDefinitionJson("{}");
+    return definition;
+  }
+
+  private OfflineJobExecution execution() {
+    OfflineJobExecution execution = new OfflineJobExecution();
+    execution.setStatus("CREATED");
+    return execution;
+  }
+
+  private BatchExecution workflowBatch() {
+    return new BatchExecution(
+        77L,
+        10L,
+        BatchKey.workflow("attempt-123"),
+        BatchTrigger.WORKFLOW,
+        BatchScope.fullSelection(),
+        new ExecutionSnapshot(
+            "{}",
+            3,
+            new RetryPolicySnapshot(1, 0),
+            "digest",
+            "{\"job\":\"spec\"}"),
+        BatchStatus.RUNNING,
+        List.of());
+  }
+
+  private void stubBatchInsert(long id) {
+    AtomicReference<BatchExecution> saved = new AtomicReference<>();
+    when(batchRepository.insert(any(BatchExecution.class)))
+        .thenAnswer(invocation -> {
+          BatchExecution batch = invocation.getArgument(0);
+          BatchExecution inserted = new BatchExecution(
+              id,
+              batch.taskId(),
+              batch.batchKey(),
+              batch.trigger(),
+              batch.batchScope(),
+              batch.snapshot(),
+              batch.status(),
+              batch.attempts());
+          saved.set(inserted);
+          return inserted;
+        });
+    when(batchRepository.findById(id)).thenAnswer(ignored -> Optional.ofNullable(saved.get()));
+  }
 }
