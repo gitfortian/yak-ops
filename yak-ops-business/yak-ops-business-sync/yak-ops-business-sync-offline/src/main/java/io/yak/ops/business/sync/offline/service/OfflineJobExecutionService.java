@@ -3,7 +3,6 @@ package io.yak.ops.business.sync.offline.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
@@ -30,7 +29,6 @@ public class OfflineJobExecutionService {
   private final OfflineExecutionOrchestrator orchestrator;
   private final OfflineExecutionReadService readService;
   private final OfflineExecutionLogService logService;
-  private final OfflineJobDefinitionService definitionService;
   private final LinkUpClient linkUpClient;
   private final OfflineSyncViewMapper viewMapper;
 
@@ -86,12 +84,9 @@ public class OfflineJobExecutionService {
     return readService.toVO(orchestrator.cancel(id));
   }
 
+  /** Task 级停止只从 BatchExecution/latest Attempt 选择目标，不读取 Task.lastExecutionId。 */
   public OfflineJobExecutionVO cancelLatest(Long definitionId) {
-    OfflineJobDefinition definition = definitionService.require(definitionId);
-    if (definition.getLastExecutionId() == null) {
-      throw new IllegalStateException("任务没有可停止的执行实例");
-    }
-    return cancel(definition.getLastExecutionId());
+    return readService.toVO(orchestrator.cancelLatestBatch(definitionId));
   }
 
   public OfflineBatchOperationVO batchExecute(OfflineBatchOperationDTO request) {

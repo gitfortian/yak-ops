@@ -62,6 +62,41 @@ class OfflineBatchExecutionRepositoryAdapterTest {
   }
 
   @Test
+  void exposesOnlyOccupyingBatchAsRuntimeTruth() {
+    FakeBatchDao dao = new FakeBatchDao();
+    OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
+    when(executions.findByBatchId(anyLong())).thenReturn(List.of());
+    OfflineBatchExecutionRepositoryAdapter repository =
+        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+
+    BatchExecution running = repository.insert(new BatchExecution(
+        null,
+        9L,
+        BatchKey.manual("request-9"),
+        BatchTrigger.MANUAL,
+        BatchScope.fullSelection(),
+        new ExecutionSnapshot("{}", 1, new RetryPolicySnapshot(2, 5), "digest"),
+        BatchStatus.RUNNING,
+        List.of()));
+
+    assertThat(repository.hasOccupyingBatch(9L)).isTrue();
+    assertThat(repository.findLatestOccupyingByTaskId(9L)).contains(running);
+
+    repository.update(new BatchExecution(
+        running.id(),
+        running.taskId(),
+        running.batchKey(),
+        running.trigger(),
+        running.batchScope(),
+        running.snapshot(),
+        BatchStatus.SUCCEEDED,
+        running.attempts()));
+
+    assertThat(repository.hasOccupyingBatch(9L)).isFalse();
+    assertThat(repository.findLatestOccupyingByTaskId(9L)).isEmpty();
+  }
+
+  @Test
   void hydratesBoundLegacyExecutionsAsAttempts() {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
@@ -140,6 +175,20 @@ class OfflineBatchExecutionRepositoryAdapterTest {
               && stored.getBatchKey().equals(batchKey)
           ? stored
           : null;
+    }
+
+    @Override
+    public boolean existsByTaskIdAndStatuses(Long taskId, List<String> statuses) {
+      return stored != null
+          && stored.getJobDefinitionId().equals(taskId)
+          && statuses.contains(stored.getStatus());
+    }
+
+    @Override
+    public OfflineBatchExecutionPO selectLatestByTaskIdAndStatuses(
+        Long taskId,
+        List<String> statuses) {
+      return existsByTaskIdAndStatuses(taskId, statuses) ? stored : null;
     }
 
     @Override

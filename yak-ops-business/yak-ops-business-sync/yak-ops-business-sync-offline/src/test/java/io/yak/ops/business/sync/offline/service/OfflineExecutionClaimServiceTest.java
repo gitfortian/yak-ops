@@ -41,6 +41,7 @@ class OfflineExecutionClaimServiceTest {
   @Mock private OfflineJobExecutionRepository executionRepository;
   @Mock private OfflineBatchExecutionRepository batchRepository;
   @Mock private OfflineScheduleRepository scheduleRepository;
+  @Mock private OfflineBatchRuntimeService batchRuntimeService;
 
   private OfflineExecutionClaimService service;
 
@@ -52,6 +53,7 @@ class OfflineExecutionClaimServiceTest {
         executionRepository,
         batchRepository,
         scheduleRepository,
+        batchRuntimeService,
         new OfflineSyncProperties());
   }
 
@@ -82,9 +84,11 @@ class OfflineExecutionClaimServiceTest {
     assertThat(result.getExecution().getWorkerInstanceId()).isNull();
     assertThat(result.getExecution().getEngineBaseUrl()).isEqualTo("http://127.0.0.1:18080");
     verify(definitionRepository).lock(10L);
-    verify(executionRepository).hasActiveExecution(10L);
+    verify(batchRuntimeService).hasOccupyingBatch(10L);
+    verify(executionRepository, never()).hasActiveExecution(10L);
     verify(batchRepository).insert(any(BatchExecution.class));
     verify(executionRepository).insert(result.getExecution());
+    verify(batchRuntimeService).refreshBatch(77L);
   }
 
   @Test
@@ -115,9 +119,11 @@ class OfflineExecutionClaimServiceTest {
     assertThat(result.getExecution().getTriggerType()).isEqualTo("WORKFLOW");
     assertThat(result.isReused()).isFalse();
     verify(definitionRepository).lock(10L);
-    verify(executionRepository).hasActiveExecution(10L);
+    verify(batchRuntimeService).hasOccupyingBatch(10L);
+    verify(executionRepository, never()).hasActiveExecution(10L);
     verify(batchRepository).insert(any(BatchExecution.class));
     verify(executionRepository).insert(result.getExecution());
+    verify(batchRuntimeService).refreshBatch(78L);
   }
 
   @Test
@@ -150,6 +156,7 @@ class OfflineExecutionClaimServiceTest {
     assertThat(result.getExecution()).isSameAs(existing);
     assertThat(result.isReused()).isTrue();
     verify(definitionRepository).lock(10L);
+    verify(batchRuntimeService, never()).hasOccupyingBatch(10L);
     verify(executionRepository, never()).hasActiveExecution(10L);
     verify(batchRepository, never()).insert(any(BatchExecution.class));
     verify(executionRepository, never()).insert(any(OfflineJobExecution.class));
@@ -188,6 +195,7 @@ class OfflineExecutionClaimServiceTest {
     InOrder order = inOrder(executionRepository);
     order.verify(executionRepository).reserveRetry(99L);
     order.verify(executionRepository).insert(retry);
+    verify(batchRuntimeService).refreshBatch(77L);
     verifyNoInteractions(definitionService, definitionRepository, scheduleRepository);
   }
 
@@ -259,7 +267,7 @@ class OfflineExecutionClaimServiceTest {
             3,
             new RetryPolicySnapshot(maxAttempts, 30),
             "frozen-digest"),
-        BatchStatus.PENDING,
+        BatchStatus.WAITING_RETRY,
         List.of());
   }
 

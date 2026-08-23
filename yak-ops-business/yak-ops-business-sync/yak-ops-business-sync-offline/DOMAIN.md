@@ -36,10 +36,11 @@ BatchExecution
 10. Backfill 创建一组 Batch，不创建新的 Task 类型；同一次 Backfill 优先共享同一 Snapshot。
 11. Cursor 只允许在 Batch `SUCCEEDED` 后推进；`FAILED / CANCELED / UNKNOWN` 不得推进。
 12. Task `last-*` 只能作为查询投影；运行真相只能来自 Batch / Attempt。
-13. `DefinitionRevision` 只是修订标识，不等于 immutable `DefinitionVersion`。
-14. Link-Up Job / Worker / Quartz / HTTP DTO / DataSource credential 都不是 Core Domain 对象。
-15. SyncDefinition / Snapshot 不长期保存密码；凭据只在 Attempt 提交边界解析。
-16. 实时同步和离线同步保持独立 Core；不得因为名字相似提前抽 Shared Sync Kernel。
+13. Batch 状态必须由同 Batch 的 latest Attempt 推导；旧 Attempt 的晚到事件不得回退 Batch 真相。
+14. `DefinitionRevision` 只是修订标识，不等于 immutable `DefinitionVersion`。
+15. Link-Up Job / Worker / Quartz / HTTP DTO / DataSource credential 都不是 Core Domain 对象。
+16. SyncDefinition / Snapshot 不长期保存密码；凭据只在 Attempt 提交边界解析。
+17. 实时同步和离线同步保持独立 Core；不得因为名字相似提前抽 Shared Sync Kernel。
 
 ## Domain Impact Analysis
 
@@ -51,29 +52,43 @@ BatchExecution
 4. 是否改变 BatchKey / 幂等身份？
 5. 是否让 Retry 回读 current Task 或 current SchedulePolicy？
 6. 是否把 Task `last-*`、Engine 状态或外部 JobId 当成领域真相？
-7. 是否引入新的 `sceneType/syncType`、技术类型或凭据泄漏？
-8. 是否能映射现有模型？不能映射则记录 `Domain Gap`，先设计再编码。
+7. Batch 状态是否仍由 latest Attempt 唯一推导？
+8. 是否引入新的 `sceneType/syncType`、技术类型或凭据泄漏？
+9. 是否能映射现有模型？不能映射则记录 `Domain Gap`，先设计再编码。
 
 ## Current Transition
 
-当前代码尚未完全满足上述目标模型。Wave 2 / Wave 3 已解决 Trigger、Schedule BatchKey、Retry 漂移与 UNKNOWN 自动重试问题；仍保留的主要 Domain Debt：
+Wave 2 / Wave 3 / Wave 4 已完成 Trigger、Retry/UNKNOWN 与 runtime truth 主链迁移。当前命令侧运行真相为：
 
 ```text
-OfflineJobExecution = legacy 运行链仍以 execution 为中心
-Batch status         = 已持久化，但尚未成为完整 runtime truth
-Task last-*          = 仍部分参与生命周期判断
-Legacy history       = Wave 1 前 execution 允许没有 batch_id，不可安全 Retry
+Task command
+    │
+    ▼
+BatchExecution status
+    │
+    ▼
+latest ExecutionAttempt
+
+Task last-* = projection only
 ```
 
-Wave 2 已切成 `Trigger -> Batch -> Attempt 1`，Schedule BatchKey 固定为 `scheduleId + plannedFireTime`。Wave 3 已把 Retry 切成原 Batch 内新 Attempt：从 Batch 读取冻结的 Snapshot / RetryPolicy，从 Attempt 1 读取过渡期冻结 JobSpec；`retry_created` 通过 CAS reservation 与下一 Attempt 创建处于同一事务。`LOST` 仅作为旧数据兼容输入并统一解释为 `UNKNOWN`，UNKNOWN 继续 reconcile，不进入自动 Retry。
+Wave 4 状态推导固定为：活动 Attempt -> `RUNNING`；FAILED 且存在 `nextRetryTime` -> `WAITING_RETRY`；FAILED 无 Retry 窗口 -> `FAILED`；UNKNOWN -> `UNKNOWN`；SUCCEEDED/CANCELED 对应同名 Batch 终态。Attempt 状态写入与 Batch 状态刷新 dual-write；Wave 2/3 历史 Batch 通过 V3 migration 从 latest Attempt 回填 runtime status。
+
+仍保留的主要 Domain Debt：
+
+```text
+OfflineJobExecution = legacy 名称/结构仍作为 Attempt persistence compatibility view
+Legacy history       = Wave 1 前 execution 可无 batch_id，不属于 Batch runtime truth
+Backfill / Cursor    = 尚未切入目标 BatchScope / Cursor 推进规则
+```
 
 ```text
 Wave 0  DONE  Core VO + compatibility mapper
 Wave 1  DONE  Batch persistence + execution.bind(batch_id)
 Wave 2  DONE  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
 Wave 3  DONE  Retry / UNKNOWN + durable retry reservation
-Wave 4  NEXT  Runtime truth -> Batch/Attempt; Task last-* projection only
-Wave 5        Backfill / Cursor
+Wave 4  DONE  Runtime truth -> Batch/Attempt; Task last-* projection only
+Wave 5  NEXT  Backfill / Cursor
 Wave 6        Legacy cleanup
 ```
 
@@ -86,9 +101,10 @@ Wave 6        Legacy cleanup
 - 把 Retry 实现成一次新的普通 execute；
 - 把 UNKNOWN/LOST 直接当 FAILED 自动重试；
 - 用 `hasActiveExecution()` 代替 Batch 级并发和 reservation；
+- 用 Task `lastJobStatus / lastExecutionId` 决定运行、停止、编辑、下线或删除；
+- 用非 latest Attempt 的状态覆盖 Batch runtime truth；
 - 用 actual callback time 作为 Schedule Batch 身份；
 - 让 Attempt 自己重新生成 Snapshot；
-- 用 Task `lastJobStatus` 决定真实运行状态；
 - 把 Link-Up JobSpec、Worker、Connector、Quartz 类型放进 Core Domain；
 - 为“全量/增量/单表/多表/补数”继续增加任务类型枚举；
 - 为了和 realtime 一致而提前增加 immutable DefinitionVersion 或 Shared Sync Kernel。

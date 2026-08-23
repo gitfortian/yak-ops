@@ -9,17 +9,17 @@ import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
+import io.yak.ops.business.sync.offline.service.OfflineBatchRuntimeService;
 import io.yak.ops.business.sync.offline.service.OfflineExecutionOrchestrator;
 import org.springframework.stereotype.Component;
 
-/** Yak Schedule 离线同步 Handler：到点后统一进入现有 Offline Execution 执行链。 */
+/** Yak Schedule 离线同步 Handler：到点后统一进入 Batch -> Attempt 执行链。 */
 @ConditionalOnOfflineSyncEnabled
 @Component(OfflineScheduleEngineBridge.HANDLER)
 public class OfflineScheduleHandler implements ScheduleHandler {
   private final OfflineJobDefinitionRepository definitionRepository;
-  private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineBatchRuntimeService batchRuntimeService;
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineExecutionOrchestrator orchestrator;
   private final OfflineScheduleEngineBridge engine;
@@ -27,13 +27,13 @@ public class OfflineScheduleHandler implements ScheduleHandler {
 
   public OfflineScheduleHandler(
       OfflineJobDefinitionRepository definitionRepository,
-      OfflineJobExecutionRepository executionRepository,
+      OfflineBatchRuntimeService batchRuntimeService,
       OfflineScheduleRepository scheduleRepository,
       OfflineExecutionOrchestrator orchestrator,
       OfflineScheduleEngineBridge engine,
       OfflineScheduleLifecycle lifecycle) {
     this.definitionRepository = definitionRepository;
-    this.executionRepository = executionRepository;
+    this.batchRuntimeService = batchRuntimeService;
     this.scheduleRepository = scheduleRepository;
     this.orchestrator = orchestrator;
     this.engine = engine;
@@ -57,9 +57,9 @@ public class OfflineScheduleHandler implements ScheduleHandler {
       return ScheduleExecutionResult.accepted(null, "离线同步任务未启用调度，本次触发忽略");
     }
 
-    if (executionRepository.hasActiveExecution(definitionId)) {
+    if (batchRuntimeService.hasOccupyingBatch(definitionId)) {
       lifecycle.refreshRuntimeState(definitionId, context.actualFireTime());
-      return ScheduleExecutionResult.accepted(null, "任务已有运行实例，本次调度触发跳过");
+      return ScheduleExecutionResult.accepted(null, "任务已有运行中的 BatchExecution，本次调度触发跳过");
     }
 
     try {

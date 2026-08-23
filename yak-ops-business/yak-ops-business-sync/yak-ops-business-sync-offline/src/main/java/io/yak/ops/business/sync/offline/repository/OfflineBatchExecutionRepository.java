@@ -11,6 +11,12 @@ public interface OfflineBatchExecutionRepository {
 
   Optional<BatchExecution> findByTaskIdAndBatchKey(long taskId, BatchKey batchKey);
 
+  /** V1 Task runtime truth：RUNNING / WAITING_RETRY / UNKNOWN Batch 会占用任务执行槽位。 */
+  boolean hasOccupyingBatch(long taskId);
+
+  /** 返回任务最近一个占用执行槽位的 Batch；命令判断不得回退到 Task last-*。 */
+  Optional<BatchExecution> findLatestOccupyingByTaskId(long taskId);
+
   BatchExecution insert(BatchExecution batch);
 
   boolean update(BatchExecution batch);
