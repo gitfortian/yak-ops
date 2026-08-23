@@ -6,13 +6,13 @@ import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
-import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper;
-import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper.Mapping;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchKey;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
+import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken.Parsed;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
@@ -68,10 +68,10 @@ public class OfflineExecutionClaimManager {
       String triggerType,
       Long retryFromExecutionId,
       int attemptNo) {
-    Mapping trigger = LegacyBatchTriggerCompatibilityMapper.parse(triggerType);
+    Parsed trigger = BatchTriggerToken.parse(triggerType);
     if (retryFromExecutionId != null
         || attemptNo > 1
-        || "RETRY".equalsIgnoreCase(trigger.legacyTriggerType())) {
+        || "RETRY".equalsIgnoreCase(trigger.attemptTriggerType())) {
       throw new IllegalArgumentException("Retry 必须通过 Batch 内 claimRetry 创建新 Attempt");
     }
 
@@ -120,8 +120,8 @@ public class OfflineExecutionClaimManager {
     if (!StringUtils.hasText(logicalJobSpecJson)) {
       throw new IllegalArgumentException("任务版本快照缺少 JobSpec");
     }
-    Mapping trigger = LegacyBatchTriggerCompatibilityMapper.parse(triggerType);
-    if ("RETRY".equalsIgnoreCase(trigger.legacyTriggerType())) {
+    Parsed trigger = BatchTriggerToken.parse(triggerType);
+    if ("RETRY".equalsIgnoreCase(trigger.attemptTriggerType())) {
       throw new IllegalArgumentException("Retry 不能通过 claimSnapshot 创建新 Batch");
     }
 
@@ -173,7 +173,7 @@ public class OfflineExecutionClaimManager {
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson,
-      Mapping trigger,
+      Parsed trigger,
       String idempotencyKey) {
     Long definitionId = definition.getId();
     if (batchRuntime.hasOccupyingBatch(definitionId)) {
@@ -196,7 +196,7 @@ public class OfflineExecutionClaimManager {
     OfflineJobExecution execution = attemptFactory.create(
         batch,
         1,
-        trigger.legacyTriggerType(),
+        trigger.attemptTriggerType(),
         null,
         normalizedIdempotencyKey);
     if (!executionRepository.insert(execution) || execution.getId() == null) {
@@ -216,7 +216,7 @@ public class OfflineExecutionClaimManager {
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson,
-      Mapping trigger,
+      Parsed trigger,
       String idempotencyKey) {
     BatchScope scope = BatchScope.fullSelection();
     BatchTrigger batchTrigger =
