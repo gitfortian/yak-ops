@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis 持久化模型与执行实例领域模型之间的适配器。 */
+/** MyBatis 持久化模型与 ExecutionAttempt 兼容视图之间的适配器。 */
 @ConditionalOnOfflineSyncEnabled
 @Repository
 @RequiredArgsConstructor
@@ -48,22 +48,6 @@ public class OfflineJobExecutionRepositoryAdapter implements OfflineJobExecution
   @Override
   public boolean update(OfflineJobExecution execution) {
     return dao.updateById(toPO(execution));
-  }
-
-  @Override
-  public boolean bindBatch(Long executionId, Long batchId) {
-    if (executionId == null || executionId <= 0L) {
-      throw new IllegalArgumentException("ExecutionId 必须大于 0");
-    }
-    if (batchId == null || batchId <= 0L) {
-      throw new IllegalArgumentException("BatchExecutionId 必须大于 0");
-    }
-    return dao.bindBatch(executionId, batchId, LocalDateTime.now());
-  }
-
-  @Override
-  public boolean hasActiveExecution(Long definitionId) {
-    return dao.hasActiveExecution(definitionId);
   }
 
   @Override

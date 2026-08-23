@@ -5,7 +5,9 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Yak Ops 对 Link-Up 离线作业状态的稳定映射。
+ * Yak Ops 对 Link-Up 离线 Attempt 状态的稳定映射。
+ *
+ * <p>LOST 只作为旧持久化值读取，并统一归一为 UNKNOWN；它不再是新的领域状态。
  *
  * @author weifuwan
  */
@@ -17,12 +19,10 @@ public enum OfflineExecutionStatus {
   SUCCEEDED,
   FAILED,
   CANCELED,
-  UNKNOWN,
-  /** Wave 3 仅保留旧数据兼容；读取 LOST 时统一解释为 UNKNOWN。 */
-  LOST;
+  UNKNOWN;
 
   private static final Set<OfflineExecutionStatus> ACTIVE =
-      EnumSet.of(CREATED, SUBMITTED, QUEUED, RUNNING, UNKNOWN, LOST);
+      EnumSet.of(CREATED, SUBMITTED, QUEUED, RUNNING, UNKNOWN);
 
   public boolean isActive() {
     return ACTIVE.contains(this);

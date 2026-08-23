@@ -7,7 +7,12 @@ import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.ToString;
 
-/** 离线同步执行实例。 */
+/**
+ * ExecutionAttempt 持久化兼容模型。
+ *
+ * <p>表名继续沿用 yak_offline_job_execution。batch_id 为空只表示 Wave 1 前历史记录；
+ * definition/config/submittedConfig 等字段是历史审计兼容副本，运行真相在 BatchExecution。
+ */
 @Data
 @TableName("yak_offline_job_execution")
 public class OfflineJobExecutionPO {

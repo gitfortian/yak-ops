@@ -74,7 +74,6 @@ class OfflineExecutionClaimServiceTest {
     assertThat(result.getExecution().getSubmittedConfig()).isEqualTo("{\"job\":\"spec\"}");
     verify(definitionRepository).lock(10L);
     verify(batchRuntimeService).hasOccupyingBatch(10L);
-    verify(executionRepository, never()).hasActiveExecution(10L);
     verify(batchRepository).insert(any(BatchExecution.class));
     verify(executionRepository).insert(result.getExecution());
     verify(batchRuntimeService).refreshBatch(77L);
@@ -108,21 +107,23 @@ class OfflineExecutionClaimServiceTest {
   }
 
   @Test
-  void shouldReuseSameWorkflowAttemptInsteadOfCreatingAnotherOfflineExecution() {
+  void shouldReuseWorkflowAttemptFromBatchSnapshotInsteadOfAttemptCompatibilityCopies() {
     OfflineJobDefinition definition = definition();
     when(definitionService.require(10L)).thenReturn(definition);
 
     OfflineJobExecution existing = new OfflineJobExecution();
     existing.setId(101L);
     existing.setJobDefinitionId(10L);
-    existing.setDefinitionVersion(3);
-    existing.setConfigDigest("digest");
-    existing.setDefinitionSnapshotJson("{}");
-    existing.setSubmittedConfig("{\"job\":\"spec\"}");
+    existing.setBatchId(77L);
+    existing.setDefinitionVersion(999);
+    existing.setConfigDigest("stale-attempt-digest");
+    existing.setDefinitionSnapshotJson("{\"stale\":true}");
+    existing.setSubmittedConfig("{\"job\":\"stale-attempt-copy\"}");
     existing.setIdempotencyKey("attempt-123");
     existing.setStatus("SUBMITTED");
     when(executionRepository.findByIdempotencyKey("attempt-123"))
         .thenReturn(Optional.of(existing));
+    when(batchRepository.findById(77L)).thenReturn(Optional.of(workflowBatch()));
 
     ClaimResult result = service.claimSnapshot(
         10L,
@@ -134,8 +135,40 @@ class OfflineExecutionClaimServiceTest {
         "attempt-123");
 
     assertThat(result.getExecution()).isSameAs(existing);
+    assertThat(result.getLogicalJobSpecJson()).isEqualTo("{\"job\":\"spec\"}");
     assertThat(result.isReused()).isTrue();
     verify(batchRuntimeService, never()).hasOccupyingBatch(10L);
+    verify(batchRepository, never()).insert(any(BatchExecution.class));
+    verify(executionRepository, never()).insert(any(OfflineJobExecution.class));
+  }
+
+  @Test
+  void shouldRejectLegacyIdempotencyReuseWithoutBatchIdentity() {
+    OfflineJobDefinition definition = definition();
+    when(definitionService.require(10L)).thenReturn(definition);
+
+    OfflineJobExecution history = new OfflineJobExecution();
+    history.setId(101L);
+    history.setJobDefinitionId(10L);
+    history.setIdempotencyKey("attempt-123");
+    history.setStatus("SUCCEEDED");
+    when(executionRepository.findByIdempotencyKey("attempt-123"))
+        .thenReturn(Optional.of(history));
+
+    assertThatThrownBy(
+            () ->
+                service.claimSnapshot(
+                    10L,
+                    3L,
+                    "digest",
+                    "{}",
+                    "{\"job\":\"spec\"}",
+                    "WORKFLOW",
+                    "attempt-123"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("未绑定 Batch")
+        .hasMessageContaining("仅支持查询");
+
     verify(batchRepository, never()).insert(any(BatchExecution.class));
     verify(executionRepository, never()).insert(any(OfflineJobExecution.class));
   }
@@ -236,7 +269,8 @@ class OfflineExecutionClaimServiceTest {
 
     assertThatThrownBy(() -> service.claimRetry(99L))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("未绑定 Batch");
+        .hasMessageContaining("未绑定 Batch")
+        .hasMessageContaining("历史查询");
   }
 
   private OfflineJobDefinition definition() {
@@ -263,6 +297,23 @@ class OfflineExecutionClaimServiceTest {
     execution.setSubmittedConfig(submittedConfig);
     execution.setRetryCreated(false);
     return execution;
+  }
+
+  private BatchExecution workflowBatch() {
+    return new BatchExecution(
+        77L,
+        10L,
+        BatchKey.workflow("attempt-123"),
+        BatchTrigger.WORKFLOW,
+        BatchScope.fullSelection(),
+        new ExecutionSnapshot(
+            "{}",
+            3,
+            new RetryPolicySnapshot(1, 0),
+            "digest",
+            "{\"job\":\"spec\"}"),
+        BatchStatus.RUNNING,
+        List.of());
   }
 
   private BatchExecution frozenBatch(long id, int maxAttempts, BatchStatus status) {

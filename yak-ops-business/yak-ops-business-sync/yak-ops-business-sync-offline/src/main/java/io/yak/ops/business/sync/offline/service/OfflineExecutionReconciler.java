@@ -18,7 +18,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 使用 YAML 固定地址持续对账，并通过 instanceId 识别 Worker 重启。 */
+/**
+ * 使用 YAML 固定地址持续对账，并通过 instanceId 识别 Worker 重启。
+ *
+ * <p>Wave 6 contract：repository 只返回已经绑定 Batch 的活动 Attempt；Wave 1 前 batchless history 不参与 reconcile。
+ */
 @ConditionalOnOfflineSyncEnabled
 @Component
 @RequiredArgsConstructor

@@ -23,7 +23,6 @@ import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.util.StringUtils;
 
 /** BatchExecution 与持久化模型之间的适配器。 */
 @ConditionalOnOfflineSyncEnabled
@@ -113,19 +112,8 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     }
 
     List<OfflineJobExecution> legacyAttempts = executionRepository.findByBatchId(po.getId());
-    String logicalJobSpec = trim(po.getLogicalJobSpecJson());
-    if (logicalJobSpec == null) {
-      logicalJobSpec = legacyAttempts.stream()
-          .filter(attempt -> attempt.getAttemptNo() != null && attempt.getAttemptNo() == 1)
-          .map(OfflineJobExecution::getSubmittedConfig)
-          .filter(StringUtils::hasText)
-          .findFirst()
-          .map(String::trim)
-          .orElse(null);
-    }
-    if (logicalJobSpec == null) {
-      throw new IllegalStateException("Batch 缺少冻结 logicalJobSpec：" + po.getId());
-    }
+    String logicalJobSpec =
+        requireText(po.getLogicalJobSpecJson(), "Batch 缺少冻结 logicalJobSpec：" + po.getId());
 
     RetryPolicySnapshot retryPolicy = new RetryPolicySnapshot(
         positive(po.getRetryMaxAttempts(), "retryMaxAttempts"),

@@ -28,6 +28,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -67,6 +68,19 @@ class OfflineSyncLayeringConventionTest {
           ".bean.po.",
           "com.baomidou.mybatisplus");
     }
+  }
+
+  @Test
+  void attemptPersistenceDoesNotExposeLegacyTaskRuntimeOrRetroactiveBinding() {
+    List<String> repositoryMethods = Arrays.stream(OfflineJobExecutionRepository.class.getMethods())
+        .map(Method::getName)
+        .toList();
+    List<String> daoMethods = Arrays.stream(OfflineJobExecutionDao.class.getMethods())
+        .map(Method::getName)
+        .toList();
+
+    assertThat(repositoryMethods).doesNotContain("hasActiveExecution", "bindBatch");
+    assertThat(daoMethods).doesNotContain("hasActiveExecution", "bindBatch");
   }
 
   @Test

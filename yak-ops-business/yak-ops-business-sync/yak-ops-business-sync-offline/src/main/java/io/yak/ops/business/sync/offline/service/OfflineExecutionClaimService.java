@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 固定 Link-Up 地址下原子创建执行实例。 */
+/** 固定 Link-Up 地址下原子创建 ExecutionAttempt。 */
 @ConditionalOnOfflineSyncEnabled
 @Service
 public class OfflineExecutionClaimService {
@@ -127,14 +127,14 @@ public class OfflineExecutionClaimService {
     if (normalizedKey != null) {
       OfflineJobExecution existing = executionRepository.findByIdempotencyKey(normalizedKey).orElse(null);
       if (existing != null) {
-        validateIdempotentReuse(
+        BatchExecution existingBatch = validateIdempotentReuse(
             existing,
             definitionId,
             definitionVersion,
             configDigest,
             definitionSnapshotJson,
             logicalJobSpecJson);
-        return new ClaimResult(current, logicalJobSpecJson, existing, true);
+        return new ClaimResult(current, existingBatch.snapshot().logicalJobSpec(), existing, true);
       }
     }
     return createInitialClaim(
@@ -162,7 +162,7 @@ public class OfflineExecutionClaimService {
         .orElseThrow(() -> new IllegalArgumentException("重试来源实例不存在：" + retryFromExecutionId));
     Long batchId = previous.getBatchId();
     if (batchId == null || batchId <= 0L) {
-      throw new IllegalStateException("旧执行实例未绑定 Batch，不能按领域规则安全 Retry");
+      throw new IllegalStateException("旧执行实例未绑定 Batch，仅支持历史查询，不能按领域规则 Retry");
     }
 
     BatchExecution batch = batchRepository.findById(batchId)
@@ -175,8 +175,7 @@ public class OfflineExecutionClaimService {
     }
 
     OfflineExecutionStatus previousStatus = parseStatus(previous.getStatus());
-    if (previousStatus == OfflineExecutionStatus.UNKNOWN
-        || "LOST".equalsIgnoreCase(previous.getStatus())) {
+    if (previousStatus == OfflineExecutionStatus.UNKNOWN) {
       throw new IllegalStateException("执行结果为 UNKNOWN，必须先 reconcile，禁止盲目 Retry");
     }
     if (previousStatus != OfflineExecutionStatus.FAILED) {
@@ -214,7 +213,6 @@ public class OfflineExecutionClaimService {
       throw new IllegalStateException("Retry 已达到 Batch 冻结的最大 Attempt 数");
     }
 
-    String logicalJobSpec = batch.snapshot().logicalJobSpec();
     if (!executionRepository.reserveRetry(previous.getId())) {
       throw new IllegalStateException("Retry 已被其他请求保留或已经创建");
     }
@@ -224,13 +222,12 @@ public class OfflineExecutionClaimService {
         nextAttemptNo,
         "RETRY",
         previous.getId(),
-        retryIdempotencyKey(batch.id(), nextAttemptNo),
-        logicalJobSpec);
+        retryIdempotencyKey(batch.id(), nextAttemptNo));
     if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建 Retry Attempt 失败");
     }
     batchRuntimeService.refreshBatch(batchId);
-    return new ClaimResult(null, logicalJobSpec, execution, false);
+    return new ClaimResult(null, batch.snapshot().logicalJobSpec(), execution, false);
   }
 
   /**
@@ -276,8 +273,7 @@ public class OfflineExecutionClaimService {
         1,
         "BACKFILL",
         null,
-        "offline-backfill:" + batchId + ":1",
-        batch.snapshot().logicalJobSpec());
+        "offline-backfill:" + batchId + ":1");
     if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建 Backfill Attempt 1 失败");
     }
@@ -316,13 +312,12 @@ public class OfflineExecutionClaimService {
         1,
         trigger.legacyTriggerType(),
         null,
-        normalizedIdempotencyKey,
-        logicalJobSpecJson);
+        normalizedIdempotencyKey);
     if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建离线同步执行实例失败");
     }
     batchRuntimeService.refreshBatch(batchId);
-    return new ClaimResult(definition, logicalJobSpecJson, execution, false);
+    return new ClaimResult(definition, batch.snapshot().logicalJobSpec(), execution, false);
   }
 
   private Long createBatch(
@@ -372,8 +367,7 @@ public class OfflineExecutionClaimService {
       int attemptNo,
       String triggerType,
       Long retryFromExecutionId,
-      String idempotencyKey,
-      String logicalJobSpec) {
+      String idempotencyKey) {
     LocalDateTime now = LocalDateTime.now();
     OfflineJobExecution execution = new OfflineJobExecution();
     execution.setJobDefinitionId(batch.taskId());
@@ -389,9 +383,10 @@ public class OfflineExecutionClaimService {
     execution.setRetryFromExecutionId(retryFromExecutionId);
     execution.setCancellationRequested(false);
     execution.setRetryCreated(false);
+    // Legacy persistence compatibility copies. Batch.snapshot() remains the runtime truth.
     execution.setConfigDigest(batch.snapshot().configDigest());
     execution.setDefinitionSnapshotJson(batch.snapshot().definitionSnapshot());
-    execution.setSubmittedConfig(requireText(logicalJobSpec, "logicalJobSpec 不能为空"));
+    execution.setSubmittedConfig(batch.snapshot().logicalJobSpec());
     execution.setSourceRecordCount(0L);
     execution.setSinkSuccessRecordCount(0L);
     execution.setSourceReadBytes(0L);
@@ -444,22 +439,32 @@ public class OfflineExecutionClaimService {
     return value == null ? fallback : value;
   }
 
-  private void validateIdempotentReuse(
+  private BatchExecution validateIdempotentReuse(
       OfflineJobExecution existing,
       Long definitionId,
       long definitionVersion,
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson) {
-    int version = (int) Math.min(Integer.MAX_VALUE, Math.max(1L, definitionVersion));
-    boolean same = Objects.equals(existing.getJobDefinitionId(), definitionId)
-        && Objects.equals(existing.getDefinitionVersion(), version)
-        && Objects.equals(existing.getConfigDigest(), configDigest)
-        && Objects.equals(existing.getDefinitionSnapshotJson(), definitionSnapshotJson)
-        && Objects.equals(existing.getSubmittedConfig(), logicalJobSpecJson);
-    if (!same) {
-      throw new IllegalStateException("幂等键已被不同任务执行占用：" + existing.getIdempotencyKey());
+    Long batchId = existing.getBatchId();
+    if (batchId == null || batchId <= 0L) {
+      throw new IllegalStateException(
+          "幂等键命中 Wave 1 前历史执行，未绑定 Batch，仅支持查询：" + existing.getIdempotencyKey());
     }
+    BatchExecution batch = batchRepository.findById(batchId)
+        .orElseThrow(() -> new IllegalStateException("幂等 Attempt 绑定的 BatchExecution 不存在：" + batchId));
+    ExecutionSnapshot snapshot = batch.snapshot();
+    int version = (int) Math.min(Integer.MAX_VALUE, Math.max(1L, definitionVersion));
+    boolean same = Objects.equals(existing.getJobDefinitionId(), batch.taskId())
+        && Objects.equals(batch.taskId(), definitionId)
+        && snapshot.definitionRevision() == version
+        && Objects.equals(snapshot.configDigest(), configDigest)
+        && Objects.equals(snapshot.definitionSnapshot(), definitionSnapshotJson)
+        && Objects.equals(snapshot.logicalJobSpec(), logicalJobSpecJson);
+    if (!same) {
+      throw new IllegalStateException("幂等键已被不同 Batch 快照占用：" + existing.getIdempotencyKey());
+    }
+    return batch;
   }
 
   public static final class ClaimResult {

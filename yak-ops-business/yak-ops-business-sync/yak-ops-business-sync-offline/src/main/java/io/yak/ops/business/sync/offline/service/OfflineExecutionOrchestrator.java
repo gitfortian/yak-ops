@@ -32,7 +32,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 离线任务提交、取消和状态落库。 */
+/** 离线 Attempt 提交、取消和状态落库；BatchExecution 是运行真相边界。 */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineExecutionOrchestrator {
@@ -265,6 +265,7 @@ public class OfflineExecutionOrchestrator {
       LinkUpJobResponse response,
       String eventType) {
     if (execution == null || response == null) return;
+    requireRuntimeBatch(execution, "对账");
 
     String previous = execution.getStatus();
     OfflineExecutionStatus next = StringUtils.hasText(response.getStatus())
@@ -332,6 +333,7 @@ public class OfflineExecutionOrchestrator {
   /** 结果无法确认时进入 UNKNOWN，继续 reconcile，并明确禁止自动 Retry。 */
   public void markUnknown(OfflineJobExecution execution, String message) {
     if (execution == null || !OfflineExecutionStatus.isActive(execution.getStatus())) return;
+    requireRuntimeBatch(execution, "UNKNOWN 对账");
     if (OfflineExecutionStatus.UNKNOWN.name().equalsIgnoreCase(execution.getStatus())) return;
 
     String previous = execution.getStatus();
@@ -378,23 +380,23 @@ public class OfflineExecutionOrchestrator {
     record(execution, previous, status.name(), status.name(), message, payload);
   }
 
-  /** Task last-* 只维护 latest Attempt / Batch 的查询投影。 */
+  /** Task last-* 只维护 latest Attempt / Batch 的查询投影；batchless history 永不覆盖投影。 */
   private void projectTaskLastState(OfflineJobExecution execution, String fallbackStatus) {
-    String projectedStatus = fallbackStatus;
     Long batchId = execution.getBatchId();
-    if (batchId != null && batchId > 0L) {
-      List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId);
-      if (!attempts.isEmpty()) {
-        OfflineJobExecution latest = attempts.stream()
-            .max(
-                Comparator.comparingInt((OfflineJobExecution value) -> value(value.getAttemptNo(), 1))
-                    .thenComparingLong(value -> value(value.getId(), 0L)))
-            .orElseThrow();
-        if (!Objects.equals(latest.getId(), execution.getId())) return;
-      }
-      BatchExecution batch = batchRepository.findById(batchId).orElse(null);
-      if (batch != null) projectedStatus = batch.status().name();
+    if (batchId == null || batchId <= 0L) return;
+
+    String projectedStatus = fallbackStatus;
+    List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId);
+    if (!attempts.isEmpty()) {
+      OfflineJobExecution latest = attempts.stream()
+          .max(
+              Comparator.comparingInt((OfflineJobExecution value) -> value(value.getAttemptNo(), 1))
+                  .thenComparingLong(value -> value(value.getId(), 0L)))
+          .orElseThrow();
+      if (!Objects.equals(latest.getId(), execution.getId())) return;
     }
+    BatchExecution batch = batchRepository.findById(batchId).orElse(null);
+    if (batch != null) projectedStatus = batch.status().name();
 
     OfflineJobDefinition definition = definitionRepository.findById(execution.getJobDefinitionId()).orElse(null);
     if (definition == null) return;
@@ -452,13 +454,24 @@ public class OfflineExecutionOrchestrator {
 
   private void ensureLatestAttemptForCancel(OfflineJobExecution execution) {
     Long batchId = execution.getBatchId();
-    if (batchId == null || batchId <= 0L) return;
+    if (batchId == null || batchId <= 0L) {
+      throw new IllegalStateException("Wave 1 前历史执行未绑定 Batch，仅支持查询，不能执行取消命令");
+    }
     BatchExecution batch = batchRepository.findById(batchId)
         .orElseThrow(() -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
     Long latestId = batch.latestAttempt().map(attempt -> attempt.id()).orElse(null);
     if (!Objects.equals(latestId, execution.getId())) {
       throw new IllegalStateException("只能停止 Batch 的 latest Attempt");
     }
+  }
+
+  private Long requireRuntimeBatch(OfflineJobExecution execution, String operation) {
+    Long batchId = execution.getBatchId();
+    if (batchId == null || batchId <= 0L) {
+      throw new IllegalStateException(
+          "Wave 1 前历史执行未绑定 Batch，仅支持查询，不能参与" + operation);
+    }
+    return batchId;
   }
 
   private boolean retryable(LinkUpJobResponse response, OfflineExecutionStatus status) {

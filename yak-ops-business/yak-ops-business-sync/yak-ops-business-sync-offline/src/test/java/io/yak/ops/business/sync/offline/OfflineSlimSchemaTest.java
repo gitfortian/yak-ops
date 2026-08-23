@@ -37,6 +37,15 @@ class OfflineSlimSchemaTest {
     assertTrue(sql.contains("sql_execution_millis"));
   }
 
+  @Test
+  void waveSixNormalizesLostWithoutGuessingLegacyBatchIdentity() throws Exception {
+    String sql = read("/db/migration/yak-offline-sync/V5__contract_legacy_execution_runtime.sql");
+    assertTrue(sql.contains("SET status = 'UNKNOWN'"));
+    assertTrue(sql.contains("SET last_job_status = 'UNKNOWN'"));
+    assertFalse(sql.contains("SET batch_id"));
+    assertFalse(sql.contains("UPDATE yak_offline_batch_execution"));
+  }
+
   private String read(String path) throws Exception {
     try (InputStream input = getClass().getResourceAsStream(path)) {
       assertTrue(input != null);
