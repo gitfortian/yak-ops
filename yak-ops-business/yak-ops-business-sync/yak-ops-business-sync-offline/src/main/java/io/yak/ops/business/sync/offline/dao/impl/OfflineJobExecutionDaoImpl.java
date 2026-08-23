@@ -15,14 +15,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-/** 基于 MyBatis-Plus 的离线同步任务实例数据访问实现。 */
+/** 基于 MyBatis-Plus 的 ExecutionAttempt 持久化 DAO。 */
 @ConditionalOnOfflineSyncEnabled
 @Repository
 @RequiredArgsConstructor
 public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
 
   private static final List<String> ACTIVE_STATUSES =
-      List.of("CREATED", "SUBMITTED", "QUEUED", "RUNNING", "UNKNOWN", "LOST");
+      List.of("CREATED", "SUBMITTED", "QUEUED", "RUNNING", "UNKNOWN");
 
   private final OfflineJobExecutionMapper mapper;
 
@@ -61,33 +61,10 @@ public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
   }
 
   @Override
-  public boolean bindBatch(Long executionId, Long batchId, LocalDateTime updateTime) {
-    if (executionId == null || executionId <= 0L || batchId == null || batchId <= 0L) return false;
-    return mapper.update(
-        null,
-        Wrappers.<OfflineJobExecutionPO>lambdaUpdate()
-            .eq(OfflineJobExecutionPO::getId, executionId)
-            .and(
-                condition -> condition
-                    .isNull(OfflineJobExecutionPO::getBatchId)
-                    .or()
-                    .eq(OfflineJobExecutionPO::getBatchId, batchId))
-            .set(OfflineJobExecutionPO::getBatchId, batchId)
-            .set(OfflineJobExecutionPO::getUpdateTime, updateTime)) > 0;
-  }
-
-  @Override
-  public boolean hasActiveExecution(Long definitionId) {
-    return mapper.selectCount(
-        Wrappers.<OfflineJobExecutionPO>lambdaQuery()
-            .eq(OfflineJobExecutionPO::getJobDefinitionId, definitionId)
-            .in(OfflineJobExecutionPO::getStatus, ACTIVE_STATUSES)) > 0L;
-  }
-
-  @Override
   public List<OfflineJobExecutionPO> selectActiveExecutions(int limit) {
     return mapper.selectList(
         Wrappers.<OfflineJobExecutionPO>lambdaQuery()
+            .isNotNull(OfflineJobExecutionPO::getBatchId)
             .in(OfflineJobExecutionPO::getStatus, ACTIVE_STATUSES)
             .orderByAsc(OfflineJobExecutionPO::getId)
             .last("LIMIT " + Math.max(1, limit)));
