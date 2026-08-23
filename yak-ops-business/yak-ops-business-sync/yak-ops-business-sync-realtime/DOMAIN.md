@@ -1,6 +1,8 @@
 # Realtime Sync Domain
 
-> 本文件只保留**必须遵守的硬规则**，不记录设计过程。历史演进看 Git / PR。
+> 本文件只保留**实现必须遵守的硬规则**，不记录设计过程。历史演进看 Git / PR。
+>
+> `REQUIREMENTS.md` 定义“需要什么”；`DOMAIN.md` 定义“不能违反什么”；`REVIEW.md` 定义“怎么判卷”。
 
 ## 核心模型
 
@@ -99,7 +101,7 @@ multi-instance reconcile lease
 
 ## 修改代码前后
 
-修改前写一个短块即可：
+修改前先确认 `REQUIREMENTS.md` 中已有对应能力，再写一个短块：
 
 ```text
 Domain Impact Analysis
@@ -117,6 +119,8 @@ Domain Compliance Report
 - Safety/tests:
 - Known gaps:
 ```
+
+代码 Review 固定按 `REVIEW.md` 执行。
 
 ## 自动护栏
 
