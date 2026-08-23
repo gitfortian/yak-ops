@@ -8,10 +8,9 @@ import static org.mockito.Mockito.when;
 import io.yak.framework.common.PageData;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
+import io.yak.ops.business.datasource.gateway.DataSourcePluginGateway;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.business.datasource.service.support.DataSourceViewMapper;
-import io.yak.ops.business.datasource.util.DataSourceSecretCodec;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
@@ -26,9 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class DataSourceServiceImplTest {
 
   @Mock private DataSourceRepository repository;
-  @Mock private DataSourcePluginRegistry pluginRegistry;
+  @Mock private DataSourcePluginGateway pluginGateway;
   @Mock private DataSourceProperties properties;
-  @Mock private DataSourceSecretCodec secretCodec;
   @Mock private DataSourceViewMapper viewMapper;
 
   @Test
@@ -67,9 +65,8 @@ class DataSourceServiceImplTest {
   private DataSourceServiceImpl service() {
     return new DataSourceServiceImpl(
         repository,
-        pluginRegistry,
+        pluginGateway,
         properties,
-        secretCodec,
         viewMapper);
   }
 }
