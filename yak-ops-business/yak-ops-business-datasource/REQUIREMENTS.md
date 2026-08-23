@@ -15,7 +15,7 @@ Datasource 提供 Yak Ops 的统一数据源控制面：维护数据源配置、
 - 提供数据库、Schema、表、字段、预览、统计、SQL 模板和变量解析。
 - Catalog Business 链路和 Plugin SPI 均使用 typed request / metadata / result，不以 Map key 扩展业务语义。
 - 提供统一 SQL Execution，支持单语句、多语句、事务、取消、超时和终态观测。
-- Plugin 通过 versioned Descriptor 声明表单、Secret 字段和 Capability。
+- Plugin 通过 versioned `DataSourcePluginDescriptor` 声明表单、Secret 字段和 Capability。
 - Plugin API 不依赖 Business DTO / VO；HTTP PluginConfig 由 Business 投影。
 - 对连接 Secret 做合并、脱敏和安全输出。
 
