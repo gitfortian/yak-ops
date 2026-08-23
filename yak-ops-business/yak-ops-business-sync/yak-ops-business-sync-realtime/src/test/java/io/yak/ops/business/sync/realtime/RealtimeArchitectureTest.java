@@ -12,6 +12,7 @@ import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionValidator;
 import io.yak.ops.business.sync.realtime.definition.RealtimeJobDefinitionService;
 import io.yak.ops.business.sync.realtime.definition.RealtimeSourceConfigDigestCalculator;
 import io.yak.ops.business.sync.realtime.definition.RealtimeYamlCodec;
+import io.yak.ops.business.sync.realtime.definition.adapter.CdcPipelineSpecCompatibilityMapper;
 import io.yak.ops.business.sync.realtime.domain.DefinitionDigest;
 import io.yak.ops.business.sync.realtime.domain.DefinitionVersion;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobState;
@@ -104,7 +105,8 @@ class RealtimeArchitectureTest {
           RealtimeDefinitionPublisher.class,
           RealtimeDefinitionValidator.class,
           RealtimeSourceConfigDigestCalculator.class,
-          RealtimeYamlCodec.class
+          RealtimeYamlCodec.class,
+          CdcPipelineSpecCompatibilityMapper.class
         }) {
       assertThat(internal.getAnnotation(Component.class))
           .as("%s must remain an internal definition role", internal.getSimpleName())
@@ -160,6 +162,7 @@ class RealtimeArchitectureTest {
           RealtimeDefinitionValidator.class,
           RealtimeSourceConfigDigestCalculator.class,
           RealtimeYamlCodec.class,
+          CdcPipelineSpecCompatibilityMapper.class,
           RealtimeJobExecutionService.class,
           io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
           io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
