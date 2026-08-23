@@ -7,7 +7,8 @@ public record ExecutionSnapshot(
     String definitionSnapshot,
     int definitionRevision,
     RetryPolicySnapshot retryPolicy,
-    String configDigest) {
+    String configDigest,
+    String logicalJobSpec) {
 
   public ExecutionSnapshot {
     definitionSnapshot = requireText(definitionSnapshot, "definitionSnapshot 不能为空");
@@ -16,6 +17,7 @@ public record ExecutionSnapshot(
     }
     retryPolicy = Objects.requireNonNull(retryPolicy, "retryPolicy 不能为空");
     configDigest = requireText(configDigest, "configDigest 不能为空");
+    logicalJobSpec = requireText(logicalJobSpec, "logicalJobSpec 不能为空");
   }
 
   private static String requireText(String value, String message) {

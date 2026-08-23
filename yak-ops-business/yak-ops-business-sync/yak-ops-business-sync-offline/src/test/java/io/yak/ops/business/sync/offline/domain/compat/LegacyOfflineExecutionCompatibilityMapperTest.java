@@ -48,12 +48,13 @@ class LegacyOfflineExecutionCompatibilityMapperTest {
   }
 
   @Test
-  void snapshotRequiresExplicitFrozenRetryPolicy() {
+  void snapshotRequiresExplicitFrozenRetryPolicyAndLogicalJobSpec() {
     OfflineJobExecution legacy =
         OfflineJobExecution.builder()
             .definitionVersion(7)
             .definitionSnapshotJson("{\"source\":{\"table\":\"orders\"}}")
             .configDigest("digest-7")
+            .submittedConfig("{\"kind\":\"BatchSyncJob\"}")
             .build();
     RetryPolicySnapshot retryPolicy = new RetryPolicySnapshot(4, 30);
 
@@ -64,6 +65,7 @@ class LegacyOfflineExecutionCompatibilityMapperTest {
     assertThat(snapshot.definitionSnapshot()).contains("orders");
     assertThat(snapshot.retryPolicy()).isSameAs(retryPolicy);
     assertThat(snapshot.configDigest()).isEqualTo("digest-7");
+    assertThat(snapshot.logicalJobSpec()).contains("BatchSyncJob");
   }
 
   @Test
@@ -73,6 +75,7 @@ class LegacyOfflineExecutionCompatibilityMapperTest {
             .definitionVersion(1)
             .definitionSnapshotJson("{\"source\":{}}")
             .configDigest("digest")
+            .submittedConfig("{}")
             .build();
 
     assertThatThrownBy(() -> LegacyOfflineExecutionCompatibilityMapper.toSnapshot(legacy, null))

@@ -1,0 +1,70 @@
+package io.yak.ops.business.sync.offline.service.support;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.sync.offline.domain.core.BatchScope;
+import io.yak.ops.business.sync.offline.service.OfflineCursorService;
+import java.time.LocalDateTime;
+import org.junit.jupiter.api.Test;
+
+class OfflineBatchScopeExecutionAdapterTest {
+
+  private final OfflineCursorService cursorService = mock(OfflineCursorService.class);
+  private final OfflineBatchScopeExecutionAdapter adapter =
+      new OfflineBatchScopeExecutionAdapter(new ObjectMapper(), cursorService);
+
+  @Test
+  void dataWindowProjectsToWhereConditionWithoutChangingDomainScope() {
+    String logical = logicalJobSpec("tenant_id = 7");
+
+    String scoped = adapter.apply(
+        10L,
+        logical,
+        BatchScope.dataWindow(
+            LocalDateTime.of(2026, 8, 1, 0, 0),
+            LocalDateTime.of(2026, 8, 2, 0, 0)));
+
+    assertThat(scoped).contains("tenant_id = 7");
+    assertThat(scoped).contains("updated_at >= '2026-08-01 00:00'");
+    assertThat(scoped).contains("updated_at < '2026-08-02 00:00'");
+  }
+
+  @Test
+  void cursorRangeUsesCursorRouteInsteadOfTreatingCursorIdAsColumn() {
+    when(cursorService.requireSourceColumn(10L, "orders-watermark")).thenReturn("updated_at");
+
+    String scoped = adapter.apply(
+        10L,
+        logicalJobSpec(null),
+        BatchScope.cursorRange("orders-watermark", "100", "200"));
+
+    assertThat(scoped).contains("updated_at > '100'");
+    assertThat(scoped).contains("updated_at <= '200'");
+  }
+
+  @Test
+  void scopedBatchRejectsMultiTableJobSpecInsteadOfGuessingRoute() {
+    String logical = "{\"source\":{\"connectorId\":\"jdbc\",\"options\":{"
+        + "\"table_list\":[{\"table_path\":\"a\"},{\"table_path\":\"b\"}],"
+        + "\"partition_column\":\"updated_at\"}},\"sink\":{}}";
+
+    assertThatThrownBy(
+            () -> adapter.apply(10L, logical, BatchScope.partitions(java.util.List.of("p1"))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("单表");
+  }
+
+  private String logicalJobSpec(String whereCondition) {
+    String where = whereCondition == null
+        ? ""
+        : ",\"where_condition\":\"" + whereCondition + "\"";
+    return "{\"kind\":\"BatchSyncJob\",\"source\":{\"connectorId\":\"jdbc\",\"options\":{"
+        + "\"table_path\":\"orders\",\"partition_column\":\"updated_at\""
+        + where
+        + "}},\"sink\":{}}";
+  }
+}

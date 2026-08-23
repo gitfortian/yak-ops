@@ -21,6 +21,7 @@ import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventReposito
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.service.OfflineExecutionClaimService.ClaimResult;
+import io.yak.ops.business.sync.offline.service.support.OfflineBatchScopeExecutionAdapter;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -41,6 +42,7 @@ public class OfflineExecutionOrchestrator {
   private final OfflineJobExecutionRepository executionRepository;
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineBatchRuntimeService batchRuntimeService;
+  private final OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
   private final OfflineExecutionEventRepository eventRepository;
   private final LinkUpClient linkUpClient;
   private final ObjectMapper objectMapper;
@@ -52,6 +54,7 @@ public class OfflineExecutionOrchestrator {
       OfflineJobExecutionRepository executionRepository,
       OfflineBatchExecutionRepository batchRepository,
       OfflineBatchRuntimeService batchRuntimeService,
+      OfflineBatchScopeExecutionAdapter scopeExecutionAdapter,
       OfflineExecutionEventRepository eventRepository,
       LinkUpClient linkUpClient,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
@@ -61,6 +64,7 @@ public class OfflineExecutionOrchestrator {
     this.executionRepository = executionRepository;
     this.batchRepository = batchRepository;
     this.batchRuntimeService = batchRuntimeService;
+    this.scopeExecutionAdapter = scopeExecutionAdapter;
     this.eventRepository = eventRepository;
     this.linkUpClient = linkUpClient;
     this.objectMapper = objectMapper;
@@ -72,7 +76,7 @@ public class OfflineExecutionOrchestrator {
       Long retryFromExecutionId,
       int attemptNo) {
     ClaimResult claim = claimService.claim(definitionId, triggerType, retryFromExecutionId, attemptNo);
-    return submitClaim(claim, definitionService.resolveExecutionJobSpec(claim.getDefinition()));
+    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
   }
 
   /** 按工作流版本固定的任务配置快照执行，不回读任务当前 JobSpec。 */
@@ -107,9 +111,33 @@ public class OfflineExecutionOrchestrator {
         logicalJobSpecJson,
         "WORKFLOW",
         idempotencyKey);
-    return submitClaim(
-        claim,
-        definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));
+    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
+  }
+
+  /** Wave 5 dispatcher：只提交已经物化并 reservation 的 Backfill Batch。 */
+  public OfflineJobExecution executePendingBackfill(Long batchId) {
+    ClaimResult claim = claimService.claimPendingBackfill(batchId);
+    OfflineJobExecution execution = claim.getExecution();
+    if (claim.isReused()
+        && !OfflineExecutionStatus.CREATED.name().equalsIgnoreCase(execution.getStatus())) {
+      return execution;
+    }
+    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
+  }
+
+  private String resolveScopedExecutionJobSpec(ClaimResult claim) {
+    OfflineJobExecution execution = claim.getExecution();
+    String logicalJobSpec = claim.getLogicalJobSpecJson();
+    Long batchId = execution.getBatchId();
+    if (batchId != null && batchId > 0L) {
+      BatchExecution batch = batchRepository.findById(batchId)
+          .orElseThrow(() -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
+      logicalJobSpec = scopeExecutionAdapter.apply(
+          batch.taskId(),
+          logicalJobSpec,
+          batch.batchScope());
+    }
+    return definitionService.resolveExecutionJobSpec(logicalJobSpec);
   }
 
   private OfflineJobExecution submitClaim(ClaimResult claim, String resolvedExecutionJobSpec) {
@@ -177,7 +205,7 @@ public class OfflineExecutionOrchestrator {
     }
   }
 
-  /** Retry 只在原 Batch 内创建新 Attempt，并使用 Batch/Attempt 1 的冻结证据。 */
+  /** Retry 只在原 Batch 内创建新 Attempt，并使用 Batch 冻结证据。 */
   public OfflineJobExecution retryFrom(OfflineJobExecution previous) {
     if (previous == null || previous.getId() == null) {
       throw new IllegalArgumentException("重试来源实例不能为空");
@@ -188,9 +216,7 @@ public class OfflineExecutionOrchestrator {
         && !OfflineExecutionStatus.CREATED.name().equalsIgnoreCase(execution.getStatus())) {
       return execution;
     }
-    return submitClaim(
-        claim,
-        definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));
+    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
   }
 
   /** Task 级停止命令从 Batch runtime truth 选择 latest Attempt，不读取 Task.lastExecutionId。 */
@@ -352,10 +378,7 @@ public class OfflineExecutionOrchestrator {
     record(execution, previous, status.name(), status.name(), message, payload);
   }
 
-  /**
-   * Task last-* 只维护 latest Attempt / Batch 的查询投影。旧 Attempt 的晚到事件不得覆盖最新投影，
-   * 且任何运行判断都禁止反向读取这些字段。
-   */
+  /** Task last-* 只维护 latest Attempt / Batch 的查询投影。 */
   private void projectTaskLastState(OfflineJobExecution execution, String fallbackStatus) {
     String projectedStatus = fallbackStatus;
     Long batchId = execution.getBatchId();

@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.offline.repository;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineBatchExecutionDao;
+import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.compat.LegacyOfflineExecutionCompatibilityMapper;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchKey;
@@ -22,6 +23,7 @@ import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.util.StringUtils;
 
 /** BatchExecution 与持久化模型之间的适配器。 */
 @ConditionalOnOfflineSyncEnabled
@@ -63,6 +65,17 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
   }
 
   @Override
+  public List<BatchExecution> findPendingBackfills(int limit) {
+    return dao.selectPendingBackfills(Math.max(1, limit)).stream().map(this::toDomain).toList();
+  }
+
+  @Override
+  public boolean reservePendingBackfill(long batchId) {
+    if (batchId <= 0L) throw new IllegalArgumentException("BatchExecutionId 必须大于 0");
+    return dao.reservePendingBackfill(batchId, LocalDateTime.now());
+  }
+
+  @Override
   public BatchExecution insert(BatchExecution batch) {
     Objects.requireNonNull(batch, "BatchExecution 不能为空");
     if (batch.id() != null) throw new IllegalArgumentException("新 Batch 不应预先包含 ID");
@@ -98,6 +111,22 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     if (!scope.fingerprint().equals(storedFingerprint)) {
       throw new IllegalStateException("BatchScope fingerprint 与持久化内容不一致");
     }
+
+    List<OfflineJobExecution> legacyAttempts = executionRepository.findByBatchId(po.getId());
+    String logicalJobSpec = trim(po.getLogicalJobSpecJson());
+    if (logicalJobSpec == null) {
+      logicalJobSpec = legacyAttempts.stream()
+          .filter(attempt -> attempt.getAttemptNo() != null && attempt.getAttemptNo() == 1)
+          .map(OfflineJobExecution::getSubmittedConfig)
+          .filter(StringUtils::hasText)
+          .findFirst()
+          .map(String::trim)
+          .orElse(null);
+    }
+    if (logicalJobSpec == null) {
+      throw new IllegalStateException("Batch 缺少冻结 logicalJobSpec：" + po.getId());
+    }
+
     RetryPolicySnapshot retryPolicy = new RetryPolicySnapshot(
         positive(po.getRetryMaxAttempts(), "retryMaxAttempts"),
         nonNegative(po.getRetryBackoffSeconds(), "retryBackoffSeconds"));
@@ -105,8 +134,9 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
         requireText(po.getDefinitionSnapshotJson(), "definitionSnapshot 不能为空"),
         positive(po.getDefinitionRevision(), "definitionRevision"),
         retryPolicy,
-        requireText(po.getConfigDigest(), "configDigest 不能为空"));
-    List<ExecutionAttempt> attempts = executionRepository.findByBatchId(po.getId()).stream()
+        requireText(po.getConfigDigest(), "configDigest 不能为空"),
+        logicalJobSpec);
+    List<ExecutionAttempt> attempts = legacyAttempts.stream()
         .map(LegacyOfflineExecutionCompatibilityMapper::toAttempt)
         .toList();
     return new BatchExecution(
@@ -134,6 +164,7 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     po.setRetryMaxAttempts(batch.snapshot().retryPolicy().maxAttempts());
     po.setRetryBackoffSeconds(batch.snapshot().retryPolicy().backoffSeconds());
     po.setConfigDigest(batch.snapshot().configDigest());
+    po.setLogicalJobSpecJson(batch.snapshot().logicalJobSpec());
     po.setStatus(batch.status().name());
     LocalDateTime now = LocalDateTime.now();
     if (batch.id() == null) po.setCreateTime(now);
@@ -204,9 +235,14 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     }
   }
 
+  private String trim(String value) {
+    return value == null || value.trim().isEmpty() ? null : value.trim();
+  }
+
   private String requireText(String value, String message) {
-    if (value == null || value.trim().isEmpty()) throw new IllegalStateException(message);
-    return value.trim();
+    String normalized = trim(value);
+    if (normalized == null) throw new IllegalStateException(message);
+    return normalized;
   }
 
   private long positive(Long value, String field) {

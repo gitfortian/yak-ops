@@ -46,7 +46,12 @@ class OfflineCoreDomainTest {
   @Test
   void batchRequiresSequentialAttemptNumbers() {
     ExecutionSnapshot snapshot =
-        new ExecutionSnapshot("definition", 3, new RetryPolicySnapshot(3, 60), "digest");
+        new ExecutionSnapshot(
+            "definition",
+            3,
+            new RetryPolicySnapshot(3, 60),
+            "digest",
+            "{\"kind\":\"BatchSyncJob\"}");
     ExecutionAttempt first = attempt(1);
     ExecutionAttempt third = attempt(3);
 
@@ -63,6 +68,18 @@ class OfflineCoreDomainTest {
                     List.of(first, third)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("AttemptNo");
+  }
+
+  @Test
+  void executionSnapshotOwnsFrozenLogicalJobSpec() {
+    ExecutionSnapshot snapshot = new ExecutionSnapshot(
+        "definition",
+        2,
+        new RetryPolicySnapshot(2, 10),
+        "digest",
+        "{\"source\":{\"connectorId\":\"jdbc\"}}");
+
+    assertThat(snapshot.logicalJobSpec()).contains("jdbc");
   }
 
   @Test

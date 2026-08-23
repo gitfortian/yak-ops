@@ -12,11 +12,10 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Transitional mapper from the current execution model to Wave 0 core types.
+ * Transitional mapper from the current execution model to core domain types.
  *
  * <p>This mapper deliberately does not synthesize BatchExecution, BatchKey or BatchScope because
- * the legacy row does not contain stable batch identity. Wave 1 will provide persisted Batch
- * identity.
+ * a legacy execution row does not contain stable batch identity.
  */
 public final class LegacyOfflineExecutionCompatibilityMapper {
 
@@ -40,10 +39,8 @@ public final class LegacyOfflineExecutionCompatibilityMapper {
   }
 
   /**
-   * Builds the Batch-owned snapshot without reading current Task or SchedulePolicy.
-   *
-   * <p>The retry policy must be supplied by the caller from frozen batch evidence; this mapper
-   * never falls back to current task configuration.
+   * Builds Batch-owned frozen evidence from a bound legacy Attempt without reading current Task or
+   * SchedulePolicy.
    */
   public static ExecutionSnapshot toSnapshot(
       OfflineJobExecution source, RetryPolicySnapshot retryPolicy) {
@@ -53,7 +50,8 @@ public final class LegacyOfflineExecutionCompatibilityMapper {
         requireText(source.getDefinitionSnapshotJson(), "definitionSnapshot 不能为空"),
         positive(source.getDefinitionVersion(), "definitionVersion"),
         retryPolicy,
-        requireText(source.getConfigDigest(), "configDigest 不能为空"));
+        requireText(source.getConfigDigest(), "configDigest 不能为空"),
+        requireText(source.getSubmittedConfig(), "logicalJobSpec 不能为空"));
   }
 
   static AttemptStatus status(String value) {
@@ -61,6 +59,7 @@ public final class LegacyOfflineExecutionCompatibilityMapper {
     String normalized = value.trim().toUpperCase(Locale.ROOT);
     return switch (normalized) {
       case "CREATED" -> AttemptStatus.CREATED;
+      case "SUBMITTING" -> AttemptStatus.SUBMITTING;
       case "SUBMITTED" -> AttemptStatus.SUBMITTED;
       case "QUEUED" -> AttemptStatus.QUEUED;
       case "RUNNING" -> AttemptStatus.RUNNING;
@@ -68,7 +67,7 @@ public final class LegacyOfflineExecutionCompatibilityMapper {
       case "FAILED" -> AttemptStatus.FAILED;
       case "CANCELED", "CANCELLED" -> AttemptStatus.CANCELED;
       case "CANCELING", "CANCELLING" -> AttemptStatus.CANCELING;
-      case "LOST" -> AttemptStatus.UNKNOWN;
+      case "UNKNOWN", "LOST" -> AttemptStatus.UNKNOWN;
       default -> AttemptStatus.UNKNOWN;
     };
   }

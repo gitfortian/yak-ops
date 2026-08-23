@@ -14,6 +14,7 @@ BatchExecution
       ├── BatchKey
       ├── BatchScope
       ├── ExecutionSnapshot
+      │     └── logical JobSpec (no credentials)
       └── ExecutionAttempt 1..N
                 │
                 ▼
@@ -30,56 +31,68 @@ BatchExecution
 4. Retry 必须保持同一个 Batch、BatchScope、ExecutionSnapshot 和 RetryPolicy Snapshot。
 5. `UNKNOWN != FAILED`；结果不确定时必须先 reconcile，禁止盲目 Retry。
 6. Batch 终态后不再追加 Attempt；再次运行同一数据范围应创建新 Batch。
-7. V1 同一个 Task 最多一个 `RUNNING / WAITING_RETRY / UNKNOWN` Batch；并发需求变化必须先定义 `ConcurrencyPolicy`。
+7. V1 同一个 Task 最多一个 `RUNNING / WAITING_RETRY / UNKNOWN` Batch；PENDING Backfill 只排队，不占执行槽位。
 8. 每个 Batch 必须有稳定 `BatchKey`；Schedule 使用 `scheduleId + plannedFireTime`，不能使用实际回调时间。
 9. `BatchScope` 描述数据范围；不得用 `sceneType/syncType` 代替 Scope / Route / Policy。
-10. Backfill 创建一组 Batch，不创建新的 Task 类型；同一次 Backfill 优先共享同一 Snapshot。
-11. Cursor 只允许在 Batch `SUCCEEDED` 后推进；`FAILED / CANCELED / UNKNOWN` 不得推进。
-12. Task `last-*` 只能作为查询投影；运行真相只能来自 Batch / Attempt。
-13. Batch 状态必须由同 Batch 的 latest Attempt 推导；旧 Attempt 的晚到事件不得回退 Batch 真相。
-14. `DefinitionRevision` 只是修订标识，不等于 immutable `DefinitionVersion`。
-15. Link-Up Job / Worker / Quartz / HTTP DTO / DataSource credential 都不是 Core Domain 对象。
-16. SyncDefinition / Snapshot 不长期保存密码；凭据只在 Attempt 提交边界解析。
-17. 实时同步和离线同步保持独立 Core；不得因为名字相似提前抽 Shared Sync Kernel。
+10. Backfill 创建一组 Batch，不创建新的 Task 类型；同一次 Backfill 共享同一 `ExecutionSnapshot`，每个 Scope 生成独立稳定 BatchKey。
+11. Backfill PENDING Batch 创建 Attempt 1 时必须经过 durable reservation；多节点不得重复创建 Attempt。
+12. Cursor route (`cursorId -> sourceColumn`) 与 BatchScope 分离；不得把 cursorId 当成数据库字段名。
+13. Cursor 只允许在对应 Batch `SUCCEEDED` 后推进；`FAILED / CANCELED / UNKNOWN` 不得推进。
+14. Cursor 推进必须用当前位置 + stateVersion CAS；旧 Batch 晚到成功不得回退或跨越 Cursor。
+15. Task `last-*` 只能作为查询投影；运行真相只能来自 Batch / Attempt。
+16. Batch 状态必须由同 Batch 的 latest Attempt 推导；旧 Attempt 的晚到事件不得回退 Batch 真相。
+17. `DefinitionRevision` 只是修订标识，不等于 immutable `DefinitionVersion`。
+18. Link-Up Job / Worker / Quartz / HTTP DTO / DataSource credential 都不是 Core Domain 对象。
+19. SyncDefinition / Snapshot 不长期保存密码；逻辑 JobSpec 可以冻结在 Batch Snapshot，但凭据只在 Attempt 提交边界解析。
+20. 实时同步和离线同步保持独立 Core；不得因为名字相似提前抽 Shared Sync Kernel。
 
 ## Domain Impact Analysis
 
 修改离线同步代码前，必须先回答：
 
-1. 变化属于 Task、Batch、Attempt、Scope、Snapshot 还是 Policy？
+1. 变化属于 Task、Batch、Attempt、Scope、Snapshot、Cursor 还是 Policy？
 2. 是否改变 Batch / Attempt 生命周期？
 3. 是否改变 Retry、UNKNOWN、Cancel 或并发语义？
 4. 是否改变 BatchKey / 幂等身份？
-5. 是否让 Retry 回读 current Task 或 current SchedulePolicy？
+5. 是否让 Retry / PENDING Backfill 回读 current Task 或 current SchedulePolicy？
 6. 是否把 Task `last-*`、Engine 状态或外部 JobId 当成领域真相？
 7. Batch 状态是否仍由 latest Attempt 唯一推导？
-8. 是否引入新的 `sceneType/syncType`、技术类型或凭据泄漏？
-9. 是否能映射现有模型？不能映射则记录 `Domain Gap`，先设计再编码。
+8. Cursor 是否只由 SUCCEEDED Batch 推进，并保留 CAS 顺序保护？
+9. 是否把 Route 偷塞进 BatchScope，或把 cursorId 当字段名？
+10. 是否引入新的 `sceneType/syncType`、技术类型或凭据泄漏？
+11. 是否能映射现有模型？不能映射则记录 `Domain Gap`，先设计再编码。
 
 ## Current Transition
 
-Wave 2 / Wave 3 / Wave 4 已完成 Trigger、Retry/UNKNOWN 与 runtime truth 主链迁移。当前命令侧运行真相为：
+Wave 2-5 已完成 Trigger、Retry/UNKNOWN、runtime truth 与 Backfill/Cursor 主链迁移。当前运行模型：
 
 ```text
-Task command
-    │
-    ▼
-BatchExecution status
-    │
-    ▼
-latest ExecutionAttempt
+Trigger / Backfill Request
+        │
+        ▼
+BatchExecution
+  ├── frozen Snapshot + logical JobSpec
+  ├── BatchScope
+  └── latest Attempt = runtime evidence
+        │
+        └── SUCCEEDED CursorRange
+                    │
+                    ▼
+                Cursor CAS
 
 Task last-* = projection only
 ```
 
-Wave 4 状态推导固定为：活动 Attempt -> `RUNNING`；FAILED 且存在 `nextRetryTime` -> `WAITING_RETRY`；FAILED 无 Retry 窗口 -> `FAILED`；UNKNOWN -> `UNKNOWN`；SUCCEEDED/CANCELED 对应同名 Batch 终态。Attempt 状态写入与 Batch 状态刷新 dual-write；Wave 2/3 历史 Batch 通过 V3 migration 从 latest Attempt 回填 runtime status。
+Wave 5 固定：一次 Backfill Request 物化一组 `PENDING` Batch，同组共享冻结 Snapshot；dispatcher 在 V1 单 Task execution slot 下逐个 reservation 并创建 Attempt 1。Scope 只在提交边界投影成 Engine 条件，凭据仍最后解析。Cursor 单独持久化 route、position 与 stateVersion，只接受 SUCCEEDED CursorRange Batch 的 CAS 推进；失败、不确定、取消和旧成功事件都不能改变 Cursor。
+
+当前 Wave 5 scoped execution V1 明确收窄为 **JDBC 单表 source**；DataWindow / PartitionScope 需要冻结 JobSpec 中的 `source.options.partition_column`，CursorRange 使用 Cursor route 的 `sourceColumn`。多表 scoped Backfill 与 custom source query 叠加 Scope 暂不猜测语义，属于后续显式 Domain Gap。
 
 仍保留的主要 Domain Debt：
 
 ```text
 OfflineJobExecution = legacy 名称/结构仍作为 Attempt persistence compatibility view
 Legacy history       = Wave 1 前 execution 可无 batch_id，不属于 Batch runtime truth
-Backfill / Cursor    = 尚未切入目标 BatchScope / Cursor 推进规则
+Legacy batch snapshot= Wave 5 migration 后仍保留 Attempt 级 snapshot 兼容副本
 ```
 
 ```text
@@ -88,8 +101,8 @@ Wave 1  DONE  Batch persistence + execution.bind(batch_id)
 Wave 2  DONE  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
 Wave 3  DONE  Retry / UNKNOWN + durable retry reservation
 Wave 4  DONE  Runtime truth -> Batch/Attempt; Task last-* projection only
-Wave 5  NEXT  Backfill / Cursor
-Wave 6        Legacy cleanup
+Wave 5  DONE  Backfill group / BatchScope / Cursor success-only CAS
+Wave 6  NEXT  Legacy cleanup
 ```
 
 迁移原则：`expand -> dual read/write -> switch -> verify -> contract`。
@@ -104,7 +117,12 @@ Wave 6        Legacy cleanup
 - 用 Task `lastJobStatus / lastExecutionId` 决定运行、停止、编辑、下线或删除；
 - 用非 latest Attempt 的状态覆盖 Batch runtime truth；
 - 用 actual callback time 作为 Schedule Batch 身份；
-- 让 Attempt 自己重新生成 Snapshot；
+- 让 Retry 或 PENDING Backfill 重新读取 current Task 生成 Snapshot / JobSpec；
+- 把 Backfill 建模成新的 Task 类型，或让同一 request 的 Scope 各自偷偷读取不同 Snapshot；
+- Attempt SUCCEEDED 就直接推进 Cursor，而不确认 Batch SUCCEEDED；
+- 在 FAILED / CANCELED / UNKNOWN Batch 上推进 Cursor；
+- 不做 position/version CAS 就覆盖 Cursor；
+- 把 cursorId 当 source column，或把 Route/Policy 塞进 BatchScope；
 - 把 Link-Up JobSpec、Worker、Connector、Quartz 类型放进 Core Domain；
 - 为“全量/增量/单表/多表/补数”继续增加任务类型枚举；
 - 为了和 realtime 一致而提前增加 immutable DefinitionVersion 或 Shared Sync Kernel。

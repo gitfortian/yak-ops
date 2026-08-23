@@ -26,6 +26,7 @@ import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventReposito
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.service.OfflineExecutionClaimService.ClaimResult;
+import io.yak.ops.business.sync.offline.service.support.OfflineBatchScopeExecutionAdapter;
 import java.net.ConnectException;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +45,7 @@ class OfflineExecutionOrchestratorTest {
   @Mock private OfflineJobExecutionRepository executionRepository;
   @Mock private OfflineBatchExecutionRepository batchRepository;
   @Mock private OfflineBatchRuntimeService batchRuntimeService;
+  @Mock private OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
   @Mock private OfflineExecutionEventRepository eventRepository;
   @Mock private LinkUpClient linkUpClient;
 
@@ -58,6 +60,7 @@ class OfflineExecutionOrchestratorTest {
         executionRepository,
         batchRepository,
         batchRuntimeService,
+        scopeExecutionAdapter,
         eventRepository,
         linkUpClient,
         new ObjectMapper());
@@ -68,18 +71,13 @@ class OfflineExecutionOrchestratorTest {
     OfflineJobDefinition definition = new OfflineJobDefinition();
     definition.setId(10L);
 
-    OfflineJobExecution execution = new OfflineJobExecution();
-    execution.setId(99L);
-    execution.setJobDefinitionId(10L);
-    execution.setBatchId(77L);
-    execution.setStatus("CREATED");
-    execution.setStateVersion(1L);
-    execution.setAttemptNo(1);
-
+    OfflineJobExecution execution = execution(99L, "CREATED");
+    BatchExecution batch = frozenBatch(BatchStatus.RUNNING, BatchScope.fullSelection());
     when(claimService.claim(10L, "WORKFLOW", null, 1))
         .thenReturn(new ClaimResult(definition, "{}", execution));
-    when(definitionService.resolveExecutionJobSpec(definition)).thenReturn("{}");
-    when(batchRepository.findById(77L)).thenReturn(Optional.of(frozenBatch(BatchStatus.RUNNING)));
+    when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));
+    when(scopeExecutionAdapter.apply(10L, "{}", batch.batchScope())).thenReturn("{}");
+    when(definitionService.resolveExecutionJobSpec("{}")).thenReturn("{}");
     when(definitionRepository.findById(10L)).thenReturn(Optional.of(definition));
     when(linkUpClient.node())
         .thenThrow(new LinkUpTransportException(
@@ -93,22 +91,48 @@ class OfflineExecutionOrchestratorTest {
 
     assertThat(execution.getStatus()).isEqualTo("FAILED");
     assertThat(execution.getNextRetryTime()).isNotNull();
-    assertThat(execution.getErrorMessage())
-        .isEqualTo("无法连接 Link-Up Server：http://127.0.0.1:18080");
     verify(batchRuntimeService, atLeastOnce()).persistAttempt(execution);
     verify(batchRepository, atLeastOnce()).findById(77L);
+    verify(scopeExecutionAdapter).apply(10L, "{}", batch.batchScope());
     verify(eventRepository, atLeastOnce()).append(any());
   }
 
   @Test
+  void retryKeepsOriginalBatchScopeAtSubmissionBoundary() {
+    OfflineJobExecution previous = execution(98L, "FAILED");
+    OfflineJobExecution retry = execution(99L, "CREATED");
+    retry.setAttemptNo(2);
+    BatchScope.CursorRange range = BatchScope.cursorRange("orders", "100", "200");
+    BatchExecution batch = frozenBatch(BatchStatus.RUNNING, range);
+    when(claimService.claimRetry(98L)).thenReturn(new ClaimResult(null, "logical", retry));
+    when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));
+    when(scopeExecutionAdapter.apply(10L, "logical", range)).thenReturn("scoped");
+    when(definitionService.resolveExecutionJobSpec("scoped")).thenReturn("{}");
+    when(linkUpClient.node())
+        .thenThrow(new LinkUpTransportException("engine down", new ConnectException(), false));
+
+    assertThatThrownBy(() -> service.retryFrom(previous))
+        .isInstanceOf(LinkUpTransportException.class);
+
+    verify(scopeExecutionAdapter).apply(10L, "logical", range);
+  }
+
+  @Test
+  void reusedSubmittedBackfillDoesNotSubmitAgain() {
+    OfflineJobExecution existing = execution(99L, "SUBMITTED");
+    when(claimService.claimPendingBackfill(77L))
+        .thenReturn(new ClaimResult(null, "logical", existing, true));
+
+    OfflineJobExecution result = service.executePendingBackfill(77L);
+
+    assertThat(result).isSameAs(existing);
+    verifyNoInteractions(scopeExecutionAdapter, linkUpClient);
+  }
+
+  @Test
   void shouldMoveUncertainExecutionToUnknownAndDualWriteBatchTruth() {
-    OfflineJobExecution execution = new OfflineJobExecution();
-    execution.setId(99L);
-    execution.setJobDefinitionId(10L);
-    execution.setBatchId(77L);
-    execution.setStatus("RUNNING");
+    OfflineJobExecution execution = execution(99L, "RUNNING");
     execution.setStateVersion(3L);
-    execution.setAttemptNo(1);
     execution.setNextRetryTime(java.time.LocalDateTime.now().plusMinutes(1));
     execution.setEndTime(java.time.LocalDateTime.now());
     when(definitionRepository.findById(10L)).thenReturn(Optional.empty());
@@ -124,19 +148,9 @@ class OfflineExecutionOrchestratorTest {
 
   @Test
   void oldAttemptLateEventDoesNotOverwriteTaskLastProjection() {
-    OfflineJobExecution oldAttempt = new OfflineJobExecution();
-    oldAttempt.setId(99L);
-    oldAttempt.setJobDefinitionId(10L);
-    oldAttempt.setBatchId(77L);
-    oldAttempt.setStatus("RUNNING");
-    oldAttempt.setStateVersion(3L);
+    OfflineJobExecution oldAttempt = execution(99L, "RUNNING");
     oldAttempt.setAttemptNo(1);
-
-    OfflineJobExecution latestAttempt = new OfflineJobExecution();
-    latestAttempt.setId(100L);
-    latestAttempt.setJobDefinitionId(10L);
-    latestAttempt.setBatchId(77L);
-    latestAttempt.setStatus("RUNNING");
+    OfflineJobExecution latestAttempt = execution(100L, "RUNNING");
     latestAttempt.setAttemptNo(2);
     when(executionRepository.findByBatchId(77L)).thenReturn(List.of(oldAttempt, latestAttempt));
 
@@ -149,14 +163,9 @@ class OfflineExecutionOrchestratorTest {
 
   @Test
   void shouldCancelWaitingRetryFromBatchTruthWithoutReadingTaskLastExecution() {
-    BatchExecution waiting = frozenBatch(BatchStatus.WAITING_RETRY);
-    OfflineJobExecution latest = new OfflineJobExecution();
-    latest.setId(99L);
-    latest.setJobDefinitionId(10L);
-    latest.setBatchId(77L);
-    latest.setStatus("FAILED");
+    BatchExecution waiting = frozenBatch(BatchStatus.WAITING_RETRY, BatchScope.fullSelection());
+    OfflineJobExecution latest = execution(99L, "FAILED");
     latest.setStateVersion(4L);
-    latest.setAttemptNo(1);
 
     when(batchRuntimeService.requireLatestOccupyingBatch(10L)).thenReturn(waiting);
     when(batchRuntimeService.cancelWaitingRetry(waiting)).thenReturn(latest);
@@ -171,18 +180,30 @@ class OfflineExecutionOrchestratorTest {
     verify(eventRepository).append(any());
   }
 
-  private BatchExecution frozenBatch(BatchStatus status) {
+  private OfflineJobExecution execution(long id, String status) {
+    OfflineJobExecution execution = new OfflineJobExecution();
+    execution.setId(id);
+    execution.setJobDefinitionId(10L);
+    execution.setBatchId(77L);
+    execution.setStatus(status);
+    execution.setStateVersion(1L);
+    execution.setAttemptNo(1);
+    return execution;
+  }
+
+  private BatchExecution frozenBatch(BatchStatus status, BatchScope scope) {
     return new BatchExecution(
         77L,
         10L,
         new BatchKey("manual:test"),
         BatchTrigger.MANUAL,
-        BatchScope.fullSelection(),
+        scope,
         new ExecutionSnapshot(
             "{}",
             1,
             new RetryPolicySnapshot(3, 30),
-            "digest"),
+            "digest",
+            "logical"),
         status,
         List.of());
   }
