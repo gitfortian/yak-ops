@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.service;
+package io.yak.ops.business.sync.realtime.environment;
 
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironment;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
@@ -6,10 +6,10 @@ import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** Resolves the task runtime binding and immutable deployment environment snapshot. */
-@Service
+/** Resolves mutable environment bindings and immutable execution environment snapshots. */
+@Component
 public class RealtimeRuntimeResolver {
 
   private final ComputeEnvironmentStore environments;

@@ -4,10 +4,10 @@ import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView.RuntimeLog;
 import io.yak.ops.business.sync.realtime.engine.FlinkObservabilityClient;
+import io.yak.ops.business.sync.realtime.environment.RealtimeRuntimeResolver;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
-import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 

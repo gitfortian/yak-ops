@@ -11,7 +11,7 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResol
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
-import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
+import io.yak.ops.business.sync.realtime.environment.RealtimeRuntimeResolver;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import jakarta.validation.ConstraintViolation;
