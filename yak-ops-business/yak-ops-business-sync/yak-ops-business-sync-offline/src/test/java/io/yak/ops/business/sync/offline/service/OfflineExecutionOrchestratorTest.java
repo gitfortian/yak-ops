@@ -180,6 +180,35 @@ class OfflineExecutionOrchestratorTest {
     verify(eventRepository).append(any());
   }
 
+  @Test
+  void batchlessLegacyExecutionIsHistoryOnlyAndCannotBeCanceled() {
+    OfflineJobExecution history = execution(99L, "RUNNING");
+    history.setBatchId(null);
+    when(executionRepository.findById(99L)).thenReturn(Optional.of(history));
+
+    assertThatThrownBy(() -> service.cancel(99L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("未绑定 Batch")
+        .hasMessageContaining("仅支持查询");
+
+    verify(batchRuntimeService, never()).persistAttempt(any(OfflineJobExecution.class));
+    verifyNoInteractions(linkUpClient);
+  }
+
+  @Test
+  void batchlessLegacyExecutionCannotEnterUnknownReconcile() {
+    OfflineJobExecution history = execution(99L, "RUNNING");
+    history.setBatchId(null);
+
+    assertThatThrownBy(() -> service.markUnknown(history, "legacy timeout"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("未绑定 Batch")
+        .hasMessageContaining("仅支持查询");
+
+    verify(batchRuntimeService, never()).persistAttempt(any(OfflineJobExecution.class));
+    verify(definitionRepository, never()).update(any(OfflineJobDefinition.class));
+  }
+
   private OfflineJobExecution execution(long id, String status) {
     OfflineJobExecution execution = new OfflineJobExecution();
     execution.setId(id);
