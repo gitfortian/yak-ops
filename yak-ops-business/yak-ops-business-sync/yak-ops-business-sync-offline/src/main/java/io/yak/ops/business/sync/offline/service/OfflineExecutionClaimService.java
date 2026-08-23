@@ -5,8 +5,20 @@ import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
+import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper;
+import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper.Mapping;
+import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchKey;
+import io.yak.ops.business.sync.offline.domain.core.BatchScope;
+import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
+import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
+import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
+import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -21,16 +33,22 @@ public class OfflineExecutionClaimService {
   private final OfflineJobDefinitionService definitionService;
   private final OfflineJobDefinitionRepository definitionRepository;
   private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineBatchExecutionRepository batchRepository;
+  private final OfflineScheduleRepository scheduleRepository;
   private final OfflineSyncProperties properties;
 
   public OfflineExecutionClaimService(
       OfflineJobDefinitionService definitionService,
       OfflineJobDefinitionRepository definitionRepository,
       OfflineJobExecutionRepository executionRepository,
+      OfflineBatchExecutionRepository batchRepository,
+      OfflineScheduleRepository scheduleRepository,
       OfflineSyncProperties properties) {
     this.definitionService = definitionService;
     this.definitionRepository = definitionRepository;
     this.executionRepository = executionRepository;
+    this.batchRepository = batchRepository;
+    this.scheduleRepository = scheduleRepository;
     this.properties = properties;
   }
 
@@ -46,13 +64,14 @@ public class OfflineExecutionClaimService {
       throw new IllegalStateException("请先上线任务，再执行运行操作");
     }
     String logicalJobSpec = definitionService.resolveLogicalJobSpec(definition);
+    Mapping trigger = LegacyBatchTriggerCompatibilityMapper.parse(triggerType);
     return createClaim(
         definition,
         Math.max(1, definition.getVersion() == null ? 1 : definition.getVersion()),
         definition.getConfigDigest(),
         definition.getDefinitionJson(),
         logicalJobSpec,
-        triggerType,
+        trigger,
         retryFromExecutionId,
         attemptNo,
         null);
@@ -112,7 +131,7 @@ public class OfflineExecutionClaimService {
         configDigest,
         definitionSnapshotJson,
         logicalJobSpecJson,
-        triggerType,
+        LegacyBatchTriggerCompatibilityMapper.parse(triggerType),
         null,
         1,
         normalizedKey);
@@ -124,7 +143,7 @@ public class OfflineExecutionClaimService {
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson,
-      String triggerType,
+      Mapping trigger,
       Long retryFromExecutionId,
       int attemptNo,
       String idempotencyKey) {
@@ -133,18 +152,31 @@ public class OfflineExecutionClaimService {
       throw new IllegalStateException("任务已有运行中的执行实例，不能重复提交");
     }
 
+    int normalizedAttemptNo = Math.max(1, attemptNo);
+    String normalizedIdempotencyKey =
+        StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : UUID.randomUUID().toString();
+    Long batchId = resolveBatchId(
+        definitionId,
+        definitionVersion,
+        configDigest,
+        definitionSnapshotJson,
+        trigger,
+        retryFromExecutionId,
+        normalizedAttemptNo,
+        normalizedIdempotencyKey);
+
     LocalDateTime now = LocalDateTime.now();
     OfflineJobExecution execution = new OfflineJobExecution();
     execution.setJobDefinitionId(definitionId);
+    execution.setBatchId(batchId);
     execution.setDefinitionVersion((int) Math.min(Integer.MAX_VALUE, definitionVersion));
     execution.setEngineBaseUrl(properties.getEngine().getBaseUrl());
     execution.setExternalExecutionId("yak-offline-" + UUID.randomUUID());
-    execution.setIdempotencyKey(
-        StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : UUID.randomUUID().toString());
+    execution.setIdempotencyKey(normalizedIdempotencyKey);
     execution.setStatus(OfflineExecutionStatus.CREATED.name());
     execution.setStateVersion(1L);
-    execution.setAttemptNo(Math.max(1, attemptNo));
-    execution.setTriggerType(triggerType);
+    execution.setAttemptNo(normalizedAttemptNo);
+    execution.setTriggerType(trigger.legacyTriggerType());
     execution.setRetryFromExecutionId(retryFromExecutionId);
     execution.setCancellationRequested(false);
     execution.setRetryCreated(false);
@@ -163,6 +195,71 @@ public class OfflineExecutionClaimService {
       throw new IllegalStateException("创建离线同步执行实例失败");
     }
     return new ClaimResult(definition, logicalJobSpecJson, execution, false);
+  }
+
+  private Long resolveBatchId(
+      Long definitionId,
+      long definitionVersion,
+      String configDigest,
+      String definitionSnapshotJson,
+      Mapping trigger,
+      Long retryFromExecutionId,
+      int attemptNo,
+      String idempotencyKey) {
+    if (retryFromExecutionId != null || attemptNo > 1 || "RETRY".equalsIgnoreCase(trigger.legacyTriggerType())) {
+      if (retryFromExecutionId == null) return null;
+      return executionRepository.findById(retryFromExecutionId)
+          .map(OfflineJobExecution::getBatchId)
+          .orElse(null);
+    }
+
+    BatchScope scope = BatchScope.fullSelection();
+    BatchTrigger batchTrigger = Objects.requireNonNull(trigger.batchTrigger(), "初始执行必须包含 BatchTrigger");
+    BatchKey batchKey = trigger.batchKey();
+    if (batchKey == null) {
+      batchKey = switch (batchTrigger) {
+        case MANUAL -> BatchKey.manual(idempotencyKey);
+        case WORKFLOW -> BatchKey.workflow(idempotencyKey);
+        case BACKFILL -> BatchKey.backfill(idempotencyKey, scope.fingerprint());
+        case SCHEDULE -> throw new IllegalArgumentException(
+            "SCHEDULE trigger 必须携带 scheduleId + plannedFireTime");
+      };
+    }
+
+    RetryPolicySnapshot retryPolicy = freezeRetryPolicy(definitionId);
+    ExecutionSnapshot snapshot = new ExecutionSnapshot(
+        requireText(definitionSnapshotJson, "definitionSnapshot 不能为空"),
+        (int) Math.min(Integer.MAX_VALUE, Math.max(1L, definitionVersion)),
+        retryPolicy,
+        requireText(configDigest, "configDigest 不能为空"));
+    BatchExecution batch = new BatchExecution(
+        null,
+        definitionId,
+        batchKey,
+        batchTrigger,
+        scope,
+        snapshot,
+        BatchStatus.PENDING,
+        java.util.List.of());
+    BatchExecution saved = batchRepository.insert(batch);
+    if (saved.id() == null) throw new IllegalStateException("创建 BatchExecution 后缺少 ID");
+    return saved.id();
+  }
+
+  private RetryPolicySnapshot freezeRetryPolicy(Long definitionId) {
+    OfflineSchedule schedule = scheduleRepository.findSchedule(definitionId);
+    int maxAttempts = schedule == null
+        ? properties.getControl().getDefaultMaxAttempts()
+        : schedule.retryMaxAttempts();
+    int backoffSeconds = schedule == null
+        ? properties.getControl().getDefaultRetryBackoffSeconds()
+        : schedule.retryBackoffSeconds();
+    return new RetryPolicySnapshot(Math.max(1, maxAttempts), Math.max(0, backoffSeconds));
+  }
+
+  private String requireText(String value, String message) {
+    if (!StringUtils.hasText(value)) throw new IllegalStateException(message);
+    return value.trim();
   }
 
   private void validateIdempotentReuse(
