@@ -70,6 +70,8 @@ public class RealtimeDefinitionValidator {
     JsonNode manifest = gateway.capabilities(environment);
     capabilityResolver.requireSupported(manifest, resolved, spec);
 
+    // Compile the logical definition as part of preflight so route escaping and connector YAML shape
+    // fail before persistence. No secrets are resolved and no Flink REST health call is made here.
     compiler.compile("definition-preflight", spec, resolved);
 
     return new RealtimeValidationResult(
