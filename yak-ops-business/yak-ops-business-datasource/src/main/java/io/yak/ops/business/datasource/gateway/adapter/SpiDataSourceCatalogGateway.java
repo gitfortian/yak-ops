@@ -2,6 +2,13 @@ package io.yak.ops.business.datasource.gateway.adapter;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
+import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
+import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
+import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult.QueryColumn;
+import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTable;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTablePath;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTableQuery;
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
@@ -16,13 +23,15 @@ import io.yak.ops.spi.datasource.metadata.DataSourceColumn;
 import io.yak.ops.spi.datasource.metadata.DataSourceTable;
 import io.yak.ops.spi.datasource.query.DataSourceQueryColumn;
 import io.yak.ops.spi.datasource.query.DataSourceQueryResult;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Datasource Catalog SPI -> Business Gateway Adapter。 */
+/** Datasource Catalog SPI -> typed Business Catalog Gateway Adapter。 */
 @Component
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -46,11 +55,12 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
   }
 
   @Override
-  public List<Table> listTables(
+  public List<CatalogTable> listTables(
       DataSourceDefinition dataSource,
-      TableQuery query,
+      CatalogTableQuery query,
       int timeoutSeconds) {
-    TableQuery value = query == null ? new TableQuery(null, null, null) : query;
+    CatalogTableQuery value =
+        query == null ? new CatalogTableQuery(null, null, null) : query;
     return execute(
         dataSource,
         timeoutSeconds,
@@ -65,9 +75,9 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
   }
 
   @Override
-  public List<Column> listColumns(
+  public List<CatalogColumn> listColumns(
       DataSourceDefinition dataSource,
-      TablePath tablePath,
+      CatalogTablePath tablePath,
       int timeoutSeconds) {
     if (tablePath == null) {
       throw new DataSourceException(
@@ -88,34 +98,37 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
   }
 
   @Override
-  public List<Column> describe(
+  public List<CatalogColumn> describe(
       DataSourceDefinition dataSource,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int timeoutSeconds) {
+    Map<String, Object> pluginRequest = toPluginRequest(request);
     return execute(
         dataSource,
         timeoutSeconds,
-        catalog -> catalog.describe(request).stream().map(this::toColumn).toList());
+        catalog -> catalog.describe(pluginRequest).stream().map(this::toColumn).toList());
   }
 
   @Override
-  public QueryResult preview(
+  public CatalogQueryResult preview(
       DataSourceDefinition dataSource,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int limit,
       int timeoutSeconds) {
+    Map<String, Object> pluginRequest = toPluginRequest(request);
     return execute(
         dataSource,
         timeoutSeconds,
-        catalog -> toQueryResult(catalog.preview(request, limit)));
+        catalog -> toQueryResult(catalog.preview(pluginRequest, limit)));
   }
 
   @Override
   public long count(
       DataSourceDefinition dataSource,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int timeoutSeconds) {
-    return execute(dataSource, timeoutSeconds, catalog -> catalog.count(request));
+    Map<String, Object> pluginRequest = toPluginRequest(request);
+    return execute(dataSource, timeoutSeconds, catalog -> catalog.count(pluginRequest));
   }
 
   @Override
@@ -132,13 +145,18 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
   @Override
   public String resolveSql(
       DataSourceDefinition dataSource,
-      String sql,
-      Map<String, Object> request,
+      CatalogReadRequest request,
       int timeoutSeconds) {
+    if (request == null || request.sql() == null) {
+      throw new DataSourceException(
+          DataSourceErrorCode.CATALOG_FAILED,
+          "解析 SQL 时 query 不能为空");
+    }
+    Map<String, Object> pluginRequest = toPluginRequest(request);
     return execute(
         dataSource,
         timeoutSeconds,
-        catalog -> catalog.resolveSql(sql, request));
+        catalog -> catalog.resolveSql(request.sql(), pluginRequest));
   }
 
   private <T> T execute(
@@ -152,8 +170,7 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
     }
     try {
       DataSourcePlugin plugin = pluginRegistry.get(dataSource.getDbType());
-      DataSourceConnection connection =
-          plugin.parseConnection(dataSource.getConnectionParams());
+      DataSourceConnection connection = plugin.parseConnection(dataSource.getConnectionParams());
       DataSourceCatalog catalog =
           plugin.createCatalog(connection, Math.max(1, timeoutSeconds));
       return action.apply(catalog);
@@ -166,8 +183,31 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
     }
   }
 
-  private Table toTable(DataSourceTable table) {
-    return new Table(
+  private Map<String, Object> toPluginRequest(CatalogReadRequest request) {
+    if (request == null) {
+      throw new DataSourceException(
+          DataSourceErrorCode.CATALOG_FAILED,
+          "Catalog 请求不能为空");
+    }
+    Map<String, Object> values = new LinkedHashMap<>();
+    values.put("read_mode", request.sqlMode() ? "sql" : "table");
+    if (request.tablePath() != null) values.put("table_path", request.tablePath());
+    if (request.sql() != null) values.put("query", request.sql());
+    if (!request.variables().isEmpty()) {
+      List<Map<String, Object>> params = new ArrayList<>(request.variables().size());
+      for (CatalogReadRequest.Variable variable : request.variables()) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("paramName", variable.name());
+        item.put("paramValue", variable.value());
+        params.add(item);
+      }
+      values.put("paramsList", List.copyOf(params));
+    }
+    return Map.copyOf(values);
+  }
+
+  private CatalogTable toTable(DataSourceTable table) {
+    return new CatalogTable(
         table.getDatabase(),
         table.getSchema(),
         table.getName(),
@@ -175,8 +215,8 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
         table.getRemarks());
   }
 
-  private Column toColumn(DataSourceColumn column) {
-    return new Column(
+  private CatalogColumn toColumn(DataSourceColumn column) {
+    return new CatalogColumn(
         column.getName(),
         column.getTypeName(),
         column.getJdbcType(),
@@ -188,13 +228,13 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
         column.getRemarks());
   }
 
-  private QueryResult toQueryResult(DataSourceQueryResult result) {
+  private CatalogQueryResult toQueryResult(DataSourceQueryResult result) {
     if (result == null) {
-      return new QueryResult(List.of(), List.of(), 0L);
+      return new CatalogQueryResult(List.of(), List.of(), 0L);
     }
     List<QueryColumn> columns =
         result.getColumns().stream().map(this::toQueryColumn).toList();
-    return new QueryResult(columns, result.getData(), result.getTotal());
+    return new CatalogQueryResult(columns, result.getData(), result.getTotal());
   }
 
   private QueryColumn toQueryColumn(DataSourceQueryColumn column) {
