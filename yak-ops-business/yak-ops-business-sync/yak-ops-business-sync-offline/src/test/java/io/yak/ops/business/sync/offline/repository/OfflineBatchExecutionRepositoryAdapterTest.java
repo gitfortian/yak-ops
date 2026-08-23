@@ -156,6 +156,43 @@ class OfflineBatchExecutionRepositoryAdapterTest {
   }
 
   @Test
+  void missingBatchLogicalJobSpecDoesNotFallBackToAttemptCopy() {
+    FakeBatchDao dao = new FakeBatchDao();
+    OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
+    OfflineBatchExecutionRepositoryAdapter repository =
+        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+
+    BatchExecution inserted = repository.insert(new BatchExecution(
+        null,
+        9L,
+        BatchKey.manual("request-9"),
+        BatchTrigger.MANUAL,
+        BatchScope.fullSelection(),
+        snapshot(1, 2),
+        BatchStatus.RUNNING,
+        List.of()));
+    dao.stored.setLogicalJobSpecJson(null);
+
+    OfflineJobExecution compatibilityCopy = OfflineJobExecution.builder()
+        .id(501L)
+        .jobDefinitionId(9L)
+        .batchId(inserted.id())
+        .attemptNo(1)
+        .triggerType("MANUAL")
+        .idempotencyKey("attempt-501")
+        .externalExecutionId("external-501")
+        .submittedConfig("{\"kind\":\"BatchSyncJob\"}")
+        .status("RUNNING")
+        .createTime(LocalDateTime.of(2026, 8, 23, 10, 0))
+        .build();
+    when(executions.findByBatchId(inserted.id())).thenReturn(List.of(compatibilityCopy));
+
+    assertThatThrownBy(() -> repository.findById(inserted.id()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("logicalJobSpec");
+  }
+
+  @Test
   void rejectsCorruptedScopeEvidence() {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
