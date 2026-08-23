@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Automated guardrails for the Realtime Sync domain.
-
-The script intentionally uses only Python's standard library so it can run:
-- locally without Maven/Node dependencies;
-- in GitHub Actions before any project dependency resolution.
-
-It enforces stable architectural facts established by Realtime Sync DOMAIN.md.
-"""
+"""Zero-dependency guardrails for the Realtime Sync domain."""
 
 from __future__ import annotations
 
@@ -20,8 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "yak-ops-business/yak-ops-business-sync/yak-ops-business-sync-realtime"
 JAVA_ROOT = MODULE / "src/main/java/io/yak/ops/business/sync/realtime"
 DOMAIN_DIR = JAVA_ROOT / "domain"
+DOC_DIR = ROOT / "docs/realtime-sync/domain"
 
-CORE_DOMAIN_FILES = (
+CORE_FILES = (
     "RealtimeJobState.java",
     "SyncDefinition.java",
     "RuntimeEnvironmentRef.java",
@@ -32,7 +26,7 @@ CORE_DOMAIN_FILES = (
     "SyncExecutionStateMachine.java",
 )
 
-FORBIDDEN_CORE_IMPORT_PREFIXES = (
+FORBIDDEN_IMPORTS = (
     "org.springframework.",
     "com.fasterxml.jackson.",
     "com.baomidou.",
@@ -45,7 +39,7 @@ FORBIDDEN_CORE_IMPORT_PREFIXES = (
     "io.yak.ops.business.sync.realtime.engine.",
 )
 
-FORBIDDEN_CORE_IDENTIFIERS = (
+FORBIDDEN_CORE_NAMES = (
     "pipelineYaml",
     "flinkHome",
     "flinkCdcHome",
@@ -59,202 +53,131 @@ FORBIDDEN_CORE_IDENTIFIERS = (
     "syncType",
 )
 
-FORBIDDEN_DOMAIN_FILENAME_PATTERNS = (
-    re.compile(r"^(Wizard|Yaml|Flink|Mysql|Postgres|Kafka).*(Spec|Definition|Task)\.java$", re.I),
-    re.compile(r".*(SceneType|SyncType).*\.java$", re.I),
-)
 
-
-class Guardrails:
+class Guard:
     def __init__(self) -> None:
         self.errors: list[str] = []
         self.checks = 0
 
-    def check(self, condition: bool, message: str) -> None:
+    def check(self, ok: bool, message: str) -> None:
         self.checks += 1
-        if not condition:
+        if not ok:
             self.errors.append(message)
 
-    def require_file(self, path: Path) -> str:
+    def read(self, path: Path) -> str:
         self.check(path.exists(), f"Missing required file: {path.relative_to(ROOT)}")
-        if not path.exists():
-            return ""
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8") if path.exists() else ""
 
-    def report(self) -> int:
+    def finish(self) -> int:
         if self.errors:
             print("Realtime Sync Domain Guardrails: FAILED")
-            for index, error in enumerate(self.errors, start=1):
-                print(f"{index}. {error}")
-            print(f"\n{len(self.errors)} failure(s), {self.checks} checks executed.")
+            for i, error in enumerate(self.errors, 1):
+                print(f"{i}. {error}")
             return 1
         print(f"Realtime Sync Domain Guardrails: OK ({self.checks} checks)")
         return 0
 
 
-def java_code_without_comments_and_strings(text: str) -> str:
-    # Imports are checked separately. Identifier checks only need comments and strings removed.
+def code_only(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
     text = re.sub(r"//[^\n]*", " ", text)
     text = re.sub(r'"(?:\\.|[^"\\])*"', '""', text)
-    text = re.sub(r"'(?:\\.|[^'\\])*'", "''", text)
     return text
 
 
-def check_core_domain_purity(g: Guardrails) -> None:
-    for filename in CORE_DOMAIN_FILES:
-        path = DOMAIN_DIR / filename
-        text = g.require_file(path)
-        if not text:
-            continue
-
+def check_core(g: Guard) -> None:
+    for name in CORE_FILES:
+        text = g.read(DOMAIN_DIR / name)
         imports = re.findall(r"(?m)^\s*import\s+(?:static\s+)?([^;]+);", text)
         for imported in imports:
             g.check(
                 imported.startswith("java.")
                 or imported.startswith("io.yak.ops.business.sync.realtime.domain."),
-                f"{filename}: Core Domain import is not JDK/domain-local: {imported}",
+                f"{name}: Core import must be JDK/domain-local: {imported}",
             )
             g.check(
-                not imported.startswith(FORBIDDEN_CORE_IMPORT_PREFIXES),
-                f"{filename}: forbidden framework/adapter import: {imported}",
+                not imported.startswith(FORBIDDEN_IMPORTS),
+                f"{name}: framework/adapter import is forbidden: {imported}",
             )
-
-        code = java_code_without_comments_and_strings(text)
-        for identifier in FORBIDDEN_CORE_IDENTIFIERS:
+        code = code_only(text)
+        for symbol in FORBIDDEN_CORE_NAMES:
             g.check(
-                re.search(rf"\b{re.escape(identifier)}\b", code) is None,
-                f"{filename}: forbidden Core Domain identifier: {identifier}",
+                re.search(rf"\b{re.escape(symbol)}\b", code) is None,
+                f"{name}: infrastructure/scenario symbol leaked into Core: {symbol}",
             )
-
-
-def check_domain_naming(g: Guardrails) -> None:
-    if not DOMAIN_DIR.exists():
-        g.check(False, f"Missing domain directory: {DOMAIN_DIR.relative_to(ROOT)}")
-        return
 
     for path in DOMAIN_DIR.glob("*.java"):
-        for pattern in FORBIDDEN_DOMAIN_FILENAME_PATTERNS:
+        g.check(
+            not re.match(r"^(Wizard|Yaml|Flink|Mysql|Postgres|Kafka).*(Spec|Definition|Task)\.java$", path.name, re.I),
+            f"Second domain truth requires review: {path.name}",
+        )
+        code = code_only(path.read_text(encoding="utf-8"))
+        for symbol in ("sceneType", "syncType"):
             g.check(
-                pattern.match(path.name) is None,
-                f"Domain anti-pattern filename requires domain review: {path.name}",
+                re.search(rf"\b{symbol}\b", code) is None,
+                f"Scenario discriminator requires domain review: {path.name}:{symbol}",
             )
 
-        code = java_code_without_comments_and_strings(path.read_text(encoding="utf-8"))
-        for identifier in ("sceneType", "syncType"):
-            g.check(
-                re.search(rf"\b{identifier}\b", code) is None,
-                f"{path.name}: scene/sync type discriminator is forbidden without domain review: {identifier}",
-            )
 
-
-def check_execution_is_runtime_truth(g: Guardrails) -> None:
-    dao_path = JAVA_ROOT / "dao/impl/RealtimeJobDaoImpl.java"
-    query_path = MODULE / "src/main/resources/mapper/realtime/RealtimeJobQueryMapper.xml"
-    store_path = JAVA_ROOT / "repository/RealtimeJobStore.java"
-
-    dao = g.require_file(dao_path)
-    query = g.require_file(query_path)
-    store = g.require_file(store_path)
+def check_runtime_truth(g: Guard) -> None:
+    dao = g.read(JAVA_ROOT / "dao/impl/RealtimeJobDaoImpl.java")
+    query = g.read(MODULE / "src/main/resources/mapper/realtime/RealtimeJobQueryMapper.xml")
+    store = g.read(JAVA_ROOT / "repository/RealtimeJobStore.java")
 
     for token in (
         "RealtimeJobDefinitionPO::getDesiredState",
         "RealtimeJobDefinitionPO::getObservedState",
         "RealtimeJobDefinitionPO::getLastError",
     ):
-        g.check(token not in dao, f"Task runtime dual-write reintroduced in DAO: {token}")
+        g.check(token not in dao, f"Task runtime dual-write reintroduced: {token}")
 
     for token in ("d.desired_state", "d.observed_state", "d.last_error"):
-        g.check(token not in query, f"Task runtime fallback reintroduced in query model: {token}")
+        g.check(token not in query, f"Task runtime fallback reintroduced: {token}")
 
     for method in ("desiredJobs", "hasOtherDesiredRunning", "markStarting"):
-        g.check(
-            re.search(rf"\b{method}\s*\(", store) is None,
-            f"Legacy Task runtime side-path reintroduced in RealtimeJobStore: {method}",
-        )
+        g.check(not re.search(rf"\b{method}\s*\(", store), f"Legacy runtime side-path reintroduced: {method}")
 
     g.check(
         "p.definition_version_id" in query and "d.published_definition_version_id" in query,
         "publishedUpdateAvailable must compare immutable DefinitionVersion IDs",
     )
-    g.check(
-        not re.search(
-            r"p\.definition_version\s*(?:!=|<>|&lt;&gt;)\s*d\.published_version", query
-        ),
-        "Legacy DraftRevision comparison must not be used as version identity",
-    )
 
 
-def check_execution_commands(g: Guardrails) -> None:
-    service_path = JAVA_ROOT / "service/RealtimeJobService.java"
-    controller_path = JAVA_ROOT / "controller/v1/RealtimeJobController.java"
-    frontend_api_path = ROOT / "yak-ops-ui/src/pages/realtime-sync/api.ts"
+def check_commands(g: Guard) -> None:
+    service = g.read(JAVA_ROOT / "service/RealtimeJobService.java")
+    controller = g.read(JAVA_ROOT / "controller/v1/RealtimeJobController.java")
+    frontend = g.read(ROOT / "yak-ops-ui/src/pages/realtime-sync/api.ts")
 
-    service = g.require_file(service_path)
-    controller = g.require_file(controller_path)
-    frontend = g.require_file(frontend_api_path)
-
-    g.check(
-        re.search(r"\brestartExecution\s*\(", service) is not None,
-        "RealtimeJobService must expose RestartExecution semantics",
-    )
-    g.check(
-        re.search(r"\bapplyPublishedVersion\s*\(", service) is not None,
-        "RealtimeJobService must expose ApplyPublishedVersion semantics",
-    )
+    g.check("restartExecution(" in service, "RestartExecution semantics missing")
+    g.check("applyPublishedVersion(" in service, "ApplyPublishedVersion semantics missing")
     g.check(
         re.search(r"\bpublic\s+[^\n{;]+\brestart\s*\(", service) is None,
-        "Generic Application restart() must not be reintroduced",
+        "Generic Application restart() must not return",
     )
-    g.check(
-        "service.restart(" not in controller,
-        "Controller compatibility endpoint must never delegate to generic restart()",
-    )
+    g.check("service.restart(" not in controller, "Controller must not use generic restart()")
     if '@PostMapping("/{id}/restart")' in controller:
-        g.check(
-            "service.restartExecution(id, key)" in controller,
-            "Legacy HTTP /restart endpoint must delegate to restartExecution()",
-        )
+        g.check("service.restartExecution(id, key)" in controller, "Legacy /restart must alias restartExecution()")
 
-    g.check(
-        re.search(r"\|\s*'restart'\s*;", frontend) is None
-        and re.search(r"\|\s*'restart'\s*\n", frontend) is None,
-        "Frontend RealtimeAction must not reintroduce generic 'restart'",
-    )
-    g.check(
-        "'restart-execution'" in frontend and "'apply-published-version'" in frontend,
-        "Frontend must keep restart-execution and apply-published-version as separate actions",
-    )
+    g.check("'restart-execution'" in frontend, "Frontend restart-execution action missing")
+    g.check("'apply-published-version'" in frontend, "Frontend apply-published-version action missing")
+    g.check(not re.search(r"\|\s*'restart'\b", frontend), "Generic frontend restart action must not return")
 
-    g.check(
-        "requirePublishedDefinition(id)" in service,
-        "Start path must resolve an immutable PublishedDefinitionRef",
-    )
-    g.check(
-        "prepare(id, true)" not in service,
-        "Start must not fall back to preparing the mutable current Draft",
-    )
+    g.check("requirePublishedDefinition(id)" in service, "Start must resolve Published DefinitionVersion")
+    g.check("prepare(id, true)" not in service, "Start must not fall back to mutable Draft")
 
 
-def check_digest_semantics(g: Guardrails) -> None:
-    store = g.require_file(JAVA_ROOT / "repository/RealtimeJobStore.java")
-    view = g.require_file(DOMAIN_DIR / "RealtimeJobView.java")
-
+def check_semantic_names(g: Guard) -> None:
+    store = g.read(JAVA_ROOT / "repository/RealtimeJobStore.java")
+    view = g.read(DOMAIN_DIR / "RealtimeJobView.java")
+    text = store + view
     for symbol in ("sourceConfigDigest()", "artifactDigest()", "draftRevision()"):
-        g.check(
-            symbol in store or symbol in view,
-            f"Expected explicit digest/revision semantic alias is missing: {symbol}",
-        )
+        g.check(symbol in text, f"Missing semantic compatibility alias: {symbol}")
 
 
-def check_required_domain_docs(g: Guardrails) -> None:
-    domain_contract = MODULE / "DOMAIN.md"
-    stage6 = ROOT / "docs/realtime-sync/domain/06-stage6-migration-completion.md"
-    stage7 = ROOT / "docs/realtime-sync/domain/07-automated-domain-guardrails.md"
-
-    contract = g.require_file(domain_contract)
-    g.require_file(stage6)
-    g.require_file(stage7)
+def check_docs(g: Guard) -> None:
+    contract = g.read(MODULE / "DOMAIN.md")
+    overview = g.read(DOC_DIR / "README.md")
+    decisions = g.read(DOC_DIR / "DECISIONS.md")
 
     for phrase in (
         "RealtimeSyncTask",
@@ -263,50 +186,37 @@ def check_required_domain_docs(g: Guardrails) -> None:
         "Domain Impact Analysis",
         "Domain Compliance Report",
     ):
-        g.check(phrase in contract, f"DOMAIN.md lost mandatory contract phrase: {phrase}")
+        g.check(phrase in contract, f"DOMAIN.md lost mandatory phrase: {phrase}")
+
+    g.check("历史设计过程看 Git / PR" in overview, "README.md must describe current model, not stage history")
+    g.check("文档保持小" in decisions, "DECISIONS.md must preserve the documentation-budget decision")
 
 
-def check_pr_body(g: Guardrails, event_path: Path | None) -> None:
-    if event_path is None:
+def check_pr(g: Guard, event_path: Path | None) -> None:
+    if not event_path:
         return
-    if not event_path.exists():
-        g.check(False, f"GitHub event file does not exist: {event_path}")
-        return
-
     event = json.loads(event_path.read_text(encoding="utf-8"))
-    pull_request = event.get("pull_request")
-    if not pull_request:
+    pr = event.get("pull_request")
+    if not pr:
         return
-
-    body = pull_request.get("body") or ""
-    for required in ("Domain Impact Analysis", "Domain Compliance Report", "Domain Gap"):
-        g.check(
-            required.lower() in body.lower(),
-            f"Realtime-sync PR body must contain '{required}'",
-        )
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--event",
-        type=Path,
-        help="Optional GitHub event JSON. Pull requests are checked for the domain review contract.",
-    )
-    return parser.parse_args()
+    body = pr.get("body") or ""
+    for phrase in ("Domain Impact Analysis", "Domain Gap", "Domain Compliance Report"):
+        g.check(phrase.lower() in body.lower(), f"PR body must contain '{phrase}'")
 
 
 def main() -> int:
-    args = parse_args()
-    g = Guardrails()
-    check_core_domain_purity(g)
-    check_domain_naming(g)
-    check_execution_is_runtime_truth(g)
-    check_execution_commands(g)
-    check_digest_semantics(g)
-    check_required_domain_docs(g)
-    check_pr_body(g, args.event)
-    return g.report()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--event", type=Path)
+    args = parser.parse_args()
+
+    g = Guard()
+    check_core(g)
+    check_runtime_truth(g)
+    check_commands(g)
+    check_semantic_names(g)
+    check_docs(g)
+    check_pr(g, args.event)
+    return g.finish()
 
 
 if __name__ == "__main__":
