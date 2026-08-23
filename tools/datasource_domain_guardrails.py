@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "yak-ops-business/yak-ops-business-datasource"
 JAVA_ROOT = MODULE / "src/main/java/io/yak/ops/business/datasource"
 DOMAIN_DIR = JAVA_ROOT / "domain"
+GATEWAY_DIR = JAVA_ROOT / "gateway"
 
 CORE_FILES = (
     "ConnectionProfile.java",
@@ -35,6 +36,21 @@ FORBIDDEN_IMPORTS = (
     "io.yak.ops.business.datasource.repository.",
     "io.yak.ops.business.datasource.dao.",
     "io.yak.ops.business.datasource.plugin.",
+)
+
+PORT_FORBIDDEN_IMPORTS = (
+    "io.yak.ops.spi.datasource.",
+    "io.yak.ops.common.bean.dto.",
+    "io.yak.ops.common.bean.vo.",
+    "io.yak.ops.common.bean.po.",
+    "com.baomidou.",
+    "org.mybatis.",
+)
+
+PROTECTED_APPLICATION_FILES = (
+    "service/impl/DataSourceServiceImpl.java",
+    "service/impl/DataSourceCatalogServiceImpl.java",
+    "service/support/DataSourceViewMapper.java",
 )
 
 
@@ -69,11 +85,14 @@ def code_only(text: str) -> str:
     return text
 
 
+def imports_of(text: str) -> list[str]:
+    return re.findall(r"(?m)^\s*import\s+(?:static\s+)?([^;]+);", text)
+
+
 def check_core(g: Guard) -> None:
     for name in CORE_FILES:
         text = g.read(DOMAIN_DIR / name)
-        imports = re.findall(r"(?m)^\s*import\s+(?:static\s+)?([^;]+);", text)
-        for imported in imports:
+        for imported in imports_of(text):
             g.check(
                 not imported.startswith(FORBIDDEN_IMPORTS),
                 f"{name}: framework/adapter import is forbidden: {imported}",
@@ -98,18 +117,11 @@ def check_core(g: Guard) -> None:
         "record ConnectionProfile" in profile,
         "ConnectionProfile must remain an immutable record value object",
     )
-    g.check(
-        '@ToString.Exclude private String jdbcUrl;' in definition,
-        "DataSourceDefinition jdbcUrl must stay excluded from toString",
-    )
-    g.check(
-        '@ToString.Exclude private String connectionParams;' in definition,
-        "DataSourceDefinition connectionParams must stay excluded from toString",
-    )
-    g.check(
-        '@ToString.Exclude private String originalJson;' in definition,
-        "DataSourceDefinition originalJson must stay excluded from toString",
-    )
+    for field in ("jdbcUrl", "connectionParams", "originalJson"):
+        g.check(
+            f"@ToString.Exclude private String {field};" in definition,
+            f"DataSourceDefinition {field} must stay excluded from toString",
+        )
 
 
 def check_application_mutations(g: Guard) -> None:
@@ -134,6 +146,52 @@ def check_application_mutations(g: Guard) -> None:
         g.check(forbidden not in code, f"Application service must not mutate aggregate scalar directly: {forbidden}")
 
 
+def check_gateway_boundary(g: Guard) -> None:
+    plugin_port = g.read(GATEWAY_DIR / "DataSourcePluginGateway.java")
+    catalog_port = g.read(GATEWAY_DIR / "DataSourceCatalogGateway.java")
+
+    for name, text in (
+        ("DataSourcePluginGateway.java", plugin_port),
+        ("DataSourceCatalogGateway.java", catalog_port),
+    ):
+        for imported in imports_of(text):
+            g.check(
+                not imported.startswith(PORT_FORBIDDEN_IMPORTS),
+                f"{name}: business gateway contract leaked external model: {imported}",
+            )
+
+    for relative in PROTECTED_APPLICATION_FILES:
+        text = g.read(JAVA_ROOT / relative)
+        imports = imports_of(text)
+        for imported in imports:
+            g.check(
+                not imported.startswith("io.yak.ops.spi.datasource."),
+                f"{relative}: Datasource Plugin SPI must stay behind Gateway Adapter: {imported}",
+            )
+            g.check(
+                imported != "io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry",
+                f"{relative}: Plugin Registry must stay behind Gateway Adapter",
+            )
+            g.check(
+                imported != "io.yak.ops.business.datasource.util.DataSourceSecretCodec",
+                f"{relative}: SPI secret helper must stay behind Gateway Adapter",
+            )
+
+    service = g.read(JAVA_ROOT / "service/impl/DataSourceServiceImpl.java")
+    catalog_service = g.read(JAVA_ROOT / "service/impl/DataSourceCatalogServiceImpl.java")
+    view_mapper = g.read(JAVA_ROOT / "service/support/DataSourceViewMapper.java")
+    g.check("DataSourcePluginGateway" in service, "DataSourceServiceImpl must use DataSourcePluginGateway")
+    g.check("DataSourceCatalogGateway" in catalog_service, "DataSourceCatalogServiceImpl must use DataSourceCatalogGateway")
+    g.check("DataSourcePluginGateway" in view_mapper, "DataSourceViewMapper must use DataSourcePluginGateway for masking")
+
+    plugin_adapter = g.read(GATEWAY_DIR / "adapter/SpiDataSourcePluginGateway.java")
+    catalog_adapter = g.read(GATEWAY_DIR / "adapter/SpiDataSourceCatalogGateway.java")
+    g.check("implements DataSourcePluginGateway" in plugin_adapter, "SPI plugin adapter must implement business port")
+    g.check("implements DataSourceCatalogGateway" in catalog_adapter, "SPI catalog adapter must implement business port")
+    g.check("io.yak.ops.spi.datasource" in plugin_adapter, "SPI plugin adapter must own plugin protocol translation")
+    g.check("io.yak.ops.spi.datasource" in catalog_adapter, "SPI catalog adapter must own catalog protocol translation")
+
+
 def check_docs(g: Guard) -> None:
     requirements = g.read(MODULE / "REQUIREMENTS.md")
     contract = g.read(MODULE / "DOMAIN.md")
@@ -142,8 +200,8 @@ def check_docs(g: Guard) -> None:
 
     for name, text, limit in (
         ("REQUIREMENTS.md", requirements, 150),
-        ("DOMAIN.md", contract, 180),
-        ("REVIEW.md", review, 210),
+        ("DOMAIN.md", contract, 190),
+        ("REVIEW.md", review, 220),
     ):
         g.check(
             len(text.splitlines()) <= limit,
@@ -157,6 +215,8 @@ def check_docs(g: Guard) -> None:
         "DataSourceDefinition",
         "ConnectionProfile",
         "12 条硬规则",
+        "DataSourcePluginGateway",
+        "DataSourceCatalogGateway",
         "Domain Impact Analysis",
         "Domain Compliance Report",
         "Domain Gap",
@@ -170,6 +230,8 @@ def check_docs(g: Guard) -> None:
         "P1 Must Fix",
         "Conclusion: PASS | CHANGES_REQUIRED",
         "Missing Tests",
+        "DataSourcePluginGateway",
+        "DataSourceCatalogGateway",
     ):
         g.check(phrase in review, f"REVIEW.md lost review protocol phrase: {phrase}")
 
@@ -202,6 +264,7 @@ def main() -> int:
     g = Guard()
     check_core(g)
     check_application_mutations(g)
+    check_gateway_boundary(g)
     check_docs(g)
     check_pr(g, args.event)
     return g.finish()
