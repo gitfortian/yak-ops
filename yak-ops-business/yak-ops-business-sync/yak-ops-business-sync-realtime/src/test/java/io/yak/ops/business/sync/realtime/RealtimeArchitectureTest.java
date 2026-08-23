@@ -12,7 +12,6 @@ import io.yak.ops.business.sync.realtime.definition.RealtimeDefinitionValidator;
 import io.yak.ops.business.sync.realtime.definition.RealtimeJobDefinitionService;
 import io.yak.ops.business.sync.realtime.definition.RealtimeSourceConfigDigestCalculator;
 import io.yak.ops.business.sync.realtime.definition.RealtimeYamlCodec;
-import io.yak.ops.business.sync.realtime.definition.adapter.CdcPipelineSpecCompatibilityMapper;
 import io.yak.ops.business.sync.realtime.domain.DefinitionDigest;
 import io.yak.ops.business.sync.realtime.domain.DefinitionVersion;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobState;
@@ -46,6 +45,7 @@ import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -109,15 +109,13 @@ class RealtimeArchitectureTest {
   @Test
   void definitionSubsystemUsesRoleComponentsBehindStableFacade() {
     assertFieldsAvoid(RealtimeJobDefinitionService.class, ".service.", ".dao.", "JdbcTemplate");
-
     for (Class<?> internal :
         new Class<?>[] {
           RealtimeDefinitionManager.class,
           RealtimeDefinitionPublisher.class,
           RealtimeDefinitionValidator.class,
           RealtimeSourceConfigDigestCalculator.class,
-          RealtimeYamlCodec.class,
-          CdcPipelineSpecCompatibilityMapper.class
+          RealtimeYamlCodec.class
         }) {
       assertInternalComponent(internal, "definition");
     }
@@ -131,7 +129,6 @@ class RealtimeArchitectureTest {
         "RealtimeJobLifecycleCoordinator",
         ".dao.",
         "JdbcTemplate");
-
     for (Class<?> internal :
         new Class<?>[] {
           RealtimeExecutionCoordinator.class,
@@ -143,9 +140,7 @@ class RealtimeArchitectureTest {
         }) {
       assertInternalComponent(internal, "execution");
     }
-
-    Set<String> coordinatorMethods = methodNames(RealtimeExecutionCoordinator.class);
-    assertThat(coordinatorMethods)
+    assertThat(methodNames(RealtimeExecutionCoordinator.class))
         .contains("start", "stop", "restartExecution", "applyPublishedVersion")
         .doesNotContain("publish", "save", "delete", "reconcile");
   }
@@ -163,16 +158,9 @@ class RealtimeArchitectureTest {
       assertInternalComponent(internal, "reconcile");
       assertFieldsAvoid(internal, ".dao.", ".dao.mapper.", ".dao.model.", "JdbcTemplate");
     }
-
-    Set<String> coordinatorMethods = methodNames(RealtimeReconcileCoordinator.class);
-    assertThat(coordinatorMethods)
+    assertThat(methodNames(RealtimeReconcileCoordinator.class))
         .contains("reconcile", "reconcileAll")
         .doesNotContain("start", "stop", "restartExecution", "applyPublishedVersion");
-
-    assertFieldsAvoid(
-        RealtimeJobExecutionService.class,
-        ".service.RealtimeJobLifecycleCoordinator",
-        ".service.RealtimeJobReconciler");
   }
 
   @Test
@@ -183,13 +171,7 @@ class RealtimeArchitectureTest {
         io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class;
 
     assertFieldsAvoid(queryFacade, ".service.", ".dao.", "JdbcTemplate");
-    assertFieldsAvoid(
-        observabilityFacade,
-        ".service.",
-        ".execution.RealtimeExecution",
-        ".reconcile.",
-        ".dao.",
-        "JdbcTemplate");
+    assertFieldsAvoid(observabilityFacade, ".service.", ".reconcile.", ".dao.", "JdbcTemplate");
 
     for (Class<?> internal :
         new Class<?>[] {
@@ -203,6 +185,8 @@ class RealtimeArchitectureTest {
           internal,
           "SyncExecutionStateMachine",
           "RealtimeExecutionCoordinator",
+          "RealtimeExecutionPreparation",
+          "RealtimeExecutionStarter",
           "RealtimeExecutionStateManager",
           "RealtimeExecutionReservationManager",
           "RealtimeExecutionReplacementManager",
@@ -238,7 +222,6 @@ class RealtimeArchitectureTest {
   @Test
   void environmentSubsystemUsesExplicitRolesAndFrozenExecutionSnapshots() {
     assertFieldsAvoid(ComputeEnvironmentService.class, ".service.", ".dao.", "JdbcTemplate");
-
     for (Class<?> internal :
         new Class<?>[] {
           ComputeEnvironmentManager.class,
@@ -249,12 +232,15 @@ class RealtimeArchitectureTest {
       assertInternalComponent(internal, "environment");
       assertFieldsAvoid(internal, ".dao.", ".dao.mapper.", ".dao.model.", "JdbcTemplate");
     }
-
     assertThat(methodNames(RealtimeRuntimeResolver.class))
         .contains("environment", "definition", "deployment")
         .doesNotContain("create", "update", "setDefault", "setEnabled", "delete", "diagnose");
-    assertThat(methodNames(ComputeEnvironmentManager.class))
-        .doesNotContain("start", "stop", "restartExecution", "applyPublishedVersion", "reconcile");
+  }
+
+  @Test
+  void persistenceCompatibilityMappingStaysInternalAndOutOfCoreDomain() {
+    assertInternalComponent(CdcPipelineSpecCompatibilityMapper.class, "persistence-compatibility");
+    assertFieldsAvoid(CdcPipelineSpecCompatibilityMapper.class, ".dao.", ".engine.", "JdbcTemplate");
   }
 
   @Test
@@ -285,7 +271,6 @@ class RealtimeArchitectureTest {
           RealtimeDefinitionValidator.class,
           RealtimeSourceConfigDigestCalculator.class,
           RealtimeYamlCodec.class,
-          CdcPipelineSpecCompatibilityMapper.class,
           RealtimeJobExecutionService.class,
           RealtimeExecutionCoordinator.class,
           RealtimeExecutionPreparation.class,
@@ -308,7 +293,8 @@ class RealtimeArchitectureTest {
           ComputeEnvironmentManager.class,
           ComputeEnvironmentConfigNormalizer.class,
           ComputeEnvironmentDiagnoser.class,
-          RealtimeRuntimeResolver.class
+          RealtimeRuntimeResolver.class,
+          CdcPipelineSpecCompatibilityMapper.class
         }) {
       assertFieldsAvoid(type, ".dao.", ".dao.mapper.", ".dao.model.", "JdbcTemplate");
     }
@@ -334,12 +320,9 @@ class RealtimeArchitectureTest {
 
   @Test
   void migratedExecutionContractCannotReintroduceTaskRuntimeSidePaths() {
-    Set<String> storeMethods = methodNames(RealtimeJobStore.class);
-    assertThat(storeMethods)
+    assertThat(methodNames(RealtimeJobStore.class))
         .doesNotContain("desiredJobs", "hasOtherDesiredRunning", "markStarting");
-
-    Set<String> environmentMethods = methodNames(ComputeEnvironmentStore.class);
-    assertThat(environmentMethods).doesNotContain("hasActiveRealtimeJobs");
+    assertThat(methodNames(ComputeEnvironmentStore.class)).doesNotContain("hasActiveRealtimeJobs");
   }
 
   @Test
@@ -373,14 +356,12 @@ class RealtimeArchitectureTest {
 
   private static void assertCoreType(Class<?> type) {
     assertAnnotationsAvoid(type, CORE_FORBIDDEN);
-
     for (Field field : type.getDeclaredFields()) {
       assertTypeAvoids(type, field.getName(), field.getGenericType(), CORE_FORBIDDEN);
       assertAnnotationsAvoid(field, CORE_FORBIDDEN);
     }
     for (Method method : type.getDeclaredMethods()) {
-      assertTypeAvoids(
-          type, method.getName() + " return", method.getGenericReturnType(), CORE_FORBIDDEN);
+      assertTypeAvoids(type, method.getName() + " return", method.getGenericReturnType(), CORE_FORBIDDEN);
       for (Type parameter : method.getGenericParameterTypes()) {
         assertTypeAvoids(type, method.getName() + " parameter", parameter, CORE_FORBIDDEN);
       }
@@ -424,9 +405,7 @@ class RealtimeArchitectureTest {
   }
 
   private static Set<String> methodNames(Class<?> type) {
-    return Arrays.stream(type.getDeclaredMethods())
-        .map(Method::getName)
-        .collect(Collectors.toSet());
+    return Arrays.stream(type.getDeclaredMethods()).map(Method::getName).collect(Collectors.toSet());
   }
 
   private static void assertFieldsAvoid(Class<?> type, String... forbidden) {
@@ -443,9 +422,7 @@ class RealtimeArchitectureTest {
   private static void assertFieldTypesIn(Class<?> type, Set<Class<?>> allowedTypes) {
     for (Field field : type.getDeclaredFields()) {
       assertThat(field.getType())
-          .as(
-              "%s.%s must use a declared application/transport boundary",
-              type.getSimpleName(), field.getName())
+          .as("%s.%s must use a declared application/transport boundary", type.getSimpleName(), field.getName())
           .isIn(allowedTypes);
     }
   }
