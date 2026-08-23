@@ -5,7 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorService;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.domain.OfflineSyncCursor;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchKey;
@@ -26,7 +26,7 @@ class OfflineBackfillDispatcherTest {
   @Test
   void cursorRangeDispatchesOnlyWhenCursorMatchesAfterExclusive() {
     OfflineBatchExecutionRepository batches = Mockito.mock(OfflineBatchExecutionRepository.class);
-    OfflineCursorService cursors = Mockito.mock(OfflineCursorService.class);
+    OfflineCursorManager cursors = Mockito.mock(OfflineCursorManager.class);
     OfflineJobExecutionService executionService = Mockito.mock(OfflineJobExecutionService.class);
     OfflineBackfillDispatcher dispatcher =
         new OfflineBackfillDispatcher(
@@ -47,7 +47,7 @@ class OfflineBackfillDispatcherTest {
   @Test
   void nextCursorRangeStaysPendingUntilPredecessorAdvancesCursor() {
     OfflineBatchExecutionRepository batches = Mockito.mock(OfflineBatchExecutionRepository.class);
-    OfflineCursorService cursors = Mockito.mock(OfflineCursorService.class);
+    OfflineCursorManager cursors = Mockito.mock(OfflineCursorManager.class);
     OfflineJobExecutionService executionService = Mockito.mock(OfflineJobExecutionService.class);
     OfflineBackfillDispatcher dispatcher =
         new OfflineBackfillDispatcher(

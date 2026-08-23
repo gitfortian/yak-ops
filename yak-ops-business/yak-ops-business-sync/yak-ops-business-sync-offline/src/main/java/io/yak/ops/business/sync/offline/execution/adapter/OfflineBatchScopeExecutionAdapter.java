@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorService;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.engine.ConnectorIdResolver;
 import java.time.LocalDateTime;
@@ -20,11 +20,11 @@ import org.springframework.util.StringUtils;
 public class OfflineBatchScopeExecutionAdapter {
   private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*");
   private final ObjectMapper objectMapper;
-  private final OfflineCursorService cursorService;
+  private final OfflineCursorManager cursorManager;
 
-  public OfflineBatchScopeExecutionAdapter(@Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper, OfflineCursorService cursorService) {
+  public OfflineBatchScopeExecutionAdapter(@Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper, OfflineCursorManager cursorManager) {
     this.objectMapper = objectMapper;
-    this.cursorService = cursorService;
+    this.cursorManager = cursorManager;
   }
 
   public String apply(long taskId, String logicalJobSpecJson, BatchScope scope) {
@@ -56,7 +56,7 @@ public class OfflineBatchScopeExecutionAdapter {
       return column + " IN (" + values + ")";
     }
     if (scope instanceof BatchScope.CursorRange range) {
-      String column = safeColumn(cursorService.requireSourceColumn(taskId, range.cursorId()));
+      String column = safeColumn(cursorManager.requireSourceColumn(taskId, range.cursorId()));
       return column + " > " + literal(range.afterExclusive()) + " AND " + column + " <= " + literal(range.throughInclusive());
     }
     throw new IllegalArgumentException("不支持的 BatchScope：" + scope.getClass().getName());

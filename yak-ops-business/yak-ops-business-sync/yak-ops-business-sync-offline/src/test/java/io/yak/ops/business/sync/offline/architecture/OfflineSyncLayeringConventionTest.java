@@ -10,14 +10,19 @@ import io.yak.ops.business.sync.offline.controller.OfflineBackfillController;
 import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobDefinitionController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobExecutionController;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.dao.OfflineBatchExecutionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineExecutionEventDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
-import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
+import io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator;
 import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.reconcile.OfflineExecutionReconciler;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
@@ -43,19 +48,29 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 class OfflineSyncLayeringConventionTest {
 
   private static final Set<String> EXECUTION_INTERNAL_IMPORTS = Set.of(
-      "io.yak.ops.business.sync.offline.execution.OfflineExecutionOrchestrator",
-      "io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimService",
-      "io.yak.ops.business.sync.offline.execution.OfflineBatchRuntimeService",
+      "io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator",
+      "io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager",
+      "io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime",
       "io.yak.ops.business.sync.offline.execution.query.",
       "io.yak.ops.business.sync.offline.execution.adapter.");
 
   private static final Set<String> EXECUTION_INTERNAL_FACADE_EXCEPTIONS = Set.of(
       "definition/OfflineJobDefinitionService.java",
       "backfill/OfflineBackfillService.java");
+
+  private static final Set<String> LEGACY_ROLE_NAMES = Set.of(
+      "OfflineExecutionOrchestrator",
+      "OfflineExecutionClaimService",
+      "OfflineBatchRuntimeService",
+      "OfflineCursorService",
+      "OfflineExecutionReadService",
+      "OfflineExecutionLogService");
 
   @Test
   void controllersDependOnlyOnStableApplicationFacades() {
@@ -78,6 +93,33 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
+  void serviceStereotypeIsReservedForApplicationFacades() {
+    for (Class<?> facade : List.of(
+        OfflineJobDefinitionService.class,
+        OfflineJobExecutionService.class,
+        OfflineBackfillService.class)) {
+      assertThat(facade.getAnnotation(Service.class))
+          .as("%s must remain an Application Service", facade.getSimpleName())
+          .isNotNull();
+    }
+
+    for (Class<?> internal : List.of(
+        OfflineExecutionCoordinator.class,
+        OfflineExecutionClaimManager.class,
+        OfflineBatchRuntime.class,
+        OfflineCursorManager.class,
+        OfflineExecutionQuery.class,
+        OfflineExecutionLogQuery.class)) {
+      assertThat(internal.getAnnotation(Component.class))
+          .as("%s must remain an internal role component", internal.getSimpleName())
+          .isNotNull();
+      assertThat(internal.getAnnotation(Service.class))
+          .as("%s must not masquerade as an Application Service", internal.getSimpleName())
+          .isNull();
+    }
+  }
+
+  @Test
   void backgroundEntrypointsReachExecutionThroughFacade() {
     for (Class<?> type : List.of(
         OfflineScheduleHandler.class,
@@ -95,9 +137,9 @@ class OfflineSyncLayeringConventionTest {
         String name = dependency.getName();
         assertThat(name)
             .as("%s must not depend on an execution internal component", type.getSimpleName())
-            .doesNotContain("OfflineExecutionOrchestrator")
-            .doesNotContain("OfflineExecutionClaimService")
-            .doesNotContain("OfflineBatchRuntimeService")
+            .doesNotContain("OfflineExecutionCoordinator")
+            .doesNotContain("OfflineExecutionClaimManager")
+            .doesNotContain("OfflineBatchRuntime")
             .doesNotContain(".execution.query.")
             .doesNotContain(".execution.adapter.");
       }
@@ -120,6 +162,22 @@ class OfflineSyncLayeringConventionTest {
           assertThat(source)
               .as("%s must not import execution internal API %s", relative, forbidden)
               .doesNotContain("import " + forbidden);
+        }
+      }
+    }
+  }
+
+  @Test
+  void productionSourceDoesNotReintroduceLegacyRoleNames() throws IOException {
+    Path root = productionRoot();
+    try (Stream<Path> paths = Files.walk(root)) {
+      for (Path file : paths.filter(path -> path.toString().endsWith(".java")).toList()) {
+        String relative = root.relativize(file).toString().replace('\\', '/');
+        String source = Files.readString(file);
+        for (String legacyRoleName : LEGACY_ROLE_NAMES) {
+          assertThat(source)
+              .as("%s must use Stage 10 role vocabulary instead of %s", relative, legacyRoleName)
+              .doesNotContain(legacyRoleName);
         }
       }
     }
@@ -162,7 +220,8 @@ class OfflineSyncLayeringConventionTest {
     Method definitions =
         OfflineJobDefinitionRepository.class.getMethod("page", OfflineDefinitionQuery.class);
     Method executions =
-        OfflineJobExecutionRepository.class.getMethod("page", OfflineExecutionQuery.class);
+        OfflineJobExecutionRepository.class.getMethod(
+            "page", io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery.class);
     assertThat(((ParameterizedType) definitions.getGenericReturnType()).getRawType())
         .isEqualTo(PageData.class);
     assertThat(((ParameterizedType) executions.getGenericReturnType()).getRawType())

@@ -9,13 +9,13 @@ import io.yak.ops.business.sync.offline.repository.OfflineSyncCursorRepository;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /** Wave 5 Cursor boundary：只有 SUCCEEDED Batch 才能推进 Task Cursor。 */
 @ConditionalOnOfflineSyncEnabled
-@Service
+@Component
 @RequiredArgsConstructor
-public class OfflineCursorService {
+public class OfflineCursorManager {
 
   private final OfflineSyncCursorRepository repository;
 

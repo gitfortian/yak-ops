@@ -6,7 +6,6 @@ import io.yak.framework.common.PageData;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionEvent;
-import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
@@ -27,12 +26,12 @@ import org.springframework.util.StringUtils;
 /** 执行实例、指标和状态事件读模型。 */
 @ConditionalOnOfflineSyncEnabled
 @Component
-public class OfflineExecutionReadService {
+public class OfflineExecutionQuery {
   private static final DateTimeFormatter FORMAT=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
   private final OfflineJobExecutionRepository executionRepository; private final OfflineExecutionEventRepository eventRepository; private final LinkUpClient linkUpClient; private final ObjectMapper objectMapper; private final OfflineSyncViewMapper viewMapper;
-  public OfflineExecutionReadService(OfflineJobExecutionRepository executionRepository,OfflineExecutionEventRepository eventRepository,LinkUpClient linkUpClient,@Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper,OfflineSyncViewMapper viewMapper){this.executionRepository=executionRepository;this.eventRepository=eventRepository;this.linkUpClient=linkUpClient;this.objectMapper=objectMapper;this.viewMapper=viewMapper;}
+  public OfflineExecutionQuery(OfflineJobExecutionRepository executionRepository,OfflineExecutionEventRepository eventRepository,LinkUpClient linkUpClient,@Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper,OfflineSyncViewMapper viewMapper){this.executionRepository=executionRepository;this.eventRepository=eventRepository;this.linkUpClient=linkUpClient;this.objectMapper=objectMapper;this.viewMapper=viewMapper;}
   public OfflineJobExecution require(Long id){if(id==null||id<=0L)throw new IllegalArgumentException("任务实例 ID 不合法");return executionRepository.findById(id).orElseThrow(()->new IllegalArgumentException("离线同步任务实例不存在："+id));}
-  public PagingData<OfflineJobExecutionVO> page(OfflineJobExecutionQueryDTO queryDTO){OfflineJobExecutionQueryDTO query=queryDTO==null?new OfflineJobExecutionQueryDTO():queryDTO;PageData<OfflineJobExecution> page=executionRepository.page(new OfflineExecutionQuery(query.getCurrent(),query.getPageSize(),query.getJobDefinitionId(),query.getStatus()));return PagingData.from(page.map(viewMapper::execution));}
+  public PagingData<OfflineJobExecutionVO> page(OfflineJobExecutionQueryDTO queryDTO){OfflineJobExecutionQueryDTO query=queryDTO==null?new OfflineJobExecutionQueryDTO():queryDTO;PageData<OfflineJobExecution> page=executionRepository.page(new io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery(query.getCurrent(),query.getPageSize(),query.getJobDefinitionId(),query.getStatus()));return PagingData.from(page.map(viewMapper::execution));}
   public OfflineJobExecutionDetailVO detail(Long id){OfflineJobExecution execution=require(id);OfflineJobExecutionVO summary=viewMapper.execution(execution);OfflineJobExecutionDetailVO detail=OfflineJobExecutionDetailVO.builder().execution(summary).summary(summary).build();if(StringUtils.hasText(execution.getEngineSnapshotJson())){try{JsonNode snapshot=objectMapper.readTree(execution.getEngineSnapshotJson());detail.setJob(snapshot);detail.setPipelines(snapshot.path("pipelines"));detail.setTasks(snapshot.path("tasks"));detail.setMetrics(snapshot.path("metrics"));}catch(Exception ignored){}}return detail;}
   public JsonNode tableMetrics(Long id){OfflineJobExecution execution=require(id);if(!OfflineExecutionStatus.isActive(execution.getStatus())){JsonNode snapshotPipelines=snapshotPipelines(execution);if(snapshotPipelines.isArray()&&!snapshotPipelines.isEmpty())return OfflinePipelineMetricsMapper.flatten(objectMapper,snapshotPipelines);}if(!StringUtils.hasText(execution.getEngineJobId()))throw new IllegalStateException("当前执行实例尚未获得 Link-Up jobId");return OfflinePipelineMetricsMapper.flatten(objectMapper,linkUpClient.pipelines(execution.getEngineJobId()));}
   public List<OfflineExecutionEventVO> events(Long executionId){return eventRepository.list(executionId).stream().map(viewMapper::event).toList();}

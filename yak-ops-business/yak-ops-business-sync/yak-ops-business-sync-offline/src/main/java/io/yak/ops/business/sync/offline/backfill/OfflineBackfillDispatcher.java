@@ -2,7 +2,7 @@ package io.yak.ops.business.sync.offline.backfill;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorService;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.domain.OfflineSyncCursor;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
@@ -24,7 +24,7 @@ public class OfflineBackfillDispatcher {
   private static final Logger LOG = LoggerFactory.getLogger(OfflineBackfillDispatcher.class);
 
   private final OfflineBatchExecutionRepository batchRepository;
-  private final OfflineCursorService cursorService;
+  private final OfflineCursorManager cursorManager;
   private final OfflineJobExecutionService executionService;
   private final OfflineSyncProperties properties;
 
@@ -47,7 +47,7 @@ public class OfflineBackfillDispatcher {
 
   private boolean cursorReady(BatchExecution batch) {
     if (!(batch.batchScope() instanceof BatchScope.CursorRange range)) return true;
-    OfflineSyncCursor cursor = cursorService.find(batch.taskId(), range.cursorId()).orElse(null);
+    OfflineSyncCursor cursor = cursorManager.find(batch.taskId(), range.cursorId()).orElse(null);
     return cursor != null && cursor.position().equals(range.afterExclusive());
   }
 }

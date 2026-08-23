@@ -7,8 +7,8 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
-import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogService;
-import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionReadService;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionVO;
 import org.junit.jupiter.api.Test;
@@ -33,54 +33,54 @@ class OfflineJobExecutionServiceEntryPointTest {
     execution.setId(21L);
     OfflineJobExecutionVO view = mock(OfflineJobExecutionVO.class);
 
-    when(fixture.orchestrator.execute(10L, triggerToken, null, 1)).thenReturn(execution);
-    when(fixture.readService.toVO(execution)).thenReturn(view);
+    when(fixture.coordinator.execute(10L, triggerToken, null, 1)).thenReturn(execution);
+    when(fixture.executionQuery.toVO(execution)).thenReturn(view);
 
     assertThat(fixture.service.executeScheduled(10L, triggerToken)).isSameAs(view);
 
-    verify(fixture.orchestrator).execute(10L, triggerToken, null, 1);
-    verify(fixture.readService).toVO(execution);
+    verify(fixture.coordinator).execute(10L, triggerToken, null, 1);
+    verify(fixture.executionQuery).toVO(execution);
   }
 
   @Test
-  void pendingBackfillExecutionDelegatesToOrchestrator() {
+  void pendingBackfillExecutionDelegatesToCoordinator() {
     Fixture fixture = fixture();
     OfflineJobExecution execution = new OfflineJobExecution();
     execution.setId(31L);
     OfflineJobExecutionVO view = mock(OfflineJobExecutionVO.class);
 
-    when(fixture.orchestrator.executePendingBackfill(77L)).thenReturn(execution);
-    when(fixture.readService.toVO(execution)).thenReturn(view);
+    when(fixture.coordinator.executePendingBackfill(77L)).thenReturn(execution);
+    when(fixture.executionQuery.toVO(execution)).thenReturn(view);
 
     assertThat(fixture.service.executePendingBackfill(77L)).isSameAs(view);
 
-    verify(fixture.orchestrator).executePendingBackfill(77L);
-    verify(fixture.readService).toVO(execution);
+    verify(fixture.coordinator).executePendingBackfill(77L);
+    verify(fixture.executionQuery).toVO(execution);
   }
 
   private Fixture fixture() {
-    OfflineExecutionOrchestrator orchestrator = mock(OfflineExecutionOrchestrator.class);
-    OfflineBatchRuntimeService runtime = mock(OfflineBatchRuntimeService.class);
-    OfflineExecutionReadService readService = mock(OfflineExecutionReadService.class);
-    OfflineExecutionLogService logService = mock(OfflineExecutionLogService.class);
+    OfflineExecutionCoordinator coordinator = mock(OfflineExecutionCoordinator.class);
+    OfflineBatchRuntime runtime = mock(OfflineBatchRuntime.class);
+    OfflineExecutionQuery executionQuery = mock(OfflineExecutionQuery.class);
+    OfflineExecutionLogQuery executionLogQuery = mock(OfflineExecutionLogQuery.class);
     LinkUpClient linkUpClient = mock(LinkUpClient.class);
     OfflineSyncViewMapper viewMapper = mock(OfflineSyncViewMapper.class);
     return new Fixture(
         new OfflineJobExecutionService(
-            orchestrator,
+            coordinator,
             runtime,
-            readService,
-            logService,
+            executionQuery,
+            executionLogQuery,
             linkUpClient,
             viewMapper),
-        orchestrator,
+        coordinator,
         runtime,
-        readService);
+        executionQuery);
   }
 
   private record Fixture(
       OfflineJobExecutionService service,
-      OfflineExecutionOrchestrator orchestrator,
-      OfflineBatchRuntimeService runtime,
-      OfflineExecutionReadService readService) {}
+      OfflineExecutionCoordinator coordinator,
+      OfflineBatchRuntime runtime,
+      OfflineExecutionQuery executionQuery) {}
 }
