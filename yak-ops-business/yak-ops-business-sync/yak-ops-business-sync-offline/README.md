@@ -2,9 +2,10 @@
 
 ## 领域建设
 
-离线同步正在按独立领域逐步建模。当前已完成 Stage 4：现有代码到目标领域映射；暂不改变现有实现：
+离线同步当前已完成 Stage 5：领域约束已收敛为短小 `DOMAIN.md`。修改代码前先读当前规则，需要迁移背景时再看 Mapping 文档：
 
-- [Offline Sync Domain](../../../docs/offline-sync/domain/README.md)
+- [DOMAIN.md](./DOMAIN.md)
+- [Domain Mapping](../../../docs/offline-sync/domain/README.md)
 
 离线同步一期只承担三件事：任务配置、Link-Up 执行代理、执行历史。
 
