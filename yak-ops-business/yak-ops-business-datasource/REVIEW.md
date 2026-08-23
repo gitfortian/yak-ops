@@ -20,7 +20,7 @@ PR diff / tests  -> 实际改了什么
 检查代码是否符合 `REQUIREMENTS.md`：
 
 - 是否实现已有能力？
-- 是否改变数据源创建、编辑、删除或连接测试行为？
+- 是否改变数据源创建、编辑、删除、连接测试或 Catalog 行为？
 - 是否引入文档中没有的新能力？
 - 是否越过 Datasource 的模块边界？
 
@@ -41,6 +41,9 @@ Requirement Gap
 - ConnectionProfile 修改后是否仍保留旧 `CONNECTED / DISCONNECTED`；
 - 未保存配置的连接测试是否错误写入状态；
 - Core Domain 是否引入 Spring / MyBatis / Plugin SPI；
+- `DataSourceServiceImpl / DataSourceCatalogServiceImpl / DataSourceViewMapper` 是否重新直接依赖 Plugin SPI、`DataSourcePluginRegistry` 或 SPI Secret helper；
+- `DataSourcePluginGateway / DataSourceCatalogGateway` 是否暴露 Plugin SPI、HTTP DTO / VO 或 PO；
+- SPI Table / Column / QueryResult 是否绕过 Adapter 直接进入 Application；
 - Repository 是否泄漏 PO / Mapper / MyBatis 类型；
 - Secret 是否可能进入 `toString()`、日志或响应；
 - 是否继续通过 `Map<String, Object>` key 偷渡新的业务语义。
@@ -65,8 +68,10 @@ Domain Gap
 - 名称重复校验；
 - 数据源类型解析；
 - 环境解析；
-- 连接配置规范化；
-- Secret 合并；
+- ConnectionProfile 规范化；
+- Secret 合并 / 脱敏；
+- Gateway Adapter 异常映射；
+- SPI metadata -> Business Gateway Contract 字段映射；
 - 事务边界；
 - 连接测试成功 / 失败状态；
 - Catalog 只读约束；
@@ -81,7 +86,9 @@ Domain Gap
 - Flyway 历史；
 - 前端已有调用；
 - Datasource Plugin SPI；
-- 已有 MySQL / PostgreSQL / Oracle / Doris 等插件。
+- 已有 MySQL / PostgreSQL / Oracle / Doris 等插件；
+- PluginConfig 动态表单历史协议；
+- Task Plugin SQL execution provider。
 
 破坏性变更必须有明确迁移方案，禁止 Big-Bang 修改。
 
@@ -92,7 +99,7 @@ Domain Gap
 - Secret 明文输出；
 - 掩码值覆盖真实密码；
 - JDBC URL 中凭据泄漏；
-- 连接测试异常是否吞掉真实失败；
+- Gateway Adapter 是否把插件异常吞掉或错误分类；
 - 失败连接是否仍显示 `CONNECTED`；
 - 新连接配置是否继承旧连接状态；
 - SQL / Catalog 入口是否绕过只读约束。
@@ -105,7 +112,7 @@ Domain Gap
 现有哪个测试应该挡住？
 ```
 
-如果没有，指出缺失测试。优先补能锁住领域规则和安全行为的回归测试，不为了覆盖率堆测试。
+如果没有，指出缺失测试。优先补能锁住领域规则和边界的回归测试，不为了覆盖率堆测试。
 
 至少应覆盖：
 
@@ -117,7 +124,28 @@ connection test failure -> DISCONNECTED
 ConnectionProfile toString secret-free
 Core Domain dependency guardrail
 Repository boundary guardrail
+Application -> Business Gateway only
+Gateway Port no Plugin SPI / DTO / VO / PO
+SPI Connection -> ConnectionProfile mapping
+SPI Catalog metadata -> Business Gateway Contract mapping
 ```
+
+## 当前允许的边界例外
+
+以下不是普通 Application Service，可按 `DOMAIN.md` 的边界说明单独判断：
+
+```text
+DataSourcePluginConfigServiceImpl
+  -> historical pluginConfig() / VO compatibility bridge
+
+BusinessDataSourceExecutionProvider
+  -> outward Task Plugin SPI adapter
+
+DataSourceSecretCodec
+  -> SPI adapter technical helper
+```
+
+这些例外不能作为在新 Service 中直接调用 Plugin SPI 的理由。
 
 ## 严重级别
 
@@ -130,6 +158,8 @@ P0 Blocker
 P1 Must Fix
 - 业务结果错误
 - 违反 REQUIREMENTS.md / DOMAIN.md
+- Plugin SPI 重新泄漏进受保护 Application 主链路
+- Gateway Port 暴露 SPI / DTO / VO / PO
 - 连接状态错误
 - 类型不可变规则失效
 - 明确事务 / 兼容性缺陷
