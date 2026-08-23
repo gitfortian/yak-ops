@@ -43,6 +43,23 @@ class OfflineJobExecutionServiceEntryPointTest {
   }
 
   @Test
+  void scheduleGatewayReturnsOnlyExecutionIdentity() {
+    Fixture fixture = fixture();
+    String triggerToken = "SCHEDULE|schedule-10|2026-08-23T08:00:00";
+    OfflineJobExecution execution = new OfflineJobExecution();
+    execution.setId(21L);
+    OfflineJobExecutionVO view = mock(OfflineJobExecutionVO.class);
+    when(view.getId()).thenReturn(21L);
+    when(fixture.coordinator.execute(10L, triggerToken, null, 1)).thenReturn(execution);
+    when(fixture.executionQuery.toVO(execution)).thenReturn(view);
+
+    assertThat(fixture.service.submitScheduled(10L, triggerToken)).isEqualTo(21L);
+
+    verify(fixture.coordinator).execute(10L, triggerToken, null, 1);
+    verify(view).getId();
+  }
+
+  @Test
   void pendingBackfillExecutionDelegatesToCoordinator() {
     Fixture fixture = fixture();
     OfflineJobExecution execution = new OfflineJobExecution();

@@ -14,7 +14,8 @@
 - [Stage 8 Package Restructuring](../../../docs/offline-sync/architecture/STAGE8.md) — 业务子系统目录归位
 - [Stage 9 Application Entry Consolidation](../../../docs/offline-sync/architecture/STAGE9.md) — Application 入口边界
 - [Stage 10 Role Naming](../../../docs/offline-sync/architecture/STAGE10.md) — 角色命名约定
-- [Stage 11 Core Responsibility Decomposition](../../../docs/offline-sync/architecture/STAGE11.md) — 当前核心职责拆分
+- [Stage 11 Core Responsibility Decomposition](../../../docs/offline-sync/architecture/STAGE11.md) — 核心职责拆分
+- [Stage 12 Dependency Boundary Governance](../../../docs/offline-sync/architecture/STAGE12.md) — 当前 package 依赖规则
 
 ```text
 OfflineSyncTask
@@ -34,11 +35,11 @@ BatchExecution
 
 ## 架构职责治理
 
-**Stage 11 已完成：Core Responsibility Decomposition。**
+**Stage 12 已完成：Dependency Boundary Governance。**
 
-Stage 8 解决“类放在哪里”，Stage 9 解决“谁可以调用谁”，Stage 10 解决“类名是什么角色”，Stage 11 开始把核心热点按独立变化原因真正拆开。
+Stage 8-11 已经依次解决目录、入口、角色和职责热点；Stage 12 固定 top-level package 的依赖方向，并把跨子系统调用收敛成明确 corridor。
 
-三个稳定 Application Facade 继续保留：
+三个稳定 Application Facade：
 
 ```text
 OfflineJobDefinitionService
@@ -57,11 +58,29 @@ OfflineExecutionStateManager         # 状态 / Retry / Event / Task projection
 OfflineBatchRuntime                  # Batch runtime truth
 OfflineExecutionQuery                # execution read model
 OfflineExecutionLogQuery             # unified log query
-OfflineCursorManager                 # cursor route + CAS advancement
+OfflineCursorManager                 # cursor 内部实现
 OfflineBackfillPlanner               # Scope / Cursor / Snapshot planning
 ```
 
 `@Service` 仍只表达稳定 Application 入口；内部 Coordinator / Manager / Runtime / Query / Planner / Factory 使用 `@Component`。
+
+## 显式跨子系统边界
+
+Stage 12 新增三条窄边界：
+
+```text
+OfflineCursorGateway
+OfflineExecutionScopeValidator
+OfflineScheduleExecutionGateway
+```
+
+含义：
+
+- Cursor 子系统之外只能依赖 `OfflineCursorGateway`，不能直接依赖 `OfflineCursorManager`；
+- Backfill 做 execution scope 前置校验时只依赖 `OfflineExecutionScopeValidator`，不直接依赖 `execution.adapter`；
+- Schedule Handler 只依赖自己定义的 `OfflineScheduleExecutionGateway`，不 import `execution.*`；该 Gateway 由 `OfflineJobExecutionService` 实现。
+
+因此跨子系统调用不再等于“知道对方内部哪个类能用”。
 
 ## Application Entry
 
@@ -73,7 +92,23 @@ Controller
    `-> OfflineBackfillService
 ```
 
-Schedule Handler、Backfill Dispatcher、Execution Reconciler 进入 execution 子系统时仍然统一通过 `OfflineJobExecutionService`，不会直接穿透内部组件。
+后台入口：
+
+```text
+OfflineBackfillDispatcher
+    -> OfflineJobExecutionService
+
+OfflineExecutionReconciler
+    -> OfflineJobExecutionService
+
+OfflineScheduleHandler
+    -> OfflineScheduleExecutionGateway
+         ^
+         |
+       implemented by OfflineJobExecutionService
+```
+
+Schedule 不再直接依赖 execution package，因此 `definition -> schedule -> execution -> definition` 的 top-level 循环已经消失。
 
 ## Execution 内部链路
 
@@ -102,7 +137,28 @@ OfflineJobExecutionService
 - `OfflineExecutionStateManager` 负责 Attempt 状态、metrics、Retry window、Event、Task last-* projection；
 - `OfflineExecutionClaimManager` 负责创建新 Batch；
 - `OfflineExistingBatchClaimManager` 负责 Retry / PENDING Backfill 在已有 Batch 上创建 Attempt；
-- `OfflineExecutionAttemptFactory` 统一构造 persistence Attempt。
+- `OfflineExecutionAttemptFactory` 统一构造 persistence Attempt；
+- `OfflineBatchRuntime` 通过 `OfflineCursorGateway` 通知 Cursor success hook，不直接依赖 CursorManager。
+
+## Definition / Schedule 边界
+
+Definition 的运行中保护只需要判断 Task 是否存在 occupying Batch。
+
+Stage 12 后：
+
+```text
+OfflineJobDefinitionService
+    -> OfflineBatchExecutionRepository.hasOccupyingBatch()
+```
+
+不再为了一个 runtime guard 反向依赖 `OfflineBatchRuntime`。这里仍然读取 Batch runtime truth，没有退回 Task `last-*` projection。
+
+Definition 继续通过明确的 schedule corridor 使用：
+
+```text
+OfflineScheduleSupport
+OfflineScheduleLifecycle
+```
 
 ## Backfill / Cursor
 
@@ -113,17 +169,61 @@ Backfill Request
        -> Scope normalize
        -> existing Batch reuse
        -> shared ExecutionSnapshot
-       -> Cursor validation
-       -> execution-scope validation
+       -> OfflineCursorGateway
+       -> OfflineExecutionScopeValidator
   -> PENDING Batch group materialization
   -> OfflineBackfillDispatcher
-  -> OfflineJobExecutionService
+       -> OfflineCursorGateway
+       -> OfflineJobExecutionService
   -> Attempt 1
 ```
 
 `OfflineBackfillService` 只负责 Application command、Task lock 和 Batch materialization；规划逻辑集中在 `OfflineBackfillPlanner`。
 
-`OfflineCursorManager` 管理 Cursor route + position + stateVersion，只在对应 `CursorRange` Batch `SUCCEEDED` 后由 `OfflineBatchRuntime` 触发 CAS 推进。
+`OfflineCursorManager` 管理 Cursor route + position + stateVersion，只在对应 `CursorRange` Batch `SUCCEEDED` 后通过 Gateway 被 `OfflineBatchRuntime` 触发 CAS 推进。
+
+## Top-level package 依赖
+
+当前允许的 offline 内部依赖：
+
+| Source | Allowed |
+| --- | --- |
+| `controller` | `config`, `definition`, `execution`, `backfill` |
+| `backfill` | `config`, `cursor`, `definition`, `domain`, `execution`, `repository` |
+| `reconcile` | `config`, `domain`, `engine`, `execution`, `repository` |
+| `execution` | `config`, `cursor`, `definition`, `domain`, `engine`, `mapping`, `repository`, `schedule` |
+| `definition` | `config`, `domain`, `engine`, `mapping`, `repository`, `schedule` |
+| `schedule` | `config`, `domain`, `repository` |
+| `cursor` | `config`, `domain`, `repository` |
+| `mapping` | `domain`, `engine` |
+| `repository` | `config`, `dao`, `domain` |
+| `dao` | `config` |
+| `engine` | `config` |
+| `domain` | none |
+| `config` | none |
+
+同一 top-level package 内的子 package 属于同一个子系统，例如 `execution.query` 和 `execution.adapter`；但它们不自动成为跨子系统 API。
+
+## 工程依赖约束
+
+当前架构护栏要求：
+
+- Controller 只依赖三个稳定 Application Facade；
+- Backfill Dispatcher / Execution Reconciler 进入 execution 只依赖 `OfflineJobExecutionService`；
+- Schedule Handler 只依赖 `OfflineScheduleExecutionGateway`，不依赖 execution package；
+- Definition 不依赖 execution package；
+- Backfill 不直接依赖 `execution.adapter`；
+- 跨子系统 Cursor 调用只依赖 `OfflineCursorGateway`；
+- execution 内部角色不作为跨子系统公共 API；
+- `OfflineExecutionCoordinator` 必须通过 `OfflineExecutionStateManager` 应用状态；
+- `OfflineExecutionClaimManager` 组合 `OfflineExistingBatchClaimManager + OfflineExecutionAttemptFactory`；
+- `OfflineBackfillService` 组合 `OfflineBackfillPlanner`；
+- Repository adapter 只依赖 `domain / dao / config`；
+- DAO 不反向依赖业务子系统；
+- Domain 不依赖 Application / Engine / Persistence；
+- 实际源码生成的 top-level package graph 必须无环。
+
+`OfflineSyncLayeringConventionTest` 守护 Stage 7-11 的角色/分层契约；`OfflineSyncDependencyBoundaryTest` 专门守护 Stage 12 的 package dependency graph 和 corridor。
 
 ## Link-Up 边界
 
@@ -137,42 +237,6 @@ Yak Ops -> DELETE /api/v1/jobs/{jobId}
 ```
 
 Batch Snapshot 只保存不含凭据的 logical JobSpec；数据源凭据在 Attempt submit boundary 才解析。
-
-## 调度与运行边界
-
-```text
-Offline Job Definition
-  -> OfflineScheduleEngineBridge
-  -> Yak Schedule / Quartz
-  -> OfflineScheduleHandler
-  -> OfflineJobExecutionService
-  -> OfflineExecutionCoordinator
-  -> BatchExecution / ExecutionAttempt
-  -> Link-Up
-```
-
-Yak Schedule 只负责“什么时候触发”。Task 是否已有运行占用、是否能创建新 Batch，只读取 `OfflineBatchRuntime` 的 Batch runtime truth；Schedule Handler 不直接持有 Runtime / Coordinator。
-
-Link-Up 状态对账和失败重试由 `reconcile.OfflineExecutionReconciler` 负责；Reconciler 通过 `OfflineJobExecutionService` 应用 execution 状态规则。Wave 1 前 `batch_id = NULL` 的 execution 是只读历史，不参与 Reconcile / Retry / Cancel。
-
-## 工程依赖约束
-
-当前架构护栏要求：
-
-- Controller 只依赖三个稳定 Application Facade；
-- Schedule Handler / Backfill Dispatcher / Execution Reconciler 进入 execution 时只依赖 `OfflineJobExecutionService`；
-- execution 内部角色不作为跨子系统公共 API；
-- `OfflineExecutionCoordinator` 必须通过 `OfflineExecutionStateManager` 应用状态，不直接持有 Definition/Event Repository；
-- `OfflineExecutionClaimManager` 组合 `OfflineExistingBatchClaimManager + OfflineExecutionAttemptFactory`；
-- `OfflineBackfillService` 组合 `OfflineBackfillPlanner`，不直接持有 CursorManager / ScheduleRepository / ScopeExecutionAdapter；
-- `@Service` 保留给三个 Application Facade；内部角色使用 `@Component`；
-- Definition / Execution / Backfill 使用 Domain，不直接操作 MyBatis PO；
-- Repository 接口只暴露 Domain；PO 与 DAO 仅存在于持久化适配层；
-- Task runtime occupancy 只由 Batch Repository / Runtime 提供；
-- Query 只负责读取/展示，不承担 Batch/Attempt 状态命令；
-- Link-Up 协议对象不直接暴露为 HTTP Domain。
-
-这些边界由 `OfflineSyncLayeringConventionTest` 持续守护。
 
 ## 数据表
 
@@ -193,5 +257,6 @@ Stage 8   COMPLETE  Package Restructuring
 Stage 9   COMPLETE  Application Entry Consolidation
 Stage 10  COMPLETE  Role Naming
 Stage 11  COMPLETE  Core Responsibility Decomposition
-Stage 12  NEXT      Dependency Boundary Governance
+Stage 12  COMPLETE  Dependency Boundary Governance
+Stage 13  NEXT      Architecture Guardrails
 ```

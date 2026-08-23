@@ -5,7 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorGateway;
 import io.yak.ops.business.sync.offline.domain.OfflineSyncCursor;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchKey;
@@ -26,11 +26,10 @@ class OfflineBackfillDispatcherTest {
   @Test
   void cursorRangeDispatchesOnlyWhenCursorMatchesAfterExclusive() {
     OfflineBatchExecutionRepository batches = Mockito.mock(OfflineBatchExecutionRepository.class);
-    OfflineCursorManager cursors = Mockito.mock(OfflineCursorManager.class);
+    OfflineCursorGateway cursors = Mockito.mock(OfflineCursorGateway.class);
     OfflineJobExecutionService executionService = Mockito.mock(OfflineJobExecutionService.class);
     OfflineBackfillDispatcher dispatcher =
-        new OfflineBackfillDispatcher(
-            batches, cursors, executionService, new OfflineSyncProperties());
+        new OfflineBackfillDispatcher(batches, cursors, executionService, new OfflineSyncProperties());
     BatchExecution pending = pendingCursor("100", "200");
 
     when(batches.findPendingBackfills(100)).thenReturn(List.of(pending));
@@ -47,11 +46,10 @@ class OfflineBackfillDispatcherTest {
   @Test
   void nextCursorRangeStaysPendingUntilPredecessorAdvancesCursor() {
     OfflineBatchExecutionRepository batches = Mockito.mock(OfflineBatchExecutionRepository.class);
-    OfflineCursorManager cursors = Mockito.mock(OfflineCursorManager.class);
+    OfflineCursorGateway cursors = Mockito.mock(OfflineCursorGateway.class);
     OfflineJobExecutionService executionService = Mockito.mock(OfflineJobExecutionService.class);
     OfflineBackfillDispatcher dispatcher =
-        new OfflineBackfillDispatcher(
-            batches, cursors, executionService, new OfflineSyncProperties());
+        new OfflineBackfillDispatcher(batches, cursors, executionService, new OfflineSyncProperties());
     BatchExecution pending = pendingCursor("200", "300");
 
     when(batches.findPendingBackfills(100)).thenReturn(List.of(pending));

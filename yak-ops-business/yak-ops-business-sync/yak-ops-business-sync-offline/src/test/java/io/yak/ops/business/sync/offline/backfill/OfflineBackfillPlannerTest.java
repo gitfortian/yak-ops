@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorGateway;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
@@ -19,7 +20,7 @@ import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
-import io.yak.ops.business.sync.offline.execution.adapter.OfflineBatchScopeExecutionAdapter;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionScopeValidator;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBackfillRequestDTO;
@@ -39,8 +40,8 @@ class OfflineBackfillPlannerTest {
   @Mock private OfflineJobDefinitionService definitionService;
   @Mock private OfflineBatchExecutionRepository batchRepository;
   @Mock private OfflineScheduleRepository scheduleRepository;
-  @Mock private OfflineCursorManager cursorManager;
-  @Mock private OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
+  @Mock private OfflineCursorGateway cursorGateway;
+  @Mock private OfflineExecutionScopeValidator scopeValidator;
 
   private OfflineBackfillPlanner planner;
 
@@ -50,8 +51,8 @@ class OfflineBackfillPlannerTest {
         definitionService,
         batchRepository,
         scheduleRepository,
-        cursorManager,
-        scopeExecutionAdapter,
+        cursorGateway,
+        scopeValidator,
         new OfflineSyncProperties());
   }
 
@@ -65,12 +66,8 @@ class OfflineBackfillPlannerTest {
     OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
     request.setRequestId("backfill-august");
     request.setScopes(List.of(
-        window(
-            LocalDateTime.of(2026, 8, 1, 0, 0),
-            LocalDateTime.of(2026, 8, 2, 0, 0)),
-        window(
-            LocalDateTime.of(2026, 8, 2, 0, 0),
-            LocalDateTime.of(2026, 8, 3, 0, 0))));
+        window(LocalDateTime.of(2026, 8, 1, 0, 0), LocalDateTime.of(2026, 8, 2, 0, 0)),
+        window(LocalDateTime.of(2026, 8, 2, 0, 0), LocalDateTime.of(2026, 8, 3, 0, 0))));
 
     OfflineBackfillPlanner.PreparedRequest prepared = planner.prepare(request);
     OfflineBackfillPlanner.Plan plan = planner.plan(10L, definition, prepared);
@@ -78,8 +75,7 @@ class OfflineBackfillPlannerTest {
     assertThat(plan.scopes()).hasSize(2);
     assertThat(plan.snapshot().logicalJobSpec())
         .isEqualTo("{\"kind\":\"BatchSyncJob\"}");
-    verify(scopeExecutionAdapter, org.mockito.Mockito.times(2))
-        .apply(anyLong(), any(), any());
+    verify(scopeValidator, org.mockito.Mockito.times(2)).validate(anyLong(), any(), any());
   }
 
   @Test
@@ -88,7 +84,7 @@ class OfflineBackfillPlannerTest {
     when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{}");
     when(batchRepository.findByTaskIdAndBatchKey(anyLong(), any()))
         .thenReturn(Optional.empty());
-    when(cursorManager.find(10L, "orders")).thenReturn(Optional.empty());
+    when(cursorGateway.find(10L, "orders")).thenReturn(Optional.empty());
     OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
     request.setRequestId("cursor-bf");
     request.setScopes(List.of(
@@ -98,7 +94,7 @@ class OfflineBackfillPlannerTest {
     OfflineBackfillPlanner.PreparedRequest prepared = planner.prepare(request);
     planner.plan(10L, definition, prepared);
 
-    verify(cursorManager).initializeIfAbsent(10L, "orders", "updated_at", "100");
+    verify(cursorGateway).initializeIfAbsent(10L, "orders", "updated_at", "100");
   }
 
   @Test
@@ -118,7 +114,7 @@ class OfflineBackfillPlannerTest {
     assertThatThrownBy(() -> planner.plan(10L, definition, prepared))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("连续");
-    verify(scopeExecutionAdapter, never()).apply(anyLong(), any(), any());
+    verify(scopeValidator, never()).validate(anyLong(), any(), any());
   }
 
   @Test
@@ -127,14 +123,13 @@ class OfflineBackfillPlannerTest {
     when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{}");
     when(batchRepository.findByTaskIdAndBatchKey(anyLong(), any()))
         .thenReturn(Optional.empty());
-    when(scopeExecutionAdapter.apply(anyLong(), any(), any()))
-        .thenThrow(new IllegalStateException("Wave 5 scoped Batch V1 仅支持单表 source"));
+    doThrow(new IllegalStateException("Wave 5 scoped Batch V1 仅支持单表 source"))
+        .when(scopeValidator)
+        .validate(anyLong(), any(), any());
     OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
     request.setRequestId("invalid-scope");
     request.setScopes(List.of(
-        window(
-            LocalDateTime.of(2026, 8, 1, 0, 0),
-            LocalDateTime.of(2026, 8, 2, 0, 0))));
+        window(LocalDateTime.of(2026, 8, 1, 0, 0), LocalDateTime.of(2026, 8, 2, 0, 0))));
 
     OfflineBackfillPlanner.PreparedRequest prepared = planner.prepare(request);
 
@@ -162,7 +157,8 @@ class OfflineBackfillPlannerTest {
         snapshot,
         BatchStatus.SUCCEEDED,
         List.of());
-    when(batchRepository.findByTaskIdAndBatchKey(10L, BatchKey.backfill("existing", scope.fingerprint())))
+    when(batchRepository.findByTaskIdAndBatchKey(
+            10L, BatchKey.backfill("existing", scope.fingerprint())))
         .thenReturn(Optional.of(existing));
     OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
     request.setRequestId("existing");
@@ -196,10 +192,7 @@ class OfflineBackfillPlannerTest {
   }
 
   private OfflineBackfillScopeDTO cursor(
-      String cursorId,
-      String column,
-      String after,
-      String through) {
+      String cursorId, String column, String after, String through) {
     OfflineBackfillScopeDTO scope = new OfflineBackfillScopeDTO();
     scope.setType("CURSOR_RANGE");
     scope.setCursorId(cursorId);
