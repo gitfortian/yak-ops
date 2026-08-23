@@ -10,6 +10,7 @@
 - [DOMAIN.md](./DOMAIN.md) — 当前硬规则：实现不能违反什么
 - [REVIEW.md](./REVIEW.md) — Review 标准：按什么规则判卷
 - [Domain Mapping](../../../docs/offline-sync/domain/README.md) — Stage 6 Wave 0-6 历史迁移映射
+- [Architecture Responsibility Inventory](../../../docs/offline-sync/architecture/README.md) — Stage 7 Service 职责盘点与 Stage 8 迁移施工图
 
 ```text
 OfflineSyncTask
@@ -26,6 +27,26 @@ BatchExecution
 ```
 
 核心约束：`Task != Batch != Attempt`。Task `last-*` 只是查询投影；Batch 是业务身份与 runtime truth；Attempt 是一次实际提交证据。
+
+## 架构职责治理
+
+**Stage 7 已完成：Service Responsibility Inventory。**
+
+Stage 7 只做职责盘点，不修改 Java package、类名、REST、数据库或运行语义。当前 `service` 大目录中的类已经按下面的稳定角色完成分类：
+
+```text
+Application Service / Facade
+Coordinator
+Manager / Runtime
+Query
+Dispatcher / Reconciler
+Adapter / Mapper
+Support / Builder
+```
+
+下一阶段 Stage 8 将优先把 `service` 大平层按 `definition / execution / backfill / cursor / reconcile / mapping` 等业务子系统归位；第一波只做 package/import 结构迁移，不同时重命名类或改领域模型。
+
+详细 inventory、依赖热点、目标目录与迁移顺序见 [Architecture Responsibility Inventory](../../../docs/offline-sync/architecture/README.md)。
 
 ## Link-Up 边界
 
@@ -83,6 +104,8 @@ V1 同 Task 仍保持单 occupying Batch。Cursor 独立持久化 route + positi
 
 ## 工程分层
 
+> 以下是 Stage 7 时仍然有效的当前分层约束。Stage 8 会做 package 结构迁移，但不会绕过这些依赖规则；规则的正式更新应和迁移代码一起 Review。
+
 ```text
 Controller -> DTO -> Service -> Domain
            -> Repository -> Adapter -> DAO
@@ -128,7 +151,15 @@ V5  legacy LOST -> UNKNOWN normalization
 
 不创建物理 FK，不猜测回填 Wave 1 前 batchless execution，也不为了改名重建历史表。
 
-## Stage 6 状态
+## Stage 状态
+
+```text
+Stage 6  COMPLETE  Domain runtime contract
+Stage 7  COMPLETE  Service Responsibility Inventory
+Stage 8  NEXT      Package Restructuring
+```
+
+Stage 6 波次：
 
 ```text
 Wave 0  DONE  Core VO + compatibility mapper
