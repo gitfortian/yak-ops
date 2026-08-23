@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 public class OfflineJobExecution {
   private Long id;
   private Long jobDefinitionId;
+  private Long batchId;
   private Integer definitionVersion;
   private String engineBaseUrl;
   private String engineJobId;

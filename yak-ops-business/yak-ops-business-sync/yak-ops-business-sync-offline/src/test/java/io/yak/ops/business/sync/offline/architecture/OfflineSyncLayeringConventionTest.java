@@ -7,17 +7,20 @@ import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobDefinitionController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobExecutionController;
+import io.yak.ops.business.sync.offline.dao.OfflineBatchExecutionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineExecutionEventDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionQuery;
+import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionIdempotencyRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
+import io.yak.ops.common.bean.po.sync.offline.OfflineBatchExecutionPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineExecutionEventPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
@@ -50,6 +53,7 @@ class OfflineSyncLayeringConventionTest {
   @Test
   void repositoriesExposeOnlyDomainContracts() {
     for (Class<?> type : List.of(
+        OfflineBatchExecutionRepository.class,
         OfflineJobDefinitionRepository.class,
         OfflineJobExecutionRepository.class,
         OfflineExecutionEventRepository.class,
@@ -80,6 +84,7 @@ class OfflineSyncLayeringConventionTest {
   @Test
   void daosDoNotDependOnTransportModels() {
     for (Class<?> type : List.of(
+        OfflineBatchExecutionDao.class,
         OfflineJobDefinitionDao.class,
         OfflineJobExecutionDao.class,
         OfflineExecutionEventDao.class)) {
@@ -88,10 +93,14 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
-  void phaseOnePersistenceRemainsThreeTables() {
+  void waveOnePersistenceAddsBatchTableWithoutReplacingLegacyTables() throws Exception {
+    assertTable(OfflineBatchExecutionPO.class, "yak_offline_batch_execution");
     assertTable(OfflineJobDefinitionPO.class, "yak_offline_job_definition");
     assertTable(OfflineJobExecutionPO.class, "yak_offline_job_execution");
     assertTable(OfflineExecutionEventPO.class, "yak_offline_execution_event");
+
+    Field batchId = OfflineJobExecutionPO.class.getDeclaredField("batchId");
+    assertThat(batchId.getType()).isEqualTo(Long.class);
   }
 
   private void assertMethodsAvoid(Class<?> owner, String... forbidden) {

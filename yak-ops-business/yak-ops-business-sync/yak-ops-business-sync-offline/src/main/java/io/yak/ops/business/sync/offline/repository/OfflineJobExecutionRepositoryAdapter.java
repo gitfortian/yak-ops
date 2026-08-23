@@ -33,6 +33,11 @@ public class OfflineJobExecutionRepositoryAdapter implements OfflineJobExecution
   }
 
   @Override
+  public List<OfflineJobExecution> findByBatchId(Long batchId) {
+    return dao.selectByBatchId(batchId).stream().map(this::toDomain).toList();
+  }
+
+  @Override
   public boolean insert(OfflineJobExecution execution) {
     OfflineJobExecutionPO po = toPO(execution);
     boolean inserted = dao.insert(po);
@@ -43,6 +48,17 @@ public class OfflineJobExecutionRepositoryAdapter implements OfflineJobExecution
   @Override
   public boolean update(OfflineJobExecution execution) {
     return dao.updateById(toPO(execution));
+  }
+
+  @Override
+  public boolean bindBatch(Long executionId, Long batchId) {
+    if (executionId == null || executionId <= 0L) {
+      throw new IllegalArgumentException("ExecutionId 必须大于 0");
+    }
+    if (batchId == null || batchId <= 0L) {
+      throw new IllegalArgumentException("BatchExecutionId 必须大于 0");
+    }
+    return dao.bindBatch(executionId, batchId, LocalDateTime.now());
   }
 
   @Override

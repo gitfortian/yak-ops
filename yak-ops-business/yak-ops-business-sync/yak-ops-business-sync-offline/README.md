@@ -2,7 +2,7 @@
 
 ## 领域建设
 
-离线同步当前已完成 Stage 6 Wave 0：Core VO + compatibility mapper。现有执行链和数据库尚未切换；修改代码前先读当前规则，需要迁移背景时再看 Mapping 文档：
+离线同步当前已完成 Stage 6 Wave 1：Batch persistence + nullable `execution.batch_id`。现有 Trigger/Retry/Schedule 仍走 legacy 链路；修改代码前先读当前规则，需要迁移背景时再看 Mapping 文档：
 
 - [DOMAIN.md](./DOMAIN.md)
 - [Domain Mapping](../../../docs/offline-sync/domain/README.md)
@@ -70,14 +70,21 @@ Domain -> View Mapper -> VO -> Controller
 
 ## 数据表
 
-仅保留：
+当前保留：
 
 - `yak_offline_job_definition`
+- `yak_offline_batch_execution`
 - `yak_offline_job_execution`
 - `yak_offline_execution_event`
 
-调度配置直接保存在任务定义表。每次执行保存任务定义和 JobSpec 快照，不再维护独立任务版本表。
+Wave 1 通过 V2 expand migration 新增 Batch 表，并给 `yak_offline_job_execution` 增加 nullable `batch_id`。旧 execution 可以暂时没有 Batch；Wave 2 才会让新 Trigger 先创建 Batch 再创建 Attempt。
 
-## 数据库重建
+调度配置继续保存在任务定义表。Batch 保存稳定业务身份、Scope 和 frozen Snapshot/RetryPolicy；execution 继续保存引擎提交、指标、错误等 Attempt 证据。
 
-本阶段明确不兼容旧离线同步表。Flyway 使用新的 `yak_offline_core_schema_history`，V1 会删除旧离线同步业务表和旧 `yak_offline_schema_history` 后重新建表。部署前应确认历史离线同步数据无需保留。
+## 数据库迁移
+
+Flyway 使用 `yak_offline_core_schema_history`：
+
+- V1 是离线同步 baseline；
+- V2 只做 expand：新增 `yak_offline_batch_execution` 和 nullable `execution.batch_id`；
+- Wave 1 不回填旧 execution，不创建物理 FK，也不切换现有执行链。
