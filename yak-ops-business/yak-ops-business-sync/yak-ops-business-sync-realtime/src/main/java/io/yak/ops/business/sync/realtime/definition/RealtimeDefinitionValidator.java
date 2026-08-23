@@ -11,7 +11,7 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResol
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
-import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
+import io.yak.ops.business.sync.realtime.environment.RealtimeRuntimeResolver;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import jakarta.validation.ConstraintViolation;
@@ -70,8 +70,6 @@ public class RealtimeDefinitionValidator {
     JsonNode manifest = gateway.capabilities(environment);
     capabilityResolver.requireSupported(manifest, resolved, spec);
 
-    // Compile the logical definition as part of preflight so route escaping and connector YAML shape
-    // fail before persistence. No secrets are resolved and no Flink REST health call is made here.
     compiler.compile("definition-preflight", spec, resolved);
 
     return new RealtimeValidationResult(
