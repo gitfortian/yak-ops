@@ -6,16 +6,14 @@ import io.yak.ops.business.sync.offline.domain.core.AttemptReason;
 import io.yak.ops.business.sync.offline.domain.core.AttemptStatus;
 import io.yak.ops.business.sync.offline.domain.core.EngineExecutionRef;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionAttempt;
-import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
-import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Transitional mapper from the current execution model to core domain types.
+ * Transitional mapper from the legacy execution persistence view to ExecutionAttempt.
  *
- * <p>This mapper deliberately does not synthesize BatchExecution, BatchKey or BatchScope because
- * a legacy execution row does not contain stable batch identity.
+ * <p>Wave 6 contract：本 mapper 只允许映射 Attempt evidence。BatchExecution / BatchScope /
+ * ExecutionSnapshot 必须来自 Batch persistence，禁止再从 Attempt 重建冻结运行真相。
  */
 public final class LegacyOfflineExecutionCompatibilityMapper {
 
@@ -36,22 +34,6 @@ public final class LegacyOfflineExecutionCompatibilityMapper {
         Objects.requireNonNull(source.getCreateTime(), "createTime 不能为空"),
         source.getStartTime(),
         source.getEndTime());
-  }
-
-  /**
-   * Builds Batch-owned frozen evidence from a bound legacy Attempt without reading current Task or
-   * SchedulePolicy.
-   */
-  public static ExecutionSnapshot toSnapshot(
-      OfflineJobExecution source, RetryPolicySnapshot retryPolicy) {
-    Objects.requireNonNull(source, "legacy execution 不能为空");
-    Objects.requireNonNull(retryPolicy, "retryPolicy 不能为空");
-    return new ExecutionSnapshot(
-        requireText(source.getDefinitionSnapshotJson(), "definitionSnapshot 不能为空"),
-        positive(source.getDefinitionVersion(), "definitionVersion"),
-        retryPolicy,
-        requireText(source.getConfigDigest(), "configDigest 不能为空"),
-        requireText(source.getSubmittedConfig(), "logicalJobSpec 不能为空"));
   }
 
   static AttemptStatus status(String value) {
