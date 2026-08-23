@@ -19,7 +19,7 @@ public class DataSourceDefinition {
   private Long id;
   private String name;
   private DataSourceDbType dbType;
-  private String jdbcUrl;
+  @ToString.Exclude private String jdbcUrl;
   private DataSourceEnvironment environment;
   private DataSourceConnStatus connStatus;
   private String remark;
