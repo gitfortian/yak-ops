@@ -2,7 +2,7 @@
 
 ## 领域建设
 
-离线同步运行模型固定为 `Task -> Batch -> Attempt`。Backfill/Cursor 已进入同一模型，legacy execution 仅保留持久化兼容职责。
+离线同步运行模型固定为 `Task -> Batch -> Attempt`。Backfill/Cursor 已进入同一模型，历史 execution 仅保留持久化与查询兼容职责。
 
 修改代码或 Review 前按顺序阅读：
 
@@ -16,6 +16,7 @@
 - [Stage 10 Role Naming](../../../docs/offline-sync/architecture/STAGE10.md) — 角色命名约定
 - [Stage 11 Core Responsibility Decomposition](../../../docs/offline-sync/architecture/STAGE11.md) — 核心职责拆分
 - [Stage 12 Dependency Boundary Governance](../../../docs/offline-sync/architecture/STAGE12.md) — 当前 package 依赖规则
+- [Legacy Compatibility Cleanup](../../../docs/offline-sync/architecture/LEGACY-COMPATIBILITY-CLEANUP.md) — Stage 12 后 Java 过渡兼容清理
 
 ```text
 OfflineSyncTask
@@ -63,6 +64,25 @@ OfflineBackfillPlanner               # Scope / Cursor / Snapshot planning
 ```
 
 `@Service` 仍只表达稳定 Application 入口；内部 Coordinator / Manager / Runtime / Query / Planner / Factory 使用 `@Component`。
+
+## Java 过渡兼容清理
+
+Stage 12 之后已删除完成使命的 Java compatibility layer：
+
+```text
+OfflineExecutionControlRepository
+OfflineExecutionIdempotencyRepository
+LegacyBatchTriggerCompatibilityMapper
+LegacyOfflineExecutionCompatibilityMapper
+```
+
+仍有价值的能力已经归位：
+
+- Schedule trigger identity 由 `BatchTriggerToken` 表达，token 编码与 `BatchKey.schedule(...)` 语义保持不变；
+- persistence Attempt -> Core `ExecutionAttempt` 的 hydration 由 `OfflineBatchExecutionRepositoryAdapter` 负责；
+- `OfflineSyncLayeringConventionTest` 禁止生产源码重新引入 `@Deprecated` 过渡实现、`domain.compat` 和上述 compatibility 类型。
+
+这次只删除 Java 过渡层。数据库表名、Flyway、历史 execution 查询以及 `batch_id = NULL` 只读兼容继续保留。
 
 ## 显式跨子系统边界
 
@@ -223,7 +243,7 @@ Backfill Request
 - Domain 不依赖 Application / Engine / Persistence；
 - 实际源码生成的 top-level package graph 必须无环。
 
-`OfflineSyncLayeringConventionTest` 守护 Stage 7-11 的角色/分层契约；`OfflineSyncDependencyBoundaryTest` 专门守护 Stage 12 的 package dependency graph 和 corridor。
+`OfflineSyncLayeringConventionTest` 守护 Stage 7-12 的角色/分层契约与兼容清理；`OfflineSyncDependencyBoundaryTest` 专门守护 Stage 12 的 package dependency graph 和 corridor。
 
 ## Link-Up 边界
 
@@ -251,12 +271,13 @@ Batch Snapshot 只保存不含凭据的 logical JobSpec；数据源凭据在 Att
 ## Stage 状态
 
 ```text
-Stage 6   COMPLETE  Domain Runtime Contract
-Stage 7   COMPLETE  Service Responsibility Inventory
-Stage 8   COMPLETE  Package Restructuring
-Stage 9   COMPLETE  Application Entry Consolidation
-Stage 10  COMPLETE  Role Naming
-Stage 11  COMPLETE  Core Responsibility Decomposition
-Stage 12  COMPLETE  Dependency Boundary Governance
-Stage 13  NEXT      Architecture Guardrails
+Stage 6         COMPLETE  Domain Runtime Contract
+Stage 7         COMPLETE  Service Responsibility Inventory
+Stage 8         COMPLETE  Package Restructuring
+Stage 9         COMPLETE  Application Entry Consolidation
+Stage 10        COMPLETE  Role Naming
+Stage 11        COMPLETE  Core Responsibility Decomposition
+Stage 12        COMPLETE  Dependency Boundary Governance
+Legacy Cleanup  COMPLETE  Transitional Java Compatibility Removal
+Stage 13        DEFERRED  Architecture Guardrails
 ```

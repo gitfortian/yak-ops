@@ -6,7 +6,7 @@ import io.yak.framework.schedule.api.ScheduleHandler;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
-import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper;
+import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import org.springframework.stereotype.Component;
@@ -57,7 +57,7 @@ public class OfflineScheduleHandler implements ScheduleHandler {
     }
 
     try {
-      String triggerToken = LegacyBatchTriggerCompatibilityMapper.scheduleToken(
+      String triggerToken = BatchTriggerToken.schedule(
           context.key().value(), context.scheduledFireTime());
       Long executionId = executionGateway.submitScheduled(definitionId, triggerToken);
       return ScheduleExecutionResult.accepted(

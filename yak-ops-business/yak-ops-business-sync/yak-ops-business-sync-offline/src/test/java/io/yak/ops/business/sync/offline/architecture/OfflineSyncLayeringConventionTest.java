@@ -32,9 +32,7 @@ import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.reconcile.OfflineExecutionReconciler;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionControlRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineExecutionIdempotencyRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
@@ -78,6 +76,12 @@ class OfflineSyncLayeringConventionTest {
       "OfflineCursorService",
       "OfflineExecutionReadService",
       "OfflineExecutionLogService");
+
+  private static final Set<String> TRANSITIONAL_COMPATIBILITY_NAMES = Set.of(
+      "LegacyBatchTriggerCompatibilityMapper",
+      "LegacyOfflineExecutionCompatibilityMapper",
+      "OfflineExecutionControlRepository",
+      "OfflineExecutionIdempotencyRepository");
 
   @Test
   void controllersDependOnlyOnStableApplicationFacades() {
@@ -211,15 +215,35 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
+  void productionSourceDoesNotContainTransitionalCompatibilityLayer() throws IOException {
+    Path root = productionRoot();
+    try (Stream<Path> paths = Files.walk(root)) {
+      for (Path file : paths.filter(path -> path.toString().endsWith(".java")).toList()) {
+        String relative = root.relativize(file).toString().replace('\\', '/');
+        String source = Files.readString(file);
+        assertThat(relative)
+            .as("transitional domain compat package must stay removed")
+            .doesNotStartWith("domain/compat/");
+        assertThat(source)
+            .as("%s must not reintroduce @Deprecated transitional code", relative)
+            .doesNotContain("@Deprecated");
+        for (String compatibilityName : TRANSITIONAL_COMPATIBILITY_NAMES) {
+          assertThat(source)
+              .as("%s must not reintroduce transitional compatibility type %s", relative, compatibilityName)
+              .doesNotContain(compatibilityName);
+        }
+      }
+    }
+  }
+
+  @Test
   void repositoriesExposeOnlyDomainContracts() {
     for (Class<?> type : List.of(
         OfflineBatchExecutionRepository.class,
         OfflineJobDefinitionRepository.class,
         OfflineJobExecutionRepository.class,
         OfflineExecutionEventRepository.class,
-        OfflineScheduleRepository.class,
-        OfflineExecutionControlRepository.class,
-        OfflineExecutionIdempotencyRepository.class)) {
+        OfflineScheduleRepository.class)) {
       assertMethodsAvoid(
           type,
           ".bean.dto.",

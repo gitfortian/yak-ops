@@ -1,26 +1,19 @@
-package io.yak.ops.business.sync.offline.domain.compat;
+package io.yak.ops.business.sync.offline.domain.core;
 
-import io.yak.ops.business.sync.offline.domain.core.BatchKey;
-import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.Objects;
 
-/**
- * Transitional adapter for carrying stable batch identity through the legacy string trigger API.
- *
- * <p>The encoded token is application-boundary compatibility only. Core types never depend on Yak
- * Schedule, Quartz, Link-Up or worker-specific objects.
- */
-public final class LegacyBatchTriggerCompatibilityMapper {
+/** Application-boundary token carrying stable Batch identity for trigger submission. */
+public final class BatchTriggerToken {
 
   private static final String SCHEDULE_PREFIX = "SCHEDULE@";
 
-  private LegacyBatchTriggerCompatibilityMapper() {}
+  private BatchTriggerToken() {}
 
-  public static String scheduleToken(String scheduleId, Instant plannedFireTime) {
+  public static String schedule(String scheduleId, Instant plannedFireTime) {
     Objects.requireNonNull(plannedFireTime, "plannedFireTime 不能为空");
     return SCHEDULE_PREFIX
         + encode(requireText(scheduleId, "scheduleId 不能为空"))
@@ -28,7 +21,7 @@ public final class LegacyBatchTriggerCompatibilityMapper {
         + encode(plannedFireTime.toString());
   }
 
-  public static Mapping parse(String triggerType) {
+  public static Parsed parse(String triggerType) {
     String value = requireText(triggerType, "triggerType 不能为空");
     if (value.startsWith(SCHEDULE_PREFIX)) {
       String payload = value.substring(SCHEDULE_PREFIX.length());
@@ -38,7 +31,7 @@ public final class LegacyBatchTriggerCompatibilityMapper {
       }
       String scheduleId = decode(parts[0]);
       Instant plannedFireTime = Instant.parse(decode(parts[1]));
-      return new Mapping(
+      return new Parsed(
           "SCHEDULE",
           BatchTrigger.SCHEDULE,
           BatchKey.schedule(scheduleId, plannedFireTime));
@@ -46,11 +39,11 @@ public final class LegacyBatchTriggerCompatibilityMapper {
 
     String normalized = value.toUpperCase(Locale.ROOT);
     return switch (normalized) {
-      case "SCHEDULE" -> new Mapping("SCHEDULE", BatchTrigger.SCHEDULE, null);
-      case "WORKFLOW" -> new Mapping("WORKFLOW", BatchTrigger.WORKFLOW, null);
-      case "BACKFILL" -> new Mapping("BACKFILL", BatchTrigger.BACKFILL, null);
-      case "RETRY" -> new Mapping("RETRY", null, null);
-      default -> new Mapping(value, BatchTrigger.MANUAL, null);
+      case "SCHEDULE" -> new Parsed("SCHEDULE", BatchTrigger.SCHEDULE, null);
+      case "WORKFLOW" -> new Parsed("WORKFLOW", BatchTrigger.WORKFLOW, null);
+      case "BACKFILL" -> new Parsed("BACKFILL", BatchTrigger.BACKFILL, null);
+      case "RETRY" -> new Parsed("RETRY", null, null);
+      default -> new Parsed(value, BatchTrigger.MANUAL, null);
     };
   }
 
@@ -73,5 +66,5 @@ public final class LegacyBatchTriggerCompatibilityMapper {
     return value.trim();
   }
 
-  public record Mapping(String legacyTriggerType, BatchTrigger batchTrigger, BatchKey batchKey) {}
+  public record Parsed(String attemptTriggerType, BatchTrigger batchTrigger, BatchKey batchKey) {}
 }
