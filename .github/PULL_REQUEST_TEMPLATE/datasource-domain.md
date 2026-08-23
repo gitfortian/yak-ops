@@ -1,0 +1,2 @@
+
+https://github.com/weifuwan/yak-ops/pull/670/conflict?name=.github%252FPULL_REQUEST_TEMPLATE%252Fdatasource-domain.md&ancestor_oid=dd53a509b7bbcf05ef7b285318ce8630474753e7&base_oid=49ece6e7f49988f7dd37a1ae2e16c4cd9d133c3c&head_oid=e69de29bb2d1d6434b8b29ae775ad8c2e48c5391

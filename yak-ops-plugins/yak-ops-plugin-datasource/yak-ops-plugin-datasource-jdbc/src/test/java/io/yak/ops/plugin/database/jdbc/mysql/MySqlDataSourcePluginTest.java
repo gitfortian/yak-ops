@@ -3,12 +3,14 @@ package io.yak.ops.plugin.database.jdbc.mysql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormSectionVO;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
 import io.yak.ops.plugin.database.jdbc.SshTunnelConfig;
+import io.yak.ops.spi.datasource.DataSourceCapability;
 import io.yak.ops.spi.datasource.DataSourceConnection;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FieldType;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormField;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormSection;
 import io.yak.ops.spi.datasource.DataSourcePluginException;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +22,7 @@ class MySqlDataSourcePluginTest {
         new MySqlDataSourcePlugin()
             .parseConnection(
                 "{\"dbType\":\"MYSQL\",\"host\":\"127.0.0.1\","
-                    + "\"database\":\"demo\",\"username\":\"root\"}");
+                    + "\"database\":\"demo\",\"username\":\"test_user\"}");
 
     assertThat(connection.jdbcUrl()).isEqualTo("jdbc:mysql://127.0.0.1:3306/demo");
     assertThat(connection.driverClassName()).isEqualTo("com.mysql.cj.jdbc.Driver");
@@ -30,63 +32,70 @@ class MySqlDataSourcePluginTest {
   }
 
   @Test
-  void shouldExposeSectionedFormSchemaAndKeepLegacyFields() {
-    DataSourcePluginConfigVO config = new MySqlDataSourcePlugin().pluginConfig();
+  void shouldExposeStableDescriptorCapabilitiesAndSectionedFormSchema() {
+    DataSourcePluginDescriptor descriptor = new MySqlDataSourcePlugin().descriptor();
 
-    assertThat(config.getSections())
-        .extracting(FormSectionVO::getKey)
+    assertThat(descriptor.apiVersion()).isEqualTo(DataSourcePluginDescriptor.CURRENT_API_VERSION);
+    assertThat(descriptor.capabilities())
+        .contains(
+            DataSourceCapability.CONNECTION_TEST,
+            DataSourceCapability.CATALOG_METADATA,
+            DataSourceCapability.CATALOG_READ,
+            DataSourceCapability.SQL_EXECUTION,
+            DataSourceCapability.TRANSACTIONS,
+            DataSourceCapability.SSH_TUNNEL);
+    assertThat(descriptor.connectionForm().sections())
+        .extracting(FormSection::key)
         .containsExactly("connection", "ssh", "driver", "advanced");
-    assertThat(config.getSections().get(0).getCollapsible()).isFalse();
-    assertThat(config.getSections().get(1).getCollapsible()).isTrue();
-    assertThat(config.getSections().get(1).getDefaultExpanded()).isFalse();
-    assertThat(config.getSections().get(1).getFields())
+    assertThat(descriptor.connectionForm().sections().get(0).collapsible()).isFalse();
+    assertThat(descriptor.connectionForm().sections().get(1).collapsible()).isTrue();
+    assertThat(descriptor.connectionForm().sections().get(1).defaultExpanded()).isFalse();
+    assertThat(descriptor.connectionForm().sections().get(1).fields())
         .singleElement()
         .satisfies(
             field -> {
-              assertThat(field.getKey()).isEqualTo("sshTunnel");
-              assertThat(field.getType()).isEqualTo("SSH");
+              assertThat(field.key()).isEqualTo("sshTunnel");
+              assertThat(field.type()).isEqualTo(FieldType.SSH);
             });
-    assertThat(config.getSections().get(2).getDefaultExpanded()).isTrue();
-    assertThat(config.getSections().get(3).getDefaultExpanded()).isFalse();
 
-    FormFieldVO jdbcUrlField =
-        config.getSections().get(0).getFields().stream()
-            .filter(field -> "jdbcUrl".equals(field.getKey()))
+    FormField jdbcUrlField =
+        descriptor.connectionForm().sections().get(0).fields().stream()
+            .filter(field -> "jdbcUrl".equals(field.key()))
             .findFirst()
             .orElseThrow();
-    assertThat(jdbcUrlField.getType()).isEqualTo("JDBC_URL");
-    assertThat(jdbcUrlField.getUrlLinkage()).isNotNull();
-    assertThat(jdbcUrlField.getUrlLinkage().getTemplate())
+    assertThat(jdbcUrlField.type()).isEqualTo(FieldType.JDBC_URL);
+    assertThat(jdbcUrlField.jdbcUrlLinkage()).isNotNull();
+    assertThat(jdbcUrlField.jdbcUrlLinkage().template())
         .isEqualTo("jdbc:mysql://{host}:{port}/{database}");
-    assertThat(jdbcUrlField.getUrlLinkage().getHostField()).isEqualTo("host");
-    assertThat(jdbcUrlField.getUrlLinkage().getPortField()).isEqualTo("port");
-    assertThat(jdbcUrlField.getUrlLinkage().getDatabaseField()).isEqualTo("database");
-    assertThat(jdbcUrlField.getUrlLinkage().getPreserveSuffix()).isTrue();
-    assertThat(jdbcUrlField.getDependsOn()).contains("sshTunnel");
-    assertThat(jdbcUrlField.getVisibleWhen())
+    assertThat(jdbcUrlField.jdbcUrlLinkage().hostField()).isEqualTo("host");
+    assertThat(jdbcUrlField.jdbcUrlLinkage().portField()).isEqualTo("port");
+    assertThat(jdbcUrlField.jdbcUrlLinkage().databaseField()).isEqualTo("database");
+    assertThat(jdbcUrlField.jdbcUrlLinkage().preserveSuffix()).isTrue();
+    assertThat(jdbcUrlField.dependsOn()).contains("sshTunnel");
+    assertThat(jdbcUrlField.visibleWhen())
         .singleElement()
         .satisfies(
             condition -> {
-              assertThat(condition.getField()).isEqualTo("sshTunnel.enabled");
-              assertThat(condition.getOperator()).isEqualTo("FALSY");
+              assertThat(condition.field()).isEqualTo("sshTunnel.enabled");
+              assertThat(condition.operator().name()).isEqualTo("FALSY");
             });
 
-    FormFieldVO propertiesField =
-        config.getSections().get(3).getFields().stream()
-            .filter(field -> "properties".equals(field.getKey()))
+    FormField propertiesField =
+        descriptor.connectionForm().sections().get(3).fields().stream()
+            .filter(field -> "properties".equals(field.key()))
             .findFirst()
             .orElseThrow();
-    assertThat(propertiesField.getDependsOn()).containsExactly("driverClassName");
-    assertThat(propertiesField.getVisibleWhen())
+    assertThat(propertiesField.dependsOn()).containsExactly("driverClassName");
+    assertThat(propertiesField.visibleWhen())
         .singleElement()
         .satisfies(
             condition -> {
-              assertThat(condition.getField()).isNull();
-              assertThat(condition.getOperator()).isEqualTo("TRUTHY");
+              assertThat(condition.field()).isNull();
+              assertThat(condition.operator().name()).isEqualTo("TRUTHY");
             });
 
-    // 旧版前端仍可继续消费扁平 formFields，SSH 复合字段只通过新版 sections 下发。
-    assertThat(config.getFormFields()).hasSize(9);
+    assertThat(descriptor.secretFieldKeys()).contains("password");
+    assertThat(descriptor.connectionForm().legacyFields()).hasSize(9);
   }
 
   @Test
@@ -96,19 +105,18 @@ class MySqlDataSourcePluginTest {
             new MySqlDataSourcePlugin()
                 .parseConnection(
                     "{\"dbType\":\"MYSQL\",\"host\":\"db.internal\","
-                        + "\"port\":3306,\"database\":\"demo\",\"username\":\"root\","
-                        + "\"sshTunnel\":{\"enabled\":true,\"host\":\"bastion.example.com\","
-                        + "\"port\":22,\"username\":\"ops\",\"authType\":\"PASSWORD\","
-                        + "\"password\":\"secret\"}}}");
+                        + "\"port\":3306,\"database\":\"demo\",\"username\":\"test_user\","
+                        + "\"sshTunnel\":{\"enabled\":true,\"host\":\"bastion.example.invalid\","
+                        + "\"port\":22,\"username\":\"test_ops\",\"authType\":\"PASSWORD\","
+                        + "\"password\":\"TEST_ONLY_VALUE\"}}}");
 
     assertThat(connection.host()).isEqualTo("db.internal");
     assertThat(connection.port()).isEqualTo(3306);
     assertThat(connection.sshTunnel().enabled()).isTrue();
-    assertThat(connection.sshTunnel().host()).isEqualTo("bastion.example.com");
+    assertThat(connection.sshTunnel().host()).isEqualTo("bastion.example.invalid");
     assertThat(connection.sshTunnel().port()).isEqualTo(22);
-    assertThat(connection.sshTunnel().username()).isEqualTo("ops");
-    assertThat(connection.sshTunnel().authType())
-        .isEqualTo(SshTunnelConfig.AuthType.PASSWORD);
+    assertThat(connection.sshTunnel().username()).isEqualTo("test_ops");
+    assertThat(connection.sshTunnel().authType()).isEqualTo(SshTunnelConfig.AuthType.PASSWORD);
     assertThat(connection.normalizedJson()).contains("\"sshTunnel\"");
   }
 
@@ -119,10 +127,10 @@ class MySqlDataSourcePluginTest {
                 new MySqlDataSourcePlugin()
                     .parseConnection(
                         "{\"dbType\":\"MYSQL\",\"host\":\"db.internal\","
-                            + "\"database\":\"demo\",\"username\":\"root\","
+                            + "\"database\":\"demo\",\"username\":\"test_user\","
                             + "\"jdbcUrl\":\"jdbc:mysql://db.internal:3306/demo\","
-                            + "\"sshTunnel\":{\"enabled\":true,\"host\":\"bastion.example.com\","
-                            + "\"username\":\"ops\",\"password\":\"secret\"}}}"))
+                            + "\"sshTunnel\":{\"enabled\":true,\"host\":\"bastion.example.invalid\","
+                            + "\"username\":\"test_ops\",\"password\":\"TEST_ONLY_VALUE\"}}}"))
         .isInstanceOf(DataSourcePluginException.class)
         .hasMessageContaining("启用 SSH 隧道时");
   }

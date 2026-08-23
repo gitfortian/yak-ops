@@ -2,6 +2,7 @@ package io.yak.ops.business.datasource.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.yak.ops.business.datasource.domain.plugin.DataSourcePluginDescriptor;
 import io.yak.ops.business.datasource.execution.DefaultSqlExecutionRuntime;
 import io.yak.ops.business.datasource.execution.domain.SqlExecutionAggregate;
 import io.yak.ops.business.datasource.gateway.DataSourceCatalogGateway;
@@ -11,7 +12,9 @@ import io.yak.ops.business.datasource.gateway.adapter.SpiDataSourceCatalogGatewa
 import io.yak.ops.business.datasource.gateway.adapter.SpiDataSourcePluginGateway;
 import io.yak.ops.business.datasource.gateway.adapter.SpiSqlExecutionGateway;
 import io.yak.ops.business.datasource.service.impl.DataSourceCatalogServiceImpl;
+import io.yak.ops.business.datasource.service.impl.DataSourcePluginConfigServiceImpl;
 import io.yak.ops.business.datasource.service.impl.DataSourceServiceImpl;
+import io.yak.ops.business.datasource.service.support.DataSourcePluginViewMapper;
 import io.yak.ops.business.datasource.service.support.DataSourceViewMapper;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -52,7 +55,9 @@ class DataSourceGatewayArchitectureTest {
         List.of(
             DataSourceServiceImpl.class,
             DataSourceCatalogServiceImpl.class,
+            DataSourcePluginConfigServiceImpl.class,
             DataSourceViewMapper.class,
+            DataSourcePluginViewMapper.class,
             DefaultSqlExecutionRuntime.class)) {
       for (Field field : type.getDeclaredFields()) {
         String fieldType = field.getGenericType().getTypeName();
@@ -75,6 +80,16 @@ class DataSourceGatewayArchitectureTest {
   }
 
   @Test
+  void businessPluginDescriptorDoesNotExposeSpiOrHttpProjectionTypes() {
+    for (Field field : DataSourcePluginDescriptor.class.getDeclaredFields()) {
+      assertThat(field.getGenericType().getTypeName())
+          .doesNotContain(".spi.datasource")
+          .doesNotContain(".bean.vo.")
+          .doesNotContain(".bean.dto.");
+    }
+  }
+
+  @Test
   void sqlExecutionAggregateDoesNotOwnPhysicalPluginInfrastructure() {
     for (Field field : SqlExecutionAggregate.class.getDeclaredFields()) {
       String fieldType = field.getGenericType().getTypeName();
@@ -87,10 +102,7 @@ class DataSourceGatewayArchitectureTest {
   }
 
   private void assertTypeAvoids(
-      Class<?> owner,
-      String member,
-      Type type,
-      String... forbidden) {
+      Class<?> owner, String member, Type type, String... forbidden) {
     String signature = typeName(type);
     for (String packagePart : forbidden) {
       assertThat(signature)

@@ -1,84 +1,79 @@
 package io.yak.ops.plugin.database.jdbc;
 
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormSectionVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.JdbcUrlLinkageVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.VisibilityConditionVO;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.ConnectionForm;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FieldType;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormField;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormSection;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.JdbcUrlLinkage;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.VisibilityCondition;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.VisibilityOperator;
 import java.util.ArrayList;
 import java.util.List;
 
-/** JDBC URL Schema 标准能力：由插件声明模板，前端统一完成 Host / Port / Database 双向联动。 */
+/** Standard JDBC URL schema capability used by the shared frontend component. */
 public final class JdbcUrlSchemaSupport {
 
   private static final String JDBC_URL_FIELD = "jdbcUrl";
   private static final String SSH_FIELD = "sshTunnel";
   private static final String SSH_ENABLED_FIELD = "sshTunnel.enabled";
 
-  private JdbcUrlSchemaSupport() {
+  private JdbcUrlSchemaSupport() {}
+
+  public static DataSourcePluginDescriptor apply(
+      DataSourcePluginDescriptor descriptor, String template) {
+    if (descriptor == null || template == null || template.trim().isEmpty()) {
+      return descriptor;
+    }
+
+    ConnectionForm form = descriptor.connectionForm();
+    List<FormSection> sections =
+        form.sections().stream()
+            .map(section -> section.withFields(configureFields(section.fields(), template)))
+            .toList();
+    List<FormField> legacyFields = configureFields(form.legacyFields(), template);
+
+    return new DataSourcePluginDescriptor(
+        descriptor.dbType(),
+        descriptor.displayName(),
+        descriptor.apiVersion(),
+        descriptor.capabilities(),
+        new ConnectionForm(sections, legacyFields),
+        descriptor.installRequired(),
+        descriptor.installHint());
   }
 
-  public static DataSourcePluginConfigVO apply(
-      DataSourcePluginConfigVO config,
-      String template) {
-    if (config == null || template == null || template.trim().isEmpty()) {
-      return config;
-    }
-
-    if (config.getSections() != null) {
-      for (FormSectionVO section : config.getSections()) {
-        if (section == null || section.getFields() == null) continue;
-        section.getFields().forEach(field -> configureField(field, template));
-      }
-    }
-    if (config.getFormFields() != null) {
-      config.getFormFields().forEach(field -> configureField(field, template));
-    }
-    return config;
+  private static List<FormField> configureFields(List<FormField> fields, String template) {
+    if (fields == null || fields.isEmpty()) return List.of();
+    return fields.stream().map(field -> configureField(field, template)).toList();
   }
 
-  private static void configureField(FormFieldVO field, String template) {
-    if (field == null || !JDBC_URL_FIELD.equals(field.getKey())) return;
+  private static FormField configureField(FormField field, String template) {
+    if (field == null || !JDBC_URL_FIELD.equals(field.key())) return field;
 
-    field.setType("JDBC_URL");
-    field.setPlaceholder("根据主机、端口和数据库自动生成，也可以直接修改");
-    field.setUrlLinkage(
-        JdbcUrlLinkageVO.builder()
-            .template(template.trim())
-            .hostField("host")
-            .portField("port")
-            .databaseField("database")
-            .preserveSuffix(true)
-            .build());
+    List<String> dependencies = new ArrayList<>(field.dependsOn());
+    if (!dependencies.contains(SSH_FIELD)) dependencies.add(SSH_FIELD);
 
-    List<String> dependencies =
-        field.getDependsOn() == null
-            ? new ArrayList<>()
-            : new ArrayList<>(field.getDependsOn());
-    // SSH 是一个复合对象字段；监听父字段可确保开关变化一定触发前端重新计算可见性。
-    if (!dependencies.contains(SSH_FIELD)) {
-      dependencies.add(SSH_FIELD);
-    }
-    field.setDependsOn(dependencies);
-
-    List<VisibilityConditionVO> conditions =
-        field.getVisibleWhen() == null
-            ? new ArrayList<>()
-            : new ArrayList<>(field.getVisibleWhen());
-    boolean hasSshVisibilityRule =
+    List<VisibilityCondition> conditions = new ArrayList<>(field.visibleWhen());
+    boolean hasSshRule =
         conditions.stream()
             .anyMatch(
                 condition ->
                     condition != null
-                        && SSH_ENABLED_FIELD.equals(condition.getField())
-                        && "FALSY".equalsIgnoreCase(condition.getOperator()));
-    if (!hasSshVisibilityRule) {
+                        && SSH_ENABLED_FIELD.equals(condition.field())
+                        && condition.operator() == VisibilityOperator.FALSY);
+    if (!hasSshRule) {
       conditions.add(
-          VisibilityConditionVO.builder()
-              .field(SSH_ENABLED_FIELD)
-              .operator("FALSY")
-              .build());
+          new VisibilityCondition(
+              SSH_ENABLED_FIELD, VisibilityOperator.FALSY, null, List.of()));
     }
-    field.setVisibleWhen(conditions);
+
+    return field
+        .withType(FieldType.JDBC_URL)
+        .withPlaceholder("根据主机、端口和数据库自动生成，也可以直接修改")
+        .withJdbcUrlLinkage(
+            new JdbcUrlLinkage(template.trim(), "host", "port", "database", true))
+        .withDependsOn(dependencies)
+        .withVisibleWhen(conditions);
   }
 }

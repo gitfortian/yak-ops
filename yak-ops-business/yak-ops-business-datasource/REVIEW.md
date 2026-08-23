@@ -5,15 +5,16 @@
 ## Review 前必读
 
 ```text
-REQUIREMENTS.md  -> 模块需要什么
-DOMAIN.md        -> 实现不能违反什么
-REVIEW.md        -> 按什么标准判卷
-PR diff / tests  -> 实际改了什么
+REQUIREMENTS.md
+DOMAIN.md
+REVIEW.md
+yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN.md
+PR diff / tests
 ```
 
 ## 1. Requirement Alignment
 
-检查是否属于已有能力，是否改变数据源生命周期、Catalog 或 SQL Execution 行为，是否越过模块边界。未定义的新能力统一报告：
+检查是否属于已有能力，是否改变数据源生命周期、Catalog、SQL Execution 或 Plugin Contract。未定义的新能力统一报告：
 
 ```text
 Requirement Gap
@@ -24,19 +25,19 @@ Requirement Gap
 重点检查：
 
 - DTO / VO / PO / Plugin SPI Model 是否冒充 Domain；
-- `dbType` 不可变和 ConnectionProfile -> `UNKNOWN` 是否保持；
+- `dbType` 不可变、ConnectionProfile -> `UNKNOWN` 是否保持；
 - Core Domain 是否引入 Spring / MyBatis / Plugin SPI；
-- Repository 是否泄漏持久化类型；
-- `DataSourceServiceImpl / DataSourceCatalogServiceImpl / DataSourceViewMapper / DefaultSqlExecutionRuntime` 是否直接依赖 Datasource Plugin SPI；
+- Application / Runtime 是否绕过 Business Gateway；
 - `DataSourcePluginGateway / DataSourceCatalogGateway / SqlExecutionGateway` 是否暴露 SPI、DTO / VO 或 PO；
-- `DataSourceCatalogGateway` 是否重新接受 `Map<String,Object>`；
-- HTTP Map 是否在 Application 入口后继续传播；
+- Business Catalog 或 Plugin `DataSourceCatalog` 是否重新接受 `Map<String,Object>`；
 - Catalog SPI metadata 是否绕过 Adapter 进入 Domain/Application；
+- Plugin API 是否重新依赖 `DataSourcePluginConfigVO` 或其他 Business/HTTP VO；
+- Plugin 是否缺少 Descriptor / apiVersion / Capability；
+- Capability 是否与真实实现冲突；
+- Secret 是否仍从 HTTP VO 猜测，而不是 Descriptor Schema；
 - `SqlExecutionAggregate` 是否重新持有线程、Future、Spring 或物理 Session；
-- Runtime 是否重新维护第二套 Execution / Statement 状态机；
-- Runtime 是否绕过 `SqlExecutionGateway` 直接调用 datasource execution SPI；
-- Secret 是否进入日志、异常或未脱敏响应；
-- 是否通过隐藏 Map key 绕过 `Domain Gap`。
+- Runtime 是否重新维护第二套 Execution / Statement 状态机或直接调用 execution SPI；
+- 是否通过隐藏 Map key、boolean、VO 字段绕过 `Domain Gap`。
 
 违反规则报告 `Domain Violation`；模型无法表达需求报告：
 
@@ -48,83 +49,82 @@ Domain Gap
 
 检查真实风险：
 
-- 空值、边界值、名称重复、类型 / 环境解析；
-- Secret 合并和脱敏；
-- Gateway Adapter 异常及字段映射；
-- Catalog TABLE / SQL 模式解析与历史 alias；
-- Catalog preview/count/describe 单条 SELECT 约束；
-- Catalog variable 投影是否保持兼容；
+- 空值、边界值、类型 / 环境解析；
+- Secret merge / mask 和嵌套 SSH Secret；
+- Descriptor `dbType / apiVersion / connectionForm`；
+- `TRANSACTIONS -> SQL_EXECUTION`、`CATALOG_READ -> CATALOG_METADATA`；
+- Plugin Registry 重复类型与 descriptor mismatch；
+- Catalog TABLE / SQL 模式、变量、历史 HTTP alias；
+- Catalog preview/count/describe 单条 SELECT；
+- SPI typed Catalog request 与 Business CatalogReadRequest 字段映射；
 - SQL Policy 是否在打开数据源前拒绝非法 SQL；
-- 多 Statement 顺序和 `SKIPPED` 语义；
-- `SINGLE_TRANSACTION` 是否同 Session begin/commit/rollback；
-- cancel、timeout、失败是否收敛到正确终态；
-- 审计观察是否不改变物理执行生命周期。
+- transaction 同 Session、rollback、cancel、timeout 和 `SKIPPED`；
+- PluginConfig Descriptor -> Business -> VO 是否保持前端 shape。
 
 ## 4. Compatibility
 
-不得无迁移方案破坏：
+必须保持：
 
 ```text
 REST API / JSON shape
 yak_ops_data_source / Flyway
-Datasource Plugin SPI
-Existing database plugins
-PluginConfig dynamic form contract
-Task Plugin SQL execution provider
 yak-ops-core SQL Execution contract
+built-in plugin runtime behavior
+Task Plugin SQL execution provider
 ```
 
-禁止 Big-Bang 修改。Catalog HTTP Map 可以作为兼容入口存在；Plugin Map 可以作为 Adapter 投影存在，但两者不得重新成为 Business Contract。
+Phase 4 允许且仅允许本次明确的 Plugin SPI source-level 迁移：
+
+```text
+pluginConfig() -> descriptor()
+Catalog Map -> DataSourceCatalogReadRequest
+```
+
+第三方插件必须有迁移说明；禁止借此连带修改 REST / DB。后续再次做 SPI breaking change 必须先定义新的 API version 和迁移计划。
 
 ## 5. Safety
 
 重点检查：
 
-- Secret 明文输出或掩码覆盖真实密码；
+- Secret 明文输出、Descriptor defaultValue 泄漏 Secret、掩码覆盖真实凭据；
 - JDBC URL 凭据泄漏；
-- Gateway Adapter 吞异常或错误分类；
-- 连接状态错误；
+- Plugin / Adapter 异常消息泄漏 Secret；
+- Capability 声明了不真实的能力；
 - Catalog 绕过只读检查；
-- Dataset / Data Service / Analysis 绕过 SQL read-only policy；
-- cancel 后继续执行剩余 Statement；
-- transaction 失败未 rollback；
-- timeout 被错误归类为普通 FAILED。
+- read-only caller 绕过 SQL Policy；
+- cancel 后继续 Statement；transaction 失败未 rollback；timeout 误归类。
 
 ## 6. Tests / Guardrails
 
 每个 P0 / P1 都回答“哪个测试应该挡住”。至少覆盖：
 
 ```text
-DataSource type immutable
-ConnectionProfile change -> UNKNOWN
+DataSource type immutable / ConnectionProfile -> UNKNOWN
 Core Domain / Repository boundary
 Application / Runtime -> Business Gateway only
-Gateway Port no Plugin SPI / DTO / VO / PO
-DataSourceCatalogGateway no Map
-HTTP Map -> CatalogReadRequest
-CatalogReadRequest -> legacy Plugin Map only in Adapter
-SPI Catalog metadata -> Catalog Domain
+Gateway Port no SPI / DTO / VO / PO
+Business Catalog + Plugin Catalog no Map
+Plugin API no DataSourcePluginConfigVO
+Descriptor apiVersion / dbType / capability dependencies
+MySQL/PostgreSQL/Oracle/Doris/达梦/Kingbase descriptor contract
+Descriptor -> PluginConfig VO compatibility projection
+Descriptor-driven Secret masking
+Catalog typed request mapping
 SqlExecutionAggregate lifecycle
-SqlExecutionGateway SPI mapping
-policy reject before datasource open
-transaction commit / rollback / cancellation
-timeout -> TIMED_OUT
+transaction / rollback / cancellation / timeout
 ```
 
 ## 当前允许的边界例外
 
 ```text
-DataSourcePluginConfigServiceImpl
-  -> historical pluginConfig() / VO compatibility bridge
-
 BusinessDataSourceExecutionProvider
   -> outward Task Plugin SPI adapter
 
 DataSourceSecretCodec
-  -> SPI adapter technical helper
+  -> plugin SPI adapter technical helper; reads SPI Descriptor, not HTTP VO
 ```
 
-例外不能扩散。
+例外不能扩散到普通 Application 主链路。
 
 ## 严重级别
 
@@ -136,9 +136,10 @@ P0 Blocker
 
 P1 Must Fix
 - 业务结果错误
-- 违反 REQUIREMENTS.md / DOMAIN.md
+- 违反 REQUIREMENTS.md / DOMAIN.md / PLUGIN.md
 - SPI 泄漏进受保护主链路
-- Gateway 暴露外部模型或 Catalog Map 回流
+- Plugin API 重新依赖 VO / Catalog Map
+- Capability 与实现不一致
 - SQL lifecycle / transaction / cancel / timeout 错误
 - 明确兼容性缺陷
 

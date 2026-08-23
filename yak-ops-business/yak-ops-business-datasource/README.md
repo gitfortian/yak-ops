@@ -1,6 +1,6 @@
 # Yak Ops Datasource
 
-数据源模块负责数据源注册、连接测试、Catalog 元数据访问、SQL Execution 和数据源插件编排，并为数据开发、同步、任务等上层模块提供稳定的数据源引用。
+Datasource 负责数据源注册、连接测试、typed Catalog、SQL Execution 与 Plugin 编排，并向数据开发、同步、任务等模块提供稳定数据源引用。
 
 ## 开发前必读
 
@@ -8,75 +8,111 @@
 REQUIREMENTS.md  -> 模块需要什么
 DOMAIN.md        -> 实现不能违反什么
 REVIEW.md        -> 按什么标准 Review
+PLUGIN.md        -> Datasource Plugin 开发标准
 ```
 
-三份文档只维护当前有效规则，历史设计过程看 Issue / PR / Git。
+Plugin 文档位于：`yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN.md`。
 
 ## 核心模型
 
 ```text
-DataSourceDefinition (Aggregate Root)
-└── ConnectionProfile
+DataSourceDefinition -> ConnectionProfile
 
 Catalog Domain
-├── CatalogReadRequest
-├── CatalogTableQuery / CatalogTablePath
-├── CatalogTable / CatalogColumn
-└── CatalogQueryResult
+  -> CatalogReadRequest / Table / Column / QueryResult
+
+Plugin Domain Projection
+  -> DataSourcePluginDescriptor
 
 SQL Execution
-├── yak-ops-core canonical Request / Plan / Result / Snapshot
-├── SqlExecutionAggregate
-└── SqlExecutionGateway
+  -> yak-ops-core Request / Plan / Result / Snapshot
+  -> SqlExecutionAggregate
+  -> SqlExecutionGateway
 ```
 
-关键规则：数据源类型创建后不可修改；连接配置变化回到 `UNKNOWN`；Secret 不输出；Catalog 内部 typed；SQL 生命周期由 Aggregate 管理，物理执行经 Gateway。
-
-## 工程分层
+## 最终依赖方向
 
 ```text
 Controller / Application
       ↓
-Domain + Business Gateway Port
-      ↓                     ↑
-Repository Adapter      SPI Gateway Adapter
-      ↓                     ↓
+Domain + Business Port
+      ↓                       ↑
+Repository Adapter        SPI Adapter
+      ↓                       ↓
 DAO / PO             Datasource Plugin SPI
+                          ↓
+                   Plugin Implementation
 ```
 
-主要边界：
+主要链路：
 
 ```text
-DataSourceServiceImpl -> DataSourcePluginGateway <- SpiDataSourcePluginGateway
-DataSourceCatalogServiceImpl -> DataSourceCatalogGateway <- SpiDataSourceCatalogGateway
-DefaultSqlExecutionRuntime -> SqlExecutionGateway <- SpiSqlExecutionGateway
+DataSourceServiceImpl
+  -> DataSourcePluginGateway
+  <- SpiDataSourcePluginGateway
+  -> DataSourcePlugin / Descriptor
+
+DataSourceCatalogServiceImpl
+  -> CatalogReadRequest
+  -> DataSourceCatalogGateway
+  <- SpiDataSourceCatalogGateway
+  -> DataSourceCatalogReadRequest
+  -> DataSourceCatalog
+
+DefaultSqlExecutionRuntime
+  -> SqlExecutionAggregate
+  -> SqlExecutionGateway
+  <- SpiSqlExecutionGateway
+  -> Datasource execution SPI
 ```
 
-SPI Adapter 负责插件发现、Connection 解析、Secret 处理、Catalog 协议转换、SQL Executor 适配和异常边界；Application / Runtime 不直接持有 Datasource Plugin SPI。
+## Plugin 标准
+
+Phase 4 后 Plugin API 不再返回 HTTP VO：
+
+```text
+DataSourcePlugin
+  -> descriptor(apiVersion, capabilities, connectionForm)
+  -> parseConnection
+  -> testConnection
+  -> createCatalog
+  -> createSqlExecutor
+```
+
+`DataSourcePluginDescriptor` 是 SPI 唯一插件元数据协议；Business Gateway 将其映射为 Business-owned Descriptor，`DataSourcePluginViewMapper` 再投影成现有 `DataSourcePluginConfigVO`。因此前端 JSON shape 保持不变，但 Plugin API 与 HTTP VO 解耦。
+
+当前 Capability：
+
+```text
+CONNECTION_TEST
+CATALOG_METADATA
+CATALOG_READ
+SQL_EXECUTION
+TRANSACTIONS
+SSH_TUNNEL
+```
+
+Registry 在加载时校验 apiVersion、dbType 和 Capability 依赖。Secret 字段由 Descriptor 的 `PASSWORD` field 声明。
 
 ## Catalog 类型化
 
-现有 REST POST 接口为兼容前端仍接受 `Map<String,Object>`，但 Map 只存在于入口：
+REST 为兼容旧前端仍可接受 `Map<String,Object>`，但 Map 到此为止：
 
 ```text
 HTTP Map
   -> DataSourceCatalogServiceImpl
   -> CatalogReadRequest
   -> DataSourceCatalogGateway
-  -> SpiDataSourceCatalogGateway
-  -> legacy Plugin Map
+  -> DataSourceCatalogReadRequest
+  -> Plugin Catalog
 ```
 
-支持的历史字段为 `read_mode/readMode`、`table_path/tablePath/table`、`query/sql`、`paramsList`。未知 Map key 不再作为 Business 扩展协议；新语义必须进入 typed Catalog Domain。
-
-Catalog 的 Table / Column / QueryResult 由 Business 自己拥有，Plugin SPI metadata 只能在 Adapter 中转换。
+Business Gateway 和 Plugin `DataSourceCatalog` 都不接受 Map。历史 `paramsList` 被解析为 typed variable；新增语义必须扩 typed model。
 
 ## SQL Execution
 
-`yak-ops-core` 已定义跨模块统一 SQL contract，因此 Datasource 不复制同名 DTO：
-
 ```text
-SqlExecutionRequest / SqlExecutionPlan
+SqlExecutionRequest / SqlExecutionPlan (yak-ops-core)
   -> SqlExecutionPolicy
   -> SqlExecutionAggregate
   -> DefaultSqlExecutionRuntime
@@ -84,46 +120,50 @@ SqlExecutionRequest / SqlExecutionPlan
   -> Datasource execution SPI
 ```
 
-职责拆分：
-
-- `SqlExecutionAggregate`：Execution / Statement 状态、取消意图、终态和 Snapshot。
-- `DefaultSqlExecutionRuntime`：线程、Future、事务编排、物理 Session、超时异常识别。
-- `SqlExecutionGateway`：Datasource 物理 SQL Session Port。
-- `SpiSqlExecutionGateway`：`DataSourceExecutionProvider / DataSourceSqlExecutor` 的唯一 Runtime Adapter。
-- `ObservableSqlExecutionRuntime`：终态观察和审计通知，不改变底层生命周期。
+- Aggregate：Execution / Statement 状态、取消意图、终态、Snapshot。
+- Runtime：线程、Future、事务编排、物理 Session、超时识别。
+- Gateway：物理 SQL Session Port。
+- Adapter：唯一 execution SPI 翻译边界。
 
 ## 分层约束
 
-- Controller 只通过 Service 进入业务链路。
-- Repository 只暴露 Domain，PO/MyBatis 只在持久化 Adapter 内。
-- Core Domain 不依赖 Spring、MyBatis、DTO / VO / PO、Datasource Plugin SPI。
-- `DataSourcePluginGateway / DataSourceCatalogGateway / SqlExecutionGateway` 不暴露 Plugin SPI、DTO / VO 或 PO。
-- `DataSourceCatalogGateway` 不接受 `Map<String,Object>`。
-- `DefaultSqlExecutionRuntime` 不直接依赖 datasource execution SPI。
-- Catalog 只读检查仍在 Application 层；物理访问由 Adapter 执行。
-- Secret 脱敏通过 `DataSourceViewMapper -> DataSourcePluginGateway` 完成。
+- Core Domain 不依赖 Spring、MyBatis、DTO / VO / PO、Plugin SPI。
+- Repository 只暴露 Domain。
+- Application / Runtime 不直接依赖 Plugin Registry / SPI。
+- Business Gateway 不暴露 SPI、DTO / VO / PO。
+- Business Catalog 和 Plugin Catalog 都不接受 `Map<String,Object>`。
+- Plugin API 不依赖 `DataSourcePluginConfigVO`。
+- PluginConfig HTTP VO 只由 Business View Mapper 生成。
+- Default SQL Runtime 不直接依赖 datasource execution SPI。
+- Secret 不进入普通日志、异常、`toString()` 或未脱敏响应。
 
-## 兼容边界
+## Phase 4 兼容边界
 
-Phase 3 不修改：
+保持：
 
 ```text
-REST API 路径和主要 JSON 结构
+REST API 路径和主要 JSON shape
 yak_ops_data_source 表结构
 Flyway 历史
-Datasource Plugin SPI 签名
-MySQL / PostgreSQL / Oracle / Doris 等插件实现
 yak-ops-core SQL Execution contract
+内置数据库插件运行行为
 ```
 
-当前例外：`DataSourcePluginConfigServiceImpl` 仍承接历史 PluginConfig VO；`BusinessDataSourceExecutionProvider` 是向 Task Plugin SPI 暴露 Executor 的外向 Adapter。这两项留给后续 Plugin API 标准化。
-
-## 后续领域 Gap
+Phase 4 有意做一次 Plugin SPI source-level migration：
 
 ```text
-Plugin Capability / Descriptor
-Plugin API VO dependency
-PluginConfig compatibility bridge cleanup
-Plugin Catalog Map SPI 最终类型化
+pluginConfig() -> descriptor()
+Catalog Map -> DataSourceCatalogReadRequest
+```
+
+仓库内置插件同步迁移；第三方插件按 `PLUGIN.md` 升级。该迁移不改变 REST / DB。
+
+## 持久化
+
+`yak_ops_data_source` 以及 `jdbc_url / connection_params / original_json / conn_status` 仍是持久化投影，由 Repository Adapter 映射。
+
+## 剩余独立 Gap
+
+```text
 DataSourceDefinition 物理命名清理
 ```

@@ -2,17 +2,15 @@ package io.yak.ops.plugin.database.doris;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO.FormFieldVO;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.plugin.database.jdbc.AbstractJdbcDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.JdbcConnectionProperties;
-import io.yak.ops.plugin.database.jdbc.JdbcUrlSchemaSupport;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormField;
 import java.util.Collections;
 import java.util.List;
 
-/** Doris 独立数据源插件。JDBC 连接复用通用基座，Catalog 行为由 Doris 自己实现。 */
+/** Doris datasource plugin. JDBC connection is shared; Catalog behavior is Doris-specific. */
 public final class DorisDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
   @Override
@@ -21,10 +19,8 @@ public final class DorisDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   }
 
   @Override
-  public DataSourcePluginConfigVO pluginConfig() {
-    return JdbcUrlSchemaSupport.apply(
-        super.pluginConfig(),
-        "jdbc:mysql://{host}:{port}/{database}");
+  protected String jdbcUrlTemplate() {
+    return "jdbc:mysql://{host}:{port}/{database}";
   }
 
   @Override
@@ -48,7 +44,7 @@ public final class DorisDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
   }
 
   @Override
-  protected void appendFormFields(List<FormFieldVO> fields) {
+  protected void appendFormFields(List<FormField> fields) {
     fields.add(
         field(
             "fenodes",
@@ -69,8 +65,7 @@ public final class DorisDataSourcePlugin extends AbstractJdbcDataSourcePlugin {
 
   @Override
   protected DataSourceCatalog createJdbcCatalog(
-      JdbcConnectionProperties connection,
-      int timeoutSeconds) {
+      JdbcConnectionProperties connection, int timeoutSeconds) {
     return new DorisJdbcCatalog(connection, timeoutSeconds, this::openJdbcConnection);
   }
 
