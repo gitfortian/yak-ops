@@ -25,7 +25,8 @@ class RealtimeRuntimeResolverTest {
     ComputeEnvironmentStore environments = mock(ComputeEnvironmentStore.class);
     RealtimeJobStore jobs = mock(RealtimeJobStore.class);
     RealtimeRuntimeResolver resolver = new RealtimeRuntimeResolver(environments, jobs);
-    when(environments.find(3L)).thenReturn(Optional.of(environment(false, 5, "http://flink:8081")));
+    when(environments.find(3L))
+        .thenReturn(Optional.of(environment(false, 5, "http://flink:8081")));
 
     assertThatThrownBy(() -> resolver.environment(3L, true))
         .isInstanceOf(IllegalStateException.class)
@@ -39,11 +40,8 @@ class RealtimeRuntimeResolverTest {
     RealtimeRuntimeResolver resolver = new RealtimeRuntimeResolver(environments, jobs);
     ComputeEnvironmentSnapshot frozen =
         ComputeEnvironmentSnapshot.from(environment(true, 2, "http://flink-old:8081"));
-    LocalDateTime now = LocalDateTime.now();
-    DefinitionRow task =
-        new DefinitionRow(7L, "orders", null, null, 3L, "PUBLISHED", "RUNNING", "RUNNING", 3, 3, "digest", null, now, now);
-    DeploymentRow execution =
-        new DeploymentRow(19L, 7L, 31L, 3, null, "summary", "artifact", "key", "job-1", frozen.runtimeRevision(), frozen, "RUNNING", false, null, now, now);
+    DefinitionRow task = definition();
+    DeploymentRow execution = deployment(frozen);
 
     ComputeEnvironmentSnapshot resolved = resolver.deployment(task, execution);
 
@@ -51,6 +49,64 @@ class RealtimeRuntimeResolverTest {
     assertThat(resolved.config().restUrl()).isEqualTo("http://flink-old:8081");
     verify(jobs, never()).deploymentEnvironment(19L);
     verify(environments, never()).find(3L);
+  }
+
+  @Test
+  void unhydratedExecutionUsesPersistedDeploymentSnapshotNotCurrentEnvironment() {
+    ComputeEnvironmentStore environments = mock(ComputeEnvironmentStore.class);
+    RealtimeJobStore jobs = mock(RealtimeJobStore.class);
+    RealtimeRuntimeResolver resolver = new RealtimeRuntimeResolver(environments, jobs);
+    ComputeEnvironmentSnapshot persisted =
+        ComputeEnvironmentSnapshot.from(environment(true, 2, "http://flink-old:8081"));
+    DefinitionRow task = definition();
+    DeploymentRow execution = deployment(null);
+    when(jobs.deploymentEnvironment(19L)).thenReturn(Optional.of(persisted));
+
+    ComputeEnvironmentSnapshot resolved = resolver.deployment(task, execution);
+
+    assertThat(resolved).isSameAs(persisted);
+    assertThat(resolved.config().restUrl()).isEqualTo("http://flink-old:8081");
+    verify(environments, never()).find(3L);
+  }
+
+  private DefinitionRow definition() {
+    LocalDateTime now = LocalDateTime.now();
+    return new DefinitionRow(
+        7L,
+        "orders",
+        null,
+        null,
+        3L,
+        "PUBLISHED",
+        "RUNNING",
+        "RUNNING",
+        3,
+        3,
+        "digest",
+        null,
+        now,
+        now);
+  }
+
+  private DeploymentRow deployment(ComputeEnvironmentSnapshot snapshot) {
+    LocalDateTime now = LocalDateTime.now();
+    return new DeploymentRow(
+        19L,
+        7L,
+        31L,
+        3,
+        null,
+        "summary",
+        "artifact",
+        "key",
+        "job-1",
+        snapshot == null ? null : snapshot.runtimeRevision(),
+        snapshot,
+        "RUNNING",
+        false,
+        null,
+        now,
+        now);
   }
 
   private ComputeEnvironment environment(boolean enabled, int version, String restUrl) {
