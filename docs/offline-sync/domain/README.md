@@ -1,14 +1,15 @@
 # Offline Sync Domain
 
-> 当前阶段：Stage 3。只定义生命周期和不变量，不修改数据库或 Java 实现。
+> 当前阶段：Stage 4。只做现有代码到目标领域的映射，不改业务实现。
 
-## 1. 核心模型
+## 1. 目标模型
 
 ```text
 OfflineSyncTask
       │ trigger
       ▼
 BatchExecution
+      ├── BatchKey
       ├── BatchScope
       ├── ExecutionSnapshot
       └── ExecutionAttempt 1..N
@@ -17,241 +18,163 @@ BatchExecution
           Engine Adapter
 ```
 
-```text
-Task != BatchExecution != ExecutionAttempt
-```
+硬规则：`Task != Batch != Attempt`；Retry 复用原 Batch/Scope/Snapshot；`UNKNOWN != FAILED`。
 
-- `OfflineSyncTask`：长期维护的同步任务。
-- `BatchExecution`：一次业务批次。
-- `ExecutionAttempt`：同一批次的一次实际提交尝试。
-- Retry 创建新 Attempt，不创建新 Batch。
+## 2. Mapping
 
-## 2. ExecutionAttempt 生命周期
+标记：`KEEP` 直接复用；`ADAPT` 保留但调整语义；`MIGRATE` 需要迁移；`DEBT` 当前行为违反目标领域。
 
-目标状态：
+| 当前实现 | 目标语义 | 结论 |
+| --- | --- | --- |
+| `OfflineJobDefinition` | Task + SyncDefinition + Schedule/Retry Policy + 查询投影 | ADAPT |
+| `definition_json` | 当前 SyncDefinition 表现 | KEEP |
+| `mode=GUIDE_SINGLE/GUIDE_MULTI` | UI/配置模式，不是领域类型 | ADAPT |
+| `version` | `DefinitionRevision` | ADAPT |
+| `job_spec_json` | Link-Up 执行产物，不是定义真相 | ADAPT |
+| `release_state` | Task 是否允许产生新 Batch | KEEP |
+| `OfflineSchedule` | SchedulePolicy + RetryPolicy + runtime projection | ADAPT |
+| `OfflineJobExecution` / `yak_offline_job_execution` | 当前更接近 `ExecutionAttempt` | MIGRATE |
+| `attempt_no / retry_from_execution_id` | Attempt 次序/血缘 | KEEP |
+| `idempotency_key / external_execution_id` | Attempt 幂等与外部提交身份 | KEEP |
+| `engine_job_id / worker_instance_id` | Engine evidence | KEEP |
+| metrics / error / start/end | Attempt 运行证据 | KEEP |
+| `definition_snapshot_json / submitted_config` | 应归属 Batch 的 ExecutionSnapshot | MIGRATE |
+| `OfflineExecutionEvent` | Attempt 事件历史 | KEEP |
+| `OfflineExecutionStatus` | Attempt 状态 | MIGRATE |
+| `OfflineExecutionClaimService` | Batch/Attempt claim 的基础 | ADAPT |
+| `OfflineExecutionReconciler` | Attempt reconcile | ADAPT |
+| `OfflineScheduleHandler` | Schedule trigger adapter | ADAPT |
+| Task `last-*` | 只允许做 Read Model projection | MIGRATE |
+| Link-Up / credential resolver | Infrastructure boundary | KEEP |
 
-```text
-CREATED
-  ↓
-SUBMITTING
-  ↓
-SUBMITTED -> QUEUED -> RUNNING
-    │          │          │
-    └──────────┴──────────┼-> SUCCEEDED
-                          ├-> FAILED
-                          ├-> CANCELING -> CANCELED
-                          └-> UNKNOWN
+## 3. 已确认 Domain Debt
 
-UNKNOWN
-  └-> reconcile -> SUBMITTED / QUEUED / RUNNING /
-                   SUCCEEDED / FAILED / CANCELED
-```
+### Retry 漂移
 
-规则：
+当前 `retryFrom(previous)` 重新进入 `execute(definitionId, ...)`，会读取 **current Task**；`configureRetry()` 还会读取 **current Schedule/RetryPolicy**。
 
-- `SUCCEEDED / FAILED / CANCELED` 是 Attempt 终态。
-- `UNKNOWN` 不是失败，也不是终态；它表示结果无法确认。
-- 提交超时、断连、Worker 身份变化但无法确认旧 Job 结果时进入 `UNKNOWN`。
-- `UNKNOWN` 未解决前禁止创建下一 Attempt。
-- Cancel 只有确认后才能进入 `CANCELED`；取消结果不确定时进入 `UNKNOWN`。
-- Engine JobId 只是 Attempt 的外部引用，不能作为 Attempt 身份。
-
-当前代码的 `LOST` 更接近目标模型的 `UNKNOWN`。`LOST -> 自动重试` 属于 Stage 4 需要迁移的 Domain Debt。
-
-## 3. BatchExecution 生命周期
-
-Batch 状态描述业务批次，而不是直接复制 Engine 状态：
+目标：
 
 ```text
-PENDING
-   ↓
-RUNNING
-   ├-> SUCCEEDED
-   ├-> WAITING_RETRY -> RUNNING
-   ├-> FAILED
-   ├-> CANCELED
-   └-> UNKNOWN -> reconcile -> RUNNING / SUCCEEDED /
-                              WAITING_RETRY / FAILED / CANCELED
+Retry
+ -> same Batch
+ -> same ExecutionSnapshot
+ -> same RetryPolicy Snapshot
+ -> new Attempt
 ```
 
-终态：
+### LOST 自动重试
+
+当前 `LOST` 会进入 retry candidate。目标中无法确认引擎结果属于 `UNKNOWN`，必须先 reconcile，不能直接 Retry。
+
+### 缺少 Batch 身份
+
+当前一条 `yak_offline_job_execution` 同时承担 Batch + Attempt。数据库缺少：
 
 ```text
-SUCCEEDED | FAILED | CANCELED
+batch_id
+batch_key
+batch_scope
+batch_status
 ```
 
-含义：
+现有 execution 表包含大量 Attempt 字段，因此优先把它演进为 Attempt persistence，而不是推倒重建。
 
-- `PENDING`：Batch 已创建，但还没有 Attempt 获得执行资格。
-- `RUNNING`：当前 Attempt 正在创建、提交、排队或执行。
-- `WAITING_RETRY`：最近 Attempt 已明确失败，满足 RetryPolicy，等待退避时间。
-- `UNKNOWN`：当前 Attempt 结果不确定，禁止新 Attempt。
-- `FAILED`：失败不可重试或重试次数耗尽。
+### Schedule 幂等不足
 
-Batch 终态后不再追加 Attempt；如果用户要重新跑同一数据范围，应创建新的 Batch。
+当前 Schedule 主要靠 `hasActiveExecution(taskId)` 防重复，没有稳定 `BatchKey`。同一计划触发重复回调、且前一次已快速结束时，可能形成第二个业务批次。
 
-## 4. Retry 不变量
-
-创建 Attempt N+1 必须同时满足：
-
-1. 属于同一个 BatchExecution；
-2. 最近 Attempt 已明确 `FAILED`；
-3. Failure 被 RetryPolicy 判定为 retryable；
-4. 未超过最大 Attempt 数；
-5. backoff 已到期；
-6. 当前不存在 Active/Unknown Attempt。
-
-Retry 必须复用：
+目标：
 
 ```text
-same BatchExecutionId
-same BatchScope
-same ExecutionSnapshot
-new AttemptNo
-new Attempt IdempotencyKey
+SCHEDULE BatchKey = scheduleId + plannedFireTime
 ```
 
-禁止：
+### WAITING_RETRY 未占用 Task 执行资格
+
+当前 FAILED/LOST execution 等待 `nextRetryTime` 时已经不算 active，新的手动/调度执行可能先进入；这与 V1 “同 Task 最多一个 RUNNING / WAITING_RETRY / UNKNOWN Batch” 不一致。
+
+### Task last-* 仍参与命令判断
+
+`lastJobStatus` 当前不仅用于展示/筛选，还参与 `ensureEditable()`。目标中 Task `last-*` 只能是查询投影，生命周期判断必须读取 Batch/Attempt。
+
+### 状态更新缺少目标状态机保护
+
+当前 reconcile 主要依赖 Engine 返回状态直接覆盖 execution。后续需要按 Attempt 状态机和单调版本处理 stale/out-of-order snapshot，终态不能被旧响应复活。
+
+## 4. 现有资产怎么复用
+
+### 当前 execution 表
+
+不建议重建整套执行历史。目标迁移：
 
 ```text
-UNKNOWN -> Retry
-SUCCEEDED -> Retry
-CANCELED -> Retry
-Retry 时回读 current Task
-Retry 时改变 BatchScope
+new BatchExecution persistence
+        │ 1:N
+        ▼
+yak_offline_job_execution
+        ≈ ExecutionAttempt persistence
 ```
 
-## 5. Task 并发不变量
+先新增 `batch_id` 绑定；物理表名可暂时保留，命名清理放最后。
 
-V1 采用保守规则：
+### Snapshot
 
-> **同一个 Task 同时最多只有一个 RUNNING / WAITING_RETRY / UNKNOWN Batch。**
-
-可以提前创建多个 `PENDING Batch`，但只有一个 Batch 可以获得 Attempt 执行资格。
-
-这样可以同时支持：
-
-- 普通任务串行执行；
-- Backfill 一次创建多个待执行 Batch；
-- Schedule 到点时先形成稳定业务身份，再等待执行资格；
-- Retry 不会被后来的 Batch 抢占。
-
-未来如果需要同 Task 并行多个 Batch，应作为 `Domain Gap` 单独设计 ConcurrencyPolicy，不能直接删除这个保护。
-
-## 6. BatchKey 与触发幂等
-
-每个 Batch 必须有稳定 `BatchKey`，同一 Task 内唯一。
-
-建议身份：
+当前每个 execution 已保存 definition/JobSpec snapshot，这是好基础。迁移后：
 
 ```text
-MANUAL   = requestId
-SCHEDULE = scheduleId + plannedFireTime
-WORKFLOW = workflow execution/attempt identity
-BACKFILL = backfillRequestId + scopeFingerprint
+Batch owns immutable ExecutionSnapshot
+Attempt references Batch Snapshot
 ```
 
-规则：
+过渡期允许 Attempt 保留兼容副本，但不能成为第二份真相。
 
-- 重复收到同一个 BatchKey，不创建第二个 Batch。
-- Schedule 使用“计划触发时间”，不能使用实际回调时间生成身份。
-- Retry 沿用原 Batch，不生成新的 BatchKey。
-- 幂等重放只能返回/继续原 Batch，不能偷偷使用 current Task 创建新 Snapshot。
+### Task 行锁与幂等
 
-Schedule 的 misfire 是调度策略问题，但不能破坏上述 Batch 身份规则。
+Task 行锁可以继续作为 V1 串行化命令入口；现有 Attempt `idempotencyKey` 继续使用，同时新增 BatchKey 解决“同一个业务批次”的幂等。
 
-## 7. Snapshot 与 Backfill
+### 凭据边界
 
-Batch 创建时冻结：
+现有 `sanitizeForPersistence + resolveExecutionJobSpec()` 方向正确：SyncDefinition/Snapshot 不保存 DataSource 密码，Attempt 提交时再解析当前凭据。
+
+## 5. 推荐迁移波次
 
 ```text
-ExecutionSnapshot
-├── SyncDefinition Snapshot
-├── DefinitionRevision
-├── RetryPolicy Snapshot
-└── ConfigDigest
+Wave 0  Core VO + compatibility mapper
+        BatchKey / BatchScope / BatchExecution / ExecutionAttempt
+
+Wave 1  Batch persistence
+        新增 Batch 表；现有 execution 绑定 batch_id
+
+Wave 2  Trigger -> Batch -> Attempt 1
+        手动/调度/工作流先 claim Batch，再创建 Attempt
+        Schedule 使用 planned BatchKey
+
+Wave 3  Retry / UNKNOWN
+        Retry 固定 Batch Snapshot/Policy
+        UNKNOWN 禁止自动 Retry
+        持久化 retry reservation
+
+Wave 4  Runtime truth
+        生命周期只读 Batch/Attempt
+        Task last-* 降级为 projection
+
+Wave 5  Backfill / Cursor
+        shared Snapshot、Scope identity、成功后推进 cursor
+
+Wave 6  Cleanup
+        LOST / legacy retry fields / GUIDE mode / 物理命名兼容清理
 ```
 
-不变量：
+采用 `expand -> dual read/write -> switch -> verify -> contract`，不做一次性 schema 重建。
 
-- Snapshot 创建后不可变。
-- Snapshot 不长期保存 DataSource 密码。
-- 所有 Attempt 使用 Batch 自己的 Snapshot。
-- Task 后续修改不影响已有 Batch。
+## 6. Stage 4 结论
 
-一次 Backfill 请求应先冻结一份 Snapshot，再按 Scope 创建多个 Batch：
+1. 当前 Task/Engine/事件/凭据边界大部分可复用。
+2. `yak_offline_job_execution` 应优先演进为 Attempt persistence。
+3. 新增 Batch persistence 是后续重构的核心支点。
+4. Retry 漂移、LOST 自动重试、Schedule 无 BatchKey 是优先安全债。
+5. 暂不引入 immutable DefinitionVersion；Batch Snapshot 继续作为执行真相。
+6. 暂不抽 Realtime/Offline Shared Kernel。
 
-```text
-BackfillRequest R1
-  ├ Scope 08-01 -> B1 -> Snapshot S1
-  ├ Scope 08-02 -> B2 -> Snapshot S1
-  └ Scope 08-03 -> B3 -> Snapshot S1
-```
-
-相同 `backfillRequestId + scopeFingerprint` 重放时复用已有 Batch，允许从部分创建失败中恢复。
-
-## 8. BatchScope 边界
-
-`BatchScope` 创建后不可变。
-
-```text
-FullSelection
-DataWindow    = [startInclusive, endExclusive)
-PartitionScope = non-empty normalized unique partitions
-CursorRange   = (afterExclusive, throughInclusive]
-```
-
-规则：
-
-- `DataWindow` 必须 `start < end`。
-- `PartitionScope` 不能为空、不能包含重复分区。
-- `CursorRange` 两端必须属于同一 Cursor，并满足 `after < through`。
-- Retry 必须使用完全相同的 Scope。
-- 自动增量场景只有前一个 CursorRange Batch `SUCCEEDED` 后才能推进 committed cursor。
-- `FAILED / CANCELED / UNKNOWN` 不得推进 cursor。
-
-单表/多表继续由 Route/Selector 表达，不进入 BatchScope 类型。
-
-## 9. Runtime truth
-
-运行状态只属于 `BatchExecution / ExecutionAttempt`。
-
-Task 上的：
-
-```text
-lastExecutionId
-lastJobStatus
-lastErrorMessage
-lastDuration...
-```
-
-只能作为查询投影，不能成为生命周期判断的事实来源。
-
-## 10. Stage 3 硬规则
-
-1. `Task != Batch != Attempt`。
-2. Attempt 的 `UNKNOWN` 不等于 `FAILED`，禁止盲目 Retry。
-3. Retry 只在明确 FAILED 后发生，并复用原 Snapshot/Scope。
-4. Batch 终态后不再追加 Attempt。
-5. 同 Task 最多一个 RUNNING / WAITING_RETRY / UNKNOWN Batch。
-6. BatchKey 决定触发幂等，Schedule 使用 planned fire identity。
-7. Snapshot 在 Batch 创建时冻结，Task 修改不影响历史 Batch。
-8. Backfill 多 Batch 优先共享同一 Snapshot。
-9. Cursor 只在 Batch 成功后推进。
-10. Task 的 last-* 字段只做投影，不做 runtime truth。
-11. `DefinitionRevision` 仍不等于 immutable DefinitionVersion。
-12. 无法映射这些规则时先记录 `Domain Gap`。
-
-## 11. Stage 4 输入
-
-下一阶段只做“当前代码 -> 目标领域”的映射，重点检查：
-
-- `OfflineJobExecution` 当前把 Batch + Attempt 合在一起；
-- `LOST` 与目标 `UNKNOWN` 的语义冲突；
-- 当前 Retry 是否回读 current Task / current SchedulePolicy；
-- 当前 `hasActiveExecution` 是否足以表达 Batch 并发规则；
-- Schedule 是否缺少稳定 BatchKey；
-- Task `last-*` 是否被用于生命周期判断；
-- 当前 execution snapshot 能否承载 BatchScope / Backfill identity。
-
-Stage 4 只标记 KEEP / ADAPT / MIGRATE / DOMAIN DEBT，不开始重构代码。
+下一阶段先建立短小的 `DOMAIN.md`，把上述规则变成 AI 修改离线同步前必须遵守的约束；仍不开始大规模重构。
