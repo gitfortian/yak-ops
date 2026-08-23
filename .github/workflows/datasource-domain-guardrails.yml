@@ -1,0 +1,93 @@
+name: Datasource Domain Guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    paths:
+      - 'yak-ops-business/yak-ops-business-datasource/**'
+      - 'yak-ops-common/src/main/java/io/yak/ops/common/enums/datasource/**'
+      - 'tools/datasource_domain_guardrails.py'
+      - '.github/PULL_REQUEST_TEMPLATE/datasource-domain.md'
+      - '.github/workflows/datasource-domain-guardrails.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'yak-ops-business/yak-ops-business-datasource/**'
+      - 'yak-ops-common/src/main/java/io/yak/ops/common/enums/datasource/**'
+      - 'tools/datasource_domain_guardrails.py'
+      - '.github/PULL_REQUEST_TEMPLATE/datasource-domain.md'
+      - '.github/workflows/datasource-domain-guardrails.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: datasource-domain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATASOURCE_MODULE: ':yak-ops-business-datasource'
+
+jobs:
+  static-domain-contract:
+    name: Static domain contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout yak-ops
+        uses: actions/checkout@v4
+
+      - name: Run zero-dependency datasource domain guard
+        run: python3 tools/datasource_domain_guardrails.py --event "$GITHUB_EVENT_PATH"
+
+  backend-domain-regression:
+    name: Backend regression hook
+    needs:
+      - static-domain-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      YAK_FRAMEWORK_TOKEN: ${{ secrets.YAK_FRAMEWORK_TOKEN }}
+    steps:
+      - name: Checkout yak-ops
+        uses: actions/checkout@v4
+
+      - name: Explain private dependency requirement
+        if: env.YAK_FRAMEWORK_TOKEN == ''
+        run: |
+          echo "::notice title=Backend regression not executed::yak-framework is a private repository. Configure repository secret YAK_FRAMEWORK_TOKEN with read access to enable the full Maven/JUnit regression layer. Static Datasource Domain Contract remains mandatory and runs without this secret."
+
+      - name: Checkout yak-framework SNAPSHOT dependency
+        if: env.YAK_FRAMEWORK_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: weifuwan/yak-framework
+          path: .ci/yak-framework
+          token: ${{ env.YAK_FRAMEWORK_TOKEN }}
+
+      - name: Set up JDK 21 and Maven cache
+        if: env.YAK_FRAMEWORK_TOKEN != ''
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install yak-framework SNAPSHOT
+        if: env.YAK_FRAMEWORK_TOKEN != ''
+        run: ./mvnw -B -ntp -f .ci/yak-framework/pom.xml -DskipTests install
+
+      - name: Build datasource module dependencies
+        if: env.YAK_FRAMEWORK_TOKEN != ''
+        run: ./mvnw -B -ntp -pl "$DATASOURCE_MODULE" -am -DskipTests install
+
+      - name: Run targeted datasource domain regression tests
+        if: env.YAK_FRAMEWORK_TOKEN != ''
+        run: >-
+          ./mvnw -B -ntp
+          -pl "$DATASOURCE_MODULE"
+          -Dtest=DataSourceDomainArchitectureTest,DataSourceLayeringConventionTest,DataSourceDefinitionTest,DataSourceRepositoryAdapterTest,DataSourceServiceImplTest,DataSourceViewMapperTest
+          -Dsurefire.failIfNoSpecifiedTests=false
+          test
