@@ -11,7 +11,8 @@
 - [REVIEW.md](./REVIEW.md) — Review 标准：按什么规则判卷
 - [Domain Mapping](../../../docs/offline-sync/domain/README.md) — Stage 6 Wave 0-6 历史迁移映射
 - [Architecture Responsibility Inventory](../../../docs/offline-sync/architecture/README.md) — Stage 7 职责盘点
-- [Stage 8 Package Restructuring](../../../docs/offline-sync/architecture/STAGE8.md) — 当前业务子系统目录
+- [Stage 8 Package Restructuring](../../../docs/offline-sync/architecture/STAGE8.md) — 业务子系统目录归位
+- [Stage 9 Application Entry Consolidation](../../../docs/offline-sync/architecture/STAGE9.md) — 当前 Application 入口边界
 
 ```text
 OfflineSyncTask
@@ -31,9 +32,9 @@ BatchExecution
 
 ## 架构职责治理
 
-**Stage 8 已完成：Package Restructuring。**
+**Stage 9 已完成：Application Entry Consolidation。**
 
-离线同步不再把不同角色平铺在一个 `service` 包中。当前生产目录按业务子系统组织：
+Stage 8 已经把生产代码从 `service` 大平层按业务子系统归位；Stage 9 在此基础上进一步固定“谁可以作为业务入口”。当前生产目录：
 
 ```text
 offline
@@ -62,7 +63,9 @@ OfflineJobExecutionService
 OfflineBackfillService
 ```
 
-其余 Coordinator / Runtime / Query / Dispatcher / Reconciler / Adapter / Mapper 均作为内部专业角色归入所属子系统。Stage 8 只改变 package/import，不改变业务语义；类级角色命名和核心大类拆分留给后续阶段。
+Controller 只通过这三个入口进入业务链。Schedule Handler、Backfill Dispatcher、Execution Reconciler 进入 execution 子系统时统一通过 `OfflineJobExecutionService`；不直接依赖 `OfflineExecutionOrchestrator`、`OfflineExecutionClaimService`、`OfflineBatchRuntimeService`、`execution.query.*` 或 `execution.adapter.*`。
+
+Facade 内部仍可以协调专业组件。Stage 9 不复制业务规则，不为了隐藏类制造额外接口层，也不提前做 Stage 10 的角色重命名。
 
 ## Link-Up 边界
 
@@ -84,21 +87,24 @@ Offline Job Definition
   -> OfflineScheduleEngineBridge
   -> Yak Schedule / Quartz
   -> OfflineScheduleHandler
+  -> OfflineJobExecutionService
   -> BatchExecution
   -> ExecutionAttempt
   -> Link-Up
 ```
 
-Yak Schedule 只负责“什么时候触发”。Task 是否已有运行占用、是否能创建新 Batch，只读取 Batch runtime truth。
+Yak Schedule 只负责“什么时候触发”。Task 是否已有运行占用、是否能创建新 Batch，只读取 Batch runtime truth；Schedule Handler 不再直接持有 Batch Runtime / Orchestrator。
 
-Link-Up 状态对账和失败重试由 `reconcile.OfflineExecutionReconciler` 负责；Wave 1 前 `batch_id = NULL` 的 execution 是只读历史，不参与 Reconcile / Retry / Cancel。
+Link-Up 状态对账和失败重试由 `reconcile.OfflineExecutionReconciler` 负责；Reconciler 通过 `OfflineJobExecutionService` 应用 execution 状态规则。Wave 1 前 `batch_id = NULL` 的 execution 是只读历史，不参与 Reconcile / Retry / Cancel。
 
 ## Backfill / Cursor
 
 ```text
 Backfill Request
+  -> OfflineBackfillService
   -> PENDING Batch group
-  -> dispatcher reservation
+  -> OfflineBackfillDispatcher
+  -> OfflineJobExecutionService
   -> Attempt 1
 ```
 
@@ -106,15 +112,19 @@ V1 同 Task 保持单 occupying Batch。Cursor 独立持久化 route + position 
 
 ## 工程依赖约束
 
-Stage 8 改变目录，不改变已有依赖边界：
+Stage 9 在 Stage 8 目录边界之上增加 Application Entry 护栏：
 
-- Controller 通过 Application Facade 进入业务链路，不直接依赖 Repository、DAO 或 Link-Up Client。
+- Controller 只依赖三个稳定 Application Facade，不直接依赖 Repository、DAO、Engine Client 或 execution 内部组件。
+- Schedule Handler / Backfill Dispatcher / Execution Reconciler 进入 execution 时只依赖 `OfflineJobExecutionService`。
+- Execution 内部 Coordinator / Claim / Runtime / Query / Adapter 不作为跨子系统公共 API。
 - Definition / Execution / Backfill 使用 Domain，不直接操作 MyBatis PO。
 - Repository 接口只暴露 Domain；PO 与 DAO 仅存在于持久化适配层。
 - Task runtime occupancy 只由 Batch Repository / Runtime 提供；Attempt Repository 不提供 `hasActiveExecution`。
 - 新 Attempt 创建时必须已经绑定 Batch；不提供 retroactive `bindBatch`。
 - Query 负责读取/展示，不承担 Batch/Attempt 状态命令。
 - Link-Up 协议对象不直接暴露为 HTTP Domain。
+
+这些边界由 `OfflineSyncLayeringConventionTest` 持续守护，避免后续新功能重新穿透 Application Facade。
 
 ## 数据表
 
@@ -129,8 +139,9 @@ Stage 8 改变目录，不改变已有依赖边界：
 ## Stage 状态
 
 ```text
-Stage 6  COMPLETE  Domain runtime contract
-Stage 7  COMPLETE  Service Responsibility Inventory
-Stage 8  COMPLETE  Package Restructuring
-Stage 9  NEXT      Application Entry Consolidation
+Stage 6   COMPLETE  Domain Runtime Contract
+Stage 7   COMPLETE  Service Responsibility Inventory
+Stage 8   COMPLETE  Package Restructuring
+Stage 9   COMPLETE  Application Entry Consolidation
+Stage 10  NEXT      Role Naming
 ```
