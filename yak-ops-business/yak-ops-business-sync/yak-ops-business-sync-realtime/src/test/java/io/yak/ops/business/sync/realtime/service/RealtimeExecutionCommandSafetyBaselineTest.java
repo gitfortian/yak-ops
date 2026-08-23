@@ -46,12 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
-/**
- * Stage 2 regression baseline for execution commands.
- *
- * <p>These tests intentionally exercise the current public application boundary before Stage 3
- * starts splitting RealtimeJobService. They protect safety semantics, not the current class layout.
- */
+/** Stage 2 regression baseline for execution command safety semantics. */
 class RealtimeExecutionCommandSafetyBaselineTest {
 
   private static final long TASK_ID = 7L;
@@ -90,8 +85,8 @@ class RealtimeExecutionCommandSafetyBaselineTest {
     task = task();
     published = version(V4_ID, 4);
 
-    ObjectMapper json = new ObjectMapper();
-    ObjectNode capabilities = json.createObjectNode().put("runtimeVersion", "flink-cdc-cli-3.6.0");
+    ObjectNode capabilities =
+        new ObjectMapper().createObjectNode().put("runtimeVersion", "flink-cdc-cli-3.6.0");
     ResolvedCdcPipeline resolved = mock(ResolvedCdcPipeline.class);
 
     when(store.definition(TASK_ID)).thenReturn(Optional.of(task));
@@ -111,7 +106,6 @@ class RealtimeExecutionCommandSafetyBaselineTest {
     service =
         new RealtimeJobService(
             store,
-            json,
             specValidator,
             new SyncExecutionStateMachine(),
             dataSourceResolver,
@@ -413,8 +407,7 @@ class RealtimeExecutionCommandSafetyBaselineTest {
     return new CdcPipelineSpec(
         1L,
         2L,
-        List.of(
-            new TableRoute("orders", "ods_orders", MatchMode.EXACT, List.of("id"))),
+        List.of(new TableRoute("orders", "ods_orders", MatchMode.EXACT, List.of("id"))),
         "initial",
         SchemaEvolution.EVOLVE,
         1,

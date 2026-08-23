@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.service;
+package io.yak.ops.business.sync.realtime.definition;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

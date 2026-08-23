@@ -124,7 +124,6 @@ class RealtimeJobServiceConcurrencyTest {
     service =
         new RealtimeJobService(
             store,
-            json,
             specValidator,
             new SyncExecutionStateMachine(),
             dataSourceResolver,
@@ -176,8 +175,10 @@ class RealtimeJobServiceConcurrencyTest {
 
     assertThatCode(() -> service.start(JOB_ID, "terminal-restart")).doesNotThrowAnyException();
 
-    verify(store).insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("terminal-restart"));
-    verify(store).markDeploymentRunning(JOB_ID, DEPLOYMENT_ID, "job-new", environment.runtimeRevision());
+    verify(store)
+        .insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("terminal-restart"));
+    verify(store)
+        .markDeploymentRunning(JOB_ID, DEPLOYMENT_ID, "job-new", environment.runtimeRevision());
     verify(store, never()).markTerminalFailure(eq(JOB_ID), eq(failed.id()), any());
   }
 
@@ -219,22 +220,17 @@ class RealtimeJobServiceConcurrencyTest {
             new RuntimeStatus("job-123", RuntimeStatus.State.RUNNING),
             new RuntimeStatus("job-123", RuntimeStatus.State.TERMINATED));
     when(store.latestDeployment(JOB_ID))
-        .thenReturn(
-            Optional.of(stopping),
-            Optional.of(stopping),
-            Optional.of(stopping));
+        .thenReturn(Optional.of(stopping), Optional.of(stopping), Optional.of(stopping));
 
     assertThatCode(() -> service.start(JOB_ID, "restart-safe")).doesNotThrowAnyException();
 
-    verify(store)
-        .bindDeploymentDefinitionVersion(DEPLOYMENT_ID, DEFINITION_VERSION_ID, 1);
+    verify(store).bindDeploymentDefinitionVersion(DEPLOYMENT_ID, DEFINITION_VERSION_ID, 1);
     verify(store, never()).markDeploymentRunning(anyLong(), anyLong(), any(), any());
     verify(store)
         .bindDeploymentForStop(
             DEPLOYMENT_ID, "job-123", "flink-cdc-cli-3.6.0@env-3-v2");
     verify(gateway).stop(environment, "job-123");
-    verify(store)
-        .reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
+    verify(store).reconcile(JOB_ID, DEPLOYMENT_ID, "STOPPED", "STOPPED", "job-123", null);
   }
 
   @Test

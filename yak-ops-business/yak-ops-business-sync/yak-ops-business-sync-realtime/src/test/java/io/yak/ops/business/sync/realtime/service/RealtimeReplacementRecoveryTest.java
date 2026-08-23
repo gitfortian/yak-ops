@@ -75,7 +75,6 @@ class RealtimeReplacementRecoveryTest {
     service =
         new RealtimeJobService(
             store,
-            new ObjectMapper(),
             specValidator,
             new SyncExecutionStateMachine(),
             dataSourceResolver,

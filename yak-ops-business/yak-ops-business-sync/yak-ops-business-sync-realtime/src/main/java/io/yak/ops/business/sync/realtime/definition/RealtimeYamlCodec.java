@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.service;
+package io.yak.ops.business.sync.realtime.definition;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;

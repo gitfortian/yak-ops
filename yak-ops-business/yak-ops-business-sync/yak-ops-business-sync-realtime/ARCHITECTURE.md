@@ -4,7 +4,7 @@
 
 需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，Review 标准看 `REVIEW.md`。
 
-> 当前代码仍存在顶层 `service/` 大桶以及职责过宽的 `RealtimeJobService`。这些属于待迁移的工程结构，不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下逐步向本文件收敛。
+> 当前 Definition application 内部已收敛到 `definition/`。顶层 `service/` 仍承载 Execution、Reconcile、Observability、Environment 等待迁移内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
 
 ## 设计原则
 
@@ -51,6 +51,7 @@ service/
 但规则是：
 
 - 不再向 `service/` 增加新的宽泛业务角色；
+- Definition 已迁出的 Validation / YAML / Draft / Publish 职责不得重新放回 `service/`；
 - 后续 PR 应按职责迁出，而不是一次 big-bang rename；
 - 迁出类完成后删除旧入口，不长期保留双路运行语义；
 - transitional package 不是稳定 API，不能据此设计新的跨包依赖。
@@ -107,7 +108,7 @@ Flink Job               = external runtime evidence
 
 ## Stable Application Entries
 
-目标稳定入口按 use-case 划分：
+稳定入口按 use-case 划分：
 
 ```text
 RealtimeJobDefinitionService
@@ -117,7 +118,7 @@ RealtimeObservabilityService
 ComputeEnvironmentService
 ```
 
-预期入口关系：
+入口关系：
 
 ```text
 RealtimeJobController
@@ -130,9 +131,9 @@ ComputeEnvironmentController
    └── ComputeEnvironmentService
 ```
 
-`@Service` 最终只用于这种稳定 Application Facade。内部专业角色使用更准确的角色名和 `@Component` / 普通对象。
+`@Service` 只用于这种稳定 Application Facade。内部专业角色使用更准确的角色名和 `@Component` / 普通对象。
 
-当前 `RealtimeJobService`、`RealtimeJobLifecycleCoordinator`、Validation / YAML / EventStream 等仍需按职责迁移；本文件不要求在一个 PR 中一次拆完。
+Definition 的 Validation / YAML / Draft / Publish 内部职责已经迁出 `service/`。当前 `RealtimeJobService` 只保留迁移期 Execution 生命周期实现；`RealtimeJobLifecycleCoordinator`、EventStream、RuntimeResolver、Environment 等内部角色仍需按后续子系统阶段继续迁移。
 
 ## Definition Subsystem
 
@@ -145,13 +146,40 @@ Create Task Shell
  -> Publish immutable DefinitionVersion
 ```
 
+当前协作结构：
+
+```text
+RealtimeJobDefinitionService
+        |
+        +-> RealtimeDefinitionManager
+        |       `-> Draft create / save / delete
+        +-> RealtimeDefinitionPublisher
+        |       `-> publish / persisted runtime validation
+        +-> RealtimeDefinitionValidator
+        |       `-> unsaved definition preflight
+        +-> RealtimeSourceConfigDigestCalculator
+        |       `-> Draft/source compatibility digest
+        `-> RealtimeYamlCodec
+                `-> Yak Realtime YAML adapter
+```
+
+角色规则：
+
+- `RealtimeJobDefinitionService` 是 Definition 唯一稳定 Application Facade；
+- `Manager / Publisher / Validator / Codec / DigestCalculator` 是内部角色，不使用 `@Service`；
+- `RealtimeJobService` 不再暴露 `create / save / publish / validate / delete` Definition 命令；
+- Definition 内部迁移完成后不保留旧 Validation / YAML 代理层。
+
 核心约束：
 
 - Draft 可以继续编辑；
 - Published Version 不可变；
 - 运行中的 SyncExecution 不读取 current Draft；
+- Publish 在外部 runtime validation 后必须重新校验 Draft revision、source config digest 与 runtime environment binding；
 - `DefinitionDigest`、source config digest、artifact digest 分属不同语义；
+- source config digest 必须包含 logical Spec 与 RuntimeEnvironmentRef，不能与 artifact digest 混用；
 - Wizard / Yak YAML 只转换同一个 `SyncDefinition`，不得建立第二套业务定义；
+- Yak YAML 不允许承载连接密码等 Credential；
 - Compatibility mapper 必须停在拥有兼容协议的边界，不长期留在 Core Domain。
 
 ## Execution Core

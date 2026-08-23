@@ -1,5 +1,7 @@
-package io.yak.ops.business.sync.realtime.domain;
+package io.yak.ops.business.sync.realtime.definition.adapter;
 
+import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
+import io.yak.ops.business.sync.realtime.domain.SyncDefinition;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.CheckpointPolicy;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.ExactTableSelector;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.ExecutionPolicy;
@@ -19,11 +21,7 @@ import io.yak.ops.business.sync.realtime.domain.SyncDefinition.TableTarget;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/**
- * Stage-6 compatibility mapper between the legacy CdcPipelineSpec and the Core SyncDefinition.
- *
- * <p>Adapter-private values are returned separately and never inserted into SyncDefinition.
- */
+/** Compatibility adapter between the legacy CdcPipelineSpec and the Core SyncDefinition. */
 @Component
 public class CdcPipelineSpecCompatibilityMapper {
 

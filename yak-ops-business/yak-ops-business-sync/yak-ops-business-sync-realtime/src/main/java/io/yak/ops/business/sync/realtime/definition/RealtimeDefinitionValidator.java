@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.service;
+package io.yak.ops.business.sync.realtime.definition;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.business.datasource.service.DataSourceCatalogService;
@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResol
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
+import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import jakarta.validation.ConstraintViolation;
@@ -20,17 +21,17 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /**
- * Unified definition-level validation boundary shared by draft preflight and save flows.
+ * Definition-level preflight shared by Wizard/YAML payloads and Draft save flows.
  *
- * <p>This deliberately does not call Flink REST health checks. A draft must remain saveable when the
- * remote Flink cluster is temporarily offline; publish/start still perform runtime validation through
- * the existing job lifecycle path. Source metadata is validated because table/key drift is part of
- * the definition itself, not a Flink runtime concern.
+ * <p>This deliberately does not perform Flink REST health validation. Drafts remain editable while
+ * the runtime cluster is temporarily unavailable; publish/start perform runtime validation through
+ * their own boundary. Source metadata is validated because table/key drift belongs to the logical
+ * definition contract.
  */
-@Service
+@Component
 public class RealtimeDefinitionValidator {
 
   private final Validator beanValidator;
@@ -70,7 +71,7 @@ public class RealtimeDefinitionValidator {
     capabilityResolver.requireSupported(manifest, resolved, spec);
 
     // Compile the logical definition as part of preflight so route escaping and connector YAML shape
-    // fail before persistence. No secrets are resolved and no Flink REST call is made here.
+    // fail before persistence. No secrets are resolved and no Flink REST health call is made here.
     compiler.compile("definition-preflight", spec, resolved);
 
     return new RealtimeValidationResult(
@@ -178,8 +179,7 @@ public class RealtimeDefinitionValidator {
   private boolean isPhysicalTable(DataSourceCatalogTableVO table) {
     return table != null
         && table.getName() != null
-        && (table.getType() == null
-            || !table.getType().toUpperCase().contains("VIEW"));
+        && (table.getType() == null || !table.getType().toUpperCase().contains("VIEW"));
   }
 
   private String violationMessage(ConstraintViolation<CdcPipelineSpec> violation) {

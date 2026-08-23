@@ -3,33 +3,33 @@ package io.yak.ops.business.sync.realtime.definition;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.RealtimeValidationResult;
 import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
-import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
-import io.yak.ops.business.sync.realtime.service.RealtimeValidationService;
-import io.yak.ops.business.sync.realtime.service.RealtimeYamlCodec;
 import org.springframework.stereotype.Service;
 
 /** Stable application entry for realtime task definition use-cases. */
 @Service("realtimeJobDefinitionApplicationService")
 public class RealtimeJobDefinitionService {
 
-  private final RealtimeJobService jobs;
-  private final RealtimeValidationService validation;
+  private final RealtimeDefinitionManager definitions;
+  private final RealtimeDefinitionPublisher publisher;
+  private final RealtimeDefinitionValidator validator;
   private final RealtimeYamlCodec yaml;
   private final RealtimeJobExecutionService executions;
 
   public RealtimeJobDefinitionService(
-      RealtimeJobService jobs,
-      RealtimeValidationService validation,
+      RealtimeDefinitionManager definitions,
+      RealtimeDefinitionPublisher publisher,
+      RealtimeDefinitionValidator validator,
       RealtimeYamlCodec yaml,
       RealtimeJobExecutionService executions) {
-    this.jobs = jobs;
-    this.validation = validation;
+    this.definitions = definitions;
+    this.publisher = publisher;
+    this.validator = validator;
     this.yaml = yaml;
     this.executions = executions;
   }
 
   public long create(String name, String description, long runtimeEnvironmentId) {
-    return jobs.create(name, description, runtimeEnvironmentId);
+    return definitions.create(name, description, runtimeEnvironmentId);
   }
 
   public long save(
@@ -38,13 +38,13 @@ public class RealtimeJobDefinitionService {
       String description,
       CdcPipelineSpec spec,
       long runtimeEnvironmentId) {
-    validation.validateDefinition(spec, runtimeEnvironmentId);
-    return jobs.save(id, name, description, spec, runtimeEnvironmentId);
+    validator.validate(spec, runtimeEnvironmentId);
+    return definitions.save(id, name, description, spec, runtimeEnvironmentId);
   }
 
   public RealtimeValidationResult validateDefinition(
       CdcPipelineSpec spec, long runtimeEnvironmentId) {
-    return validation.validateDefinition(spec, runtimeEnvironmentId);
+    return validator.validate(spec, runtimeEnvironmentId);
   }
 
   public CdcPipelineSpec parseYaml(String source) {
@@ -56,15 +56,15 @@ public class RealtimeJobDefinitionService {
   }
 
   public void publish(long id) {
-    jobs.publish(id);
+    publisher.publish(id);
   }
 
   public RealtimeValidationResult validate(long id) {
-    return validation.validate(id);
+    return publisher.validate(id);
   }
 
   public void delete(long id) {
     executions.assertSafeToDelete(id);
-    jobs.delete(id);
+    definitions.delete(id);
   }
 }

@@ -1,10 +1,11 @@
-package io.yak.ops.business.sync.realtime.domain;
+package io.yak.ops.business.sync.realtime.definition.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper.MappingResult;
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper.UnsupportedLegacyDefinitionException;
+import io.yak.ops.business.sync.realtime.definition.adapter.CdcPipelineSpecCompatibilityMapper.MappingResult;
+import io.yak.ops.business.sync.realtime.definition.adapter.CdcPipelineSpecCompatibilityMapper.UnsupportedLegacyDefinitionException;
+import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.ExactTableSelector;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.FixedDelayRestart;
 import java.util.List;
@@ -17,7 +18,8 @@ class CdcPipelineSpecCompatibilityMapperTest {
 
   @Test
   void mapsLegacySpecToCoreDefinitionAndBackWithoutLeakingAdapterTuning() {
-    CdcPipelineSpec legacy = spec(new CdcPipelineSpec.RestartPolicy("fixed-delay", 3, 10_000), 256);
+    CdcPipelineSpec legacy =
+        spec(new CdcPipelineSpec.RestartPolicy("fixed-delay", 3, 10_000), 256);
 
     MappingResult mapped = mapper.toDomain(legacy);
 
@@ -45,13 +47,17 @@ class CdcPipelineSpecCompatibilityMapperTest {
         .hasMessageContaining("failure-rate");
   }
 
-  private CdcPipelineSpec spec(CdcPipelineSpec.RestartPolicy restart, int statementCacheSize) {
+  private CdcPipelineSpec spec(
+      CdcPipelineSpec.RestartPolicy restart, int statementCacheSize) {
     return new CdcPipelineSpec(
         11L,
         22L,
         List.of(
             new CdcPipelineSpec.TableRoute(
-                "orders", "ods_orders", CdcPipelineSpec.MatchMode.EXACT, List.of("tenant_id", "id"))),
+                "orders",
+                "ods_orders",
+                CdcPipelineSpec.MatchMode.EXACT,
+                List.of("tenant_id", "id"))),
         "initial",
         CdcPipelineSpec.SchemaEvolution.EVOLVE,
         2,
