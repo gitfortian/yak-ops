@@ -31,6 +31,11 @@ public class OfflineBatchExecutionPO {
   private Integer retryMaxAttempts;
   private Integer retryBackoffSeconds;
   private String configDigest;
+
+  /** Wave 5 后由 Batch Snapshot 持有的不含凭据逻辑 JobSpec；旧 Batch 迁移期允许为空。 */
+  @ToString.Exclude
+  private String logicalJobSpecJson;
+
   private String status;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;

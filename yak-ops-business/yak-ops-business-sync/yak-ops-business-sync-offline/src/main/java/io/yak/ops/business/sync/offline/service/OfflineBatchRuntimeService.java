@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Wave 4 runtime truth boundary.
+ * Batch runtime truth boundary.
  *
  * <p>BatchExecution 是业务运行真相，状态只由同 Batch 的 latest Attempt 推导。Task last-* 只允许作为查询投影，
  * 不得进入这里的命令判断。
@@ -30,6 +30,7 @@ public class OfflineBatchRuntimeService {
 
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineCursorService cursorService;
 
   public boolean hasOccupyingBatch(Long taskId) {
     return batchRepository.hasOccupyingBatch(positive(taskId, "TaskId"));
@@ -76,7 +77,8 @@ public class OfflineBatchRuntimeService {
   /**
    * 从持久化的 latest Attempt 重新计算 BatchStatus。
    *
-   * <p>不得直接使用调用方传入 Attempt 的状态，否则旧 Attempt 的晚到 reconcile 可能回退 Batch 真相。
+   * <p>不得直接使用调用方传入 Attempt 的状态，否则旧 Attempt 的晚到 reconcile 可能回退 Batch 真相。Wave 5
+   * 同时把 Cursor advancement 放在同一事务中，保证只有 SUCCEEDED Batch 才能推进 Cursor。
    */
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public void refreshBatch(Long batchId) {
@@ -92,7 +94,12 @@ public class OfflineBatchRuntimeService {
                 .thenComparingLong(value -> number(value.getId(), 0L)))
         .orElseThrow();
     BatchStatus target = deriveStatus(latest);
-    if (batch.status() == target) return;
+    if (batch.status() == target) {
+      if (target == BatchStatus.SUCCEEDED) {
+        cursorService.advanceAfterSucceededBatch(batch);
+      }
+      return;
+    }
 
     BatchExecution updated = new BatchExecution(
         batch.id(),
@@ -105,6 +112,9 @@ public class OfflineBatchRuntimeService {
         batch.attempts());
     if (!batchRepository.update(updated)) {
       throw new IllegalStateException("更新 BatchExecution runtime status 失败：" + batch.id());
+    }
+    if (target == BatchStatus.SUCCEEDED) {
+      cursorService.advanceAfterSucceededBatch(updated);
     }
   }
 

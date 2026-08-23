@@ -5,6 +5,7 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.dao.OfflineBatchExecutionDao;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineBatchExecutionMapper;
 import io.yak.ops.common.bean.po.sync.offline.OfflineBatchExecutionPO;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -53,6 +54,29 @@ public class OfflineBatchExecutionDaoImpl implements OfflineBatchExecutionDao {
             .in(OfflineBatchExecutionPO::getStatus, statuses)
             .orderByDesc(OfflineBatchExecutionPO::getId)
             .last("LIMIT 1"));
+  }
+
+  @Override
+  public List<OfflineBatchExecutionPO> selectPendingBackfills(int limit) {
+    return mapper.selectList(
+        Wrappers.<OfflineBatchExecutionPO>lambdaQuery()
+            .eq(OfflineBatchExecutionPO::getTriggerType, "BACKFILL")
+            .eq(OfflineBatchExecutionPO::getStatus, "PENDING")
+            .orderByAsc(OfflineBatchExecutionPO::getId)
+            .last("LIMIT " + Math.max(1, limit)));
+  }
+
+  @Override
+  public boolean reservePendingBackfill(Long batchId, LocalDateTime updateTime) {
+    if (batchId == null || batchId <= 0L) return false;
+    return mapper.update(
+        null,
+        Wrappers.<OfflineBatchExecutionPO>lambdaUpdate()
+            .eq(OfflineBatchExecutionPO::getId, batchId)
+            .eq(OfflineBatchExecutionPO::getTriggerType, "BACKFILL")
+            .eq(OfflineBatchExecutionPO::getStatus, "PENDING")
+            .set(OfflineBatchExecutionPO::getStatus, "RUNNING")
+            .set(OfflineBatchExecutionPO::getUpdateTime, updateTime)) > 0;
   }
 
   @Override

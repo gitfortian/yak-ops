@@ -38,11 +38,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
         BatchKey.schedule("schedule-42", Instant.parse("2026-08-23T02:00:00Z")),
         BatchTrigger.SCHEDULE,
         BatchScope.partitions(List.of("dt=2026-08-23", "dt=2026-08-22", "dt=2026-08-23")),
-        new ExecutionSnapshot(
-            "{\"source\":\"orders\"}",
-            7,
-            new RetryPolicySnapshot(3, 30),
-            "digest-7"),
+        snapshot(7, 3),
         BatchStatus.PENDING,
         List.of());
 
@@ -56,6 +52,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     assertThat(reloaded.batchScope()).isEqualTo(source.batchScope());
     assertThat(reloaded.batchScope().fingerprint()).isEqualTo(source.batchScope().fingerprint());
     assertThat(reloaded.snapshot()).isEqualTo(source.snapshot());
+    assertThat(reloaded.snapshot().logicalJobSpec()).contains("BatchSyncJob");
     assertThat(reloaded.status()).isEqualTo(BatchStatus.PENDING);
     assertThat(reloaded.attempts()).isEmpty();
     assertThat(repository.findByTaskIdAndBatchKey(42L, source.batchKey())).contains(reloaded);
@@ -75,7 +72,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
         BatchKey.manual("request-9"),
         BatchTrigger.MANUAL,
         BatchScope.fullSelection(),
-        new ExecutionSnapshot("{}", 1, new RetryPolicySnapshot(2, 5), "digest"),
+        snapshot(1, 2),
         BatchStatus.RUNNING,
         List.of()));
 
@@ -97,6 +94,30 @@ class OfflineBatchExecutionRepositoryAdapterTest {
   }
 
   @Test
+  void pendingBackfillUsesCasReservationBeforeAttemptCreation() {
+    FakeBatchDao dao = new FakeBatchDao();
+    OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
+    when(executions.findByBatchId(anyLong())).thenReturn(List.of());
+    OfflineBatchExecutionRepositoryAdapter repository =
+        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+
+    BatchExecution pending = repository.insert(new BatchExecution(
+        null,
+        9L,
+        BatchKey.backfill("bf-1", BatchScope.fullSelection().fingerprint()),
+        BatchTrigger.BACKFILL,
+        BatchScope.fullSelection(),
+        snapshot(1, 2),
+        BatchStatus.PENDING,
+        List.of()));
+
+    assertThat(repository.findPendingBackfills(10)).containsExactly(pending);
+    assertThat(repository.reservePendingBackfill(pending.id())).isTrue();
+    assertThat(repository.reservePendingBackfill(pending.id())).isFalse();
+    assertThat(repository.findPendingBackfills(10)).isEmpty();
+  }
+
+  @Test
   void hydratesBoundLegacyExecutionsAsAttempts() {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
@@ -109,7 +130,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
         BatchKey.manual("request-9"),
         BatchTrigger.MANUAL,
         BatchScope.fullSelection(),
-        new ExecutionSnapshot("{}", 1, new RetryPolicySnapshot(2, 5), "digest"),
+        snapshot(1, 2),
         BatchStatus.RUNNING,
         List.of()));
 
@@ -148,7 +169,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
         BatchKey.manual("request-7"),
         BatchTrigger.MANUAL,
         BatchScope.fullSelection(),
-        new ExecutionSnapshot("{}", 1, new RetryPolicySnapshot(1, 0), "digest"),
+        snapshot(1, 1),
         BatchStatus.PENDING,
         List.of());
 
@@ -158,6 +179,15 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     assertThatThrownBy(() -> repository.findById(inserted.id()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("fingerprint");
+  }
+
+  private ExecutionSnapshot snapshot(int revision, int maxAttempts) {
+    return new ExecutionSnapshot(
+        "{\"source\":\"orders\"}",
+        revision,
+        new RetryPolicySnapshot(maxAttempts, 30),
+        "digest-" + revision,
+        "{\"kind\":\"BatchSyncJob\",\"source\":{\"connectorId\":\"jdbc\"}}");
   }
 
   private static final class FakeBatchDao implements OfflineBatchExecutionDao {
@@ -189,6 +219,28 @@ class OfflineBatchExecutionRepositoryAdapterTest {
         Long taskId,
         List<String> statuses) {
       return existsByTaskIdAndStatuses(taskId, statuses) ? stored : null;
+    }
+
+    @Override
+    public List<OfflineBatchExecutionPO> selectPendingBackfills(int limit) {
+      return stored != null
+              && "BACKFILL".equals(stored.getTriggerType())
+              && "PENDING".equals(stored.getStatus())
+          ? List.of(stored)
+          : List.of();
+    }
+
+    @Override
+    public boolean reservePendingBackfill(Long batchId, LocalDateTime updateTime) {
+      if (stored == null
+          || !stored.getId().equals(batchId)
+          || !"BACKFILL".equals(stored.getTriggerType())
+          || !"PENDING".equals(stored.getStatus())) {
+        return false;
+      }
+      stored.setStatus("RUNNING");
+      stored.setUpdateTime(updateTime);
+      return true;
     }
 
     @Override
