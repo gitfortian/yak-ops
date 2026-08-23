@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.service;
+package io.yak.ops.business.sync.realtime.observability;
 
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobChangeEvent;
 import jakarta.annotation.PreDestroy;
@@ -12,16 +12,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** Broadcasts committed realtime job changes and heartbeats to authenticated UI clients. */
-@Service
-public class RealtimeEventStreamService {
+@Component
+public class RealtimeEventStream {
 
-  private static final Logger LOG = LoggerFactory.getLogger(RealtimeEventStreamService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RealtimeEventStream.class);
   private static final long STREAM_TIMEOUT_MILLIS = Duration.ofHours(1).toMillis();
   private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
   private final ScheduledExecutorService heartbeat =
@@ -32,7 +32,7 @@ public class RealtimeEventStreamService {
             return thread;
           });
 
-  public RealtimeEventStreamService() {
+  public RealtimeEventStream() {
     heartbeat.scheduleAtFixedRate(this::heartbeat, 15, 15, TimeUnit.SECONDS);
   }
 

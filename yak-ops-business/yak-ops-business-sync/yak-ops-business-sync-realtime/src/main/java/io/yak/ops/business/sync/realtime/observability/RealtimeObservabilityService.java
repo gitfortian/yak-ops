@@ -3,8 +3,6 @@ package io.yak.ops.business.sync.realtime.observability;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView;
 import io.yak.ops.business.sync.realtime.domain.RealtimeObservabilityView.RuntimeLog;
-import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
-import io.yak.ops.business.sync.realtime.service.RealtimeEventStreamService;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -13,17 +11,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service("realtimeObservabilityApplicationService")
 public class RealtimeObservabilityService {
 
-  private final io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService observability;
-  private final RealtimeEventStreamService eventStream;
-  private final RealtimeJobStore store;
+  private final RealtimeObservabilityReader reader;
+  private final RealtimeEventQuery events;
+  private final RealtimeEventStream eventStream;
 
   public RealtimeObservabilityService(
-      io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService observability,
-      RealtimeEventStreamService eventStream,
-      RealtimeJobStore store) {
-    this.observability = observability;
+      RealtimeObservabilityReader reader,
+      RealtimeEventQuery events,
+      RealtimeEventStream eventStream) {
+    this.reader = reader;
+    this.events = events;
     this.eventStream = eventStream;
-    this.store = store;
   }
 
   public SseEmitter subscribe() {
@@ -31,20 +29,18 @@ public class RealtimeObservabilityService {
   }
 
   public List<RealtimeJobEventView> events(long id) {
-    store.definition(id)
-        .orElseThrow(() -> new IllegalArgumentException("实时同步任务不存在：" + id));
-    return store.events(id);
+    return events.events(id);
   }
 
   public RealtimeObservabilityView snapshot(long id) {
-    return observability.snapshot(id);
+    return reader.snapshot(id);
   }
 
   public String submissionLog(long id, int tailLines) {
-    return observability.submissionLog(id, tailLines);
+    return reader.submissionLog(id, tailLines);
   }
 
   public RuntimeLog runtimeLog(long id, int maxExceptions) {
-    return observability.runtimeLog(id, maxExceptions);
+    return reader.runtimeLog(id, maxExceptions);
   }
 }

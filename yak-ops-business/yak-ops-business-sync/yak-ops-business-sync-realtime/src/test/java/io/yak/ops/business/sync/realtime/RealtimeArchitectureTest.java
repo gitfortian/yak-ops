@@ -28,6 +28,10 @@ import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionReservationM
 import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionStarter;
 import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionStateManager;
 import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
+import io.yak.ops.business.sync.realtime.execution.query.RealtimeJobReadModelQuery;
+import io.yak.ops.business.sync.realtime.observability.RealtimeEventQuery;
+import io.yak.ops.business.sync.realtime.observability.RealtimeEventStream;
+import io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityReader;
 import io.yak.ops.business.sync.realtime.reconcile.RealtimeDeleteSafetyChecker;
 import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconcileCoordinator;
 import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconciler;
@@ -38,8 +42,6 @@ import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
 import io.yak.ops.business.sync.realtime.service.ComputeEnvironmentService;
-import io.yak.ops.business.sync.realtime.service.RealtimeJobQueryService;
-import io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService;
 import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
@@ -174,6 +176,66 @@ class RealtimeArchitectureTest {
   }
 
   @Test
+  void queryAndObservabilityStayReadOnlyBehindStableFacades() {
+    Class<?> queryFacade =
+        io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class;
+    Class<?> observabilityFacade =
+        io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class;
+
+    assertFieldsAvoid(queryFacade, ".service.", ".dao.", "JdbcTemplate");
+    assertFieldsAvoid(
+        observabilityFacade,
+        ".service.",
+        ".execution.RealtimeExecution",
+        ".reconcile.",
+        ".dao.",
+        "JdbcTemplate");
+
+    for (Class<?> internal :
+        new Class<?>[] {
+          RealtimeJobReadModelQuery.class,
+          RealtimeObservabilityReader.class,
+          RealtimeEventQuery.class,
+          RealtimeEventStream.class
+        }) {
+      assertInternalComponent(internal, "read-side");
+      assertFieldsAvoid(
+          internal,
+          "SyncExecutionStateMachine",
+          "RealtimeExecutionCoordinator",
+          "RealtimeExecutionStateManager",
+          "RealtimeExecutionReservationManager",
+          "RealtimeExecutionReplacementManager",
+          ".reconcile.",
+          ".dao.",
+          ".dao.mapper.",
+          ".dao.model.",
+          "JdbcTemplate");
+    }
+
+    for (Class<?> readSide :
+        new Class<?>[] {
+          queryFacade,
+          RealtimeJobReadModelQuery.class,
+          observabilityFacade,
+          RealtimeObservabilityReader.class,
+          RealtimeEventQuery.class,
+          RealtimeEventStream.class
+        }) {
+      assertThat(methodNames(readSide))
+          .as("%s must not expose execution commands", readSide.getSimpleName())
+          .doesNotContain(
+              "start",
+              "stop",
+              "restartExecution",
+              "applyPublishedVersion",
+              "reconcile",
+              "delete",
+              "save");
+    }
+  }
+
+  @Test
   void controllersDependOnApplicationBoundariesInsteadOfPersistenceOrEnginePorts() {
     assertFieldsAvoid(
         RealtimeJobController.class,
@@ -195,8 +257,6 @@ class RealtimeArchitectureTest {
   void servicesDoNotDependOnDaoMapperPoOrJdbcTemplate() {
     for (Class<?> type :
         new Class<?>[] {
-          RealtimeJobQueryService.class,
-          RealtimeObservabilityService.class,
           RealtimeRuntimeResolver.class,
           ComputeEnvironmentService.class,
           RealtimeJobDefinitionService.class,
@@ -219,7 +279,11 @@ class RealtimeArchitectureTest {
           RealtimeDeleteSafetyChecker.class,
           RealtimeReconciler.class,
           io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
+          RealtimeJobReadModelQuery.class,
           io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
+          RealtimeObservabilityReader.class,
+          RealtimeEventQuery.class,
+          RealtimeEventStream.class,
           io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService.class
         }) {
       assertFieldsAvoid(type, ".dao.", ".dao.mapper.", ".dao.model.", "JdbcTemplate");

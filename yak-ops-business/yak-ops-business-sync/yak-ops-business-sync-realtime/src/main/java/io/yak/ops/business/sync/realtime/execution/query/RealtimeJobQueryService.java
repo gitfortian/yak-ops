@@ -2,25 +2,20 @@ package io.yak.ops.business.sync.realtime.execution.query;
 
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobPage;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
-import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import org.springframework.stereotype.Service;
 
 /** Stable application entry for realtime task and execution read models. */
 @Service("realtimeJobQueryApplicationService")
 public class RealtimeJobQueryService {
 
-  private final io.yak.ops.business.sync.realtime.service.RealtimeJobQueryService query;
-  private final RealtimeJobStore store;
+  private final RealtimeJobReadModelQuery query;
 
-  public RealtimeJobQueryService(
-      io.yak.ops.business.sync.realtime.service.RealtimeJobQueryService query,
-      RealtimeJobStore store) {
+  public RealtimeJobQueryService(RealtimeJobReadModelQuery query) {
     this.query = query;
-    this.store = store;
   }
 
   public RealtimeJobView detail(long id) {
-    return store.view(id);
+    return query.detail(id);
   }
 
   public RealtimeJobPage page(
