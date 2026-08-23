@@ -7,10 +7,8 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.business.sync.offline.domain.compat.LegacyBatchTriggerCompatibilityMapper;
-import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
-import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionVO;
 import org.springframework.stereotype.Component;
 
 @ConditionalOnOfflineSyncEnabled
@@ -19,19 +17,19 @@ public class OfflineScheduleHandler implements ScheduleHandler {
 
   private final OfflineJobDefinitionRepository definitionRepository;
   private final OfflineScheduleRepository scheduleRepository;
-  private final OfflineJobExecutionService executionService;
+  private final OfflineScheduleExecutionGateway executionGateway;
   private final OfflineScheduleEngineBridge engine;
   private final OfflineScheduleLifecycle lifecycle;
 
   public OfflineScheduleHandler(
       OfflineJobDefinitionRepository definitionRepository,
       OfflineScheduleRepository scheduleRepository,
-      OfflineJobExecutionService executionService,
+      OfflineScheduleExecutionGateway executionGateway,
       OfflineScheduleEngineBridge engine,
       OfflineScheduleLifecycle lifecycle) {
     this.definitionRepository = definitionRepository;
     this.scheduleRepository = scheduleRepository;
-    this.executionService = executionService;
+    this.executionGateway = executionGateway;
     this.engine = engine;
     this.lifecycle = lifecycle;
   }
@@ -53,7 +51,7 @@ public class OfflineScheduleHandler implements ScheduleHandler {
       return ScheduleExecutionResult.accepted(null, "离线同步任务未启用调度，本次触发忽略");
     }
 
-    if (executionService.hasOccupyingBatch(definitionId)) {
+    if (executionGateway.hasOccupyingBatch(definitionId)) {
       lifecycle.refreshRuntimeState(definitionId, context.actualFireTime());
       return ScheduleExecutionResult.accepted(null, "任务已有运行中的 BatchExecution，本次调度触发跳过");
     }
@@ -61,10 +59,9 @@ public class OfflineScheduleHandler implements ScheduleHandler {
     try {
       String triggerToken = LegacyBatchTriggerCompatibilityMapper.scheduleToken(
           context.key().value(), context.scheduledFireTime());
-      OfflineJobExecutionVO execution =
-          executionService.executeScheduled(definitionId, triggerToken);
+      Long executionId = executionGateway.submitScheduled(definitionId, triggerToken);
       return ScheduleExecutionResult.accepted(
-          execution.getId() == null ? null : String.valueOf(execution.getId()),
+          executionId == null ? null : String.valueOf(executionId),
           "离线同步任务已提交 Link-Up 执行");
     } finally {
       lifecycle.refreshRuntimeState(definitionId, context.actualFireTime());
