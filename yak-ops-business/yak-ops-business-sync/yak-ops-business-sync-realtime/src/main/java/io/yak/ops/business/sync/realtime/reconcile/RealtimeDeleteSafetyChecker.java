@@ -5,11 +5,11 @@ import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
 import io.yak.ops.business.sync.realtime.engine.FlinkJobDiscoveryClient;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway.RuntimeStatus;
+import io.yak.ops.business.sync.realtime.environment.RealtimeRuntimeResolver;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
-import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
 import org.springframework.stereotype.Component;
 
 /** Verifies both local execution terminality and external runtime inactivity before metadata deletion. */
