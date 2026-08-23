@@ -51,7 +51,7 @@ class DataSourceDefinitionTest {
             () ->
                 dataSource.updateConfiguration(
                     "orders-db",
-                    DataSourceDbType.POSTGRESQL,
+                    DataSourceDbType.POSTGRE_SQL,
                     profile("orders", "secret-b"),
                     DataSourceEnvironment.PROD,
                     null))
