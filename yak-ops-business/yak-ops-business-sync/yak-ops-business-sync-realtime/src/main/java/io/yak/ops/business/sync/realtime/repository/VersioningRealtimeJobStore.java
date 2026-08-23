@@ -1,9 +1,6 @@
 package io.yak.ops.business.sync.realtime.repository;
 
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper;
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper.MappingResult;
-import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecCompatibilityMapper.UnsupportedLegacyDefinitionException;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.domain.DefinitionDigest;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobEventView;
@@ -16,6 +13,9 @@ import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationCandidate;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.PublicationSnapshot;
 import io.yak.ops.business.sync.realtime.repository.DefinitionVersionRepository.StoredVersion;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper.MappingResult;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper.UnsupportedLegacyDefinitionException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
