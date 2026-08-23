@@ -136,11 +136,11 @@ class RealtimeJobServiceConcurrencyTest {
 
   @Test
   void activeExecutionBlocksAnotherStartEvenWhenTaskProjectionSaysStopped() {
+    DeploymentRow running = deployment("job-existing", "RUNNING");
     when(store.deploymentByIdempotencyKey("start-2")).thenReturn(Optional.empty());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
     when(store.lockDefinition(JOB_ID)).thenReturn(stopped);
-    when(store.latestExecution(JOB_ID))
-        .thenReturn(Optional.of(execution(DesiredState.RUNNING, ObservedState.RUNNING, null)));
+    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(running));
 
     assertThatThrownBy(() -> service.start(JOB_ID, "start-2"))
         .isInstanceOf(IllegalStateException.class)
@@ -159,11 +159,10 @@ class RealtimeJobServiceConcurrencyTest {
     when(store.deploymentByIdempotencyKey("terminal-restart")).thenReturn(Optional.empty());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(staleTaskProjection));
     when(store.lockDefinition(JOB_ID)).thenReturn(staleTaskProjection, staleTaskProjection);
-    when(store.latestExecution(JOB_ID))
-        .thenReturn(Optional.of(execution(DesiredState.STOPPED, ObservedState.FAILED, null)));
+    when(store.latestDeployment(JOB_ID))
+        .thenReturn(Optional.of(failed), Optional.of(starting));
     when(store.insertDeployment(any(), any(), any(), any(), eq(environment), eq("terminal-restart")))
         .thenReturn(DEPLOYMENT_ID);
-    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(starting));
     when(dataSourceResolver.resolveCredentials(spec))
         .thenReturn(
             new CredentialBinding[] {
@@ -204,7 +203,8 @@ class RealtimeJobServiceConcurrencyTest {
     when(store.deploymentByIdempotencyKey("restart-safe")).thenReturn(Optional.empty());
     when(store.definition(JOB_ID)).thenReturn(Optional.of(stopped));
     when(store.lockDefinition(JOB_ID)).thenReturn(stopped, stopped, stopped);
-    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
+    when(store.latestDeployment(JOB_ID))
+        .thenReturn(Optional.empty(), Optional.of(stopping));
     when(store.insertDeployment(any(), any(), any(), any(), eq(environment), eq("restart-safe")))
         .thenReturn(DEPLOYMENT_ID);
     when(dataSourceResolver.resolveCredentials(spec))
@@ -219,8 +219,6 @@ class RealtimeJobServiceConcurrencyTest {
         .thenReturn(
             new RuntimeStatus("job-123", RuntimeStatus.State.RUNNING),
             new RuntimeStatus("job-123", RuntimeStatus.State.TERMINATED));
-    when(store.latestDeployment(JOB_ID))
-        .thenReturn(Optional.of(stopping), Optional.of(stopping), Optional.of(stopping));
 
     assertThatCode(() -> service.start(JOB_ID, "restart-safe")).doesNotThrowAnyException();
 

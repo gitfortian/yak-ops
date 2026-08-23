@@ -3,36 +3,39 @@ package io.yak.ops.business.sync.realtime.execution;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
-import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
 import org.springframework.stereotype.Service;
 
 /** Stable application entry for realtime execution lifecycle commands. */
 @Service("realtimeJobExecutionApplicationService")
 public class RealtimeJobExecutionService {
 
-  private final RealtimeJobService jobs;
+  private final RealtimeExecutionCoordinator executions;
+  private final RealtimeExecutionPreparation preparation;
   private final RealtimeJobLifecycleCoordinator lifecycle;
 
   public RealtimeJobExecutionService(
-      RealtimeJobService jobs, RealtimeJobLifecycleCoordinator lifecycle) {
-    this.jobs = jobs;
+      RealtimeExecutionCoordinator executions,
+      RealtimeExecutionPreparation preparation,
+      RealtimeJobLifecycleCoordinator lifecycle) {
+    this.executions = executions;
+    this.preparation = preparation;
     this.lifecycle = lifecycle;
   }
 
   public RealtimeJobView.Deployment start(long id, String idempotencyKey) {
-    return jobs.start(id, idempotencyKey);
+    return executions.start(id, idempotencyKey);
   }
 
   public void stop(long id) {
-    jobs.stop(id);
+    executions.stop(id);
   }
 
   public RealtimeJobView.Deployment restartExecution(long id, String idempotencyKey) {
-    return jobs.restartExecution(id, idempotencyKey);
+    return executions.restartExecution(id, idempotencyKey);
   }
 
   public RealtimeJobView.Deployment applyPublishedVersion(long id, String idempotencyKey) {
-    return jobs.applyPublishedVersion(id, idempotencyKey);
+    return executions.applyPublishedVersion(id, idempotencyKey);
   }
 
   public RealtimeJobView reconcile(long id) {
@@ -44,6 +47,6 @@ public class RealtimeJobExecutionService {
   }
 
   public JsonNode capabilities(long runtimeEnvironmentId) {
-    return jobs.capabilities(runtimeEnvironmentId);
+    return preparation.capabilities(runtimeEnvironmentId);
   }
 }

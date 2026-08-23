@@ -21,6 +21,12 @@ import io.yak.ops.business.sync.realtime.domain.SyncDefinition;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinitionDigestCalculator;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
+import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionCoordinator;
+import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionPreparation;
+import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionReplacementManager;
+import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionReservationManager;
+import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionStarter;
+import io.yak.ops.business.sync.realtime.execution.RealtimeExecutionStateManager;
 import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobListQuery;
@@ -29,7 +35,6 @@ import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore
 import io.yak.ops.business.sync.realtime.service.ComputeEnvironmentService;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
 import io.yak.ops.business.sync.realtime.service.RealtimeJobQueryService;
-import io.yak.ops.business.sync.realtime.service.RealtimeJobService;
 import io.yak.ops.business.sync.realtime.service.RealtimeObservabilityService;
 import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
 import java.lang.reflect.AnnotatedElement;
@@ -108,24 +113,34 @@ class RealtimeArchitectureTest {
           RealtimeYamlCodec.class,
           CdcPipelineSpecCompatibilityMapper.class
         }) {
-      assertThat(internal.getAnnotation(Component.class))
-          .as("%s must remain an internal definition role", internal.getSimpleName())
-          .isNotNull();
-      assertThat(internal.getAnnotation(Service.class))
-          .as("%s must not masquerade as an application service", internal.getSimpleName())
-          .isNull();
+      assertInternalComponent(internal, "definition");
     }
   }
 
   @Test
-  void legacyJobServiceIsExecutionOnlyAndNotAnApplicationService() {
-    assertThat(RealtimeJobService.class.getAnnotation(Component.class)).isNotNull();
-    assertThat(RealtimeJobService.class.getAnnotation(Service.class)).isNull();
+  void executionSubsystemUsesRoleComponentsBehindStableFacade() {
+    assertFieldsAvoid(
+        RealtimeJobExecutionService.class,
+        "RealtimeJobService",
+        ".dao.",
+        "JdbcTemplate");
 
-    Set<String> methods = methodNames(RealtimeJobService.class);
-    assertThat(methods)
+    for (Class<?> internal :
+        new Class<?>[] {
+          RealtimeExecutionCoordinator.class,
+          RealtimeExecutionPreparation.class,
+          RealtimeExecutionReservationManager.class,
+          RealtimeExecutionStateManager.class,
+          RealtimeExecutionStarter.class,
+          RealtimeExecutionReplacementManager.class
+        }) {
+      assertInternalComponent(internal, "execution");
+    }
+
+    Set<String> coordinatorMethods = methodNames(RealtimeExecutionCoordinator.class);
+    assertThat(coordinatorMethods)
         .contains("start", "stop", "restartExecution", "applyPublishedVersion")
-        .doesNotContain("create", "save", "publish", "validate", "delete", "restart");
+        .doesNotContain("publish", "save", "delete", "reconcile");
   }
 
   @Test
@@ -150,7 +165,6 @@ class RealtimeArchitectureTest {
   void servicesDoNotDependOnDaoMapperPoOrJdbcTemplate() {
     for (Class<?> type :
         new Class<?>[] {
-          RealtimeJobService.class,
           RealtimeJobLifecycleCoordinator.class,
           RealtimeJobQueryService.class,
           RealtimeObservabilityService.class,
@@ -164,6 +178,12 @@ class RealtimeArchitectureTest {
           RealtimeYamlCodec.class,
           CdcPipelineSpecCompatibilityMapper.class,
           RealtimeJobExecutionService.class,
+          RealtimeExecutionCoordinator.class,
+          RealtimeExecutionPreparation.class,
+          RealtimeExecutionReservationManager.class,
+          RealtimeExecutionStateManager.class,
+          RealtimeExecutionStarter.class,
+          RealtimeExecutionReplacementManager.class,
           io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService.class,
           io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService.class,
           io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService.class
@@ -183,7 +203,9 @@ class RealtimeArchitectureTest {
         }) {
       for (Method method : repository.getDeclaredMethods()) {
         assertTypeBoundary(method.getReturnType());
-        for (Class<?> parameterType : method.getParameterTypes()) assertTypeBoundary(parameterType);
+        for (Class<?> parameterType : method.getParameterTypes()) {
+          assertTypeBoundary(parameterType);
+        }
       }
     }
   }
@@ -212,8 +234,19 @@ class RealtimeArchitectureTest {
           SyncExecutionStateMachine.class
         }) {
       assertCoreType(root);
-      for (Class<?> nested : root.getDeclaredClasses()) assertCoreType(nested);
+      for (Class<?> nested : root.getDeclaredClasses()) {
+        assertCoreType(nested);
+      }
     }
+  }
+
+  private static void assertInternalComponent(Class<?> type, String subsystem) {
+    assertThat(type.getAnnotation(Component.class))
+        .as("%s must remain an internal %s role", type.getSimpleName(), subsystem)
+        .isNotNull();
+    assertThat(type.getAnnotation(Service.class))
+        .as("%s must not masquerade as an application service", type.getSimpleName())
+        .isNull();
   }
 
   private static void assertCoreType(Class<?> type) {
@@ -224,7 +257,8 @@ class RealtimeArchitectureTest {
       assertAnnotationsAvoid(field, CORE_FORBIDDEN);
     }
     for (Method method : type.getDeclaredMethods()) {
-      assertTypeAvoids(type, method.getName() + " return", method.getGenericReturnType(), CORE_FORBIDDEN);
+      assertTypeAvoids(
+          type, method.getName() + " return", method.getGenericReturnType(), CORE_FORBIDDEN);
       for (Type parameter : method.getGenericParameterTypes()) {
         assertTypeAvoids(type, method.getName() + " parameter", parameter, CORE_FORBIDDEN);
       }
@@ -268,7 +302,9 @@ class RealtimeArchitectureTest {
   }
 
   private static Set<String> methodNames(Class<?> type) {
-    return Arrays.stream(type.getDeclaredMethods()).map(Method::getName).collect(Collectors.toSet());
+    return Arrays.stream(type.getDeclaredMethods())
+        .map(Method::getName)
+        .collect(Collectors.toSet());
   }
 
   private static void assertFieldsAvoid(Class<?> type, String... forbidden) {

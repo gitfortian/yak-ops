@@ -112,12 +112,12 @@ class RealtimeExecutionPathTest {
     when(store.spec(any())).thenReturn(spec);
     when(store.runtimeEnvironmentId(JOB_ID)).thenReturn(environment.id());
     when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.of(published));
-    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
     when(store.lockDefinition(JOB_ID)).thenReturn(publishedStopped, publishedStopped, starting);
     when(store.deploymentByIdempotencyKey("exec-1")).thenReturn(Optional.empty());
     when(store.insertDeployment(any(), eq(spec), any(), any(), eq(environment), eq("exec-1")))
         .thenReturn(DEPLOYMENT_ID);
-    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(startingExecution));
+    when(store.latestDeployment(JOB_ID))
+        .thenReturn(Optional.empty(), Optional.of(startingExecution));
     when(runtimeResolver.definition(any(), eq(true))).thenReturn(environment);
     when(runtimeResolver.environment(environment.id(), true)).thenReturn(environment);
     when(dataSourceResolver.resolve(spec)).thenReturn(resolved);
@@ -228,13 +228,13 @@ class RealtimeExecutionPathTest {
 
     when(store.definition(JOB_ID)).thenReturn(Optional.of(draftStopped));
     when(store.publishedDefinition(JOB_ID)).thenReturn(Optional.of(published));
-    when(store.latestExecution(JOB_ID)).thenReturn(Optional.empty());
     when(store.lockDefinition(JOB_ID)).thenReturn(draftStopped, staleStartingProjection);
     when(store.deploymentByIdempotencyKey("published-v1")).thenReturn(Optional.empty());
     when(store.insertDeployment(
             any(), eq(publishedSpec), any(), any(), eq(publishedEnvironment), eq("published-v1")))
         .thenReturn(DEPLOYMENT_ID);
-    when(store.latestDeployment(JOB_ID)).thenReturn(Optional.of(startingExecution));
+    when(store.latestDeployment(JOB_ID))
+        .thenReturn(Optional.empty(), Optional.of(startingExecution));
     when(runtimeResolver.environment(publishedEnvironment.id(), true))
         .thenReturn(publishedEnvironment);
     when(dataSourceResolver.resolve(publishedSpec)).thenReturn(resolved);
