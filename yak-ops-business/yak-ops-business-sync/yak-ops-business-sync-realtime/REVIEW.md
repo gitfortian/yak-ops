@@ -9,9 +9,12 @@
 ```text
 REQUIREMENTS.md  -> 模块需要什么
 DOMAIN.md        -> 实现不能违反什么
+ARCHITECTURE.md  -> 代码边界与角色要收敛到哪里
 REVIEW.md        -> 按什么标准判卷
 PR diff / tests  -> 实际改了什么
 ```
+
+如果 PR 是纯 package move / rename / class split，也必须同时检查 Domain 和 Architecture；“只是重构”不能成为绕过运行安全规则的理由。
 
 ## Review 顺序
 
@@ -58,7 +61,39 @@ Domain Violation
 Domain Gap
 ```
 
-### 3. Correctness
+### 3. Architecture Alignment
+
+检查 `ARCHITECTURE.md`。当前允许 `service/` 作为迁移期 package，但新的代码和拆分方向必须向业务子系统收敛。
+
+重点关注：
+
+- 新类是否能明确归属 Definition / Execution / Reconcile / Observability / Environment / Engine / Persistence；
+- 是否继续向顶层 `service/` 增加宽泛职责；
+- Controller 是否依赖稳定 Application Facade，而不是内部 Coordinator / Manager / Repository / Engine；
+- `@Service` 是否被滥用于内部专业角色；
+- Query / Observability 是否开始承担 command 状态迁移；
+- Reconcile 是否仍使用明确 runtime identity / environment snapshot，而不是猜外部 Job；
+- Repository contract 是否泄漏 DAO / PO / Controller DTO；
+- Domain 是否依赖 Spring / Jackson / MyBatis / Flink / SSH；
+- Compatibility mapper / facade 是否重新进入 Core Domain；
+- 是否为了减少重复提前抽 realtime/offline Shared Sync Kernel；
+- package move 是否同时改变 REST / DB / Domain behavior，导致 PR 难以独立 review / rollback。
+
+出现明确违反目标架构且会形成新的长期耦合时，报告：
+
+```text
+Architecture Violation
+```
+
+如果当前目标架构无法表达真实需求，先报告：
+
+```text
+Architecture Gap
+```
+
+不要通过新增 `Helper / Common / Utils / Base` 绕过边界。
+
+### 4. Correctness
 
 检查真实错误，不做泛泛而谈：
 
@@ -72,7 +107,7 @@ Domain Gap
 - Start / Stop / Reconcile / Restart / Apply 的竞态；
 - 快照、版本、外部 JobId 是否可能错配。
 
-### 4. Compatibility
+### 5. Compatibility
 
 检查是否破坏：
 
@@ -83,9 +118,9 @@ Domain Gap
 - 前端调用；
 - 已存在运行实例或版本记录。
 
-破坏性变更必须有明确迁移方案，禁止 Big-Bang 修改。
+破坏性变更必须有明确迁移方案，禁止借架构重构做 Big-Bang contract change。
 
-### 5. Safety
+### 6. Safety
 
 重点检查：
 
@@ -94,10 +129,12 @@ Domain Gap
 - `UNKNOWN / CONFLICT`；
 - runtime identity 恢复；
 - RuntimeEnvironmentSnapshot；
+- replacement-stop reservation；
+- prepared version re-check；
 - 密码 / Secret 是否落库或进日志；
 - 提交临时文件是否安全清理。
 
-### 6. Tests / Guardrails
+### 7. Tests / Guardrails
 
 每个 P0 / P1 问题都回答：
 
@@ -105,7 +142,53 @@ Domain Gap
 现有哪个测试应该挡住？
 ```
 
-如果没有，指出缺失测试。优先补能锁住领域行为的回归测试，不为了覆盖率堆测试。
+如果没有，指出缺失测试。优先补能锁住领域行为和架构边界的回归测试，不为了覆盖率堆测试。
+
+迁移期间：
+
+- `RealtimeArchitectureTest` 继续作为基础边界安全网；
+- Domain guardrail 不得因为 package move 被删除；
+- 当 Definition / Execution / Reconcile 等目标 package 稳定后，再逐步补完整 dependency graph / corridor tests；
+- 不要提前把临时 `service/` 依赖写成永久 architecture whitelist。
+
+## Refactor PR Rules
+
+纯结构重构默认遵守：
+
+```text
+一个 PR 一个主要边界
+package move / class split / behavior change 尽量分开
+不顺手改 REST / DB / Flyway / Domain semantics
+不长期保留新旧双入口
+先有行为回归测试，再拆 Execution 高风险路径
+```
+
+好的重构 PR 应让 reviewer 快速回答：
+
+```text
+为什么拆？
+目标 subsystem / role 是什么？
+runtime truth owner 有没有变化？
+public contract 有没有变化？
+哪个测试证明行为没变？
+```
+
+### Domain / Architecture Impact block
+
+涉及核心结构调整的 PR 建议在描述中包含：
+
+```text
+Domain Impact Analysis
+- Aggregate(s):
+- Invariant/lifecycle impact:
+- Domain Gap: yes/no
+
+Architecture Impact Analysis
+- Target subsystem:
+- Stable entry / gateway:
+- Runtime truth owner:
+- Dependency direction changed: yes/no
+```
 
 ## 严重级别
 
@@ -121,13 +204,14 @@ P1 Must Fix
 - 违反 REQUIREMENTS.md / DOMAIN.md
 - 明确并发、幂等、事务、兼容性缺陷
 - 高概率导致运行故障
+- 引入明确的长期架构越界并破坏稳定边界
 
 P2 Suggestion
 - 有明确收益的可维护性、性能或测试改进
-- 不阻塞合并
+- 非阻塞架构收敛建议
 ```
 
-纯命名、格式、个人风格偏好不要作为问题提交，除非会造成真实歧义或风险。
+纯命名、格式、个人风格偏好不要作为问题提交，除非会造成真实歧义或边界风险。
 
 ## 每个问题必须有证据
 
@@ -136,8 +220,8 @@ P2 Suggestion
 ```text
 位置：文件 / 行或方法
 级别：P0 / P1 / P2
-依据：Requirement / Domain rule / correctness fact
-场景：什么输入或并发顺序会触发
+依据：Requirement / Domain / Architecture / correctness fact
+场景：什么输入、依赖关系或并发顺序会触发
 风险：会造成什么结果
 建议：修复方向，不必替作者重写整段代码
 测试：应补或应命中的测试
@@ -167,6 +251,9 @@ Conclusion: PASS | CHANGES_REQUIRED
 ## Domain Gap
 无 / 说明
 
+## Architecture Gap
+无 / 说明
+
 ## Missing Tests
 无 / 说明
 ```
@@ -176,4 +263,4 @@ Conclusion: PASS | CHANGES_REQUIRED
 - 有 P0 / P1 -> `CHANGES_REQUIRED`。
 - 只有 P2 -> 可以 `PASS`，P2 不阻塞。
 - 没发现真实问题 -> 直接 `PASS`，不要为了显得有价值硬凑问题。
-- Review 结论只基于当前需求、领域规则、代码事实和可复现风险，不猜未来需求。
+- Review 结论只基于当前需求、领域规则、架构 contract、代码事实和可复现风险，不猜未来需求。
