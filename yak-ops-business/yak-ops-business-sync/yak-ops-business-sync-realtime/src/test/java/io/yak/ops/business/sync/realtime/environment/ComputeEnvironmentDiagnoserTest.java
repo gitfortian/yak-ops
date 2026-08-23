@@ -14,7 +14,6 @@ import io.yak.ops.business.sync.realtime.engine.FlinkRuntimeEnvironmentProbe;
 import io.yak.ops.business.sync.realtime.repository.ComputeEnvironmentStore;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class ComputeEnvironmentDiagnoserTest {
