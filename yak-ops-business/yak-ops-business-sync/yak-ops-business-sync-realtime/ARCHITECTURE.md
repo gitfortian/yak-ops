@@ -4,7 +4,7 @@
 
 需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，Review 标准看 `REVIEW.md`。
 
-> 当前 Definition application 内部已收敛到 `definition/`。顶层 `service/` 仍承载 Execution、Reconcile、Observability、Environment 等待迁移内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
+> 当前 Definition 与 Execution application 内部已分别收敛到 `definition/`、`execution/`。顶层 `service/` 仍承载 Reconcile、Observability、Environment、RuntimeResolver 等待迁移内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
 
 ## 设计原则
 
@@ -52,7 +52,9 @@ service/
 
 - 不再向 `service/` 增加新的宽泛业务角色；
 - Definition 已迁出的 Validation / YAML / Draft / Publish 职责不得重新放回 `service/`；
-- 后续 PR 应按职责迁出，而不是一次 big-bang rename；
+- Execution 已迁出的 Start / Stop / Restart / Apply 编排职责不得重新放回 `service/`；
+- `service/RealtimeJobService` 已退出 production，不得重新作为跨子系统总入口引入；
+- 后续 PR 应按 Reconcile / Observability / Environment 等职责继续迁出，而不是一次 big-bang rename；
 - 迁出类完成后删除旧入口，不长期保留双路运行语义；
 - transitional package 不是稳定 API，不能据此设计新的跨包依赖。
 
@@ -95,13 +97,13 @@ SyncDefinition
 ## Truth Ownership
 
 ```text
-RealtimeSyncTask        = long-lived task identity + current draft/published references
-DefinitionVersion       = immutable published definition truth
-SyncExecution           = desired/observed lifecycle + runtime execution truth
-RuntimeEnvironmentSnapshot = execution-time compute environment truth
-Runtime Identity        = external job recovery identity
-Task last/latest-*      = query projection / compatibility only
-Flink Job               = external runtime evidence
+RealtimeSyncTask            = long-lived task identity + current draft/published references
+DefinitionVersion           = immutable published definition truth
+SyncExecution               = desired/observed lifecycle + runtime execution truth
+RuntimeEnvironmentSnapshot  = execution-time compute environment truth
+Runtime Identity            = external job recovery identity
+Task last/latest-*          = query projection / compatibility only
+Flink Job                   = external runtime evidence
 ```
 
 如果一个状态可以同时由 Task 字段、Deployment compatibility mirror 和 SyncExecution 决定，必须以 `SyncExecution` 为运行真相，并把其他字段限制为 compatibility / projection。
@@ -133,7 +135,7 @@ ComputeEnvironmentController
 
 `@Service` 只用于这种稳定 Application Facade。内部专业角色使用更准确的角色名和 `@Component` / 普通对象。
 
-Definition 的 Validation / YAML / Draft / Publish 内部职责已经迁出 `service/`。当前 `RealtimeJobService` 只保留迁移期 Execution 生命周期实现；`RealtimeJobLifecycleCoordinator`、EventStream、RuntimeResolver、Environment 等内部角色仍需按后续子系统阶段继续迁移。
+Definition 与 Execution 的 command 内部职责已经迁出 `service/`。当前 `RealtimeJobLifecycleCoordinator`、EventStream、RuntimeResolver、Environment 等内部角色仍需按后续子系统阶段继续迁移。
 
 ## Definition Subsystem
 
@@ -159,16 +161,17 @@ RealtimeJobDefinitionService
         |       `-> unsaved definition preflight
         +-> RealtimeSourceConfigDigestCalculator
         |       `-> Draft/source compatibility digest
-        `-> RealtimeYamlCodec
-                `-> Yak Realtime YAML adapter
+        +-> RealtimeYamlCodec
+        |       `-> Yak Realtime YAML adapter
+        `-> adapter/CdcPipelineSpecCompatibilityMapper
+                `-> legacy Spec <-> Core SyncDefinition
 ```
 
 角色规则：
 
 - `RealtimeJobDefinitionService` 是 Definition 唯一稳定 Application Facade；
-- `Manager / Publisher / Validator / Codec / DigestCalculator` 是内部角色，不使用 `@Service`；
-- `RealtimeJobService` 不再暴露 `create / save / publish / validate / delete` Definition 命令；
-- Definition 内部迁移完成后不保留旧 Validation / YAML 代理层。
+- `Manager / Publisher / Validator / Codec / DigestCalculator / Adapter` 是内部角色，不使用 `@Service`；
+- Definition 内部迁移完成后不保留旧 Validation / YAML / Draft / Publish 代理层。
 
 核心约束：
 
@@ -193,30 +196,58 @@ RestartExecution
 ApplyPublishedVersion
 ```
 
-目标协作模型：
+当前协作结构：
 
 ```text
-RealtimeJobExecutionService
+RealtimeJobExecutionService                 @Service / stable application facade
         |
-        +-> Execution Coordinator
-        +-> Claim / Reservation Manager
-        +-> State Manager
-        +-> Replacement Manager
-        +-> Runtime Resolver
-        +-> Engine Gateway
-        `-> Repository contracts
+        +-> RealtimeExecutionCoordinator     @Component
+        |       +-> RealtimeExecutionStarter
+        |       +-> RealtimeExecutionStateManager
+        |       `-> RealtimeExecutionReplacementManager
+        |
+        +-> RealtimeExecutionPreparation     @Component
+        |       `-> runtime capabilities read boundary
+        |
+        `-> RealtimeJobLifecycleCoordinator  transitional Reconcile boundary
+
+RealtimeExecutionStarter
+        +-> RealtimeExecutionPreparation
+        +-> RealtimeExecutionReservationManager
+        `-> RealtimeExecutionStateManager
+
+RealtimeExecutionReplacementManager
+        +-> RealtimeExecutionPreparation
+        +-> RealtimeExecutionReservationManager
+        +-> RealtimeExecutionStateManager
+        `-> RealtimeExecutionStarter
 ```
 
-实际类名在拆分 PR 中以职责为准，但必须保留以下 contract：
+角色语义：
+
+- `Coordinator`：只负责同一 Task 的 in-process command serialization 与顶层编排；
+- `Preparation`：固定 DefinitionVersion、RuntimeEnvironmentSnapshot、compiled artifact，并负责提交边界 Credential 短生命周期；
+- `ReservationManager`：拥有 Idempotency-Key、single Active/Uncertain claim、replacement-stop reservation 与 DB linearization point；
+- `StateManager`：拥有 Start result commit、Stop、stop-during-start、UNKNOWN/STOPPED 状态提交；
+- `Starter`：执行 prepare -> reservation -> external submit -> state commit；
+- `ReplacementManager`：拥有 RestartExecution / ApplyPublishedVersion 的 target pinning、replacement intent 与 resume contract；
+- `RealtimeJobExecutionService` 是唯一稳定 Execution Application Facade；内部角色全部使用 `@Component`，不冒充 Application Service。
+
+`service/RealtimeJobService` 已从 production 删除。Stage 2 / Wave 5 行为测试通过 test-scope source-compatible adapter 继续运行真实拆分后的 Execution Core；该 adapter 不进入 production artifact，也不是 Spring Bean。
+
+必须保持以下 contract：
 
 - 同一 Task 最多一个 Active / Uncertain Execution；
-- Start 先 reservation，再外部 submit；
-- Idempotency-Key race 可恢复；
-- prepared version 在提交前重新校验；
-- Stop during Start 不能留下失控外部 Job；
-- RestartExecution 固定原 DefinitionVersion；
+- Start 先 DB reservation，再外部 submit；
+- Idempotency-Key race 可以通过已存在 Execution 恢复；
+- prepared DefinitionVersion 在提交前重新校验；
+- Stop during Start 返回 JobId 后必须绑定并立即取消该精确外部 Job；
+- Stop 结果不确定必须进入 `UNKNOWN`，不能伪装 `STOPPED`；
+- RestartExecution 固定当前 Execution 的原 DefinitionVersion；
 - ApplyPublishedVersion 固定命令开始时的 Published Version；
-- `UNKNOWN / CONFLICT` 先 reconcile，不猜测失败。
+- replacement intent 必须持久化 command type / target / Idempotency-Key，STOPPED 后仍可恢复；
+- `UNKNOWN / CONFLICT` 先 reconcile，不猜测失败或创建第二实例；
+- artifact digest 属于 compiled execution artifact，不与 source config / Definition digest 混用。
 
 ## Reconcile Subsystem
 
@@ -267,7 +298,7 @@ Read Model / Observability View
 - checkpoints；
 - metrics。
 
-read side 可以组合多个事实来源，但不得拥有 Start / Stop / Retry / Reconcile 的 command 状态迁移。
+read side 可以组合多个事实来源，但不得拥有 Start / Stop / Retry / Reconcile 的 command 状态迁移。任务详情与 events 直接读取 Repository projection，不再为了 read side 依赖已经退出的 `RealtimeJobService`。
 
 ## Environment / Engine Boundary
 
@@ -312,7 +343,7 @@ Repository contract 不暴露 MyBatis PO / Mapper / Controller DTO；DAO 不依�
 
 1. **先锁行为，再移动代码。** Start / Stop / Restart / Apply / Reconcile 的安全测试先于大规模拆分。
 2. **一个 PR 一个主要边界。** definition、execution、reconcile、observability、environment 分开迁移。
-3. **不做双真相兼容层。** 新入口稳定后删除旧运行入口，不让两套 service 同时决定状态。
+3. **不做双真相兼容层。** 新入口稳定后删除旧 production 入口，不让两套 service 同时决定状态；test-scope fixture 不属于 production compatibility layer。
 4. **不借重构改 REST / DB / Domain semantics。** 真正需要行为变化时单独走 Requirement / Domain review。
 5. **不提前抽 realtime/offline Shared Sync Kernel。** 两个模块可以共享工程思想，但 Core Domain 独立演进。
 6. **现有 architecture test 是安全网，不是最终 dependency contract。** package 收敛后再增加完整 dependency graph / corridor guardrails。
