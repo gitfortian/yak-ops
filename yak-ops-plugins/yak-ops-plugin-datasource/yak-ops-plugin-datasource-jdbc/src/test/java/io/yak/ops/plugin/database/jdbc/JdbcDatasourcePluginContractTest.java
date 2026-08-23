@@ -11,6 +11,7 @@ import io.yak.ops.spi.datasource.DataSourceCapability;
 import io.yak.ops.spi.datasource.DataSourcePlugin;
 import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
 import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FieldType;
+import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.FormField;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -32,14 +33,13 @@ class JdbcDatasourcePluginContractTest {
               DataSourceCapability.TRANSACTIONS,
               DataSourceCapability.SSH_TUNNEL);
       assertThat(descriptor.secretFieldKeys()).contains("password");
-      assertThat(descriptor.connectionForm().allFields())
-          .anySatisfy(
-              field -> {
-                if ("jdbcUrl".equals(field.key())) {
-                  assertThat(field.type()).isEqualTo(FieldType.JDBC_URL);
-                  assertThat(field.jdbcUrlLinkage()).isNotNull();
-                }
-              });
+      FormField jdbcUrlField =
+          descriptor.connectionForm().allFields().stream()
+              .filter(field -> "jdbcUrl".equals(field.key()))
+              .findFirst()
+              .orElseThrow();
+      assertThat(jdbcUrlField.type()).isEqualTo(FieldType.JDBC_URL);
+      assertThat(jdbcUrlField.jdbcUrlLinkage()).isNotNull();
     }
   }
 
