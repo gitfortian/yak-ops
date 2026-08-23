@@ -158,7 +158,7 @@ public class DataSourceServiceImpl implements DataSourceService {
     } catch (RuntimeException exception) {
       definition.markDisconnected();
       repository.updateConnectionStatus(id, definition.getConnStatus());
-      throw exception;
+      throw connectException(exception);
     }
   }
 
@@ -195,14 +195,28 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     ConnectionProfile connectionProfile =
         pluginGateway.normalizeConnection(dbType, connectionJson);
-    pluginGateway.testConnection(dbType, connectionProfile, connectionTimeoutSeconds());
-    return true;
+    try {
+      pluginGateway.testConnection(dbType, connectionProfile, connectionTimeoutSeconds());
+      return true;
+    } catch (RuntimeException exception) {
+      throw connectException(exception);
+    }
   }
 
   @Override
   public List<DataSourceOptionVO> getOptions(String dbType) {
     DataSourceDbType normalizedType = StringUtils.hasText(dbType) ? parseDbType(dbType) : null;
     return repository.findAll(normalizedType).stream().map(viewMapper::option).toList();
+  }
+
+  private DataSourceException connectException(RuntimeException exception) {
+    if (exception instanceof DataSourceException dataSourceException) {
+      return dataSourceException;
+    }
+    return new DataSourceException(
+        DataSourceErrorCode.CONNECT_FAILED,
+        exception.getMessage(),
+        exception);
   }
 
   private int connectionTimeoutSeconds() {
