@@ -3,7 +3,8 @@ package io.yak.ops.business.sync.realtime.definition;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -91,7 +92,13 @@ class RealtimeDefinitionLifecycleTest {
             "new-source-digest",
             ENVIRONMENT_ID);
     verify(store)
-        .event(TASK_ID, null, "DRAFT_SAVED", "DRAFT", "DRAFT", "已保存草稿并生成新定义版本；当前 SyncExecution 不受影响");
+        .event(
+            TASK_ID,
+            null,
+            "DRAFT_SAVED",
+            "DRAFT",
+            "DRAFT",
+            "已保存草稿并生成新定义版本；当前 SyncExecution 不受影响");
   }
 
   @Test
@@ -140,7 +147,7 @@ class RealtimeDefinitionLifecycleTest {
         .hasMessageContaining("定义在校验期间已变化");
 
     verify(gateway).validate(environment, compiled.yaml());
-    verify(store, never()).publish(any(Long.class), any(Integer.class), any());
+    verify(store, never()).publish(anyLong(), anyInt(), any());
   }
 
   private PlatformTransactionManager transactionManager() {
