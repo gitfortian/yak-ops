@@ -28,7 +28,7 @@ Requirement Gap
 - `dbType` 不可变、ConnectionProfile -> `UNKNOWN` 是否保持；
 - Core Domain 是否引入 Spring / MyBatis / Plugin SPI；
 - Application / Runtime 是否绕过 Business Gateway；
-- Gateway 是否暴露 SPI、DTO / VO 或 PO；
+- `DataSourcePluginGateway / DataSourceCatalogGateway / SqlExecutionGateway` 是否暴露 SPI、DTO / VO 或 PO；
 - Business Catalog 或 Plugin `DataSourceCatalog` 是否重新接受 `Map<String,Object>`；
 - Catalog SPI metadata 是否绕过 Adapter 进入 Domain/Application；
 - Plugin API 是否重新依赖 `DataSourcePluginConfigVO` 或其他 Business/HTTP VO；
