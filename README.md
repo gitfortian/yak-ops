@@ -27,7 +27,7 @@ Yak Ops currently keeps a deliberately small and maintainable feature set:
 - system management and security administration.
 
 Realtime synchronization submits Pipeline YAML through the local Flink CDC CLI and manages each
-job through the Flink REST API. See `docs/realtime-sync-mvp.md` for installation and operations.
+job through the Flink REST API. See `yak-ops-business/yak-ops-business-sync/yak-ops-business-sync-realtime/README.md` for the module contract and operations.
 
 ## Quick start
 
