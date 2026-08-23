@@ -2,7 +2,7 @@ package io.yak.ops.business.sync.offline.backfill;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
-import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorGateway;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
@@ -13,7 +13,7 @@ import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
-import io.yak.ops.business.sync.offline.execution.adapter.OfflineBatchScopeExecutionAdapter;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionScopeValidator;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBackfillRequestDTO;
@@ -42,8 +42,8 @@ public class OfflineBackfillPlanner {
   private final OfflineJobDefinitionService definitionService;
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineScheduleRepository scheduleRepository;
-  private final OfflineCursorManager cursorManager;
-  private final OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
+  private final OfflineCursorGateway cursorGateway;
+  private final OfflineExecutionScopeValidator scopeValidator;
   private final OfflineSyncProperties properties;
 
   public PreparedRequest prepare(OfflineBackfillRequestDTO request) {
@@ -162,7 +162,7 @@ public class OfflineBackfillPlanner {
         }
       }
 
-      OfflineSyncCursor existingCursor = cursorManager.find(taskId, entry.getKey()).orElse(null);
+      OfflineSyncCursor existingCursor = cursorGateway.find(taskId, entry.getKey()).orElse(null);
       if (existingCursor != null
           && hasMissing
           && !existingCursor.position().equals(first.afterExclusive())) {
@@ -173,7 +173,7 @@ public class OfflineBackfillPlanner {
               "Cursor 已离开本 Backfill 起点，禁止追加会改变 Cursor 顺序的新 Batch：" + entry.getKey());
         }
       }
-      cursorManager.initializeIfAbsent(
+      cursorGateway.initializeIfAbsent(
           taskId, entry.getKey(), sourceColumn, first.afterExclusive());
     }
   }
@@ -183,7 +183,7 @@ public class OfflineBackfillPlanner {
       List<ScopePlan> plans,
       String logicalJobSpec) {
     for (ScopePlan plan : plans) {
-      scopeExecutionAdapter.apply(taskId, logicalJobSpec, plan.scope());
+      scopeValidator.validate(taskId, logicalJobSpec, plan.scope());
     }
   }
 
