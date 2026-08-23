@@ -106,7 +106,6 @@ class RealtimeWave5VersionCommandRaceTest {
     ResolvedCdcPipeline resolved = mock(ResolvedCdcPipeline.class);
     CompiledPipeline compiled = new CompiledPipeline("pipeline: v4", "v4");
     when(store.deploymentByIdempotencyKey("apply-race")).thenReturn(Optional.empty());
-    // Initial pending check + stable read see RUNNING; DB-lock reservation sees competing Stop.
     when(store.latestDeployment(taskId))
         .thenReturn(Optional.of(running), Optional.of(running), Optional.of(stopAlreadyWon));
     when(store.publishedDefinition(taskId)).thenReturn(Optional.of(published));
@@ -122,7 +121,6 @@ class RealtimeWave5VersionCommandRaceTest {
     RealtimeJobService service =
         new RealtimeJobService(
             store,
-            new ObjectMapper(),
             specValidator,
             new SyncExecutionStateMachine(),
             dataSourceResolver,
