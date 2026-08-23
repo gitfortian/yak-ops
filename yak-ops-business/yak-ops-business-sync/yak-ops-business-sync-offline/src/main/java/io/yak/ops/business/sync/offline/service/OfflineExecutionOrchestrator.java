@@ -4,25 +4,26 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
-import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionEvent;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
-import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
+import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
+import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpRequestException;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpTransportException;
+import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineExecutionEventRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
-import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import io.yak.ops.business.sync.offline.service.OfflineExecutionClaimService.ClaimResult;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -35,10 +36,9 @@ public class OfflineExecutionOrchestrator {
   private final OfflineExecutionClaimService claimService;
   private final OfflineJobDefinitionRepository definitionRepository;
   private final OfflineJobExecutionRepository executionRepository;
+  private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineExecutionEventRepository eventRepository;
-  private final OfflineScheduleRepository scheduleRepository;
   private final LinkUpClient linkUpClient;
-  private final OfflineSyncProperties properties;
   private final ObjectMapper objectMapper;
 
   public OfflineExecutionOrchestrator(
@@ -46,19 +46,17 @@ public class OfflineExecutionOrchestrator {
       OfflineExecutionClaimService claimService,
       OfflineJobDefinitionRepository definitionRepository,
       OfflineJobExecutionRepository executionRepository,
+      OfflineBatchExecutionRepository batchRepository,
       OfflineExecutionEventRepository eventRepository,
-      OfflineScheduleRepository scheduleRepository,
       LinkUpClient linkUpClient,
-      OfflineSyncProperties properties,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
     this.definitionService = definitionService;
     this.claimService = claimService;
     this.definitionRepository = definitionRepository;
     this.executionRepository = executionRepository;
+    this.batchRepository = batchRepository;
     this.eventRepository = eventRepository;
-    this.scheduleRepository = scheduleRepository;
     this.linkUpClient = linkUpClient;
-    this.properties = properties;
     this.objectMapper = objectMapper;
   }
 
@@ -168,15 +166,20 @@ public class OfflineExecutionOrchestrator {
     }
   }
 
+  /** Retry 只在原 Batch 内创建新 Attempt，并使用 Batch/Attempt 1 的冻结证据。 */
   public OfflineJobExecution retryFrom(OfflineJobExecution previous) {
     if (previous == null || previous.getId() == null) {
       throw new IllegalArgumentException("重试来源实例不能为空");
     }
-    return execute(
-        previous.getJobDefinitionId(),
-        "RETRY",
-        previous.getId(),
-        value(previous.getAttemptNo(), 1) + 1);
+    ClaimResult claim = claimService.claimRetry(previous.getId());
+    OfflineJobExecution execution = claim.getExecution();
+    if (claim.isReused()
+        && !OfflineExecutionStatus.CREATED.name().equalsIgnoreCase(execution.getStatus())) {
+      return execution;
+    }
+    return submitClaim(
+        claim,
+        definitionService.resolveExecutionJobSpec(claim.getLogicalJobSpecJson()));
   }
 
   public OfflineJobExecution cancel(Long id) {
@@ -269,10 +272,28 @@ public class OfflineExecutionOrchestrator {
     execution.setQps(sourceAverageQps > 0D ? sourceAverageQps : sinkAverageQps);
   }
 
-  public void markLost(OfflineJobExecution execution, String message) {
-    if (execution != null && OfflineExecutionStatus.isActive(execution.getStatus())) {
-      markTerminal(execution, OfflineExecutionStatus.LOST, message, null, true);
-    }
+  /** 结果无法确认时进入 UNKNOWN，继续 reconcile，并明确禁止自动 Retry。 */
+  public void markUnknown(OfflineJobExecution execution, String message) {
+    if (execution == null || !OfflineExecutionStatus.isActive(execution.getStatus())) return;
+    if (OfflineExecutionStatus.UNKNOWN.name().equalsIgnoreCase(execution.getStatus())) return;
+
+    String previous = execution.getStatus();
+    execution.setStatus(OfflineExecutionStatus.UNKNOWN.name());
+    execution.setStateVersion(value(execution.getStateVersion(), 0L) + 1L);
+    execution.setErrorMessage(message);
+    execution.setNextRetryTime(null);
+    execution.setEndTime(null);
+    execution.setLastSyncTime(LocalDateTime.now());
+    execution.setUpdateTime(LocalDateTime.now());
+    executionRepository.update(execution);
+    updateDefinition(execution, OfflineExecutionStatus.UNKNOWN);
+    record(
+        execution,
+        previous,
+        OfflineExecutionStatus.UNKNOWN.name(),
+        "UNKNOWN",
+        message,
+        null);
   }
 
   public OfflineJobExecution require(Long id) {
@@ -332,29 +353,30 @@ public class OfflineExecutionOrchestrator {
     record(execution, previous, target.name(), type, message, payload);
   }
 
+  /** 使用 Batch 创建时冻结的 RetryPolicy Snapshot，禁止回读 current SchedulePolicy。 */
   private void configureRetry(
       OfflineJobExecution execution,
       OfflineExecutionStatus status,
       boolean retryable) {
     execution.setNextRetryTime(null);
-    if (!retryable
-        || (status != OfflineExecutionStatus.FAILED && status != OfflineExecutionStatus.LOST)) {
-      return;
-    }
-    OfflineSchedule schedule = scheduleRepository.findSchedule(execution.getJobDefinitionId());
-    int attempts = schedule == null
-        ? properties.getControl().getDefaultMaxAttempts()
-        : schedule.retryMaxAttempts();
-    int backoff = schedule == null
-        ? properties.getControl().getDefaultRetryBackoffSeconds()
-        : schedule.retryBackoffSeconds();
-    if (value(execution.getAttemptNo(), 1) < Math.max(1, attempts)) {
-      execution.setNextRetryTime(LocalDateTime.now().plusSeconds(Math.max(1, backoff)));
+    if (!retryable || status != OfflineExecutionStatus.FAILED) return;
+    RetryPolicySnapshot retryPolicy = frozenRetryPolicy(execution);
+    if (retryPolicy == null) return;
+    if (value(execution.getAttemptNo(), 1) < retryPolicy.maxAttempts()) {
+      execution.setNextRetryTime(
+          LocalDateTime.now().plusSeconds(Math.max(0, retryPolicy.backoffSeconds())));
     }
   }
 
+  private RetryPolicySnapshot frozenRetryPolicy(OfflineJobExecution execution) {
+    Long batchId = execution.getBatchId();
+    if (batchId == null || batchId <= 0L) return null;
+    BatchExecution batch = batchRepository.findById(batchId).orElse(null);
+    if (batch == null || !Objects.equals(execution.getJobDefinitionId(), batch.taskId())) return null;
+    return batch.snapshot().retryPolicy();
+  }
+
   private boolean retryable(LinkUpJobResponse response, OfflineExecutionStatus status) {
-    if (status == OfflineExecutionStatus.LOST) return true;
     if (status != OfflineExecutionStatus.FAILED) return false;
     String code = response == null ? null : response.getErrorCode();
     if (!StringUtils.hasText(code)) return true;

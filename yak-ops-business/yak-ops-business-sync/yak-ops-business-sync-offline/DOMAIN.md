@@ -56,25 +56,23 @@ BatchExecution
 
 ## Current Transition
 
-当前代码尚未完全满足上述目标模型。已确认的主要 Domain Debt：
+当前代码尚未完全满足上述目标模型。Wave 2 / Wave 3 已解决 Trigger、Schedule BatchKey、Retry 漂移与 UNKNOWN 自动重试问题；仍保留的主要 Domain Debt：
 
 ```text
 OfflineJobExecution = legacy 运行链仍以 execution 为中心
-retryFrom()          = 回读 current Task
-configureRetry()     = 回读 current RetryPolicy
-LOST                  = 当前会自动 Retry，应迁移为 UNKNOWN 语义
-Schedule              = 缺少稳定 BatchKey
-Task last-*           = 仍部分参与生命周期判断
+Batch status         = 已持久化，但尚未成为完整 runtime truth
+Task last-*          = 仍部分参与生命周期判断
+Legacy history       = Wave 1 前 execution 允许没有 batch_id，不可安全 Retry
 ```
 
-Wave 0 已完成 Core VO 与兼容映射；Wave 1 已新增 Batch persistence，并给 legacy execution 增加 nullable `batch_id` 与安全绑定能力。现有 Trigger/Retry/Schedule 尚未切换到 Batch，因此不得把“Batch 表已存在”理解成运行真相已经迁移。
+Wave 2 已切成 `Trigger -> Batch -> Attempt 1`，Schedule BatchKey 固定为 `scheduleId + plannedFireTime`。Wave 3 已把 Retry 切成原 Batch 内新 Attempt：从 Batch 读取冻结的 Snapshot / RetryPolicy，从 Attempt 1 读取过渡期冻结 JobSpec；`retry_created` 通过 CAS reservation 与下一 Attempt 创建处于同一事务。`LOST` 仅作为旧数据兼容输入并统一解释为 `UNKNOWN`，UNKNOWN 继续 reconcile，不进入自动 Retry。
 
 ```text
 Wave 0  DONE  Core VO + compatibility mapper
 Wave 1  DONE  Batch persistence + execution.bind(batch_id)
-Wave 2  NEXT  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
-Wave 3        Retry / UNKNOWN + durable retry reservation
-Wave 4        Runtime truth -> Batch/Attempt; Task last-* projection only
+Wave 2  DONE  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
+Wave 3  DONE  Retry / UNKNOWN + durable retry reservation
+Wave 4  NEXT  Runtime truth -> Batch/Attempt; Task last-* projection only
 Wave 5        Backfill / Cursor
 Wave 6        Legacy cleanup
 ```

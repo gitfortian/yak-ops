@@ -18,6 +18,7 @@ public interface OfflineJobExecutionRepository {
   boolean hasActiveExecution(Long definitionId);
   List<OfflineJobExecution> findActiveExecutions(int limit);
   List<OfflineJobExecution> findRetryCandidates(LocalDateTime now, int limit);
-  void markRetryCreated(Long executionId);
+  /** 原子保留一次 FAILED Attempt 的 Retry 创建权。 */
+  boolean reserveRetry(Long executionId);
   PageData<OfflineJobExecution> page(OfflineExecutionQuery query);
 }

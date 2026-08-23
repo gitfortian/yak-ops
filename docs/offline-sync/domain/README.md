@@ -1,6 +1,6 @@
 # Offline Sync Domain
 
-> 当前实现阶段：Stage 6 / Wave 1。本文保留当前代码到目标领域的迁移映射；日常开发规则以模块 `DOMAIN.md` 为准。
+> 当前实现阶段：Stage 6 / Wave 3。本文保留当前代码到目标领域的迁移映射；日常开发规则以模块 `DOMAIN.md` 为准。
 
 ## 1. 目标模型
 
@@ -33,57 +33,47 @@ BatchExecution
 | `OfflineSchedule` | SchedulePolicy + RetryPolicy + runtime projection | ADAPT |
 | `yak_offline_batch_execution` | `BatchExecution` persistence | WAVE 1 DONE |
 | `yak_offline_job_execution.batch_id` | Attempt -> Batch 绑定 | WAVE 1 DONE / nullable |
+| Trigger claim | `Trigger -> Batch -> Attempt 1` | WAVE 2 DONE |
+| Schedule identity | `scheduleId + plannedFireTime` BatchKey | WAVE 2 DONE |
+| `retry_created` | FAILED Attempt 的 durable Retry reservation | WAVE 3 DONE |
+| Retry Attempt | same Batch + frozen Snapshot/RetryPolicy | WAVE 3 DONE |
+| `UNKNOWN` / legacy `LOST` | 不确定结果，持续 reconcile，不自动 Retry | WAVE 3 DONE |
 | `OfflineJobExecution` | legacy 运行链仍混合 Batch + Attempt | MIGRATE |
 | `attempt_no / retry_from_execution_id` | Attempt 次序/血缘 | KEEP |
 | `idempotency_key / external_execution_id` | Attempt 幂等与外部提交身份 | KEEP |
 | `engine_job_id / worker_instance_id` | Engine evidence | KEEP |
 | metrics / error / start/end | Attempt 运行证据 | KEEP |
-| legacy execution snapshot | 过渡期兼容副本 | MIGRATE |
+| legacy execution snapshot | 过渡期兼容副本；Retry 从 Attempt 1 读取冻结 JobSpec | MIGRATE |
 | `OfflineExecutionEvent` | Attempt 事件历史 | KEEP |
 | Task `last-*` | 只允许做 Read Model projection | MIGRATE |
 | Link-Up / credential resolver | Infrastructure boundary | KEEP |
 
-## 3. 仍未解决的 Domain Debt
-
-### Trigger 尚未切 Batch
-
-Batch 表已经存在，但当前手动/调度/工作流执行仍直接创建 legacy execution。Wave 2 才切成：
-
-```text
-Trigger -> claim Batch -> create Attempt 1
-```
-
-### Retry 漂移
-
-当前 `retryFrom(previous)` 会重新读取 current Task；`configureRetry()` 还会读取 current Schedule/RetryPolicy。
-
-目标：
-
-```text
-Retry
- -> same Batch
- -> same ExecutionSnapshot
- -> same RetryPolicy Snapshot
- -> new Attempt
-```
-
-### LOST 自动重试
-
-当前 `LOST` 会进入 retry candidate。目标中无法确认引擎结果属于 `UNKNOWN`，必须先 reconcile，不能直接 Retry。
-
-### Schedule 幂等不足
-
-当前 Schedule 仍主要靠 `hasActiveExecution(taskId)` 防重复。Wave 2 必须使用：
-
-```text
-SCHEDULE BatchKey = scheduleId + plannedFireTime
-```
+## 3. 当前仍未解决的 Domain Debt
 
 ### Runtime truth 尚未切换
 
-Task `lastJobStatus` 仍参与部分命令判断；生命周期最终必须只读 Batch/Attempt。
+Batch 已经真实创建，Retry/UNKNOWN 也已经按 Batch 规则运行，但 Task `lastJobStatus` 和 legacy execution 查询仍参与部分命令判断。
 
-## 4. Wave 1 Persistence
+Wave 4 目标：
+
+```text
+Runtime truth
+  -> BatchExecution
+  -> latest ExecutionAttempt
+
+Task last-*
+  -> projection only
+```
+
+### Batch 生命周期尚未完整 dual-write
+
+`yak_offline_batch_execution.status` 已有持久化字段，但当前执行状态更新仍主要落在 legacy execution；Wave 4 才会把 Batch / Attempt 生命周期切成运行真相。
+
+### Legacy history 无 Batch identity
+
+Wave 1 前历史 execution 允许 `batch_id = NULL`。这类记录没有冻结的 BatchScope / RetryPolicy Snapshot，因此 Wave 3 明确禁止从它们安全 Retry，不通过回读 current Task/SchedulePolicy 猜测历史语义。
+
+## 4. Wave 1-3 已完成迁移
 
 当前持久化关系：
 
@@ -97,24 +87,28 @@ yak_offline_batch_execution
 yak_offline_job_execution
 ```
 
-Wave 1 约束：
+已完成约束：
 
-- 新增 Batch 表，不重建旧 execution/event 历史；
 - execution `batch_id` nullable，旧记录不要求回填；
 - `bindBatch(executionId, batchId)` 只允许 `NULL -> batchId` 或重复绑定同一个 Batch；
+- Trigger 先创建 Batch，再创建 Attempt 1；
+- Schedule BatchKey 使用稳定 planned fire identity；
+- Retry 不创建新 Batch，不回读 current Task；
+- RetryPolicy 从 Batch `ExecutionSnapshot` 读取，不回读 current SchedulePolicy；
+- Retry 使用 Attempt 1 已冻结的逻辑 JobSpec，只在提交边界解析最新凭据；
+- `retry_created` 通过 CAS reservation 防止并发创建重复 Attempt，reservation 与新 Attempt insert 同事务；
+- FAILED 才能 Retry；UNKNOWN / legacy LOST 只 reconcile；
 - 不创建物理 FK；
-- Batch Repository 只持久化 Batch 业务身份、Scope、Snapshot/RetryPolicy 和状态；
-- Engine Job、metrics、error 继续属于 Attempt persistence；
-- 现有 Service/Orchestrator/Schedule/Retry 尚不使用 Batch Repository。
+- Engine Job、metrics、error 继续属于 Attempt persistence。
 
 ## 5. 迁移波次
 
 ```text
 Wave 0  DONE  Core VO + compatibility mapper
 Wave 1  DONE  Batch persistence + execution.bind(batch_id)
-Wave 2  NEXT  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
-Wave 3        Retry / UNKNOWN + durable retry reservation
-Wave 4        Runtime truth -> Batch/Attempt; Task last-* projection only
+Wave 2  DONE  Trigger -> Batch -> Attempt 1 + Schedule BatchKey
+Wave 3  DONE  Retry / UNKNOWN + durable retry reservation
+Wave 4  NEXT  Runtime truth -> Batch/Attempt; Task last-* projection only
 Wave 5        Backfill / Cursor
 Wave 6        Legacy cleanup
 ```
@@ -123,8 +117,8 @@ Wave 6        Legacy cleanup
 
 ## 6. 当前结论
 
-1. Batch 已有真实持久化身份，但尚未成为现有运行链的入口。
-2. `yak_offline_job_execution` 继续演进为 Attempt persistence，不推倒重建。
-3. Wave 2 是第一次运行链切换：Trigger 先 claim Batch，再创建 Attempt 1。
-4. Retry/UNKNOWN、Task runtime truth、Backfill/Cursor 继续按后续 Wave 独立迁移。
+1. Batch 已成为 Trigger 的真实业务身份，Attempt 1 与后续 Retry Attempt 都绑定同一 Batch。
+2. Retry 已固定 Batch/Scope/Snapshot/RetryPolicy，不再通过 current Task/SchedulePolicy 漂移。
+3. UNKNOWN 已与 FAILED 分离，不确定结果只 reconcile，不自动 Retry。
+4. `yak_offline_job_execution` 继续作为过渡期 Attempt persistence；Batch/Attempt runtime truth 在 Wave 4 切换。
 5. 暂不引入 immutable DefinitionVersion，也不抽 Realtime/Offline Shared Kernel。

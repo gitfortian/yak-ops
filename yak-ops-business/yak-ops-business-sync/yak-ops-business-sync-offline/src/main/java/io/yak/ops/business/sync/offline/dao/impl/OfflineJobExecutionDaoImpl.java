@@ -22,7 +22,7 @@ import org.springframework.util.StringUtils;
 public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
 
   private static final List<String> ACTIVE_STATUSES =
-      List.of("CREATED", "SUBMITTED", "QUEUED", "RUNNING");
+      List.of("CREATED", "SUBMITTED", "QUEUED", "RUNNING", "UNKNOWN", "LOST");
 
   private final OfflineJobExecutionMapper mapper;
 
@@ -97,8 +97,9 @@ public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
   public List<OfflineJobExecutionPO> selectRetryCandidates(LocalDateTime now, int limit) {
     return mapper.selectList(
         Wrappers.<OfflineJobExecutionPO>lambdaQuery()
-            .in(OfflineJobExecutionPO::getStatus, List.of("FAILED", "LOST"))
+            .eq(OfflineJobExecutionPO::getStatus, "FAILED")
             .eq(OfflineJobExecutionPO::getRetryCreated, false)
+            .isNotNull(OfflineJobExecutionPO::getBatchId)
             .isNotNull(OfflineJobExecutionPO::getNextRetryTime)
             .le(OfflineJobExecutionPO::getNextRetryTime, now)
             .orderByAsc(OfflineJobExecutionPO::getNextRetryTime)
@@ -106,13 +107,18 @@ public class OfflineJobExecutionDaoImpl implements OfflineJobExecutionDao {
   }
 
   @Override
-  public void markRetryCreated(Long executionId, LocalDateTime updateTime) {
-    mapper.update(
+  public boolean reserveRetry(Long executionId, LocalDateTime updateTime) {
+    if (executionId == null || executionId <= 0L) return false;
+    return mapper.update(
         null,
         Wrappers.<OfflineJobExecutionPO>lambdaUpdate()
             .eq(OfflineJobExecutionPO::getId, executionId)
+            .eq(OfflineJobExecutionPO::getStatus, "FAILED")
+            .eq(OfflineJobExecutionPO::getRetryCreated, false)
+            .isNotNull(OfflineJobExecutionPO::getBatchId)
             .set(OfflineJobExecutionPO::getRetryCreated, true)
-            .set(OfflineJobExecutionPO::getUpdateTime, updateTime));
+            .set(OfflineJobExecutionPO::getNextRetryTime, null)
+            .set(OfflineJobExecutionPO::getUpdateTime, updateTime)) > 0;
   }
 
   @Override
