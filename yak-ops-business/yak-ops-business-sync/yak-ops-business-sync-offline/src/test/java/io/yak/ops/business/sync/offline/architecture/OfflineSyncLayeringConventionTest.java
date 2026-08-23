@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.offline.controller.OfflineBackfillController;
 import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobDefinitionController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobExecutionController;
+import io.yak.ops.business.sync.offline.cursor.OfflineCursorGateway;
 import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;
 import io.yak.ops.business.sync.offline.dao.OfflineBatchExecutionDao;
 import io.yak.ops.business.sync.offline.dao.OfflineExecutionEventDao;
@@ -22,6 +23,7 @@ import io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime;
 import io.yak.ops.business.sync.offline.execution.OfflineExecutionAttemptFactory;
 import io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager;
 import io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionScopeValidator;
 import io.yak.ops.business.sync.offline.execution.OfflineExecutionStateManager;
 import io.yak.ops.business.sync.offline.execution.OfflineExistingBatchClaimManager;
 import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
@@ -36,6 +38,7 @@ import io.yak.ops.business.sync.offline.repository.OfflineExecutionIdempotencyRe
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
+import io.yak.ops.business.sync.offline.schedule.OfflineScheduleExecutionGateway;
 import io.yak.ops.business.sync.offline.schedule.OfflineScheduleHandler;
 import io.yak.ops.common.bean.po.sync.offline.OfflineBatchExecutionPO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineExecutionEventPO;
@@ -67,10 +70,6 @@ class OfflineSyncLayeringConventionTest {
       "io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime",
       "io.yak.ops.business.sync.offline.execution.query.",
       "io.yak.ops.business.sync.offline.execution.adapter.");
-
-  private static final Set<String> EXECUTION_INTERNAL_FACADE_EXCEPTIONS = Set.of(
-      "definition/OfflineJobDefinitionService.java",
-      "backfill/OfflineBackfillPlanner.java");
 
   private static final Set<String> LEGACY_ROLE_NAMES = Set.of(
       "OfflineExecutionOrchestrator",
@@ -152,42 +151,38 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
-  void backgroundEntrypointsReachExecutionThroughFacade() {
-    for (Class<?> type : List.of(
-        OfflineScheduleHandler.class,
-        OfflineBackfillDispatcher.class,
-        OfflineExecutionReconciler.class)) {
-      List<Class<?>> dependencies = fieldTypes(type);
-
-      assertThat(dependencies)
-          .as("%s must enter execution through OfflineJobExecutionService", type.getSimpleName())
-          .contains(OfflineJobExecutionService.class);
-
-      for (Class<?> dependency : dependencies) {
-        String name = dependency.getName();
-        assertThat(name)
-            .as("%s must not depend on an execution internal component", type.getSimpleName())
-            .doesNotContain("OfflineExecutionCoordinator")
-            .doesNotContain("OfflineExecutionClaimManager")
-            .doesNotContain("OfflineExistingBatchClaimManager")
-            .doesNotContain("OfflineExecutionStateManager")
-            .doesNotContain("OfflineBatchRuntime")
-            .doesNotContain(".execution.query.")
-            .doesNotContain(".execution.adapter.");
-      }
-    }
+  void stageTwelveExplicitBoundariesAreImplemented() {
+    assertThat(OfflineCursorGateway.class.isAssignableFrom(OfflineCursorManager.class)).isTrue();
+    assertThat(OfflineExecutionScopeValidator.class.isAssignableFrom(OfflineBatchScopeExecutionAdapter.class))
+        .isTrue();
+    assertThat(OfflineScheduleExecutionGateway.class.isAssignableFrom(OfflineJobExecutionService.class))
+        .isTrue();
   }
 
   @Test
-  void nonFacadeProductionCodeDoesNotImportExecutionInternals() throws IOException {
+  void backgroundEntrypointsUseOnlyDeclaredExecutionCorridors() {
+    for (Class<?> type : List.of(OfflineBackfillDispatcher.class, OfflineExecutionReconciler.class)) {
+      List<Class<?>> dependencies = fieldTypes(type);
+      assertThat(dependencies)
+          .as("%s must enter execution through OfflineJobExecutionService", type.getSimpleName())
+          .contains(OfflineJobExecutionService.class);
+      assertNoExecutionInternals(type, dependencies);
+    }
+
+    List<Class<?>> scheduleDependencies = fieldTypes(OfflineScheduleHandler.class);
+    assertThat(scheduleDependencies)
+        .contains(OfflineScheduleExecutionGateway.class)
+        .doesNotContain(OfflineJobExecutionService.class);
+    assertNoExecutionInternals(OfflineScheduleHandler.class, scheduleDependencies);
+  }
+
+  @Test
+  void nonExecutionProductionCodeDoesNotImportExecutionInternals() throws IOException {
     Path root = productionRoot();
     try (Stream<Path> paths = Files.walk(root)) {
       for (Path file : paths.filter(path -> path.toString().endsWith(".java")).toList()) {
         String relative = root.relativize(file).toString().replace('\\', '/');
-        if (relative.startsWith("execution/")
-            || EXECUTION_INTERNAL_FACADE_EXCEPTIONS.contains(relative)) {
-          continue;
-        }
+        if (relative.startsWith("execution/")) continue;
 
         String source = Files.readString(file);
         for (String forbidden : EXECUTION_INTERNAL_IMPORTS) {
@@ -280,6 +275,21 @@ class OfflineSyncLayeringConventionTest {
 
     Field batchId = OfflineJobExecutionPO.class.getDeclaredField("batchId");
     assertThat(batchId.getType()).isEqualTo(Long.class);
+  }
+
+  private void assertNoExecutionInternals(Class<?> owner, List<Class<?>> dependencies) {
+    for (Class<?> dependency : dependencies) {
+      String name = dependency.getName();
+      assertThat(name)
+          .as("%s must not depend on an execution internal component", owner.getSimpleName())
+          .doesNotContain("OfflineExecutionCoordinator")
+          .doesNotContain("OfflineExecutionClaimManager")
+          .doesNotContain("OfflineExistingBatchClaimManager")
+          .doesNotContain("OfflineExecutionStateManager")
+          .doesNotContain("OfflineBatchRuntime")
+          .doesNotContain(".execution.query.")
+          .doesNotContain(".execution.adapter.");
+    }
   }
 
   private List<Class<?>> fieldTypes(Class<?> type) {
