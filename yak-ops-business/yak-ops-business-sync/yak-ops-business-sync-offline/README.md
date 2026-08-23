@@ -1,5 +1,11 @@
 # Yak Ops Offline Sync
 
+## 领域建设
+
+离线同步正在按独立领域逐步建模。Stage 1 只定义边界和统一语言，不改变现有实现：
+
+- [Offline Sync Domain — Stage 1](../../../docs/offline-sync/domain/README.md)
+
 离线同步一期只承担三件事：任务配置、Link-Up 执行代理、执行历史。
 
 ```text
