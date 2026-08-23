@@ -131,8 +131,8 @@ public class OfflineJobExecutionService {
     orchestrator.applySnapshot(execution, response, type);
   }
 
-  public void markLost(OfflineJobExecution execution, String message) {
-    orchestrator.markLost(execution, message);
+  public void markUnknown(OfflineJobExecution execution, String message) {
+    orchestrator.markUnknown(execution, message);
   }
 
   private OfflineBatchOperationVO batch(OfflineBatchOperationDTO request, boolean execute) {

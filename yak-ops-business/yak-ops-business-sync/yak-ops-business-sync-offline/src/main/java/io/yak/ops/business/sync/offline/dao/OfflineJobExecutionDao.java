@@ -26,7 +26,8 @@ public interface OfflineJobExecutionDao {
 
   List<OfflineJobExecutionPO> selectRetryCandidates(LocalDateTime now, int limit);
 
-  void markRetryCreated(Long executionId, LocalDateTime updateTime);
+  /** 原子保留一次 FAILED Attempt 的 Retry 创建权。 */
+  boolean reserveRetry(Long executionId, LocalDateTime updateTime);
 
   IPage<OfflineJobExecutionPO> selectPage(PageQuery query);
 

@@ -20,6 +20,8 @@ import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepositor
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -58,22 +60,25 @@ public class OfflineExecutionClaimService {
       String triggerType,
       Long retryFromExecutionId,
       int attemptNo) {
+    Mapping trigger = LegacyBatchTriggerCompatibilityMapper.parse(triggerType);
+    if (retryFromExecutionId != null
+        || attemptNo > 1
+        || "RETRY".equalsIgnoreCase(trigger.legacyTriggerType())) {
+      throw new IllegalArgumentException("Retry 必须通过 Batch 内 claimRetry 创建新 Attempt");
+    }
     definitionRepository.lock(definitionId);
     OfflineJobDefinition definition = definitionService.require(definitionId);
     if (!"ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("请先上线任务，再执行运行操作");
     }
     String logicalJobSpec = definitionService.resolveLogicalJobSpec(definition);
-    Mapping trigger = LegacyBatchTriggerCompatibilityMapper.parse(triggerType);
-    return createClaim(
+    return createInitialClaim(
         definition,
         Math.max(1, definition.getVersion() == null ? 1 : definition.getVersion()),
         definition.getConfigDigest(),
         definition.getDefinitionJson(),
         logicalJobSpec,
         trigger,
-        retryFromExecutionId,
-        attemptNo,
         null);
   }
 
@@ -109,6 +114,10 @@ public class OfflineExecutionClaimService {
     if (!StringUtils.hasText(logicalJobSpecJson)) {
       throw new IllegalArgumentException("任务版本快照缺少 JobSpec");
     }
+    Mapping trigger = LegacyBatchTriggerCompatibilityMapper.parse(triggerType);
+    if ("RETRY".equalsIgnoreCase(trigger.legacyTriggerType())) {
+      throw new IllegalArgumentException("Retry 不能通过 claimSnapshot 创建新 Batch");
+    }
     definitionRepository.lock(definitionId);
     OfflineJobDefinition current = definitionService.require(definitionId);
     String normalizedKey = StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : null;
@@ -125,44 +134,141 @@ public class OfflineExecutionClaimService {
         return new ClaimResult(current, logicalJobSpecJson, existing, true);
       }
     }
-    return createClaim(
+    return createInitialClaim(
         current,
         Math.max(1L, definitionVersion),
         configDigest,
         definitionSnapshotJson,
         logicalJobSpecJson,
-        LegacyBatchTriggerCompatibilityMapper.parse(triggerType),
-        null,
-        1,
+        trigger,
         normalizedKey);
   }
 
-  private ClaimResult createClaim(
+  /**
+   * 在原 Batch 内创建下一次 Retry Attempt。
+   *
+   * <p>本方法不读取 current Task / current SchedulePolicy。Retry reservation 与下一 Attempt
+   * 持久化处于同一事务：reservation CAS 失败时不会创建重复 Attempt，Attempt 创建失败时 reservation
+   * 会随事务一起回滚。
+   */
+  @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
+  public ClaimResult claimRetry(Long retryFromExecutionId) {
+    if (retryFromExecutionId == null || retryFromExecutionId <= 0L) {
+      throw new IllegalArgumentException("重试来源实例不能为空");
+    }
+    OfflineJobExecution previous = executionRepository.findById(retryFromExecutionId)
+        .orElseThrow(() -> new IllegalArgumentException("重试来源实例不存在：" + retryFromExecutionId));
+    Long batchId = previous.getBatchId();
+    if (batchId == null || batchId <= 0L) {
+      throw new IllegalStateException("旧执行实例未绑定 Batch，不能按领域规则安全 Retry");
+    }
+
+    BatchExecution batch = batchRepository.findById(batchId)
+        .orElseThrow(() -> new IllegalStateException("Retry 所属 BatchExecution 不存在：" + batchId));
+    if (!Objects.equals(previous.getJobDefinitionId(), batch.taskId())) {
+      throw new IllegalStateException("Retry 来源 Attempt 与 Batch 的 Task 不一致");
+    }
+    if (batch.status().isTerminal()) {
+      throw new IllegalStateException("Batch 已进入终态，不能追加 Retry Attempt");
+    }
+
+    OfflineExecutionStatus previousStatus = parseStatus(previous.getStatus());
+    if (previousStatus == OfflineExecutionStatus.UNKNOWN
+        || "LOST".equalsIgnoreCase(previous.getStatus())) {
+      throw new IllegalStateException("执行结果为 UNKNOWN，必须先 reconcile，禁止盲目 Retry");
+    }
+    if (previousStatus != OfflineExecutionStatus.FAILED) {
+      throw new IllegalStateException("只有明确 FAILED 的 Attempt 才能 Retry");
+    }
+
+    List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId);
+    if (attempts.isEmpty()) {
+      throw new IllegalStateException("Batch 缺少 Attempt 历史，不能 Retry");
+    }
+    int previousAttemptNo = positive(previous.getAttemptNo(), "attemptNo");
+    int nextAttemptNo = previousAttemptNo + 1;
+
+    OfflineJobExecution existingNext = attempts.stream()
+        .filter(attempt -> value(attempt.getAttemptNo(), 1) == nextAttemptNo)
+        .filter(attempt -> Objects.equals(attempt.getRetryFromExecutionId(), previous.getId()))
+        .findFirst()
+        .orElse(null);
+    if (existingNext != null) {
+      return new ClaimResult(null, frozenLogicalJobSpec(attempts), existingNext, true);
+    }
+
+    OfflineJobExecution latest = attempts.stream()
+        .max(
+            Comparator.comparingInt((OfflineJobExecution attempt) -> value(attempt.getAttemptNo(), 1))
+                .thenComparingLong(attempt -> value(attempt.getId(), 0L)))
+        .orElseThrow(() -> new IllegalStateException("Batch 缺少最新 Attempt"));
+    if (!Objects.equals(latest.getId(), previous.getId())) {
+      throw new IllegalStateException("只能从 Batch 最新 Attempt 创建 Retry");
+    }
+
+    RetryPolicySnapshot retryPolicy = batch.snapshot().retryPolicy();
+    if (nextAttemptNo > retryPolicy.maxAttempts()) {
+      throw new IllegalStateException("Retry 已达到 Batch 冻结的最大 Attempt 数");
+    }
+
+    String logicalJobSpec = frozenLogicalJobSpec(attempts);
+    if (!executionRepository.reserveRetry(previous.getId())) {
+      throw new IllegalStateException("Retry 已被其他请求保留或已经创建");
+    }
+
+    LocalDateTime now = LocalDateTime.now();
+    OfflineJobExecution execution = new OfflineJobExecution();
+    execution.setJobDefinitionId(batch.taskId());
+    execution.setBatchId(batch.id());
+    execution.setDefinitionVersion(batch.snapshot().definitionRevision());
+    execution.setEngineBaseUrl(properties.getEngine().getBaseUrl());
+    execution.setExternalExecutionId("yak-offline-" + UUID.randomUUID());
+    execution.setIdempotencyKey(retryIdempotencyKey(batch.id(), nextAttemptNo));
+    execution.setStatus(OfflineExecutionStatus.CREATED.name());
+    execution.setStateVersion(1L);
+    execution.setAttemptNo(nextAttemptNo);
+    execution.setTriggerType("RETRY");
+    execution.setRetryFromExecutionId(previous.getId());
+    execution.setCancellationRequested(false);
+    execution.setRetryCreated(false);
+    execution.setConfigDigest(batch.snapshot().configDigest());
+    execution.setDefinitionSnapshotJson(batch.snapshot().definitionSnapshot());
+    execution.setSubmittedConfig(logicalJobSpec);
+    execution.setSourceRecordCount(0L);
+    execution.setSinkSuccessRecordCount(0L);
+    execution.setSourceReadBytes(0L);
+    execution.setSinkWrittenBytes(0L);
+    execution.setQps(0D);
+    execution.setDurationMillis(0L);
+    execution.setCreateTime(now);
+    execution.setUpdateTime(now);
+    if (!executionRepository.insert(execution) || execution.getId() == null) {
+      throw new IllegalStateException("创建 Retry Attempt 失败");
+    }
+    return new ClaimResult(null, logicalJobSpec, execution, false);
+  }
+
+  private ClaimResult createInitialClaim(
       OfflineJobDefinition definition,
       long definitionVersion,
       String configDigest,
       String definitionSnapshotJson,
       String logicalJobSpecJson,
       Mapping trigger,
-      Long retryFromExecutionId,
-      int attemptNo,
       String idempotencyKey) {
     Long definitionId = definition.getId();
     if (executionRepository.hasActiveExecution(definitionId)) {
       throw new IllegalStateException("任务已有运行中的执行实例，不能重复提交");
     }
 
-    int normalizedAttemptNo = Math.max(1, attemptNo);
     String normalizedIdempotencyKey =
         StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : UUID.randomUUID().toString();
-    Long batchId = resolveBatchId(
+    Long batchId = createBatch(
         definitionId,
         definitionVersion,
         configDigest,
         definitionSnapshotJson,
         trigger,
-        retryFromExecutionId,
-        normalizedAttemptNo,
         normalizedIdempotencyKey);
 
     LocalDateTime now = LocalDateTime.now();
@@ -175,9 +281,9 @@ public class OfflineExecutionClaimService {
     execution.setIdempotencyKey(normalizedIdempotencyKey);
     execution.setStatus(OfflineExecutionStatus.CREATED.name());
     execution.setStateVersion(1L);
-    execution.setAttemptNo(normalizedAttemptNo);
+    execution.setAttemptNo(1);
     execution.setTriggerType(trigger.legacyTriggerType());
-    execution.setRetryFromExecutionId(retryFromExecutionId);
+    execution.setRetryFromExecutionId(null);
     execution.setCancellationRequested(false);
     execution.setRetryCreated(false);
     execution.setConfigDigest(configDigest);
@@ -197,22 +303,13 @@ public class OfflineExecutionClaimService {
     return new ClaimResult(definition, logicalJobSpecJson, execution, false);
   }
 
-  private Long resolveBatchId(
+  private Long createBatch(
       Long definitionId,
       long definitionVersion,
       String configDigest,
       String definitionSnapshotJson,
       Mapping trigger,
-      Long retryFromExecutionId,
-      int attemptNo,
       String idempotencyKey) {
-    if (retryFromExecutionId != null || attemptNo > 1 || "RETRY".equalsIgnoreCase(trigger.legacyTriggerType())) {
-      if (retryFromExecutionId == null) return null;
-      return executionRepository.findById(retryFromExecutionId)
-          .map(OfflineJobExecution::getBatchId)
-          .orElse(null);
-    }
-
     BatchScope scope = BatchScope.fullSelection();
     BatchTrigger batchTrigger = Objects.requireNonNull(trigger.batchTrigger(), "初始执行必须包含 BatchTrigger");
     BatchKey batchKey = trigger.batchKey();
@@ -240,7 +337,7 @@ public class OfflineExecutionClaimService {
         scope,
         snapshot,
         BatchStatus.PENDING,
-        java.util.List.of());
+        List.of());
     BatchExecution saved = batchRepository.insert(batch);
     if (saved.id() == null) throw new IllegalStateException("创建 BatchExecution 后缺少 ID");
     return saved.id();
@@ -257,9 +354,44 @@ public class OfflineExecutionClaimService {
     return new RetryPolicySnapshot(Math.max(1, maxAttempts), Math.max(0, backoffSeconds));
   }
 
+  private String frozenLogicalJobSpec(List<OfflineJobExecution> attempts) {
+    return attempts.stream()
+        .filter(attempt -> value(attempt.getAttemptNo(), 1) == 1)
+        .map(OfflineJobExecution::getSubmittedConfig)
+        .filter(StringUtils::hasText)
+        .findFirst()
+        .map(String::trim)
+        .orElseThrow(() -> new IllegalStateException("Batch Attempt 1 缺少冻结的逻辑 JobSpec"));
+  }
+
+  private String retryIdempotencyKey(Long batchId, int attemptNo) {
+    return "offline-retry:" + batchId + ":" + attemptNo;
+  }
+
+  private OfflineExecutionStatus parseStatus(String status) {
+    try {
+      return OfflineExecutionStatus.parse(status);
+    } catch (IllegalArgumentException exception) {
+      throw new IllegalStateException("Retry 来源 Attempt 状态不合法：" + status, exception);
+    }
+  }
+
+  private int positive(Integer value, String field) {
+    if (value == null || value < 1) throw new IllegalStateException(field + " 必须大于 0");
+    return value;
+  }
+
   private String requireText(String value, String message) {
     if (!StringUtils.hasText(value)) throw new IllegalStateException(message);
     return value.trim();
+  }
+
+  private int value(Integer value, int fallback) {
+    return value == null ? fallback : value;
+  }
+
+  private long value(Long value, long fallback) {
+    return value == null ? fallback : value;
   }
 
   private void validateIdempotentReuse(

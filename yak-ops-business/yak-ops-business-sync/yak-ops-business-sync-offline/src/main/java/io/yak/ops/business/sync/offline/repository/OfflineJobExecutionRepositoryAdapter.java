@@ -77,8 +77,11 @@ public class OfflineJobExecutionRepositoryAdapter implements OfflineJobExecution
   }
 
   @Override
-  public void markRetryCreated(Long executionId) {
-    dao.markRetryCreated(executionId, LocalDateTime.now());
+  public boolean reserveRetry(Long executionId) {
+    if (executionId == null || executionId <= 0L) {
+      throw new IllegalArgumentException("ExecutionId 必须大于 0");
+    }
+    return dao.reserveRetry(executionId, LocalDateTime.now());
   }
 
   @Override

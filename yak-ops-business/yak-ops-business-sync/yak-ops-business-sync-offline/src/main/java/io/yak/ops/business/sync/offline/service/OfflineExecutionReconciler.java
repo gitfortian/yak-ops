@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.offline.service;
 
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;
+import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
@@ -56,11 +57,13 @@ public class OfflineExecutionReconciler {
       RuntimeException probeError) {
     try {
       if (probeError != null) throw probeError;
-      if (node != null
+      boolean workerChanged = node != null
           && StringUtils.hasText(execution.getWorkerInstanceId())
           && StringUtils.hasText(node.getInstanceId())
-          && !execution.getWorkerInstanceId().equals(node.getInstanceId())) {
-        executionService.markLost(execution, "Link-Up instanceId 已变化，旧实例执行结果无法继续确认");
+          && !execution.getWorkerInstanceId().equals(node.getInstanceId());
+      if (workerChanged
+          && OfflineExecutionStatus.parse(execution.getStatus()) != OfflineExecutionStatus.UNKNOWN) {
+        executionService.markUnknown(execution, "Link-Up instanceId 已变化，旧实例执行结果无法继续确认");
         return;
       }
       LinkUpJobResponse response = StringUtils.hasText(execution.getEngineJobId())
@@ -77,8 +80,8 @@ public class OfflineExecutionReconciler {
             "CANCEL_RECONCILED");
       }
     } catch (RuntimeException exception) {
-      if (isPastLostDeadline(execution)) {
-        executionService.markLost(execution, "Link-Up 状态对账超时：" + exception.getMessage());
+      if (isPastUnknownDeadline(execution)) {
+        executionService.markUnknown(execution, "Link-Up 状态对账超时：" + exception.getMessage());
       } else {
         LOG.debug("Offline execution reconcile failed, executionId={}", execution.getId(), exception);
       }
@@ -88,13 +91,12 @@ public class OfflineExecutionReconciler {
   private void retry(OfflineJobExecution execution) {
     try {
       executionService.retryFrom(execution);
-      executionRepository.markRetryCreated(execution.getId());
     } catch (RuntimeException exception) {
       LOG.warn("Offline execution retry failed, executionId={}", execution.getId(), exception);
     }
   }
 
-  private boolean isPastLostDeadline(OfflineJobExecution execution) {
+  private boolean isPastUnknownDeadline(OfflineJobExecution execution) {
     LocalDateTime reference = execution.getLastSyncTime() == null
         ? execution.getCreateTime()
         : execution.getLastSyncTime();

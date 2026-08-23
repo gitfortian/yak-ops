@@ -17,10 +17,12 @@ public enum OfflineExecutionStatus {
   SUCCEEDED,
   FAILED,
   CANCELED,
+  UNKNOWN,
+  /** Wave 3 仅保留旧数据兼容；读取 LOST 时统一解释为 UNKNOWN。 */
   LOST;
 
   private static final Set<OfflineExecutionStatus> ACTIVE =
-      EnumSet.of(CREATED, SUBMITTED, QUEUED, RUNNING);
+      EnumSet.of(CREATED, SUBMITTED, QUEUED, RUNNING, UNKNOWN, LOST);
 
   public boolean isActive() {
     return ACTIVE.contains(this);
@@ -41,6 +43,9 @@ public enum OfflineExecutionStatus {
     if ("CANCELLED".equals(normalized) || "CANCELING".equals(normalized)
         || "CANCELLING".equals(normalized)) {
       return CANCELED;
+    }
+    if ("LOST".equals(normalized)) {
+      return UNKNOWN;
     }
     return valueOf(normalized);
   }

@@ -25,6 +25,17 @@ class OfflineJobExecutionRepositoryAdapterBatchBindingTest {
   }
 
   @Test
+  void delegatesDurableRetryReservationToDao() {
+    OfflineJobExecutionDao dao = mock(OfflineJobExecutionDao.class);
+    when(dao.reserveRetry(org.mockito.ArgumentMatchers.eq(9L), any())).thenReturn(true);
+    OfflineJobExecutionRepositoryAdapter repository =
+        new OfflineJobExecutionRepositoryAdapter(dao);
+
+    assertThat(repository.reserveRetry(9L)).isTrue();
+    verify(dao).reserveRetry(org.mockito.ArgumentMatchers.eq(9L), any());
+  }
+
+  @Test
   void rejectsInvalidBindingIdentityBeforeDao() {
     OfflineJobExecutionDao dao = mock(OfflineJobExecutionDao.class);
     OfflineJobExecutionRepositoryAdapter repository =
@@ -36,5 +47,8 @@ class OfflineJobExecutionRepositoryAdapterBatchBindingTest {
     assertThatThrownBy(() -> repository.bindBatch(9L, 0L))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("BatchExecutionId");
+    assertThatThrownBy(() -> repository.reserveRetry(0L))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("ExecutionId");
   }
 }
