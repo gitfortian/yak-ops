@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconcileCoordinator;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconciler;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,15 +19,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RealtimeJobReconcilerTest {
 
-  @Mock private RealtimeJobLifecycleCoordinator lifecycleCoordinator;
+  @Mock private RealtimeReconcileCoordinator coordinator;
   @Mock private RealtimeJobStore store;
-  private RealtimeJobReconciler reconciler;
+  private RealtimeReconciler reconciler;
 
   @BeforeEach
   void setUp() {
     RealtimeSyncProperties properties = new RealtimeSyncProperties();
     properties.setReconcileLeaseSeconds(30);
-    reconciler = new RealtimeJobReconciler(lifecycleCoordinator, store, properties);
+    reconciler = new RealtimeReconciler(coordinator, store, properties);
   }
 
   @Test
@@ -34,7 +36,7 @@ class RealtimeJobReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(lifecycleCoordinator, never()).reconcileAll();
+    verify(coordinator, never()).reconcileAll();
   }
 
   @Test
@@ -43,6 +45,6 @@ class RealtimeJobReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(lifecycleCoordinator).reconcileAll();
+    verify(coordinator).reconcileAll();
   }
 }

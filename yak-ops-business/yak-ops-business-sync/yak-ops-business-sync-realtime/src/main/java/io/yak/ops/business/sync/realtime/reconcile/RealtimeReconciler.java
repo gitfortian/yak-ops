@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.service;
+package io.yak.ops.business.sync.realtime.reconcile;
 
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
@@ -8,21 +8,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Periodically recovers JobIds and reconciles Yak Ops state against the real Flink runtime. */
+/** Periodically acquires the module lease and reconciles execution state against Flink. */
 @Component
-public class RealtimeJobReconciler {
+public class RealtimeReconciler {
 
-  private static final Logger LOG = LoggerFactory.getLogger(RealtimeJobReconciler.class);
-  private final RealtimeJobLifecycleCoordinator lifecycleCoordinator;
+  private static final Logger LOG = LoggerFactory.getLogger(RealtimeReconciler.class);
+
+  private final RealtimeReconcileCoordinator coordinator;
   private final RealtimeJobStore store;
   private final RealtimeSyncProperties properties;
   private final String leaseOwner = UUID.randomUUID().toString();
 
-  public RealtimeJobReconciler(
-      RealtimeJobLifecycleCoordinator lifecycleCoordinator,
+  public RealtimeReconciler(
+      RealtimeReconcileCoordinator coordinator,
       RealtimeJobStore store,
       RealtimeSyncProperties properties) {
-    this.lifecycleCoordinator = lifecycleCoordinator;
+    this.coordinator = coordinator;
     this.store = store;
     this.properties = properties;
   }
@@ -33,7 +34,7 @@ public class RealtimeJobReconciler {
       if (!store.tryAcquireReconcileLease(leaseOwner, properties.getReconcileLeaseSeconds())) {
         return;
       }
-      lifecycleCoordinator.reconcileAll();
+      coordinator.reconcileAll();
     } catch (RuntimeException exception) {
       LOG.warn("Realtime state reconciliation failed", exception);
     }

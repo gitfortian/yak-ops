@@ -4,7 +4,7 @@
 
 需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，Review 标准看 `REVIEW.md`。
 
-> 当前 Definition 与 Execution application 内部已分别收敛到 `definition/`、`execution/`。顶层 `service/` 仍承载 Reconcile、Observability、Environment、RuntimeResolver 等待迁移内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
+> 当前 Definition、Execution、Reconcile application 内部已分别收敛到 `definition/`、`execution/`、`reconcile/`。顶层 `service/` 仍承载 Observability、Environment、RuntimeResolver 等待迁移内部实现；这些 transitional 结构不代表目标架构。后续重构必须在不改变现有业务 contract 的前提下继续向本文件收敛。
 
 ## 设计原则
 
@@ -53,8 +53,9 @@ service/
 - 不再向 `service/` 增加新的宽泛业务角色；
 - Definition 已迁出的 Validation / YAML / Draft / Publish 职责不得重新放回 `service/`；
 - Execution 已迁出的 Start / Stop / Restart / Apply 编排职责不得重新放回 `service/`；
-- `service/RealtimeJobService` 已退出 production，不得重新作为跨子系统总入口引入；
-- 后续 PR 应按 Reconcile / Observability / Environment 等职责继续迁出，而不是一次 big-bang rename；
+- Reconcile 已迁出的 runtime identity recovery / state convergence / scheduled reconcile 职责不得重新放回 `service/`；
+- `service/RealtimeJobService`、`service/RealtimeJobLifecycleCoordinator`、`service/RealtimeJobReconciler` 已退出 production，不得重新作为跨子系统入口引入；
+- 后续 PR 应按 Observability / Environment 等职责继续迁出，而不是一次 big-bang rename；
 - 迁出类完成后删除旧入口，不长期保留双路运行语义；
 - transitional package 不是稳定 API，不能据此设计新的跨包依赖。
 
@@ -135,7 +136,7 @@ ComputeEnvironmentController
 
 `@Service` 只用于这种稳定 Application Facade。内部专业角色使用更准确的角色名和 `@Component` / 普通对象。
 
-Definition 与 Execution 的 command 内部职责已经迁出 `service/`。当前 `RealtimeJobLifecycleCoordinator`、EventStream、RuntimeResolver、Environment 等内部角色仍需按后续子系统阶段继续迁移。
+Definition、Execution、Reconcile 的内部职责已经迁出 `service/`。EventStream、RuntimeResolver、Environment 等内部角色仍需按后续子系统阶段继续迁移。
 
 ## Definition Subsystem
 
@@ -209,7 +210,8 @@ RealtimeJobExecutionService                 @Service / stable application facade
         +-> RealtimeExecutionPreparation     @Component
         |       `-> runtime capabilities read boundary
         |
-        `-> RealtimeJobLifecycleCoordinator  transitional Reconcile boundary
+        +-> RealtimeReconcileCoordinator     reconcile corridor
+        `-> RealtimeDeleteSafetyChecker      reconcile safety corridor
 
 RealtimeExecutionStarter
         +-> RealtimeExecutionPreparation
@@ -253,27 +255,48 @@ RealtimeExecutionReplacementManager
 
 Realtime Sync 的外部 Flink Job 是长生命周期事实，Reconcile 是一级业务子系统，不是附属定时任务。
 
+当前协作结构：
+
 ```text
-Local SyncExecution
-        +
-Runtime Identity
-        +
-Flink Runtime Evidence
+RealtimeJobExecutionService
         |
-        ▼
-Reconcile
+        +-> RealtimeReconcileCoordinator
+        |       +-> RealtimeRuntimeIdentityRecovery
+        |       `-> RealtimeRuntimeStateReconciler
         |
-        ▼
-Converged SyncExecution state
+        `-> RealtimeDeleteSafetyChecker
+
+RealtimeReconciler (@Scheduled)
+        |
+        +-> reconcile lease
+        `-> RealtimeReconcileCoordinator.reconcileAll()
 ```
 
-Reconcile 负责：
+角色语义：
 
-- 提交结果不确定后的 runtime identity recovery；
-- `UNKNOWN / CONFLICT` 状态收敛；
-- 外部 JobId / 状态恢复；
-- 多实例 reconcile lease；
-- 只根据精确 runtime identity / environment snapshot 对账，不按用户可见任务名猜测外部 Job。
+- `RealtimeReconcileCoordinator`：统一手工与批量对账入口，负责候选 Execution 迭代和连续 Engine failure threshold；
+- `RealtimeRuntimeIdentityRecovery`：只通过持久化 deterministic runtime identity 查找 JobId，负责 recovery grace window 与唯一匹配回填；
+- `RealtimeRuntimeStateReconciler`：只根据 `SyncExecution desired state + Flink RuntimeStatus` 收敛 observed state；
+- `RealtimeDeleteSafetyChecker`：删除元数据前同时验证本地 Execution terminality 与外部 Flink inactivity；
+- `RealtimeReconciler`：只负责定时触发与多实例 lease，拿不到 lease 就不执行批量对账；
+- Reconcile 内部角色全部使用 `@Component`，不新增第二个 Application Service。
+
+Reconcile 必须保持：
+
+- 提交结果不确定时，只有 deterministic runtime identity 可以恢复 JobId；
+- runtime identity 唯一匹配才允许绑定 JobId；
+- 多匹配时 STARTING/RUNNING 类状态进入 `CONFLICT`，STOPPING 保持 `UNKNOWN`，绝不猜任意 JobId；
+- orphan recovery grace window 内不提前把未发现 Job 当作终态；
+- grace window 后，`desired=RUNNING` 且确认无匹配 runtime 才收敛 FAILED；`desired=STOPPED` 才收敛 STOPPED；
+- `RuntimeStatus.UNKNOWN` 只能收敛 `UNKNOWN`，不能伪造 FAILED / STOPPED；
+- `desired=RUNNING` 但 Flink 已 TERMINATED/NONE 才作为 lost runtime 收敛 FAILED；
+- `desired=STOPPED` 但 Flink 仍 RUNNING 时先收敛 STOPPING，再停止该精确 Job；
+- 连续 Engine 失败达到 `reconcileFailureThreshold` 才标记 UNKNOWN，单次短暂故障不污染运行状态；
+- 成功对账后清除该 Task 的连续 Engine failure 计数；
+- 删除前若 Flink 仍 RUNNING 或状态 UNKNOWN，必须拒绝删除；
+- 多实例后台 reconcile 必须先取得 `yak_realtime_runtime_lease`。
+
+`service/RealtimeJobLifecycleCoordinator` 与 `service/RealtimeJobReconciler` 已从 production 删除。Stage 2 / lifecycle 行为测试可通过 test-scope source-compatible fixture 继续执行真实拆分后的 Reconcile Core；该 fixture 不进入 production artifact。
 
 ## Query / Observability
 

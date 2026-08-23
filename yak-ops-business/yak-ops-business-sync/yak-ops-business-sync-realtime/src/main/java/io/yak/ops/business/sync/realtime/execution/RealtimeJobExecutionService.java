@@ -2,7 +2,8 @@ package io.yak.ops.business.sync.realtime.execution;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
-import io.yak.ops.business.sync.realtime.service.RealtimeJobLifecycleCoordinator;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeDeleteSafetyChecker;
+import io.yak.ops.business.sync.realtime.reconcile.RealtimeReconcileCoordinator;
 import org.springframework.stereotype.Service;
 
 /** Stable application entry for realtime execution lifecycle commands. */
@@ -11,15 +12,18 @@ public class RealtimeJobExecutionService {
 
   private final RealtimeExecutionCoordinator executions;
   private final RealtimeExecutionPreparation preparation;
-  private final RealtimeJobLifecycleCoordinator lifecycle;
+  private final RealtimeReconcileCoordinator reconciliation;
+  private final RealtimeDeleteSafetyChecker deleteSafety;
 
   public RealtimeJobExecutionService(
       RealtimeExecutionCoordinator executions,
       RealtimeExecutionPreparation preparation,
-      RealtimeJobLifecycleCoordinator lifecycle) {
+      RealtimeReconcileCoordinator reconciliation,
+      RealtimeDeleteSafetyChecker deleteSafety) {
     this.executions = executions;
     this.preparation = preparation;
-    this.lifecycle = lifecycle;
+    this.reconciliation = reconciliation;
+    this.deleteSafety = deleteSafety;
   }
 
   public RealtimeJobView.Deployment start(long id, String idempotencyKey) {
@@ -39,11 +43,11 @@ public class RealtimeJobExecutionService {
   }
 
   public RealtimeJobView reconcile(long id) {
-    return lifecycle.reconcile(id);
+    return reconciliation.reconcile(id);
   }
 
   public void assertSafeToDelete(long id) {
-    lifecycle.assertSafeToDelete(id);
+    deleteSafety.assertSafeToDelete(id);
   }
 
   public JsonNode capabilities(long runtimeEnvironmentId) {
