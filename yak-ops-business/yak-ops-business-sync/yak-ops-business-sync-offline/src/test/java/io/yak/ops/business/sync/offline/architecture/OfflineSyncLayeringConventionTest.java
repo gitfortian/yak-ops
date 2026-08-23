@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.yak.framework.common.PageData;
 import io.yak.ops.business.sync.offline.backfill.OfflineBackfillDispatcher;
+import io.yak.ops.business.sync.offline.backfill.OfflineBackfillPlanner;
 import io.yak.ops.business.sync.offline.backfill.OfflineBackfillService;
 import io.yak.ops.business.sync.offline.controller.OfflineBackfillController;
 import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
@@ -18,9 +19,13 @@ import io.yak.ops.business.sync.offline.dao.OfflineJobExecutionDao;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionAttemptFactory;
 import io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager;
 import io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator;
+import io.yak.ops.business.sync.offline.execution.OfflineExecutionStateManager;
+import io.yak.ops.business.sync.offline.execution.OfflineExistingBatchClaimManager;
 import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
+import io.yak.ops.business.sync.offline.execution.adapter.OfflineBatchScopeExecutionAdapter;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.reconcile.OfflineExecutionReconciler;
@@ -56,13 +61,16 @@ class OfflineSyncLayeringConventionTest {
   private static final Set<String> EXECUTION_INTERNAL_IMPORTS = Set.of(
       "io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator",
       "io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager",
+      "io.yak.ops.business.sync.offline.execution.OfflineExistingBatchClaimManager",
+      "io.yak.ops.business.sync.offline.execution.OfflineExecutionAttemptFactory",
+      "io.yak.ops.business.sync.offline.execution.OfflineExecutionStateManager",
       "io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime",
       "io.yak.ops.business.sync.offline.execution.query.",
       "io.yak.ops.business.sync.offline.execution.adapter.");
 
   private static final Set<String> EXECUTION_INTERNAL_FACADE_EXCEPTIONS = Set.of(
       "definition/OfflineJobDefinitionService.java",
-      "backfill/OfflineBackfillService.java");
+      "backfill/OfflineBackfillPlanner.java");
 
   private static final Set<String> LEGACY_ROLE_NAMES = Set.of(
       "OfflineExecutionOrchestrator",
@@ -106,10 +114,14 @@ class OfflineSyncLayeringConventionTest {
     for (Class<?> internal : List.of(
         OfflineExecutionCoordinator.class,
         OfflineExecutionClaimManager.class,
+        OfflineExistingBatchClaimManager.class,
+        OfflineExecutionAttemptFactory.class,
+        OfflineExecutionStateManager.class,
         OfflineBatchRuntime.class,
         OfflineCursorManager.class,
         OfflineExecutionQuery.class,
-        OfflineExecutionLogQuery.class)) {
+        OfflineExecutionLogQuery.class,
+        OfflineBackfillPlanner.class)) {
       assertThat(internal.getAnnotation(Component.class))
           .as("%s must remain an internal role component", internal.getSimpleName())
           .isNotNull();
@@ -120,14 +132,32 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
+  void stageElevenCoreResponsibilitiesStayDecomposed() {
+    List<Class<?>> coordinatorDependencies = fieldTypes(OfflineExecutionCoordinator.class);
+    assertThat(coordinatorDependencies)
+        .contains(OfflineExecutionStateManager.class)
+        .doesNotContain(OfflineJobDefinitionRepository.class, OfflineExecutionEventRepository.class);
+
+    List<Class<?>> claimDependencies = fieldTypes(OfflineExecutionClaimManager.class);
+    assertThat(claimDependencies)
+        .contains(OfflineExistingBatchClaimManager.class, OfflineExecutionAttemptFactory.class);
+
+    List<Class<?>> backfillDependencies = fieldTypes(OfflineBackfillService.class);
+    assertThat(backfillDependencies)
+        .contains(OfflineBackfillPlanner.class)
+        .doesNotContain(
+            OfflineCursorManager.class,
+            OfflineScheduleRepository.class,
+            OfflineBatchScopeExecutionAdapter.class);
+  }
+
+  @Test
   void backgroundEntrypointsReachExecutionThroughFacade() {
     for (Class<?> type : List.of(
         OfflineScheduleHandler.class,
         OfflineBackfillDispatcher.class,
         OfflineExecutionReconciler.class)) {
-      List<Class<?>> dependencies = Arrays.stream(type.getDeclaredFields())
-          .map(Field::getType)
-          .toList();
+      List<Class<?>> dependencies = fieldTypes(type);
 
       assertThat(dependencies)
           .as("%s must enter execution through OfflineJobExecutionService", type.getSimpleName())
@@ -139,6 +169,8 @@ class OfflineSyncLayeringConventionTest {
             .as("%s must not depend on an execution internal component", type.getSimpleName())
             .doesNotContain("OfflineExecutionCoordinator")
             .doesNotContain("OfflineExecutionClaimManager")
+            .doesNotContain("OfflineExistingBatchClaimManager")
+            .doesNotContain("OfflineExecutionStateManager")
             .doesNotContain("OfflineBatchRuntime")
             .doesNotContain(".execution.query.")
             .doesNotContain(".execution.adapter.");
@@ -248,6 +280,10 @@ class OfflineSyncLayeringConventionTest {
 
     Field batchId = OfflineJobExecutionPO.class.getDeclaredField("batchId");
     assertThat(batchId.getType()).isEqualTo(Long.class);
+  }
+
+  private List<Class<?>> fieldTypes(Class<?> type) {
+    return Arrays.stream(type.getDeclaredFields()).map(Field::getType).toList();
   }
 
   private Path productionRoot() {

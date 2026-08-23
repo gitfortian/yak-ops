@@ -1,3 +1,166 @@
 package io.yak.ops.business.sync.offline.backfill;
-import static org.assertj.core.api.Assertions.assertThat;import static org.assertj.core.api.Assertions.assertThatThrownBy;import static org.mockito.ArgumentMatchers.any;import static org.mockito.ArgumentMatchers.anyLong;import static org.mockito.Mockito.never;import static org.mockito.Mockito.verify;import static org.mockito.Mockito.when;import io.yak.ops.business.sync.offline.config.OfflineSyncProperties;import io.yak.ops.business.sync.offline.cursor.OfflineCursorManager;import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;import io.yak.ops.business.sync.offline.domain.core.BatchExecution;import io.yak.ops.business.sync.offline.domain.core.BatchStatus;import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;import io.yak.ops.business.sync.offline.execution.adapter.OfflineBatchScopeExecutionAdapter;import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;import io.yak.ops.common.bean.dto.sync.offline.OfflineBackfillRequestDTO;import io.yak.ops.common.bean.dto.sync.offline.OfflineBackfillScopeDTO;import io.yak.ops.common.bean.vo.sync.offline.OfflineBackfillVO;import java.time.LocalDateTime;import java.util.List;import java.util.Optional;import java.util.concurrent.atomic.AtomicLong;import org.junit.jupiter.api.BeforeEach;import org.junit.jupiter.api.Test;import org.junit.jupiter.api.extension.ExtendWith;import org.mockito.ArgumentCaptor;import org.mockito.Mock;import org.mockito.junit.jupiter.MockitoExtension;
-@ExtendWith(MockitoExtension.class)class OfflineBackfillServiceTest {@Mock private OfflineJobDefinitionService definitionService;@Mock private OfflineJobDefinitionRepository definitionRepository;@Mock private OfflineBatchExecutionRepository batchRepository;@Mock private OfflineScheduleRepository scheduleRepository;@Mock private OfflineCursorManager cursorManager;@Mock private OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;private OfflineBackfillService service;@BeforeEach void setUp(){service=new OfflineBackfillService(definitionService,definitionRepository,batchRepository,scheduleRepository,cursorManager,scopeExecutionAdapter,new OfflineSyncProperties());}@Test void oneBackfillRequestMaterializesBatchGroupWithSharedSnapshot(){OfflineJobDefinition definition=definition("ONLINE");when(definitionService.require(10L)).thenReturn(definition);when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{\"kind\":\"BatchSyncJob\"}");when(batchRepository.findByTaskIdAndBatchKey(anyLong(),any())).thenReturn(Optional.empty());AtomicLong sequence=new AtomicLong(100L);when(batchRepository.insert(any(BatchExecution.class))).thenAnswer(invocation->persisted(invocation.getArgument(0),sequence.incrementAndGet()));OfflineBackfillRequestDTO request=new OfflineBackfillRequestDTO();request.setRequestId("backfill-august");request.setScopes(List.of(window(LocalDateTime.of(2026,8,1,0,0),LocalDateTime.of(2026,8,2,0,0)),window(LocalDateTime.of(2026,8,2,0,0),LocalDateTime.of(2026,8,3,0,0))));OfflineBackfillVO result=service.submit(10L,request);assertThat(result.getCreatedCount()).isEqualTo(2);assertThat(result.getReusedCount()).isZero();assertThat(result.getBatchIds()).containsExactly(101L,102L);ArgumentCaptor<BatchExecution> captor=ArgumentCaptor.forClass(BatchExecution.class);verify(batchRepository,org.mockito.Mockito.times(2)).insert(captor.capture());List<BatchExecution>batches=captor.getAllValues();assertThat(batches).allMatch(batch->batch.trigger()==BatchTrigger.BACKFILL);assertThat(batches).allMatch(batch->batch.status()==BatchStatus.PENDING);assertThat(batches.get(0).snapshot()).isEqualTo(batches.get(1).snapshot());verify(scopeExecutionAdapter,org.mockito.Mockito.times(2)).apply(anyLong(),any(),any());verify(definitionRepository).lock(10L);}@Test void cursorBackfillRequiresContinuousRangesAndInitializesRoute(){OfflineJobDefinition definition=definition("ONLINE");when(definitionService.require(10L)).thenReturn(definition);when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{}");when(batchRepository.findByTaskIdAndBatchKey(anyLong(),any())).thenReturn(Optional.empty());AtomicLong sequence=new AtomicLong(100L);when(batchRepository.insert(any(BatchExecution.class))).thenAnswer(invocation->persisted(invocation.getArgument(0),sequence.incrementAndGet()));OfflineBackfillRequestDTO request=new OfflineBackfillRequestDTO();request.setRequestId("cursor-bf");request.setScopes(List.of(cursor("orders","updated_at","100","200"),cursor("orders","updated_at","200","300")));service.submit(10L,request);verify(cursorManager).initializeIfAbsent(10L,"orders","updated_at","100");}@Test void cursorBackfillRejectsGapBeforeCreatingAnyBatch(){OfflineJobDefinition definition=definition("ONLINE");when(definitionService.require(10L)).thenReturn(definition);when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{}");when(batchRepository.findByTaskIdAndBatchKey(anyLong(),any())).thenReturn(Optional.empty());OfflineBackfillRequestDTO request=new OfflineBackfillRequestDTO();request.setRequestId("cursor-gap");request.setScopes(List.of(cursor("orders","updated_at","100","200"),cursor("orders","updated_at","250","300")));assertThatThrownBy(()->service.submit(10L,request)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("连续");verify(batchRepository,never()).insert(any(BatchExecution.class));}@Test void invalidScopeProjectionIsRejectedBeforePendingBatchIsPersisted(){OfflineJobDefinition definition=definition("ONLINE");when(definitionService.require(10L)).thenReturn(definition);when(definitionService.resolveLogicalJobSpec(definition)).thenReturn("{}");when(batchRepository.findByTaskIdAndBatchKey(anyLong(),any())).thenReturn(Optional.empty());when(scopeExecutionAdapter.apply(anyLong(),any(),any())).thenThrow(new IllegalStateException("Wave 5 scoped Batch V1 仅支持单表 source"));OfflineBackfillRequestDTO request=new OfflineBackfillRequestDTO();request.setRequestId("invalid-scope");request.setScopes(List.of(window(LocalDateTime.of(2026,8,1,0,0),LocalDateTime.of(2026,8,2,0,0))));assertThatThrownBy(()->service.submit(10L,request)).isInstanceOf(IllegalStateException.class).hasMessageContaining("单表");verify(batchRepository,never()).insert(any(BatchExecution.class));}private OfflineJobDefinition definition(String releaseState){OfflineJobDefinition definition=new OfflineJobDefinition();definition.setId(10L);definition.setReleaseState(releaseState);definition.setDefinitionJson("{\"definition\":1}");definition.setVersion(7);definition.setConfigDigest("digest-7");return definition;}private OfflineBackfillScopeDTO window(LocalDateTime start,LocalDateTime end){OfflineBackfillScopeDTO scope=new OfflineBackfillScopeDTO();scope.setType("DATA_WINDOW");scope.setStartInclusive(start);scope.setEndExclusive(end);return scope;}private OfflineBackfillScopeDTO cursor(String cursorId,String column,String after,String through){OfflineBackfillScopeDTO scope=new OfflineBackfillScopeDTO();scope.setType("CURSOR_RANGE");scope.setCursorId(cursorId);scope.setCursorColumn(column);scope.setAfterExclusive(after);scope.setThroughInclusive(through);return scope;}private BatchExecution persisted(BatchExecution batch,long id){return new BatchExecution(id,batch.taskId(),batch.batchKey(),batch.trigger(),batch.batchScope(),batch.snapshot(),batch.status(),batch.attempts());}}
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
+import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchKey;
+import io.yak.ops.business.sync.offline.domain.core.BatchScope;
+import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
+import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
+import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
+import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.common.bean.dto.sync.offline.OfflineBackfillRequestDTO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineBackfillVO;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class OfflineBackfillServiceTest {
+
+  @Mock private OfflineJobDefinitionService definitionService;
+  @Mock private OfflineJobDefinitionRepository definitionRepository;
+  @Mock private OfflineBatchExecutionRepository batchRepository;
+  @Mock private OfflineBackfillPlanner planner;
+
+  private OfflineBackfillService service;
+
+  @BeforeEach
+  void setUp() {
+    service = new OfflineBackfillService(
+        definitionService,
+        definitionRepository,
+        batchRepository,
+        planner);
+  }
+
+  @Test
+  void materializesPlannerScopesWithSharedSnapshot() {
+    OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
+    OfflineBackfillPlanner.PreparedRequest prepared =
+        new OfflineBackfillPlanner.PreparedRequest("backfill-august", List.of());
+    OfflineJobDefinition definition = new OfflineJobDefinition();
+    definition.setId(10L);
+    OfflineBackfillPlanner.ScopePlan first = new OfflineBackfillPlanner.ScopePlan(
+        BatchScope.dataWindow(
+            LocalDateTime.of(2026, 8, 1, 0, 0),
+            LocalDateTime.of(2026, 8, 2, 0, 0)),
+        null);
+    OfflineBackfillPlanner.ScopePlan second = new OfflineBackfillPlanner.ScopePlan(
+        BatchScope.dataWindow(
+            LocalDateTime.of(2026, 8, 2, 0, 0),
+            LocalDateTime.of(2026, 8, 3, 0, 0)),
+        null);
+    ExecutionSnapshot snapshot = snapshot();
+    OfflineBackfillPlanner.Plan plan = new OfflineBackfillPlanner.Plan(
+        "backfill-august",
+        List.of(first, second),
+        Map.of(),
+        snapshot);
+
+    when(planner.prepare(request)).thenReturn(prepared);
+    when(definitionService.require(10L)).thenReturn(definition);
+    when(planner.plan(10L, definition, prepared)).thenReturn(plan);
+    AtomicLong sequence = new AtomicLong(100L);
+    when(batchRepository.insert(any(BatchExecution.class)))
+        .thenAnswer(invocation -> persisted(invocation.getArgument(0), sequence.incrementAndGet()));
+
+    OfflineBackfillVO result = service.submit(10L, request);
+
+    assertThat(result.getCreatedCount()).isEqualTo(2);
+    assertThat(result.getReusedCount()).isZero();
+    assertThat(result.getBatchIds()).containsExactly(101L, 102L);
+    ArgumentCaptor<BatchExecution> captor = ArgumentCaptor.forClass(BatchExecution.class);
+    verify(batchRepository, org.mockito.Mockito.times(2)).insert(captor.capture());
+    assertThat(captor.getAllValues()).allMatch(batch -> batch.trigger() == BatchTrigger.BACKFILL);
+    assertThat(captor.getAllValues()).allMatch(batch -> batch.status() == BatchStatus.PENDING);
+    assertThat(captor.getAllValues()).allMatch(batch -> batch.snapshot().equals(snapshot));
+    verify(definitionRepository).lock(10L);
+    verify(planner).plan(10L, definition, prepared);
+  }
+
+  @Test
+  void reusesExistingPlannerBatchWithoutCreatingDuplicate() {
+    OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
+    OfflineBackfillPlanner.PreparedRequest prepared =
+        new OfflineBackfillPlanner.PreparedRequest("backfill-existing", List.of());
+    OfflineJobDefinition definition = new OfflineJobDefinition();
+    definition.setId(10L);
+    OfflineBackfillPlanner.ScopePlan scope =
+        new OfflineBackfillPlanner.ScopePlan(BatchScope.fullSelection(), null);
+    BatchExecution existing = new BatchExecution(
+        77L,
+        10L,
+        BatchKey.backfill("backfill-existing", scope.scope().fingerprint()),
+        BatchTrigger.BACKFILL,
+        scope.scope(),
+        snapshot(),
+        BatchStatus.SUCCEEDED,
+        List.of());
+    OfflineBackfillPlanner.Plan plan = new OfflineBackfillPlanner.Plan(
+        "backfill-existing",
+        List.of(scope),
+        Map.of(scope.scope().fingerprint(), existing),
+        existing.snapshot());
+
+    when(planner.prepare(request)).thenReturn(prepared);
+    when(definitionService.require(10L)).thenReturn(definition);
+    when(planner.plan(10L, definition, prepared)).thenReturn(plan);
+
+    OfflineBackfillVO result = service.submit(10L, request);
+
+    assertThat(result.getCreatedCount()).isZero();
+    assertThat(result.getReusedCount()).isEqualTo(1);
+    assertThat(result.getBatchIds()).containsExactly(77L);
+    verify(batchRepository, never()).insert(any(BatchExecution.class));
+  }
+
+  @Test
+  void requestValidationHappensBeforeTaskLock() {
+    OfflineBackfillRequestDTO request = new OfflineBackfillRequestDTO();
+    when(planner.prepare(request)).thenThrow(new IllegalArgumentException("scopes 不能为空"));
+
+    assertThatThrownBy(() -> service.submit(10L, request))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("scopes");
+
+    verify(definitionRepository, never()).lock(10L);
+  }
+
+  private ExecutionSnapshot snapshot() {
+    return new ExecutionSnapshot(
+        "{\"definition\":1}",
+        7,
+        new RetryPolicySnapshot(2, 10),
+        "digest-7",
+        "{\"kind\":\"BatchSyncJob\"}");
+  }
+
+  private BatchExecution persisted(BatchExecution batch, long id) {
+    return new BatchExecution(
+        id,
+        batch.taskId(),
+        batch.batchKey(),
+        batch.trigger(),
+        batch.batchScope(),
+        batch.snapshot(),
+        batch.status(),
+        batch.attempts());
+  }
+}
