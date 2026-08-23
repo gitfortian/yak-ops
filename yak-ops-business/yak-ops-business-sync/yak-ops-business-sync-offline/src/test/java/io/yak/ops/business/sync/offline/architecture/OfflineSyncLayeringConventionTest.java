@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.yak.framework.common.PageData;
-import io.yak.ops.business.sync.offline.backfill.OfflineBackfillController;
 import io.yak.ops.business.sync.offline.backfill.OfflineBackfillDispatcher;
 import io.yak.ops.business.sync.offline.backfill.OfflineBackfillService;
+import io.yak.ops.business.sync.offline.controller.OfflineBackfillController;
 import io.yak.ops.business.sync.offline.controller.OfflineControlPlaneController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobDefinitionController;
 import io.yak.ops.business.sync.offline.controller.OfflineJobExecutionController;
