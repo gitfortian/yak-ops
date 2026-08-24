@@ -34,8 +34,8 @@ import io.yak.ops.business.dataset.gateway.lineage.DatasetProjectionAnalyzerGate
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskAssetSnapshot;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskRevisionSnapshot;
-import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceAvailability;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceOrigin;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,8 +54,8 @@ class DatasetLineageSynchronizerTest {
             11L,
             "sales.sql",
             "101",
-            TaskAssetSource.DATA_DEVELOPMENT,
-            TaskAssetStatus.ONLINE,
+            SourceOrigin.DATA_DEVELOPMENT,
+            SourceAvailability.ONLINE,
             "SQL",
             99L,
             5);
