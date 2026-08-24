@@ -17,15 +17,25 @@ class SyncExecutionStateMachineTest {
     SyncExecution failed = execution(DesiredState.STOPPED, ObservedState.FAILED);
     SyncExecution stopped = execution(DesiredState.STOPPED, ObservedState.STOPPED);
 
-    assertThatThrownBy(() -> stateMachine.requireTransition(failed, "STARTING"))
+    assertThatThrownBy(
+            () -> stateMachine.requireTransition(failed, ObservedState.STARTING))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("FAILED -> STARTING");
-    assertThatThrownBy(() -> stateMachine.requireTransition(stopped, "STARTING"))
+    assertThatThrownBy(
+            () -> stateMachine.requireTransition(stopped, ObservedState.STARTING))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("STOPPED -> STARTING");
 
     assertThatCode(() -> stateMachine.requireNewExecutionAllowed(failed)).doesNotThrowAnyException();
     assertThatCode(() -> stateMachine.requireNewExecutionAllowed(stopped)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void stringCompatibilityOverloadKeepsExistingTransitionContract() {
+    SyncExecution starting = execution(DesiredState.RUNNING, ObservedState.STARTING);
+
+    assertThatCode(() -> stateMachine.requireTransition(starting, "RUNNING"))
+        .doesNotThrowAnyException();
   }
 
   @Test

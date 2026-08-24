@@ -29,7 +29,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
- * Stage 2 regression baseline for reconciliation.
+ * Regression baseline for reconciliation uncertainty.
  *
  * <p>The reconciler must converge to explicit UNKNOWN / CONFLICT states when external truth cannot
  * be identified safely. It must never guess a Flink JobId or turn runtime uncertainty into a false

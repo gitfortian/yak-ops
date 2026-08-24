@@ -20,11 +20,11 @@ import java.util.List;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * Test-scope source-compatible adapter for pre-Stage5 behavioral regression tests.
+ * Test-scope source-compatible adapter for the long-lived execution regression suite.
  *
  * <p>This class is not production code and is not a Spring bean. Every command delegates to the
- * real decomposed Execution Core so Stage 2/Wave 5 assertions remain unchanged while the legacy
- * production RealtimeJobService is removed.
+ * real decomposed Execution Core so historical behavioral assertions continue to exercise the
+ * current production path without reintroducing a production compatibility facade.
  */
 final class RealtimeJobService {
 

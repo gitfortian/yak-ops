@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.realtime.engine;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.sync.realtime.config.RealtimeSyncProperties;
@@ -36,6 +37,7 @@ import org.springframework.stereotype.Component;
 public class FlinkObservabilityClient {
 
   private static final Pattern JOB_ID = Pattern.compile("(?i)[0-9a-f]{32}");
+  private static final int MAX_RUNTIME_EXCEPTIONS = 100;
   private static final String METRIC_IDS =
       String.join(
           ",",
@@ -123,7 +125,7 @@ public class FlinkObservabilityClient {
   public RuntimeLog runtimeLog(
       ComputeEnvironmentSnapshot environment, String jobId, int maxExceptions) {
     requireJobId(jobId);
-    int limit = Math.max(1, Math.min(maxExceptions, 100));
+    int limit = Math.max(1, Math.min(maxExceptions, MAX_RUNTIME_EXCEPTIONS));
     JsonNode body =
         getJson(environment, "/jobs/" + jobId + "/exceptions?maxExceptions=" + limit, true);
     if (body == null) {
@@ -229,9 +231,10 @@ public class FlinkObservabilityClient {
       } catch (RealtimeEngineException ignored) {
         continue;
       }
-      String name = String.valueOf(text(vertex, "name")).toLowerCase(Locale.ROOT);
-      boolean source = name.contains("source");
-      boolean sink = name.contains("sink");
+      String vertexName = text(vertex, "name");
+      String normalizedName = vertexName == null ? "" : vertexName.toLowerCase(Locale.ROOT);
+      boolean source = normalizedName.contains("source");
+      boolean sink = normalizedName.contains("sink");
 
       if (source) {
         recordsRead = add(recordsRead, sum(metrics, "numRecordsOut"));
@@ -369,6 +372,7 @@ public class FlinkObservabilityClient {
     }
   }
 
+  /** Returns null only when Flink explicitly reports 404 and allowNotFound is true. */
   private JsonNode getJson(
       ComputeEnvironmentSnapshot environment, String path, boolean allowNotFound) {
     try {
@@ -385,9 +389,7 @@ public class FlinkObservabilityClient {
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw failure("Flink REST HTTP " + response.statusCode(), true, null);
       }
-      return response.body() == null || response.body().isBlank()
-          ? json.createObjectNode()
-          : json.readTree(response.body());
+      return parseJson(response.body());
     } catch (HttpTimeoutException exception) {
       throw failure("Flink REST 请求超时", true, exception);
     } catch (InterruptedException exception) {
@@ -395,6 +397,17 @@ public class FlinkObservabilityClient {
       throw failure("Flink REST 请求被中断", true, exception);
     } catch (IOException exception) {
       throw failure("Flink REST 连接失败", true, exception);
+    }
+  }
+
+  private JsonNode parseJson(String body) {
+    if (body == null || body.isBlank()) {
+      return json.createObjectNode();
+    }
+    try {
+      return json.readTree(body);
+    } catch (JsonProcessingException exception) {
+      throw failure("Flink REST 返回了无效 JSON", true, exception);
     }
   }
 

@@ -17,6 +17,7 @@ import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentR
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Objects;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,8 @@ import org.springframework.stereotype.Component;
 /** Resolves and freezes the DefinitionVersion, runtime environment and compiled execution artifact. */
 @Component
 public class RealtimeExecutionPreparation {
+
+  private static final String ARTIFACT_DIGEST_ALGORITHM = "SHA-256";
 
   private final RealtimeJobStore store;
   private final CdcPipelineSpecValidator specValidator;
@@ -116,20 +119,19 @@ public class RealtimeExecutionPreparation {
   String artifactDigest(RealtimeExecutionPrepared prepared) {
     try {
       byte[] bytes =
-          MessageDigest.getInstance("SHA-256")
+          MessageDigest.getInstance(ARTIFACT_DIGEST_ALGORITHM)
               .digest(prepared.compiled().yaml().getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(bytes);
-    } catch (Exception exception) {
-      throw new IllegalStateException("无法计算 SHA-256 摘要", exception);
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("运行环境不支持 SHA-256 摘要", exception);
     }
   }
 
   RealtimeEngineGateway.DeployResult deploy(RealtimeExecutionPrepared prepared, String key) {
-    RealtimeDeployRequest.CredentialBinding[] credentials =
+    RealtimeDeployRequest.CredentialBindings credentials =
         dataSourceResolver.resolveCredentials(prepared.spec());
     try (RealtimeDeployRequest request =
-        new RealtimeDeployRequest(
-            prepared.compiled().yaml(), key, credentials[0], credentials[1])) {
+        new RealtimeDeployRequest(prepared.compiled().yaml(), key, credentials)) {
       return gateway.deploy(prepared.runtimeEnvironment(), request);
     }
   }

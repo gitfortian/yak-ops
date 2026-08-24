@@ -29,6 +29,8 @@ public class FlinkRuntimeEnvironmentProbe {
 
   private static final Pattern VERSION =
       Pattern.compile("(?i)(?:version[^0-9]*)?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:[-+][A-Za-z0-9._-]+)?)");
+  private static final int VERSION_COMMAND_TIMEOUT_SECONDS = 8;
+  private static final int MAX_DIAGNOSTIC_MESSAGE_LENGTH = 300;
 
   private final RealtimeEngineGateway gateway;
   private final RealtimeSyncProperties properties;
@@ -45,7 +47,6 @@ public class FlinkRuntimeEnvironmentProbe {
     if (environment == null || environment.config() == null) {
       throw new IllegalArgumentException("运行环境配置不能为空");
     }
-    RuntimeConfig config = environment.config();
     List<Check> checks = new ArrayList<>();
     LocalDateTime checkedAt = LocalDateTime.now();
 
@@ -67,17 +68,15 @@ public class FlinkRuntimeEnvironmentProbe {
       checks.add(fail("FLINK_REST", "Flink REST", safeMessage(exception, "无法连接 Flink REST")));
     }
 
+    ProbeVersions versions;
     if (ComputeEnvironment.SUBMITTER_SSH.equals(environment.submitterType())) {
-      SshProbeVersions versions = diagnoseSsh(environment, checks);
-      detectedFlinkVersion = firstNonBlank(versions.flinkVersion(), detectedFlinkVersion);
-      detectedCdcVersion = versions.cdcVersion();
-      detectedJavaVersion = versions.javaVersion();
+      versions = diagnoseSsh(environment, checks);
     } else {
-      SshProbeVersions versions = diagnoseLocal(environment, checks);
-      detectedFlinkVersion = firstNonBlank(versions.flinkVersion(), detectedFlinkVersion);
-      detectedCdcVersion = versions.cdcVersion();
-      detectedJavaVersion = versions.javaVersion();
+      versions = diagnoseLocal(environment, checks);
     }
+    detectedFlinkVersion = firstNonBlank(versions.flinkVersion(), detectedFlinkVersion);
+    detectedCdcVersion = versions.cdcVersion();
+    detectedJavaVersion = versions.javaVersion();
 
     String status = overallStatus(checks);
     boolean ready = !ComputeEnvironmentDiagnosis.STATUS_FAILED.equals(status);
@@ -95,7 +94,7 @@ public class FlinkRuntimeEnvironmentProbe {
         List.copyOf(checks));
   }
 
-  private SshProbeVersions diagnoseLocal(
+  private ProbeVersions diagnoseLocal(
       ComputeEnvironmentSnapshot environment, List<Check> checks) {
     RuntimeConfig config = environment.config();
     Path cdc = Path.of(config.flinkCdcHome(), "bin", "flink-cdc.sh").toAbsolutePath().normalize();
@@ -105,7 +104,7 @@ public class FlinkRuntimeEnvironmentProbe {
     if (!Files.isRegularFile(cdc) || !Files.isExecutable(cdc)) {
       checks.add(fail("FLINK_CDC_CLI", "Flink CDC CLI", "文件不存在或不可执行：" + cdc));
     } else {
-      CommandOutput output = run(List.of(cdc.toString(), "--version"), 8);
+      CommandOutput output = runVersionCommand(List.of(cdc.toString(), "--version"));
       cdcVersion = extractVersion(output.output());
       checks.add(
           versionCheck(
@@ -116,7 +115,7 @@ public class FlinkRuntimeEnvironmentProbe {
     if (!Files.isRegularFile(flink) || !Files.isExecutable(flink)) {
       checks.add(fail("FLINK_CLI", "Flink CLI", "文件不存在或不可执行：" + flink));
     } else {
-      CommandOutput output = run(List.of(flink.toString(), "--version"), 8);
+      CommandOutput output = runVersionCommand(List.of(flink.toString(), "--version"));
       flinkVersion = extractVersion(output.output());
       checks.add(
           versionCheck("FLINK_CLI", "Flink CLI", output, flinkVersion, config.flinkVersion()));
@@ -128,9 +127,9 @@ public class FlinkRuntimeEnvironmentProbe {
             : "java";
     if (StringUtils.hasText(config.javaHome()) && !Files.isExecutable(Path.of(javaExecutable))) {
       checks.add(fail("JAVA", "Java", "JAVA_HOME/bin/java 不存在或不可执行"));
-      return new SshProbeVersions(flinkVersion, cdcVersion, null);
+      return new ProbeVersions(flinkVersion, cdcVersion, null);
     }
-    CommandOutput javaOutput = run(List.of(javaExecutable, "-version"), 8);
+    CommandOutput javaOutput = runVersionCommand(List.of(javaExecutable, "-version"));
     String javaVersion = extractVersion(javaOutput.output());
     if (!javaOutput.success()) {
       checks.add(fail("JAVA", "Java", nonBlank(javaOutput.output(), "无法执行 java -version")));
@@ -139,10 +138,10 @@ public class FlinkRuntimeEnvironmentProbe {
     } else {
       checks.add(pass("JAVA", "Java", "检测到 Java " + javaVersion));
     }
-    return new SshProbeVersions(flinkVersion, cdcVersion, javaVersion);
+    return new ProbeVersions(flinkVersion, cdcVersion, javaVersion);
   }
 
-  private SshProbeVersions diagnoseSsh(
+  private ProbeVersions diagnoseSsh(
       ComputeEnvironmentSnapshot environment, List<Check> checks) {
     RuntimeConfig config = environment.config();
     SshConfig ssh = config.ssh();
@@ -200,14 +199,14 @@ public class FlinkRuntimeEnvironmentProbe {
           probe.tempWritable()
               ? pass("REMOTE_TEMP", "远端临时目录", "mktemp 可创建并清理临时文件")
               : fail("REMOTE_TEMP", "远端临时目录", "无法创建远端临时 pipeline 文件"));
-      return new SshProbeVersions(flinkVersion, cdcVersion, javaVersion);
+      return new ProbeVersions(flinkVersion, cdcVersion, javaVersion);
     } catch (RuntimeException exception) {
       checks.add(fail("SSH", "SSH 连接", safeMessage(exception, "SSH 连接或认证失败")));
       checks.add(warn("FLINK_CDC_CLI", "Flink CDC CLI", "SSH 未连接，未执行远端检查"));
       checks.add(warn("FLINK_CLI", "Flink CLI", "SSH 未连接，未执行远端检查"));
       checks.add(warn("JAVA", "Java", "SSH 未连接，未执行远端检查"));
       checks.add(warn("REMOTE_TEMP", "远端临时目录", "SSH 未连接，未执行远端检查"));
-      return new SshProbeVersions(null, null, null);
+      return new ProbeVersions(null, null, null);
     }
   }
 
@@ -218,7 +217,7 @@ public class FlinkRuntimeEnvironmentProbe {
       Files.createDirectories(work);
       marker = Files.createTempFile(work, ".yak-env-probe-", ".tmp");
       return pass("WORK_DIRECTORY", "Yak Ops 工作目录", "可读写：" + work);
-    } catch (Exception exception) {
+    } catch (IOException | RuntimeException exception) {
       return fail("WORK_DIRECTORY", "Yak Ops 工作目录", safeMessage(exception, "工作目录不可写"));
     } finally {
       if (marker != null) {
@@ -267,11 +266,11 @@ public class FlinkRuntimeEnvironmentProbe {
     return pass(key, label, "检测到 " + detected);
   }
 
-  private CommandOutput run(List<String> command, int timeoutSeconds) {
+  private CommandOutput runVersionCommand(List<String> command) {
     Process process = null;
     try {
       process = new ProcessBuilder(command).redirectErrorStream(true).start();
-      if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+      if (!process.waitFor(VERSION_COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
         process.destroyForcibly();
         return new CommandOutput(false, "版本检测超时");
       }
@@ -280,20 +279,30 @@ public class FlinkRuntimeEnvironmentProbe {
       return new CommandOutput(process.exitValue() == 0, output);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
-      if (process != null) process.destroyForcibly();
+      if (process != null) {
+        process.destroyForcibly();
+      }
       return new CommandOutput(false, "版本检测被中断");
     } catch (IOException exception) {
-      if (process != null) process.destroyForcibly();
+      if (process != null) {
+        process.destroyForcibly();
+      }
       return new CommandOutput(false, "无法执行命令：" + exception.getMessage());
     }
   }
 
   private String extractVersion(String output) {
-    if (!StringUtils.hasText(output)) return null;
+    if (!StringUtils.hasText(output)) {
+      return null;
+    }
     for (String line : output.lines().toList()) {
-      if (!line.toLowerCase(Locale.ROOT).contains("version")) continue;
+      if (!line.toLowerCase(Locale.ROOT).contains("version")) {
+        continue;
+      }
       Matcher matcher = VERSION.matcher(line);
-      if (matcher.find()) return matcher.group(1);
+      if (matcher.find()) {
+        return matcher.group(1);
+      }
     }
     Matcher matcher = VERSION.matcher(output);
     return matcher.find() ? matcher.group(1) : null;
@@ -305,7 +314,9 @@ public class FlinkRuntimeEnvironmentProbe {
 
   private String overviewMessage(JsonNode overview, String version) {
     List<String> parts = new ArrayList<>();
-    if (StringUtils.hasText(version)) parts.add("Flink " + version);
+    if (StringUtils.hasText(version)) {
+      parts.add("Flink " + version);
+    }
     addNumber(parts, overview, "taskmanagers", "TaskManagers");
     if (overview != null && overview.has("slots-available") && overview.has("slots-total")) {
       parts.add(
@@ -350,7 +361,9 @@ public class FlinkRuntimeEnvironmentProbe {
   }
 
   private String text(JsonNode node, String field) {
-    if (node == null || node.path(field).isMissingNode() || node.path(field).isNull()) return null;
+    if (node == null || node.path(field).isMissingNode() || node.path(field).isNull()) {
+      return null;
+    }
     String value = node.path(field).asText(null);
     return StringUtils.hasText(value) ? value.trim() : null;
   }
@@ -360,9 +373,13 @@ public class FlinkRuntimeEnvironmentProbe {
   }
 
   private String nonBlank(String value, String fallback) {
-    if (!StringUtils.hasText(value)) return fallback;
+    if (!StringUtils.hasText(value)) {
+      return fallback;
+    }
     String firstLine = value.lines().findFirst().orElse(value).trim();
-    return firstLine.length() > 300 ? firstLine.substring(0, 300) : firstLine;
+    return firstLine.length() > MAX_DIAGNOSTIC_MESSAGE_LENGTH
+        ? firstLine.substring(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH)
+        : firstLine;
   }
 
   private String safeMessage(Throwable exception, String fallback) {
@@ -383,5 +400,5 @@ public class FlinkRuntimeEnvironmentProbe {
 
   private record CommandOutput(boolean success, String output) {}
 
-  private record SshProbeVersions(String flinkVersion, String cdcVersion, String javaVersion) {}
+  private record ProbeVersions(String flinkVersion, String cdcVersion, String javaVersion) {}
 }

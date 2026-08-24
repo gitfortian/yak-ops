@@ -10,6 +10,7 @@ import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentR
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -45,29 +46,29 @@ public class RealtimeRuntimeIdentityRecovery {
     this.transactions = new TransactionTemplate(transactionManager);
   }
 
-  String recoverJobId(DefinitionRow definition, DeploymentRow deployment) {
-    String runtimeName = identityStore.findByDeploymentId(deployment.id()).orElse(null);
-    if (!hasText(runtimeName)) {
+  Optional<String> recoverJobId(DefinitionRow definition, DeploymentRow deployment) {
+    Optional<String> runtimeName = identityStore.findByDeploymentId(deployment.id()).filter(this::hasText);
+    if (runtimeName.isEmpty()) {
       if (graceExpired(deployment)) {
         stateReconciler.settleMissing(
             definition.id(), deployment, "Gateway 尚未绑定 runtime identity，确认 CLI 未开始提交");
       }
-      return null;
+      return Optional.empty();
     }
 
     ComputeEnvironmentSnapshot runtimeEnvironment =
         runtimeResolver.deployment(definition, deployment);
-    List<String> matches = discovery.findJobIds(runtimeEnvironment, runtimeName);
+    List<String> matches = discovery.findJobIds(runtimeEnvironment, runtimeName.orElseThrow());
     if (matches.size() > 1) {
       stateReconciler.markConflict(definition.id(), deployment, matches.size());
-      return null;
+      return Optional.empty();
     }
     if (matches.isEmpty()) {
       if (graceExpired(deployment)) {
         stateReconciler.settleMissing(
             definition.id(), deployment, "恢复窗口内未发现匹配的 Flink runtime job");
       }
-      return null;
+      return Optional.empty();
     }
 
     String recoveredJobId = matches.get(0);
@@ -94,7 +95,7 @@ public class RealtimeRuntimeIdentityRecovery {
               execution.observedState().name(),
               "已通过 runtime job identity 找回 Flink JobId：" + recoveredJobId);
         });
-    return recoveredJobId;
+    return Optional.of(recoveredJobId);
   }
 
   private boolean graceExpired(DeploymentRow deployment) {

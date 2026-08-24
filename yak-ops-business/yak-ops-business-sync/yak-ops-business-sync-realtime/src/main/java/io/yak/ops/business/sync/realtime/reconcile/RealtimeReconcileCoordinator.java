@@ -10,6 +10,7 @@ import io.yak.ops.business.sync.realtime.environment.RealtimeRuntimeResolver;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
@@ -75,10 +76,11 @@ public class RealtimeReconcileCoordinator {
 
     String jobId = deployment.engineJobId();
     if (!hasText(jobId)) {
-      jobId = identityRecovery.recoverJobId(definition, deployment);
-      if (!hasText(jobId)) {
+      Optional<String> recovered = identityRecovery.recoverJobId(definition, deployment);
+      if (recovered.isEmpty()) {
         return store.view(taskId);
       }
+      jobId = recovered.orElseThrow();
       deployment = store.latestDeployment(taskId).orElse(deployment);
     }
 
