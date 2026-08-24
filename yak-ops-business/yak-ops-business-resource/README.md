@@ -2,7 +2,19 @@
 
 文件资源模块负责 Resource Namespace、文件内容、存储插件路由、运行时资源解析，以及资源变更后的外部同步传播。
 
-当前代码按业务子系统组织，不再以通用 `service/impl` 作为业务入口：
+代码按业务子系统和明确角色组织，不以通用 `service/impl` 作为业务入口。
+
+## Read First
+
+开始修改 Resource 前建议按顺序阅读：
+
+1. [`REQUIREMENTS.md`](./REQUIREMENTS.md)：必须长期保持的业务行为；
+2. [`DOMAIN.md`](./DOMAIN.md)：Resource Truth Ownership、Revision 与一致性语义；
+3. [`ARCHITECTURE.md`](./ARCHITECTURE.md)：package map、角色与主要调用 corridor；
+4. [`DEPENDENCIES.md`](./DEPENDENCIES.md)：允许的依赖方向与 forbidden dependency；
+5. [`REVIEW.md`](./REVIEW.md)：PR 评审和最终一致性检查清单。
+
+## Architecture at a Glance
 
 ```text
 Controller
@@ -21,29 +33,100 @@ ResourceResolver SPI
    -> Namespace / Content Read Side
 ```
 
-## 运行真相
+主要 package：
 
-数据库中的 `yak_ops_resource` 是 Resource identity / namespace / current revision metadata 的事实来源；Local / MinIO / HDFS 等 Storage Plugin 只拥有物理文件字节。
+```text
+resource
+├── controller/v1/mapper
+├── namespace
+├── content
+├── storage
+├── resolution
+├── sync
+├── repository
+├── dao
+├── domain
+├── config
+└── exception
+```
 
-`version` 表示当前 Resource Revision，用于变更 fencing 与运行时版本校验。当前模块不是历史版本存储系统，因此 `version = 5` 不表示仍可读取 1~4 版本内容。
+## Truth Ownership
 
-## 一致性语义
+```text
+Database / ResourceRepository
+    owns Resource identity / namespace / current revision metadata
 
-当前重构保持既有行为：
+Storage Plugin
+    owns physical bytes
 
-- 创建目录、上传和在线创建：先写物理存储，再写元数据；元数据失败时补偿删除刚创建的物理对象。
-- Move：先移动物理对象，再批量更新当前资源及后代路径；元数据更新失败时尝试把 Storage 路径回滚。
-- 当前不支持跨 Storage Move。
-- Delete：先提交元数据删除；物理对象删除与外部 Resource Sync 在事务提交后执行，不让外部 I/O 延长数据库事务。
-- Resource Sync 是提交后的 best-effort propagation，不是 Resource Namespace 的第二状态来源。
-- Resource Resolver 会把资源物化到临时目录并校验 SHA-256 checksum；指定 version 时只允许读取当前匹配 revision。
+Resolution
+    owns temporary materialization only
 
-## 持久化
+Resource Sync
+    owns external propagation only
+```
 
-当前只维护一张业务表：
+`ResourceNode` 和物理文件不是同一份 Truth。
+
+`version` 表示当前 Resource Revision / fencing value，不是 historical version store。`version = 5` 不意味着 revision 1~4 仍然可以下载。
+
+## Role Vocabulary
+
+| Role | Responsibility |
+|---|---|
+| `Manager` | mutation lifecycle owner |
+| `Reader` | read-side entry，无业务 mutation |
+| `Resolver` | reference / runtime materialization |
+| `Policy` | 可测试约束和业务决策 |
+| `Gateway` | Resource-owned external capability Port |
+| `Adapter` | transport / persistence / SPI 边界翻译 |
+| `Registry` | installed plugin/capability registry |
+| `Lifecycle` | compensation / after-commit lifecycle |
+| `Dispatcher` | commit 后外部传播 |
+| `Repository` | Domain persistence Port |
+| `DAO` | MyBatis persistence access |
+| `Mapper` | HTTP 或 Persistence 模型转换 |
+| `Command` | immutable mutation input，不是 HTTP DTO |
+
+新增代码不要重新创建 `Support/Helper/Utils/Common/Base/ServiceImpl` 兜底角色。
+
+## Consistency Semantics
+
+当前必须保持：
+
+- 创建目录、上传、在线创建：先写物理 Storage，再写 Metadata；Metadata 创建失败时 best-effort 删除新 Storage Object；
+- Move：先移动 Storage Object，再批量更新当前 Resource 和 descendants Metadata；Metadata 失败时 best-effort 回滚 Storage Path；
+- 当前不支持 cross-storage move；
+- Delete：先提交 Metadata 删除，再 after-commit 删除 Storage Object；
+- Resource Sync 在 commit 后 best-effort 执行，Provider 失败不回滚 Resource Truth；
+- Resource Resolver 物化到临时目录并校验 SHA-256；指定 version 时只允许当前 matching revision。
+
+## Persistence
+
+当前 Resource Metadata 只维护：
 
 ```text
 yak_ops_resource
 ```
 
-资源模块复用 `yak.database` 对应的业务 DataSource、MyBatis SessionFactory 和事务管理器，并继续拥有独立的 `yak_resource_schema_history` Flyway 历史边界。
+资源模块复用 `yak.database` 对应的 Business DataSource、MyBatis SessionFactory 和 TransactionManager，并继续拥有独立的：
+
+```text
+yak_resource_schema_history
+```
+
+Flyway 历史边界。
+
+## Architecture Guards
+
+Resource 架构由以下测试作为 executable contract：
+
+```text
+ResourceArchitectureDocumentationTest
+ResourceDependencyBoundaryTest
+ResourceLayeringConventionTest
+ResourceCodeStyleConventionTest
+ResourceRoleConventionTest
+```
+
+架构约束需要变更时，代码、`ARCHITECTURE.md`、`DEPENDENCIES.md` 和对应测试必须一起修改，而不是单独放宽测试。
