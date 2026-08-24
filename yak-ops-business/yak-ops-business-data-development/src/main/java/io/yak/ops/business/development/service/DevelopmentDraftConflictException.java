@@ -1,7 +1,9 @@
 package io.yak.ops.business.development.service;
 
-/** Raised when a client tries to overwrite a newer server-side draft revision. */
-public class DevelopmentDraftConflictException extends RuntimeException {
+/** @deprecated Use the shared authoring conflict type from the domain boundary. */
+@Deprecated
+public class DevelopmentDraftConflictException
+    extends io.yak.ops.business.development.domain.DevelopmentDraftConflictException {
 
   public DevelopmentDraftConflictException(String message) {
     super(message);

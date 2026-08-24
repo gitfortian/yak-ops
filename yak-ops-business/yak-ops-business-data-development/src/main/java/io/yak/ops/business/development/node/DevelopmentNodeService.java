@@ -1,4 +1,4 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.node;
 
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentNodeType;

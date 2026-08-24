@@ -1,7 +1,7 @@
 package io.yak.ops.business.development.controller.v1;
 
-import io.yak.ops.business.development.service.DevelopmentDraftConflictException;
-import io.yak.ops.business.development.service.DevelopmentTaskValidationException;
+import io.yak.ops.business.development.domain.DevelopmentDraftConflictException;
+import io.yak.ops.business.development.task.DevelopmentTaskValidationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;

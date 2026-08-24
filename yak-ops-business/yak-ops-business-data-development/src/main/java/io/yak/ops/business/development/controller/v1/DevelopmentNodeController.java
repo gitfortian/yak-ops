@@ -7,7 +7,7 @@ import io.yak.framework.security.extend.CurrentUserProvider;
 import io.yak.ops.business.development.api.DevelopmentNodeApi.CreateRequest;
 import io.yak.ops.business.development.api.DevelopmentNodeApi.RenameRequest;
 import io.yak.ops.business.development.domain.DevelopmentNode;
-import io.yak.ops.business.development.service.DevelopmentNodeService;
+import io.yak.ops.business.development.node.DevelopmentNodeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;

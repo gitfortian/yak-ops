@@ -1,4 +1,4 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.task;
 
 import io.yak.ops.plugin.task.api.TaskValidationIssue;
 import java.util.List;

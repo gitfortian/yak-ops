@@ -1,4 +1,4 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.directory;
 
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
