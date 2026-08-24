@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -13,7 +14,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
+import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.lineage.LineageAsset;
@@ -21,8 +23,8 @@ import io.yak.ops.business.lineage.LineageAssetType;
 import io.yak.ops.business.lineage.LineageMaintenanceService;
 import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.LineageService;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.spi.task.model.TaskDefinition;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -140,13 +142,13 @@ class DevelopmentSqlLineageServiceTest {
     when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = new SqlColumnLineageParser();
-    DataSourceCatalogService catalogService = mock(DataSourceCatalogService.class);
+    DataSourceCatalogReader catalogReader = mock(DataSourceCatalogReader.class);
     ObjectMapper objectMapper = new ObjectMapper();
     stubAssetRegistration(lineageService);
 
     DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
         lineageService, maintenanceService, tableParser, columnParser, objectMapper);
-    service.setDataSourceCatalogService(catalogService);
+    service.setDataSourceCatalogReader(catalogReader);
 
     String sql = "INSERT INTO dws.orders_copy SELECT * FROM ods.orders";
     SqlTableLineageParser.TableRef orders = table("ods.orders", "ods", "orders");
@@ -156,12 +158,12 @@ class DevelopmentSqlLineageServiceTest {
 
     // Simulate a MySQL/Doris style two-part name. The first schema.table interpretation returns no
     // metadata; the service retries the same qualifier as database.table.
-    when(catalogService.listColumns(12L, null, "ods", "orders")).thenReturn(List.of());
-    when(catalogService.listColumns(12L, "ods", null, "orders")).thenReturn(List.of(
+    when(catalogReader.listColumns(12L, null, "ods", "orders")).thenReturn(List.of());
+    when(catalogReader.listColumns(12L, "ods", null, "orders")).thenReturn(List.of(
         catalogColumn("id", 1),
         catalogColumn("amount", 2)));
-    when(catalogService.listColumns(12L, null, "dws", "orders_copy")).thenReturn(List.of());
-    when(catalogService.listColumns(12L, "dws", null, "orders_copy")).thenReturn(List.of(
+    when(catalogReader.listColumns(12L, null, "dws", "orders_copy")).thenReturn(List.of());
+    when(catalogReader.listColumns(12L, "dws", null, "orders_copy")).thenReturn(List.of(
         catalogColumn("order_id", 1),
         catalogColumn("order_amount", 2)));
 
@@ -286,11 +288,11 @@ class DevelopmentSqlLineageServiceTest {
         qualifiedName, qualifiedName, null, schema, table);
   }
 
-  private static DataSourceCatalogColumnVO catalogColumn(String name, int ordinal) {
-    return new DataSourceCatalogColumnVO(
+  private static CatalogColumn catalogColumn(String name, int ordinal) {
+    return new CatalogColumn(
         name,
         "VARCHAR",
-        null,
+        Types.VARCHAR,
         null,
         null,
         true,
