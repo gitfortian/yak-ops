@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.realtime.definition.adapter;
+package io.yak.ops.business.sync.realtime.repository.support;
 
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition;
@@ -21,7 +21,7 @@ import io.yak.ops.business.sync.realtime.domain.SyncDefinition.TableTarget;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** Compatibility adapter between the legacy CdcPipelineSpec and the Core SyncDefinition. */
+/** Compatibility mapper used while persistence still stores the legacy CdcPipelineSpec snapshot. */
 @Component
 public class CdcPipelineSpecCompatibilityMapper {
 

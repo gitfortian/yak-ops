@@ -1,13 +1,13 @@
-package io.yak.ops.business.sync.realtime.definition.adapter;
+package io.yak.ops.business.sync.realtime.repository.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.yak.ops.business.sync.realtime.definition.adapter.CdcPipelineSpecCompatibilityMapper.MappingResult;
-import io.yak.ops.business.sync.realtime.definition.adapter.CdcPipelineSpecCompatibilityMapper.UnsupportedLegacyDefinitionException;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.ExactTableSelector;
 import io.yak.ops.business.sync.realtime.domain.SyncDefinition.FixedDelayRestart;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper.MappingResult;
+import io.yak.ops.business.sync.realtime.repository.support.CdcPipelineSpecCompatibilityMapper.UnsupportedLegacyDefinitionException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

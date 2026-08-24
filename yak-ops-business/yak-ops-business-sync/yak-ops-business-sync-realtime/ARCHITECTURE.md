@@ -2,72 +2,40 @@
 
 本文件定义 Realtime Sync 的**长期架构 contract**。它描述稳定边界、角色、运行真相与依赖方向，不记录 Stage / Wave 过程；历史演进以 Git / PR 为准。
 
-需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，Review 标准看 `REVIEW.md`。
-
-> Definition、Execution、Reconcile、Query / Observability、Environment 已分别收敛到明确业务子系统。production `service/` 大桶已经退出；后续治理不得重新创建宽泛 Service 层绕过这些边界。
+需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，包依赖看 `DEPENDENCIES.md`，代码风格看 `CODE_STYLE.md`，Review 标准看 `REVIEW.md`。
 
 ## 设计原则
 
-1. **业务子系统优先，技术分层第二。** package 本身必须能表达 Realtime Sync 架构。
-2. **稳定入口，隐藏内部角色。** Controller / scheduler 只依赖明确的 Application Facade 或专业 Coordinator。
-3. **名字表达角色。** `Service / Coordinator / Manager / Resolver / Query / Reader / Reconciler / Gateway / Adapter` 不互相冒充。
-4. **运行真相只有一个主人。** Task 管长期定义上下文，DefinitionVersion 管不可变发布版本，SyncExecution 管运行生命周期。
-5. **外部系统停在边界。** Flink、Flink CDC CLI、SSH、HTTP DTO、MyBatis、Credential 不进入 Core Domain。
-6. **查询与命令分离。** Query / Observability 读取事实与投影，不反向拥有 Execution command 语义。
-7. **Environment 是邻接上下文。** Definition 引用 Environment，Execution 冻结 RuntimeEnvironmentSnapshot；环境后续修改不能让历史 Execution 漂移。
-8. **重构不偷偷改业务语义。** package move、rename、class split 与 REST / DB / Domain behavior change 分开进行。
-9. **架构规则必须可执行。** Architecture tests 与最终 dependency corridor guardrails 共同守住依赖方向。
+1. **业务子系统优先。** package 本身表达架构。
+2. **稳定入口，隐藏内部角色。** Controller 只进入 Application Facade；跨子系统只走声明过的 corridor。
+3. **名字表达角色。** Service / Coordinator / Manager / Resolver / Query / Reader / Reconciler / Gateway / Repository 不互相冒充。
+4. **Truth 只有一个 owner。** Task、DefinitionVersion、SyncExecution、RuntimeEnvironmentSnapshot、Flink evidence 各自边界清晰。
+5. **外部系统停在边界。** Flink / CLI / SSH / HTTP / MyBatis 等实现细节不进入 Core Domain。
+6. **Query 与 Command 分离。** Observability / Query 不修改 Execution state。
+7. **Environment 是邻接上下文。** Execution 冻结运行环境快照，不随后续 Environment 修改漂移。
+8. **结构重构不偷改行为。** package move、class split 与 REST / DB / Domain semantic change 分开。
+9. **架构规则必须可执行。** 文档 contract 由 architecture tests 与 dependency scan 守住。
 
 ## Package Map
 
 ```text
 io.yak.ops.business.sync.realtime
-├── controller          # HTTP inbound + API DTO / VO / mapper
+├── controller          # HTTP inbound + transport mapper
 ├── definition          # Draft / Publish / immutable DefinitionVersion
 ├── execution           # Start / Stop / Restart / Apply lifecycle
 │   └── query           # task/execution read model
-├── reconcile           # runtime identity recovery + state convergence
-├── observability       # events / logs / checkpoint / metrics read side
-├── environment         # Compute Environment + runtime snapshot resolution
+├── reconcile           # runtime identity recovery + external state convergence
+├── observability       # event/log/checkpoint/metrics read side
+├── environment         # Compute Environment + RuntimeEnvironmentSnapshot resolution
 ├── engine              # Flink / Flink CDC / SSH outbound boundary
-├── repository          # domain persistence contracts + adapters
+├── repository          # persistence contracts + adapters
+│   └── support         # persistence-only compatibility conversion
 ├── dao                 # MyBatis persistence primitives
 ├── domain              # framework-free core domain / value objects
 └── config              # module configuration
 ```
 
-production 不再使用：
-
-```text
-service/
-common/
-helper/
-utils/
-```
-
-作为业务职责大桶。新增类前必须先回答：它属于哪个业务子系统、是什么角色、允许从哪里被调用。
-
-### Retired service package
-
-以下旧 production 入口已经退出：
-
-```text
-service/RealtimeJobService
-service/RealtimeJobLifecycleCoordinator
-service/RealtimeJobReconciler
-service/RealtimeJobQueryService
-service/RealtimeObservabilityService
-service/RealtimeEventStreamService
-service/ComputeEnvironmentService
-service/RealtimeRuntimeResolver
-```
-
-规则：
-
-- 不得重新创建新的宽泛 `service/` 业务层；
-- 已迁出的职责不得通过 compatibility facade 回流；
-- 测试源码可短期保留 source-compatible fixture / alias，用于证明行为迁移不改 contract；这些类型不能进入 production artifact，也不能成为 Spring Bean；
-- 跨子系统依赖必须通过稳定 Facade、专业 Resolver、Repository contract 或 Engine Gateway 表达。
+production 不允许重新创建 `service / common / helper / utils` 业务大桶。完整 top-level dependency matrix 和 corridor 见 `DEPENDENCIES.md`。
 
 ## Core Domain Model
 
@@ -79,9 +47,6 @@ DefinitionVersion (immutable)
       │ start / restart / apply
       ▼
 SyncExecution
-      │
-      ▼
-Engine Adapter
 ```
 
 核心关系：
@@ -90,18 +55,7 @@ Engine Adapter
 Task != DefinitionVersion != SyncExecution
 ```
 
-运行时配置：
-
-```text
-SyncDefinition
-├── SourceEndpoint
-├── SinkEndpoint
-├── SyncRoute[]
-├── SyncPolicy
-└── ExecutionPolicy
-```
-
-`SyncDefinition` 是唯一配置事实；Wizard、Yak YAML、HTTP DTO、DB JSON、Flink YAML 都只是 Adapter / Projection。
+`SyncDefinition` 是唯一逻辑配置事实；Wizard、Yak YAML、HTTP DTO、DB compatibility JSON、Flink YAML 都只是边界表示。
 
 ## Truth Ownership
 
@@ -111,13 +65,15 @@ DefinitionVersion           = immutable published definition truth
 SyncExecution               = desired/observed lifecycle + runtime execution truth
 RuntimeEnvironmentSnapshot  = execution-time environment truth
 Runtime Identity            = external job recovery identity
-Task last/latest-*          = query projection / compatibility only
+Task last/latest-*          = projection / compatibility only
 Flink Job                   = external runtime evidence
 ```
 
-如果 Task 字段、Deployment compatibility mirror 与 SyncExecution 对同一运行状态有不同表达，必须以 `SyncExecution` 为运行真相。
+Task compatibility 字段和 Deployment compatibility storage 不能重新成为运行真相。
 
 ## Stable Application Entries
+
+仅以下类型是稳定 `@Service`：
 
 ```text
 RealtimeJobDefinitionService
@@ -140,243 +96,194 @@ ComputeEnvironmentController
    └── ComputeEnvironmentService
 ```
 
-`@Service` 只用于这种稳定 Application Facade。内部专业角色使用 `@Component` 或普通对象。
+内部专业角色使用 `@Component` 或普通对象。
 
 ## Definition Subsystem
 
 ```text
-RealtimeJobDefinitionService                 @Service
-        |
-        +-> RealtimeDefinitionManager         @Component
-        +-> RealtimeDefinitionPublisher       @Component
-        +-> RealtimeDefinitionValidator       @Component
-        +-> RealtimeSourceConfigDigestCalculator
-        +-> RealtimeYamlCodec
-        `-> adapter/CdcPipelineSpecCompatibilityMapper
+RealtimeJobDefinitionService
+        ├── RealtimeDefinitionManager
+        ├── RealtimeDefinitionPublisher
+        ├── RealtimeDefinitionValidator
+        ├── RealtimeSourceConfigDigestCalculator
+        └── RealtimeYamlCodec
 ```
 
 职责：
 
-- `Manager`：Task shell、Draft save、metadata delete；
-- `Publisher`：完整 preflight、runtime validate、Draft re-check、immutable DefinitionVersion publish；
-- `Validator`：未保存 Definition preflight，不把 Flink 临时不可用变成 Draft 永久非法；
-- `DigestCalculator`：source-config compatibility digest；
-- `YamlCodec`：Yak YAML 与同一 logical definition 的转换；
-- compatibility mapper 停在 Definition boundary，不进入 Core Domain。
+- Manager：Task shell、Draft save、metadata delete；
+- Publisher：完整 preflight、runtime validate、Draft re-check、immutable DefinitionVersion publish；
+- Validator：未保存 Definition preflight；
+- DigestCalculator：source-config compatibility digest；
+- YamlCodec：Yak YAML 与同一 logical definition 的转换。
 
-必须保持：
+必须保持：Published Version 不可变；运行中的 Execution 不读取 current Draft；Publish 校验后重新检查 Draft revision/digest/environment binding；`DefinitionDigest != sourceConfigDigest != artifactDigest`。
 
-- Draft / Published / Running 可以同时存在；
-- Published Version 不可变；
-- 运行中的 SyncExecution 不读取 current Draft；
-- Publish 在外部校验后重新检查 Draft revision、source config digest 与 RuntimeEnvironmentRef；
-- `DefinitionDigest != sourceConfigDigest != artifactDigest`；
-- Yak YAML 不承载 Credential。
+Definition 删除任务前只通过 `RealtimeJobExecutionService.assertSafeToDelete` 进入 Execution/Reconcile 安全边界，不直接依赖 Reconcile 内部实现。
 
 ## Execution Core
 
 ```text
-RealtimeJobExecutionService                  @Service
-        |
-        +-> RealtimeExecutionCoordinator      @Component
-        |       +-> RealtimeExecutionStarter
-        |       +-> RealtimeExecutionStateManager
-        |       `-> RealtimeExecutionReplacementManager
-        |
-        +-> RealtimeExecutionPreparation
-        +-> RealtimeReconcileCoordinator
-        `-> RealtimeDeleteSafetyChecker
+RealtimeJobExecutionService
+        ├── RealtimeExecutionCoordinator
+        │       ├── RealtimeExecutionStarter
+        │       ├── RealtimeExecutionStateManager
+        │       └── RealtimeExecutionReplacementManager
+        ├── RealtimeExecutionPreparation
+        ├── RealtimeReconcileCoordinator
+        └── RealtimeDeleteSafetyChecker
 
 RealtimeExecutionStarter
-        +-> RealtimeExecutionPreparation
-        +-> RealtimeExecutionReservationManager
-        `-> RealtimeExecutionStateManager
+        ├── RealtimeExecutionPreparation
+        ├── RealtimeExecutionReservationManager
+        └── RealtimeExecutionStateManager
 ```
 
-角色语义：
-
-- `Coordinator`：同一 Task 的 in-process command serialization；
-- `Preparation`：固定 DefinitionVersion、RuntimeEnvironmentSnapshot、compiled artifact，并管理 submit-boundary Credential 生命周期；
-- `ReservationManager`：Idempotency-Key、single Active/Uncertain claim、prepared-version re-check、replacement reservation、DB linearization point；
-- `StateManager`：Start result commit、Stop、stop-during-start、FAILED / UNKNOWN / STOPPED 状态提交；
-- `Starter`：`prepare -> reservation -> submit -> state commit`；
-- `ReplacementManager`：Restart / Apply target pinning 与 replacement resume。
-
-必须保持：
+固定安全 contract：
 
 - 同一 Task 最多一个 Active / Uncertain Execution；
-- Start 先 reservation，再外部 submit；
+- Start 先 DB reservation，再 external submit；
 - same-key race 可恢复；
-- Stop during Start 必须绑定并取消返回的精确 JobId；
-- Stop 结果不确定进入 `UNKNOWN`；
-- RestartExecution 固定当前 Execution 的原 DefinitionVersion；
-- ApplyPublishedVersion 固定命令开始时 Published Version；
-- `UNKNOWN / CONFLICT` 先 Reconcile，不猜失败、不创建第二实例。
+- prepared DefinitionVersion 提交前 re-check；
+- stop-during-start 必须绑定并取消返回的精确 JobId；
+- stop 结果不确定进入 UNKNOWN；
+- RestartExecution 固定原 DefinitionVersion；
+- ApplyPublishedVersion 固定 command-time Published Version；
+- replacement intent 持久化 command type / target / Idempotency-Key；
+- UNKNOWN / CONFLICT 先 reconcile，不猜失败、不创建第二实例。
 
 ## Reconcile Subsystem
 
 ```text
-RealtimeJobExecutionService
-        |
-        +-> RealtimeReconcileCoordinator
-        |       +-> RealtimeRuntimeIdentityRecovery
-        |       `-> RealtimeRuntimeStateReconciler
-        |
-        `-> RealtimeDeleteSafetyChecker
+RealtimeReconcileCoordinator
+        ├── RealtimeRuntimeIdentityRecovery
+        └── RealtimeRuntimeStateReconciler
 
-RealtimeReconciler (@Scheduled)
-        |
-        +-> reconcile lease
-        `-> RealtimeReconcileCoordinator.reconcileAll()
+RealtimeDeleteSafetyChecker
+RealtimeReconciler (@Scheduled + lease)
 ```
-
-职责：
-
-- `Coordinator`：手工 / 批量对账、candidate iteration、连续 Engine failure threshold；
-- `RuntimeIdentityRecovery`：只用持久化 deterministic runtime identity 精确恢复 JobId；
-- `RuntimeStateReconciler`：根据 SyncExecution desired state + Flink RuntimeStatus 收敛 observed state；
-- `DeleteSafetyChecker`：删除前验证本地 terminality + 外部 Flink inactivity；
-- `RealtimeReconciler`：scheduled trigger + multi-instance lease。
 
 必须保持：
 
-- runtime identity 唯一匹配才绑定 JobId；
-- 多匹配不猜：STARTING/RUNNING -> `CONFLICT`，STOPPING -> `UNKNOWN`；
+- deterministic runtime identity 唯一匹配才绑定 JobId；
+- 多匹配不猜：运行意图保持 CONFLICT/UNKNOWN；
 - orphan recovery grace window 内不提前终结；
-- `RuntimeStatus.UNKNOWN -> UNKNOWN`；
-- expected RUNNING 且 Flink TERMINATED/NONE 才收敛 FAILED；
-- desired STOPPED 但 Flink RUNNING 时停止该精确 Job；
-- 连续故障达到 threshold 才标 UNKNOWN，成功后清零 failure counter；
-- 删除前 Flink RUNNING / UNKNOWN 都必须拒绝；
-- 后台 reconcile 必须先取得 reconcile lease。
+- RuntimeStatus.UNKNOWN 只能收敛 UNKNOWN；
+- expected RUNNING 且外部任务确认终止/不存在才收敛 FAILED；
+- desired STOPPED 但外部仍 RUNNING 时停止精确 Job；
+- 连续 Engine failure 达 threshold 才标 UNKNOWN，成功后清零；
+- 删除前外部 RUNNING / UNKNOWN 都拒绝；
+- 后台 reconcile 先取得 multi-instance lease。
 
 ## Query / Observability
 
 ```text
-RealtimeJobQueryService                     @Service
-        `-> RealtimeJobReadModelQuery        @Component
+RealtimeJobQueryService
+        └── RealtimeJobReadModelQuery
 
-RealtimeObservabilityService                @Service
-        +-> RealtimeObservabilityReader      @Component
-        +-> RealtimeEventQuery               @Component
-        `-> RealtimeEventStream              @Component
+RealtimeObservabilityService
+        ├── RealtimeObservabilityReader
+        ├── RealtimeEventQuery
+        └── RealtimeEventStream
 ```
 
-read-side contract：
-
-- detail / page / events / logs / metrics / checkpoints 不得触发 Start / Stop / Restart / Apply / Reconcile；
-- 不依赖 `SyncExecutionStateMachine`；
-- 不依赖 Execution command roles 或 Reconcile command roles；
-- submission log 只依赖 Idempotency-Key，因此 JobId 未恢复时仍可读；
-- runtime log / metrics / checkpoint 需要精确 JobId，不按任务名猜；
-- SSE 只消费 AFTER_COMMIT change event，不成为 state owner；
-- Flink read 失败不得反向写 `UNKNOWN / FAILED / STOPPED`。
+read side 只组合 Repository projection、RuntimeEnvironmentSnapshot 和 Flink read evidence；不得依赖 Execution state machine、Execution command roles 或 Reconcile command roles，也不得因读取失败反向写 UNKNOWN / FAILED / STOPPED。
 
 ## Environment / Runtime Boundary
 
-Compute Environment 是邻接上下文，不属于 `SyncDefinition` 内部字段集合。
-
-当前协作结构：
-
 ```text
-ComputeEnvironmentController
-        `-> ComputeEnvironmentService           @Service / stable facade
-                +-> ComputeEnvironmentManager    @Component
-                |       `-> ComputeEnvironmentConfigNormalizer
-                `-> ComputeEnvironmentDiagnoser @Component
+ComputeEnvironmentService
+        ├── ComputeEnvironmentManager
+        │       └── ComputeEnvironmentConfigNormalizer
+        └── ComputeEnvironmentDiagnoser
 
 Definition / Execution / Reconcile / Observability
-        `-> RealtimeRuntimeResolver              @Component
-                +-> ComputeEnvironmentStore
-                `-> RealtimeJobStore deployment snapshot
+        └── RealtimeRuntimeResolver
 ```
 
-角色语义：
-
-- `ComputeEnvironmentService`：唯一稳定 Environment Application Facade；
-- `ComputeEnvironmentManager`：create / update / enable / default / delete 与引用约束；
-- `ComputeEnvironmentConfigNormalizer`：LOCAL / SSH config normalization 与格式安全规则；
-- `ComputeEnvironmentDiagnoser`：saved / preview runtime probe；saved diagnosis 只持久化小型诊断摘要；
-- `RealtimeRuntimeResolver`：解析新命令所需当前 Environment Snapshot，以及既有 Execution 的冻结 Snapshot；它不是 Environment lifecycle service。
-
-### Runtime snapshot contract
+固定 snapshot contract：
 
 ```text
-Draft / DefinitionVersion
-        -> RuntimeEnvironmentRef
-        -> current enabled ComputeEnvironment
-        -> new RuntimeEnvironmentSnapshot
+new work
+  -> current RuntimeEnvironmentRef
+  -> current enabled ComputeEnvironment
+  -> RuntimeEnvironmentSnapshot
 
-SyncExecution
-        -> persisted RuntimeEnvironmentSnapshot
-        -> always prefer execution snapshot
-        -> never drift with later Environment edits
+existing SyncExecution
+  -> persisted RuntimeEnvironmentSnapshot
+  -> never fallback to current Environment
 ```
 
-固定规则：
-
-- 新 Draft / Publish / Start 使用 Environment 时可以要求 `enabled=true`；
-- Execution 创建时保存 immutable RuntimeEnvironmentSnapshot；
-- 对既有 Execution，`RealtimeRuntimeResolver.deployment()` 优先使用 execution row 已冻结 snapshot；
-- 若 row 未 hydrate snapshot，只允许从该 deployment 的持久化 snapshot 恢复；不得回读“当前 Environment”替代历史 snapshot；
-- Environment 后续修改、停用、切换默认值不能改变已存在 Execution 的运行上下文；
-- 删除 Environment 时必须检查 Draft、Published Version、Execution 引用；
-- 默认 Environment 不能直接停用或删除；
-- SSH 模式要求远端 Flink/Flink CDC/Java Home 使用 Linux 绝对路径；
-- SSH 配置只保存 executable / host / user / key path 等连接配置，不托管 SSH password；
-- Credential 只在 Engine submit boundary 短暂解析和使用。
+Environment 后续修改、停用、默认值切换不能改变已有 Execution 的运行上下文。
 
 ## Engine Boundary
 
 ```text
 RuntimeEnvironmentSnapshot
-        |
-        ▼
+        ↓
 RealtimeEngineGateway / Flink clients
-        |
-        +-> Flink REST
-        +-> Flink CDC CLI
-        `-> LOCAL / SSH execution adapter
+        ↓
+Flink REST / Flink CDC CLI / LOCAL / SSH adapter
 ```
 
-边界规则：
+Engine 通常只依赖 config/domain。存在一个刻意保留的安全 corridor：
 
-- Engine 只消费明确 RuntimeEnvironmentSnapshot，不读取 Task 当前环境配置作为隐式 fallback；
-- Pipeline YAML 只是提交 artifact，不成为长期业务真相；
-- Runtime identity 必须在 CLI 可能启动前持久化；
-- Flink / SSH DTO、Process/HTTP 实现、secret 不进入 Core Domain。
+```text
+RecoverableRealtimeEngineGateway
+   -> RealtimeRuntimeIdentityStore
+```
+
+原因是 runtime identity 必须在 CLI 可能启动前持久化。该例外不能扩展成 Engine -> RealtimeJobStore / DAO。
 
 ## Persistence Boundary
 
 ```text
-Domain       -> no framework / persistence / engine dependency
-Repository   -> Domain contracts + DAO adapter
-DAO          -> persistence primitives
-Engine       -> external protocol boundary
+Application / internal roles
+        ↓
+Repository contracts
+        ↓
+Repository adapters
+        ↓
+DAO
 ```
 
-Repository contract 不暴露 MyBatis PO / Mapper / Controller DTO；DAO 不依赖 Application Facade；Core Domain 不依赖 Spring/Jackson/MyBatis/Flink/SSH。
+规则：
 
-## Migration / Change Rules
+- Repository contract 不暴露 DAO model / Mapper / Controller DTO；
+- DAO 不依赖 Application / Engine / Repository；
+- Core Domain 不依赖 Repository / DAO / Engine / Spring；
+- Repository 不反向依赖 Definition / Execution / Reconcile；
+- immutable DefinitionVersion 的 legacy `CdcPipelineSpec` compatibility mapping 位于 `repository.support.CdcPipelineSpecCompatibilityMapper`；
+- compatibility mapper 不是 Core Domain，也不是第二套 editable Definition truth。
 
-1. **先锁行为，再移动代码。** 高风险生命周期测试先于结构重构。
-2. **一个 PR 一个主要边界。** Definition、Execution、Reconcile、Observability、Environment 分开治理。
-3. **不做 production 双入口。** 新入口稳定后删除旧入口；test-scope fixture 不属于 production compatibility layer。
-4. **不借重构改 REST / DB / Domain semantics。** 行为变化必须单独走 Requirement / Domain review。
-5. **不提前抽 realtime/offline Shared Sync Kernel。** 两个模块共享工程思想，但 Core Domain 独立演进。
-6. **跨子系统 corridor 必须显式。** Application Facade / Resolver / Repository / Gateway 之外的跨包捷径需要 Review。
-7. **禁止重新创建 `service/common/helper/utils` 大桶。** 角色与 truth owner 不清楚时先设计边界。
+## Dependency Governance
 
-## Change Rule
+`DEPENDENCIES.md` 是 package dependency contract，`RealtimeSyncDependencyBoundaryTest` 直接扫描 production Java import 并保护：
 
-新增或移动代码前，依次回答：
+```text
+top-level dependency matrix
+acyclic graph
+Definition -> Execution corridor
+Execution -> Reconcile corridor
+RuntimeResolver corridor
+Engine -> RuntimeIdentityStore corridor
+Controller -> stable facade corridor
+@Service allowlist
+no service/common/helper/utils buckets
+persistence compatibility mapper location
+```
 
-1. 它属于 Definition、Execution、Reconcile、Observability、Environment、Engine 还是 Persistence？
-2. 它是什么角色？名字是否表达职责？
-3. 谁是它的稳定调用入口？
-4. 它读取或修改的 truth 属于 Task、DefinitionVersion、SyncExecution、Environment Snapshot 还是外部 Runtime Evidence？
-5. 是否跨子系统？如果是，应该通过哪个 Facade / Resolver / Gateway？
-6. 是否把 Flink / SSH / Credential / DTO / PO 泄漏进 Core Domain？
-7. 哪个测试能证明改动没有破坏现有 contract？
+`RealtimeArchitectureTest` 继续保护角色、Spring stereotype、read-side、Core Domain purity、Repository contract 等结构语义。
 
-答不清楚时，不要创建新的 `Helper / Common / Utils / Base`；先把边界设计清楚。
+修改依赖白名单前必须先证明真实架构需求，不能为了让测试通过直接扩大 corridor。
+
+## Change Rules
+
+1. 一个 PR 一个主要边界或行为关注点；
+2. behavior change 与 package move 尽量分开；
+3. 新入口稳定后不保留 production 双入口；
+4. 不借重构改 REST / DB / Flyway / Domain semantics；
+5. 不提前抽 realtime/offline Shared Sync Kernel；
+6. 新 dependency 必须同时符合 `ARCHITECTURE.md + DEPENDENCIES.md`；
+7. 代码风格与角色命名遵守 `CODE_STYLE.md`；
+8. behavior tests 与 architecture tests 都是长期 contract，不因“迁移完成”删除。

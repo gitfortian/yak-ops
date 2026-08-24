@@ -2,7 +2,7 @@
 
 > 本文件只保留**实现必须遵守的硬规则**，不记录设计过程。历史演进看 Git / PR。
 >
-> `REQUIREMENTS.md` 定义“需要什么”；`DOMAIN.md` 定义“不能违反什么”；`ARCHITECTURE.md` 定义“代码边界如何收敛”；`REVIEW.md` 定义“怎么判卷”。
+> `REQUIREMENTS.md` 定义“需要什么”；`DOMAIN.md` 定义“不能违反什么”；`ARCHITECTURE.md` 定义“代码边界”；`DEPENDENCIES.md` 定义“允许依赖谁”；`CODE_STYLE.md` 定义“怎么写”；`REVIEW.md` 定义“怎么判卷”。
 
 ## 核心模型
 
@@ -67,18 +67,6 @@ Stop / Reconcile       -> SyncExecution lifecycle
 
 ## Runtime Truth
 
-命令侧运行真相固定为：
-
-```text
-RealtimeSyncTask
-    │ publish reference
-    ▼
-DefinitionVersion
-    │ execution reference
-    ▼
-SyncExecution
-```
-
 ```text
 Task desired/observed/lastError = compatibility only
 Deployment.status               = compatibility mirror only
@@ -90,7 +78,7 @@ SyncExecution                   = local runtime truth
 
 ## 遗留兼容字段
 
-这些名字可以暂时存在，但**不是领域语义**：
+这些名字可以存在，但**不是领域语义**：
 
 ```text
 definition_version              = DraftRevision
@@ -104,7 +92,7 @@ HTTP /restart                   = restartExecution 的兼容 alias
 
 禁止用 `definition_version / published_version` 判断真正的 Version identity。
 
-Compatibility 如果必须继续存在，应停在拥有旧协议或旧持久化格式的边界；不得为了结构迁移把 compatibility mapper / facade 扩散回 Core Domain。
+Compatibility 必须停在拥有旧协议或旧持久化格式的边界。当前 legacy `CdcPipelineSpec` 与 Core `SyncDefinition` 的持久化兼容转换属于 `repository.support`，不得扩散回 Core Domain。
 
 ## 安全能力必须保留
 
@@ -119,37 +107,39 @@ UNKNOWN / CONFLICT recovery
 runtime identity persistence / recovery
 RuntimeEnvironmentSnapshot
 replacement-stop reservation
-credential short lifetime + zeroize
+sensitive-value short lifetime
 secret-free persistence / log redaction
 multi-instance reconcile lease
 ```
 
-这些不是实现细节，可以在重构中换角色或换 package，但不能被删除、弱化或绕过。
+这些不是实现细节，可以换内部角色，但不能被删除、弱化或绕过。
 
 ## Architecture Boundary
 
-领域模型与工程结构的关系以 `ARCHITECTURE.md` 为准。长期方向固定为业务子系统优先：
+领域模型与工程结构的关系以 `ARCHITECTURE.md` 为准，依赖方向以 `DEPENDENCIES.md` 为准。长期业务子系统固定为：
 
 ```text
 Definition
 Execution
 Reconcile
-Observability
+Query / Observability
 Environment
 Engine / Persistence boundaries
 ```
 
-允许后续 PR 移动类、重命名角色、拆分过宽 Service，但必须满足：
+任何后续结构调整必须满足：
 
 - 不新增第二套 SyncDefinition / Execution 模型；
 - 不改变 Published Version immutable contract；
 - 不把 Query / Observability 变成 command truth owner；
-- 不把 Flink / SSH / Credential / HTTP DTO / MyBatis PO 引入 Core Domain；
-- 不为了和 offline-sync 目录一致提前抽 Shared Sync Kernel。
+- 不把外部协议、敏感连接配置、HTTP DTO、MyBatis PO 引入 Core Domain；
+- 不重新创建 `service/common/helper/utils` 业务大桶；
+- 不为了和 offline-sync 目录一致提前抽 Shared Sync Kernel；
+- 不通过扩大 dependency whitelist 掩盖真实架构循环。
 
 ## 修改代码前后
 
-修改前先确认 `REQUIREMENTS.md` 中已有对应能力，再写一个短块：
+修改前先确认 `REQUIREMENTS.md` 中已有对应能力，再写：
 
 ```text
 Domain Impact Analysis
@@ -167,6 +157,12 @@ Architecture Impact Analysis
 - Stable entry / gateway:
 - Runtime truth owner:
 - Dependency direction changed: yes/no
+
+Dependency Impact Analysis
+- New edge:
+- Existing corridor or new corridor:
+- Cycle impact:
+- DEPENDENCIES / guard updated: yes/no
 ```
 
 修改后写：
@@ -178,28 +174,29 @@ Domain Compliance Report
 - Known gaps:
 ```
 
-代码 Review 固定按 `REVIEW.md` 执行。
-
 ## 自动护栏
 
-本地最快检查：
-
-```bash
-python3 tools/realtime_domain_guardrails.py
-```
-
-CI 强制执行：
+长期架构护栏：
 
 ```text
-Static domain contract
-Framework-free core domain smoke
+RealtimeArchitectureTest
+  -> stable Application Facade / role stereotype
+  -> Core Domain purity
+  -> Query/Observability read-side
+  -> Repository contract / Environment role
+
+RealtimeSyncDependencyBoundaryTest
+  -> top-level package dependency matrix
+  -> acyclic dependency graph
+  -> explicit cross-subsystem corridors
+  -> @Service allowlist
+  -> no broad service/common/helper/utils bucket
+  -> persistence compatibility boundary
 ```
 
-完整 Maven/JUnit 深层回归依赖 private `yak-framework`；配置 `YAK_FRAMEWORK_TOKEN` 后自动启用。
+行为回归测试继续保护 Start / Stop / Restart / Apply / Reconcile / Environment snapshot 等 runtime contract。
 
-**不要因为功能或结构调整被护栏拦住就删护栏。** 如果规则真的变化，同一个 PR 中同步修改当前 contract 文档和对应测试 / guardrail。
-
-当前 `RealtimeArchitectureTest` 是迁移期间的基础安全网；完整 package dependency graph 与 explicit corridor guardrails 在目标 package 结构稳定后补齐，不应在结构尚未收敛时提前把临时依赖固化成永久白名单。
+**不要因为功能或结构调整被护栏拦住就删护栏。** 如果规则真的变化，同一个 PR 中同步修改 Requirement/Domain/Architecture/Dependencies contract 和对应测试。
 
 ## 已知独立 Gap
 
@@ -212,4 +209,4 @@ Compute Environment physical context cleanup
 API v2 / physical schema naming cleanup
 ```
 
-这些 Gap 需要单独做 Requirement / Domain 设计，不在纯架构重构中顺手解决。
+这些 Gap 需要单独做 Requirement / Domain 设计，不在纯架构治理中顺手解决。

@@ -9,25 +9,20 @@
 ```text
 REQUIREMENTS.md  -> 模块需要什么
 DOMAIN.md        -> 实现不能违反什么
-ARCHITECTURE.md  -> 代码边界与角色要收敛到哪里
+ARCHITECTURE.md  -> 子系统、truth ownership 与角色
+DEPENDENCIES.md  -> package graph 与跨子系统 corridor
+CODE_STYLE.md    -> 类、方法与 stereotype 的工程规范
 REVIEW.md        -> 按什么标准判卷
 PR diff / tests  -> 实际改了什么
 ```
 
-如果 PR 是纯 package move / rename / class split，也必须同时检查 Domain 和 Architecture；“只是重构”不能成为绕过运行安全规则的理由。
+“只是重构”不能成为绕过运行安全、领域规则或 dependency guard 的理由。
 
-## Review 顺序
+## 1. Requirement Alignment
 
-### 1. Requirement Alignment
+检查代码是否符合 `REQUIREMENTS.md`：是否改变已有业务行为、引入未定义能力或越过模块边界。
 
-检查代码是否符合 `REQUIREMENTS.md`：
-
-- 是否实现已有能力？
-- 是否改变已有业务行为？
-- 是否引入文档中没有的新能力？
-- 是否越过模块边界？
-
-出现未定义的新能力或行为变化时，报告：
+出现未定义的新能力或行为变化时报告：
 
 ```text
 Requirement Gap
@@ -35,79 +30,92 @@ Requirement Gap
 
 不要替产品或开发者自行补需求。
 
-### 2. Domain Compliance
+## 2. Domain Compliance
 
-检查 `DOMAIN.md`，重点关注：
+重点检查：
 
 - Task / DefinitionVersion / SyncExecution 是否混淆；
 - Execution 是否读取 current Draft；
 - Published Version 是否可能被原地修改；
-- Restart 是否可能隐式升级；
-- Apply 的目标版本是否可能执行中漂移；
-- `UNKNOWN / CONFLICT` 是否可能创建第二实例；
-- Runtime state 是否重新回到 Task；
-- Flink / SSH / Credential / Adapter 参数是否泄漏进 Core Domain；
-- 是否重新引入 `syncType / sceneType / 第二套 Spec`。
+- Restart 是否隐式升级，Apply target 是否执行中漂移；
+- `UNKNOWN / CONFLICT` 是否被误判为 FAILED 或允许创建第二实例；
+- Runtime state 是否重新回到 Task compatibility 字段；
+- Current Environment 是否覆盖历史 Execution snapshot；
+- 外部协议或 adapter 参数是否泄漏进 Core Domain；
+- 是否重新引入第二套 Definition truth。
 
-违反现有领域规则时，报告：
+违反现有规则：`Domain Violation`。现有模型无法表达真实需求：`Domain Gap`。
 
-```text
-Domain Violation
-```
+## 3. Architecture Alignment
 
-如果现有领域模型无法表达需求，报告：
+production Realtime Sync 已完成子系统收敛，`service/` 大桶不再是迁移期白名单。
 
-```text
-Domain Gap
-```
+重点检查：
 
-### 3. Architecture Alignment
+- 新类是否明确归属 Definition / Execution / Reconcile / Query / Observability / Environment / Engine / Persistence；
+- 是否重新创建 `service / common / helper / utils / base` 业务桶；
+- Controller 是否只依赖稳定 Application Facade；
+- `@Service` 是否仅用于 5 个稳定 Facade；
+- Query / Observability 是否保持纯 read side；
+- Reconcile 是否仍依据 runtime identity 与 runtime evidence 收敛，而不是猜外部 Job；
+- Environment lifecycle 与 Runtime snapshot resolution 是否保持分离；
+- Repository / DAO / Engine 是否反向依赖 Application；
+- Core Domain 是否保持 framework / persistence / engine free；
+- 是否为了减少重复提前抽 realtime/offline Shared Sync Kernel。
 
-检查 `ARCHITECTURE.md`。当前允许 `service/` 作为迁移期 package，但新的代码和拆分方向必须向业务子系统收敛。
+明确破坏已声明架构：`Architecture Violation`。真实需求无法由当前架构表达：`Architecture Gap`。
 
-重点关注：
+## 4. Dependency Alignment
 
-- 新类是否能明确归属 Definition / Execution / Reconcile / Observability / Environment / Engine / Persistence；
-- 是否继续向顶层 `service/` 增加宽泛职责；
-- Controller 是否依赖稳定 Application Facade，而不是内部 Coordinator / Manager / Repository / Engine；
-- `@Service` 是否被滥用于内部专业角色；
-- Query / Observability 是否开始承担 command 状态迁移；
-- Reconcile 是否仍使用明确 runtime identity / environment snapshot，而不是猜外部 Job；
-- Repository contract 是否泄漏 DAO / PO / Controller DTO；
-- Domain 是否依赖 Spring / Jackson / MyBatis / Flink / SSH；
-- Compatibility mapper / facade 是否重新进入 Core Domain；
-- 是否为了减少重复提前抽 realtime/offline Shared Sync Kernel；
-- package move 是否同时改变 REST / DB / Domain behavior，导致 PR 难以独立 review / rollback。
+任何新增 realtime 内部 import 都检查 `DEPENDENCIES.md` 与 `RealtimeSyncDependencyBoundaryTest`。
 
-出现明确违反目标架构且会形成新的长期耦合时，报告：
+尤其关注窄 corridor：
 
 ```text
-Architecture Violation
+definition -> execution.RealtimeJobExecutionService
+execution  -> reconcile.RealtimeReconcileCoordinator / RealtimeDeleteSafetyChecker
+definition/execution/reconcile/observability -> environment.RealtimeRuntimeResolver
+engine -> repository.RealtimeRuntimeIdentityStore
+controller -> declared stable facades
 ```
 
-如果当前目标架构无法表达真实需求，先报告：
+不接受以下修复方式：
 
-```text
-Architecture Gap
-```
+- 为了让测试通过直接扩大 dependency whitelist；
+- 引入反向依赖后声称“现在只有一个调用点”；
+- 用 reflection / service locator 绕过 import guard；
+- 把兼容 mapper 塞回 Core Domain 规避循环。
 
-不要通过新增 `Helper / Common / Utils / Base` 绕过边界。
+Dependency graph 必须保持无环。
 
-### 4. Correctness
+## 5. Code Style / Role Alignment
 
-检查真实错误，不做泛泛而谈：
+按 `CODE_STYLE.md` 检查：
+
+- Service / Coordinator / Manager / Resolver / Query / Reader / Reconciler / Gateway / Repository 是否名副其实；
+- 一个类是否承担多个 truth owner；
+- 高风险流程是否把关键顺序写清楚；
+- transaction 是否只覆盖需要线性化的工作；
+- 是否出现泛化 `execute/handle/process` 吞掉关键状态语义；
+- 注释是否解释 invariant / why，而非复述代码。
+
+纯格式和个人偏好不要当成阻塞问题。
+
+## 6. Correctness
+
+检查真实错误：
 
 - 状态迁移；
 - 空值和边界值；
 - 事务边界；
 - 并发 / CAS / 锁；
 - 幂等；
-- 重试；
 - 外部调用超时和部分失败；
-- Start / Stop / Reconcile / Restart / Apply 的竞态；
-- 快照、版本、外部 JobId 是否可能错配。
+- Start / Stop / Reconcile / Restart / Apply 竞态；
+- Snapshot / Version / JobId 是否错配；
+- Definition / Execution target 是否可能在命令中途漂移。
 
-### 5. Compatibility
+## 7. Compatibility
 
 检查是否破坏：
 
@@ -116,11 +124,11 @@ Architecture Gap
 - Yak YAML；
 - 历史数据；
 - 前端调用；
-- 已存在运行实例或版本记录。
+- 已存在 DefinitionVersion / SyncExecution。
 
-破坏性变更必须有明确迁移方案，禁止借架构重构做 Big-Bang contract change。
+破坏性变化必须有明确迁移方案，禁止借架构重构做 Big-Bang contract change。
 
-### 6. Safety
+## 8. Safety
 
 重点检查：
 
@@ -131,51 +139,59 @@ Architecture Gap
 - RuntimeEnvironmentSnapshot；
 - replacement-stop reservation；
 - prepared version re-check；
-- 密码 / Secret 是否落库或进日志；
-- 提交临时文件是否安全清理。
+- 敏感配置是否扩大持久化或输出范围；
+- 提交临时 artifact 是否按既有边界清理。
 
-### 7. Tests / Guardrails
+## 9. Engine / Persistence Boundary
 
-每个 P0 / P1 问题都回答：
+Engine 通常不持久化业务状态。唯一显式例外是：
 
 ```text
-现有哪个测试应该挡住？
+RecoverableRealtimeEngineGateway
+  -> RealtimeRuntimeIdentityStore
 ```
 
-如果没有，指出缺失测试。优先补能锁住领域行为和架构边界的回归测试，不为了覆盖率堆测试。
+它用于保证 runtime identity 在外部提交开始前已持久化。不要把这条安全 corridor 扩成 Engine -> RealtimeJobStore / DAO。
 
-迁移期间：
+Persistence 侧检查：
 
-- `RealtimeArchitectureTest` 继续作为基础边界安全网；
-- Domain guardrail 不得因为 package move 被删除；
-- 当 Definition / Execution / Reconcile 等目标 package 稳定后，再逐步补完整 dependency graph / corridor tests；
-- 不要提前把临时 `service/` 依赖写成永久 architecture whitelist。
+- Repository contract 不暴露 DAO model / Mapper / Controller DTO；
+- DAO 不调用 Application / Engine / Repository；
+- persistence compatibility mapping 留在 `repository.support`；
+- Repository 不反向依赖 Definition / Execution / Reconcile。
+
+## 10. Tests / Guardrails
+
+每个 P0 / P1 问题都回答：现有哪个测试应该挡住？没有就指出 Missing Test。
+
+长期 guard：
+
+```text
+RealtimeArchitectureTest
+  -> role / stereotype / core-domain / read-side guards
+
+RealtimeSyncDependencyBoundaryTest
+  -> top-level dependency matrix
+  -> no-cycle
+  -> cross-subsystem corridors
+  -> @Service allowlist
+  -> forbidden broad buckets
+  -> persistence compatibility location
+```
+
+行为安全测试仍负责 Start/Stop/Restart/Apply/Reconcile/Environment Snapshot 等 runtime contract。
 
 ## Refactor PR Rules
-
-纯结构重构默认遵守：
 
 ```text
 一个 PR 一个主要边界
 package move / class split / behavior change 尽量分开
 不顺手改 REST / DB / Flyway / Domain semantics
-不长期保留新旧双入口
-先有行为回归测试，再拆 Execution 高风险路径
+不长期保留 production 新旧双入口
+行为测试与 architecture tests 都必须保留
 ```
 
-好的重构 PR 应让 reviewer 快速回答：
-
-```text
-为什么拆？
-目标 subsystem / role 是什么？
-runtime truth owner 有没有变化？
-public contract 有没有变化？
-哪个测试证明行为没变？
-```
-
-### Domain / Architecture Impact block
-
-涉及核心结构调整的 PR 建议在描述中包含：
+涉及结构调整的 PR 建议包含：
 
 ```text
 Domain Impact Analysis
@@ -190,40 +206,49 @@ Architecture Impact Analysis
 - Dependency direction changed: yes/no
 ```
 
+如果修改 package dependency，再增加：
+
+```text
+Dependency Impact Analysis
+- New edge:
+- Existing corridor or new corridor:
+- Cycle impact:
+- DEPENDENCIES.md updated: yes/no
+- RealtimeSyncDependencyBoundaryTest updated: yes/no
+```
+
 ## 严重级别
 
 ```text
 P0 Blocker
 - 数据丢失 / 不可恢复破坏
 - 重复运行导致严重数据风险
-- Secret 泄漏
+- 敏感信息泄漏
 - 明确安全问题
 
 P1 Must Fix
 - 业务结果错误
-- 违反 REQUIREMENTS.md / DOMAIN.md
+- 违反 REQUIREMENTS / DOMAIN
 - 明确并发、幂等、事务、兼容性缺陷
-- 高概率导致运行故障
-- 引入明确的长期架构越界并破坏稳定边界
+- 高概率运行故障
+- 打破稳定架构/依赖 corridor 或引入 cycle
 
 P2 Suggestion
 - 有明确收益的可维护性、性能或测试改进
-- 非阻塞架构收敛建议
+- 非阻塞工程建议
 ```
-
-纯命名、格式、个人风格偏好不要作为问题提交，除非会造成真实歧义或边界风险。
 
 ## 每个问题必须有证据
 
-一个有效 Review 问题至少包含：
+有效 Review 问题至少包含：
 
 ```text
 位置：文件 / 行或方法
 级别：P0 / P1 / P2
-依据：Requirement / Domain / Architecture / correctness fact
+依据：Requirement / Domain / Architecture / Dependencies / correctness fact
 场景：什么输入、依赖关系或并发顺序会触发
 风险：会造成什么结果
-建议：修复方向，不必替作者重写整段代码
+建议：修复方向
 测试：应补或应命中的测试
 ```
 
@@ -254,13 +279,11 @@ Conclusion: PASS | CHANGES_REQUIRED
 ## Architecture Gap
 无 / 说明
 
+## Dependency Gap
+无 / 说明
+
 ## Missing Tests
 无 / 说明
 ```
 
-规则：
-
-- 有 P0 / P1 -> `CHANGES_REQUIRED`。
-- 只有 P2 -> 可以 `PASS`，P2 不阻塞。
-- 没发现真实问题 -> 直接 `PASS`，不要为了显得有价值硬凑问题。
-- Review 结论只基于当前需求、领域规则、架构 contract、代码事实和可复现风险，不猜未来需求。
+有 P0/P1 -> `CHANGES_REQUIRED`；只有 P2 可以 `PASS`。没发现真实问题就直接 `PASS`，不要为了显得有价值硬凑问题。
