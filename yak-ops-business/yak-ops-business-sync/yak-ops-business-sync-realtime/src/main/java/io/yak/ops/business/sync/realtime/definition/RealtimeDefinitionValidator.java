@@ -19,6 +19,7 @@ import jakarta.validation.Validator;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -179,7 +180,8 @@ public class RealtimeDefinitionValidator {
   private boolean isPhysicalTable(DataSourceCatalogTableVO table) {
     return table != null
         && table.getName() != null
-        && (table.getType() == null || !table.getType().toUpperCase().contains("VIEW"));
+        && (table.getType() == null
+            || !table.getType().toUpperCase(Locale.ROOT).contains("VIEW"));
   }
 
   private String violationMessage(ConstraintViolation<CdcPipelineSpec> violation) {
