@@ -11,7 +11,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
+import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
+import io.yak.ops.business.datasource.domain.catalog.CatalogTable;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpecValidator;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
@@ -20,10 +22,9 @@ import io.yak.ops.business.sync.realtime.engine.RealtimeConnectorCapabilityResol
 import io.yak.ops.business.sync.realtime.engine.RealtimeDataSourceResolver;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
 import io.yak.ops.business.sync.realtime.engine.ResolvedCdcPipeline;
-import io.yak.ops.business.sync.realtime.service.RealtimeRuntimeResolver;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
+import io.yak.ops.business.sync.realtime.environment.RealtimeRuntimeResolver;
 import jakarta.validation.Validation;
+import java.sql.Types;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class RealtimeDefinitionValidatorTest {
   private CdcPipelineSpecValidator specValidator;
   private RealtimeRuntimeResolver runtimeResolver;
   private RealtimeDataSourceResolver dataSourceResolver;
-  private DataSourceCatalogService catalogService;
+  private DataSourceCatalogReader catalogReader;
   private RealtimeConnectorCapabilityResolver capabilityResolver;
   private PipelineYamlCompiler compiler;
   private RealtimeEngineGateway gateway;
@@ -46,7 +47,7 @@ class RealtimeDefinitionValidatorTest {
     specValidator = mock(CdcPipelineSpecValidator.class);
     runtimeResolver = mock(RealtimeRuntimeResolver.class);
     dataSourceResolver = mock(RealtimeDataSourceResolver.class);
-    catalogService = mock(DataSourceCatalogService.class);
+    catalogReader = mock(DataSourceCatalogReader.class);
     capabilityResolver = mock(RealtimeConnectorCapabilityResolver.class);
     compiler = mock(PipelineYamlCompiler.class);
     gateway = mock(RealtimeEngineGateway.class);
@@ -57,13 +58,13 @@ class RealtimeDefinitionValidatorTest {
 
     when(runtimeResolver.environment(3L, true)).thenReturn(environment);
     when(dataSourceResolver.resolve(any(CdcPipelineSpec.class))).thenReturn(resolved);
-    when(catalogService.listTables(1L, null, null, null))
-        .thenReturn(List.of(new DataSourceCatalogTableVO("shop", null, "orders", "TABLE", null)));
-    when(catalogService.listColumns(1L, "shop", null, "orders"))
+    when(catalogReader.listTables(1L, null, null, null))
+        .thenReturn(List.of(new CatalogTable("shop", null, "orders", "TABLE", null)));
+    when(catalogReader.listColumns(1L, "shop", null, "orders"))
         .thenReturn(
             List.of(
-                new DataSourceCatalogColumnVO(
-                    "id", "BIGINT", null, null, null, false, 1, true, null)));
+                new CatalogColumn(
+                    "id", "BIGINT", Types.BIGINT, null, null, false, 1, true, null)));
 
     ObjectNode manifest = new ObjectMapper().createObjectNode();
     manifest.put("deliverySemantics", "at-least-once");
@@ -79,7 +80,7 @@ class RealtimeDefinitionValidatorTest {
             specValidator,
             runtimeResolver,
             dataSourceResolver,
-            catalogService,
+            catalogReader,
             capabilityResolver,
             compiler,
             gateway);
@@ -96,8 +97,8 @@ class RealtimeDefinitionValidatorTest {
     verify(specValidator).validate(spec);
     verify(runtimeResolver).environment(3L, true);
     verify(dataSourceResolver).resolve(spec);
-    verify(catalogService).listTables(1L, null, null, null);
-    verify(catalogService).listColumns(1L, "shop", null, "orders");
+    verify(catalogReader).listTables(1L, null, null, null);
+    verify(catalogReader).listColumns(1L, "shop", null, "orders");
     verify(capabilityResolver).requireSupported(any(), eq(resolved), eq(spec));
     verify(compiler).compile("definition-preflight", spec, resolved);
     verify(gateway, never()).validate(any(), any());
@@ -113,18 +114,18 @@ class RealtimeDefinitionValidatorTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Source 数据源不存在");
 
-    verify(catalogService, never()).listTables(any(), any(), any(), any());
+    verify(catalogReader, never()).listTables(any(), any(), any(), any());
     verify(compiler, never()).compile(any(), any(), any());
   }
 
   @Test
   void rejectsPrimaryKeyDriftBeforePersistence() {
     CdcPipelineSpec spec = spec();
-    when(catalogService.listColumns(1L, "shop", null, "orders"))
+    when(catalogReader.listColumns(1L, "shop", null, "orders"))
         .thenReturn(
             List.of(
-                new DataSourceCatalogColumnVO(
-                    "order_id", "BIGINT", null, null, null, false, 1, true, null)));
+                new CatalogColumn(
+                    "order_id", "BIGINT", Types.BIGINT, null, null, false, 1, true, null)));
 
     assertThatThrownBy(() -> validator.validate(spec, 3L))
         .isInstanceOf(IllegalArgumentException.class)
