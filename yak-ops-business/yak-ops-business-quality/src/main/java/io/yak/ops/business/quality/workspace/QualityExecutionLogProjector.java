@@ -4,6 +4,7 @@ import io.yak.ops.business.quality.domain.QualityDomain.Execution;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecution;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.LogLevel;
+import io.yak.ops.common.enums.quality.QualityEnums.TriggerType;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,49 +16,81 @@ public class QualityExecutionLogProjector {
 
   public StructuredLog project(Execution execution) {
     List<LogLine> lines = new ArrayList<>();
-    lines.add(new LogLine(
-        execution.queuedAt(), LogLevel.INFO, "DISPATCH",
-        "执行任务已创建，触发方式："
-            + (execution.triggerType().name().equals("SCHEDULE") ? "调度触发" : "手动触发")
-            + "，操作人：" + safe(execution.operator())));
+    lines.add(
+        new LogLine(
+            execution.queuedAt(),
+            LogLevel.INFO,
+            "DISPATCH",
+            "执行任务已创建，触发方式："
+                + (execution.triggerType() == TriggerType.SCHEDULE ? "调度触发" : "手动触发")
+                + "，操作人："
+                + safe(execution.operator())));
 
     if (execution.startedAt() != null) {
-      lines.add(new LogLine(
-          execution.startedAt(), LogLevel.INFO, "EXECUTION",
-          "开始执行质量检查，共 " + execution.totalRules() + " 条规则"));
+      lines.add(
+          new LogLine(
+              execution.startedAt(),
+              LogLevel.INFO,
+              "EXECUTION",
+              "开始执行质量检查，共 " + execution.totalRules() + " 条规则"));
     }
 
     for (RuleExecution rule : execution.rules()) {
-      lines.add(new LogLine(
-          fallback(rule.createdAt(), execution.startedAt(), execution.queuedAt()),
-          logLevel(rule.checkResult()), "RULE", ruleMessage(rule)));
+      lines.add(
+          new LogLine(
+              fallback(rule.createdAt(), execution.startedAt(), execution.queuedAt()),
+              logLevel(rule.checkResult()),
+              "RULE",
+              ruleMessage(rule)));
     }
 
     if (hasText(execution.errorMessage())) {
-      lines.add(new LogLine(
-          fallback(execution.finishedAt(), execution.startedAt(), execution.queuedAt()),
-          LogLevel.ERROR, "EXECUTION", execution.errorMessage()));
+      lines.add(
+          new LogLine(
+              fallback(execution.finishedAt(), execution.startedAt(), execution.queuedAt()),
+              LogLevel.ERROR,
+              "EXECUTION",
+              execution.errorMessage()));
     }
 
     if (execution.finishedAt() != null) {
-      lines.add(new LogLine(
-          execution.finishedAt(),
-          execution.checkResult() == CheckResult.PASSED ? LogLevel.INFO : LogLevel.WARN,
-          "FINISH",
-          "执行结束：通过 " + execution.passedRules() + "，未通过 " + execution.failedRules()
-              + "，异常 " + execution.errorRules() + "，耗时 "
-              + (execution.durationMs() == null ? 0 : execution.durationMs()) + " ms"));
+      lines.add(
+          new LogLine(
+              execution.finishedAt(),
+              execution.checkResult() == CheckResult.PASSED ? LogLevel.INFO : LogLevel.WARN,
+              "FINISH",
+              "执行结束：通过 "
+                  + execution.passedRules()
+                  + "，未通过 "
+                  + execution.failedRules()
+                  + "，异常 "
+                  + execution.errorRules()
+                  + "，耗时 "
+                  + (execution.durationMs() == null ? 0 : execution.durationMs())
+                  + " ms"));
     }
     return new StructuredLog(execution.executionNo(), lines);
   }
 
   private static String ruleMessage(RuleExecution rule) {
-    StringBuilder message = new StringBuilder().append("规则「").append(rule.ruleName()).append("」")
-        .append(resultLabel(rule.checkResult()));
-    if (hasText(rule.metricValue())) message.append("，实际值：").append(rule.metricValue());
-    if (hasText(rule.expectedValue())) message.append("，期望值：").append(rule.expectedValue());
-    if (rule.durationMs() != null) message.append("，耗时：").append(rule.durationMs()).append(" ms");
-    if (hasText(rule.errorMessage())) message.append("，错误：").append(rule.errorMessage());
+    StringBuilder message =
+        new StringBuilder()
+            .append("规则「")
+            .append(rule.ruleName())
+            .append("」")
+            .append(resultLabel(rule.checkResult()));
+    if (hasText(rule.metricValue())) {
+      message.append("，实际值：").append(rule.metricValue());
+    }
+    if (hasText(rule.expectedValue())) {
+      message.append("，期望值：").append(rule.expectedValue());
+    }
+    if (rule.durationMs() != null) {
+      message.append("，耗时：").append(rule.durationMs()).append(" ms");
+    }
+    if (hasText(rule.errorMessage())) {
+      message.append("，错误：").append(rule.errorMessage());
+    }
     return message.toString();
   }
 
@@ -79,28 +112,28 @@ public class QualityExecutionLogProjector {
     };
   }
 
+  private static LocalDateTime fallback(LocalDateTime... values) {
+    for (LocalDateTime value : values) {
+      if (value != null) {
+        return value;
+      }
+    }
+    return LocalDateTime.now();
+  }
+
+  private static String safe(String value) {
+    return value == null || value.isBlank() ? "system" : value;
+  }
+
   private static boolean hasText(String value) {
     return value != null && !value.isBlank();
   }
 
-  private static String safe(String value) {
-    return hasText(value) ? value : "system";
-  }
-
-  private static LocalDateTime fallback(LocalDateTime... values) {
-    for (LocalDateTime value : values) if (value != null) return value;
-    return LocalDateTime.now();
-  }
+  public record LogLine(LocalDateTime time, LogLevel level, String stage, String message) {}
 
   public record StructuredLog(String executionNo, List<LogLine> lines) {
     public StructuredLog {
       lines = lines == null ? List.of() : List.copyOf(lines);
     }
   }
-
-  public record LogLine(
-      LocalDateTime time,
-      LogLevel level,
-      String stage,
-      String message) {}
 }
