@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.plugin;
+package io.yak.ops.business.datasource.query;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

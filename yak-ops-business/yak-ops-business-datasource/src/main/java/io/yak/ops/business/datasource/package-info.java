@@ -1,4 +1,4 @@
 /**
- * 数据源注册、连接配置、分页查询与连通性管理能力。
+ * 数据源定义、连接、Catalog、Plugin 适配与 SQL Execution 控制面。
  */
 package io.yak.ops.business.datasource;

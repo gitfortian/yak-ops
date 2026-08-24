@@ -6,7 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.controller.v1.mapper.DataSourcePluginViewMapper;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginReader;
+import io.yak.ops.business.datasource.query.DataSourcePluginReader;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.constant.datasource.DataSourceConstants;
 import io.yak.ops.common.constant.datasource.DataSourcePermissionCode;

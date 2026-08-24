@@ -7,7 +7,6 @@ import io.yak.ops.business.datasource.domain.plugin.DataSourcePluginDescriptor.C
 import io.yak.ops.business.datasource.exception.DataSourceException;
 import io.yak.ops.business.datasource.gateway.DataSourcePluginGateway;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
-import io.yak.ops.business.datasource.util.DataSourceSecretCodec;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.spi.datasource.DataSourceCapability;
@@ -15,6 +14,7 @@ import io.yak.ops.spi.datasource.DataSourceConnection;
 import io.yak.ops.spi.datasource.DataSourcePlugin;
 import io.yak.ops.spi.datasource.DataSourcePluginException;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -112,7 +112,9 @@ public class SpiDataSourcePluginGateway implements DataSourcePluginGateway {
         source.dbType(),
         source.displayName(),
         source.apiVersion(),
-        source.capabilities().stream().map(value -> Capability.valueOf(value.name())).collect(java.util.stream.Collectors.toUnmodifiableSet()),
+        source.capabilities().stream()
+            .map(value -> Capability.valueOf(value.name()))
+            .collect(Collectors.toUnmodifiableSet()),
         source.connectionForm().sections().stream().map(this::toSection).toList(),
         source.connectionForm().legacyFields().stream().map(this::toField).toList(),
         source.installRequired(),

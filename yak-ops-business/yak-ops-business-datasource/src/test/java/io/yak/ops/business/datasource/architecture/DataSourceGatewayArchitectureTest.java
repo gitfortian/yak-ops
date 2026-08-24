@@ -2,6 +2,11 @@ package io.yak.ops.business.datasource.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
+import io.yak.ops.business.datasource.connection.DataSourceConnectionResolver;
+import io.yak.ops.business.datasource.connection.DataSourceConnectionTester;
+import io.yak.ops.business.datasource.controller.v1.mapper.DataSourcePluginViewMapper;
+import io.yak.ops.business.datasource.controller.v1.mapper.DataSourceViewMapper;
 import io.yak.ops.business.datasource.domain.plugin.DataSourcePluginDescriptor;
 import io.yak.ops.business.datasource.execution.DefaultSqlExecutionRuntime;
 import io.yak.ops.business.datasource.execution.domain.SqlExecutionAggregate;
@@ -11,11 +16,9 @@ import io.yak.ops.business.datasource.gateway.SqlExecutionGateway;
 import io.yak.ops.business.datasource.gateway.adapter.SpiDataSourceCatalogGateway;
 import io.yak.ops.business.datasource.gateway.adapter.SpiDataSourcePluginGateway;
 import io.yak.ops.business.datasource.gateway.adapter.SpiSqlExecutionGateway;
-import io.yak.ops.business.datasource.service.impl.DataSourceCatalogServiceImpl;
-import io.yak.ops.business.datasource.service.impl.DataSourcePluginConfigServiceImpl;
-import io.yak.ops.business.datasource.service.impl.DataSourceServiceImpl;
-import io.yak.ops.business.datasource.service.support.DataSourcePluginViewMapper;
-import io.yak.ops.business.datasource.service.support.DataSourceViewMapper;
+import io.yak.ops.business.datasource.management.DataSourceManager;
+import io.yak.ops.business.datasource.query.DataSourcePluginReader;
+import io.yak.ops.business.datasource.query.DataSourceReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -50,12 +53,15 @@ class DataSourceGatewayArchitectureTest {
   }
 
   @Test
-  void applicationConsumersDependOnBusinessGatewaysInsteadOfPluginInfrastructure() {
+  void applicationRolesDependOnBusinessGatewaysInsteadOfPluginInfrastructure() {
     for (Class<?> type :
         List.of(
-            DataSourceServiceImpl.class,
-            DataSourceCatalogServiceImpl.class,
-            DataSourcePluginConfigServiceImpl.class,
+            DataSourceManager.class,
+            DataSourceReader.class,
+            DataSourceConnectionResolver.class,
+            DataSourceConnectionTester.class,
+            DataSourceCatalogReader.class,
+            DataSourcePluginReader.class,
             DataSourceViewMapper.class,
             DataSourcePluginViewMapper.class,
             DefaultSqlExecutionRuntime.class)) {
@@ -65,7 +71,7 @@ class DataSourceGatewayArchitectureTest {
             .as(type.getSimpleName() + "." + field.getName())
             .doesNotContain(".spi.datasource")
             .doesNotContain(".plugin.DataSourcePluginRegistry")
-            .doesNotContain(".util.DataSourceSecretCodec");
+            .doesNotContain(".gateway.adapter.DataSourceSecretCodec");
       }
     }
   }

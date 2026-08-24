@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.util;
+package io.yak.ops.business.datasource.gateway.adapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.exception.DataSourceException;
+import io.yak.ops.business.datasource.security.SensitiveTextMasker;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
 import java.util.Iterator;
@@ -16,13 +17,13 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Connection-secret masking and stored-secret merge helper used by the SPI adapter boundary. */
+/** Masks and merges descriptor-owned connection secrets at the Plugin SPI adapter boundary. */
 @Component
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataSourceSecretCodec {
 
-  public static final String MASKED_VALUE = "******";
+  public static final String MASKED_VALUE = SensitiveTextMasker.MASKED_VALUE;
 
   private static final Set<String> COMMON_SECRET_KEYS =
       Set.of(
@@ -38,8 +39,8 @@ public class DataSourceSecretCodec {
           "privatekeypassphrase");
 
   private final ObjectMapper objectMapper;
+  private final SensitiveTextMasker textMasker;
 
-  /** Return masked JSON for interface projection only. */
   public String maskConnectionJson(DataSourcePluginDescriptor descriptor, String connectionJson) {
     if (connectionJson == null || connectionJson.trim().isEmpty()) return null;
     ObjectNode root = readObject(connectionJson);
@@ -47,7 +48,6 @@ public class DataSourceSecretCodec {
     return write(root);
   }
 
-  /** Merge masked, empty or missing secret fields with the stored connection JSON. */
   public String mergeStoredSecrets(
       DataSourcePluginDescriptor descriptor, String submittedJson, String storedJson) {
     ObjectNode submitted = readObject(submittedJson);
@@ -56,15 +56,8 @@ public class DataSourceSecretCodec {
     return write(submitted);
   }
 
-  /** Fallback masking for sensitive credentials embedded in display text/JDBC URLs. */
   public String maskSensitiveText(String value) {
-    if (value == null || value.isEmpty()) return value;
-    String masked =
-        value.replaceAll(
-            "(?i)((?:^|[?&;])(?:password|pwd|token|secret)=)[^&;\\s]*",
-            "$1" + MASKED_VALUE);
-    return masked.replaceAll(
-        "(?i)(://[^:/?#\\s]+:)[^@/?#\\s]+@", "$1" + MASKED_VALUE + "@");
+    return textMasker.mask(value);
   }
 
   private void maskObject(ObjectNode object, Set<String> configuredKeys) {

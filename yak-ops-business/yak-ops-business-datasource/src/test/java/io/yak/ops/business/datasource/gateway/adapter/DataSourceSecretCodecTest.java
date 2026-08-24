@@ -1,9 +1,10 @@
-package io.yak.ops.business.datasource.util;
+package io.yak.ops.business.datasource.gateway.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.datasource.security.SensitiveTextMasker;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
 import io.yak.ops.spi.datasource.DataSourcePluginDescriptor.ConnectionForm;
@@ -16,12 +17,12 @@ import org.junit.jupiter.api.Test;
 class DataSourceSecretCodecTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private final DataSourceSecretCodec codec = new DataSourceSecretCodec(objectMapper);
+  private final DataSourceSecretCodec codec =
+      new DataSourceSecretCodec(objectMapper, new SensitiveTextMasker());
 
   @Test
   void shouldMaskPasswordInResponseJsonAndJdbcUrl() throws Exception {
     DataSourcePluginDescriptor descriptor = descriptorWithPasswordField();
-
     String masked =
         codec.maskConnectionJson(
             descriptor,
@@ -34,7 +35,9 @@ class DataSourceSecretCodecTest {
     assertThat(root.path("properties").path("accessToken").asText())
         .isEqualTo(DataSourceSecretCodec.MASKED_VALUE);
     assertThat(root.get("username").asText()).isEqualTo("test_user");
-    assertThat(codec.maskSensitiveText("jdbc:mysql://test_user:TEST_ONLY_VALUE@db/demo?password=TEST_ONLY_VALUE"))
+    assertThat(
+            codec.maskSensitiveText(
+                "jdbc:mysql://test_user:TEST_ONLY_VALUE@db/demo?password=TEST_ONLY_VALUE"))
         .isEqualTo("jdbc:mysql://test_user:******@db/demo?password=******");
   }
 
@@ -98,14 +101,35 @@ class DataSourceSecretCodecTest {
             "{\"password\":\"TEST_ONLY_NEW\"}",
             "{\"password\":\"TEST_ONLY_OLD\"}");
 
-    assertThat(objectMapper.readTree(merged).get("password").asText()).isEqualTo("TEST_ONLY_NEW");
+    assertThat(objectMapper.readTree(merged).get("password").asText())
+        .isEqualTo("TEST_ONLY_NEW");
   }
 
   private DataSourcePluginDescriptor descriptorWithPasswordField() {
-    FormField username = new FormField(
-        "username", "用户名", FieldType.INPUT, null, null, List.of(), List.of(), List.of(), List.of(), null);
-    FormField password = new FormField(
-        "password", "密码", FieldType.PASSWORD, null, null, List.of(), List.of(), List.of(), List.of(), null);
+    FormField username =
+        new FormField(
+            "username",
+            "用户名",
+            FieldType.INPUT,
+            null,
+            null,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null);
+    FormField password =
+        new FormField(
+            "password",
+            "密码",
+            FieldType.PASSWORD,
+            null,
+            null,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null);
     return new DataSourcePluginDescriptor(
         DataSourceDbType.MYSQL,
         "MySQL",

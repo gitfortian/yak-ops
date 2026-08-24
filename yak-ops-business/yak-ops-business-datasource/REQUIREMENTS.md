@@ -25,6 +25,7 @@ Datasource 提供 Yak Ops 的统一数据源控制面：维护数据源配置、
 Create -> normalize -> DataSourceDefinition / ConnectionProfile -> UNKNOWN
 Update -> dbType unchanged -> replace ConnectionProfile -> UNKNOWN
 Test saved -> success CONNECTED / connectivity failure DISCONNECTED
+Test invalid saved config -> keep previous status
 Test unsaved -> validation only -> no persisted state
 ```
 
@@ -34,16 +35,16 @@ Test unsaved -> validation only -> no persisted state
 
 ```text
 HTTP compatibility Map
-  -> CatalogReadRequest
+  -> typed CatalogReadRequest
   -> read-only validation
   -> DataSourceCatalogGateway
-  -> DataSourceCatalogReadRequest (Plugin SPI)
+  -> typed Plugin Catalog request
   -> Plugin Catalog
 ```
 
 - TABLE 模式必须有 `table_path`；SQL 模式必须有 `query`。
 - preview / count / describe 的 SQL 模式只允许单条只读 SELECT。
-- HTTP 历史 alias 和 `paramsList` 继续兼容，但 Map 只能停在 Interface/Application 兼容入口。
+- HTTP 历史 alias 和 `paramsList` 继续兼容，但 Map 只能停在 HTTP compatibility boundary。
 - Plugin Catalog SPI 不接受 `Map<String,Object>`。
 
 ## SQL Execution
@@ -88,17 +89,19 @@ SSH_TUNNEL
 
 依赖关系：`TRANSACTIONS -> SQL_EXECUTION`，`CATALOG_READ -> CATALOG_METADATA`。详细规范见 `yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN.md`。
 
+当前 Plugin SPI v1 使用 Descriptor + typed Catalog contract。未来 source-level breaking change 必须提升 API version，并提供内置/第三方插件迁移计划；不得借 SPI 迁移连带改变 REST 或数据库结构。
+
 ## 安全要求
 
 - Secret 不得通过异常、`toString()`、普通日志或未脱敏响应输出。
 - HTTP 详情中的 JDBC 地址和连接 JSON 必须脱敏。
 - 掩码、空值或缺失 Secret 可以沿用已保存值，掩码不得覆盖真实凭据。
-- Secret 字段由 Plugin Descriptor Schema 声明，Business 不依赖 Plugin HTTP VO 判断 Secret。
+- Secret 字段由 Plugin Descriptor Schema 声明，Business 不依赖 HTTP VO 判断 Secret。
 - Dataset / Data Service / Analysis 等只读调用方不得绕过 SQL Policy。
 
 ## 模块边界
 
-本模块负责 DataSource Domain、持久化、连接测试、typed Catalog、SQL Execution 生命周期、Plugin discovery/adapter；不负责实时同步定义/Flink 生命周期、任意 ETL 编排、血缘计算或第三方 Driver 部署。
+本模块负责 DataSource Domain、持久化、连接测试、typed Catalog、SQL Execution 生命周期、Plugin discovery/adapter；不负责实时/离线同步定义与运行时生命周期、任意 ETL 编排、血缘计算或第三方 Driver 部署。
 
 ## 兼容性要求
 
@@ -108,10 +111,10 @@ SSH_TUNNEL
 REST API 路径和主要 JSON shape
 yak_ops_data_source / Flyway
 yak-ops-core SQL Execution contract
+Datasource Plugin SPI v1
 MySQL / PostgreSQL / Oracle / Doris / 达梦 / Kingbase 内置插件行为
+Task Plugin SQL execution provider
 ```
-
-Phase 4 **有意做一次 Plugin SPI source-level breaking change**：`pluginConfig() -> descriptor()`，Catalog Map -> typed request。仓库内置插件同步迁移；第三方插件按 `PLUGIN.md` 升级。该 SPI 迁移不得连带修改 REST 或数据库结构。
 
 ## 当前明确未解决
 

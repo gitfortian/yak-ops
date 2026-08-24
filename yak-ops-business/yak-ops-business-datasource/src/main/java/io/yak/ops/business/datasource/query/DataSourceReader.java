@@ -6,7 +6,6 @@ import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.domain.DataSourceSummary;
 import io.yak.ops.business.datasource.exception.DataSourceException;
-import io.yak.ops.business.datasource.management.DataSourceValidator;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
@@ -21,10 +20,9 @@ import org.springframework.stereotype.Component;
 public class DataSourceReader {
 
   private final DataSourceRepository repository;
-  private final DataSourceValidator validator;
 
   public DataSourceDefinition require(Long id) {
-    long dataSourceId = validator.requireId(id);
+    long dataSourceId = requireId(id);
     return repository.findById(dataSourceId)
         .orElseThrow(() -> new DataSourceException(DataSourceErrorCode.NOT_FOUND));
   }
@@ -39,5 +37,12 @@ public class DataSourceReader {
 
   public List<DataSourceDefinition> findAll(DataSourceDbType dbType) {
     return repository.findAll(dbType);
+  }
+
+  private long requireId(Long id) {
+    if (id == null || id <= 0L) {
+      throw new DataSourceException(DataSourceErrorCode.NOT_FOUND);
+    }
+    return id;
   }
 }

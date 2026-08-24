@@ -5,8 +5,7 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.common.enums.ResultCode;
 import io.yak.framework.security.exception.YakSecurityException;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.controller.v1.DataSourceController;
-import io.yak.ops.business.datasource.util.DataSourceSecretCodec;
+import io.yak.ops.business.datasource.security.SensitiveTextMasker;
 import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +24,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /** 数据源管理接口异常转换。 */
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(basePackageClasses = DataSourceController.class)
+@RestControllerAdvice(basePackages = "io.yak.ops.business.datasource.controller")
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataSourceExceptionHandler {
 
-  private final DataSourceSecretCodec secretCodec;
+  private final SensitiveTextMasker textMasker;
 
   @ExceptionHandler(YakSecurityException.class)
   public ResponseEntity<Result<Void>> handleSecurityException(
@@ -49,7 +48,7 @@ public class DataSourceExceptionHandler {
 
   @ExceptionHandler(DataSourceException.class)
   public Result<Void> handleDataSourceException(DataSourceException exception) {
-    String message = secretCodec.maskSensitiveText(exception.getUserMessage());
+    String message = textMasker.mask(exception.getUserMessage());
     if (exception.getErrorCode() == null) {
       return Result.fail(message);
     }
@@ -82,11 +81,9 @@ public class DataSourceExceptionHandler {
 
   private String resolveValidationMessage(Exception exception) {
     BindingResult bindingResult = null;
-    if (exception instanceof MethodArgumentNotValidException) {
-      MethodArgumentNotValidException validException = (MethodArgumentNotValidException) exception;
+    if (exception instanceof MethodArgumentNotValidException validException) {
       bindingResult = validException.getBindingResult();
-    } else if (exception instanceof BindException) {
-      BindException bindException = (BindException) exception;
+    } else if (exception instanceof BindException bindException) {
       bindingResult = bindException.getBindingResult();
     }
     if (bindingResult != null && bindingResult.getFieldError() != null) {

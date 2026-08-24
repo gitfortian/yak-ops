@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.plugin;
+package io.yak.ops.business.datasource.query;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.domain.plugin.DataSourcePluginDescriptor;
@@ -9,7 +9,7 @@ import io.yak.ops.common.enums.datasource.DataSourceErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Reads plugin capabilities through the business plugin gateway. */
+/** Reads datasource plugin capabilities through the business plugin gateway. */
 @Component
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor

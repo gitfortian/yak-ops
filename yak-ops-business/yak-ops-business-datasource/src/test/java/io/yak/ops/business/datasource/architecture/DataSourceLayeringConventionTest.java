@@ -10,11 +10,12 @@ import io.yak.ops.business.datasource.connection.DataSourceConnectionTester;
 import io.yak.ops.business.datasource.controller.v1.DataSourceCatalogController;
 import io.yak.ops.business.datasource.controller.v1.DataSourceController;
 import io.yak.ops.business.datasource.controller.v1.DataSourcePluginConfigController;
+import io.yak.ops.business.datasource.controller.v1.SqlExecutionAuditController;
 import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.datasource.dao.mapper.DataSourceMapper;
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
 import io.yak.ops.business.datasource.management.DataSourceManager;
-import io.yak.ops.business.datasource.plugin.DataSourcePluginReader;
+import io.yak.ops.business.datasource.query.DataSourcePluginReader;
 import io.yak.ops.business.datasource.query.DataSourceReader;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
@@ -40,7 +41,8 @@ class DataSourceLayeringConventionTest {
   @Test
   void repositoryUsesSharedPageData() throws Exception {
     Method page = DataSourceRepository.class.getMethod("page", DataSourceQuery.class);
-    assertThat(((ParameterizedType) page.getGenericReturnType()).getRawType()).isEqualTo(PageData.class);
+    assertThat(((ParameterizedType) page.getGenericReturnType()).getRawType())
+        .isEqualTo(PageData.class);
   }
 
   @Test
@@ -74,7 +76,8 @@ class DataSourceLayeringConventionTest {
         List.of(
             DataSourceController.class,
             DataSourceCatalogController.class,
-            DataSourcePluginConfigController.class)) {
+            DataSourcePluginConfigController.class,
+            SqlExecutionAuditController.class)) {
       for (Field field : type.getDeclaredFields()) {
         String fieldType = field.getGenericType().getTypeName();
         assertThat(fieldType)
@@ -109,7 +112,8 @@ class DataSourceLayeringConventionTest {
     }
   }
 
-  private void assertTypeAvoids(Class<?> owner, Method method, Type type, String... forbidden) {
+  private void assertTypeAvoids(
+      Class<?> owner, Method method, Type type, String... forbidden) {
     String signature = typeName(type);
     for (String packagePart : forbidden) {
       assertThat(signature)
