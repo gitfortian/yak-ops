@@ -51,9 +51,9 @@ public class OfflineCursorManager implements OfflineCursorGateway {
     }
 
     OfflineSyncCursor current = repository.find(batch.taskId(), range.cursorId()).orElse(null);
-    AdvanceResult currentState = currentState(current, range);
-    if (currentState != null) {
-      return currentState;
+    Optional<AdvanceResult> currentState = currentState(current, range);
+    if (currentState.isPresent()) {
+      return currentState.get();
     }
 
     if (repository.advance(current, range.afterExclusive(), range.throughInclusive(), batch.id())) {
@@ -67,17 +67,17 @@ public class OfflineCursorManager implements OfflineCursorGateway {
     return AdvanceResult.STALE;
   }
 
-  private AdvanceResult currentState(
+  private Optional<AdvanceResult> currentState(
       OfflineSyncCursor current, BatchScope.CursorRange range) {
     if (current == null) {
-      return AdvanceResult.NOT_INITIALIZED;
+      return Optional.of(AdvanceResult.NOT_INITIALIZED);
     }
     if (current.position().equals(range.throughInclusive())) {
-      return AdvanceResult.ALREADY_ADVANCED;
+      return Optional.of(AdvanceResult.ALREADY_ADVANCED);
     }
     if (!current.position().equals(range.afterExclusive())) {
-      return AdvanceResult.STALE;
+      return Optional.of(AdvanceResult.STALE);
     }
-    return null;
+    return Optional.empty();
   }
 }
