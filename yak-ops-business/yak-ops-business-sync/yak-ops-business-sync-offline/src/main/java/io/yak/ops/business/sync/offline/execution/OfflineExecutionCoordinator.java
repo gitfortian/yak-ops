@@ -9,6 +9,7 @@ import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
+import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
@@ -22,7 +23,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Execution 流程协调：claim -> scoped JobSpec -> Link-Up -> state application。 */
+/** Coordinates claim -> frozen scope -> Link-Up submit -> Attempt state application. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineExecutionCoordinator {
@@ -65,7 +66,7 @@ public class OfflineExecutionCoordinator {
       int attemptNo) {
     OfflineExecutionClaim claim =
         claimManager.claim(definitionId, triggerType, retryFromExecutionId, attemptNo);
-    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
+    return submitClaim(claim);
   }
 
   public OfflineJobExecution executeSnapshot(
@@ -90,38 +91,27 @@ public class OfflineExecutionCoordinator {
       String definitionSnapshotJson,
       String logicalJobSpecJson,
       String idempotencyKey) {
-    OfflineExecutionClaim claim = claimManager.claimSnapshot(
-        definitionId,
-        definitionVersion,
-        configDigest,
-        definitionSnapshotJson,
-        logicalJobSpecJson,
-        "WORKFLOW",
-        idempotencyKey);
-    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
+    OfflineExecutionClaim claim =
+        claimManager.claimSnapshot(
+            definitionId,
+            definitionVersion,
+            configDigest,
+            definitionSnapshotJson,
+            logicalJobSpecJson,
+            BatchTriggerToken.WORKFLOW,
+            idempotencyKey);
+    return submitClaim(claim);
   }
 
   public OfflineJobExecution executePendingBackfill(Long batchId) {
-    OfflineExecutionClaim claim = claimManager.claimPendingBackfill(batchId);
-    OfflineJobExecution execution = claim.getExecution();
-    if (claim.isReused()
-        && !OfflineExecutionStatus.CREATED.name().equalsIgnoreCase(execution.getStatus())) {
-      return execution;
-    }
-    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
+    return submitClaimIfNeeded(claimManager.claimPendingBackfill(batchId));
   }
 
   public OfflineJobExecution retryFrom(OfflineJobExecution previous) {
     if (previous == null || previous.getId() == null) {
       throw new IllegalArgumentException("重试来源实例不能为空");
     }
-    OfflineExecutionClaim claim = claimManager.claimRetry(previous.getId());
-    OfflineJobExecution execution = claim.getExecution();
-    if (claim.isReused()
-        && !OfflineExecutionStatus.CREATED.name().equalsIgnoreCase(execution.getStatus())) {
-      return execution;
-    }
-    return submitClaim(claim, resolveScopedExecutionJobSpec(claim));
+    return submitClaimIfNeeded(claimManager.claimRetry(previous.getId()));
   }
 
   public OfflineJobExecution cancelLatestBatch(Long definitionId) {
@@ -140,6 +130,7 @@ public class OfflineExecutionCoordinator {
     if (!OfflineExecutionStatus.isActive(execution.getStatus())) {
       throw new IllegalStateException("当前执行实例已结束，无需停止");
     }
+
     stateManager.markCancellationRequested(execution);
     if (StringUtils.hasText(execution.getEngineJobId())) {
       stateManager.applySnapshot(
@@ -162,49 +153,47 @@ public class OfflineExecutionCoordinator {
   }
 
   public OfflineJobExecution require(Long id) {
-    if (id == null || id <= 0L) throw new IllegalArgumentException("任务实例 ID 不合法");
-    return executionRepository.findById(id)
+    if (id == null || id <= 0L) {
+      throw new IllegalArgumentException("任务实例 ID 不合法");
+    }
+    return executionRepository
+        .findById(id)
         .orElseThrow(() -> new IllegalArgumentException("离线同步任务实例不存在：" + id));
   }
 
-  private String resolveScopedExecutionJobSpec(OfflineExecutionClaim claim) {
+  private OfflineJobExecution submitClaimIfNeeded(OfflineExecutionClaim claim) {
     OfflineJobExecution execution = claim.getExecution();
-    String logicalJobSpec = claim.getLogicalJobSpecJson();
-    Long batchId = execution.getBatchId();
-    if (batchId != null && batchId > 0L) {
-      BatchExecution batch = batchRepository.findById(batchId)
-          .orElseThrow(() -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
-      logicalJobSpec = scopeExecutionAdapter.apply(
-          batch.taskId(),
-          logicalJobSpec,
-          batch.batchScope());
+    if (claim.isReused() && !OfflineExecutionStatus.isCreated(execution.getStatus())) {
+      return execution;
     }
-    return definitionService.resolveExecutionJobSpec(logicalJobSpec);
+    return submitClaim(claim);
   }
 
-  private OfflineJobExecution submitClaim(
-      OfflineExecutionClaim claim,
-      String resolvedExecutionJobSpec) {
+  private OfflineJobExecution submitClaim(OfflineExecutionClaim claim) {
+    String executionJobSpec = resolveScopedExecutionJobSpec(claim);
     OfflineJobExecution execution = claim.getExecution();
     stateManager.recordCreated(execution);
+
     try {
       LinkUpNodeResponse node = linkUpClient.node();
       stateManager.bindWorker(execution, node.getInstanceId());
 
-      JsonNode jobSpec = readJobSpec(resolvedExecutionJobSpec);
+      JsonNode jobSpec = readJobSpec(executionJobSpec);
       stateManager.markSubmitting(execution);
-      LinkUpJobResponse response = linkUpClient.submit(
-          execution.getExternalExecutionId(),
-          execution.getIdempotencyKey(),
-          execution.getDefinitionVersion(),
-          jobSpec);
+      LinkUpJobResponse response =
+          linkUpClient.submit(
+              execution.getExternalExecutionId(),
+              execution.getIdempotencyKey(),
+              execution.getDefinitionVersion(),
+              jobSpec);
       stateManager.applySnapshot(execution, response, "SUBMITTED");
       return execution;
     } catch (LinkUpRequestException exception) {
+      boolean retryable = exception.getStatusCode() == 429 || exception.getStatusCode() >= 500;
       stateManager.markFailed(
           execution,
           exception.getCode() + "：" + exception.getMessage(),
-          exception.getStatusCode() == 429 || exception.getStatusCode() >= 500);
+          retryable);
       throw exception;
     } catch (LinkUpTransportException exception) {
       if (exception.isUncertain()) {
@@ -219,14 +208,36 @@ public class OfflineExecutionCoordinator {
     }
   }
 
+  private String resolveScopedExecutionJobSpec(OfflineExecutionClaim claim) {
+    OfflineJobExecution execution = claim.getExecution();
+    String logicalJobSpec = claim.getLogicalJobSpecJson();
+    Long batchId = execution.getBatchId();
+    if (batchId != null && batchId > 0L) {
+      BatchExecution batch =
+          batchRepository
+              .findById(batchId)
+              .orElseThrow(
+                  () -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
+      logicalJobSpec =
+          scopeExecutionAdapter.apply(
+              batch.taskId(),
+              logicalJobSpec,
+              batch.batchScope());
+    }
+    return definitionService.resolveExecutionJobSpec(logicalJobSpec);
+  }
+
   private void ensureLatestAttemptForCancel(OfflineJobExecution execution) {
     Long batchId = execution.getBatchId();
     if (batchId == null || batchId <= 0L) {
-      throw new IllegalStateException(
-          "Wave 1 前历史执行未绑定 Batch，仅支持查询，不能执行取消命令");
+      throw new IllegalStateException("历史执行未绑定 Batch，仅支持查询，不能执行取消命令");
     }
-    BatchExecution batch = batchRepository.findById(batchId)
-        .orElseThrow(() -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
+
+    BatchExecution batch =
+        batchRepository
+            .findById(batchId)
+            .orElseThrow(
+                () -> new IllegalStateException("Attempt 绑定的 BatchExecution 不存在：" + batchId));
     Long latestId = batch.latestAttempt().map(attempt -> attempt.id()).orElse(null);
     if (!Objects.equals(latestId, execution.getId())) {
       throw new IllegalStateException("只能停止 Batch 的 latest Attempt");
@@ -234,7 +245,9 @@ public class OfflineExecutionCoordinator {
   }
 
   private JsonNode readJobSpec(String value) {
-    if (!StringUtils.hasText(value)) throw new IllegalStateException("任务缺少 Link-Up JobSpec");
+    if (!StringUtils.hasText(value)) {
+      throw new IllegalStateException("任务缺少 Link-Up JobSpec");
+    }
     try {
       JsonNode node = objectMapper.readTree(value);
       if (node == null || !node.isObject()) {
