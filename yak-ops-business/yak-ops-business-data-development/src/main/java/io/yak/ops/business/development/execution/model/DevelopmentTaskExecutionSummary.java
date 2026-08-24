@@ -1,8 +1,8 @@
-package io.yak.ops.business.development.domain;
+package io.yak.ops.business.development.execution.model;
 
 import java.time.LocalDateTime;
 
-/** Lightweight row used by the data-development execution history page. */
+/** Lightweight row used by the data-development execution-history read side. */
 public record DevelopmentTaskExecutionSummary(
     Long id,
     Long nodeId,

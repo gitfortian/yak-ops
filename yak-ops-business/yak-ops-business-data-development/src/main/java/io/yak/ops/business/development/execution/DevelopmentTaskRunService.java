@@ -3,7 +3,7 @@ package io.yak.ops.business.development.execution;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
-import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
+import io.yak.ops.business.development.execution.model.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.task.DevelopmentTaskDefinitionNormalizer;
 import io.yak.ops.business.development.task.DevelopmentTaskNodeResolver;

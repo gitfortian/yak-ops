@@ -1,6 +1,7 @@
 package io.yak.ops.business.development.directory;
 
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
+import io.yak.ops.business.development.domain.DevelopmentDirectoryName;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import java.util.Comparator;
@@ -43,18 +44,18 @@ public class DevelopmentDirectoryService {
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public DevelopmentDirectory create(Long parentId, String name) {
     Long normalizedParentId = normalizeParentId(parentId);
-    String normalizedName = normalizeName(name);
+    DevelopmentDirectoryName directoryName = DevelopmentDirectoryName.of(name);
 
     if (normalizedParentId != null) {
       repository.findById(normalizedParentId)
           .orElseThrow(() -> new IllegalArgumentException("父目录不存在：" + normalizedParentId));
     }
 
-    if (repository.existsByName(normalizedParentId, normalizedName)) {
-      throw new IllegalStateException("当前路径下已存在同名目录：" + normalizedName);
+    if (repository.existsByName(normalizedParentId, directoryName.value())) {
+      throw new IllegalStateException("当前路径下已存在同名目录：" + directoryName.value());
     }
 
-    DevelopmentDirectory created = repository.insert(normalizedParentId, normalizedName);
+    DevelopmentDirectory created = repository.insert(normalizedParentId, directoryName.value());
     return requireFromList(created.id());
   }
 
@@ -62,12 +63,12 @@ public class DevelopmentDirectoryService {
   public DevelopmentDirectory rename(Long id, String name) {
     DevelopmentDirectory current = repository.findById(id)
         .orElseThrow(() -> new IllegalArgumentException("目录不存在：" + id));
-    String normalizedName = normalizeName(name);
-    if (current.name().equals(normalizedName)) return requireFromList(id);
-    if (repository.existsByName(current.parentId(), normalizedName)) {
-      throw new IllegalStateException("当前路径下已存在同名目录：" + normalizedName);
+    DevelopmentDirectoryName directoryName = DevelopmentDirectoryName.of(name);
+    if (current.name().equals(directoryName.value())) return requireFromList(id);
+    if (repository.existsByName(current.parentId(), directoryName.value())) {
+      throw new IllegalStateException("当前路径下已存在同名目录：" + directoryName.value());
     }
-    if (!repository.updateName(id, normalizedName)) {
+    if (!repository.updateName(id, directoryName.value())) {
       throw new IllegalStateException("目录重命名失败：" + id);
     }
     return requireFromList(id);
@@ -132,16 +133,5 @@ public class DevelopmentDirectoryService {
 
   private Long normalizeParentId(Long parentId) {
     return parentId == null || parentId <= 0L ? null : parentId;
-  }
-
-  private String normalizeName(String name) {
-    if (name == null || name.isBlank()) throw new IllegalArgumentException("目录名称不能为空");
-    String normalized = name.trim();
-    if (normalized.length() > 128) throw new IllegalArgumentException("目录名称不能超过 128 个字符");
-    if (".".equals(normalized) || "..".equals(normalized)
-        || normalized.contains("/") || normalized.contains("\\")) {
-      throw new IllegalArgumentException("目录名称不能包含 /、\\，也不能使用 . 或 ..");
-    }
-    return normalized;
   }
 }

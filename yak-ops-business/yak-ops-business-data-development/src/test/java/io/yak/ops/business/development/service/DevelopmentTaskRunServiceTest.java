@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
-import io.yak.ops.business.development.domain.DevelopmentTaskRunResult;
+import io.yak.ops.business.development.execution.model.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.job.task.TaskExecution;
 import io.yak.ops.business.job.task.TaskExecutionGateway;

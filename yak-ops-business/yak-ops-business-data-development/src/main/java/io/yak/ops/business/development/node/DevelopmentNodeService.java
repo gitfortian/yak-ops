@@ -1,6 +1,7 @@
 package io.yak.ops.business.development.node;
 
 import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.domain.DevelopmentNodeName;
 import io.yak.ops.business.development.domain.DevelopmentNodeType;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
@@ -37,8 +38,8 @@ public class DevelopmentNodeService {
       String type,
       Long projectId,
       Long directoryId) {
-    String normalizedName = normalizeName(name);
-    String normalizedType = normalizeType(type);
+    DevelopmentNodeName nodeName = DevelopmentNodeName.of(name);
+    DevelopmentNodeType nodeType = DevelopmentNodeType.require(type);
     Long normalizedProjectId = normalizeProjectId(projectId);
     Long normalizedDirectoryId = normalizeDirectoryId(directoryId);
 
@@ -46,13 +47,13 @@ public class DevelopmentNodeService {
         && directoryRepository.findById(normalizedDirectoryId).isEmpty()) {
       throw new IllegalArgumentException("数据开发目录不存在：" + normalizedDirectoryId);
     }
-    if (repository.existsByName(normalizedDirectoryId, normalizedName)) {
-      throw new IllegalStateException("当前目录下已存在同名节点：" + normalizedName);
+    if (repository.existsByName(normalizedDirectoryId, nodeName.value())) {
+      throw new IllegalStateException("当前目录下已存在同名节点：" + nodeName.value());
     }
 
     return repository.insert(
-        normalizedName,
-        normalizedType,
+        nodeName.value(),
+        nodeType.name(),
         normalizedProjectId,
         normalizedDirectoryId,
         false);
@@ -62,17 +63,17 @@ public class DevelopmentNodeService {
   public DevelopmentNode rename(Long id, String name) {
     DevelopmentNode current = repository.findById(id)
         .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + id));
-    String normalizedName = normalizeName(name);
-    if (current.name().equals(normalizedName)) return current;
-    if (repository.existsByName(current.directoryId(), normalizedName)) {
-      throw new IllegalStateException("当前目录下已存在同名节点：" + normalizedName);
+    DevelopmentNodeName nodeName = DevelopmentNodeName.of(name);
+    if (current.name().equals(nodeName.value())) return current;
+    if (repository.existsByName(current.directoryId(), nodeName.value())) {
+      throw new IllegalStateException("当前目录下已存在同名节点：" + nodeName.value());
     }
-    if (!repository.updateName(id, normalizedName)) {
+    if (!repository.updateName(id, nodeName.value())) {
       throw new IllegalStateException("节点重命名失败：" + id);
     }
     DevelopmentNode renamed = repository.findById(id)
         .orElseThrow(() -> new IllegalStateException("节点重命名成功但无法重新读取：" + id));
-    if (isProcessingType(renamed.type())) {
+    if (renamed.nodeType().isProcessing()) {
       taskCatalogService.updateSourceMetadata(
           TaskAssetSource.DATA_DEVELOPMENT,
           String.valueOf(renamed.id()),
@@ -102,37 +103,11 @@ public class DevelopmentNodeService {
     if (!repository.deleteById(id)) {
       throw new IllegalStateException("节点删除失败：" + id);
     }
-    if (isProcessingType(current.type())) {
+    if (current.nodeType().isProcessing()) {
       taskCatalogService.offlineSource(
           TaskAssetSource.DATA_DEVELOPMENT,
           String.valueOf(current.id()));
     }
-  }
-
-  private String normalizeName(String name) {
-    if (name == null || name.isBlank()) throw new IllegalArgumentException("节点名称不能为空");
-    String normalized = name.trim();
-    if (normalized.length() > 200) {
-      throw new IllegalArgumentException("节点名称不能超过 200 个字符");
-    }
-    if (normalized.contains("/") || normalized.contains("\\")) {
-      throw new IllegalArgumentException("节点名称不能包含路径分隔符");
-    }
-    return normalized;
-  }
-
-  private String normalizeType(String type) {
-    if (type == null || type.isBlank()) throw new IllegalArgumentException("节点类型不能为空");
-    String normalized = type.trim().toUpperCase(java.util.Locale.ROOT);
-    return DevelopmentNodeType.tryParse(normalized)
-        .orElseThrow(() -> new IllegalArgumentException("不支持的数据开发节点类型：" + normalized))
-        .name();
-  }
-
-  private boolean isProcessingType(String type) {
-    return DevelopmentNodeType.tryParse(type)
-        .map(DevelopmentNodeType::isProcessing)
-        .orElse(false);
   }
 
   private Long normalizeProjectId(Long projectId) {
