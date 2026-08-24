@@ -1,10 +1,12 @@
 package io.yak.ops.business.sync.realtime.execution;
 
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -30,15 +32,15 @@ public class RealtimeExecutionReplacementManager {
 
   RealtimeJobView.Deployment restartExecution(long taskId, String requestedKey) {
     String key = reservations.normalizeKey(requestedKey);
-    RealtimeJobView.Deployment existing = reservations.idempotentView(taskId, key);
-    if (existing != null) {
-      return existing;
+    Optional<RealtimeJobView.Deployment> existing = reservations.idempotentView(taskId, key);
+    if (existing.isPresent()) {
+      return existing.orElseThrow();
     }
 
-    DeploymentRow pending = reservations.pendingReplacement(taskId);
-    if (pending != null) {
+    Optional<DeploymentRow> pending = reservations.pendingReplacement(taskId);
+    if (pending.isPresent()) {
       return resumeReplacement(
-          taskId, key, pending, RealtimeExecutionIntent.RESTART_EXECUTION);
+          taskId, key, pending.orElseThrow(), RealtimeExecutionIntent.RESTART_EXECUTION);
     }
 
     DeploymentRow currentRow =
@@ -69,15 +71,15 @@ public class RealtimeExecutionReplacementManager {
 
   RealtimeJobView.Deployment applyPublishedVersion(long taskId, String requestedKey) {
     String key = reservations.normalizeKey(requestedKey);
-    RealtimeJobView.Deployment existing = reservations.idempotentView(taskId, key);
-    if (existing != null) {
-      return existing;
+    Optional<RealtimeJobView.Deployment> existing = reservations.idempotentView(taskId, key);
+    if (existing.isPresent()) {
+      return existing.orElseThrow();
     }
 
-    DeploymentRow pending = reservations.pendingReplacement(taskId);
-    if (pending != null) {
+    Optional<DeploymentRow> pending = reservations.pendingReplacement(taskId);
+    if (pending.isPresent()) {
       return resumeReplacement(
-          taskId, key, pending, RealtimeExecutionIntent.APPLY_PUBLISHED_VERSION);
+          taskId, key, pending.orElseThrow(), RealtimeExecutionIntent.APPLY_PUBLISHED_VERSION);
     }
 
     DeploymentRow currentRow =
@@ -149,17 +151,17 @@ public class RealtimeExecutionReplacementManager {
       String stoppedMessage) {
     DeploymentRow latest = states.requireCurrentExecutionRow(taskId, source.id());
     SyncExecution execution = latest.execution();
-    String observed = execution.observedState().name();
+    ObservedState observed = execution.observedState();
 
-    if ("UNKNOWN".equals(observed) || "CONFLICT".equals(observed)) {
+    if (observed == ObservedState.UNKNOWN || observed == ObservedState.CONFLICT) {
       throw new IllegalStateException("版本替换 Execution 状态不确定，请先执行状态对账");
     }
-    if ("STOPPING".equals(observed)) {
+    if (observed == ObservedState.STOPPING) {
       if (!StringUtils.hasText(latest.engineJobId())) {
         throw new IllegalStateException("版本替换 Execution 缺少 EngineExecutionRef，请先执行状态对账");
       }
       states.stopBoundJob(taskId, latest.id(), latest.engineJobId(), stoppedMessage);
-    } else if (!"STOPPED".equals(observed)) {
+    } else if (observed != ObservedState.STOPPED) {
       throw new IllegalStateException("版本替换命令只能从 STOPPING/STOPPED 状态继续，请先执行状态对账");
     }
 
