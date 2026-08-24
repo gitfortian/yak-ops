@@ -4,17 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.yak.framework.common.PageData;
+import io.yak.ops.business.resource.content.ResourceContentManager;
 import io.yak.ops.business.resource.controller.v1.ResourcesController;
 import io.yak.ops.business.resource.dao.ResourceDao;
 import io.yak.ops.business.resource.domain.ResourceQuery;
+import io.yak.ops.business.resource.namespace.ResourceNamespaceManager;
 import io.yak.ops.business.resource.repository.ResourceRepository;
-import io.yak.ops.business.resource.service.impl.ResourceServiceImpl;
-import io.yak.ops.business.resource.storage.StorageOperatorRegistry;
+import io.yak.ops.business.resource.storage.ResourceStorageGateway;
 import io.yak.ops.common.bean.po.resource.ResourcePO;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -52,50 +55,57 @@ class ResourceLayeringConventionTest {
     List<String> httpPackages =
         List.of("io.yak.ops.common.bean.dto.", "io.yak.ops.common.bean.vo.");
     for (Method method : ResourceDao.class.getDeclaredMethods()) {
-      assertThat(containsAny(method.getGenericReturnType(), httpPackages))
-          .as("DAO return type: %s", method)
-          .isFalse();
+      assertThat(containsAny(method.getGenericReturnType(), httpPackages)).isFalse();
       for (Type parameter : method.getGenericParameterTypes()) {
-        assertThat(containsAny(parameter, httpPackages))
-            .as("DAO parameter: %s", method)
-            .isFalse();
+        assertThat(containsAny(parameter, httpPackages)).isFalse();
       }
     }
   }
 
   @Test
-  void serviceInternalsDoNotInjectDaoPoOrHttpModels() throws Exception {
-    for (Class<?> type :
-        List.of(
-            ResourceServiceImpl.class,
-            Class.forName("io.yak.ops.business.resource.service.impl.ResourceServiceSupport"),
-            Class.forName("io.yak.ops.business.resource.service.impl.ResourceFileOperations"))) {
+  void namespaceAndContentDoNotInjectDaoPoOrHttpModels() {
+    for (Class<?> type : List.of(ResourceNamespaceManager.class, ResourceContentManager.class)) {
       for (Field field : type.getDeclaredFields()) {
         String fieldType = field.getGenericType().getTypeName();
-        assertThat(fieldType).as("field %s.%s", type.getSimpleName(), field.getName())
+        assertThat(fieldType)
+            .as("field %s.%s", type.getSimpleName(), field.getName())
             .doesNotContain(".resource.dao.")
             .doesNotContain(".bean.po.resource.")
             .doesNotContain(".bean.dto.resource.")
-            .doesNotContain(".bean.vo.resource.");
+            .doesNotContain(".bean.vo.resource.")
+            .doesNotContain("io.yak.ops.spi.storage.StorageOperator");
       }
     }
   }
 
   @Test
-  void controllerOnlyEntersResourceBusinessThroughService() {
+  void controllerDoesNotEnterPersistenceOrStorageSpi() {
     for (Field field : ResourcesController.class.getDeclaredFields()) {
       String type = field.getGenericType().getTypeName();
-      assertThat(type).doesNotContain(".repository.");
-      assertThat(type).doesNotContain(".dao.");
-      assertThat(type).doesNotContain(".storage.");
-      assertThat(type).doesNotContain("StorageOperator");
+      assertThat(type)
+          .doesNotContain(".repository.")
+          .doesNotContain(".dao.")
+          .doesNotContain("StorageOperator")
+          .doesNotContain("ResourceStorageGateway");
     }
   }
 
   @Test
-  void storageRegistryDoesNotExposeHttpViewModels() throws Exception {
-    Method list = StorageOperatorRegistry.class.getMethod("list");
-    assertThat(list.getGenericReturnType().getTypeName()).doesNotContain(".bean.vo.");
+  void resourceStorageGatewayDoesNotExposeStorageOperator() {
+    for (Method method : ResourceStorageGateway.class.getDeclaredMethods()) {
+      String signature = method.getGenericReturnType().getTypeName();
+      for (Type parameter : method.getGenericParameterTypes()) {
+        signature += "|" + parameter.getTypeName();
+      }
+      assertThat(signature).doesNotContain("io.yak.ops.spi.storage.StorageOperator");
+    }
+  }
+
+  @Test
+  void broadServiceAndUtilBucketsAreRemoved() {
+    Path root = moduleRoot().resolve("src/main/java/io/yak/ops/business/resource");
+    assertThat(Files.exists(root.resolve("service"))).isFalse();
+    assertThat(Files.exists(root.resolve("util"))).isFalse();
   }
 
   @Test
@@ -103,6 +113,14 @@ class ResourceLayeringConventionTest {
     TableName tableName = ResourcePO.class.getAnnotation(TableName.class);
     assertThat(tableName).isNotNull();
     assertThat(tableName.value()).isEqualTo("yak_ops_resource");
+  }
+
+  private Path moduleRoot() {
+    Path local = Path.of("").toAbsolutePath().normalize();
+    if (Files.isDirectory(local.resolve("src/main/java/io/yak/ops/business/resource"))) {
+      return local;
+    }
+    return Path.of("yak-ops-business", "yak-ops-business-resource").toAbsolutePath().normalize();
   }
 
   private boolean containsAny(Type type, List<String> packages) {

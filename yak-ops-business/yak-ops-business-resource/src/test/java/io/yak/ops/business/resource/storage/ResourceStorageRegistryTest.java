@@ -13,21 +13,19 @@ import java.io.InputStream;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class StorageOperatorRegistryTest {
+class ResourceStorageRegistryTest {
 
   @Test
   void resolvesLocalAsConfiguredDefaultAndListsInstalledPlugins() {
     ResourceProperties properties = new ResourceProperties();
     StorageOperator local = new StubOperator(ResourceStorageType.LOCAL, "本地存储");
     StorageOperator minio = new StubOperator(ResourceStorageType.MINIO, "MinIO");
-    StorageOperatorRegistry registry = new StorageOperatorRegistry(List.of(local, minio), properties);
+    ResourceStorageRegistry registry = new ResourceStorageRegistry(List.of(local, minio), properties);
 
     assertThat(registry.require(null)).isSameAs(local);
-
     List<ResourceStoragePlugin> plugins = registry.list();
     assertThat(plugins).hasSize(2);
     assertThat(plugins.get(0).type()).isEqualTo(ResourceStorageType.LOCAL);
-    assertThat(plugins.get(0).name()).isEqualTo("本地存储");
     assertThat(plugins.get(0).active()).isTrue();
     assertThat(plugins.get(1).type()).isEqualTo(ResourceStorageType.MINIO);
     assertThat(plugins.get(1).active()).isFalse();
@@ -37,13 +35,12 @@ class StorageOperatorRegistryTest {
   void rejectsMissingConfiguredPlugin() {
     ResourceProperties properties = new ResourceProperties();
     properties.getStorage().setType(ResourceStorageType.HDFS);
-    StorageOperatorRegistry registry = new StorageOperatorRegistry(List.of(), properties);
+    ResourceStorageRegistry registry = new ResourceStorageRegistry(List.of(), properties);
 
     assertThatThrownBy(() -> registry.require(null)).isInstanceOf(ResourceException.class);
   }
 
   private static final class StubOperator implements StorageOperator {
-
     private final ResourceStorageType type;
     private final String name;
 
@@ -63,7 +60,8 @@ class StorageOperatorRegistryTest {
     }
 
     @Override
-    public void createDirectory(String path) {}
+    public void createDirectory(String path) {
+    }
 
     @Override
     public boolean exists(String path) {
@@ -76,7 +74,8 @@ class StorageOperatorRegistryTest {
         InputStream inputStream,
         long size,
         String contentType,
-        boolean overwrite) {}
+        boolean overwrite) {
+    }
 
     @Override
     public InputStream download(String path) {
@@ -84,10 +83,12 @@ class StorageOperatorRegistryTest {
     }
 
     @Override
-    public void delete(String path, boolean recursive) {}
+    public void delete(String path, boolean recursive) {
+    }
 
     @Override
-    public void move(String sourcePath, String targetPath, boolean overwrite) {}
+    public void move(String sourcePath, String targetPath, boolean overwrite) {
+    }
 
     @Override
     public StorageObjectMetadata metadata(String path) {

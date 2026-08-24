@@ -1,41 +1,49 @@
 # Yak Ops Resource
 
-文件管理模块负责资源目录、文件元数据、上传下载、在线文本编辑以及存储插件路由。
+文件资源模块负责 Resource Namespace、文件内容、存储插件路由、运行时资源解析，以及资源变更后的外部同步传播。
 
-## 工程分层
+当前代码按业务子系统组织，不再以通用 `service/impl` 作为业务入口：
 
 ```text
-Controller -> DTO -> Service -> Domain
-           -> Repository -> Adapter -> DAO
-           -> BaseMapper -> PO -> MySQL
+Controller
+   -> Namespace Manager / Reader
+   -> Content Manager / Reader
+   -> Storage Reader
 
-Domain -> ViewMapper -> VO -> Controller
+Namespace / Content
+   -> Resource Domain
+   -> ResourceRepository -> DAO -> MyBatis
+   -> ResourceStorageGateway -> StorageOperator SPI
+   -> ResourceChangeDispatcher -> ResourceFileSyncProvider SPI
 
-Service / FileOperations -> Storage Plugin SPI
-Domain -> ResourceFileSyncDispatcher -> ResourceFileSyncProvider SPI
+ResourceResolver SPI
+   -> Resolution Adapter
+   -> Namespace / Content Read Side
 ```
 
-约束：
+## 运行真相
 
-- Controller 只通过 `ResourceService` 进入业务链路，不直接依赖 Repository、DAO、Mapper 或 Storage SPI。
-- Service、`ResourceServiceSupport` 和 `ResourceFileOperations` 使用 `ResourceNode` 等 Domain，不直接操作 `ResourcePO`。
-- `ResourceRepository` 只暴露 Domain；PO 只存在于 Repository Adapter / DAO / Mapper 持久化层。
-- 分页遵循 `DAO IPage<PO> -> Adapter PageData<Domain> -> Service PagingData<VO>`；不再创建资源模块私有 `ResourcePage`。
-- HTTP 分页继续保持 `bizData + pagination`，第一阶段不要求前端迁移。
-- DAO 不接收 HTTP DTO，也不返回 HTTP VO；分页使用 DAO 自己的 `PageQuery`。
-- 当前资源元数据只有一张表，查询均为单表 CRUD/条件查询，因此继续使用 MyBatis-Plus `BaseMapper` / LambdaWrapper；只有未来真正出现复杂关联 SQL 时才放入 `mapper/resource/*.xml`。
-- `MultipartFile`、`InputStream`、Storage Operator 等文件 I/O 对象属于 Service/Storage SPI 边界，不进入 Repository。
-- 文件上传/创建仍遵循“先写物理存储，元数据失败则补偿删除”的现有语义。
-- 元数据删除成功后，物理对象删除与 ResourceFileSyncProvider 通知继续在事务提交后执行，避免数据库事务被外部存储/Git 同步拖住。
+数据库中的 `yak_ops_resource` 是 Resource identity / namespace / current revision metadata 的事实来源；Local / MinIO / HDFS 等 Storage Plugin 只拥有物理文件字节。
+
+`version` 表示当前 Resource Revision，用于变更 fencing 与运行时版本校验。当前模块不是历史版本存储系统，因此 `version = 5` 不表示仍可读取 1~4 版本内容。
+
+## 一致性语义
+
+当前重构保持既有行为：
+
+- 创建目录、上传和在线创建：先写物理存储，再写元数据；元数据失败时补偿删除刚创建的物理对象。
+- Move：先移动物理对象，再批量更新当前资源及后代路径；元数据更新失败时尝试把 Storage 路径回滚。
+- 当前不支持跨 Storage Move。
+- Delete：先提交元数据删除；物理对象删除与外部 Resource Sync 在事务提交后执行，不让外部 I/O 延长数据库事务。
+- Resource Sync 是提交后的 best-effort propagation，不是 Resource Namespace 的第二状态来源。
+- Resource Resolver 会把资源物化到临时目录并校验 SHA-256 checksum；指定 version 时只允许读取当前匹配 revision。
 
 ## 持久化
 
-当前文件管理只维护一张业务表：
+当前只维护一张业务表：
 
 ```text
 yak_ops_resource
 ```
 
-数据库元数据仍是资源树的事实来源；MinIO/HDFS/Local 等 Storage Plugin 只负责文件内容和目录对象。
-
-资源模块复用 `yak.database` 对应的业务 DataSource、MyBatis SessionFactory 和事务管理器，同时继续拥有独立的 `yak_resource_schema_history` Flyway 历史边界。
+资源模块复用 `yak.database` 对应的业务 DataSource、MyBatis SessionFactory 和事务管理器，并继续拥有独立的 `yak_resource_schema_history` Flyway 历史边界。

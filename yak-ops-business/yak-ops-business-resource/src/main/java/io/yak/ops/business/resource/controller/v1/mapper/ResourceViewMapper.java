@@ -1,15 +1,16 @@
-package io.yak.ops.business.resource.service.support;
+package io.yak.ops.business.resource.controller.v1.mapper;
 
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.domain.ResourceContent;
 import io.yak.ops.business.resource.domain.ResourceNode;
 import io.yak.ops.business.resource.domain.ResourceStoragePlugin;
+import io.yak.ops.business.resource.domain.ResourceTreeNode;
 import io.yak.ops.common.bean.vo.resource.ResourceContentVO;
 import io.yak.ops.common.bean.vo.resource.ResourceStoragePluginVO;
 import io.yak.ops.common.bean.vo.resource.ResourceVO;
 import org.springframework.stereotype.Component;
 
-/** 资源 Domain 到 HTTP VO 的纯转换器。 */
+/** Resource Domain to HTTP VO mapping. */
 @Component
 @ConditionalOnResourceEnabled
 public class ResourceViewMapper {
@@ -35,6 +36,14 @@ public class ResourceViewMapper {
         .createTime(resource.getCreateTime())
         .updateTime(resource.getUpdateTime())
         .build();
+  }
+
+  public ResourceVO tree(ResourceTreeNode tree) {
+    ResourceVO result = node(tree.resource());
+    for (ResourceTreeNode child : tree.children()) {
+      result.getChildren().add(tree(child));
+    }
+    return result;
   }
 
   public ResourceContentVO content(ResourceContent content) {

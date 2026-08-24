@@ -1,4 +1,4 @@
-package io.yak.ops.business.resource.resolver;
+package io.yak.ops.business.resource.resolution;
 
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.spi.resource.ResolvedResource;
@@ -14,30 +14,25 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import org.springframework.stereotype.Component;
 
-/**
- * Platform implementation of {@link ResourceResolver}.
- * Downloads resource files to local temp directories and validates checksums.
- */
+/** Materializes a Resource to a verified local temporary file for task runtimes. */
 @Component
 @ConditionalOnResourceEnabled
-public class DefaultResourceResolver implements ResourceResolver {
+public class ResourceResolverAdapter implements ResourceResolver {
 
   private final ResourceDownloadProvider downloadProvider;
 
-  public DefaultResourceResolver(ResourceDownloadProvider downloadProvider) {
+  public ResourceResolverAdapter(ResourceDownloadProvider downloadProvider) {
     this.downloadProvider = downloadProvider;
   }
 
   @Override
   public ResolvedResource resolve(long resourceId) {
-    ResourceDownloadResult result = downloadProvider.download(resourceId);
-    return doResolve(resourceId, result);
+    return doResolve(resourceId, downloadProvider.download(resourceId));
   }
 
   @Override
   public ResolvedResource resolve(long resourceId, int version) {
-    ResourceDownloadResult result = downloadProvider.download(resourceId, version);
-    return doResolve(resourceId, result);
+    return doResolve(resourceId, downloadProvider.download(resourceId, version));
   }
 
   private ResolvedResource doResolve(long resourceId, ResourceDownloadResult result) {
@@ -46,11 +41,11 @@ public class DefaultResourceResolver implements ResourceResolver {
       tempDir = Files.createTempDirectory("yak-task-");
       Path localFile = tempDir.resolve(result.fileName());
       String actualChecksum;
-      try (InputStream in = result.inputStream()) {
-        actualChecksum = copyWithChecksum(in, localFile);
+      try (InputStream inputStream = result.inputStream()) {
+        actualChecksum = copyWithChecksum(inputStream, localFile);
       }
-      // Validate checksum integrity
-      if (result.checksum() != null && !result.checksum().isBlank()
+      if (result.checksum() != null
+          && !result.checksum().isBlank()
           && !result.checksum().equalsIgnoreCase(actualChecksum)) {
         TempDirectoryUtils.deleteRecursively(tempDir);
         throw new IllegalStateException(
@@ -62,36 +57,35 @@ public class DefaultResourceResolver implements ResourceResolver {
           result.fileName(),
           result.suffix(),
           result.fileSize(),
-          actualChecksum
-      );
-    } catch (Exception e) {
+          actualChecksum);
+    } catch (Exception exception) {
       if (tempDir != null) {
         try {
           TempDirectoryUtils.deleteRecursively(tempDir);
         } catch (IOException cleanupError) {
-          e.addSuppressed(cleanupError);
+          exception.addSuppressed(cleanupError);
         }
       }
       throw new IllegalStateException(
-          "Failed to resolve resource #" + resourceId + " to local file", e);
+          "Failed to resolve resource #" + resourceId + " to local file",
+          exception);
     }
   }
 
-  /** Copy stream to file while computing SHA-256 checksum, avoiding a second read pass. */
-  private static String copyWithChecksum(InputStream in, Path target) throws IOException {
+  private static String copyWithChecksum(InputStream inputStream, Path target) throws IOException {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      try (DigestInputStream din = new DigestInputStream(in, digest);
-           var out = Files.newOutputStream(target)) {
-        din.transferTo(out);
+      try (DigestInputStream digestInputStream = new DigestInputStream(inputStream, digest);
+          var outputStream = Files.newOutputStream(target)) {
+        digestInputStream.transferTo(outputStream);
       }
-      StringBuilder hex = new StringBuilder(64);
-      for (byte b : digest.digest()) {
-        hex.append(String.format("%02x", b & 0xff));
+      StringBuilder value = new StringBuilder(64);
+      for (byte item : digest.digest()) {
+        value.append(String.format("%02x", item & 0xff));
       }
-      return hex.toString();
-    } catch (java.security.NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 not available", e);
+      return value.toString();
+    } catch (java.security.NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 not available", exception);
     }
   }
 }
