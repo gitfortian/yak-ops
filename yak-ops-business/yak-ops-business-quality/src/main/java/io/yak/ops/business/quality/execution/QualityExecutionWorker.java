@@ -1,21 +1,18 @@
 package io.yak.ops.business.quality.execution;
 
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
 import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
 import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.RuleSnapshot;
 import io.yak.ops.business.quality.execution.QualityMetricEvaluator.MetricMeasurement;
 import io.yak.ops.business.quality.execution.QualitySqlCompiler.CompiledRule;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.business.quality.service.QualityAlertService;
-import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.RuleFailureAction;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.springframework.stereotype.Component;
 
 @ConditionalOnQualityEnabled
@@ -24,19 +21,19 @@ public class QualityExecutionWorker {
   private final QualityRepository repository;
   private final QualitySqlCompiler compiler;
   private final QualityMetricEvaluator evaluator;
-  private final DataSourceCatalogService catalogService;
+  private final QualityDataCatalogGateway catalogGateway;
   private final QualityAlertService alertService;
 
   public QualityExecutionWorker(
       QualityRepository repository,
       QualitySqlCompiler compiler,
       QualityMetricEvaluator evaluator,
-      DataSourceCatalogService catalogService,
+      QualityDataCatalogGateway catalogGateway,
       QualityAlertService alertService) {
     this.repository = repository;
     this.compiler = compiler;
     this.evaluator = evaluator;
-    this.catalogService = catalogService;
+    this.catalogGateway = catalogGateway;
     this.alertService = alertService;
   }
 
@@ -83,10 +80,7 @@ public class QualityExecutionWorker {
       CompiledRule compiled = compiler.compile(job.monitor(), rule);
       sql = compiled.sql();
       expected = compiled.expectedValue();
-      Map<String, Object> request = new LinkedHashMap<>();
-      request.put("read_mode", "sql");
-      request.put("query", sql);
-      DataSourceQueryResultVO result = catalogService.preview(job.monitor().dataSourceId(), request);
+      var result = catalogGateway.preview(job.monitor().dataSourceId(), sql);
       MetricMeasurement measurement = compiler.measure(result);
       boolean passed = evaluator.passes(compiled.operator(), compiled.threshold(), compiled.thresholdEnd(), measurement);
       CheckResult checkResult = passed ? CheckResult.PASSED : CheckResult.NOT_PASSED;

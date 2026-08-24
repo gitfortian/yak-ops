@@ -1,13 +1,13 @@
 package io.yak.ops.business.quality.service;
 
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetSpec;
 import io.yak.ops.business.quality.domain.QualityQuery;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway.QualityPhysicalTable;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.business.quality.service.support.QualityViewMapper;
 import io.yak.ops.common.bean.dto.quality.QualityTableAssetDTO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.quality.QualityTableAssetVO;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -24,13 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class QualityTableAssetService {
 
   private final QualityRepository repository;
-  private final DataSourceCatalogService catalogService;
+  private final QualityDataCatalogGateway catalogGateway;
 
   public QualityTableAssetService(
       QualityRepository repository,
-      DataSourceCatalogService catalogService) {
+      QualityDataCatalogGateway catalogGateway) {
     this.repository = repository;
-    this.catalogService = catalogService;
+    this.catalogGateway = catalogGateway;
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
@@ -64,7 +64,7 @@ public class QualityTableAssetService {
         .map(target -> targetKey(target.databaseName(), target.schemaName(), target.tableName()))
         .collect(Collectors.toSet());
 
-    List<QualityTableAssetVO.Candidate> available = catalogService
+    List<QualityTableAssetVO.Candidate> available = catalogGateway
         .listTables(dataSourceId, databaseName, schemaName, trimToNull(keyword))
         .stream()
         .map(table -> toCandidate(table, databaseName))
@@ -87,15 +87,14 @@ public class QualityTableAssetService {
       String operator) {
     validateDataSourceId(request.dataSourceId());
     String selectedDatabase = trimToNull(request.databaseName());
-    List<DataSourceCatalogTableVO> physicalTables = catalogService.listTables(
+    List<QualityPhysicalTable> physicalTables = catalogGateway.listTables(
         request.dataSourceId(), selectedDatabase, null, null);
 
-    Map<String, DataSourceCatalogTableVO> physicalTableMap = physicalTables.stream()
+    Map<String, QualityPhysicalTable> physicalTableMap = physicalTables.stream()
         .collect(Collectors.toMap(
             table -> targetKey(
-                firstNonBlank(table.getDatabase(), selectedDatabase),
-                table.getSchema(),
-                table.getName()),
+                firstNonBlank(table.databaseName(), selectedDatabase),
+                table.schemaName(), table.tableName()),
             table -> table,
             (left, right) -> left,
             LinkedHashMap::new));
@@ -110,16 +109,16 @@ public class QualityTableAssetService {
     List<TableAssetSpec> writes = requestedTables.entrySet().stream()
         .map(entry -> {
           QualityTableAssetDTO.RegisterItem requested = entry.getValue();
-          DataSourceCatalogTableVO physical = physicalTableMap.get(entry.getKey());
+          QualityPhysicalTable physical = physicalTableMap.get(entry.getKey());
           if (physical == null) {
             throw new IllegalArgumentException(
                 "数据表已不存在或无法通过数据源插件发现：" + requested.tableName());
           }
           return new TableAssetSpec(
               request.dataSourceId(), request.dataSourceName().trim(),
-              firstNonBlank(physical.getDatabase(), selectedDatabase),
-              trimToNull(physical.getSchema()), physical.getName(),
-              trimToNull(physical.getType()), trimToNull(physical.getRemarks()), registeredBy);
+              firstNonBlank(physical.databaseName(), selectedDatabase),
+              trimToNull(physical.schemaName()), physical.tableName(),
+              trimToNull(physical.tableType()), trimToNull(physical.remarks()), registeredBy);
         })
         .toList();
 
@@ -140,12 +139,12 @@ public class QualityTableAssetService {
   }
 
   private QualityTableAssetVO.Candidate toCandidate(
-      DataSourceCatalogTableVO table,
+      QualityPhysicalTable table,
       String selectedDatabase) {
     return new QualityTableAssetVO.Candidate(
-        firstNonBlank(table.getDatabase(), selectedDatabase),
-        trimToNull(table.getSchema()), table.getName(),
-        trimToNull(table.getType()), trimToNull(table.getRemarks()));
+        firstNonBlank(table.databaseName(), selectedDatabase),
+        trimToNull(table.schemaName()), table.tableName(),
+        trimToNull(table.tableType()), trimToNull(table.remarks()));
   }
 
   private void validateDataSourceId(Long dataSourceId) {

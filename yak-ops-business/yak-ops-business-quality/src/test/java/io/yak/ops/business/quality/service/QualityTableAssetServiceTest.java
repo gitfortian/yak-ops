@@ -6,12 +6,12 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetSpec;
 import io.yak.ops.business.quality.domain.QualityDomain.TableAssetTarget;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway.QualityPhysicalTable;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.common.bean.dto.quality.QualityTableAssetDTO;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,20 +22,20 @@ import org.mockito.MockitoAnnotations;
 class QualityTableAssetServiceTest {
 
   @Mock private QualityRepository repository;
-  @Mock private DataSourceCatalogService catalogService;
+  @Mock private QualityDataCatalogGateway catalogGateway;
   private QualityTableAssetService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new QualityTableAssetService(repository, catalogService);
+    service = new QualityTableAssetService(repository, catalogGateway);
   }
 
   @Test
   void shouldReturnOnlyUnregisteredPluginTables() {
     when(repository.listTableAssetTargets(1L, "demo"))
         .thenReturn(List.of(new TableAssetTarget("demo", null, "registered_table")));
-    when(catalogService.listTables(1L, "demo", null, null))
+    when(catalogGateway.listTables(1L, "demo", null, null))
         .thenReturn(List.of(
             table("registered_table", "已注册"),
             table("order_info", "订单表"),
@@ -50,7 +50,7 @@ class QualityTableAssetServiceTest {
 
   @Test
   void shouldPersistMetadataReturnedByDatasourcePlugin() {
-    when(catalogService.listTables(1L, "demo", null, null))
+    when(catalogGateway.listTables(1L, "demo", null, null))
         .thenReturn(List.of(table("user_info", "插件中的用户表描述")));
     when(repository.registerTableAssets(anyList())).thenReturn(1);
 
@@ -79,7 +79,7 @@ class QualityTableAssetServiceTest {
         .hasMessageContaining("先删除监控");
   }
 
-  private DataSourceCatalogTableVO table(String name, String remarks) {
-    return new DataSourceCatalogTableVO("demo", null, name, "TABLE", remarks);
+  private QualityPhysicalTable table(String name, String remarks) {
+    return new QualityPhysicalTable("demo", null, name, "TABLE", remarks);
   }
 }
