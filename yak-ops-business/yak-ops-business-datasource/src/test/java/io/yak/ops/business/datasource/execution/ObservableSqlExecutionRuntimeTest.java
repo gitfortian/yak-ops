@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.yak.ops.business.datasource.gateway.adapter.SpiSqlExecutionGateway;
 import io.yak.ops.core.execution.sql.*;
 import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import io.yak.ops.spi.datasource.execution.DataSourceSqlResult;
@@ -24,7 +25,9 @@ class ObservableSqlExecutionRuntimeTest {
         DataSourceExecutionProvider provider = dataSourceId -> request ->
                 DataSourceSqlResult.resultSet(List.of(), List.of(), false);
         DefaultSqlExecutionRuntime delegate =
-                new DefaultSqlExecutionRuntime(provider, new DefaultSqlExecutionPolicy());
+                new DefaultSqlExecutionRuntime(
+                        new SpiSqlExecutionGateway(provider),
+                        new DefaultSqlExecutionPolicy());
 
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.getBeanFactory().registerSingleton("defaultSqlExecutionRuntime", delegate);
@@ -130,7 +133,9 @@ class ObservableSqlExecutionRuntimeTest {
                         ? DataSourceSqlResult.resultSet(List.of(), List.of(), false)
                         : DataSourceSqlResult.updateCount(1L);
         DefaultSqlExecutionRuntime delegate =
-                new DefaultSqlExecutionRuntime(provider, new DefaultSqlExecutionPolicy());
+                new DefaultSqlExecutionRuntime(
+                        new SpiSqlExecutionGateway(provider),
+                        new DefaultSqlExecutionPolicy());
         return new RuntimePair(delegate, new ObservableSqlExecutionRuntime(delegate, List.of(observer)));
     }
 

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.datasource.domain.ConnectionProfile;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
 import io.yak.ops.business.datasource.domain.catalog.CatalogReadRequest;
@@ -16,6 +17,7 @@ import io.yak.ops.business.datasource.domain.catalog.CatalogTable;
 import io.yak.ops.business.datasource.domain.catalog.CatalogTableQuery;
 import io.yak.ops.business.datasource.plugin.DataSourcePluginRegistry;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
 import io.yak.ops.spi.datasource.DataSourceCapability;
 import io.yak.ops.spi.datasource.DataSourceCatalog;
 import io.yak.ops.spi.datasource.DataSourceConnection;
@@ -91,9 +93,11 @@ class SpiDataSourceCatalogGatewayTest {
   }
 
   private DataSourceDefinition configuredDataSource() {
-    DataSourceDefinition dataSource = new DataSourceDefinition();
-    dataSource.setDbType(DataSourceDbType.MYSQL);
-    dataSource.setConnectionParams("{\"database\":\"orders_db\"}");
-    return dataSource;
+    return DataSourceDefinition.create(
+        "orders-db",
+        DataSourceDbType.MYSQL,
+        ConnectionProfile.of(null, "{\"database\":\"orders_db\"}"),
+        DataSourceEnvironment.TEST,
+        null);
   }
 }
