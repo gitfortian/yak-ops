@@ -6,7 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.controller.v1.mapper.QualityMonitorMapper;
+import io.yak.ops.business.quality.controller.v1.converter.QualityMonitorConverter;
 import io.yak.ops.business.quality.execution.QualityExecutionManager;
 import io.yak.ops.business.quality.monitor.QualityMonitorManager;
 import io.yak.ops.business.quality.monitor.QualityMonitorReader;
@@ -36,14 +36,14 @@ public class QualityMonitorController {
   private final QualityMonitorReader reader;
   private final QualityMonitorManager manager;
   private final QualityExecutionManager executionManager;
-  private final QualityMonitorMapper mapper;
+  private final QualityMonitorConverter converter;
 
   @Operation(summary = "分页查询质量监控")
   @PostMapping("/page")
   public Result<QualityMonitorVO.Page> page(
       @Valid @RequestBody(required = false) QualityMonitorDTO.PageRequest request) {
-    var query = mapper.query(request);
-    return Result.success(mapper.page(reader.page(query), query));
+    var query = converter.query(request);
+    return Result.success(converter.page(reader.page(query), query));
   }
 
   @Operation(summary = "按数据表查询监控摘要")
@@ -52,19 +52,19 @@ public class QualityMonitorController {
       @RequestParam long dataSourceId,
       @RequestParam(value = "databaseName", required = false) String databaseName,
       @RequestParam(value = "schemaName", required = false) String schemaName) {
-    return Result.success(mapper.tableSummaries(reader.tableSummaries(dataSourceId, databaseName, schemaName)));
+    return Result.success(converter.tableSummaries(reader.tableSummaries(dataSourceId, databaseName, schemaName)));
   }
 
   @Operation(summary = "查询质量监控详情")
   @GetMapping("/{id}")
   public Result<QualityMonitorVO.Detail> detail(@PathVariable long id) {
-    return Result.success(mapper.detail(reader.require(id)));
+    return Result.success(converter.detail(reader.require(id)));
   }
 
   @Operation(summary = "查询质量监控运行设置")
   @GetMapping("/{id}/settings")
   public Result<QualityMonitorVO.Settings> settings(@PathVariable long id) {
-    return Result.success(mapper.settings(reader.settings(id)));
+    return Result.success(converter.settings(reader.settings(id)));
   }
 
   @Operation(summary = "创建质量监控")
@@ -72,7 +72,7 @@ public class QualityMonitorController {
   @RequiresPermission(QualityPermissionCode.MONITOR_CREATE)
   public Result<QualityMonitorVO.Detail> create(
       @Valid @RequestBody QualityMonitorDTO.SaveRequest request) {
-    return Result.success(mapper.detail(manager.create(mapper.command(request))));
+    return Result.success(converter.detail(manager.create(converter.command(request))));
   }
 
   @Operation(summary = "更新质量监控")
@@ -81,7 +81,7 @@ public class QualityMonitorController {
   public Result<QualityMonitorVO.Detail> update(
       @PathVariable long id,
       @Valid @RequestBody QualityMonitorDTO.SaveRequest request) {
-    return Result.success(mapper.detail(manager.update(id, mapper.command(request))));
+    return Result.success(converter.detail(manager.update(id, converter.command(request))));
   }
 
   @Operation(summary = "删除质量监控")
@@ -95,7 +95,7 @@ public class QualityMonitorController {
   @PostMapping("/{id}/run")
   @RequiresPermission(QualityPermissionCode.MONITOR_RUN)
   public Result<QualityMonitorVO.Run> run(@PathVariable long id, Principal principal) {
-    return Result.success(mapper.run(executionManager.run(id, operator(principal))));
+    return Result.success(converter.run(executionManager.run(id, operator(principal))));
   }
 
   private static String operator(Principal principal) {
