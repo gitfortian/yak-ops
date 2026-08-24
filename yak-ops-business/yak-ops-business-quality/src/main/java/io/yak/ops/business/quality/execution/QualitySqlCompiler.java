@@ -1,9 +1,9 @@
 package io.yak.ops.business.quality.execution;
 
 import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.MonitorSnapshot;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.RuleSnapshot;
 import io.yak.ops.business.quality.execution.QualityMetricEvaluator.MetricMeasurement;
-import io.yak.ops.business.quality.execution.QualityRuntime.MonitorSnapshot;
-import io.yak.ops.business.quality.execution.QualityRuntime.RuleSnapshot;
 import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
 import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
 import java.math.BigDecimal;
@@ -154,6 +154,7 @@ public class QualitySqlCompiler {
     if (column == null || column.isBlank()) throw new IllegalArgumentException("当前规则必须选择字段");
     return column;
   }
+
   private static BigDecimal required(BigDecimal value, String message) { if (value == null) throw new IllegalArgumentException(message); return value; }
   private static String literal(BigDecimal value) { return value.stripTrailingZeros().toPlainString(); }
   private static String stringLiteral(String value) { return "'" + value.replace("'", "''") + "'"; }

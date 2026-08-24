@@ -24,9 +24,9 @@ import io.yak.ops.business.quality.domain.QualityDomain.TableAssetTarget;
 import io.yak.ops.business.quality.domain.QualityDomain.TableMonitorSummary;
 import io.yak.ops.business.quality.domain.QualityDomain.Template;
 import io.yak.ops.business.quality.domain.QualityQuery;
-import io.yak.ops.business.quality.execution.QualityRuntime.ExecutionJob;
-import io.yak.ops.business.quality.execution.QualityRuntime.MonitorSnapshot;
-import io.yak.ops.business.quality.execution.QualityRuntime.RuleSnapshot;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.MonitorSnapshot;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.RuleSnapshot;
 import io.yak.ops.common.bean.po.quality.QualityAlertEventPO;
 import io.yak.ops.common.bean.po.quality.QualityExecutionPO;
 import io.yak.ops.common.bean.po.quality.QualityMonitorPO;
@@ -180,7 +180,7 @@ public class QualityRepositoryAdapter implements QualityRepository {
   @Override public List<Rule> listRules(long monitorId) { return monitorDao.selectRules(monitorId).stream().map(this::rule).toList(); }
 
   @Override
-  public ExecutionJob executionJob(long monitorId, long executionId, String executionNo) {
+  public QualityExecutionPlan executionJob(long monitorId, long executionId, String executionNo) {
     Monitor monitor = findMonitor(monitorId)
         .orElseThrow(() -> new IllegalArgumentException("质量监控不存在：" + monitorId));
     MonitorSettings settings = findMonitorSettings(monitorId);
@@ -191,7 +191,7 @@ public class QualityRepositoryAdapter implements QualityRepository {
         rule.id(), rule.templateId(), rule.templateCode(), rule.name(), rule.ruleType(), rule.scope(),
         rule.dimension(), rule.columnName(), ComparisonOperator.fromValue(rule.operator()),
         rule.threshold(), rule.thresholdEnd(), rule.enumValues(), rule.customSql())).toList();
-    return new ExecutionJob(executionId, executionNo, monitorSnapshot, rules,
+    return new QualityExecutionPlan(executionId, executionNo, monitorSnapshot, rules,
         settings.ruleFailureAction(), settings.notifyEnabled(), settings.notifyChannel(),
         settings.notifyTarget(), settings.alertLevel());
   }

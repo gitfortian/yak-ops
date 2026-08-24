@@ -3,9 +3,9 @@ package io.yak.ops.business.quality.execution;
 import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.RuleSnapshot;
 import io.yak.ops.business.quality.execution.QualityMetricEvaluator.MetricMeasurement;
-import io.yak.ops.business.quality.execution.QualityRuntime.ExecutionJob;
-import io.yak.ops.business.quality.execution.QualityRuntime.RuleSnapshot;
 import io.yak.ops.business.quality.execution.QualitySqlCompiler.CompiledRule;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.business.quality.service.QualityAlertService;
@@ -40,7 +40,7 @@ public class QualityExecutionWorker {
     this.alertService = alertService;
   }
 
-  public void execute(ExecutionJob job) {
+  public void execute(QualityExecutionPlan job) {
     LocalDateTime startedAt = LocalDateTime.now();
     if (!repository.markExecutionRunning(job.executionId(), startedAt)) return;
     int passed = 0;
@@ -75,7 +75,7 @@ public class QualityExecutionWorker {
     }
   }
 
-  private RuleOutcome executeRule(ExecutionJob job, RuleSnapshot rule) {
+  private RuleOutcome executeRule(QualityExecutionPlan job, RuleSnapshot rule) {
     LocalDateTime startedAt = LocalDateTime.now();
     String sql = null;
     String expected = null;
@@ -105,7 +105,7 @@ public class QualityExecutionWorker {
     }
   }
 
-  private void markRemainingRulesNotRun(ExecutionJob job, int startIndex) {
+  private void markRemainingRulesNotRun(QualityExecutionPlan job, int startIndex) {
     for (int index = startIndex; index < job.rules().size(); index++) {
       RuleSnapshot rule = job.rules().get(index);
       repository.insertRuleExecution(new RuleExecutionSpec(
@@ -117,10 +117,12 @@ public class QualityExecutionWorker {
   private static long durationMillis(LocalDateTime start, LocalDateTime end) {
     return Math.max(0L, Duration.between(start, end).toMillis());
   }
+
   private static String message(Throwable throwable) {
     String message = throwable.getMessage();
     String normalized = message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message.trim();
     return normalized.length() <= 1000 ? normalized : normalized.substring(0, 1000);
   }
+
   private record RuleOutcome(CheckResult result) {}
 }

@@ -3,8 +3,8 @@ package io.yak.ops.business.quality.service;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityQuery;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
 import io.yak.ops.business.quality.execution.QualityExecutionWorker;
-import io.yak.ops.business.quality.execution.QualityRuntime.ExecutionJob;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.business.quality.service.support.QualityViewMapper;
 import io.yak.ops.common.bean.dto.quality.QualityExecutionDTO;
@@ -94,12 +94,12 @@ public class QualityExecutionService {
     String executionNo = executionNo(queuedAt);
     long executionId = repository.insertExecution(
         executionNo, monitor, enabledRules, normalizeOperator(operator), triggerType, queuedAt);
-    ExecutionJob job = repository.executionJob(monitorId, executionId, executionNo);
+    QualityExecutionPlan job = repository.executionJob(monitorId, executionId, executionNo);
     dispatchAfterCommit(job);
     return new QualityMonitorVO.Run(executionNo, ExecutionStatus.WAITING, CheckResult.RUNNING);
   }
 
-  private void dispatchAfterCommit(ExecutionJob job) {
+  private void dispatchAfterCommit(QualityExecutionPlan job) {
     Runnable dispatch = () -> {
       try {
         taskExecutor.execute(() -> worker.execute(job));

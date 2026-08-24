@@ -2,7 +2,7 @@ package io.yak.ops.business.quality.service;
 
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.AlertEventSpec;
-import io.yak.ops.business.quality.execution.QualityRuntime.ExecutionJob;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
 import io.yak.ops.business.quality.repository.QualityRepository;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
@@ -23,7 +23,7 @@ public class QualityAlertService {
   }
 
   public void recordIfNecessary(
-      ExecutionJob job,
+      QualityExecutionPlan job,
       String executionNo,
       CheckResult result,
       int passed,
@@ -53,7 +53,7 @@ public class QualityAlertService {
     }
   }
 
-  private String normalizeTarget(ExecutionJob job) {
+  private String normalizeTarget(QualityExecutionPlan job) {
     if (job.notifyTarget() != null && !job.notifyTarget().isBlank()) return job.notifyTarget().trim();
     return job.monitor().owner();
   }
