@@ -1,10 +1,10 @@
 package io.yak.ops.business.quality.execution;
 
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.MonitorSnapshot;
+import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan.RuleSnapshot;
 import io.yak.ops.business.quality.execution.QualityMetricEvaluator.MetricMeasurement;
-import io.yak.ops.business.quality.execution.QualityRuntime.MonitorSnapshot;
-import io.yak.ops.business.quality.execution.QualityRuntime.RuleSnapshot;
-import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway.QualityQueryResult;
 import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -17,11 +17,11 @@ public class QualitySqlCompiler {
   private static final Pattern SELECT_TEMPLATE = Pattern.compile("(?is)^\\s*SELECT\\s+(.+?)\\s+FROM\\s+(.+?)\\s*$");
   private static final Pattern READ_ONLY_SELECT = Pattern.compile("(?is)^\\s*SELECT\\b.*");
   private static final Pattern UNSAFE_FILTER = Pattern.compile("(?is)(;|--|/\\*|\\*/|\\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE)\\b)");
-  private final DataSourceCatalogService catalogService;
+  private final QualityDataCatalogGateway catalogGateway;
   private final QualityMetricEvaluator evaluator;
 
-  public QualitySqlCompiler(DataSourceCatalogService catalogService, QualityMetricEvaluator evaluator) {
-    this.catalogService = catalogService;
+  public QualitySqlCompiler(QualityDataCatalogGateway catalogGateway, QualityMetricEvaluator evaluator) {
+    this.catalogGateway = catalogGateway;
     this.evaluator = evaluator;
   }
 
@@ -46,9 +46,9 @@ public class QualitySqlCompiler {
     };
   }
 
-  public MetricMeasurement measure(DataSourceQueryResultVO result) {
-    if (result == null || result.getData() == null || result.getData().isEmpty()) throw new IllegalArgumentException("质量检查 SQL 没有返回指标数据");
-    Map<String, Object> row = result.getData().get(0);
+  public MetricMeasurement measure(QualityQueryResult result) {
+    if (result == null || result.rows().isEmpty()) throw new IllegalArgumentException("质量检查 SQL 没有返回指标数据");
+    Map<String, Object> row = result.rows().get(0);
     if (row == null || row.isEmpty()) throw new IllegalArgumentException("质量检查 SQL 返回了空指标行");
     BigDecimal value = decimal(firstValue(row, "metric_value"));
     return new MetricMeasurement(value, null, QualityMetricEvaluator.format(value));
@@ -94,7 +94,7 @@ public class QualitySqlCompiler {
   }
 
   private TableContext tableContext(MonitorSnapshot monitor, String columnName) {
-    String template = catalogService.buildSqlTemplate(monitor.dataSourceId(), Map.of("table_path", tablePath(monitor)));
+    String template = catalogGateway.buildSqlTemplate(monitor.dataSourceId(), tablePath(monitor));
     Matcher matcher = SELECT_TEMPLATE.matcher(template == null ? "" : template);
     if (!matcher.matches()) throw new IllegalArgumentException("数据源插件返回了无法识别的 SQL 模板");
     String selectedColumns = matcher.group(1).trim();
@@ -154,6 +154,7 @@ public class QualitySqlCompiler {
     if (column == null || column.isBlank()) throw new IllegalArgumentException("当前规则必须选择字段");
     return column;
   }
+
   private static BigDecimal required(BigDecimal value, String message) { if (value == null) throw new IllegalArgumentException(message); return value; }
   private static String literal(BigDecimal value) { return value.stripTrailingZeros().toPlainString(); }
   private static String stringLiteral(String value) { return "'" + value.replace("'", "''") + "'"; }

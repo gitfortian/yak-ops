@@ -6,7 +6,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettingsSpec;
-import io.yak.ops.business.quality.repository.QualityRepository;
+import io.yak.ops.business.quality.repository.QualityMonitorRepository;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -18,11 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnQualityEnabled
 @Component
 public class QualityScheduleLifecycle {
-  private final QualityRepository repository;
+  private final QualityMonitorRepository repository;
   private final QualityScheduleEngineBridge engine;
 
   public QualityScheduleLifecycle(
-      QualityRepository repository,
+      QualityMonitorRepository repository,
       QualityScheduleEngineBridge engine) {
     this.repository = repository;
     this.engine = engine;
@@ -35,14 +35,12 @@ public class QualityScheduleLifecycle {
       engine.deleteIfPresent(monitorId);
       return;
     }
-
     MonitorSettings settings = repository.findMonitorSettings(monitorId);
     if (!monitor.enabled() || settings.runMode() != RunMode.SCHEDULE) {
       engine.pauseIfPresent(monitorId);
       updateNextRunTime(monitorId, settings, null);
       return;
     }
-
     ScheduleSnapshot snapshot = engine.save(monitor, settings);
     updateNextRunTime(monitorId, settings, snapshot.nextFireTime());
   }
@@ -71,16 +69,9 @@ public class QualityScheduleLifecycle {
     repository.upsertMonitorSettings(
         monitorId,
         new MonitorSettingsSpec(
-            settings.runMode(),
-            settings.scheduleFrequency(),
-            settings.scheduleTime(),
-            settings.scheduleWeekday(),
-            settings.cronExpression(),
-            next,
-            settings.ruleFailureAction(),
-            settings.notifyEnabled(),
-            settings.notifyChannel(),
-            settings.notifyTarget(),
-            settings.alertLevel()));
+            settings.runMode(), settings.scheduleFrequency(), settings.scheduleTime(),
+            settings.scheduleWeekday(), settings.cronExpression(), next,
+            settings.ruleFailureAction(), settings.notifyEnabled(), settings.notifyChannel(),
+            settings.notifyTarget(), settings.alertLevel()));
   }
 }

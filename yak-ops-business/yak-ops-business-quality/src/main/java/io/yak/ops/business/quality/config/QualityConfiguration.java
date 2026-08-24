@@ -1,9 +1,9 @@
 package io.yak.ops.business.quality.config;
 
 import io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration;
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
 import io.yak.ops.business.quality.execution.QualityMetricEvaluator;
 import io.yak.ops.business.quality.execution.QualitySqlCompiler;
+import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -44,9 +44,9 @@ public class QualityConfiguration {
 
   @Bean
   public QualitySqlCompiler qualitySqlCompiler(
-      DataSourceCatalogService catalogService,
+      QualityDataCatalogGateway catalogGateway,
       QualityMetricEvaluator evaluator) {
-    return new QualitySqlCompiler(catalogService, evaluator);
+    return new QualitySqlCompiler(catalogGateway, evaluator);
   }
 
   @Bean(name = "qualityExecutionTaskExecutor", destroyMethod = "shutdown")

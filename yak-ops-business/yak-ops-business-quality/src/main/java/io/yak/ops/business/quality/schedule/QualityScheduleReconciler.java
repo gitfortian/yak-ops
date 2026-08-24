@@ -4,7 +4,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.business.quality.domain.QualityQuery;
-import io.yak.ops.business.quality.repository.QualityRepository;
+import io.yak.ops.business.quality.repository.QualityMonitorRepository;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -23,12 +23,12 @@ public class QualityScheduleReconciler {
   private static final Logger LOGGER = LoggerFactory.getLogger(QualityScheduleReconciler.class);
   private static final int PAGE_SIZE = 100;
 
-  private final QualityRepository repository;
+  private final QualityMonitorRepository repository;
   private final QualityScheduleEngineBridge engine;
   private final QualityScheduleLifecycle lifecycle;
 
   public QualityScheduleReconciler(
-      QualityRepository repository,
+      QualityMonitorRepository repository,
       QualityScheduleEngineBridge engine,
       QualityScheduleLifecycle lifecycle) {
     this.repository = repository;
@@ -66,8 +66,7 @@ public class QualityScheduleReconciler {
         } catch (RuntimeException exception) {
           LOGGER.warn(
               "[quality-schedule] stale schedule cleanup failed monitor={}, message={}",
-              monitorId,
-              exception.getMessage());
+              monitorId, exception.getMessage());
         }
       }
     });
@@ -81,9 +80,7 @@ public class QualityScheduleReconciler {
       } catch (RuntimeException exception) {
         LOGGER.error(
             "[quality-schedule] reconcile failed monitor={}, message={}",
-            monitorId,
-            exception.getMessage(),
-            exception);
+            monitorId, exception.getMessage(), exception);
         return;
       }
 
@@ -92,14 +89,11 @@ public class QualityScheduleReconciler {
           engine.runNowIfPresent(monitorId);
           LOGGER.info(
               "[quality-schedule] recovered missed trigger monitor={}, planned={}",
-              monitorId,
-              persistedNextRunTime);
+              monitorId, persistedNextRunTime);
         } catch (RuntimeException exception) {
           LOGGER.warn(
               "[quality-schedule] missed trigger recovery skipped monitor={}, planned={}, message={}",
-              monitorId,
-              persistedNextRunTime,
-              exception.getMessage());
+              monitorId, persistedNextRunTime, exception.getMessage());
         }
       }
     });

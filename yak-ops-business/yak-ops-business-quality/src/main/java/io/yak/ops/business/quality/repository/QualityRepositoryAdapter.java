@@ -24,9 +24,6 @@ import io.yak.ops.business.quality.domain.QualityDomain.TableAssetTarget;
 import io.yak.ops.business.quality.domain.QualityDomain.TableMonitorSummary;
 import io.yak.ops.business.quality.domain.QualityDomain.Template;
 import io.yak.ops.business.quality.domain.QualityQuery;
-import io.yak.ops.business.quality.execution.QualityRuntime.ExecutionJob;
-import io.yak.ops.business.quality.execution.QualityRuntime.MonitorSnapshot;
-import io.yak.ops.business.quality.execution.QualityRuntime.RuleSnapshot;
 import io.yak.ops.common.bean.po.quality.QualityAlertEventPO;
 import io.yak.ops.common.bean.po.quality.QualityExecutionPO;
 import io.yak.ops.common.bean.po.quality.QualityMonitorPO;
@@ -40,7 +37,6 @@ import io.yak.ops.common.bean.po.quality.QualityRulePO;
 import io.yak.ops.common.bean.po.quality.QualityTableAssetPO;
 import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
-import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
 import io.yak.ops.common.enums.quality.QualityEnums.ExecutionStatus;
 import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
 import io.yak.ops.common.enums.quality.QualityEnums.RuleFailureAction;
@@ -66,7 +62,12 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 @ConditionalOnQualityEnabled
 @DependsOn("qualityFlyway")
-public class QualityRepositoryAdapter implements QualityRepository {
+public class QualityRepositoryAdapter implements
+    QualityTemplateRepository,
+    QualityTableAssetRepository,
+    QualityMonitorRepository,
+    QualityExecutionRepository,
+    QualityAlertRepository {
   private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
   private final QualityCatalogDao catalogDao;
@@ -178,24 +179,6 @@ public class QualityRepositoryAdapter implements QualityRepository {
   }
 
   @Override public List<Rule> listRules(long monitorId) { return monitorDao.selectRules(monitorId).stream().map(this::rule).toList(); }
-
-  @Override
-  public ExecutionJob executionJob(long monitorId, long executionId, String executionNo) {
-    Monitor monitor = findMonitor(monitorId)
-        .orElseThrow(() -> new IllegalArgumentException("质量监控不存在：" + monitorId));
-    MonitorSettings settings = findMonitorSettings(monitorId);
-    MonitorSnapshot monitorSnapshot = new MonitorSnapshot(
-        monitor.id(), monitor.name(), monitor.dataSourceId(), monitor.dataSourceName(),
-        monitor.databaseName(), monitor.schemaName(), monitor.tableName(), monitor.whereClause(), monitor.owner());
-    List<RuleSnapshot> rules = monitor.rules().stream().filter(Rule::enabled).map(rule -> new RuleSnapshot(
-        rule.id(), rule.templateId(), rule.templateCode(), rule.name(), rule.ruleType(), rule.scope(),
-        rule.dimension(), rule.columnName(), ComparisonOperator.fromValue(rule.operator()),
-        rule.threshold(), rule.thresholdEnd(), rule.enumValues(), rule.customSql())).toList();
-    return new ExecutionJob(executionId, executionNo, monitorSnapshot, rules,
-        settings.ruleFailureAction(), settings.notifyEnabled(), settings.notifyChannel(),
-        settings.notifyTarget(), settings.alertLevel());
-  }
-
   @Override public void lockMonitor(long monitorId) { monitorDao.lockMonitor(monitorId); }
   @Override public boolean hasActiveExecution(long monitorId) { return executionDao.hasActive(monitorId); }
 
@@ -385,11 +368,7 @@ public class QualityRepositoryAdapter implements QualityRepository {
     catch (JsonProcessingException e) { throw new IllegalStateException("数据库中的枚举值配置无法解析", e); }
   }
 
-  private static <T> PageData<T> pageData(
-      List<T> records,
-      long total,
-      int current,
-      int pageSize) {
+  private static <T> PageData<T> pageData(List<T> records, long total, int current, int pageSize) {
     long pages = pageSize <= 0 ? 0L : (total + pageSize - 1L) / pageSize;
     return new PageData<>(records, total, pages, current, pageSize);
   }

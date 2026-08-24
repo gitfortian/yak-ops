@@ -6,28 +6,27 @@ import io.yak.framework.schedule.api.ScheduleHandler;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
-import io.yak.ops.business.quality.repository.QualityRepository;
-import io.yak.ops.business.quality.service.QualityExecutionService;
-import io.yak.ops.common.bean.vo.quality.QualityMonitorVO;
+import io.yak.ops.business.quality.execution.QualityExecutionManager;
+import io.yak.ops.business.quality.repository.QualityMonitorRepository;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import org.springframework.stereotype.Component;
 
-/** Yak Schedule 数据质量 Handler：统一进入 QualityExecutionService。 */
+/** Yak Schedule handler that delegates every accepted trigger to QualityExecutionManager. */
 @ConditionalOnQualityEnabled
 @Component(QualityScheduleEngineBridge.HANDLER)
 public class QualityScheduleHandler implements ScheduleHandler {
-  private final QualityRepository repository;
-  private final QualityExecutionService executionService;
+  private final QualityMonitorRepository repository;
+  private final QualityExecutionManager executionManager;
   private final QualityScheduleEngineBridge engine;
   private final QualityScheduleLifecycle lifecycle;
 
   public QualityScheduleHandler(
-      QualityRepository repository,
-      QualityExecutionService executionService,
+      QualityMonitorRepository repository,
+      QualityExecutionManager executionManager,
       QualityScheduleEngineBridge engine,
       QualityScheduleLifecycle lifecycle) {
     this.repository = repository;
-    this.executionService = executionService;
+    this.executionManager = executionManager;
     this.engine = engine;
     this.lifecycle = lifecycle;
   }
@@ -49,8 +48,8 @@ public class QualityScheduleHandler implements ScheduleHandler {
     }
 
     try {
-      QualityMonitorVO.Run run = executionService.runScheduled(monitorId);
-      return ScheduleExecutionResult.accepted(run.executionNo(), "质量检查已提交执行");
+      var receipt = executionManager.runScheduled(monitorId);
+      return ScheduleExecutionResult.accepted(receipt.executionNo(), "质量检查已提交执行");
     } finally {
       lifecycle.refreshRuntimeState(monitorId);
     }

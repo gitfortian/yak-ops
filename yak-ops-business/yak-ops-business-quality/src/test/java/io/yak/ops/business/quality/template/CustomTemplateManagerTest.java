@@ -1,4 +1,4 @@
-package io.yak.ops.business.quality.service;
+package io.yak.ops.business.quality.template;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,8 +9,6 @@ import static org.mockito.Mockito.when;
 import io.yak.ops.business.quality.domain.QualityDomain.CustomTemplate;
 import io.yak.ops.business.quality.domain.QualityDomain.CustomTemplateSpec;
 import io.yak.ops.business.quality.repository.CustomTemplateRepository;
-import io.yak.ops.common.bean.dto.quality.CustomQualityTemplateDTO;
-import io.yak.ops.common.bean.vo.quality.CustomQualityTemplateVO;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckMethod;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckType;
 import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
@@ -25,15 +23,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-class CustomTemplateServiceTest {
-
+class CustomTemplateManagerTest {
   @Mock private CustomTemplateRepository repository;
-  private CustomTemplateService service;
+  private CustomTemplateManager manager;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new CustomTemplateService(repository);
+    manager = new CustomTemplateManager(repository, new CustomTemplatePolicy());
   }
 
   @Test
@@ -41,11 +38,11 @@ class CustomTemplateServiceTest {
     when(repository.insertTemplate(any())).thenReturn(7L);
     when(repository.find(7L)).thenReturn(Optional.of(template(7L)));
 
-    CustomQualityTemplateVO.Template result = service.create(
-        new CustomQualityTemplateDTO.SaveTemplateRequest(
-            "订单数量校验", "统计订单数量", "完整性", null, "set demo=value",
+    CustomTemplate result = manager.create(
+        new CustomTemplateCommand.Save(
+            "订单数量校验", "统计订单数量", "完整性", null,
+            "SELECT COUNT(*) FROM ${tableName} WHERE ${where};", "set demo=value",
             CheckType.NUMERIC, CheckMethod.FIXED_VALUE,
-            "SELECT COUNT(*) FROM ${tableName} WHERE ${where};",
             ComparisonOperator.GTE, BigDecimal.ONE, null),
         "tester");
 
@@ -62,11 +59,12 @@ class CustomTemplateServiceTest {
 
   @Test
   void shouldRejectMultipleStatements() {
-    assertThatThrownBy(() -> service.create(
-        new CustomQualityTemplateDTO.SaveTemplateRequest(
-            "多语句模板", null, "自定义", null, null,
+    assertThatThrownBy(() -> manager.create(
+        new CustomTemplateCommand.Save(
+            "多语句模板", null, "自定义", null,
+            "SELECT 1; SELECT 2", null,
             CheckType.NUMERIC, CheckMethod.FIXED_VALUE,
-            "SELECT 1; SELECT 2", ComparisonOperator.EQ, BigDecimal.ZERO, null),
+            ComparisonOperator.EQ, BigDecimal.ZERO, null),
         "tester"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("单条只读 SELECT");
