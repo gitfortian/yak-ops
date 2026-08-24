@@ -24,6 +24,7 @@ public class TaskCatalogDatasetAdapter implements DatasetTaskCatalogGateway {
     return new DatasetTaskAssetSnapshot(
         asset.id(),
         asset.name(),
+        asset.sourceRef(),
         asset.source(),
         asset.status(),
         asset.taskType(),
