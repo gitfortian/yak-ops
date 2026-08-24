@@ -20,14 +20,14 @@ import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.definition.DatasetReader;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskAssetSnapshot;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceAvailability;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceOrigin;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshPublisher;
 import io.yak.ops.business.dataset.repository.DatasetRepository;
 import io.yak.ops.business.dataset.schema.DatasetFieldIdentity;
 import io.yak.ops.business.dataset.schema.DatasetFieldNormalizer;
 import io.yak.ops.business.dataset.schema.DatasetFieldSpec;
 import io.yak.ops.business.dataset.schema.DatasetSchemaDiscovery;
-import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -39,7 +39,7 @@ class DatasetPublisherTest {
   void publishSnapshotsCurrentTaskRevisionWithoutOwningTaskExecution() {
     Fixture fixture = fixture();
     DatasetTaskAssetSnapshot asset =
-        taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 71L, 3);
+        taskAsset(11L, SourceAvailability.ONLINE, "SQL", 71L, 3);
     when(fixture.taskCatalog.get(11L)).thenReturn(asset);
     when(fixture.repository.insertDataset("sales", "sales dataset")).thenReturn(21L);
     when(fixture.schemaDiscovery.discover(21L, asset)).thenReturn(List.of());
@@ -58,7 +58,7 @@ class DatasetPublisherTest {
   void publishFromReleaseIsIdempotentForCurrentTaskRevision() {
     Fixture fixture = fixture();
     DatasetTaskAssetSnapshot asset =
-        taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 71L, 3);
+        taskAsset(11L, SourceAvailability.ONLINE, "SQL", 71L, 3);
     Dataset dataset = dataset(21L, 31L);
     DatasetVersion version = version(31L, 21L, 1, 11L, 71L, 3);
     when(fixture.taskCatalog.get(11L)).thenReturn(asset);
@@ -81,7 +81,7 @@ class DatasetPublisherTest {
   void publishFromReleaseAppendsVersionForNewTaskRevision() {
     Fixture fixture = fixture();
     DatasetTaskAssetSnapshot asset =
-        taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 72L, 4);
+        taskAsset(11L, SourceAvailability.ONLINE, "SQL", 72L, 4);
     Dataset before = dataset(21L, 31L);
     Dataset after = dataset(21L, 32L);
     DatasetVersion version1 = version(31L, 21L, 1, 11L, 71L, 3);
@@ -121,7 +121,7 @@ class DatasetPublisherTest {
   void publishFromReleasePreservesStableFieldIdAcrossCustomizedVersion() {
     Fixture fixture = fixture();
     DatasetTaskAssetSnapshot asset =
-        taskAsset(11L, TaskAssetStatus.ONLINE, "SQL", 72L, 4);
+        taskAsset(11L, SourceAvailability.ONLINE, "SQL", 72L, 4);
     Dataset before = dataset(21L, 31L);
     Dataset after = dataset(21L, 32L);
     DatasetVersion version1 = version(31L, 21L, 1, 11L, 71L, 3);
@@ -200,7 +200,7 @@ class DatasetPublisherTest {
   void publishRejectsOfflineAsset() {
     Fixture fixture = fixture();
     when(fixture.taskCatalog.get(11L))
-        .thenReturn(taskAsset(11L, TaskAssetStatus.OFFLINE, "SQL", 71L, 3));
+        .thenReturn(taskAsset(11L, SourceAvailability.NOT_ONLINE, "SQL", 71L, 3));
 
     IllegalArgumentException error =
         assertThrows(
@@ -216,7 +216,7 @@ class DatasetPublisherTest {
   void publishRejectsNonSqlTask() {
     Fixture fixture = fixture();
     when(fixture.taskCatalog.get(11L))
-        .thenReturn(taskAsset(11L, TaskAssetStatus.ONLINE, "SHELL", 71L, 3));
+        .thenReturn(taskAsset(11L, SourceAvailability.ONLINE, "SHELL", 71L, 3));
 
     assertThrows(
         IllegalArgumentException.class,
@@ -298,7 +298,7 @@ class DatasetPublisherTest {
 
   private DatasetTaskAssetSnapshot taskAsset(
       long assetId,
-      TaskAssetStatus status,
+      SourceAvailability availability,
       String taskType,
       long revisionId,
       int revisionNo) {
@@ -306,8 +306,8 @@ class DatasetPublisherTest {
         assetId,
         "sales.sql",
         "101",
-        TaskAssetSource.DATA_DEVELOPMENT,
-        status,
+        SourceOrigin.DATA_DEVELOPMENT,
+        availability,
         taskType,
         revisionId,
         revisionNo);
