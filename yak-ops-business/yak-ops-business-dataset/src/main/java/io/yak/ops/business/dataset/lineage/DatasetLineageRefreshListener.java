@@ -1,6 +1,5 @@
 package io.yak.ops.business.dataset.lineage;
 
-import io.yak.ops.business.dataset.definition.DatasetReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -14,12 +13,13 @@ public class DatasetLineageRefreshListener {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(DatasetLineageRefreshListener.class);
 
-  private final DatasetReader reader;
+  private final DatasetLineageSnapshotReader snapshotReader;
   private final DatasetLineageTransactionRunner transactionRunner;
 
   public DatasetLineageRefreshListener(
-      DatasetReader reader, DatasetLineageTransactionRunner transactionRunner) {
-    this.reader = reader;
+      DatasetLineageSnapshotReader snapshotReader,
+      DatasetLineageTransactionRunner transactionRunner) {
+    this.snapshotReader = snapshotReader;
     this.transactionRunner = transactionRunner;
   }
 
@@ -31,7 +31,7 @@ public class DatasetLineageRefreshListener {
       return;
     }
     try {
-      transactionRunner.sync(reader.require(event.datasetId()));
+      transactionRunner.sync(snapshotReader.require(event.datasetId()));
     } catch (RuntimeException exception) {
       LOGGER.warn(
           "Dataset lineage refresh failed after commit for dataset {}: {}",
