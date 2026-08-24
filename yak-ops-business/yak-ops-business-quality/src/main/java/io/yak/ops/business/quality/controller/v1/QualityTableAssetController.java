@@ -9,7 +9,7 @@ import io.yak.ops.business.quality.asset.QualityTableAssetManager;
 import io.yak.ops.business.quality.asset.QualityTableAssetReader;
 import io.yak.ops.business.quality.asset.QualityTableCandidateReader;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.controller.v1.mapper.QualityTableAssetMapper;
+import io.yak.ops.business.quality.controller.v1.converter.QualityTableAssetConverter;
 import io.yak.ops.common.bean.dto.quality.QualityTableAssetDTO;
 import io.yak.ops.common.bean.vo.quality.QualityTableAssetVO;
 import jakarta.validation.Valid;
@@ -38,14 +38,13 @@ public class QualityTableAssetController {
   private final QualityTableAssetReader reader;
   private final QualityTableCandidateReader candidateReader;
   private final QualityTableAssetManager manager;
-  private final QualityTableAssetMapper mapper;
+  private final QualityTableAssetConverter converter;
 
   @Operation(summary = "分页查询已注册数据表")
   @PostMapping("/page")
-  public Result<QualityTableAssetVO.Page> page(
-      @Valid @RequestBody QualityTableAssetDTO.PageRequest request) {
-    var query = mapper.query(request);
-    return Result.success(mapper.page(reader.page(query), query));
+  public Result<QualityTableAssetVO.Page> page(@Valid @RequestBody QualityTableAssetDTO.PageRequest request) {
+    var query = converter.query(request);
+    return Result.success(converter.page(reader.page(query), query));
   }
 
   @Operation(summary = "从数据源插件分页查询可注册数据表")
@@ -57,7 +56,7 @@ public class QualityTableAssetController {
       @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(defaultValue = "1") @Min(1) int current,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-    return Result.success(mapper.candidates(candidateReader.candidates(
+    return Result.success(converter.candidates(candidateReader.candidates(
         dataSourceId, databaseName, schemaName, keyword, current, pageSize)));
   }
 
@@ -67,7 +66,7 @@ public class QualityTableAssetController {
   public Result<QualityTableAssetVO.RegisterResult> register(
       @Valid @RequestBody QualityTableAssetDTO.RegisterRequest request,
       Principal principal) {
-    return Result.success(mapper.register(manager.register(mapper.command(request), operator(principal))));
+    return Result.success(converter.register(manager.register(converter.command(request), operator(principal))));
   }
 
   @Operation(summary = "取消注册数据表")
