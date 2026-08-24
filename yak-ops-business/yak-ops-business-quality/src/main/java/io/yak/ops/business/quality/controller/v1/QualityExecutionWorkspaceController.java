@@ -6,7 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.controller.v1.mapper.QualityExecutionWorkspaceMapper;
+import io.yak.ops.business.quality.controller.v1.converter.QualityExecutionWorkspaceConverter;
 import io.yak.ops.business.quality.workspace.QualityExecutionLogProjector;
 import io.yak.ops.business.quality.workspace.QualityExecutionWorkspaceReader;
 import io.yak.ops.common.bean.dto.quality.QualityExecutionWorkspaceDTO;
@@ -27,42 +27,42 @@ import org.springframework.web.bind.annotation.RestController;
 public class QualityExecutionWorkspaceController {
   private final QualityExecutionWorkspaceReader reader;
   private final QualityExecutionLogProjector logProjector;
-  private final QualityExecutionWorkspaceMapper mapper;
+  private final QualityExecutionWorkspaceConverter converter;
 
   public QualityExecutionWorkspaceController(
       QualityExecutionWorkspaceReader reader,
       QualityExecutionLogProjector logProjector,
-      QualityExecutionWorkspaceMapper mapper) {
+      QualityExecutionWorkspaceConverter converter) {
     this.reader = reader;
     this.logProjector = logProjector;
-    this.mapper = mapper;
+    this.converter = converter;
   }
 
   @Operation(summary = "分页查询监控执行记录")
   @PostMapping("/page")
   public Result<QualityExecutionWorkspaceVO.ExecutionPage> page(
       @Valid @RequestBody(required = false) QualityExecutionWorkspaceDTO.PageRequest request) {
-    var query = mapper.query(request);
-    return Result.success(mapper.page(reader.page(query), query));
+    var query = converter.query(request);
+    return Result.success(converter.page(reader.page(query), query));
   }
 
   @Operation(summary = "分页查询规则执行记录")
   @PostMapping("/rule/page")
   public Result<QualityExecutionWorkspaceVO.RuleExecutionPage> pageRules(
       @Valid @RequestBody(required = false) QualityExecutionWorkspaceDTO.PageRequest request) {
-    var query = mapper.query(request);
-    return Result.success(mapper.pageRules(reader.pageRules(query), query));
+    var query = converter.query(request);
+    return Result.success(converter.pageRules(reader.pageRules(query), query));
   }
 
   @Operation(summary = "查询执行工作台详情")
   @GetMapping("/{executionNo}")
   public Result<QualityExecutionWorkspaceVO.ExecutionDetail> detail(@PathVariable String executionNo) {
-    return Result.success(mapper.detail(reader.require(executionNo)));
+    return Result.success(converter.detail(reader.require(executionNo)));
   }
 
   @Operation(summary = "查询执行结构化日志")
   @GetMapping("/{executionNo}/logs")
   public Result<QualityExecutionWorkspaceVO.LogView> logs(@PathVariable String executionNo) {
-    return Result.success(mapper.logs(logProjector.project(reader.require(executionNo))));
+    return Result.success(converter.logs(logProjector.project(reader.require(executionNo))));
   }
 }
