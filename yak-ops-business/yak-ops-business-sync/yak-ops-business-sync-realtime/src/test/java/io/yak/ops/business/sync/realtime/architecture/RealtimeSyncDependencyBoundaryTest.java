@@ -155,7 +155,7 @@ class RealtimeSyncDependencyBoundaryTest {
   @Test
   void broadBusinessBucketsCannotReturn() {
     Path root = productionRoot();
-    for (String forbidden : Set.of("service", "common", "helper", "utils")) {
+    for (String forbidden : Set.of("service", "common", "helper", "utils", "base")) {
       assertThat(Files.exists(root.resolve(forbidden)))
           .as("Broad business bucket '%s' must not exist under realtime-sync", forbidden)
           .isFalse();
