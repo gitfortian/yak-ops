@@ -39,16 +39,16 @@ public class RealtimeDataSourceResolver {
   }
 
   /** Resolves credentials only for the lifetime of one Flink CDC CLI submission. */
-  public RealtimeDeployRequest.CredentialBinding[] resolveCredentials(CdcPipelineSpec spec) {
+  public RealtimeDeployRequest.CredentialBindings resolveCredentials(CdcPipelineSpec spec) {
     DataSourceDefinition source = find(spec.sourceDataSourceRef(), "Source");
     DataSourceDefinition sink = find(spec.sinkDataSourceRef(), "Sink");
     requireRole(source, Role.SOURCE);
     requireRole(sink, Role.SINK);
+
     RealtimeDeployRequest.CredentialBinding sourceCredential = credential(source, Role.SOURCE);
     try {
-      return new RealtimeDeployRequest.CredentialBinding[] {
-        sourceCredential, credential(sink, Role.SINK)
-      };
+      return new RealtimeDeployRequest.CredentialBindings(
+          sourceCredential, credential(sink, Role.SINK));
     } catch (RuntimeException exception) {
       sourceCredential.close();
       throw exception;
@@ -75,7 +75,6 @@ public class RealtimeDataSourceResolver {
 
   private ResolvedCdcPipeline.Endpoint endpoint(DataSourceDefinition definition, Role role) {
     DataSourceConnection connection = connection(definition, role);
-
     HostPort hostPort = hostPort(connection.normalizedJson(), connection.jdbcUrl());
     return new ResolvedCdcPipeline.Endpoint(
         definition.getId(),
@@ -129,7 +128,7 @@ public class RealtimeDataSourceResolver {
         return new HostPort(host, port);
       }
     } catch (Exception ignored) {
-      // Fall through to JDBC URL parsing. No connection values are logged.
+      // JDBC URL is the compatibility fallback; connection values must never be logged here.
     }
 
     String uriText = jdbcUrl == null ? "" : jdbcUrl.replaceFirst("^jdbc:", "");
@@ -139,7 +138,7 @@ public class RealtimeDataSourceResolver {
         return new HostPort(uri.getHost(), uri.getPort());
       }
     } catch (IllegalArgumentException ignored) {
-      // Produce a role-neutral validation error below.
+      // Produce one role-neutral validation error below without exposing connection values.
     }
     throw new IllegalArgumentException("无法从数据源连接参数解析 host/port");
   }
