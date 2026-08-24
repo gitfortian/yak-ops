@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 将冻结 Batch 物化为一次新的 persistence Attempt。 */
+/** Creates one persistence Attempt from an already frozen BatchExecution. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 @RequiredArgsConstructor
@@ -55,7 +55,9 @@ public class OfflineExecutionAttemptFactory {
   }
 
   private String requireText(String value, String message) {
-    if (!StringUtils.hasText(value)) throw new IllegalStateException(message);
+    if (!StringUtils.hasText(value)) {
+      throw new IllegalStateException(message);
+    }
     return value.trim();
   }
 }
