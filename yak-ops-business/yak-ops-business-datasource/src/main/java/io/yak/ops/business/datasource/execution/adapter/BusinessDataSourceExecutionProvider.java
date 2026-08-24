@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.service.support;
+package io.yak.ops.business.datasource.execution.adapter;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
@@ -46,7 +46,8 @@ public class BusinessDataSourceExecutionProvider implements DataSourceExecutionP
     }
     DataSourceConnection connection = plugin.parseConnection(definition.getConnectionParams());
     return plugin.createSqlExecutor(
-        connection, Math.max(1, properties.getConnectionTest().getTimeoutSeconds()));
+        connection,
+        Math.max(1, properties.getConnectionTest().getTimeoutSeconds()));
   }
 
   private long parseDataSourceId(String reference) {

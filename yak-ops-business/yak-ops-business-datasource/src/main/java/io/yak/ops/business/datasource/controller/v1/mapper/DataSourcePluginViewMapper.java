@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.service.support;
+package io.yak.ops.business.datasource.controller.v1.mapper;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.domain.plugin.DataSourcePluginDescriptor;

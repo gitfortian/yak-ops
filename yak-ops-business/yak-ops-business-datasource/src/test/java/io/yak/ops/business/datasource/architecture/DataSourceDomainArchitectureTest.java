@@ -9,6 +9,7 @@ import io.yak.ops.business.datasource.domain.DataSourceSummary;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.List;
@@ -56,7 +57,13 @@ class DataSourceDomainArchitectureTest {
   void connectionProfileIsImmutableDomainValueObject() {
     assertThat(ConnectionProfile.class.isRecord()).isTrue();
     assertThat(ConnectionProfile.class.getDeclaredFields())
-        .allMatch(field -> java.lang.reflect.Modifier.isFinal(field.getModifiers()));
+        .allMatch(field -> Modifier.isFinal(field.getModifiers()));
+  }
+
+  @Test
+  void dataSourceAggregateDoesNotExposePublicSetters() {
+    assertThat(DataSourceDefinition.class.getMethods())
+        .noneMatch(method -> method.getName().startsWith("set"));
   }
 
   @Test
@@ -75,6 +82,21 @@ class DataSourceDomainArchitectureTest {
     assertThat(DataSourceDefinition.class.getMethod("markConnected")).isNotNull();
     assertThat(DataSourceDefinition.class.getMethod("markDisconnected")).isNotNull();
     assertThat(DataSourceDefinition.class.getMethod("markConnectionUnknown")).isNotNull();
+    assertThat(
+            DataSourceDefinition.class.getMethod(
+                "restore",
+                Long.class,
+                String.class,
+                io.yak.ops.common.enums.datasource.DataSourceDbType.class,
+                String.class,
+                io.yak.ops.common.enums.datasource.DataSourceEnvironment.class,
+                io.yak.ops.common.enums.datasource.DataSourceConnStatus.class,
+                String.class,
+                String.class,
+                String.class,
+                java.time.LocalDateTime.class,
+                java.time.LocalDateTime.class))
+        .isNotNull();
   }
 
   private void assertTypeAvoids(Class<?> owner, String member, Type type) {

@@ -5,16 +5,18 @@ import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
 import java.time.LocalDateTime;
 import java.util.Objects;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.ToString;
 
 /**
  * 数据源聚合根；当前保留 {@code DataSourceDefinition} 历史命名以维持兼容。
  *
- * <p>持久化层暂时仍以 jdbcUrl / connectionParams / originalJson 三个标量字段存储连接信息；业务修改必须把它们作为
- * {@link ConnectionProfile} 整体处理，避免部分更新和旧连接状态漂移。
+ * <p>业务侧只通过聚合行为修改配置和连接状态；持久化重建统一使用 {@link #restore}，避免 setter 绕过领域约束。
  */
-@Data
+@Getter
+@EqualsAndHashCode
+@ToString
 public class DataSourceDefinition {
   private Long id;
   private String name;
@@ -27,6 +29,8 @@ public class DataSourceDefinition {
   @ToString.Exclude private String originalJson;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
+
+  private DataSourceDefinition() {}
 
   /** 创建新的数据源聚合。创建只代表配置有效，连接状态必须从 UNKNOWN 开始。 */
   public static DataSourceDefinition create(
@@ -41,6 +45,34 @@ public class DataSourceDefinition {
     definition.environment = Objects.requireNonNull(environment, "数据源环境不能为空");
     definition.remark = normalizeNullable(remark);
     definition.replaceConnectionProfile(connectionProfile);
+    return definition;
+  }
+
+  /** Rehydrates an aggregate from persistence without replaying business state transitions. */
+  public static DataSourceDefinition restore(
+      Long id,
+      String name,
+      DataSourceDbType dbType,
+      String jdbcUrl,
+      DataSourceEnvironment environment,
+      DataSourceConnStatus connStatus,
+      String remark,
+      String connectionParams,
+      String originalJson,
+      LocalDateTime createTime,
+      LocalDateTime updateTime) {
+    DataSourceDefinition definition = new DataSourceDefinition();
+    definition.id = id;
+    definition.name = name;
+    definition.dbType = dbType;
+    definition.jdbcUrl = jdbcUrl;
+    definition.environment = environment;
+    definition.connStatus = connStatus;
+    definition.remark = remark;
+    definition.connectionParams = connectionParams;
+    definition.originalJson = originalJson;
+    definition.createTime = createTime;
+    definition.updateTime = updateTime;
     return definition;
   }
 
