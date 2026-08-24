@@ -12,4 +12,9 @@ public record DevelopmentTaskDraft(
     long draftRevision,
     Instant createTime,
     Instant updateTime) {
+
+  /** Publish commands must pin the exact mutable revision they were prepared against. */
+  public boolean matchesRevision(long expectedRevision) {
+    return draftRevision == expectedRevision;
+  }
 }

@@ -2,8 +2,10 @@ package io.yak.ops.business.development.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class DevelopmentNodeModelTest {
@@ -36,5 +38,21 @@ class DevelopmentNodeModelTest {
     assertFalse(DevelopmentNodeType.DATA_SERVICE.isProcessing());
     assertTrue(DevelopmentNodeType.DATASET.isOutput());
     assertTrue(DevelopmentNodeType.DATA_SERVICE.isOutput());
+  }
+
+  @Test
+  void nodeOwnsTaskLifecycleCapabilityGate() {
+    Instant now = Instant.parse("2026-08-24T00:00:00Z");
+    DevelopmentNode sql = new DevelopmentNode(1L, "SQL", "sql", null, null, true, now, now);
+    DevelopmentNode dataset =
+        new DevelopmentNode(2L, "Dataset", "DATASET", null, null, true, now, now);
+
+    assertEquals(DevelopmentNodeType.SQL, sql.nodeType());
+    assertTrue(sql.supportsTaskLifecycle());
+    sql.requireTaskLifecycle();
+
+    IllegalArgumentException exception =
+        assertThrows(IllegalArgumentException.class, dataset::requireTaskLifecycle);
+    assertTrue(exception.getMessage().contains("不是可执行开发任务"));
   }
 }
