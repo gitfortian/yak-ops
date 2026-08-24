@@ -13,6 +13,7 @@ public interface DatasetTaskCatalogGateway {
   record DatasetTaskAssetSnapshot(
       long id,
       String name,
+      String sourceRef,
       TaskAssetSource source,
       TaskAssetStatus status,
       String taskType,
