@@ -15,21 +15,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Manages application-level environment variables stored in {@code yak_system_env_var}.
+ * Stable application facade for application-level environment variables.
  *
- * <p>On startup, all rows are loaded into an in-memory cache. Mutations update both the
- * cache and the database so that subsequent task executions immediately pick up the
- * latest values without restarting the application.
- *
- * <p>The merge priority (highest first) is:
- * <ol>
- *   <li>Task-level {@code envVars} specified in the task config</li>
- *   <li>Application-level env vars managed by this service</li>
- *   <li>OS-level environment variables from {@code System.getenv()}</li>
- * </ol>
+ * <p>The same component implements {@link TaskEnvironmentResolver}, so task execution depends only
+ * on the narrow runtime read contract rather than on settings CRUD behavior.</p>
  */
 @Service
-public class SystemEnvVarService {
+public class SystemEnvVarService implements TaskEnvironmentResolver {
 
   private static final Logger log = LoggerFactory.getLogger(SystemEnvVarService.class);
 
@@ -54,19 +46,15 @@ public class SystemEnvVarService {
     return Collections.unmodifiableMap(new LinkedHashMap<>(cache));
   }
 
-  /**
-   * Returns a merged environment variable map suitable for task execution.
-   *
-   * <p>OS-level environment variables form the base; application-level variables
-   * override them.
-   */
+  /** OS environment is the base; application-level values override it. */
+  @Override
   public Map<String, String> resolveMergedEnv() {
     Map<String, String> merged = new LinkedHashMap<>(System.getenv());
     merged.putAll(cache);
     return Collections.unmodifiableMap(merged);
   }
 
-  /** Sets (or updates) an application-level environment variable. */
+  /** Sets or updates an application-level environment variable. */
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void set(String key, String value) {
     String normalizedKey = normalizeKey(key);
@@ -87,7 +75,10 @@ public class SystemEnvVarService {
     }
 
     cache.put(normalizedKey, normalizedValue);
-    log.info("Application environment variable set: {} = {}", normalizedKey, maskSensitive(normalizedKey, normalizedValue));
+    log.info(
+        "Application environment variable set: {} = {}",
+        normalizedKey,
+        maskSensitive(normalizedKey, normalizedValue));
   }
 
   /** Removes an application-level environment variable. */
@@ -102,12 +93,10 @@ public class SystemEnvVarService {
     return affected > 0;
   }
 
-  /** Batch-saves environment variables, replacing all existing application-level variables. */
+  /** Batch-saves environment variables using the same validation and persistence semantics as set. */
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void batchSave(Map<String, String> variables) {
-    if (variables == null || variables.isEmpty()) {
-      return;
-    }
+    if (variables == null || variables.isEmpty()) return;
     for (Map.Entry<String, String> entry : variables.entrySet()) {
       set(entry.getKey(), entry.getValue());
     }

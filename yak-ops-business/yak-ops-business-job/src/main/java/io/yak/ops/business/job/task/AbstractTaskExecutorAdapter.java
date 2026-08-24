@@ -24,18 +24,15 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * Template-method base class for task executor adapters that delegate to the
- * shared Task Runtime / TaskPlugin contract.
+ * Shared local runtime for TaskPlugin-backed task types.
  *
- * <p>Subclasses only specify <em>what</em> task type they handle and
- * <em>how</em> the execution context should be configured. All orchestration
- * (idempotency, lifecycle, conversion, error handling) lives here exactly once.</p>
+ * <p>Task-type adapters only declare type identity and contribute capabilities. Idempotency,
+ * execution handles, asynchronous lifecycle, status/cancel and result conversion are owned here.
  */
 abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
 
@@ -61,40 +58,51 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     this.workerExecutor = Executors.newVirtualThreadPerTaskExecutor();
   }
 
-  // ── Template hooks ────────────────────────────────────────────────
-
-  /**
-   * The task type this adapter handles, e.g. "PYTHON", "JAVA", "SHELL".
-   * Also serves as the {@link TaskExecutor#taskType()} implementation.
-   */
   @Override
   public abstract String taskType();
 
-  /** Prefix for generated execution IDs, e.g. "python", "java", "shell". */
   protected abstract String executionIdPrefix();
 
-  /** Human-readable display name for log/error messages, e.g. "Python". */
   protected abstract String displayName();
 
-  /**
-   * Configure the execution context with task-type-specific capabilities.
-   *
-   * <p>The default injects {@link ResourceResolver} conditionally when the
-   * definition carries a {@code resourceId} reference. Override for types
-   * that always (or never) require a resolver.</p>
-   */
+  /** Contributes task-type-specific runtime capabilities. */
   protected void configureContext(
       DefaultTaskExecutionContext.Builder builder,
       String definitionJson) {
+    if (resourceResolverProvider == null) return;
     if (hasResourceReference(definitionJson, objectMapper)) {
       ResourceResolver resolver = resourceResolverProvider.getIfAvailable();
-      if (resolver != null) {
-        builder.capability(ResourceResolver.class, resolver);
-      }
+      if (resolver != null) builder.capability(ResourceResolver.class, resolver);
     }
   }
 
-  // ── TaskExecutor implementation ───────────────────────────────────
+  protected String snapshotRequiredMessage() {
+    return "Task version snapshot must not be null";
+  }
+
+  protected String snapshotTypeMismatchMessage(TaskVersionSnapshot snapshot) {
+    return displayName() + " executor cannot execute task type: " + snapshot.type();
+  }
+
+  protected String missingDefinitionSnapshotMessage(TaskVersionSnapshot snapshot) {
+    return displayName() + " task missing immutable definitionSnapshot: " + snapshot.taskId();
+  }
+
+  protected String executionNotFoundMessage(String executionId) {
+    return displayName() + " task execution not found: " + executionId;
+  }
+
+  protected String pluginNotExecutableMessage() {
+    return displayName() + " Task Plugin does not support execution";
+  }
+
+  protected String validationFailureMessage(TaskValidationResult validation) {
+    return summarizeIssues(validation, displayName() + " task validation failed");
+  }
+
+  protected String executionFailureMessage(Throwable throwable) {
+    return safeMessage(throwable, displayName() + " execution failed");
+  }
 
   @Override
   public TaskExecution start(
@@ -125,9 +133,9 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     validateDefinition(plugin, definition);
 
     TaskExecutionContext context = contextFactory.create(
-        safeTrigger, input,
+        safeTrigger,
+        input,
         builder -> configureContext(builder, snapshot.definitionSnapshotJson()));
-
     io.yak.ops.plugin.task.api.TaskExecutor pluginExecutor =
         plugin.createExecutor(definition, context);
 
@@ -139,9 +147,12 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
 
     try {
       workerExecutor.submit(() -> runExecution(executionId, handle));
-    } catch (RuntimeException e) {
+    } catch (RuntimeException exception) {
       TaskExecution failed = new TaskExecution(
-          executionId, "FAILED", safeMessage(e, displayName() + " execution failed"), Map.of());
+          executionId,
+          "FAILED",
+          executionFailureMessage(exception),
+          Map.of());
       handle.snapshot().set(failed);
       return failed;
     }
@@ -150,8 +161,7 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
 
   @Override
   public TaskExecution status(String executionId) {
-    ExecutionHandle handle = requireHandle(executionId);
-    return handle.snapshot().get();
+    return requireHandle(executionId).snapshot().get();
   }
 
   @Override
@@ -164,8 +174,10 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     handle.snapshot().updateAndGet(existing -> existing.terminal()
         ? existing
         : new TaskExecution(
-            executionId, "CANCELED",
-            displayName() + " execution cancelled", existing.output()));
+            executionId,
+            "CANCELED",
+            displayName() + " execution cancelled",
+            existing.output()));
   }
 
   @PreDestroy
@@ -173,32 +185,34 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     workerExecutor.shutdownNow();
   }
 
-  // ── Protected accessors for subclasses ────────────────────────────
-
-  /** Access the ResourceResolver provider, e.g. for always-required injection. */
   protected ResourceResolver resourceResolver() {
-    return resourceResolverProvider.getIfAvailable();
+    return resourceResolverProvider == null ? null : resourceResolverProvider.getIfAvailable();
   }
-
-  // ── Internal orchestration ────────────────────────────────────────
 
   private void runExecution(String executionId, ExecutionHandle handle) {
     try {
       TaskExecutionResult result = handle.executor().execute();
       TaskExecution completed = convert(executionId, result);
-      handle.snapshot().updateAndGet(c -> c.terminal() ? c : completed);
+      handle.snapshot().updateAndGet(current -> current.terminal() ? current : completed);
       if (completed.terminal() && !"SUCCEEDED".equals(completed.status())) {
-        log.warn("{} task execution ended [{}] status={} message={}",
-            displayName(), executionId, completed.status(), completed.errorMessage());
+        log.warn(
+            "{} task execution ended [{}] status={} message={}",
+            displayName(),
+            executionId,
+            completed.status(),
+            completed.errorMessage());
       } else {
         log.info("{} task execution completed [{}] status={}",
             displayName(), executionId, completed.status());
       }
-    } catch (Exception e) {
-      log.error("{} task execution exception [{}]", displayName(), executionId, e);
+    } catch (Exception exception) {
+      log.error("{} task execution exception [{}]", displayName(), executionId, exception);
       TaskExecution failed = new TaskExecution(
-          executionId, "FAILED", safeMessage(e, displayName() + " execution failed"), Map.of());
-      handle.snapshot().updateAndGet(c -> c.terminal() ? c : failed);
+          executionId,
+          "FAILED",
+          executionFailureMessage(exception),
+          Map.of());
+      handle.snapshot().updateAndGet(current -> current.terminal() ? current : failed);
     }
   }
 
@@ -216,13 +230,10 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     return new TaskExecution(executionId, status, errorMessage, result.output());
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────
-
   private TaskPlugin requireExecutablePlugin() {
     TaskPlugin plugin = pluginRegistry.require(taskType());
     if (!plugin.descriptor().executable()) {
-      throw new IllegalStateException(
-          displayName() + " Task Plugin does not support execution");
+      throw new IllegalStateException(pluginNotExecutableMessage());
     }
     return plugin;
   }
@@ -230,8 +241,7 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
   private TaskDefinition extractDefinition(TaskVersionSnapshot snapshot) {
     String json = snapshot.definitionSnapshotJson();
     if (json == null || json.isBlank()) {
-      throw new IllegalArgumentException(
-          displayName() + " task missing immutable definitionSnapshot: " + snapshot.taskId());
+      throw new IllegalArgumentException(missingDefinitionSnapshotMessage(snapshot));
     }
     try {
       TaskDefinition definition = objectMapper.readValue(json, TaskDefinition.class);
@@ -241,35 +251,28 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
                 + taskType() + ", definition=" + definition.taskType());
       }
       return definition;
-    } catch (JsonProcessingException e) {
+    } catch (JsonProcessingException exception) {
       throw new IllegalArgumentException(
-          displayName() + " task definitionSnapshot is not valid JSON", e);
+          displayName() + " task definitionSnapshot is not valid JSON", exception);
     }
   }
 
   private void validateDefinition(TaskPlugin plugin, TaskDefinition definition) {
     TaskValidationResult validation = plugin.validate(definition);
-    String summary = summarizeIssues(validation,
-        displayName() + " task validation failed");
+    String summary = validationFailureMessage(validation);
     if (summary != null) throw new IllegalArgumentException(summary);
   }
 
   private void requireSnapshot(TaskVersionSnapshot snapshot) {
-    if (snapshot == null) {
-      throw new IllegalArgumentException("Task version snapshot must not be null");
-    }
+    if (snapshot == null) throw new IllegalArgumentException(snapshotRequiredMessage());
     if (!taskType().equalsIgnoreCase(snapshot.type())) {
-      throw new IllegalArgumentException(
-          displayName() + " executor cannot execute task type: " + snapshot.type());
+      throw new IllegalArgumentException(snapshotTypeMismatchMessage(snapshot));
     }
   }
 
   private ExecutionHandle requireHandle(String executionId) {
     ExecutionHandle handle = executions.get(executionId);
-    if (handle == null) {
-      throw new IllegalArgumentException(
-          displayName() + " task execution not found: " + executionId);
-    }
+    if (handle == null) throw new IllegalArgumentException(executionNotFoundMessage(executionId));
     return handle;
   }
 
@@ -277,8 +280,6 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     if (key == null || key.isBlank()) return null;
     return key.trim();
   }
-
-  // ── Inner types ───────────────────────────────────────────────────
 
   protected record ExecutionHandle(
       io.yak.ops.plugin.task.api.TaskExecutor executor,
