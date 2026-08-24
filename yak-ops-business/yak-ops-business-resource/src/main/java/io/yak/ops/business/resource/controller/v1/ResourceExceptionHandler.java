@@ -1,11 +1,11 @@
-package io.yak.ops.business.resource.exception;
+package io.yak.ops.business.resource.controller.v1;
 
 import io.yak.framework.common.ErrorCode;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.common.enums.ResultCode;
 import io.yak.framework.security.exception.YakSecurityException;
 import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
-import io.yak.ops.business.resource.controller.v1.ResourcesController;
+import io.yak.ops.business.resource.exception.ResourceException;
 import io.yak.ops.common.enums.resource.ResourceErrorCode;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
-/** 资源管理接口异常转换。 */
+/** Resource HTTP exception translation; business exceptions themselves remain in the exception package. */
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackageClasses = ResourcesController.class)

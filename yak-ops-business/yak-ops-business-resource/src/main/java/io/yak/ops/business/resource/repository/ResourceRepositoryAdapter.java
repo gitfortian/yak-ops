@@ -11,10 +11,9 @@ import io.yak.ops.common.bean.po.resource.ResourcePO;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis 持久化模型与资源领域模型之间的适配器。 */
+/** Explicit persistence adapter between Resource domain metadata and MyBatis persistence models. */
 @Repository
 @ConditionalOnResourceEnabled
 @RequiredArgsConstructor
@@ -42,7 +41,7 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
     if (resource == null) {
       return false;
     }
-    ResourcePO po = toPO(resource);
+    ResourcePO po = toPersistence(resource);
     boolean inserted = resourceDao.insert(po) > 0;
     if (inserted) {
       resource.setId(po.getId());
@@ -52,7 +51,7 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
 
   @Override
   public boolean update(ResourceNode resource) {
-    return resource != null && resourceDao.update(toPO(resource));
+    return resource != null && resourceDao.update(toPersistence(resource));
   }
 
   @Override
@@ -60,7 +59,7 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
     if (resources == null || resources.isEmpty()) {
       return true;
     }
-    return resourceDao.updateBatch(resources.stream().map(this::toPO).toList());
+    return resourceDao.updateBatch(resources.stream().map(this::toPersistence).toList());
   }
 
   @Override
@@ -108,13 +107,43 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
       return null;
     }
     ResourceNode domain = new ResourceNode();
-    BeanUtils.copyProperties(po, domain);
+    domain.setId(po.getId());
+    domain.setParentId(po.getParentId());
+    domain.setName(po.getName());
+    domain.setFullPath(po.getFullPath());
+    domain.setNodeType(po.getNodeType());
+    domain.setStorageType(po.getStorageType());
+    domain.setStoragePath(po.getStoragePath());
+    domain.setContentType(po.getContentType());
+    domain.setSuffix(po.getSuffix());
+    domain.setFileSize(po.getFileSize());
+    domain.setChecksum(po.getChecksum());
+    domain.setDescription(po.getDescription());
+    domain.setVersion(po.getVersion());
+    domain.setGitSyncStatus(po.getGitSyncStatus());
+    domain.setCreateTime(po.getCreateTime());
+    domain.setUpdateTime(po.getUpdateTime());
     return domain;
   }
 
-  ResourcePO toPO(ResourceNode domain) {
+  ResourcePO toPersistence(ResourceNode domain) {
     ResourcePO po = new ResourcePO();
-    BeanUtils.copyProperties(domain, po);
+    po.setId(domain.getId());
+    po.setParentId(domain.getParentId());
+    po.setName(domain.getName());
+    po.setFullPath(domain.getFullPath());
+    po.setNodeType(domain.getNodeType());
+    po.setStorageType(domain.getStorageType());
+    po.setStoragePath(domain.getStoragePath());
+    po.setContentType(domain.getContentType());
+    po.setSuffix(domain.getSuffix());
+    po.setFileSize(domain.getFileSize());
+    po.setChecksum(domain.getChecksum());
+    po.setDescription(domain.getDescription());
+    po.setVersion(domain.getVersion());
+    po.setGitSyncStatus(domain.getGitSyncStatus());
+    po.setCreateTime(domain.getCreateTime());
+    po.setUpdateTime(domain.getUpdateTime());
     return po;
   }
 }

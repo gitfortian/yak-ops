@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.yak.framework.common.PageData;
+import io.yak.ops.business.resource.content.ResourceBinarySource;
 import io.yak.ops.business.resource.content.ResourceContentManager;
+import io.yak.ops.business.resource.controller.v1.ResourceExceptionHandler;
 import io.yak.ops.business.resource.controller.v1.ResourcesController;
 import io.yak.ops.business.resource.dao.ResourceDao;
 import io.yak.ops.business.resource.domain.ResourceQuery;
@@ -63,7 +65,7 @@ class ResourceLayeringConventionTest {
   }
 
   @Test
-  void namespaceAndContentDoNotInjectDaoPoOrHttpModels() {
+  void namespaceAndContentDoNotInjectDaoPoHttpOrStorageOperator() {
     for (Class<?> type : List.of(ResourceNamespaceManager.class, ResourceContentManager.class)) {
       for (Field field : type.getDeclaredFields()) {
         String fieldType = field.getGenericType().getTypeName();
@@ -91,6 +93,17 @@ class ResourceLayeringConventionTest {
   }
 
   @Test
+  void multipartFileStopsAtHttpRequestMapperBoundary() {
+    for (Method method : ResourceBinarySource.class.getDeclaredMethods()) {
+      String signature = method.getGenericReturnType().getTypeName();
+      for (Type parameter : method.getGenericParameterTypes()) {
+        signature += "|" + parameter.getTypeName();
+      }
+      assertThat(signature).doesNotContain("org.springframework.web.multipart.MultipartFile");
+    }
+  }
+
+  @Test
   void resourceStorageGatewayDoesNotExposeStorageOperator() {
     for (Method method : ResourceStorageGateway.class.getDeclaredMethods()) {
       String signature = method.getGenericReturnType().getTypeName();
@@ -102,10 +115,18 @@ class ResourceLayeringConventionTest {
   }
 
   @Test
-  void broadServiceAndUtilBucketsAreRemoved() {
+  void httpExceptionAdviceLivesAtControllerBoundary() {
+    assertThat(ResourceExceptionHandler.class.getPackageName())
+        .startsWith("io.yak.ops.business.resource.controller.");
+  }
+
+  @Test
+  void broadBusinessBucketsAreRemoved() {
     Path root = moduleRoot().resolve("src/main/java/io/yak/ops/business/resource");
-    assertThat(Files.exists(root.resolve("service"))).isFalse();
-    assertThat(Files.exists(root.resolve("util"))).isFalse();
+    for (String forbidden :
+        List.of("service", "common", "helper", "utils", "util", "base", "persistence")) {
+      assertThat(Files.exists(root.resolve(forbidden))).isFalse();
+    }
   }
 
   @Test
