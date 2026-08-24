@@ -1,6 +1,6 @@
 package io.yak.ops.business.development.service;
 
-/** Raised when a client tries to overwrite a newer server-side draft revision. */
+/** Optimistic authoring conflict retained as a compatibility corridor for Task and Data Service. */
 public class DevelopmentDraftConflictException extends RuntimeException {
 
   public DevelopmentDraftConflictException(String message) {

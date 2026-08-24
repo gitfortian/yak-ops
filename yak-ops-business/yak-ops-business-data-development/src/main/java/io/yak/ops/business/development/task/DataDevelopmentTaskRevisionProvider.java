@@ -1,4 +1,4 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.task;
 
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;

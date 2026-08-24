@@ -1,21 +1,15 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.task;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
+import io.yak.ops.business.development.lineage.DevelopmentLineageOutbox;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskDraftRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;
-import io.yak.ops.business.development.task.DevelopmentTaskDefinitionNormalizer;
-import io.yak.ops.business.development.task.DevelopmentTaskDraftManager;
-import io.yak.ops.business.development.task.DevelopmentTaskNodeResolver;
-import io.yak.ops.business.development.task.DevelopmentTaskPublisher;
-import io.yak.ops.business.development.task.DevelopmentTaskRevisionReader;
-import io.yak.ops.business.development.task.DevelopmentTaskValidation;
-import io.yak.ops.business.development.task.DevelopmentTaskValidator;
-import io.yak.ops.business.development.task.TaskDefinitionDigestCalculator;
+import io.yak.ops.business.development.service.DevelopmentDraftConflictException;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.spi.task.model.TaskDefinition;
@@ -55,7 +49,6 @@ public class DevelopmentTaskService {
         null);
   }
 
-  /** Keeps the previous full constructor source compatible during Stage 1. */
   public DevelopmentTaskService(
       DevelopmentNodeRepository nodeRepository,
       DevelopmentTaskDraftRepository draftRepository,

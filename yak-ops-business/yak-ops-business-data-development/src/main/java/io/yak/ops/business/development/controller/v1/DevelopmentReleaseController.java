@@ -6,7 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.ops.business.development.domain.DevelopmentReleaseDetail;
 import io.yak.ops.business.development.domain.DevelopmentReleasePage;
 import io.yak.ops.business.development.domain.DevelopmentReleaseSummary;
-import io.yak.ops.business.development.service.DevelopmentReleaseService;
+import io.yak.ops.business.development.release.DevelopmentReleaseService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

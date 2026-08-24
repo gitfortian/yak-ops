@@ -1,4 +1,4 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.lineage;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;

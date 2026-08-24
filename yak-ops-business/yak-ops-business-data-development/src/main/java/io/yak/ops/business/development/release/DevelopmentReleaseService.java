@@ -1,4 +1,4 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.release;
 
 import io.yak.ops.business.development.domain.DevelopmentReleaseDetail;
 import io.yak.ops.business.development.domain.DevelopmentReleasePage;

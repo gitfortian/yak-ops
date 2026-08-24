@@ -1,50 +1,84 @@
 # Data Development Architecture
 
-本文件定义 Data Development 的长期角色边界，并记录 Stage 1 的兼容入口。需求语义看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`。
+本文件定义 Data Development 的长期结构 contract。需求看 `REQUIREMENTS.md`，领域硬规则看 `DOMAIN.md`，依赖方向看 `DEPENDENCIES.md`，Review 看 `REVIEW.md`。
 
 ## 设计原则
 
-1. **先有 Truth Owner，再拆 package。** 不为了 DDD 或“去 Service”制造空壳层。
-2. **Service 只做稳定入口。** 内部复杂行为使用明确角色名。
-3. **角色名表达职责。** Manager / Publisher / Validator / Normalizer / Coordinator / Resolver / Parser / Analyzer / Query / Gateway / Worker 不互相冒充。
-4. **Draft / Revision / Execution 分离。** 任何结构都不能把三种生命周期重新揉回一个对象。
-5. **外部系统停在边界。** Task Runtime、Task Catalog、Lineage、DataSource Catalog 都通过明确依赖进入。
-6. **派生事实不反向拥有业务真相。** Lineage、read model、execution history 都不能成为 Task Revision owner。
-7. **结构重构不偷改 REST / DB。** Stage 1 只调整内部职责和领域表达。
+1. **业务子系统优先。** package 要能表达 Node、Task、Execution、Dataset、Release、Lineage 等业务角色。
+2. **Service 是入口角色，不是分层目录。** 允许稳定 Application Service，禁止通用 Service 大桶。
+3. **名字表达职责。** Manager / Publisher / Validator / Normalizer / Coordinator / Resolver / Parser / Analyzer / Reader / Gateway / Worker 各自只承担对应角色。
+4. **Truth 只有一个 owner。** Node、Draft、Revision、Execution、Task Catalog projection、Lineage evidence 不互相冒充。
+5. **结构重构不偷改行为。** package move 与 REST / DB / Domain semantic change 分开。
+6. **外部系统停在边界。** Task Runtime、Task Catalog、Dataset、Data Service Runtime、Lineage、DataSource 都是邻接上下文。
+7. **架构必须可执行。** 文档由 architecture tests 和固定 legacy allowlist 守住。
 
-## Stage 1 Package Map
+## Package Map
 
 ```text
 io.yak.ops.business.development
-├── controller          # HTTP inbound
-├── task                # Task authoring domain roles（Stage 1 新边界）
-├── domain              # Node / Draft / Revision / execution views / value semantics
-├── repository          # Data Development persistence contracts + adapters
+├── controller          # HTTP inbound only
+├── node                # Node identity / metadata lifecycle
+├── directory           # workspace directory lifecycle
+├── task                # Draft / validation / immutable Revision / Task Catalog projection
+├── execution           # editor manual run + execution history
+├── dataset             # Dataset output-node application boundary
+├── release             # published Task Catalog read/activation boundary
+├── editor              # editor preference boundary
+├── lineage             # outbox / worker / write transaction orchestration
+├── domain              # core values and immutable facts
+├── repository          # persistence contracts + adapters
 ├── dao                 # MyBatis persistence primitives
-├── service             # 兼容入口 + 尚未迁移的历史实现
-└── config              # module configuration
+├── config              # module configuration
+└── service             # frozen legacy Data Service / SQL lineage algorithm island
 ```
 
-`service` 在 Stage 1 仍然存在，但它是**迁移中的兼容区域**：允许保留稳定 Facade 和尚未迁移的旧实现，不再把新的 Parser / Validator / Manager / Coordinator 一律放入该 package。
+禁止新增 `common / helper / helpers / util / utils / base` 业务大桶。
 
-Stage 2 目标会按业务子系统继续收敛：
+## Core Truth
 
 ```text
-node / task / dataservice / release / lineage / editor / repository / dao / config
+DevelopmentNode
+      │ author
+      ▼
+DevelopmentTaskDraft (mutable)
+      │ publish
+      ▼
+DevelopmentTaskRevision (immutable)
+      │ project
+      └────────> Task Catalog
+
+current editor definition
+      │ run
+      ▼
+DevelopmentTaskExecution
 ```
 
-不是为了目录一致强行一次搬完。
-
-## Task Stable Entry
-
-Stage 1 保留：
+固定关系：
 
 ```text
-DevelopmentTaskController / API
-        -> DevelopmentTaskService
+Node != Draft != Revision != Execution
 ```
 
-`DevelopmentTaskService` 是兼容 Application Facade，内部职责拆为：
+DATASET / DATA_SERVICE 是 Output Node，不进入 executable Task Draft/Revision lifecycle。
+
+## Stable Application Entries
+
+Stage 2 的新稳定入口按业务包放置：
+
+```text
+node.DevelopmentNodeService
+directory.DevelopmentDirectoryService
+task.DevelopmentTaskService
+execution.DevelopmentTaskRunService
+execution.DevelopmentTaskExecutionService
+dataset.DevelopmentDatasetNodeService
+release.DevelopmentReleaseService
+editor.DevelopmentEditorSettingsService
+```
+
+Controller 只依赖这些入口以及明确保留的 legacy lineage preview corridor，不直接进入 Repository / DAO。
+
+## Task Subsystem
 
 ```text
 DevelopmentTaskService
@@ -57,102 +91,115 @@ DevelopmentTaskService
 └── DevelopmentTaskRevisionReader
 ```
 
-职责：
+固定职责：
 
-- `NodeResolver`：Node identity lookup 与 executable capability gate；
-- `DefinitionNormalizer`：TaskDefinition 唯一规范化入口；
-- `DraftManager`：Draft read/save/lock 与 optimistic storage；
-- `Validator`：Task Plugin publish validation；
-- `DigestCalculator`：发布定义 digest；
-- `Publisher`：不可变 Revision append/reuse + Task Catalog projection；
-- `RevisionReader`：历史 Revision read side；
-- `DevelopmentTaskService`：事务边界、异常兼容和跨角色编排。
+- NodeResolver：Node lookup + executable capability gate；
+- DefinitionNormalizer：唯一 TaskDefinition normalization；
+- DraftManager：Draft read/save/lock；
+- Validator：Task Plugin publish validation；
+- DigestCalculator：immutable definition digest；
+- Publisher：Revision append/reuse + Task Catalog projection；
+- RevisionReader：immutable Revision read side。
 
-## Editor Run
+Task publish 成功后只向 `lineage.DevelopmentLineageOutbox` 投递 SQL evidence 工作，不直接同步写 Lineage 图。
 
-Stage 1 仍保留 `DevelopmentTaskRunService` 作为现有入口，但它不再拥有第二套 Node / TaskDefinition 规则：
+## Execution Subsystem
 
 ```text
 DevelopmentTaskRunService
 ├── DevelopmentTaskNodeResolver
 ├── DevelopmentTaskDefinitionNormalizer
-├── TaskExecutionGateway
+├── shared TaskExecutionGateway
 └── DevelopmentTaskExecutionService
 ```
 
-后续 Stage 2 可以继续收敛为 `ExecutionCoordinator / Starter / Recorder / Query`，但本 PR 不为了改名而改名。
+Editor Run 使用临时 `TaskVersionSnapshot(version=0)`。它不是 Publish，也不能创建 immutable Revision。
 
-## Role Vocabulary
+Execution history 是 Data Development 的运行记录；真正的 executor runtime state 仍由共享 Task Runtime 提供。
 
-```text
-Manager       管一个业务对象的生命周期
-Coordinator   编排多个专业角色或外部边界
-Publisher     发布不可变版本 / 事件 / projection
-Validator     执行业务能力校验
-Normalizer    把输入收敛为唯一逻辑表示
-Compiler      从逻辑表示生成另一种运行表示
-Parser        解析语法或协议
-Analyzer      基于解析结果产生静态事实
-Resolver      解析引用、身份或上下文
-Reader/Query  只读
-Gateway       外部系统边界
-Worker        异步消费
-Reconciler    本地意图与外部事实收敛
-Repository    领域持久化 contract
-```
+## Node / Directory / Dataset / Release
 
-如果一个类同时承担三种以上角色，应优先拆职责，而不是继续扩大 `*Service`。
-
-## Domain / Persistence Boundary
+这些能力不再放在通用 service 包：
 
 ```text
-domain
-   ↑
-task roles
-   ↓
-repository contracts
-   ↓
-repository adapters / dao
+node      -> Node identity / rename / delete / updater metadata
+directory -> hierarchy / path / empty-delete rule
+dataset   -> Dataset-owned datasource + SQL + field contract
+release   -> Task Catalog release projection + online/offline/activate
+editor    -> user editor settings
 ```
 
-Stage 1 允许 `domain` 继续保留现有 JSON serialization annotation 以保证接口兼容，但不新增 Spring Service、MyBatis Mapper、Task Runtime Client 或 Lineage Client 依赖。
+`Release` 读取 Task Catalog projection 与 immutable Task Revision，但不能修改历史 Revision。
 
-`task` package 不直接依赖 Controller / DAO；持久化通过 Repository contract。
-
-## External Corridors
-
-允许的主要外部方向：
+## Lineage Boundary
 
 ```text
-Task Publisher     -> Task Catalog
-Editor Run         -> shared Task Runtime
-SQL publish        -> durable lineage outbox -> Lineage subsystem
-Data Service       -> DataSource / Data Service Runtime boundaries
+Task publish
+   -> DevelopmentLineageOutbox
+   -> DevelopmentLineageWorker
+   -> legacy SQL parser/analyzer preparation
+   -> DevelopmentLineageWriteTransaction
+   -> yak-ops-business-lineage
 ```
 
-这些 corridor 是明确依赖，不等于把对方领域模型复制到 Data Development。
+Outbox / Worker / transaction orchestration 已归 `lineage`。SQL Parser / Analyzer 的大算法当前继续留在 frozen legacy island，避免纯 package move 与算法变化混在同一 PR。
 
-## Behavior Compatibility
+## Frozen Legacy Service Island
 
-Stage 1 必须保持：
+`service` 已不是新代码的落点，只允许以下固定类型：
 
-- Controller 路径和 DTO 不变；
-- DB schema 不变；
-- Draft optimistic revision 不变；
-- Published Revision append-only / reuse 语义不变；
-- Task Catalog projection 不变；
-- Editor Run snapshot 语义不变；
-- SQL lineage outbox 不变。
+```text
+DerivedAwareSqlColumnLineageParser
+DevelopmentDataServiceNodeService
+DevelopmentDataServiceNodeSourceProvider
+DevelopmentDataServiceSqlCompiler
+DevelopmentDraftConflictException
+DevelopmentSqlLineagePreviewService
+DevelopmentSqlLineageService
+DevelopmentSqlProjectionLineageAnalyzer
+DevelopmentTaskValidationException
+SqlColumnLineageParser
+SqlTableLineageParser
+TableIdentityResolver
+```
 
-## Stage 2
+其中两个 Exception 是兼容 corridor；其余均为 Data Service / SQL Lineage 历史实现。
 
-Stage 2 再处理：
+规则：
 
-- `service` 大桶中的 Data Service / Release / Lineage / Execution 角色化；
-- `DEPENDENCIES.md` / `REVIEW.md` / README 收口；
-- `@Service` allowlist；
-- top-level dependency matrix；
-- architecture / dependency executable guards；
-- 更彻底的 package move。
+- 不得在该目录新增文件；
+- 不得把新 Node/Task/Execution/Dataset/Release 功能放回这里；
+- 修改 legacy 算法可以原地修 bug，但新增能力优先建立目标业务包；
+- 后续迁移必须独立 PR，不与 SQL parser 行为变化混做。
 
-Stage 2 的目标是让 package 本身表达业务架构，而不是让 Stage 1 为追求目录漂亮一次性改变所有代码。
+## Persistence Boundary
+
+Repository 是领域持久化 contract，DAO 是 MyBatis/JDBC primitive。Application roles 不直接依赖 DAO。
+
+```text
+application role -> repository -> dao
+```
+
+当前 Execution / Editor / Lineage Outbox 等历史 JDBC 边界属于已知工程债务；新增持久化能力不应继续复制这种模式，除非有明确设计理由并同步更新 `DEPENDENCIES.md`。
+
+## Architecture Guards
+
+Stage 2 使用 architecture tests 固化：
+
+```text
+DataDevelopmentArchitectureDocumentationTest
+  -> six module docs exist and cross-link
+
+DataDevelopmentDependencyBoundaryTest
+  -> controller cannot enter repository/dao
+  -> domain purity
+  -> package graph cycle check
+  -> frozen service allowlist
+
+DataDevelopmentRoleConventionTest
+  -> stable @Service entries
+  -> technical roles do not masquerade as Service
+  -> no new broad business buckets
+```
+
+如果架构规则真的变化，同一个 PR 中同时修改文档、测试和代码；不要因为护栏报错就删除护栏。
