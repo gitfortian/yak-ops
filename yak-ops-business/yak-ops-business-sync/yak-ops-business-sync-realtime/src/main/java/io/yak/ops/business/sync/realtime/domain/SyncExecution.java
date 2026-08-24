@@ -7,9 +7,9 @@ import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
  * Lifecycle core of one realtime-sync execution.
  *
  * <p>One execution represents exactly one run. STOPPED and FAILED executions are historical facts
- * and are never resurrected. During Stage-6 migration {@code definitionVersionId} may be null only
- * when reading a legacy historical deployment created before immutable DefinitionVersion evidence
- * existed. Newly created executions are bound to a DefinitionVersion before external submission.
+ * and are never resurrected. {@code definitionVersionId} may be absent only for legacy historical
+ * records created before immutable DefinitionVersion evidence existed; every new execution must be
+ * bound to one immutable DefinitionVersion before external submission.
  */
 public record SyncExecution(
     long id,
@@ -22,13 +22,21 @@ public record SyncExecution(
     String errorMessage) {
 
   public SyncExecution {
-    if (id <= 0) throw new IllegalArgumentException("ExecutionId 必须大于 0");
-    if (taskId <= 0) throw new IllegalArgumentException("TaskId 必须大于 0");
+    if (id <= 0) {
+      throw new IllegalArgumentException("ExecutionId 必须大于 0");
+    }
+    if (taskId <= 0) {
+      throw new IllegalArgumentException("TaskId 必须大于 0");
+    }
     if (definitionVersionId != null && definitionVersionId <= 0) {
       throw new IllegalArgumentException("DefinitionVersionId 必须大于 0");
     }
-    if (desiredState == null) throw new IllegalArgumentException("Execution DesiredState 不能为空");
-    if (observedState == null) throw new IllegalArgumentException("Execution ObservedState 不能为空");
+    if (desiredState == null) {
+      throw new IllegalArgumentException("Execution DesiredState 不能为空");
+    }
+    if (observedState == null) {
+      throw new IllegalArgumentException("Execution ObservedState 不能为空");
+    }
     if (engineExecutionRef == null) {
       throw new IllegalArgumentException("EngineExecutionRef 不能为空");
     }
