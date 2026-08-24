@@ -1,6 +1,8 @@
 package io.yak.ops.business.sync.realtime.reconcile;
 
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.DeploymentState;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.DesiredState;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
@@ -61,15 +63,21 @@ public class RealtimeRuntimeStateReconciler {
                 transition(
                     taskId,
                     latest,
-                    "UNKNOWN",
-                    "UNKNOWN",
+                    ObservedState.UNKNOWN,
+                    DeploymentState.UNKNOWN,
                     jobId,
                     "Flink 当前运行状态未知");
                 return false;
               }
-              if (execution.desiredState().name().equals("RUNNING")) {
+              if (execution.desiredState() == DesiredState.RUNNING) {
                 if (runtime.state() == RuntimeStatus.State.RUNNING) {
-                  transition(taskId, latest, "RUNNING", "RUNNING", jobId, null);
+                  transition(
+                      taskId,
+                      latest,
+                      ObservedState.RUNNING,
+                      DeploymentState.RUNNING,
+                      jobId,
+                      null);
                 } else {
                   failExpectedRunning(
                       taskId,
@@ -81,7 +89,13 @@ public class RealtimeRuntimeStateReconciler {
                 return false;
               }
               if (runtime.state() == RuntimeStatus.State.RUNNING) {
-                transition(taskId, latest, "STOPPING", "STOPPING", jobId, null);
+                transition(
+                    taskId,
+                    latest,
+                    ObservedState.STOPPING,
+                    DeploymentState.STOPPING,
+                    jobId,
+                    null);
                 return true;
               }
               toStopped(taskId, latest, jobId, "Flink 已确认无活动任务");
@@ -107,7 +121,7 @@ public class RealtimeRuntimeStateReconciler {
             return;
           }
           SyncExecution execution = latest.execution();
-          if (execution.desiredState().name().equals("RUNNING")) {
+          if (execution.desiredState() == DesiredState.RUNNING) {
             failExpectedRunning(taskId, latest, "提交结果不确定，" + reason);
           } else {
             toStopped(taskId, latest, null, reason + "，已确认停止");
@@ -124,9 +138,18 @@ public class RealtimeRuntimeStateReconciler {
             return;
           }
           SyncExecution execution = latest.execution();
-          String target = execution.observedState() == ObservedState.STOPPING ? "UNKNOWN" : "CONFLICT";
+          ObservedState target =
+              execution.observedState() == ObservedState.STOPPING
+                  ? ObservedState.UNKNOWN
+                  : ObservedState.CONFLICT;
           String message = "runtime job identity 匹配到 " + count + " 个 Flink Job，拒绝自动绑定";
-          transition(taskId, latest, target, "UNKNOWN", null, message);
+          transition(
+              taskId,
+              latest,
+              target,
+              DeploymentState.UNKNOWN,
+              null,
+              message);
         });
   }
 
@@ -143,13 +166,13 @@ public class RealtimeRuntimeStateReconciler {
             if (execution.terminal() || execution.observedState() == ObservedState.UNKNOWN) {
               return;
             }
-            stateMachine.requireTransition(execution, "UNKNOWN");
+            stateMachine.requireTransition(execution, ObservedState.UNKNOWN);
             String message = "Flink 状态不可用" + (detail == null ? "" : "：" + detail);
             store.reconcile(
                 taskId,
                 deployment.id(),
-                "UNKNOWN",
-                "UNKNOWN",
+                ObservedState.UNKNOWN.name(),
+                DeploymentState.UNKNOWN.name(),
                 deployment.engineJobId(),
                 message);
             store.event(
@@ -157,7 +180,7 @@ public class RealtimeRuntimeStateReconciler {
                 deployment.id(),
                 "FLINK_UNAVAILABLE",
                 execution.observedState().name(),
-                "UNKNOWN",
+                ObservedState.UNKNOWN.name(),
                 message);
           });
     } catch (RuntimeException exception) {
@@ -173,42 +196,54 @@ public class RealtimeRuntimeStateReconciler {
           if (latest == null || latest.id() != deploymentId) {
             return;
           }
-          transition(taskId, latest, "UNKNOWN", "UNKNOWN", jobId, message);
+          transition(
+              taskId,
+              latest,
+              ObservedState.UNKNOWN,
+              DeploymentState.UNKNOWN,
+              jobId,
+              message);
         });
   }
 
   private void transition(
       long taskId,
       DeploymentRow deployment,
-      String observed,
-      String deploymentState,
+      ObservedState observed,
+      DeploymentState deploymentState,
       String jobId,
       String error) {
     SyncExecution execution = deployment.execution();
     stateMachine.requireTransition(execution, observed);
-    store.reconcile(taskId, deployment.id(), observed, deploymentState, jobId, error);
-    if (!observed.equals(execution.observedState().name())
+    store.reconcile(
+        taskId,
+        deployment.id(),
+        observed.name(),
+        deploymentState.name(),
+        jobId,
+        error);
+    if (observed != execution.observedState()
         || !Objects.equals(error, execution.errorMessage())) {
       store.event(
           taskId,
           deployment.id(),
           "STATE_RECONCILED",
           execution.observedState().name(),
-          observed,
+          observed.name(),
           error == null ? "Flink 状态已对账" : error);
     }
   }
 
   private void failExpectedRunning(long taskId, DeploymentRow deployment, String message) {
     SyncExecution execution = deployment.execution();
-    stateMachine.requireTransition(execution, "FAILED");
+    stateMachine.requireTransition(execution, ObservedState.FAILED);
     store.markTerminalFailure(taskId, deployment.id(), message);
     store.event(
         taskId,
         deployment.id(),
         "FLINK_JOB_LOST",
         execution.observedState().name(),
-        "FAILED",
+        ObservedState.FAILED.name(),
         message);
   }
 
@@ -216,14 +251,32 @@ public class RealtimeRuntimeStateReconciler {
     ObservedState from = deployment.execution().observedState();
     if (from == ObservedState.STARTING || from == ObservedState.RUNNING) {
       stateMachine.requireTransition(from, ObservedState.STOPPING);
-      store.reconcile(taskId, deployment.id(), "STOPPING", "STOPPING", jobId, null);
+      store.reconcile(
+          taskId,
+          deployment.id(),
+          ObservedState.STOPPING.name(),
+          DeploymentState.STOPPING.name(),
+          jobId,
+          null);
       from = ObservedState.STOPPING;
     }
     if (from != ObservedState.STOPPED) {
       stateMachine.requireTransition(from, ObservedState.STOPPED);
     }
-    store.reconcile(taskId, deployment.id(), "STOPPED", "STOPPED", jobId, null);
-    store.event(taskId, deployment.id(), "STOPPED", from.name(), "STOPPED", message);
+    store.reconcile(
+        taskId,
+        deployment.id(),
+        ObservedState.STOPPED.name(),
+        DeploymentState.STOPPED.name(),
+        jobId,
+        null);
+    store.event(
+        taskId,
+        deployment.id(),
+        "STOPPED",
+        from.name(),
+        ObservedState.STOPPED.name(),
+        message);
   }
 
   private boolean sameDeployment(DeploymentRow expected, DeploymentRow current) {
