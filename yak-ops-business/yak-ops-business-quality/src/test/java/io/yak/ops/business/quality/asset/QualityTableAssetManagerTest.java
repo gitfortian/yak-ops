@@ -25,7 +25,9 @@ class QualityTableAssetManagerTest {
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    manager = new QualityTableAssetManager(repository, catalogGateway);
+    manager =
+        new QualityTableAssetManager(
+            repository, catalogGateway, new QualityTableTargetPolicy());
   }
 
   @Test
@@ -34,12 +36,16 @@ class QualityTableAssetManagerTest {
         .thenReturn(List.of(table("user_info", "插件中的用户表描述")));
     when(repository.registerTableAssets(anyList())).thenReturn(1);
 
-    var result = manager.register(
-        new QualityTableAssetCommand.Register(
-            1L, "测试数据源", "demo",
-            List.of(new QualityTableAssetCommand.Item(
-                "demo", null, "user_info", "CLIENT_VALUE", "客户端描述"))),
-        "tester");
+    var result =
+        manager.register(
+            new QualityTableAssetCommand.Register(
+                1L,
+                "测试数据源",
+                "demo",
+                List.of(
+                    new QualityTableAssetCommand.Item(
+                        "demo", null, "user_info", "CLIENT_VALUE", "客户端描述"))),
+            "tester");
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<TableAssetSpec>> captor = ArgumentCaptor.forClass(List.class);
