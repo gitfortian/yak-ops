@@ -2,10 +2,10 @@ package io.yak.ops.business.analysis.controller.v1.vo;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import io.yak.ops.business.analysis.AnalysisAggregation;
-import io.yak.ops.business.analysis.AnalysisChartType;
-import io.yak.ops.business.analysis.AnalysisFilterOperator;
-import io.yak.ops.business.analysis.AnalysisSortDirection;
+import io.yak.ops.business.analysis.query.AnalysisAggregation;
+import io.yak.ops.business.analysis.query.AnalysisFilterOperator;
+import io.yak.ops.business.analysis.query.AnalysisSortDirection;
+import io.yak.ops.business.analysis.visualization.AnalysisChartType;
 import java.time.Instant;
 import java.util.List;
 

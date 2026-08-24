@@ -1,9 +1,9 @@
 package io.yak.ops.business.analysis.controller.v1.mapper;
 
-import io.yak.ops.business.analysis.AnalysisAsset;
-import io.yak.ops.business.analysis.AnalysisQuerySpec;
-import io.yak.ops.business.analysis.AnalysisVisualConfig;
 import io.yak.ops.business.analysis.controller.v1.vo.AnalysisViews;
+import io.yak.ops.business.analysis.domain.AnalysisAsset;
+import io.yak.ops.business.analysis.query.AnalysisQuerySpec;
+import io.yak.ops.business.analysis.visualization.AnalysisVisualConfig;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -12,9 +12,15 @@ public class AnalysisViewMapper {
 
   public AnalysisViews.Analysis toView(AnalysisAsset asset) {
     return new AnalysisViews.Analysis(
-        asset.id(), asset.name(), asset.description(), asset.datasetId(), asset.chartType(),
-        toQuerySpec(asset.querySpec()), toVisualConfig(asset.visualConfig()),
-        asset.createTime(), asset.updateTime());
+        asset.id(),
+        asset.name(),
+        asset.description(),
+        asset.datasetId(),
+        asset.chartType(),
+        toQuerySpec(asset.querySpec()),
+        toVisualConfig(asset.visualConfig()),
+        asset.createTime(),
+        asset.updateTime());
   }
 
   public List<AnalysisViews.Analysis> toViews(List<AnalysisAsset> assets) {
@@ -34,11 +40,15 @@ public class AnalysisViewMapper {
             .map(value -> new AnalysisViews.Sort(
                 value.fieldId(), value.aggregation(), value.direction()))
             .toList(),
-        spec.limit(), spec.timeoutSeconds());
+        spec.limit(),
+        spec.timeoutSeconds());
   }
 
   private AnalysisViews.VisualConfig toVisualConfig(AnalysisVisualConfig config) {
     return new AnalysisViews.VisualConfig(
-        config.showLegend(), config.showDataLabels(), config.smooth(), config.showGrid());
+        config.showLegend(),
+        config.showDataLabels(),
+        config.smooth(),
+        config.showGrid());
   }
 }
