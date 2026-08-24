@@ -3,8 +3,8 @@ package io.yak.ops.business.dataservice.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.yak.ops.business.dataservice.domain.DataServiceQueryResponse;
 import io.yak.ops.business.dataservice.domain.RuntimePolicy;
-import io.yak.ops.business.dataservice.execution.DataServiceQueryResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;

@@ -1,5 +1,6 @@
 package io.yak.ops.business.dataservice.execution;
 
+import io.yak.ops.business.dataservice.query.DataServiceParameterNameReader;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Component;
 
 /** Validates read-only service SQL and compiles named parameters to JDBC placeholders. */
 @Component
-public class DataServiceSqlCompiler {
+public class DataServiceSqlCompiler implements DataServiceParameterNameReader {
 
   public CompiledSql compile(String sql, Map<String, ?> parameters) {
     validateSelectOnly(sql);
@@ -34,6 +35,7 @@ public class DataServiceSqlCompiler {
     }
   }
 
+  @Override
   public List<String> parameterNames(String sql) {
     validateSelectOnly(sql);
     Set<String> names = new LinkedHashSet<>();
