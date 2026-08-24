@@ -4,6 +4,7 @@ import io.yak.ops.business.dataservice.access.DataServiceAuthorizer;
 import io.yak.ops.business.dataservice.access.DataServiceRateLimitException;
 import io.yak.ops.business.dataservice.access.DataServiceUnauthorizedException;
 import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
+import io.yak.ops.business.dataservice.domain.DataServiceQueryResponse;
 import io.yak.ops.business.dataservice.domain.access.AccessContext;
 import io.yak.ops.business.dataservice.query.DataServiceReader;
 import io.yak.ops.business.dataservice.runtime.LocalDataServiceRuntime;

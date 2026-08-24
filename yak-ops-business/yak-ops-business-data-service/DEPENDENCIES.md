@@ -1,0 +1,264 @@
+# Data Service Dependency Contract
+
+> 本文件定义 `yak-ops-business-data-service` 生产代码的**允许依赖方向**。它不是当前 import 的截图，而是长期架构约束；对应规则由 `src/test/.../architecture` 下的 executable guard 校验。
+
+## 1. 原则
+
+1. 顶层 package graph 必须无环。
+2. Domain 不依赖 Spring、MyBatis、HTTP、Repository、Runtime 或上游业务模块。
+3. MyBatis Mapper/PO 只允许出现在 `dao` 与 `repository` persistence corridor。
+4. Controller 不直接访问 Repository/DAO/PO。
+5. Publication/Management/Execution/Access/Runtime 等业务角色依赖 Repository port，不依赖 Mapper。
+6. `publication.source` 是跨模块 Source Provider 的公开 extension contract，保持 JDK-only。
+7. Data Service 不反向依赖 Data Development implementation。
+8. SQL 物理执行只走 `yak-ops-core` `SqlExecutionRuntime`，不访问 Datasource DAO/Mapper。
+9. 不通过 `service/common/helper/utils/util/base` 等模糊 package 绕过依赖矩阵。
+
+## 2. 顶层依赖图
+
+```text
+controller
+   |
+   +--> publication --> documentation --> execution --> access --> query --> repository --> dao
+   |        |                 |              |            |           |          |
+   |        +--> management --+              +--> runtime-+           |          +--> domain
+   |        +--> query                       +--> query               +--> domain
+   |        +--> execution                   +--> repository
+   |
+   +--> management --> access/runtime/query/repository
+   +--> execution  --> access/runtime/query/repository
+   +--> documentation --> execution/query/repository
+   +--> observability --> query/repository
+   +--> access --> query/repository
+   +--> runtime --> query/repository
+   +--> query --> repository
+
+all business packages may depend on domain where required
+config and domain have no internal outward dependencies
+```
+
+图中省略同 package import 和 `domain` 边，以避免噪声。
+
+## 3. Allowed Top-level Matrix
+
+| Source package | Allowed Data Service target packages |
+| --- | --- |
+| `controller` | `access`, `documentation`, `domain`, `execution`, `management`, `observability`, `publication`, `query`, `runtime` |
+| `publication` | `documentation`, `domain`, `execution`, `management`, `query` |
+| `management` | `access`, `domain`, `query`, `repository`, `runtime` |
+| `documentation` | `domain`, `execution`, `query`, `repository` |
+| `execution` | `access`, `domain`, `query`, `repository`, `runtime` |
+| `observability` | `domain`, `query`, `repository` |
+| `access` | `domain`, `query`, `repository` |
+| `runtime` | `domain`, `query`, `repository` |
+| `query` | `domain`, `repository` |
+| `repository` | `dao`, `domain` |
+| `dao` | none |
+| `config` | none |
+| `domain` | none |
+
+同一顶层 package 内部引用不计作跨包 edge。
+
+## 4. 为什么 Query 不依赖 Execution
+
+`DataServiceViewFactory` 需要从 SQL 提取 parameter names，但如果直接 import `DataServiceSqlCompiler`，就会形成：
+
+```text
+query -> execution -> query
+```
+
+因此定义窄 port：
+
+```text
+query.DataServiceParameterNameReader
+             ^
+             |
+execution.DataServiceSqlCompiler
+```
+
+`query` 只认识自己需要的 read capability，Execution 提供实现。
+
+## 5. 为什么 Runtime 不依赖 Execution
+
+Execution 需要 Runtime 做 cache/circuit，而 Runtime 也需要缓存查询结果。如果查询结果类型归 `execution`，会形成：
+
+```text
+execution -> runtime -> execution
+```
+
+因此 `DataServiceQueryResponse` 是 `domain` 下的 runtime-neutral value：
+
+```text
+execution -> domain <- runtime
+execution -> runtime
+```
+
+## 6. Persistence Corridor
+
+唯一允许的业务到 ORM 路径：
+
+```text
+Business Role
+    |
+    v
+Repository interface
+    |
+    v
+RepositoryAdapter
+    |
+    v
+DAO Mapper / PO
+```
+
+允许：
+
+```text
+repository/DataServiceRepositoryAdapter
+  -> dao.mapper.DataServiceApiMapper
+  -> dao.model.DataServiceApiPO
+```
+
+禁止：
+
+```text
+controller -> dao/repository
+publication -> dao
+management -> dao
+execution -> dao
+runtime -> dao
+access -> dao
+documentation -> dao
+observability -> dao
+domain -> repository/dao
+```
+
+`repository` 可以使用 MyBatis type，因为 Adapter 就是 persistence boundary；其他业务 package 不可以。
+
+## 7. Source Provider Corridor
+
+跨模块只暴露：
+
+```text
+io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider
+```
+
+该 contract 当前只依赖 JDK type：`Instant / List / record`。
+
+允许：
+
+```text
+Data Development
+  -> DataServiceSourceProvider
+```
+
+禁止：
+
+```text
+Data Service -> Data Development implementation
+Data Development provider -> Data Service repository/manager/runtime
+publication.source -> query/repository/management/execution/access/runtime
+```
+
+Provider 负责返回**不可变、可发布的来源事实**，而不是进入 Data Service 内部执行链路。
+
+## 8. Datasource / Core Corridor
+
+Data Service 当前允许的跨模块基础依赖：
+
+```text
+io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled
+io.yak.ops.core.execution.sql.*
+```
+
+`ConditionalOnDataSourceEnabled` 只是模块启用条件；物理 SQL 通过 core contract 执行。
+
+禁止 Data Service 生产代码依赖：
+
+```text
+io.yak.ops.business.datasource.dao.*
+io.yak.ops.business.datasource.repository.*
+io.yak.ops.business.datasource.gateway.adapter.*
+io.yak.ops.business.datasource.plugin.*
+io.yak.ops.business.development.*
+```
+
+如未来需要新的 Datasource Business Port，应先在 Datasource 定义稳定 contract，再更新本文件和 Guard。
+
+## 9. HTTP Boundary
+
+Controller 可以使用：
+
+- `Result`；
+- Spring MVC annotation；
+- capability-owned input/view records；
+- Domain query result / audit projection。
+
+Controller 不应：
+
+- 构造 MyBatis Wrapper；
+- import Mapper / PO；
+- 编译 SQL；
+- 直接读写 Repository；
+- 实现 API Key hash、rate-limit、circuit 等业务规则。
+
+## 10. Domain Boundary
+
+`domain/**` 只表达 business fact/value：
+
+```text
+DataServiceDefinition
+DataServiceSettings
+PublishedRuntimeSnapshot
+SourceReference
+RuntimePolicy
+DataServiceQueryResponse
+DataServiceApiKey
+DataServiceDocumentation
+InvocationRecord
+```
+
+Domain 不依赖：
+
+```text
+Spring
+MyBatis
+Controller
+Repository
+DAO
+Publication
+Execution
+Runtime
+Access implementation
+Data Development / Datasource implementation
+```
+
+`domain.access` / `domain.documentation` 仍属于顶层 `domain`，不是新的依赖层。
+
+## 11. No Service Facade by Default
+
+当前没有通用 `DataServiceService` facade。Controller 进入明确 capability role。
+
+如果未来确实需要 application facade：
+
+1. 明确它解决的跨能力稳定 API 问题；
+2. 不把业务逻辑重新搬进一个大类；
+3. 更新 Architecture/Dependencies；
+4. 显式调整 Guard allowlist。
+
+禁止仅因为“Controller 注入项多”就恢复 `XxxService / XxxServiceImpl`。
+
+## 12. Dependency Change Protocol
+
+引入新的 import edge 前在 PR 描述中写：
+
+```text
+Dependency Impact
+- source package:
+- target package:
+- why current owner cannot handle it:
+- cycle check:
+- persistence / source / datasource corridor impact:
+- DEPENDENCIES.md updated: yes/no
+```
+
+Guard 失败时先检查职责是否放错；不要默认扩大 `ALLOWED_DEPENDENCIES`。

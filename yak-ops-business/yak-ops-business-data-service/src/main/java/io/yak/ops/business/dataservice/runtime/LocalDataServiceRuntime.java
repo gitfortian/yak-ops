@@ -2,8 +2,8 @@ package io.yak.ops.business.dataservice.runtime;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.yak.ops.business.dataservice.domain.DataServiceQueryResponse;
 import io.yak.ops.business.dataservice.domain.RuntimePolicy;
-import io.yak.ops.business.dataservice.execution.DataServiceQueryResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;

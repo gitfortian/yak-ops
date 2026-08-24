@@ -1,6 +1,7 @@
 package io.yak.ops.business.dataservice.execution;
 
 import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
+import io.yak.ops.business.dataservice.domain.DataServiceQueryResponse;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.core.execution.sql.SqlExecutionCaller;
 import io.yak.ops.core.execution.sql.SqlExecutionColumn;
