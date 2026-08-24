@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 新 Batch admission：Manual / Schedule / Workflow Snapshot 创建 Batch + Attempt 1。 */
+/** Owns admission of new Manual / Schedule / Workflow Batch plus Attempt 1. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineExecutionClaimManager {
@@ -69,9 +69,7 @@ public class OfflineExecutionClaimManager {
       Long retryFromExecutionId,
       int attemptNo) {
     Parsed trigger = BatchTriggerToken.parse(triggerType);
-    if (retryFromExecutionId != null
-        || attemptNo > 1
-        || "RETRY".equalsIgnoreCase(trigger.attemptTriggerType())) {
+    if (retryFromExecutionId != null || attemptNo > 1 || trigger.retry()) {
       throw new IllegalArgumentException("Retry 必须通过 Batch 内 claimRetry 创建新 Attempt");
     }
 
@@ -80,6 +78,7 @@ public class OfflineExecutionClaimManager {
     if (!"ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
       throw new IllegalStateException("请先上线任务，再执行运行操作");
     }
+
     return createInitialClaim(
         definition,
         Math.max(1, definition.getVersion() == null ? 1 : definition.getVersion()),
@@ -120,25 +119,27 @@ public class OfflineExecutionClaimManager {
     if (!StringUtils.hasText(logicalJobSpecJson)) {
       throw new IllegalArgumentException("任务版本快照缺少 JobSpec");
     }
+
     Parsed trigger = BatchTriggerToken.parse(triggerType);
-    if ("RETRY".equalsIgnoreCase(trigger.attemptTriggerType())) {
+    if (trigger.retry()) {
       throw new IllegalArgumentException("Retry 不能通过 claimSnapshot 创建新 Batch");
     }
 
     definitionRepository.lock(definitionId);
     OfflineJobDefinition current = definitionService.require(definitionId);
-    String normalizedKey = StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : null;
+    String normalizedKey = normalizeOptionalIdempotencyKey(idempotencyKey);
     if (normalizedKey != null) {
       OfflineJobExecution existing =
           executionRepository.findByIdempotencyKey(normalizedKey).orElse(null);
       if (existing != null) {
-        BatchExecution existingBatch = validateIdempotentReuse(
-            existing,
-            definitionId,
-            definitionVersion,
-            configDigest,
-            definitionSnapshotJson,
-            logicalJobSpecJson);
+        BatchExecution existingBatch =
+            validateIdempotentReuse(
+                existing,
+                definitionId,
+                definitionVersion,
+                configDigest,
+                definitionSnapshotJson,
+                logicalJobSpecJson);
         return new OfflineExecutionClaim(
             current,
             existingBatch.snapshot().logicalJobSpec(),
@@ -180,28 +181,34 @@ public class OfflineExecutionClaimManager {
       throw new IllegalStateException("任务已有运行中的 BatchExecution，不能重复提交");
     }
 
-    String normalizedIdempotencyKey =
-        StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : UUID.randomUUID().toString();
-    Long batchId = createBatch(
-        definitionId,
-        definitionVersion,
-        configDigest,
-        definitionSnapshotJson,
-        logicalJobSpecJson,
-        trigger,
-        normalizedIdempotencyKey);
-    BatchExecution batch = batchRepository.findById(batchId)
-        .orElseThrow(() -> new IllegalStateException("创建后无法读取 BatchExecution：" + batchId));
+    String effectiveIdempotencyKey =
+        idempotencyKey == null ? UUID.randomUUID().toString() : idempotencyKey;
+    Long batchId =
+        createBatch(
+            definitionId,
+            definitionVersion,
+            configDigest,
+            definitionSnapshotJson,
+            logicalJobSpecJson,
+            trigger,
+            effectiveIdempotencyKey);
+    BatchExecution batch =
+        batchRepository
+            .findById(batchId)
+            .orElseThrow(
+                () -> new IllegalStateException("创建后无法读取 BatchExecution：" + batchId));
 
-    OfflineJobExecution execution = attemptFactory.create(
-        batch,
-        1,
-        trigger.attemptTriggerType(),
-        null,
-        normalizedIdempotencyKey);
+    OfflineJobExecution execution =
+        attemptFactory.create(
+            batch,
+            1,
+            trigger.attemptTriggerType(),
+            null,
+            effectiveIdempotencyKey);
     if (!executionRepository.insert(execution) || execution.getId() == null) {
       throw new IllegalStateException("创建离线同步执行实例失败");
     }
+
     batchRuntime.refreshBatch(batchId);
     return new OfflineExecutionClaim(
         definition,
@@ -223,44 +230,55 @@ public class OfflineExecutionClaimManager {
         Objects.requireNonNull(trigger.batchTrigger(), "初始执行必须包含 BatchTrigger");
     BatchKey batchKey = trigger.batchKey();
     if (batchKey == null) {
-      batchKey = switch (batchTrigger) {
-        case MANUAL -> BatchKey.manual(idempotencyKey);
-        case WORKFLOW -> BatchKey.workflow(idempotencyKey);
-        case BACKFILL -> BatchKey.backfill(idempotencyKey, scope.fingerprint());
-        case SCHEDULE ->
-            throw new IllegalArgumentException("SCHEDULE trigger 必须携带 scheduleId + plannedFireTime");
-      };
+      batchKey = defaultBatchKey(batchTrigger, idempotencyKey, scope);
     }
 
     RetryPolicySnapshot retryPolicy = freezeRetryPolicy(definitionId);
-    ExecutionSnapshot snapshot = new ExecutionSnapshot(
-        requireText(definitionSnapshotJson, "definitionSnapshot 不能为空"),
-        (int) Math.min(Integer.MAX_VALUE, Math.max(1L, definitionVersion)),
-        retryPolicy,
-        requireText(configDigest, "configDigest 不能为空"),
-        requireText(logicalJobSpecJson, "logicalJobSpec 不能为空"));
-    BatchExecution batch = new BatchExecution(
-        null,
-        definitionId,
-        batchKey,
-        batchTrigger,
-        scope,
-        snapshot,
-        BatchStatus.PENDING,
-        List.of());
+    ExecutionSnapshot snapshot =
+        new ExecutionSnapshot(
+            requireText(definitionSnapshotJson, "definitionSnapshot 不能为空"),
+            (int) Math.min(Integer.MAX_VALUE, Math.max(1L, definitionVersion)),
+            retryPolicy,
+            requireText(configDigest, "configDigest 不能为空"),
+            requireText(logicalJobSpecJson, "logicalJobSpec 不能为空"));
+    BatchExecution batch =
+        new BatchExecution(
+            null,
+            definitionId,
+            batchKey,
+            batchTrigger,
+            scope,
+            snapshot,
+            BatchStatus.PENDING,
+            List.of());
     BatchExecution saved = batchRepository.insert(batch);
-    if (saved.id() == null) throw new IllegalStateException("创建 BatchExecution 后缺少 ID");
+    if (saved.id() == null) {
+      throw new IllegalStateException("创建 BatchExecution 后缺少 ID");
+    }
     return saved.id();
+  }
+
+  private BatchKey defaultBatchKey(
+      BatchTrigger trigger, String idempotencyKey, BatchScope scope) {
+    return switch (trigger) {
+      case MANUAL -> BatchKey.manual(idempotencyKey);
+      case WORKFLOW -> BatchKey.workflow(idempotencyKey);
+      case BACKFILL -> BatchKey.backfill(idempotencyKey, scope.fingerprint());
+      case SCHEDULE ->
+          throw new IllegalArgumentException("SCHEDULE trigger 必须携带 scheduleId + plannedFireTime");
+    };
   }
 
   private RetryPolicySnapshot freezeRetryPolicy(Long definitionId) {
     OfflineSchedule schedule = scheduleRepository.findSchedule(definitionId);
-    int maxAttempts = schedule == null
-        ? properties.getControl().getDefaultMaxAttempts()
-        : schedule.retryMaxAttempts();
-    int backoffSeconds = schedule == null
-        ? properties.getControl().getDefaultRetryBackoffSeconds()
-        : schedule.retryBackoffSeconds();
+    int maxAttempts =
+        schedule == null
+            ? properties.getControl().getDefaultMaxAttempts()
+            : schedule.retryMaxAttempts();
+    int backoffSeconds =
+        schedule == null
+            ? properties.getControl().getDefaultRetryBackoffSeconds()
+            : schedule.retryBackoffSeconds();
     return new RetryPolicySnapshot(Math.max(1, maxAttempts), Math.max(0, backoffSeconds));
   }
 
@@ -274,26 +292,37 @@ public class OfflineExecutionClaimManager {
     Long batchId = existing.getBatchId();
     if (batchId == null || batchId <= 0L) {
       throw new IllegalStateException(
-          "幂等键命中 Wave 1 前历史执行，未绑定 Batch，仅支持查询：" + existing.getIdempotencyKey());
+          "幂等键命中未绑定 Batch 的历史执行，仅支持查询：" + existing.getIdempotencyKey());
     }
-    BatchExecution batch = batchRepository.findById(batchId)
-        .orElseThrow(() -> new IllegalStateException("幂等 Attempt 绑定的 BatchExecution 不存在：" + batchId));
+
+    BatchExecution batch =
+        batchRepository
+            .findById(batchId)
+            .orElseThrow(
+                () -> new IllegalStateException("幂等 Attempt 绑定的 BatchExecution 不存在：" + batchId));
     ExecutionSnapshot snapshot = batch.snapshot();
     int version = (int) Math.min(Integer.MAX_VALUE, Math.max(1L, definitionVersion));
-    boolean same = Objects.equals(existing.getJobDefinitionId(), batch.taskId())
-        && Objects.equals(batch.taskId(), definitionId)
-        && snapshot.definitionRevision() == version
-        && Objects.equals(snapshot.configDigest(), configDigest)
-        && Objects.equals(snapshot.definitionSnapshot(), definitionSnapshotJson)
-        && Objects.equals(snapshot.logicalJobSpec(), logicalJobSpecJson);
+    boolean same =
+        Objects.equals(existing.getJobDefinitionId(), batch.taskId())
+            && Objects.equals(batch.taskId(), definitionId)
+            && snapshot.definitionRevision() == version
+            && Objects.equals(snapshot.configDigest(), configDigest)
+            && Objects.equals(snapshot.definitionSnapshot(), definitionSnapshotJson)
+            && Objects.equals(snapshot.logicalJobSpec(), logicalJobSpecJson);
     if (!same) {
       throw new IllegalStateException("幂等键已被不同 Batch 快照占用：" + existing.getIdempotencyKey());
     }
     return batch;
   }
 
+  private String normalizeOptionalIdempotencyKey(String value) {
+    return StringUtils.hasText(value) ? value.trim() : null;
+  }
+
   private String requireText(String value, String message) {
-    if (!StringUtils.hasText(value)) throw new IllegalStateException(message);
+    if (!StringUtils.hasText(value)) {
+      throw new IllegalStateException(message);
+    }
     return value.trim();
   }
 }
