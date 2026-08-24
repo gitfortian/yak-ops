@@ -1,4 +1,4 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.job.runtime;
 
 import static io.yak.ops.plugin.task.api.ScriptTaskSupport.hasResourceReference;
 import static io.yak.ops.plugin.task.api.ScriptTaskSupport.safeMessage;
@@ -6,6 +6,9 @@ import static io.yak.ops.plugin.task.api.ScriptTaskSupport.summarizeIssues;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutor;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.DefaultTaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
@@ -28,13 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 
-/**
- * Shared local runtime for TaskPlugin-backed task types.
- *
- * <p>Task-type adapters only declare type identity and contribute capabilities. Idempotency,
- * execution handles, asynchronous lifecycle, status/cancel and result conversion are owned here.
- */
-abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
+/** Shared local runtime for TaskPlugin-backed task types. */
+public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
 
   protected final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -181,7 +179,7 @@ abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
   }
 
   @PreDestroy
-  void shutdown() {
+  public void shutdown() {
     workerExecutor.shutdownNow();
   }
 

@@ -1,10 +1,14 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.job.discovery;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskProvider;
+import io.yak.ops.business.job.task.TaskRegistration;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -46,7 +50,7 @@ class InMemoryTaskRegistryTest {
   @SuppressWarnings("unchecked")
   private final ObjectProvider<TaskProvider> providers(TaskProvider... values) {
     ObjectProvider<TaskProvider> provider = mock(ObjectProvider.class);
-    when(provider.orderedStream()).thenAnswer(ignored -> Stream.of(values));
+    when(provider.orderedStream()).thenAnswer(ignored -> java.util.stream.Stream.of(values));
     return provider;
   }
 }

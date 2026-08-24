@@ -1,5 +1,10 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.job.discovery;
 
+import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskProvider;
+import io.yak.ops.business.job.task.TaskRegistration;
+import io.yak.ops.business.job.task.TaskRegistry;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -7,10 +12,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** Workflow task registry. Concrete business domains contribute tasks through {@link TaskProvider}. */
-@Service
+/** Aggregates task registrations contributed by business-owned {@link TaskProvider}s. */
+@Component
 public class InMemoryTaskRegistry implements TaskRegistry {
 
   private final ObjectProvider<TaskProvider> taskProviderProvider;

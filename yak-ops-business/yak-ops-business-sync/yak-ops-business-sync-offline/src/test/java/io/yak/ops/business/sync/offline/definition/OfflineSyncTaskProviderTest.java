@@ -1,4 +1,4 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.sync.offline.definition;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -8,14 +8,14 @@ import org.junit.jupiter.api.Test;
 class OfflineSyncTaskProviderTest {
 
   @Test
-  void exposesOnlyOnlineTasksWithoutEnabledBusinessSchedule() {
+  void shouldOnlyExposeOnlineTasksWithoutEnabledSchedule() {
     assertThat(OfflineSyncTaskProvider.isWorkflowEligible(task("ONLINE", false))).isTrue();
     assertThat(OfflineSyncTaskProvider.isWorkflowEligible(task("OFFLINE", false))).isFalse();
     assertThat(OfflineSyncTaskProvider.isWorkflowEligible(task("ONLINE", true))).isFalse();
   }
 
   @Test
-  void rejectsIncompleteTaskMetadata() {
+  void shouldRejectIncompleteTaskMetadata() {
     assertThat(OfflineSyncTaskProvider.isWorkflowEligible(null)).isFalse();
     OfflineJobDefinition incomplete = new OfflineJobDefinition();
     incomplete.setJobName("未完成任务");

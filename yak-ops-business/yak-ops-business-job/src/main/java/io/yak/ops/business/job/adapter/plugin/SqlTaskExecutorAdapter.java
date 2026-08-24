@@ -1,6 +1,9 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.job.adapter.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.job.runtime.AbstractTaskExecutorAdapter;
+import io.yak.ops.business.job.runtime.TaskExecutionContextFactory;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.core.execution.sql.SqlExecutionRuntime;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.DefaultTaskExecutionContext;
@@ -9,10 +12,10 @@ import io.yak.ops.plugin.task.api.TaskValidationResult;
 import io.yak.ops.spi.datasource.execution.DataSourceExecutionProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** SQL TaskPlugin adapter; SQL contributes capabilities while shared runtime owns execution lifecycle. */
-@Service
+/** SQL TaskPlugin adapter; SQL contributes capabilities while shared runtime owns lifecycle. */
+@Component
 public class SqlTaskExecutorAdapter extends AbstractTaskExecutorAdapter {
 
   private final ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider;
@@ -30,8 +33,8 @@ public class SqlTaskExecutorAdapter extends AbstractTaskExecutorAdapter {
     this.sqlExecutionRuntime = sqlExecutionRuntime;
   }
 
-  /** Backward-compatible constructor for existing adapter-level tests and embedders. */
-  SqlTaskExecutorAdapter(
+  /** Backward-compatible constructor for focused adapter tests and embedders. */
+  public SqlTaskExecutorAdapter(
       TaskPluginRegistry pluginRegistry,
       ObjectProvider<DataSourceExecutionProvider> dataSourceExecutionProvider,
       ObjectMapper objectMapper,

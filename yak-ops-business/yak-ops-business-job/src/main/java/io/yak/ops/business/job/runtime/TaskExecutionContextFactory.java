@@ -1,14 +1,14 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.job.runtime;
 
-import io.yak.ops.business.job.env.TaskEnvironmentResolver;
+import io.yak.ops.business.job.environment.TaskEnvironmentResolver;
 import io.yak.ops.plugin.task.api.DefaultTaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.spi.task.model.TaskExecutionTrigger;
 import java.util.Map;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** Builds task runtime context from trigger, parameters, environment and type-specific capabilities. */
-@Service
+/** Creates runtime contexts without depending on environment-management CRUD. */
+@Component
 public class TaskExecutionContextFactory {
 
   private final TaskEnvironmentResolver environmentResolver;
@@ -35,7 +35,9 @@ public class TaskExecutionContextFactory {
         .trigger(trigger)
         .parameters(input)
         .globalEnvVars(environmentResolver.resolveMergedEnv());
-    if (customiser != null) customiser.accept(builder);
+    if (customiser != null) {
+      customiser.accept(builder);
+    }
     return builder.build();
   }
 }
