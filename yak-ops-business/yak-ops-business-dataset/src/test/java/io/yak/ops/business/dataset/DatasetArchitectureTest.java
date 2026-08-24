@@ -16,6 +16,7 @@ import io.yak.ops.business.dataset.gateway.lineage.LineageProjectionAnalyzerAdap
 import io.yak.ops.business.dataset.gateway.taskcatalog.TaskCatalogDatasetAdapter;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshListener;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshPublisher;
+import io.yak.ops.business.dataset.lineage.DatasetLineageSnapshotReader;
 import io.yak.ops.business.dataset.lineage.DatasetLineageSourceResolver;
 import io.yak.ops.business.dataset.lineage.DatasetLineageSynchronizer;
 import io.yak.ops.business.dataset.lineage.DatasetLineageTransactionRunner;
@@ -43,7 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
-/** Lightweight Stage-1 architecture checks; full dependency governance belongs to Stage 2. */
+/** Lightweight layering checks that complement the source-level dependency and style guards. */
 class DatasetArchitectureTest {
 
   @Test
@@ -90,6 +91,7 @@ class DatasetArchitectureTest {
             DatasetQueryPerformanceReader.class,
             DevelopmentDatasetManager.class,
             DatasetLineageRefreshPublisher.class,
+            DatasetLineageSnapshotReader.class,
             DatasetLineageSourceResolver.class,
             DatasetLineageSynchronizer.class,
             DatasetLineageTransactionRunner.class,
@@ -145,9 +147,9 @@ class DatasetArchitectureTest {
   }
 
   @Test
-  void legacyServiceBucketIsRetiredFromProduction() {
+  void genericServiceBucketCannotReturn() {
     assertThat(Files.exists(productionRoot().resolve("service")))
-        .as("Dataset production service/ bucket must be retired after Stage 1")
+        .as("Dataset production service/ bucket must remain retired")
         .isFalse();
   }
 
