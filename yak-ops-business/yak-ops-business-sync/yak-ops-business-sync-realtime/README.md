@@ -14,7 +14,7 @@ Realtime Sync 是 Yak Ops 的持续数据同步控制面，负责定义同步任
 | [`DOMAIN.md`](./DOMAIN.md) | 哪些领域规则不能违反 |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 子系统、truth ownership 与角色如何协作 |
 | [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package 可以依赖谁、跨子系统走哪条 corridor |
-| [`CODE_STYLE.md`](./CODE_STYLE.md) | 类、方法、Spring stereotype 与重构按什么风格写 |
+| [`CODE_STYLE.md`](../../../CODE_STYLE.md) | Yak Ops 仓库统一工程与代码规范 |
 | [`REVIEW.md`](./REVIEW.md) | PR 按什么标准判卷 |
 
 当前 production 已完成 Definition / Execution / Reconcile / Query / Observability / Environment 子系统收敛，旧 `service/` 业务大桶已退休。`RealtimeArchitectureTest` 保护角色边界，`RealtimeSyncDependencyBoundaryTest` 扫描真实源码 import，保护无环依赖图、窄 corridor 与稳定 Application Facade。
@@ -175,7 +175,7 @@ Observability 属于 read side：可以组合本地持久化与 Flink REST 事�
 新增或移动代码前至少回答：
 
 1. 属于 Definition、Execution、Reconcile、Observability、Environment、Engine 还是 Persistence？
-2. 是什么 role，是否符合 `CODE_STYLE.md`？
+2. 是什么 role，是否符合根目录 `CODE_STYLE.md`？
 3. 谁拥有它读写的 runtime truth？
 4. 新 import 是否符合 `DEPENDENCIES.md`，跨子系统是否走声明过的 corridor？
 5. 哪个 behavior test 与 architecture test 证明改动没有破坏现有 contract？

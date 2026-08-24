@@ -21,10 +21,14 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 只访问 application.yml 中固定 Link-Up 地址的强类型客户端。 */
+/** Strongly typed client for the fixed Link-Up endpoint configured in application.yml. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class LinkUpClient {
+
+  private static final int MIN_LOG_LIMIT = 1;
+  private static final int MAX_LOG_LIMIT = 1_000;
+
   private final HttpClient httpClient;
   private final ObjectMapper objectMapper;
   private final OfflineSyncProperties properties;
@@ -58,22 +62,21 @@ public class LinkUpClient {
         || !jobSpec.isObject()) {
       throw new LinkUpProtocolException("Link-Up JobSpec 提交参数不完整");
     }
+
     LinkUpSubmitRequest body = new LinkUpSubmitRequest();
     body.setExternalExecutionId(externalExecutionId.trim());
     body.setIdempotencyKey(idempotencyKey.trim());
     body.setDefinitionVersion(definitionVersion);
     body.setJobSpec(jobSpec);
+
     HttpRequest request =
         HttpRequest.newBuilder(uri("/api/v1/jobs"))
             .timeout(properties.getEngine().getRequestTimeout())
             .header("Content-Type", "application/json;charset=UTF-8")
             .header("Accept", "application/json")
-            .POST(
-                HttpRequest.BodyPublishers.ofString(
-                    write(body),
-                    StandardCharsets.UTF_8))
+            .POST(HttpRequest.BodyPublishers.ofString(write(body), StandardCharsets.UTF_8))
             .build();
-    return send(request, LinkUpJobResponse.class, true);
+    return send(request, LinkUpJobResponse.class, TransportFailureMode.MUTATING_REQUEST);
   }
 
   public LinkUpJobResponse getJob(String id) {
@@ -81,9 +84,7 @@ public class LinkUpClient {
   }
 
   public LinkUpJobResponse findByExternalExecutionId(String id) {
-    return get(
-        "/api/v1/jobs/external/" + encode(id),
-        LinkUpJobResponse.class);
+    return get("/api/v1/jobs/external/" + encode(id), LinkUpJobResponse.class);
   }
 
   public LinkUpJobResponse cancel(String id) {
@@ -94,36 +95,28 @@ public class LinkUpClient {
             .header("Accept", "application/json")
             .DELETE()
             .build();
-    return send(request, LinkUpJobResponse.class, true);
+    return send(request, LinkUpJobResponse.class, TransportFailureMode.MUTATING_REQUEST);
   }
 
   public JsonNode pipelines(String id) {
-    return get(
-        "/api/v1/jobs/" + encode(id) + "/pipelines",
-        JsonNode.class);
+    return get("/api/v1/jobs/" + encode(id) + "/pipelines", JsonNode.class);
   }
 
   public JsonNode tasks(String id) {
-    return get(
-        "/api/v1/jobs/" + encode(id) + "/tasks",
-        JsonNode.class);
+    return get("/api/v1/jobs/" + encode(id) + "/tasks", JsonNode.class);
   }
 
   public JsonNode metrics(String id) {
-    return get(
-        "/api/v1/jobs/" + encode(id) + "/metrics",
-        JsonNode.class);
+    return get("/api/v1/jobs/" + encode(id) + "/metrics", JsonNode.class);
   }
 
-  public LinkUpJobLogPageResponse logs(
-      String id,
-      long cursor,
-      int limit) {
+  public LinkUpJobLogPageResponse logs(String id, long cursor, int limit) {
     if (cursor < 0L) {
       throw new LinkUpProtocolException("Link-Up 日志 cursor 不能为负数");
     }
-    if (limit < 1 || limit > 1000) {
-      throw new LinkUpProtocolException("Link-Up 日志 limit 必须在 1 到 1000 之间");
+    if (limit < MIN_LOG_LIMIT || limit > MAX_LOG_LIMIT) {
+      throw new LinkUpProtocolException(
+          "Link-Up 日志 limit 必须在 " + MIN_LOG_LIMIT + " 到 " + MAX_LOG_LIMIT + " 之间");
     }
     return get(
         "/api/v1/jobs/"
@@ -143,21 +136,18 @@ public class LinkUpClient {
             .header("Accept", "application/json")
             .GET()
             .build();
-    return send(request, type, false);
+    return send(request, type, TransportFailureMode.READ_ONLY);
   }
 
   private <T> T send(
-      HttpRequest request,
-      Class<T> type,
-      boolean uncertainOnTransportFailure) {
+      HttpRequest request, Class<T> type, TransportFailureMode failureMode) {
     try {
       HttpResponse<String> response =
-          httpClient.send(
-              request,
-              HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
       if (response.statusCode() >= 200 && response.statusCode() < 300) {
         return read(response.body(), type);
       }
+
       JsonNode error = readError(response.body());
       throw new LinkUpRequestException(
           response.statusCode(),
@@ -165,18 +155,14 @@ public class LinkUpClient {
           errorMessage(error, response.body()));
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
-      throw new LinkUpTransportException(
-          "Link-Up 请求被中断",
-          exception,
-          false);
+      throw new LinkUpTransportException("Link-Up 请求被中断", exception, false);
     } catch (IOException exception) {
-      String message = uncertainOnTransportFailure
-          ? "无法确认 Link-Up 是否已接收请求：" + baseUrl()
-          : "无法连接 Link-Up Server：" + baseUrl();
-      throw new LinkUpTransportException(
-          message,
-          exception,
-          uncertainOnTransportFailure);
+      boolean uncertain = failureMode == TransportFailureMode.MUTATING_REQUEST;
+      String message =
+          uncertain
+              ? "无法确认 Link-Up 是否已接收请求：" + baseUrl()
+              : "无法连接 Link-Up Server：" + baseUrl();
+      throw new LinkUpTransportException(message, exception, uncertain);
     }
   }
 
@@ -185,23 +171,21 @@ public class LinkUpClient {
       return URI.create(baseUrl() + path);
     } catch (IllegalArgumentException exception) {
       throw new LinkUpProtocolException(
-          "Link-Up 地址不合法：" + properties.getEngine().getBaseUrl(),
-          exception);
+          "Link-Up 地址不合法：" + properties.getEngine().getBaseUrl(), exception);
     }
   }
 
   private String baseUrl() {
     String value = properties.getEngine().getBaseUrl();
     if (!StringUtils.hasText(value)) {
-      throw new LinkUpProtocolException(
-          "yak.sync.offline.engine.base-url 不能为空");
+      throw new LinkUpProtocolException("yak.sync.offline.engine.base-url 不能为空");
     }
+
     String normalized = value.trim();
     while (normalized.endsWith("/")) {
       normalized = normalized.substring(0, normalized.length() - 1);
     }
-    if (!normalized.startsWith("http://")
-        && !normalized.startsWith("https://")) {
+    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
       throw new LinkUpProtocolException("Link-Up 地址必须使用 HTTP 或 HTTPS");
     }
     return normalized;
@@ -211,8 +195,7 @@ public class LinkUpClient {
     if (!StringUtils.hasText(value)) {
       throw new LinkUpProtocolException("Link-Up 标识不能为空");
     }
-    return URLEncoder.encode(value.trim(), StandardCharsets.UTF_8)
-        .replace("+", "%20");
+    return URLEncoder.encode(value.trim(), StandardCharsets.UTF_8).replace("+", "%20");
   }
 
   private void requireEnabled() {
@@ -238,13 +221,11 @@ public class LinkUpClient {
         if (JsonNode.class.equals(type)) {
           return type.cast(objectMapper.createObjectNode());
         }
-        return type.getDeclaredConstructor().newInstance();
+        return objectMapper.readValue("{}", type);
       }
       return objectMapper.readValue(body, type);
-    } catch (ReflectiveOperationException | JsonProcessingException exception) {
-      throw new LinkUpProtocolException(
-          "Link-Up 返回了无法解析的协议数据",
-          exception);
+    } catch (JsonProcessingException exception) {
+      throw new LinkUpProtocolException("Link-Up 返回了无法解析的协议数据", exception);
     }
   }
 
@@ -252,9 +233,7 @@ public class LinkUpClient {
     try {
       return objectMapper.writeValueAsString(value);
     } catch (JsonProcessingException exception) {
-      throw new LinkUpProtocolException(
-          "序列化 Link-Up 提交协议失败",
-          exception);
+      throw new LinkUpProtocolException("序列化 Link-Up 提交协议失败", exception);
     }
   }
 
@@ -264,6 +243,11 @@ public class LinkUpClient {
       message = body.path("error").asText(null);
     }
     return StringUtils.hasText(message) ? message : fallback;
+  }
+
+  private enum TransportFailureMode {
+    READ_ONLY,
+    MUTATING_REQUEST
   }
 
   @Data
@@ -352,10 +336,7 @@ public class LinkUpClient {
     private final int statusCode;
     private final String code;
 
-    public LinkUpRequestException(
-        int statusCode,
-        String code,
-        String message) {
+    public LinkUpRequestException(int statusCode, String code, String message) {
       super(message);
       this.statusCode = statusCode;
       this.code = code;
@@ -373,10 +354,7 @@ public class LinkUpClient {
   public static final class LinkUpTransportException extends RuntimeException {
     private final boolean uncertain;
 
-    public LinkUpTransportException(
-        String message,
-        Throwable cause,
-        boolean uncertain) {
+    public LinkUpTransportException(String message, Throwable cause, boolean uncertain) {
       super(message, cause);
       this.uncertain = uncertain;
     }
@@ -391,9 +369,7 @@ public class LinkUpClient {
       super(message);
     }
 
-    public LinkUpProtocolException(
-        String message,
-        Throwable cause) {
+    public LinkUpProtocolException(String message, Throwable cause) {
       super(message, cause);
     }
   }

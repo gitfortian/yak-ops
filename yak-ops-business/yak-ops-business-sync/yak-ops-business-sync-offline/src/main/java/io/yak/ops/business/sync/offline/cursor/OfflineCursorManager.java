@@ -11,7 +11,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Cursor 子系统内部实现；跨子系统只暴露 OfflineCursorGateway。 */
+/** Internal Cursor owner; other subsystems enter only through OfflineCursorGateway. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 @RequiredArgsConstructor
@@ -43,23 +43,41 @@ public class OfflineCursorManager implements OfflineCursorGateway {
     if (!(batch.batchScope() instanceof BatchScope.CursorRange range)) {
       return AdvanceResult.NOT_CURSOR_SCOPE;
     }
-    if (batch.status() != BatchStatus.SUCCEEDED) return AdvanceResult.NOT_SUCCEEDED;
+    if (batch.status() != BatchStatus.SUCCEEDED) {
+      return AdvanceResult.NOT_SUCCEEDED;
+    }
     if (batch.id() == null || batch.id() <= 0L) {
       throw new IllegalArgumentException("BatchExecutionId 必须大于 0");
     }
 
     OfflineSyncCursor current = repository.find(batch.taskId(), range.cursorId()).orElse(null);
-    if (current == null) return AdvanceResult.NOT_INITIALIZED;
-    if (current.position().equals(range.throughInclusive())) return AdvanceResult.ALREADY_ADVANCED;
-    if (!current.position().equals(range.afterExclusive())) return AdvanceResult.STALE;
+    Optional<AdvanceResult> currentState = currentState(current, range);
+    if (currentState.isPresent()) {
+      return currentState.get();
+    }
 
     if (repository.advance(current, range.afterExclusive(), range.throughInclusive(), batch.id())) {
       return AdvanceResult.ADVANCED;
     }
+
     OfflineSyncCursor reread = repository.find(batch.taskId(), range.cursorId()).orElse(null);
     if (reread != null && reread.position().equals(range.throughInclusive())) {
       return AdvanceResult.ALREADY_ADVANCED;
     }
     return AdvanceResult.STALE;
+  }
+
+  private Optional<AdvanceResult> currentState(
+      OfflineSyncCursor current, BatchScope.CursorRange range) {
+    if (current == null) {
+      return Optional.of(AdvanceResult.NOT_INITIALIZED);
+    }
+    if (current.position().equals(range.throughInclusive())) {
+      return Optional.of(AdvanceResult.ALREADY_ADVANCED);
+    }
+    if (!current.position().equals(range.afterExclusive())) {
+      return Optional.of(AdvanceResult.STALE);
+    }
+    return Optional.empty();
   }
 }

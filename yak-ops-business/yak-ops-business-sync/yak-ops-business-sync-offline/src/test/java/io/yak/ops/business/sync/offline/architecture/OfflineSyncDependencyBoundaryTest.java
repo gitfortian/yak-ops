@@ -16,49 +16,66 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-/** Stage 12：离线同步 top-level package 依赖图与跨子系统 corridor 护栏。 */
+/** Permanent guard for offline-sync top-level dependencies and cross-subsystem corridors. */
 class OfflineSyncDependencyBoundaryTest {
 
   private static final String BASE = "io.yak.ops.business.sync.offline.";
-  private static final Pattern OFFLINE_IMPORT = Pattern.compile(
-      "(?m)^import\\s+(?:static\\s+)?(io\\.yak\\.ops\\.business\\.sync\\.offline\\.([A-Za-z0-9_]+)\\.[^;]+);");
+  private static final Pattern OFFLINE_IMPORT =
+      Pattern.compile(
+          "(?m)^import\\s+(?:static\\s+)?(io\\.yak\\.ops\\.business\\.sync\\.offline\\.([A-Za-z0-9_]+)\\.[^;]+);");
 
-  private static final Map<String, Set<String>> ALLOWED_TOP_LEVEL_DEPENDENCIES = Map.ofEntries(
-      Map.entry("controller", Set.of("config", "definition", "execution", "backfill")),
-      Map.entry("backfill", Set.of("config", "cursor", "definition", "domain", "execution", "repository")),
-      Map.entry("reconcile", Set.of("config", "domain", "engine", "execution", "repository")),
-      Map.entry("execution", Set.of("config", "cursor", "definition", "domain", "engine", "mapping", "repository", "schedule")),
-      Map.entry("definition", Set.of("config", "domain", "engine", "mapping", "repository", "schedule")),
-      Map.entry("schedule", Set.of("config", "domain", "repository")),
-      Map.entry("cursor", Set.of("config", "domain", "repository")),
-      Map.entry("mapping", Set.of("domain", "engine")),
-      Map.entry("repository", Set.of("config", "dao", "domain")),
-      Map.entry("dao", Set.of("config")),
-      Map.entry("engine", Set.of("config")),
-      Map.entry("domain", Set.of()),
-      Map.entry("config", Set.of()));
+  private static final Map<String, Set<String>> ALLOWED_TOP_LEVEL_DEPENDENCIES =
+      Map.ofEntries(
+          Map.entry("controller", Set.of("config", "definition", "execution", "backfill")),
+          Map.entry(
+              "backfill", Set.of("config", "cursor", "definition", "domain", "execution", "repository")),
+          Map.entry("reconcile", Set.of("config", "domain", "engine", "execution", "repository")),
+          Map.entry(
+              "execution",
+              Set.of(
+                  "config",
+                  "cursor",
+                  "definition",
+                  "domain",
+                  "engine",
+                  "mapping",
+                  "repository",
+                  "schedule")),
+          Map.entry("definition", Set.of("config", "domain", "engine", "mapping", "repository", "schedule")),
+          Map.entry("schedule", Set.of("config", "domain", "repository")),
+          Map.entry("cursor", Set.of("config", "domain", "repository")),
+          Map.entry("mapping", Set.of("domain", "engine")),
+          Map.entry("repository", Set.of("config", "dao", "domain")),
+          Map.entry("dao", Set.of("config")),
+          Map.entry("engine", Set.of("config")),
+          Map.entry("domain", Set.of()),
+          Map.entry("config", Set.of()));
 
-  private static final Map<String, Set<String>> EXECUTION_CORRIDORS = Map.ofEntries(
-      Map.entry("controller", Set.of(BASE + "execution.OfflineJobExecutionService")),
-      Map.entry(
-          "backfill",
-          Set.of(
-              BASE + "execution.OfflineJobExecutionService",
-              BASE + "execution.OfflineExecutionScopeValidator")),
-      Map.entry("reconcile", Set.of(BASE + "execution.OfflineJobExecutionService")));
+  private static final Map<String, Set<String>> EXECUTION_CORRIDORS =
+      Map.ofEntries(
+          Map.entry("controller", Set.of(BASE + "execution.OfflineJobExecutionService")),
+          Map.entry(
+              "backfill",
+              Set.of(
+                  BASE + "execution.OfflineJobExecutionService",
+                  BASE + "execution.OfflineExecutionScopeValidator")),
+          Map.entry("reconcile", Set.of(BASE + "execution.OfflineJobExecutionService")));
 
-  private static final Map<String, Set<String>> SCHEDULE_CORRIDORS = Map.ofEntries(
-      Map.entry(
-          "definition",
-          Set.of(
-              BASE + "schedule.OfflineScheduleLifecycle",
-              BASE + "schedule.OfflineScheduleSupport")),
-      Map.entry("execution", Set.of(BASE + "schedule.OfflineScheduleExecutionGateway")));
+  private static final Map<String, Set<String>> SCHEDULE_CORRIDORS =
+      Map.ofEntries(
+          Map.entry(
+              "definition",
+              Set.of(
+                  BASE + "schedule.OfflineScheduleLifecycle",
+                  BASE + "schedule.OfflineScheduleSupport")),
+          Map.entry("execution", Set.of(BASE + "schedule.OfflineScheduleExecutionGateway")));
 
   @Test
   void topLevelPackagesFollowDeclaredDependencyGraph() throws IOException {
     for (Dependency dependency : dependencies()) {
-      if (dependency.sourcePackage().equals(dependency.targetPackage())) continue;
+      if (dependency.sourcePackage().equals(dependency.targetPackage())) {
+        continue;
+      }
       Set<String> allowed = ALLOWED_TOP_LEVEL_DEPENDENCIES.get(dependency.sourcePackage());
       assertThat(allowed)
           .as("%s must have a declared dependency rule", dependency.sourcePackage())
@@ -86,7 +103,9 @@ class OfflineSyncDependencyBoundaryTest {
 
     for (String start : graph.keySet()) {
       assertThat(reaches(start, start, graph, new HashSet<>(), true))
-          .as("offline-sync top-level package dependency graph must be acyclic; cycle starts at %s", start)
+          .as(
+              "offline-sync top-level package dependency graph must be acyclic; cycle starts at %s",
+              start)
           .isFalse();
     }
   }
@@ -98,7 +117,8 @@ class OfflineSyncDependencyBoundaryTest {
           || "execution".equals(dependency.sourcePackage())) {
         continue;
       }
-      Set<String> allowed = EXECUTION_CORRIDORS.getOrDefault(dependency.sourcePackage(), Set.of());
+      Set<String> allowed =
+          EXECUTION_CORRIDORS.getOrDefault(dependency.sourcePackage(), Set.of());
       assertThat(allowed)
           .as(
               "%s must enter execution through a declared corridor instead of %s",
@@ -127,7 +147,8 @@ class OfflineSyncDependencyBoundaryTest {
           || "schedule".equals(dependency.sourcePackage())) {
         continue;
       }
-      Set<String> allowed = SCHEDULE_CORRIDORS.getOrDefault(dependency.sourcePackage(), Set.of());
+      Set<String> allowed =
+          SCHEDULE_CORRIDORS.getOrDefault(dependency.sourcePackage(), Set.of());
       assertThat(allowed)
           .as(
               "%s must enter schedule through a declared corridor instead of %s",
@@ -151,7 +172,9 @@ class OfflineSyncDependencyBoundaryTest {
       }
       if ("repository".equals(dependency.sourcePackage())) {
         assertThat(dependency.targetPackage())
-            .as("Repository adapter must point only to persistence/domain/config: %s", dependency.relativePath())
+            .as(
+                "Repository adapter must point only to persistence/domain/config: %s",
+                dependency.relativePath())
             .isIn("repository", "dao", "domain", "config");
       }
     }
@@ -163,10 +186,16 @@ class OfflineSyncDependencyBoundaryTest {
       Map<String, Set<String>> graph,
       Set<String> visited,
       boolean first) {
-    if (!first && current.equals(target)) return true;
-    if (!visited.add(current)) return false;
+    if (!first && current.equals(target)) {
+      return true;
+    }
+    if (!visited.add(current)) {
+      return false;
+    }
     for (String next : graph.getOrDefault(current, Set.of())) {
-      if (reaches(next, target, graph, new HashSet<>(visited), false)) return true;
+      if (reaches(next, target, graph, new HashSet<>(visited), false)) {
+        return true;
+      }
     }
     return false;
   }
@@ -180,7 +209,8 @@ class OfflineSyncDependencyBoundaryTest {
         String sourcePackage = relative.substring(0, relative.indexOf('/'));
         Matcher matcher = OFFLINE_IMPORT.matcher(Files.readString(file));
         while (matcher.find()) {
-          result.add(new Dependency(relative, sourcePackage, matcher.group(2), matcher.group(1)));
+          result.add(
+              new Dependency(relative, sourcePackage, matcher.group(2), matcher.group(1)));
         }
       }
     }
@@ -189,21 +219,24 @@ class OfflineSyncDependencyBoundaryTest {
 
   private Path productionRoot() {
     Path moduleRoot = Path.of("src/main/java/io/yak/ops/business/sync/offline");
-    if (Files.isDirectory(moduleRoot)) return moduleRoot;
+    if (Files.isDirectory(moduleRoot)) {
+      return moduleRoot;
+    }
 
-    Path repositoryRoot = Path.of(
-        "yak-ops-business",
-        "yak-ops-business-sync",
-        "yak-ops-business-sync-offline",
-        "src",
-        "main",
-        "java",
-        "io",
-        "yak",
-        "ops",
-        "business",
-        "sync",
-        "offline");
+    Path repositoryRoot =
+        Path.of(
+            "yak-ops-business",
+            "yak-ops-business-sync",
+            "yak-ops-business-sync-offline",
+            "src",
+            "main",
+            "java",
+            "io",
+            "yak",
+            "ops",
+            "business",
+            "sync",
+            "offline");
     assertThat(Files.isDirectory(repositoryRoot))
         .as("offline-sync production source root must be available to dependency test")
         .isTrue();

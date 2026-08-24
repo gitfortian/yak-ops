@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Backfill Application Service：锁定 Task，并按 Planner 结果物化 PENDING Batch group。 */
+/** Stable Backfill facade that locks the Task and materializes one planned PENDING Batch group. */
 @ConditionalOnOfflineSyncEnabled
 @Service
 @RequiredArgsConstructor
@@ -48,16 +48,10 @@ public class OfflineBackfillService {
         continue;
       }
 
-      BatchExecution saved = batchRepository.insert(
-          new BatchExecution(
-              null,
-              id,
-              BatchKey.backfill(plan.requestId(), scopePlan.scope().fingerprint()),
-              BatchTrigger.BACKFILL,
-              scopePlan.scope(),
-              plan.snapshot(),
-              BatchStatus.PENDING,
-              List.of()));
+      BatchExecution saved = batchRepository.insert(newBackfillBatch(id, plan, scopePlan));
+      if (saved.id() == null) {
+        throw new IllegalStateException("创建 Backfill Batch 后缺少 ID");
+      }
       batchIds.add(saved.id());
       created++;
     }
@@ -71,8 +65,25 @@ public class OfflineBackfillService {
         .build();
   }
 
+  private BatchExecution newBackfillBatch(
+      long taskId,
+      OfflineBackfillPlanner.Plan plan,
+      OfflineBackfillPlanner.ScopePlan scopePlan) {
+    return new BatchExecution(
+        null,
+        taskId,
+        BatchKey.backfill(plan.requestId(), scopePlan.scope().fingerprint()),
+        BatchTrigger.BACKFILL,
+        scopePlan.scope(),
+        plan.snapshot(),
+        BatchStatus.PENDING,
+        List.of());
+  }
+
   private long positive(Long value, String field) {
-    if (value == null || value <= 0L) throw new IllegalArgumentException(field + " 必须大于 0");
+    if (value == null || value <= 0L) {
+      throw new IllegalArgumentException(field + " 必须大于 0");
+    }
     return value;
   }
 }

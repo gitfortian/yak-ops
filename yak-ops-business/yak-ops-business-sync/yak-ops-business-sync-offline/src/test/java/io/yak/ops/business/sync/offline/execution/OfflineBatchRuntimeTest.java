@@ -55,7 +55,8 @@ class OfflineBatchRuntimeTest {
   void failedAttemptWithRetryReservationWindowMeansWaitingRetry() {
     OfflineBatchExecutionRepository batches = mock(OfflineBatchExecutionRepository.class);
     OfflineJobExecutionRepository attempts = mock(OfflineJobExecutionRepository.class);
-    OfflineBatchRuntime runtime = new OfflineBatchRuntime(batches, attempts, mock(OfflineCursorGateway.class));
+    OfflineBatchRuntime runtime =
+        new OfflineBatchRuntime(batches, attempts, mock(OfflineCursorGateway.class));
     BatchExecution batch = batch(77L, BatchStatus.RUNNING, List.of(), BatchScope.fullSelection());
     OfflineJobExecution failed = attempt(501L, 77L, 1, "FAILED");
     failed.setNextRetryTime(LocalDateTime.now().plusMinutes(1));
@@ -74,7 +75,8 @@ class OfflineBatchRuntimeTest {
   void persistsAttemptBeforeRefreshingBatchTruth() {
     OfflineBatchExecutionRepository batches = mock(OfflineBatchExecutionRepository.class);
     OfflineJobExecutionRepository attempts = mock(OfflineJobExecutionRepository.class);
-    OfflineBatchRuntime runtime = new OfflineBatchRuntime(batches, attempts, mock(OfflineCursorGateway.class));
+    OfflineBatchRuntime runtime =
+        new OfflineBatchRuntime(batches, attempts, mock(OfflineCursorGateway.class));
     BatchExecution batch = batch(77L, BatchStatus.PENDING, List.of(), BatchScope.fullSelection());
     OfflineJobExecution running = attempt(501L, 77L, 1, "RUNNING");
     when(attempts.update(running)).thenReturn(true);
@@ -113,11 +115,23 @@ class OfflineBatchRuntimeTest {
 
   @Test
   void unknownAttemptKeepsBatchInUnknownInsteadOfFailed() {
-    OfflineBatchRuntime runtime = new OfflineBatchRuntime(
-        mock(OfflineBatchExecutionRepository.class),
-        mock(OfflineJobExecutionRepository.class),
-        mock(OfflineCursorGateway.class));
+    OfflineBatchRuntime runtime =
+        new OfflineBatchRuntime(
+            mock(OfflineBatchExecutionRepository.class),
+            mock(OfflineJobExecutionRepository.class),
+            mock(OfflineCursorGateway.class));
     assertThat(runtime.deriveStatus(attempt(501L, 77L, 1, "UNKNOWN")))
+        .isEqualTo(BatchStatus.UNKNOWN);
+  }
+
+  @Test
+  void persistedLostCompatibilityValueAlsoMapsToUnknown() {
+    OfflineBatchRuntime runtime =
+        new OfflineBatchRuntime(
+            mock(OfflineBatchExecutionRepository.class),
+            mock(OfflineJobExecutionRepository.class),
+            mock(OfflineCursorGateway.class));
+    assertThat(runtime.deriveStatus(attempt(501L, 77L, 1, "LOST")))
         .isEqualTo(BatchStatus.UNKNOWN);
   }
 
@@ -125,14 +139,16 @@ class OfflineBatchRuntimeTest {
   void cancelWaitingRetryUsesSameCasReservationAsAutomaticRetry() {
     OfflineBatchExecutionRepository batches = mock(OfflineBatchExecutionRepository.class);
     OfflineJobExecutionRepository attempts = mock(OfflineJobExecutionRepository.class);
-    OfflineBatchRuntime runtime = new OfflineBatchRuntime(batches, attempts, mock(OfflineCursorGateway.class));
+    OfflineBatchRuntime runtime =
+        new OfflineBatchRuntime(batches, attempts, mock(OfflineCursorGateway.class));
     OfflineJobExecution failed = attempt(501L, 77L, 1, "FAILED");
     failed.setNextRetryTime(LocalDateTime.now().plusMinutes(1));
-    BatchExecution waiting = batch(
-        77L,
-        BatchStatus.WAITING_RETRY,
-        List.of(evidence(failed)),
-        BatchScope.fullSelection());
+    BatchExecution waiting =
+        batch(
+            77L,
+            BatchStatus.WAITING_RETRY,
+            List.of(evidence(failed)),
+            BatchScope.fullSelection());
     when(attempts.findById(501L)).thenReturn(Optional.of(failed));
     when(attempts.reserveRetry(501L)).thenReturn(true);
     when(batches.update(any(BatchExecution.class))).thenReturn(true);
@@ -165,10 +181,7 @@ class OfflineBatchRuntimeTest {
   }
 
   private BatchExecution batch(
-      long id,
-      BatchStatus status,
-      List<ExecutionAttempt> attempts,
-      BatchScope scope) {
+      long id, BatchStatus status, List<ExecutionAttempt> attempts, BatchScope scope) {
     return new BatchExecution(
         id,
         10L,
@@ -176,7 +189,11 @@ class OfflineBatchRuntimeTest {
         BatchTrigger.MANUAL,
         scope,
         new ExecutionSnapshot(
-            "{}", 1, new RetryPolicySnapshot(3, 30), "digest", "{\"kind\":\"BatchSyncJob\"}"),
+            "{}",
+            1,
+            new RetryPolicySnapshot(3, 30),
+            "digest",
+            "{\"kind\":\"BatchSyncJob\"}"),
         status,
         attempts);
   }

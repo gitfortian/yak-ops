@@ -9,7 +9,13 @@ import java.util.Objects;
 /** Application-boundary token carrying stable Batch identity for trigger submission. */
 public final class BatchTriggerToken {
 
-  private static final String SCHEDULE_PREFIX = "SCHEDULE@";
+  public static final String MANUAL = "MANUAL";
+  public static final String SCHEDULE = "SCHEDULE";
+  public static final String WORKFLOW = "WORKFLOW";
+  public static final String BACKFILL = "BACKFILL";
+  public static final String RETRY = "RETRY";
+
+  private static final String SCHEDULE_PREFIX = SCHEDULE + "@";
 
   private BatchTriggerToken() {}
 
@@ -32,17 +38,17 @@ public final class BatchTriggerToken {
       String scheduleId = decode(parts[0]);
       Instant plannedFireTime = Instant.parse(decode(parts[1]));
       return new Parsed(
-          "SCHEDULE",
+          SCHEDULE,
           BatchTrigger.SCHEDULE,
           BatchKey.schedule(scheduleId, plannedFireTime));
     }
 
     String normalized = value.toUpperCase(Locale.ROOT);
     return switch (normalized) {
-      case "SCHEDULE" -> new Parsed("SCHEDULE", BatchTrigger.SCHEDULE, null);
-      case "WORKFLOW" -> new Parsed("WORKFLOW", BatchTrigger.WORKFLOW, null);
-      case "BACKFILL" -> new Parsed("BACKFILL", BatchTrigger.BACKFILL, null);
-      case "RETRY" -> new Parsed("RETRY", null, null);
+      case SCHEDULE -> new Parsed(SCHEDULE, BatchTrigger.SCHEDULE, null);
+      case WORKFLOW -> new Parsed(WORKFLOW, BatchTrigger.WORKFLOW, null);
+      case BACKFILL -> new Parsed(BACKFILL, BatchTrigger.BACKFILL, null);
+      case RETRY -> new Parsed(RETRY, null, null);
       default -> new Parsed(value, BatchTrigger.MANUAL, null);
     };
   }
@@ -62,9 +68,16 @@ public final class BatchTriggerToken {
   }
 
   private static String requireText(String value, String message) {
-    if (value == null || value.trim().isEmpty()) throw new IllegalArgumentException(message);
+    if (value == null || value.trim().isEmpty()) {
+      throw new IllegalArgumentException(message);
+    }
     return value.trim();
   }
 
-  public record Parsed(String attemptTriggerType, BatchTrigger batchTrigger, BatchKey batchKey) {}
+  public record Parsed(String attemptTriggerType, BatchTrigger batchTrigger, BatchKey batchKey) {
+
+    public boolean retry() {
+      return RETRY.equals(attemptTriggerType);
+    }
+  }
 }

@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.offline.domain.core.BatchKey;
 import io.yak.ops.business.sync.offline.domain.core.BatchScope;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
+import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
 import io.yak.ops.business.sync.offline.domain.core.EngineExecutionRef;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionAttempt;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
@@ -27,7 +28,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-/** BatchExecution 与持久化模型之间的适配器。 */
+/** Persistence adapter between BatchExecution domain truth and compatibility storage. */
 @ConditionalOnOfflineSyncEnabled
 @Repository
 @RequiredArgsConstructor
@@ -49,21 +50,22 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   @Override
   public Optional<BatchExecution> findByTaskIdAndBatchKey(long taskId, BatchKey batchKey) {
-    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    requirePositive(taskId, "TaskId");
     Objects.requireNonNull(batchKey, "BatchKey 不能为空");
     return Optional.ofNullable(toDomain(dao.selectByTaskIdAndBatchKey(taskId, batchKey.value())));
   }
 
   @Override
   public boolean hasOccupyingBatch(long taskId) {
-    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    requirePositive(taskId, "TaskId");
     return dao.existsByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES);
   }
 
   @Override
   public Optional<BatchExecution> findLatestOccupyingByTaskId(long taskId) {
-    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
-    return Optional.ofNullable(toDomain(dao.selectLatestByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES)));
+    requirePositive(taskId, "TaskId");
+    return Optional.ofNullable(
+        toDomain(dao.selectLatestByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES)));
   }
 
   @Override
@@ -73,17 +75,20 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   @Override
   public boolean reservePendingBackfill(long batchId) {
-    if (batchId <= 0L) throw new IllegalArgumentException("BatchExecutionId 必须大于 0");
+    requirePositive(batchId, "BatchExecutionId");
     return dao.reservePendingBackfill(batchId, LocalDateTime.now());
   }
 
   @Override
   public BatchExecution insert(BatchExecution batch) {
     Objects.requireNonNull(batch, "BatchExecution 不能为空");
-    if (batch.id() != null) throw new IllegalArgumentException("新 Batch 不应预先包含 ID");
+    if (batch.id() != null) {
+      throw new IllegalArgumentException("新 Batch 不应预先包含 ID");
+    }
     if (!batch.attempts().isEmpty()) {
       throw new IllegalArgumentException("创建 Batch 时不能同时持久化 Attempt");
     }
+
     OfflineBatchExecutionPO po = toPO(batch);
     if (!dao.insert(po) || po.getId() == null) {
       throw new IllegalStateException("创建离线同步 BatchExecution 失败");
@@ -102,14 +107,20 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
   @Override
   public boolean update(BatchExecution batch) {
     Objects.requireNonNull(batch, "BatchExecution 不能为空");
-    if (batch.id() == null) throw new IllegalArgumentException("更新 Batch 必须包含 ID");
+    if (batch.id() == null) {
+      throw new IllegalArgumentException("更新 Batch 必须包含 ID");
+    }
     return dao.updateById(toPO(batch));
   }
 
   private BatchExecution toDomain(OfflineBatchExecutionPO po) {
-    if (po == null) return null;
+    if (po == null) {
+      return null;
+    }
+
     BatchScope scope = readScope(po.getBatchScopeType(), po.getBatchScopeValue());
-    String storedFingerprint = requireText(po.getBatchScopeFingerprint(), "batchScopeFingerprint 不能为空");
+    String storedFingerprint =
+        requireText(po.getBatchScopeFingerprint(), "batchScopeFingerprint 不能为空");
     if (!scope.fingerprint().equals(storedFingerprint)) {
       throw new IllegalStateException("BatchScope fingerprint 与持久化内容不一致");
     }
@@ -117,17 +128,19 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     List<OfflineJobExecution> persistedAttempts = executionRepository.findByBatchId(po.getId());
     String logicalJobSpec =
         requireText(po.getLogicalJobSpecJson(), "Batch 缺少冻结 logicalJobSpec：" + po.getId());
-
-    RetryPolicySnapshot retryPolicy = new RetryPolicySnapshot(
-        positive(po.getRetryMaxAttempts(), "retryMaxAttempts"),
-        nonNegative(po.getRetryBackoffSeconds(), "retryBackoffSeconds"));
-    ExecutionSnapshot snapshot = new ExecutionSnapshot(
-        requireText(po.getDefinitionSnapshotJson(), "definitionSnapshot 不能为空"),
-        positive(po.getDefinitionRevision(), "definitionRevision"),
-        retryPolicy,
-        requireText(po.getConfigDigest(), "configDigest 不能为空"),
-        logicalJobSpec);
+    RetryPolicySnapshot retryPolicy =
+        new RetryPolicySnapshot(
+            positive(po.getRetryMaxAttempts(), "retryMaxAttempts"),
+            nonNegative(po.getRetryBackoffSeconds(), "retryBackoffSeconds"));
+    ExecutionSnapshot snapshot =
+        new ExecutionSnapshot(
+            requireText(po.getDefinitionSnapshotJson(), "definitionSnapshot 不能为空"),
+            positive(po.getDefinitionRevision(), "definitionRevision"),
+            retryPolicy,
+            requireText(po.getConfigDigest(), "configDigest 不能为空"),
+            logicalJobSpec);
     List<ExecutionAttempt> attempts = persistedAttempts.stream().map(this::toAttempt).toList();
+
     return new BatchExecution(
         positive(po.getId(), "BatchExecutionId"),
         positive(po.getJobDefinitionId(), "TaskId"),
@@ -156,8 +169,11 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
         source.getEndTime());
   }
 
+  /** Compatibility strings are normalized here before entering ExecutionAttempt. */
   private AttemptStatus attemptStatus(String value) {
-    if (value == null || value.trim().isEmpty()) return AttemptStatus.CREATED;
+    if (value == null || value.trim().isEmpty()) {
+      return AttemptStatus.CREATED;
+    }
     String normalized = value.trim().toUpperCase(Locale.ROOT);
     return switch (normalized) {
       case "CREATED" -> AttemptStatus.CREATED;
@@ -177,7 +193,7 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
   private AttemptReason attemptReason(OfflineJobExecution source) {
     return value(source.getAttemptNo(), 1) > 1
             || source.getRetryFromExecutionId() != null
-            || "RETRY".equalsIgnoreCase(source.getTriggerType())
+            || BatchTriggerToken.RETRY.equalsIgnoreCase(source.getTriggerType())
         ? AttemptReason.RETRY
         : AttemptReason.INITIAL;
   }
@@ -222,17 +238,28 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     po.setConfigDigest(batch.snapshot().configDigest());
     po.setLogicalJobSpecJson(batch.snapshot().logicalJobSpec());
     po.setStatus(batch.status().name());
+
     LocalDateTime now = LocalDateTime.now();
-    if (batch.id() == null) po.setCreateTime(now);
+    if (batch.id() == null) {
+      po.setCreateTime(now);
+    }
     po.setUpdateTime(now);
     return po;
   }
 
   private String scopeType(BatchScope scope) {
-    if (scope instanceof BatchScope.FullSelection) return "FULL_SELECTION";
-    if (scope instanceof BatchScope.DataWindow) return "DATA_WINDOW";
-    if (scope instanceof BatchScope.PartitionScope) return "PARTITION_SCOPE";
-    if (scope instanceof BatchScope.CursorRange) return "CURSOR_RANGE";
+    if (scope instanceof BatchScope.FullSelection) {
+      return "FULL_SELECTION";
+    }
+    if (scope instanceof BatchScope.DataWindow) {
+      return "DATA_WINDOW";
+    }
+    if (scope instanceof BatchScope.PartitionScope) {
+      return "PARTITION_SCOPE";
+    }
+    if (scope instanceof BatchScope.CursorRange) {
+      return "CURSOR_RANGE";
+    }
     throw new IllegalArgumentException("不支持的 BatchScope：" + scope.getClass().getName());
   }
 
@@ -260,7 +287,7 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
           throw new IllegalStateException("PartitionScope 持久化内容不正确");
         }
         yield BatchScope.partitions(
-            java.util.Arrays.stream(canonical.substring(prefix.length()).split(",", -1))
+            Arrays.stream(canonical.substring(prefix.length()).split(",", -1))
                 .map(this::decode)
                 .toList());
       }
@@ -285,7 +312,8 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   private <T extends Enum<T>> T enumValue(Class<T> type, String value, String field) {
     try {
-      return Enum.valueOf(type, requireText(value, field + " 不能为空").toUpperCase(Locale.ROOT));
+      return Enum.valueOf(
+          type, requireText(value, field + " 不能为空").toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException exception) {
       throw new IllegalStateException(field + " 持久化值不合法：" + value, exception);
     }
@@ -297,33 +325,52 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   private String requireText(String value, String message) {
     String normalized = trim(value);
-    if (normalized == null) throw new IllegalStateException(message);
+    if (normalized == null) {
+      throw new IllegalStateException(message);
+    }
     return normalized;
   }
 
   private String attemptRequireText(String value, String message) {
     String normalized = trim(value);
-    if (normalized == null) throw new IllegalArgumentException(message);
+    if (normalized == null) {
+      throw new IllegalArgumentException(message);
+    }
     return normalized;
   }
 
   private int attemptPositive(Integer value, String field) {
-    if (value == null || value < 1) throw new IllegalArgumentException(field + " 必须大于 0");
+    if (value == null || value < 1) {
+      throw new IllegalArgumentException(field + " 必须大于 0");
+    }
+    return value;
+  }
+
+  private long requirePositive(long value, String field) {
+    if (value <= 0L) {
+      throw new IllegalArgumentException(field + " 必须大于 0");
+    }
     return value;
   }
 
   private long positive(Long value, String field) {
-    if (value == null || value <= 0L) throw new IllegalStateException(field + " 必须大于 0");
+    if (value == null || value <= 0L) {
+      throw new IllegalStateException(field + " 必须大于 0");
+    }
     return value;
   }
 
   private int positive(Integer value, String field) {
-    if (value == null || value <= 0) throw new IllegalStateException(field + " 必须大于 0");
+    if (value == null || value <= 0) {
+      throw new IllegalStateException(field + " 必须大于 0");
+    }
     return value;
   }
 
   private int nonNegative(Integer value, String field) {
-    if (value == null || value < 0) throw new IllegalStateException(field + " 不能小于 0");
+    if (value == null || value < 0) {
+      throw new IllegalStateException(field + " 不能小于 0");
+    }
     return value;
   }
 

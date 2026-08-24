@@ -14,10 +14,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 离线同步调度生命周期：业务定义表为事实来源，Yak Schedule 只负责时间触发。 */
+/** Keeps Yak Schedule aligned with offline Task/Schedule truth. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineScheduleLifecycle {
+
   private final OfflineJobDefinitionRepository definitionRepository;
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineScheduleEngineBridge engine;
@@ -40,10 +41,7 @@ public class OfflineScheduleLifecycle {
       return;
     }
 
-    if (!"ONLINE".equalsIgnoreCase(definition.getReleaseState())
-        || schedule == null
-        || !schedule.enabled()
-        || !StringUtils.hasText(schedule.cronExpression())) {
+    if (!schedulable(definition, schedule)) {
       engine.pauseIfPresent(definitionId);
       if (schedule != null) {
         scheduleRepository.updateRuntimeState(definitionId, schedule.lastFireTime(), null);
@@ -53,22 +51,25 @@ public class OfflineScheduleLifecycle {
 
     ScheduleSnapshot snapshot = engine.save(definition, schedule);
     scheduleRepository.updateRuntimeState(
-        definitionId,
-        schedule.lastFireTime(),
-        local(snapshot.nextFireTime()));
+        definitionId, schedule.lastFireTime(), local(snapshot.nextFireTime()));
   }
 
   @Transactional(transactionManager = "offlineSyncTransactionManager", rollbackFor = Exception.class)
   public void refreshRuntimeState(long definitionId, Instant actualFireTime) {
     OfflineSchedule schedule = scheduleRepository.findSchedule(definitionId);
-    if (schedule == null) return;
+    if (schedule == null) {
+      return;
+    }
 
-    LocalDateTime last = actualFireTime == null ? schedule.lastFireTime() : local(actualFireTime);
-    LocalDateTime next = engine.snapshot(definitionId)
-        .filter(snapshot -> snapshot.status() == ScheduleStatus.ENABLED)
-        .map(ScheduleSnapshot::nextFireTime)
-        .map(this::local)
-        .orElse(null);
+    LocalDateTime last =
+        actualFireTime == null ? schedule.lastFireTime() : local(actualFireTime);
+    LocalDateTime next =
+        engine
+            .snapshot(definitionId)
+            .filter(snapshot -> snapshot.status() == ScheduleStatus.ENABLED)
+            .map(ScheduleSnapshot::nextFireTime)
+            .map(this::local)
+            .orElse(null);
     scheduleRepository.updateRuntimeState(definitionId, last, next);
   }
 
@@ -79,6 +80,13 @@ public class OfflineScheduleLifecycle {
     if (schedule != null) {
       scheduleRepository.updateRuntimeState(definitionId, schedule.lastFireTime(), null);
     }
+  }
+
+  private boolean schedulable(OfflineJobDefinition definition, OfflineSchedule schedule) {
+    return "ONLINE".equalsIgnoreCase(definition.getReleaseState())
+        && schedule != null
+        && schedule.enabled()
+        && StringUtils.hasText(schedule.cronExpression());
   }
 
   private LocalDateTime local(Instant instant) {

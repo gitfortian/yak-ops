@@ -22,7 +22,7 @@ Task -> Batch -> Attempt -> Link-Up
 | [`DOMAIN.md`](./DOMAIN.md) | 哪些领域规则不能违反 |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 代码放哪里、角色如何协作 |
 | [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package 谁能依赖谁、跨子系统从哪里进入 |
-| [`CODE_STYLE.md`](./CODE_STYLE.md) | Apache-style Yak Ops 代码应该怎么写 |
+| [`CODE_STYLE.md`](../../../CODE_STYLE.md) | Yak Ops 仓库统一工程与代码规范 |
 | [`REVIEW.md`](./REVIEW.md) | PR 按什么标准判卷 |
 
 ## Stable Entry
@@ -55,4 +55,4 @@ Link-Up Job、Worker、Quartz、HTTP DTO、Credential 都停在边界，不进�
 2. 是什么 role？
 3. 允许从哪里被依赖？
 
-答不清楚时，先看 `ARCHITECTURE.md + DEPENDENCIES.md + CODE_STYLE.md`，不要创建新的 `Common / Helper / Utils` 大桶。
+答不清楚时，先看 `ARCHITECTURE.md + DEPENDENCIES.md + ../../../CODE_STYLE.md`，不要创建新的 `Common / Helper / Utils` 大桶。
