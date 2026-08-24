@@ -13,8 +13,8 @@ import io.yak.ops.business.dataset.gateway.datasource.DatasetSchemaSqlGateway.Qu
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskAssetSnapshot;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskRevisionSnapshot;
-import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceAvailability;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceOrigin;
 import java.sql.Types;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,8 +30,8 @@ class DatasetSchemaDiscoveryTest {
             11L,
             "sales.sql",
             "101",
-            TaskAssetSource.DATA_DEVELOPMENT,
-            TaskAssetStatus.ONLINE,
+            SourceOrigin.DATA_DEVELOPMENT,
+            SourceAvailability.ONLINE,
             "SQL",
             71L,
             3);
