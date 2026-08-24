@@ -21,7 +21,9 @@ class QualityTableCandidateReaderTest {
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    reader = new QualityTableCandidateReader(repository, catalogGateway);
+    reader =
+        new QualityTableCandidateReader(
+            repository, catalogGateway, new QualityTableTargetPolicy());
   }
 
   @Test
@@ -29,15 +31,17 @@ class QualityTableCandidateReaderTest {
     when(repository.listTableAssetTargets(1L, "demo"))
         .thenReturn(List.of(new TableAssetTarget("demo", null, "registered_table")));
     when(catalogGateway.listTables(1L, "demo", null, null))
-        .thenReturn(List.of(
-            table("registered_table", "已注册"),
-            table("order_info", "订单表"),
-            table("user_info", "用户表")));
+        .thenReturn(
+            List.of(
+                table("registered_table", "已注册"),
+                table("order_info", "订单表"),
+                table("user_info", "用户表")));
 
     var result = reader.candidates(1L, "demo", null, null, 1, 20);
 
     assertThat(result.total()).isEqualTo(2);
-    assertThat(result.records()).extracting(QualityPhysicalTable::tableName)
+    assertThat(result.records())
+        .extracting(QualityPhysicalTable::tableName)
         .containsExactly("order_info", "user_info");
   }
 
