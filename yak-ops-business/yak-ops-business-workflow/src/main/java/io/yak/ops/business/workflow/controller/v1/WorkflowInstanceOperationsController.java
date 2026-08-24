@@ -3,7 +3,7 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.workflow.service.WorkflowInstanceOperationsService;
+import io.yak.ops.business.workflow.execution.WorkflowExecutionManager;
 import io.yak.ops.common.bean.dto.workflow.WorkflowBatchRetryDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowBusinessDateRerunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillVO;
@@ -22,9 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/workflows/instances")
 public class WorkflowInstanceOperationsController {
-  private final WorkflowInstanceOperationsService operations;
+  private final WorkflowExecutionManager operations;
 
-  public WorkflowInstanceOperationsController(WorkflowInstanceOperationsService operations) {
+  public WorkflowInstanceOperationsController(WorkflowExecutionManager operations) {
     this.operations = operations;
   }
 

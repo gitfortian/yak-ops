@@ -3,8 +3,8 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.workflow.service.WorkflowBackfillQuery;
-import io.yak.ops.business.workflow.service.WorkflowBackfillService;
+import io.yak.ops.business.workflow.backfill.WorkflowBackfillQuery;
+import io.yak.ops.business.workflow.backfill.WorkflowBackfillManager;
 import io.yak.ops.common.bean.dto.workflow.WorkflowBackfillCreateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillPreviewVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillVO;
@@ -25,11 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/workflows/backfills")
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowBackfillController {
-  private final WorkflowBackfillService service;
+  private final WorkflowBackfillManager service;
   private final WorkflowBackfillQuery query;
 
   public WorkflowBackfillController(
-      WorkflowBackfillService service,
+      WorkflowBackfillManager service,
       WorkflowBackfillQuery query) {
     this.service = service;
     this.query = query;
