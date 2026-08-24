@@ -4,6 +4,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.CustomTemplate;
 import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.CustomTemplateRepository;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +54,9 @@ public class CustomTemplateReader {
       int customTotal,
       Map<String, Long> dimensions) {
     public Summary {
-      dimensions = dimensions == null ? Map.of() : Map.copyOf(dimensions);
+      dimensions = dimensions == null
+          ? Map.of()
+          : Collections.unmodifiableMap(new LinkedHashMap<>(dimensions));
     }
   }
 }

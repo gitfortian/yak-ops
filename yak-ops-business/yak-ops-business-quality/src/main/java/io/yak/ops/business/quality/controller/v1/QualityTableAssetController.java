@@ -5,8 +5,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
+import io.yak.ops.business.quality.asset.QualityTableAssetManager;
+import io.yak.ops.business.quality.asset.QualityTableAssetReader;
+import io.yak.ops.business.quality.asset.QualityTableCandidateReader;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.service.QualityTableAssetService;
+import io.yak.ops.business.quality.controller.v1.mapper.QualityTableAssetMapper;
 import io.yak.ops.common.bean.dto.quality.QualityTableAssetDTO;
 import io.yak.ops.common.bean.vo.quality.QualityTableAssetVO;
 import jakarta.validation.Valid;
@@ -32,13 +35,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/table-asset")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
 public class QualityTableAssetController {
-  private final QualityTableAssetService service;
+  private final QualityTableAssetReader reader;
+  private final QualityTableCandidateReader candidateReader;
+  private final QualityTableAssetManager manager;
+  private final QualityTableAssetMapper mapper;
 
   @Operation(summary = "分页查询已注册数据表")
   @PostMapping("/page")
   public Result<QualityTableAssetVO.Page> page(
       @Valid @RequestBody QualityTableAssetDTO.PageRequest request) {
-    return Result.success(service.page(request));
+    var query = mapper.query(request);
+    return Result.success(mapper.page(reader.page(query), query));
   }
 
   @Operation(summary = "从数据源插件分页查询可注册数据表")
@@ -50,8 +57,8 @@ public class QualityTableAssetController {
       @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(defaultValue = "1") @Min(1) int current,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-    return Result.success(service.candidates(
-        dataSourceId, databaseName, schemaName, keyword, current, pageSize));
+    return Result.success(mapper.candidates(candidateReader.candidates(
+        dataSourceId, databaseName, schemaName, keyword, current, pageSize)));
   }
 
   @Operation(summary = "批量注册数据表")
@@ -60,14 +67,14 @@ public class QualityTableAssetController {
   public Result<QualityTableAssetVO.RegisterResult> register(
       @Valid @RequestBody QualityTableAssetDTO.RegisterRequest request,
       Principal principal) {
-    return Result.success(service.register(request, operator(principal)));
+    return Result.success(mapper.register(manager.register(mapper.command(request), operator(principal))));
   }
 
   @Operation(summary = "取消注册数据表")
   @DeleteMapping("/{id}")
   @RequiresPermission(QualityPermissionCode.MONITOR_DELETE)
   public Result<Boolean> unregister(@PathVariable long id) {
-    return Result.success(service.unregister(id));
+    return Result.success(manager.unregister(id));
   }
 
   private static String operator(Principal principal) {

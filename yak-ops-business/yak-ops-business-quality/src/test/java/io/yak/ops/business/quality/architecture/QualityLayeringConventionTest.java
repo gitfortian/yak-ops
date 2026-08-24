@@ -11,8 +11,12 @@ import io.yak.ops.business.quality.dao.QualityMonitorDao;
 import io.yak.ops.business.quality.domain.QualityDomain;
 import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.CustomTemplateRepository;
+import io.yak.ops.business.quality.repository.QualityAlertRepository;
+import io.yak.ops.business.quality.repository.QualityExecutionRepository;
 import io.yak.ops.business.quality.repository.QualityExecutionWorkspaceRepository;
-import io.yak.ops.business.quality.repository.QualityRepository;
+import io.yak.ops.business.quality.repository.QualityMonitorRepository;
+import io.yak.ops.business.quality.repository.QualityTableAssetRepository;
+import io.yak.ops.business.quality.repository.QualityTemplateRepository;
 import io.yak.ops.business.quality.repository.QualityWorkspaceRepository;
 import io.yak.ops.common.bean.po.quality.QualityAlertEventPO;
 import io.yak.ops.common.bean.po.quality.QualityExecutionPO;
@@ -34,7 +38,11 @@ class QualityLayeringConventionTest {
   @Test
   void repositoryBoundariesShouldNotExposeHttpOrPersistenceContracts() {
     assertCleanBoundaries(List.of(
-        QualityRepository.class,
+        QualityTemplateRepository.class,
+        QualityTableAssetRepository.class,
+        QualityMonitorRepository.class,
+        QualityExecutionRepository.class,
+        QualityAlertRepository.class,
         CustomTemplateRepository.class,
         QualityWorkspaceRepository.class,
         QualityExecutionWorkspaceRepository.class));
@@ -42,14 +50,16 @@ class QualityLayeringConventionTest {
 
   @Test
   void repositoryPagingUsesSharedPageData() throws Exception {
-    Method tableAssets =
-        QualityRepository.class.getMethod("pageTableAssets", QualityQuery.TableAsset.class);
-    Method monitors = QualityRepository.class.getMethod("pageMonitors", QualityQuery.Monitor.class);
-    Method executions = QualityRepository.class.getMethod("pageExecutions", QualityQuery.Execution.class);
-    Method workspace =
-        QualityExecutionWorkspaceRepository.class.getMethod("page", QualityQuery.ExecutionWorkspace.class);
-    Method workspaceRules =
-        QualityExecutionWorkspaceRepository.class.getMethod("pageRules", QualityQuery.ExecutionWorkspace.class);
+    Method tableAssets = QualityTableAssetRepository.class.getMethod(
+        "pageTableAssets", QualityQuery.TableAsset.class);
+    Method monitors = QualityMonitorRepository.class.getMethod(
+        "pageMonitors", QualityQuery.Monitor.class);
+    Method executions = QualityExecutionRepository.class.getMethod(
+        "pageExecutions", QualityQuery.Execution.class);
+    Method workspace = QualityExecutionWorkspaceRepository.class.getMethod(
+        "page", QualityQuery.ExecutionWorkspace.class);
+    Method workspaceRules = QualityExecutionWorkspaceRepository.class.getMethod(
+        "pageRules", QualityQuery.ExecutionWorkspace.class);
     for (Method method : List.of(tableAssets, monitors, executions, workspace, workspaceRules)) {
       assertThat(((ParameterizedType) method.getGenericReturnType()).getRawType())
           .as(method.getName())

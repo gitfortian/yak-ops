@@ -6,7 +6,8 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.service.QualityWorkspaceService;
+import io.yak.ops.business.quality.controller.v1.mapper.QualityWorkspaceMapper;
+import io.yak.ops.business.quality.workspace.QualityWorkspaceReader;
 import io.yak.ops.common.bean.vo.quality.QualityWorkspaceVO;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -22,16 +23,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/monitor")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
 public class QualityWorkspaceController {
-  private final QualityWorkspaceService service;
+  private final QualityWorkspaceReader reader;
+  private final QualityWorkspaceMapper mapper;
 
-  public QualityWorkspaceController(QualityWorkspaceService service) {
-    this.service = service;
+  public QualityWorkspaceController(QualityWorkspaceReader reader, QualityWorkspaceMapper mapper) {
+    this.reader = reader;
+    this.mapper = mapper;
   }
 
   @Operation(summary = "查询质量监控工作台")
   @GetMapping("/{id}/workspace")
   public Result<QualityWorkspaceVO.MonitorWorkspace> workspace(@PathVariable long id) {
-    return Result.success(service.workspace(id));
+    return Result.success(mapper.workspace(reader.workspace(id)));
   }
 
   @Operation(summary = "查询质量监控报告")
@@ -40,7 +43,7 @@ public class QualityWorkspaceController {
       @PathVariable long id,
       @RequestParam(value = "date", required = false)
       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-    return Result.success(service.report(id, date));
+    return Result.success(mapper.report(reader.report(id, date)));
   }
 
   @Operation(summary = "查询质量监控操作日志")
@@ -49,6 +52,6 @@ public class QualityWorkspaceController {
       @PathVariable long id,
       @RequestParam(value = "current", required = false) Integer current,
       @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-    return Result.success(service.operationLogs(id, current, pageSize));
+    return Result.success(mapper.operationLogs(reader.operationLogs(id, current, pageSize)));
   }
 }

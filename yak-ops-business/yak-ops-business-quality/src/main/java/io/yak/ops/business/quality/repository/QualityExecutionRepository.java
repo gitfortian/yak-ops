@@ -5,7 +5,6 @@ import io.yak.ops.business.quality.domain.QualityDomain.Execution;
 import io.yak.ops.business.quality.domain.QualityDomain.Monitor;
 import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionSpec;
 import io.yak.ops.business.quality.domain.QualityQuery;
-import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.TriggerType;
 import java.time.LocalDateTime;
@@ -13,7 +12,6 @@ import java.util.Optional;
 
 /** Persistence port for execution lifecycle and immutable execution evidence. */
 public interface QualityExecutionRepository {
-  QualityExecutionPlan executionJob(long monitorId, long executionId, String executionNo);
   boolean hasActiveExecution(long monitorId);
   long insertExecution(String executionNo, Monitor monitor, int totalRules, String operator,
       TriggerType triggerType, LocalDateTime queuedAt);

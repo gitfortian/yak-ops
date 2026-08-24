@@ -6,8 +6,8 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
-import io.yak.ops.business.quality.service.QualityTemplateService;
-import io.yak.ops.common.bean.dto.quality.QualityTemplateDTO;
+import io.yak.ops.business.quality.controller.v1.mapper.QualityTemplateMapper;
+import io.yak.ops.business.quality.template.QualityTemplateReader;
 import io.yak.ops.common.bean.vo.quality.QualityTemplateVO;
 import io.yak.ops.common.enums.quality.QualityEnums.RuleScope;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/template")
 @RequiresPermission(QualityPermissionCode.TEMPLATE_READ)
 public class QualityTemplateController {
-  private final QualityTemplateService service;
+  private final QualityTemplateReader reader;
+  private final QualityTemplateMapper mapper;
 
   @Operation(summary = "查询规则模板")
   @GetMapping
@@ -32,12 +33,12 @@ public class QualityTemplateController {
       @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(value = "dimension", required = false) String dimension,
       @RequestParam(value = "scope", required = false) RuleScope scope) {
-    return Result.success(service.list(new QualityTemplateDTO.Query(keyword, dimension, scope)));
+    return Result.success(mapper.templateList(reader.list(mapper.templateQuery(keyword, dimension, scope))));
   }
 
   @Operation(summary = "查询规则模板详情")
   @GetMapping("/{id}")
   public Result<QualityTemplateVO.Template> detail(@PathVariable long id) {
-    return Result.success(service.get(id));
+    return Result.success(mapper.template(reader.require(id)));
   }
 }
