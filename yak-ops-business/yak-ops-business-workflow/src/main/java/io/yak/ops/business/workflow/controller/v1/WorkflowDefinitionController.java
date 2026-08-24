@@ -4,9 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
-import io.yak.ops.business.workflow.service.WorkflowDefinitionScheduleGuard;
-import io.yak.ops.business.workflow.service.WorkflowDefinitionService;
-import io.yak.ops.business.workflow.service.WorkflowLaunchService;
+import io.yak.ops.business.workflow.definition.WorkflowDefinitionScheduleGuard;
+import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
+import io.yak.ops.business.workflow.execution.WorkflowLauncher;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
@@ -29,13 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/workflows/definitions")
 public class WorkflowDefinitionController {
 
-  private final WorkflowDefinitionService definitionService;
-  private final WorkflowLaunchService launchService;
+  private final WorkflowDefinitionManager definitionService;
+  private final WorkflowLauncher launchService;
   private final WorkflowDefinitionScheduleGuard scheduleGuard;
 
   public WorkflowDefinitionController(
-      WorkflowDefinitionService definitionService,
-      WorkflowLaunchService launchService,
+      WorkflowDefinitionManager definitionService,
+      WorkflowLauncher launchService,
       WorkflowDefinitionScheduleGuard scheduleGuard) {
     this.definitionService = definitionService;
     this.launchService = launchService;

@@ -4,9 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
-import io.yak.ops.business.workflow.service.WorkflowExecutionReactivationService;
-import io.yak.ops.business.workflow.service.WorkflowLaunchService;
-import io.yak.ops.business.workflow.service.WorkflowRuntimeService;
+import io.yak.ops.business.workflow.execution.WorkflowExecutionReactivator;
+import io.yak.ops.business.workflow.execution.WorkflowLauncher;
+import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import jakarta.validation.Valid;
@@ -26,14 +26,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/v1/workflows")
 public class WorkflowController {
 
-  private final WorkflowRuntimeService workflowRuntimeService;
-  private final WorkflowLaunchService workflowLaunchService;
-  private final WorkflowExecutionReactivationService workflowReactivationService;
+  private final WorkflowRuntime workflowRuntimeService;
+  private final WorkflowLauncher workflowLaunchService;
+  private final WorkflowExecutionReactivator workflowReactivationService;
 
   public WorkflowController(
-      WorkflowRuntimeService workflowRuntimeService,
-      WorkflowLaunchService workflowLaunchService,
-      WorkflowExecutionReactivationService workflowReactivationService) {
+      WorkflowRuntime workflowRuntimeService,
+      WorkflowLauncher workflowLaunchService,
+      WorkflowExecutionReactivator workflowReactivationService) {
     this.workflowRuntimeService = workflowRuntimeService;
     this.workflowLaunchService = workflowLaunchService;
     this.workflowReactivationService = workflowReactivationService;
