@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 /** Maps SQL execution audit transport models to/from typed read-side projections. */
 @Component
 @ConditionalOnDataSourceEnabled
-public class SqlExecutionAuditMapper {
+public class SqlExecutionAuditViewMapper {
 
   public SqlExecutionAuditCriteria criteria(SqlExecutionAuditQueryDTO dto) {
     SqlExecutionAuditQueryDTO source = dto == null ? new SqlExecutionAuditQueryDTO() : dto;
