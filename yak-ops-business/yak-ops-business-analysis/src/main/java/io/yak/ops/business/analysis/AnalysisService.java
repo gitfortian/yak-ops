@@ -1,87 +1,60 @@
 package io.yak.ops.business.analysis;
 
-import io.yak.ops.business.analysis.repository.AnalysisRepository;
-import io.yak.ops.business.analysis.service.event.AnalysisLineageRefreshRequested;
-import io.yak.ops.business.analysis.service.support.AnalysisDefinitionNormalizer;
+import io.yak.ops.business.analysis.definition.AnalysisManager;
+import io.yak.ops.business.analysis.definition.AnalysisReader;
+import io.yak.ops.business.analysis.definition.AnalysisSaveCommand;
+import io.yak.ops.business.analysis.domain.AnalysisAsset;
+import io.yak.ops.business.analysis.query.AnalysisQuerySpec;
+import io.yak.ops.business.analysis.visualization.AnalysisChartType;
+import io.yak.ops.business.analysis.visualization.AnalysisVisualConfig;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-/** Owns reusable Analysis assets while Dataset execution and Dashboard layout remain separate. */
+/** Stable Analysis application facade retained for HTTP and cross-module callers. */
 @Service
 public class AnalysisService {
 
-  private final AnalysisRepository repository;
-  private final AnalysisDefinitionNormalizer normalizer;
-  private final ApplicationEventPublisher eventPublisher;
-  private final List<AnalysisDeletionGuard> deletionGuards;
+  private final AnalysisManager manager;
+  private final AnalysisReader reader;
 
-  @Autowired
-  public AnalysisService(
-      AnalysisRepository repository,
-      AnalysisDefinitionNormalizer normalizer,
-      ApplicationEventPublisher eventPublisher,
-      List<AnalysisDeletionGuard> deletionGuards) {
-    this.repository = repository;
-    this.normalizer = normalizer;
-    this.eventPublisher = eventPublisher;
-    this.deletionGuards = deletionGuards == null ? List.of() : List.copyOf(deletionGuards);
+  public AnalysisService(AnalysisManager manager, AnalysisReader reader) {
+    this.manager = manager;
+    this.reader = reader;
   }
 
-  /** Focused tests and callers without cross-domain deletion guards retain the lightweight path. */
-  public AnalysisService(
-      AnalysisRepository repository,
-      AnalysisDefinitionNormalizer normalizer,
-      ApplicationEventPublisher eventPublisher) {
-    this(repository, normalizer, eventPublisher, List.of());
-  }
-
-  @Transactional(transactionManager = "yakBusinessTransactionManager", readOnly = true)
   public List<AnalysisAsset> list() {
-    return repository.list();
+    return reader.list();
   }
 
-  @Transactional(transactionManager = "yakBusinessTransactionManager", readOnly = true)
   public AnalysisAsset get(long analysisId) {
-    requireAnalysisId(analysisId);
-    return repository.findById(analysisId)
-        .orElseThrow(() -> new IllegalArgumentException("Analysis 不存在：" + analysisId));
+    return reader.require(analysisId);
   }
 
-  @Transactional("yakBusinessTransactionManager")
   public AnalysisAsset create(SaveCommand command) {
-    AnalysisDraft draft = normalizer.normalize(command);
-    long analysisId = repository.insert(draft);
-    eventPublisher.publishEvent(AnalysisLineageRefreshRequested.refresh(analysisId));
-    return get(analysisId);
+    return manager.create(toCommand(command));
   }
 
-  @Transactional("yakBusinessTransactionManager")
   public AnalysisAsset update(long analysisId, SaveCommand command) {
-    requireAnalysisId(analysisId);
-    get(analysisId);
-    AnalysisDraft draft = normalizer.normalize(command);
-    repository.update(analysisId, draft);
-    eventPublisher.publishEvent(AnalysisLineageRefreshRequested.refresh(analysisId));
-    return get(analysisId);
+    return manager.update(analysisId, toCommand(command));
   }
 
-  @Transactional("yakBusinessTransactionManager")
   public void delete(long analysisId) {
-    requireAnalysisId(analysisId);
-    get(analysisId);
-    deletionGuards.forEach(guard -> guard.requireDeletable(analysisId));
-    repository.delete(analysisId);
-    eventPublisher.publishEvent(AnalysisLineageRefreshRequested.deleted(analysisId));
+    manager.delete(analysisId);
   }
 
-  private static void requireAnalysisId(long analysisId) {
-    if (analysisId <= 0L) throw new IllegalArgumentException("analysisId 必须大于 0");
+  private AnalysisSaveCommand toCommand(SaveCommand command) {
+    Objects.requireNonNull(command, "command");
+    return new AnalysisSaveCommand(
+        command.name(),
+        command.description(),
+        command.datasetId(),
+        command.chartType(),
+        command.querySpec(),
+        command.visualConfig());
   }
 
-  /** Stable application command retained for callers outside the HTTP adapter. */
+  /** Stable compatibility command used by existing HTTP/application callers. */
   public record SaveCommand(
       String name,
       String description,

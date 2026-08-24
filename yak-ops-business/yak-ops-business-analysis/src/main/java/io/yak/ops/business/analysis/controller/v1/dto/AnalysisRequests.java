@@ -1,9 +1,9 @@
 package io.yak.ops.business.analysis.controller.v1.dto;
 
-import io.yak.ops.business.analysis.AnalysisAggregation;
-import io.yak.ops.business.analysis.AnalysisChartType;
-import io.yak.ops.business.analysis.AnalysisFilterOperator;
-import io.yak.ops.business.analysis.AnalysisSortDirection;
+import io.yak.ops.business.analysis.query.AnalysisAggregation;
+import io.yak.ops.business.analysis.query.AnalysisFilterOperator;
+import io.yak.ops.business.analysis.query.AnalysisSortDirection;
+import io.yak.ops.business.analysis.visualization.AnalysisChartType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

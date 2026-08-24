@@ -1,18 +1,19 @@
 package io.yak.ops.business.analysis;
 
+import io.yak.ops.business.analysis.reference.AnalysisReferenceReader;
 import org.springframework.stereotype.Service;
 
-/** Narrow cross-domain port for assets that only need to hold a stable Analysis reference. */
+/** Stable narrow cross-domain facade for assets that only hold an Analysis reference. */
 @Service
 public class AnalysisReferenceService {
 
-  private final AnalysisService analysisService;
+  private final AnalysisReferenceReader references;
 
-  public AnalysisReferenceService(AnalysisService analysisService) {
-    this.analysisService = analysisService;
+  public AnalysisReferenceService(AnalysisReferenceReader references) {
+    this.references = references;
   }
 
   public void requireExists(long analysisId) {
-    analysisService.get(analysisId);
+    references.requireExists(analysisId);
   }
 }

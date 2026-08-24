@@ -1,11 +1,11 @@
 package io.yak.ops.business.analysis.repository;
 
-import io.yak.ops.business.analysis.AnalysisAsset;
-import io.yak.ops.business.analysis.AnalysisChartType;
-import io.yak.ops.business.analysis.AnalysisDraft;
 import io.yak.ops.business.analysis.dao.AnalysisDao;
 import io.yak.ops.business.analysis.dao.model.AnalysisPO;
-import io.yak.ops.business.analysis.repository.support.AnalysisJsonCodec;
+import io.yak.ops.business.analysis.domain.AnalysisAsset;
+import io.yak.ops.business.analysis.domain.AnalysisDefinition;
+import io.yak.ops.business.analysis.repository.codec.AnalysisJsonCodec;
+import io.yak.ops.business.analysis.visualization.AnalysisChartType;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.util.List;
 import java.util.Optional;
@@ -26,13 +26,13 @@ public class AnalysisRepositoryAdapter implements AnalysisRepository {
   }
 
   @Override
-  public long insert(AnalysisDraft draft) {
-    return dao.insert(toPO(draft));
+  public long insert(AnalysisDefinition definition) {
+    return dao.insert(toPO(definition));
   }
 
   @Override
-  public void update(long analysisId, AnalysisDraft draft) {
-    dao.update(analysisId, toPO(draft));
+  public void update(long analysisId, AnalysisDefinition definition) {
+    dao.update(analysisId, toPO(definition));
   }
 
   @Override
@@ -50,14 +50,14 @@ public class AnalysisRepositoryAdapter implements AnalysisRepository {
     dao.delete(analysisId);
   }
 
-  private AnalysisPO toPO(AnalysisDraft draft) {
+  private AnalysisPO toPO(AnalysisDefinition definition) {
     AnalysisPO value = new AnalysisPO();
-    value.setName(draft.name());
-    value.setDescription(draft.description());
-    value.setDatasetId(draft.datasetId());
-    value.setChartType(draft.chartType().name());
-    value.setQuerySpecJson(jsonCodec.writeQuerySpec(draft.querySpec()));
-    value.setVisualConfigJson(jsonCodec.writeVisualConfig(draft.visualConfig()));
+    value.setName(definition.name());
+    value.setDescription(definition.description());
+    value.setDatasetId(definition.datasetId());
+    value.setChartType(definition.chartType().name());
+    value.setQuerySpecJson(jsonCodec.writeQuerySpec(definition.querySpec()));
+    value.setVisualConfigJson(jsonCodec.writeVisualConfig(definition.visualConfig()));
     return value;
   }
 
