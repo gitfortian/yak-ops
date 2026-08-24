@@ -1,6 +1,5 @@
 package io.yak.ops.business.dataset.publication;
 
-import io.yak.ops.business.dataset.DatasetSourceType;
 import io.yak.ops.business.dataset.DatasetVersionDraft;
 import io.yak.ops.business.dataset.repository.DatasetRepository;
 import io.yak.ops.business.dataset.schema.DatasetFieldNormalizer;
@@ -21,7 +20,47 @@ public class DatasetVersionWriter {
     this.fieldNormalizer = fieldNormalizer;
   }
 
-  public long appendQueryRevision(
+  public long appendInitialQueryRevision(
+      long datasetId,
+      long sourceTaskAssetId,
+      long sourceTaskRevisionId,
+      int sourceTaskRevisionNo,
+      List<DatasetFieldSpec> fields) {
+    return appendQueryRevision(
+        datasetId,
+        sourceTaskAssetId,
+        sourceTaskRevisionId,
+        sourceTaskRevisionNo,
+        fields,
+        false);
+  }
+
+  public long appendNextQueryRevision(
+      long datasetId,
+      long sourceTaskAssetId,
+      long sourceTaskRevisionId,
+      int sourceTaskRevisionNo,
+      List<DatasetFieldSpec> fields) {
+    return appendQueryRevision(
+        datasetId,
+        sourceTaskAssetId,
+        sourceTaskRevisionId,
+        sourceTaskRevisionNo,
+        fields,
+        true);
+  }
+
+  public long appendInitialSqlQuery(
+      long datasetId, String dataSourceId, String sql, List<DatasetFieldSpec> fields) {
+    return appendSqlQuery(datasetId, dataSourceId, sql, fields, false);
+  }
+
+  public long appendNextSqlQuery(
+      long datasetId, String dataSourceId, String sql, List<DatasetFieldSpec> fields) {
+    return appendSqlQuery(datasetId, dataSourceId, sql, fields, true);
+  }
+
+  private long appendQueryRevision(
       long datasetId,
       long sourceTaskAssetId,
       long sourceTaskRevisionId,
@@ -43,7 +82,7 @@ public class DatasetVersionWriter {
     return versionId;
   }
 
-  public long appendSqlQuery(
+  private long appendSqlQuery(
       long datasetId,
       String dataSourceId,
       String sql,
