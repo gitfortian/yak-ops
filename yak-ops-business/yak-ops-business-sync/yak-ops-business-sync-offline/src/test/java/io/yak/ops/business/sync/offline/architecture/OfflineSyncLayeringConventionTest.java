@@ -59,45 +59,53 @@ import org.springframework.stereotype.Service;
 
 class OfflineSyncLayeringConventionTest {
 
-  private static final Set<String> EXECUTION_INTERNAL_IMPORTS = Set.of(
-      "io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator",
-      "io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager",
-      "io.yak.ops.business.sync.offline.execution.OfflineExistingBatchClaimManager",
-      "io.yak.ops.business.sync.offline.execution.OfflineExecutionAttemptFactory",
-      "io.yak.ops.business.sync.offline.execution.OfflineExecutionStateManager",
-      "io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime",
-      "io.yak.ops.business.sync.offline.execution.query.",
-      "io.yak.ops.business.sync.offline.execution.adapter.");
+  private static final Set<String> EXECUTION_INTERNAL_IMPORTS =
+      Set.of(
+          "io.yak.ops.business.sync.offline.execution.OfflineExecutionCoordinator",
+          "io.yak.ops.business.sync.offline.execution.OfflineExecutionClaimManager",
+          "io.yak.ops.business.sync.offline.execution.OfflineExistingBatchClaimManager",
+          "io.yak.ops.business.sync.offline.execution.OfflineExecutionAttemptFactory",
+          "io.yak.ops.business.sync.offline.execution.OfflineExecutionStateManager",
+          "io.yak.ops.business.sync.offline.execution.OfflineBatchRuntime",
+          "io.yak.ops.business.sync.offline.execution.query.",
+          "io.yak.ops.business.sync.offline.execution.adapter.");
 
-  private static final Set<String> LEGACY_ROLE_NAMES = Set.of(
-      "OfflineExecutionOrchestrator",
-      "OfflineExecutionClaimService",
-      "OfflineBatchRuntimeService",
-      "OfflineCursorService",
-      "OfflineExecutionReadService",
-      "OfflineExecutionLogService");
+  private static final Set<String> LEGACY_ROLE_NAMES =
+      Set.of(
+          "OfflineExecutionOrchestrator",
+          "OfflineExecutionClaimService",
+          "OfflineBatchRuntimeService",
+          "OfflineCursorService",
+          "OfflineExecutionReadService",
+          "OfflineExecutionLogService");
 
-  private static final Set<String> TRANSITIONAL_COMPATIBILITY_NAMES = Set.of(
-      "LegacyBatchTriggerCompatibilityMapper",
-      "LegacyOfflineExecutionCompatibilityMapper",
-      "OfflineExecutionControlRepository",
-      "OfflineExecutionIdempotencyRepository");
+  private static final Set<String> TRANSITIONAL_COMPATIBILITY_NAMES =
+      Set.of(
+          "LegacyBatchTriggerCompatibilityMapper",
+          "LegacyOfflineExecutionCompatibilityMapper",
+          "OfflineExecutionControlRepository",
+          "OfflineExecutionIdempotencyRepository");
 
   @Test
   void controllersDependOnlyOnStableApplicationFacades() {
-    Set<Class<?>> facades = Set.of(
-        OfflineJobDefinitionService.class,
-        OfflineJobExecutionService.class,
-        OfflineBackfillService.class);
+    Set<Class<?>> facades =
+        Set.of(
+            OfflineJobDefinitionService.class,
+            OfflineJobExecutionService.class,
+            OfflineBackfillService.class);
 
-    for (Class<?> type : List.of(
-        OfflineJobDefinitionController.class,
-        OfflineJobExecutionController.class,
-        OfflineControlPlaneController.class,
-        OfflineBackfillController.class)) {
+    for (Class<?> type :
+        List.of(
+            OfflineJobDefinitionController.class,
+            OfflineJobExecutionController.class,
+            OfflineControlPlaneController.class,
+            OfflineBackfillController.class)) {
       for (Field field : type.getDeclaredFields()) {
         assertThat(field.getType())
-            .as("%s.%s must depend on a stable Application Facade", type.getSimpleName(), field.getName())
+            .as(
+                "%s.%s must depend on a stable Application Facade",
+                type.getSimpleName(),
+                field.getName())
             .isIn(facades);
       }
     }
@@ -105,26 +113,28 @@ class OfflineSyncLayeringConventionTest {
 
   @Test
   void serviceStereotypeIsReservedForApplicationFacades() {
-    for (Class<?> facade : List.of(
-        OfflineJobDefinitionService.class,
-        OfflineJobExecutionService.class,
-        OfflineBackfillService.class)) {
+    for (Class<?> facade :
+        List.of(
+            OfflineJobDefinitionService.class,
+            OfflineJobExecutionService.class,
+            OfflineBackfillService.class)) {
       assertThat(facade.getAnnotation(Service.class))
           .as("%s must remain an Application Service", facade.getSimpleName())
           .isNotNull();
     }
 
-    for (Class<?> internal : List.of(
-        OfflineExecutionCoordinator.class,
-        OfflineExecutionClaimManager.class,
-        OfflineExistingBatchClaimManager.class,
-        OfflineExecutionAttemptFactory.class,
-        OfflineExecutionStateManager.class,
-        OfflineBatchRuntime.class,
-        OfflineCursorManager.class,
-        OfflineExecutionQuery.class,
-        OfflineExecutionLogQuery.class,
-        OfflineBackfillPlanner.class)) {
+    for (Class<?> internal :
+        List.of(
+            OfflineExecutionCoordinator.class,
+            OfflineExecutionClaimManager.class,
+            OfflineExistingBatchClaimManager.class,
+            OfflineExecutionAttemptFactory.class,
+            OfflineExecutionStateManager.class,
+            OfflineBatchRuntime.class,
+            OfflineCursorManager.class,
+            OfflineExecutionQuery.class,
+            OfflineExecutionLogQuery.class,
+            OfflineBackfillPlanner.class)) {
       assertThat(internal.getAnnotation(Component.class))
           .as("%s must remain an internal role component", internal.getSimpleName())
           .isNotNull();
@@ -135,7 +145,7 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
-  void stageElevenCoreResponsibilitiesStayDecomposed() {
+  void coreResponsibilitiesStayDecomposed() {
     List<Class<?>> coordinatorDependencies = fieldTypes(OfflineExecutionCoordinator.class);
     assertThat(coordinatorDependencies)
         .contains(OfflineExecutionStateManager.class)
@@ -155,17 +165,22 @@ class OfflineSyncLayeringConventionTest {
   }
 
   @Test
-  void stageTwelveExplicitBoundariesAreImplemented() {
+  void explicitSubsystemBoundariesStayImplemented() {
     assertThat(OfflineCursorGateway.class.isAssignableFrom(OfflineCursorManager.class)).isTrue();
-    assertThat(OfflineExecutionScopeValidator.class.isAssignableFrom(OfflineBatchScopeExecutionAdapter.class))
+    assertThat(
+            OfflineExecutionScopeValidator.class.isAssignableFrom(
+                OfflineBatchScopeExecutionAdapter.class))
         .isTrue();
-    assertThat(OfflineScheduleExecutionGateway.class.isAssignableFrom(OfflineJobExecutionService.class))
+    assertThat(
+            OfflineScheduleExecutionGateway.class.isAssignableFrom(
+                OfflineJobExecutionService.class))
         .isTrue();
   }
 
   @Test
   void backgroundEntrypointsUseOnlyDeclaredExecutionCorridors() {
-    for (Class<?> type : List.of(OfflineBackfillDispatcher.class, OfflineExecutionReconciler.class)) {
+    for (Class<?> type :
+        List.of(OfflineBackfillDispatcher.class, OfflineExecutionReconciler.class)) {
       List<Class<?>> dependencies = fieldTypes(type);
       assertThat(dependencies)
           .as("%s must enter execution through OfflineJobExecutionService", type.getSimpleName())
@@ -186,7 +201,9 @@ class OfflineSyncLayeringConventionTest {
     try (Stream<Path> paths = Files.walk(root)) {
       for (Path file : paths.filter(path -> path.toString().endsWith(".java")).toList()) {
         String relative = root.relativize(file).toString().replace('\\', '/');
-        if (relative.startsWith("execution/")) continue;
+        if (relative.startsWith("execution/")) {
+          continue;
+        }
 
         String source = Files.readString(file);
         for (String forbidden : EXECUTION_INTERNAL_IMPORTS) {
@@ -207,7 +224,7 @@ class OfflineSyncLayeringConventionTest {
         String source = Files.readString(file);
         for (String legacyRoleName : LEGACY_ROLE_NAMES) {
           assertThat(source)
-              .as("%s must use Stage 10 role vocabulary instead of %s", relative, legacyRoleName)
+              .as("%s must use current role vocabulary instead of %s", relative, legacyRoleName)
               .doesNotContain(legacyRoleName);
         }
       }
@@ -229,7 +246,10 @@ class OfflineSyncLayeringConventionTest {
             .doesNotContain("@Deprecated");
         for (String compatibilityName : TRANSITIONAL_COMPATIBILITY_NAMES) {
           assertThat(source)
-              .as("%s must not reintroduce transitional compatibility type %s", relative, compatibilityName)
+              .as(
+                  "%s must not reintroduce transitional compatibility type %s",
+                  relative,
+                  compatibilityName)
               .doesNotContain(compatibilityName);
         }
       }
@@ -238,12 +258,13 @@ class OfflineSyncLayeringConventionTest {
 
   @Test
   void repositoriesExposeOnlyDomainContracts() {
-    for (Class<?> type : List.of(
-        OfflineBatchExecutionRepository.class,
-        OfflineJobDefinitionRepository.class,
-        OfflineJobExecutionRepository.class,
-        OfflineExecutionEventRepository.class,
-        OfflineScheduleRepository.class)) {
+    for (Class<?> type :
+        List.of(
+            OfflineBatchExecutionRepository.class,
+            OfflineJobDefinitionRepository.class,
+            OfflineJobExecutionRepository.class,
+            OfflineExecutionEventRepository.class,
+            OfflineScheduleRepository.class)) {
       assertMethodsAvoid(
           type,
           ".bean.dto.",
@@ -255,12 +276,12 @@ class OfflineSyncLayeringConventionTest {
 
   @Test
   void attemptPersistenceDoesNotExposeLegacyTaskRuntimeOrRetroactiveBinding() {
-    List<String> repositoryMethods = Arrays.stream(OfflineJobExecutionRepository.class.getMethods())
-        .map(Method::getName)
-        .toList();
-    List<String> daoMethods = Arrays.stream(OfflineJobExecutionDao.class.getMethods())
-        .map(Method::getName)
-        .toList();
+    List<String> repositoryMethods =
+        Arrays.stream(OfflineJobExecutionRepository.class.getMethods())
+            .map(Method::getName)
+            .toList();
+    List<String> daoMethods =
+        Arrays.stream(OfflineJobExecutionDao.class.getMethods()).map(Method::getName).toList();
 
     assertThat(repositoryMethods).doesNotContain("hasActiveExecution", "bindBatch");
     assertThat(daoMethods).doesNotContain("hasActiveExecution", "bindBatch");
@@ -281,17 +302,18 @@ class OfflineSyncLayeringConventionTest {
 
   @Test
   void daosDoNotDependOnTransportModels() {
-    for (Class<?> type : List.of(
-        OfflineBatchExecutionDao.class,
-        OfflineJobDefinitionDao.class,
-        OfflineJobExecutionDao.class,
-        OfflineExecutionEventDao.class)) {
+    for (Class<?> type :
+        List.of(
+            OfflineBatchExecutionDao.class,
+            OfflineJobDefinitionDao.class,
+            OfflineJobExecutionDao.class,
+            OfflineExecutionEventDao.class)) {
       assertMethodsAvoid(type, ".bean.dto.", ".bean.vo.");
     }
   }
 
   @Test
-  void waveOnePersistenceAddsBatchTableWithoutReplacingLegacyTables() throws Exception {
+  void batchPersistenceKeepsEstablishedPhysicalTables() throws Exception {
     assertTable(OfflineBatchExecutionPO.class, "yak_offline_batch_execution");
     assertTable(OfflineJobDefinitionPO.class, "yak_offline_job_definition");
     assertTable(OfflineJobExecutionPO.class, "yak_offline_job_execution");
@@ -322,21 +344,24 @@ class OfflineSyncLayeringConventionTest {
 
   private Path productionRoot() {
     Path moduleRoot = Path.of("src/main/java/io/yak/ops/business/sync/offline");
-    if (Files.isDirectory(moduleRoot)) return moduleRoot;
+    if (Files.isDirectory(moduleRoot)) {
+      return moduleRoot;
+    }
 
-    Path repositoryRoot = Path.of(
-        "yak-ops-business",
-        "yak-ops-business-sync",
-        "yak-ops-business-sync-offline",
-        "src",
-        "main",
-        "java",
-        "io",
-        "yak",
-        "ops",
-        "business",
-        "sync",
-        "offline");
+    Path repositoryRoot =
+        Path.of(
+            "yak-ops-business",
+            "yak-ops-business-sync",
+            "yak-ops-business-sync-offline",
+            "src",
+            "main",
+            "java",
+            "io",
+            "yak",
+            "ops",
+            "business",
+            "sync",
+            "offline");
     assertThat(Files.isDirectory(repositoryRoot))
         .as("offline-sync production source root must be available to architecture test")
         .isTrue();
@@ -352,7 +377,8 @@ class OfflineSyncLayeringConventionTest {
     }
   }
 
-  private void assertTypeAvoids(Class<?> owner, Method method, Type type, String... forbidden) {
+  private void assertTypeAvoids(
+      Class<?> owner, Method method, Type type, String... forbidden) {
     String signature = typeName(type);
     for (String packagePart : forbidden) {
       assertThat(signature)
