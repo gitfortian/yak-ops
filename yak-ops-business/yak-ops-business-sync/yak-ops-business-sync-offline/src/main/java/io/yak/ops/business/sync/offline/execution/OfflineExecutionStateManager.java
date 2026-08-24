@@ -27,7 +27,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** ExecutionAttempt 状态应用、Retry 计算、事件记录和 Task last-* 投影。 */
+/** Owns Attempt state application, retry timing, events and Task last-* projection. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineExecutionStateManager {
@@ -130,16 +130,20 @@ public class OfflineExecutionStateManager {
       OfflineJobExecution execution,
       LinkUpJobResponse response,
       String eventType) {
-    if (execution == null || response == null) return;
+    if (execution == null || response == null) {
+      return;
+    }
     requireRuntimeBatch(execution, "对账");
 
     String previous = execution.getStatus();
-    OfflineExecutionStatus next = StringUtils.hasText(response.getStatus())
-        ? OfflineExecutionStatus.parse(response.getStatus())
-        : OfflineExecutionStatus.parse(execution.getStatus());
+    OfflineExecutionStatus next =
+        StringUtils.hasText(response.getStatus())
+            ? OfflineExecutionStatus.parse(response.getStatus())
+            : OfflineExecutionStatus.parse(execution.getStatus());
 
     execution.setEngineJobId(first(response.getJobId(), execution.getEngineJobId()));
-    execution.setWorkerInstanceId(first(response.getWorkerInstanceId(), execution.getWorkerInstanceId()));
+    execution.setWorkerInstanceId(
+        first(response.getWorkerInstanceId(), execution.getWorkerInstanceId()));
     execution.setStatus(next.name());
     execution.setStateVersion(
         Math.max(value(execution.getStateVersion(), 0L), value(response.getStateVersion(), 0L)));
@@ -155,9 +159,9 @@ public class OfflineExecutionStateManager {
     execution.setLastSyncTime(LocalDateTime.now());
     execution.setUpdateTime(LocalDateTime.now());
     configureRetry(execution, next, retryable(response, next));
+
     batchRuntime.persistAttempt(execution);
     projectTaskLastState(execution, next.name());
-
     if (!next.name().equals(previous)) {
       record(
           execution,
@@ -170,9 +174,13 @@ public class OfflineExecutionStateManager {
   }
 
   public void markUnknown(OfflineJobExecution execution, String message) {
-    if (execution == null || !OfflineExecutionStatus.isActive(execution.getStatus())) return;
+    if (execution == null || !OfflineExecutionStatus.isActive(execution.getStatus())) {
+      return;
+    }
     requireRuntimeBatch(execution, "UNKNOWN 对账");
-    if (OfflineExecutionStatus.UNKNOWN.name().equalsIgnoreCase(execution.getStatus())) return;
+    if (OfflineExecutionStatus.UNKNOWN.name().equalsIgnoreCase(execution.getStatus())) {
+      return;
+    }
 
     String previous = execution.getStatus();
     execution.setStatus(OfflineExecutionStatus.UNKNOWN.name());
@@ -232,8 +240,8 @@ public class OfflineExecutionStateManager {
     long sourceRecordCount = number(metrics, "sourceRecordCount", 0L);
     long sinkAttemptedRecordCount = number(metrics, "sinkAttemptedRecordCount", 0L);
     long sinkSuccessRecordCount = number(metrics, "sinkSuccessRecordCount", 0L);
-    long sinkCommittedRecordCount = number(
-        commitSummary, "successfullyCommittedRecordCount", sinkSuccessRecordCount);
+    long sinkCommittedRecordCount =
+        number(commitSummary, "successfullyCommittedRecordCount", sinkSuccessRecordCount);
     double sourceAverageQps = decimal(metrics, "sourceAverageQps", 0D);
     double sinkAverageQps = decimal(metrics, "sinkAverageQps", 0D);
 
@@ -257,9 +265,14 @@ public class OfflineExecutionStateManager {
       OfflineExecutionStatus status,
       boolean retryable) {
     execution.setNextRetryTime(null);
-    if (!retryable || status != OfflineExecutionStatus.FAILED) return;
+    if (!retryable || status != OfflineExecutionStatus.FAILED) {
+      return;
+    }
+
     RetryPolicySnapshot retryPolicy = frozenRetryPolicy(execution);
-    if (retryPolicy == null) return;
+    if (retryPolicy == null) {
+      return;
+    }
     if (value(execution.getAttemptNo(), 1) < retryPolicy.maxAttempts()) {
       execution.setNextRetryTime(
           LocalDateTime.now().plusSeconds(Math.max(0, retryPolicy.backoffSeconds())));
@@ -268,32 +281,32 @@ public class OfflineExecutionStateManager {
 
   private RetryPolicySnapshot frozenRetryPolicy(OfflineJobExecution execution) {
     Long batchId = execution.getBatchId();
-    if (batchId == null || batchId <= 0L) return null;
+    if (batchId == null || batchId <= 0L) {
+      return null;
+    }
     BatchExecution batch = batchRepository.findById(batchId).orElse(null);
-    if (batch == null || !Objects.equals(execution.getJobDefinitionId(), batch.taskId())) return null;
+    if (batch == null || !Objects.equals(execution.getJobDefinitionId(), batch.taskId())) {
+      return null;
+    }
     return batch.snapshot().retryPolicy();
   }
 
   private void projectTaskLastState(OfflineJobExecution execution, String fallbackStatus) {
     Long batchId = execution.getBatchId();
-    if (batchId == null || batchId <= 0L) return;
-
-    String projectedStatus = fallbackStatus;
-    List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId);
-    if (!attempts.isEmpty()) {
-      OfflineJobExecution latest = attempts.stream()
-          .max(
-              Comparator.comparingInt((OfflineJobExecution value) -> value(value.getAttemptNo(), 1))
-                  .thenComparingLong(value -> value(value.getId(), 0L)))
-          .orElseThrow();
-      if (!Objects.equals(latest.getId(), execution.getId())) return;
+    if (batchId == null || batchId <= 0L) {
+      return;
+    }
+    if (!isLatestAttempt(execution, batchId)) {
+      return;
     }
 
     BatchExecution batch = batchRepository.findById(batchId).orElse(null);
-    if (batch != null) projectedStatus = batch.status().name();
+    String projectedStatus = batch == null ? fallbackStatus : batch.status().name();
     OfflineJobDefinition definition =
         definitionRepository.findById(execution.getJobDefinitionId()).orElse(null);
-    if (definition == null) return;
+    if (definition == null) {
+      return;
+    }
 
     definition.setLastExecutionId(execution.getId());
     definition.setLastEngineJobId(execution.getEngineJobId());
@@ -303,26 +316,48 @@ public class OfflineExecutionStateManager {
     definition.setLastReadRowCount(execution.getSourceRecordCount());
     definition.setLastQps(execution.getQps());
     definition.setLastSyncBytes(
-        Math.max(value(execution.getSourceReadBytes(), 0L), value(execution.getSinkWrittenBytes(), 0L)));
+        Math.max(
+            value(execution.getSourceReadBytes(), 0L),
+            value(execution.getSinkWrittenBytes(), 0L)));
     definition.setLastStartTime(execution.getStartTime());
     definition.setLastEndTime(execution.getEndTime());
     definition.setUpdateTime(LocalDateTime.now());
     definitionRepository.update(definition);
   }
 
+  private boolean isLatestAttempt(OfflineJobExecution execution, Long batchId) {
+    List<OfflineJobExecution> attempts = executionRepository.findByBatchId(batchId);
+    if (attempts.isEmpty()) {
+      return true;
+    }
+
+    OfflineJobExecution latest =
+        attempts.stream()
+            .max(
+                Comparator.comparingInt(
+                        (OfflineJobExecution value) -> value(value.getAttemptNo(), 1))
+                    .thenComparingLong(value -> value(value.getId(), 0L)))
+            .orElseThrow();
+    return Objects.equals(latest.getId(), execution.getId());
+  }
+
   private Long requireRuntimeBatch(OfflineJobExecution execution, String operation) {
     Long batchId = execution.getBatchId();
     if (batchId == null || batchId <= 0L) {
       throw new IllegalStateException(
-          "Wave 1 前历史执行未绑定 Batch，仅支持查询，不能参与" + operation);
+          "历史执行未绑定 Batch，仅支持查询，不能参与" + operation);
     }
     return batchId;
   }
 
   private boolean retryable(LinkUpJobResponse response, OfflineExecutionStatus status) {
-    if (status != OfflineExecutionStatus.FAILED) return false;
+    if (status != OfflineExecutionStatus.FAILED) {
+      return false;
+    }
     String code = response == null ? null : response.getErrorCode();
-    if (!StringUtils.hasText(code)) return true;
+    if (!StringUtils.hasText(code)) {
+      return true;
+    }
     String normalized = code.toUpperCase(Locale.ROOT);
     return !(normalized.contains("CONFIG")
         || normalized.contains("VALIDATION")
