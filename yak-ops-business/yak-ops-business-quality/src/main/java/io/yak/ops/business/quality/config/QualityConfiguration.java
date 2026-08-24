@@ -1,9 +1,6 @@
 package io.yak.ops.business.quality.config;
 
 import io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration;
-import io.yak.ops.business.quality.execution.QualityMetricEvaluator;
-import io.yak.ops.business.quality.execution.QualitySqlCompiler;
-import io.yak.ops.business.quality.gateway.datasource.QualityDataCatalogGateway;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -35,18 +32,6 @@ public class QualityConfiguration {
         .baselineOnMigrate(true)
         .placeholderReplacement(false)
         .load();
-  }
-
-  @Bean
-  public QualityMetricEvaluator qualityMetricEvaluator() {
-    return new QualityMetricEvaluator();
-  }
-
-  @Bean
-  public QualitySqlCompiler qualitySqlCompiler(
-      QualityDataCatalogGateway catalogGateway,
-      QualityMetricEvaluator evaluator) {
-    return new QualitySqlCompiler(catalogGateway, evaluator);
   }
 
   @Bean(name = "qualityExecutionTaskExecutor", destroyMethod = "shutdown")
