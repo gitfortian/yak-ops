@@ -1,4 +1,4 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.job.adapter.plugin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -8,7 +8,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.job.env.SystemEnvVarService;
+import io.yak.ops.business.job.environment.SystemEnvVarService;
+import io.yak.ops.business.job.runtime.TaskExecutionContextFactory;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionResult;

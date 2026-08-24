@@ -1,15 +1,18 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.sync.offline.definition;
 
 import io.yak.framework.common.PageData;
+import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskProvider;
+import io.yak.ops.business.job.task.TaskRegistration;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
-import io.yak.ops.business.sync.offline.service.OfflineJobDefinitionService;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
-/** Adapts workflow-eligible Offline Sync definitions into the generic TaskProvider contract. */
+/** Exposes workflow-eligible Offline Sync definitions through the generic Job task contract. */
 @Component
 public class OfflineSyncTaskProvider implements TaskProvider {
 
@@ -96,9 +99,7 @@ public class OfflineSyncTaskProvider implements TaskProvider {
 
   private OfflineJobDefinitionService service() {
     OfflineJobDefinitionService service = definitionServiceProvider.getIfAvailable();
-    if (service == null) {
-      throw new IllegalStateException("离线同步能力未启用");
-    }
+    if (service == null) throw new IllegalStateException("离线同步能力未启用");
     return service;
   }
 

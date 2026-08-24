@@ -1,67 +1,61 @@
-package io.yak.ops.business.job.task;
+package io.yak.ops.business.sync.offline.execution.adapter;
 
-import io.yak.ops.business.sync.offline.service.OfflineJobExecutionService;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutor;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
+import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionDetailVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionVO;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** 使用现有离线同步执行服务实现工作流 SYNC 任务执行。 */
-@Service
-public class OfflineSyncTaskRunner implements SyncTaskRunner {
+/** Adapts the Offline Sync-owned execution lifecycle to the generic Job task runtime contract. */
+@Component
+public class OfflineSyncTaskExecutor implements TaskExecutor {
 
   private final ObjectProvider<OfflineJobExecutionService> executionServiceProvider;
 
-  public OfflineSyncTaskRunner(
+  public OfflineSyncTaskExecutor(
       ObjectProvider<OfflineJobExecutionService> executionServiceProvider) {
     this.executionServiceProvider = executionServiceProvider;
   }
 
   @Override
-  public SyncTaskExecution start(String taskId) {
-    OfflineJobExecutionVO execution = service().execute(parseId(taskId, "taskId"));
-    return toExecution(execution);
+  public String taskType() {
+    return "SYNC";
   }
 
   @Override
-  public SyncTaskExecution start(TaskVersionSnapshot snapshot) {
-    return startSnapshot(snapshot, null);
-  }
-
-  @Override
-  public SyncTaskExecution start(TaskVersionSnapshot snapshot, String idempotencyKey) {
-    return startSnapshot(snapshot, idempotencyKey);
-  }
-
-  private SyncTaskExecution startSnapshot(
+  public TaskExecution start(
       TaskVersionSnapshot snapshot,
-      String idempotencyKey) {
-    if (snapshot == null) {
-      throw new IllegalArgumentException("任务版本快照不能为空");
-    }
+      String idempotencyKey,
+      Map<String, Object> input) {
+    if (snapshot == null) throw new IllegalArgumentException("任务版本快照不能为空");
     if (!"SYNC".equalsIgnoreCase(snapshot.type())) {
       throw new IllegalArgumentException("仅支持 SYNC 任务版本快照：" + snapshot.taskId());
     }
+
+    OfflineJobExecutionVO execution;
     if (snapshot.version() <= 0L
         || snapshot.definitionSnapshotJson() == null
         || snapshot.executionConfigSnapshotJson() == null) {
-      // 没有版本能力的兼容 TaskRegistry 仍走原执行入口。
-      return start(snapshot.taskId());
+      execution = service().execute(parseId(snapshot.taskId(), "taskId"));
+    } else {
+      execution = service().executeSnapshot(
+          parseId(snapshot.taskId(), "taskId"),
+          snapshot.version(),
+          snapshot.configDigest(),
+          snapshot.definitionSnapshotJson(),
+          snapshot.executionConfigSnapshotJson(),
+          idempotencyKey);
     }
-    OfflineJobExecutionVO execution = service().executeSnapshot(
-        parseId(snapshot.taskId(), "taskId"),
-        snapshot.version(),
-        snapshot.configDigest(),
-        snapshot.definitionSnapshotJson(),
-        snapshot.executionConfigSnapshotJson(),
-        idempotencyKey);
     return toExecution(execution);
   }
 
   @Override
-  public SyncTaskExecution status(String executionId) {
+  public TaskExecution status(String executionId) {
     OfflineJobExecutionDetailVO detail = service().detail(parseId(executionId, "executionId"));
     OfflineJobExecutionVO execution = detail.getSummary() != null
         ? detail.getSummary()
@@ -85,7 +79,7 @@ public class OfflineSyncTaskRunner implements SyncTaskRunner {
     return service;
   }
 
-  private SyncTaskExecution toExecution(OfflineJobExecutionVO execution) {
+  private TaskExecution toExecution(OfflineJobExecutionVO execution) {
     Map<String, Object> output = new LinkedHashMap<>();
     put(output, "engineJobId", execution.getEngineJobId());
     put(output, "externalExecutionId", execution.getExternalExecutionId());
@@ -93,7 +87,7 @@ public class OfflineSyncTaskRunner implements SyncTaskRunner {
     put(output, "sinkCommittedRecordCount", execution.getSinkCommittedRecordCount());
     put(output, "failedRecordCount", execution.getFailedRecordCount());
     put(output, "durationMillis", execution.getDurationMillis());
-    return new SyncTaskExecution(
+    return new TaskExecution(
         String.valueOf(execution.getId()),
         execution.getStatus(),
         execution.getErrorMessage(),
@@ -101,17 +95,13 @@ public class OfflineSyncTaskRunner implements SyncTaskRunner {
   }
 
   private void put(Map<String, Object> target, String key, Object value) {
-    if (value != null) {
-      target.put(key, value);
-    }
+    if (value != null) target.put(key, value);
   }
 
   private Long parseId(String value, String name) {
     try {
       long parsed = Long.parseLong(value);
-      if (parsed <= 0L) {
-        throw new NumberFormatException(value);
-      }
+      if (parsed <= 0L) throw new NumberFormatException(value);
       return parsed;
     } catch (RuntimeException exception) {
       throw new IllegalArgumentException(name + " 不合法：" + value, exception);

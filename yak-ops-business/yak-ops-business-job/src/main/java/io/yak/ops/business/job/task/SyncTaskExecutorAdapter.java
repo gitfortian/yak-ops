@@ -1,10 +1,13 @@
 package io.yak.ops.business.job.task;
 
 import java.util.Map;
-import org.springframework.stereotype.Service;
 
-/** Keeps the existing offline-sync runner behind the generic task execution contract. */
-@Service
+/**
+ * Compatibility adapter for legacy Workflow tests/constructors.
+ *
+ * <p>Production SYNC execution is contributed by Offline Sync directly through {@link TaskExecutor}.
+ */
+@Deprecated(forRemoval = true)
 public class SyncTaskExecutorAdapter implements TaskExecutor {
 
   private final SyncTaskRunner runner;

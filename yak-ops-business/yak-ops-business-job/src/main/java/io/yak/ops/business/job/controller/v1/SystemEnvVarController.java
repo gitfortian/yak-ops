@@ -3,7 +3,7 @@ package io.yak.ops.business.job.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.job.env.SystemEnvVarService;
+import io.yak.ops.business.job.environment.SystemEnvVarService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,7 +34,6 @@ public class SystemEnvVarController {
     Map<String, String> appVars = service.getAll();
     Map<String, String> systemEnv = System.getenv();
 
-    // Merge: app vars first, then system-only vars.
     Map<String, EnvVarEntry> result = new LinkedHashMap<>();
     for (Map.Entry<String, String> entry : appVars.entrySet()) {
       result.put(entry.getKey(), new EnvVarEntry(entry.getKey(), entry.getValue(), "app"));
@@ -59,6 +58,5 @@ public class SystemEnvVarController {
     return Result.success(null);
   }
 
-  /** DTO for environment variable listing with source distinction. */
   public record EnvVarEntry(String key, String value, String source) {}
 }

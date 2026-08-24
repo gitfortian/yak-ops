@@ -1,4 +1,4 @@
-package io.yak.ops.business.job.env;
+package io.yak.ops.business.job.environment;
 
 import io.yak.ops.business.job.dao.SystemEnvVarDao;
 import io.yak.ops.common.bean.po.job.SystemEnvVarPO;
@@ -14,12 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Stable application facade for application-level environment variables.
- *
- * <p>The same component implements {@link TaskEnvironmentResolver}, so task execution depends only
- * on the narrow runtime read contract rather than on settings CRUD behavior.</p>
- */
+/** Stable application facade for application-level environment variables. */
 @Service
 public class SystemEnvVarService implements TaskEnvironmentResolver {
 
@@ -41,12 +36,10 @@ public class SystemEnvVarService implements TaskEnvironmentResolver {
     log.info("Loaded {} application environment variable(s) from database", cache.size());
   }
 
-  /** Returns an unmodifiable snapshot of all application-level environment variables. */
   public Map<String, String> getAll() {
     return Collections.unmodifiableMap(new LinkedHashMap<>(cache));
   }
 
-  /** OS environment is the base; application-level values override it. */
   @Override
   public Map<String, String> resolveMergedEnv() {
     Map<String, String> merged = new LinkedHashMap<>(System.getenv());
@@ -54,7 +47,6 @@ public class SystemEnvVarService implements TaskEnvironmentResolver {
     return Collections.unmodifiableMap(merged);
   }
 
-  /** Sets or updates an application-level environment variable. */
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void set(String key, String value) {
     String normalizedKey = normalizeKey(key);
@@ -81,7 +73,6 @@ public class SystemEnvVarService implements TaskEnvironmentResolver {
         maskSensitive(normalizedKey, normalizedValue));
   }
 
-  /** Removes an application-level environment variable. */
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public boolean remove(String key) {
     String normalizedKey = normalizeKey(key);
@@ -93,7 +84,6 @@ public class SystemEnvVarService implements TaskEnvironmentResolver {
     return affected > 0;
   }
 
-  /** Batch-saves environment variables using the same validation and persistence semantics as set. */
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public void batchSave(Map<String, String> variables) {
     if (variables == null || variables.isEmpty()) return;

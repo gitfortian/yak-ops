@@ -3,7 +3,8 @@ package io.yak.ops.business.job.task;
 import java.util.Locale;
 import java.util.Map;
 
-/** 工作流观察同步任务执行时使用的最小状态视图。 */
+/** Legacy compatibility view; production execution uses {@link TaskExecution}. */
+@Deprecated(forRemoval = true)
 public record SyncTaskExecution(
     String executionId,
     String status,
