@@ -4,7 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
+import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.lineage.LineageAsset;
@@ -12,7 +13,6 @@ import io.yak.ops.business.lineage.LineageAssetType;
 import io.yak.ops.business.lineage.LineageMaintenanceService;
 import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.LineageService;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,7 +42,7 @@ public class DevelopmentSqlLineageService {
   private final ObjectMapper objectMapper;
   private final TableIdentityResolver identityResolver = new TableIdentityResolver();
 
-  private DataSourceCatalogService dataSourceCatalogService;
+  private DataSourceCatalogReader dataSourceCatalogReader;
   private int lineageBatchSize = 200;
 
   public DevelopmentSqlLineageService(
@@ -63,8 +63,8 @@ public class DevelopmentSqlLineageService {
    * publish table-level facts and conservative column facts when Catalog metadata is unavailable.
    */
   @Autowired(required = false)
-  void setDataSourceCatalogService(DataSourceCatalogService dataSourceCatalogService) {
-    this.dataSourceCatalogService = dataSourceCatalogService;
+  void setDataSourceCatalogReader(DataSourceCatalogReader dataSourceCatalogReader) {
+    this.dataSourceCatalogReader = dataSourceCatalogReader;
   }
 
   @Value("${yak.lineage.write-batch-size:200}")
@@ -85,7 +85,7 @@ public class DevelopmentSqlLineageService {
     try {
       SqlTableLineageParser.ParseResult tables = tableParser.parse(revision.definition().content());
       try {
-        SqlColumnLineageParser.ParseResult columns = dataSourceCatalogService == null
+        SqlColumnLineageParser.ParseResult columns = dataSourceCatalogReader == null
             ? columnParser.parse(revision.definition().content())
             : columnParser.parse(revision.definition().content(), schemaProvider(context.dataSourceId()));
         return new PreparedLineage(context, tables, columns, null, null);
@@ -150,8 +150,8 @@ public class DevelopmentSqlLineageService {
       RuntimeException columnFailure) {}
 
   private SqlColumnLineageParser.SchemaProvider schemaProvider(String dataSourceId) {
-    DataSourceCatalogService catalogService = this.dataSourceCatalogService;
-    if (catalogService == null) {
+    DataSourceCatalogReader catalogReader = this.dataSourceCatalogReader;
+    if (catalogReader == null) {
       return SqlColumnLineageParser.SchemaProvider.none();
     }
 
@@ -166,15 +166,15 @@ public class DevelopmentSqlLineageService {
     Map<String, List<SqlColumnLineageParser.SchemaColumn>> cache = new LinkedHashMap<>();
     return table -> cache.computeIfAbsent(
         table.canonicalName(),
-        ignored -> loadSchemaColumns(catalogService, numericDataSourceId, table));
+        ignored -> loadSchemaColumns(catalogReader, numericDataSourceId, table));
   }
 
   private List<SqlColumnLineageParser.SchemaColumn> loadSchemaColumns(
-      DataSourceCatalogService catalogService,
+      DataSourceCatalogReader catalogReader,
       Long dataSourceId,
       SqlTableLineageParser.TableRef table) {
-    List<DataSourceCatalogColumnVO> columns = listColumns(
-        catalogService,
+    List<CatalogColumn> columns = listColumns(
+        catalogReader,
         dataSourceId,
         table.databaseName(),
         table.schemaName(),
@@ -186,7 +186,7 @@ public class DevelopmentSqlLineageService {
     // datasource-plugin details into the SQL parser.
     if (columns.isEmpty() && table.databaseName() == null && table.schemaName() != null) {
       columns = listColumns(
-          catalogService,
+          catalogReader,
           dataSourceId,
           table.schemaName(),
           null,
@@ -194,24 +194,24 @@ public class DevelopmentSqlLineageService {
     }
 
     List<SqlColumnLineageParser.SchemaColumn> result = new ArrayList<>();
-    for (DataSourceCatalogColumnVO column : columns) {
-      if (column == null || column.getName() == null || column.getName().isBlank()) continue;
+    for (CatalogColumn column : columns) {
+      if (column == null || column.name() == null || column.name().isBlank()) continue;
       result.add(new SqlColumnLineageParser.SchemaColumn(
-          column.getName(),
-          column.getOrdinalPosition()));
+          column.name(),
+          column.ordinalPosition()));
     }
     return List.copyOf(result);
   }
 
-  private List<DataSourceCatalogColumnVO> listColumns(
-      DataSourceCatalogService catalogService,
+  private List<CatalogColumn> listColumns(
+      DataSourceCatalogReader catalogReader,
       Long dataSourceId,
       String database,
       String schema,
       String table) {
     try {
-      List<DataSourceCatalogColumnVO> columns =
-          catalogService.listColumns(dataSourceId, database, schema, table);
+      List<CatalogColumn> columns =
+          catalogReader.listColumns(dataSourceId, database, schema, table);
       return columns == null ? List.of() : columns;
     } catch (RuntimeException exception) {
       LOGGER.debug(
@@ -307,7 +307,7 @@ public class DevelopmentSqlLineageService {
     properties.put("dataSourceId", dataSourceId);
     properties.put(
         "columnSchemaResolution",
-        dataSourceCatalogService == null ? "NONE" : "DATASOURCE_CATALOG");
+        dataSourceCatalogReader == null ? "NONE" : "DATASOURCE_CATALOG");
 
     if (tableFailure == null && tableParsed != null) {
       properties.put("parseStatus", "SUCCESS");

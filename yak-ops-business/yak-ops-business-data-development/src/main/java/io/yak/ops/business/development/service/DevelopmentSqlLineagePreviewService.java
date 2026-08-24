@@ -3,7 +3,7 @@ package io.yak.ops.business.development.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview;
 import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview.ColumnMapping;
@@ -15,7 +15,6 @@ import io.yak.ops.business.lineage.LineageAssetType;
 import io.yak.ops.business.lineage.LineageDirection;
 import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.SqlProjectionLineageAnalyzer;
-import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,7 +35,7 @@ public class DevelopmentSqlLineagePreviewService {
   private final ObjectMapper objectMapper;
   private final TableIdentityResolver identityResolver = new TableIdentityResolver();
 
-  private DataSourceCatalogService dataSourceCatalogService;
+  private DataSourceCatalogReader dataSourceCatalogReader;
 
   public DevelopmentSqlLineagePreviewService(
       DevelopmentNodeRepository nodeRepository,
@@ -52,8 +51,8 @@ public class DevelopmentSqlLineagePreviewService {
   }
 
   @Autowired(required = false)
-  void setDataSourceCatalogService(DataSourceCatalogService dataSourceCatalogService) {
-    this.dataSourceCatalogService = dataSourceCatalogService;
+  void setDataSourceCatalogReader(DataSourceCatalogReader dataSourceCatalogReader) {
+    this.dataSourceCatalogReader = dataSourceCatalogReader;
   }
 
   public DevelopmentSqlLineagePreview preview(
@@ -331,8 +330,8 @@ public class DevelopmentSqlLineagePreviewService {
       String database,
       String schema,
       String table) {
-    DataSourceCatalogService catalogService = this.dataSourceCatalogService;
-    if (catalogService == null) return List.of();
+    DataSourceCatalogReader catalogReader = this.dataSourceCatalogReader;
+    if (catalogReader == null) return List.of();
 
     final Long numericDataSourceId;
     try {
@@ -341,37 +340,34 @@ public class DevelopmentSqlLineagePreviewService {
       return List.of();
     }
 
-    List<DataSourceCatalogColumnVO> columns = listColumns(
-        catalogService,
+    List<io.yak.ops.business.datasource.domain.catalog.CatalogColumn> columns = listColumns(
+        catalogReader,
         numericDataSourceId,
         database,
         schema,
         table);
     if (columns.isEmpty() && database == null && schema != null) {
-      columns = listColumns(catalogService, numericDataSourceId, schema, null, table);
+      columns = listColumns(catalogReader, numericDataSourceId, schema, null, table);
     }
 
     List<CatalogColumn> result = new ArrayList<>();
-    for (DataSourceCatalogColumnVO column : columns) {
-      if (column == null || column.getName() == null || column.getName().isBlank()) continue;
+    for (io.yak.ops.business.datasource.domain.catalog.CatalogColumn column : columns) {
+      if (column == null || column.name() == null || column.name().isBlank()) continue;
       result.add(new CatalogColumn(
-          column.getName(), column.getTypeName(), column.getOrdinalPosition()));
+          column.name(), column.typeName(), column.ordinalPosition()));
     }
     return List.copyOf(result);
   }
 
-  private List<DataSourceCatalogColumnVO> listColumns(
-      DataSourceCatalogService catalogService,
+  private List<io.yak.ops.business.datasource.domain.catalog.CatalogColumn> listColumns(
+      DataSourceCatalogReader catalogReader,
       Long dataSourceId,
       String database,
       String schema,
       String table) {
     try {
-      List<DataSourceCatalogColumnVO> columns = catalogService.listColumns(
-          dataSourceId,
-          database,
-          schema,
-          table);
+      List<io.yak.ops.business.datasource.domain.catalog.CatalogColumn> columns =
+          catalogReader.listColumns(dataSourceId, database, schema, table);
       return columns == null ? List.of() : columns;
     } catch (RuntimeException exception) {
       return List.of();
@@ -505,7 +501,6 @@ public class DevelopmentSqlLineagePreviewService {
     if (value == null || value.isBlank()) return null;
     return value.trim();
   }
-
 
   private static String firstNonBlank(String explicit, String persisted) {
     String normalized = normalizeContext(explicit);
