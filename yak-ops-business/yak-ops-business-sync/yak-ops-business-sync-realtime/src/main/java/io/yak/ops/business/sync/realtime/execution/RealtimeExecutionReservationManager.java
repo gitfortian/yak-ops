@@ -1,5 +1,7 @@
 package io.yak.ops.business.sync.realtime.execution;
 
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.DesiredState;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
@@ -7,6 +9,7 @@ import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DefinitionRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.DeploymentRow;
 import io.yak.ops.business.sync.realtime.repository.RealtimeJobStore.PublishedDefinitionRow;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -17,6 +20,9 @@ import org.springframework.util.StringUtils;
 /** Owns command keys, single-execution claims and replacement-stop reservations. */
 @Component
 public class RealtimeExecutionReservationManager {
+
+  private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+  private static final String IDEMPOTENCY_KEY_PATTERN = "[A-Za-z0-9._:-]+";
 
   private final RealtimeJobStore store;
   private final SyncExecutionStateMachine stateMachine;
@@ -37,15 +43,14 @@ public class RealtimeExecutionReservationManager {
   String normalizeKey(String requestedKey) {
     String key =
         StringUtils.hasText(requestedKey) ? requestedKey.trim() : UUID.randomUUID().toString();
-    if (key.length() > 128 || !key.matches("[A-Za-z0-9._:-]+")) {
+    if (key.length() > MAX_IDEMPOTENCY_KEY_LENGTH || !key.matches(IDEMPOTENCY_KEY_PATTERN)) {
       throw new IllegalArgumentException("Idempotency-Key 格式无效");
     }
     return key;
   }
 
-  RealtimeJobView.Deployment idempotentView(long taskId, String key) {
-    DeploymentRow existing = idempotentDeployment(taskId, key);
-    return existing == null ? null : store.deploymentView(existing);
+  Optional<RealtimeJobView.Deployment> idempotentView(long taskId, String key) {
+    return idempotentDeployment(taskId, key).map(store::deploymentView);
   }
 
   RealtimeJobView.Deployment requireIdempotentView(long taskId, String key) {
@@ -76,9 +81,9 @@ public class RealtimeExecutionReservationManager {
             status -> {
               DefinitionRow locked = store.lockDefinition(taskId);
 
-              DeploymentRow duplicate = idempotentDeployment(taskId, key);
-              if (duplicate != null) {
-                return new StartReservation(duplicate.id(), false);
+              Optional<DeploymentRow> duplicate = idempotentDeployment(taskId, key);
+              if (duplicate.isPresent()) {
+                return new StartReservation(duplicate.orElseThrow().id(), false);
               }
 
               PublishedDefinitionRow currentTarget;
@@ -121,10 +126,10 @@ public class RealtimeExecutionReservationManager {
               store.event(
                   taskId,
                   created,
-                  intent.eventType,
+                  intent.eventType(),
                   null,
-                  "STARTING",
-                  intent.messagePrefix
+                  ObservedState.STARTING.name(),
+                  intent.messagePrefix()
                       + " DefinitionVersion v"
                       + prepared.definitionVersion().versionNo()
                       + "，通过运行环境「"
@@ -140,9 +145,8 @@ public class RealtimeExecutionReservationManager {
     return reservation;
   }
 
-  DeploymentRow pendingReplacement(long taskId) {
-    DeploymentRow latest = store.latestDeployment(taskId).orElse(null);
-    return latest != null && latest.replacementPending() ? latest : null;
+  Optional<DeploymentRow> pendingReplacement(long taskId) {
+    return store.latestDeployment(taskId).filter(DeploymentRow::replacementPending);
   }
 
   DeploymentRow requireStableRunningExecutionRow(long taskId, String action) {
@@ -193,7 +197,7 @@ public class RealtimeExecutionReservationManager {
                   || !StringUtils.hasText(latest.engineJobId())) {
                 throw new IllegalStateException("当前 SyncExecution 缺少 EngineExecutionRef，请先执行状态对账");
               }
-              stateMachine.requireTransition(execution, "STOPPING");
+              stateMachine.requireTransition(execution, ObservedState.STOPPING);
               store.reserveReplacementStop(
                   taskId, latest.id(), intent.name(), targetDefinitionVersionId, key);
               store.event(
@@ -201,7 +205,7 @@ public class RealtimeExecutionReservationManager {
                   latest.id(),
                   eventType,
                   execution.observedState().name(),
-                  "STOPPING",
+                  ObservedState.STOPPING.name(),
                   message);
               return latest;
             });
@@ -219,11 +223,9 @@ public class RealtimeExecutionReservationManager {
     }
   }
 
-  private DeploymentRow idempotentDeployment(long taskId, String key) {
-    DeploymentRow existing = store.deploymentByIdempotencyKey(key).orElse(null);
-    if (existing != null) {
-      requireIdempotencyOwner(taskId, existing);
-    }
+  private Optional<DeploymentRow> idempotentDeployment(long taskId, String key) {
+    Optional<DeploymentRow> existing = store.deploymentByIdempotencyKey(key);
+    existing.ifPresent(deployment -> requireIdempotencyOwner(taskId, deployment));
     return existing;
   }
 
@@ -254,8 +256,8 @@ public class RealtimeExecutionReservationManager {
     if (execution.terminal()) {
       throw new IllegalStateException("当前 SyncExecution 已结束，请直接启动已发布版本");
     }
-    if (!"RUNNING".equals(execution.desiredState().name())
-        || !"RUNNING".equals(execution.observedState().name())
+    if (execution.desiredState() != DesiredState.RUNNING
+        || execution.observedState() != ObservedState.RUNNING
         || execution.resultUncertain()) {
       throw new IllegalStateException(
           action
