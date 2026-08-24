@@ -77,8 +77,9 @@ public class DevelopmentDatasetManager {
     String normalizedDescription = normalizeDescription(description);
 
     Dataset dataset = repository.findDatasetByDevelopmentNodeId(developmentNodeId).orElse(null);
+    boolean newDataset = dataset == null;
     long datasetId;
-    if (dataset == null) {
+    if (newDataset) {
       datasetId =
           repository.insertDevelopmentNodeDataset(
               developmentNodeId, normalizedName, normalizedDescription);
@@ -103,7 +104,11 @@ public class DevelopmentDatasetManager {
       return current;
     }
 
-    versionWriter.appendSqlQuery(datasetId, sourceId, sourceSql, fields, dataset != null);
+    if (newDataset) {
+      versionWriter.appendInitialSqlQuery(datasetId, sourceId, sourceSql, fields);
+    } else {
+      versionWriter.appendNextSqlQuery(datasetId, sourceId, sourceSql, fields);
+    }
     lineagePublisher.request(datasetId);
     return reader.require(datasetId);
   }
@@ -124,13 +129,12 @@ public class DevelopmentDatasetManager {
     if (existing.isEmpty()) {
       long datasetId = repository.insertDevelopmentNodeDataset(developmentNodeId, name, description);
       List<DatasetFieldSpec> fields = resolveTaskFields(datasetId, asset, command.fields());
-      versionWriter.appendQueryRevision(
+      versionWriter.appendInitialQueryRevision(
           datasetId,
           asset.id(),
           asset.currentRevisionId(),
           asset.currentRevisionNo(),
-          fields,
-          false);
+          fields);
       lineagePublisher.request(datasetId);
       return reader.require(datasetId);
     }
@@ -148,13 +152,12 @@ public class DevelopmentDatasetManager {
       return reader.require(datasetId);
     }
 
-    versionWriter.appendQueryRevision(
+    versionWriter.appendNextQueryRevision(
         datasetId,
         asset.id(),
         asset.currentRevisionId(),
         asset.currentRevisionNo(),
-        fields,
-        true);
+        fields);
     lineagePublisher.request(datasetId);
     return reader.require(datasetId);
   }
