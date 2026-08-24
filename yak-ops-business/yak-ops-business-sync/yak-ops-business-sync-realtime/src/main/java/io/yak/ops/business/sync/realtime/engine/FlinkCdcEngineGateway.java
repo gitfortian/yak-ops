@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.realtime.engine;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -53,6 +54,9 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
           "CANCELLING");
   private static final Set<String> TERMINAL_STATES =
       Set.of("FINISHED", "CANCELED", "FAILED", "SUSPENDED");
+  private static final String DELIVERY_SEMANTICS = "at-least-once";
+  private static final int SUBMISSION_ERROR_TAIL_LINES = 20;
+  private static final int DESTROY_WAIT_SECONDS = 5;
 
   private final HttpClient client;
   private final ObjectMapper json;
@@ -102,7 +106,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     result.put("restTransport", "DIRECT");
     result.put("submissionMode", ssh ? "SSH" : "LOCAL");
     result.put("submissionEndpoint", ssh ? sshRunner.endpoint(environment) : "local");
-    result.put("deliverySemantics", "at-least-once");
+    result.put("deliverySemantics", DELIVERY_SEMANTICS);
     result.put("checkpointsApi", true);
     result.put("metricsApi", true);
     result.put("checkpointConfiguration", false);
@@ -132,7 +136,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       }
     }
     health(environment);
-    return new ValidationResult(true, "at-least-once");
+    return new ValidationResult(true, DELIVERY_SEMANTICS);
   }
 
   @Override
@@ -149,8 +153,9 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       writePrivate(submissionLog, "");
 
       URI rest = restUri(environment);
+      boolean ssh = sshSubmission(environment);
       CommandResult result;
-      if (sshSubmission(environment)) {
+      if (ssh) {
         SshFlinkCdcCommandRunner.ExecutionResult sshResult =
             sshRunner.submit(
                 environment,
@@ -171,8 +176,8 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       output = sanitizeOutput(output, request);
       writePrivate(submissionLog, output);
       if (result.exitCode() != 0) {
-        String excerpt = tail(output, 20);
-        String prefix = sshSubmission(environment) ? "SSH Flink CDC" : "Flink CDC";
+        String excerpt = tail(output, SUBMISSION_ERROR_TAIL_LINES);
+        String prefix = ssh ? "SSH Flink CDC" : "Flink CDC";
         throw failure(
             prefix
                 + " 提交失败，exitCode="
@@ -188,7 +193,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       }
       String jobId = matcher.group(1).toLowerCase(Locale.ROOT);
       Files.copy(submissionLog, submitLog(jobId), StandardCopyOption.REPLACE_EXISTING);
-      return new DeployResult(jobId, "at-least-once");
+      return new DeployResult(jobId, DELIVERY_SEMANTICS);
     } catch (RealtimeEngineException exception) {
       throw exception;
     } catch (InterruptedException exception) {
@@ -227,7 +232,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     Duration timeout = properties.getSubmitTimeout();
     if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
       process.destroyForcibly();
-      process.waitFor(5, TimeUnit.SECONDS);
+      process.waitFor(DESTROY_WAIT_SECONDS, TimeUnit.SECONDS);
       throw failure("Flink CDC 提交超时，结果不确定，请在 Flink UI 中核对", true, null, null);
     }
     return new CommandResult(process.exitValue(), false);
@@ -262,7 +267,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   @Override
   public void stop(ComputeEnvironmentSnapshot environment, String jobId) {
     requireJobId(jobId);
-    send(environment, "/jobs/" + jobId, "PATCH", true, true);
+    send(environment, "/jobs/" + jobId, RestMethod.PATCH, true, true);
   }
 
   private String resolveSecrets(RealtimeDeployRequest request) {
@@ -326,19 +331,20 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     }
   }
 
+  /** Returns null only when Flink explicitly reports 404 and allowNotFound is true. */
   private JsonNode getJson(
       ComputeEnvironmentSnapshot environment,
       String path,
       boolean uncertain,
       boolean allowNotFound) {
-    Response response = send(environment, path, "GET", uncertain, allowNotFound);
+    Response response = send(environment, path, RestMethod.GET, uncertain, allowNotFound);
     return response == null ? null : response.body();
   }
 
   private Response send(
       ComputeEnvironmentSnapshot environment,
       String path,
-      String method,
+      RestMethod method,
       boolean uncertain,
       boolean allowNotFound) {
     try {
@@ -347,9 +353,10 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
               .timeout(properties.getRequestTimeout())
               .header("Accept", "application/json");
       HttpRequest request =
-          "PATCH".equals(method)
-              ? builder.method("PATCH", HttpRequest.BodyPublishers.noBody()).build()
-              : builder.GET().build();
+          switch (method) {
+            case GET -> builder.GET().build();
+            case PATCH -> builder.method("PATCH", HttpRequest.BodyPublishers.noBody()).build();
+          };
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
       if (allowNotFound && response.statusCode() == 404) {
         return null;
@@ -358,7 +365,7 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw failure("Flink REST HTTP " + response.statusCode(), uncertain, response.statusCode(), null);
       }
-      return new Response(response.statusCode(), body);
+      return new Response(body);
     } catch (HttpTimeoutException exception) {
       throw failure("Flink REST 请求超时", uncertain, null, exception);
     } catch (InterruptedException exception) {
@@ -370,9 +377,12 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
   }
 
   private JsonNode parse(String value, boolean uncertain) {
+    if (value == null || value.isBlank()) {
+      return json.createObjectNode();
+    }
     try {
-      return value == null || value.isBlank() ? json.createObjectNode() : json.readTree(value);
-    } catch (Exception exception) {
+      return json.readTree(value);
+    } catch (JsonProcessingException exception) {
       throw failure("Flink REST 返回了无效 JSON", uncertain, null, exception);
     }
   }
@@ -471,7 +481,12 @@ public class FlinkCdcEngineGateway implements RealtimeEngineGateway {
     return new RealtimeEngineException(message, uncertain, status, cause);
   }
 
+  private enum RestMethod {
+    GET,
+    PATCH
+  }
+
   private record CommandResult(int exitCode, boolean uncertain) {}
 
-  private record Response(int status, JsonNode body) {}
+  private record Response(JsonNode body) {}
 }
