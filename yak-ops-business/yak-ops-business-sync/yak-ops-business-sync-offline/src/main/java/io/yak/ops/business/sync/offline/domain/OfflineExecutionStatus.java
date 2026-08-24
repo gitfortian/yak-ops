@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.offline.domain;
 
 import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 /** Yak Ops stable Attempt status mapping for Link-Up offline execution. */
@@ -61,14 +62,18 @@ public enum OfflineExecutionStatus {
     return parseSafely(value).map(OfflineExecutionStatus::isConfirmedActive).orElse(false);
   }
 
-  private static java.util.Optional<OfflineExecutionStatus> parseSafely(String value) {
+  public static boolean isCreated(String value) {
+    return parseSafely(value).filter(status -> status == CREATED).isPresent();
+  }
+
+  private static Optional<OfflineExecutionStatus> parseSafely(String value) {
     if (value == null || value.trim().isEmpty()) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     try {
-      return java.util.Optional.of(parse(value));
+      return Optional.of(parse(value));
     } catch (IllegalArgumentException exception) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
   }
 }
