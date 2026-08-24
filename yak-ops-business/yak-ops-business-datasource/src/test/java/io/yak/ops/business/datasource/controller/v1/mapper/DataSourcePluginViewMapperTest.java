@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.service.support;
+package io.yak.ops.business.datasource.controller.v1.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

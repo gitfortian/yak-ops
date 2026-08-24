@@ -1,4 +1,4 @@
-package io.yak.ops.business.datasource.service.support;
+package io.yak.ops.business.datasource.controller.v1.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -19,15 +19,19 @@ class DataSourceViewMapperTest {
   void detailKeepsJdbcAndConnectionJsonMasked() {
     DataSourcePluginGateway pluginGateway = mock(DataSourcePluginGateway.class);
     DataSourceViewMapper mapper = new DataSourceViewMapper(pluginGateway);
-
-    DataSourceDefinition source = new DataSourceDefinition();
-    source.setId(42L);
-    source.setName("orders-db");
-    source.setDbType(DataSourceDbType.MYSQL);
-    source.setEnvironment(DataSourceEnvironment.PROD);
-    source.setConnStatus(DataSourceConnStatus.CONNECTED);
-    source.setJdbcUrl("jdbc:mysql://user:credential-value@127.0.0.1:3306/orders");
-    source.setOriginalJson("{\"password\":\"credential-value\"}");
+    DataSourceDefinition source =
+        DataSourceDefinition.restore(
+            42L,
+            "orders-db",
+            DataSourceDbType.MYSQL,
+            "jdbc:mysql://user:credential-value@127.0.0.1:3306/orders",
+            DataSourceEnvironment.PROD,
+            DataSourceConnStatus.CONNECTED,
+            null,
+            "{\"password\":\"credential-value\"}",
+            "{\"password\":\"credential-value\"}",
+            null,
+            null);
 
     when(pluginGateway.maskSensitiveText(source.getJdbcUrl()))
         .thenReturn("jdbc:mysql://user:******@127.0.0.1:3306/orders");
