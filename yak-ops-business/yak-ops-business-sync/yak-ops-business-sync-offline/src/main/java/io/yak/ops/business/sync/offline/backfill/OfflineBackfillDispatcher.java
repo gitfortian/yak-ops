@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Wave 5 Backfill queue dispatcher；PENDING Batch 按 V1 单 Task execution slot 串行提交。 */
+/** Dispatches PENDING Backfill batches only when the Task slot and Cursor range are ready. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 @RequiredArgsConstructor
@@ -36,8 +36,9 @@ public class OfflineBackfillDispatcher {
     List<BatchExecution> pending = batchRepository.findPendingBackfills(limit);
     for (BatchExecution batch : pending) {
       try {
-        if (executionService.hasOccupyingBatch(batch.taskId())) continue;
-        if (!cursorReady(batch)) continue;
+        if (!readyToDispatch(batch)) {
+          continue;
+        }
         executionService.executePendingBackfill(batch.id());
       } catch (RuntimeException exception) {
         LOG.warn("Offline backfill dispatch failed, batchId={}", batch.id(), exception);
@@ -45,9 +46,16 @@ public class OfflineBackfillDispatcher {
     }
   }
 
+  private boolean readyToDispatch(BatchExecution batch) {
+    return !executionService.hasOccupyingBatch(batch.taskId()) && cursorReady(batch);
+  }
+
   private boolean cursorReady(BatchExecution batch) {
-    if (!(batch.batchScope() instanceof BatchScope.CursorRange range)) return true;
-    OfflineSyncCursor cursor = cursorGateway.find(batch.taskId(), range.cursorId()).orElse(null);
+    if (!(batch.batchScope() instanceof BatchScope.CursorRange range)) {
+      return true;
+    }
+    OfflineSyncCursor cursor =
+        cursorGateway.find(batch.taskId(), range.cursorId()).orElse(null);
     return cursor != null && cursor.position().equals(range.afterExclusive());
   }
 }
