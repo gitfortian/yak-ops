@@ -1,6 +1,5 @@
 package io.yak.ops.business.workflow.execution;
 
-import io.yak.ops.business.workflow.backfill.WorkflowBackfillManager;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,10 +31,10 @@ class WorkflowExecutionManagerTest {
   @Mock private ObjectProvider<WorkflowRuntimeRepository> runtimePersistence;
   @Mock private ObjectProvider<WorkflowDefinitionRepository> definitionProvider;
   @Mock private ObjectProvider<WorkflowScheduleTriggerDao> triggerProvider;
-  @Mock private ObjectProvider<WorkflowBackfillManager> backfillProvider;
+  @Mock private ObjectProvider<WorkflowBusinessDateRerunGateway> rerunProvider;
   @Mock private WorkflowDefinitionRepository definitionRepository;
   @Mock private WorkflowScheduleTriggerDao triggerDao;
-  @Mock private WorkflowBackfillManager backfillService;
+  @Mock private WorkflowBusinessDateRerunGateway rerunGateway;
 
   private WorkflowExecutionManager service;
 
@@ -47,7 +46,7 @@ class WorkflowExecutionManagerTest {
         runtimePersistence,
         definitionProvider,
         triggerProvider,
-        backfillProvider);
+        rerunProvider);
   }
 
   @Test
@@ -58,7 +57,7 @@ class WorkflowExecutionManagerTest {
     when(triggerProvider.getIfAvailable()).thenReturn(triggerDao);
     when(triggerDao.selectWorkflowIdByExecution("execution-1")).thenReturn("workflow-1");
     when(definitionProvider.getIfAvailable()).thenReturn(definitionRepository);
-    when(backfillProvider.getIfAvailable()).thenReturn(backfillService);
+    when(rerunProvider.getIfAvailable()).thenReturn(rerunGateway);
     WorkflowDefinition definition = new WorkflowDefinition(
         "workflow-version-5",
         "订单同步",

@@ -1,6 +1,5 @@
 package io.yak.ops.business.workflow.execution;
 
-import io.yak.ops.business.workflow.backfill.WorkflowBackfillManager;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 
 import io.yak.framework.workflow.engine.definition.EdgeDefinition;
@@ -25,7 +24,7 @@ import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** Stage 6 工作流实例运维编排：查询血缘、批量失败恢复和指定 businessDate 补跑。 */
+/** 工作流实例运维编排：查询血缘、批量失败恢复和指定 businessDate 补跑。 */
 @Service
 public class WorkflowExecutionManager {
   private static final int MAX_BATCH_RETRY = 100;
@@ -35,7 +34,7 @@ public class WorkflowExecutionManager {
   private final ObjectProvider<WorkflowRuntimeRepository> runtimePersistence;
   private final ObjectProvider<WorkflowDefinitionRepository> definitionRepository;
   private final ObjectProvider<WorkflowScheduleTriggerDao> triggerDao;
-  private final ObjectProvider<WorkflowBackfillManager> backfillService;
+  private final ObjectProvider<WorkflowBusinessDateRerunGateway> businessDateRerun;
 
   public WorkflowExecutionManager(
       WorkflowRuntime runtime,
@@ -43,13 +42,13 @@ public class WorkflowExecutionManager {
       ObjectProvider<WorkflowRuntimeRepository> runtimePersistence,
       ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
       ObjectProvider<WorkflowScheduleTriggerDao> triggerDao,
-      ObjectProvider<WorkflowBackfillManager> backfillService) {
+      ObjectProvider<WorkflowBusinessDateRerunGateway> businessDateRerun) {
     this.runtime = runtime;
     this.reactivation = reactivation;
     this.runtimePersistence = runtimePersistence;
     this.definitionRepository = definitionRepository;
     this.triggerDao = triggerDao;
-    this.backfillService = backfillService;
+    this.businessDateRerun = businessDateRerun;
   }
 
   public WorkflowInstanceOperationsVO describe(String executionId) {
@@ -102,9 +101,9 @@ public class WorkflowExecutionManager {
     if (!operations.businessDateRerunSupported()) {
       throw new IllegalStateException(operations.businessDateRerunUnavailableReason());
     }
-    WorkflowBackfillManager service = backfillService.getIfAvailable();
-    if (service == null) throw new IllegalStateException("当前运行模式不支持 durable businessDate 补跑");
-    return service.createBusinessDateRerun(id, instance, request);
+    WorkflowBusinessDateRerunGateway gateway = businessDateRerun.getIfAvailable();
+    if (gateway == null) throw new IllegalStateException("当前运行模式不支持 durable businessDate 补跑");
+    return gateway.createBusinessDateRerun(id, instance, request);
   }
 
   /** 每个实例独立处理；其中一条失败不会回滚已经成功恢复的其它实例。 */
@@ -149,7 +148,7 @@ public class WorkflowExecutionManager {
     if (scheduleId == null) return "实例没有 Schedule 调度血缘";
     if (cronExpression == null) return "实例缺少创建时 Cron 快照";
     if (scheduleTimezone == null) return "实例缺少创建时调度时区";
-    if (backfillService.getIfAvailable() == null) return "当前运行模式未启用 durable Backfill";
+    if (businessDateRerun.getIfAvailable() == null) return "当前运行模式未启用 durable Backfill";
     return null;
   }
 

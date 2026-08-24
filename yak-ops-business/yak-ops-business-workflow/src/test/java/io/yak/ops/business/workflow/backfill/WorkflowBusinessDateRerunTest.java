@@ -7,6 +7,7 @@ import io.yak.ops.business.workflow.schedule.trigger.WorkflowScheduleTriggerCoor
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -118,6 +119,7 @@ class WorkflowBusinessDateRerunTest {
         .containsEntry("tenant", "hospital-a")
         .doesNotContainKeys("businessDate", "scheduleTime", "triggerId", "__schedule");
     assertThat(json.readMap(batch.getInputJson())).containsEntry("force", true);
-    verify(coordinator).submitBackfill(any(WorkflowBackfillPO.class), any());
+    verify(coordinator).submitBackfill(
+        eq(batch.getId()), eq(LocalDate.of(2026, 8, 10)), any(Instant.class));
   }
 }

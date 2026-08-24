@@ -39,11 +39,14 @@ class WorkflowBackfillTriggerCoordinatorTest {
   @Mock private WorkflowScheduleParameterResolver parameters;
 
   private WorkflowScheduleTriggerCoordinator coordinator;
+  private WorkflowBackfillTriggerAdapter backfillTriggerAdapter;
 
   @BeforeEach
   void setUp() {
+    backfillTriggerAdapter =
+        new WorkflowBackfillTriggerAdapter(backfills, parameters, launchService);
     coordinator = new WorkflowScheduleTriggerCoordinator(
-        ledger, schedules, launchService, admission, backfills, parameters);
+        ledger, schedules, launchService, admission, backfillTriggerAdapter, parameters);
   }
 
   @Test
@@ -73,7 +76,8 @@ class WorkflowBackfillTriggerCoordinatorTest {
     when(admission.bindLaunch(any(WorkflowScheduleTriggerPO.class), eq("execution-v5-20260810")))
         .thenReturn(AdmissionResult.none());
 
-    var result = coordinator.submitBackfill(backfill, occurrence);
+    var result = coordinator.submitBackfill(
+        backfill.getId(), occurrence.businessDate(), occurrence.scheduleInstant());
 
     assertThat(result.businessExecutionId()).isEqualTo("execution-v5-20260810");
     ArgumentCaptor<WorkflowScheduleTriggerPO> triggerCaptor =

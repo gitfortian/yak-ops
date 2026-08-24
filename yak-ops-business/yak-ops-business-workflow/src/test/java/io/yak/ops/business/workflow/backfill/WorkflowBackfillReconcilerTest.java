@@ -58,7 +58,9 @@ class WorkflowBackfillReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(coordinator).submitBackfill(backfill, first);
-    verify(coordinator).submitBackfill(backfill, second);
+    verify(coordinator).submitBackfill(
+        backfill.getId(), first.businessDate(), first.scheduleInstant());
+    verify(coordinator).submitBackfill(
+        backfill.getId(), second.businessDate(), second.scheduleInstant());
   }
 }

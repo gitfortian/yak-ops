@@ -1,6 +1,4 @@
-package io.yak.ops.business.workflow.definition;
-
-import io.yak.ops.business.workflow.schedule.WorkflowScheduleLifecycle;
+package io.yak.ops.business.workflow.schedule;
 
 import io.yak.ops.business.workflow.dao.WorkflowScheduleDao;
 import java.time.Instant;

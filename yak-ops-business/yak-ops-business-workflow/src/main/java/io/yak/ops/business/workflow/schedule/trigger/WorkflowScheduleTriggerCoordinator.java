@@ -1,7 +1,6 @@
 package io.yak.ops.business.workflow.schedule.trigger;
 
-import io.yak.ops.business.workflow.backfill.WorkflowBackfillPlanner;
-import io.yak.ops.business.workflow.backfill.WorkflowBackfillQuery;
+import io.yak.ops.business.workflow.execution.WorkflowExecutionReactivationGuard;
 import io.yak.ops.business.workflow.execution.WorkflowLauncher;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleParameterResolver;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleQuery;
@@ -10,14 +9,13 @@ import io.yak.framework.schedule.api.ScheduleExecutionResult;
 import io.yak.ops.business.workflow.dao.WorkflowScheduleTriggerDao;
 import io.yak.ops.business.workflow.domain.WorkflowScheduleTriggerIdentity;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
-import io.yak.ops.business.workflow.backfill.WorkflowBackfillPlanner.Occurrence;
 import io.yak.ops.business.workflow.schedule.trigger.WorkflowScheduleTriggerAdmission.AdmissionResult;
-import io.yak.ops.common.bean.po.workflow.WorkflowBackfillPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.po.workflow.WorkflowScheduleTriggerPO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,7 +33,7 @@ import org.springframework.stereotype.Component;
 /** Trigger Ledger、幂等、Backfill、运维补跑与 WorkflowExecution 并发策略统一协调器。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class WorkflowScheduleTriggerCoordinator {
+public class WorkflowScheduleTriggerCoordinator implements WorkflowExecutionReactivationGuard {
   private static final Logger log = LoggerFactory.getLogger(WorkflowScheduleTriggerCoordinator.class);
   private static final String BUSINESS_DATE_RERUN = "BUSINESS_DATE_RERUN";
 
@@ -43,7 +41,7 @@ public class WorkflowScheduleTriggerCoordinator {
   private final WorkflowScheduleQuery schedules;
   private final WorkflowLauncher launchService;
   private final WorkflowScheduleTriggerAdmission admission;
-  private final WorkflowBackfillQuery backfills;
+  private final WorkflowBackfillTriggerGateway backfillGateway;
   private final WorkflowScheduleParameterResolver parameters;
 
   @Autowired
@@ -52,17 +50,17 @@ public class WorkflowScheduleTriggerCoordinator {
       WorkflowScheduleQuery schedules,
       WorkflowLauncher launchService,
       WorkflowScheduleTriggerAdmission admission,
-      WorkflowBackfillQuery backfills,
+      WorkflowBackfillTriggerGateway backfillGateway,
       WorkflowScheduleParameterResolver parameters) {
     this.ledger = ledger;
     this.schedules = schedules;
     this.launchService = launchService;
     this.admission = admission;
-    this.backfills = backfills;
+    this.backfillGateway = backfillGateway;
     this.parameters = parameters;
   }
 
-  /** Focused Stage 4 tests retain the original constructor shape. */
+  /** Focused tests retain the lightweight constructor without Backfill wiring. */
   public WorkflowScheduleTriggerCoordinator(
       WorkflowScheduleTriggerDao ledger,
       WorkflowScheduleQuery schedules,
@@ -84,12 +82,15 @@ public class WorkflowScheduleTriggerCoordinator {
   }
 
   public ScheduleExecutionResult submitBackfill(
-      WorkflowBackfillPO backfill,
-      Occurrence occurrence) {
-    AdmissionResult result = admission.admitNew(newBackfillTrigger(backfill, occurrence));
+      String backfillId,
+      LocalDate businessDate,
+      Instant plannedFireTime) {
+    WorkflowScheduleTriggerPO candidate =
+        requireBackfillGateway().createTrigger(backfillId, businessDate, plannedFireTime);
+    AdmissionResult result = admission.admitNew(candidate);
     return handleAdmission(
         result,
-        isOperationalRerun(backfill)
+        BUSINESS_DATE_RERUN.equals(candidate.getTriggerSource())
             ? "businessDate 运维补跑 Trigger 已获得执行准入"
             : "Backfill Trigger 已获得执行准入");
   }
@@ -179,6 +180,7 @@ public class WorkflowScheduleTriggerCoordinator {
    * 非终态，也不需要重新占位。对于 SERIAL_WAIT / SERIAL_DISCARD，终态后如果串行槽位已经交给后续
    * 实例或队列，本次原地恢复会被明确拒绝，不允许悄悄制造并发。</p>
    */
+  @Override
   public WorkflowInstanceVO reactivateExecution(
       String executionId,
       String operation,
@@ -289,28 +291,7 @@ public class WorkflowScheduleTriggerCoordinator {
   }
 
   private WorkflowInstanceVO launchBackfill(WorkflowScheduleTriggerPO trigger) {
-    if (backfills == null) throw new IllegalStateException("Backfill 查询服务不可用");
-    WorkflowBackfillPO backfill = backfills.require(trigger.getBackfillId());
-    boolean operational = isOperationalRerun(backfill);
-    WorkflowTriggerContext context = operational
-        ? WorkflowTriggerContext.rerun(
-            trigger.getTriggerId(),
-            backfill.getScheduleId(),
-            backfill.getId(),
-            trigger.getPlannedFireTime(),
-            backfill.getTimezone())
-        : WorkflowTriggerContext.backfill(
-            trigger.getTriggerId(),
-            backfill.getScheduleId(),
-            backfill.getId(),
-            trigger.getPlannedFireTime(),
-            backfill.getTimezone());
-    Map<String, Object> input = parameters == null ? Map.of() : parameters.forBackfill(backfill, context);
-    return operational
-        ? launchService.runOperationalPublished(
-            backfill.getWorkflowId(), backfill.getWorkflowVersionId(), context, input)
-        : launchService.runBackfillPublished(
-            backfill.getWorkflowId(), backfill.getWorkflowVersionId(), context, input);
+    return requireBackfillGateway().launch(trigger);
   }
 
   private WorkflowScheduleTriggerPO newScheduleTrigger(
@@ -341,34 +322,6 @@ public class WorkflowScheduleTriggerCoordinator {
     return value;
   }
 
-  private WorkflowScheduleTriggerPO newBackfillTrigger(
-      WorkflowBackfillPO backfill,
-      Occurrence occurrence) {
-    if (backfill == null || occurrence == null) throw new IllegalArgumentException("Backfill Trigger 参数不能为空");
-    Instant planned = occurrence.scheduleInstant();
-    Instant now = Instant.now();
-    boolean operational = isOperationalRerun(backfill);
-    WorkflowScheduleTriggerPO value = new WorkflowScheduleTriggerPO();
-    value.setId("workflow-trigger-ledger-" + UUID.randomUUID());
-    value.setScheduleId(backfill.getScheduleId());
-    value.setWorkflowId(backfill.getWorkflowId());
-    value.setBackfillId(backfill.getId());
-    value.setTriggerId((operational ? "workflow-rerun-" : "workflow-backfill-")
-        + backfill.getId() + "-" + planned.toEpochMilli());
-    value.setDedupeKey(WorkflowScheduleTriggerIdentity.backfill(
-        backfill.getScheduleId(), backfill.getId(), planned));
-    value.setTriggerSource(operational ? BUSINESS_DATE_RERUN : "BACKFILL");
-    value.setPlannedFireTime(planned);
-    value.setActualFireTime(now);
-    value.setBusinessDate(occurrence.businessDate());
-    value.setExecutionStrategy(backfill.getExecutionStrategy());
-    value.setMisfireStrategy("FIRE_ONCE");
-    value.setStatus("RECEIVED");
-    value.setCreateTime(now);
-    value.setUpdateTime(now);
-    return value;
-  }
-
   private ScheduleExecutionResult duplicateResult(WorkflowScheduleTriggerPO trigger) {
     return ScheduleExecutionResult.accepted(
         trigger.getWorkflowExecutionId(),
@@ -377,8 +330,7 @@ public class WorkflowScheduleTriggerCoordinator {
 
   private boolean runnable(WorkflowScheduleTriggerPO trigger) {
     if (isBackfill(trigger)) {
-      WorkflowBackfillPO value = safeBackfill(trigger.getBackfillId());
-      return value != null && !"CANCELED".equals(value.getStatus());
+      return backfillGateway != null && backfillGateway.runnable(trigger.getBackfillId());
     }
     WorkflowSchedulePO schedule = safeSchedule(trigger.getScheduleId());
     return schedule != null && "ONLINE".equals(schedule.getStatus());
@@ -386,10 +338,6 @@ public class WorkflowScheduleTriggerCoordinator {
 
   private boolean isBackfill(WorkflowScheduleTriggerPO trigger) {
     return trigger.getBackfillId() != null && !trigger.getBackfillId().isBlank();
-  }
-
-  private boolean isOperationalRerun(WorkflowBackfillPO backfill) {
-    return backfill != null && BUSINESS_DATE_RERUN.equals(backfill.getOperationType());
   }
 
   private WorkflowSchedulePO safeSchedule(String scheduleId) {
@@ -400,13 +348,11 @@ public class WorkflowScheduleTriggerCoordinator {
     }
   }
 
-  private WorkflowBackfillPO safeBackfill(String backfillId) {
-    if (backfills == null) return null;
-    try {
-      return backfills.require(backfillId);
-    } catch (IllegalArgumentException missing) {
-      return null;
+  private WorkflowBackfillTriggerGateway requireBackfillGateway() {
+    if (backfillGateway == null) {
+      throw new IllegalStateException("Backfill Trigger Gateway 不可用");
     }
+    return backfillGateway;
   }
 
   private String required(String value, String message) {

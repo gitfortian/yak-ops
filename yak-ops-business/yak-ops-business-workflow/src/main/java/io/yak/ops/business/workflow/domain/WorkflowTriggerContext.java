@@ -27,7 +27,7 @@ public record WorkflowTriggerContext(
     timezone = trimToNull(timezone);
   }
 
-  /** Stage 1-4 兼容构造器。 */
+  /** Compatibility constructor without Backfill/timezone lineage. */
   public WorkflowTriggerContext(
       WorkflowTriggerType triggerType,
       String triggerId,
@@ -109,7 +109,7 @@ public record WorkflowTriggerContext(
         timezone);
   }
 
-  /** Stage 6：指定 businessDate 的人工运维补跑。 */
+  /** 指定 businessDate 的人工运维补跑。 */
   public static WorkflowTriggerContext rerun(
       String triggerId,
       String scheduleId,

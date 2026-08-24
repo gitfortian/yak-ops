@@ -52,7 +52,8 @@ public class WorkflowBackfillReconciler {
             backfill.getEndBusinessDate());
         for (var occurrence : plan.occurrences()) {
           try {
-            coordinator.submitBackfill(backfill, occurrence);
+            coordinator.submitBackfill(
+                backfill.getId(), occurrence.businessDate(), occurrence.scheduleInstant());
           } catch (RuntimeException exception) {
             log.warn(
                 "[workflow-backfill] reconcile occurrence failed backfill={}, businessDate={}, message={}",

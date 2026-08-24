@@ -1,6 +1,4 @@
-package io.yak.ops.business.workflow.definition;
-
-import io.yak.ops.business.workflow.schedule.WorkflowScheduleLifecycle;
+package io.yak.ops.business.workflow.schedule;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.verify;
