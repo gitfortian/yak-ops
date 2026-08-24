@@ -1,6 +1,6 @@
 package io.yak.ops.business.datasource.execution.audit;
 
-import io.yak.ops.core.execution.sql.SqlExecutionStatus;
+import io.yak.ops.core.execution.sql.SqlStatementStatus;
 import io.yak.ops.core.execution.sql.SqlStatementType;
 import java.time.LocalDateTime;
 
@@ -11,7 +11,7 @@ public record SqlStatementAuditRecord(
     SqlStatementType statementType,
     String sqlFingerprint,
     String sqlPreview,
-    SqlExecutionStatus status,
+    SqlStatementStatus status,
     String resultType,
     long returnedRows,
     long affectedRows,
