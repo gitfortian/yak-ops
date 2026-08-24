@@ -1,10 +1,10 @@
 package io.yak.ops.business.dashboard.version;
 
-import io.yak.ops.business.dashboard.definition.DashboardReader;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardVersion;
 import io.yak.ops.business.dashboard.domain.DashboardVersionDetail;
 import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
+import io.yak.ops.business.dashboard.read.DashboardReader;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepository;
 import java.util.List;
 import org.springframework.stereotype.Component;

@@ -5,12 +5,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.dashboard.definition.DashboardChangedEvent;
-import io.yak.ops.business.dashboard.definition.DashboardReader;
+import io.yak.ops.business.dashboard.change.DashboardChangedEvent;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardDetail;
 import io.yak.ops.business.dashboard.domain.DashboardVersion;
 import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
+import io.yak.ops.business.dashboard.read.DashboardReader;
 import io.yak.ops.business.dashboard.repository.DashboardRepository;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepository;
 import java.time.Instant;

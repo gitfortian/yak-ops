@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.dashboard.definition.DashboardChangedEvent;
+import io.yak.ops.business.dashboard.change.DashboardChangedEvent;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardVersion;
 import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;

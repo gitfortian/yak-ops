@@ -1,6 +1,6 @@
 package io.yak.ops.business.dashboard.lineage;
 
-import io.yak.ops.business.dashboard.definition.DashboardChangedEvent;
+import io.yak.ops.business.dashboard.change.DashboardChangedEvent;
 import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
 import io.yak.ops.business.dashboard.publication.DashboardEffectiveSnapshotReader;
 import io.yak.ops.business.dashboard.publication.DashboardEffectiveSnapshotReader.EffectiveSnapshot;

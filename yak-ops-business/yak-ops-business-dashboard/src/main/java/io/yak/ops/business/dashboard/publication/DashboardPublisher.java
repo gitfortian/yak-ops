@@ -1,10 +1,10 @@
 package io.yak.ops.business.dashboard.publication;
 
-import io.yak.ops.business.dashboard.definition.DashboardChangedEvent;
-import io.yak.ops.business.dashboard.definition.DashboardReader;
+import io.yak.ops.business.dashboard.change.DashboardChangedEvent;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardDetail;
 import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
+import io.yak.ops.business.dashboard.read.DashboardReader;
 import io.yak.ops.business.dashboard.repository.DashboardRepository;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepository;
 import java.util.Objects;
