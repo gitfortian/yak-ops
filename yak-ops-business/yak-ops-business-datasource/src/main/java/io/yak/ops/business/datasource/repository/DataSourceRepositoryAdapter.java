@@ -15,10 +15,9 @@ import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis 持久化模型与数据源领域模型之间的适配器。 */
+/** MyBatis persistence adapter; persistence rehydration is explicit and cannot mutate aggregates via setters. */
 @Repository
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -99,14 +98,33 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   private DataSourceDefinition toDomain(DataSourcePO po) {
     if (po == null) return null;
-    DataSourceDefinition definition = new DataSourceDefinition();
-    BeanUtils.copyProperties(po, definition);
-    return definition;
+    return DataSourceDefinition.restore(
+        po.getId(),
+        po.getName(),
+        po.getDbType(),
+        po.getJdbcUrl(),
+        po.getEnvironment(),
+        po.getConnStatus(),
+        po.getRemark(),
+        po.getConnectionParams(),
+        po.getOriginalJson(),
+        po.getCreateTime(),
+        po.getUpdateTime());
   }
 
   private DataSourcePO toPO(DataSourceDefinition definition) {
     DataSourcePO po = new DataSourcePO();
-    BeanUtils.copyProperties(definition, po);
+    po.setId(definition.getId());
+    po.setName(definition.getName());
+    po.setDbType(definition.getDbType());
+    po.setJdbcUrl(definition.getJdbcUrl());
+    po.setEnvironment(definition.getEnvironment());
+    po.setConnStatus(definition.getConnStatus());
+    po.setRemark(definition.getRemark());
+    po.setConnectionParams(definition.getConnectionParams());
+    po.setOriginalJson(definition.getOriginalJson());
+    po.setCreateTime(definition.getCreateTime());
+    po.setUpdateTime(definition.getUpdateTime());
     return po;
   }
 }

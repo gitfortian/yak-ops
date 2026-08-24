@@ -4,8 +4,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
+import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.service.DataSourceCatalogService;
+import io.yak.ops.business.datasource.controller.v1.mapper.CatalogRequestMapper;
+import io.yak.ops.business.datasource.controller.v1.mapper.CatalogViewMapper;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnOptionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogOptionVO;
@@ -33,12 +35,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiresPermission(DataSourcePermissionCode.READ)
 public class DataSourceCatalogController {
 
-  private final DataSourceCatalogService catalogService;
+  private final DataSourceCatalogReader catalogReader;
+  private final CatalogRequestMapper requestMapper;
+  private final CatalogViewMapper viewMapper;
 
   @Operation(summary = "查询数据库列表")
   @GetMapping("/{id}/databases")
   public Result<List<String>> databases(@PathVariable("id") Long id) {
-    return Result.success(catalogService.listDatabases(id));
+    return Result.success(catalogReader.listDatabases(id));
   }
 
   @Operation(summary = "查询 Schema 列表")
@@ -46,7 +50,7 @@ public class DataSourceCatalogController {
   public Result<List<String>> schemas(
       @PathVariable("id") Long id,
       @RequestParam(value = "database", required = false) String database) {
-    return Result.success(catalogService.listSchemas(id, database));
+    return Result.success(catalogReader.listSchemas(id, database));
   }
 
   @Operation(summary = "查询表和视图列表")
@@ -56,7 +60,10 @@ public class DataSourceCatalogController {
       @RequestParam(value = "database", required = false) String database,
       @RequestParam(value = "schema", required = false) String schema,
       @RequestParam(value = "keyword", required = false) String keyword) {
-    return Result.success(catalogService.listTables(id, database, schema, keyword));
+    return Result.success(
+        catalogReader.listTables(id, database, schema, keyword).stream()
+            .map(viewMapper::table)
+            .toList());
   }
 
   @Operation(summary = "查询表字段列表")
@@ -66,13 +73,16 @@ public class DataSourceCatalogController {
       @RequestParam(value = "database", required = false) String database,
       @RequestParam(value = "schema", required = false) String schema,
       @RequestParam("table") String table) {
-    return Result.success(catalogService.listColumns(id, database, schema, table));
+    return Result.success(
+        catalogReader.listColumns(id, database, schema, table).stream()
+            .map(viewMapper::column)
+            .toList());
   }
 
   @Operation(summary = "查询数据源表选项")
   @GetMapping("/list/{id}")
   public Result<List<DataSourceCatalogOptionVO>> listTable(@PathVariable("id") Long id) {
-    return Result.success(catalogService.listTable(id));
+    return Result.success(catalogReader.listTable(id).stream().map(viewMapper::option).toList());
   }
 
   @Operation(summary = "按匹配模式查询数据源表")
@@ -81,7 +91,10 @@ public class DataSourceCatalogController {
       @PathVariable("id") Long id,
       @RequestParam(value = "matchMode", required = false) String matchMode,
       @RequestParam(value = "keyword", required = false) String keyword) {
-    return Result.success(catalogService.listTableReference(id, matchMode, keyword));
+    return Result.success(
+        catalogReader.listTableReference(id, matchMode, keyword).stream()
+            .map(viewMapper::option)
+            .toList());
   }
 
   @Operation(summary = "查询表或 SQL 字段")
@@ -89,7 +102,10 @@ public class DataSourceCatalogController {
   public Result<List<DataSourceCatalogColumnOptionVO>> listColumn(
       @PathVariable("id") Long id,
       @RequestBody Map<String, Object> requestBody) {
-    return Result.success(catalogService.listColumn(id, requestBody));
+    return Result.success(
+        catalogReader.listColumn(id, requestMapper.readRequest(requestBody)).stream()
+            .map(viewMapper::columnOption)
+            .toList());
   }
 
   @Operation(summary = "预览前 20 条数据")
@@ -97,7 +113,8 @@ public class DataSourceCatalogController {
   public Result<DataSourceQueryResultVO> preview(
       @PathVariable("id") Long id,
       @RequestBody Map<String, Object> requestBody) {
-    return Result.success(catalogService.preview(id, requestBody));
+    return Result.success(
+        viewMapper.preview(catalogReader.preview(id, requestMapper.readRequest(requestBody))));
   }
 
   @Operation(summary = "统计表或 SQL 查询结果")
@@ -105,7 +122,7 @@ public class DataSourceCatalogController {
   public Result<Long> count(
       @PathVariable("id") Long id,
       @RequestBody Map<String, Object> requestBody) {
-    return Result.success(catalogService.count(id, requestBody));
+    return Result.success(catalogReader.count(id, requestMapper.readRequest(requestBody)));
   }
 
   @Operation(summary = "构建查询 SQL 模板")
@@ -113,7 +130,7 @@ public class DataSourceCatalogController {
   public Result<String> buildSqlTemplate(
       @PathVariable("id") Long id,
       @RequestBody Map<String, Object> requestBody) {
-    return Result.success(catalogService.buildSqlTemplate(id, requestBody));
+    return Result.success(catalogReader.buildSqlTemplate(id, requestMapper.tablePath(requestBody)));
   }
 
   @Operation(summary = "解析 SQL 变量")
@@ -121,6 +138,6 @@ public class DataSourceCatalogController {
   public Result<String> resolveSql(
       @PathVariable("id") Long id,
       @RequestBody Map<String, Object> requestBody) {
-    return Result.success(catalogService.resolveSql(id, requestBody));
+    return Result.success(catalogReader.resolveSql(id, requestMapper.readRequest(requestBody)));
   }
 }

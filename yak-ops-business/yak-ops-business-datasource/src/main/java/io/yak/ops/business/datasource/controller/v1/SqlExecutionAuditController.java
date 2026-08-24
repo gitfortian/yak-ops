@@ -6,7 +6,7 @@ import io.yak.framework.common.PagingData;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.service.SqlExecutionAuditService;
+import io.yak.ops.business.datasource.execution.audit.SqlExecutionAuditReader;
 import io.yak.ops.common.bean.dto.observability.SqlExecutionAuditQueryDTO;
 import io.yak.ops.common.bean.vo.observability.SqlExecutionAuditDetailVO;
 import io.yak.ops.common.bean.vo.observability.SqlExecutionAuditSummaryVO;
@@ -30,26 +30,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiresPermission(SqlExecutionAuditConstants.READ_PERMISSION)
 public class SqlExecutionAuditController {
 
-  private final SqlExecutionAuditService auditService;
+  private final SqlExecutionAuditReader auditReader;
 
   @Operation(summary = "分页查询 SQL 执行历史")
   @PostMapping("/page")
   public Result<PagingData<SqlExecutionAuditVO>> page(
       @Valid @RequestBody(required = false) SqlExecutionAuditQueryDTO query) {
-    return Result.success(auditService.page(query));
+    return Result.success(auditReader.page(query));
   }
 
   @Operation(summary = "查询 SQL 执行详情")
   @GetMapping("/{executionId}")
   public Result<SqlExecutionAuditDetailVO> detail(
       @PathVariable("executionId") String executionId) {
-    return Result.success(auditService.detail(executionId));
+    return Result.success(auditReader.detail(executionId));
   }
 
   @Operation(summary = "查询 SQL 执行观测汇总")
   @PostMapping("/summary")
   public Result<SqlExecutionAuditSummaryVO> summary(
       @Valid @RequestBody(required = false) SqlExecutionAuditQueryDTO query) {
-    return Result.success(auditService.summary(query));
+    return Result.success(auditReader.summary(query));
   }
 }

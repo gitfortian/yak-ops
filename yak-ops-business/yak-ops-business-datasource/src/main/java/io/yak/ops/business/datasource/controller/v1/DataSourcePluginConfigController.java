@@ -5,7 +5,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.service.DataSourcePluginConfigService;
+import io.yak.ops.business.datasource.controller.v1.mapper.DataSourcePluginViewMapper;
+import io.yak.ops.business.datasource.plugin.DataSourcePluginReader;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.constant.datasource.DataSourceConstants;
 import io.yak.ops.common.constant.datasource.DataSourcePermissionCode;
@@ -25,20 +26,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiresPermission(DataSourcePermissionCode.READ)
 public class DataSourcePluginConfigController {
 
-  private final DataSourcePluginConfigService pluginConfigService;
+  private final DataSourcePluginReader pluginReader;
+  private final DataSourcePluginViewMapper viewMapper;
 
   @Operation(summary = "查询数据源动态表单配置")
   @GetMapping
   public Result<DataSourcePluginConfigVO> getPluginConfig(
       @RequestParam("pluginType") String pluginType) {
-    return Result.success(pluginConfigService.getPluginConfig(pluginType));
+    return Result.success(viewMapper.config(pluginReader.get(pluginType)));
   }
 
   @Operation(summary = "安装数据源配置")
   @PostMapping("/install")
   @RequiresPermission(DataSourcePermissionCode.CREATE)
-  public Result<Boolean> installPlugin(
-      @RequestParam("pluginType") String pluginType) {
-    return Result.success(pluginConfigService.installPlugin(pluginType));
+  public Result<Boolean> installPlugin(@RequestParam("pluginType") String pluginType) {
+    return Result.success(pluginReader.install(pluginType));
   }
 }
