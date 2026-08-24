@@ -9,6 +9,11 @@ import io.yak.ops.business.dataset.definition.DatasetBindingPolicy;
 import io.yak.ops.business.dataset.definition.DatasetManager;
 import io.yak.ops.business.dataset.definition.DatasetReader;
 import io.yak.ops.business.dataset.development.DevelopmentDatasetManager;
+import io.yak.ops.business.dataset.gateway.datasource.DataSourceDatasetCatalogAdapter;
+import io.yak.ops.business.dataset.gateway.datasource.DataSourceSchemaSqlAdapter;
+import io.yak.ops.business.dataset.gateway.lineage.LineageGraphDatasetAdapter;
+import io.yak.ops.business.dataset.gateway.lineage.LineageProjectionAnalyzerAdapter;
+import io.yak.ops.business.dataset.gateway.taskcatalog.TaskCatalogDatasetAdapter;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshListener;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshPublisher;
 import io.yak.ops.business.dataset.lineage.DatasetLineageSourceResolver;
@@ -88,7 +93,12 @@ class DatasetArchitectureTest {
             DatasetLineageSourceResolver.class,
             DatasetLineageSynchronizer.class,
             DatasetLineageTransactionRunner.class,
-            DatasetLineageRefreshListener.class)) {
+            DatasetLineageRefreshListener.class,
+            TaskCatalogDatasetAdapter.class,
+            DataSourceSchemaSqlAdapter.class,
+            DataSourceDatasetCatalogAdapter.class,
+            LineageProjectionAnalyzerAdapter.class,
+            LineageGraphDatasetAdapter.class)) {
       assertThat(internal.getAnnotation(Component.class))
           .as("%s must remain an explicit internal role", internal.getSimpleName())
           .isNotNull();
