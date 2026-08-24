@@ -72,13 +72,12 @@ public class DatasetPublisher {
     DatasetVersion currentVersion = current.currentVersion();
     if (currentVersion == null) {
       List<DatasetFieldSpec> fields = resolveFields(datasetId, asset, command.fields());
-      versionWriter.appendQueryRevision(
+      versionWriter.appendNextQueryRevision(
           datasetId,
           asset.id(),
           asset.currentRevisionId(),
           asset.currentRevisionNo(),
-          fields,
-          true);
+          fields);
       lineagePublisher.request(datasetId);
       return reader.require(datasetId);
     }
@@ -96,13 +95,12 @@ public class DatasetPublisher {
     }
 
     List<DatasetFieldSpec> fields = resolveFields(datasetId, asset, command.fields());
-    versionWriter.appendQueryRevision(
+    versionWriter.appendNextQueryRevision(
         datasetId,
         asset.id(),
         asset.currentRevisionId(),
         asset.currentRevisionNo(),
-        fields,
-        true);
+        fields);
     lineagePublisher.request(datasetId);
     return reader.require(datasetId);
   }
@@ -125,13 +123,12 @@ public class DatasetPublisher {
     }
 
     List<DatasetFieldSpec> normalizedFields = resolveFields(datasetId, asset, fields);
-    versionWriter.appendQueryRevision(
+    versionWriter.appendNextQueryRevision(
         datasetId,
         asset.id(),
         asset.currentRevisionId(),
         asset.currentRevisionNo(),
-        normalizedFields,
-        true);
+        normalizedFields);
     lineagePublisher.request(datasetId);
     return reader.require(datasetId);
   }
@@ -163,13 +160,12 @@ public class DatasetPublisher {
         repository.insertDataset(
             normalizeName(command.name(), asset.name()), normalizeDescription(command.description()));
     List<DatasetFieldSpec> fields = resolveFields(datasetId, asset, command.fields());
-    versionWriter.appendQueryRevision(
+    versionWriter.appendInitialQueryRevision(
         datasetId,
         asset.id(),
         asset.currentRevisionId(),
         asset.currentRevisionNo(),
-        fields,
-        false);
+        fields);
     lineagePublisher.request(datasetId);
     return reader.require(datasetId);
   }
