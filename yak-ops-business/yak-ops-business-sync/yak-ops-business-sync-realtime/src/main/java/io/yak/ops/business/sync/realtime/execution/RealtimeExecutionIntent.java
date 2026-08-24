@@ -6,11 +6,19 @@ enum RealtimeExecutionIntent {
   RESTART_EXECUTION("RESTART_EXECUTION_REQUESTED", "重启当前运行版本"),
   APPLY_PUBLISHED_VERSION("APPLY_PUBLISHED_VERSION_REQUESTED", "应用已发布版本");
 
-  final String eventType;
-  final String messagePrefix;
+  private final String eventType;
+  private final String messagePrefix;
 
   RealtimeExecutionIntent(String eventType, String messagePrefix) {
     this.eventType = eventType;
     this.messagePrefix = messagePrefix;
+  }
+
+  String eventType() {
+    return eventType;
+  }
+
+  String messagePrefix() {
+    return messagePrefix;
   }
 }
