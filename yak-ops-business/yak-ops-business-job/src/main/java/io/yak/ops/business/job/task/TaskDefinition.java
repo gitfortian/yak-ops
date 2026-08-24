@@ -1,6 +1,11 @@
 package io.yak.ops.business.job.task;
 
-/** 工作流可引用的最小任务定义。 */
+/**
+ * Workflow-visible task descriptor.
+ *
+ * <p>The historical class name is kept for compatibility. This value describes a discoverable task;
+ * the immutable executable truth is {@link TaskVersionSnapshot}.</p>
+ */
 public record TaskDefinition(
     String id,
     String name,

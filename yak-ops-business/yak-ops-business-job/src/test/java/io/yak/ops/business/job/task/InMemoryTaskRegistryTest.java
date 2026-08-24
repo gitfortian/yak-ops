@@ -1,36 +1,52 @@
 package io.yak.ops.business.job.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 
 class InMemoryTaskRegistryTest {
 
   @Test
-  void shouldOnlyExposeOnlineTasksWithoutEnabledSchedule() {
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("ONLINE", false))).isTrue();
+  void aggregatesOnlyTaskProviderRegistrations() {
+    TaskProvider provider = mock(TaskProvider.class);
+    when(provider.registrations()).thenReturn(List.of(registration("task-1", "SQL", 3L)));
+    InMemoryTaskRegistry registry = new InMemoryTaskRegistry(providers(provider));
 
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("OFFLINE", false))).isFalse();
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(task("ONLINE", true))).isFalse();
+    assertThat(registry.list()).containsExactly(new TaskDefinition("task-1", "Task task-1", "SQL"));
+    assertThat(registry.snapshot("task-1").version()).isEqualTo(3L);
   }
 
   @Test
-  void shouldRejectIncompleteTaskMetadata() {
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(null)).isFalse();
-    OfflineJobDefinition incomplete = new OfflineJobDefinition();
-    incomplete.setJobName("未完成任务");
-    incomplete.setReleaseState("ONLINE");
-    incomplete.setScheduleEnabled(false);
-    assertThat(InMemoryTaskRegistry.isWorkflowEligible(incomplete)).isFalse();
+  void rejectsDuplicateTaskIdsAcrossProviders() {
+    TaskProvider first = mock(TaskProvider.class);
+    TaskProvider second = mock(TaskProvider.class);
+    when(first.registrations()).thenReturn(List.of(registration("same", "SQL", 1L)));
+    when(second.registrations()).thenReturn(List.of(registration("same", "SYNC", 2L)));
+    InMemoryTaskRegistry registry = new InMemoryTaskRegistry(providers(first, second));
+
+    assertThatThrownBy(registry::list)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("重复的工作流任务 ID");
   }
 
-  private OfflineJobDefinition task(String releaseState, boolean scheduleEnabled) {
-    OfflineJobDefinition definition = new OfflineJobDefinition();
-    definition.setId(1001L);
-    definition.setJobName("用户数据同步");
-    definition.setReleaseState(releaseState);
-    definition.setScheduleEnabled(scheduleEnabled);
-    return definition;
+  private TaskRegistration registration(String id, String type, long version) {
+    TaskDefinition definition = new TaskDefinition(id, "Task " + id, type);
+    TaskVersionSnapshot snapshot = new TaskVersionSnapshot(
+        id, definition.name(), type, version, "digest", "{}", "{}");
+    return new TaskRegistration(definition, snapshot);
+  }
+
+  @SafeVarargs
+  @SuppressWarnings("unchecked")
+  private final ObjectProvider<TaskProvider> providers(TaskProvider... values) {
+    ObjectProvider<TaskProvider> provider = mock(ObjectProvider.class);
+    when(provider.orderedStream()).thenAnswer(ignored -> Stream.of(values));
+    return provider;
   }
 }
