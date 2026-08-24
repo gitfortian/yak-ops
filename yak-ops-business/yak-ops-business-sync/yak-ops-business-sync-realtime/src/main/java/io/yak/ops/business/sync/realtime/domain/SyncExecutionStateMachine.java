@@ -48,14 +48,22 @@ public class SyncExecutionStateMachine {
     // STOPPED / FAILED intentionally have no outgoing transitions. A later run is a new execution.
   }
 
-  public void requireTransition(SyncExecution execution, String targetValue) {
-    if (execution == null) throw new IllegalArgumentException("SyncExecution 不能为空");
-    ObservedState target = ObservedState.valueOf(targetValue);
+  public void requireTransition(SyncExecution execution, ObservedState target) {
+    if (execution == null) {
+      throw new IllegalArgumentException("SyncExecution 不能为空");
+    }
     requireTransition(execution.observedState(), target);
   }
 
+  /** Compatibility overload for persistence/protocol callers that still carry state text. */
+  public void requireTransition(SyncExecution execution, String targetValue) {
+    requireTransition(execution, ObservedState.valueOf(targetValue));
+  }
+
   public void requireTransition(ObservedState from, ObservedState target) {
-    if (from == target) return;
+    if (from == target) {
+      return;
+    }
     if (!transitions.getOrDefault(from, EnumSet.noneOf(ObservedState.class)).contains(target)) {
       throw new IllegalStateException("非法 SyncExecution 状态迁移：" + from + " -> " + target);
     }
