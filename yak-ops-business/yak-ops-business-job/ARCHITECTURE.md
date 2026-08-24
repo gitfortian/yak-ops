@@ -1,93 +1,110 @@
 # Job Architecture
 
-Job 采用“发现、快照、执行、运行上下文”四个明确角色，不以调度为中心。
+本文件定义 `yak-ops-business-job` 的长期代码边界。
 
-## Stage 1 结构
+## Package Map
 
 ```text
-controller
-    -> task registry / env service
-
-task
-├── discovery
-│   TaskProvider / TaskRegistration / TaskRegistry
-│
-├── execution
-│   TaskExecutionGateway / TaskExecutor
-│
-├── runtime
-│   AbstractTaskExecutorAdapter
-│   SQL / Python / Java / Shell adapters
-│
-└── sync adapter
-    SyncTaskExecutorAdapter / OfflineSyncTaskRunner
-
-env
-├── SystemEnvVarService
-└── TaskEnvironmentResolver
+io.yak.ops.business.job
+├── controller       # HTTP inbound
+├── task             # stable cross-module contracts + TaskExecutionGateway
+├── discovery        # TaskProvider aggregation
+├── runtime          # shared Plugin execution lifecycle/context
+├── adapter
+│   └── plugin       # SQL / Python / Java / Shell capability adapters
+├── environment      # env CRUD facade + runtime resolver
+├── dao              # persistence primitives
+└── config           # module configuration
 ```
 
-现阶段仍保留 `task` 单包以控制改动；Stage 2 再做物理 package 收敛。
+禁止重新创建 `service / common / helper / utils` 作为业务大桶。
+
+## Stable Contract Package
+
+`task` 是跨模块稳定入口，只允许承载：
+
+```text
+TaskDefinition
+TaskVersionSnapshot
+TaskRegistration
+TaskExecution
+TaskProvider
+TaskRegistry
+TaskExecutor
+TaskExecutionGateway
+```
+
+以及暂时保留的 deprecated SYNC compatibility corridor。
+
+`task` 不允许 import Offline Sync、Workflow、Data Development 等具体业务实现。
 
 ## Discovery
 
-`InMemoryTaskRegistry` 只能依赖 `TaskProvider`：
-
 ```text
-Business source
-    -> TaskProvider
-    -> TaskRegistration
-    -> TaskRegistry
+Business TaskProvider(s)
+        ↓
+InMemoryTaskRegistry
+        ↓
+TaskRegistry
 ```
 
-Offline Sync 在 Stage 1 先通过 `OfflineSyncTaskProvider` 隔离直接依赖；是否把 Provider/Executor Adapter 物理移回 Offline Sync 模块，留到 Stage 2 做 Maven 依赖反转。
+`discovery` 只做聚合、去重和快照索引，不知道任务来自哪个业务域。
 
 ## Execution
 
 ```text
-caller
+Caller
   -> TaskExecutionGateway
-  -> TaskExecutor by type
+  -> TaskExecutor
 ```
 
-Gateway 只负责路由和输入防御。
+`TaskExecutionGateway` 是稳定 Application Service。它按 Type 路由，不管理 Task Plugin 生命周期。
 
-Plugin Task 的公共生命周期由 `AbstractTaskExecutorAdapter` 负责：
+Plugin 类型走：
 
 ```text
-snapshot validation
- -> Task Plugin lookup
- -> plugin validation
- -> TaskExecutionContext
- -> idempotency
- -> async execution
- -> status / cancel / result conversion
+adapter.plugin
+     ↓
+runtime.AbstractTaskExecutorAdapter
+     ↓
+TaskPlugin
 ```
 
-SQL 不再复制这套生命周期，只负责贡献 `DataSourceExecutionProvider` / `SqlExecutionRuntime` Capability。
-
-SYNC 是外部业务 Runtime Adapter，不强行继承 Plugin Runtime。
+`runtime` 拥有幂等、ExecutionHandle、虚拟线程、状态/取消和结果转换；Adapter 只贡献 Capability。
 
 ## Environment
 
+`SystemEnvVarService` 是设置页面稳定 Facade；`TaskEnvironmentResolver` 是 Runtime 读取边界。`TaskExecutionContextFactory` 只能依赖 Resolver。
+
+## Business Runtime Extension
+
+Job Core 不依赖 Offline Sync。Offline Sync 自己实现 `TaskProvider / TaskExecutor` 并由应用组合层自动发现。
+
+允许方向：
+
 ```text
-TaskExecutionContextFactory
-    -> TaskEnvironmentResolver
+Offline Sync -> job.task contract
 ```
 
-Factory 不依赖环境变量 CRUD/DAO 细节。`SystemEnvVarService` 是当前 Resolver 实现和设置页稳定入口。
-
-## 角色词汇
+禁止方向：
 
 ```text
-Provider   暴露业务能力
-Registry   聚合与查找
-Gateway    稳定外部入口/路由
-Executor   执行一种 Task Type
-Adapter    翻译外部 Runtime / Plugin
-Resolver   解析运行上下文
-Factory    构造上下文对象
-Service    稳定应用入口
+job.* -> business.sync.offline implementation
 ```
 
-Stage 1 不为了去 Service 改名；Stage 2 再补依赖矩阵、角色约束和完整架构测试。
+## Spring Roles
+
+生产代码中的 `@Service` 只允许：
+
+```text
+task/TaskExecutionGateway.java
+environment/SystemEnvVarService.java
+```
+
+Registry、Factory、Adapter 等专业角色使用 `@Component` 或 plain object。
+
+## Persistence
+
+Controller 不直接访问 DAO。Runtime / Adapter / Discovery 不访问 Job DAO。只有 `environment` 当前通过 DAO 持久化应用环境变量。
+
+结构规则由 architecture tests 持续执行。

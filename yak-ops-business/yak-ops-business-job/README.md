@@ -1,32 +1,50 @@
 # yak-ops-business-job
 
-`yak-ops-business-job` 是 Yak Ops 的通用 **Task Discovery + Snapshot + Execution Routing** 模块，主要服务 Workflow、Data Development 等上层运行入口。
+`yak-ops-business-job` 是 Yak Ops 的通用任务运行中枢：负责 **Task Discovery、不可变 Snapshot、Execution Routing 和 Runtime Context**。
 
 它不拥有业务任务定义，也不负责 Cron / Schedule 生命周期。
 
-核心关系：
-
 ```text
-TaskDefinition (discovery descriptor)
-        -> TaskVersionSnapshot
-        -> TaskExecution
+Business TaskProvider
+        ↓
+TaskRegistry
+        ↓
+TaskVersionSnapshot
+        ↓
+TaskExecutionGateway
+        ↓
+TaskExecutor
 ```
 
-其中：
+核心约束：
 
-- `TaskProvider`：业务域向 Job 暴露可执行任务；
-- `TaskRegistry`：聚合 Provider 并校验任务 ID 冲突；
-- `TaskExecutionGateway`：按 Task Type 路由到 `TaskExecutor`；
-- Plugin Task Executor：SQL / Python / Java / Shell 复用统一执行生命周期；
-- SYNC：通过 Offline Sync 业务运行时执行，Job 不拥有其执行事实；
-- `TaskEnvironmentResolver`：向运行上下文提供全局环境变量。
+- `TaskDefinition != TaskVersionSnapshot != TaskExecution`；
+- 业务域通过 `TaskProvider / TaskExecutor` 接入，Job Core 不直接依赖具体业务模块；
+- SQL / Python / Java / Shell 复用统一 Plugin Runtime，只贡献各自 Capability；
+- Offline Sync 自己提供 `SYNC` Provider / Executor，执行事实仍归 Offline Sync；
+- `TaskExecutionGateway` 只路由，不实现具体引擎；
+- Runtime 只通过 `TaskEnvironmentResolver` 读取环境能力；
+- 调度生命周期归各业务域，不归 Job。
 
-业务时间调度继续由各业务域自己管理，不在 Job 模块注册计划或维护调度状态。
+代码结构：
 
-架构约束：
+```text
+task         稳定跨模块契约 + Execution Gateway
+discovery    Provider 聚合
+runtime      Plugin 执行生命周期 / Context
+adapter      Task Type 能力适配
+environment  环境变量管理与 Runtime Resolver
+controller   HTTP 入口
+dao          持久化
+config       配置
+```
+
+架构文档：
 
 - [REQUIREMENTS.md](REQUIREMENTS.md)
 - [DOMAIN.md](DOMAIN.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md)
+- [DEPENDENCIES.md](DEPENDENCIES.md)
+- [REVIEW.md](REVIEW.md)
 
-仓库级代码规范统一看 `../../CODE_STYLE.md`。
+仓库级写法统一遵循 `../../CODE_STYLE.md`。

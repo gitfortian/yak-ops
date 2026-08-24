@@ -1,60 +1,74 @@
 # Job Requirements
 
-本文件只回答：Job 模块需要提供什么能力。
+本文件只回答“Job 模块需要提供什么能力”。领域硬规则看 `DOMAIN.md`，代码边界看 `ARCHITECTURE.md`。
 
 ## 模块定位
 
-Job 是业务无关的任务发现与执行路由层。业务域负责定义任务和拥有业务执行事实；Job 负责把这些能力统一暴露给 Workflow、Data Development 等调用方。
+Job 是业务无关的 Task Runtime Hub。业务域拥有任务定义和业务执行事实，Job 提供统一发现、快照和执行路由。
 
-## 核心能力
+## 必须提供
 
 ### Task Discovery
 
-业务域通过 `TaskProvider` 暴露任务。Job 不应在 Registry 中直接扫描某个业务 Service。
+业务域通过 `TaskProvider` 提供可执行任务。Registry 聚合 Provider，拒绝重复 Task ID，但不读取具体业务表或业务 Service。
 
-每个被发现任务至少包含：
-
-```text
-TaskDefinition         = 可选择的任务描述
-TaskVersionSnapshot    = 被固定的执行输入
-```
-
-Registry 必须拒绝重复 Task ID，并保证描述与快照属于同一个 Task。
-
-### Task Execution
-
-调用方统一通过：
+`TaskRegistration` 必须同时交付：
 
 ```text
-TaskExecutionGateway
-    -> TaskExecutor
-    -> TaskExecution
+TaskDefinition        # 发现描述
+TaskVersionSnapshot   # 可执行快照
 ```
 
-Job 根据 Task Type 路由，不复制各业务域的执行状态机。
-
-SQL / Python / Java / Shell 这类 Task Plugin 应共享同一套本地执行生命周期：校验、幂等、运行句柄、状态、取消和结果转换只实现一次。
-
-SYNC 属于外部业务运行时：Job 只做适配，不拥有 Offline Sync 的 Execution 真相。
+二者的 Task ID / Type 必须一致。
 
 ### Immutable Snapshot
 
-有版本能力的任务执行时必须使用已经固定的 `TaskVersionSnapshot`。运行期间不能回读当前草稿或最新版本替换它。
+有版本能力的任务运行时必须使用调用方固定的 `TaskVersionSnapshot`。不得在执行时回读当前 Draft / Latest Version。
 
-### Runtime Context
+没有版本能力的兼容任务可使用 `version=0`，但这不能伪装成 Published Revision。
 
-Task Runtime Context 可以包含参数、Trigger、全局环境变量及任务类型能力。环境变量通过窄接口提供，执行层不依赖设置页面的 CRUD 实现。
+### Execution Routing
+
+`TaskExecutionGateway` 按 Task Type 路由到唯一 `TaskExecutor`，统一暴露：
+
+```text
+start / status / cancel
+```
+
+Gateway 不拥有具体执行引擎。
+
+### Plugin Runtime
+
+SQL / Python / Java / Shell 等 TaskPlugin 类型共享一套本地执行生命周期：
+
+```text
+snapshot validation
+-> plugin validation
+-> context/capability assembly
+-> idempotency
+-> async execution
+-> status/cancel/result conversion
+```
+
+具体 Adapter 只贡献自己的 Capability。
+
+### Business-owned Runtime
+
+SYNC 等拥有独立业务运行时的类型，由对应业务模块实现 Job 的 `TaskProvider / TaskExecutor` 契约。Job 不反向依赖业务实现。
+
+### Runtime Environment
+
+任务运行上下文只依赖 `TaskEnvironmentResolver` 获取全局环境变量。环境变量 CRUD 不是 Runtime 的依赖面。
 
 ## 非职责
 
 Job 不负责：
 
-- Cron / Schedule 注册与生命周期；
-- Offline Sync / Data Development 等业务任务定义；
-- Workflow 编排；
-- 业务 Execution 持久化；
-- 把所有 Task Type 的业务逻辑集中到一个超级 Service。
+- Cron / Schedule 注册和生命周期；
+- Offline Sync / Data Development / Workflow 的业务定义；
+- 业务执行记录的最终事实；
+- Task Plugin 内部业务规则。
 
 ## 兼容要求
 
-Stage 1 保持现有 REST、Task SPI、Workflow 调用方式、Offline Sync 执行行为和环境变量 API 不变；不新增数据库迁移。
+重构不得偷偷改变现有 `/api/v1/tasks`、`/api/v1/system/env-vars`、Task Gateway、Snapshot、幂等、状态和取消语义。
