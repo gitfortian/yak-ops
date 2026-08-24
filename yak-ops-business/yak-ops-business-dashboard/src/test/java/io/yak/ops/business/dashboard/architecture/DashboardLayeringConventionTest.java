@@ -9,6 +9,7 @@ import io.yak.ops.business.dashboard.gateway.analysis.DashboardAnalysisGateway;
 import io.yak.ops.business.dashboard.gateway.lineage.DashboardLineageGraphGateway;
 import io.yak.ops.business.dashboard.lineage.DashboardLineageSynchronizer;
 import io.yak.ops.business.dashboard.publication.DashboardPublisher;
+import io.yak.ops.business.dashboard.repository.DashboardReferenceRepository;
 import io.yak.ops.business.dashboard.repository.DashboardRepository;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepository;
 import io.yak.ops.business.dashboard.version.DashboardVersionManager;
@@ -33,7 +34,7 @@ class DashboardLayeringConventionTest {
   void stableFacadeOnlyCoordinatesExplicitApplicationRoles() {
     for (Field field : DashboardService.class.getDeclaredFields()) {
       assertThat(field.getType().getName())
-          .matches("io\\.yak\\.ops\\.business\\.dashboard\\.(definition|version|publication)\\..+");
+          .matches("io\\.yak\\.ops\\.business\\.dashboard\\.(definition|read|version|publication)\\..+");
     }
   }
 
@@ -63,7 +64,10 @@ class DashboardLayeringConventionTest {
 
   @Test
   void repositoryContractsDoNotExposeDaoOrHttpTypes() {
-    for (Class<?> contract : List.of(DashboardRepository.class, DashboardVersionRepository.class)) {
+    for (Class<?> contract : List.of(
+        DashboardRepository.class,
+        DashboardVersionRepository.class,
+        DashboardReferenceRepository.class)) {
       for (Method method : contract.getDeclaredMethods()) {
         assertThat(method.toGenericString())
             .doesNotContain(".dao.", "com.baomidou.mybatisplus", "controller.v1", "JdbcTemplate");

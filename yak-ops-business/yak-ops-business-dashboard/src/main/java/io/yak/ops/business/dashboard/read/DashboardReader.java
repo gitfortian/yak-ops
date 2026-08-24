@@ -1,4 +1,4 @@
-package io.yak.ops.business.dashboard.definition;
+package io.yak.ops.business.dashboard.read;
 
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardDetail;
@@ -10,7 +10,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Read-side entry for Dashboard identity and the current draft snapshot. */
+/** Shared read-side entry for Dashboard identity and the current draft snapshot. */
 @Component
 public class DashboardReader {
 

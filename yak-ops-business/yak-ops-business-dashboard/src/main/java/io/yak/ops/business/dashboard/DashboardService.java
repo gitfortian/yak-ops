@@ -1,13 +1,13 @@
 package io.yak.ops.business.dashboard;
 
 import io.yak.ops.business.dashboard.definition.DashboardManager;
-import io.yak.ops.business.dashboard.definition.DashboardReader;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardDetail;
 import io.yak.ops.business.dashboard.domain.DashboardDraft;
 import io.yak.ops.business.dashboard.domain.DashboardVersion;
 import io.yak.ops.business.dashboard.domain.DashboardVersionDetail;
 import io.yak.ops.business.dashboard.publication.DashboardPublisher;
+import io.yak.ops.business.dashboard.read.DashboardReader;
 import io.yak.ops.business.dashboard.version.DashboardVersionManager;
 import io.yak.ops.business.dashboard.version.DashboardVersionReader;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;

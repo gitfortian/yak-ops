@@ -1,4 +1,4 @@
-package io.yak.ops.business.dashboard.definition;
+package io.yak.ops.business.dashboard.change;
 
 /** Committed Dashboard mutation fact consumed by derived projections. */
 public record DashboardChangedEvent(long dashboardId, boolean deleted) {

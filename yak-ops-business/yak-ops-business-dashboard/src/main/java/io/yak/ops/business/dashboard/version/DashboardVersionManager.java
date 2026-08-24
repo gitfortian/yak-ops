@@ -1,8 +1,7 @@
 package io.yak.ops.business.dashboard.version;
 
+import io.yak.ops.business.dashboard.change.DashboardChangedEvent;
 import io.yak.ops.business.dashboard.composition.DashboardCompositionNormalizer;
-import io.yak.ops.business.dashboard.definition.DashboardChangedEvent;
-import io.yak.ops.business.dashboard.definition.DashboardReader;
 import io.yak.ops.business.dashboard.domain.DashboardDetail;
 import io.yak.ops.business.dashboard.domain.DashboardDraft;
 import io.yak.ops.business.dashboard.domain.DashboardVersionDetail;
@@ -10,6 +9,7 @@ import io.yak.ops.business.dashboard.domain.FilterBindingSpec;
 import io.yak.ops.business.dashboard.domain.GlobalFilterSpec;
 import io.yak.ops.business.dashboard.domain.InteractionSpec;
 import io.yak.ops.business.dashboard.domain.WidgetSpec;
+import io.yak.ops.business.dashboard.read.DashboardReader;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
