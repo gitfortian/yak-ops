@@ -1,9 +1,7 @@
 package io.yak.ops.business.development.service;
 
-/** @deprecated Use the shared authoring conflict type from the domain boundary. */
-@Deprecated
-public class DevelopmentDraftConflictException
-    extends io.yak.ops.business.development.domain.DevelopmentDraftConflictException {
+/** Optimistic authoring conflict retained as a compatibility corridor for Task and Data Service. */
+public class DevelopmentDraftConflictException extends RuntimeException {
 
   public DevelopmentDraftConflictException(String message) {
     super(message);

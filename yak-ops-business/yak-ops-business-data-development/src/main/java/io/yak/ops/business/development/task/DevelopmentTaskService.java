@@ -1,7 +1,6 @@
 package io.yak.ops.business.development.task;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.development.domain.DevelopmentDraftConflictException;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
@@ -10,6 +9,7 @@ import io.yak.ops.business.development.lineage.DevelopmentLineageOutbox;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskDraftRepository;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;
+import io.yak.ops.business.development.service.DevelopmentDraftConflictException;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
 import io.yak.ops.spi.task.model.TaskDefinition;
@@ -49,7 +49,6 @@ public class DevelopmentTaskService {
         null);
   }
 
-  /** Keeps the previous full constructor source compatible during the role migration. */
   public DevelopmentTaskService(
       DevelopmentNodeRepository nodeRepository,
       DevelopmentTaskDraftRepository draftRepository,
