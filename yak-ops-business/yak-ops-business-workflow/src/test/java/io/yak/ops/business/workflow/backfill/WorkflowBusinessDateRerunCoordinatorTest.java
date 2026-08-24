@@ -41,11 +41,14 @@ class WorkflowBusinessDateRerunCoordinatorTest {
   @Mock private WorkflowInstanceVO launched;
 
   private WorkflowScheduleTriggerCoordinator coordinator;
+  private WorkflowBackfillTriggerAdapter backfillTriggerAdapter;
 
   @BeforeEach
   void setUp() {
+    backfillTriggerAdapter =
+        new WorkflowBackfillTriggerAdapter(backfills, parameters, launchService);
     coordinator = new WorkflowScheduleTriggerCoordinator(
-        ledger, schedules, launchService, admission, backfills, parameters);
+        ledger, schedules, launchService, admission, backfillTriggerAdapter, parameters);
   }
 
   @Test
@@ -82,7 +85,8 @@ class WorkflowBusinessDateRerunCoordinatorTest {
     when(admission.bindLaunch(any(WorkflowScheduleTriggerPO.class), eq("execution-rerun")))
         .thenAnswer(invocation -> new AdmissionResult(invocation.getArgument(0), false, false));
 
-    var result = coordinator.submitBackfill(batch, occurrence);
+    var result = coordinator.submitBackfill(
+        batch.getId(), occurrence.businessDate(), occurrence.scheduleInstant());
 
     ArgumentCaptor<WorkflowScheduleTriggerPO> trigger =
         ArgumentCaptor.forClass(WorkflowScheduleTriggerPO.class);

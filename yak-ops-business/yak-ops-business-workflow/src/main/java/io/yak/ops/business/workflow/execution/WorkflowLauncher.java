@@ -41,7 +41,7 @@ public class WorkflowLauncher {
     this.publishedVersionRunner = publishedVersionRunner;
   }
 
-  /** Focused tests retain the Stage 4 constructor. */
+  /** Focused tests retain the lightweight constructor without pinned-version wiring. */
   public WorkflowLauncher(
       WorkflowDefinitionManager definitionService,
       WorkflowRuntime runtimeService,
@@ -104,7 +104,7 @@ public class WorkflowLauncher {
   }
 
   /**
-   * Stage 6 运维补跑：显式人工操作允许执行来源实例固定的不可变版本。
+   * 运维补跑允许执行来源实例固定的不可变版本。
    * 与正常 Cron/Backfill 不同，这里不跟随当前 activeVersion，也不以当前 ONLINE 状态作为历史恢复门槛。
    */
   public WorkflowInstanceVO runOperationalPublished(

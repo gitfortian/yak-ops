@@ -1,7 +1,6 @@
 package io.yak.ops.business.workflow.execution;
 
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
-import io.yak.ops.business.workflow.schedule.trigger.WorkflowScheduleTriggerCoordinator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,32 +21,32 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class WorkflowExecutionReactivatorTest {
   @Mock private WorkflowRuntime runtime;
-  @Mock private ObjectProvider<WorkflowScheduleTriggerCoordinator> coordinatorProvider;
-  @Mock private WorkflowScheduleTriggerCoordinator coordinator;
+  @Mock private ObjectProvider<WorkflowExecutionReactivationGuard> guardProvider;
+  @Mock private WorkflowExecutionReactivationGuard guard;
 
   @Test
-  void shouldRouteScheduledRetryThroughTriggerCoordinator() {
+  void shouldRouteScheduledRetryThroughReactivationGuard() {
     WorkflowExecutionReactivator service =
-        new WorkflowExecutionReactivator(runtime, coordinatorProvider);
+        new WorkflowExecutionReactivator(runtime, guardProvider);
     WorkflowInstanceVO expected = instance("execution-1", "RUNNING");
-    when(coordinatorProvider.getIfAvailable()).thenReturn(coordinator);
-    when(coordinator.reactivateExecution(
+    when(guardProvider.getIfAvailable()).thenReturn(guard);
+    when(guard.reactivateExecution(
         eq("execution-1"), eq("RETRY_FAILED_NODES"), any()))
         .thenReturn(expected);
 
     WorkflowInstanceVO result = service.retryFailedNodes("execution-1");
 
     assertThat(result).isSameAs(expected);
-    verify(coordinator).reactivateExecution(
+    verify(guard).reactivateExecution(
         eq("execution-1"), eq("RETRY_FAILED_NODES"), any());
   }
 
   @Test
   void shouldKeepDatabaseDisabledFallbackOnRuntime() {
     WorkflowExecutionReactivator service =
-        new WorkflowExecutionReactivator(runtime, coordinatorProvider);
+        new WorkflowExecutionReactivator(runtime, guardProvider);
     WorkflowInstanceVO expected = instance("execution-1", "RUNNING");
-    when(coordinatorProvider.getIfAvailable()).thenReturn(null);
+    when(guardProvider.getIfAvailable()).thenReturn(null);
     when(runtime.retryFailedNode("execution-1", "node-1")).thenReturn(expected);
 
     WorkflowInstanceVO result = service.retryFailedNode("execution-1", "node-1");

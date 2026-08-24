@@ -6,7 +6,7 @@ import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository;
 import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository.VersionRecord;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /**
  * 直接执行指定不可变发布版本。
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
  * <p>正常 Cron 始终 FOLLOW_ACTIVE；Backfill 在创建批次时固定 workflowVersionId，
  * 因此后续发布新版本不会改变已经创建的补数批次语义。</p>
  */
-@Service
+@Component
 public class WorkflowPublishedVersionRunner {
   private final WorkflowRuntime runtimeService;
   private final ObjectProvider<WorkflowDefinitionRepository> persistence;
