@@ -1,6 +1,6 @@
 # Datasource Architecture
 
-> 本文是 `yak-ops-business-datasource` 的长期架构契约，描述当前代码应如何组织、职责归谁以及依赖如何流动。历史迁移过程看 Git / PR，不写回生产架构。
+> 本文是 `yak-ops-business-datasource` 的长期架构契约，描述当前代码应如何组织、职责归谁以及依赖如何流动。历史迁移过程看 Git / PR，不写回生产架构。跨模块统一工程风格以仓库根目录 [`CODE_STYLE.md`](../../CODE_STYLE.md) 为准。
 
 ## 1. 模块定位
 
@@ -24,6 +24,7 @@ Datasource 是 Yak Ops 的统一数据源控制面，负责：
 5. **依赖图必须无环。** 不用 package 白名单掩盖反向引用；发现循环时重新归属职责。
 6. **兼容协议只停在边界。** HTTP 的 DTO/VO/历史 `Map<String,Object>` alias 不能进入 Domain/Gateway。
 7. **结构重构默认不改行为。** API、数据库、Plugin SPI、状态语义如需变化，必须按 Requirements/Domain 先定义。
+8. **统一工程风格不在模块重复定义。** 通用 Role Vocabulary、Spring stereotype、method/test/comment 规则遵循根目录 `CODE_STYLE.md`；本文件只补充 Datasource 特有架构约束。
 
 ## 3. 最终包结构
 
@@ -54,26 +55,28 @@ datasource
 
 生产代码不创建 `service / common / helper / utils / util / base` 这类模糊业务桶。
 
-## 4. 角色语义
+## 4. Datasource 角色语义
 
-| Role | 责任 |
+仓库级角色定义以根目录 `CODE_STYLE.md` 为准。Datasource 当前使用：
+
+| Role | 本模块中的责任 |
 | --- | --- |
-| `Manager` | 聚合生命周期、Command 编排和事务边界 |
-| `Reader` | read-side 查询，返回 Domain/Projection，不承担命令 |
-| `Resolver` | 将原始配置/引用解析成可使用的业务对象 |
-| `Tester` | 对外部资源执行显式探测并收敛测试语义 |
-| `Policy` | 业务/安全决策，例如 Catalog 只读规则 |
-| `Matcher` | 一个明确的匹配算法职责 |
-| `Registry` | 外部能力发现、注册和按类型查找 |
-| `Runtime` | 可执行任务的并发、事务、取消、超时编排 |
-| `Observer` | 旁路观测与审计写入 |
+| `Manager` | 数据源聚合生命周期、Command 编排和事务边界 |
+| `Reader` | DataSource / Plugin / Audit read-side，不承担 command transition |
+| `Resolver` | 将原始连接配置解析成可使用的业务对象 |
+| `Tester` | 数据源连接探测并收敛 saved/unsaved test 语义 |
+| `Policy` | Catalog/SQL 安全与业务决策 |
+| `Matcher` | Catalog 表名匹配算法 |
+| `Registry` | Datasource Plugin 发现、注册和按类型查找 |
+| `Runtime` | SQL 执行生命周期、并发、事务、取消、超时编排 |
+| `Observer` | SQL 执行旁路观测与审计写入 |
 | `Gateway` | Business-owned 外部能力 Port |
 | `Repository` | Domain 持久化 Port |
-| `Adapter` | 外部协议/模型翻译 |
-| `Mapper` | HTTP 边界 DTO/VO 转换 |
-| `Codec/Masker` | 一个窄的技术转换或安全职责 |
+| `Adapter` | SPI / Persistence / outward contract 翻译 |
+| `Mapper` | HTTP DTO/VO 边界转换 |
+| `Codec/Masker` | 窄的 Secret/文本安全转换职责 |
 
-`Service` 不是禁词，但只允许代表真正稳定的 Application Facade。当前 Datasource **没有** Service facade；Controller 直接进入明确的角色组件，这是当前架构的有意选择。若未来需要 Service，必须同时更新 `DEPENDENCIES.md` 和 Architecture Guard。
+当前 Datasource **没有** Service facade；Controller 直接进入明确的角色组件，这是当前架构的有意选择。若未来需要稳定 Application Service，必须同时更新 `DEPENDENCIES.md` 和 Architecture Guard，而不是默认增加 `XxxServiceImpl`。
 
 ## 5. 业务事实所有权
 
@@ -190,6 +193,21 @@ SqlExecutionRequest / Plan (yak-ops-core)
 
 Runtime 负责线程、Future、事务 Session、取消和超时编排；Aggregate 拥有生命周期；Gateway 负责物理 SQL Port。
 
+### 6.7 SQL Audit Read Side
+
+```text
+HTTP Audit DTO
+  -> SqlExecutionAuditMapper
+  -> SqlExecutionAuditCriteria
+  -> SqlExecutionAuditReader
+  -> SqlExecutionAuditDao
+  -> typed audit projection
+  -> SqlExecutionAuditMapper
+  -> HTTP Audit VO
+```
+
+Audit Reader 是明确 observability read-side，可读取 DAO projection，但不接受/返回 HTTP DTO/VO。
+
 ## 7. 持久化边界
 
 ```text
@@ -239,11 +257,11 @@ Domain、Config、Security 等底层能力不向上反向依赖。`DataSourceDep
 
 ```text
 1. 这个逻辑属于哪个业务能力 package？
-2. 这个类的角色能否用 Manager/Reader/Resolver/... 明确表达？
+2. 这个类的 role 是否符合根目录 CODE_STYLE.md？
 3. 是否改变 Domain truth owner / lifecycle？
 4. 是否引入新的 package edge？
 5. 是否把 DTO/VO/PO/SPI/Map 泄漏进业务内部？
-6. 是否需要同步更新 REQUIREMENTS / DOMAIN / DEPENDENCIES / CODE_STYLE？
+6. 是否需要同步更新 REQUIREMENTS / DOMAIN / ARCHITECTURE / DEPENDENCIES / tests？
 ```
 
 无法在现有模型表达需求时报告 `Domain Gap`；需要新增依赖方向时先修改 `DEPENDENCIES.md`，不要先放宽测试。

@@ -9,11 +9,13 @@ REQUIREMENTS.md
 ARCHITECTURE.md
 DEPENDENCIES.md
 DOMAIN.md
-CODE_STYLE.md
+../../CODE_STYLE.md
 REVIEW.md
 yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN.md
 PR diff / tests
 ```
+
+仓库统一工程风格以根目录 `CODE_STYLE.md` 为准；本文件只补充 Datasource 的领域、依赖、安全与兼容 Review 标准。
 
 ## 1. Requirement Alignment
 
@@ -28,7 +30,7 @@ Requirement Gap
 重点检查：
 
 - 新类是否放在表达真实能力的 package；
-- 类名是否表达 Manager/Reader/Resolver/Tester/Policy/Registry/Runtime/Gateway/Adapter 等明确角色；
+- 类名与 role 是否符合根目录 `CODE_STYLE.md`；
 - 是否重新出现 `service/common/helper/utils/util/base` 模糊桶；
 - 是否无理由新增 `ServiceImpl` 或 `@Service`；
 - 新 package edge 是否在 `DEPENDENCIES.md`，是否形成 cycle；
@@ -52,6 +54,7 @@ Requirement Gap
 - Catalog 是否重新接受业务 Map；
 - Plugin Descriptor/Capability 是否与实现一致；
 - SQL Runtime 是否复制第二套生命周期；
+- SQL Audit Reader 是否重新接受/返回 HTTP DTO/VO；
 - 是否通过隐藏 Map key/boolean/VO 字段绕过模型。
 
 违反规则报告 `Domain Violation`；模型无法表达需求报告 `Domain Gap`。
@@ -69,7 +72,8 @@ Requirement Gap
 - SPI typed Catalog mapping；
 - SQL Policy 是否在打开数据源前拒绝非法请求；
 - transaction 同 Session、rollback、cancel、timeout、SKIPPED；
-- Plugin Descriptor -> Business -> HTTP VO shape。
+- Plugin Descriptor -> Business -> HTTP VO shape；
+- SQL Audit filter/result transport shape、`OTHER` bucket、duration 精度。
 
 ## 5. Compatibility
 
@@ -111,9 +115,11 @@ Gateway Port no SPI/DTO/VO/PO
 Top-level dependency matrix + no cycles
 raw SPI / persistence / HTTP Map corridor
 no broad bucket / no default @Service
+repository-level code-style regressions
 Catalog typed request / read-only policy
 Descriptor capability contract
 SQL aggregate lifecycle / transaction / cancellation / timeout
+SQL Audit transport mapping
 Controller permission/compatibility
 ```
 
@@ -150,7 +156,7 @@ P2 Suggestion
 - 不阻塞合并
 ```
 
-纯命名、格式或个人偏好不算问题，除非造成真实歧义、违反已声明 Code Style 或导致结构回退。
+纯命名、格式或个人偏好不算问题，除非造成真实歧义、违反仓库 `CODE_STYLE.md` 或导致结构回退。
 
 ## 10. 问题证据要求
 

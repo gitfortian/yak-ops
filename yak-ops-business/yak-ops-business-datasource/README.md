@@ -4,14 +4,16 @@ Datasource 是 Yak Ops 的统一数据源控制面：管理数据源定义与连
 
 ## 开发前必读
 
+本模块遵循仓库根目录统一 [`CODE_STYLE.md`](../../CODE_STYLE.md)，模块只维护自身需求、领域、架构、依赖与 Review contract。
+
 ```text
-REQUIREMENTS.md   -> 模块需要什么
-ARCHITECTURE.md   -> 代码如何组织、职责归谁
-DEPENDENCIES.md   -> package 允许怎么依赖
-DOMAIN.md         -> 业务事实和不变量
-CODE_STYLE.md     -> 类/角色应该怎么写
-REVIEW.md         -> 按什么标准 Review
-PLUGIN.md         -> Datasource Plugin 开发标准（插件模块）
+REQUIREMENTS.md      -> 模块需要什么
+ARCHITECTURE.md      -> 代码如何组织、职责归谁
+DEPENDENCIES.md      -> package 允许怎么依赖
+DOMAIN.md            -> 业务事实和不变量
+../../CODE_STYLE.md  -> Yak Ops 仓库统一工程与代码规范
+REVIEW.md            -> 按什么标准 Review
+PLUGIN.md            -> Datasource Plugin 开发标准（插件模块）
 ```
 
 Plugin 文档：`yak-ops-plugins/yak-ops-plugin-datasource/PLUGIN.md`。
@@ -166,10 +168,10 @@ Top-level dependency matrix + acyclic graph
 raw SPI / HTTP Map / persistence corridor
 no broad service/common/helper/utils/util/base package
 no default @Service / ServiceImpl
-code-style regressions
+repository-level code-style regressions
 ```
 
-规则变化时文档和测试同一 PR 修改，不通过删除/放宽测试绕过。
+仓库统一风格以根目录 `CODE_STYLE.md` 为准；Datasource 专属依赖与角色规则由 `ARCHITECTURE.md / DEPENDENCIES.md` 和 Architecture Guard 保护。规则变化时文档和测试同一 PR 修改，不通过删除/放宽测试绕过。
 
 ## 兼容边界
 
