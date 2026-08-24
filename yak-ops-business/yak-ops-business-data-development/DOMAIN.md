@@ -1,6 +1,6 @@
 # Data Development Domain
 
-> `REQUIREMENTS.md` 定义“需要什么”；本文件定义“哪些领域事实不能被实现细节破坏”；`ARCHITECTURE.md` 定义这些事实由哪些代码角色负责。
+> `REQUIREMENTS.md` 定义“需要什么”；本文件定义“哪些领域事实不能被实现细节破坏”；`ARCHITECTURE.md` 定义这些事实由哪些代码角色负责；`DEPENDENCIES.md` 定义允许依赖谁。
 
 ## 核心模型
 
@@ -43,6 +43,7 @@ DevelopmentTaskDraft        = 当前可编辑定义
 DevelopmentTaskRevision     = 不可变发布版本
 DevelopmentTaskExecution    = 编辑器运行历史
 Task Catalog                = 发布状态 / 跨模块任务资产投影
+Dataset Version             = Dataset 输出定义快照
 Data Service Revision       = Data Service 不可变发布事实
 Lineage subsystem           = Lineage Asset / Relation 最终事实
 Task Runtime                = 外部执行事实
@@ -96,29 +97,71 @@ require executable Node
 
 `DevelopmentTaskRevision.represents(draftRevision, checksum)` 表达“现有不可变版本是否已经代表当前 Draft”的领域判断。
 
-## Data Service Contract
-
-Data Service Definition 可以自己持有发布不变量，例如 `validatePublishable()`。
-
-它与普通 Task 的关系是相邻能力，不是继承关系：
+## Execution Contract
 
 ```text
-Task Revision        -> shared Task Runtime
-Data Service Revision -> Data Service Runtime
+current editor definition
+    -> normalize
+    -> TaskVersionSnapshot(version = 0)
+    -> shared Task Runtime
+    -> DevelopmentTaskExecution history
 ```
 
-后续结构调整应继续强化这个边界，而不是把两者重新塞回一个通用 Service。
+Editor Run 不读取或写入 Published Revision，不修改 Task Catalog projection。运行历史记录与共享 Runtime execution evidence 是相邻事实，不互相替代。
+
+## Dataset / Data Service Contract
+
+DATASET 和 DATA_SERVICE 都是 Output Node，但各自拥有独立输出定义生命周期。
+
+```text
+Dataset definition     -> Dataset Version / Dataset runtime boundary
+Data Service definition -> Data Service Revision / Runtime boundary
+```
+
+它们与普通 Task 的关系是相邻能力，不是继承关系。不能为了复用 SQL、发布或 Service，把 Output Node 重新塞回 executable Task lifecycle。
+
+Data Service Definition 可以自己持有发布不变量，例如 `validatePublishable()`；这些规则属于 Data Service definition truth，而不是通用 Task Plugin truth。
 
 ## Lineage Boundary
 
 ```text
 SQL DevelopmentTaskRevision
+    -> durable outbox
     -> parser / analyzer
     -> lineage evidence
     -> yak-ops-business-lineage
 ```
 
-Data Development 可以持有 Parser、Analyzer、Outbox、Worker 等角色，但不得复制 Lineage Asset / Relation 的领域所有权。
+Data Development 可以持有 Parser、Analyzer、Outbox、Worker 等证据产生角色，但不得复制 Lineage Asset / Relation 的领域所有权。
+
+发布事务与 lineage projection 解耦：Lineage 失败不能回滚已成功发布的 Revision。Worker 只对最新 Revision 执行 replacement，避免旧 Revision 覆盖新证据。
+
+## Architecture Boundary
+
+长期业务子系统固定为：
+
+```text
+Node
+Directory
+Task Authoring
+Execution
+Dataset
+Release
+Editor
+Lineage evidence
+Persistence boundaries
+```
+
+新业务角色进入对应 package。`service` 目录仅是冻结 legacy island，不是业务层；其固定文件集合以 `ARCHITECTURE.md` 和架构测试为准。
+
+任何结构调整必须满足：
+
+- 不新增第二套 Draft / Revision / Execution truth；
+- 不把 Task Catalog 变成 Revision owner；
+- 不把 Output Node 重新变成 executable Task；
+- 不把 Lineage graph truth 搬回 Data Development；
+- 不通过 `service/common/helper/utils` 隐藏职责；
+- 不通过扩大 dependency whitelist 掩盖真实架构循环。
 
 ## 修改代码前后
 
@@ -143,4 +186,16 @@ Domain Compliance Report
 - Known gaps:
 ```
 
-Stage 2 会继续用依赖测试把这些 contract 固化；Stage 1 不通过删除现有行为测试来换取重构通过。
+## 自动护栏
+
+长期 contract 由 architecture tests 固化：
+
+```text
+DataDevelopmentArchitectureDocumentationTest
+DataDevelopmentDependencyBoundaryTest
+DataDevelopmentRoleConventionTest
+```
+
+行为测试继续保护 Draft concurrency、Publish、Editor Run、Dataset、Data Service 和 Lineage parsing/replacement 等现有语义。
+
+**不要因为功能或结构调整被护栏拦住就删护栏。** 如果规则真的变化，同一个 PR 中同步修改 Requirement/Domain/Architecture/Dependencies/Review contract 与对应测试。

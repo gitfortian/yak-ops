@@ -2,7 +2,7 @@
 
 本文件定义 Data Development 的长期需求语义。它回答“这个模块需要提供什么能力”，不承担代码分层说明。
 
-领域硬规则看 `DOMAIN.md`，角色和依赖边界看 `ARCHITECTURE.md`。
+领域硬规则看 `DOMAIN.md`，代码角色看 `ARCHITECTURE.md`，依赖方向看 `DEPENDENCIES.md`，Review 标准看 `REVIEW.md`。
 
 ## 模块定位
 
@@ -12,14 +12,14 @@ Data Development 是数据开发工作台的 authoring context。它负责组织
 
 ## 核心能力
 
-### 1. 开发节点
+### 开发节点
 
 - `DevelopmentNode` 是工作区中的长期身份，负责名称、类型、项目/目录位置和配置状态。
 - 节点类型必须显式声明能力；不能通过 `PROCESSING / OUTPUT` 分类推断是否允许进入任务生命周期。
 - SQL / SHELL / HTTP / PYTHON / JAVA 可以进入 Task Draft -> Revision 生命周期。
 - DATASET / DATA_SERVICE 是输出型节点，不复用 Task Draft -> Revision 生命周期。
 
-### 2. Task Authoring
+### Task Authoring
 
 可执行节点必须支持：
 
@@ -39,7 +39,7 @@ DevelopmentNode
 - 相同 Draft Revision + 相同 Definition Digest 重复发布时复用已有 Revision；
 - Published Revision 不可被后续编辑覆盖。
 
-### 3. Editor Run
+### Editor Run
 
 编辑器运行当前内容时，不要求先 Publish。
 
@@ -52,13 +52,19 @@ current editor definition
 
 Editor Run 与 Published Revision 是两个概念。运行当前编辑器内容不能隐式创建 Published Revision，也不能修改 Task Catalog 的发布指针。
 
-### 4. Release Projection
+### Release Projection
 
 发布后的 Data Development Task 通过 Task Catalog 暴露上线、下线和历史版本切换能力。
 
 Task Catalog 是发布状态和跨模块任务资产入口；`DevelopmentTaskRevision` 仍然是 Data Development 内部不可变版本事实。
 
-### 5. Data Service
+### Dataset
+
+DATASET 是输出节点。新编辑器直接拥有 datasource + SQL + field contract；历史 TaskAsset source binding 只保留兼容读取/保存能力。
+
+Dataset 的配置事实不能重新塞进 executable Task Draft / Revision，也不能因为共享 SQL 能力而伪装成 SQL Task。
+
+### Data Service
 
 DATA_SERVICE 使用独立的 Draft / Revision / Runtime contract，不得伪装成通用 Task Node。
 
@@ -70,7 +76,7 @@ Data Service 发布前至少要保证：
 - Response Contract 已确认；
 - Request Contract 满足当前 Runtime 能力。
 
-### 6. Lineage
+### Lineage
 
 SQL Task Revision 发布后可以异步生成表级和字段级 lineage evidence。
 
@@ -80,25 +86,40 @@ Lineage 解析或写入失败不能回滚已经成功提交的业务发布；可
 
 ## 兼容要求
 
-Stage 1 重构必须保持：
+纯结构重构必须保持：
 
-- `/api/v1/development/**` 现有 REST contract；
+- `/api/v1/data-development/**` REST contract；
 - 现有数据库表和 Flyway migration；
 - Draft optimistic revision 语义；
-- Revision number / checksum 语义；
-- Task Catalog publish / online / offline 行为；
-- Editor Run 走共享 Task Runtime；
-- SQL lineage outbox 行为。
+- Revision number / checksum / append-reuse 语义；
+- Task Plugin validation 语义；
+- Task Catalog publish / online / offline / activate 行为；
+- Editor Run 走共享 Task Runtime 且使用 version-0 snapshot；
+- Dataset / Data Service 现有 API 与运行 contract；
+- SQL lineage outbox 与 latest-revision replacement 语义。
 
-## Stage 1 非目标
+如果需要改变这些行为，应作为明确的 Requirement / Domain change 单独设计，不能藏在 package move 或类拆分里。
 
-本阶段不处理：
+## 架构治理要求
 
-- 全量删除 `service` package；
-- 重写 Data Service / Release / Lineage 全部实现；
-- 新增数据库模型；
-- 修改 API v1；
-- 改造共享 Task Runtime；
-- 抽取 Data Development 与 Offline/Realtime Sync 的 Shared Kernel。
+- package 按业务子系统和专业角色组织，不用通用 `service/common/helper/utils` 代替设计；
+- `Service` 可以作为稳定 Application Entry，但不是默认类名；
+- Parser / Resolver / Validator / Normalizer / Publisher / Reader / Provider / Worker / Outbox 等角色应按真实职责命名；
+- Controller 只进入稳定应用入口，不直接访问 Repository / DAO；
+- Domain 不拥有 Task Runtime、Task Catalog、Lineage、Spring JDBC、MyBatis 等外部实现；
+- 当前 `service` 目录是冻结 legacy island，只允许 `ARCHITECTURE.md` 声明的固定类型集合；
+- 新功能不得向 legacy island 新增文件；
+- 架构 contract 必须由自动化测试保护，规则变化时同步修改文档与护栏。
 
-Stage 1 的重点是先建立 Domain Truth，并让 Task 主链开始按明确角色组织。
+## 已知迁移债务
+
+当前仍保留两类刻意未与结构治理混做的债务：
+
+```text
+Data Service 大实现
+SQL Lineage Parser / Analyzer 大算法
+```
+
+它们位于 frozen legacy island。后续迁移应独立进行，并与 SQL parsing / Data Service 行为变化分开。
+
+Execution history、Editor settings、Lineage Outbox 等历史边界仍存在直接 JDBC 使用；新增持久化能力默认优先建立 Repository contract。
