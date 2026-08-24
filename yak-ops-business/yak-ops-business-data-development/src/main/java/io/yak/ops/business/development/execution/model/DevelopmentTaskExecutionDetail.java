@@ -1,9 +1,9 @@
-package io.yak.ops.business.development.domain;
+package io.yak.ops.business.development.execution.model;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
-/** Full execution snapshot used by the run-history detail drawer. */
+/** Full execution-history projection used by the run-history detail API. */
 public record DevelopmentTaskExecutionDetail(
     Long id,
     Long nodeId,

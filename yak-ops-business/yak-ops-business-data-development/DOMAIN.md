@@ -35,6 +35,16 @@ DevelopmentNode
 Node != Draft != Revision != Execution
 ```
 
+命令侧基础约束由值对象持有：
+
+```text
+DevelopmentNodeName       = Node 名称规范化与合法性
+DevelopmentDirectoryName  = Directory path segment 合法性
+DevelopmentNodeType       = Node 类型词汇、分类与 capability gate
+```
+
+Application Service 不再复制这些规则。
+
 ## Truth Ownership
 
 ```text
@@ -51,7 +61,30 @@ Task Runtime                = 外部执行事实
 
 Task Catalog 不能反向成为 Data Development Revision 的存储真相；Lineage 也不能成为 Task 发布状态的真相。
 
-## 12 条硬规则
+## Domain Model Placement
+
+`domain` 不是“所有 POJO 的默认目录”。它只保留**拥有领域事实、领域不变量或核心值语义**的类型。
+
+纯读侧 / 展示侧模型跟随所属业务子系统：
+
+```text
+release.model
+├── DevelopmentReleaseSummary
+├── DevelopmentReleasePage
+└── DevelopmentReleaseDetail
+
+execution.model
+├── DevelopmentTaskExecutionSummary
+├── DevelopmentTaskExecutionPage
+├── DevelopmentTaskExecutionDetail
+└── DevelopmentTaskRunResult
+```
+
+这些对象可以组合多个 truth owner 的数据用于 API 展示，但自身不是新的 truth owner。不能因为它们是 record / DTO 就放进 `domain`。
+
+当前仍保留在 `domain` 的历史 SQL lineage preview/result 等类型属于后续 legacy lineage 拆分范围，不在本次结构重构中顺手迁移。
+
+## 13 条硬规则
 
 1. **Node 是身份，不是版本。** 编辑定义和发布内容不能继续堆进 `DevelopmentNode`。
 2. **Node Type 能力必须显式声明。** 是否支持 Task Lifecycle 只由 `DevelopmentNodeType.supportsTaskLifecycle()` 决定。
@@ -65,6 +98,7 @@ Task Catalog 不能反向成为 Data Development Revision 的存储真相；Line
 10. **DATASET / DATA_SERVICE 不是 executable Task。** 输出节点不得为了复用 Service 而进入 Task Draft / Revision 生命周期。
 11. **Lineage 是派生事实。** SQL Revision 是证据来源；Asset / Relation 的最终 owner 是 Lineage 模块。
 12. **结构重构不能偷改行为。** package move、角色拆分、领域语义变更、REST/DB 变更必须分开处理。
+13. **Domain 不是 Read Model 大桶。** Page / Summary / Detail / response projection 必须跟随所属子系统，除非它本身真的拥有领域事实或不变量。
 
 ## Task Definition Contract
 
@@ -152,7 +186,7 @@ Lineage evidence
 Persistence boundaries
 ```
 
-新业务角色进入对应 package。`service` 目录仅是冻结 legacy island，不是业务层；其固定文件集合以 `ARCHITECTURE.md` 和架构测试为准。
+新业务角色进入对应 package。`domain` 只保留 truth-bearing model / value object；读侧 projection 跟随所属业务 package。`service` 目录仅是冻结 legacy island，不是业务层；其固定文件集合以 `ARCHITECTURE.md` 和架构测试为准。
 
 任何结构调整必须满足：
 
@@ -160,6 +194,7 @@ Persistence boundaries
 - 不把 Task Catalog 变成 Revision owner；
 - 不把 Output Node 重新变成 executable Task；
 - 不把 Lineage graph truth 搬回 Data Development；
+- 不把 API/query projection 堆进 `domain`；
 - 不通过 `service/common/helper/utils` 隐藏职责；
 - 不通过扩大 dependency whitelist 掩盖真实架构循环。
 
@@ -194,8 +229,9 @@ Domain Compliance Report
 DataDevelopmentArchitectureDocumentationTest
 DataDevelopmentDependencyBoundaryTest
 DataDevelopmentRoleConventionTest
+DataDevelopmentDomainModelPlacementTest
 ```
 
-行为测试继续保护 Draft concurrency、Publish、Editor Run、Dataset、Data Service 和 Lineage parsing/replacement 等现有语义。
+行为测试继续保护 resource-name invariants、Draft concurrency、Publish、Editor Run、Dataset、Data Service 和 Lineage parsing/replacement 等现有语义。
 
 **不要因为功能或结构调整被护栏拦住就删护栏。** 如果规则真的变化，同一个 PR 中同步修改 Requirement/Domain/Architecture/Dependencies/Review contract 与对应测试。

@@ -1,10 +1,10 @@
-package io.yak.ops.business.development.domain;
+package io.yak.ops.business.development.execution.model;
 
 import io.yak.ops.spi.task.model.TaskExecutionStatus;
 import java.util.Map;
 import java.util.Objects;
 
-/** Synchronous manual-run response; durable TaskExecution persistence is introduced later. */
+/** Synchronous editor-run response; durable execution history and runtime state remain separate. */
 public record DevelopmentTaskRunResult(
     TaskExecutionStatus status,
     String message,

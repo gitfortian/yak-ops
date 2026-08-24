@@ -6,10 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.yak.ops.business.development.domain.DevelopmentReleasePage;
-import io.yak.ops.business.development.domain.DevelopmentReleaseSummary;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
+import io.yak.ops.business.development.release.model.DevelopmentReleasePage;
+import io.yak.ops.business.development.release.model.DevelopmentReleaseSummary;
 import io.yak.ops.business.development.repository.DevelopmentTaskRevisionRepository;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;

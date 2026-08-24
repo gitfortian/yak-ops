@@ -44,6 +44,16 @@ public enum DevelopmentNodeType {
     };
   }
 
+  /** Parses and validates a command-side node type using the domain vocabulary. */
+  public static DevelopmentNodeType require(String value) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalArgumentException("节点类型不能为空");
+    }
+    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    return tryParse(normalized)
+        .orElseThrow(() -> new IllegalArgumentException("不支持的数据开发节点类型：" + normalized));
+  }
+
   public static Optional<DevelopmentNodeType> tryParse(String value) {
     if (value == null || value.isBlank()) return Optional.empty();
     try {

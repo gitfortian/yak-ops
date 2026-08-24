@@ -9,16 +9,20 @@ controller
    -> node / directory / task / execution / dataset / release / editor
    -> frozen legacy preview corridor
 
-node       -> repository -> dao
-directory  -> repository -> dao
-task       -> repository -> dao
+node       -> domain + repository -> dao
+directory  -> domain + repository -> dao
+task       -> domain + repository -> dao
            -> lineage (outbox only)
-execution  -> task + shared Task Runtime
-dataset    -> repository + Dataset / Task Catalog
-release    -> repository + Task Catalog
-lineage    -> repository + frozen SQL lineage implementation
+execution  -> domain + task + shared Task Runtime
+             └── model = execution read/response projection
+
+dataset    -> domain + repository + Dataset / Task Catalog
+release    -> domain + repository + Task Catalog
+             └── model = release read projection
+
+lineage    -> domain + repository + frozen SQL lineage implementation
 editor     -> local persistence boundary
-domain     -> framework-light values only
+domain     -> framework-light truth/value types only
 ```
 
 依赖必须总体向边界流动，不能通过扩大白名单掩盖循环。
@@ -31,13 +35,29 @@ domain     -> framework-light values only
 | `node` | `domain`, `repository` |
 | `directory` | `domain`, `repository` |
 | `task` | `domain`, `repository`, `lineage`, compatibility exception corridor |
-| `execution` | `domain`, `task` |
+| `execution` | `domain`, `task`; `execution.model` 只能作为 read/response projection |
 | `dataset` | `domain`, `repository` |
-| `release` | `domain`, `repository` |
+| `release` | `domain`, `repository`; `release.model` 只能作为 read projection |
 | `lineage` | `domain`, `repository`, frozen legacy SQL lineage implementation |
 | `repository` | `domain`, `dao` |
 | `dao` | persistence primitives |
 | `domain` | JDK + compatibility serialization annotations |
+
+## Read Model Rule
+
+Read Model 跟随所属业务子系统，但不能反向成为领域 truth owner：
+
+```text
+controller -> release.model
+release.model -> immutable domain facts (read only)
+
+controller -> execution.model
+execution.model -> JDK / SPI response vocabulary
+
+domain -X-> release.model / execution.model
+```
+
+新增 `Page / Summary / Detail / View / Response` 类型时，先判断它是否拥有业务不变量；如果只是组合查询结果，默认不能进入 `domain`。
 
 ## Cross-module Corridors
 
@@ -67,7 +87,7 @@ Dependency Impact Analysis
 ## Forbidden Shortcuts
 
 - Controller 不直接访问 Repository / DAO。
-- Domain 不依赖 Controller、Repository、DAO、Task Runtime、Lineage Service、Spring JDBC、MyBatis。
+- Domain 不依赖 Controller、Repository、DAO、Task Runtime、Lineage Service、Spring JDBC、MyBatis，也不依赖 release/execution read model。
 - Task / Node / Directory / Dataset / Release 不直接进入本模块 DAO。
 - Query/read 行为不得顺手修改 Draft/Revision/Execution truth。
 - 不创建 `common/helper/utils/base/service` 作为新功能的默认落点。
@@ -84,6 +104,6 @@ Dependency Impact Analysis
 
 ## Persistence Note
 
-历史上的 Execution history、Editor settings、Lineage Outbox 仍直接使用 JDBC。这次 Stage 2 不把 package move 与 persistence redesign 混在一起。
+历史上的 Execution history、Editor settings、Lineage Outbox 仍直接使用 JDBC。这次领域模型整理不把 model placement 与 persistence redesign 混在一起。
 
 新持久化能力默认走 Repository contract；如果确实需要直接 JDBC，需要在 PR 中写清楚原因、truth owner 和事务边界。
