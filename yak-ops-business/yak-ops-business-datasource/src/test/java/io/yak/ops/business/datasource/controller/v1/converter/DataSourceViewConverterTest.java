@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
-import io.yak.ops.business.datasource.gateway.DataSourcePluginGateway;
+import io.yak.ops.business.datasource.query.DataSourcePluginReader;
 import io.yak.ops.common.bean.vo.datasource.DataSourceVO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
@@ -16,18 +16,24 @@ import org.junit.jupiter.api.Test;
 class DataSourceViewConverterTest {
   @Test
   void detailKeepsJdbcAndConnectionJsonMasked() {
-    DataSourcePluginGateway pluginGateway = mock(DataSourcePluginGateway.class);
-    DataSourceViewConverter converter = new DataSourceViewConverter(pluginGateway);
+    DataSourcePluginReader pluginReader = mock(DataSourcePluginReader.class);
+    DataSourceViewConverter converter = new DataSourceViewConverter(pluginReader);
     DataSourceDefinition source = DataSourceDefinition.restore(
-        42L, "orders-db", DataSourceDbType.MYSQL,
+        42L,
+        "orders-db",
+        DataSourceDbType.MYSQL,
         "jdbc:mysql://user:credential-value@127.0.0.1:3306/orders",
-        DataSourceEnvironment.PROD, DataSourceConnStatus.CONNECTED, null,
+        DataSourceEnvironment.PROD,
+        DataSourceConnStatus.CONNECTED,
+        null,
         "{\"password\":\"credential-value\"}",
-        "{\"password\":\"credential-value\"}", null, null);
+        "{\"password\":\"credential-value\"}",
+        null,
+        null);
 
-    when(pluginGateway.maskSensitiveText(source.getJdbcUrl()))
+    when(pluginReader.maskSensitiveText(source.getJdbcUrl()))
         .thenReturn("jdbc:mysql://user:******@127.0.0.1:3306/orders");
-    when(pluginGateway.maskConnectionJson(DataSourceDbType.MYSQL, source.getOriginalJson()))
+    when(pluginReader.maskConnectionJson(DataSourceDbType.MYSQL, source.getOriginalJson()))
         .thenReturn("{\"password\":\"******\"}");
 
     DataSourceVO result = converter.definition(source, true);
@@ -35,7 +41,7 @@ class DataSourceViewConverterTest {
     assertThat(result.getJdbcUrl()).doesNotContain("credential-value");
     assertThat(result.getOriginalJson()).doesNotContain("credential-value");
     assertThat(result.getEnvironmentName()).isEqualTo("生产");
-    verify(pluginGateway).maskSensitiveText(source.getJdbcUrl());
-    verify(pluginGateway).maskConnectionJson(DataSourceDbType.MYSQL, source.getOriginalJson());
+    verify(pluginReader).maskSensitiveText(source.getJdbcUrl());
+    verify(pluginReader).maskConnectionJson(DataSourceDbType.MYSQL, source.getOriginalJson());
   }
 }
