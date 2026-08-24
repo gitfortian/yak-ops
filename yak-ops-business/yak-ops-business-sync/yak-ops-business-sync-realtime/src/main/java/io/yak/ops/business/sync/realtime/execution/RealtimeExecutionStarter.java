@@ -3,6 +3,7 @@ package io.yak.ops.business.sync.realtime.execution;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineException;
 import io.yak.ops.business.sync.realtime.engine.RealtimeEngineGateway;
+import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
@@ -25,15 +26,14 @@ public class RealtimeExecutionStarter {
 
   RealtimeJobView.Deployment start(long taskId, String requestedKey) {
     String key = reservations.normalizeKey(requestedKey);
-    RealtimeJobView.Deployment existing = reservations.idempotentView(taskId, key);
-    if (existing != null) {
-      return existing;
+    Optional<RealtimeJobView.Deployment> existing = reservations.idempotentView(taskId, key);
+    if (existing.isPresent()) {
+      return existing.orElseThrow();
     }
 
     RealtimeExecutionPrepared prepared = preparation.preparePublished(taskId);
     preparation.validate(prepared);
-    return startPrepared(
-        taskId, key, prepared, true, RealtimeExecutionIntent.START);
+    return startPrepared(taskId, key, prepared, true, RealtimeExecutionIntent.START);
   }
 
   RealtimeJobView.Deployment startPrepared(
@@ -42,9 +42,9 @@ public class RealtimeExecutionStarter {
       RealtimeExecutionPrepared prepared,
       boolean requireCurrentPublished,
       RealtimeExecutionIntent intent) {
-    RealtimeJobView.Deployment existing = reservations.idempotentView(taskId, key);
-    if (existing != null) {
-      return existing;
+    Optional<RealtimeJobView.Deployment> existing = reservations.idempotentView(taskId, key);
+    if (existing.isPresent()) {
+      return existing.orElseThrow();
     }
 
     RealtimeExecutionReservationManager.StartReservation reservation;
