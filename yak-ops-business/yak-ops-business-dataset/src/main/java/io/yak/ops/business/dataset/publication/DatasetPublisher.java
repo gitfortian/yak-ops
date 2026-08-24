@@ -6,13 +6,13 @@ import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.definition.DatasetReader;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskAssetSnapshot;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceAvailability;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceOrigin;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshPublisher;
 import io.yak.ops.business.dataset.repository.DatasetRepository;
 import io.yak.ops.business.dataset.schema.DatasetFieldNormalizer;
 import io.yak.ops.business.dataset.schema.DatasetFieldSpec;
 import io.yak.ops.business.dataset.schema.DatasetSchemaDiscovery;
-import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -139,10 +139,10 @@ public class DatasetPublisher {
 
   public DatasetTaskAssetSnapshot requirePublishableAsset(long assetId) {
     DatasetTaskAssetSnapshot asset = taskCatalogGateway.get(assetId);
-    if (asset.source() != TaskAssetSource.DATA_DEVELOPMENT) {
+    if (asset.sourceOrigin() != SourceOrigin.DATA_DEVELOPMENT) {
       throw new IllegalArgumentException("只有数据开发 TaskAsset 可以发布为 Dataset：" + assetId);
     }
-    if (asset.status() != TaskAssetStatus.ONLINE) {
+    if (asset.availability() != SourceAvailability.ONLINE) {
       throw new IllegalArgumentException("只有 ONLINE 的 TaskAsset 可以发布/更新 Dataset：" + assetId);
     }
     if (!"SQL".equalsIgnoreCase(asset.taskType())) {
