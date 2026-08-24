@@ -12,9 +12,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class SqlExecutionAuditMapperTest {
+class SqlExecutionAuditViewMapperTest {
 
-  private final SqlExecutionAuditMapper mapper = new SqlExecutionAuditMapper();
+  private final SqlExecutionAuditViewMapper mapper = new SqlExecutionAuditViewMapper();
 
   @Test
   void mapsTransportFiltersToTypedCriteria() {

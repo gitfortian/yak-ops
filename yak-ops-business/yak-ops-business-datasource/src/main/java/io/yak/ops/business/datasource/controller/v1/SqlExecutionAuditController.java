@@ -6,7 +6,7 @@ import io.yak.framework.common.PagingData;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.controller.v1.mapper.SqlExecutionAuditMapper;
+import io.yak.ops.business.datasource.controller.v1.mapper.SqlExecutionAuditViewMapper;
 import io.yak.ops.business.datasource.execution.audit.SqlExecutionAuditReader;
 import io.yak.ops.common.bean.dto.observability.SqlExecutionAuditQueryDTO;
 import io.yak.ops.common.bean.vo.observability.SqlExecutionAuditDetailVO;
@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SqlExecutionAuditController {
 
   private final SqlExecutionAuditReader auditReader;
-  private final SqlExecutionAuditMapper auditMapper;
+  private final SqlExecutionAuditViewMapper auditMapper;
 
   @Operation(summary = "分页查询 SQL 执行历史")
   @PostMapping("/page")
