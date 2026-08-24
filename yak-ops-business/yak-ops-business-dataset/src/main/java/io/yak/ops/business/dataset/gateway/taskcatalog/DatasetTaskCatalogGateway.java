@@ -1,8 +1,5 @@
 package io.yak.ops.business.dataset.gateway.taskcatalog;
 
-import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
-
 /** Dataset-owned view of the Task Catalog facts required by publication and query runtime. */
 public interface DatasetTaskCatalogGateway {
 
@@ -10,12 +7,22 @@ public interface DatasetTaskCatalogGateway {
 
   DatasetTaskRevisionSnapshot resolveRevision(long assetId, long revisionId);
 
+  enum SourceOrigin {
+    DATA_DEVELOPMENT,
+    OTHER
+  }
+
+  enum SourceAvailability {
+    ONLINE,
+    NOT_ONLINE
+  }
+
   record DatasetTaskAssetSnapshot(
       long id,
       String name,
       String sourceRef,
-      TaskAssetSource source,
-      TaskAssetStatus status,
+      SourceOrigin sourceOrigin,
+      SourceAvailability availability,
       String taskType,
       long currentRevisionId,
       int currentRevisionNo) {}
