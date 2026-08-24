@@ -1,8 +1,13 @@
 package io.yak.ops.business.quality.execution;
 
+import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.common.enums.quality.QualityEnums.ComparisonOperator;
 import java.math.BigDecimal;
+import org.springframework.stereotype.Component;
 
+/** Evaluates compiled quality metrics against the frozen rule thresholds. */
+@Component
+@ConditionalOnQualityEnabled
 public class QualityMetricEvaluator {
 
   public boolean passes(
@@ -15,8 +20,10 @@ public class QualityMetricEvaluator {
     return switch (operator) {
       case GT -> first.compareTo(expected) > 0;
       case GTE -> first.compareTo(expected) >= 0;
-      case EQ -> first.compareTo(expected) == 0
-          && (measurement.valueEnd() == null || measurement.valueEnd().compareTo(expected) == 0);
+      case EQ ->
+          first.compareTo(expected) == 0
+              && (measurement.valueEnd() == null
+                  || measurement.valueEnd().compareTo(expected) == 0);
       case LTE -> first.compareTo(expected) <= 0;
       case LT -> first.compareTo(expected) < 0;
       case BETWEEN -> {
@@ -40,15 +47,22 @@ public class QualityMetricEvaluator {
   }
 
   public static String format(BigDecimal value) {
-    if (value == null) return "--";
+    if (value == null) {
+      return "--";
+    }
     BigDecimal normalized = value.stripTrailingZeros();
-    return normalized.scale() < 0 ? normalized.setScale(0).toPlainString() : normalized.toPlainString();
+    return normalized.scale() < 0
+        ? normalized.setScale(0).toPlainString()
+        : normalized.toPlainString();
   }
 
   private static BigDecimal required(BigDecimal value, String message) {
-    if (value == null) throw new IllegalArgumentException(message);
+    if (value == null) {
+      throw new IllegalArgumentException(message);
+    }
     return value;
   }
 
-  public record MetricMeasurement(BigDecimal value, BigDecimal valueEnd, String displayValue) {}
+  public record MetricMeasurement(
+      BigDecimal value, BigDecimal valueEnd, String displayValue) {}
 }
