@@ -3,7 +3,6 @@ package io.yak.ops.business.datasource.controller.v1.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.yak.ops.business.datasource.domain.DataSourceQuery;
-import io.yak.ops.business.datasource.management.DataSourceValidator;
 import io.yak.ops.common.bean.dto.datasource.DataSourceQueryDTO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
@@ -12,8 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class DataSourceRequestMapperTest {
 
-  private final DataSourceRequestMapper mapper =
-      new DataSourceRequestMapper(new DataSourceValidator());
+  private final DataSourceRequestMapper mapper = new DataSourceRequestMapper();
 
   @Test
   void pageQueryIsNormalizedWithoutMutatingHttpRequest() {
