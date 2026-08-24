@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.framework.common.PagingData;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
+import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
@@ -24,7 +25,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** 离线同步执行门面；Controller、Backfill Dispatcher、Reconciler 统一从这里进入 execution 子系统。 */
+/** Stable execution facade for controllers, Backfill dispatch, Schedule and Reconcile. */
 @ConditionalOnOfflineSyncEnabled
 @Service
 @RequiredArgsConstructor
@@ -47,10 +48,10 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
   }
 
   public OfflineJobExecutionVO execute(Long id) {
-    return executionQuery.toVO(coordinator.execute(id, "MANUAL", null, 1));
+    return executionQuery.toVO(coordinator.execute(id, BatchTriggerToken.MANUAL, null, 1));
   }
 
-  /** 工作流按发布时固定的任务版本快照执行。 */
+  /** Workflow executes the immutable task snapshot captured at publish time. */
   public OfflineJobExecutionVO executeSnapshot(
       Long id,
       long version,
@@ -66,7 +67,7 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
         null);
   }
 
-  /** 工作流按发布快照和 Attempt 幂等键执行。 */
+  /** Workflow executes the frozen snapshot with an Attempt idempotency key. */
   public OfflineJobExecutionVO executeSnapshot(
       Long id,
       long version,
@@ -85,22 +86,22 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
   }
 
   public OfflineJobExecutionVO executeScheduled(Long id) {
-    return executeScheduled(id, "SCHEDULE");
+    return executeScheduled(id, BatchTriggerToken.SCHEDULE);
   }
 
-  /** 保留完整 schedule trigger token 的执行入口。 */
+  /** Preserves the complete schedule trigger token that identifies one planned fire. */
   public OfflineJobExecutionVO executeScheduled(Long id, String triggerToken) {
     return executionQuery.toVO(coordinator.execute(id, triggerToken, null, 1));
   }
 
-  /** Schedule 子系统只通过窄 Gateway 获取 executionId，不依赖 execution VO。 */
+  /** Schedule depends only on the narrow execution gateway contract. */
   @Override
   public Long submitScheduled(Long definitionId, String triggerToken) {
     OfflineJobExecutionVO execution = executeScheduled(definitionId, triggerToken);
     return execution == null ? null : execution.getId();
   }
 
-  /** Backfill Dispatcher 只负责触发，不直接调用内部 Coordinator。 */
+  /** Backfill Dispatcher enters execution through this stable facade. */
   public OfflineJobExecutionVO executePendingBackfill(Long batchId) {
     return executionQuery.toVO(coordinator.executePendingBackfill(batchId));
   }
@@ -117,17 +118,17 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
     return executionQuery.toVO(coordinator.cancel(id));
   }
 
-  /** Task 级停止只从 BatchExecution/latest Attempt 选择目标，不读取 Task.lastExecutionId。 */
+  /** Task-level cancel resolves the target from BatchExecution/latest Attempt, never Task.last-*. */
   public OfflineJobExecutionVO cancelLatest(Long definitionId) {
     return executionQuery.toVO(coordinator.cancelLatestBatch(definitionId));
   }
 
   public OfflineBatchOperationVO batchExecute(OfflineBatchOperationDTO request) {
-    return batch(request, true);
+    return batch(request, BatchCommand.EXECUTE);
   }
 
   public OfflineBatchOperationVO batchCancel(OfflineBatchOperationDTO request) {
-    return batch(request, false);
+    return batch(request, BatchCommand.CANCEL);
   }
 
   public PagingData<OfflineJobExecutionVO> page(OfflineJobExecutionQueryDTO query) {
@@ -146,7 +147,7 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
     return executionQuery.events(id);
   }
 
-  /** 旧文本接口保留，并直接渲染新的统一时间线。 */
+  /** Compatibility text endpoint renders the unified execution timeline. */
   public String logs(Long id) {
     return executionLogQuery.text(executionQuery.require(id));
   }
@@ -155,29 +156,26 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
     return executionLogQuery.logs(executionQuery.require(id), cursor, limit);
   }
 
-  /** Reconciler 的状态同步入口；内部状态迁移仍由 Coordinator 负责。 */
+  /** Reconciler enters state application through the stable facade. */
   public void applySnapshot(OfflineJobExecution execution, LinkUpJobResponse response, String type) {
     coordinator.applySnapshot(execution, response, type);
   }
 
-  /** Reconciler 的 UNKNOWN 收口入口。 */
+  /** Reconciler enters UNKNOWN convergence through the stable facade. */
   public void markUnknown(OfflineJobExecution execution, String message) {
     coordinator.markUnknown(execution, message);
   }
 
-  private OfflineBatchOperationVO batch(OfflineBatchOperationDTO request, boolean execute) {
-    if (request == null
-        || request.getJobDefinitionIds() == null
-        || request.getJobDefinitionIds().isEmpty()) {
-      throw new IllegalArgumentException("jobDefinitionIds 不能为空");
-    }
+  private OfflineBatchOperationVO batch(
+      OfflineBatchOperationDTO request, BatchCommand command) {
+    requireBatchRequest(request);
 
     int success = 0;
     List<OfflineBatchOperationErrorVO> errors = new ArrayList<>();
     for (Long id : request.getJobDefinitionIds()) {
       try {
-        if (id == null || id <= 0L) throw new IllegalArgumentException("任务定义 ID 不合法");
-        if (execute) execute(id); else cancelLatest(id);
+        requireDefinitionId(id);
+        applyBatchCommand(id, command);
         success++;
       } catch (RuntimeException exception) {
         errors.add(
@@ -193,5 +191,31 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
         .failedCount(errors.size())
         .errors(errors)
         .build();
+  }
+
+  private void requireBatchRequest(OfflineBatchOperationDTO request) {
+    if (request == null
+        || request.getJobDefinitionIds() == null
+        || request.getJobDefinitionIds().isEmpty()) {
+      throw new IllegalArgumentException("jobDefinitionIds 不能为空");
+    }
+  }
+
+  private void requireDefinitionId(Long id) {
+    if (id == null || id <= 0L) {
+      throw new IllegalArgumentException("任务定义 ID 不合法");
+    }
+  }
+
+  private void applyBatchCommand(Long id, BatchCommand command) {
+    switch (command) {
+      case EXECUTE -> execute(id);
+      case CANCEL -> cancelLatest(id);
+    }
+  }
+
+  private enum BatchCommand {
+    EXECUTE,
+    CANCEL
   }
 }
