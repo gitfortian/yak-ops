@@ -21,6 +21,16 @@ class OfflineExecutionStatusTest {
   }
 
   @Test
+  void unknownOccupiesTheBatchSlotButIsNotConfirmedRemoteActivity() {
+    assertThat(OfflineExecutionStatus.UNKNOWN.isActive()).isTrue();
+    assertThat(OfflineExecutionStatus.UNKNOWN.isConfirmedActive()).isFalse();
+    assertThat(OfflineExecutionStatus.RUNNING.isConfirmedActive()).isTrue();
+    assertThat(OfflineExecutionStatus.isConfirmedActive("RUNNING")).isTrue();
+    assertThat(OfflineExecutionStatus.isConfirmedActive("UNKNOWN")).isFalse();
+    assertThat(OfflineExecutionStatus.isConfirmedActive("LOST")).isFalse();
+  }
+
+  @Test
   void shouldTreatMissingPersistedStatusAsInactive() {
     assertThat(OfflineExecutionStatus.isActive(null)).isFalse();
     assertThat(OfflineExecutionStatus.isActive("")).isFalse();
