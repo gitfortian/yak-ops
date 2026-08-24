@@ -2,12 +2,12 @@ package io.yak.ops.business.development.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ParameterContract;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ResolvedSource;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ResponseFieldContract;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourceContract;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.SourceDescriptor;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider.ParameterContract;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider.ResolvedSource;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider.ResponseFieldContract;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider.SourceContract;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider.SourceDescriptor;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceDefinition;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceRevision;

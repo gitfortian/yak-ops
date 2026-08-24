@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.dataservice.service.source.DataServiceSourceProvider.ResolvedSource;
+import io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider.ResolvedSource;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceDefinition;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceRevision;
 import io.yak.ops.business.development.domain.DevelopmentNode;
