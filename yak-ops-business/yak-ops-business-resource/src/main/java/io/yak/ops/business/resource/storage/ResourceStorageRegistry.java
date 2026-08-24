@@ -14,15 +14,15 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
-/** 已安装资源存储插件注册表。 */
+/** Installed storage plugin registry. Only the storage subsystem sees StorageOperator directly. */
 @Component
 @ConditionalOnResourceEnabled
-public class StorageOperatorRegistry {
+public class ResourceStorageRegistry {
 
   private final Map<ResourceStorageType, StorageOperator> operators;
   private final ResourceProperties properties;
 
-  public StorageOperatorRegistry(
+  public ResourceStorageRegistry(
       List<StorageOperator> storageOperators,
       ResourceProperties properties) {
     this.properties = properties;
@@ -36,8 +36,8 @@ public class StorageOperatorRegistry {
     this.operators = Collections.unmodifiableMap(mapped);
   }
 
-  public StorageOperator require(ResourceStorageType type) {
-    ResourceStorageType effective = type == null ? properties.getStorage().getType() : type;
+  StorageOperator require(ResourceStorageType type) {
+    ResourceStorageType effective = type == null ? defaultType() : type;
     StorageOperator operator = operators.get(effective);
     if (operator == null) {
       throw new ResourceException(
@@ -47,9 +47,13 @@ public class StorageOperatorRegistry {
     return operator;
   }
 
+  public ResourceStorageType defaultType() {
+    return properties.getStorage().getType();
+  }
+
   public List<ResourceStoragePlugin> list() {
     List<ResourceStoragePlugin> plugins = new ArrayList<>();
-    ResourceStorageType activeType = properties.getStorage().getType();
+    ResourceStorageType activeType = defaultType();
     for (StorageOperator operator : operators.values()) {
       plugins.add(
           new ResourceStoragePlugin(
@@ -57,6 +61,6 @@ public class StorageOperatorRegistry {
               operator.name(),
               operator.type() == activeType));
     }
-    return plugins;
+    return List.copyOf(plugins);
   }
 }
