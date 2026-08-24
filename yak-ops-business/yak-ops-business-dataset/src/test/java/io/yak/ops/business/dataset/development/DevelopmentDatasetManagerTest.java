@@ -15,6 +15,8 @@ import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.DatasetVersionDraft;
 import io.yak.ops.business.dataset.definition.DatasetReader;
 import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.DatasetTaskAssetSnapshot;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceAvailability;
+import io.yak.ops.business.dataset.gateway.taskcatalog.DatasetTaskCatalogGateway.SourceOrigin;
 import io.yak.ops.business.dataset.lineage.DatasetLineageRefreshPublisher;
 import io.yak.ops.business.dataset.publication.DatasetPublishCommand;
 import io.yak.ops.business.dataset.publication.DatasetPublisher;
@@ -23,8 +25,6 @@ import io.yak.ops.business.dataset.repository.DatasetRepository;
 import io.yak.ops.business.dataset.schema.DatasetFieldIdentity;
 import io.yak.ops.business.dataset.schema.DatasetFieldNormalizer;
 import io.yak.ops.business.dataset.schema.DatasetSchemaDiscovery;
-import io.yak.ops.spi.task.model.TaskAssetSource;
-import io.yak.ops.spi.task.model.TaskAssetStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -143,8 +143,8 @@ class DevelopmentDatasetManagerTest {
         assetId,
         "sales.sql",
         "101",
-        TaskAssetSource.DATA_DEVELOPMENT,
-        TaskAssetStatus.ONLINE,
+        SourceOrigin.DATA_DEVELOPMENT,
+        SourceAvailability.ONLINE,
         "SQL",
         revisionId,
         revisionNo);
