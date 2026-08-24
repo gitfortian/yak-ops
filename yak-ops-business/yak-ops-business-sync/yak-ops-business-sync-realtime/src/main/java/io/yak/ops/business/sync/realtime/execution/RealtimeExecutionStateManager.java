@@ -1,6 +1,8 @@
 package io.yak.ops.business.sync.realtime.execution;
 
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.DesiredState;
+import io.yak.ops.business.sync.realtime.domain.RealtimeJobState.ObservedState;
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobView;
 import io.yak.ops.business.sync.realtime.domain.SyncExecution;
 import io.yak.ops.business.sync.realtime.domain.SyncExecutionStateMachine;
@@ -18,6 +20,9 @@ import org.springframework.util.StringUtils;
 /** Owns SyncExecution state commits and exact external-stop handling. */
 @Component
 public class RealtimeExecutionStateManager {
+
+  private static final int STOP_POLL_ATTEMPTS = 20;
+  private static final long STOP_POLL_INTERVAL_MILLIS = 250L;
 
   private final RealtimeJobStore store;
   private final SyncExecutionStateMachine stateMachine;
@@ -50,9 +55,9 @@ public class RealtimeExecutionStateManager {
               DeploymentRow row = requireCurrentExecutionRow(taskId, deploymentId);
               SyncExecution execution = row.execution();
 
-              if (execution.desiredState().name().equals("RUNNING")
-                  && execution.observedState().name().equals("STARTING")) {
-                stateMachine.requireTransition(execution, "RUNNING");
+              if (execution.desiredState() == DesiredState.RUNNING
+                  && execution.observedState() == ObservedState.STARTING) {
+                stateMachine.requireTransition(execution, ObservedState.RUNNING);
                 store.markDeploymentRunning(
                     taskId,
                     deploymentId,
@@ -62,15 +67,15 @@ public class RealtimeExecutionStateManager {
                     taskId,
                     deploymentId,
                     "STARTED",
-                    "STARTING",
-                    "RUNNING",
+                    ObservedState.STARTING.name(),
+                    ObservedState.RUNNING.name(),
                     "Flink 已接受任务");
                 return false;
               }
 
-              String from = execution.observedState().name();
-              if (!"STOPPING".equals(from)) {
-                stateMachine.requireTransition(execution, "STOPPING");
+              ObservedState from = execution.observedState();
+              if (from != ObservedState.STOPPING) {
+                stateMachine.requireTransition(execution, ObservedState.STOPPING);
                 store.markStopping(taskId, deploymentId);
               }
               store.bindDeploymentForStop(
@@ -81,8 +86,8 @@ public class RealtimeExecutionStateManager {
                   taskId,
                   deploymentId,
                   "START_CANCEL_PENDING",
-                  from,
-                  "STOPPING",
+                  from.name(),
+                  ObservedState.STOPPING.name(),
                   "启动提交已返回，但期间 Execution 停止意图已生效，立即取消该 Flink 任务");
               return true;
             });
@@ -104,8 +109,9 @@ public class RealtimeExecutionStateManager {
           store.lockDefinition(taskId);
           DeploymentRow row = requireCurrentExecutionRow(taskId, deploymentId);
           SyncExecution execution = row.execution();
-          boolean stopRequested = execution.desiredState().name().equals("STOPPED");
-          String target = exception.uncertain() ? "UNKNOWN" : "FAILED";
+          boolean stopRequested = execution.desiredState() == DesiredState.STOPPED;
+          ObservedState target =
+              exception.uncertain() ? ObservedState.UNKNOWN : ObservedState.FAILED;
           stateMachine.requireTransition(execution, target);
           store.markDeployFailure(
               taskId,
@@ -118,7 +124,7 @@ public class RealtimeExecutionStateManager {
               deploymentId,
               exception.uncertain() ? "START_UNCERTAIN" : "START_FAILED",
               execution.observedState().name(),
-              target,
+              target.name(),
               exception.getMessage());
         });
   }
@@ -136,19 +142,19 @@ public class RealtimeExecutionStateManager {
               if (execution.terminal()) {
                 return new StopReservation(deployment, true, false);
               }
-              if (execution.desiredState().name().equals("STOPPED")
-                  && execution.observedState().name().equals("STOPPING")) {
+              if (execution.desiredState() == DesiredState.STOPPED
+                  && execution.observedState() == ObservedState.STOPPING) {
                 return new StopReservation(deployment, false, true);
               }
 
-              stateMachine.requireTransition(execution, "STOPPING");
+              stateMachine.requireTransition(execution, ObservedState.STOPPING);
               store.markStopping(taskId, deployment.id());
               store.event(
                   taskId,
                   deployment.id(),
                   "STOP_REQUESTED",
                   execution.observedState().name(),
-                  "STOPPING",
+                  ObservedState.STOPPING.name(),
                   "已请求停止当前 SyncExecution");
               return new StopReservation(deployment, false, false);
             });
@@ -200,14 +206,20 @@ public class RealtimeExecutionStateManager {
           store.lockDefinition(taskId);
           DeploymentRow row = requireCurrentExecutionRow(taskId, deploymentId);
           SyncExecution execution = row.execution();
-          stateMachine.requireTransition(execution, "UNKNOWN");
-          store.reconcile(taskId, deploymentId, "UNKNOWN", "UNKNOWN", jobId, message);
+          stateMachine.requireTransition(execution, ObservedState.UNKNOWN);
+          store.reconcile(
+              taskId,
+              deploymentId,
+              ObservedState.UNKNOWN.name(),
+              ObservedState.UNKNOWN.name(),
+              jobId,
+              message);
           store.event(
               taskId,
               deploymentId,
               "STOP_UNCERTAIN",
               execution.observedState().name(),
-              "UNKNOWN",
+              ObservedState.UNKNOWN.name(),
               message);
         });
   }
@@ -219,25 +231,31 @@ public class RealtimeExecutionStateManager {
           store.lockDefinition(taskId);
           DeploymentRow row = requireCurrentExecutionRow(taskId, deploymentId);
           SyncExecution execution = row.execution();
-          if (execution.desiredState().name().equals("STOPPED")
-              && execution.observedState().name().equals("STOPPED")) {
+          if (execution.desiredState() == DesiredState.STOPPED
+              && execution.observedState() == ObservedState.STOPPED) {
             return;
           }
-          stateMachine.requireTransition(execution, "STOPPED");
-          store.reconcile(taskId, deploymentId, "STOPPED", "STOPPED", jobId, null);
+          stateMachine.requireTransition(execution, ObservedState.STOPPED);
+          store.reconcile(
+              taskId,
+              deploymentId,
+              ObservedState.STOPPED.name(),
+              ObservedState.STOPPED.name(),
+              jobId,
+              null);
           store.event(
               taskId,
               deploymentId,
               "STOPPED",
               execution.observedState().name(),
-              "STOPPED",
+              ObservedState.STOPPED.name(),
               message);
         });
   }
 
   private void waitForRuntimeStop(
       ComputeEnvironmentSnapshot runtimeEnvironment, String jobId) {
-    for (int attempt = 0; attempt < 20; attempt++) {
+    for (int attempt = 0; attempt < STOP_POLL_ATTEMPTS; attempt++) {
       RuntimeStatus status = gateway.status(runtimeEnvironment, jobId);
       if (status.state() == RuntimeStatus.State.TERMINATED
           || status.state() == RuntimeStatus.State.NONE) {
@@ -247,7 +265,7 @@ public class RealtimeExecutionStateManager {
         throw new RealtimeEngineException("Flink 停止状态未知，等待后续对账", true, null, null);
       }
       try {
-        Thread.sleep(250);
+        Thread.sleep(STOP_POLL_INTERVAL_MILLIS);
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
         throw new RealtimeEngineException("等待 Flink 停止时被中断", true, null, exception);
