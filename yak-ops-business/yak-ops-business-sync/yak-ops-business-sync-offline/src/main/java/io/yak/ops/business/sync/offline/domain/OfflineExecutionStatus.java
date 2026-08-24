@@ -4,13 +4,7 @@ import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
 
-/**
- * Yak Ops 对 Link-Up 离线 Attempt 状态的稳定映射。
- *
- * <p>LOST 只作为旧持久化值读取，并统一归一为 UNKNOWN；它不再是新的领域状态。
- *
- * @author weifuwan
- */
+/** Yak Ops stable Attempt status mapping for Link-Up offline execution. */
 public enum OfflineExecutionStatus {
   CREATED,
   SUBMITTED,
@@ -23,9 +17,16 @@ public enum OfflineExecutionStatus {
 
   private static final Set<OfflineExecutionStatus> ACTIVE =
       EnumSet.of(CREATED, SUBMITTED, QUEUED, RUNNING, UNKNOWN);
+  private static final Set<OfflineExecutionStatus> CONFIRMED_ACTIVE =
+      EnumSet.of(CREATED, SUBMITTED, QUEUED, RUNNING);
 
   public boolean isActive() {
     return ACTIVE.contains(this);
+  }
+
+  /** UNKNOWN occupies the Batch slot but does not prove an active remote Job. */
+  public boolean isConfirmedActive() {
+    return CONFIRMED_ACTIVE.contains(this);
   }
 
   public boolean isTerminal() {
@@ -40,10 +41,12 @@ public enum OfflineExecutionStatus {
     if ("FINISHED".equals(normalized) || "COMPLETED".equals(normalized)) {
       return SUCCEEDED;
     }
-    if ("CANCELLED".equals(normalized) || "CANCELING".equals(normalized)
+    if ("CANCELLED".equals(normalized)
+        || "CANCELING".equals(normalized)
         || "CANCELLING".equals(normalized)) {
       return CANCELED;
     }
+    // LOST is a persisted compatibility value, not a current domain state.
     if ("LOST".equals(normalized)) {
       return UNKNOWN;
     }
@@ -51,13 +54,21 @@ public enum OfflineExecutionStatus {
   }
 
   public static boolean isActive(String value) {
+    return parseSafely(value).map(OfflineExecutionStatus::isActive).orElse(false);
+  }
+
+  public static boolean isConfirmedActive(String value) {
+    return parseSafely(value).map(OfflineExecutionStatus::isConfirmedActive).orElse(false);
+  }
+
+  private static java.util.Optional<OfflineExecutionStatus> parseSafely(String value) {
     if (value == null || value.trim().isEmpty()) {
-      return false;
+      return java.util.Optional.empty();
     }
     try {
-      return parse(value).isActive();
+      return java.util.Optional.of(parse(value));
     } catch (IllegalArgumentException exception) {
-      return false;
+      return java.util.Optional.empty();
     }
   }
 }
