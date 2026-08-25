@@ -58,7 +58,8 @@ yak:
     audit-enabled: true
     application-name: ${YAK_SECURITY_APPLICATION_NAME:${spring.application.name}}
     authentication:
-      mode: ${YAK_SECURITY_AUTHENTICATION_MODE:satoken}
+      # Sa-Token 无操作超时。
+      idle-timeout: ${YAK_SECURITY_AUTHENTICATION_IDLE_TIMEOUT:30m}
       # 本地默认内存；多实例生产环境设置为 redis。
       storage: ${YAK_SECURITY_AUTHENTICATION_STORAGE:memory}
       redis:
@@ -67,9 +68,6 @@ yak:
         password: ${YAK_SECURITY_REDIS_PASSWORD:}
         database: ${YAK_SECURITY_REDIS_DATABASE:0}
         max-total: ${YAK_SECURITY_REDIS_MAX_TOTAL:64}
-    # 无操作超时；Sa-Token 模式映射为 activeTimeout。
-    session:
-      timeout: ${YAK_SECURITY_SESSION_TIMEOUT:30m}
     public-paths:
       - /api/test/ping
       - /yak-security/api/v1/account/login

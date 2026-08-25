@@ -1,6 +1,7 @@
 package io.yak.ops.boot;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -41,9 +42,14 @@ class YakOpsApplicationTests {
   }
 
   @Test
-  void shouldUseSaTokenAuthenticationByDefault() {
+  void shouldUseSingleSaTokenAuthenticationConfiguration() {
     assertEquals(
-        "satoken",
-        environment.getProperty("yak.security.authentication.mode"));
+        "30m",
+        environment.getProperty("yak.security.authentication.idle-timeout"));
+    assertEquals(
+        "memory",
+        environment.getProperty("yak.security.authentication.storage"));
+    assertNull(environment.getProperty("yak.security.authentication.mode"));
+    assertNull(environment.getProperty("yak.security.session.timeout"));
   }
 }
