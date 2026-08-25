@@ -55,6 +55,7 @@ jobs:
               file.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
           PY
 
+          chmod +x mvnw
           git diff --check
 
       - name: Compile affected modules
