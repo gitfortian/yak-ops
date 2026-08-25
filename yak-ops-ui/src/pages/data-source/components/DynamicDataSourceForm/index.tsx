@@ -381,7 +381,8 @@ const DynamicDataSourceForm = ({
           </div>
           <Button
             size="small"
-            className="shrink-0"
+            type="text"
+            className="shrink-0 !text-[#667085]"
             onClick={() => {
               if (installRequired) {
                 void installPlugin().then((installed) => {
