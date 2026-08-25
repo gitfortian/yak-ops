@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import { openPrettyNotification } from "@/utils/prettyNotification";
+import { dispatchAuthenticationInvalidated } from "@/utils/security/authentication";
 import { history } from "umi";
 import { extend } from "umi-request";
 import {
@@ -23,8 +24,8 @@ const codeMessage: Record<number, string> = {
   202: "一个请求已经进入后台排队（异步任务）。",
   204: "删除数据成功。",
   400: "发出的请求有错误，服务器没有进行新建或修改数据的操作。",
-  401: "用户没有权限（令牌、用户名、密码错误）。",
-  403: "用户得到授权，但是访问是被禁止的。",
+  401: "当前请求未通过身份认证，请重新登录。",
+  403: "当前用户已登录，但没有访问该资源的权限。",
   404: "发出的请求针对的是不存在的记录，服务器没有进行操作。",
   406: "请求的格式不可得。",
   410: "请求的资源被永久删除，且不会再得到的。",
@@ -78,14 +79,14 @@ const notifyOnce = (
   openPrettyNotification(notification);
 };
 
-/** Re-arm expiry handling only after a new Session has been established. */
+/** Re-arm expiry handling only after authentication has been established. */
 export const resetAuthenticationFailure = () => {
   authenticationFailureHandled = false;
 };
 
-/** HTTP 401、业务未登录码与 Session 失效的唯一处理出口。 */
+/** HTTP 401 与业务未认证码的唯一处理出口。 */
 export const handleAuthenticationFailure = () => {
-  window.dispatchEvent(new Event("yak-security:session-expired"));
+  dispatchAuthenticationInvalidated();
   if (window.location.pathname.toLowerCase().startsWith("/login")) {
     return;
   }

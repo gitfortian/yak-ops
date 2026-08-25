@@ -3,9 +3,10 @@ import { securityGetData, securityPostData } from './client';
 /**
  * Yak Security AccountController contract.
  *
- * Authentication is backed by the server-side HTTP session. The shared
- * request client sends cookies with `credentials: "include"`; no bearer token
- * is returned or stored by this module.
+ * Authentication state is managed by the server and carried by cookies. The
+ * shared request client sends cookies with `credentials: "include"`; this
+ * module neither stores credentials nor depends on the server-side
+ * authentication implementation.
  */
 const ACCOUNT_API = '/api/v1/account';
 
