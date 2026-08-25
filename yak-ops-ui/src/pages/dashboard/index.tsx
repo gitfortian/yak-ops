@@ -503,15 +503,6 @@ function DashboardEmptyState({
       <div className="mt-1.5 max-w-[360px] text-[12px] leading-5 text-[#8a9099]">
         把指标、图表和趋势放在同一个画布里，做一个属于你的数据视图。
       </div>
-
-      <Button
-        type="link"
-        icon={<Plus size={14} />}
-        onClick={onCreate}
-        className="mt-2 h-8 px-2 text-[12px] font-medium"
-      >
-        创建第一个仪表盘
-      </Button>
     </div>
   );
 }

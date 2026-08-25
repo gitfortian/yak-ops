@@ -273,15 +273,6 @@ const DigitalScreenEmptyState = ({
     <div className="mt-1.5 text-[12px] leading-5 text-[#8A9099]">
 做一块更有氛围感的数据大屏，把重点信息直接铺开展示。
     </div>
-
-    <Button
-      type="link"
-      icon={<Plus size={14} />}
-      onClick={onCreate}
-      className="mt-2 h-8 px-2 text-[12px] font-medium"
-    >
-      打造第一个大屏
-    </Button>
   </div>
 );
 
