@@ -46,6 +46,8 @@ yak:
     authentication-enabled: true
     audit-enabled: true
     application-name: ${YAK_SECURITY_APPLICATION_NAME:${spring.application.name}}
+    authentication:
+      mode: ${YAK_SECURITY_AUTHENTICATION_MODE:satoken}
     public-paths:
       - /api/test/ping
       - /yak-security/api/v1/account/login

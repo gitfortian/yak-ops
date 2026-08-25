@@ -1,5 +1,6 @@
 package io.yak.ops.boot;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,6 +20,9 @@ class YakOpsApplicationTests {
 
   @Autowired
   private MockMvc mockMvc;
+
+  @Autowired
+  private Environment environment;
 
   @Test
   void testControllerShouldReturnFrameworkResult() throws Exception {
@@ -33,5 +38,12 @@ class YakOpsApplicationTests {
     mockMvc.perform(get("/v3/api-docs/yak-ops"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.paths['/api/test/ping']").exists());
+  }
+
+  @Test
+  void shouldUseSaTokenAuthenticationByDefault() {
+    assertEquals(
+        "satoken",
+        environment.getProperty("yak.security.authentication.mode"));
   }
 }

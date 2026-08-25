@@ -118,4 +118,6 @@ Existing database tables are not automatically dropped. Deployments that already
 
 ## Security note
 
+Yak Ops delegates login-state management to Yak Security and uses the Sa-Token backend by default. To temporarily roll back to the legacy Servlet Session backend, set `YAK_SECURITY_AUTHENTICATION_MODE=session` before startup. Business modules should continue to depend on Yak Security's current-user and permission abstractions instead of calling Sa-Token directly.
+
 Datasource connections, offline synchronization, and data-quality checks can access external systems. Production deployments should apply project permissions, network restrictions, audit rules, query limits, and secret management before granting access.
