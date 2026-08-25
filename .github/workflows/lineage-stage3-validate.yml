@@ -16,6 +16,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - uses: actions/checkout@v4
+        with:
+          repository: weifuwan/yak-framework
+          path: .deps/yak-framework
+          fetch-depth: 1
+
+      - name: Install Yak Framework snapshots
+        shell: bash
+        run: |
+          mvn -B -ntp -f .deps/yak-framework/pom.xml \
+            -Dmaven.test.skip=true \
+            install
+
       - name: Fix mechanical rename and normalize imports
         shell: bash
         run: |
@@ -78,6 +97,7 @@ jobs:
       - name: Commit validated result
         shell: bash
         run: |
+          rm -rf .deps
           rm -f .github/workflows/lineage-stage3-validate.yml
           rmdir .github/workflows 2>/dev/null || true
           rmdir .github 2>/dev/null || true
