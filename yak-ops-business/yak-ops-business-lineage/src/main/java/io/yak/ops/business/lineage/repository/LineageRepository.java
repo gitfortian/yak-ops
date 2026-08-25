@@ -1,10 +1,10 @@
 package io.yak.ops.business.lineage.repository;
 
-import io.yak.ops.business.lineage.LineageAsset;
-import io.yak.ops.business.lineage.LineageAssetDraft;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageRelation;
-import io.yak.ops.business.lineage.LineageRelationDraft;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageAssetDraft;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageRelation;
+import io.yak.ops.business.lineage.domain.LineageRelationDraft;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

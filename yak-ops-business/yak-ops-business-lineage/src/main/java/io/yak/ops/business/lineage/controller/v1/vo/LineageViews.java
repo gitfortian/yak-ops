@@ -1,9 +1,9 @@
 package io.yak.ops.business.lineage.controller.v1.vo;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageDirection;
-import io.yak.ops.business.lineage.LineageRelationType;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageDirection;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

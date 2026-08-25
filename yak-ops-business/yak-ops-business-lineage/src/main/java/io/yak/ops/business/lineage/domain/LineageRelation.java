@@ -1,4 +1,4 @@
-package io.yak.ops.business.lineage;
+package io.yak.ops.business.lineage.domain;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;

@@ -2,14 +2,18 @@ package io.yak.ops.business.lineage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.yak.ops.business.lineage.controller.v1.mapper.LineageViewMapper;
+import io.yak.ops.business.lineage.controller.v1.converter.LineageViewConverter;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageRelation;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class LineageViewMapperTest {
 
-  private final LineageViewMapper mapper = new LineageViewMapper();
+  private final LineageViewConverter converter = new LineageViewConverter();
 
   @Test
   void httpViewsKeepLongIdentifiersAsStrings() {
@@ -32,7 +36,7 @@ class LineageViewMapperTest {
         Instant.EPOCH,
         Instant.EPOCH);
 
-    var view = mapper.asset(asset);
+    var view = converter.asset(asset);
 
     assertEquals(String.valueOf(assetId), view.id());
     assertEquals(String.valueOf(parentId), view.parentAssetId());
@@ -55,7 +59,7 @@ class LineageViewMapperTest {
         Instant.EPOCH,
         Instant.EPOCH);
 
-    var view = mapper.relation(relation);
+    var view = converter.relation(relation);
 
     assertEquals("9007199254740995", view.id());
     assertEquals("9007199254740993", view.sourceAssetId());

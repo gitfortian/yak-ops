@@ -1,4 +1,4 @@
-package io.yak.ops.business.lineage;
+package io.yak.ops.business.lineage.domain;
 
 /** First-stage asset types shared by data development, catalog and BI consumption. */
 public enum LineageAssetType {

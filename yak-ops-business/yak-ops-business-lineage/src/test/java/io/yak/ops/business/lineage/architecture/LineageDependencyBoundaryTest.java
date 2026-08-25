@@ -30,15 +30,7 @@ class LineageDependencyBoundaryTest {
 
   private static final Set<String> TRANSITIONAL_ROOT_TYPES =
       Set.of(
-          "LineageAsset.java",
-          "LineageAssetDraft.java",
-          "LineageAssetType.java",
-          "LineageDirection.java",
-          "LineageGraph.java",
           "LineageMaintenanceService.java",
-          "LineageRelation.java",
-          "LineageRelationDraft.java",
-          "LineageRelationType.java",
           "LineageService.java",
           "SqlProjectionLineageAnalyzer.java");
 
@@ -103,7 +95,7 @@ class LineageDependencyBoundaryTest {
   }
 
   @Test
-  void futureDomainPackageMustRemainFrameworkAndPersistenceFree() throws IOException {
+  void domainPackageMustRemainFrameworkAndPersistenceFree() throws IOException {
     assertNoImports(
         "domain",
         "org.springframework",
