@@ -18,9 +18,6 @@ import {
 
 const {TextArea} = Input;
 
-/**
- * 解析通道配置 JSON。
- */
 function parseConfigJson(
   configJson?: string,
 ): Record<string, unknown> {
@@ -45,9 +42,6 @@ function parseConfigJson(
   }
 }
 
-/**
- * 将后端动态表单校验规则转换为 Ant Design Form Rule。
- */
 function toAntdRules(
   rules?: FormFieldRule[],
 ): Rule[] | undefined {
@@ -80,9 +74,6 @@ function toAntdRules(
   });
 }
 
-/**
- * 根据后端下发的字段类型渲染表单控件。
- */
 function renderFormControl(field: FormFieldConfig) {
   switch (field.type) {
     case 'PASSWORD':
@@ -154,9 +145,6 @@ interface ChannelTypeSelectorProps {
   onSelect: (type: ChannelTypeVO) => void;
 }
 
-/**
- * 新建通道时的类型选择区域。
- */
 const ChannelTypeSelector: React.FC<ChannelTypeSelectorProps> = ({
                                                                    channelTypes,
                                                                    loading,
@@ -298,9 +286,6 @@ const AddOrEditChannelModal =
     const isCreateMode =
       operateType === AlarmOperateType.Create;
 
-    /**
-     * 清空抽屉内部状态。
-     */
     const resetState = () => {
       setCurrentRecord(undefined);
       setSelectedType(null);
@@ -312,9 +297,6 @@ const AddOrEditChannelModal =
       configForm.resetFields();
     };
 
-    /**
-     * 关闭抽屉。
-     */
     const handleClose = () => {
       if (confirmLoading || testing) {
         return;
@@ -323,10 +305,6 @@ const AddOrEditChannelModal =
       setOpen(false);
     };
 
-    /**
-     * 抽屉关闭动画完成后再清空表单。
-     * 避免关闭过程中内容突然消失。
-     */
     const handleAfterOpenChange = (
       nextOpen: boolean,
     ) => {
@@ -335,9 +313,6 @@ const AddOrEditChannelModal =
       }
     };
 
-    /**
-     * 获取后端 SPI 下发的通道类型。
-     */
     const ensureChannelTypes =
       async (): Promise<ChannelTypeVO[]> => {
         if (channelTypes.length > 0) {
@@ -388,9 +363,6 @@ const AddOrEditChannelModal =
 
         const types = await ensureChannelTypes();
 
-        /**
-         * 编辑模式直接进入配置表单。
-         */
         if (
           nextOperateType ===
           AlarmOperateType.Edit &&
@@ -435,9 +407,6 @@ const AddOrEditChannelModal =
           return;
         }
 
-        /**
-         * 新建模式先选择通道类型。
-         */
         setSelectedType(null);
         setShowFormStep(false);
       },
@@ -445,9 +414,6 @@ const AddOrEditChannelModal =
       close: handleClose,
     }));
 
-    /**
-     * 选择通道类型。
-     */
     const handleSelectType = (
       type: ChannelTypeVO,
     ) => {
@@ -462,9 +428,6 @@ const AddOrEditChannelModal =
       setShowFormStep(true);
     };
 
-    /**
-     * 返回通道类型选择。
-     */
     const handlePrevious = () => {
       if (confirmLoading || testing) {
         return;
@@ -477,9 +440,6 @@ const AddOrEditChannelModal =
       configForm.resetFields();
     };
 
-    /**
-     * 新建通道时设置动态字段默认值。
-     */
     useEffect(() => {
       if (
         !showFormStep ||
@@ -512,9 +472,6 @@ const AddOrEditChannelModal =
       showFormStep,
     ]);
 
-    /**
-     * 测试通道配置。
-     */
     const handleTest = async () => {
       if (!selectedType) {
         message.error('请先选择告警通道类型');
@@ -560,9 +517,6 @@ const AddOrEditChannelModal =
       }
     };
 
-    /**
-     * 保存通道。
-     */
     const handleSubmit = async () => {
       if (!selectedType) {
         message.error('请先选择告警通道类型');
@@ -675,7 +629,6 @@ const AddOrEditChannelModal =
         }}
       >
         <div className="flex h-full min-h-0 flex-col bg-white">
-          {/* 自定义抽屉头部 */}
           <header
             className={[
               'flex min-h-[76px] shrink-0',
@@ -749,13 +702,14 @@ const AddOrEditChannelModal =
                 <>
                   <Button
                     size="small"
+                    type="text"
                     icon={
                       <FlaskConical className="h-3.5 w-3.5"/>
                     }
                     loading={testing}
                     disabled={confirmLoading}
                     onClick={handleTest}
-                    className="rounded-lg"
+                    className="rounded-lg !text-[#667085]"
                   >
                     <span className="hidden sm:inline">
                       测试
@@ -803,13 +757,11 @@ const AddOrEditChannelModal =
             </div>
           </header>
 
-          {/* 抽屉内容 */}
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
             <Spin spinning={loadingTypes}>
               {showFormStep &&
               selectedType ? (
                 <>
-                  {/* 基本信息 */}
                   <section className="border-b border-slate-100 pb-6">
                     <div className="mb-5">
                       <h3 className="m-0 text-sm font-semibold text-slate-950">
@@ -890,7 +842,6 @@ const AddOrEditChannelModal =
                     </Form>
                   </section>
 
-                  {/* 动态通道配置 */}
                   <section className="pt-6">
                     <div className="mb-5 flex items-start justify-between gap-4">
                       <div>
