@@ -107,6 +107,7 @@ export const FilterTimeConditions: React.FC<FilterConditionsProps> = ({
               <Button
                 size="small"
                 type="text"
+                className="!text-[#667085]"
                 onClick={() => toggleLogicalOperator(index)}
                 style={{
                   minWidth: 30,
@@ -115,14 +116,26 @@ export const FilterTimeConditions: React.FC<FilterConditionsProps> = ({
                 {condition.logicalOperator}
               </Button>
             )}
-            <Button size="small" type="text" danger onClick={() => removeCondition(index)}>
+            <Button
+              size="small"
+              type="text"
+              danger
+              className="!text-[#667085]"
+              onClick={() => removeCondition(index)}
+            >
               删除
             </Button>
           </div>
         );
       })}
 
-      <Button size="small" type="dashed" onClick={addCondition} style={{ width: 'fit-content' }}>
+      <Button
+        size="small"
+        type="text"
+        className="!text-[#667085]"
+        onClick={addCondition}
+        style={{ width: 'fit-content' }}
+      >
         + 添加时间条件
       </Button>
     </div>
