@@ -9,11 +9,10 @@ const OFFICIAL_FONT_URLS = [
 ];
 
 const FONT_STYLES = [
-  { style: 'Light', weight: 300, required: false },
-  { style: 'Regular', weight: 400, required: true },
-  { style: 'Medium', weight: 500, required: true },
-  { style: 'Semibold', weight: 600, required: false },
-  { style: 'Bold', weight: 700, required: true },
+  { style: 'Light', weight: 300 },
+  { style: 'Regular', weight: 400 },
+  { style: 'Medium', weight: 500 },
+  { style: 'Bold', weight: 700 },
 ];
 
 const MAX_ZIP_ENTRY_SIZE = 64 * 1024 * 1024;
@@ -23,12 +22,12 @@ const ZIP_END_SIGNATURE = 0x06054b50;
 
 const rootDir = process.cwd();
 const fontDir = path.join(rootDir, 'public', 'fonts', 'harmonyos-sans-sc');
-const fontCssPath = path.join(fontDir, 'font.css');
 const licenseDir = path.join(rootDir, 'public', 'licenses');
 const licensePath = path.join(licenseDir, 'HarmonyOS-Sans-LICENSE.txt');
 
 const normalize = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 const basename = (entryName) => path.posix.basename(entryName.replaceAll('\\', '/'));
+const outputFilename = (style) => `HarmonyOS_SansSC_${style}.ttf`;
 
 const exists = async (filePath) => {
   try {
@@ -37,6 +36,14 @@ const exists = async (filePath) => {
   } catch {
     return false;
   }
+};
+
+const fontAssetsExist = async () => {
+  const fontChecks = FONT_STYLES.map(({ style }) =>
+    exists(path.join(fontDir, outputFilename(style))),
+  );
+  const results = await Promise.all([...fontChecks, exists(licensePath)]);
+  return results.every(Boolean);
 };
 
 const loadFontArchive = async () => {
@@ -171,7 +178,7 @@ const extractZipEntry = (buffer, entry) => {
 };
 
 const findFontEntry = (entries, style) => {
-  const expectedName = normalize(`HarmonyOS_SansSC_${style}.ttf`);
+  const expectedName = normalize(outputFilename(style));
   return entries.find(
     (entry) => !entry.isDirectory && normalize(basename(entry.entryName)) === expectedName,
   );
@@ -191,44 +198,20 @@ const findLicenseEntry = (entries) => {
   );
 };
 
-const buildFontCss = (fonts) =>
-  `${fonts
-    .map(
-      ({ filename, style, weight }) => `@font-face {
-  font-family: 'HarmonyOS Sans SC';
-  font-style: normal;
-  font-weight: ${weight};
-  font-display: swap;
-  src: local('HarmonyOS Sans SC ${style}'),
-    url('/fonts/harmonyos-sans-sc/${filename}') format('truetype');
-}`,
-    )
-    .join('\n\n')}\n`;
-
 const main = async () => {
-  if (
-    process.env.HARMONYOS_SANS_FORCE !== '1' &&
-    (await exists(fontCssPath)) &&
-    (await exists(licensePath))
-  ) {
+  if (process.env.HARMONYOS_SANS_FORCE !== '1' && (await fontAssetsExist())) {
     console.log('[font] HarmonyOS Sans SC assets already exist; skipping setup.');
     return;
   }
 
   const { buffer, source } = await loadFontArchive();
   const entries = readZipEntries(buffer);
-
-  const selectedFonts = FONT_STYLES.flatMap(({ style, weight, required }) => {
+  const selectedFonts = FONT_STYLES.map(({ style, weight }) => {
     const entry = findFontEntry(entries, style);
     if (!entry) {
-      if (required) {
-        throw new Error(`Official HarmonyOS Sans archive is missing the ${style} SC font.`);
-      }
-      console.warn(`[font] Optional ${style} font not found; continuing.`);
-      return [];
+      throw new Error(`Official HarmonyOS Sans archive is missing the ${style} SC font.`);
     }
-
-    return [{ entry, filename: basename(entry.entryName), style, weight }];
+    return { entry, filename: outputFilename(style), style, weight };
   });
 
   const licenseEntry = findLicenseEntry(entries);
@@ -243,7 +226,6 @@ const main = async () => {
   for (const { entry, filename } of selectedFonts) {
     await writeFile(path.join(fontDir, filename), extractZipEntry(buffer, entry));
   }
-  await writeFile(fontCssPath, buildFontCss(selectedFonts), 'utf8');
   await writeFile(licensePath, extractZipEntry(buffer, licenseEntry));
 
   console.log(
