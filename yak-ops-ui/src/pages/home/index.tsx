@@ -9,6 +9,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { fetchDataSourceSummary } from '@/pages/data-source/service';
 import DataCenter from './DataCenter';
 import HomeWorkbench from './HomeWorkbench';
@@ -327,6 +328,41 @@ function HomeSecondaryPanels() {
   );
 }
 
+function HomeHeaderBlend() {
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      aria-hidden="true"
+      className="
+        pointer-events-none fixed inset-x-0 top-0 z-[5] h-[176px]
+        overflow-hidden
+        [mask-image:linear-gradient(to_bottom,#000_0%,#000_56%,transparent_100%)]
+      "
+    >
+      <div
+        className="
+          absolute inset-0 bg-white/[0.12] backdrop-blur-[10px]
+        "
+      />
+      <div
+        className="
+          absolute -right-[4%] -top-[160px] h-[360px] w-[72%]
+          bg-[radial-gradient(ellipse_at_center,rgba(159,215,239,0.30)_0%,rgba(187,224,240,0.13)_46%,rgba(255,255,255,0)_74%)]
+          blur-[28px]
+        "
+      />
+      <div
+        className="
+          absolute inset-x-0 top-0 h-[128px]
+          bg-gradient-to-b from-white/55 via-white/20 to-transparent
+        "
+      />
+    </div>,
+    document.body,
+  );
+}
+
 /* =========================================================
  * Page
  * ========================================================= */
@@ -383,6 +419,8 @@ export default function CreatorWorkbenchPage() {
         relative min-h-screen w-full overflow-hidden bg-[#f7f8fa] text-[#242731]
       "
     >
+      <HomeHeaderBlend />
+
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
           className="
