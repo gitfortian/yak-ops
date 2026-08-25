@@ -106,8 +106,8 @@ const DataSourceTypeSelector = ({
         'group flex min-h-[46px] min-w-0 items-center gap-2.5 rounded-lg',
         'border border-[#E8EAED] bg-white px-3 py-2 text-left',
         'transition-colors duration-150',
-        'hover:border-[var(--ant-color-primary-border)]',
-        'focus-visible:border-[var(--ant-color-primary-border)] focus-visible:outline-none',
+        'hover:border-[var(--ant-color-primary)]',
+        'focus-visible:border-[var(--ant-color-primary)] focus-visible:outline-none',
         'disabled:cursor-not-allowed disabled:opacity-45',
       ].join(' ')}
       onClick={() => onSelect(item.dbType)}
@@ -166,8 +166,8 @@ const DataSourceTypeSelector = ({
                 className={[
                   'group flex min-w-0 items-center gap-2 rounded-lg border',
                   'border-[#E8EAED] bg-white px-2.5 py-2 text-left',
-                  'transition-colors hover:border-[var(--ant-color-primary-border)]',
-                  'focus-visible:border-[var(--ant-color-primary-border)] focus-visible:outline-none',
+                  'transition-colors hover:border-[var(--ant-color-primary)]',
+                  'focus-visible:border-[var(--ant-color-primary)] focus-visible:outline-none',
                 ].join(' ')}
                 onClick={() => onSelect(item.dbType)}
               >
