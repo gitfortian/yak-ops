@@ -106,22 +106,17 @@ const DataSourceTypeSelector = ({
         'group flex min-h-[46px] min-w-0 items-center gap-2.5 rounded-lg',
         'border border-[#E8EAED] bg-white px-3 py-2 text-left',
         'transition-colors duration-150',
-        'hover:border-[var(--ant-color-primary-border)] hover:bg-[var(--ant-color-primary-bg)]',
+        'hover:border-[var(--ant-color-primary-border)]',
+        'focus-visible:border-[var(--ant-color-primary-border)] focus-visible:outline-none',
         'disabled:cursor-not-allowed disabled:opacity-45',
       ].join(' ')}
       onClick={() => onSelect(item.dbType)}
     >
-      <span
-        className={[
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-          'bg-[#F7F8FA] transition-colors duration-150',
-          'group-hover:bg-white',
-        ].join(' ')}
-      >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F7F8FA]">
         <DatabaseIcons dbType={item.dbType} width="15px" height="15px" />
       </span>
       <span
-        className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#344054] transition-colors group-hover:text-[var(--ant-color-primary)]"
+        className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#344054]"
         title={item.dbType}
       >
         {item.dbType}
@@ -172,7 +167,7 @@ const DataSourceTypeSelector = ({
                   'group flex min-w-0 items-center gap-2 rounded-lg border',
                   'border-[#E8EAED] bg-white px-2.5 py-2 text-left',
                   'transition-colors hover:border-[var(--ant-color-primary-border)]',
-                  'hover:bg-[var(--ant-color-primary-bg)]',
+                  'focus-visible:border-[var(--ant-color-primary-border)] focus-visible:outline-none',
                 ].join(' ')}
                 onClick={() => onSelect(item.dbType)}
               >
@@ -183,7 +178,7 @@ const DataSourceTypeSelector = ({
                     height="14px"
                   />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#344054] group-hover:text-[var(--ant-color-primary)]">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#344054]">
                   {item.label}
                 </span>
               </button>
