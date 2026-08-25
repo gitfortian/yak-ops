@@ -12,7 +12,7 @@ function LanguageSwitcher() {
   const currentLocale = getSupportedLocale();
 
   const switchLocale = (locale: SupportedLocale) => {
-    if (locale === currentLocale) return;
+    if (locale === getLocale()) return;
 
     document.documentElement.dataset.yakLocale = locale;
     document.documentElement.lang = locale;
