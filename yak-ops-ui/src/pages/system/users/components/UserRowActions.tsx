@@ -178,10 +178,10 @@ export default function UserRowActions({
   return (
     <Space size={2}>
       <Button
-        type="link"
+        type="text"
         size="small"
         icon={<EyeOutlined />}
-        className="!px-1.5 !text-slate-600 hover:!text-slate-900"
+        className="!px-1.5 !text-[#667085]"
         onClick={() => onDetail(user)}
       >
         详情
@@ -189,10 +189,10 @@ export default function UserRowActions({
 
       {canEdit && (
         <Button
-          type="link"
+          type="text"
           size="small"
           icon={<EditOutlined />}
-          className="!px-1.5 !text-slate-600 hover:!text-slate-900"
+          className="!px-1.5 !text-[#667085]"
           onClick={() => onEdit(user)}
         >
           编辑
@@ -209,9 +209,9 @@ export default function UserRowActions({
           }}
         >
           <Button
-            type="link"
+            type="text"
             size="small"
-            className="!px-1.5 !text-slate-600 hover:!text-slate-900"
+            className="!px-1.5 !text-[#667085]"
           >
             更多
             <DownOutlined className="ml-1 text-[10px]" />
