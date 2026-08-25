@@ -1,8 +1,8 @@
+import YakButton from '@/components/YakButton';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import { BRAND_THEME } from '@/styles/brand';
 import { history } from '@umijs/max';
 import {
-  Button,
   ConfigProvider,
   DatePicker,
   Input,
@@ -388,17 +388,17 @@ const ExecutionPage = () => {
       </div>
 
       <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f1f3] pt-3">
-        <Button
+        <YakButton
           size="small"
           type="text"
           className="!text-[#667085]"
           onClick={reset}
         >
           重置
-        </Button>
-        <Button size="small" type="primary" onClick={applyAdvancedSearch}>
+        </YakButton>
+        <YakButton size="small" type="primary" onClick={applyAdvancedSearch}>
           应用
-        </Button>
+        </YakButton>
       </div>
     </div>
   );
@@ -467,13 +467,13 @@ const ExecutionPage = () => {
                     }}
                   />
 
-                  <Button
+                  <YakButton
                     type="text"
                     className="!text-[#667085]"
                     onClick={applySearch}
                   >
                     查询
-                  </Button>
+                  </YakButton>
 
                   <Popover
                     trigger="click"
@@ -482,18 +482,19 @@ const ExecutionPage = () => {
                     onOpenChange={setAdvancedOpen}
                     content={advancedSearchContent}
                   >
-                    <Button
+                    <YakButton
                       type="text"
                       className="!text-[#667085]"
                       icon={<ListFilter size={14} />}
                     >
                       高级筛选
                       {advancedFilterCount ? ` (${advancedFilterCount})` : ''}
-                    </Button>
+                    </YakButton>
                   </Popover>
 
-                  <Button
+                  <YakButton
                     type="text"
+                    iconOnly
                     className="!text-[#667085]"
                     aria-label="刷新"
                     icon={<RefreshCw size={14} />}
