@@ -17,9 +17,9 @@ Lineage 是 Yak Ops 的统一元数据血缘模块，负责维护可稳定寻址
 
 ## Current Contract
 
-当前生产代码已经具备 `controller -> application service -> repository -> dao` 的基础分层，并把 MyBatis PO 与 HTTP DTO 隔离在边界之外。Stage 2 已将 Asset / Relation / Graph 及相关枚举、Draft 收拢到 `io.yak.ops.business.lineage.domain`；稳定 Service 和 SQL 分析接口仍暂时保留在根包。
+当前生产代码已形成 `controller -> query/write service -> repository -> dao` 的稳定入口。Stage 2 将 Asset / Relation / Graph 收拢到 `domain`；Stage 3 将读取、写入和维护用例分别收拢到 `LineageQueryService`、`LineageWriteService`、`LineageMaintenanceService`，并切换 Dataset、Analysis、Dashboard、Data Development 调用方。
 
-Stage 1 建立长期架构合同和可执行护栏，Stage 2 只完成 Domain package 迁移与引用修复，**不修改 REST、数据库、Flyway、领域行为与持久化语义**。后续阶段继续按合同消除剩余根包过渡债务，而不是一次性重写。
+根包现在仅保留待 Stage 4 归位的 `SqlProjectionLineageAnalyzer` contract。本阶段不修改 REST、数据库、Flyway、领域行为和持久化语义。
 
 ## Core Model
 

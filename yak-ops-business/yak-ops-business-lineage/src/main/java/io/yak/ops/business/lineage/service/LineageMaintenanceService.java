@@ -1,4 +1,4 @@
-package io.yak.ops.business.lineage;
+package io.yak.ops.business.lineage.service;
 
 import io.yak.ops.business.lineage.repository.LineageRepository;
 import java.util.Set;

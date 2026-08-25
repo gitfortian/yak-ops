@@ -12,6 +12,8 @@ import io.yak.ops.business.lineage.domain.LineageRelation;
 import io.yak.ops.business.lineage.domain.LineageRelationDraft;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
 import io.yak.ops.business.lineage.repository.LineageRepository;
+import io.yak.ops.business.lineage.service.LineageQueryService;
+import io.yak.ops.business.lineage.service.LineageWriteService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,36 +25,37 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
-class LineageServiceTest {
+class LineageServicesTest {
 
   @Test
   void traversesMultiHopGraphAndStopsAtVisitedAssets() {
     InMemoryLineageRepository repository = new InMemoryLineageRepository();
-    LineageService service = new LineageService(repository);
+    LineageWriteService writeService = new LineageWriteService(repository);
+    LineageQueryService queryService = new LineageQueryService(repository);
 
-    LineageAsset tableA = service.registerAsset(asset("table:a", LineageAssetType.TABLE));
-    LineageAsset taskB = service.registerAsset(asset("sql:b", LineageAssetType.SQL_TASK));
-    LineageAsset tableC = service.registerAsset(asset("table:c", LineageAssetType.TABLE));
-    LineageAsset datasetD = service.registerAsset(asset("dataset:d", LineageAssetType.DATASET));
-    LineageAsset chartE = service.registerAsset(asset("chart:e", LineageAssetType.CHART));
+    LineageAsset tableA = writeService.registerAsset(asset("table:a", LineageAssetType.TABLE));
+    LineageAsset taskB = writeService.registerAsset(asset("sql:b", LineageAssetType.SQL_TASK));
+    LineageAsset tableC = writeService.registerAsset(asset("table:c", LineageAssetType.TABLE));
+    LineageAsset datasetD = writeService.registerAsset(asset("dataset:d", LineageAssetType.DATASET));
+    LineageAsset chartE = writeService.registerAsset(asset("chart:e", LineageAssetType.CHART));
 
-    service.registerRelation(relation(tableA.id(), taskB.id(), LineageRelationType.READS_FROM));
-    service.registerRelation(relation(taskB.id(), tableC.id(), LineageRelationType.WRITES_TO));
-    service.registerRelation(relation(tableC.id(), datasetD.id(), LineageRelationType.DERIVES_FROM));
-    service.registerRelation(relation(datasetD.id(), chartE.id(), LineageRelationType.CONSUMES));
-    service.registerRelation(relation(chartE.id(), taskB.id(), LineageRelationType.CONSUMES));
+    writeService.registerRelation(relation(tableA.id(), taskB.id(), LineageRelationType.READS_FROM));
+    writeService.registerRelation(relation(taskB.id(), tableC.id(), LineageRelationType.WRITES_TO));
+    writeService.registerRelation(relation(tableC.id(), datasetD.id(), LineageRelationType.DERIVES_FROM));
+    writeService.registerRelation(relation(datasetD.id(), chartE.id(), LineageRelationType.CONSUMES));
+    writeService.registerRelation(relation(chartE.id(), taskB.id(), LineageRelationType.CONSUMES));
 
-    LineageGraph downstream = service.downstream(tableA.id(), 10);
+    LineageGraph downstream = queryService.downstream(tableA.id(), 10);
     assertEquals(
         Set.of(tableA.id(), taskB.id(), tableC.id(), datasetD.id(), chartE.id()),
         ids(downstream));
     assertEquals(5, downstream.relations().size());
 
-    LineageGraph twoHops = service.downstream(tableA.id(), 2);
+    LineageGraph twoHops = queryService.downstream(tableA.id(), 2);
     assertEquals(Set.of(tableA.id(), taskB.id(), tableC.id()), ids(twoHops));
     assertEquals(2, twoHops.relations().size());
 
-    LineageGraph upstream = service.upstream(chartE.id(), 4);
+    LineageGraph upstream = queryService.upstream(chartE.id(), 4);
     assertTrue(ids(upstream).contains(tableA.id()));
     assertTrue(ids(upstream).contains(datasetD.id()));
   }
@@ -60,23 +63,24 @@ class LineageServiceTest {
   @Test
   void searchesAssetsByKeywordTypeAndLimit() {
     InMemoryLineageRepository repository = new InMemoryLineageRepository();
-    LineageService service = new LineageService(repository);
+    LineageWriteService writeService = new LineageWriteService(repository);
+    LineageQueryService queryService = new LineageQueryService(repository);
 
-    service.registerAsset(new LineageService.RegisterAssetCommand(
+    writeService.registerAsset(new LineageWriteService.RegisterAssetCommand(
         "dataset:1", LineageAssetType.DATASET, "Sales Dataset", "TEST", "1", null,
         null, null, null, null, null, null));
-    service.registerAsset(new LineageService.RegisterAssetCommand(
+    writeService.registerAsset(new LineageWriteService.RegisterAssetCommand(
         "dataset:2", LineageAssetType.DATASET, "Inventory", "TEST", "2", null,
         null, null, null, null, null, null));
-    service.registerAsset(new LineageService.RegisterAssetCommand(
+    writeService.registerAsset(new LineageWriteService.RegisterAssetCommand(
         "chart:1", LineageAssetType.CHART, "Sales Chart", "TEST", "3", null,
         null, null, null, null, null, null));
 
-    List<LineageAsset> values = service.searchAssets("sales", LineageAssetType.DATASET, 10);
+    List<LineageAsset> values = queryService.searchAssets("sales", LineageAssetType.DATASET, 10);
 
     assertEquals(1, values.size());
     assertEquals("dataset:1", values.get(0).assetKey());
-    assertEquals(1, service.searchAssets(null, LineageAssetType.DATASET, 1).size());
+    assertEquals(1, queryService.searchAssets(null, LineageAssetType.DATASET, 1).size());
   }
 
   @Test
@@ -90,13 +94,14 @@ class LineageServiceTest {
   @Test
   void batchApiDeduplicatesInputsAndSkipsEmptyCollections() {
     InMemoryLineageRepository repository = new InMemoryLineageRepository();
-    LineageService service = new LineageService(repository);
+    LineageWriteService writeService = new LineageWriteService(repository);
+    LineageQueryService queryService = new LineageQueryService(repository);
 
-    Map<String, LineageAsset> assets = service.registerAssetsBatch(
+    Map<String, LineageAsset> assets = writeService.registerAssetsBatch(
         List.of(asset("column:a", LineageAssetType.COLUMN),
             asset("column:a", LineageAssetType.COLUMN),
             asset("column:b", LineageAssetType.COLUMN)), 1);
-    service.registerRelationsBatch(List.of(
+    writeService.registerRelationsBatch(List.of(
         relation(assets.get("column:a").id(), assets.get("column:b").id(),
             LineageRelationType.DERIVES_FROM),
         relation(assets.get("column:a").id(), assets.get("column:b").id(),
@@ -104,8 +109,8 @@ class LineageServiceTest {
 
     assertEquals(2, assets.size());
     assertEquals(1, repository.relations.size());
-    assertTrue(service.registerAssetsBatch(List.of(), 10).isEmpty());
-    service.registerRelationsBatch(List.of(), 10);
+    assertTrue(writeService.registerAssetsBatch(List.of(), 10).isEmpty());
+    writeService.registerRelationsBatch(List.of(), 10);
     assertEquals(1, repository.relations.size());
   }
 
@@ -113,16 +118,16 @@ class LineageServiceTest {
     return graph.nodes().stream().map(LineageAsset::id).collect(Collectors.toSet());
   }
 
-  private static LineageService.RegisterAssetCommand asset(
+  private static LineageWriteService.RegisterAssetCommand asset(
       String assetKey, LineageAssetType assetType) {
-    return new LineageService.RegisterAssetCommand(
+    return new LineageWriteService.RegisterAssetCommand(
         assetKey, assetType, assetKey, "TEST", assetKey, null,
         null, null, null, null, null, null);
   }
 
-  private static LineageService.RegisterRelationCommand relation(
+  private static LineageWriteService.RegisterRelationCommand relation(
       long sourceAssetId, long targetAssetId, LineageRelationType relationType) {
-    return new LineageService.RegisterRelationCommand(
+    return new LineageWriteService.RegisterRelationCommand(
         sourceAssetId, targetAssetId, relationType, "TEST", "case", null,
         null, "v1", Instant.parse("2026-08-20T00:00:00Z"), null);
   }

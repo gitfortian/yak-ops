@@ -38,23 +38,23 @@ config  <- infrastructure-only configuration
 
 ## Current Transitional Corridors
 
-Stage 1 不移动 production class，因此当前存在两个明确债务：
+Stage 3 已完成 Domain 与 Service 的物理归位：
 
 ```text
-controller -> root LineageService
-root LineageService / LineageMaintenanceService -> repository
-repository adapter -> root Asset / Relation domain records
+controller -> service -> repository -> domain
+                              └-----> dao
+
+cross-module gateway adapters -> query/write/maintenance service
 ```
 
-根包同时放着 Domain、Service 和 Analyzer，使完整 package graph 暂时无法表达为无环图。这个状态被 `LineageDependencyBoundaryTest` 显式冻结：**债务可以减少，不能继续增长**。
+根包只保留 `SqlProjectionLineageAnalyzer`，等待 Stage 4 进入 `analysis`。Service 不直接依赖 DAO/Mapper/PO，跨模块调用方不能重新引用旧根包 Service 或旧根包领域类型。
 
 后续顺序：
 
 ```text
-Domain move
-  -> Service facade split
-  -> Analyzer / Collector role placement
-  -> tighten dependency matrix
+Analyzer / Collector role placement
+  -> persistence and Maven dependency audit
+  -> final root-package cleanup and graph lock
 ```
 
 ## Forbidden Shortcuts
@@ -92,5 +92,5 @@ Stage 1 保持单一 `yak-ops-business-lineage` Maven module，不提前拆 `lin
 - Controller 不穿透持久化；
 - Repository 不依赖 HTTP contract；
 - DAO 不反向依赖上层；
-- 未来 Domain package 保持 framework/persistence free；
+- Domain package 保持 framework/persistence free；
 - `common/helper/utils/base` 业务大桶不能回流。
