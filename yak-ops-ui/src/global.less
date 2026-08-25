@@ -203,51 +203,6 @@ ol {
   background: rgba(0, 0, 0, 0.55)
 }
 
-// Global Ant Design secondary actions use the same lightweight text-button
-// language as the compact refresh action: no outlined white box by default,
-// with a neutral hover surface. Explicit primary/link/text hierarchy is kept.
-.ant-btn-default {
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-.ant-btn-default:not(.ant-btn-dangerous) {
-  color: #344054 !important;
-}
-
-.ant-btn-default:not(:disabled):not(.ant-btn-disabled):not(.ant-btn-dangerous):hover,
-.ant-btn-default:not(:disabled):not(.ant-btn-disabled):not(.ant-btn-dangerous):active {
-  color: #161823 !important;
-  border-color: transparent !important;
-}
-
-.ant-btn-default:not(:disabled):not(.ant-btn-disabled):hover {
-  background: #f5f5f6 !important;
-}
-
-.ant-btn-default:not(:disabled):not(.ant-btn-disabled):active {
-  background: #eaecf0 !important;
-}
-
-.ant-btn-default.ant-btn-dangerous:not(:disabled):not(.ant-btn-disabled):hover,
-.ant-btn-default.ant-btn-dangerous:not(:disabled):not(.ant-btn-disabled):active {
-  border-color: transparent !important;
-  background: rgba(254, 44, 85, 0.06) !important;
-}
-
-.ant-btn-default:focus-visible {
-  outline: 2px solid rgba(254, 44, 85, 0.16);
-  outline-offset: 1px;
-}
-
-.ant-btn-default:disabled,
-.ant-btn-default.ant-btn-disabled {
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
 // Data development tree: keep the compact, polished density used by Chat2DB.
 .development-tree.ant-tree {
   font-size: 13px;
