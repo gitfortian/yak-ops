@@ -1,5 +1,6 @@
+import YakButton from '@/components/YakButton';
 import { UploadOutlined } from '@ant-design/icons';
-import { Button, Input, message, Upload } from 'antd';
+import { Input, message, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { useMemo, useState } from 'react';
 
@@ -87,15 +88,14 @@ const DriverManager = ({
         />
 
         <Upload {...uploadProps}>
-          <Button
-            type="text"
-            className="shrink-0 !text-[#667085]"
+          <YakButton
+            className="shrink-0"
             icon={<UploadOutlined />}
             loading={uploading}
             disabled={disabled}
           >
             上传驱动
-          </Button>
+          </YakButton>
         </Upload>
       </div>
 
