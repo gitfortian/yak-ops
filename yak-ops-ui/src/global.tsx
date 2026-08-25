@@ -2,6 +2,7 @@ import { useIntl } from '@umijs/max';
 import { Button, message, notification } from 'antd';
 import defaultSettings from '../config/defaultSettings';
 import '../tailwind.css';
+import './styles/fonts.less';
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
