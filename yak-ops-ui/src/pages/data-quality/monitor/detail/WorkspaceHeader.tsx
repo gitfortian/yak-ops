@@ -1,5 +1,5 @@
+import YakButton from '@/components/YakButton';
 import YakTab from '@/components/YakTab';
-import { Button } from "antd";
 import { Database, ExternalLink } from "lucide-react";
 import type { MonitorWorkspaceView } from "../../types";
 import type { WorkspaceTab } from "./model";
@@ -46,14 +46,14 @@ const WorkspaceHeader = ({
             <h1 className="m-0 truncate text-[18px] font-semibold leading-7 text-[#172033]">
               {monitor?.tableName || "规则管理"}
             </h1>
-            <Button
+            <YakButton
               type="text"
               size="small"
               className="!h-6 !px-0 !text-xs !text-[#667085]"
               onClick={onBack}
             >
               返回数据表监控 <ExternalLink size={12} />
-            </Button>
+            </YakButton>
           </div>
 
           <div className="mt-0.5 truncate text-xs text-[#8b95a7]">
