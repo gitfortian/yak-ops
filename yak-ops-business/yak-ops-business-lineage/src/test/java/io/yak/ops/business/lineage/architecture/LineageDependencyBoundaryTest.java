@@ -18,7 +18,15 @@ class LineageDependencyBoundaryTest {
   private static final String BASE = "io.yak.ops.business.lineage";
 
   private static final Set<String> DECLARED_TOP_LEVEL_PACKAGES =
-      Set.of("analysis", "collector", "config", "controller", "dao", "domain", "repository", "service");
+      Set.of(
+          "analysis",
+          "collector",
+          "config",
+          "controller",
+          "dao",
+          "domain",
+          "repository",
+          "service");
 
   private static final Set<String> TRANSITIONAL_ROOT_TYPES =
       Set.of(
@@ -110,7 +118,8 @@ class LineageDependencyBoundaryTest {
 
   @Test
   void serviceStereotypeCannotLeakIntoInfrastructureOrDomain() throws IOException {
-    for (String packageName : Set.of("analysis", "collector", "config", "dao", "domain", "repository")) {
+    for (String packageName :
+        Set.of("analysis", "collector", "config", "dao", "domain", "repository")) {
       Path root = productionRoot().resolve(packageName);
       if (!Files.isDirectory(root)) continue;
       for (Path file : javaFiles(root)) {
@@ -138,10 +147,14 @@ class LineageDependencyBoundaryTest {
 
     for (Path file : javaFiles(root)) {
       String source = Files.readString(file, StandardCharsets.UTF_8);
+      String imports =
+          source.lines()
+              .filter(line -> line.startsWith("import "))
+              .reduce("", (left, right) -> left + right + "\n");
       for (String token : forbiddenTokens) {
-        assertThat(source)
+        assertThat(imports)
             .as("Forbidden dependency '%s' in %s", token, normalize(file))
-            .doesNotContain("import " + token);
+            .doesNotContain(token);
       }
     }
   }
@@ -164,7 +177,9 @@ class LineageDependencyBoundaryTest {
             "yak-ops-business-lineage",
             "src/main/java/io/yak/ops/business/lineage");
     assertThat(Files.isDirectory(repositoryRelative))
-        .as("Unable to locate Lineage production source root from %s", Paths.get(".").toAbsolutePath())
+        .as(
+            "Unable to locate Lineage production source root from %s",
+            Paths.get(".").toAbsolutePath())
         .isTrue();
     return repositoryRelative;
   }
