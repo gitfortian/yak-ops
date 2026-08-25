@@ -1,4 +1,5 @@
-import { Button, Tabs } from "antd";
+import YakTab from '@/components/YakTab';
+import { Button } from "antd";
 import { Database, ExternalLink } from "lucide-react";
 import type { MonitorWorkspaceView } from "../../types";
 import type { WorkspaceTab } from "./model";
@@ -99,7 +100,7 @@ const WorkspaceHeader = ({
       </div>
 
       <div className="px-4">
-        <Tabs
+        <YakTab
           activeKey={activeTab}
           onChange={(value) => onTabChange(value as WorkspaceTab)}
           items={[
@@ -107,10 +108,6 @@ const WorkspaceHeader = ({
             { key: "monitors", label: "监控信息" },
             { key: "report", label: "质量报告" },
           ]}
-          className="
-    workspace-tabs
-    [&.ant-tabs-top>.ant-tabs-nav]:!m-0
-  "
         />
       </div>
     </header>

@@ -1,0 +1,55 @@
+.yak-tabs.ant-tabs-top {
+  > .ant-tabs-nav {
+    min-height: 35px;
+    margin: 0;
+  }
+
+  > .ant-tabs-nav::before {
+    border-bottom: 1px solid #eceef2;
+  }
+
+  > .ant-tabs-nav .ant-tabs-nav-list {
+    gap: 20px;
+  }
+
+  > .ant-tabs-nav .ant-tabs-tab,
+  > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {
+    height: 35px;
+    margin: 0 !important;
+    padding: 0 0 8px;
+    color: #858a93;
+    font-size: 13px;
+    font-weight: 400;
+    transition: color 0.2s ease;
+  }
+
+  > .ant-tabs-nav .ant-tabs-tab:hover {
+    color: #4a4f59;
+  }
+
+  > .ant-tabs-nav .ant-tabs-tab-btn {
+    transition: color 0.2s ease;
+  }
+
+  > .ant-tabs-nav .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: #292c35 !important;
+    font-weight: 600;
+    text-shadow: none;
+  }
+
+  > .ant-tabs-nav .ant-tabs-ink-bar {
+    height: 2px !important;
+    background: #252832 !important;
+    border-radius: 999px;
+  }
+
+  > .ant-tabs-nav .ant-tabs-extra-content {
+    align-self: flex-end;
+  }
+}
+
+@media (min-width: 640px) {
+  .yak-tabs.ant-tabs-top > .ant-tabs-nav .ant-tabs-nav-list {
+    gap: 28px;
+  }
+}

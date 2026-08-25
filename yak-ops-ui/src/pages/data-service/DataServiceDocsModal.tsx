@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import {
   Button,
   Input,
@@ -5,7 +6,6 @@ import {
   Select,
   Spin,
   Table,
-  Tabs,
   Tag,
   message,
 } from 'antd';
@@ -336,7 +336,7 @@ const DataServiceDocsModal = ({ open, service, readOnly = false, onCancel }: Dat
             {readOnly ? <Tag bordered={false}>DS Revision · 只读</Tag> : null}
             {documentation?.schemaStale ? <Tag color="warning">Schema 待同步</Tag> : documentation?.documented ? <Tag bordered={false}>已同步</Tag> : <Tag bordered={false}>未保存</Tag>}
           </div>
-          <Tabs items={items} />
+          <YakTab items={items} />
         </div>
       </Spin>
     </Modal>

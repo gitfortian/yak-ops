@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { BRAND_THEME } from '@/styles/brand';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -12,7 +13,6 @@ import {
   Select,
   Spin,
   Table,
-  Tabs,
   Tag,
   Tooltip,
   Tree,
@@ -975,8 +975,8 @@ const DataCatalogPage = () => {
           </div>
         </div>
 
-        <div className="shrink-0 border-b border-[#e4e7ec] px-2">
-          <Tabs
+        <div className="shrink-0 px-2">
+          <YakTab
             activeKey={detailTab}
             items={detailTabs.map((tab) => ({
               key: tab.key,
@@ -985,7 +985,6 @@ const DataCatalogPage = () => {
             onChange={(key) =>
               setDetailTab(key as 'fields' | 'versions' | 'overview' | 'lineage')
             }
-            className="dataset-detail-tabs"
           />
         </div>
 
@@ -1195,19 +1194,7 @@ const DataCatalogPage = () => {
       </div>
 
       <style>{`
-        .dataset-detail-tabs > .ant-tabs-nav {
-          margin: 0;
-        }
-        .dataset-detail-tabs > .ant-tabs-nav::before {
-          border-bottom: 0;
-        }
-        .dataset-detail-tabs .ant-tabs-tab {
-          padding: 9px 12px;
-          font-size: 14px;
-        }
-        .dataset-detail-tabs .ant-tabs-tab + .ant-tabs-tab {
-          margin-left: 4px;
-        }
+
         
       
 

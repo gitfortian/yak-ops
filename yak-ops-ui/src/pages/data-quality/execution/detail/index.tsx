@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import { BRAND_THEME } from '@/styles/brand';
 import { history, useParams } from '@umijs/max';
@@ -9,7 +10,6 @@ import {
   Input,
   Spin,
   Table,
-  Tabs,
   Tag,
   Typography,
   message,
@@ -422,10 +422,10 @@ const ExecutionDetailPage = () => {
                 )}
               </button>
 
-              <Tabs
+              <YakTab
                 activeKey={activeTab}
                 onChange={setActiveTab}
-                className="min-h-0 flex-1 [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:overflow-auto [&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-nav]:!px-4"
+                className="min-h-0 flex-1 [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:overflow-auto"
                 items={[
                   {
                     key: 'CURRENT',

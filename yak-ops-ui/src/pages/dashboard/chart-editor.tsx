@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import {
   calculatedFieldKey,
   isCalculatedFieldKey,
@@ -9,7 +10,7 @@ import {
   updateEncodingMetricAggregation,
 } from '@/components/analysis/encoding';
 import type { AnalysisEncoding, AnalysisSpec } from '@/components/analysis/model';
-import { Button, Collapse, Input, Select, Tabs } from 'antd';
+import { Button, Collapse, Input, Select } from 'antd';
 import {
   Calculator,
   ChevronDown,
@@ -452,7 +453,7 @@ export function ChartAppearanceConfigPanel({
     <section className="chart-appearance-config-panel flex w-[320px] shrink-0 flex-col border-l border-[#e3e6ea] bg-white 2xl:w-[336px]">
       <InspectorHeader />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <Tabs
+        <YakTab
           size="small"
           defaultActiveKey="style"
           className="chart-appearance-tabs"

@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import {
   Alert,
   Button,
@@ -7,7 +8,6 @@ import {
   Progress,
   Space,
   Spin,
-  Tabs,
   Timeline,
   Typography,
   message,
@@ -251,7 +251,7 @@ export default function RealtimeRuntimeDetail({ job, events }: Props) {
   );
 
   const logs = (
-    <Tabs
+    <YakTab
       items={[
         {
           key: 'submission',
@@ -469,7 +469,7 @@ export default function RealtimeRuntimeDetail({ job, events }: Props) {
   );
 
   return (
-    <Tabs
+    <YakTab
       items={[
         { key: 'overview', label: '运行概览', children: overview },
         {

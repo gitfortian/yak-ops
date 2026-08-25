@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
@@ -718,41 +719,18 @@ export default function DataCenter() {
         <LatestTaskCard task={overview?.latestTask} />
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-h-[35px] items-end justify-between border-b border-[#eceef2]">
-            <div className="flex items-center gap-5 sm:gap-7">
-              {overviewTabs.map((tab) => {
-                const active = activeTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`
-                      relative h-[35px] pb-2 text-[13px] transition-colors
-                      ${
-                        active
-                          ? 'font-semibold text-[#292c35]'
-                          : 'font-normal text-[#858a93] hover:text-[#4a4f59]'
-                      }
-                    `}
-                  >
-                    {tab.label}
-                    <span
-                      className={`absolute inset-x-0 -bottom-px h-[2px] origin-center rounded-full bg-[#252832] transition-transform duration-200 ${
-                        active ? 'scale-x-100' : 'scale-x-0'
-                      }`}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-
-            {activeTab !== 'recent' && (
-              <div className="mb-1.5">
-                <PeriodSelect value={periodKey} onChange={setPeriodKey} />
-              </div>
-            )}
-          </div>
+          <YakTab
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as OverviewTabKey)}
+            items={overviewTabs}
+            tabBarExtraContent={
+              activeTab !== 'recent' ? (
+                <div className="mb-1.5">
+                  <PeriodSelect value={periodKey} onChange={setPeriodKey} />
+                </div>
+              ) : undefined
+            }
+          />
 
           {activeTab === 'overview' && (
             <div>
