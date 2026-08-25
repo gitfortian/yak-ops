@@ -3,7 +3,7 @@ import LoginPanel from "./LoginPanel";
 
 export default function LoginPage() {
   return (
-    <main className="h-screen overflow-y-auto bg-[#fbfbfa] text-[#171717]">
+    <main className="yak-login-page h-screen overflow-y-auto bg-[#fbfbfa] text-[#171717]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1540px] flex-col px-6 py-4 sm:px-10 lg:px-12 lg:pb-6 lg:pt-5 xl:px-16">
         <header className="flex h-11 shrink-0 items-center">
           <img
