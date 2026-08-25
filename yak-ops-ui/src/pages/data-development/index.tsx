@@ -372,6 +372,10 @@ export default function DataDevelopmentPage() {
             directories={directories}
             selectedNodeId={selectedResourceNodeId}
             onNodeFocus={(nodeId) => setSelectedNodeKey(nodeId ? nodeKey(nodeId) : undefined)}
+            onCreateNode={(type) => {
+              setCreateType(type);
+              setCreateOpen(true);
+            }}
             onNodesChanged={loadTree}
           />
         </div>
