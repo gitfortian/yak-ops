@@ -3,13 +3,15 @@ import type { Settings as LayoutSettings } from "@ant-design/pro-components";
 import { SettingDrawer } from "@ant-design/pro-components";
 import "@ant-design/v5-patch-for-react-19";
 import type { RunTimeLayoutConfig } from "@umijs/max";
-import { getLocale, history } from "@umijs/max";
+import { getLocale, history, useModel } from "@umijs/max";
+import { useEffect } from "react";
 
 import defaultSettings from "../config/defaultSettings";
 import { GlobalSearch, Knowledge } from "./components/RightContent";
 import SidebarMenuLink from "./components/SidebarMenuLink";
 import { getCurrentUser } from "./services/security/account";
 import { toCurrentUser } from "./services/security/currentIdentity";
+import { AUTHENTICATION_INVALIDATED_EVENT } from "./utils/security/authentication";
 import {
   getCurrentReturnTo,
   getSafeReturnTo,
@@ -34,6 +36,35 @@ const redirectAnonymousUser = () => {
   history.replace(`${loginPath}?returnTo=${encodeURIComponent(returnTo)}`);
 };
 
+const AuthenticationStateSync = () => {
+  const { setInitialState } = useModel("@@initialState");
+
+  useEffect(() => {
+    const clearAuthenticationState = () => {
+      void setInitialState((state) => ({
+        ...state,
+        currentUser: undefined,
+        currentProject: undefined,
+        securityProject: undefined,
+        currentUserLoadError: false,
+      }));
+    };
+
+    window.addEventListener(
+      AUTHENTICATION_INVALIDATED_EVENT,
+      clearAuthenticationState,
+    );
+    return () => {
+      window.removeEventListener(
+        AUTHENTICATION_INVALIDATED_EVENT,
+        clearAuthenticationState,
+      );
+    };
+  }, [setInitialState]);
+
+  return null;
+};
+
 /**
  * @see https://umijs.org/docs/api/runtime-config#getinitialstate
  * */
@@ -49,7 +80,7 @@ export async function getInitialState(): Promise<{
   syncDocumentLocale();
 
   const fetchUserInfo = async () => toCurrentUser(await getCurrentUser());
-  // Always probe the cookie-backed Session, including after a reload on login.
+  // Always probe cookie-backed authentication state, including after a reload on login.
   let currentUser: API.CurrentUser | undefined;
   let currentUserLoadError = false;
   try {
@@ -148,6 +179,7 @@ export const layout: RunTimeLayoutConfig = ({
       // if (initialState?.loading) return <PageLoading />;
       return (
         <>
+          <AuthenticationStateSync />
           {children}
           {isDev && (
             <SettingDrawer

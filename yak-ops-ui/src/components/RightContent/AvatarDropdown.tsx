@@ -129,12 +129,13 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
       await logout();
     } finally {
       // Identity, grants and the selected Security project only live in memory.
-      // Clear them even if the server has already invalidated the Session.
+      // Clear them even if server-side authentication is already invalid.
       await setInitialState((state) => ({
         ...state,
         currentUser: undefined,
         currentProject: undefined,
         securityProject: undefined,
+        currentUserLoadError: false,
       }));
       history.replace('/login');
       setLoggingOut(false);

@@ -23,6 +23,7 @@ export default function LoginPanel() {
         setInitialState((state: any) => ({
           ...state,
           currentUser: userInfo,
+          currentUserLoadError: false,
         }));
       });
     }

@@ -25,10 +25,17 @@ describe('API response protocols', () => {
     );
   });
 
-  it('recognizes business session expiry without treating forbidden as anonymous', () => {
+  it('recognizes authentication failures without treating forbidden as anonymous', () => {
     expect(isUnauthenticatedResponse({ code: 401 }, 'yak-ops')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 401 }, 'security')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 403 }, 'security')).toBe(false);
+    expect(
+      isUnauthenticatedResponse(
+        { code: 999, message: 'UNAUTHENTICATED' },
+        'security',
+      ),
+    ).toBe(true);
+    // Keep parsing legacy backend messages while frontend state remains backend-neutral.
     expect(
       isUnauthenticatedResponse(
         { code: 999, message: 'session_expired' },
