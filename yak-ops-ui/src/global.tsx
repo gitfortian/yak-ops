@@ -1,5 +1,5 @@
-import { useIntl } from '@umijs/max';
-import { Button, message, notification } from 'antd';
+import { getIntl } from '@umijs/max';
+import { closeNotification, notifyOnce } from './utils/notifyOnce';
 import defaultSettings from '../config/defaultSettings';
 import '../tailwind.css';
 import './styles/fonts.less';
@@ -27,7 +27,13 @@ const clearCache = () => {
 if (pwa) {
   // Notify user if offline now
   window.addEventListener('sw.offline', () => {
-    message.warning(useIntl().formatMessage({ id: 'app.pwa.offline' }));
+    const intl = getIntl();
+    notifyOnce('pwa:offline', {
+      type: 'warning',
+      title: intl.formatMessage({ id: 'app.pwa.offline' }),
+      description: '当前设备处于离线状态，请检查网络连接。',
+      meta: '网络离线',
+    });
   });
 
   // Pop up a prompt on the page asking the user if they want to use the latest version
@@ -57,26 +63,22 @@ if (pwa) {
       window.location.reload();
       return true;
     };
-    const key = `open${Date.now()}`;
-    const btn = (
-      <Button
-        type="primary"
-        onClick={() => {
-          notification.destroy(key);
-          reloadSW();
-        }}
-      >
-        {useIntl().formatMessage({ id: 'app.pwa.serviceworker.updated.ok' })}
-      </Button>
-    );
-    notification.open({
-      message: useIntl().formatMessage({ id: 'app.pwa.serviceworker.updated' }),
-      description: useIntl().formatMessage({
+
+    const intl = getIntl();
+    const key = 'pwa:update';
+    notifyOnce(key, {
+      type: 'info',
+      title: intl.formatMessage({ id: 'app.pwa.serviceworker.updated' }),
+      description: intl.formatMessage({
         id: 'app.pwa.serviceworker.updated.hint',
       }),
-      btn,
+      btnText: intl.formatMessage({ id: 'app.pwa.serviceworker.updated.ok' }),
+      onClick: () => {
+        closeNotification(key);
+        void reloadSW();
+      },
+      duration: 0,
       key,
-      onClose: async () => null,
     });
   });
 } else if ('serviceWorker' in navigator && isHttps) {
