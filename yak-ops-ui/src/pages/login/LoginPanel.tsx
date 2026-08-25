@@ -2,10 +2,70 @@ import { login } from "@/services/security/account";
 import { resetAuthenticationFailure } from "@/utils/request";
 import { getSafeReturnTo } from "@/utils/security/redirect";
 import { history, useIntl, useModel } from "@umijs/max";
-import { App, Button, Form, Input } from "antd";
+import { App, Button, Form, Input, type InputProps } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useState } from "react";
 import { flushSync } from "react-dom";
+
+type FloatingInputProps = InputProps & {
+  label: string;
+  password?: boolean;
+};
+
+function FloatingInput({
+  label,
+  password = false,
+  onBlur,
+  onFocus,
+  value,
+  ...inputProps
+}: FloatingInputProps) {
+  const [focused, setFocused] = useState(false);
+  const floating = focused || String(value ?? "").length > 0;
+
+  const handleFocus: InputProps["onFocus"] = (event) => {
+    setFocused(true);
+    onFocus?.(event);
+  };
+
+  const handleBlur: InputProps["onBlur"] = (event) => {
+    setFocused(false);
+    onBlur?.(event);
+  };
+
+  const className = password
+    ? "!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
+    : "!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !text-[15px] !shadow-none hover:!border-[#bdbdb8] focus:!border-[#171717]";
+
+  const controlProps: InputProps = {
+    ...inputProps,
+    value,
+    className,
+    placeholder: "",
+    onFocus: handleFocus,
+    onBlur: handleBlur,
+  };
+
+  return (
+    <div className="relative">
+      {password ? (
+        <Input.Password {...controlProps} />
+      ) : (
+        <Input {...controlProps} />
+      )}
+      <label
+        htmlFor={inputProps.id}
+        className={`pointer-events-none absolute left-4 z-10 bg-white px-1 transition-all duration-200 ease-out ${
+          floating
+            ? "top-0 -translate-y-1/2 text-[12px] font-medium text-[#333]"
+            : "top-1/2 -translate-y-1/2 text-[15px] text-[#aaa]"
+        }`}
+      >
+        {label}
+      </label>
+    </div>
+  );
+}
 
 export default function LoginPanel() {
   const [loading, setLoading] = useState(false);
@@ -78,28 +138,14 @@ export default function LoginPanel() {
       >
         <Form.Item
           className="!mb-5"
-          label={
-            <span className="text-[13px] font-medium text-[#333]">
-              Username
-            </span>
-          }
           name="userName"
           rules={[{ required: true, message: "请输入用户名" }]}
         >
-          <Input
-            className="!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !text-[15px] !shadow-none placeholder:!text-[#aaa] hover:!border-[#bdbdb8] focus:!border-[#171717]"
-            placeholder="Enter your username"
-            autoComplete="username"
-          />
+          <FloatingInput label="Username" autoComplete="username" />
         </Form.Item>
 
         <Form.Item
           className="!mb-6"
-          label={
-            <span className="text-[13px] font-medium text-[#333]">
-              Password
-            </span>
-          }
           name="userPassword"
           rules={[
             {
@@ -108,9 +154,9 @@ export default function LoginPanel() {
             },
           ]}
         >
-          <Input.Password
-            className="!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
-            placeholder="Enter your password"
+          <FloatingInput
+            label="Password"
+            password
             autoComplete="current-password"
           />
         </Form.Item>
