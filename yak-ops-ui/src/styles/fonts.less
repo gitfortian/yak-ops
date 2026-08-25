@@ -1,0 +1,15 @@
+@import (less) '@lobehub/webfont-harmony-sans-sc-mini/css/index.css';
+
+// Keep YakOps' existing Latin font for English, and switch the complete
+// Chinese UI (including Ant Design via --yak-font-family) to HarmonyOS Sans SC.
+html[data-yak-locale='zh-CN']:root {
+  --yak-font-family: 'HarmonyOS Sans SC', 'HarmonyOS Sans', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+}
+
+// global.less currently pins the login page to YakOps. Override it only for
+// zh-CN so login and authenticated pages use one consistent Chinese typeface.
+html[data-yak-locale='zh-CN'] .yak-login-page {
+  --yak-font-family: 'HarmonyOS Sans SC', 'HarmonyOS Sans', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+}

@@ -42,6 +42,7 @@
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@ant-design/x": "^2.2.2",
     "@emoji-mart/data": "^1.1.2",
+    "@lobehub/webfont-harmony-sans-sc-mini": "1.0.0",
     "@rc-component/menu": "^1.2.0",
     "@stomp/stompjs": "^7.1.0",
     "antd": "^5.25.4",
