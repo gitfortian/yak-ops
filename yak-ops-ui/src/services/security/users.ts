@@ -159,6 +159,18 @@ export const deleteUser = (
   );
 
 /**
+ * 强制下线指定用户的全部登录终端。
+ */
+export const forceLogoutUser = (
+  userId: number,
+): Promise<void> =>
+  securityPostData<void>(
+    `${USER_API}/${encodeURIComponent(
+      String(userId),
+    )}/logout`,
+  );
+
+/**
  * 校验用户名、手机号或邮箱是否可用。
  */
 export const checkUserField = (
