@@ -135,6 +135,8 @@ export default function AssignmentDrawer(
       extra={
         <Space>
           <Button
+            type="text"
+            className="!text-[#667085]"
             disabled={submitting}
             onClick={onClose}
           >
@@ -167,6 +169,7 @@ export default function AssignmentDrawer(
           <Button
             type="text"
             size="small"
+            className="!text-[#667085]"
             onClick={() => setSelected([])}
           >
             清空
