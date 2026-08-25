@@ -38,6 +38,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
 
 export const appRoutes: readonly NavigationRoute[] = [
   { id: 'home', mode: 'public', path: '/home', title: '首页', component: './home', iconKey: 'home', order: 0 },
+  { id: 'quick-create', path: '/create', title: '快速创建', component: './create', hidden: true, parentId: 'home' },
   { id: 'data-source', mode: 'one', permission: 'resource:data-source:read', path: '/data-source', title: '数据源管理', component: './data-source', iconKey: 'database', order: 10 },
   { id: 'dashboard', mode: 'public', path: '/dashboard', title: '仪表盘', component: './dashboard', iconKey: 'insight', menuGroup: 'data-analysis', order: 10 },
   { id: 'dashboard-new', path: '/dashboard/new', title: '新建仪表盘', component: './dashboard/editor', hidden: true, parentId: 'dashboard' },
