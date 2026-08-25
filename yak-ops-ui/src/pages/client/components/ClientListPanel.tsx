@@ -131,7 +131,7 @@ const ClientListPanel: React.FC<Props> = ({
                       danger
                       icon={<DeleteOutlined/>}
                       loading={deleting}
-                      className="!flex !h-7 !w-7 !items-center !justify-center !rounded-lg hover:!bg-[#FFF1F0]"
+                      className="!flex !h-7 !w-7 !items-center !justify-center !rounded-lg !text-[#667085] hover:!bg-[#FFF1F0]"
                     />
                   </Tooltip>
                 </Popconfirm>
