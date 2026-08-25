@@ -17,7 +17,10 @@ export default function LoginPage() {
         <div className="grid flex-1 grid-cols-1 gap-10 pt-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(540px,0.95fr)] lg:items-center lg:gap-14 lg:pt-0 xl:gap-20">
           <section className="flex min-w-0 items-center justify-center py-8 lg:py-10">
             <div className="w-full max-w-[620px]">
-              <div className="mb-10 text-center">
+              <div
+                className="mb-10 text-center"
+                style={{ fontFamily: "'YakOps', Inter, sans-serif" }}
+              >
                 <h1 className="m-0 text-[46px] font-normal leading-[1.01] tracking-[-0.045em] text-[#171717] sm:text-[60px] lg:text-[64px]">
                   Data ops,  &nbsp; simplified.
                 </h1>
