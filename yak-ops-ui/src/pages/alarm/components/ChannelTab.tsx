@@ -1,6 +1,7 @@
+import YakButton from '@/components/YakButton';
 import {BellOutlined, DeleteOutlined, EditOutlined, ThunderboltOutlined,} from '@ant-design/icons';
 import {useIntl} from '@umijs/max';
-import {Button, Empty, message, Modal, Spin, Switch, Tooltip,} from 'antd';
+import {Empty, message, Modal, Spin, Switch, Tooltip,} from 'antd';
 import {ArrowRight, RadioTower} from 'lucide-react';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {deleteChannel, fetchChannels, saveChannel, testChannel,} from '../service';
@@ -184,13 +185,13 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
           </p>
         </div>
 
-        <Button
+        <YakButton
           type="primary"
           onClick={handleCreate}
           className="rounded-full"
         >
           新建通道
-        </Button>
+        </YakButton>
       </div>
 
       <Spin spinning={loading}>
@@ -273,7 +274,7 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
 
                     {/* 操作 */}
                     <div className="mt-3 flex items-center gap-1 border-t border-slate-100 pt-3">
-                      <Button
+                      <YakButton
                         type="text"
                         size="small"
                         icon={<ThunderboltOutlined/>}
@@ -282,9 +283,9 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
                         className="!text-[#667085]"
                       >
                         测试
-                      </Button>
+                      </YakButton>
 
-                      <Button
+                      <YakButton
                         type="text"
                         size="small"
                         icon={<EditOutlined/>}
@@ -292,9 +293,9 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
                         className="!text-[#667085]"
                       >
                         编辑
-                      </Button>
+                      </YakButton>
 
-                      <Button
+                      <YakButton
                         type="text"
                         size="small"
                         danger
@@ -303,20 +304,19 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
                         onClick={() => handleDelete(channel)}
                       >
                         删除
-                      </Button>
+                      </YakButton>
 
                       <Tooltip title="查看详情">
-                        <button
-                          type="button"
+                        <YakButton
+                          type="text"
+                          size="small"
+                          iconOnly
+                          htmlType="button"
+                          aria-label="查看详情"
                           onClick={() => handleEdit(channel)}
-                          className={[
-                            'ml-auto inline-flex h-7 w-7 items-center justify-center',
-                            'rounded-lg text-slate-300 transition-all duration-200',
-                            'hover:bg-white hover:text-slate-700',
-                          ].join(' ')}
-                        >
-                          <ArrowRight className="h-4 w-4"/>
-                        </button>
+                          className="ml-auto !h-7 !w-7 !rounded-lg !text-slate-300 hover:!bg-white hover:!text-slate-700"
+                          icon={<ArrowRight className="h-4 w-4"/>}
+                        />
                       </Tooltip>
                     </div>
                   </div>
@@ -335,9 +335,9 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
               }
             >
               {!keyword && (
-                <Button type="primary" onClick={handleCreate}>
+                <YakButton type="primary" onClick={handleCreate}>
                   新建通道
-                </Button>
+                </YakButton>
               )}
             </Empty>
           </div>
