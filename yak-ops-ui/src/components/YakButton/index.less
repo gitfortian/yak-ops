@@ -166,3 +166,61 @@
     background: #b42318;
   }
 }
+
+/* --------------------------------------------------
+ * Glass
+ * Chrome-style subtle hover surface
+ * -------------------------------------------------- */
+
+.yak-button.ant-btn.yak-button--glass {
+  position: relative;
+  overflow: hidden;
+
+  border-color: transparent;
+  color: #4a4f59;
+
+  // 核心：默认尽量“消失”
+  background: rgba(255, 255, 255, 0);
+
+  box-shadow: none;
+
+  // 视频里的感觉非常克制，不建议 scale
+  transform: none;
+
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    backdrop-filter 140ms ease,
+    box-shadow 140ms ease;
+
+  &:not(:disabled):not(.ant-btn-disabled):hover {
+    border-color: transparent;
+
+    color: #292c35;
+
+    // 真正核心
+    background: rgba(37, 40, 50, 0.055);
+
+    // 很轻，不要太重
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+
+    box-shadow: none;
+  }
+
+  &:not(:disabled):not(.ant-btn-disabled):active {
+    color: #1f222a;
+
+    background: rgba(37, 40, 50, 0.085);
+
+    // 覆盖你全局的 translateY(1px)
+    transform: none;
+  }
+
+  &:focus-visible {
+    outline: 0;
+
+    box-shadow:
+      0 0 0 3px rgba(37, 40, 50, 0.08);
+  }
+}

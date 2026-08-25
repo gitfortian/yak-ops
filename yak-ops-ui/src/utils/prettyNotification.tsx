@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import "./index.less";
+import YakButton from "@/components/YakButton";
 
 type NotifyType = "error" | "success" | "warning" | "info";
 
@@ -147,7 +148,7 @@ export function openPrettyNotification({
                 )}
 
                 {btnText ? (
-                  <Button
+                  <YakButton
                     type="text"
                     size="small"
                     onClick={onClick}
@@ -158,7 +159,7 @@ export function openPrettyNotification({
                       {btnText}
                       <ArrowRight size={14} />
                     </Space>
-                  </Button>
+                  </YakButton>
                 ) : null}
               </div>
             )}

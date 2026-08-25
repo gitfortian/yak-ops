@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   createWorkflowDefinition,
   deleteWorkflowDefinition,
@@ -25,7 +26,6 @@ import {
 } from '@ant-design/icons';
 import { history } from '@umijs/max';
 import {
-  Button,
   ConfigProvider,
   Divider,
   Drawer,
@@ -365,8 +365,8 @@ export default function WorkflowDefinitionList() {
       ),
       okText: '删除',
       cancelText: '取消',
-      okButtonProps: { danger: true, size: 'small' },
-      cancelButtonProps: { size: 'small' },
+      okYakButtonProps: { danger: true, size: 'small' },
+      cancelYakButtonProps: { size: 'small' },
       maskClosable: true,
       async onOk() {
         try {
@@ -542,7 +542,7 @@ export default function WorkflowDefinitionList() {
 
     if (runtimeStatus === 'PAUSING') {
       return (
-        <Button
+        <YakButton
           size="small"
           color="danger"
           variant="filled"
@@ -551,13 +551,13 @@ export default function WorkflowDefinitionList() {
           className="!h-7 !rounded-md !px-2.5 !text-xs"
         >
           暂停中
-        </Button>
+        </YakButton>
       );
     }
 
     if (runtimeStatus === 'RESUMING') {
       return (
-        <Button
+        <YakButton
           size="small"
           color="primary"
           variant="filled"
@@ -566,13 +566,13 @@ export default function WorkflowDefinitionList() {
           className="!h-7 !rounded-md !px-2.5 !text-xs"
         >
           恢复中
-        </Button>
+        </YakButton>
       );
     }
 
     if (runtimeStatus === 'PAUSED') {
       return (
-        <Button
+        <YakButton
           size="small"
           color="primary"
           variant="filled"
@@ -589,7 +589,7 @@ export default function WorkflowDefinitionList() {
           }
         >
           恢复
-        </Button>
+        </YakButton>
       );
     }
 
@@ -609,7 +609,7 @@ export default function WorkflowDefinitionList() {
             )
           }
         >
-          <Button
+          <YakButton
             size="small"
             color="danger"
             variant="filled"
@@ -619,7 +619,7 @@ export default function WorkflowDefinitionList() {
             className="!h-7 !rounded-md !px-2.5 !text-xs"
           >
             暂停
-          </Button>
+          </YakButton>
         </Popconfirm>
       );
     }
@@ -648,7 +648,7 @@ export default function WorkflowDefinitionList() {
               )
             }
           >
-            <Button
+            <YakButton
               size="small"
               color={canRun ? 'primary' : 'default'}
               variant="filled"
@@ -661,7 +661,7 @@ export default function WorkflowDefinitionList() {
               ].join(' ')}
             >
               运行
-            </Button>
+            </YakButton>
           </Popconfirm>
         </span>
       </Tooltip>
@@ -675,8 +675,8 @@ export default function WorkflowDefinitionList() {
       width: 310,
       render: (_value: string, record: WorkflowDefinition) => (
         <div className="min-w-0 py-0.5">
-          <button
-            type="button"
+          <YakButton
+            type="YakButton"
             title={record.name}
             onClick={() => goToDefinition(record)}
             className={[
@@ -686,7 +686,7 @@ export default function WorkflowDefinitionList() {
             ].join(' ')}
           >
             {record.name || '未命名工作流'}
-          </button>
+          </YakButton>
           <div
             title={record.description || ''}
             className="mt-0.5 truncate text-[11px] leading-5 text-[#98a2b3]"
@@ -794,7 +794,7 @@ export default function WorkflowDefinitionList() {
               },
             }}
           >
-            <Button
+            <YakButton
               size="small"
               color="default"
               variant="text"
@@ -804,7 +804,7 @@ export default function WorkflowDefinitionList() {
             >
               更多
               <DownOutlined className="text-[9px]" />
-            </Button>
+            </YakButton>
           </Dropdown>
         </div>
       ),
@@ -820,7 +820,7 @@ export default function WorkflowDefinitionList() {
           colorBgContainer: '#ffffff',
         },
         components: {
-          Button: { borderRadius: 8 },
+          YakButton: { borderRadius: 8 },
           Input: { activeShadow: 'none' },
         },
       }}
@@ -839,9 +839,9 @@ export default function WorkflowDefinitionList() {
                     const active = filter === item.key;
 
                     return (
-                      <button
+                      <YakButton
                         key={item.key}
-                        type="button"
+                        type="YakButton"
                         onClick={() => setFilter(item.key)}
                         className={[
                           'h-8 rounded-md px-3.5 text-[13px] font-medium transition-all',
@@ -851,7 +851,7 @@ export default function WorkflowDefinitionList() {
                         ].join(' ')}
                       >
                         {item.label}
-                      </button>
+                      </YakButton>
                     );
                   })}
                 </div>
@@ -868,16 +868,16 @@ export default function WorkflowDefinitionList() {
                     onPressEnter={handleSearch}
                   />
 
-                  <Button
+                  <YakButton
                     size="small"
                     className="!h-9 !px-4"
                     onClick={handleSearch}
                   >
                     查询
-                  </Button>
+                  </YakButton>
 
                   <Tooltip title="刷新">
-                    <Button
+                    <YakButton
                       size="small"
                       icon={<ReloadOutlined spin={loading} />}
                       className="!h-9 !w-9 !px-0"
@@ -890,7 +890,7 @@ export default function WorkflowDefinitionList() {
             </div>
 
             <div className="flex min-h-[48px] items-center justify-end">
-              <Button
+              <YakButton
                 danger
                 type="primary"
                 size="small"
@@ -898,7 +898,7 @@ export default function WorkflowDefinitionList() {
                 onClick={() => setCreateOpen(true)}
               >
                 <span className="text-[13px]">新建工作流</span>
-              </Button>
+              </YakButton>
             </div>
 
             <div className="flex min-h-9 items-center rounded-sm bg-[#fff7e6] px-3 text-[12px] text-[#475467]">
@@ -990,21 +990,21 @@ export default function WorkflowDefinitionList() {
           }
           extra={
             <div className="flex items-center gap-2">
-              <Button
+              <YakButton
                 disabled={creating}
                 onClick={handleCreateClose}
                 className="!h-9 !rounded-lg !px-4"
               >
                 取消
-              </Button>
-              <Button
+              </YakButton>
+              <YakButton
                 type="primary"
                 loading={creating}
                 onClick={() => void handleCreate()}
                 className="!h-9 !rounded-lg !px-5 !text-white"
               >
                 创建并配置
-              </Button>
+              </YakButton>
             </div>
           }
           styles={{

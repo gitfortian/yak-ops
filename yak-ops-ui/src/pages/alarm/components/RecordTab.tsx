@@ -6,6 +6,7 @@ import React, {useCallback, useEffect, useMemo, useState,} from 'react';
 import {fetchAlarmRecords, fetchChannels,} from '../service';
 import type {AlarmChannelRecord, AlarmRecordRecord,} from '../types';
 import {formatTime} from '../utils';
+import YakButton from '@/components/YakButton';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -596,7 +597,7 @@ const RecordTab: React.FC = () => {
           </p>
         </div>
 
-        <Button
+        <YakButton
           icon={
             <RefreshCw className="h-4 w-4"/>
           }
@@ -605,7 +606,7 @@ const RecordTab: React.FC = () => {
           className="rounded-full"
         >
           刷新
-        </Button>
+        </YakButton>
       </div>
 
       {/* 筛选区域 */}

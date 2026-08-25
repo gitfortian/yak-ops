@@ -14,18 +14,18 @@ import {
 import {
   ArrowUpRight,
   Boxes,
+  ChevronLeft,
   ChevronRight,
   Filter,
   GitBranch,
   LocateFixed,
-  PanelLeftClose,
-  PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   Search,
   X,
 } from 'lucide-react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
@@ -53,11 +53,32 @@ import {
   type LineageRelation,
 } from './types';
 import { lineageAssetVisual, lineageRelationColor } from './visual';
+import YakButton from '@/components/YakButton';
 
 const DEFAULT_DEPTH = 3;
 const SEARCH_LIMIT = 30;
 const ALL_TYPES = [...LINEAGE_ASSET_TYPES];
 const SELECTED_EDGE_COLOR = '#3F73C7';
+
+const DEFAULT_LEFT_PANEL_WIDTH = 264;
+const MIN_LEFT_PANEL_WIDTH = 220;
+const MAX_LEFT_PANEL_WIDTH = 480;
+const LEFT_PANEL_WIDTH_STORAGE_KEY = 'yak-lineage.left-panel-width';
+
+const clampLeftPanelWidth = (value: number) =>
+  Math.min(MAX_LEFT_PANEL_WIDTH, Math.max(MIN_LEFT_PANEL_WIDTH, value));
+
+const initialLeftPanelWidth = () => {
+  if (typeof window === 'undefined') return DEFAULT_LEFT_PANEL_WIDTH;
+
+  const stored = Number(
+    window.localStorage.getItem(LEFT_PANEL_WIDTH_STORAGE_KEY),
+  );
+
+  return Number.isFinite(stored) && stored > 0
+    ? clampLeftPanelWidth(stored)
+    : DEFAULT_LEFT_PANEL_WIDTH;
+};
 
 const nodeTypes = { lineage: LineageNode };
 
@@ -155,6 +176,195 @@ const ImpactValue = ({ label, value }: { label: string; value: number }) => (
   </div>
 );
 
+const LineageEmptyIllustration = () => (
+  <svg
+    width="360"
+    height="236"
+    viewBox="0 0 360 236"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+    className="select-none"
+  >
+    <defs>
+      <linearGradient id="lineage-main-card" x1="111" y1="69" x2="241" y2="170">
+        <stop stopColor="#FFFFFF" />
+        <stop offset="1" stopColor="#F7F9FC" />
+      </linearGradient>
+      <linearGradient id="lineage-blue" x1="0" y1="0" x2="1" y2="1">
+        <stop stopColor="#93C5FD" />
+        <stop offset="1" stopColor="#4C78C9" />
+      </linearGradient>
+      <linearGradient id="lineage-purple" x1="0" y1="0" x2="1" y2="1">
+        <stop stopColor="#C4B5FD" />
+        <stop offset="1" stopColor="#8B5CF6" />
+      </linearGradient>
+      <linearGradient id="lineage-pink" x1="0" y1="0" x2="1" y2="1">
+        <stop stopColor="#FDA4AF" />
+        <stop offset="1" stopColor="#FE2C55" />
+      </linearGradient>
+      <linearGradient id="lineage-green" x1="0" y1="0" x2="1" y2="1">
+        <stop stopColor="#86EFAC" />
+        <stop offset="1" stopColor="#22A06B" />
+      </linearGradient>
+      <filter
+        id="lineage-shadow"
+        x="40"
+        y="22"
+        width="280"
+        height="196"
+        filterUnits="userSpaceOnUse"
+      >
+        <feDropShadow
+          dx="0"
+          dy="10"
+          stdDeviation="13"
+          floodColor="#1F2937"
+          floodOpacity="0.08"
+        />
+      </filter>
+      <filter
+        id="lineage-small-shadow"
+        x="0"
+        y="0"
+        width="360"
+        height="236"
+        filterUnits="userSpaceOnUse"
+      >
+        <feDropShadow
+          dx="0"
+          dy="6"
+          stdDeviation="7"
+          floodColor="#1F2937"
+          floodOpacity="0.07"
+        />
+      </filter>
+    </defs>
+
+    {/* subtle dots */}
+    <circle cx="47" cy="54" r="3.5" fill="#E1EAFE" />
+    <circle cx="313" cy="56" r="4" fill="#FCE0E6" />
+    <circle cx="58" cy="185" r="4" fill="#E9E2FF" />
+    <circle cx="303" cy="181" r="3.5" fill="#D9F2E5" />
+
+    {/* connectors */}
+    <path
+      d="M105 113C87 113 83 94 73 88"
+      stroke="#D8E2F2"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeDasharray="4 5"
+    />
+    <path
+      d="M174 68C174 53 156 47 148 42"
+      stroke="#E0D8F7"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeDasharray="4 5"
+    />
+    <path
+      d="M241 105C262 105 268 88 282 85"
+      stroke="#F5D5DD"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeDasharray="4 5"
+    />
+    <path
+      d="M200 167C204 184 223 190 233 194"
+      stroke="#D6ECDF"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeDasharray="4 5"
+    />
+
+    {/* connector joints */}
+    <circle cx="105" cy="113" r="4" fill="#FFFFFF" stroke="#AFC4E4" strokeWidth="2" />
+    <circle cx="174" cy="68" r="4" fill="#FFFFFF" stroke="#BCAAE9" strokeWidth="2" />
+    <circle cx="241" cy="105" r="4" fill="#FFFFFF" stroke="#E7A7B5" strokeWidth="2" />
+    <circle cx="200" cy="167" r="4" fill="#FFFFFF" stroke="#9FD1B4" strokeWidth="2" />
+
+    {/* main table node */}
+    <g filter="url(#lineage-shadow)">
+      <rect x="105" y="68" width="136" height="100" rx="18" fill="url(#lineage-main-card)" />
+      <rect
+        x="105.75"
+        y="68.75"
+        width="134.5"
+        height="98.5"
+        rx="17.25"
+        stroke="#E5EAF0"
+        strokeWidth="1.5"
+      />
+
+      <rect x="121" y="84" width="54" height="7" rx="3.5" fill="#DCE3EA" />
+      <rect x="183" y="84" width="38" height="7" rx="3.5" fill="#EEF1F5" />
+
+      <rect x="121" y="105" width="100" height="1.5" rx="0.75" fill="#EDF0F4" />
+      <circle cx="127" cy="118" r="4" fill="#93C5FD" />
+      <rect x="138" y="114.5" width="55" height="7" rx="3.5" fill="#E3E8EE" />
+      <rect x="199" y="114.5" width="22" height="7" rx="3.5" fill="#F1F3F6" />
+
+      <circle cx="127" cy="138" r="4" fill="#C4B5FD" />
+      <rect x="138" y="134.5" width="42" height="7" rx="3.5" fill="#E3E8EE" />
+      <rect x="186" y="134.5" width="35" height="7" rx="3.5" fill="#F1F3F6" />
+
+      <circle cx="127" cy="154" r="4" fill="#86EFAC" />
+      <rect x="138" y="150.5" width="67" height="7" rx="3.5" fill="#E3E8EE" />
+    </g>
+
+    {/* source database node */}
+    <g filter="url(#lineage-small-shadow)">
+      <rect x="39" y="62" width="54" height="54" rx="15" fill="#FFFFFF" />
+      <rect x="39.75" y="62.75" width="52.5" height="52.5" rx="14.25" stroke="#E6EBF1" strokeWidth="1.5" />
+      <ellipse cx="66" cy="77" rx="13" ry="5.5" fill="#DCEBFF" stroke="#8CB5EE" strokeWidth="1.4" />
+      <path d="M53 77V94C53 97 59 99.5 66 99.5C73 99.5 79 97 79 94V77" stroke="#7EA9E5" strokeWidth="1.5" />
+      <path d="M53 85C53 88 59 90.5 66 90.5C73 90.5 79 88 79 85" stroke="#A8C5EC" strokeWidth="1.3" />
+    </g>
+
+    {/* SQL task node */}
+    <g filter="url(#lineage-small-shadow)">
+      <rect x="124" y="19" width="50" height="42" rx="14" fill="#FFFFFF" />
+      <rect x="124.75" y="19.75" width="48.5" height="40.5" rx="13.25" stroke="#E6EBF1" strokeWidth="1.5" />
+      <path d="M144 31L138 40L144 49" stroke="url(#lineage-purple)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M154 31L160 40L154 49" stroke="url(#lineage-purple)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="149" cy="40" r="2.7" fill="#A78BFA" />
+    </g>
+
+    {/* chart node */}
+    <g filter="url(#lineage-small-shadow)">
+      <rect x="270" y="57" width="54" height="54" rx="15" fill="#FFFFFF" />
+      <rect x="270.75" y="57.75" width="52.5" height="52.5" rx="14.25" stroke="#E6EBF1" strokeWidth="1.5" />
+      <rect x="283" y="87" width="6" height="10" rx="3" fill="#FFD3DC" />
+      <rect x="293" y="79" width="6" height="18" rx="3" fill="#FF9DB0" />
+      <rect x="303" y="70" width="6" height="27" rx="3" fill="url(#lineage-pink)" />
+    </g>
+
+    {/* dashboard node */}
+    <g filter="url(#lineage-small-shadow)">
+      <rect x="214" y="181" width="58" height="42" rx="14" fill="#FFFFFF" />
+      <rect x="214.75" y="181.75" width="56.5" height="40.5" rx="13.25" stroke="#E6EBF1" strokeWidth="1.5" />
+      <rect x="226" y="192" width="14" height="8" rx="3" fill="#DDF4E7" />
+      <rect x="245" y="192" width="14" height="8" rx="3" fill="#C9EAD8" />
+      <rect x="226" y="204" width="14" height="7" rx="3" fill="#C9EAD8" />
+      <rect x="245" y="204" width="14" height="7" rx="3" fill="url(#lineage-green)" opacity="0.78" />
+    </g>
+  </svg>
+);
+
+const LineageEmptyState = () => (
+  <div className="flex h-full min-h-[560px] items-center justify-center px-8">
+    <div className="flex max-w-[420px] flex-col items-center text-center">
+      <LineageEmptyIllustration />
+      <div className="-mt-1 text-[15px] font-semibold leading-6 text-[#30333B]">
+        选择一个资产
+      </div>
+      <div className="mt-1.5 text-[12px] leading-5 text-[#8A94A3]">
+        搜索后点击左侧结果，查看它的上下游关系。
+      </div>
+    </div>
+  </div>
+);
+
 export default function LineagePage() {
   const [rootAsset, setRootAsset] = useState<LineageAsset>();
   const [graph, setGraph] = useState<LineageGraph>();
@@ -172,6 +382,7 @@ export default function LineagePage() {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(initialLeftPanelWidth);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [viewFilterDraft, setViewFilterDraft] = useState<{
@@ -389,241 +600,263 @@ export default function LineagePage() {
       .finally(() => setLoading(false));
   };
 
+  const handleLeftPanelResizeStart = useCallback(
+    (event: ReactPointerEvent) => {
+      if (!leftPanelOpen) return;
+
+      event.preventDefault();
+
+      const startX = event.clientX;
+      const startWidth = leftPanelWidth;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        setLeftPanelWidth(
+          clampLeftPanelWidth(startWidth + moveEvent.clientX - startX),
+        );
+      };
+
+      const finish = (upEvent: PointerEvent) => {
+        const width = clampLeftPanelWidth(
+          startWidth + upEvent.clientX - startX,
+        );
+
+        setLeftPanelWidth(width);
+        window.localStorage.setItem(
+          LEFT_PANEL_WIDTH_STORAGE_KEY,
+          String(width),
+        );
+
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', finish);
+        window.removeEventListener('pointercancel', finish);
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', finish);
+      window.addEventListener('pointercancel', finish);
+    },
+    [leftPanelOpen, leftPanelWidth],
+  );
+
   return (
     <ConfigProvider theme={BRAND_THEME}>
-      <div className="lineage-page flex h-full min-h-[600px] flex-col overflow-hidden bg-white text-[#161823]">
-        <header className="shrink-0 border-b border-[#E5E7EB] bg-white">
-          <div className="flex min-h-[52px] items-center gap-3 px-4 py-2.5">
-            <GitBranch size={17} className="shrink-0 text-[#4C78C9]" />
-            <div className="min-w-0">
-              <div className="text-[16px] font-semibold leading-5 text-[#161823]">数据血缘</div>
-              <div className="mt-0.5 text-[11px] text-[#8A94A3]">
-                查看资产上下游依赖、流转关系和影响范围
-              </div>
+      <div className="lineage-page flex h-[calc(100vh-64px)] min-h-[640px] flex-col overflow-hidden bg-white text-[#161823]">
+        <header className="flex h-[58px] shrink-0 items-center gap-4 border-b border-[#E5E7EB] bg-white px-4">
+          <div className="flex shrink-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#F3F6FC] text-[#4C78C9]">
+              <GitBranch size={16} />
             </div>
-
-            {rootAsset ? (
-              <div className="ml-auto hidden min-w-0 items-center gap-2 text-[11px] xl:flex">
-                <span className="text-[#98A2B3]">中心</span>
-                <AssetTypeLabel type={rootAsset.assetType} />
-                <span className="max-w-[220px] truncate font-medium text-[#344054]">
-                  {rootAsset.name}
-                </span>
-                <span className="mx-1 h-3 w-px bg-[#E4E7EC]" />
-                <span className="text-[#667085]">下游 {impact?.total || 0}</span>
-                <span className="text-[#667085]">图表 {impact?.byType.CHART || 0}</span>
-                <span className="text-[#667085]">仪表盘 {impact?.byType.DASHBOARD || 0}</span>
-              </div>
-            ) : null}
+            <div className="text-[16px] font-semibold leading-5 text-[#161823]">数据血缘</div>
           </div>
 
-          <div className="flex min-h-[54px] items-center justify-end gap-2 border-t border-[#F2F4F7] px-4 py-2">
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto">
-              <Input
-                allowClear
-                variant="filled"
-                value={searchKeyword}
-                prefix={<Search size={14} className="text-[#98A2B3]" />}
-                placeholder="搜索资产名称、表名或 assetKey"
-                className="!h-9 !w-[260px] !min-w-[220px]"
-                onChange={(event) => {
-                  setSearchKeyword(event.target.value);
-                  setHasSearched(false);
-                }}
-                onPressEnter={() => void runAssetSearch()}
-              />
+          <div className="ml-auto flex min-w-0 items-center gap-2 overflow-x-auto">
+            <Input
+              allowClear
+              variant="filled"
+              value={searchKeyword}
+              prefix={<Search size={14} className="text-[#98A2B3]" />}
+              placeholder="搜索资产"
+              className="!h-9 !w-[250px] !min-w-[210px]"
+              onChange={(event) => {
+                setSearchKeyword(event.target.value);
+                setHasSearched(false);
+              }}
+              onPressEnter={() => void runAssetSearch()}
+            />
 
-              <Select
-                variant="filled"
-                value={searchType}
-                className="!h-9 !w-[150px] !min-w-[140px]"
-                onChange={(value) => {
-                  setSearchType(value);
-                  setHasSearched(false);
-                }}
-                options={[
-                  { value: 'ALL', label: '全部类型' },
-                  ...LINEAGE_ASSET_TYPES.map((value) => ({
-                    value,
-                    label: assetTypeLabel[value],
-                  })),
-                ]}
-              />
+            <Select
+              variant="filled"
+              value={searchType}
+              className="!h-9 !w-[132px] !min-w-[126px]"
+              onChange={(value) => {
+                setSearchType(value);
+                setHasSearched(false);
+              }}
+              options={[
+                { value: 'ALL', label: '全部类型' },
+                ...LINEAGE_ASSET_TYPES.map((value) => ({
+                  value,
+                  label: assetTypeLabel[value],
+                })),
+              ]}
+            />
 
-              <Button size="small" className="!h-9 !px-4" onClick={() => void runAssetSearch()}>
-                查询
-              </Button>
+            <Button
+              size="small"
+              className="!h-9 !px-4"
+              onClick={() => void runAssetSearch()}
+            >
+              查询
+            </Button>
 
-              <Popover
-                trigger="click"
-                placement="bottomRight"
-                open={advancedOpen}
-                onOpenChange={handleAdvancedOpenChange}
-                content={
-                  <div className="w-[430px]">
-                    <div className="mb-4">
-                      <div className="text-[14px] font-semibold text-[#101828]">高级搜索</div>
-                      <div className="mt-1 text-[12px] text-[#98A2B3]">
-                        设置血缘方向、展开深度和画布中需要展示的资产类型
-                      </div>
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              open={advancedOpen}
+              onOpenChange={handleAdvancedOpenChange}
+              content={
+                <div className="w-[400px]">
+                  <div className="mb-4 text-[14px] font-semibold text-[#101828]">视图筛选</div>
+
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+                    <div>
+                      <div className="mb-1.5 text-[12px] text-[#667085]">方向</div>
+                      <Select
+                        variant="filled"
+                        value={viewFilterDraft.direction}
+                        className="w-full"
+                        onChange={(value) =>
+                          setViewFilterDraft((previous) => ({
+                            ...previous,
+                            direction: value as LineageDirection,
+                          }))
+                        }
+                        options={[
+                          { label: '上下游', value: 'BOTH' },
+                          { label: '仅上游', value: 'UPSTREAM' },
+                          { label: '仅下游', value: 'DOWNSTREAM' },
+                        ]}
+                      />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-                      <div>
-                        <div className="mb-1.5 text-[12px] text-[#667085]">血缘方向</div>
-                        <Select
-                          variant="filled"
-                          value={viewFilterDraft.direction}
-                          className="w-full"
-                          onChange={(value) =>
-                            setViewFilterDraft((previous) => ({
-                              ...previous,
-                              direction: value as LineageDirection,
-                            }))
-                          }
-                          options={[
-                            { label: '上下游', value: 'BOTH' },
-                            { label: '仅上游', value: 'UPSTREAM' },
-                            { label: '仅下游', value: 'DOWNSTREAM' },
-                          ]}
-                        />
-                      </div>
-
-                      <div>
-                        <div className="mb-1.5 text-[12px] text-[#667085]">展开深度</div>
-                        <Select
-                          variant="filled"
-                          value={viewFilterDraft.depth}
-                          className="w-full"
-                          onChange={(value) =>
-                            setViewFilterDraft((previous) => ({
-                              ...previous,
-                              depth: value,
-                            }))
-                          }
-                          options={[1, 2, 3, 4, 5].map((value) => ({
-                            value,
-                            label: `${value} 跳`,
-                          }))}
-                        />
-                      </div>
-
-                      <div className="col-span-2">
-                        <div className="mb-1.5 text-[12px] text-[#667085]">显示资产类型</div>
-                        <Select
-                          mode="multiple"
-                          variant="filled"
-                          value={viewFilterDraft.visibleTypes}
-                          className="w-full"
-                          maxTagCount={3}
-                          maxTagPlaceholder={(omitted) => `+ ${omitted.length}`}
-                          placeholder="请选择需要展示的资产类型"
-                          onChange={(values) =>
-                            setViewFilterDraft((previous) => ({
-                              ...previous,
-                              visibleTypes: values as LineageAssetType[],
-                            }))
-                          }
-                          options={LINEAGE_ASSET_TYPES.map((value) => ({
-                            value,
-                            label: assetTypeLabel[value],
-                          }))}
-                        />
-                      </div>
+                    <div>
+                      <div className="mb-1.5 text-[12px] text-[#667085]">深度</div>
+                      <Select
+                        variant="filled"
+                        value={viewFilterDraft.depth}
+                        className="w-full"
+                        onChange={(value) =>
+                          setViewFilterDraft((previous) => ({
+                            ...previous,
+                            depth: value,
+                          }))
+                        }
+                        options={[1, 2, 3, 4, 5].map((value) => ({
+                          value,
+                          label: `${value} 跳`,
+                        }))}
+                      />
                     </div>
 
-                    <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#F0F0F0] pt-4">
-                      <Button size="small" className="!h-8" onClick={resetViewFilters}>
-                        重置
-                      </Button>
-                      <Button
-                        danger
-                        type="primary"
-                        size="small"
-                        className="!h-8"
-                        onClick={applyViewFilters}
-                      >
-                        应用筛选
-                      </Button>
+                    <div className="col-span-2">
+                      <div className="mb-1.5 text-[12px] text-[#667085]">资产类型</div>
+                      <Select
+                        mode="multiple"
+                        variant="filled"
+                        value={viewFilterDraft.visibleTypes}
+                        className="w-full"
+                        maxTagCount={3}
+                        maxTagPlaceholder={(omitted) => `+ ${omitted.length}`}
+                        placeholder="选择资产类型"
+                        onChange={(values) =>
+                          setViewFilterDraft((previous) => ({
+                            ...previous,
+                            visibleTypes: values as LineageAssetType[],
+                          }))
+                        }
+                        options={LINEAGE_ASSET_TYPES.map((value) => ({
+                          value,
+                          label: assetTypeLabel[value],
+                        }))}
+                      />
                     </div>
                   </div>
-                }
-              >
-                <Button
-                  size="small"
-                  icon={<Filter size={13} />}
-                  className={[
-                    '!h-9 !px-3',
-                    advancedFilterCount > 0
-                      ? '!border-[#FFCCC7] !bg-[#FFF1F0] !text-[#FF4D4F]'
-                      : '',
-                  ].join(' ')}
-                >
-                  高级搜索
-                  {advancedFilterCount > 0 ? (
-                    <span className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#FF4D4F] px-1 text-[10px] leading-[18px] text-white">
-                      {advancedFilterCount}
-                    </span>
-                  ) : null}
-                </Button>
-              </Popover>
 
-              <Tooltip title="刷新血缘">
-                <Button
-                  aria-label="刷新血缘"
-                  size="small"
-                  className="!h-9 !w-9 !px-0"
-                  icon={<RefreshCw size={14} />}
-                  loading={loading}
-                  disabled={!rootAsset}
-                  onClick={refresh}
-                />
-              </Tooltip>
-            </div>
+                  <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#F0F0F0] pt-4">
+                    <YakButton size="small" className="!h-8" onClick={resetViewFilters}>
+                      重置
+                    </YakButton>
+                    <YakButton
+                      danger
+                      type="primary"
+                      size="small"
+                      className="!h-8"
+                      onClick={applyViewFilters}
+                    >
+                      应用
+                    </YakButton>
+                  </div>
+                </div>
+              }
+            >
+              <Button
+                size="small"
+                icon={<Filter size={13} />}
+                className={[
+                  '!h-9 !px-3',
+                  advancedFilterCount > 0
+                    ? '!border-[#FFCCC7] !bg-[#FFF1F0] !text-[#FF4D4F]'
+                    : '',
+                ].join(' ')}
+              >
+                筛选
+                {advancedFilterCount > 0 ? (
+                  <span className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#FF4D4F] px-1 text-[10px] leading-[18px] text-white">
+                    {advancedFilterCount}
+                  </span>
+                ) : null}
+              </Button>
+            </Popover>
+
+            <Tooltip title="刷新">
+              <Button
+                aria-label="刷新血缘"
+                size="small"
+                className="!h-9 !w-9 !px-0"
+                icon={<RefreshCw size={14} />}
+                loading={loading}
+                disabled={!rootAsset}
+                onClick={refresh}
+              />
+            </Tooltip>
           </div>
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
-          {leftPanelOpen ? (
-            <aside className="flex w-[286px] shrink-0 flex-col border-r border-[#E5E7EB] bg-white transition-[width] duration-200">
+          <aside
+            className="group relative shrink-0 overflow-hidden bg-white transition-[width] duration-200 ease-out"
+            style={{ width: leftPanelOpen ? leftPanelWidth : 0 }}
+          >
+            <div
+              className="flex h-full flex-col overflow-hidden"
+              style={{ width: leftPanelWidth }}
+            >
               <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#F0F1F3] px-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="text-[13px] font-semibold text-[#344054]">资产列表</span>
+                  <span className="text-[13px] font-semibold text-[#344054]">资产</span>
                   {hasSearched && !searching ? (
                     <span className="text-[10px] text-[#98A2B3]">{searchResults.length} 项</span>
                   ) : null}
                 </div>
-                <Tooltip title="收起资产列表">
-                  <Button
-                    type="text"
-                    size="small"
-                    className="!h-7 !w-7 !min-w-0 !p-0"
-                    icon={<PanelLeftClose size={14} />}
-                    onClick={() => setLeftPanelOpen(false)}
-                  />
-                </Tooltip>
               </div>
 
               {rootAsset ? (
                 <div className="shrink-0 border-b border-[#F0F1F3] px-3 py-3">
-                  <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#98A2B3]">
-                    当前中心
-                  </div>
-                  <div className="mt-1.5 truncate text-[13px] font-semibold text-[#344054]" title={rootAsset.name}>
-                    {rootAsset.name}
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <AssetTypeLabel type={rootAsset.assetType} />
-                    <span className="truncate font-mono text-[10px] text-[#98A2B3]" title={rootAsset.assetKey}>
-                      {rootAsset.assetKey}
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-[#F1F5FB] px-2 text-[10px] font-medium text-[#4C78C9]">
+                      中心
+                    </span>
+                    <span
+                      className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344054]"
+                      title={rootAsset.name}
+                    >
+                      {rootAsset.name}
                     </span>
                   </div>
+
+                  <div className="mt-2">
+                    <AssetTypeLabel type={rootAsset.assetType} />
+                  </div>
                 </div>
-              ) : (
-                <div className="shrink-0 border-b border-[#F0F1F3] px-3 py-3 text-[11px] leading-5 text-[#8A94A3]">
-                  使用上方查询定位一个资产，搜索结果会保留在这里，方便连续切换中心节点。
-                </div>
-              )}
+              ) : null}
 
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {searching ? (
@@ -634,6 +867,7 @@ export default function LineagePage() {
                   <div className="space-y-1">
                     {searchResults.map((asset) => {
                       const active = rootAsset?.id === asset.id;
+
                       return (
                         <button
                           key={asset.id}
@@ -652,6 +886,7 @@ export default function LineagePage() {
                               {asset.name}
                             </span>
                           </div>
+
                           <div
                             className="mt-1 truncate text-[10px] text-[#98A2B3]"
                             title={assetLocation(asset)}
@@ -663,69 +898,71 @@ export default function LineagePage() {
                     })}
                   </div>
                 ) : hasSearched ? (
-                  <div className="flex h-36 flex-col items-center justify-center px-4 text-center">
+                  <div className="flex h-40 flex-col items-center justify-center px-4 text-center">
                     <Boxes size={18} className="text-[#B7BEC8]" />
-                    <div className="mt-2 text-[12px] font-medium text-[#667085]">暂无匹配资产</div>
-                    <div className="mt-1 text-[11px] leading-5 text-[#98A2B3]">
-                      可以调整关键词或资产类型后重新查询
+                    <div className="mt-2 text-[12px] font-medium text-[#667085]">
+                      未找到资产
+                    </div>
+                    <div className="mt-1 text-[11px] text-[#A3AAB5]">
+                      换个关键词试试
                     </div>
                   </div>
                 ) : (
-                  <div className="flex h-36 flex-col items-center justify-center px-4 text-center">
+                  <div className="flex h-40 flex-col items-center justify-center px-4 text-center">
                     <Search size={18} className="text-[#B7BEC8]" />
-                    <div className="mt-2 text-[12px] font-medium text-[#667085]">查询资产</div>
-                    <div className="mt-1 text-[11px] leading-5 text-[#98A2B3]">
-                      输入名称、表名或 assetKey 后点击查询
+                    <div className="mt-2 text-[12px] font-medium text-[#667085]">
+                      搜索资产
                     </div>
                   </div>
                 )}
               </div>
+            </div>
+          </aside>
 
-              <div className="shrink-0 border-t border-[#F0F1F3] px-3 py-3">
-                <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[#98A2B3]">
-                  资产类型
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-2">
-                  {LINEAGE_ASSET_TYPES.map((type) => (
-                    <AssetTypeLabel key={type} type={type} />
-                  ))}
-                </div>
-              </div>
-            </aside>
-          ) : (
-            <aside className="flex w-10 shrink-0 items-start justify-center border-r border-[#E5E7EB] bg-[#FAFBFC] pt-3 transition-[width] duration-200">
-              <Tooltip title="展开资产列表" placement="right">
-                <Button
-                  type="text"
-                  size="small"
-                  className="!h-7 !w-7 !min-w-0 !p-0"
-                  icon={<PanelLeftOpen size={14} />}
-                  onClick={() => setLeftPanelOpen(true)}
-                />
-              </Tooltip>
-            </aside>
-          )}
+          <div
+            role="separator"
+            aria-label="调整资产面板宽度"
+            aria-orientation="vertical"
+            onPointerDown={leftPanelOpen ? handleLeftPanelResizeStart : undefined}
+            className={[
+              'group relative z-20 w-3 shrink-0 self-stretch touch-none',
+              leftPanelOpen ? 'cursor-col-resize' : 'cursor-default',
+            ].join(' ')}
+          >
+            <div
+              className={[
+                'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#dfe3e8]',
+                'transition-[width,background-color] duration-150',
+                leftPanelOpen
+                  ? 'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:bg-[rgba(254,44,85,1)]'
+                  : '',
+              ].join(' ')}
+            />
+
+            <button
+              type="button"
+              aria-label={leftPanelOpen ? '收起资产面板' : '展开资产面板'}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setLeftPanelOpen((value) => !value)}
+              className={[
+                'absolute left-1/2 top-1/2 z-20 flex h-8 w-4 -translate-x-1/2 -translate-y-1/2',
+                'items-center justify-center rounded-[3px] border border-[#dfe3e8] bg-white text-[#667085]',
+                'shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[color,border-color,box-shadow] duration-150',
+                'hover:border-[#cfd4dc] hover:text-[#161823] focus:outline-none focus-visible:ring-2',
+                'focus-visible:ring-[rgba(254,44,85,.16)]',
+              ].join(' ')}
+            >
+              {leftPanelOpen ? (
+                <ChevronLeft size={12} />
+              ) : (
+                <ChevronRight size={12} />
+              )}
+            </button>
+          </div>
 
           <main className="relative min-w-0 flex-1 bg-white">
             {!rootAsset ? (
-              <div className="flex h-full min-h-[560px] items-center justify-center px-6">
-                <div className="max-w-[430px] text-center">
-                  <div className="mx-auto flex h-11 w-11 items-center justify-center border border-[#D0D5DD] bg-[#FAFAFB] text-[#667085]">
-                    <Boxes size={20} strokeWidth={1.6} />
-                  </div>
-                  <div className="mt-4 text-[14px] font-semibold text-[#344054]">
-                    选择一个资产开始查看血缘
-                  </div>
-                  <div className="mt-1.5 text-[12px] leading-5 text-[#8A94A3]">
-                    从上方查询数据表、SQL 任务、Dataset、图表或仪表盘，结果会显示在左侧资产列表。
-                  </div>
-                  <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2">
-                    {(['TABLE', 'SQL_TASK', 'DATASET', 'CHART', 'DASHBOARD'] as LineageAssetType[]).map((type) => (
-                      <AssetTypeLabel key={type} type={type} />
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <LineageEmptyState />
             ) : loadError && !graph ? (
               <div className="flex h-full min-h-[560px] items-center justify-center">
                 <Empty description={loadError}>
@@ -774,7 +1011,7 @@ export default function LineagePage() {
             {loading && graph ? (
               <div className="pointer-events-none absolute right-3 top-3 z-20 flex items-center gap-2 border border-[#E4E7EC] bg-white px-2.5 py-1.5 text-[11px] text-[#667085]">
                 <Spin size="small" />
-                更新中
+                更新
               </div>
             ) : null}
           </main>
@@ -950,7 +1187,7 @@ export default function LineagePage() {
                 </div>
               ) : (
                 <div className="flex h-full min-h-[420px] items-center justify-center px-8 text-center text-[12px] text-[#8A94A3]">
-                  点击节点查看资产详情，点击连线查看关系证据
+                  选择节点或连线查看详情
                 </div>
               )}
                 </aside>

@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import type { WorkflowDefinition } from '@/services/workflow/definitions';
 import {
   createWorkflowSchedule,
@@ -106,10 +107,10 @@ const ScheduleEditorDrawer = ({
       onClose={onClose}
       extra={
         <div className="flex gap-2">
-          <Button onClick={onClose}>取消</Button>
-          <Button type="primary" loading={saving} onClick={() => void handleSave()}>
+          <YakButton onClick={onClose}>取消</YakButton>
+          <YakButton type="primary" loading={saving} onClick={() => void handleSave()}>
             保存
-          </Button>
+          </YakButton>
         </div>
       }
     >

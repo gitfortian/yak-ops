@@ -1,3 +1,4 @@
+import YakButton from "@/components/YakButton";
 import {Button, Typography} from "antd";
 
 const {Text} = Typography;
@@ -31,14 +32,14 @@ const BottomActionBar: React.FC<Props> = ({
         <Text className="text-[14px] text-[#667085]">{hintText}</Text>
 
         <div className="flex items-center gap-3">
-          <Button className="!h-10 !rounded-full !px-5" onClick={onCancel}>
+          <YakButton className="!h-10 " onClick={onCancel}>
             取消
-          </Button>
+          </YakButton>
 
           {onPrev && (
-            <Button className="!h-10 !rounded-full !px-5" onClick={onPrev}>
+            <YakButton className="!h-10" onClick={onPrev}>
               上一步
-            </Button>
+            </YakButton>
           )}
 
           <Button

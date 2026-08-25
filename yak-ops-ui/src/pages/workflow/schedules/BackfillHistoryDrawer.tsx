@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   cancelWorkflowBackfill,
   listWorkflowBackfills,
@@ -5,7 +6,7 @@ import {
   type WorkflowBackfillStatus,
 } from '@/services/workflow/schedules';
 import { ReloadOutlined } from '@ant-design/icons';
-import { Button, Drawer, Modal, Select, Table, message } from 'antd';
+import {  Drawer, Modal, Select, Table, message } from 'antd';
 import { History, ListTree, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -71,7 +72,7 @@ const BackfillHistoryDrawer = ({
       content: '尚未启动的计划会被标记为已跳过；已经运行中的 WorkflowExecution 会继续完成。',
       okText: '取消批次',
       cancelText: '关闭',
-      okButtonProps: { danger: true },
+      okYakButtonProps: { danger: true },
       async onOk() {
         try {
           await cancelWorkflowBackfill(record.id);
@@ -110,7 +111,7 @@ const BackfillHistoryDrawer = ({
             onChange={setStatus}
             options={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
           />
-          <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void load()} />
+          <YakButton icon={<ReloadOutlined spin={loading} />} onClick={() => void load()} />
         </div>
       }
     >
@@ -220,13 +221,13 @@ const BackfillHistoryDrawer = ({
             fixed: 'right',
             render: (_: unknown, record: WorkflowBackfill) => (
               <div className="flex items-center gap-1 whitespace-nowrap">
-                <Button type="text" size="small" icon={<ListTree size={13} />} onClick={() => onOpenTriggers(record)}>
+                <YakButton type="text" size="small" icon={<ListTree size={13} />} onClick={() => onOpenTriggers(record)}>
                   明细
-                </Button>
+                </YakButton>
                 {record.status === 'RUNNING' ? (
-                  <Button danger type="text" size="small" icon={<XCircle size={13} />} onClick={() => cancel(record)}>
+                  <YakButton danger type="text" size="small" icon={<XCircle size={13} />} onClick={() => cancel(record)}>
                     取消
-                  </Button>
+                  </YakButton>
                 ) : null}
               </div>
             ),

@@ -12,7 +12,6 @@ import {
 import { BRAND_THEME } from '@/styles/brand';
 import { history, useLocation, useParams } from '@umijs/max';
 import {
-  Button,
   ConfigProvider,
   DatePicker,
   Empty,
@@ -44,6 +43,7 @@ import {
 import BackfillDrawer from './BackfillDrawer';
 import BackfillHistoryDrawer from './BackfillHistoryDrawer';
 import TriggerLedgerDrawer from './TriggerLedgerDrawer';
+import YakButton from '@/components/YakButton';
 
 interface FormValues {
   name: string;
@@ -95,9 +95,9 @@ function SectionNavigator({ activeKey, onSelect }: SectionNavigatorProps) {
         {SECTION_ITEMS.map((item) => {
           const active = activeKey === item.key;
           return (
-            <button
+            <YakButton
               key={item.key}
-              type="button"
+              type="YakButton"
               aria-current={active ? 'location' : undefined}
               className={[
                 'flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 px-2 py-2 text-left transition-colors',
@@ -117,7 +117,7 @@ function SectionNavigator({ activeKey, onSelect }: SectionNavigatorProps) {
               <span className={active ? 'text-[12px] font-semibold' : 'text-[12px]'}>
                 {item.label}
               </span>
-            </button>
+            </YakButton>
           );
         })}
       </div>
@@ -340,7 +340,7 @@ export default function WorkflowScheduleConfigPage() {
       content: '删除后不影响工作流和历史运行记录。',
       okText: '删除',
       cancelText: '取消',
-      okButtonProps: { danger: true },
+      okYakButtonProps: { danger: true },
       async onOk() {
         try {
           await deleteWorkflowSchedule(primarySchedule.id);
@@ -373,7 +373,7 @@ export default function WorkflowScheduleConfigPage() {
     return (
       <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f8fa]">
         <Empty description="未找到工作流" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          <Button onClick={() => history.push('/workflow/definitions')}>返回工作流定义</Button>
+          <YakButton onClick={() => history.push('/workflow/definitions')}>返回工作流定义</YakButton>
         </Empty>
       </div>
     );
@@ -389,7 +389,7 @@ export default function WorkflowScheduleConfigPage() {
                 <div className="rounded-xl bg-white px-6 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      <Button
+                      <YakButton
                         type="text"
                         size="small"
                         icon={<ArrowLeft size={16} />}
@@ -415,17 +415,17 @@ export default function WorkflowScheduleConfigPage() {
                       <div className="flex shrink-0 items-center gap-1.5">
                         <Tooltip title={workflow.status !== 'ONLINE' ? '工作流上线后才能执行历史补数' : undefined}>
                           <span>
-                            <Button
+                            <YakButton
                               size="small"
                               disabled={workflow.status !== 'ONLINE'}
                               icon={<DatabaseBackup size={14} />}
                               onClick={() => setBackfillOpen(true)}
                             >
                               补数
-                            </Button>
+                            </YakButton>
                           </span>
                         </Tooltip>
-                        <Button
+                        <YakButton
                           size="small"
                           icon={<ListTree size={14} />}
                           onClick={() => {
@@ -434,14 +434,14 @@ export default function WorkflowScheduleConfigPage() {
                           }}
                         >
                           触发记录
-                        </Button>
-                        <Button
+                        </YakButton>
+                        <YakButton
                           size="small"
                           icon={<History size={14} />}
                           onClick={() => setBackfillHistoryOpen(true)}
                         >
                           补数记录
-                        </Button>
+                        </YakButton>
                       </div>
                     ) : null}
                   </div>
@@ -484,7 +484,7 @@ export default function WorkflowScheduleConfigPage() {
                       <div className="-mt-3 mb-5 flex flex-wrap items-center gap-1.5">
                         <span className="mr-1 text-[11px] text-[#98a2b3]">快捷设置</span>
                         {CRON_PRESETS.map((preset) => (
-                          <Button
+                          <YakButton
                             key={preset.value}
                             size="small"
                             type="text"
@@ -492,7 +492,7 @@ export default function WorkflowScheduleConfigPage() {
                             onClick={() => form.setFieldValue('cronExpression', preset.value)}
                           >
                             {preset.label}
-                          </Button>
+                          </YakButton>
                         ))}
                       </div>
 
@@ -553,14 +553,14 @@ export default function WorkflowScheduleConfigPage() {
 
                       {primarySchedule && canEdit ? (
                         <div className="flex justify-end">
-                          <Button
+                          <YakButton
                             danger
                             type="text"
                             icon={<Trash2 size={14} />}
                             onClick={handleDelete}
                           >
                             删除调度
-                          </Button>
+                          </YakButton>
                         </div>
                       ) : null}
                     </SectionCard>
@@ -570,7 +570,7 @@ export default function WorkflowScheduleConfigPage() {
 
               <footer className="sticky bottom-0 z-50 mt-4 rounded-xl bg-white px-6 py-3">
                 <div className="flex items-center gap-3">
-                  <Button
+                  <YakButton
                     type="primary"
                     loading={saving}
                     disabled={!canEdit}
@@ -584,14 +584,14 @@ export default function WorkflowScheduleConfigPage() {
                     onClick={() => void handleSave()}
                   >
                     保存配置
-                  </Button>
-                  <Button
+                  </YakButton>
+                  <YakButton
                     disabled={saving}
                     className="!h-9 !min-w-[96px] !rounded-lg !border-0 !bg-[#f2f3f5] !px-5 !font-medium !text-[#344054] hover:!bg-[#e9eaec]"
                     onClick={() => history.push('/workflow/definitions')}
                   >
                     返回
-                  </Button>
+                  </YakButton>
                 </div>
               </footer>
             </div>

@@ -451,7 +451,7 @@ export default function DepartmentsPage() {
           />
 
           <Tooltip title="刷新部门树">
-            <Button
+            <YakButton
               icon={<ReloadOutlined />}
               loading={loading}
               onClick={() => void loadTree()}

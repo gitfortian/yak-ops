@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   listWorkflowScheduleTriggers,
   type WorkflowSchedule,
@@ -104,7 +105,7 @@ const TriggerLedgerDrawer = ({
             onChange={(value) => setStatus(value)}
             options={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
           />
-          <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void load()} />
+          <YakButton icon={<ReloadOutlined spin={loading} />} onClick={() => void load()} />
         </div>
       }
     >

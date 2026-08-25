@@ -12,6 +12,7 @@ import { BRAND_THEME } from '@/styles/brand';
 import { realtimeApi } from './api';
 import type { RealtimeAction } from './api';
 import type { RealtimeJob, RuntimeCapabilities } from './types';
+import YakButton from '@/components/YakButton';
 
 type ExecutionAction = Exclude<RealtimeAction, 'restart'>;
 
@@ -290,13 +291,13 @@ export default function RealtimeExecutionPanel({
                         校验当前草稿绑定的运行环境和 Connector；已有 SyncExecution 不参与这次定义校验。
                       </div>
                     </div>
-                    <Button
+                    <YakButton
                       loading={acting === 'validate'}
                       disabled={Boolean(acting) || !current.spec || runtimeDisabled}
                       onClick={() => void run('validate')}
                     >
                       运行校验
-                    </Button>
+                    </YakButton>
                   </div>
                 </div>
 
@@ -310,7 +311,7 @@ export default function RealtimeExecutionPanel({
                         发布形成不可变 DefinitionVersion；运行中发布只推进 Task 的 Published Ref，不修改当前 SyncExecution。
                       </div>
                     </div>
-                    <Button
+                    <YakButton
                       type="primary"
                       loading={acting === 'publish'}
                       disabled={Boolean(acting) || currentDraftPublished || !current.spec || runtimeDisabled}
@@ -321,7 +322,7 @@ export default function RealtimeExecutionPanel({
                         : running
                           ? '发布当前版本（不影响运行）'
                           : '发布当前版本'}
-                    </Button>
+                    </YakButton>
                   </div>
                 </div>
 
@@ -337,7 +338,7 @@ export default function RealtimeExecutionPanel({
                     </div>
                     {running ? (
                       <Space wrap>
-                        <Button
+                        <YakButton
                           danger
                           icon={<StopOutlined />}
                           loading={acting === 'stop'}
@@ -345,17 +346,17 @@ export default function RealtimeExecutionPanel({
                           onClick={() => void run('stop')}
                         >
                           停止任务
-                        </Button>
-                        <Button
+                        </YakButton>
+                        <YakButton
                           icon={<ReloadOutlined />}
                           loading={acting === 'restart-execution'}
                           disabled={Boolean(acting) || !stableRunning}
                           onClick={() => void run('restart-execution')}
                         >
                           重启当前版本
-                        </Button>
+                        </YakButton>
                         {current.publishedUpdateAvailable && (
-                          <Button
+                          <YakButton
                             type="primary"
                             danger
                             icon={<PlayCircleOutlined />}
@@ -364,11 +365,11 @@ export default function RealtimeExecutionPanel({
                             onClick={() => void run('apply-published-version')}
                           >
                             应用已发布版本
-                          </Button>
+                          </YakButton>
                         )}
                       </Space>
                     ) : (
-                      <Button
+                      <YakButton
                         type="primary"
                         danger
                         icon={<PlayCircleOutlined />}
@@ -377,7 +378,7 @@ export default function RealtimeExecutionPanel({
                         onClick={() => void run('start')}
                       >
                         {hasUnpublishedChanges ? `启动已发布 v${current.publishedVersion}` : '启动任务'}
-                      </Button>
+                      </YakButton>
                     )}
                   </div>
                 </div>
@@ -412,7 +413,7 @@ export default function RealtimeExecutionPanel({
                     {current.latestDeployment?.engineJobId || '-'}
                   </Descriptions.Item>
                 </Descriptions>
-                <Button
+                <YakButton
                   className="mt-3"
                   size="small"
                   icon={<ReloadOutlined />}
@@ -420,7 +421,7 @@ export default function RealtimeExecutionPanel({
                   onClick={() => void refreshJob()}
                 >
                   刷新状态
-                </Button>
+                </YakButton>
               </Card>
 
               <Alert

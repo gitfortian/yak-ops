@@ -52,6 +52,7 @@ export class AnalysisErrorBoundary extends Component<Props, State> {
           </div>
           <YakButton
             size="small"
+            effect="glass"
             type="text"
             className="mt-3 !h-7 !rounded-[6px] !text-[#667085]"
             icon={<RotateCcw size={11} />}

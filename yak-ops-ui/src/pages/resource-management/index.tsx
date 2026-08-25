@@ -87,6 +87,7 @@ import {
   resourceKey,
   ROOT_RESOURCE_ID,
 } from './utils';
+import YakButton from '@/components/YakButton';
 
 const { confirm } = Modal;
 
@@ -564,20 +565,20 @@ const ResourceManagementPage = () => {
           </div>
           <Space size={10} wrap>
             {canCreate && (
-              <Button
+              <YakButton
                 icon={<FolderPlus size={16} />}
                 onClick={() => setDirectoryModalOpen(true)}
               >
                 新建文件夹
-              </Button>
+              </YakButton>
             )}
             {canCreate && (
-              <Button
+              <YakButton
                 icon={<FilePlus2 size={16} />}
                 onClick={() => setTextModalOpen(true)}
               >
                 在线创建
-              </Button>
+              </YakButton>
             )}
             {canCreate && (
               <Button
@@ -687,7 +688,7 @@ const ResourceManagementPage = () => {
                   onChange={(event) => setKeyword(event.target.value)}
                 />
                 <Tooltip title="刷新列表">
-                  <Button
+                  <YakButton
                     icon={
                       <RefreshCw
                         size={15}

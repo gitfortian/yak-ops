@@ -21,6 +21,7 @@ import type {
   RealtimeObservability,
   RealtimeRuntimeLog,
 } from './types';
+import YakButton from '@/components/YakButton';
 
 const ACTIVE_STATES = new Set(['STARTING', 'RUNNING', 'STOPPING', 'UNKNOWN']);
 
@@ -180,18 +181,18 @@ export default function RealtimeRuntimeDetail({ job, events }: Props) {
           </div>
           <Space>
             {flinkWebUrl && (
-              <Button size="small" href={flinkWebUrl} target="_blank">
+              <YakButton size="small" href={flinkWebUrl} target="_blank">
                 打开 Flink Web UI
-              </Button>
+              </YakButton>
             )}
-            <Button
+            <YakButton
               size="small"
               icon={<ReloadOutlined />}
               loading={observabilityLoading}
               onClick={() => void refreshObservability()}
             >
               刷新
-            </Button>
+            </YakButton>
           </Space>
         </div>
 
@@ -282,9 +283,9 @@ export default function RealtimeRuntimeDetail({ job, events }: Props) {
                 showIcon
                 message="运行诊断来自 Flink Job Exception History，用于定位作业失败和 Task 异常；完整 JobManager/TaskManager 日志请进入 Flink Web UI。"
               />
-              <Button loading={runtimeLoading} onClick={() => void loadRuntimeLog()}>
+              <YakButton loading={runtimeLoading} onClick={() => void loadRuntimeLog()}>
                 刷新运行诊断
-              </Button>
+              </YakButton>
               {runtimeLog?.rootException && (
                 <Alert
                   type="error"
@@ -339,14 +340,14 @@ export default function RealtimeRuntimeDetail({ job, events }: Props) {
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <div className="flex items-center justify-between">
           <Typography.Text type="secondary">Checkpoint 汇总由 Flink REST 归一化展示</Typography.Text>
-          <Button
+          <YakButton
             size="small"
             icon={<ReloadOutlined />}
             loading={observabilityLoading}
             onClick={() => void refreshObservability()}
           >
             刷新
-          </Button>
+          </YakButton>
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard label="成功" value={formatNumber(checkpoint?.completed)} />
@@ -397,14 +398,14 @@ export default function RealtimeRuntimeDetail({ job, events }: Props) {
           <Typography.Text type="secondary">
             Source/Sink 吞吐来自 Flink vertex 聚合指标；无法可靠识别时显示为 “-”
           </Typography.Text>
-          <Button
+          <YakButton
             size="small"
             icon={<ReloadOutlined />}
             loading={observabilityLoading}
             onClick={() => void refreshObservability()}
           >
             刷新
-          </Button>
+          </YakButton>
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard

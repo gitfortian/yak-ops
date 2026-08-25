@@ -222,14 +222,13 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
         <div>
           {isCreateMode && !hideBackButton ? (
             <YakButton
-              type="text"
               disabled={busy}
               onClick={handleBackToTypeSelection}
             >
               上一步
             </YakButton>
           ) : (
-            <YakButton type="text" disabled={busy} onClick={handleClose}>
+            <YakButton  disabled={busy} onClick={handleClose}>
               取消
             </YakButton>
           )}

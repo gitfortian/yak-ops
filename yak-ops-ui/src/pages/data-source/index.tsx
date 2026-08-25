@@ -763,7 +763,6 @@ const DataSourcePage = () => {
                 <YakButton
                   type="text"
                   size="small"
-                  className="!px-0 !text-[11px] !font-semibold !text-black/[0.58]"
                   onClick={handleResetFilters}
                 >
                   重置

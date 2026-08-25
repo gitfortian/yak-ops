@@ -9,6 +9,7 @@ import {
   type DataServiceOverviewFailure,
   type DataServiceOverviewRange,
 } from './overview-service';
+import YakButton from '@/components/YakButton';
 
 const BRAND_COLOR = 'rgba(254,44,85,1)';
 const TEXT_PRIMARY = '#161823';
@@ -349,7 +350,7 @@ export default function DataServiceOverviewPage() {
                 );
               })}
             </div>
-            <Button
+            <YakButton
               type="text"
               size="middle"
               loading={loading}
@@ -358,7 +359,7 @@ export default function DataServiceOverviewPage() {
               className="bg-[#f5f6f7]"
             >
               刷新
-            </Button>
+            </YakButton>
           </div>
         </div>
 

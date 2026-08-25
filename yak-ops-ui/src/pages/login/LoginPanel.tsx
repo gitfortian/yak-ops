@@ -228,6 +228,7 @@ export default function LoginPanel() {
 
         <YakButton
           block
+          effect="glass"
           type="primary"
           htmlType="submit"
           loading={loading}

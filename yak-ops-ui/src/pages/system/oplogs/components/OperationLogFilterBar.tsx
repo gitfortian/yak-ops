@@ -15,6 +15,7 @@ import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
 
 import type { OperationLogOptions } from '@/services/security/operationLogs';
+import YakButton from '@/components/YakButton';
 
 export interface OperationLogFilterValues {
   operateType?: string;
@@ -327,19 +328,19 @@ export default function OperationLogFilterBar({
             if (open) setDraftAdvanced(advanced);
           }}
         >
-          <Button icon={<FilterOutlined />}>
+          <YakButton icon={<FilterOutlined />}>
             高级筛选
             {advancedCount > 0 ? ` (${advancedCount})` : ''}
-          </Button>
+          </YakButton>
         </Popover>
 
-        <Button
+        <YakButton
           icon={<ReloadOutlined />}
           loading={loading}
           onClick={onRefresh}
         >
           刷新
-        </Button>
+        </YakButton>
       </div>
     </div>
   );

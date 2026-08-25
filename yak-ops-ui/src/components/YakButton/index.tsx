@@ -7,19 +7,20 @@ export type YakButtonProps = ButtonProps & {
    * without forcing Ant Design's circular shape.
    */
   iconOnly?: boolean;
+
+  /**
+   * Optional visual treatment.
+   *
+   * glass:
+   * Transparent by default, revealing a subtle translucent surface on hover.
+   */
+  effect?: 'default' | 'glass';
 };
 
-/**
- * Yak Ops unified button.
- *
- * The component keeps the complete Ant Design Button API while applying the
- * compact neutral treatment used by Yak Ops. Default buttons follow the soft
- * grey button in the interaction reference; primary, text and danger states
- * share the same spacing, radius and feedback rules.
- */
 export default function YakButton({
   className,
   iconOnly = false,
+  effect = 'default',
   ...props
 }: YakButtonProps) {
   return (
@@ -28,6 +29,7 @@ export default function YakButton({
       className={[
         'yak-button',
         iconOnly ? 'yak-button--icon-only' : '',
+        effect === 'glass' ? 'yak-button--glass' : '',
         className,
       ]
         .filter(Boolean)

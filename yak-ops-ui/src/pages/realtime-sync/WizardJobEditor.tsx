@@ -36,6 +36,7 @@ import type {
   RealtimeJob,
   TableRoute,
 } from './types';
+import YakButton from '@/components/YakButton';
 
 type PrimaryKeyStatus = 'loading' | 'ready' | 'missing' | 'error';
 type StartupMode = CdcPipelineSpec['startupMode'];
@@ -481,14 +482,14 @@ export default function WizardJobEditor({
               </div>
               <div className="flex items-center gap-2">
                 <Tag>{selectedTables.length} 张已选</Tag>
-                <Button
+                <YakButton
                   size="small"
                   icon={<ReloadOutlined spin={tableLoading} />}
                   disabled={!sourceId || tableLoading}
                   onClick={() => sourceId && void loadTables(sourceId)}
                 >
                   刷新表
-                </Button>
+                </YakButton>
               </div>
             </div>
 

@@ -1,7 +1,5 @@
-import YakTab from '@/components/YakTab';
-import { BRAND_THEME } from '@/styles/brand';
-import type { DataNode } from 'antd/es/tree';
-import type { ColumnsType } from 'antd/es/table';
+import YakTab from "@/components/YakTab";
+import { BRAND_THEME } from "@/styles/brand";
 import {
   Button,
   ConfigProvider,
@@ -16,7 +14,9 @@ import {
   Tag,
   Tooltip,
   Tree,
-} from 'antd';
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
+import type { DataNode } from "antd/es/tree";
 import {
   BarChart3,
   ChevronDown,
@@ -26,16 +26,16 @@ import {
   Database,
   Folder,
   GitBranch,
-  RefreshCw,
   Rows3,
   Search,
   Sigma,
   TableProperties,
-} from 'lucide-react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+} from "lucide-react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import DatasetLineageTab from './DatasetLineageTab';
+import YakButton from "@/components/YakButton";
+import DatasetLineageTab from "./DatasetLineageTab";
 import {
   fetchCatalogWorkspace,
   offlineCatalogDataset,
@@ -45,36 +45,36 @@ import {
   type CatalogDatasetSourceType,
   type CatalogDatasetStatus,
   type CatalogDirectory,
-} from './service';
+} from "./service";
 
 const DEFAULT_LEFT_WIDTH = 286;
 const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_WIDTH = 480;
-const LEFT_WIDTH_STORAGE_KEY = 'yak-data-catalog.left-width';
-const ROOT_KEY = 'catalog:root';
-const UNGROUPED_KEY = 'catalog:ungrouped';
+const LEFT_WIDTH_STORAGE_KEY = "yak-data-catalog.left-width";
+const ROOT_KEY = "catalog:root";
+const UNGROUPED_KEY = "catalog:ungrouped";
 
 const sourceTypeLabel: Record<CatalogDatasetSourceType, string> = {
-  QUERY_REVISION: 'SQL 查询',
-  TABLE: '数据表',
-  VIEW: '视图',
+  QUERY_REVISION: "SQL 查询",
+  TABLE: "数据表",
+  VIEW: "视图",
 };
 
 const roleLabel: Record<CatalogDatasetFieldRole, string> = {
-  DIMENSION: '维度',
-  MEASURE: '指标',
+  DIMENSION: "维度",
+  MEASURE: "指标",
 };
 
 const fieldTypeLabel: Record<string, string> = {
-  STRING: '文本',
-  NUMBER: '数值',
-  DATE: '日期',
-  DATETIME: '时间',
-  BOOLEAN: '布尔',
-  UNKNOWN: '未知',
+  STRING: "文本",
+  NUMBER: "数值",
+  DATE: "日期",
+  DATETIME: "时间",
+  BOOLEAN: "布尔",
+  UNKNOWN: "未知",
 };
 
-type CatalogTreeNodeKind = 'root' | 'directory' | 'dataset' | 'ungrouped';
+type CatalogTreeNodeKind = "root" | "directory" | "dataset" | "ungrouped";
 
 interface CatalogTreeNode extends DataNode {
   key: string;
@@ -91,7 +91,7 @@ const clampLeftWidth = (value: number) =>
   Math.min(MAX_LEFT_WIDTH, Math.max(MIN_LEFT_WIDTH, value));
 
 const initialLeftWidth = () => {
-  if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
+  if (typeof window === "undefined") return DEFAULT_LEFT_WIDTH;
   const stored = Number(window.localStorage.getItem(LEFT_WIDTH_STORAGE_KEY));
   return Number.isFinite(stored) && stored > 0
     ? clampLeftWidth(stored)
@@ -99,32 +99,34 @@ const initialLeftWidth = () => {
 };
 
 const formatTime = (value?: string) => {
-  if (!value) return '-';
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: false,
-  }).format(date).replaceAll('/', '-');
+  })
+    .format(date)
+    .replaceAll("/", "-");
 };
 
 const schemaSummary = (dataset: CatalogDataset) => {
   const dimensions = dataset.fields.filter(
-    (field) => field.defaultRole === 'DIMENSION',
+    (field) => field.defaultRole === "DIMENSION"
   ).length;
   const metrics = dataset.fields.filter(
-    (field) => field.defaultRole === 'MEASURE',
+    (field) => field.defaultRole === "MEASURE"
   ).length;
   return { fields: dataset.fields.length, dimensions, metrics };
 };
 
 const directoryAncestors = (
   directoryId: string | undefined,
-  directoryMap: Map<string, CatalogDirectory>,
+  directoryMap: Map<string, CatalogDirectory>
 ) => {
   const values: CatalogDirectory[] = [];
   const visited = new Set<string>();
@@ -139,57 +141,62 @@ const directoryAncestors = (
 
 const buildCatalogTree = (
   datasets: CatalogDataset[],
-  directories: CatalogDirectory[],
+  directories: CatalogDirectory[]
 ): CatalogTreeNode[] => {
   const directoryMap = new Map(
-    directories.map((directory) => [directory.id, directory]),
+    directories.map((directory) => [directory.id, directory])
   );
   const relevantDirectoryIds = new Set<string>();
 
   datasets.forEach((dataset) => {
-    directoryAncestors(dataset.directoryId, directoryMap).forEach((directory) => {
-      relevantDirectoryIds.add(directory.id);
-    });
+    directoryAncestors(dataset.directoryId, directoryMap).forEach(
+      (directory) => {
+        relevantDirectoryIds.add(directory.id);
+      }
+    );
   });
 
   const datasetNode = (dataset: CatalogDataset): CatalogTreeNode => ({
     key: `dataset:${dataset.id}`,
     title: dataset.name,
-    kind: 'dataset',
+    kind: "dataset",
     datasetId: dataset.id,
     isLeaf: true,
     searchText: [
       dataset.name,
       dataset.description,
-      dataset.sourceTaskName || '',
-      dataset.directoryPath || '',
-      ...dataset.fields.flatMap((field) => [field.displayName, field.physicalName]),
-    ].join(' '),
+      dataset.sourceTaskName || "",
+      dataset.directoryPath || "",
+      ...dataset.fields.flatMap((field) => [
+        field.displayName,
+        field.physicalName,
+      ]),
+    ].join(" "),
   });
 
   const buildDirectory = (directory: CatalogDirectory): CatalogTreeNode => {
     const childDirectories = directories
       .filter(
         (candidate) =>
-          candidate.parentId === directory.id
-          && relevantDirectoryIds.has(candidate.id),
+          candidate.parentId === directory.id &&
+          relevantDirectoryIds.has(candidate.id)
       )
-      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+      .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
       .map(buildDirectory);
     const directDatasets = datasets
       .filter((dataset) => dataset.directoryId === directory.id)
-      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+      .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
       .map(datasetNode);
     const children = [...childDirectories, ...directDatasets];
     const datasetCount = children.reduce(
       (total, child) =>
-        total + (child.kind === 'dataset' ? 1 : child.datasetCount || 0),
-      0,
+        total + (child.kind === "dataset" ? 1 : child.datasetCount || 0),
+      0
     );
     return {
       key: `directory:${directory.id}`,
       title: directory.name,
-      kind: 'directory',
+      kind: "directory",
       directoryId: directory.id,
       datasetCount,
       searchText: `${directory.name} ${directory.path}`,
@@ -199,27 +206,28 @@ const buildCatalogTree = (
 
   const topDirectories = directories
     .filter(
-      (directory) => !directory.parentId && relevantDirectoryIds.has(directory.id),
+      (directory) =>
+        !directory.parentId && relevantDirectoryIds.has(directory.id)
     )
-    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
     .map(buildDirectory);
   const rootDatasets = datasets
     .filter((dataset) => dataset.sourceNodeId && !dataset.directoryId)
-    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
     .map(datasetNode);
   const unmappedDatasets = datasets
     .filter((dataset) => !dataset.sourceNodeId)
-    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
     .map(datasetNode);
 
   const children: CatalogTreeNode[] = [...topDirectories, ...rootDatasets];
   if (unmappedDatasets.length) {
     children.push({
       key: UNGROUPED_KEY,
-      title: '未分组',
-      kind: 'ungrouped',
+      title: "未分组",
+      kind: "ungrouped",
       datasetCount: unmappedDatasets.length,
-      searchText: '未分组',
+      searchText: "未分组",
       children: unmappedDatasets,
     });
   }
@@ -227,10 +235,10 @@ const buildCatalogTree = (
   return [
     {
       key: ROOT_KEY,
-      title: '全部数据集',
-      kind: 'root',
+      title: "全部数据集",
+      kind: "root",
       datasetCount: datasets.length,
-      searchText: '全部数据集',
+      searchText: "全部数据集",
       children,
     },
   ];
@@ -238,13 +246,13 @@ const buildCatalogTree = (
 
 const filterTree = (
   nodes: CatalogTreeNode[],
-  keyword: string,
+  keyword: string
 ): CatalogTreeNode[] => {
   const normalized = keyword.trim().toLowerCase();
   if (!normalized) return nodes;
 
   return nodes.flatMap((node) => {
-    const selfMatches = `${node.title} ${node.searchText || ''}`
+    const selfMatches = `${node.title} ${node.searchText || ""}`
       .toLowerCase()
       .includes(normalized);
     if (selfMatches) return [node];
@@ -268,38 +276,38 @@ const DataCatalogPage = () => {
   const [datasets, setDatasets] = useState<CatalogDataset[]>([]);
   const [directories, setDirectories] = useState<CatalogDirectory[]>([]);
   const [selectedKey, setSelectedKey] = useState(ROOT_KEY);
-  const [treeKeyword, setTreeKeyword] = useState('');
-  const [listKeyword, setListKeyword] = useState('');
-  const [status, setStatus] = useState<'ALL' | CatalogDatasetStatus>('ALL');
+  const [treeKeyword, setTreeKeyword] = useState("");
+  const [listKeyword, setListKeyword] = useState("");
+  const [status, setStatus] = useState<"ALL" | CatalogDatasetStatus>("ALL");
   const [sourceType, setSourceType] = useState<
-    'ALL' | CatalogDatasetSourceType
-  >('ALL');
+    "ALL" | CatalogDatasetSourceType
+  >("ALL");
   const [detailTab, setDetailTab] = useState<
-    'fields' | 'versions' | 'overview' | 'lineage'
-  >('fields');
+    "fields" | "versions" | "overview" | "lineage"
+  >("fields");
   const [current, setCurrent] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [statusUpdatingId, setStatusUpdatingId] = useState('');
+  const [loadError, setLoadError] = useState("");
+  const [statusUpdatingId, setStatusUpdatingId] = useState("");
   const [leftWidth, setLeftWidth] = useState(initialLeftWidth);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setLoadError('');
+    setLoadError("");
     try {
       const workspace = await fetchCatalogWorkspace();
       setDatasets(workspace.datasets);
       setDirectories(workspace.directories);
       setSelectedKey((value) =>
-        value.startsWith('dataset:')
-          && !workspace.datasets.some((item) => `dataset:${item.id}` === value)
+        value.startsWith("dataset:") &&
+        !workspace.datasets.some((item) => `dataset:${item.id}` === value)
           ? ROOT_KEY
-          : value,
+          : value
       );
     } catch (error) {
-      const text = error instanceof Error ? error.message : '加载数据目录失败';
+      const text = error instanceof Error ? error.message : "加载数据目录失败";
       setLoadError(text);
       setDatasets([]);
       setDirectories([]);
@@ -315,25 +323,27 @@ const DataCatalogPage = () => {
 
   const treeData = useMemo(
     () => buildCatalogTree(datasets, directories),
-    [datasets, directories],
+    [datasets, directories]
   );
   const visibleTreeData = useMemo(
     () => filterTree(treeData, treeKeyword),
-    [treeData, treeKeyword],
+    [treeData, treeKeyword]
   );
   const treeNodeMap = useMemo(() => flattenTree(treeData), [treeData]);
-  const selectedNode = treeNodeMap.get(selectedKey) ?? treeNodeMap.get(ROOT_KEY);
+  const selectedNode =
+    treeNodeMap.get(selectedKey) ?? treeNodeMap.get(ROOT_KEY);
   const selectedDataset =
-    selectedNode?.kind === 'dataset'
+    selectedNode?.kind === "dataset"
       ? datasets.find((dataset) => dataset.id === selectedNode.datasetId)
       : undefined;
 
   const scopeDatasets = useMemo(() => {
-    if (!selectedNode || selectedNode.kind === 'root') return datasets;
-    if (selectedNode.kind === 'ungrouped') {
+    if (!selectedNode || selectedNode.kind === "root") return datasets;
+    if (selectedNode.kind === "ungrouped") {
       return datasets.filter((dataset) => !dataset.sourceNodeId);
     }
-    if (selectedNode.kind !== 'directory' || !selectedNode.directoryId) return [];
+    if (selectedNode.kind !== "directory" || !selectedNode.directoryId)
+      return [];
 
     const includedDirectoryIds = new Set<string>([selectedNode.directoryId]);
     let changed = true;
@@ -341,9 +351,9 @@ const DataCatalogPage = () => {
       changed = false;
       directories.forEach((directory) => {
         if (
-          directory.parentId
-          && includedDirectoryIds.has(directory.parentId)
-          && !includedDirectoryIds.has(directory.id)
+          directory.parentId &&
+          includedDirectoryIds.has(directory.parentId) &&
+          !includedDirectoryIds.has(directory.id)
         ) {
           includedDirectoryIds.add(directory.id);
           changed = true;
@@ -351,28 +361,33 @@ const DataCatalogPage = () => {
       });
     }
     return datasets.filter((dataset) =>
-      dataset.directoryId ? includedDirectoryIds.has(dataset.directoryId) : false,
+      dataset.directoryId
+        ? includedDirectoryIds.has(dataset.directoryId)
+        : false
     );
   }, [datasets, directories, selectedNode]);
 
   const filteredDatasets = useMemo(() => {
     const normalized = listKeyword.trim().toLowerCase();
     return scopeDatasets.filter((dataset) => {
-      if (status !== 'ALL' && dataset.status !== status) return false;
-      if (sourceType !== 'ALL' && dataset.currentVersion?.sourceType !== sourceType) {
+      if (status !== "ALL" && dataset.status !== status) return false;
+      if (
+        sourceType !== "ALL" &&
+        dataset.currentVersion?.sourceType !== sourceType
+      ) {
         return false;
       }
       if (!normalized) return true;
       return [
         dataset.name,
         dataset.description,
-        dataset.sourceTaskName || '',
-        dataset.directoryPath || '',
-        dataset.currentVersion?.sourceTaskAssetId || '',
+        dataset.sourceTaskName || "",
+        dataset.directoryPath || "",
+        dataset.currentVersion?.sourceTaskAssetId || "",
         ...dataset.fields.flatMap((field) => [
           field.displayName,
           field.physicalName,
-          field.description || '',
+          field.description || "",
         ]),
       ].some((value) => value.toLowerCase().includes(normalized));
     });
@@ -389,14 +404,14 @@ const DataCatalogPage = () => {
   }, [current, filteredDatasets.length, pageSize]);
 
   const scopeTitle =
-    selectedNode?.kind === 'directory' || selectedNode?.kind === 'ungrouped'
+    selectedNode?.kind === "directory" || selectedNode?.kind === "ungrouped"
       ? selectedNode.title
-      : '全部数据集';
+      : "全部数据集";
 
   const updateDatasetStatus = async (dataset: CatalogDataset) => {
     setStatusUpdatingId(dataset.id);
     try {
-      if (dataset.status === 'ONLINE') {
+      if (dataset.status === "ONLINE") {
         await offlineCatalogDataset(dataset.id);
         message.success(`Dataset「${dataset.name}」已下线`);
       } else {
@@ -406,22 +421,22 @@ const DataCatalogPage = () => {
       await load();
     } catch (error) {
       message.error(
-        error instanceof Error ? error.message : '更新 Dataset 状态失败',
+        error instanceof Error ? error.message : "更新 Dataset 状态失败"
       );
     } finally {
-      setStatusUpdatingId('');
+      setStatusUpdatingId("");
     }
   };
 
   const selectDataset = (dataset: CatalogDataset) => {
     setSelectedKey(`dataset:${dataset.id}`);
-    setDetailTab('fields');
+    setDetailTab("fields");
   };
 
   const resetFilters = () => {
-    setListKeyword('');
-    setStatus('ALL');
-    setSourceType('ALL');
+    setListKeyword("");
+    setStatus("ALL");
+    setSourceType("ALL");
     setCurrent(1);
   };
 
@@ -433,8 +448,8 @@ const DataCatalogPage = () => {
       const startWidth = leftWidth;
       const previousCursor = document.body.style.cursor;
       const previousUserSelect = document.body.style.userSelect;
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
         setLeftWidth(clampLeftWidth(startWidth + moveEvent.clientX - startX));
@@ -445,21 +460,21 @@ const DataCatalogPage = () => {
         window.localStorage.setItem(LEFT_WIDTH_STORAGE_KEY, String(width));
         document.body.style.cursor = previousCursor;
         document.body.style.userSelect = previousUserSelect;
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', finish);
-        window.removeEventListener('pointercancel', finish);
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
       };
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', finish);
-      window.addEventListener('pointercancel', finish);
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
     },
-    [leftCollapsed, leftWidth],
+    [leftCollapsed, leftWidth]
   );
 
   const columns: ColumnsType<CatalogDataset> = [
     {
-      title: '数据集',
-      dataIndex: 'name',
+      title: "数据集",
+      dataIndex: "name",
       width: 290,
       render: (_, record) => (
         <div className="flex min-w-0 items-center gap-2 py-1">
@@ -478,38 +493,38 @@ const DataCatalogPage = () => {
               {record.name}
             </button>
             <div className="mt-0.5 truncate text-[12px] text-[#8a8f99]">
-              {record.description || record.sourceTaskName || '暂无描述'}
+              {record.description || record.sourceTaskName || "暂无描述"}
             </div>
           </div>
         </div>
       ),
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: "状态",
+      dataIndex: "status",
       width: 90,
       render: (value: CatalogDatasetStatus) => (
         <Tag
           bordered={false}
           className={
-            value === 'ONLINE'
-              ? 'm-0 bg-[#f1f3f5] text-[12px] text-[#344054]'
-              : 'm-0 bg-[#f5f5f6] text-[12px] text-[#8a8f99]'
+            value === "ONLINE"
+              ? "m-0 bg-[#f1f3f5] text-[12px] text-[#344054]"
+              : "m-0 bg-[#f5f5f6] text-[12px] text-[#8a8f99]"
           }
         >
-          {value === 'ONLINE' ? '已上线' : '已下线'}
+          {value === "ONLINE" ? "已上线" : "已下线"}
         </Tag>
       ),
     },
     {
-      title: '来源',
+      title: "来源",
       width: 210,
       render: (_, record) =>
         record.currentVersion ? (
           <div className="min-w-0">
             <div className="truncate text-[14px] text-[#344054]">
-              {record.sourceTaskName
-                || `TaskAsset #${record.currentVersion.sourceTaskAssetId}`}
+              {record.sourceTaskName ||
+                `TaskAsset #${record.currentVersion.sourceTaskAssetId}`}
             </div>
             <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               {sourceTypeLabel[record.currentVersion.sourceType]} · SQL V
@@ -521,7 +536,7 @@ const DataCatalogPage = () => {
         ),
     },
     {
-      title: 'Schema',
+      title: "Schema",
       width: 145,
       render: (_, record) => {
         const summary = schemaSummary(record);
@@ -536,12 +551,14 @@ const DataCatalogPage = () => {
       },
     },
     {
-      title: '版本',
+      title: "版本",
       width: 92,
       render: (_, record) => (
         <div>
           <div className="text-[14px] font-medium text-[#344054]">
-            {record.currentVersion ? `DV${record.currentVersion.versionNo}` : '-'}
+            {record.currentVersion
+              ? `DV${record.currentVersion.versionNo}`
+              : "-"}
           </div>
           <div className="mt-0.5 text-[12px] text-[#8a8f99]">
             {record.versions.length} 个版本
@@ -550,43 +567,47 @@ const DataCatalogPage = () => {
       ),
     },
     {
-      title: '消费',
+      title: "消费",
       width: 115,
       render: (_, record) => (
         <div className="flex items-center gap-1.5 text-[14px] text-[#344054]">
-          <BarChart3 size={13} className="text-[#667085]" /> {record.analysisCount} Analysis
+          <BarChart3 size={13} className="text-[#667085]" />{" "}
+          {record.analysisCount} Analysis
         </div>
       ),
     },
     {
-      title: '更新时间',
+      title: "更新时间",
       width: 160,
       render: (_, record) => (
         <div className="flex items-center gap-1.5 text-[13px] text-[#667085]">
-          <Clock3 size={12} className="text-[#8a8f99]" /> {formatTime(record.updateTime || record.createTime)}
+          <Clock3 size={12} className="text-[#8a8f99]" />{" "}
+          {formatTime(record.updateTime || record.createTime)}
         </div>
       ),
     },
     {
-      title: '操作',
-      fixed: 'right',
+      title: "操作",
+      fixed: "right",
       width: 170,
       render: (_, record) => (
         <div className="flex items-center gap-1">
           <Tooltip
             title={
-              record.status === 'ONLINE'
-                ? '使用当前 Dataset 创建分析'
-                : 'Dataset 上线后才能创建 Analysis'
+              record.status === "ONLINE"
+                ? "使用当前 Dataset 创建分析"
+                : "Dataset 上线后才能创建 Analysis"
             }
           >
             <Button
               type="link"
               size="small"
-              disabled={record.status !== 'ONLINE' || !record.currentVersion}
+              disabled={record.status !== "ONLINE" || !record.currentVersion}
               href={
-                record.status === 'ONLINE' && record.currentVersion
-                  ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(record.id)}`
+                record.status === "ONLINE" && record.currentVersion
+                  ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(
+                      record.id
+                    )}`
                   : undefined
               }
               onClick={(event) => event.stopPropagation()}
@@ -596,14 +617,14 @@ const DataCatalogPage = () => {
           </Tooltip>
           <Popconfirm
             title={
-              record.status === 'ONLINE'
-                ? '确认下线这个 Dataset？'
-                : '确认上线这个 Dataset？'
+              record.status === "ONLINE"
+                ? "确认下线这个 Dataset？"
+                : "确认上线这个 Dataset？"
             }
             description={
-              record.status === 'ONLINE'
-                ? '下线后现有 Analysis 将无法继续查询。'
-                : '上线后可继续用于图表分析和仪表盘。'
+              record.status === "ONLINE"
+                ? "下线后现有 Analysis 将无法继续查询。"
+                : "上线后可继续用于图表分析和仪表盘。"
             }
             okText="确认"
             cancelText="取消"
@@ -615,7 +636,7 @@ const DataCatalogPage = () => {
               loading={statusUpdatingId === record.id}
               onClick={(event) => event.stopPropagation()}
             >
-              {record.status === 'ONLINE' ? '下线' : '上线'}
+              {record.status === "ONLINE" ? "下线" : "上线"}
             </Button>
           </Popconfirm>
         </div>
@@ -629,35 +650,38 @@ const DataCatalogPage = () => {
       ? datasets.find((item) => item.id === node.datasetId)
       : undefined;
     const icon =
-      node.kind === 'dataset' ? (
+      node.kind === "dataset" ? (
         <TableProperties size={14} className="shrink-0 text-[#667085]" />
-      ) : node.kind === 'root' ? (
+      ) : node.kind === "root" ? (
         <Database size={14} className="shrink-0 text-[#475467]" />
       ) : (
         <Folder size={14} className="shrink-0 text-[#667085]" />
       );
 
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-2" title={node.title}>
+      <div
+        className="flex min-w-0 flex-1 items-center gap-2"
+        title={node.title}
+      >
         {icon}
         <span
           className={[
-            'min-w-0 flex-1 truncate text-[14px] leading-8',
-            node.kind === 'dataset'
-              ? 'font-normal text-[#344054]'
-              : 'font-medium text-[#161823]',
-          ].join(' ')}
+            "min-w-0 flex-1 truncate text-[14px] leading-8",
+            node.kind === "dataset"
+              ? "font-normal text-[#344054]"
+              : "font-medium text-[#161823]",
+          ].join(" ")}
         >
           {node.title}
         </span>
         {dataset ? (
           <span
             className={[
-              'h-1.5 w-1.5 shrink-0 rounded-full',
-              dataset.status === 'ONLINE' ? 'bg-[#667085]' : 'bg-[#c7cbd1]',
-            ].join(' ')}
+              "h-1.5 w-1.5 shrink-0 rounded-full",
+              dataset.status === "ONLINE" ? "bg-[#667085]" : "bg-[#c7cbd1]",
+            ].join(" ")}
           />
-        ) : typeof node.datasetCount === 'number' ? (
+        ) : typeof node.datasetCount === "number" ? (
           <span className="shrink-0 text-[12px] text-[#8a8f99]">
             {node.datasetCount}
           </span>
@@ -701,9 +725,9 @@ const DataCatalogPage = () => {
                 setCurrent(1);
               }}
               options={[
-                { label: '全部状态', value: 'ALL' },
-                { label: '已上线', value: 'ONLINE' },
-                { label: '已下线', value: 'OFFLINE' },
+                { label: "全部状态", value: "ALL" },
+                { label: "已上线", value: "ONLINE" },
+                { label: "已下线", value: "OFFLINE" },
               ]}
             />
             <Select
@@ -715,19 +739,13 @@ const DataCatalogPage = () => {
                 setCurrent(1);
               }}
               options={[
-                { label: '全部来源', value: 'ALL' },
-                { label: 'SQL 查询', value: 'QUERY_REVISION' },
-                { label: '数据表', value: 'TABLE' },
-                { label: '视图', value: 'VIEW' },
+                { label: "全部来源", value: "ALL" },
+                { label: "SQL 查询", value: "QUERY_REVISION" },
+                { label: "数据表", value: "TABLE" },
+                { label: "视图", value: "VIEW" },
               ]}
             />
-            <Button onClick={resetFilters}>重置</Button>
-            <Button
-              aria-label="刷新"
-              icon={<RefreshCw size={14} />}
-              loading={loading}
-              onClick={() => void load()}
-            />
+            <YakButton onClick={() => void load()}>重置</YakButton>
           </div>
         </div>
       </div>
@@ -749,10 +767,10 @@ const DataCatalogPage = () => {
             columns={columns}
             dataSource={pagedDatasets}
             scroll={{ x: 1200 }}
-            locale={{ emptyText: '当前目录暂无 Dataset' }}
+            locale={{ emptyText: "当前目录暂无 Dataset" }}
             onRow={(record) => ({
               onClick: () => selectDataset(record),
-              style: { cursor: 'pointer' },
+              style: { cursor: "pointer" },
             })}
           />
         )}
@@ -778,20 +796,22 @@ const DataCatalogPage = () => {
   const renderDatasetDetail = (dataset: CatalogDataset) => {
     const summary = schemaSummary(dataset);
     const detailTabs = [
-      { key: 'fields', label: `字段信息 ${summary.fields}` },
-      { key: 'versions', label: `版本历史 ${dataset.versions.length}` },
-      { key: 'overview', label: '基本信息' },
-      { key: 'lineage', label: '血缘' },
+      { key: "fields", label: `字段信息 ${summary.fields}` },
+      { key: "versions", label: `版本历史 ${dataset.versions.length}` },
+      { key: "overview", label: "基本信息" },
+      { key: "lineage", label: "血缘" },
     ] as const;
 
-    const fieldColumns: ColumnsType<CatalogDataset['fields'][number]> = [
+    const fieldColumns: ColumnsType<CatalogDataset["fields"][number]> = [
       {
-        title: '字段名称',
-        dataIndex: 'displayName',
+        title: "字段名称",
+        dataIndex: "displayName",
         width: 180,
         render: (value: string, record) => (
           <div>
-            <div className="text-[14px] font-medium text-[#161823]">{value}</div>
+            <div className="text-[14px] font-medium text-[#161823]">
+              {value}
+            </div>
             <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               {record.physicalName}
             </div>
@@ -799,8 +819,8 @@ const DataCatalogPage = () => {
         ),
       },
       {
-        title: '类型',
-        dataIndex: 'dataType',
+        title: "类型",
+        dataIndex: "dataType",
         width: 90,
         render: (value: string) => (
           <span className="text-[14px] text-[#344054]">
@@ -809,45 +829,49 @@ const DataCatalogPage = () => {
         ),
       },
       {
-        title: '角色',
-        dataIndex: 'defaultRole',
+        title: "角色",
+        dataIndex: "defaultRole",
         width: 90,
         render: (value: CatalogDatasetFieldRole) => (
           <span className="inline-flex items-center gap-1 text-[14px] text-[#344054]">
-            {value === 'MEASURE' ? <Sigma size={13} /> : <Rows3 size={13} />}
+            {value === "MEASURE" ? <Sigma size={13} /> : <Rows3 size={13} />}
             {roleLabel[value]}
           </span>
         ),
       },
       {
-        title: '可空',
-        dataIndex: 'nullable',
+        title: "可空",
+        dataIndex: "nullable",
         width: 70,
         render: (value: boolean) => (
-          <span className="text-[14px] text-[#344054]">{value ? '是' : '否'}</span>
+          <span className="text-[14px] text-[#344054]">
+            {value ? "是" : "否"}
+          </span>
         ),
       },
       {
-        title: '描述',
-        dataIndex: 'description',
+        title: "描述",
+        dataIndex: "description",
         render: (value?: string) => (
-          <span className="text-[13px] text-[#667085]">{value || '-'}</span>
+          <span className="text-[13px] text-[#667085]">{value || "-"}</span>
         ),
       },
     ];
 
-    const versionColumns: ColumnsType<CatalogDataset['versions'][number]> = [
+    const versionColumns: ColumnsType<CatalogDataset["versions"][number]> = [
       {
-        title: 'Dataset 版本',
-        dataIndex: 'versionNo',
+        title: "Dataset 版本",
+        dataIndex: "versionNo",
         width: 120,
         render: (value: number) => (
-          <span className="text-[14px] font-medium text-[#161823]">DV{value}</span>
+          <span className="text-[14px] font-medium text-[#161823]">
+            DV{value}
+          </span>
         ),
       },
       {
-        title: '来源类型',
-        dataIndex: 'sourceType',
+        title: "来源类型",
+        dataIndex: "sourceType",
         width: 120,
         render: (value: CatalogDatasetSourceType) => (
           <span className="text-[14px] text-[#344054]">
@@ -856,11 +880,12 @@ const DataCatalogPage = () => {
         ),
       },
       {
-        title: '来源任务',
+        title: "来源任务",
         render: (_, record) => (
           <div>
             <div className="text-[14px] text-[#344054]">
-              {dataset.sourceTaskName || `TaskAsset #${record.sourceTaskAssetId}`}
+              {dataset.sourceTaskName ||
+                `TaskAsset #${record.sourceTaskAssetId}`}
             </div>
             <div className="mt-0.5 text-[12px] text-[#8a8f99]">
               SQL V{record.sourceTaskRevisionNo}
@@ -869,15 +894,17 @@ const DataCatalogPage = () => {
         ),
       },
       {
-        title: '发布时间',
-        dataIndex: 'createTime',
+        title: "发布时间",
+        dataIndex: "createTime",
         width: 165,
         render: (value?: string) => (
-          <span className="text-[13px] text-[#667085]">{formatTime(value)}</span>
+          <span className="text-[13px] text-[#667085]">
+            {formatTime(value)}
+          </span>
         ),
       },
       {
-        title: '状态',
+        title: "状态",
         width: 90,
         render: (_, record) =>
           record.id === dataset.currentVersionId ? (
@@ -894,25 +921,25 @@ const DataCatalogPage = () => {
     ];
 
     const datasetType = dataset.currentVersion
-      ? dataset.currentVersion.sourceType === 'QUERY_REVISION'
-        ? 'SQL 数据集'
+      ? dataset.currentVersion.sourceType === "QUERY_REVISION"
+        ? "SQL 数据集"
         : `${sourceTypeLabel[dataset.currentVersion.sourceType]}数据集`
-      : '-';
+      : "-";
 
     const detailItems = [
-      { label: '类型', value: datasetType },
+      { label: "类型", value: datasetType },
       {
-        label: '所属目录',
+        label: "所属目录",
         value:
-          dataset.directoryPath || (dataset.sourceNodeId ? '根目录' : '未分组'),
+          dataset.directoryPath || (dataset.sourceNodeId ? "根目录" : "未分组"),
       },
-      { label: '来源任务', value: dataset.sourceTaskName || '-' },
-      { label: '数据描述', value: dataset.description || '无' },
+      { label: "来源任务", value: dataset.sourceTaskName || "-" },
+      { label: "数据描述", value: dataset.description || "无" },
       {
-        label: '更新时间',
+        label: "更新时间",
         value: formatTime(dataset.updateTime || dataset.createTime),
       },
-      { label: '创建时间', value: formatTime(dataset.createTime) },
+      { label: "创建时间", value: formatTime(dataset.createTime) },
     ];
 
     return (
@@ -938,35 +965,41 @@ const DataCatalogPage = () => {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <Button href="/data-development/releases" icon={<GitBranch size={13} />} variant='filled'>
+            <Button
+              href="/data-development/releases"
+              icon={<GitBranch size={13} />}
+              variant="filled"
+            >
               发布中心
             </Button>
             <Popconfirm
               title={
-                dataset.status === 'ONLINE'
-                  ? '确认下线这个 Dataset？'
-                  : '确认上线这个 Dataset？'
+                dataset.status === "ONLINE"
+                  ? "确认下线这个 Dataset？"
+                  : "确认上线这个 Dataset？"
               }
               description={
-                dataset.status === 'ONLINE'
-                  ? '下线后现有 Analysis 将无法继续查询。'
-                  : '上线后可继续用于图表分析和仪表盘。'
+                dataset.status === "ONLINE"
+                  ? "下线后现有 Analysis 将无法继续查询。"
+                  : "上线后可继续用于图表分析和仪表盘。"
               }
               okText="确认"
               cancelText="取消"
               onConfirm={() => void updateDatasetStatus(dataset)}
             >
               <Button loading={statusUpdatingId === dataset.id}>
-                {dataset.status === 'ONLINE' ? '下线' : '上线'}
+                {dataset.status === "ONLINE" ? "下线" : "上线"}
               </Button>
             </Popconfirm>
             <Button
               type="primary"
               icon={<BarChart3 size={13} />}
-              disabled={dataset.status !== 'ONLINE' || !dataset.currentVersion}
+              disabled={dataset.status !== "ONLINE" || !dataset.currentVersion}
               href={
-                dataset.status === 'ONLINE' && dataset.currentVersion
-                  ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(dataset.id)}`
+                dataset.status === "ONLINE" && dataset.currentVersion
+                  ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(
+                      dataset.id
+                    )}`
                   : undefined
               }
             >
@@ -983,14 +1016,16 @@ const DataCatalogPage = () => {
               label: tab.label,
             }))}
             onChange={(key) =>
-              setDetailTab(key as 'fields' | 'versions' | 'overview' | 'lineage')
+              setDetailTab(
+                key as "fields" | "versions" | "overview" | "lineage"
+              )
             }
           />
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <section className="min-w-0 flex-1 overflow-auto px-3 py-3">
-            {detailTab === 'fields' ? (
+            {detailTab === "fields" ? (
               <Table
                 rowKey="fieldId"
                 size="small"
@@ -999,9 +1034,9 @@ const DataCatalogPage = () => {
                 columns={fieldColumns}
                 dataSource={dataset.fields}
                 scroll={{ x: 760 }}
-                locale={{ emptyText: '当前 Dataset 暂无字段' }}
+                locale={{ emptyText: "当前 Dataset 暂无字段" }}
               />
-            ) : detailTab === 'versions' ? (
+            ) : detailTab === "versions" ? (
               <Table
                 rowKey="id"
                 size="small"
@@ -1009,29 +1044,32 @@ const DataCatalogPage = () => {
                 pagination={false}
                 columns={versionColumns}
                 dataSource={[...dataset.versions].sort(
-                  (left, right) => right.versionNo - left.versionNo,
+                  (left, right) => right.versionNo - left.versionNo
                 )}
                 scroll={{ x: 760 }}
-                locale={{ emptyText: '暂无 DatasetVersion' }}
+                locale={{ emptyText: "暂无 DatasetVersion" }}
               />
-            ) : detailTab === 'lineage' ? (
+            ) : detailTab === "lineage" ? (
               <DatasetLineageTab key={dataset.id} dataset={dataset} />
             ) : (
               <div className="max-w-[980px]">
                 <div className="grid grid-cols-4 gap-3">
                   {[
-                    { label: '字段', value: summary.fields, icon: Rows3 },
-                    { label: '维度', value: summary.dimensions, icon: Rows3 },
-                    { label: '指标', value: summary.metrics, icon: Sigma },
+                    { label: "字段", value: summary.fields, icon: Rows3 },
+                    { label: "维度", value: summary.dimensions, icon: Rows3 },
+                    { label: "指标", value: summary.metrics, icon: Sigma },
                     {
-                      label: 'Analysis',
+                      label: "Analysis",
                       value: dataset.analysisCount,
                       icon: BarChart3,
                     },
                   ].map((item) => {
                     const Icon = item.icon;
                     return (
-                      <div key={item.label} className="border border-[#e4e7ec] p-3">
+                      <div
+                        key={item.label}
+                        className="border border-[#e4e7ec] p-3"
+                      >
                         <div className="flex items-center gap-1.5 text-[12px] text-[#667085]">
                           <Icon size={12} /> {item.label}
                         </div>
@@ -1047,7 +1085,7 @@ const DataCatalogPage = () => {
                     Dataset 描述
                   </div>
                   <div className="mt-2 text-[13px] leading-5 text-[#667085]">
-                    {dataset.description || '暂无描述'}
+                    {dataset.description || "暂无描述"}
                   </div>
                 </div>
               </div>
@@ -1055,7 +1093,9 @@ const DataCatalogPage = () => {
           </section>
 
           <aside className="w-[272px] shrink-0 overflow-y-auto border-l border-[#dfe3e8] bg-[#fafbfc] px-5 py-4">
-            <div className="text-[14px] font-semibold text-[#161823]">数据详情</div>
+            <div className="text-[14px] font-semibold text-[#161823]">
+              数据详情
+            </div>
             <div className="mt-4 space-y-4">
               {detailItems.map((item) => (
                 <div key={item.label}>
@@ -1125,10 +1165,10 @@ const DataCatalogPage = () => {
                       titleRender={renderTreeTitle}
                       switcherIcon={<ChevronDown size={12} strokeWidth={1.8} />}
                       onSelect={(keys) => {
-                        const key = String(keys[0] || '');
+                        const key = String(keys[0] || "");
                         if (!key) return;
                         setSelectedKey(key);
-                        setDetailTab('fields');
+                        setDetailTab("fields");
                         setCurrent(1);
                       }}
                       className="catalog-tree bg-transparent"
@@ -1138,8 +1178,8 @@ const DataCatalogPage = () => {
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                       description={
                         treeKeyword.trim()
-                          ? '未找到匹配 Dataset'
-                          : '暂无已发布 Dataset'
+                          ? "未找到匹配 Dataset"
+                          : "暂无已发布 Dataset"
                       }
                       className="mt-10"
                     />
@@ -1155,31 +1195,33 @@ const DataCatalogPage = () => {
             aria-orientation="vertical"
             onPointerDown={leftCollapsed ? undefined : handleResizeStart}
             className={[
-              'group relative z-20 w-3 shrink-0 touch-none',
-              leftCollapsed ? 'cursor-default' : 'cursor-col-resize',
-            ].join(' ')}
+              "group relative z-20 w-3 shrink-0 touch-none",
+              leftCollapsed ? "cursor-default" : "cursor-col-resize",
+            ].join(" ")}
           >
             <div
               className={[
-                'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#dfe3e8]',
-                'transition-[width,background-color] duration-150',
+                "pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#dfe3e8]",
+                "transition-[width,background-color] duration-150",
                 !leftCollapsed
-                  ? 'group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:bg-[rgba(254,44,85,1)]'
-                  : '',
-              ].join(' ')}
+                  ? "group-hover:w-[2px] group-hover:bg-[rgba(254,44,85,.55)] group-active:bg-[rgba(254,44,85,1)]"
+                  : "",
+              ].join(" ")}
             />
             <button
               type="button"
-              aria-label={leftCollapsed ? '展开数据目录面板' : '收起数据目录面板'}
+              aria-label={
+                leftCollapsed ? "展开数据目录面板" : "收起数据目录面板"
+              }
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => setLeftCollapsed((value) => !value)}
               className={[
-                'absolute left-1/2 top-1/2 z-20 flex h-8 w-4 -translate-x-1/2 -translate-y-1/2',
-                'items-center justify-center rounded-[3px] border border-[#dfe3e8] bg-white text-[#667085]',
-                'shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[color,border-color,box-shadow] duration-150',
-                'hover:border-[#cfd4dc] hover:text-[#161823] focus:outline-none focus-visible:ring-2',
-                'focus-visible:ring-[rgba(254,44,85,.16)]',
-              ].join(' ')}
+                "absolute left-1/2 top-1/2 z-20 flex h-8 w-4 -translate-x-1/2 -translate-y-1/2",
+                "items-center justify-center rounded-[3px] border border-[#dfe3e8] bg-white text-[#667085]",
+                "shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[color,border-color,box-shadow] duration-150",
+                "hover:border-[#cfd4dc] hover:text-[#161823] focus:outline-none focus-visible:ring-2",
+                "focus-visible:ring-[rgba(254,44,85,.16)]",
+              ].join(" ")}
             >
               {leftCollapsed ? (
                 <ChevronRight size={12} />
@@ -1189,7 +1231,9 @@ const DataCatalogPage = () => {
             </button>
           </div>
 
-          {selectedDataset ? renderDatasetDetail(selectedDataset) : renderDirectoryView()}
+          {selectedDataset
+            ? renderDatasetDetail(selectedDataset)
+            : renderDirectoryView()}
         </div>
       </div>
 
