@@ -136,7 +136,7 @@ antd: {
         colorInfo: BRAND_COLOR,
         colorLink: BRAND_COLOR,
 
-        fontFamily: 'YakOps, Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontFamily: 'var(--yak-font-family)',
       },
     },
   },

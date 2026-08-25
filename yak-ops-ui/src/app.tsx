@@ -3,7 +3,7 @@ import type { Settings as LayoutSettings } from "@ant-design/pro-components";
 import { SettingDrawer } from "@ant-design/pro-components";
 import "@ant-design/v5-patch-for-react-19";
 import type { RunTimeLayoutConfig } from "@umijs/max";
-import { history } from "@umijs/max";
+import { getLocale, history } from "@umijs/max";
 
 import defaultSettings from "../config/defaultSettings";
 import { GlobalSearch, Knowledge } from "./components/RightContent";
@@ -18,6 +18,14 @@ import {
 
 const isDev = process.env.NODE_ENV === "development";
 const loginPath = "/login";
+
+const syncDocumentLocale = () => {
+  const currentLocale = getLocale();
+  const locale = currentLocale.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+
+  document.documentElement.dataset.yakLocale = locale;
+  document.documentElement.lang = locale;
+};
 
 const redirectAnonymousUser = () => {
   if (isLoginPath(window.location.pathname)) return;
@@ -38,6 +46,8 @@ export async function getInitialState(): Promise<{
   currentUserLoadError?: boolean;
   fetchUserInfo?: () => Promise<API.CurrentUser | undefined>;
 }> {
+  syncDocumentLocale();
+
   const fetchUserInfo = async () => toCurrentUser(await getCurrentUser());
   // Always probe the cookie-backed Session, including after a reload on login.
   let currentUser: API.CurrentUser | undefined;
