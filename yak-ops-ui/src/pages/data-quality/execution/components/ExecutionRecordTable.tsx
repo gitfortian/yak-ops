@@ -144,8 +144,9 @@ const ExecutionRecordTable = ({
         render: (_, record) => (
           <div className="flex items-center">
             <Button
-              type="link"
+              type="text"
               size="small"
+              className="!text-[#667085]"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenExecution(record.executionNo);
@@ -154,8 +155,9 @@ const ExecutionRecordTable = ({
               详情
             </Button>
             <Button
-              type="link"
+              type="text"
               size="small"
+              className="!text-[#667085]"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenMonitor(record.monitorId);
@@ -278,8 +280,9 @@ const ExecutionRecordTable = ({
         render: (_, record) => (
           <div className="flex items-center">
             <Button
-              type="link"
+              type="text"
               size="small"
+              className="!text-[#667085]"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenExecution(record.executionNo);
@@ -288,8 +291,9 @@ const ExecutionRecordTable = ({
               详情
             </Button>
             <Button
-              type="link"
+              type="text"
               size="small"
+              className="!text-[#667085]"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenMonitor(record.monitorId);
