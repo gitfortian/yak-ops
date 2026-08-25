@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   CheckSquareOutlined,
   CloseOutlined,
@@ -6,7 +7,7 @@ import {
   SyncOutlined,
 } from "@ant-design/icons";
 import { useIntl } from "@umijs/max";
-import { Button, Col, DatePicker, Form, Input, Row, Select, Space } from "antd";
+import { Col, DatePicker, Form, Input, Row, Select, Space } from "antd";
 import moment from "moment";
 import { useEffect, useMemo, useState } from "react";
 import DatabaseIcons from "../../../../data-source/icon/DatabaseIcons";
@@ -231,7 +232,7 @@ const AdvancedSearchForm: React.FC<AdvancedSearchFormProps> = ({
           <Col xs={24} md={12} xl={4}>
             <div className="flex h-8 items-center justify-start md:justify-end">
               <Space size={8}>
-                <Button
+                <YakButton
                   type="primary"
                   htmlType="submit"
                   className="h-8 rounded-full border-none px-5 font-medium shadow-none"
@@ -240,9 +241,9 @@ const AdvancedSearchForm: React.FC<AdvancedSearchFormProps> = ({
                     id: "pages.job.search.button.search",
                     defaultMessage: "Search",
                   })}
-                </Button>
+                </YakButton>
 
-                <Button
+                <YakButton
                   type="text"
                   onClick={handleReset}
                   className="h-8 rounded-full px-5 !text-[#667085]"
@@ -251,11 +252,12 @@ const AdvancedSearchForm: React.FC<AdvancedSearchFormProps> = ({
                     id: "pages.job.search.button.reset",
                     defaultMessage: "Reset",
                   })}
-                </Button>
+                </YakButton>
 
-                <button
-                  type="button"
-                  className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-medium text-indigo-600 transition hover:bg-indigo-50"
+                <YakButton
+                  type="text"
+                  htmlType="button"
+                  className="!h-8 !rounded-full !px-2 !text-xs !font-medium !text-indigo-600 hover:!bg-indigo-50"
                   onClick={() => setExpand((prev) => !prev)}
                 >
                   {expand
@@ -274,7 +276,7 @@ const AdvancedSearchForm: React.FC<AdvancedSearchFormProps> = ({
                       expand ? "rotate-180" : "rotate-0",
                     ].join(" ")}
                   />
-                </button>
+                </YakButton>
               </Space>
             </div>
           </Col>
