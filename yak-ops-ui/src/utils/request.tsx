@@ -1,17 +1,9 @@
 /* eslint-disable @typescript-eslint/dot-notation */
-import { openPrettyNotification } from "@/utils/prettyNotification";
+import { extractErrorMessage, extractUnknownErrorMessage, isApiResponse, isSuccessfulResponse, isUnauthenticatedResponse, protocolForUrl, type ApiProtocol, type ApiResponse } from "@/services/http/response";
+import { notifyOnce } from "@/utils/notifyOnce";
 import { dispatchAuthenticationInvalidated } from "@/utils/security/authentication";
 import { history } from "umi";
 import { extend } from "umi-request";
-import {
-  extractErrorMessage,
-  isApiResponse,
-  isSuccessfulResponse,
-  isUnauthenticatedResponse,
-  protocolForUrl,
-  type ApiProtocol,
-  type ApiResponse,
-} from "@/services/http/response";
 
 export type { ApiProtocol, ApiResponse } from "@/services/http/response";
 
@@ -27,6 +19,7 @@ const codeMessage: Record<number, string> = {
   401: "当前请求未通过身份认证，请重新登录。",
   403: "当前用户已登录，但没有访问该资源的权限。",
   404: "发出的请求针对的是不存在的记录，服务器没有进行操作。",
+  405: "请求方法不被当前接口允许，请检查请求方式。",
   406: "请求的格式不可得。",
   410: "请求的资源被永久删除，且不会再得到的。",
   422: "当创建一个对象时，发生一个验证错误。",
@@ -66,18 +59,6 @@ export const goLogin = () => {
 };
 
 let authenticationFailureHandled = false;
-const recentNotifications = new Map<string, number>();
-
-const notifyOnce = (
-  key: string,
-  notification: Parameters<typeof openPrettyNotification>[0]
-) => {
-  const now = Date.now();
-  const lastShown = recentNotifications.get(key) || 0;
-  if (now - lastShown < 1000) return;
-  recentNotifications.set(key, now);
-  openPrettyNotification(notification);
-};
 
 /** Re-arm expiry handling only after authentication has been established. */
 export const resetAuthenticationFailure = () => {
@@ -85,7 +66,9 @@ export const resetAuthenticationFailure = () => {
 };
 
 /** HTTP 401 与业务未认证码的唯一处理出口。 */
-export const handleAuthenticationFailure = () => {
+export const handleAuthenticationFailure = (
+  reason = "当前登录信息已过期，请重新登录后继续操作。"
+) => {
   dispatchAuthenticationInvalidated();
   if (window.location.pathname.toLowerCase().startsWith("/login")) {
     return;
@@ -96,7 +79,7 @@ export const handleAuthenticationFailure = () => {
   notifyOnce("authentication", {
     type: "warning",
     title: "登录状态失效",
-    description: "当前登录信息已过期，请重新登录后继续操作。",
+    description: reason,
     meta: "即将跳转登录页",
   });
   goLogin();
@@ -105,7 +88,7 @@ export const handleAuthenticationFailure = () => {
 /** 业务异常的唯一展示出口。 */
 const handleBusinessError = (error: BizError) => {
   if (isUnauthenticatedResponse(error.response, error.protocol)) {
-    handleAuthenticationFailure();
+    handleAuthenticationFailure(error.message);
     return;
   }
 
@@ -129,18 +112,25 @@ const errorHandler = (error: any): Response | undefined => {
     throw error;
   }
 
-  // HTTP 异常
+  // HTTP 异常。umi-request 会把 JSON 错误体放在 error.data 中，优先展示
+  // 后端真实 msg/message，而不是用通用 HTTP 状态文案覆盖它。
   if (response?.status) {
     const { status, url } = response;
+    const protocol = protocolForUrl(url);
+    const payload: unknown = error?.data;
+    const fallback = codeMessage[status] || response.statusText || "请求失败";
+    const errorText = extractUnknownErrorMessage(payload, fallback);
 
-    if (status === 401) {
-      handleAuthenticationFailure();
+    // 401 明确代表未认证；另外兼容网关把 Sa-Token 未登录响应包装成
+    // 其他 HTTP 状态的情况。403/405 本身不等于登录失效。
+    const payloadUnauthenticated =
+      isApiResponse(payload) && isUnauthenticatedResponse(payload, protocol);
+    if (status === 401 || payloadUnauthenticated) {
+      handleAuthenticationFailure(errorText);
       return response;
     }
 
-    const errorText = codeMessage[status] || response.statusText || "请求失败";
-
-    notifyOnce(`http:${status}:${url || ""}`, {
+    notifyOnce(`http:${status}:${url || ""}:${errorText}`, {
       type: "error",
       title: `请求错误 ${status}`,
       description: (
@@ -159,7 +149,7 @@ const errorHandler = (error: any): Response | undefined => {
           ) : null}
         </div>
       ),
-      meta: "服务端返回异常",
+      meta: status === 403 ? "权限不足" : "服务端返回异常",
       duration: 3.5,
     });
 

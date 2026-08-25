@@ -1,6 +1,7 @@
 import {
   API_SUCCESS_CODE,
   extractErrorMessage,
+  extractUnknownErrorMessage,
   isApiResponse,
   isSuccessfulResponse,
   isUnauthenticatedResponse,
@@ -25,9 +26,28 @@ describe('API response protocols', () => {
     );
   });
 
+  it('preserves useful backend messages from HTTP error payloads', () => {
+    expect(
+      extractUnknownErrorMessage({
+        code: 500,
+        data: null,
+        msg: '数据库连接失败',
+      }),
+    ).toBe('数据库连接失败');
+    expect(extractUnknownErrorMessage({ message: '服务不可用' })).toBe(
+      '服务不可用',
+    );
+    expect(extractUnknownErrorMessage({ detail: '参数格式错误' })).toBe(
+      '参数格式错误',
+    );
+    expect(extractUnknownErrorMessage('纯文本错误')).toBe('纯文本错误');
+    expect(extractUnknownErrorMessage({}, 'fallback')).toBe('fallback');
+  });
+
   it('recognizes authentication failures without treating forbidden as anonymous', () => {
     expect(isUnauthenticatedResponse({ code: 401 }, 'yak-ops')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 401 }, 'security')).toBe(true);
+    expect(isUnauthenticatedResponse({ code: 2001 }, 'security')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 403 }, 'security')).toBe(false);
     expect(
       isUnauthenticatedResponse(
@@ -35,13 +55,24 @@ describe('API response protocols', () => {
         'security',
       ),
     ).toBe(true);
-    // Keep parsing legacy backend messages while frontend state remains backend-neutral.
     expect(
       isUnauthenticatedResponse(
-        { code: 999, message: 'session_expired' },
+        { code: 999, message: 'session-expired' },
         'security',
       ),
     ).toBe(true);
+    expect(
+      isUnauthenticatedResponse(
+        { code: 999, message: 'token expired' },
+        'security',
+      ),
+    ).toBe(true);
+    expect(
+      isUnauthenticatedResponse(
+        { code: 999, message: 'validation failed' },
+        'security',
+      ),
+    ).toBe(false);
   });
 
   it('routes only security endpoints to the security protocol', () => {
