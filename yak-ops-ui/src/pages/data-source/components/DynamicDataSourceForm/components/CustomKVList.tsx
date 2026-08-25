@@ -1,5 +1,6 @@
+import YakButton from '@/components/YakButton';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Form, Input } from 'antd';
+import { Form, Input } from 'antd';
 import type { Rule } from 'antd/es/form';
 
 const CustomKVList = ({ intl, field }: any) => {
@@ -88,11 +89,11 @@ const CustomKVList = ({ intl, field }: any) => {
                         <Input variant="filled" placeholder="例如：false" />
                       </Form.Item>
 
-                      <Button
+                      <YakButton
                         type="text"
                         size="small"
                         danger
-                        className="!h-8 !w-8 !px-0"
+                        iconOnly
                         icon={<DeleteOutlined />}
                         aria-label="删除扩展参数"
                         onClick={() => remove(name)}
@@ -107,7 +108,7 @@ const CustomKVList = ({ intl, field }: any) => {
               )}
 
               <div className="flex justify-end border-t border-[#eef0f3] bg-[#fcfcfd] px-3 py-2">
-                <Button
+                <YakButton
                   type="text"
                   size="small"
                   icon={<PlusOutlined />}
@@ -120,7 +121,7 @@ const CustomKVList = ({ intl, field }: any) => {
                         defaultMessage: '新增参数',
                       })
                     : `最多 ${maxRows} 条`}
-                </Button>
+                </YakButton>
               </div>
             </div>
           );

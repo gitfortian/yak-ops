@@ -1,6 +1,7 @@
+import YakButton from "@/components/YakButton";
 import { API_SUCCESS_CODE } from "@/services/http/response";
 import { useIntl } from "@umijs/max";
-import { Button, Drawer, Form, message } from "antd";
+import { Drawer, Form, message } from "antd";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 
 import { dataSourceGroupList } from "../constants";
@@ -209,14 +210,9 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
     if (!showFormStep) {
       return (
         <div className="flex justify-end">
-          <Button
-            type="text"
-            className="!text-[#667085]"
-            disabled={busy}
-            onClick={handleClose}
-          >
+          <YakButton type="text" disabled={busy} onClick={handleClose}>
             取消
-          </Button>
+          </YakButton>
         </div>
       );
     }
@@ -225,45 +221,38 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       <div className="flex items-center justify-between gap-3">
         <div>
           {isCreateMode && !hideBackButton ? (
-            <Button
+            <YakButton
               type="text"
-              className="!text-[#667085]"
               disabled={busy}
               onClick={handleBackToTypeSelection}
             >
               上一步
-            </Button>
+            </YakButton>
           ) : (
-            <Button
-              type="text"
-              className="!text-[#667085]"
-              disabled={busy}
-              onClick={handleClose}
-            >
+            <YakButton type="text" disabled={busy} onClick={handleClose}>
               取消
-            </Button>
+            </YakButton>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            type="text"
-            className="!text-[#667085]"
+          <YakButton
+            type="default"
             loading={testing}
             disabled={submitting}
             onClick={() => void handleTestConnection()}
           >
             连接测试
-          </Button>
+          </YakButton>
 
-          <Button
+          <YakButton
             type="primary"
             loading={submitting}
             disabled={testing}
             onClick={() => void handleSubmit()}
           >
             {isCreateMode ? "创建数据源" : "保存修改"}
-          </Button>
+          </YakButton>
         </div>
       </div>
     );

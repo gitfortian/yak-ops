@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import { SearchOutlined } from '@ant-design/icons';
 import { Empty, Input, Select } from 'antd';
 import { useMemo, useState } from 'react';
@@ -96,32 +97,25 @@ const DataSourceTypeSelector = ({
   const renderSourceItem = (
     item: (typeof filteredDatasourceList)[number],
   ) => (
-    <button
+    <YakButton
       key={[item.groupName, item.dbType, item.connectorType || item.type || ''].join(
         '-',
       )}
-      type="button"
+      htmlType="button"
       disabled={item.disabled}
-      className={[
-        'group flex min-h-[46px] min-w-0 items-center gap-2.5 rounded-lg',
-        'border border-[#E8EAED] bg-white px-3 py-2 text-left',
-        'transition-colors duration-150',
-        'hover:border-[var(--ant-color-primary)]',
-        'focus-visible:border-[var(--ant-color-primary)] focus-visible:outline-none',
-        'disabled:cursor-not-allowed disabled:opacity-45',
-      ].join(' ')}
+      className="!h-auto !min-h-[46px] !min-w-0 !justify-start !px-3 !py-2 !text-left"
       onClick={() => onSelect(item.dbType)}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F7F8FA]">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white">
         <DatabaseIcons dbType={item.dbType} width="15px" height="15px" />
       </span>
       <span
-        className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#344054]"
+        className="min-w-0 flex-1 truncate text-[13px] font-medium"
         title={item.dbType}
       >
         {item.dbType}
       </span>
-    </button>
+    </YakButton>
   );
 
   return (
@@ -160,28 +154,23 @@ const DataSourceTypeSelector = ({
           <div className="mb-2 text-xs font-semibold text-[#161823]">常用</div>
           <div className="grid grid-cols-3 gap-2">
             {suggestedDatasourceList.map((item) => (
-              <button
+              <YakButton
                 key={item.dbType}
-                type="button"
-                className={[
-                  'group flex min-w-0 items-center gap-2 rounded-lg border',
-                  'border-[#E8EAED] bg-white px-2.5 py-2 text-left',
-                  'transition-colors hover:border-[var(--ant-color-primary)]',
-                  'focus-visible:border-[var(--ant-color-primary)] focus-visible:outline-none',
-                ].join(' ')}
+                htmlType="button"
+                className="!h-auto !min-w-0 !justify-start !px-2.5 !py-2 !text-left"
                 onClick={() => onSelect(item.dbType)}
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F7F8FA]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white">
                   <DatabaseIcons
                     dbType={item.dbType}
                     width="14px"
                     height="14px"
                   />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#344054]">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium">
                   {item.label}
                 </span>
-              </button>
+              </YakButton>
             ))}
           </div>
         </section>

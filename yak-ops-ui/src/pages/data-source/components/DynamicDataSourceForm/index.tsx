@@ -1,7 +1,7 @@
+import YakButton from '@/components/YakButton';
 import { InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useIntl } from '@umijs/max';
 import {
-  Button,
   Collapse,
   Form,
   Input,
@@ -379,10 +379,10 @@ const DynamicDataSourceForm = ({
                   : '请检查服务状态或网络后重新加载。')}
             </div>
           </div>
-          <Button
+          <YakButton
             size="small"
             type="text"
-            className="shrink-0 !text-[#667085]"
+            className="shrink-0"
             onClick={() => {
               if (installRequired) {
                 void installPlugin().then((installed) => {
@@ -397,7 +397,7 @@ const DynamicDataSourceForm = ({
               {installRequired ? '安装插件' : '重新加载'}
               <DatabaseIcons dbType={dbType} height="15" width="15" />
             </span>
-          </Button>
+          </YakButton>
         </div>
       </div>
     );

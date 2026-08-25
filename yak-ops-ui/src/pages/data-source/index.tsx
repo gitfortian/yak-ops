@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import { YAK_OPS_PERMISSIONS } from '@/constants/yakOpsPermissions';
 import usePermissionAccess from '@/hooks/usePermissionAccess';
 import { API_SUCCESS_CODE } from '@/services/http/response';
@@ -334,42 +335,39 @@ const DataSourcePage = () => {
           {actionAvailable && (
             <div className="datasource-item__quick-actions">
               {canTest && (
-                <button
-                  type="button"
+                <YakButton
+                  type="text"
+                  size="small"
+                  iconOnly
                   title="测试连接"
-                  disabled={Boolean(testingId)}
+                  loading={testingId === currentId}
+                  disabled={Boolean(testingId) && testingId !== currentId}
+                  icon={<Unplug size={15} strokeWidth={1.9} />}
                   onClick={() => void handleTestConnection(record)}
-                >
-                  {testingId === currentId ? (
-                    <RefreshCw className="is-spinning" size={15} />
-                  ) : (
-                    <Unplug size={15} strokeWidth={1.9} />
-                  )}
-                </button>
+                />
               )}
               {canUpdate && (
-                <button
-                  type="button"
+                <YakButton
+                  type="text"
+                  size="small"
+                  iconOnly
                   title="编辑数据源"
-                  disabled={Boolean(editingId)}
+                  loading={editingId === currentId}
+                  disabled={Boolean(editingId) && editingId !== currentId}
+                  icon={<Pencil size={15} strokeWidth={1.9} />}
                   onClick={() => void handleEdit(record)}
-                >
-                  {editingId === currentId ? (
-                    <RefreshCw className="is-spinning" size={15} />
-                  ) : (
-                    <Pencil size={15} strokeWidth={1.9} />
-                  )}
-                </button>
+                />
               )}
               {canDelete && (
-                <button
-                  type="button"
-                  className="is-danger"
+                <YakButton
+                  type="text"
+                  size="small"
+                  danger
+                  iconOnly
                   title="删除数据源"
+                  icon={<Trash2 size={15} strokeWidth={1.9} />}
                   onClick={() => handleDelete(record)}
-                >
-                  <Trash2 size={15} strokeWidth={1.9} />
-                </button>
+                />
               )}
             </div>
           )}
@@ -411,13 +409,15 @@ const DataSourcePage = () => {
             </div>
 
             {canCreate && (
-              <button
-                type="button"
+              <YakButton
+                type="primary"
+                size="large"
+                icon={<Plus size={16} strokeWidth={2.1} />}
                 className="datasource-create-button"
                 onClick={handleCreate}
               >
                 新建数据源
-              </button>
+              </YakButton>
             )}
           </motion.header>
 
@@ -471,10 +471,15 @@ const DataSourcePage = () => {
               {environmentTabs.map((item) => {
                 const isActive = (environmentFilter || 'all') === item.key;
                 return (
-                  <button
-                    type="button"
+                  <YakButton
+                    type="text"
                     key={item.key}
-                    className={isActive ? 'is-active' : ''}
+                    className={[
+                      'datasource-filter-tab',
+                      isActive ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                     onClick={() => {
                       setEnvironmentFilter(item.value);
                       resetPage();
@@ -482,7 +487,7 @@ const DataSourcePage = () => {
                   >
                     {item.label}
                     {typeof item.count === 'number' && <span>{item.count}</span>}
-                  </button>
+                  </YakButton>
                 );
               })}
             </div>
@@ -512,8 +517,11 @@ const DataSourcePage = () => {
                   placeholder="搜索名称或连接地址"
                 />
                 {searchKeyword && (
-                  <button
-                    type="button"
+                  <YakButton
+                    type="text"
+                    size="small"
+                    iconOnly
+                    className="datasource-search__clear"
                     aria-label="清空搜索"
                     onClick={() => {
                       setSearchKeyword('');
@@ -521,51 +529,46 @@ const DataSourcePage = () => {
                     }}
                   >
                     ×
-                  </button>
+                  </YakButton>
                 )}
               </label>
 
               {hasActiveFilters && (
-                <button
-                  type="button"
+                <YakButton
+                  type="text"
+                  size="small"
                   className="datasource-detail-button"
                   onClick={handleResetFilters}
                 >
                   重置
-                </button>
+                </YakButton>
               )}
 
-              <button
-                type="button"
-                className="datasource-tool-button"
+              <YakButton
+                iconOnly
                 title="刷新"
-                disabled={loading}
+                loading={loading}
+                icon={<RefreshCw size={16} strokeWidth={1.8} />}
                 onClick={handleRefresh}
-              >
-                <RefreshCw
-                  size={16}
-                  strokeWidth={1.8}
-                  className={loading ? 'is-spinning' : ''}
-                />
-              </button>
+              />
 
               <div className="datasource-view-switch">
-                <button
-                  type="button"
+                <YakButton
+                  type="text"
+                  iconOnly
                   className={viewMode === 'grid' ? 'is-active' : ''}
                   title="卡片视图"
+                  icon={<Grid2X2 size={16} strokeWidth={1.8} />}
                   onClick={() => setViewMode('grid')}
-                >
-                  <Grid2X2 size={16} strokeWidth={1.8} />
-                </button>
-                <button
-                  type="button"
+                />
+                <YakButton
+                  type="text"
+                  iconOnly
                   className={viewMode === 'list' ? 'is-active' : ''}
                   title="列表视图"
+                  icon={<LayoutList size={17} strokeWidth={1.8} />}
                   onClick={() => setViewMode('list')}
-                >
-                  <LayoutList size={17} strokeWidth={1.8} />
-                </button>
+                />
               </div>
             </div>
           </motion.section>
@@ -610,15 +613,19 @@ const DataSourcePage = () => {
                     : '创建第一个数据源，开始配置数据同步与运行任务。'}
                 </p>
                 {hasActiveFilters ? (
-                  <button type="button" onClick={handleResetFilters}>
+                  <YakButton className="datasource-empty__action" onClick={handleResetFilters}>
                     重置筛选
-                  </button>
+                  </YakButton>
                 ) : (
                   canCreate && (
-                    <button type="button" onClick={handleCreate}>
-                      <Plus size={16} strokeWidth={2.2} />
+                    <YakButton
+                      type="primary"
+                      icon={<Plus size={16} strokeWidth={2.2} />}
+                      className="datasource-empty__action"
+                      onClick={handleCreate}
+                    >
                       新建数据源
-                    </button>
+                    </YakButton>
                   )
                 )}
               </div>
