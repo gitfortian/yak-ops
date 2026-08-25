@@ -1,5 +1,6 @@
+import YakButton from '@/components/YakButton';
 import {useIntl} from '@umijs/max';
-import {Button, Drawer, Form, Input, InputNumber, message, Select, Spin, Switch,} from 'antd';
+import {Drawer, Form, Input, InputNumber, message, Select, Spin, Switch,} from 'antd';
 import type {Rule} from 'antd/es/form';
 import {ArrowLeft, Check, ChevronRight, FlaskConical, RadioTower, X,} from 'lucide-react';
 import React, {forwardRef, useEffect, useImperativeHandle, useRef, useState,} from 'react';
@@ -183,15 +184,16 @@ const ChannelTypeSelector: React.FC<ChannelTypeSelectorProps> = ({
               type.displayName || type.channelType;
 
             return (
-              <button
+              <YakButton
                 key={type.channelType}
-                type="button"
+                type="text"
+                htmlType="button"
                 onClick={() => onSelect(type)}
                 className={[
-                  'group flex w-full items-center gap-4',
-                  'rounded-xl px-3 py-4 text-left',
+                  'group !flex !h-auto w-full !items-center !justify-start gap-4',
+                  '!rounded-xl !px-3 !py-4 text-left',
                   'transition-all duration-200',
-                  'hover:bg-slate-50',
+                  'hover:!bg-slate-50',
                   'focus-visible:outline-none',
                   'focus-visible:ring-2',
                   'focus-visible:ring-slate-300',
@@ -234,7 +236,7 @@ const ChannelTypeSelector: React.FC<ChannelTypeSelectorProps> = ({
                     'group-hover:text-slate-600',
                   ].join(' ')}
                 />
-              </button>
+              </YakButton>
             );
           })}
         </div>
@@ -640,26 +642,26 @@ const AddOrEditChannelModal =
             <div className="flex min-w-0 items-center gap-3">
               {showFormStep &&
               isCreateMode && (
-                <button
-                  type="button"
+                <YakButton
+                  type="text"
+                  iconOnly
+                  htmlType="button"
                   aria-label="返回选择通道类型"
                   disabled={
                     confirmLoading || testing
                   }
                   onClick={handlePrevious}
                   className={[
-                    'inline-flex h-9 w-9 shrink-0',
-                    'items-center justify-center',
-                    'rounded-lg text-slate-400',
+                    '!h-9 !w-9 shrink-0',
+                    '!rounded-lg !text-slate-400',
                     'transition-colors duration-200',
-                    'hover:bg-slate-100',
-                    'hover:text-slate-900',
+                    'hover:!bg-slate-100',
+                    'hover:!text-slate-900',
                     'disabled:pointer-events-none',
                     'disabled:opacity-40',
                   ].join(' ')}
-                >
-                  <ArrowLeft className="h-4 w-4"/>
-                </button>
+                  icon={<ArrowLeft className="h-4 w-4"/>}
+                />
               )}
 
               <div
@@ -700,7 +702,7 @@ const AddOrEditChannelModal =
             <div className="flex shrink-0 items-center gap-2">
               {showFormStep && (
                 <>
-                  <Button
+                  <YakButton
                     size="small"
                     type="text"
                     icon={
@@ -714,9 +716,9 @@ const AddOrEditChannelModal =
                     <span className="hidden sm:inline">
                       测试
                     </span>
-                  </Button>
+                  </YakButton>
 
-                  <Button
+                  <YakButton
                     type="primary"
                     size="small"
                     icon={
@@ -730,30 +732,30 @@ const AddOrEditChannelModal =
                     <span className="hidden sm:inline">
                       保存
                     </span>
-                  </Button>
+                  </YakButton>
                 </>
               )}
 
-              <button
-                type="button"
+              <YakButton
+                type="text"
+                iconOnly
+                htmlType="button"
                 aria-label="关闭抽屉"
                 disabled={
                   confirmLoading || testing
                 }
                 onClick={handleClose}
                 className={[
-                  'ml-1 inline-flex h-9 w-9',
-                  'items-center justify-center',
-                  'rounded-lg text-slate-400',
+                  'ml-1 !h-9 !w-9',
+                  '!rounded-lg !text-slate-400',
                   'transition-colors duration-200',
-                  'hover:bg-slate-100',
-                  'hover:text-slate-900',
+                  'hover:!bg-slate-100',
+                  'hover:!text-slate-900',
                   'disabled:pointer-events-none',
                   'disabled:opacity-40',
                 ].join(' ')}
-              >
-                <X className="h-4 w-4"/>
-              </button>
+                icon={<X className="h-4 w-4"/>}
+              />
             </div>
           </header>
 
