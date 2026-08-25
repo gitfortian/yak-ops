@@ -279,7 +279,7 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
                         icon={<ThunderboltOutlined/>}
                         loading={testing}
                         onClick={() => handleTest(channel)}
-                        className="text-slate-500"
+                        className="!text-[#667085]"
                       >
                         测试
                       </Button>
@@ -289,7 +289,7 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
                         size="small"
                         icon={<EditOutlined/>}
                         onClick={() => handleEdit(channel)}
-                        className="text-slate-500"
+                        className="!text-[#667085]"
                       >
                         编辑
                       </Button>
@@ -299,6 +299,7 @@ const ChannelTab: React.FC<ChannelTabProps> = ({keyword = ''}) => {
                         size="small"
                         danger
                         icon={<DeleteOutlined/>}
+                        className="!text-[#667085]"
                         onClick={() => handleDelete(channel)}
                       >
                         删除
