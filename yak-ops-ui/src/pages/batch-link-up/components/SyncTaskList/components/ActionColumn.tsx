@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import {
   CloudDownloadOutlined,
@@ -11,7 +12,6 @@ import {
 } from '@ant-design/icons';
 import { history, useIntl } from '@umijs/max';
 import {
-  Button,
   Dropdown,
   Modal,
   Popconfirm,
@@ -264,7 +264,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
           cancelText={intl.formatMessage({ id: 'pages.common.no', defaultMessage: '取消' })}
           onConfirm={handleStop}
         >
-          <Button
+          <YakButton
             size="small"
             type="text"
             danger
@@ -273,7 +273,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
             onClick={stopPropagation}
           >
             停止
-          </Button>
+          </YakButton>
         </Popconfirm>
       ) : (
         <Tooltip title={canRun ? undefined : '请先上线任务'}>
@@ -293,7 +293,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
               if (!runLoading) setRunOpen(open);
             }}
           >
-            <Button
+            <YakButton
               size="small"
               type="text"
               loading={runLoading}
@@ -306,7 +306,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
               onClick={stopPropagation}
             >
               运行
-            </Button>
+            </YakButton>
           </Popconfirm>
         </Tooltip>
       )}
@@ -316,7 +316,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
         placement="bottomRight"
         menu={{ items: menuItems, onClick: handleMenuClick }}
       >
-        <Button
+        <YakButton
           size="small"
           type="text"
           className="!h-7 !rounded-md !px-2 !text-xs !text-[#667085]"
@@ -324,7 +324,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
         >
           更多
           <DownOutlined className="text-[9px]" />
-        </Button>
+        </YakButton>
       </Dropdown>
     </div>
   );

@@ -1,4 +1,5 @@
-import { Button, Input, Select } from 'antd';
+import YakButton from '@/components/YakButton';
+import { Input, Select } from 'antd';
 import React from 'react';
 
 interface FilterCondition {
@@ -104,7 +105,7 @@ export const FilterTimeConditions: React.FC<FilterConditionsProps> = ({
             />
             {/* 新增 AND/OR 切换按钮 */}
             {index < conditions.length - 1 && (
-              <Button
+              <YakButton
                 size="small"
                 type="text"
                 className="!text-[#667085]"
@@ -114,9 +115,9 @@ export const FilterTimeConditions: React.FC<FilterConditionsProps> = ({
                 }}
               >
                 {condition.logicalOperator}
-              </Button>
+              </YakButton>
             )}
-            <Button
+            <YakButton
               size="small"
               type="text"
               danger
@@ -124,12 +125,12 @@ export const FilterTimeConditions: React.FC<FilterConditionsProps> = ({
               onClick={() => removeCondition(index)}
             >
               删除
-            </Button>
+            </YakButton>
           </div>
         );
       })}
 
-      <Button
+      <YakButton
         size="small"
         type="text"
         className="!text-[#667085]"
@@ -137,7 +138,7 @@ export const FilterTimeConditions: React.FC<FilterConditionsProps> = ({
         style={{ width: 'fit-content' }}
       >
         + 添加时间条件
-      </Button>
+      </YakButton>
     </div>
   );
 };

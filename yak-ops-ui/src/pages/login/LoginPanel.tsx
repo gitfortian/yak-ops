@@ -1,9 +1,10 @@
 import { ExclamationCircleOutlined } from "@ant-design/icons";
+import YakButton from "@/components/YakButton";
 import { login } from "@/services/security/account";
 import { resetAuthenticationFailure } from "@/utils/request";
 import { getSafeReturnTo } from "@/utils/security/redirect";
 import { history, useIntl, useModel } from "@umijs/max";
-import { App, Button, Form, Input, Popover, type InputProps } from "antd";
+import { App, Form, Input, Popover, type InputProps } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useState } from "react";
 import { flushSync } from "react-dom";
@@ -225,7 +226,7 @@ export default function LoginPanel() {
           />
         </Form.Item>
 
-        <Button
+        <YakButton
           block
           type="primary"
           htmlType="submit"
@@ -233,7 +234,7 @@ export default function LoginPanel() {
           className="!h-11 !rounded-full !border-[#171717] !bg-[#171717] !font-medium !text-white !shadow-none hover:!border-[#292929] hover:!bg-[#292929]"
         >
           Log in
-        </Button>
+        </YakButton>
 
         <WeChatQrHelp />
       </Form>

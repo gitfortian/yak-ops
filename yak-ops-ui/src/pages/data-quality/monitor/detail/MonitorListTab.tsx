@@ -1,5 +1,5 @@
+import YakButton from '@/components/YakButton';
 import {
-  Button,
   Dropdown,
   Empty,
   Input,
@@ -233,7 +233,7 @@ const MonitorListTab = ({
       width: 170,
       render: () => (
         <div className="flex items-center gap-3">
-          <Button
+          <YakButton
             type="text"
             size="small"
             loading={running}
@@ -241,12 +241,13 @@ const MonitorListTab = ({
             className="!h-auto !p-0 !text-[#667085]"
           >
             {running ? '提交中' : '测试运行'}
-          </Button>
+          </YakButton>
 
           <Dropdown trigger={['click']} menu={moreMenu}>
-            <Button
+            <YakButton
               type="text"
               size="small"
+              iconOnly
               aria-label="更多操作"
               icon={<MoreHorizontal size={15} />}
               className="!h-7 !w-7 !px-0 !text-[#667085]"
@@ -289,16 +290,16 @@ const MonitorListTab = ({
       </div>
 
       <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f1f3] pt-3">
-        <Button
+        <YakButton
           size="small"
           type="text"
           className="!text-[#667085]"
           onClick={resetFilters}
         >
           重置
-        </Button>
+        </YakButton>
 
-        <Button
+        <YakButton
           size="small"
           type="primary"
           onClick={() => {
@@ -307,7 +308,7 @@ const MonitorListTab = ({
           }}
         >
           应用
-        </Button>
+        </YakButton>
       </div>
     </div>
   );
@@ -360,13 +361,13 @@ const MonitorListTab = ({
             className="w-[160px]"
           />
 
-          <Button
+          <YakButton
             type="text"
             className="!text-[#667085]"
             onClick={applyFilters}
           >
             查询
-          </Button>
+          </YakButton>
 
           <Popover
             trigger="click"
@@ -375,13 +376,13 @@ const MonitorListTab = ({
             onOpenChange={setAdvancedOpen}
             content={advancedSearchContent}
           >
-            <Button
+            <YakButton
               type="text"
               className="!text-[#667085]"
               icon={<ListFilter size={14} />}
             >
               高级搜索
-            </Button>
+            </YakButton>
           </Popover>
         </div>
       </div>

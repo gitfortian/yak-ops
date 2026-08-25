@@ -1,4 +1,5 @@
-import { Button, Empty, Table, Tag } from "antd";
+import YakButton from '@/components/YakButton';
+import { Empty, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useMemo, type MouseEvent } from "react";
@@ -54,16 +55,17 @@ const ExecutionRecordTable = ({
             <div className="truncate text-[11px] text-[#98a2b3]">
               {record.executionNo}
             </div>
-            <button
-              type="button"
-              className="mt-1 block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left font-medium text-[#fe2c55]"
+            <YakButton
+              type="text"
+              htmlType="button"
+              className="mt-1 !block !h-auto max-w-full !min-h-0 !cursor-pointer !truncate !border-0 !bg-transparent !p-0 !text-left !font-medium !text-[#fe2c55]"
               onClick={(event: MouseEvent<HTMLButtonElement>) => {
                 event.stopPropagation();
                 onOpenExecution(record.executionNo);
               }}
             >
               {record.monitorName}
-            </button>
+            </YakButton>
           </div>
         ),
       },
@@ -143,7 +145,7 @@ const ExecutionRecordTable = ({
         fixed: "right",
         render: (_, record) => (
           <div className="flex items-center">
-            <Button
+            <YakButton
               type="text"
               size="small"
               className="!text-[#667085]"
@@ -153,8 +155,8 @@ const ExecutionRecordTable = ({
               }}
             >
               详情
-            </Button>
-            <Button
+            </YakButton>
+            <YakButton
               type="text"
               size="small"
               className="!text-[#667085]"
@@ -164,7 +166,7 @@ const ExecutionRecordTable = ({
               }}
             >
               规则
-            </Button>
+            </YakButton>
           </div>
         ),
       },
@@ -183,16 +185,17 @@ const ExecutionRecordTable = ({
             <div className="truncate text-[11px] text-[#98a2b3]">
               {record.ruleId} · {record.executionNo}
             </div>
-            <button
-              type="button"
-              className="mt-1 block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left font-medium text-[#fe2c55]"
+            <YakButton
+              type="text"
+              htmlType="button"
+              className="mt-1 !block !h-auto max-w-full !min-h-0 !cursor-pointer !truncate !border-0 !bg-transparent !p-0 !text-left !font-medium !text-[#fe2c55]"
               onClick={(event: MouseEvent<HTMLButtonElement>) => {
                 event.stopPropagation();
                 onOpenExecution(record.executionNo);
               }}
             >
               {record.ruleName}
-            </button>
+            </YakButton>
           </div>
         ),
       },
@@ -279,7 +282,7 @@ const ExecutionRecordTable = ({
         fixed: "right",
         render: (_, record) => (
           <div className="flex items-center">
-            <Button
+            <YakButton
               type="text"
               size="small"
               className="!text-[#667085]"
@@ -289,8 +292,8 @@ const ExecutionRecordTable = ({
               }}
             >
               详情
-            </Button>
-            <Button
+            </YakButton>
+            <YakButton
               type="text"
               size="small"
               className="!text-[#667085]"
@@ -300,7 +303,7 @@ const ExecutionRecordTable = ({
               }}
             >
               规则
-            </Button>
+            </YakButton>
           </div>
         ),
       },

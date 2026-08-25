@@ -1,4 +1,4 @@
-import { Button } from 'antd';
+import YakButton from '@/components/YakButton';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
@@ -50,7 +50,7 @@ export class AnalysisErrorBoundary extends Component<Props, State> {
           <div className="mt-1 text-[10px] leading-4 text-[#98a2b3]">
             当前组件出现了未预期的渲染异常，其他图表不会受到影响。
           </div>
-          <Button
+          <YakButton
             size="small"
             type="text"
             className="mt-3 !h-7 !rounded-[6px] !text-[#667085]"
@@ -58,7 +58,7 @@ export class AnalysisErrorBoundary extends Component<Props, State> {
             onClick={this.retry}
           >
             重试
-          </Button>
+          </YakButton>
         </div>
       </div>
     );

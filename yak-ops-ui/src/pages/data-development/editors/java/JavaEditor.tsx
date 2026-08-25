@@ -1,4 +1,5 @@
-import { Button, Input, Typography } from 'antd';
+import YakButton from '@/components/YakButton';
+import { Input, Typography } from 'antd';
 import { Plus, Trash2, Upload } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -172,7 +173,7 @@ export const JavaEditor = ({ node }: DevelopmentEditorContext) => {
                     {res.version ? `v${res.version}` : '版本将在发布时锁定'}
                   </div>
                 </div>
-                <Button
+                <YakButton
                   size="small"
                   type="text"
                   danger
@@ -186,14 +187,14 @@ export const JavaEditor = ({ node }: DevelopmentEditorContext) => {
         )}
 
         {/* 添加 JAR 按钮 */}
-        <Button
+        <YakButton
           type="text"
           icon={<Plus size={14} />}
           className="w-full !text-[#667085]"
           onClick={() => setPickerOpen(true)}
         >
           添加 JAR 文件
-        </Button>
+        </YakButton>
       </div>
 
       {/* 主类配置 */}

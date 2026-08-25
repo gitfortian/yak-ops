@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   ArrowRightOutlined,
   DatabaseOutlined,
@@ -5,7 +6,6 @@ import {
 } from '@ant-design/icons';
 import { history } from '@umijs/max';
 import {
-  Button,
   ConfigProvider,
   Drawer,
   Form,
@@ -246,16 +246,16 @@ export default function CreateSyncTaskDrawer({
         }
         extra={
           <div className="flex shrink-0 items-center gap-2">
-            <Button
+            <YakButton
               type="text"
               disabled={submitting}
               onClick={handleCancel}
               className="!h-9 !rounded-lg !px-4 !font-medium !text-[#667085]"
             >
               取消
-            </Button>
+            </YakButton>
 
-            <Button
+            <YakButton
               type="primary"
               loading={submitting}
               disabled={!sourceDbType || !targetDbType}
@@ -263,7 +263,7 @@ export default function CreateSyncTaskDrawer({
               className="!h-9 !rounded-lg !px-5 !font-medium !text-white"
             >
               创建并配置
-            </Button>
+            </YakButton>
           </div>
         }
         styles={{

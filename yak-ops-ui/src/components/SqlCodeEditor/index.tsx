@@ -1,8 +1,9 @@
+import YakButton from '@/components/YakButton';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 import 'monaco-editor/esm/vs/editor/contrib/folding/browser/folding';
 import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
-import { Button, Modal } from 'antd';
+import { Modal } from 'antd';
 import classNames from 'classnames';
 import { Maximize2 } from 'lucide-react';
 import type { CSSProperties } from 'react';
@@ -597,7 +598,6 @@ export default function SqlCodeEditor({
     });
     const sizeDisposable = editor.onDidContentSizeChange(resizeToContent);
     const animationFrame = window.requestAnimationFrame(resizeToContent);
-
     return () => {
       window.cancelAnimationFrame(animationFrame);
       resizeToContentRef.current = undefined;
@@ -677,7 +677,7 @@ export default function SqlCodeEditor({
           <div className="sql-code-editor__placeholder">{placeholder}</div>
         ) : null}
         {expandable ? (
-          <Button
+          <YakButton
             type="text"
             size="small"
             className="sql-code-editor__expand-btn !text-[#667085]"
@@ -701,16 +701,16 @@ export default function SqlCodeEditor({
           onCancel={handleCancelFullscreen}
           footer={
             <div className="sql-code-editor-modal__footer">
-              <Button
+              <YakButton
                 type="text"
                 className="!text-[#667085]"
                 onClick={handleCancelFullscreen}
               >
                 取消
-              </Button>
-              <Button type="primary" onClick={handleApplyFullscreen}>
+              </YakButton>
+              <YakButton type="primary" onClick={handleApplyFullscreen}>
                 应用
-              </Button>
+              </YakButton>
             </div>
           }
         >

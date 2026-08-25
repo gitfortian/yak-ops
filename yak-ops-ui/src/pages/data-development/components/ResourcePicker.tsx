@@ -1,4 +1,5 @@
-import { Button, Input, Modal, Table, Tag, Typography } from 'antd';
+import YakButton from '@/components/YakButton';
+import { Input, Modal, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Folder, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -208,7 +209,7 @@ export default function ResourcePicker({
 
       {/* Breadcrumb */}
       <div className="mb-2 flex items-center gap-1 text-[12px]">
-        <Button
+        <YakButton
           type="text"
           size="small"
           className="px-1 !text-[#667085]"
@@ -216,11 +217,11 @@ export default function ResourcePicker({
           onClick={() => handleBreadcrumbClick(-1)}
         >
           根目录
-        </Button>
+        </YakButton>
         {breadcrumbs.map((bc, index) => (
           <span key={String(bc.id)} className="flex items-center gap-1">
             <span className="text-[#98a2b3]">/</span>
-            <Button
+            <YakButton
               type="text"
               size="small"
               className="px-1 !text-[#667085]"
@@ -228,7 +229,7 @@ export default function ResourcePicker({
               onClick={() => handleBreadcrumbClick(index)}
             >
               {bc.name}
-            </Button>
+            </YakButton>
           </span>
         ))}
       </div>

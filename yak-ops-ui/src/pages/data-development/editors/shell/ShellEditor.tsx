@@ -1,4 +1,5 @@
-import { Button, Typography } from 'antd';
+import YakButton from '@/components/YakButton';
+import { Typography } from 'antd';
 import { Snail, Trash2, Upload } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -127,28 +128,30 @@ export const ShellEditor = ({
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
       {/* 模式切换标签 */}
       <div className="flex shrink-0 items-center gap-1 border-b border-[#eef0f2] bg-[#fafafa] px-3 py-1.5">
-        <button
-          type="button"
-          className={`rounded px-3 py-1 text-[12px] font-medium transition-colors ${
+        <YakButton
+          type="text"
+          htmlType="button"
+          className={`!h-auto !rounded !px-3 !py-1 text-[12px] !font-medium transition-colors ${
             editMode === 'inline'
-              ? 'bg-white text-[#344054] shadow-sm'
-              : 'text-[#667085] hover:text-[#344054]'
+              ? '!bg-white !text-[#344054] shadow-sm'
+              : '!text-[#667085] hover:!text-[#344054]'
           }`}
           onClick={handleSwitchToInline}
         >
           内联脚本
-        </button>
-        <button
-          type="button"
-          className={`rounded px-3 py-1 text-[12px] font-medium transition-colors ${
+        </YakButton>
+        <YakButton
+          type="text"
+          htmlType="button"
+          className={`!h-auto !rounded !px-3 !py-1 text-[12px] !font-medium transition-colors ${
             editMode === 'resource'
-              ? 'bg-white text-[#344054] shadow-sm'
-              : 'text-[#667085] hover:text-[#344054]'
+              ? '!bg-white !text-[#344054] shadow-sm'
+              : '!text-[#667085] hover:!text-[#344054]'
           }`}
           onClick={handleSwitchToResource}
         >
           引用资源文件
-        </button>
+        </YakButton>
       </div>
 
       {/* 编辑器内容区 */}
@@ -192,14 +195,14 @@ export const ShellEditor = ({
                     {config.checksum ? `SHA-256: ${config.checksum.substring(0, 16)}...` : '版本将在发布时锁定'}
                   </div>
                 </div>
-                <Button
+                <YakButton
                   size="small"
                   type="text"
                   className="!text-[#667085]"
                   icon={<Upload size={14} />}
                   onClick={() => setPickerOpen(true)}
                 />
-                <Button
+                <YakButton
                   size="small"
                   type="text"
                   danger

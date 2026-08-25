@@ -1,6 +1,7 @@
+import YakButton from '@/components/YakButton';
 import React from "react";
 import {DeleteOutlined, EditOutlined, LinkOutlined,} from "@ant-design/icons";
-import {Button, Popconfirm, Tooltip} from "antd";
+import {Popconfirm, Tooltip} from "antd";
 import {BLUE, BORDER_COLOR} from "../constants";
 import {getHealthMeta} from "../utils";
 
@@ -104,9 +105,10 @@ const ClientListPanel: React.FC<Props> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <Tooltip title="编辑">
-                  <Button
+                  <YakButton
                     size="small"
                     type="text"
+                    iconOnly
                     icon={<EditOutlined/>}
                     className="!flex !h-7 !w-7 !items-center !justify-center !rounded-lg !text-[#667085] hover:!bg-white hover:!text-[#4F5BD5]"
                     onClick={() => onEdit(client)}
@@ -125,10 +127,11 @@ const ClientListPanel: React.FC<Props> = ({
                   onConfirm={() => onDelete(client)}
                 >
                   <Tooltip title="删除">
-                    <Button
+                    <YakButton
                       size="small"
                       type="text"
                       danger
+                      iconOnly
                       icon={<DeleteOutlined/>}
                       loading={deleting}
                       className="!flex !h-7 !w-7 !items-center !justify-center !rounded-lg !text-[#667085] hover:!bg-[#FFF1F0]"

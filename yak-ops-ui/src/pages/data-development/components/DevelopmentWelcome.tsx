@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   Code2,
   Database,
@@ -86,10 +87,11 @@ const DevelopmentWelcome = ({ onCreateNode }: DevelopmentWelcomeProps) => (
           <div className="mt-9 text-[13px] font-semibold text-[#344054]">快速开始</div>
           <div className="mt-3 grid max-w-[620px] grid-cols-1 gap-x-8 gap-y-1 lg:grid-cols-2">
             {QUICK_START_ITEMS.map((item) => (
-              <button
+              <YakButton
                 key={item.type}
-                type="button"
-                className="group flex min-h-11 items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[#f7f8fa]"
+                type="text"
+                htmlType="button"
+                className="group !flex !h-auto !min-h-11 !w-full !items-center !justify-start gap-3 !rounded-md !px-2 !py-1.5 !text-left transition-colors hover:!bg-[#f7f8fa]"
                 onClick={() => onCreateNode(item.type)}
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#fff1f4] text-[#fe2c55] transition-colors group-hover:bg-[#ffe7ed]">
@@ -103,7 +105,7 @@ const DevelopmentWelcome = ({ onCreateNode }: DevelopmentWelcomeProps) => (
                     {item.description}
                   </span>
                 </span>
-              </button>
+              </YakButton>
             ))}
           </div>
         </section>
