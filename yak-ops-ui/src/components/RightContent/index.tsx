@@ -1,3 +1,4 @@
+import YakButton from "@/components/YakButton";
 import { ApiOutlined, BarChartOutlined, ReadOutlined } from "@ant-design/icons";
 import { SelectLang as UmiSelectLang } from "@umijs/max";
 import {
@@ -338,15 +339,17 @@ export const GlobalSearch: React.FC = () => {
             </svg>
 
             {keyword && (
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-slate-100"
+              <YakButton
+                type="text"
+                size="small"
+                iconOnly
+                htmlType="button"
+                aria-label="清空搜索"
+                className="!absolute right-2 top-1/2 !-translate-y-1/2 !rounded"
                 onClick={() => setKeyword("")}
               >
-                <div className="flex h-4 w-4 items-center justify-center text-slate-400">
-                  ×
-                </div>
-              </button>
+                ×
+              </YakButton>
             )}
           </div>
         </div>
