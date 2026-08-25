@@ -1,6 +1,13 @@
 import { Button } from 'antd';
 import { Boxes, RefreshCw } from 'lucide-react';
-import { Component, type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  Component,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { isDevelopmentTaskNode } from '../node-model';
 import type {
@@ -73,12 +80,28 @@ export default function DevelopmentEditorWorkspace({
   const [focusedNodeId, setFocusedNodeId] = useState<DevelopmentId | undefined>(
     selectedNodeId,
   );
+  const requestedNodeId = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    return new URLSearchParams(window.location.search).get('nodeId')?.trim() || undefined;
+  }, []);
+  const deepLinkAppliedRef = useRef(false);
 
   useEffect(() => {
     if (selectedNodeId && nodes.some((node) => node.id === selectedNodeId)) {
       setFocusedNodeId(selectedNodeId);
+      return;
     }
-  }, [nodes, selectedNodeId]);
+
+    if (
+      !deepLinkAppliedRef.current &&
+      requestedNodeId &&
+      nodes.some((node) => node.id === requestedNodeId)
+    ) {
+      deepLinkAppliedRef.current = true;
+      setFocusedNodeId(requestedNodeId);
+      onNodeFocus(requestedNodeId);
+    }
+  }, [nodes, onNodeFocus, requestedNodeId, selectedNodeId]);
 
   const effectiveNodeId =
     selectedNodeId && nodes.some((node) => node.id === selectedNodeId)
