@@ -135,7 +135,7 @@ function QuickCreateCard({ item }: { item: QuickCreateItem }) {
   return (
     <button
       type="button"
-      onClick={() => history.push(item.route)}
+      onClick={() => history.push(`/create?type=${item.key}`)}
       className="group relative flex h-[76px] min-w-0 items-center overflow-visible rounded-[16px] border border-[rgba(31,35,41,0.075)] bg-white/[0.96] pr-4 text-left shadow-[0_3px_10px_rgba(31,35,41,0.045),0_1px_2px_rgba(31,35,41,0.025)] transition-[border-color,box-shadow,transform] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-px hover:border-[rgba(31,35,41,0.09)] hover:shadow-[0_8px_20px_rgba(31,35,41,0.07),0_1px_2px_rgba(31,35,41,0.025)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
     >
       <span
