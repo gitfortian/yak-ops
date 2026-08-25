@@ -1,4 +1,5 @@
-import { Button, DatePicker, Input, InputNumber, Select } from 'antd';
+import YakButton from '@/components/YakButton';
+import { DatePicker, Input, InputNumber, Select } from 'antd';
 import moment from 'moment';
 import React from 'react';
 
@@ -124,7 +125,7 @@ export const FilterConditions: React.FC<FilterConditionsProps> = ({
             {renderValue(condition.type)}
             {/* 新增 AND/OR 切换按钮 */}
             {index < conditions.length - 1 && (
-              <Button
+              <YakButton
                 size="small"
                 type="text"
                 className="!text-[#667085]"
@@ -134,9 +135,9 @@ export const FilterConditions: React.FC<FilterConditionsProps> = ({
                 }}
               >
                 {condition.logicalOperator}
-              </Button>
+              </YakButton>
             )}
-            <Button
+            <YakButton
               size="small"
               type="text"
               danger
@@ -144,12 +145,12 @@ export const FilterConditions: React.FC<FilterConditionsProps> = ({
               onClick={() => removeCondition(index)}
             >
               删除
-            </Button>
+            </YakButton>
           </div>
         );
       })}
 
-      <Button
+      <YakButton
         size="small"
         type="text"
         className="!text-[#667085]"
@@ -157,7 +158,7 @@ export const FilterConditions: React.FC<FilterConditionsProps> = ({
         style={{ width: 'fit-content' }}
       >
         + 添加条件
-      </Button>
+      </YakButton>
     </div>
   );
 };
