@@ -174,7 +174,9 @@ export const JavaEditor = ({ node }: DevelopmentEditorContext) => {
                 </div>
                 <Button
                   size="small"
+                  type="text"
                   danger
+                  className="!text-[#667085]"
                   icon={<Trash2 size={14} />}
                   onClick={() => handleRemoveResource(index)}
                 />
@@ -185,9 +187,9 @@ export const JavaEditor = ({ node }: DevelopmentEditorContext) => {
 
         {/* 添加 JAR 按钮 */}
         <Button
-          type="dashed"
+          type="text"
           icon={<Plus size={14} />}
-          className="w-full"
+          className="w-full !text-[#667085]"
           onClick={() => setPickerOpen(true)}
         >
           添加 JAR 文件
