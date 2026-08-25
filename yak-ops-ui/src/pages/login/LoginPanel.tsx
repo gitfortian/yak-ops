@@ -2,10 +2,12 @@ import { login } from "@/services/security/account";
 import { resetAuthenticationFailure } from "@/utils/request";
 import { getSafeReturnTo } from "@/utils/security/redirect";
 import { history, useIntl, useModel } from "@umijs/max";
-import { App, Button, Form, Input, type InputProps } from "antd";
+import { App, Button, Form, Input, Popover, type InputProps } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useState } from "react";
 import { flushSync } from "react-dom";
+
+const WECHAT_QR_CODE_SRC = "/wechat-official-account-qr.png";
 
 type FloatingInputProps = InputProps & {
   label: string;
@@ -63,6 +65,41 @@ function FloatingInput({
       >
         {label}
       </label>
+    </div>
+  );
+}
+
+function WeChatQrHelp() {
+  const [qrCodeAvailable, setQrCodeAvailable] = useState(true);
+
+  const qrCodeContent = (
+    <div className="flex w-[176px] flex-col items-center gap-2 p-1">
+      {qrCodeAvailable ? (
+        <img
+          src={WECHAT_QR_CODE_SRC}
+          alt="微信公众号二维码"
+          className="h-40 w-40 rounded-xl object-cover"
+          onError={() => setQrCodeAvailable(false)}
+        />
+      ) : (
+        <div className="flex h-40 w-40 items-center justify-center rounded-xl border border-dashed border-[#dededb] bg-[#fafafa] px-5 text-center text-[12px] leading-5 text-[#999]">
+          微信公众号二维码待上传
+        </div>
+      )}
+      <span className="text-center text-[11px] leading-5 text-[#888]">
+        微信扫码获取账号 / 密码
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="mt-3 text-center text-[11px] leading-5 text-[#8c8c88]">
+      获取账号 / 密码，请扫描{" "}
+      <Popover placement="right" trigger="hover" content={qrCodeContent}>
+        <span className="cursor-help font-medium text-[#555] underline decoration-[#d6d6d1] underline-offset-2 transition-colors hover:text-[#171717]">
+          微信公众号二维码
+        </span>
+      </Popover>
     </div>
   );
 }
@@ -170,6 +207,8 @@ export default function LoginPanel() {
         >
           Log in
         </Button>
+
+        <WeChatQrHelp />
       </Form>
     </div>
   );
