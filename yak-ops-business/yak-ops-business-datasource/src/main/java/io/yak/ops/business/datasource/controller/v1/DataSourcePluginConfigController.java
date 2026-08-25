@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import io.yak.ops.business.datasource.controller.v1.mapper.DataSourcePluginViewMapper;
+import io.yak.ops.business.datasource.controller.v1.converter.DataSourcePluginViewConverter;
 import io.yak.ops.business.datasource.query.DataSourcePluginReader;
 import io.yak.ops.common.bean.vo.datasource.DataSourcePluginConfigVO;
 import io.yak.ops.common.constant.datasource.DataSourceConstants;
@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 数据源动态表单配置接口。 */
 @Tag(name = "数据源表单配置接口")
 @RestController
 @ConditionalOnDataSourceEnabled
@@ -25,21 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(DataSourceConstants.API_PREFIX + "/plugin/config")
 @RequiresPermission(DataSourcePermissionCode.READ)
 public class DataSourcePluginConfigController {
-
   private final DataSourcePluginReader pluginReader;
-  private final DataSourcePluginViewMapper viewMapper;
-
-  @Operation(summary = "查询数据源动态表单配置")
-  @GetMapping
-  public Result<DataSourcePluginConfigVO> getPluginConfig(
-      @RequestParam("pluginType") String pluginType) {
-    return Result.success(viewMapper.config(pluginReader.get(pluginType)));
-  }
-
-  @Operation(summary = "安装数据源配置")
-  @PostMapping("/install")
-  @RequiresPermission(DataSourcePermissionCode.CREATE)
-  public Result<Boolean> installPlugin(@RequestParam("pluginType") String pluginType) {
-    return Result.success(pluginReader.install(pluginType));
-  }
+  private final DataSourcePluginViewConverter viewConverter;
+  @Operation(summary = "查询数据源动态表单配置") @GetMapping
+  public Result<DataSourcePluginConfigVO> getPluginConfig(@RequestParam("pluginType") String pluginType) { return Result.success(viewConverter.config(pluginReader.get(pluginType))); }
+  @Operation(summary = "安装数据源配置") @PostMapping("/install") @RequiresPermission(DataSourcePermissionCode.CREATE)
+  public Result<Boolean> installPlugin(@RequestParam("pluginType") String pluginType) { return Result.success(pluginReader.install(pluginType)); }
 }

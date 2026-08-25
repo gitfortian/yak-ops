@@ -21,6 +21,14 @@ public class DataSourcePluginReader {
     return pluginGateway.descriptor(parseDbType(pluginType));
   }
 
+  public String maskSensitiveText(String value) {
+    return pluginGateway.maskSensitiveText(value);
+  }
+
+  public String maskConnectionJson(DataSourceDbType dbType, String value) {
+    return pluginGateway.maskConnectionJson(dbType, value);
+  }
+
   /** Legacy install endpoint is an availability check because plugins are discovered at startup. */
   public boolean install(String pluginType) {
     pluginGateway.descriptor(parseDbType(pluginType));

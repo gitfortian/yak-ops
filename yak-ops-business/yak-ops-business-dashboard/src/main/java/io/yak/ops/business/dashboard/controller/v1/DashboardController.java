@@ -4,9 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.dashboard.DashboardService;
+import io.yak.ops.business.dashboard.controller.v1.converter.DashboardRequestConverter;
+import io.yak.ops.business.dashboard.controller.v1.converter.DashboardViewConverter;
 import io.yak.ops.business.dashboard.controller.v1.dto.SaveDashboardRequest;
-import io.yak.ops.business.dashboard.controller.v1.mapper.DashboardRequestMapper;
-import io.yak.ops.business.dashboard.controller.v1.mapper.DashboardViewMapper;
 import io.yak.ops.business.dashboard.controller.v1.vo.DashboardViews;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import jakarta.validation.Valid;
@@ -31,81 +31,73 @@ import org.springframework.web.bind.annotation.RestController;
 public class DashboardController {
 
   private final DashboardService dashboardService;
-  private final DashboardRequestMapper requestMapper;
-  private final DashboardViewMapper viewMapper;
+  private final DashboardRequestConverter requestConverter;
+  private final DashboardViewConverter viewConverter;
 
   @Operation(summary = "查询 Dashboard 列表")
   @GetMapping
   public Result<List<DashboardViews.Dashboard>> list() {
-    return Result.success(viewMapper.dashboards(dashboardService.list()));
+    return Result.success(viewConverter.dashboards(dashboardService.list()));
   }
 
   @Operation(summary = "查询 Dashboard 当前草稿和历史版本")
   @GetMapping("/{dashboardId}")
   public Result<DashboardViews.Detail> get(@PathVariable("dashboardId") long dashboardId) {
-    return Result.success(viewMapper.detail(dashboardService.get(dashboardId)));
+    return Result.success(viewConverter.detail(dashboardService.get(dashboardId)));
   }
 
   @Operation(summary = "查询 Dashboard 版本历史")
   @GetMapping("/{dashboardId}/versions")
-  public Result<List<DashboardViews.Version>> versions(
-      @PathVariable("dashboardId") long dashboardId) {
-    return Result.success(viewMapper.versions(dashboardService.versions(dashboardId)));
+  public Result<List<DashboardViews.Version>> versions(@PathVariable("dashboardId") long dashboardId) {
+    return Result.success(viewConverter.versions(dashboardService.versions(dashboardId)));
   }
 
   @Operation(summary = "查看指定 DashboardVersion 快照")
   @GetMapping("/{dashboardId}/versions/{versionNo}")
   public Result<DashboardViews.VersionDetail> version(
-      @PathVariable("dashboardId") long dashboardId,
-      @PathVariable("versionNo") int versionNo) {
-    return Result.success(viewMapper.versionDetail(dashboardService.version(dashboardId, versionNo)));
+      @PathVariable("dashboardId") long dashboardId, @PathVariable("versionNo") int versionNo) {
+    return Result.success(viewConverter.versionDetail(dashboardService.version(dashboardId, versionNo)));
   }
 
   @Operation(summary = "查询 Dashboard 当前已发布快照")
   @GetMapping("/{dashboardId}/published")
-  public Result<DashboardViews.VersionDetail> published(
-      @PathVariable("dashboardId") long dashboardId) {
-    return Result.success(viewMapper.versionDetail(dashboardService.published(dashboardId)));
+  public Result<DashboardViews.VersionDetail> published(@PathVariable("dashboardId") long dashboardId) {
+    return Result.success(viewConverter.versionDetail(dashboardService.published(dashboardId)));
   }
 
   @Operation(summary = "创建 Dashboard，并保存草稿 V1")
   @PostMapping
-  public Result<DashboardViews.Detail> create(
-      @Valid @RequestBody SaveDashboardRequest request) {
-    return Result.success(viewMapper.detail(
-        dashboardService.create(requestMapper.toDraft(request))));
+  public Result<DashboardViews.Detail> create(@Valid @RequestBody SaveDashboardRequest request) {
+    return Result.success(viewConverter.detail(dashboardService.create(requestConverter.toDraft(request))));
   }
 
   @Operation(summary = "保存 Dashboard 新草稿版本")
   @PostMapping("/{dashboardId}/versions")
   public Result<DashboardViews.Detail> saveVersion(
-      @PathVariable("dashboardId") long dashboardId,
-      @Valid @RequestBody SaveDashboardRequest request) {
-    return Result.success(viewMapper.detail(
-        dashboardService.saveVersion(dashboardId, requestMapper.toDraft(request))));
+      @PathVariable("dashboardId") long dashboardId, @Valid @RequestBody SaveDashboardRequest request) {
+    return Result.success(viewConverter.detail(
+        dashboardService.saveVersion(dashboardId, requestConverter.toDraft(request))));
   }
 
   @Operation(summary = "发布当前 Dashboard 草稿")
   @PostMapping("/{dashboardId}/publish")
   public Result<DashboardViews.Detail> publish(@PathVariable("dashboardId") long dashboardId) {
-    return Result.success(viewMapper.detail(dashboardService.publish(dashboardId)));
+    return Result.success(viewConverter.detail(dashboardService.publish(dashboardId)));
   }
 
   @Operation(summary = "将历史 DashboardVersion 恢复为新的草稿版本")
   @PostMapping("/{dashboardId}/restore/{versionNo}")
   public Result<DashboardViews.Detail> restoreVersion(
-      @PathVariable("dashboardId") long dashboardId,
-      @PathVariable("versionNo") int versionNo) {
-    return Result.success(viewMapper.detail(dashboardService.restoreVersion(dashboardId, versionNo)));
+      @PathVariable("dashboardId") long dashboardId, @PathVariable("versionNo") int versionNo) {
+    return Result.success(viewConverter.detail(dashboardService.restoreVersion(dashboardId, versionNo)));
   }
 
   @Deprecated
   @Operation(summary = "兼容旧版激活接口：恢复历史版本为新草稿")
   @PostMapping("/{dashboardId}/activate/{versionNo}")
   public Result<DashboardViews.Detail> activateVersion(
-      @PathVariable("dashboardId") long dashboardId,
-      @PathVariable("versionNo") int versionNo) {
-    return Result.success(viewMapper.detail(dashboardService.activateVersion(dashboardId, versionNo)));
+      @PathVariable("dashboardId") long dashboardId, @PathVariable("versionNo") int versionNo) {
+    return Result.success(viewConverter.detail(dashboardService.activateVersion(dashboardId, versionNo)));
   }
 
   @Operation(summary = "删除 Dashboard 及其历史版本")

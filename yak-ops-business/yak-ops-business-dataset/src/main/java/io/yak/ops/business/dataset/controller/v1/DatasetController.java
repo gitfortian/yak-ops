@@ -5,11 +5,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.dataset.DatasetQueryService;
 import io.yak.ops.business.dataset.DatasetService;
+import io.yak.ops.business.dataset.controller.v1.converter.DatasetRequestConverter;
+import io.yak.ops.business.dataset.controller.v1.converter.DatasetViewConverter;
 import io.yak.ops.business.dataset.controller.v1.dto.DatasetRequests.CreateDatasetVersionRequest;
 import io.yak.ops.business.dataset.controller.v1.dto.DatasetRequests.PublishDatasetRequest;
 import io.yak.ops.business.dataset.controller.v1.dto.DatasetRequests.QueryDatasetRequest;
-import io.yak.ops.business.dataset.controller.v1.mapper.DatasetRequestMapper;
-import io.yak.ops.business.dataset.controller.v1.mapper.DatasetViewMapper;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetDetailVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryPerformanceVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryResultVO;
@@ -36,13 +36,13 @@ public class DatasetController {
 
   private final DatasetService datasetService;
   private final DatasetQueryService queryService;
-  private final DatasetRequestMapper requestMapper;
-  private final DatasetViewMapper viewMapper;
+  private final DatasetRequestConverter requestConverter;
+  private final DatasetViewConverter viewConverter;
 
   @Operation(summary = "查询 Dataset 列表")
   @GetMapping
   public Result<List<DatasetVO>> list() {
-    return Result.success(datasetService.list().stream().map(viewMapper::dataset).toList());
+    return Result.success(datasetService.list().stream().map(viewConverter::dataset).toList());
   }
 
   @Operation(summary = "查询最近的 Dataset SQL 性能诊断记录")
@@ -54,20 +54,20 @@ public class DatasetController {
     Set<Long> datasetFilters = datasetIds == null ? Set.of() : new HashSet<>(datasetIds);
     Set<String> queryFilters = queryIds == null ? Set.of() : new HashSet<>(queryIds);
     return Result.success(queryService.recentPerformance(datasetFilters, queryFilters, limit).stream()
-        .map(viewMapper::performance)
+        .map(viewConverter::performance)
         .toList());
   }
 
   @Operation(summary = "查询 Dataset 详情、当前版本与版本历史")
   @GetMapping("/{datasetId}")
   public Result<DatasetDetailVO> get(@PathVariable("datasetId") long datasetId) {
-    return Result.success(viewMapper.detail(datasetService.get(datasetId)));
+    return Result.success(viewConverter.detail(datasetService.get(datasetId)));
   }
 
   @Operation(summary = "把 ONLINE SQL TaskAsset 的当前不可变版本发布为 Dataset")
   @PostMapping
   public Result<DatasetDetailVO> publish(@Valid @RequestBody PublishDatasetRequest request) {
-    return Result.success(viewMapper.detail(datasetService.publish(requestMapper.publish(request))));
+    return Result.success(viewConverter.detail(datasetService.publish(requestConverter.publish(request))));
   }
 
   @Operation(summary = "把来源 TaskAsset 的当前版本发布为新的 DatasetVersion")
@@ -75,9 +75,9 @@ public class DatasetController {
   public Result<DatasetDetailVO> createVersion(
       @PathVariable("datasetId") long datasetId,
       @Valid @RequestBody(required = false) CreateDatasetVersionRequest request) {
-    return Result.success(viewMapper.detail(datasetService.createVersion(
+    return Result.success(viewConverter.detail(datasetService.createVersion(
         datasetId,
-        request == null ? List.of() : requestMapper.fields(request.fields()))));
+        request == null ? List.of() : requestConverter.fields(request.fields()))));
   }
 
   @Operation(summary = "通过 Dataset Query Runtime 查询当前或指定不可变版本")
@@ -85,18 +85,19 @@ public class DatasetController {
   public Result<DatasetQueryResultVO> query(
       @PathVariable("datasetId") long datasetId,
       @Valid @RequestBody(required = false) QueryDatasetRequest request) {
-    return Result.success(viewMapper.queryResult(queryService.query(datasetId, requestMapper.query(request))));
+    return Result.success(viewConverter.queryResult(
+        queryService.query(datasetId, requestConverter.query(request))));
   }
 
   @Operation(summary = "上线 Dataset")
   @PostMapping("/{datasetId}/online")
   public Result<DatasetDetailVO> online(@PathVariable("datasetId") long datasetId) {
-    return Result.success(viewMapper.detail(datasetService.online(datasetId)));
+    return Result.success(viewConverter.detail(datasetService.online(datasetId)));
   }
 
   @Operation(summary = "下线 Dataset")
   @PostMapping("/{datasetId}/offline")
   public Result<DatasetDetailVO> offline(@PathVariable("datasetId") long datasetId) {
-    return Result.success(viewMapper.detail(datasetService.offline(datasetId)));
+    return Result.success(viewConverter.detail(datasetService.offline(datasetId)));
   }
 }
