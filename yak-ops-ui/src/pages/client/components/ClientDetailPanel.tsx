@@ -1,5 +1,6 @@
+import YakButton from '@/components/YakButton';
 import {ApiOutlined, ReloadOutlined} from "@ant-design/icons";
-import {Button, Empty} from "antd";
+import {Empty} from "antd";
 import {AnimatePresence} from "framer-motion";
 import React, {useMemo} from "react";
 import {BLUE, contentSwapVariants, MotionDiv} from "../constants";
@@ -148,7 +149,7 @@ const ClientDetailPanel: React.FC<Props> = ({
               </div>
             </div>
 
-            <Button
+            <YakButton
               type="text"
               icon={<ReloadOutlined/>}
               loading={metricsLoading}
@@ -160,7 +161,7 @@ const ClientDetailPanel: React.FC<Props> = ({
       "
             >
               刷新指标
-            </Button>
+            </YakButton>
           </div>
         </section>
 
