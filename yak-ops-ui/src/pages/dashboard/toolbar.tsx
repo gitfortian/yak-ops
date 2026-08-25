@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { DashboardPerformanceModal } from './performance-modal';
+import YakButton from '@/components/YakButton';
 
 export function DashboardToolbar({
   name,
@@ -184,31 +185,30 @@ export function DashboardToolbar({
             <div className="flex items-center gap-1.5">
               <Tooltip title={saveDisabled ? '当前没有需要保存到草稿的修改' : '保存草稿 Ctrl/Cmd + S'}>
                 <span>
-                  <Button
-                    size="small"
-                    className="!h-7 !rounded-[6px] !border-[#cfd8e4] !bg-[rgba(255,255,255,.72)] !px-2.5 !text-[11px] !text-[#344054] hover:!border-[#bfcad8] hover:!bg-white"
+                  <YakButton
+                  size="small"
                     loading={saving}
+                    style={{background: "white"}}
                     disabled={saveDisabled || publishing}
                     icon={<Save size={12} />}
                     onClick={onSaveDraft}
                   >
                     保存草稿
-                  </Button>
+                  </YakButton>
                 </span>
               </Tooltip>
               <Tooltip title={!canPublish ? '当前草稿已经是已发布版本' : undefined}>
                 <span>
-                  <Button
+                  <YakButton
                     size="small"
                     type="primary"
-                    className="!h-7 !rounded-[6px] !px-3 !text-[11px] !shadow-none"
                     loading={publishing}
                     disabled={!canPublish || saving}
                     icon={<Send size={12} />}
                     onClick={onPublish}
                   >
                     {hasPublishedVersion ? '发布更新' : '发布'}
-                  </Button>
+                  </YakButton>
                 </span>
               </Tooltip>
             </div>

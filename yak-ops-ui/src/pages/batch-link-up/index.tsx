@@ -842,13 +842,12 @@ const BatchLinkUpPage: React.FC = () => {
                         </div>
 
                         <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#f0f0f0] pt-4">
-                          <Button
-                            size="small"
+                          <YakButton
                             className="!h-8"
                             onClick={handleAdvancedReset}
                           >
                             重置
-                          </Button>
+                          </YakButton>
 
                           <Button
                             danger

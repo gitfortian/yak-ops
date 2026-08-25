@@ -40,6 +40,7 @@ import type {
   ReleaseState,
   RuntimeCapabilities,
 } from './types';
+import YakButton from '@/components/YakButton';
 
 type StateGroup = 'ALL' | 'RUNNING' | 'STOPPED' | 'ABNORMAL';
 
@@ -757,10 +758,10 @@ export default function RealtimeSync() {
                           />
                         </div>
                         <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#f0f0f0] pt-4">
-                          <Button size="small" className="!h-8" onClick={handleReset}>
+                          <YakButton  className="!h-8" onClick={handleReset}>
                             重置全部
-                          </Button>
-                          <Button
+                          </YakButton>
+                          <YakButton
                             danger
                             type="primary"
                             size="small"
@@ -771,7 +772,7 @@ export default function RealtimeSync() {
                             }}
                           >
                             应用筛选
-                          </Button>
+                          </YakButton>
                         </div>
                       </div>
                     }

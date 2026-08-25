@@ -1,3 +1,4 @@
+import YakButton from "@/components/YakButton";
 import type { WorkflowFailureStrategy } from "@/services/workflow";
 import {
   listWorkflowVersions,
@@ -355,8 +356,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
         <span className="mx-1 h-5 w-px bg-[#eceef1]" />
 
         <Tooltip title="保存当前草稿并按草稿配置测试，不影响已发布版本">
-          <Button
-            size="middle"
+          <YakButton
             type="text"
             loading={testing}
             disabled={!definition?.id || busy}
@@ -365,11 +365,10 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
             className="bg-[#f5f6f7]"
           >
             {testing ? "测试运行中" : "测试运行"}
-          </Button>
+          </YakButton>
         </Tooltip>
 
-        <Button
-          size="middle"
+        <YakButton
           type="text"
           loading={saving}
           disabled={testing || statusAction}
@@ -378,7 +377,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
           className="bg-[#f5f6f7]"
         >
           保存草稿
-        </Button>
+        </YakButton>
 
         <div className="flex items-center">
           <Tooltip title={!canPublish ? "当前草稿与已发布版本一致" : undefined}>

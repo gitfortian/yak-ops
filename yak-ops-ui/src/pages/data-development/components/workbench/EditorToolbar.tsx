@@ -3,6 +3,7 @@ import { LoaderCircle, Play, Rocket, Save } from 'lucide-react';
 
 import type { DevelopmentEditorDefinition } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
+import YakButton from '@/components/YakButton';
 
 interface EditorToolbarProps {
   node: DevelopmentNode;
@@ -60,8 +61,7 @@ const EditorToolbar = ({
             <div className="flex h-full items-center gap-0.5">
               {capabilities.run ? (
                 <Tooltip title={running ? '运行中' : '运行'} mouseEnterDelay={0.35}>
-                  <button
-                    type="button"
+                  <YakButton
                     aria-label="运行"
                     disabled={running}
                     onClick={onRun}
@@ -72,13 +72,12 @@ const EditorToolbar = ({
                     ) : (
                       <Play size={15} strokeWidth={1.8} />
                     )}
-                  </button>
+                  </YakButton>
                 </Tooltip>
               ) : null}
               {capabilities.save ? (
                 <Tooltip title="保存草稿" mouseEnterDelay={0.35}>
-                  <button
-                    type="button"
+                  <YakButton
                     aria-label="保存草稿"
                     disabled={saving || publishing || running}
                     onClick={onSave}
@@ -89,13 +88,12 @@ const EditorToolbar = ({
                     ) : (
                       <Save size={15} strokeWidth={1.8} />
                     )}
-                  </button>
+                  </YakButton>
                 </Tooltip>
               ) : null}
               {capabilities.publish ? (
                 <Tooltip title="发布版本" mouseEnterDelay={0.35}>
-                  <button
-                    type="button"
+                  <YakButton
                     aria-label="发布版本"
                     disabled={saving || publishing || running}
                     onClick={onPublish}
@@ -106,7 +104,7 @@ const EditorToolbar = ({
                     ) : (
                       <Rocket size={15} strokeWidth={1.8} />
                     )}
-                  </button>
+                  </YakButton>
                 </Tooltip>
               ) : null}
             </div>

@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   batchRetryWorkflowInstances,
   getWorkflowInstances,
@@ -274,6 +275,7 @@ const WorkflowInstancesPage = () => {
         <Select
           size="small"
           className="w-full"
+          variant='filled'
           value={testRunFilter}
           onChange={(value) => { setTestRunFilter(value); setPage(1); }}
           options={[
@@ -284,7 +286,7 @@ const WorkflowInstancesPage = () => {
         />
       </div>
       <div className="flex justify-end border-t border-[#f0f0f0] pt-2">
-        <Button size="small" disabled={advancedFilterCount === 0} onClick={resetAdvancedFilters}>重置</Button>
+        <YakButton disabled={advancedFilterCount === 0} onClick={resetAdvancedFilters}>重置</YakButton>
       </div>
     </div>
   );
