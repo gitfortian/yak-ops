@@ -1,5 +1,5 @@
+import YakButton from '@/components/YakButton';
 import {
-  Button,
   Checkbox,
   Drawer,
   Empty,
@@ -134,15 +134,15 @@ export default function AssignmentDrawer(
       closable={!submitting}
       extra={
         <Space>
-          <Button
+          <YakButton
             type="text"
             className="!text-[#667085]"
             disabled={submitting}
             onClick={onClose}
           >
             取消
-          </Button>
-          <Button
+          </YakButton>
+          <YakButton
             type="primary"
             loading={submitting}
             disabled={
@@ -152,7 +152,7 @@ export default function AssignmentDrawer(
             onClick={() => void submit()}
           >
             确定
-          </Button>
+          </YakButton>
         </Space>
       }
     >
@@ -166,14 +166,14 @@ export default function AssignmentDrawer(
           }
         />
         {allowEmpty && selected.length > 0 && (
-          <Button
+          <YakButton
             type="text"
             size="small"
             className="!text-[#667085]"
             onClick={() => setSelected([])}
           >
             清空
-          </Button>
+          </YakButton>
         )}
       </div>
       <Spin spinning={Boolean(loading)}>
