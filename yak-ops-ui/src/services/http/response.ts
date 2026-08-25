@@ -28,7 +28,13 @@ const unauthenticatedMessages = new Set([
   'UNAUTHENTICATED',
   'SESSION_EXPIRED',
   'SESSION_INVALID',
+  'TOKEN_EXPIRED',
+  'TOKEN_INVALID',
+  'LOGIN_EXPIRED',
 ]);
+
+const normalizeUnauthenticatedMessage = (message: string) =>
+  message.trim().toUpperCase().replace(/[\s-]+/g, '_');
 
 export const protocolForUrl = (url?: string): ApiProtocol =>
   url?.includes('/yak-security/') ? 'security' : 'yak-ops';
@@ -50,6 +56,36 @@ export const extractErrorMessage = (
   fallback = '操作失败',
 ): string => response?.msg?.trim() || response?.message?.trim() || fallback;
 
+/**
+ * Extract a useful server error from both the standard API envelope and common
+ * HTTP error payloads. This prevents a real backend reason from being replaced
+ * by a generic 4xx/5xx status description in the request error handler.
+ */
+export const extractUnknownErrorMessage = (
+  payload: unknown,
+  fallback = '请求失败',
+): string => {
+  if (isApiResponse(payload)) {
+    return extractErrorMessage(payload, fallback);
+  }
+
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload.trim();
+  }
+
+  if (payload && typeof payload === 'object') {
+    const source = payload as Record<string, unknown>;
+    for (const key of ['msg', 'message', 'error', 'detail']) {
+      const value = source[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+
+  return fallback;
+};
+
 export const isUnauthenticatedResponse = (
   response: Partial<ApiResponse> | null | undefined,
   protocol: ApiProtocol,
@@ -59,6 +95,6 @@ export const isUnauthenticatedResponse = (
     (typeof response?.code === 'number' &&
       protocolRules[protocol].unauthenticated.includes(response.code)) ||
     (typeof message === 'string' &&
-      unauthenticatedMessages.has(message.trim().toUpperCase()))
+      unauthenticatedMessages.has(normalizeUnauthenticatedMessage(message)))
   );
 };
