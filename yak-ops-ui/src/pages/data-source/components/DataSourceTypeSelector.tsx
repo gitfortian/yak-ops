@@ -1,5 +1,5 @@
 import { SearchOutlined } from '@ant-design/icons';
-import { Empty, Input } from 'antd';
+import { Empty, Input, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { COMMON_DB_OPTIONS } from '../constants';
@@ -16,6 +16,7 @@ const DataSourceTypeSelector = ({
   onSelect,
 }: DataSourceTypeSelectorProps) => {
   const [query, setQuery] = useState('');
+  const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
   const keyword = query.trim().toLowerCase();
 
   const flatDatasourceList = useMemo(
@@ -35,10 +36,41 @@ const DataSourceTypeSelector = ({
 
   const filteredDatasourceList = useMemo(
     () =>
-      flatDatasourceList.filter(
-        (item) => !keyword || item.searchText.includes(keyword),
-      ),
-    [flatDatasourceList, keyword],
+      flatDatasourceList.filter((item) => {
+        const matchGroup =
+          selectedGroupName === null || item.groupName === selectedGroupName;
+        const matchKeyword = !keyword || item.searchText.includes(keyword);
+        return matchGroup && matchKeyword;
+      }),
+    [flatDatasourceList, keyword, selectedGroupName],
+  );
+
+  const groupedDatasourceList = useMemo(
+    () =>
+      dataSourceGroups
+        .filter(
+          (group) =>
+            selectedGroupName === null || group.groupName === selectedGroupName,
+        )
+        .map((group) => ({
+          groupName: group.groupName,
+          items: filteredDatasourceList.filter(
+            (item) => item.groupName === group.groupName,
+          ),
+        }))
+        .filter((group) => group.items.length > 0),
+    [dataSourceGroups, filteredDatasourceList, selectedGroupName],
+  );
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: 'ALL', label: '全部分类' },
+      ...dataSourceGroups.map((group) => ({
+        value: group.groupName,
+        label: group.groupName,
+      })),
+    ],
+    [dataSourceGroups],
   );
 
   const suggestedDatasourceList = useMemo(
@@ -104,18 +136,31 @@ const DataSourceTypeSelector = ({
           选择数据源
         </div>
 
-        <Input
-          allowClear
-          variant="filled"
-          prefix={<SearchOutlined className="text-[#98A2B3]" />}
-          placeholder="搜索数据源"
-          value={query}
-          className="!h-9 !rounded-lg"
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <div className="flex gap-2">
+          <Input
+            allowClear
+            variant="filled"
+            prefix={<SearchOutlined className="text-[#98A2B3]" />}
+            placeholder="搜索数据源"
+            value={query}
+            className="!h-9 !min-w-0 !flex-1 !rounded-lg"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+
+          <Select
+            variant="filled"
+            value={selectedGroupName || 'ALL'}
+            options={categoryOptions}
+            className="!h-9 !w-[150px] shrink-0"
+            popupMatchSelectWidth={false}
+            onChange={(value) =>
+              setSelectedGroupName(value === 'ALL' ? null : value)
+            }
+          />
+        </div>
       </div>
 
-      {!keyword && suggestedDatasourceList.length > 0 ? (
+      {!keyword && selectedGroupName === null && suggestedDatasourceList.length > 0 ? (
         <section className="mt-4 shrink-0">
           <div className="mb-2 text-xs font-semibold text-[#161823]">常用</div>
           <div className="grid grid-cols-3 gap-2">
@@ -164,8 +209,22 @@ const DataSourceTypeSelector = ({
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {filteredDatasourceList.map(renderSourceItem)}
+            <div className="space-y-4">
+              {groupedDatasourceList.map((group) => (
+                <section key={group.groupName}>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-[#667085]">
+                      {group.groupName}
+                    </span>
+                    <span className="text-[10px] text-[#B0B7C3]">
+                      {group.items.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {group.items.map(renderSourceItem)}
+                  </div>
+                </section>
+              ))}
             </div>
           </div>
         )}
