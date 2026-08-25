@@ -36,8 +36,4 @@ functions/*
 screenshot
 .firebase
 
-# generated HarmonyOS Sans assets
-/public/fonts/harmonyos-sans-sc/
-/public/licenses/HarmonyOS-Sans-LICENSE.txt
-
 build
