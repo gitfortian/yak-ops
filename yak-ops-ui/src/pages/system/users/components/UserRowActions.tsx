@@ -1,3 +1,4 @@
+import YakButton from '@/components/YakButton';
 import {
   DeleteOutlined,
   DownOutlined,
@@ -8,7 +9,6 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import {
-  Button,
   Dropdown,
   Modal,
   Space,
@@ -177,7 +177,7 @@ export default function UserRowActions({
 
   return (
     <Space size={2}>
-      <Button
+      <YakButton
         type="text"
         size="small"
         icon={<EyeOutlined />}
@@ -185,10 +185,10 @@ export default function UserRowActions({
         onClick={() => onDetail(user)}
       >
         详情
-      </Button>
+      </YakButton>
 
       {canEdit && (
-        <Button
+        <YakButton
           type="text"
           size="small"
           icon={<EditOutlined />}
@@ -196,7 +196,7 @@ export default function UserRowActions({
           onClick={() => onEdit(user)}
         >
           编辑
-        </Button>
+        </YakButton>
       )}
 
       {menuItems.length > 0 && (
@@ -208,14 +208,14 @@ export default function UserRowActions({
             onClick: handleMenuClick,
           }}
         >
-          <Button
+          <YakButton
             type="text"
             size="small"
             className="!px-1.5 !text-[#667085]"
           >
             更多
             <DownOutlined className="ml-1 text-[10px]" />
-          </Button>
+          </YakButton>
         </Dropdown>
       )}
     </Space>
