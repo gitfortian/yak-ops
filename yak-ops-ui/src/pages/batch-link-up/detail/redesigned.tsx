@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import {
   ArrowLeftOutlined,
   CopyOutlined,
@@ -15,7 +16,6 @@ import {
   Select,
   Spin,
   Table,
-  Tabs,
   Tag,
   Tooltip,
 } from "antd";
@@ -1270,11 +1270,10 @@ export default function BatchLinkUpExecutionDetailPage() {
           </section>
 
           <div className="px-5 lg:px-6">
-            <Tabs
+            <YakTab
               activeKey={activeTab}
               onChange={handleTabChange}
               items={tabItems.map(({ key, label }) => ({ key, label }))}
-              className="[&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-nav]:!min-h-[50px] [&_.ant-tabs-tab]:!py-3.5"
             />
           </div>
 

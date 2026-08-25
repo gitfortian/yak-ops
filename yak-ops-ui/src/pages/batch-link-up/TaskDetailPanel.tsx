@@ -1,5 +1,5 @@
+import YakTab from '@/components/YakTab';
 import { useIntl } from "@umijs/max";
-import { Tabs } from "antd";
 import React, { useEffect, useState } from "react";
 
 import { linkupJobInstanceApi } from "./api";
@@ -125,7 +125,7 @@ const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ instanceItem }) => {
         <BasicInfoSection item={instanceItem} />
 
         <div className="m-4 rounded-lg bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-          <Tabs
+          <YakTab
             activeKey={activeKey}
             items={tabs}
             onChange={(key) => setActiveKey(key)}

@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import {Footer} from "@/components";
 import {login} from "@/services/ant-design-pro/api";
 import {getFakeCaptcha} from "@/services/ant-design-pro/login";
@@ -11,7 +12,7 @@ import {
 } from "@ant-design/icons";
 import {LoginForm, ProFormCaptcha, ProFormCheckbox, ProFormText,} from "@ant-design/pro-components";
 import {FormattedMessage, Helmet, SelectLang, useIntl, useModel,} from "@umijs/max";
-import {Alert, App, Tabs} from "antd";
+import {Alert, App} from "antd";
 import {createStyles} from "antd-style";
 import React, {useState} from "react";
 import {flushSync} from "react-dom";
@@ -192,7 +193,7 @@ const Login: React.FC = () => {
             await handleSubmit(values as API.LoginParams);
           }}
         >
-          <Tabs
+          <YakTab
             activeKey={type}
             onChange={setType}
             centered

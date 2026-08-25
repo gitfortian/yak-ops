@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import {
   BRAND_COLOR,
@@ -15,7 +16,6 @@ import {
   Select,
   Spin,
   Table,
-  Tabs,
   Tag,
   message,
 } from 'antd';
@@ -731,7 +731,7 @@ const TemplateLibraryPage = () => {
                   </div>
                 </div>
 
-                <Tabs
+                <YakTab
                   activeKey={activeTab}
                   animated={false}
                   items={[
@@ -747,7 +747,7 @@ const TemplateLibraryPage = () => {
                   onChange={(key) =>
                     setActiveTab(key as TemplateTabKey)
                   }
-                  className="mt-2 [&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-tab]:!px-3 [&_.ant-tabs-tab]:!py-2.5 [&_.ant-tabs-tab-btn]:!text-[13px]"
+                  className="mt-2"
                 />
               </section>
 

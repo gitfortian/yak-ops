@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { history, useParams } from '@umijs/max';
 import {
   Button,
@@ -5,7 +6,6 @@ import {
   Empty,
   Spin,
   Table,
-  Tabs,
   Tooltip,
   message,
   type TableColumnsType,
@@ -451,11 +451,10 @@ export default function DataServiceDetailPage() {
           </section>
 
           <div className="px-5 lg:px-6">
-            <Tabs
+            <YakTab
               activeKey={activeTab}
               onChange={(key) => setActiveTab(key as DetailTabKey)}
               items={tabItems.map(({ key, label }) => ({ key, label }))}
-              className="[&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-nav]:!min-h-[50px] [&_.ant-tabs-tab]:!py-3.5"
             />
           </div>
 

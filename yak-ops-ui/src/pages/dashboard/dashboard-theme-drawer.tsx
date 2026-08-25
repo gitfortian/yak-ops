@@ -1,4 +1,5 @@
-import { Button, Collapse, ColorPicker, Drawer, Tabs } from 'antd';
+import YakTab from '@/components/YakTab';
+import { Button, Collapse, ColorPicker, Drawer } from 'antd';
 import {
   BarChart3,
   Box,
@@ -359,7 +360,7 @@ export function DashboardThemeDrawer({
         </div>
       )}
     >
-      <Tabs
+      <YakTab
         defaultActiveKey={customized ? 'custom' : 'preset'}
         size="small"
         items={[

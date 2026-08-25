@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import {
   activateWorkflowInstance,
   cancelWorkflowInstance,
@@ -30,7 +31,6 @@ import {
   Select,
   Spin,
   Table,
-  Tabs,
   Tooltip,
   message,
 } from 'antd';
@@ -700,11 +700,10 @@ export default function WorkflowInstanceDetailPage() {
           </section>
 
           <div className="px-5 lg:px-6">
-            <Tabs
+            <YakTab
               activeKey={activeTab}
               onChange={(key) => setActiveTab(key as DetailTabKey)}
               items={tabItems.map(({ key, label }) => ({ key, label }))}
-              className="[&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-nav]:!min-h-[50px] [&_.ant-tabs-tab]:!py-3.5"
             />
           </div>
 
