@@ -1,3 +1,4 @@
+import { ExclamationCircleOutlined } from "@ant-design/icons";
 import { login } from "@/services/security/account";
 import { resetAuthenticationFailure } from "@/utils/request";
 import { getSafeReturnTo } from "@/utils/security/redirect";
@@ -8,6 +9,8 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 
 const WECHAT_QR_CODE_SRC = "/wechat-official-account-qr.png";
+const FORM_ITEM_CLASS_NAME =
+  "!mb-5 [&_.ant-form-item-explain]:!pt-1.5 [&_.ant-form-item-explain-error]:!text-[12px] [&_.ant-form-item-explain-error]:!leading-[18px] [&_.ant-form-item-explain-error]:!text-[#b42318]";
 
 type FloatingInputProps = InputProps & {
   label: string;
@@ -23,7 +26,9 @@ function FloatingInput({
   ...inputProps
 }: FloatingInputProps) {
   const [focused, setFocused] = useState(false);
+  const { status } = Form.Item.useStatus();
   const floating = focused || String(value ?? "").length > 0;
+  const hasError = status === "error";
 
   const handleFocus: InputProps["onFocus"] = (event) => {
     setFocused(true);
@@ -36,8 +41,16 @@ function FloatingInput({
   };
 
   const className = password
-    ? "!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !shadow-none hover:!border-[#bdbdb8] focus-within:!border-[#171717] [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px]"
-    : "!h-11 !rounded-full !border-[#dededb] !bg-white !px-4 !text-[15px] !shadow-none hover:!border-[#bdbdb8] focus:!border-[#171717]";
+    ? `!h-11 !rounded-full !bg-white !px-4 !shadow-none [&>input.ant-input]:!bg-white [&>input.ant-input]:!text-[15px] ${
+        hasError
+          ? "!border-[#d92d20] hover:!border-[#d92d20] focus-within:!border-[#d92d20]"
+          : "!border-[#dededb] hover:!border-[#bdbdb8] focus-within:!border-[#171717]"
+      }`
+    : `!h-11 !rounded-full !bg-white !px-4 !text-[15px] !shadow-none ${
+        hasError
+          ? "!border-[#d92d20] hover:!border-[#d92d20] focus:!border-[#d92d20]"
+          : "!border-[#dededb] hover:!border-[#bdbdb8] focus:!border-[#171717]"
+      }`;
 
   const controlProps: InputProps = {
     ...inputProps,
@@ -66,6 +79,15 @@ function FloatingInput({
         {label}
       </label>
     </div>
+  );
+}
+
+function ValidationMessage({ children }: { children: string }) {
+  return (
+    <span className="inline-flex items-start gap-1.5">
+      <ExclamationCircleOutlined className="mt-[2px] shrink-0 text-[12px]" />
+      <span>{children}</span>
+    </span>
   );
 }
 
@@ -174,20 +196,25 @@ export default function LoginPanel() {
         onFinish={handleAccountLogin}
       >
         <Form.Item
-          className="!mb-5"
+          className={FORM_ITEM_CLASS_NAME}
           name="userName"
-          rules={[{ required: true, message: "请输入用户名" }]}
+          rules={[
+            {
+              required: true,
+              message: <ValidationMessage>请输入用户名</ValidationMessage>,
+            },
+          ]}
         >
           <FloatingInput label="Username" autoComplete="username" />
         </Form.Item>
 
         <Form.Item
-          className="!mb-6"
+          className={FORM_ITEM_CLASS_NAME}
           name="userPassword"
           rules={[
             {
               required: true,
-              message: "Please enter your password",
+              message: <ValidationMessage>请输入密码</ValidationMessage>,
             },
           ]}
         >
