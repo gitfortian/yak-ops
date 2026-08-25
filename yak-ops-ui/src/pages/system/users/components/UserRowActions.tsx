@@ -4,6 +4,7 @@ import {
   EditOutlined,
   EyeOutlined,
   KeyOutlined,
+  LogoutOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import {
@@ -19,10 +20,9 @@ import { SECURITY_PERMISSIONS } from '@/constants/securityPermissions';
 import { usePermissionAccess } from '@/hooks/usePermissionAccess';
 import {
   deleteUser as deleteSystemUser,
+  forceLogoutUser,
   type SystemUser,
 } from '@/services/security/users';
-
-import { errorText } from '../shared';
 
 interface UserRowActionsProps {
   user: SystemUser;
@@ -34,7 +34,11 @@ interface UserRowActionsProps {
   onDeleted: () => void;
 }
 
-type ActionKey = 'assignRole' | 'resetPassword' | 'delete';
+type ActionKey =
+  | 'assignRole'
+  | 'resetPassword'
+  | 'forceLogout'
+  | 'delete';
 
 export default function UserRowActions({
   user,
@@ -58,14 +62,9 @@ export default function UserRowActions({
   const remove = async () => {
     if (!canDelete) return;
 
-    try {
-      await deleteSystemUser(user.id);
-      message.success('用户已删除');
-      onDeleted();
-    } catch (error) {
-      
-      throw error;
-    }
+    await deleteSystemUser(user.id);
+    message.success('用户已删除');
+    onDeleted();
   };
 
   const confirmDelete = () => {
@@ -92,6 +91,30 @@ export default function UserRowActions({
     });
   };
 
+  const confirmForceLogout = () => {
+    if (!canEdit || isCurrentUser) return;
+
+    Modal.confirm({
+      title: '强制下线用户',
+      content: (
+        <div>
+          确定让用户
+          <span className="mx-1 font-medium text-slate-900">
+            {user.realName || user.userName}
+          </span>
+          的全部登录终端立即失效吗？
+        </div>
+      ),
+      okText: '强制下线',
+      cancelText: '取消',
+      centered: true,
+      onOk: async () => {
+        await forceLogoutUser(user.id);
+        message.success('用户已强制下线');
+      },
+    });
+  };
+
   const menuItems: NonNullable<MenuProps['items']> = [];
 
   if (canAssignRole) {
@@ -107,6 +130,15 @@ export default function UserRowActions({
       key: 'resetPassword',
       icon: <KeyOutlined />,
       label: '重置密码',
+    });
+  }
+
+  if (canEdit) {
+    menuItems.push({
+      key: 'forceLogout',
+      icon: <LogoutOutlined />,
+      label: '强制下线',
+      disabled: isCurrentUser,
     });
   }
 
@@ -131,6 +163,9 @@ export default function UserRowActions({
         break;
       case 'resetPassword':
         if (canResetPassword) onResetPassword(user);
+        break;
+      case 'forceLogout':
+        confirmForceLogout();
         break;
       case 'delete':
         confirmDelete();
