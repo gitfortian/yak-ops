@@ -5,7 +5,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Conservative guard for SQL used as a QUERY_REVISION Dataset source. */
-final class DatasetSqlSafety {
+public final class DatasetSqlSafety {
 
   private static final int MAX_SQL_LENGTH = 500_000;
   private static final Pattern FIRST_KEYWORD = Pattern.compile("(?i)\\b([a-z]+)\\b");
@@ -17,7 +17,7 @@ final class DatasetSqlSafety {
   private DatasetSqlSafety() {
   }
 
-  static String requireReadOnlyQuery(String sql) {
+    public static String requireReadOnlyQuery(String sql) {
     if (sql == null || sql.isBlank()) {
       throw new IllegalArgumentException("Dataset 来源 SQL 不能为空");
     }
