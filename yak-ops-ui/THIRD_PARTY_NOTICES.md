@@ -6,10 +6,15 @@ Yak Ops uses HarmonyOS Sans SC for the Simplified Chinese interface.
 
 Copyright 2021 Huawei Device Co., Ltd. HarmonyOS Sans Fonts Software is licensed under the HarmonyOS Sans Fonts License Agreement.
 
-The UI install step downloads the official HarmonyOS Sans package from Huawei and copies selected Simplified Chinese TTF files without modifying their font data. The original font license from that package is copied to `public/licenses/HarmonyOS-Sans-LICENSE.txt` and is included in the built application.
+The project expects unmodified HarmonyOS Sans SC font files to be placed in `public/fonts/harmonyos-sans-sc/`.
 
-No HarmonyOS Sans font binary is committed directly to this repository.
+Required font files:
+
+- `HarmonyOS_SansSC_Regular.ttf`
+- `HarmonyOS_SansSC_Medium.ttf`
+- `HarmonyOS_SansSC_Semibold.ttf`
+- `HarmonyOS_SansSC_Bold.ttf`
+
+Keep the original HarmonyOS Sans font license with the distributed application, for example at `public/licenses/HarmonyOS-Sans-LICENSE.txt`.
 
 Official HarmonyOS design resource: https://developer.huawei.com/consumer/cn/design/resource
-
-For offline builds, download the official ZIP yourself and set `HARMONYOS_SANS_ZIP` to its local path before installing dependencies.
