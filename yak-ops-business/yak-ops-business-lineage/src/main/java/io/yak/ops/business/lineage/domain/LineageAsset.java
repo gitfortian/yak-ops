@@ -1,9 +1,11 @@
-package io.yak.ops.business.lineage;
+package io.yak.ops.business.lineage.domain;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Instant;
 
-/** Validated domain write model for registering a metadata asset. */
-public record LineageAssetDraft(
+/** Stable identity for an object participating in the Yak Ops metadata graph. */
+public record LineageAsset(
+    long id,
     String assetKey,
     LineageAssetType assetType,
     String name,
@@ -15,5 +17,7 @@ public record LineageAssetDraft(
     String schemaName,
     String tableName,
     String columnName,
-    JsonNode properties) {
+    JsonNode properties,
+    Instant createTime,
+    Instant updateTime) {
 }

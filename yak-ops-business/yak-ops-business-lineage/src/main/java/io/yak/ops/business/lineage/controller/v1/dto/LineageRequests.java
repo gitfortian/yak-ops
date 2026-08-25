@@ -1,8 +1,8 @@
 package io.yak.ops.business.lineage.controller.v1.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageRelationType;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;

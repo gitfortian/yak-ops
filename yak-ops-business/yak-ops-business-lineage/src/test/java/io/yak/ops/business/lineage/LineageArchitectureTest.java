@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.yak.ops.business.lineage.controller.v1.LineageController;
 import io.yak.ops.business.lineage.dao.LineageDao;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageRelation;
 import io.yak.ops.business.lineage.repository.LineageRepository;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

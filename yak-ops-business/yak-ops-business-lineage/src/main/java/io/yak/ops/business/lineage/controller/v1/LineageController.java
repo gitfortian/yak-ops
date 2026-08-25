@@ -3,8 +3,6 @@ package io.yak.ops.business.lineage.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageDirection;
 import io.yak.ops.business.lineage.LineageService;
 import io.yak.ops.business.lineage.controller.v1.converter.LineageRequestConverter;
 import io.yak.ops.business.lineage.controller.v1.converter.LineageViewConverter;
@@ -13,6 +11,8 @@ import io.yak.ops.business.lineage.controller.v1.dto.LineageRequests.RegisterRel
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.AssetView;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.GraphView;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.RelationView;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageDirection;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

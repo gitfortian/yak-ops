@@ -1,14 +1,14 @@
 package io.yak.ops.business.lineage.repository;
 
-import io.yak.ops.business.lineage.LineageAsset;
-import io.yak.ops.business.lineage.LineageAssetDraft;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageRelation;
-import io.yak.ops.business.lineage.LineageRelationDraft;
-import io.yak.ops.business.lineage.LineageRelationType;
 import io.yak.ops.business.lineage.dao.LineageDao;
 import io.yak.ops.business.lineage.dao.model.LineageAssetPO;
 import io.yak.ops.business.lineage.dao.model.LineageRelationPO;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageAssetDraft;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageRelation;
+import io.yak.ops.business.lineage.domain.LineageRelationDraft;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
 import io.yak.ops.business.lineage.repository.support.LineageJsonCodec;
 import java.sql.Timestamp;
 import java.util.LinkedHashMap;

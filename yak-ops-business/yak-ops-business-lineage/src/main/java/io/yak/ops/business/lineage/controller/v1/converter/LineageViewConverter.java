@@ -1,11 +1,11 @@
 package io.yak.ops.business.lineage.controller.v1.converter;
 
-import io.yak.ops.business.lineage.LineageAsset;
-import io.yak.ops.business.lineage.LineageGraph;
-import io.yak.ops.business.lineage.LineageRelation;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.AssetView;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.GraphView;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.RelationView;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageGraph;
+import io.yak.ops.business.lineage.domain.LineageRelation;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
