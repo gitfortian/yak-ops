@@ -138,18 +138,17 @@ const DataSourceCard: React.FC<DataSourceCardProps> = ({
 
         <Button
           block
-          type="default"
+          type="text"
           className={[
-            "group/detail relative h-[42px] overflow-hidden rounded-full p-0",
-            "border border-[#D9D9D9] bg-white font-bold",
+            "group/detail relative h-[42px] overflow-hidden rounded-full p-0 !text-[#667085]",
+            "font-bold",
             "transition-all duration-300 ease-out",
-            "hover:!border-[hsl(231_48%_48%)]",
           ].join(" ")}
           onClick={() => onEdit(record)}
         >
           <span
             className={[
-              "absolute inset-0 z-[1] flex items-center justify-center rounded-full bg-white",
+              "absolute inset-0 z-[1] flex items-center justify-center rounded-full",
               "transition-all duration-300 ease-out",
               "group-hover/detail:translate-y-1.5 group-hover/detail:opacity-0",
             ].join(" ")}
@@ -160,7 +159,7 @@ const DataSourceCard: React.FC<DataSourceCardProps> = ({
           <span
             className={[
               "absolute inset-0 z-[2] flex items-center justify-center gap-2 rounded-full",
-              "bg-[hsl(231_48%_48%)] text-white opacity-0",
+              "bg-[#f5f5f6] text-[#344054] opacity-0",
               "transition-all duration-300 ease-out",
               "group-hover/detail:opacity-100",
             ].join(" ")}
