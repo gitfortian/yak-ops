@@ -1,7 +1,7 @@
+import YakButton from '@/components/YakButton';
+import { logout } from '@/services/security/account';
 import { history, useModel } from '@umijs/max';
 import { createStyles } from 'antd-style';
-import { logout } from '@/services/security/account';
-
 import React, { useEffect, useRef, useState } from 'react';
 import './index.less';
 
@@ -170,18 +170,19 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
   return (
     <div ref={containerRef} className="relative inline-flex items-center">
       {/* 点击区域 */}
-      <button
-        type="button"
+      <YakButton
+        type="text"
+        htmlType="button"
         aria-label="打开用户菜单"
         aria-expanded={open}
-        className="cursor-pointer border-0 bg-transparent p-0 outline-none"
+        className="!h-auto !min-h-0 !w-auto !p-0 !bg-transparent"
         onClick={() => setOpen((previous) => !previous)}
       >
         {/* 原来的头像样式，完全不变 */}
         <div className="status-pill">
           <span className="status-dot">S</span>
         </div>
-      </button>
+      </YakButton>
 
       {/* 自定义下拉框 */}
       <div
@@ -213,15 +214,16 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
           "
         />
 
-        <button
-          type="button"
-          className="relative z-10 inline-flex cursor-pointer flex-row items-center justify-center gap-2 whitespace-nowrap border-0 bg-transparent text-[15px] font-semibold text-[#475569]"
+        <YakButton
+          type="text"
+          htmlType="button"
+          className="relative z-10 !h-auto !min-h-0 !p-0 !bg-transparent text-[15px] !font-semibold !text-[#475569]"
           disabled={loggingOut}
           onClick={handleLogout}
         >
           <span>{loggingOut ? '正在退出…' : '退出登录'}</span>
           <PixelCheekyFace />
-        </button>
+        </YakButton>
       </div>
     </div>
   );
