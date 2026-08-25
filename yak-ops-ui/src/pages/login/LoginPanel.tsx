@@ -85,7 +85,7 @@ function FloatingInput({
 
 function ValidationMessage({ children }: { children: string }) {
   return (
-    <span className="inline-flex h-[18px] items-center gap-1.5 align-middle leading-[18px]">
+    <span className="inline-flex h-[18px] items-center gap-1.5 align-middle leading-[18px]" style={{marginBottom: 8}}>
       <ExclamationCircleOutlined className="flex shrink-0 items-center text-[12px] leading-none [&_svg]:block" />
       <span className="leading-[18px]">{children}</span>
     </span>
