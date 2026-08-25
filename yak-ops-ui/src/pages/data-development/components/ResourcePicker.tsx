@@ -209,9 +209,9 @@ export default function ResourcePicker({
       {/* Breadcrumb */}
       <div className="mb-2 flex items-center gap-1 text-[12px]">
         <Button
-          type="link"
+          type="text"
           size="small"
-          className="px-1"
+          className="px-1 !text-[#667085]"
           disabled={breadcrumbs.length === 0}
           onClick={() => handleBreadcrumbClick(-1)}
         >
@@ -221,9 +221,9 @@ export default function ResourcePicker({
           <span key={String(bc.id)} className="flex items-center gap-1">
             <span className="text-[#98a2b3]">/</span>
             <Button
-              type="link"
+              type="text"
               size="small"
-              className="px-1"
+              className="px-1 !text-[#667085]"
               disabled={index === breadcrumbs.length - 1}
               onClick={() => handleBreadcrumbClick(index)}
             >

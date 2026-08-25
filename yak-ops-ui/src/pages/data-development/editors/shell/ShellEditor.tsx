@@ -194,12 +194,16 @@ export const ShellEditor = ({
                 </div>
                 <Button
                   size="small"
+                  type="text"
+                  className="!text-[#667085]"
                   icon={<Upload size={14} />}
                   onClick={() => setPickerOpen(true)}
                 />
                 <Button
                   size="small"
+                  type="text"
                   danger
+                  className="!text-[#667085]"
                   icon={<Trash2 size={14} />}
                   onClick={handleClearResource}
                 />

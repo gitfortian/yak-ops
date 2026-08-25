@@ -88,7 +88,8 @@ const DriverManager = ({
 
         <Upload {...uploadProps}>
           <Button
-            className="shrink-0"
+            type="text"
+            className="shrink-0 !text-[#667085]"
             icon={<UploadOutlined />}
             loading={uploading}
             disabled={disabled}

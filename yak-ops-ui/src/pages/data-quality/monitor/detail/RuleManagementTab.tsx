@@ -323,7 +323,12 @@ const RuleManagementTab = ({
       </div>
 
       <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f1f3] pt-3">
-        <Button size="small" onClick={reset}>
+        <Button
+          size="small"
+          type="text"
+          className="!text-[#667085]"
+          onClick={reset}
+        >
           重置
         </Button>
         <Button
@@ -455,9 +460,10 @@ const RuleManagementTab = ({
 
             <Dropdown menu={moreMenu} trigger={['click']}>
               <Button
+                type="text"
                 aria-label="更多操作"
                 icon={<MoreHorizontal size={15} />}
-                className="!h-8 !w-8 !px-0"
+                className="!h-8 !w-8 !px-0 !text-[#667085]"
               />
             </Dropdown>
           </div>
@@ -506,7 +512,13 @@ const RuleManagementTab = ({
               className="w-[160px]"
             />
 
-            <Button onClick={applyFilters}>查询</Button>
+            <Button
+              type="text"
+              className="!text-[#667085]"
+              onClick={applyFilters}
+            >
+              查询
+            </Button>
 
             <Popover
               trigger="click"
@@ -515,7 +527,13 @@ const RuleManagementTab = ({
               onOpenChange={setAdvancedOpen}
               content={advancedSearchContent}
             >
-              <Button icon={<ListFilter size={14} />}>高级搜索</Button>
+              <Button
+                type="text"
+                className="!text-[#667085]"
+                icon={<ListFilter size={14} />}
+              >
+                高级搜索
+              </Button>
             </Popover>
           </div>
         </div>

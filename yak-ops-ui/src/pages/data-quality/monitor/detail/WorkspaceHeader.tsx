@@ -47,9 +47,9 @@ const WorkspaceHeader = ({
               {monitor?.tableName || "规则管理"}
             </h1>
             <Button
-              type="link"
+              type="text"
               size="small"
-              className="!h-6 !px-0 !text-xs"
+              className="!h-6 !px-0 !text-xs !text-[#667085]"
               onClick={onBack}
             >
               返回数据表监控 <ExternalLink size={12} />

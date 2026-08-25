@@ -234,11 +234,11 @@ const MonitorListTab = ({
       render: () => (
         <div className="flex items-center gap-3">
           <Button
-            type="link"
+            type="text"
             size="small"
             loading={running}
             onClick={onRun}
-            className="!h-auto !p-0"
+            className="!h-auto !p-0 !text-[#667085]"
           >
             {running ? '提交中' : '测试运行'}
           </Button>
@@ -249,7 +249,7 @@ const MonitorListTab = ({
               size="small"
               aria-label="更多操作"
               icon={<MoreHorizontal size={15} />}
-              className="!h-7 !w-7 !px-0"
+              className="!h-7 !w-7 !px-0 !text-[#667085]"
             />
           </Dropdown>
         </div>
@@ -289,7 +289,12 @@ const MonitorListTab = ({
       </div>
 
       <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f1f3] pt-3">
-        <Button size="small" onClick={resetFilters}>
+        <Button
+          size="small"
+          type="text"
+          className="!text-[#667085]"
+          onClick={resetFilters}
+        >
           重置
         </Button>
 
@@ -355,7 +360,13 @@ const MonitorListTab = ({
             className="w-[160px]"
           />
 
-          <Button onClick={applyFilters}>查询</Button>
+          <Button
+            type="text"
+            className="!text-[#667085]"
+            onClick={applyFilters}
+          >
+            查询
+          </Button>
 
           <Popover
             trigger="click"
@@ -364,7 +375,13 @@ const MonitorListTab = ({
             onOpenChange={setAdvancedOpen}
             content={advancedSearchContent}
           >
-            <Button icon={<ListFilter size={14} />}>高级搜索</Button>
+            <Button
+              type="text"
+              className="!text-[#667085]"
+              icon={<ListFilter size={14} />}
+            >
+              高级搜索
+            </Button>
           </Popover>
         </div>
       </div>

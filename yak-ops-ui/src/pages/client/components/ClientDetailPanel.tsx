@@ -149,15 +149,14 @@ const ClientDetailPanel: React.FC<Props> = ({
             </div>
 
             <Button
+              type="text"
               icon={<ReloadOutlined/>}
               loading={metricsLoading}
               onClick={() => onRefresh(selectedClientId)}
               className="
-        h-10 rounded-full border-[#E4E7EC] px-4
-        text-[13px] font-medium text-[#475467]
-        shadow-[0_2px_8px_rgba(16,24,40,0.04)]
+        h-10 rounded-full px-4
+        text-[13px] font-medium !text-[#667085]
         transition-all duration-200
-        hover:!border-[#CBD5E1] hover:!text-[#344054]
       "
             >
               刷新指标

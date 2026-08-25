@@ -243,8 +243,9 @@ const AdvancedSearchForm: React.FC<AdvancedSearchFormProps> = ({
                 </Button>
 
                 <Button
+                  type="text"
                   onClick={handleReset}
-                  className="h-8 rounded-full border-slate-200 px-5 text-slate-600 hover:!border-slate-300 hover:!text-slate-900"
+                  className="h-8 rounded-full px-5 !text-[#667085]"
                 >
                   {intl.formatMessage({
                     id: "pages.job.search.button.reset",

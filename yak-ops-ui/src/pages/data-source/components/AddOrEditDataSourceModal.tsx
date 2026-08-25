@@ -209,7 +209,12 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
     if (!showFormStep) {
       return (
         <div className="flex justify-end">
-          <Button disabled={busy} onClick={handleClose}>
+          <Button
+            type="text"
+            className="!text-[#667085]"
+            disabled={busy}
+            onClick={handleClose}
+          >
             取消
           </Button>
         </div>
@@ -220,11 +225,21 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       <div className="flex items-center justify-between gap-3">
         <div>
           {isCreateMode && !hideBackButton ? (
-            <Button disabled={busy} onClick={handleBackToTypeSelection}>
+            <Button
+              type="text"
+              className="!text-[#667085]"
+              disabled={busy}
+              onClick={handleBackToTypeSelection}
+            >
               上一步
             </Button>
           ) : (
-            <Button disabled={busy} onClick={handleClose}>
+            <Button
+              type="text"
+              className="!text-[#667085]"
+              disabled={busy}
+              onClick={handleClose}
+            >
               取消
             </Button>
           )}
@@ -232,6 +247,8 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
 
         <div className="flex items-center gap-2">
           <Button
+            type="text"
+            className="!text-[#667085]"
             loading={testing}
             disabled={submitting}
             onClick={() => void handleTestConnection()}

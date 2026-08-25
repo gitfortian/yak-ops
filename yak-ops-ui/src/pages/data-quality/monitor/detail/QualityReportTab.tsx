@@ -175,8 +175,9 @@ const QualityReportTab = ({
       width: 100,
       render: () => (
         <Button
-          type="link"
+          type="text"
           size="small"
+          className="!text-[#667085]"
           onClick={() => message.info('趋势明细已在运行记录中保留')}
         >
           查看详情

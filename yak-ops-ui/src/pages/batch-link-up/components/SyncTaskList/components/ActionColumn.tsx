@@ -266,10 +266,10 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
         >
           <Button
             size="small"
-            color="danger"
-            variant="filled"
+            type="text"
+            danger
             icon={<PauseCircleOutlined />}
-            className="!h-7 !rounded-md !px-2.5 !text-xs"
+            className="!h-7 !rounded-md !px-2.5 !text-xs !text-[#667085]"
             onClick={stopPropagation}
           >
             停止
@@ -295,13 +295,12 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
           >
             <Button
               size="small"
-              color={canRun ? 'primary' : 'default'}
-              variant="filled"
+              type="text"
               loading={runLoading}
               aria-disabled={!canRun}
               icon={<PlayCircleOutlined />}
               className={[
-                '!h-7 !rounded-md !px-2.5 !text-xs',
+                '!h-7 !rounded-md !px-2.5 !text-xs !text-[#667085]',
                 !canRun ? '!cursor-not-allowed !text-[#98a2b3]' : '',
               ].join(' ')}
               onClick={stopPropagation}
@@ -319,8 +318,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
       >
         <Button
           size="small"
-          color="default"
-          variant="text"
+          type="text"
           className="!h-7 !rounded-md !px-2 !text-xs !text-[#667085]"
           onClick={stopPropagation}
         >

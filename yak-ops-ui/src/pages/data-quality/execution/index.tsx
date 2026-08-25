@@ -388,7 +388,12 @@ const ExecutionPage = () => {
       </div>
 
       <div className="mt-4 flex justify-end gap-2 border-t border-[#f0f1f3] pt-3">
-        <Button size="small" onClick={reset}>
+        <Button
+          size="small"
+          type="text"
+          className="!text-[#667085]"
+          onClick={reset}
+        >
           重置
         </Button>
         <Button size="small" type="primary" onClick={applyAdvancedSearch}>
@@ -462,7 +467,13 @@ const ExecutionPage = () => {
                     }}
                   />
 
-                  <Button onClick={applySearch}>查询</Button>
+                  <Button
+                    type="text"
+                    className="!text-[#667085]"
+                    onClick={applySearch}
+                  >
+                    查询
+                  </Button>
 
                   <Popover
                     trigger="click"
@@ -471,13 +482,19 @@ const ExecutionPage = () => {
                     onOpenChange={setAdvancedOpen}
                     content={advancedSearchContent}
                   >
-                    <Button icon={<ListFilter size={14} />}>
+                    <Button
+                      type="text"
+                      className="!text-[#667085]"
+                      icon={<ListFilter size={14} />}
+                    >
                       高级筛选
                       {advancedFilterCount ? ` (${advancedFilterCount})` : ''}
                     </Button>
                   </Popover>
 
                   <Button
+                    type="text"
+                    className="!text-[#667085]"
                     aria-label="刷新"
                     icon={<RefreshCw size={14} />}
                     onClick={() => void load(current, pageSize)}

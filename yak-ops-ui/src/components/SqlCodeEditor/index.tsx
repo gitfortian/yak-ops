@@ -680,7 +680,7 @@ export default function SqlCodeEditor({
           <Button
             type="text"
             size="small"
-            className="sql-code-editor__expand-btn"
+            className="sql-code-editor__expand-btn !text-[#667085]"
             icon={<Maximize2 size={14} />}
             aria-label="展开 SQL 编辑器"
             title="展开编辑"
@@ -701,7 +701,13 @@ export default function SqlCodeEditor({
           onCancel={handleCancelFullscreen}
           footer={
             <div className="sql-code-editor-modal__footer">
-              <Button onClick={handleCancelFullscreen}>取消</Button>
+              <Button
+                type="text"
+                className="!text-[#667085]"
+                onClick={handleCancelFullscreen}
+              >
+                取消
+              </Button>
               <Button type="primary" onClick={handleApplyFullscreen}>
                 应用
               </Button>

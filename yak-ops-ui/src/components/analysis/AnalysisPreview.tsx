@@ -464,7 +464,7 @@ function AnalysisPreviewContent({
       <div className={`${className} flex items-center justify-center px-5 text-center`} style={themedStyle}>
         <div>
           <div className="text-[11px] text-[#b42318]">{error}</div>
-          <Button size="small" type="text" className="mt-2 !h-7 !text-[10px]" onClick={retry}>
+          <Button size="small" type="text" className="mt-2 !h-7 !text-[10px] !text-[#667085]" onClick={retry}>
             重新查询
           </Button>
         </div>
