@@ -1,5 +1,6 @@
 import moment from 'moment';
 
+import type { OfflineSyncSearchState } from './types';
 import {
   buildOfflineSyncPageQuery,
   buildOfflineSyncQueryString,
@@ -33,7 +34,7 @@ describe('batch-link-up page utilities', () => {
   });
 
   it('builds the URL and service request from one search model', () => {
-    const filters = {
+    const filters: OfflineSyncSearchState = {
       jobName: '  orders  ',
       sourceTable: 'orders',
       createTime: [
