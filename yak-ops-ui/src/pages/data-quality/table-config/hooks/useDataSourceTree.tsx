@@ -1,8 +1,8 @@
-import { fetchDataSourceAll } from '@/pages/data-source/service';
-import type { DataSourceRecord } from '@/pages/data-source/types';
-import type { TreeProps } from 'antd';
-import { Tooltip, message } from 'antd';
-import { Database } from 'lucide-react';
+import {
+  listAllDataSources,
+  type DataSourceRecord,
+} from '@/services/data-source';
+import { message } from 'antd';
 import {
   useCallback,
   useMemo,
@@ -10,25 +10,41 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+
 import {
-  DEFAULT_LEFT_WIDTH,
-  MAX_LEFT_WIDTH,
-  MIN_LEFT_WIDTH,
-  dataSourceNodeKey,
-  normalizeDataSourceType,
-  type DataSourceTreeNode,
-  unwrap,
-} from '../model';
+  QUALITY_SOURCE_TREE_MIN_WIDTH,
+  QUALITY_SOURCE_TREE_WIDTH_STORAGE_KEY,
+} from '../constants';
+import type {
+  QualityDataSourceNode,
+  QualityDataSourceTreeKey,
+} from '../types';
+import {
+  buildQualityDataSourceNodes,
+  clampQualitySourceTreeWidth,
+  parseQualitySourceTreeWidth,
+} from '../utils';
+
+const initialTreeWidth = () => {
+  if (typeof window === 'undefined') {
+    return parseQualitySourceTreeWidth();
+  }
+  return parseQualitySourceTreeWidth(
+    window.localStorage.getItem(QUALITY_SOURCE_TREE_WIDTH_STORAGE_KEY),
+  );
+};
 
 export const useDataSourceTree = () => {
+  const requestSequenceRef = useRef(0);
+  const dragRef = useRef<{ x: number; width: number }>();
   const [dataSources, setDataSources] = useState<DataSourceRecord[]>([]);
-  const [sourceNodes, setSourceNodes] = useState<DataSourceTreeNode[]>([]);
-  const [selectedNodeKey, setSelectedNodeKey] = useState<string>();
+  const [sourceNodes, setSourceNodes] = useState<QualityDataSourceNode[]>([]);
+  const [selectedNodeKey, setSelectedNodeKey] =
+    useState<QualityDataSourceTreeKey>();
   const [dataSourceId, setDataSourceId] = useState<number>();
   const [treeLoading, setTreeLoading] = useState(false);
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
+  const [leftWidth, setLeftWidth] = useState(initialTreeWidth);
   const [collapsed, setCollapsed] = useState(false);
-  const dragRef = useRef<{ x: number; width: number }>();
 
   const selectedDataSource = useMemo(
     () => dataSources.find((item) => Number(item.id) === dataSourceId),
@@ -40,86 +56,18 @@ export const useDataSourceTree = () => {
     [selectedNodeKey, sourceNodes],
   );
 
-  const treeData = useMemo<NonNullable<TreeProps['treeData']>>(() => {
-    const groupMap = new Map<string, DataSourceTreeNode[]>();
-    sourceNodes.forEach((node) => {
-      const current = groupMap.get(node.dataSourceType) || [];
-      current.push(node);
-      groupMap.set(node.dataSourceType, current);
-    });
-
-    return Array.from(groupMap.entries())
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([type, nodes]) => ({
-        key: `type:${type}`,
-        selectable: false,
-        title: (
-          <div className="flex min-w-0 flex-1 items-center gap-2 pr-1 text-[13px] font-semibold text-[#30323b]">
-            <Database size={14} className="shrink-0 text-[#667085]" />
-            <span className="min-w-0 flex-1 truncate">{type}</span>
-            <span className="text-xs font-normal text-[#98a2b3]">
-              {nodes.length}
-            </span>
-          </div>
-        ),
-        children: [...nodes]
-          .sort((left, right) =>
-            left.dataSourceName.localeCompare(right.dataSourceName),
-          )
-          .map((node) => {
-            const active = node.key === selectedNodeKey;
-            return {
-              key: node.key,
-              title: (
-                <Tooltip
-                  placement="right"
-                  title={
-                    node.environment
-                      ? `环境：${node.environment}`
-                      : `数据源：${node.dataSourceName}`
-                  }
-                >
-                  <div
-                    className={`flex min-w-0 flex-1 items-center gap-2 text-[13px] ${
-                      active ? 'font-medium text-[#fe2c55]' : 'text-[#30323b]'
-                    }`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        active ? 'bg-[#fe2c55]' : 'bg-[#c6c9d0]'
-                      }`}
-                    />
-                    <span className="truncate">{node.dataSourceName}</span>
-                  </div>
-                </Tooltip>
-              ),
-            };
-          }),
-      }));
-  }, [selectedNodeKey, sourceNodes]);
-
   const loadSourceTree = useCallback(async (preferredKey?: string) => {
+    const requestSequence = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestSequence;
     setTreeLoading(true);
+
     try {
-      const result = unwrap(await fetchDataSourceAll());
-      const records = result.bizData || [];
+      const result = await listAllDataSources();
+      if (requestSequence !== requestSequenceRef.current) return undefined;
+
+      const records = result?.bizData || [];
+      const nodes = buildQualityDataSourceNodes(records);
       setDataSources(records);
-
-      const nodes = records
-        .map((record) => {
-          const id = Number(record.id);
-          if (!Number.isFinite(id) || id <= 0) return undefined;
-
-          return {
-            key: dataSourceNodeKey(id),
-            dataSourceId: id,
-            dataSourceName: record.name || `数据源 ${id}`,
-            dataSourceType: normalizeDataSourceType(record.dbType),
-            environment: record.environmentName || record.environment,
-          } satisfies DataSourceTreeNode;
-        })
-        .filter((item): item is DataSourceTreeNode => Boolean(item));
-
       setSourceNodes(nodes);
 
       const selected =
@@ -127,15 +75,21 @@ export const useDataSourceTree = () => {
       setSelectedNodeKey(selected?.key);
       setDataSourceId(selected?.dataSourceId);
       return selected;
-    } catch (error: any) {
-      setDataSources([]);
-      setSourceNodes([]);
-      setSelectedNodeKey(undefined);
-      setDataSourceId(undefined);
-      message.error(error?.message || '数据源加载失败');
+    } catch (error) {
+      if (requestSequence === requestSequenceRef.current) {
+        setDataSources([]);
+        setSourceNodes([]);
+        setSelectedNodeKey(undefined);
+        setDataSourceId(undefined);
+        message.error(
+          error instanceof Error ? error.message : '数据源加载失败',
+        );
+      }
       return undefined;
     } finally {
-      setTreeLoading(false);
+      if (requestSequence === requestSequenceRef.current) {
+        setTreeLoading(false);
+      }
     }
   }, []);
 
@@ -150,44 +104,62 @@ export const useDataSourceTree = () => {
     [sourceNodes],
   );
 
-  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    const initial = collapsed ? MIN_LEFT_WIDTH : leftWidth;
-    if (collapsed) setCollapsed(false);
-    dragRef.current = { x: event.clientX, width: initial };
+  const startResize = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
 
-    const move = (current: PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag) return;
-      setLeftWidth(
-        Math.min(
-          MAX_LEFT_WIDTH,
-          Math.max(MIN_LEFT_WIDTH, drag.width + current.clientX - drag.x),
-        ),
-      );
-    };
+      const initialWidth = collapsed
+        ? QUALITY_SOURCE_TREE_MIN_WIDTH
+        : leftWidth;
+      if (collapsed) setCollapsed(false);
+      dragRef.current = { x: event.clientX, width: initialWidth };
 
-    const end = () => {
-      dragRef.current = undefined;
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
+      const move = (current: PointerEvent) => {
+        const drag = dragRef.current;
+        if (!drag) return;
+        setLeftWidth(
+          clampQualitySourceTreeWidth(
+            drag.width + current.clientX - drag.x,
+          ),
+        );
+      };
 
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-  };
+      const end = (current: PointerEvent) => {
+        const drag = dragRef.current;
+        if (drag) {
+          const width = clampQualitySourceTreeWidth(
+            drag.width + current.clientX - drag.x,
+          );
+          setLeftWidth(width);
+          window.localStorage.setItem(
+            QUALITY_SOURCE_TREE_WIDTH_STORAGE_KEY,
+            String(width),
+          );
+        }
+        dragRef.current = undefined;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    },
+    [collapsed, leftWidth],
+  );
 
   return {
     dataSourceId,
     selectedDataSource,
     selectedSourceNode,
     selectedNodeKey,
-    treeData,
+    sourceNodes,
     treeLoading,
     leftWidth,
     collapsed,

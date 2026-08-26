@@ -1,21 +1,31 @@
-import type { DataSourceRecord } from '@/pages/data-source/types';
+import type { DataSourceRecord } from '@/services/data-source';
+import {
+  listQualityTableAssets,
+  listQualityTableCandidates,
+  registerQualityTables,
+  type TableAssetView,
+  type TableCandidateView,
+} from '@/services/data-quality';
 import { history } from '@umijs/max';
 import { message } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { qualityTableAssetApi } from '../../service';
-import type { TableAssetView, TableCandidateView } from '../../types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import {
-  CANDIDATE_PAGE_SIZE,
-  PAGE_SIZE,
-  tableTargetKey,
-  type DataSourceTreeNode,
-  unwrap,
-} from '../model';
+  QUALITY_TABLE_CANDIDATE_PAGE_SIZE,
+  QUALITY_TABLE_PAGE_SIZE,
+  QUALITY_TABLE_SEARCH_DEBOUNCE,
+} from '../constants';
+import type { QualityDataSourceNode } from '../types';
+import {
+  getQualityMonitorCreatePath,
+  getQualityMonitorDetailPath,
+  qualityTableCandidateKey,
+} from '../utils';
 
 interface UseTableAssetsOptions {
   dataSourceId?: number;
   selectedDataSource?: DataSourceRecord;
-  selectedSourceNode?: DataSourceTreeNode;
+  selectedSourceNode?: QualityDataSourceNode;
 }
 
 export const useTableAssets = ({
@@ -23,6 +33,8 @@ export const useTableAssets = ({
   selectedDataSource,
   selectedSourceNode,
 }: UseTableAssetsOptions) => {
+  const assetRequestSequenceRef = useRef(0);
+  const candidateRequestSequenceRef = useRef(0);
   const [assets, setAssets] = useState<TableAssetView[]>([]);
   const [assetTotal, setAssetTotal] = useState(0);
   const [assetCurrent, setAssetCurrent] = useState(1);
@@ -58,24 +70,34 @@ export const useTableAssets = ({
       current: number,
       searchKeyword: string,
     ) => {
+      const requestSequence = assetRequestSequenceRef.current + 1;
+      assetRequestSequenceRef.current = requestSequence;
       setAssetLoading(true);
+
       try {
-        const result = unwrap(
-          await qualityTableAssetApi.page({
-            current,
-            pageSize: PAGE_SIZE,
-            dataSourceId: targetDataSourceId,
-            keyword: searchKeyword,
-          }),
-        );
-        setAssets(result.records || []);
-        setAssetTotal(result.total || 0);
-      } catch (error: any) {
-        setAssets([]);
-        setAssetTotal(0);
-        message.error(error?.message || '已注册数据表加载失败');
+        const result = await listQualityTableAssets({
+          current,
+          pageSize: QUALITY_TABLE_PAGE_SIZE,
+          dataSourceId: targetDataSourceId,
+          keyword: searchKeyword || undefined,
+        });
+        if (requestSequence !== assetRequestSequenceRef.current) return;
+        setAssets(result?.records || []);
+        setAssetTotal(result?.total || 0);
+      } catch (error) {
+        if (requestSequence === assetRequestSequenceRef.current) {
+          setAssets([]);
+          setAssetTotal(0);
+          message.error(
+            error instanceof Error
+              ? error.message
+              : '已注册数据表加载失败',
+          );
+        }
       } finally {
-        setAssetLoading(false);
+        if (requestSequence === assetRequestSequenceRef.current) {
+          setAssetLoading(false);
+        }
       }
     },
     [],
@@ -87,24 +109,34 @@ export const useTableAssets = ({
       current: number,
       searchKeyword: string,
     ) => {
+      const requestSequence = candidateRequestSequenceRef.current + 1;
+      candidateRequestSequenceRef.current = requestSequence;
       setCandidateLoading(true);
+
       try {
-        const result = unwrap(
-          await qualityTableAssetApi.candidates({
-            dataSourceId: targetDataSourceId,
-            current,
-            pageSize: CANDIDATE_PAGE_SIZE,
-            keyword: searchKeyword,
-          }),
-        );
-        setCandidates(result.records || []);
-        setCandidateTotal(result.total || 0);
-      } catch (error: any) {
-        setCandidates([]);
-        setCandidateTotal(0);
-        message.error(error?.message || '可注册数据表加载失败');
+        const result = await listQualityTableCandidates({
+          dataSourceId: targetDataSourceId,
+          current,
+          pageSize: QUALITY_TABLE_CANDIDATE_PAGE_SIZE,
+          keyword: searchKeyword || undefined,
+        });
+        if (requestSequence !== candidateRequestSequenceRef.current) return;
+        setCandidates(result?.records || []);
+        setCandidateTotal(result?.total || 0);
+      } catch (error) {
+        if (requestSequence === candidateRequestSequenceRef.current) {
+          setCandidates([]);
+          setCandidateTotal(0);
+          message.error(
+            error instanceof Error
+              ? error.message
+              : '可注册数据表加载失败',
+          );
+        }
       } finally {
-        setCandidateLoading(false);
+        if (requestSequence === candidateRequestSequenceRef.current) {
+          setCandidateLoading(false);
+        }
       }
     },
     [],
@@ -113,21 +145,23 @@ export const useTableAssets = ({
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setQueryKeyword(keyword.trim());
-    }, 250);
+    }, QUALITY_TABLE_SEARCH_DEBOUNCE);
     return () => window.clearTimeout(timer);
   }, [keyword]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setCandidateQueryKeyword(candidateKeyword.trim());
-    }, 250);
+    }, QUALITY_TABLE_SEARCH_DEBOUNCE);
     return () => window.clearTimeout(timer);
   }, [candidateKeyword]);
 
   useEffect(() => {
     if (!dataSourceId) {
+      assetRequestSequenceRef.current += 1;
       setAssets([]);
       setAssetTotal(0);
+      setAssetLoading(false);
       return;
     }
     void requestAssets(dataSourceId, assetCurrent, queryKeyword);
@@ -148,15 +182,18 @@ export const useTableAssets = ({
     requestCandidates,
   ]);
 
-  const resetForDataSource = () => {
+  const resetForDataSource = useCallback(() => {
+    candidateRequestSequenceRef.current += 1;
     setAssetCurrent(1);
     setKeyword('');
     setQueryKeyword('');
     setRegisterOpen(false);
+    setCandidates([]);
+    setCandidateTotal(0);
     setSelectedCandidates(new Map());
-  };
+  }, []);
 
-  const openRegisterDrawer = () => {
+  const openRegisterDrawer = useCallback(() => {
     if (!dataSourceId) {
       message.warning('请先从左侧选择数据源');
       return;
@@ -166,51 +203,50 @@ export const useTableAssets = ({
     setCandidateQueryKeyword('');
     setCandidateCurrent(1);
     setRegisterOpen(true);
-  };
+  }, [dataSourceId]);
 
-  const closeRegisterDrawer = () => {
+  const closeRegisterDrawer = useCallback(() => {
     if (registering) return;
+    candidateRequestSequenceRef.current += 1;
+    setCandidateLoading(false);
     setRegisterOpen(false);
     setSelectedCandidates(new Map());
-  };
+  }, [registering]);
 
-  const updateCandidateSelection = (
-    record: TableCandidateView,
-    selected: boolean,
-  ) => {
-    setSelectedCandidates((previous) => {
-      const next = new Map(previous);
-      const key = tableTargetKey(record);
-      if (selected) {
-        next.set(key, record);
-      } else {
-        next.delete(key);
-      }
-      return next;
-    });
-  };
-
-  const updateAllCandidateSelection = (
-    selected: boolean,
-    changedRows: TableCandidateView[],
-  ) => {
-    setSelectedCandidates((previous) => {
-      const next = new Map(previous);
-      changedRows.forEach((record) => {
-        const key = tableTargetKey(record);
-        if (selected) {
-          next.set(key, record);
-        } else {
-          next.delete(key);
-        }
+  const updateCandidateSelection = useCallback(
+    (record: TableCandidateView, selected: boolean) => {
+      setSelectedCandidates((previous) => {
+        const next = new Map(previous);
+        const key = qualityTableCandidateKey(record);
+        if (selected) next.set(key, record);
+        else next.delete(key);
+        return next;
       });
-      return next;
-    });
-  };
+    },
+    [],
+  );
 
-  const clearCandidateSelection = () => setSelectedCandidates(new Map());
+  const updateAllCandidateSelection = useCallback(
+    (selected: boolean, changedRows: TableCandidateView[]) => {
+      setSelectedCandidates((previous) => {
+        const next = new Map(previous);
+        changedRows.forEach((record) => {
+          const key = qualityTableCandidateKey(record);
+          if (selected) next.set(key, record);
+          else next.delete(key);
+        });
+        return next;
+      });
+    },
+    [],
+  );
 
-  const handleRegister = async () => {
+  const clearCandidateSelection = useCallback(
+    () => setSelectedCandidates(new Map()),
+    [],
+  );
+
+  const handleRegister = useCallback(async () => {
     if (!dataSourceId || !selectedDataSource) return;
     if (!selectedCandidates.size) {
       message.warning('请至少选择一张数据表');
@@ -219,50 +255,52 @@ export const useTableAssets = ({
 
     setRegistering(true);
     try {
-      const result = unwrap(
-        await qualityTableAssetApi.register({
-          dataSourceId,
-          dataSourceName:
-            selectedDataSource.name || selectedSourceNode?.dataSourceName || '',
-          tables: selectedCandidateRecords.map((record) => ({
-            databaseName: record.databaseName,
-            schemaName: record.schemaName,
-            tableName: record.tableName,
-            tableType: record.tableType,
-            remarks: record.remarks,
-          })),
-        }),
-      );
+      const result = await registerQualityTables({
+        dataSourceId,
+        dataSourceName:
+          selectedDataSource.name || selectedSourceNode?.dataSourceName || '',
+        tables: selectedCandidateRecords.map((record) => ({
+          databaseName: record.databaseName,
+          schemaName: record.schemaName,
+          tableName: record.tableName,
+          tableType: record.tableType,
+          remarks: record.remarks,
+        })),
+      });
       message.success(`已注册 ${result.registered} 张数据表`);
       setRegisterOpen(false);
       setSelectedCandidates(new Map());
       setAssetCurrent(1);
       await requestAssets(dataSourceId, 1, queryKeyword);
-    } catch (error: any) {
-      message.error(error?.message || '数据表注册失败');
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : '数据表注册失败',
+      );
     } finally {
       setRegistering(false);
     }
-  };
+  }, [
+    dataSourceId,
+    queryKeyword,
+    requestAssets,
+    selectedCandidateRecords,
+    selectedCandidates.size,
+    selectedDataSource,
+    selectedSourceNode?.dataSourceName,
+  ]);
 
-  const openRuleManagement = (record: TableAssetView) => {
-    if (!record.monitorId) {
+  const openRuleManagement = useCallback((record: TableAssetView) => {
+    const path = getQualityMonitorDetailPath(record);
+    if (!path) {
       message.warning('当前数据表暂无监控配置，请先新增监控');
       return;
     }
-    history.push(`/data-quality/monitor/${record.monitorId}`);
-  };
+    history.push(path);
+  }, []);
 
-  const createMonitor = (record: TableAssetView) => {
-    const query = new URLSearchParams({
-      dataSourceId: String(record.dataSourceId),
-      dataSourceName: record.dataSourceName,
-      databaseName: record.databaseName || '',
-      schemaName: record.schemaName || '',
-      tableName: record.tableName,
-    }).toString();
-    history.push(`/data-quality/monitor/create?${query}`);
-  };
+  const createMonitor = useCallback((record: TableAssetView) => {
+    history.push(getQualityMonitorCreatePath(record));
+  }, []);
 
   return {
     assets,

@@ -1,27 +1,40 @@
+import { YakEmpty } from '@/components/ui';
+import type { DataNode } from 'antd/es/tree';
 import type { TreeProps } from 'antd';
-import { Empty, Spin, Tree } from 'antd';
+import { Spin, Tooltip, Tree } from 'antd';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Database,
   Layers3,
-  Workflow,
 } from 'lucide-react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo, type PointerEvent as ReactPointerEvent } from 'react';
+
+import type { QualityDataSourceNode } from '../types';
+import { groupQualityDataSourceNodes } from '../utils';
 
 interface DataSourceTreePaneProps {
-  treeData: NonNullable<TreeProps['treeData']>;
+  sourceNodes: QualityDataSourceNode[];
   treeLoading: boolean;
   selectedNodeKey?: string;
   leftWidth: number;
   collapsed: boolean;
   onSelect: TreeProps['onSelect'];
-  onResizeStart: (event: ReactPointerEvent) => void;
+  onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onCollapsedChange: (collapsed: boolean) => void;
 }
 
+interface QualityTreeDataNode extends DataNode {
+  kind: 'group' | 'source';
+  source?: QualityDataSourceNode;
+  dataSourceType?: string;
+  count?: number;
+  children?: QualityTreeDataNode[];
+}
+
 const DataSourceTreePane = ({
-  treeData,
+  sourceNodes,
   treeLoading,
   selectedNodeKey,
   leftWidth,
@@ -30,41 +43,78 @@ const DataSourceTreePane = ({
   onResizeStart,
   onCollapsedChange,
 }: DataSourceTreePaneProps) => {
-  const renderTitle: TreeProps['titleRender'] = (node) => {
-    const isLeaf = node.isLeaf === true || !node.children?.length;
-    const title =
-      typeof node.title === 'string' ? node.title : undefined;
+  const treeData = useMemo<QualityTreeDataNode[]>(
+    () =>
+      groupQualityDataSourceNodes(sourceNodes).map((group) => ({
+        key: `type:${group.dataSourceType}`,
+        title: group.dataSourceType,
+        kind: 'group',
+        selectable: false,
+        dataSourceType: group.dataSourceType,
+        count: group.nodes.length,
+        children: group.nodes.map((source) => ({
+          key: source.key,
+          title: source.dataSourceName,
+          kind: 'source',
+          source,
+          isLeaf: true,
+        })),
+      })),
+    [sourceNodes],
+  );
 
+  const renderTitle: TreeProps['titleRender'] = (rawNode) => {
+    const node = rawNode as QualityTreeDataNode;
+    if (node.kind === 'group') {
+      return (
+        <div className="flex min-w-0 flex-1 items-center gap-2 pr-1">
+          <Database
+            size={14}
+            strokeWidth={1.8}
+            className="shrink-0 text-[#667085]"
+          />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#30323b]">
+            {node.dataSourceType}
+          </span>
+          <span className="text-xs font-normal text-[#98a2b3]">
+            {node.count || 0}
+          </span>
+        </div>
+      );
+    }
+
+    const source = node.source;
+    const active = String(node.key) === selectedNodeKey;
     return (
-      <div
-        className="flex min-w-0 flex-1 items-center gap-2"
-        title={title}
+      <Tooltip
+        placement="right"
+        title={
+          source?.environment
+            ? `环境：${source.environment}`
+            : `数据源：${source?.dataSourceName || '-'}`
+        }
       >
-        {isLeaf ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Layers3
             size={13}
             strokeWidth={1.7}
-            className="shrink-0 text-[#98a2b3]"
+            className={[
+              'shrink-0',
+              active ? 'text-[#fe2c55]' : 'text-[#98a2b3]',
+            ].join(' ')}
           />
-        ) : (
-          <Workflow
-            size={14}
-            strokeWidth={2}
-            className="shrink-0 text-[#ff7a00]"
-          />
-        )}
-
-        <span
-          className={[
-            'min-w-0 flex-1 truncate text-[13px] leading-8',
-            isLeaf
-              ? 'font-normal text-[#344054]'
-              : 'font-medium text-[#1f2937]',
-          ].join(' ')}
-        >
-          {node.title}
-        </span>
-      </div>
+          <span
+            className={[
+              'min-w-0 flex-1 truncate text-[13px] leading-8',
+              active
+                ? 'font-medium text-[#fe2c55]'
+                : 'font-normal text-[#344054]',
+            ].join(' ')}
+          >
+            {source?.dataSourceName || node.title}
+          </span>
+        </div>
+      </Tooltip>
     );
   };
 
@@ -88,30 +138,23 @@ const DataSourceTreePane = ({
           </div>
 
           <div className="mt-1 min-h-0 flex-1 overflow-y-auto px-[14px]">
-            <Spin
-              spinning={treeLoading}
-              wrapperClassName="block min-h-full"
-            >
+            <Spin spinning={treeLoading} wrapperClassName="block min-h-full">
               {treeData.length ? (
                 <Tree
                   blockNode
                   defaultExpandAll
-                  selectedKeys={
-                    selectedNodeKey ? [selectedNodeKey] : []
-                  }
+                  selectedKeys={selectedNodeKey ? [selectedNodeKey] : []}
                   treeData={treeData}
                   titleRender={renderTitle}
-                  switcherIcon={
-                    <ChevronDown size={12} strokeWidth={1.8} />
-                  }
+                  switcherIcon={<ChevronDown size={12} strokeWidth={1.8} />}
                   onSelect={onSelect}
                   className="data-source-tree bg-transparent"
                 />
               ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="暂无数据源"
-                  className="mt-10"
+                <YakEmpty
+                  compact
+                  title="暂无数据源"
+                  description="请先在数据源管理中创建可用数据源"
                 />
               )}
             </Spin>
@@ -166,14 +209,8 @@ const DataSourceTreePane = ({
       </div>
 
       <style>{`
-        .data-source-tree.ant-tree {
-          color: #344054;
-        }
-
-        .data-source-tree .ant-tree-list-holder-inner {
-          gap: 2px;
-        }
-
+        .data-source-tree.ant-tree { color: #344054; }
+        .data-source-tree .ant-tree-list-holder-inner { gap: 2px; }
         .data-source-tree .ant-tree-treenode {
           box-sizing: border-box;
           width: 100%;
@@ -183,13 +220,10 @@ const DataSourceTreePane = ({
           border-radius: 0;
           transition: background-color 0.15s ease;
         }
-
         .data-source-tree .ant-tree-treenode:hover,
-        .data-source-tree
-          .ant-tree-treenode:has(.ant-tree-node-selected) {
+        .data-source-tree .ant-tree-treenode:has(.ant-tree-node-selected) {
           background: #f5f5f5;
         }
-
         .data-source-tree .ant-tree-node-content-wrapper {
           display: flex;
           min-width: 0;
@@ -201,23 +235,16 @@ const DataSourceTreePane = ({
           background: transparent !important;
           line-height: 32px;
         }
-
-        .data-source-tree
-          .ant-tree-node-content-wrapper.ant-tree-node-selected {
+        .data-source-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
           color: #1f2937;
           background: transparent !important;
         }
-
         .data-source-tree .ant-tree-title {
           display: flex;
           min-width: 0;
           flex: 1;
         }
-
-        .data-source-tree .ant-tree-indent-unit {
-          width: 22px;
-        }
-
+        .data-source-tree .ant-tree-indent-unit { width: 22px; }
         .data-source-tree .ant-tree-switcher {
           display: inline-flex;
           width: 20px;
@@ -228,22 +255,14 @@ const DataSourceTreePane = ({
           color: #98a2b3;
           line-height: 32px;
         }
-
         .data-source-tree .ant-tree-switcher svg {
           transition: transform 0.15s ease;
         }
-
         .data-source-tree .ant-tree-switcher_close svg {
           transform: rotate(-90deg);
         }
-
-        .data-source-tree .ant-tree-switcher-noop {
-          width: 20px;
-        }
-
-        .data-source-tree .ant-tree-treenode-disabled {
-          opacity: 0.55;
-        }
+        .data-source-tree .ant-tree-switcher-noop { width: 20px; }
+        .data-source-tree .ant-tree-treenode-disabled { opacity: 0.55; }
       `}</style>
     </>
   );
