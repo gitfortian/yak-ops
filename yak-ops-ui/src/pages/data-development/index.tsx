@@ -2,8 +2,8 @@ import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import { BRAND_THEME } from '@/styles/brand';
 import { ConfigProvider } from 'antd';
 
+import CreateDevelopmentNodeModal from './components/CreateDevelopmentNodeModal';
 import CreateDirectoryModal from './components/CreateDirectoryModal';
-import CreateTaskModal from './components/CreateTaskModal';
 import DeleteDevelopmentResourceModal from './components/DeleteDevelopmentResourceModal';
 import DevelopmentEditorWorkspace from './components/DevelopmentEditorWorkspace';
 import DevelopmentTreePane from './components/DevelopmentTreePane';
@@ -47,7 +47,7 @@ export default function DataDevelopmentPage() {
           />
         </div>
 
-        <CreateTaskModal
+        <CreateDevelopmentNodeModal
           open={page.createNodeOpen}
           type={page.createNodeType}
           directories={page.directories}
