@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.OptionalLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -23,7 +23,7 @@ import org.springframework.util.StringUtils;
  * data and never injects a default project into legacy global queries.</p>
  */
 @Component
-public class ProjectCompatibilityCoordinator implements ApplicationRunner {
+public class ProjectCompatibilityCoordinator {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ProjectCompatibilityCoordinator.class);
@@ -41,8 +41,12 @@ public class ProjectCompatibilityCoordinator implements ApplicationRunner {
     this.userService = userService;
   }
 
-  @Override
-  public void run(ApplicationArguments args) {
+  /**
+   * Runs only after Spring Boot runners have completed, so Yak Security's optional administrator
+   * bootstrap has already had a chance to create the configured owner.
+   */
+  @EventListener(ApplicationReadyEvent.class)
+  public void bootstrapDefaultProjectAfterStartup() {
     if (!properties.getCompatibility().isBootstrapDefaultProject()) {
       return;
     }
@@ -78,7 +82,8 @@ public class ProjectCompatibilityCoordinator implements ApplicationRunner {
       throw new IllegalStateException("Default Project Space owner does not exist: " + ownerUsername);
     }
 
-    List<Long> userIds = userService.getAllUserBriefList().stream()
+    List<UserBriefVO> users = userService.getAllUserBriefList();
+    List<Long> userIds = (users == null ? Collections.<UserBriefVO>emptyList() : users).stream()
         .map(UserBriefVO::getId)
         .filter(id -> id != null && id > 0)
         .distinct()
