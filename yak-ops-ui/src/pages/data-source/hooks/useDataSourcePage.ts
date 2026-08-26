@@ -83,9 +83,10 @@ export const useDataSourcePage = () => {
       if (requestSequence !== requestSequenceRef.current) return;
 
       if (pageResult.status === 'fulfilled') {
-        const nextRecords = pageResult.value.bizData || [];
+        const pageData = pageResult.value;
+        const nextRecords = pageData?.bizData || [];
         const nextPagination =
-          pageResult.value.pagination || PAGE_DEFAULT_PAGINATION;
+          pageData?.pagination || PAGE_DEFAULT_PAGINATION;
 
         if (
           nextRecords.length === 0 &&
@@ -188,9 +189,9 @@ export const useDataSourcePage = () => {
   const removeRecord = useCallback(
     async (id: DataSourceId): Promise<boolean> => {
       if (!permissions.canDelete) return false;
-      const deleted = await deleteDataSourceById(id);
-      if (deleted) refresh();
-      return deleted;
+      await deleteDataSourceById(id);
+      refresh();
+      return true;
     },
     [permissions.canDelete, refresh],
   );
@@ -209,9 +210,9 @@ export const useDataSourcePage = () => {
       const id = dataSourceRecordKey(record.id);
       setTestingId(id);
       try {
-        const connected = await testDataSourceConnectionById(record.id);
-        if (connected) refresh();
-        return connected;
+        await testDataSourceConnectionById(record.id);
+        refresh();
+        return true;
       } finally {
         setTestingId('');
       }
