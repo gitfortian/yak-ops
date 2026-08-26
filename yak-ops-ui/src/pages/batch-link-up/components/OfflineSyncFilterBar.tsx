@@ -101,7 +101,7 @@ const OfflineSyncFilterBar = ({
             onChange={(value) =>
               onQuickFilterChange(
                 'createTime',
-                (value || undefined) as OfflineSyncSearchState['createTime'],
+                (value || undefined) as unknown as OfflineSyncSearchState['createTime'],
               )
             }
           />
