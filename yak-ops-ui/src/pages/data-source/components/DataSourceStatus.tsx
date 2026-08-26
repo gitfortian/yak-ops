@@ -1,3 +1,4 @@
+import type { DataSourceConnectionStatus } from '@/services/data-source';
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -10,7 +11,7 @@ import type { ReactNode } from 'react';
 import '../index.enhancements.less';
 
 interface DataSourceStatusProps {
-  status?: string;
+  status?: DataSourceConnectionStatus;
 }
 
 interface StatusConfigItem {
@@ -70,7 +71,7 @@ const DataSourceStatus = ({ status }: DataSourceStatusProps) => {
           borderRadius: 999,
           paddingInline: 10,
           fontSize: 12,
-          width: "80px",
+          width: '80px',
           lineHeight: '20px',
         }}
       >
