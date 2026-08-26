@@ -117,16 +117,8 @@ export function usePluginFormConfig(params: {
     dispatch({ type: 'INSTALL_START' });
 
     try {
-      const installed = await installDataSourcePlugin(dbType);
+      await installDataSourcePlugin(dbType);
       if (requestSequence !== requestSequenceRef.current) return false;
-
-      if (!installed) {
-        dispatch({
-          type: 'INSTALL_FAILED',
-          message: '数据源插件安装失败，请重试',
-        });
-        return false;
-      }
 
       await loadFormConfig();
       return true;
