@@ -1,5 +1,13 @@
-import YakButton from '@/components/YakButton';
-import { API_SUCCESS_CODE } from '@/services/http/response';
+import { YakButton } from '@/components/ui';
+import {
+  deleteOfflineSyncTask,
+  executeOfflineSyncTask,
+  offlineOfflineSyncTask,
+  onlineOfflineSyncTask,
+  stopOfflineSyncExecution,
+  type BatchLinkUpId,
+  type OfflineJobDefinitionVO,
+} from '@/services/batch-link-up';
 import {
   CloudDownloadOutlined,
   CloudUploadOutlined,
@@ -19,17 +27,12 @@ import {
   message,
   type MenuProps,
 } from 'antd';
-import { useState } from 'react';
-
-import {
-  linkupJobDefinitionApi,
-  linkupJobExecuteApi,
-} from '../../../api';
+import { useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 interface ActionColumnProps {
-  record: any;
-  cbk: () => void;
-  goDetail: (value: any, item: any) => void;
+  record: OfflineJobDefinitionVO;
+  cbk: () => void | Promise<void>;
+  goDetail: (value: BatchLinkUpId, item: OfflineJobDefinitionVO) => void;
 }
 
 const { confirm } = Modal;
@@ -41,32 +44,32 @@ const normalizeStatus = (value?: string) =>
 const isReleaseOnline = (releaseState?: string | number) =>
   releaseState === 'ONLINE' || releaseState === 1;
 
-const errorText = (response: any, fallback: string) =>
-  response?.msg || response?.message || fallback;
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
 
-const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) => {
+const ActionColumn = ({ record, cbk, goDetail }: ActionColumnProps) => {
   const intl = useIntl();
   const [runOpen, setRunOpen] = useState(false);
   const [runLoading, setRunLoading] = useState(false);
 
-  const isOnline = isReleaseOnline(record?.releaseState);
-  const isActive = ACTIVE_STATUSES.has(normalizeStatus(record?.lastJobStatus));
+  const isOnline = isReleaseOnline(record.releaseState);
+  const isActive = ACTIVE_STATUSES.has(normalizeStatus(record.lastJobStatus));
   const canRun = isOnline && !isActive;
   const canEdit = !isOnline && !isActive;
   const canDelete = !isOnline && !isActive;
 
-  const stopPropagation = (event: React.MouseEvent<HTMLElement>) => {
+  const stopPropagation = (event: ReactMouseEvent<HTMLElement>) => {
     event.stopPropagation();
   };
 
   const openExecutionDetail = () => {
-    if (record?.id === undefined || record?.id === null) {
+    if (record.id === undefined || record.id === null) {
       message.error('任务定义 ID 不存在');
       return;
     }
 
     const params = new URLSearchParams();
-    if (record?.instanceId !== undefined && record?.instanceId !== null) {
+    if (record.instanceId !== undefined && record.instanceId !== null) {
       params.set('instanceId', String(record.instanceId));
     }
 
@@ -83,61 +86,51 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
       message.warning(isOnline ? '任务正在执行中' : '请先上线任务，再执行运行操作');
       return;
     }
-    if (record?.id === undefined || record?.id === null) {
+    if (record.id === undefined || record.id === null) {
       message.error('任务定义 ID 不存在');
       return;
     }
+
     try {
       setRunLoading(true);
-      const response = await linkupJobExecuteApi.execute(record.id);
-      if (response?.code !== API_SUCCESS_CODE) {
-        message.error(errorText(response, '运行失败'));
-        return;
-      }
+      await executeOfflineSyncTask(record.id);
       message.success('任务已提交运行');
       setRunOpen(false);
-      cbk();
-    } catch (error: any) {
-      message.error(error?.message || '运行失败');
+      void cbk();
+    } catch (error) {
+      message.error(errorMessage(error, '运行失败'));
     } finally {
       setRunLoading(false);
     }
   };
 
   const handleStop = async () => {
-    const instanceId = record?.instanceId;
-    if (instanceId === undefined || instanceId === null) {
+    if (record.instanceId === undefined || record.instanceId === null) {
       message.error('任务实例 ID 不存在');
       return;
     }
+
     try {
-      const response = await linkupJobExecuteApi.pause(instanceId);
-      if (response?.code !== API_SUCCESS_CODE) {
-        message.error(errorText(response, '停止失败'));
-        return;
-      }
+      await stopOfflineSyncExecution(record.instanceId);
       message.success('停止请求已提交');
-      cbk();
-    } catch (error: any) {
-      message.error(error?.message || '停止失败');
+      void cbk();
+    } catch (error) {
+      message.error(errorMessage(error, '停止失败'));
     }
   };
 
   const handleOnline = async () => {
-    if (record?.id === undefined || record?.id === null) {
+    if (record.id === undefined || record.id === null) {
       message.error('任务定义 ID 不存在');
       return;
     }
+
     try {
-      const response = await linkupJobDefinitionApi.online(record.id);
-      if (response?.code !== API_SUCCESS_CODE) {
-        message.error(errorText(response, '上线失败'));
-        return;
-      }
+      await onlineOfflineSyncTask(record.id);
       message.success('上线成功');
-      cbk();
-    } catch (error: any) {
-      message.error(error?.message || '上线失败');
+      void cbk();
+    } catch (error) {
+      message.error(errorMessage(error, '上线失败'));
     }
   };
 
@@ -146,20 +139,17 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
       message.warning('任务正在执行中，请先停止任务后再下线');
       return;
     }
-    if (record?.id === undefined || record?.id === null) {
+    if (record.id === undefined || record.id === null) {
       message.error('任务定义 ID 不存在');
       return;
     }
+
     try {
-      const response = await linkupJobDefinitionApi.offline(record.id);
-      if (response?.code !== API_SUCCESS_CODE) {
-        message.error(errorText(response, '下线失败'));
-        return;
-      }
+      await offlineOfflineSyncTask(record.id);
       message.success('下线成功');
-      cbk();
-    } catch (error: any) {
-      message.error(error?.message || '下线失败');
+      void cbk();
+    } catch (error) {
+      message.error(errorMessage(error, '下线失败'));
     }
   };
 
@@ -194,7 +184,7 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
       message.warning(isOnline ? '任务已上线，请先下线后再编辑' : '任务正在执行中');
       return;
     }
-    if (record?.id === undefined || record?.id === null) {
+    if (record.id === undefined || record.id === null) {
       message.error('任务定义 ID 不存在');
       return;
     }
@@ -206,21 +196,26 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
       message.warning(isOnline ? '任务已上线，请先下线后再删除' : '任务正在执行中');
       return;
     }
+    if (record.id === undefined || record.id === null) {
+      message.error('任务定义 ID 不存在');
+      return;
+    }
+
     confirm({
       title: '删除任务',
       centered: true,
-      content: `确认删除任务 ${record?.jobName || '-'} 吗？删除后无法恢复。`,
+      content: `确认删除任务 ${record.jobName || '-'} 吗？删除后无法恢复。`,
       okText: '删除',
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
-        const response = await linkupJobDefinitionApi.delete(record.id);
-        if (response?.code !== API_SUCCESS_CODE) {
-          message.error(errorText(response, '删除失败'));
-          return;
+        try {
+          await deleteOfflineSyncTask(record.id as BatchLinkUpId);
+          message.success('删除成功');
+          void cbk();
+        } catch (error) {
+          message.error(errorMessage(error, '删除失败'));
         }
-        message.success('删除成功');
-        cbk();
       },
     });
   };
@@ -260,8 +255,14 @@ const ActionColumn: React.FC<ActionColumnProps> = ({ record, cbk, goDetail }) =>
         <Popconfirm
           title="停止任务"
           description="确认停止当前任务吗？"
-          okText={intl.formatMessage({ id: 'pages.common.yes', defaultMessage: '确认' })}
-          cancelText={intl.formatMessage({ id: 'pages.common.no', defaultMessage: '取消' })}
+          okText={intl.formatMessage({
+            id: 'pages.common.yes',
+            defaultMessage: '确认',
+          })}
+          cancelText={intl.formatMessage({
+            id: 'pages.common.no',
+            defaultMessage: '取消',
+          })}
           onConfirm={handleStop}
         >
           <YakButton
