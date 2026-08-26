@@ -1,4 +1,4 @@
-import YakButton from '@/components/YakButton';
+import { YakButton } from '@/components/ui';
 import { SearchOutlined } from '@ant-design/icons';
 import { Empty, Input, Select } from 'antd';
 import { useMemo, useState } from 'react';
@@ -20,7 +20,7 @@ const DataSourceTypeSelector = ({
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
   const keyword = query.trim().toLowerCase();
 
-  const flatDatasourceList = useMemo(
+  const flatDataSources = useMemo(
     () =>
       dataSourceGroups.flatMap((group) =>
         group.datasourceList.map((item) => ({
@@ -35,18 +35,18 @@ const DataSourceTypeSelector = ({
     [dataSourceGroups],
   );
 
-  const filteredDatasourceList = useMemo(
+  const filteredDataSources = useMemo(
     () =>
-      flatDatasourceList.filter((item) => {
-        const matchGroup =
+      flatDataSources.filter((item) => {
+        const matchesGroup =
           selectedGroupName === null || item.groupName === selectedGroupName;
-        const matchKeyword = !keyword || item.searchText.includes(keyword);
-        return matchGroup && matchKeyword;
+        const matchesKeyword = !keyword || item.searchText.includes(keyword);
+        return matchesGroup && matchesKeyword;
       }),
-    [flatDatasourceList, keyword, selectedGroupName],
+    [flatDataSources, keyword, selectedGroupName],
   );
 
-  const groupedDatasourceList = useMemo(
+  const groupedDataSources = useMemo(
     () =>
       dataSourceGroups
         .filter(
@@ -55,12 +55,12 @@ const DataSourceTypeSelector = ({
         )
         .map((group) => ({
           groupName: group.groupName,
-          items: filteredDatasourceList.filter(
+          items: filteredDataSources.filter(
             (item) => item.groupName === group.groupName,
           ),
         }))
         .filter((group) => group.items.length > 0),
-    [dataSourceGroups, filteredDatasourceList, selectedGroupName],
+    [dataSourceGroups, filteredDataSources, selectedGroupName],
   );
 
   const categoryOptions = useMemo(
@@ -74,10 +74,10 @@ const DataSourceTypeSelector = ({
     [dataSourceGroups],
   );
 
-  const suggestedDatasourceList = useMemo(
+  const suggestedDataSources = useMemo(
     () =>
       COMMON_DB_OPTIONS.map((common) => {
-        const matched = flatDatasourceList.find((item) => {
+        const matched = flatDataSources.find((item) => {
           const dbType = item.dbType?.toLowerCase();
           const value = common.value?.toLowerCase();
           const label = common.label?.toLowerCase();
@@ -91,12 +91,10 @@ const DataSourceTypeSelector = ({
       })
         .filter((item) => Boolean(item.dbType))
         .slice(0, 3),
-    [flatDatasourceList],
+    [flatDataSources],
   );
 
-  const renderSourceItem = (
-    item: (typeof filteredDatasourceList)[number],
-  ) => (
+  const renderSourceItem = (item: (typeof filteredDataSources)[number]) => (
     <YakButton
       key={[item.groupName, item.dbType, item.connectorType || item.type || ''].join(
         '-',
@@ -149,11 +147,11 @@ const DataSourceTypeSelector = ({
         </div>
       </div>
 
-      {!keyword && selectedGroupName === null && suggestedDatasourceList.length > 0 ? (
+      {!keyword && selectedGroupName === null && suggestedDataSources.length > 0 ? (
         <section className="mt-4 shrink-0">
           <div className="mb-2 text-xs font-semibold text-[#161823]">常用</div>
           <div className="grid grid-cols-3 gap-2">
-            {suggestedDatasourceList.map((item) => (
+            {suggestedDataSources.map((item) => (
               <YakButton
                 key={item.dbType}
                 htmlType="button"
@@ -180,11 +178,11 @@ const DataSourceTypeSelector = ({
         <div className="mb-2 flex shrink-0 items-center justify-between">
           <span className="text-xs font-semibold text-[#161823]">全部数据源</span>
           <span className="text-[11px] text-[#98A2B3]">
-            {filteredDatasourceList.length}
+            {filteredDataSources.length}
           </span>
         </div>
 
-        {filteredDatasourceList.length === 0 ? (
+        {filteredDataSources.length === 0 ? (
           <div className="flex min-h-0 flex-1 items-center justify-center px-5 py-8">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -194,7 +192,7 @@ const DataSourceTypeSelector = ({
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="space-y-4">
-              {groupedDatasourceList.map((group) => (
+              {groupedDataSources.map((group) => (
                 <section key={group.groupName}>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[11px] font-medium text-[#667085]">
