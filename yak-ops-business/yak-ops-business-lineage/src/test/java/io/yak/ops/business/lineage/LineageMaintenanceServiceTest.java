@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
 import io.yak.ops.business.lineage.repository.LineageRepository;
+import io.yak.ops.business.lineage.service.LineageMaintenanceService;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;

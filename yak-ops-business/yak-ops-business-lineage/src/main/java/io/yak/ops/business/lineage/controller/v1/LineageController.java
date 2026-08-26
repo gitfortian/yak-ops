@@ -1,9 +1,9 @@
+
 package io.yak.ops.business.lineage.controller.v1;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.lineage.LineageService;
 import io.yak.ops.business.lineage.controller.v1.converter.LineageRequestConverter;
 import io.yak.ops.business.lineage.controller.v1.converter.LineageViewConverter;
 import io.yak.ops.business.lineage.controller.v1.dto.LineageRequests.RegisterAssetRequest;
@@ -13,6 +13,8 @@ import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.GraphView;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.RelationView;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
 import io.yak.ops.business.lineage.domain.LineageDirection;
+import io.yak.ops.business.lineage.service.LineageQueryService;
+import io.yak.ops.business.lineage.service.LineageWriteService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -36,20 +38,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/lineage")
 public class LineageController {
 
-  private final LineageService lineageService;
+  private final LineageQueryService queryService;
+  private final LineageWriteService writeService;
   private final LineageRequestConverter requestConverter;
   private final LineageViewConverter viewConverter;
 
   @Operation(summary = "注册或更新元数据资产")
   @PostMapping("/assets")
   public Result<AssetView> registerAsset(@Valid @RequestBody RegisterAssetRequest request) {
-    return Result.success(viewConverter.asset(lineageService.registerAsset(requestConverter.asset(request))));
+    return Result.success(viewConverter.asset(writeService.registerAsset(requestConverter.asset(request))));
   }
 
   @Operation(summary = "注册或更新元数据关系")
   @PostMapping("/relations")
   public Result<RelationView> registerRelation(@Valid @RequestBody RegisterRelationRequest request) {
-    return Result.success(viewConverter.relation(lineageService.registerRelation(requestConverter.relation(request))));
+    return Result.success(
+        viewConverter.relation(writeService.registerRelation(requestConverter.relation(request))));
   }
 
   @Operation(summary = "搜索血缘资产")
@@ -57,37 +61,40 @@ public class LineageController {
   public Result<List<AssetView>> searchAssets(
       @RequestParam(value = "keyword", required = false) @Size(max = 200) String keyword,
       @RequestParam(value = "assetType", required = false) LineageAssetType assetType,
-      @RequestParam(value = "limit", defaultValue = "30") @Min(1) @Max(LineageService.MAX_ASSET_SEARCH_LIMIT) int limit) {
-    return Result.success(lineageService.searchAssets(keyword, assetType, limit).stream()
+      @RequestParam(value = "limit", defaultValue = "30")
+          @Min(1) @Max(LineageQueryService.MAX_ASSET_SEARCH_LIMIT) int limit) {
+    return Result.success(queryService.searchAssets(keyword, assetType, limit).stream()
         .map(viewConverter::asset).toList());
   }
 
   @Operation(summary = "查询血缘资产")
   @GetMapping("/assets/{assetId}")
   public Result<AssetView> getAsset(@PathVariable("assetId") long assetId) {
-    return Result.success(viewConverter.asset(lineageService.getAsset(assetId)));
+    return Result.success(viewConverter.asset(queryService.getAsset(assetId)));
   }
 
   @Operation(summary = "按稳定 assetKey 查询血缘资产")
   @GetMapping("/assets/by-key")
   public Result<AssetView> getAssetByKey(@RequestParam("assetKey") String assetKey) {
-    return Result.success(viewConverter.asset(lineageService.getAssetByKey(assetKey)));
+    return Result.success(viewConverter.asset(queryService.getAssetByKey(assetKey)));
   }
 
   @Operation(summary = "查询上游血缘")
   @GetMapping("/assets/{assetId}/upstream")
   public Result<GraphView> upstream(
       @PathVariable("assetId") long assetId,
-      @RequestParam(value = "depth", defaultValue = "1") @Min(1) @Max(LineageService.MAX_GRAPH_DEPTH) int depth) {
-    return Result.success(viewConverter.graph(lineageService.upstream(assetId, depth)));
+      @RequestParam(value = "depth", defaultValue = "1")
+          @Min(1) @Max(LineageQueryService.MAX_GRAPH_DEPTH) int depth) {
+    return Result.success(viewConverter.graph(queryService.upstream(assetId, depth)));
   }
 
   @Operation(summary = "查询下游血缘")
   @GetMapping("/assets/{assetId}/downstream")
   public Result<GraphView> downstream(
       @PathVariable("assetId") long assetId,
-      @RequestParam(value = "depth", defaultValue = "1") @Min(1) @Max(LineageService.MAX_GRAPH_DEPTH) int depth) {
-    return Result.success(viewConverter.graph(lineageService.downstream(assetId, depth)));
+      @RequestParam(value = "depth", defaultValue = "1")
+          @Min(1) @Max(LineageQueryService.MAX_GRAPH_DEPTH) int depth) {
+    return Result.success(viewConverter.graph(queryService.downstream(assetId, depth)));
   }
 
   @Operation(summary = "查询指定方向的多跳血缘图")
@@ -95,7 +102,8 @@ public class LineageController {
   public Result<GraphView> graph(
       @PathVariable("assetId") long assetId,
       @RequestParam(value = "direction", defaultValue = "BOTH") LineageDirection direction,
-      @RequestParam(value = "depth", defaultValue = "3") @Min(1) @Max(LineageService.MAX_GRAPH_DEPTH) int depth) {
-    return Result.success(viewConverter.graph(lineageService.graph(assetId, direction, depth)));
+      @RequestParam(value = "depth", defaultValue = "3")
+          @Min(1) @Max(LineageQueryService.MAX_GRAPH_DEPTH) int depth) {
+    return Result.success(viewConverter.graph(queryService.graph(assetId, direction, depth)));
   }
 }

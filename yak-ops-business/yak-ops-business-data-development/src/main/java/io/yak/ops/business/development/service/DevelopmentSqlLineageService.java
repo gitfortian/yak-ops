@@ -8,11 +8,11 @@ import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
 import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
-import io.yak.ops.business.lineage.LineageAsset;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageMaintenanceService;
-import io.yak.ops.business.lineage.LineageRelationType;
-import io.yak.ops.business.lineage.LineageService;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.service.LineageMaintenanceService;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
+import io.yak.ops.business.lineage.service.LineageWriteService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ public class DevelopmentSqlLineageService {
   private static final Logger LOGGER = LoggerFactory.getLogger(DevelopmentSqlLineageService.class);
   private static final int MAX_EVIDENCE_SQL_LENGTH = 16000;
 
-  private final LineageService lineageService;
+  private final LineageWriteService lineageWriteService;
   private final LineageMaintenanceService maintenanceService;
   private final SqlTableLineageParser tableParser;
   private final SqlColumnLineageParser columnParser;
@@ -46,12 +46,12 @@ public class DevelopmentSqlLineageService {
   private int lineageBatchSize = 200;
 
   public DevelopmentSqlLineageService(
-      LineageService lineageService,
+      LineageWriteService lineageWriteService,
       LineageMaintenanceService maintenanceService,
       SqlTableLineageParser tableParser,
       SqlColumnLineageParser columnParser,
       ObjectMapper objectMapper) {
-    this.lineageService = lineageService;
+    this.lineageWriteService = lineageWriteService;
     this.maintenanceService = maintenanceService;
     this.tableParser = tableParser;
     this.columnParser = columnParser;
@@ -128,14 +128,14 @@ public class DevelopmentSqlLineageService {
     Map<String, LineageAsset> tableAssets = new LinkedHashMap<>();
     for (SqlTableLineageParser.TableRef input : tableParsed.inputs()) {
       LineageAsset table = registerTableAsset(prepared.context(), input, tableAssets);
-      lineageService.registerRelation(new LineageService.RegisterRelationCommand(table.id(), task.id(),
+      lineageWriteService.registerRelation(new LineageWriteService.RegisterRelationCommand(table.id(), task.id(),
           LineageRelationType.READS_FROM, EVIDENCE_SOURCE_TYPE, evidenceId, evidenceSql,
           BigDecimal.ONE, Integer.toString(revision.revisionNo()), observedAt,
           tableRelationProperties(revision, "INPUT")));
     }
     for (SqlTableLineageParser.TableRef output : tableParsed.outputs()) {
       LineageAsset table = registerTableAsset(prepared.context(), output, tableAssets);
-      lineageService.registerRelation(new LineageService.RegisterRelationCommand(task.id(), table.id(),
+      lineageWriteService.registerRelation(new LineageWriteService.RegisterRelationCommand(task.id(), table.id(),
           LineageRelationType.WRITES_TO, EVIDENCE_SOURCE_TYPE, evidenceId, evidenceSql,
           BigDecimal.ONE, Integer.toString(revision.revisionNo()), observedAt,
           tableRelationProperties(revision, "OUTPUT")));
@@ -233,16 +233,16 @@ public class DevelopmentSqlLineageService {
       String evidenceId,
       Instant observedAt,
       Map<String, LineageAsset> tableAssets) {
-    Map<String, LineageService.RegisterAssetCommand> columnCommands = new LinkedHashMap<>();
+    Map<String, LineageWriteService.RegisterAssetCommand> columnCommands = new LinkedHashMap<>();
     Map<String, PendingColumnRelation> pendingRelations = new LinkedHashMap<>();
     int mappingIndex = 0;
     for (SqlColumnLineageParser.ColumnMapping mapping : parsed.mappings()) {
       mappingIndex++;
       LineageAsset sourceTable = registerTableAsset(sqlContext, mapping.sourceTable(), tableAssets);
       LineageAsset targetTable = registerTableAsset(sqlContext, mapping.targetTable(), tableAssets);
-      LineageService.RegisterAssetCommand sourceColumn = columnAssetCommand(
+      LineageWriteService.RegisterAssetCommand sourceColumn = columnAssetCommand(
           sqlContext, sourceTable, mapping.sourceTable(), mapping.sourceColumnName());
-      LineageService.RegisterAssetCommand targetColumn = columnAssetCommand(
+      LineageWriteService.RegisterAssetCommand targetColumn = columnAssetCommand(
           sqlContext, targetTable, mapping.targetTable(), mapping.targetColumnName());
       columnCommands.putIfAbsent(sourceColumn.assetKey(), sourceColumn);
       columnCommands.putIfAbsent(targetColumn.assetKey(), targetColumn);
@@ -263,9 +263,9 @@ public class DevelopmentSqlLineageService {
           sourceColumn.assetKey(), targetColumn.assetKey(), mapping, relationVersion));
     }
 
-    Map<String, LineageAsset> columns = lineageService.registerAssetsBatch(
+    Map<String, LineageAsset> columns = lineageWriteService.registerAssetsBatch(
         List.copyOf(columnCommands.values()), lineageBatchSize);
-    List<LineageService.RegisterRelationCommand> relations = new ArrayList<>();
+    List<LineageWriteService.RegisterRelationCommand> relations = new ArrayList<>();
     for (PendingColumnRelation pending : pendingRelations.values()) {
       LineageAsset sourceColumn = columns.get(pending.sourceAssetKey());
       LineageAsset targetColumn = columns.get(pending.targetAssetKey());
@@ -274,7 +274,7 @@ public class DevelopmentSqlLineageService {
       }
       // UPDATE a = a + 1 is a valid dependency, but Lineage Core intentionally forbids self edges.
       if (sourceColumn.id() == targetColumn.id()) continue;
-      relations.add(new LineageService.RegisterRelationCommand(
+      relations.add(new LineageWriteService.RegisterRelationCommand(
           sourceColumn.id(), targetColumn.id(),
           LineageRelationType.DERIVES_FROM,
           EVIDENCE_SOURCE_TYPE,
@@ -285,7 +285,7 @@ public class DevelopmentSqlLineageService {
           observedAt,
           columnRelationProperties(task, revision, pending.mapping())));
     }
-    lineageService.registerRelationsBatch(relations, lineageBatchSize);
+    lineageWriteService.registerRelationsBatch(relations, lineageBatchSize);
   }
 
   private record PendingColumnRelation(String sourceAssetKey, String targetAssetKey,
@@ -341,7 +341,7 @@ public class DevelopmentSqlLineageService {
       properties.put("columnParseStatus", "SKIPPED");
     }
 
-    return lineageService.registerAsset(new LineageService.RegisterAssetCommand(
+    return lineageWriteService.registerAsset(new LineageWriteService.RegisterAssetCommand(
         "sql-task:data-development:" + node.id(),
         LineageAssetType.SQL_TASK,
         node.name(),
@@ -367,7 +367,7 @@ public class DevelopmentSqlLineageService {
 
     ObjectNode properties = objectMapper.createObjectNode();
     properties.put("qualifiedName", table.qualifiedName());
-    LineageAsset registered = lineageService.registerAsset(new LineageService.RegisterAssetCommand(
+    LineageAsset registered = lineageWriteService.registerAsset(new LineageWriteService.RegisterAssetCommand(
         key,
         LineageAssetType.TABLE,
         table.qualifiedName(),
@@ -384,7 +384,7 @@ public class DevelopmentSqlLineageService {
     return registered;
   }
 
-  private LineageService.RegisterAssetCommand columnAssetCommand(
+  private LineageWriteService.RegisterAssetCommand columnAssetCommand(
       SqlContext sqlContext,
       LineageAsset tableAsset,
       SqlTableLineageParser.TableRef table,
@@ -392,7 +392,7 @@ public class DevelopmentSqlLineageService {
     ObjectNode properties = objectMapper.createObjectNode();
     properties.put("qualifiedName", table.qualifiedName() + "." + columnName);
 
-    return new LineageService.RegisterAssetCommand(
+    return new LineageWriteService.RegisterAssetCommand(
         columnAssetKey(resolve(table, sqlContext), columnName),
         LineageAssetType.COLUMN,
         columnName,

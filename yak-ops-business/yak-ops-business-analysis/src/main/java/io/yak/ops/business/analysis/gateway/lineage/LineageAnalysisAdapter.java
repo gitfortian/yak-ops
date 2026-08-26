@@ -2,11 +2,12 @@ package io.yak.ops.business.analysis.gateway.lineage;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.yak.ops.business.lineage.LineageAsset;
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageMaintenanceService;
-import io.yak.ops.business.lineage.LineageRelationType;
-import io.yak.ops.business.lineage.LineageService;
+import io.yak.ops.business.lineage.domain.LineageAsset;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.service.LineageMaintenanceService;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
+import io.yak.ops.business.lineage.service.LineageQueryService;
+import io.yak.ops.business.lineage.service.LineageWriteService;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -14,15 +15,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class LineageAnalysisAdapter implements AnalysisLineageGraphGateway {
 
-  private final LineageService lineage;
+  private final LineageQueryService queryService;
+  private final LineageWriteService writeService;
   private final LineageMaintenanceService maintenance;
   private final ObjectMapper objectMapper;
 
   public LineageAnalysisAdapter(
-      LineageService lineage,
+      LineageQueryService queryService,
+      LineageWriteService writeService,
       LineageMaintenanceService maintenance,
       ObjectMapper objectMapper) {
-    this.lineage = lineage;
+    this.queryService = queryService;
+    this.writeService = writeService;
     this.maintenance = maintenance;
     this.objectMapper = objectMapper;
   }
@@ -34,7 +38,7 @@ public class LineageAnalysisAdapter implements AnalysisLineageGraphGateway {
 
   @Override
   public Asset registerAsset(AssetSpec spec) {
-    LineageAsset asset = lineage.registerAsset(new LineageService.RegisterAssetCommand(
+    LineageAsset asset = writeService.registerAsset(new LineageWriteService.RegisterAssetCommand(
         spec.assetKey(),
         assetType(spec.assetType()),
         spec.name(),
@@ -52,13 +56,13 @@ public class LineageAnalysisAdapter implements AnalysisLineageGraphGateway {
 
   @Override
   public Asset requireAssetByKey(String assetKey) {
-    LineageAsset asset = lineage.getAssetByKey(assetKey);
+    LineageAsset asset = queryService.getAssetByKey(assetKey);
     return new Asset(asset.id(), asset.assetKey());
   }
 
   @Override
   public void registerRelation(RelationSpec spec) {
-    lineage.registerRelation(new LineageService.RegisterRelationCommand(
+    writeService.registerRelation(new LineageWriteService.RegisterRelationCommand(
         spec.sourceAssetId(),
         spec.targetAssetId(),
         relationType(spec.relationType()),

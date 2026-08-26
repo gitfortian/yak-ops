@@ -33,28 +33,20 @@ io.yak.ops.business.lineage
 
 ## Application Boundary
 
-当前稳定入口仍是：
-
-```text
-LineageController
-    └── LineageService
-
-internal publishers
-    ├── LineageService
-    └── LineageMaintenanceService
-```
-
-Stage 1 不改 production API。后续 Service 收敛的目标是：
+当前稳定入口是：
 
 ```text
 LineageController
     ├── LineageQueryService
     └── LineageWriteService
 
-internal publishers
+internal publishers / cross-module adapters
+    ├── LineageQueryService
     ├── LineageWriteService
     └── LineageMaintenanceService
 ```
+
+Query 只负责资产定位、搜索和有界图遍历；Write 负责资产/关系注册与批量写入；Maintenance 负责 evidence replacement、清理和 revision guard。调用方按用例依赖，不再进入一个同时承担读写的宽 Service。
 
 稳定入口使用 `@Service`。内部专业角色优先使用 `@Component`、`@Repository` 或普通对象，不通过增加更多 `*Service` 掩盖职责不清。
 
@@ -81,7 +73,7 @@ Repository implementation
 Flink / Spark / Hadoop SDK
 ```
 
-当前 Asset / Relation / Graph 等仍位于根包，这是**显式过渡债务**，不是推荐的新代码位置。
+Asset / Relation / Graph 已位于 `domain/`；稳定应用入口已位于 `service/`。Domain 不依赖 Service、Repository、Controller 或平台 SDK。
 
 ## Analysis / Collector Boundary
 
@@ -124,23 +116,13 @@ Mapper / PO / MyBatis / DB
 
 ## Transitional Root Debt
 
-Stage 1 明确冻结以下根包 production 类型：
+Stage 3 后根包只剩：
 
 ```text
-LineageAsset
-LineageAssetDraft
-LineageAssetType
-LineageDirection
-LineageGraph
-LineageMaintenanceService
-LineageRelation
-LineageRelationDraft
-LineageRelationType
-LineageService
 SqlProjectionLineageAnalyzer
 ```
 
-在后续 Domain / Service / Analysis 阶段完成前，不允许继续向根包增加新的 production 类型。新增能力应直接进入长期角色 package，或在对应重构阶段更新 contract。
+它是下一阶段需要归入 `analysis` 角色包的 source-neutral contract。根包不再允许新增 Domain 或 Service 类型。
 
 ## Change Rules
 

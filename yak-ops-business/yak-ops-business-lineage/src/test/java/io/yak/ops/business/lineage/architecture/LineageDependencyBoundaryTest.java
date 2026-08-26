@@ -29,10 +29,13 @@ class LineageDependencyBoundaryTest {
           "service");
 
   private static final Set<String> TRANSITIONAL_ROOT_TYPES =
+      Set.of("SqlProjectionLineageAnalyzer.java");
+
+  private static final Set<String> STABLE_SERVICE_TYPES =
       Set.of(
           "LineageMaintenanceService.java",
-          "LineageService.java",
-          "SqlProjectionLineageAnalyzer.java");
+          "LineageQueryService.java",
+          "LineageWriteService.java");
 
   @Test
   void transitionalRootPackageDebtCannotGrow() throws IOException {
@@ -47,6 +50,21 @@ class LineageDependencyBoundaryTest {
     assertThat(actual)
         .as("Root-package debt is transitional: move/remove existing types, do not add new ones")
         .containsExactlyInAnyOrderElementsOf(TRANSITIONAL_ROOT_TYPES);
+  }
+
+  @Test
+  void stableServiceSetIsExplicit() throws IOException {
+    Set<String> actual = new HashSet<>();
+    try (Stream<Path> files = Files.list(productionRoot().resolve("service"))) {
+      files.filter(Files::isRegularFile)
+          .filter(path -> path.toString().endsWith(".java"))
+          .map(path -> path.getFileName().toString())
+          .forEach(actual::add);
+    }
+
+    assertThat(actual)
+        .as("Lineage stable application facade set is explicit")
+        .containsExactlyInAnyOrderElementsOf(STABLE_SERVICE_TYPES);
   }
 
   @Test
@@ -68,6 +86,15 @@ class LineageDependencyBoundaryTest {
     assertNoImports(
         "controller",
         BASE + ".repository.",
+        BASE + ".dao.",
+        "com.baomidou.mybatisplus",
+        "JdbcTemplate");
+  }
+
+  @Test
+  void serviceCannotReachPersistenceImplementation() throws IOException {
+    assertNoImports(
+        "service",
         BASE + ".dao.",
         "com.baomidou.mybatisplus",
         "JdbcTemplate");
@@ -124,6 +151,33 @@ class LineageDependencyBoundaryTest {
   }
 
   @Test
+  void legacyRootContractsCannotReturnAcrossProductionSources() throws IOException {
+    Set<String> forbiddenImports =
+        Set.of(
+            "import " + BASE + ".LineageService;",
+            "import " + BASE + ".LineageMaintenanceService;",
+            "import " + BASE + ".LineageAsset;",
+            "import " + BASE + ".LineageAssetDraft;",
+            "import " + BASE + ".LineageAssetType;",
+            "import " + BASE + ".LineageDirection;",
+            "import " + BASE + ".LineageGraph;",
+            "import " + BASE + ".LineageRelation;",
+            "import " + BASE + ".LineageRelationDraft;",
+            "import " + BASE + ".LineageRelationType;");
+
+    try (Stream<Path> files = Files.walk(repositoryRoot())) {
+      for (Path file : files.filter(this::isProductionJava).toList()) {
+        String source = Files.readString(file, StandardCharsets.UTF_8);
+        for (String forbiddenImport : forbiddenImports) {
+          assertThat(source)
+              .as("Legacy Lineage root contract in %s", normalize(file))
+              .doesNotContain(forbiddenImport);
+        }
+      }
+    }
+  }
+
+  @Test
   void broadBusinessBucketsCannotAppear() {
     Path root = productionRoot();
     for (String forbidden : Set.of("common", "helper", "utils", "base")) {
@@ -157,6 +211,23 @@ class LineageDependencyBoundaryTest {
       files.filter(path -> path.toString().endsWith(".java")).forEach(result::add);
     }
     return result;
+  }
+
+  private boolean isProductionJava(Path path) {
+    String normalized = normalize(path);
+    return normalized.endsWith(".java") && normalized.contains("/src/main/java/")
+        && !normalized.contains("/target/");
+  }
+
+  private Path repositoryRoot() {
+    Path current = Paths.get(".").toAbsolutePath().normalize();
+    if (Files.isDirectory(current.resolve("yak-ops-business"))) return current;
+
+    Path candidate = current.resolve("../..").normalize();
+    assertThat(Files.isDirectory(candidate.resolve("yak-ops-business")))
+        .as("Unable to locate repository root from %s", current)
+        .isTrue();
+    return candidate;
   }
 
   private Path productionRoot() {

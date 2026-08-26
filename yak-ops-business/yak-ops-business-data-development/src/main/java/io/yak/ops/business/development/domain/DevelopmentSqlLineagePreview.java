@@ -1,8 +1,8 @@
 package io.yak.ops.business.development.domain;
 
-import io.yak.ops.business.lineage.LineageAssetType;
-import io.yak.ops.business.lineage.LineageDirection;
-import io.yak.ops.business.lineage.LineageRelationType;
+import io.yak.ops.business.lineage.domain.LineageAssetType;
+import io.yak.ops.business.lineage.domain.LineageDirection;
+import io.yak.ops.business.lineage.domain.LineageRelationType;
 import java.util.List;
 import java.util.Map;
 
