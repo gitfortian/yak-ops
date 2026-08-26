@@ -1,26 +1,22 @@
-# Ant Design Pro
+# Yak Ops UI
 
-This project is initialized with [Ant Design Pro](https://pro.ant.design). Follow is the quick guide for how to use.
+Yak Ops 的 Web 前端，基于 Ant Design Pro / Umi 构建。
+
+## Engineering Standard
+
+新增或重构前端代码前，请先阅读 [FRONTEND_CODE_STYLE.md](./FRONTEND_CODE_STYLE.md)。
+
+规范采用渐进式迁移：新代码立即遵守，历史代码按业务模块逐步收敛，不做一次性全仓目录搬迁。
 
 ## Environment Prepare
 
-Install `node_modules`:
+安装依赖：
 
 ```bash
 npm install
 ```
 
-or
-
-```bash
-yarn
-```
-
 ## Provided Scripts
-
-Ant Design Pro provides some useful script to help you quick start and build with web project, code style check and test.
-
-Scripts provided in `package.json`. It's safe to modify or add additional script:
 
 ### Start project
 
@@ -34,16 +30,10 @@ npm start
 npm run build
 ```
 
-### Check code style
+### Check code style and types
 
 ```bash
 npm run lint
-```
-
-You can also use script to auto fix some lint error:
-
-```bash
-npm run lint:fix
 ```
 
 ### Test code
@@ -51,7 +41,3 @@ npm run lint:fix
 ```bash
 npm test
 ```
-
-## More
-
-You can view full document on our [official website](https://pro.ant.design). And welcome any feedback in our [github](https://github.com/ant-design/ant-design-pro).
