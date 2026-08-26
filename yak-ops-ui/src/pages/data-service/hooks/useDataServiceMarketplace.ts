@@ -38,16 +38,17 @@ export const useDataServiceMarketplace = () => {
     setLoading(true);
 
     try {
-      const [nextServices, nextDataSources, nextLogs] = await Promise.all([
+      const [serviceResult, dataSourceResult, logResult] = await Promise.all([
         listDataServices(),
         listDataServiceDataSources(),
         listRecentDataServiceLogs(),
       ]);
       if (requestSequence !== requestSequenceRef.current) return;
 
-      setServices(nextServices || []);
-      setDataSources(nextDataSources || []);
-      setLogs(nextLogs || []);
+      const nextServices = serviceResult || [];
+      setServices(nextServices);
+      setDataSources(dataSourceResult || []);
+      setLogs(logResult || []);
       setDetailTarget((current) =>
         current
           ? nextServices.find((service) => service.id === current.id)
@@ -115,13 +116,20 @@ export const useDataServiceMarketplace = () => {
   }, []);
 
   const search = useCallback(() => {
-    const value = keyword.trim();
-    setSubmittedKeyword(value);
+    setSubmittedKeyword(keyword.trim());
   }, [keyword]);
 
   const resetSearch = useCallback(() => {
     setKeyword('');
     setSubmittedKeyword('');
+  }, []);
+
+  const openDetail = useCallback((service: DataServiceApi) => {
+    setDetailTarget(service);
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    setDetailTarget(undefined);
   }, []);
 
   const deleteService = useCallback(
@@ -168,7 +176,6 @@ export const useDataServiceMarketplace = () => {
   return {
     services,
     dataSources,
-    logs,
     loading,
     keyword,
     submittedKeyword,
@@ -184,8 +191,8 @@ export const useDataServiceMarketplace = () => {
     changeKeyword,
     search,
     resetSearch,
-    openDetail: setDetailTarget,
-    closeDetail: () => setDetailTarget(undefined),
+    openDetail,
+    closeDetail,
     deleteService,
     toggleService,
     copyEndpoint,
