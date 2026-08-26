@@ -1,7 +1,6 @@
-import YakEmpty from '@/components/YakEmpty';
-import type { DataNode } from 'antd/es/tree';
+import { YakButton, YakEmpty } from '@/components/ui';
 import type { MenuProps, TreeProps } from 'antd';
-import { Button, Dropdown, Input, Spin, Tooltip, Tree } from 'antd';
+import { Dropdown, Input, Spin, Tooltip, Tree } from 'antd';
 import {
   ChevronDown,
   ChevronLeft,
@@ -19,39 +18,26 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import JavaIcon from '../icon/JavaIcon';
-import PythonIcon from '../icon/PythonIcon';
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type {
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from 'react';
 import { useEffect, useRef, useState } from 'react';
 
-import { listDevelopmentNodes } from '../service';
-import type { DevelopmentNodeType } from '../types';
+import JavaIcon from '../icon/JavaIcon';
+import PythonIcon from '../icon/PythonIcon';
+import type {
+  DevelopmentNodeCreateType,
+  DevelopmentTreeAction,
+  DevelopmentTreeNode,
+} from '../types';
 
-export type DevelopmentTreeNodeType = 'directory' | 'node';
-export type DevelopmentNodeCreateType = DevelopmentNodeType;
-export type DevelopmentTreeAction =
-  | 'create-directory'
-  | 'create-sql'
-  | 'create-shell'
-  | 'create-python'
-  | 'create-java'
-  | 'create-dataset'
-  | 'create-data-service'
-  | 'copy-name'
-  | 'copy-path'
-  | 'rename'
-  | 'delete';
-
-export interface DevelopmentTreeNode extends DataNode {
-  key: string;
-  title: string;
-  nodeType: DevelopmentTreeNodeType;
-  resourceId: string;
-  resourcePath: string;
-  taskType?: string;
-  searchText?: string;
-  children?: DevelopmentTreeNode[];
-}
+export type {
+  DevelopmentNodeCreateType,
+  DevelopmentTreeAction,
+  DevelopmentTreeNode,
+  DevelopmentTreeNodeType,
+} from '../types';
 
 interface DevelopmentTreePaneProps {
   treeData: DevelopmentTreeNode[];
@@ -72,17 +58,9 @@ interface DevelopmentTreePaneProps {
   onCollapsedChange: (collapsed: boolean) => void;
 }
 
-type NodeMetadata = {
-  updatedBy?: string | null;
-  updateTime?: string;
-  pendingPublish?: boolean;
-};
-
 const nodeTypeIconClassName = (taskType?: string) => {
   if (taskType === 'SHELL') return 'text-[#6172f3]';
   if (taskType === 'SQL') return 'text-[#f79009]';
-  if (taskType === 'PYTHON') return '';
-  if (taskType === 'JAVA') return '';
   if (taskType === 'DATASET') return 'text-[#667085]';
   if (taskType === 'DATA_SERVICE') return 'text-[#475467]';
   return 'text-[#667085]';
@@ -91,14 +69,12 @@ const nodeTypeIconClassName = (taskType?: string) => {
 const nodeIcon = (taskType?: string): ReactNode => {
   const className = `shrink-0 ${nodeTypeIconClassName(taskType)}`;
   if (taskType === 'SHELL') {
-    return <TerminalSquare size={13} strokeWidth={1.8} className={className} />;
+    return (
+      <TerminalSquare size={13} strokeWidth={1.8} className={className} />
+    );
   }
-  if (taskType === 'PYTHON') {
-    return <PythonIcon size={13} />;
-  }
-  if (taskType === 'JAVA') {
-    return <JavaIcon size={13} />;
-  }
+  if (taskType === 'PYTHON') return <PythonIcon size={13} />;
+  if (taskType === 'JAVA') return <JavaIcon size={13} />;
   if (taskType === 'DATASET') {
     return <Database size={13} strokeWidth={1.8} className={className} />;
   }
@@ -164,15 +140,16 @@ const DevelopmentFolderIcon = ({ expanded }: { expanded: boolean }) => {
   );
 };
 
-const collectExpandedDirectoryKeys = (nodes: DevelopmentTreeNode[]): string[] =>
+const collectExpandedDirectoryKeys = (
+  nodes: DevelopmentTreeNode[],
+): string[] =>
   nodes.flatMap((node) => {
     const childKeys = node.children?.length
       ? collectExpandedDirectoryKeys(node.children)
       : [];
-    if (node.nodeType === 'directory' && node.children?.length) {
-      return [node.key, ...childKeys];
-    }
-    return childKeys;
+    return node.nodeType === 'directory' && node.children?.length
+      ? [node.key, ...childKeys]
+      : childKeys;
   });
 
 const nodeCreateItems: NonNullable<MenuProps['items']> = [
@@ -184,7 +161,13 @@ const nodeCreateItems: NonNullable<MenuProps['items']> = [
   {
     key: 'node-shell',
     label: 'Shell 节点',
-    icon: <TerminalSquare size={14} strokeWidth={1.8} className="text-[#6172f3]" />,
+    icon: (
+      <TerminalSquare
+        size={14}
+        strokeWidth={1.8}
+        className="text-[#6172f3]"
+      />
+    ),
   },
   {
     key: 'node-python',
@@ -209,13 +192,17 @@ const nodeCreateItems: NonNullable<MenuProps['items']> = [
   },
 ];
 
-const createTypeForMenuKey = (key: string): DevelopmentNodeCreateType | undefined => {
+const createTypeForMenuKey = (
+  key: string,
+): DevelopmentNodeCreateType | undefined => {
   if (key === 'node-sql' || key === 'create-sql') return 'SQL';
   if (key === 'node-shell' || key === 'create-shell') return 'SHELL';
   if (key === 'node-python' || key === 'create-python') return 'PYTHON';
   if (key === 'node-java' || key === 'create-java') return 'JAVA';
   if (key === 'node-dataset' || key === 'create-dataset') return 'DATASET';
-  if (key === 'node-data-service' || key === 'create-data-service') return 'DATA_SERVICE';
+  if (key === 'node-data-service' || key === 'create-data-service') {
+    return 'DATA_SERVICE';
+  }
   return undefined;
 };
 
@@ -246,8 +233,9 @@ const DevelopmentTreePane = ({
   onResizeStart,
   onCollapsedChange,
 }: DevelopmentTreePaneProps) => {
-  const [metadataById, setMetadataById] = useState<Map<string, NodeMetadata>>(new Map());
-  const [expandedDirectoryKeys, setExpandedDirectoryKeys] = useState<string[]>([]);
+  const [expandedDirectoryKeys, setExpandedDirectoryKeys] = useState<string[]>(
+    [],
+  );
   const expansionInitializedRef = useRef(false);
 
   useEffect(() => {
@@ -260,28 +248,6 @@ const DevelopmentTreePane = ({
     expansionInitializedRef.current = true;
     setExpandedDirectoryKeys(collectExpandedDirectoryKeys(treeData));
   }, [treeData]);
-
-  useEffect(() => {
-    let active = true;
-    void listDevelopmentNodes()
-      .then((response) => {
-        if (!active || !Array.isArray(response.data)) return;
-        setMetadataById(new Map(response.data.map((node) => [
-          node.id,
-          {
-            updatedBy: node.updatedBy,
-            updateTime: node.updateTime,
-            pendingPublish: node.pendingPublish,
-          },
-        ])));
-      })
-      .catch(() => {
-        // The parent tree request already owns page-level error feedback.
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const createMenuItems: MenuProps['items'] = [
     {
@@ -297,7 +263,9 @@ const DevelopmentTreePane = ({
     },
   ];
 
-  const contextMenuItems = (node: DevelopmentTreeNode): MenuProps['items'] => {
+  const contextMenuItems = (
+    node: DevelopmentTreeNode,
+  ): MenuProps['items'] => {
     const commonItems: MenuProps['items'] = [
       {
         key: 'copy-name',
@@ -329,15 +297,13 @@ const DevelopmentTreePane = ({
         key: 'create-node',
         label: '新建节点',
         icon: <Code2 size={14} strokeWidth={1.8} />,
-        children: [
-          { key: 'create-sql', label: 'SQL 节点', icon: <Code2 size={14} className="text-[#f79009]" /> },
-          { key: 'create-shell', label: 'Shell 节点', icon: <TerminalSquare size={14} className="text-[#6172f3]" /> },
-          { key: 'create-python', label: 'Python 节点', icon: <PythonIcon size={14} /> },
-          { key: 'create-java', label: 'Java 节点', icon: <JavaIcon size={14} /> },
-          { type: 'divider' },
-          { key: 'create-dataset', label: '数据集节点', icon: <Database size={14} className="text-[#667085]" /> },
-          { key: 'create-data-service', label: '数据服务节点', icon: <Network size={14} className="text-[#475467]" /> },
-        ],
+        children: nodeCreateItems.map((item) => {
+          if (!item || item.type === 'divider') return item;
+          return {
+            ...item,
+            key: String(item.key).replace('node-', 'create-'),
+          };
+        }),
       },
       {
         key: 'create-directory',
@@ -352,12 +318,12 @@ const DevelopmentTreePane = ({
   const renderTitle: TreeProps['titleRender'] = (rawNode) => {
     const node = rawNode as DevelopmentTreeNode;
     const isNode = node.nodeType === 'node';
-    const metadata = isNode ? metadataById.get(node.resourceId) : undefined;
-    const updateTime = formatUpdateTime(metadata?.updateTime);
-    const modifier = metadata?.updatedBy && metadata.updatedBy !== 'unknown'
-      ? metadata.updatedBy
-      : '';
-    const updateMeta = [modifier ? `${modifier}修改` : '', updateTime].filter(Boolean).join(' ');
+    const updateTime = formatUpdateTime(node.updateTime);
+    const modifier =
+      node.updatedBy && node.updatedBy !== 'unknown' ? node.updatedBy : '';
+    const updateMeta = [modifier ? `${modifier}修改` : '', updateTime]
+      .filter(Boolean)
+      .join(' ');
 
     return (
       <Dropdown
@@ -367,14 +333,15 @@ const DevelopmentTreePane = ({
           triggerSubMenuAction: 'hover',
           subMenuOpenDelay: 0.05,
           subMenuCloseDelay: 0.1,
-          onClick: ({ key }) => onResourceAction(key as DevelopmentTreeAction, node),
+          onClick: ({ key }) =>
+            onResourceAction(key as DevelopmentTreeAction, node),
         }}
       >
         <div
           className="flex min-w-0 flex-1 items-center gap-1.5"
           title={[node.title, updateMeta].filter(Boolean).join('  ')}
         >
-          {isNode && metadata?.pendingPublish ? (
+          {isNode && node.pendingPublish ? (
             <Tooltip title="待发布">
               <span className="inline-flex shrink-0 items-center text-[#98a2b3]">
                 <Upload size={12} strokeWidth={1.8} />
@@ -382,14 +349,20 @@ const DevelopmentTreePane = ({
             </Tooltip>
           ) : null}
 
-          {isNode ? nodeIcon(node.taskType) : (
-            <DevelopmentFolderIcon expanded={expandedDirectoryKeys.includes(node.key)} />
+          {isNode ? (
+            nodeIcon(node.taskType)
+          ) : (
+            <DevelopmentFolderIcon
+              expanded={expandedDirectoryKeys.includes(node.key)}
+            />
           )}
 
           <span
             className={[
               'min-w-[36px] truncate text-[13px] leading-8',
-              isNode ? 'font-normal text-[#344054]' : 'flex-1 font-medium text-[#1f2937]',
+              isNode
+                ? 'font-normal text-[#344054]'
+                : 'flex-1 font-medium text-[#1f2937]',
             ].join(' ')}
           >
             {node.title}
@@ -402,7 +375,9 @@ const DevelopmentTreePane = ({
           ) : null}
 
           {isNode && node.taskType ? (
-            <span className="shrink-0 text-[10px] text-[#98a2b3]">{node.taskType}</span>
+            <span className="shrink-0 text-[10px] text-[#98a2b3]">
+              {node.taskType}
+            </span>
           ) : null}
         </div>
       </Dropdown>
@@ -415,9 +390,14 @@ const DevelopmentTreePane = ({
         className="group relative shrink-0 overflow-hidden bg-white transition-[width] duration-200 ease-out"
         style={{ width: collapsed ? 0 : leftWidth }}
       >
-        <div className="flex h-full flex-col overflow-hidden" style={{ width: leftWidth }}>
+        <div
+          className="flex h-full flex-col overflow-hidden"
+          style={{ width: leftWidth }}
+        >
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-[#f7f7f8] px-3">
-            <span className="text-[13px] font-semibold text-[#30323b]">开发目录</span>
+            <span className="text-[13px] font-semibold text-[#30323b]">
+              开发目录
+            </span>
             <Dropdown
               trigger={['click']}
               placement="bottomRight"
@@ -437,12 +417,13 @@ const DevelopmentTreePane = ({
               }}
             >
               <Tooltip title="新建" placement="right">
-                <Button
+                <YakButton
                   type="text"
                   size="small"
+                  iconOnly
                   aria-label="新建目录或节点"
                   icon={<Plus size={15} strokeWidth={1.8} />}
-                  className="!flex !h-7 !w-7 !items-center !justify-center !p-0 hover:!bg-white"
+                  className="!h-7 !w-7 !p-0 hover:!bg-white"
                 />
               </Tooltip>
             </Dropdown>
@@ -472,15 +453,25 @@ const DevelopmentTreePane = ({
                   treeData={treeData}
                   titleRender={renderTitle}
                   switcherIcon={<ChevronDown size={12} strokeWidth={1.8} />}
-                  onExpand={(keys) => setExpandedDirectoryKeys(keys.map(String))}
+                  onExpand={(keys) =>
+                    setExpandedDirectoryKeys(keys.map(String))
+                  }
                   onSelect={onSelect}
                   className="development-tree bg-transparent"
                 />
               ) : (
                 <YakEmpty
                   compact
-                  title={searchValue.trim() ? '未找到匹配节点' : '暂无开发节点'}
-                  description={searchValue.trim() ? '换个关键词试试' : '点击右上角 + 创建目录或节点'}
+                  title={
+                    searchValue.trim()
+                      ? '未找到匹配节点'
+                      : '暂无开发节点'
+                  }
+                  description={
+                    searchValue.trim()
+                      ? '换个关键词试试'
+                      : '点击右上角 + 创建目录或节点'
+                  }
                 />
               )}
             </Spin>
@@ -515,7 +506,9 @@ const DevelopmentTreePane = ({
         />
         <button
           type="button"
-          aria-label={collapsed ? '展开开发目录面板' : '收起开发目录面板'}
+          aria-label={
+            collapsed ? '展开开发目录面板' : '收起开发目录面板'
+          }
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => onCollapsedChange(!collapsed)}
           className={[
@@ -525,7 +518,11 @@ const DevelopmentTreePane = ({
             'hover:border-[#cfd4dc] hover:text-[#344054] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,.16)]',
           ].join(' ')}
         >
-          {collapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
+          {collapsed ? (
+            <ChevronRight size={11} />
+          ) : (
+            <ChevronLeft size={11} />
+          )}
         </button>
       </div>
 
