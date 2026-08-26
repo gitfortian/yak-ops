@@ -31,7 +31,7 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
     this.currentProject = currentProject;
   }
 
-  ResourceRepositoryAdapter(ResourceDao resourceDao) {
+  public ResourceRepositoryAdapter(ResourceDao resourceDao) {
     this(resourceDao, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 

@@ -16,6 +16,7 @@ import io.yak.ops.spi.resource.ResourceFileSyncAction;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,9 +112,7 @@ public class ResourceNamespaceManager {
     List<ResourceNode> descendants = repository.findDescendants(resource.getFullPath());
     List<Long> ids = new ArrayList<>(descendants.size() + 1);
     ids.add(resource.getId());
-    for (ResourceNode descendant : descendants) {
-      ids.add(descendant.getId());
-    }
+    for (ResourceNode descendant : descendants) ids.add(descendant.getId());
     if (!repository.deleteBatch(ids)) {
       throw new ResourceException(ResourceErrorCode.DELETE_FAILED);
     }
@@ -139,8 +138,7 @@ public class ResourceNamespaceManager {
     if (targetParent.storageType() != resource.getStorageType()) {
       throw new ResourceException(ResourceErrorCode.CROSS_STORAGE_MOVE_UNSUPPORTED);
     }
-    if (resource.getProjectId() != null
-        && !resource.getProjectId().equals(targetParent.projectId())) {
+    if (!Objects.equals(resource.getProjectId(), targetParent.projectId())) {
       throw new ResourceException(ResourceErrorCode.INVALID_MOVE_TARGET);
     }
 

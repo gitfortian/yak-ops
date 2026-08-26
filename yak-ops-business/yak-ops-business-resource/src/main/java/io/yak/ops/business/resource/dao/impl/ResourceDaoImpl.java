@@ -55,10 +55,13 @@ public class ResourceDaoImpl implements ResourceDao {
   @Override
   public ResourcePO selectByFullPath(Long projectId, String fullPath) {
     if (!StringUtils.hasText(fullPath)) return null;
-    return resourceMapper.selectOne(
+    LambdaQueryWrapper<ResourcePO> query =
         Wrappers.<ResourcePO>lambdaQuery()
             .eq(projectId != null, ResourcePO::getProjectId, projectId)
-            .eq(ResourcePO::getFullPath, fullPath));
+            .eq(ResourcePO::getFullPath, fullPath)
+            .orderByAsc(ResourcePO::getId);
+    if (projectId != null) return resourceMapper.selectOne(query);
+    return resourceMapper.selectList(query).stream().findFirst().orElse(null);
   }
 
   @Override

@@ -40,7 +40,7 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
     this.currentProject = currentProject;
   }
 
-  DatasetRepositoryAdapter(DatasetDao datasetDao, DatasetJsonCodec jsonCodec) {
+  public DatasetRepositoryAdapter(DatasetDao datasetDao, DatasetJsonCodec jsonCodec) {
     this(datasetDao, jsonCodec, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 

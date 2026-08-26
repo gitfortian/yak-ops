@@ -26,7 +26,7 @@ public class TaskCatalogDatasetAdapter implements DatasetTaskCatalogGateway {
     this.currentProject = currentProject;
   }
 
-  TaskCatalogDatasetAdapter(TaskCatalogService taskCatalogService) {
+  public TaskCatalogDatasetAdapter(TaskCatalogService taskCatalogService) {
     this(taskCatalogService, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 

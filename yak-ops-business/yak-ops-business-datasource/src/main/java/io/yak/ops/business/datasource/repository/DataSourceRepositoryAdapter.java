@@ -35,7 +35,7 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
     this.currentProject = currentProject;
   }
 
-  DataSourceRepositoryAdapter(DataSourceDao dao) {
+  public DataSourceRepositoryAdapter(DataSourceDao dao) {
     this(dao, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 

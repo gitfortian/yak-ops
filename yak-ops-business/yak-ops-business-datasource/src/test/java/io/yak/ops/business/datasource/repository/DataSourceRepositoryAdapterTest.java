@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasource.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.datasource.dao.DataSourceDao;
@@ -11,6 +12,9 @@ import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -40,6 +44,22 @@ class DataSourceRepositoryAdapterTest {
     assertThat(result.getEnvironment()).isEqualTo(DataSourceEnvironment.PROD);
     assertThat(result.getConnStatus()).isEqualTo(DataSourceConnStatus.CONNECTED);
     assertThat(result.getConnectionParams()).contains("127.0.0.1");
+  }
+
+  @Test
+  void usesProjectQualifiedLookupWhenContextIsBound() {
+    DataSourcePO po = new DataSourcePO();
+    po.setId(42L);
+    po.setProjectId(7L);
+    po.setName("orders-db");
+    CurrentProject currentProject = () -> Optional.of(new ProjectContext(7L, "Project A"));
+    when(dao.selectById(7L, 42L)).thenReturn(po);
+
+    DataSourceDefinition result =
+        new DataSourceRepositoryAdapter(dao, currentProject).findById(42L).orElseThrow();
+
+    assertThat(result.getProjectId()).isEqualTo(7L);
+    verify(dao).selectById(7L, 42L);
   }
 
   @Test

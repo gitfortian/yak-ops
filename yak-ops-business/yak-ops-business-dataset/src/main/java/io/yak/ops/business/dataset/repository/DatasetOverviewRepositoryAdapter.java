@@ -27,7 +27,7 @@ public class DatasetOverviewRepositoryAdapter implements DatasetOverviewReposito
     this.currentProject = currentProject;
   }
 
-  DatasetOverviewRepositoryAdapter(DatasetOverviewMapper mapper) {
+  public DatasetOverviewRepositoryAdapter(DatasetOverviewMapper mapper) {
     this(mapper, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 

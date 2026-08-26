@@ -15,6 +15,9 @@ import io.yak.ops.business.resource.domain.ResourceQuery;
 import io.yak.ops.common.bean.po.resource.ResourcePO;
 import io.yak.ops.common.enums.resource.ResourceNodeType;
 import io.yak.ops.common.enums.resource.ResourceStorageType;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -51,6 +54,21 @@ class ResourceRepositoryAdapterTest {
     verify(resourceDao).insert(captor.capture());
     assertThat(captor.getValue().getFullPath()).isEqualTo("/README.md");
     assertThat(captor.getValue().getNodeType()).isEqualTo(ResourceNodeType.FILE);
+  }
+
+  @Test
+  void projectContextQualifiesResourceLookup() {
+    ResourcePO po = new ResourcePO();
+    po.setId(9L);
+    po.setProjectId(7L);
+    CurrentProject currentProject = () -> Optional.of(new ProjectContext(7L, "Project A"));
+    when(resourceDao.selectById(7L, 9L)).thenReturn(po);
+
+    ResourceNode result =
+        new ResourceRepositoryAdapter(resourceDao, currentProject).findById(9L).orElseThrow();
+
+    assertThat(result.getProjectId()).isEqualTo(7L);
+    verify(resourceDao).selectById(7L, 9L);
   }
 
   @Test
