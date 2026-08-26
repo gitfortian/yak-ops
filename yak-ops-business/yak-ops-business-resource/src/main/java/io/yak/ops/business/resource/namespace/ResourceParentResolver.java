@@ -32,7 +32,7 @@ public class ResourceParentResolver {
     this.currentProject = currentProject;
   }
 
-  ResourceParentResolver(ResourceRepository repository, ResourceStorageGateway storage) {
+  public ResourceParentResolver(ResourceRepository repository, ResourceStorageGateway storage) {
     this(repository, storage, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
