@@ -1,18 +1,15 @@
 package io.yak.ops.business.dataservice.observability;
 
-import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
 import io.yak.ops.business.dataservice.domain.InvocationRecord;
-import io.yak.ops.business.dataservice.query.DataServiceReader;
-import io.yak.ops.business.dataservice.repository.DataServiceCallLogRepository;
+import io.yak.ops.business.dataservice.repository.DataServiceOverviewRepository;
+import io.yak.ops.business.dataservice.repository.DataServiceOverviewRepository.ApiStatistics;
+import io.yak.ops.business.dataservice.repository.DataServiceOverviewRepository.Snapshot;
+import io.yak.ops.business.dataservice.repository.DataServiceOverviewRepository.TrendBucket;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -20,110 +17,219 @@ import org.springframework.stereotype.Component;
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataServiceOverviewReader {
+
   private static final int HOT_API_LIMIT = 8;
   private static final int FAILURE_LIMIT = 8;
-  private final DataServiceReader dataServiceReader;
-  private final DataServiceCallLogRepository callLogRepository;
 
-  public Overview overview(String range) { return overviewAt(range, LocalDateTime.now()); }
+  private final DataServiceOverviewRepository repository;
+
+  public Overview overview(String range) {
+    return overviewAt(range, LocalDateTime.now());
+  }
 
   Overview overviewAt(String range, LocalDateTime now) {
     RangeWindow window = RangeWindow.of(range, now);
-    List<DataServiceDefinition> apis = dataServiceReader.list();
-    List<InvocationRecord> logs = callLogRepository.between(window.startTime(), now);
-    long runningApis = apis.stream().filter(api -> api.settings().enabled()).count();
-    long totalCalls = logs.size();
-    long successCalls = 0, totalDuration = 0, totalRows = 0;
+    Snapshot snapshot =
+        repository.load(
+            window.startTime(),
+            now,
+            window.bucketMinutes(),
+            window.bucketCount(),
+            HOT_API_LIMIT,
+            FAILURE_LIMIT);
+
     List<MutableTrendPoint> trend = createTrend(window);
-    Map<Long, MutableApiStats> apiStats = new LinkedHashMap<>();
-    for (InvocationRecord log : logs) {
-      if (log.success()) successCalls++;
-      totalDuration += Math.max(0L, log.durationMs());
-      totalRows += Math.max(0, log.rowCount());
-      int bucketIndex = window.bucketIndex(log.createTime());
-      if (bucketIndex >= 0 && bucketIndex < trend.size()) trend.get(bucketIndex).accept(log.success(), log.durationMs());
-      if (log.apiId() != null) apiStats.computeIfAbsent(log.apiId(), ignored -> new MutableApiStats(log)).accept(log);
+    for (TrendBucket bucket : snapshot.trend()) {
+      if (bucket.bucketIndex() < 0 || bucket.bucketIndex() >= trend.size()) continue;
+      trend
+          .get(bucket.bucketIndex())
+          .accept(
+              bucket.calls(),
+              bucket.successCalls(),
+              bucket.failureCalls(),
+              bucket.totalDurationMs());
     }
-    Map<Long, DataServiceDefinition> apiById = new LinkedHashMap<>();
-    for (DataServiceDefinition api : apis) if (api.id() != null) apiById.put(api.id(), api);
-    List<HotApi> hotApis = apiStats.entrySet().stream()
-        .sorted((left, right) -> Long.compare(right.getValue().calls, left.getValue().calls))
-        .limit(HOT_API_LIMIT).map(entry -> entry.getValue().toHotApi(entry.getKey(), apiById.get(entry.getKey()))).toList();
-    List<FailureItem> failures = logs.stream().filter(log -> !log.success())
-        .sorted(Comparator.comparing(InvocationRecord::createTime, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-        .limit(FAILURE_LIMIT).map(FailureItem::from).toList();
-    long failureCalls = totalCalls - successCalls;
-    return new Overview(window.range(), window.startTime(), now, apis.size(), runningApis, apis.size() - runningApis,
-        totalCalls, successCalls, failureCalls, percent(successCalls, totalCalls),
-        totalCalls == 0 ? 0 : Math.round((double) totalDuration / totalCalls), totalRows,
-        trend.stream().map(MutableTrendPoint::toView).toList(), hotApis, failures);
+
+    List<HotApi> hotApis = snapshot.hotApis().stream().map(this::hotApi).toList();
+    List<FailureItem> failures = snapshot.recentFailures().stream().map(FailureItem::from).toList();
+    long failureCalls = Math.max(0L, snapshot.totalCalls() - snapshot.successCalls());
+
+    return new Overview(
+        window.range(),
+        window.startTime(),
+        now,
+        snapshot.apiTotal(),
+        snapshot.runningApis(),
+        Math.max(0L, snapshot.apiTotal() - snapshot.runningApis()),
+        snapshot.totalCalls(),
+        snapshot.successCalls(),
+        failureCalls,
+        percent(snapshot.successCalls(), snapshot.totalCalls()),
+        average(snapshot.totalDurationMs(), snapshot.totalCalls()),
+        snapshot.totalRows(),
+        trend.stream().map(MutableTrendPoint::toView).toList(),
+        hotApis,
+        failures);
   }
 
   private List<MutableTrendPoint> createTrend(RangeWindow window) {
     List<MutableTrendPoint> points = new ArrayList<>(window.bucketCount());
     for (int index = 0; index < window.bucketCount(); index++) {
-      points.add(new MutableTrendPoint(window.label(window.startTime().plusHours((long) index * window.bucketHours()))));
+      points.add(
+          new MutableTrendPoint(
+              window.label(
+                  window.startTime().plusMinutes((long) index * window.bucketMinutes()))));
     }
     return points;
+  }
+
+  private HotApi hotApi(ApiStatistics value) {
+    String fallback = value.apiId() == null ? "未知 API" : "API #" + value.apiId();
+    String name = firstText(value.name(), value.path(), fallback);
+    String path = firstText(value.path(), "");
+    return new HotApi(
+        value.apiId(),
+        name,
+        path,
+        value.calls(),
+        percent(value.successCalls(), value.calls()),
+        average(value.totalDurationMs(), value.calls()));
+  }
+
+  private static long average(long total, long count) {
+    return count <= 0 ? 0L : Math.round((double) Math.max(0L, total) / count);
   }
 
   private static double percent(long numerator, long denominator) {
     return denominator <= 0 ? 0D : Math.round((numerator * 1000D) / denominator) / 10D;
   }
 
-  public record Overview(String range, LocalDateTime startTime, LocalDateTime endTime, long apiTotal,
-      long runningApis, long stoppedApis, long totalCalls, long successCalls, long failureCalls,
-      double successRate, long averageDurationMs, long totalRows, List<TrendPoint> trend,
-      List<HotApi> hotApis, List<FailureItem> recentFailures) {}
-  public record TrendPoint(String time, long calls, long successCalls, long failureCalls, long averageDurationMs) {}
-  public record HotApi(Long apiId, String name, String path, long calls, double successRate, long averageDurationMs) {}
-  public record FailureItem(Long id, Long apiId, String serviceName, String servicePath, long durationMs,
-      String errorMessage, LocalDateTime createTime) {
+  private static String firstText(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) return value;
+    }
+    return "";
+  }
+
+  public record Overview(
+      String range,
+      LocalDateTime startTime,
+      LocalDateTime endTime,
+      long apiTotal,
+      long runningApis,
+      long stoppedApis,
+      long totalCalls,
+      long successCalls,
+      long failureCalls,
+      double successRate,
+      long averageDurationMs,
+      long totalRows,
+      List<TrendPoint> trend,
+      List<HotApi> hotApis,
+      List<FailureItem> recentFailures) {}
+
+  public record TrendPoint(
+      String time,
+      long calls,
+      long successCalls,
+      long failureCalls,
+      long averageDurationMs) {}
+
+  public record HotApi(
+      Long apiId,
+      String name,
+      String path,
+      long calls,
+      double successRate,
+      long averageDurationMs) {}
+
+  public record FailureItem(
+      Long id,
+      Long apiId,
+      String serviceName,
+      String servicePath,
+      long durationMs,
+      String errorMessage,
+      LocalDateTime createTime) {
+
     static FailureItem from(InvocationRecord log) {
-      return new FailureItem(log.id(), log.apiId(), log.serviceName(), log.servicePath(), Math.max(0L, log.durationMs()),
-          log.errorMessage(), log.createTime());
+      return new FailureItem(
+          log.id(),
+          log.apiId(),
+          log.serviceName(),
+          log.servicePath(),
+          Math.max(0L, log.durationMs()),
+          log.errorMessage(),
+          log.createTime());
     }
   }
 
   private static final class MutableTrendPoint {
-    private final String time; private long calls, successes, failures, duration;
-    MutableTrendPoint(String time) { this.time = time; }
-    void accept(boolean success, long value) { calls++; if (success) successes++; else failures++; duration += Math.max(0L, value); }
-    TrendPoint toView() { return new TrendPoint(time, calls, successes, failures, calls == 0 ? 0 : Math.round((double) duration / calls)); }
-  }
+    private final String time;
+    private long calls;
+    private long successes;
+    private long failures;
+    private long duration;
 
-  private static final class MutableApiStats {
-    private String name, path; private long calls, successes, duration;
-    MutableApiStats(InvocationRecord first) { name = first.serviceName(); path = first.servicePath(); }
-    void accept(InvocationRecord log) { calls++; if (log.success()) successes++; duration += Math.max(0L, log.durationMs());
-      if (log.serviceName() != null) name = log.serviceName(); if (log.servicePath() != null) path = log.servicePath(); }
-    HotApi toHotApi(Long id, DataServiceDefinition current) {
-      String currentName = current == null ? name : current.settings().name();
-      String currentPath = current == null ? path : current.settings().path();
-      return new HotApi(id, currentName, currentPath, calls, percent(successes, calls),
-          calls == 0 ? 0 : Math.round((double) duration / calls));
+    MutableTrendPoint(String time) {
+      this.time = time;
+    }
+
+    void accept(long calls, long successes, long failures, long duration) {
+      this.calls = Math.max(0L, calls);
+      this.successes = Math.max(0L, successes);
+      this.failures = Math.max(0L, failures);
+      this.duration = Math.max(0L, duration);
+    }
+
+    TrendPoint toView() {
+      return new TrendPoint(time, calls, successes, failures, average(duration, calls));
     }
   }
 
-  private record RangeWindow(String range, LocalDateTime startTime, int bucketHours, int bucketCount,
+  private record RangeWindow(
+      String range,
+      LocalDateTime startTime,
+      int bucketMinutes,
+      int bucketCount,
       DateTimeFormatter labelFormatter) {
+
     static RangeWindow of(String raw, LocalDateTime now) {
       String range = raw == null || raw.isBlank() ? "24h" : raw.trim().toLowerCase();
       return switch (range) {
-        case "24h" -> create("24h", now, 1, 24, DateTimeFormatter.ofPattern("HH:mm"));
-        case "7d" -> create("7d", now, 6, 28, DateTimeFormatter.ofPattern("MM-dd HH:mm"));
-        case "30d" -> create("30d", now, 24, 30, DateTimeFormatter.ofPattern("MM-dd"));
+        case "24h" -> create("24h", now, 60, 24, DateTimeFormatter.ofPattern("HH:mm"));
+        case "7d" -> create("7d", now, 360, 28, DateTimeFormatter.ofPattern("MM-dd HH:mm"));
+        case "30d" -> create("30d", now, 1_440, 30, DateTimeFormatter.ofPattern("MM-dd"));
         default -> throw new IllegalArgumentException("运行概览时间范围仅支持 24h、7d、30d");
       };
     }
-    static RangeWindow create(String range, LocalDateTime now, int bucketHours, int count, DateTimeFormatter formatter) {
-      LocalDateTime aligned = bucketHours >= 24 ? now.toLocalDate().atStartOfDay()
-          : now.withHour((now.getHour() / bucketHours) * bucketHours).withMinute(0).withSecond(0).withNano(0);
-      LocalDateTime endBoundary = aligned.plusHours(bucketHours);
-      return new RangeWindow(range, endBoundary.minusHours((long) bucketHours * count), bucketHours, count, formatter);
+
+    static RangeWindow create(
+        String range,
+        LocalDateTime now,
+        int bucketMinutes,
+        int count,
+        DateTimeFormatter formatter) {
+      int bucketHours = Math.max(1, bucketMinutes / 60);
+      LocalDateTime aligned =
+          bucketMinutes >= 1_440
+              ? now.toLocalDate().atStartOfDay()
+              : now
+                  .withHour((now.getHour() / bucketHours) * bucketHours)
+                  .withMinute(0)
+                  .withSecond(0)
+                  .withNano(0);
+      LocalDateTime endBoundary = aligned.plusMinutes(bucketMinutes);
+      return new RangeWindow(
+          range,
+          endBoundary.minusMinutes((long) bucketMinutes * count),
+          bucketMinutes,
+          count,
+          formatter);
     }
-    int bucketIndex(LocalDateTime time) { if (time == null || time.isBefore(startTime)) return -1;
-      return (int) (Duration.between(startTime, time).toMinutes() / (bucketHours * 60L)); }
-    String label(LocalDateTime time) { return labelFormatter.format(time); }
+
+    String label(LocalDateTime time) {
+      return labelFormatter.format(time);
+    }
   }
 }

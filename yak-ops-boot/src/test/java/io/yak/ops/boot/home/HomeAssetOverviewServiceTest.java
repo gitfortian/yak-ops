@@ -1,12 +1,17 @@
 package io.yak.ops.boot.home;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.dataset.Dataset;
-import io.yak.ops.business.dataset.DatasetStatus;
+import io.yak.ops.business.dataset.DatasetOverviewSnapshot;
 import io.yak.ops.business.dataset.DatasetService;
+import io.yak.ops.business.dataset.DatasetStatus;
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
 import io.yak.ops.business.lineage.domain.LineageRelation;
@@ -23,7 +28,7 @@ import org.springframework.beans.factory.ObjectProvider;
 class HomeAssetOverviewServiceTest {
 
   @Test
-  void shouldAggregateDatasetAndLineageOverviewFromPublicReadServices() {
+  void shouldAggregateDatasetAndLineageOverviewFromBoundedReadServices() {
     DatasetService datasetService = mock(DatasetService.class);
     LineageQueryService lineageQueryService = mock(LineageQueryService.class);
     @SuppressWarnings("unchecked")
@@ -36,33 +41,31 @@ class HomeAssetOverviewServiceTest {
     ZoneId zone = ZoneId.systemDefault();
     Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
     Instant recentTime = todayStart.plusSeconds(3_600);
-    when(datasetService.list())
-        .thenReturn(
-            List.of(
-                new Dataset(
-                    2L,
-                    "订单分析数据集",
-                    "订单主题分析",
-                    DatasetStatus.ONLINE,
-                    22L,
-                    recentTime,
-                    recentTime.plusSeconds(60)),
-                new Dataset(
-                    1L,
-                    "客户画像数据集",
-                    null,
-                    DatasetStatus.OFFLINE,
-                    11L,
-                    todayStart.minusSeconds(86_400),
-                    todayStart.minusSeconds(120))));
+    Dataset online =
+        new Dataset(
+            2L,
+            "订单分析数据集",
+            "订单主题分析",
+            DatasetStatus.ONLINE,
+            22L,
+            recentTime,
+            recentTime.plusSeconds(60));
+    Dataset offline =
+        new Dataset(
+            1L,
+            "客户画像数据集",
+            null,
+            DatasetStatus.OFFLINE,
+            11L,
+            todayStart.minusSeconds(86_400),
+            todayStart.minusSeconds(120));
+    when(datasetService.overview(any(), any(), eq(5)))
+        .thenReturn(new DatasetOverviewSnapshot(2L, 1L, List.of(online, offline), List.of(online)));
 
     LineageAsset source = asset(11L, "ods_order", LineageAssetType.TABLE, recentTime);
     LineageAsset target = asset(12L, "dwd_order_detail", LineageAssetType.TABLE, recentTime);
     LineageRelation relation = relation(21L, source.id(), target.id(), recentTime);
-    when(lineageQueryService.overview(
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(6)))
+    when(lineageQueryService.overview(any(), any(), eq(6)))
         .thenReturn(
             new LineageQueryService.Overview(
                 42L,
@@ -104,6 +107,7 @@ class HomeAssetOverviewServiceTest {
               assertThat(activity.targetName()).isEqualTo("dwd_order_detail");
               assertThat(activity.relationType()).isEqualTo("DERIVES_FROM");
             });
+    verify(datasetService, never()).list();
   }
 
   @Test
@@ -143,11 +147,9 @@ class HomeAssetOverviewServiceTest {
     ObjectProvider<LineageQueryService> lineageProvider = mock(ObjectProvider.class);
     when(datasetProvider.getIfAvailable()).thenReturn(datasetService);
     when(lineageProvider.getIfAvailable()).thenReturn(lineageQueryService);
-    when(datasetService.list()).thenThrow(new IllegalStateException("dataset unavailable"));
-    when(lineageQueryService.overview(
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(6)))
+    when(datasetService.overview(any(), any(), eq(5)))
+        .thenThrow(new IllegalStateException("dataset unavailable"));
+    when(lineageQueryService.overview(any(), any(), eq(6)))
         .thenReturn(
             new LineageQueryService.Overview(
                 1L, 0L, 0L, 1L, 0L, 0L, List.of(), List.of()));

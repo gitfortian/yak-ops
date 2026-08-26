@@ -1,7 +1,7 @@
 package io.yak.ops.boot.home;
 
 import io.yak.ops.business.dataset.Dataset;
-import io.yak.ops.business.dataset.DatasetStatus;
+import io.yak.ops.business.dataset.DatasetOverviewSnapshot;
 import io.yak.ops.business.dataset.DatasetService;
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageRelation;
@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,16 +39,16 @@ public class HomeAssetOverviewService {
 
   public OverviewResponse overview() {
     DayRange today = DayRange.today();
-    List<Dataset> datasets = loadDatasets();
+    DatasetOverviewSnapshot datasets = loadDatasets(today);
     LineageQueryService.Overview lineage = loadLineage(today);
-    return new OverviewResponse(datasetOverview(datasets, lineage, today), lineageOverview(lineage));
+    return new OverviewResponse(datasetOverview(datasets, lineage), lineageOverview(lineage));
   }
 
-  private List<Dataset> loadDatasets() {
+  private DatasetOverviewSnapshot loadDatasets(DayRange today) {
     DatasetService service = datasetServiceProvider.getIfAvailable();
     if (service == null) return null;
     try {
-      return service.list();
+      return service.overview(today.start(), today.end(), DATASET_LIST_LIMIT);
     } catch (RuntimeException exception) {
       LOGGER.warn("加载首页数据集总览失败", exception);
       return null;
@@ -68,15 +67,9 @@ public class HomeAssetOverviewService {
   }
 
   private DatasetOverview datasetOverview(
-      List<Dataset> datasets, LineageQueryService.Overview lineage, DayRange today) {
-    Long datasetCount = datasets == null ? null : (long) datasets.size();
-    Long todayCreatedCount =
-        datasets == null
-            ? null
-            : datasets.stream()
-                .map(Dataset::createTime)
-                .filter(value -> inRange(value, today))
-                .count();
+      DatasetOverviewSnapshot datasets, LineageQueryService.Overview lineage) {
+    Long datasetCount = datasets == null ? null : datasets.datasetCount();
+    Long todayCreatedCount = datasets == null ? null : datasets.createdCount();
     Long tableAssetCount = lineage == null ? null : lineage.tableAssetCount();
     Long columnAssetCount = lineage == null ? null : lineage.columnAssetCount();
 
@@ -85,38 +78,12 @@ public class HomeAssetOverviewService {
         tableAssetCount,
         columnAssetCount,
         todayCreatedCount,
-        recentDatasets(datasets),
-        onlineDatasets(datasets));
+        datasetItems(datasets == null ? List.of() : datasets.recentDatasets()),
+        datasetItems(datasets == null ? List.of() : datasets.onlineDatasets()));
   }
 
-  private List<DatasetItem> recentDatasets(List<Dataset> datasets) {
-    if (datasets == null || datasets.isEmpty()) return List.of();
-    return datasets.stream()
-        .sorted(datasetUpdatedComparator())
-        .limit(DATASET_LIST_LIMIT)
-        .map(this::datasetItem)
-        .toList();
-  }
-
-  private List<DatasetItem> onlineDatasets(List<Dataset> datasets) {
-    if (datasets == null || datasets.isEmpty()) return List.of();
-    return datasets.stream()
-        .filter(dataset -> dataset.status() == DatasetStatus.ONLINE)
-        .sorted(datasetUpdatedComparator())
-        .limit(DATASET_LIST_LIMIT)
-        .map(this::datasetItem)
-        .toList();
-  }
-
-  private Comparator<Dataset> datasetUpdatedComparator() {
-    return Comparator.comparing(
-            this::datasetUpdatedAt,
-            Comparator.nullsLast(Comparator.reverseOrder()))
-        .thenComparing(Dataset::id, Comparator.reverseOrder());
-  }
-
-  private Instant datasetUpdatedAt(Dataset dataset) {
-    return dataset.updateTime() == null ? dataset.createTime() : dataset.updateTime();
+  private List<DatasetItem> datasetItems(List<Dataset> datasets) {
+    return datasets.stream().map(this::datasetItem).toList();
   }
 
   private DatasetItem datasetItem(Dataset dataset) {
@@ -126,6 +93,10 @@ public class HomeAssetOverviewService {
         dataset.description(),
         dataset.status() == null ? "UNKNOWN" : dataset.status().name(),
         toText(datasetUpdatedAt(dataset)));
+  }
+
+  private Instant datasetUpdatedAt(Dataset dataset) {
+    return dataset.updateTime() == null ? dataset.createTime() : dataset.updateTime();
   }
 
   private LineageOverview lineageOverview(LineageQueryService.Overview lineage) {
@@ -200,10 +171,6 @@ public class HomeAssetOverviewService {
         "未命名资产");
   }
 
-  private boolean inRange(Instant value, DayRange range) {
-    return value != null && !value.isBefore(range.start()) && value.isBefore(range.end());
-  }
-
   private static String firstText(String... values) {
     for (String value : values) {
       if (value != null && !value.isBlank()) return value;
@@ -219,8 +186,7 @@ public class HomeAssetOverviewService {
     return value == null ? null : value.toString();
   }
 
-  public record OverviewResponse(DatasetOverview dataset, LineageOverview lineage) {
-  }
+  public record OverviewResponse(DatasetOverview dataset, LineageOverview lineage) {}
 
   public record DatasetOverview(
       Long datasetCount,
@@ -228,16 +194,14 @@ public class HomeAssetOverviewService {
       Long columnAssetCount,
       Long todayCreatedCount,
       List<DatasetItem> recentDatasets,
-      List<DatasetItem> onlineDatasets) {
-  }
+      List<DatasetItem> onlineDatasets) {}
 
   public record DatasetItem(
       String id,
       String name,
       String description,
       String status,
-      String updatedAt) {
-  }
+      String updatedAt) {}
 
   public record LineageOverview(
       Long assetCount,
@@ -246,23 +210,19 @@ public class HomeAssetOverviewService {
       Long datasetAssetCount,
       List<LineageNode> nodes,
       List<LineageEdge> edges,
-      List<LineageActivity> recentActivities) {
-  }
+      List<LineageActivity> recentActivities) {}
 
-  public record LineageNode(String id, String name, String assetType, String sourceType) {
-  }
+  public record LineageNode(String id, String name, String assetType, String sourceType) {}
 
   public record LineageEdge(
-      String id, String sourceAssetId, String targetAssetId, String relationType) {
-  }
+      String id, String sourceAssetId, String targetAssetId, String relationType) {}
 
   public record LineageActivity(
       String id,
       String sourceName,
       String targetName,
       String relationType,
-      String occurredAt) {
-  }
+      String occurredAt) {}
 
   private record DayRange(Instant start, Instant end) {
 

@@ -2,11 +2,13 @@ package io.yak.ops.business.dataset;
 
 import io.yak.ops.business.dataset.definition.DatasetBindingPolicy;
 import io.yak.ops.business.dataset.definition.DatasetManager;
+import io.yak.ops.business.dataset.definition.DatasetOverviewReader;
 import io.yak.ops.business.dataset.definition.DatasetReader;
 import io.yak.ops.business.dataset.development.DevelopmentDatasetManager;
 import io.yak.ops.business.dataset.publication.DatasetPublishCommand;
 import io.yak.ops.business.dataset.publication.DatasetPublisher;
 import io.yak.ops.business.dataset.schema.DatasetFieldSpec;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class DatasetService {
 
   private final DatasetReader reader;
+  private final DatasetOverviewReader overviewReader;
   private final DatasetManager manager;
   private final DatasetPublisher publisher;
   private final DatasetBindingPolicy bindingPolicy;
@@ -24,11 +27,13 @@ public class DatasetService {
 
   public DatasetService(
       DatasetReader reader,
+      DatasetOverviewReader overviewReader,
       DatasetManager manager,
       DatasetPublisher publisher,
       DatasetBindingPolicy bindingPolicy,
       DevelopmentDatasetManager developmentManager) {
     this.reader = reader;
+    this.overviewReader = overviewReader;
     this.manager = manager;
     this.publisher = publisher;
     this.bindingPolicy = bindingPolicy;
@@ -59,6 +64,10 @@ public class DatasetService {
 
   public List<Dataset> list() {
     return reader.list();
+  }
+
+  public DatasetOverviewSnapshot overview(Instant from, Instant to, int listLimit) {
+    return overviewReader.overview(from, to, listLimit);
   }
 
   public DatasetDetail get(long datasetId) {

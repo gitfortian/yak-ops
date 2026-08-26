@@ -7,6 +7,7 @@ import io.yak.ops.business.dataset.DatasetService;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade;
 import io.yak.ops.business.dataset.definition.DatasetBindingPolicy;
 import io.yak.ops.business.dataset.definition.DatasetManager;
+import io.yak.ops.business.dataset.definition.DatasetOverviewReader;
 import io.yak.ops.business.dataset.definition.DatasetReader;
 import io.yak.ops.business.dataset.development.DevelopmentDatasetManager;
 import io.yak.ops.business.dataset.gateway.datasource.DataSourceDatasetCatalogAdapter;
@@ -54,6 +55,7 @@ class DatasetRoleConventionTest {
     for (Class<?> role :
         List.of(
             DatasetReader.class,
+            DatasetOverviewReader.class,
             DatasetManager.class,
             DatasetBindingPolicy.class,
             DatasetPublisher.class,
