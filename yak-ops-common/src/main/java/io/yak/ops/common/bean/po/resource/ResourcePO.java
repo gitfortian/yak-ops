@@ -15,6 +15,7 @@ public class ResourcePO {
 
   @TableId(type = IdType.ASSIGN_ID)
   private Long id;
+  private Long projectId;
   private Long parentId;
   private String name;
   private String fullPath;

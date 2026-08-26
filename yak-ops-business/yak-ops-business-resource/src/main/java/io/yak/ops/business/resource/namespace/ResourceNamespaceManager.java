@@ -4,6 +4,7 @@ import io.yak.ops.business.resource.config.ConditionalOnResourceEnabled;
 import io.yak.ops.business.resource.domain.ResourceNode;
 import io.yak.ops.business.resource.domain.ResourceNodeFactory;
 import io.yak.ops.business.resource.domain.ResourcePath;
+import io.yak.ops.business.resource.domain.ResourceStoragePath;
 import io.yak.ops.business.resource.exception.ResourceException;
 import io.yak.ops.business.resource.repository.ResourceRepository;
 import io.yak.ops.business.resource.storage.ResourceStorageGateway;
@@ -42,7 +43,7 @@ public class ResourceNamespaceManager {
     String name = names.normalize(command.name());
     ensureNameAvailable(parent.id(), name, null);
     ResourcePath fullPath = new ResourcePath(parent.fullPath()).child(name);
-    String storagePath = fullPath.storagePath();
+    String storagePath = ResourceStoragePath.forProject(parent.projectId(), fullPath);
 
     storage.createDirectory(parent.storageType(), storagePath);
     try {
@@ -59,6 +60,7 @@ public class ResourceNamespaceManager {
               0L,
               null,
               command.description());
+      resource.setProjectId(parent.projectId());
       insert(resource);
       changes.dispatchAfterCommit(resource, ResourceFileSyncAction.CREATED, null);
       return resource;
@@ -137,6 +139,10 @@ public class ResourceNamespaceManager {
     if (targetParent.storageType() != resource.getStorageType()) {
       throw new ResourceException(ResourceErrorCode.CROSS_STORAGE_MOVE_UNSUPPORTED);
     }
+    if (resource.getProjectId() != null
+        && !resource.getProjectId().equals(targetParent.projectId())) {
+      throw new ResourceException(ResourceErrorCode.INVALID_MOVE_TARGET);
+    }
 
     ResourcePath oldPath = new ResourcePath(resource.getFullPath());
     ResourcePath newPath = new ResourcePath(targetParent.fullPath()).child(targetName);
@@ -150,7 +156,7 @@ public class ResourceNamespaceManager {
     }
 
     String oldStoragePath = resource.getStoragePath();
-    String newStoragePath = newPath.storagePath();
+    String newStoragePath = ResourceStoragePath.forProject(resource.getProjectId(), newPath);
     storage.move(resource.getStorageType(), oldStoragePath, newStoragePath, false);
 
     List<ResourceNode> updates = new ArrayList<>();
@@ -165,7 +171,9 @@ public class ResourceNamespaceManager {
       for (ResourceNode descendant : repository.findDescendants(oldPath.value())) {
         String suffix = descendant.getFullPath().substring(oldPath.value().length());
         descendant.setFullPath(newPath.value() + suffix);
-        descendant.setStoragePath(new ResourcePath(descendant.getFullPath()).storagePath());
+        descendant.setStoragePath(
+            ResourceStoragePath.forProject(
+                descendant.getProjectId(), new ResourcePath(descendant.getFullPath())));
         bumpNamespaceRevision(descendant);
         updates.add(descendant);
       }

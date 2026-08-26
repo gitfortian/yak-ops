@@ -34,23 +34,45 @@ public class ResourceDaoImpl implements ResourceDao {
 
   @Override
   public ResourcePO selectById(Long id) {
-    return id == null ? null : resourceMapper.selectById(id);
+    return selectById(null, id);
+  }
+
+  @Override
+  public ResourcePO selectById(Long projectId, Long id) {
+    if (id == null) return null;
+    if (projectId == null) return resourceMapper.selectById(id);
+    return resourceMapper.selectOne(
+        Wrappers.<ResourcePO>lambdaQuery()
+            .eq(ResourcePO::getProjectId, projectId)
+            .eq(ResourcePO::getId, id));
   }
 
   @Override
   public ResourcePO selectByFullPath(String fullPath) {
-    if (!StringUtils.hasText(fullPath)) {
-      return null;
-    }
+    return selectByFullPath(null, fullPath);
+  }
+
+  @Override
+  public ResourcePO selectByFullPath(Long projectId, String fullPath) {
+    if (!StringUtils.hasText(fullPath)) return null;
     return resourceMapper.selectOne(
-        Wrappers.<ResourcePO>lambdaQuery().eq(ResourcePO::getFullPath, fullPath));
+        Wrappers.<ResourcePO>lambdaQuery()
+            .eq(projectId != null, ResourcePO::getProjectId, projectId)
+            .eq(ResourcePO::getFullPath, fullPath));
   }
 
   @Override
   public boolean existsByParentAndName(Long parentId, String name, Long excludeId) {
+    return existsByParentAndName(null, parentId, name, excludeId);
+  }
+
+  @Override
+  public boolean existsByParentAndName(
+      Long projectId, Long parentId, String name, Long excludeId) {
     Long count =
         resourceMapper.selectCount(
             Wrappers.<ResourcePO>lambdaQuery()
+                .eq(projectId != null, ResourcePO::getProjectId, projectId)
                 .eq(ResourcePO::getParentId, parentId == null ? 0L : parentId)
                 .eq(ResourcePO::getName, name)
                 .ne(excludeId != null, ResourcePO::getId, excludeId));
@@ -59,8 +81,14 @@ public class ResourceDaoImpl implements ResourceDao {
 
   @Override
   public List<ResourcePO> selectChildren(Long parentId, String keyword) {
+    return selectChildren(null, parentId, keyword);
+  }
+
+  @Override
+  public List<ResourcePO> selectChildren(Long projectId, Long parentId, String keyword) {
     return resourceMapper.selectList(
         Wrappers.<ResourcePO>lambdaQuery()
+            .eq(projectId != null, ResourcePO::getProjectId, projectId)
             .eq(ResourcePO::getParentId, parentId == null ? 0L : parentId)
             .and(
                 StringUtils.hasText(keyword),
@@ -75,30 +103,41 @@ public class ResourceDaoImpl implements ResourceDao {
 
   @Override
   public List<ResourcePO> selectAll() {
+    return selectAll(null);
+  }
+
+  @Override
+  public List<ResourcePO> selectAll(Long projectId) {
     return resourceMapper.selectList(
         Wrappers.<ResourcePO>lambdaQuery()
+            .eq(projectId != null, ResourcePO::getProjectId, projectId)
             .orderByAsc(ResourcePO::getFullPath)
             .orderByAsc(ResourcePO::getId));
   }
 
   @Override
   public List<ResourcePO> selectDescendants(String fullPath) {
-    if (!StringUtils.hasText(fullPath)) {
-      return Collections.emptyList();
-    }
+    return selectDescendants(null, fullPath);
+  }
+
+  @Override
+  public List<ResourcePO> selectDescendants(Long projectId, String fullPath) {
+    if (!StringUtils.hasText(fullPath)) return Collections.emptyList();
     return resourceMapper.selectList(
         Wrappers.<ResourcePO>lambdaQuery()
+            .eq(projectId != null, ResourcePO::getProjectId, projectId)
             .likeRight(ResourcePO::getFullPath, fullPath + "/")
             .orderByAsc(ResourcePO::getFullPath));
   }
 
   @Override
   public IPage<ResourcePO> selectPage(PageQuery query) {
-    PageQuery condition = query == null ? new PageQuery(1, 20, null, null, null) : query;
+    PageQuery condition = query == null ? new PageQuery(null, 1, 20, null, null, null) : query;
     Page<ResourcePO> page =
         Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
     LambdaQueryWrapper<ResourcePO> wrapper = Wrappers.lambdaQuery();
     wrapper
+        .eq(condition.projectId() != null, ResourcePO::getProjectId, condition.projectId())
         .eq(condition.parentId() != null, ResourcePO::getParentId, condition.parentId())
         .and(
             StringUtils.hasText(condition.keyword()),
@@ -115,19 +154,26 @@ public class ResourceDaoImpl implements ResourceDao {
 
   @Override
   public boolean updateBatch(List<ResourcePO> resources) {
-    if (resources == null || resources.isEmpty()) {
-      return true;
-    }
+    if (resources == null || resources.isEmpty()) return true;
     for (ResourcePO resource : resources) {
-      if (resourceMapper.updateById(resource) <= 0) {
-        return false;
-      }
+      if (resourceMapper.updateById(resource) <= 0) return false;
     }
     return true;
   }
 
   @Override
   public boolean deleteBatch(List<Long> ids) {
-    return ids != null && !ids.isEmpty() && resourceMapper.deleteByIds(ids) == ids.size();
+    return deleteBatch(null, ids);
+  }
+
+  @Override
+  public boolean deleteBatch(Long projectId, List<Long> ids) {
+    if (ids == null || ids.isEmpty()) return false;
+    if (projectId == null) return resourceMapper.deleteByIds(ids) == ids.size();
+    return resourceMapper.delete(
+            Wrappers.<ResourcePO>lambdaQuery()
+                .eq(ResourcePO::getProjectId, projectId)
+                .in(ResourcePO::getId, ids))
+        == ids.size();
   }
 }

@@ -25,6 +25,8 @@ import io.yak.ops.common.bean.vo.resource.ResourceContentVO;
 import io.yak.ops.common.bean.vo.resource.ResourceStoragePluginVO;
 import io.yak.ops.common.bean.vo.resource.ResourceVO;
 import io.yak.ops.common.constant.resource.ResourcePermissionCode;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -57,6 +59,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/resources")
 @RequiresPermission(ResourcePermissionCode.READ)
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class ResourcesController {
 
   private final ResourceNamespaceManager namespaceManager;

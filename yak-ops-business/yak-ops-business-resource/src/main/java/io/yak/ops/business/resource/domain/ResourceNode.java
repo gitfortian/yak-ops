@@ -9,6 +9,7 @@ import java.util.Objects;
 public class ResourceNode {
 
   private Long id;
+  private Long projectId;
   private Long parentId;
   private String name;
   private String fullPath;
@@ -31,6 +32,17 @@ public class ResourceNode {
 
   public void setId(Long id) {
     this.id = id;
+  }
+
+  public Long getProjectId() {
+    return projectId;
+  }
+
+  public void setProjectId(Long projectId) {
+    if (projectId != null && projectId <= 0L) {
+      throw new IllegalArgumentException("projectId must be positive");
+    }
+    this.projectId = projectId;
   }
 
   public Long getParentId() {
@@ -162,6 +174,7 @@ public class ResourceNode {
       return false;
     }
     return Objects.equals(id, other.id)
+        && Objects.equals(projectId, other.projectId)
         && Objects.equals(parentId, other.parentId)
         && Objects.equals(name, other.name)
         && Objects.equals(fullPath, other.fullPath)
@@ -183,6 +196,7 @@ public class ResourceNode {
   public int hashCode() {
     return Objects.hash(
         id,
+        projectId,
         parentId,
         name,
         fullPath,
@@ -204,6 +218,7 @@ public class ResourceNode {
   public String toString() {
     return "ResourceNode{" +
         "id=" + id +
+        ", projectId=" + projectId +
         ", parentId=" + parentId +
         ", name='" + name + '\'' +
         ", fullPath='" + fullPath + '\'' +
