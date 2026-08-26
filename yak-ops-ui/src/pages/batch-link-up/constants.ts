@@ -1,7 +1,10 @@
 import type { ThemeConfig } from 'antd';
 import moment from 'moment';
 
-import type { OfflineSyncPaginationState } from './types';
+import type {
+  OfflineSyncPaginationState,
+  OfflineSyncTimeRange,
+} from './types';
 
 export const OFFLINE_SYNC_DEFAULT_PAGINATION: OfflineSyncPaginationState = {
   current: 1,
@@ -18,7 +21,7 @@ export const OFFLINE_SYNC_STATUS_TABS = [
   { label: '失败', value: 'FAILED' },
 ] as const;
 
-export const createDefaultOfflineSyncTimeRange = () => [
+export const createDefaultOfflineSyncTimeRange = (): OfflineSyncTimeRange => [
   moment().subtract(4, 'days'),
   moment().add(1, 'days'),
 ];
