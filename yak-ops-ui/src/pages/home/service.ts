@@ -83,7 +83,62 @@ export interface HomeScheduleResponse {
   items: HomeScheduleItem[];
 }
 
+export interface HomeAssetDatasetItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  status: string;
+  updatedAt?: string | null;
+}
+
+export interface HomeAssetDatasetOverview {
+  datasetCount: number | null;
+  tableAssetCount: number | null;
+  columnAssetCount: number | null;
+  todayCreatedCount: number | null;
+  recentDatasets: HomeAssetDatasetItem[];
+  onlineDatasets: HomeAssetDatasetItem[];
+}
+
+export interface HomeLineageNode {
+  id: string;
+  name: string;
+  assetType: string;
+  sourceType?: string | null;
+}
+
+export interface HomeLineageEdge {
+  id: string;
+  sourceAssetId: string;
+  targetAssetId: string;
+  relationType: string;
+}
+
+export interface HomeLineageActivity {
+  id: string;
+  sourceName: string;
+  targetName: string;
+  relationType: string;
+  occurredAt?: string | null;
+}
+
+export interface HomeAssetLineageOverview {
+  assetCount: number | null;
+  relationCount: number | null;
+  todayUpdatedCount: number | null;
+  datasetAssetCount: number | null;
+  nodes: HomeLineageNode[];
+  edges: HomeLineageEdge[];
+  recentActivities: HomeLineageActivity[];
+}
+
+export interface HomeAssetOverview {
+  dataset: HomeAssetDatasetOverview;
+  lineage: HomeAssetLineageOverview;
+}
+
 const PREFIX = '/api/v1/home/data-center';
+const ASSET_PREFIX = '/api/v1/home/assets';
 
 export const homeDataCenterApi = {
   overview: (
@@ -100,4 +155,9 @@ export const homeDataCenterApi = {
     HttpUtils.get<HomeScheduleResponse>(
       `${PREFIX}/schedule?period=${encodeURIComponent(period)}`,
     ),
+};
+
+export const homeAssetOverviewApi = {
+  overview: (): Promise<ApiResponse<HomeAssetOverview>> =>
+    HttpUtils.get<HomeAssetOverview>(`${ASSET_PREFIX}/overview`),
 };

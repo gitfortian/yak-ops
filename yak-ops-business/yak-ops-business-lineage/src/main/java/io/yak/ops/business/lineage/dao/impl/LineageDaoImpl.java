@@ -9,6 +9,7 @@ import io.yak.ops.business.lineage.dao.mapper.LineageRelationMapper;
 import io.yak.ops.business.lineage.dao.mapper.LineageWriteMapper;
 import io.yak.ops.business.lineage.dao.model.LineageAssetPO;
 import io.yak.ops.business.lineage.dao.model.LineageRelationPO;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -109,15 +110,52 @@ public class LineageDaoImpl implements LineageDao {
         Wrappers.<LineageAssetPO>lambdaQuery()
             .and(
                 StringUtils.hasText(condition.keyword()),
-                nested -> nested.like(LineageAssetPO::getName, condition.keyword())
-                    .or().like(LineageAssetPO::getAssetKey, condition.keyword())
-                    .or().like(LineageAssetPO::getTableName, condition.keyword())
-                    .or().like(LineageAssetPO::getColumnName, condition.keyword()))
-            .eq(StringUtils.hasText(condition.assetType()),
-                LineageAssetPO::getAssetType, condition.assetType())
+                nested ->
+                    nested
+                        .like(LineageAssetPO::getName, condition.keyword())
+                        .or()
+                        .like(LineageAssetPO::getAssetKey, condition.keyword())
+                        .or()
+                        .like(LineageAssetPO::getTableName, condition.keyword())
+                        .or()
+                        .like(LineageAssetPO::getColumnName, condition.keyword()))
+            .eq(
+                StringUtils.hasText(condition.assetType()),
+                LineageAssetPO::getAssetType,
+                condition.assetType())
             .orderByDesc(LineageAssetPO::getUpdateTime)
             .orderByDesc(LineageAssetPO::getId)
             .last("LIMIT " + Math.max(1, condition.limit())));
+  }
+
+  @Override
+  public long countAssets(String assetType) {
+    return assetMapper.selectCount(
+        Wrappers.<LineageAssetPO>lambdaQuery()
+            .eq(StringUtils.hasText(assetType), LineageAssetPO::getAssetType, assetType));
+  }
+
+  @Override
+  public long countAssetsUpdatedBetween(Timestamp start, Timestamp end) {
+    return assetMapper.selectCount(
+        Wrappers.<LineageAssetPO>lambdaQuery()
+            .ge(LineageAssetPO::getUpdateTime, start)
+            .lt(LineageAssetPO::getUpdateTime, end));
+  }
+
+  @Override
+  public long countRelations() {
+    return relationMapper.selectCount(null);
+  }
+
+  @Override
+  public List<LineageRelationPO> selectRecentRelations(int limit) {
+    return relationMapper.selectList(
+        Wrappers.<LineageRelationPO>lambdaQuery()
+            .orderByDesc(LineageRelationPO::getUpdateTime)
+            .orderByDesc(LineageRelationPO::getObservedAt)
+            .orderByDesc(LineageRelationPO::getId)
+            .last("LIMIT " + Math.max(1, limit)));
   }
 
   @Override

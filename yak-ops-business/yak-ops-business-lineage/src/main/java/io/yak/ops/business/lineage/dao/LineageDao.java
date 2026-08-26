@@ -2,6 +2,7 @@ package io.yak.ops.business.lineage.dao;
 
 import io.yak.ops.business.lineage.dao.model.LineageAssetPO;
 import io.yak.ops.business.lineage.dao.model.LineageRelationPO;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Set;
 
@@ -29,6 +30,14 @@ public interface LineageDao {
   LineageAssetPO selectAssetByKey(String assetKey);
 
   List<LineageAssetPO> selectAssets(AssetSearch query);
+
+  long countAssets(String assetType);
+
+  long countAssetsUpdatedBetween(Timestamp start, Timestamp end);
+
+  long countRelations();
+
+  List<LineageRelationPO> selectRecentRelations(int limit);
 
   List<LineageAssetPO> selectAssetsByIds(Set<Long> assetIds);
 

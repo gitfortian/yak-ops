@@ -26,7 +26,8 @@ io.yak.ops.business.lineage
 ├── query
 │   ├── LineageQueryService
 │   ├── LineageAssetReader
-│   └── LineageGraphReader
+│   ├── LineageGraphReader
+│   └── LineageOverviewReader
 ├── registration
 │   ├── LineageRegistrationService
 │   ├── LineageAssetRegistrar
@@ -45,7 +46,7 @@ io.yak.ops.business.lineage
 
 ### Query
 
-`LineageQueryService` 只保留只读事务与稳定入口；`LineageAssetReader` 负责资产定位/搜索，`LineageGraphReader` 负责有界图遍历。
+`LineageQueryService` 只保留只读事务与稳定入口；`LineageAssetReader` 负责资产定位/搜索，`LineageGraphReader` 负责有界图遍历，`LineageOverviewReader` 负责首页等轻量消费者需要的数量统计和有界最近关系读取。
 
 ### Registration
 
@@ -93,7 +94,7 @@ role facade
     ↓
 role component
     ↓
-LineageRepository
+LineageRepository / LineageOverviewRepository
     ↓
 LineageRepositoryAdapter
     ↓
@@ -102,7 +103,7 @@ LineageDao
 Mapper / PO / DB
 ```
 
-Facade 和内部角色不直接访问 DAO、Mapper、PO 或 persistence config。RepositoryAdapter 是 Domain 与 Persistence 的转换位置。
+Facade 和内部角色不直接访问 DAO、Mapper、PO 或 persistence config。RepositoryAdapter 是 Domain 与 Persistence 的转换位置；`LineageOverviewRepository` 只承载轻量统计和最近关系投影，不成为跨模块 contract。
 
 ## Persistence Configuration Corridor
 
