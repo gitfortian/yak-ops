@@ -16,6 +16,15 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/data-source', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/resources', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/datasets', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/data-development', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/task-catalog', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/job/batch-definition', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/job/batch-execution', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/job/batch-instance', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/job/batch-control', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/executor', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/realtime-sync', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/workflows', mode: 'PROJECT_OPTIONAL' },
 ];
 
 const normalizePath = (url: string): string => {

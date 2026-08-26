@@ -147,8 +147,12 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
     String sql = "UPDATE yak_task_asset SET project_id = ?, name = ?, task_type = ?, update_time = NOW(6) "
         + "WHERE source = ? AND source_ref = ?"
         + (currentProjectId == null ? "" : " AND (project_id = ? OR project_id IS NULL)");
-    List<Object> args = new ArrayList<>(
-        List.of(effectiveProjectId, name, taskType, source.name(), sourceRef));
+    List<Object> args = new ArrayList<>();
+    args.add(effectiveProjectId);
+    args.add(name);
+    args.add(taskType);
+    args.add(source.name());
+    args.add(sourceRef);
     if (currentProjectId != null) args.add(currentProjectId);
     return jdbcTemplate.update(sql, args.toArray()) > 0;
   }
