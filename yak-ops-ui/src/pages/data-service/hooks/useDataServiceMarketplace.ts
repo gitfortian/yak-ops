@@ -175,7 +175,6 @@ export const useDataServiceMarketplace = () => {
 
   return {
     services,
-    dataSources,
     loading,
     keyword,
     submittedKeyword,
@@ -196,6 +195,5 @@ export const useDataServiceMarketplace = () => {
     deleteService,
     toggleService,
     copyEndpoint,
-    refresh: loadMarketplace,
   };
 };
