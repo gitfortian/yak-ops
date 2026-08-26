@@ -12,6 +12,16 @@ import type {
 const DEFINITION_API = '/api/v1/job/batch-definition';
 const EXECUTION_API = '/api/v1/job/batch-execution';
 
+type IdentifierResponse = BatchLinkUpId | { id?: BatchLinkUpId };
+
+const identifierFromResponse = (value: IdentifierResponse): BatchLinkUpId | undefined => {
+  const identifier =
+    value && typeof value === 'object' ? value.id : value;
+  return identifier === undefined || identifier === null || identifier === ''
+    ? undefined
+    : identifier;
+};
+
 export const listOfflineSyncTasks = (
   query: OfflineSyncTaskPageQuery,
 ): Promise<PagingData<OfflineJobDefinitionVO>> =>
@@ -34,28 +44,43 @@ export const getOfflineSyncEditDetail = (
     `${DEFINITION_API}/${encodeURIComponent(id)}/edit-detail`,
   );
 
-export const getOfflineSyncUniqueId = (): Promise<BatchLinkUpId> =>
-  HttpUtils.getData<BatchLinkUpId>(`${DEFINITION_API}/get-unique-id`);
+export const getOfflineSyncUniqueId = async (): Promise<BatchLinkUpId> => {
+  const response = await HttpUtils.getData<IdentifierResponse>(
+    `${DEFINITION_API}/get-unique-id`,
+  );
+  const identifier = identifierFromResponse(response);
+  if (identifier === undefined) throw new Error('生成任务 ID 失败');
+  return identifier;
+};
 
-export const createOfflineSyncDraft = (
+export const createOfflineSyncDraft = async (
   payload: Record<string, unknown>,
-): Promise<BatchLinkUpId> =>
-  HttpUtils.postData<BatchLinkUpId>(`${DEFINITION_API}/draft`, payload);
-
-export const saveOfflineSyncSingleGuide = (
-  payload: Record<string, unknown>,
-): Promise<BatchLinkUpId> =>
-  HttpUtils.postData<BatchLinkUpId>(
-    `${DEFINITION_API}/guide-single/saveOrUpdate`,
-    payload,
+): Promise<BatchLinkUpId | undefined> =>
+  identifierFromResponse(
+    await HttpUtils.postData<IdentifierResponse>(
+      `${DEFINITION_API}/draft`,
+      payload,
+    ),
   );
 
-export const saveOfflineSyncMultiGuide = (
+export const saveOfflineSyncSingleGuide = async (
   payload: Record<string, unknown>,
-): Promise<BatchLinkUpId> =>
-  HttpUtils.postData<BatchLinkUpId>(
-    `${DEFINITION_API}/guide-multi/saveOrUpdate`,
-    payload,
+): Promise<BatchLinkUpId | undefined> =>
+  identifierFromResponse(
+    await HttpUtils.postData<IdentifierResponse>(
+      `${DEFINITION_API}/guide-single/saveOrUpdate`,
+      payload,
+    ),
+  );
+
+export const saveOfflineSyncMultiGuide = async (
+  payload: Record<string, unknown>,
+): Promise<BatchLinkUpId | undefined> =>
+  identifierFromResponse(
+    await HttpUtils.postData<IdentifierResponse>(
+      `${DEFINITION_API}/guide-multi/saveOrUpdate`,
+      payload,
+    ),
   );
 
 export const deleteOfflineSyncTask = async (
