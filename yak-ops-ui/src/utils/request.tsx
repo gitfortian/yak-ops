@@ -71,6 +71,12 @@ export const handleAuthenticationFailure = (
 ) => {
   dispatchAuthenticationInvalidated();
   if (window.location.pathname.toLowerCase().startsWith("/login")) {
+    notifyOnce("login-authentication", {
+      type: "error",
+      title: "登录失败",
+      description: reason,
+      meta: "请检查账号密码或稍后重试",
+    });
     return;
   }
   if (authenticationFailureHandled) return;
@@ -87,12 +93,12 @@ export const handleAuthenticationFailure = (
 
 /** 业务异常的唯一展示出口。 */
 const handleBusinessError = (error: BizError) => {
+  if (error.skipErrorHandler) return;
+
   if (isUnauthenticatedResponse(error.response, error.protocol)) {
     handleAuthenticationFailure(error.message);
     return;
   }
-
-  if (error.skipErrorHandler) return;
 
   notifyOnce(`business:${error.protocol}:${error.code}:${error.message}`, {
     type: "error",
@@ -102,7 +108,16 @@ const handleBusinessError = (error: BizError) => {
   });
 };
 
-/** 唯一错误出口 */
+const shouldSkipErrorHandler = (error: any): boolean => {
+  const requestOptions =
+    error?.request?.options ??
+    error?.requestOptions ??
+    error?.options ??
+    error?.request;
+  return Boolean(requestOptions?.skipErrorHandler);
+};
+
+/** 唯一错误出口。展示完成后仍必须拒绝 Promise，避免失败请求继续执行成功链路。 */
 const errorHandler = (error: any): Response | undefined => {
   const { response } = error;
 
@@ -111,6 +126,8 @@ const errorHandler = (error: any): Response | undefined => {
     handleBusinessError(error);
     throw error;
   }
+
+  const skipErrorHandler = shouldSkipErrorHandler(error);
 
   // HTTP 异常。umi-request 会把 JSON 错误体放在 error.data 中，优先展示
   // 后端真实 msg/message，而不是用通用 HTTP 状态文案覆盖它。
@@ -126,48 +143,52 @@ const errorHandler = (error: any): Response | undefined => {
     const payloadUnauthenticated =
       isApiResponse(payload) && isUnauthenticatedResponse(payload, protocol);
     if (status === 401 || payloadUnauthenticated) {
-      handleAuthenticationFailure(errorText);
-      return response;
+      if (!skipErrorHandler) handleAuthenticationFailure(errorText);
+      throw error;
     }
 
-    notifyOnce(`http:${status}:${url || ""}:${errorText}`, {
-      type: "error",
-      title: `请求错误 ${status}`,
-      description: (
-        <div>
-          <div>{errorText}</div>
-          {url ? (
-            <div
-              style={{
-                marginTop: 6,
-                fontSize: 12,
-                color: "rgba(23, 32, 51, 0.45)",
-              }}
-            >
-              {url}
-            </div>
-          ) : null}
-        </div>
-      ),
-      meta: status === 403 ? "权限不足" : "服务端返回异常",
-      duration: 3.5,
-    });
+    if (!skipErrorHandler) {
+      notifyOnce(`http:${status}:${url || ""}:${errorText}`, {
+        type: "error",
+        title: `请求错误 ${status}`,
+        description: (
+          <div>
+            <div>{errorText}</div>
+            {url ? (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 12,
+                  color: "rgba(23, 32, 51, 0.45)",
+                }}
+              >
+                {url}
+              </div>
+            ) : null}
+          </div>
+        ),
+        meta: status === 403 ? "权限不足" : "服务端返回异常",
+        duration: 3.5,
+      });
+    }
 
-    return response;
+    throw error;
   }
 
   // Abort is caller-controlled (navigation, timeout, stale request), not a network fault.
   if (error?.name === "AbortError" || error?.type === "aborted") throw error;
 
   // 网络异常
-  notifyOnce("network", {
-    type: "warning",
-    title: "网络异常",
-    description: "当前无法连接到服务器，请检查网络或稍后再试。",
-    meta: "连接中断",
-  });
+  if (!skipErrorHandler) {
+    notifyOnce("network", {
+      type: "warning",
+      title: "网络异常",
+      description: "当前无法连接到服务器，请检查网络或稍后再试。",
+      meta: "连接中断",
+    });
+  }
 
-  return response;
+  throw error;
 };
 
 function createClient() {
@@ -211,7 +232,7 @@ request.interceptors.response.use(async (response: Response, options: any) => {
       extractErrorMessage(res, "登录状态失效"),
       res.code,
       res,
-      true,
+      options?.skipErrorHandler,
       protocol
     );
   }
