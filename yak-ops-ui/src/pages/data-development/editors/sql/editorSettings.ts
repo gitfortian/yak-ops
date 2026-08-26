@@ -1,9 +1,6 @@
 import {
   getDevelopmentEditorSettings,
-  type YakEditorLineHighlight,
   type YakEditorSettings,
-  type YakRenderWhitespace,
-  type YakSqlCompletionFqn,
 } from '@/services/data-development';
 import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
