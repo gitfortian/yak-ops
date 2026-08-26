@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.yak.ops.business.quality.dao.mapper.QualityOverviewMapper">
+
+  <sql id="DimensionExpression">
+    COALESCE(
+      NULLIF(r.quality_dimension, ''),
+      CASE re.rule_type
+        WHEN 'TABLE_ROW_COUNT' THEN '完整性'
+        WHEN 'COLUMN_NOT_NULL' THEN '完整性'
+        WHEN 'COLUMN_UNIQUE' THEN '唯一性'
+        WHEN 'COLUMN_RANGE' THEN '有效性'
+        WHEN 'COLUMN_ENUM' THEN '准确性'
+        WHEN 'CUSTOM_SQL' THEN '自定义'
+        ELSE '其他'
+      END)
+  </sql>
+
+  <select id="selectStats" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$StatsRow">
+    SELECT
+      (SELECT COUNT(DISTINCT CONCAT(
+          m.data_source_id, '|', COALESCE(m.database_name, ''), '|',
+          COALESCE(m.schema_name, ''), '|', m.table_name))
+       FROM yak_quality_monitor m
+       WHERE m.deleted = 0 AND m.enabled = 1) AS monitored_table_count,
+      (SELECT COUNT(*)
+       FROM yak_quality_rule r
+       INNER JOIN yak_quality_monitor m ON m.id = r.monitor_id
+       WHERE r.deleted = 0 AND r.enabled = 1
+         AND m.deleted = 0 AND m.enabled = 1) AS enabled_rule_count,
+      (SELECT COUNT(*)
+       FROM yak_quality_execution e
+       WHERE e.queued_at &gt;= #{todayStart} AND e.queued_at &lt; #{todayEnd}) AS today_execution_count,
+      (SELECT COUNT(DISTINCT e.monitor_id)
+       FROM yak_quality_execution e
+       WHERE e.queued_at &gt;= #{todayStart} AND e.queued_at &lt; #{todayEnd}
+         AND e.check_result IN ('NOT_PASSED', 'ERROR')) AS today_issue_table_count,
+      (SELECT COUNT(*)
+       FROM yak_quality_rule_execution re
+       INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+       WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+         AND re.check_result IN ('PASSED', 'NOT_PASSED', 'ERROR')) AS recent_executed_rule_count,
+      (SELECT COUNT(*)
+       FROM yak_quality_rule_execution re
+       INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+       WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+         AND re.check_result = 'PASSED') AS recent_passed_rule_count,
+      (SELECT COUNT(*)
+       FROM yak_quality_rule_execution re
+       INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+       WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+         AND re.check_result IN ('NOT_PASSED', 'ERROR')) AS recent_issue_rule_count
+  </select>
+
+  <select id="selectDimensions" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$DimensionRow">
+    SELECT
+      <include refid="DimensionExpression"/> AS dimension,
+      COUNT(*) AS total_count,
+      SUM(CASE WHEN re.check_result = 'PASSED' THEN 1 ELSE 0 END) AS passed_count,
+      SUM(CASE WHEN re.check_result IN ('NOT_PASSED', 'ERROR') THEN 1 ELSE 0 END) AS issue_count
+    FROM yak_quality_rule_execution re
+    INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+    LEFT JOIN yak_quality_rule r ON r.id = re.rule_id
+    WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+      AND re.check_result IN ('PASSED', 'NOT_PASSED', 'ERROR')
+    GROUP BY <include refid="DimensionExpression"/>
+    ORDER BY FIELD(dimension, '完整性', '准确性', '唯一性', '有效性', '一致性', '时效性', '自定义', '其他'), dimension
+  </select>
+
+  <select id="selectRecentIssues" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$IssueRow">
+    SELECT
+      re.id AS rule_execution_id,
+      e.execution_no,
+      e.monitor_id,
+      e.monitor_name,
+      e.object_name,
+      e.table_name,
+      re.rule_name,
+      <include refid="DimensionExpression"/> AS dimension,
+      re.column_name,
+      re.check_result,
+      e.queued_at
+    FROM yak_quality_rule_execution re
+    INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+    LEFT JOIN yak_quality_rule r ON r.id = re.rule_id
+    WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+      AND re.check_result IN ('NOT_PASSED', 'ERROR')
+    ORDER BY e.queued_at DESC, e.id DESC, re.id ASC
+    LIMIT #{limit}
+  </select>
+</mapper>

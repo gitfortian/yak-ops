@@ -15,6 +15,7 @@ import io.yak.ops.business.quality.repository.QualityAlertRepository;
 import io.yak.ops.business.quality.repository.QualityExecutionRepository;
 import io.yak.ops.business.quality.repository.QualityExecutionWorkspaceRepository;
 import io.yak.ops.business.quality.repository.QualityMonitorRepository;
+import io.yak.ops.business.quality.repository.QualityOverviewRepository;
 import io.yak.ops.business.quality.repository.QualityTableAssetRepository;
 import io.yak.ops.business.quality.repository.QualityTemplateRepository;
 import io.yak.ops.business.quality.repository.QualityWorkspaceRepository;
@@ -45,6 +46,7 @@ class QualityLayeringConventionTest {
         QualityAlertRepository.class,
         CustomTemplateRepository.class,
         QualityWorkspaceRepository.class,
+        QualityOverviewRepository.class,
         QualityExecutionWorkspaceRepository.class));
   }
 
