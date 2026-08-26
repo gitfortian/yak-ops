@@ -16,7 +16,7 @@ import { useOfflineSyncTasks } from './hooks/useOfflineSyncTasks';
 import type { OfflineSyncConnectorOption } from './types';
 import { getOfflineSyncEditPath } from './utils';
 
-const BatchLinkUpPage = () => {
+const OfflineSyncPage = () => {
   const connectorOptions = useMemo(
     () => generateDataSourceOptions() as OfflineSyncConnectorOption[],
     [],
@@ -45,15 +45,14 @@ const BatchLinkUpPage = () => {
   } = useOfflineSyncTasks();
 
   const handleEdit = (
-    _id: BatchLinkUpId,
+    id: BatchLinkUpId,
     record: OfflineJobDefinitionVO,
   ) => {
-    if (record.id === undefined || record.id === null) {
-      message.warning('任务定义 ID 不能为空');
-      return;
-    }
-
-    const path = getOfflineSyncEditPath(record);
+    const editableRecord =
+      record.id === undefined || record.id === null
+        ? { ...record, id }
+        : record;
+    const path = getOfflineSyncEditPath(editableRecord);
     if (!path) {
       message.warning('暂不支持当前任务模式的编辑');
       return;
@@ -73,12 +72,8 @@ const BatchLinkUpPage = () => {
               currentStatus={currentStatus}
               connectorOptions={connectorOptions}
               advancedFilterCount={advancedFilterCount}
-              onDraftChange={(field, value) =>
-                updateFilterDraft(field, value)
-              }
-              onQuickFilterChange={(field, value) =>
-                changeQuickFilter(field, value)
-              }
+              onDraftChange={updateFilterDraft}
+              onQuickFilterChange={changeQuickFilter}
               onStatusChange={changeStatus}
               onSearch={searchTasks}
               onReset={resetFilters}
@@ -111,4 +106,4 @@ const BatchLinkUpPage = () => {
   );
 };
 
-export default BatchLinkUpPage;
+export default OfflineSyncPage;
