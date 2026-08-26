@@ -1637,7 +1637,7 @@ export default function UnifiedCreatePage() {
                 handlePanelAnimationEnd
               }
               className={[
-                'yak-create-panel-motion h-fit w-full rounded-[28px] bg-[#f7f7f4] px-7 py-8 sm:px-10 sm:py-10',
+                'yak-create-panel-motion h-fit w-full rounded-[28px] bg-[#f9f9fa] px-7 py-8 sm:px-10 sm:py-10',
                 contentMotionClassName,
                 motionPhase !== 'idle'
                   ? 'pointer-events-none'
