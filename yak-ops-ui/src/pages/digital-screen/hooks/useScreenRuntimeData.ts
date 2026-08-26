@@ -1,11 +1,11 @@
-import type { ScreenDataOverrides, ScreenTemplate } from '@/components/screen-engine';
 import type { PublishedDataset } from '@/components/analysis/model';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DigitalScreenBindings } from './model';
+import type { ScreenDataOverrides, ScreenTemplate } from '@/components/screen-engine';
 import {
   canQueryScreenComponent,
   queryScreenComponentData,
-} from './screen-data-service';
+  type DigitalScreenBindings,
+} from '@/services/digital-screen';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface ScreenRuntimeDataState {
   data: ScreenDataOverrides;
@@ -19,11 +19,11 @@ const EMPTY_STATE: ScreenRuntimeDataState = {
   errors: {},
 };
 
-export const useScreenRuntimeData = (
+export function useScreenRuntimeData(
   template: ScreenTemplate | undefined,
   bindings: DigitalScreenBindings,
   datasets: PublishedDataset[],
-) => {
+) {
   const [state, setState] = useState<ScreenRuntimeDataState>(EMPTY_STATE);
   const sequence = useRef(0);
   const bindingKey = useMemo(() => JSON.stringify(bindings), [bindings]);
@@ -81,11 +81,11 @@ export const useScreenRuntimeData = (
       window.clearTimeout(timer);
       if (sequence.current === requestId) sequence.current += 1;
     };
-  }, [template?.id, bindingKey, datasetKey]);
+  }, [bindingKey, datasetKey, template]);
 
   return {
     ...state,
     loadingCount: state.loadingIds.length,
     boundCount: template?.components.filter((component) => Boolean(bindings[component.id])).length ?? 0,
   };
-};
+}

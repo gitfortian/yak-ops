@@ -4,7 +4,7 @@ import type {
   DigitalScreenBindings,
   DigitalScreenInstance,
   UpdateDigitalScreenInput,
-} from './model';
+} from './types';
 
 const STORAGE_KEY = 'yak-ops:digital-screens:v1';
 
@@ -52,13 +52,13 @@ const writeScreens = (screens: DigitalScreenInstance[]) => {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(screens));
 };
 
-const sorted = (screens: DigitalScreenInstance[]) => [...screens].sort(
+const sortScreens = (screens: DigitalScreenInstance[]) => [...screens].sort(
   (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
 );
 
-export const fetchDigitalScreens = async () => sorted(readScreens());
+export const listDigitalScreens = async () => sortScreens(readScreens());
 
-export const fetchDigitalScreen = async (id: string) => {
+export const getDigitalScreen = async (id: string) => {
   const screen = readScreens().find((item) => item.id === id);
   if (!screen) throw new Error('数字化大屏不存在或已被删除');
   return screen;
@@ -150,7 +150,7 @@ export const unpublishDigitalScreen = async (id: string) => {
 };
 
 export const duplicateDigitalScreen = async (id: string) => {
-  const source = await fetchDigitalScreen(id);
+  const source = await getDigitalScreen(id);
   return createDigitalScreen({
     name: `${source.name} - 副本`,
     description: source.description,
