@@ -1,178 +1,210 @@
 # Lineage Dependencies
 
-本文定义 Lineage 的 package 依赖方向、跨模块 corridor 与 Maven 运行时归属。
+本文定义 Lineage 当前有效的 package、跨模块和 Maven 依赖方向。它描述真实结构，不把未来扩展当作活动白名单。
 
-## Final Dependency Graph
-
-长期方向保持单向、可解释，并由源码测试验证无环：
+## Active Dependency Graph
 
 ```text
 controller
-    ↓
-service
-    ├──────────────→ analysis ─────→ domain
-    ├──────────────→ collector ────→ domain
-    │                    └─────────→ analysis
-    ├──────────────→ repository ───→ domain
-    │                    ↓
-    │                   dao ───────→ config
+    ├──────────────→ service
     └──────────────→ domain
 
-config -> declared external persistence corridor only
+service
+    ├──────────────→ analysis
+    ├──────────────→ repository
+    └──────────────→ domain
+
+analysis ──────────→ domain
+repository ────────→ dao
+repository ────────→ domain
+dao ───────────────→ config
+
+config
+domain
 ```
 
 允许矩阵：
 
 | Source | May depend on |
 | --- | --- |
-| `controller` | `service`, `domain`, transport-local converter/dto/vo |
-| `service` | `domain`, `analysis`, `collector`, `repository` |
+| `controller` | `service`, `domain`, transport-local dto/vo/converter |
+| `service` | `analysis`, `repository`, `domain` |
 | `analysis` | `domain` |
-| `collector` | `domain`, `analysis` |
-| `repository` | `domain`, `dao`, `repository.support` |
-| `dao` | `config`, DAO-local mapper/model/support |
-| `config` | declared external persistence configuration only |
+| `repository` | `dao`, `domain`, `repository.support` |
+| `dao` | `config`, DAO-local mapper/model |
+| `config` | no other Lineage top-level package |
 | `domain` | no Lineage application/infrastructure package |
 
-目标图不得形成 `domain -> repository -> service`、`dao -> repository`、`collector -> service` 或其他反向依赖。
+实际 top-level package 集合必须与矩阵键完全一致，且声明图和 import 图都必须无环。
 
-## Current Structure
+## Public API Corridors
+
+邻接业务模块只允许直接编译依赖以下类型根：
 
 ```text
-controller -> service -> repository -> domain
-                              └-----> dao -> config
+analysis.sql.SqlProjectionLineageAnalyzer
 
-analysis/sql
-  -> source-neutral SQL projection contract
+domain.LineageAsset
+domain.LineageAssetType
+domain.LineageDirection
+domain.LineageGraph
+domain.LineageRelation
+domain.LineageRelationType
+
+service.LineageQueryService
+service.LineageWriteService
+service.LineageMaintenanceService
 ```
 
-根包没有 production Java 类型。Service 不直接依赖 DAO/Mapper/PO，跨模块调用方不能引用旧根包 Service、Domain 或 Analyzer。
+允许嵌套类型跟随所属根类型，例如 `LineageWriteService.RegisterAssetCommand`。
 
-## SQL Analysis Corridors
+禁止跨模块 import：
 
-共享 contract：
+```text
+controller/*
+config/*
+dao/*
+repository/*
+domain.LineageAssetDraft
+domain.LineageRelationDraft
+```
+
+当前真实 corridor：
+
+```text
+Data Development lineage/analysis
+    -> SqlProjectionLineageAnalyzer
+
+Dataset gateway/lineage
+    -> Analyzer + Query/Write/Maintenance Service + selected Domain
+
+Analysis gateway/lineage
+    -> Query/Write/Maintenance Service + selected Domain
+
+Dashboard gateway/lineage
+    -> Query/Write/Maintenance Service + selected Domain
+```
+
+邻接模块应继续通过自身 Gateway/Adapter 使用这些类型，不把 Lineage 依赖散落到 Controller、DAO 或核心 Domain。
+
+## SQL Analysis Corridor
 
 ```text
 io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer
 ```
 
-允许的真实实现与消费边界：
+固定方向：
 
 ```text
-Data Development lineage/analysis implementation
-    -> shared SQL analysis contract
-
-Dataset gateway/lineage adapter
-    -> shared SQL analysis contract
+Data Development implementation -> shared contract
+Dataset adapter                 -> shared contract
+Lineage                          -X-> Data Development parser
 ```
 
-Lineage 模块不能为了复用 parser 反向依赖 Data Development。Dataset 也不能直接依赖 Data Development parser；它只依赖自身 Gateway 和共享 contract。
+共享 contract 不携带 Spring、Repository、DAO、Parser SDK 或调用方 Domain 类型。
 
-## Persistence Configuration Corridor
+## Persistence Corridor
 
-Lineage 唯一允许的外部 business-module import 是 Datasource 配置 corridor：
+```text
+Service -> LineageRepository -> LineageRepositoryAdapter -> LineageDao
+```
+
+固定限制：
+
+```text
+controller -X-> repository / dao
+service    -X-> dao / mapper / PO / config
+analysis   -X-> Spring / service / repository / dao / config
+repository -X-> controller / DTO / VO
+dao        -X-> controller / service / analysis / repository / domain orchestration
+domain     -X-> Spring / MyBatis / controller / service / repository / dao / analysis
+```
+
+## External Business Corridor
+
+Lineage 只允许通过两个配置文件直接进入 Datasource：
 
 ```text
 config/ConditionalOnLineagePersistence.java
-  -> io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled
+    -> ConditionalOnDataSourceEnabled
 
 config/LineagePersistenceConfiguration.java
-  -> io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration
-  -> io.yak.ops.business.datasource.config.DataSourceProperties
+    -> BusinessDatabaseConfiguration
+    -> DataSourceProperties
 ```
 
-DAO、Repository、Service、Controller、Domain、Analysis 不得直接 import Datasource。`LineageDaoImpl` 通过 Lineage 自己的 `ConditionalOnLineagePersistence` 接收装配条件。
+DAO 和 Repository 不能直接 import `io.yak.ops.business.datasource.*`。
 
-该列表是精确白名单，不是 package 前缀放行。新增类型必须说明为何不能通过现有配置边界表达。
+## Maven Boundary
 
-## Collector Corridors
+Lineage 保持单一 Maven module，不提前拆 `lineage-core / lineage-api / lineage-flink / lineage-spark`。
 
-当前没有 Collector production implementation，也不以空目录或空接口模拟未来架构。
+直接依赖只承担源码编译和 Lineage 自身实现所需能力：
 
-出现 Flink / Spark / Hadoop 等真实采集能力时，平台依赖只能进入对应 `collector/<platform>` adapter。Collector 不得把 SDK 类型暴露给 Domain、Service 或 Repository contract，也不得反向调用稳定 Service 形成环。
+- Datasource 作为 optional persistence provider；
+- Spring Web/Validation 用于当前 HTTP contract；
+- Spring TX 用于稳定 Service transaction boundary；
+- MyBatis-Plus starter 用于 DAO；
+- Flyway Core 用于模块 migration；
+- Swagger annotations 用于源码注解；
+- Jackson/Lombok/Test 依赖按当前实现保留。
 
-## Forbidden Shortcuts
+数据库 driver、Flyway database extension 和 JSqlParser runtime 由 Datasource/应用装配侧提供，不通过 Lineage 向所有消费者传播。
 
-以下依赖不允许出现：
+拆分 Maven artifact 只能由真实需求驱动，例如：
+
+- 平台 SDK 体积或依赖冲突；
+- 可选装载；
+- 独立发布；
+- 需要在无 Spring/无 Persistence 环境复用 contract。
+
+## Extension Corridor
+
+当前没有 `collector` top-level package，也没有活动依赖边。
+
+首个真实 Collector 进入时，同一个 PR 必须明确并更新：
 
 ```text
-controller -> repository / dao / mapper / PO
-service -> dao / mapper / PO
-analysis -> service / repository / dao / controller / Spring
-collector -> service / repository / dao
-dao -> controller / service / repository / domain orchestration
-repository -> controller / DTO / VO
-domain -> Spring / MyBatis / repository / controller / analysis
-non-config package -> Datasource business module
+new package
+new dependency edge
+evidence ownership
+platform SDK boundary
+public API impact
+behavior tests
+documentation and executable guards
 ```
 
-HTTP transport mapping 留在 `controller`；持久化兼容转换留在 `repository`/`dao`；外部平台 SDK 留在 `analysis`/`collector` 的边界实现。
+不能先扩白名单，再等待未来实现补齐。
 
-## Maven Direct Dependency Surface
+## Root Package Rule
 
-Lineage POM 的直接依赖集合由 `LineageMavenDependencyBoundaryTest` 精确锁定：
+以下结构永久禁止：
 
 ```text
-Yak Ops:
-  yak-ops-common
-  yak-ops-business-datasource (optional)
-
-Framework/API:
-  spring-boot-starter-web
-  spring-boot-starter-validation
-  spring-tx
-  mybatis-plus-spring-boot3-starter
-  swagger-annotations-jakarta
-  flyway-core
-  lombok (optional)
-  spring-boot-starter-test (test)
+io.yak.ops.business.lineage.LineageService
+io.yak.ops.business.lineage.LineageAsset
+io.yak.ops.business.lineage.<any production type>
 ```
 
-新增直接 dependency 必须同步说明 capability owner、scope 和传递影响。
-
-## Runtime Ownership
-
-运行时依赖按实际装配职责归属：
-
-```text
-Datasource module
-  -> mybatis-plus-jsqlparser-4.9 (runtime)
-  -> flyway-mysql (runtime)
-
-Explicit application/plugin assembly
-  -> concrete JDBC drivers
-  -> Springdoc UI runtime
-
-Lineage
-  -X-> database driver
-  -X-> Flyway vendor module
-  -X-> Springdoc UI runtime
-  -X-> direct JSqlParser runtime
-```
-
-Lineage 对 Datasource 的依赖为 optional。仓库内任何直接依赖 Lineage 的 POM，必须同时显式依赖 Datasource；测试会扫描全部项目 POM，防止偶然依赖传递装配。
-
-这里约束的是 Lineage 依赖面，不把其他业务模块已有的数据库依赖重复声明纳入本阶段；它们由各模块后续独立治理。
-
-## Maven Module Boundary
-
-保持单一 `yak-ops-business-lineage` Maven module，不提前拆 `lineage-core / lineage-api / lineage-flink / lineage-spark`。
-
-只有出现真实的编译期隔离需求，例如某个平台 SDK 体积大、依赖冲突明显、需要独立发布或可选装载时，才考虑拆 Maven artifact。先把 Java 与 Maven 依赖方向锁清楚，再决定物理 jar 边界。
+根包类型禁令是结构规则，不再依赖有限的旧类名列表。公开 contract 必须归属 `analysis`、`domain` 或 `service` 的明确角色路径。
 
 ## Governance
 
-`LineageArchitectureTest` 保护反射可见的层次语义；`LineageDependencyBoundaryTest` 与 `LineageMavenDependencyBoundaryTest` 保护：
+- `LineageDependencyBoundaryTest`：精确 package 集合、依赖图、Datasource corridor、根包禁令；
+- `LineageMavenDependencyBoundaryTest`：直接依赖集合、runtime provider、消费方显式装配；
+- `LineagePublicApiBoundaryTest`：跨模块类型根和公开方法签名；
+- `LineageCodeStyleConventionTest`：package/path、文件/类型和角色位置；
+- `LineageDocumentationContractTest`：文档集合、链接和最终 contract。
 
-- 根包保持空白；
-- top-level package 必须经过声明；
-- 声明图和实际 import 图都保持无环；
-- 稳定 Service 与 Analysis role 集合固定；
-- Analysis 保持 source-neutral；
-- Datasource import 只进入精确的 config corridor；
-- DAO 使用 Lineage-owned persistence condition；
-- Controller、Service、Repository、DAO、Domain 不发生反向穿透；
-- 旧根包 contract 与业务大桶不能回流；
-- Lineage POM 直接依赖集合固定；
-- JSqlParser 与 Flyway vendor 由 Datasource 提供，driver/UI 不由 Lineage 传播；
-- Lineage 消费方显式装配 Datasource。
+新增 import 或 dependency 之前，先回答：
+
+```text
+Dependency Impact Analysis
+- New edge:
+- Owner of the target truth:
+- Existing corridor or new corridor:
+- Public API impact:
+- Cycle impact:
+- Maven/runtime impact:
+- Documentation and guard updated: yes/no
+```

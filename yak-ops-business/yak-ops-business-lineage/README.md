@@ -1,78 +1,86 @@
 # Lineage
 
-Lineage 是 Yak Ops 的统一元数据血缘模块，负责维护可稳定寻址的元数据资产、带来源证据的有向关系，以及受限深度的上下游图查询。
+Lineage 是 Yak Ops 的统一元数据血缘模块，负责维护可稳定寻址的资产、带来源证据的有向关系，以及有边界的上下游图查询。
 
 ## Read First
 
-本目录只维护**当前有效 contract**，历史迁移过程以 Git / PR 为准。
+本目录只维护当前有效 contract。历史迁移过程以 Git 和 Pull Request 为准，不进入长期架构文档。
 
 | Document | Answers |
 | --- | --- |
-| [`REQUIREMENTS.md`](./REQUIREMENTS.md) | 模块需要提供什么能力、哪些事情不在这里做 |
-| [`DOMAIN.md`](./DOMAIN.md) | Asset / Relation / Evidence / Graph 的领域语义 |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 长期 package、角色与持久化边界 |
-| [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package、跨模块 corridor 与 Maven 依赖归属 |
-| [`CODE_STYLE.md`](../../CODE_STYLE.md) | Yak Ops 仓库统一工程与代码规范 |
-| [`REVIEW.md`](./REVIEW.md) | Lineage PR 的评审标准 |
+| [`REQUIREMENTS.md`](./REQUIREMENTS.md) | 模块提供什么能力，哪些事情不属于 Lineage |
+| [`DOMAIN.md`](./DOMAIN.md) | Asset、Relation、Evidence、Graph 的领域语义 |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 当前 package、公共入口与持久化边界 |
+| [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package、Maven 与跨模块依赖方向 |
+| [`REVIEW.md`](./REVIEW.md) | Lineage 变更的评审和拒绝标准 |
+| [`CODE_STYLE.md`](../../CODE_STYLE.md) | Yak Ops 仓库统一工程规范 |
 
 ## Current Contract
 
-当前生产代码形成两条明确路径：
-
 ```text
-HTTP / module caller
-   -> query / write / maintenance service
-   -> repository
-   -> dao
-   -> shared business database
-
-Dataset / Data Development
-   -> analysis/sql/SqlProjectionLineageAnalyzer
+HTTP / neighboring module
+          ↓
+Query / Write / Maintenance Service
+          ↓
+      Repository
+          ↓
+         DAO
+          ↓
+ MyBatis / Flyway / business database
 ```
 
-Asset / Relation / Graph 位于 `domain`，稳定应用入口位于 `service`，共享 SQL 分析契约位于 `analysis/sql`。具体 SQL parser 实现在 Data Development 的 Lineage 角色包中，Dataset 只通过自身 Gateway Adapter 使用该 contract。
-
-`io.yak.ops.business.lineage` 根包不承载 production Java 类型，也不作为兼容大桶。
-
-## Persistence Contract
+SQL projection analysis 是独立的 source-neutral contract：
 
 ```text
-LineageRepository
-   -> LineageRepositoryAdapter
-   -> LineageDao
-   -> Mapper / PO / XML
+analysis/sql/SqlProjectionLineageAnalyzer
 ```
 
-Datasource 模块只允许从 `config` corridor 进入 Lineage：
+具体 SQL parser 实现由拥有 parser 的 Data Development 模块提供；Dataset 只通过自身 Gateway Adapter 使用共享 contract。
+
+## Active Package Shape
+
+当前生产代码只允许以下七个 top-level package：
 
 ```text
-ConditionalOnLineagePersistence
-LineagePersistenceConfiguration
+io.yak.ops.business.lineage
+├── analysis            # source-neutral analysis contracts
+├── config              # persistence enablement and wiring
+├── controller          # HTTP inbound + DTO/VO mapping
+├── dao                 # MyBatis primitives, mapper and PO
+├── domain              # framework-free lineage facts
+├── repository          # domain persistence contract + adapter
+└── service             # stable query/write/maintenance entries
 ```
 
-DAO 依赖 Lineage 自己的条件注解，不直接感知 Datasource 模块。Repository contract 不暴露 PO、Mapper、HTTP DTO 或 MyBatis 类型。
+根包不放 production Java 类型。`common / helper / utils / base` 不能成为新的业务大桶。
 
-## Maven Contract
+## Public API
 
-Lineage 只声明自身编译所需的 API 和实现边界：Web/Validation、Spring Transaction、MyBatis、Flyway Core、Swagger annotations。
-
-以下运行时能力不由 Lineage 向下游传播：
+邻接业务模块只允许编译依赖以下类型根：
 
 ```text
-Datasource module            -> MyBatis JSqlParser + Flyway MySQL runtime
-explicit app/plugin assembly -> JDBC drivers + Springdoc UI
+analysis.sql.SqlProjectionLineageAnalyzer
+
+domain.LineageAsset
+domain.LineageAssetType
+domain.LineageDirection
+domain.LineageGraph
+domain.LineageRelation
+domain.LineageRelationType
+
+service.LineageQueryService
+service.LineageWriteService
+service.LineageMaintenanceService
 ```
 
-本阶段只锁定 Lineage 的直接依赖面，不顺手统一其他业务模块已有的持久化 POM。
-
-Lineage 对 Datasource 的 Maven 依赖是 optional。任何直接消费 Lineage 的应用或业务模块，都必须显式声明 Datasource，而不能依赖传递引入。
+上述 Service 与 Analyzer 的公开嵌套类型也属于对应类型根。`LineageAssetDraft`、`LineageRelationDraft`、Repository、DAO、Config、Controller 均为模块内部实现，不是跨模块 contract。
 
 ## Core Model
 
 ```text
 LineageAsset
     │
-    │ source -> target
+    │ upstream source -> downstream target
     ▼
 LineageRelation
     │
@@ -81,30 +89,31 @@ LineageRelation
 LineageGraph = root + direction + bounded depth + assets + relations
 ```
 
-关系方向固定为**上游资产 -> 下游资产**。`READS_FROM / WRITES_TO / DERIVES_FROM / CONSUMES / CONTAINS` 描述下游如何使用、派生或包含上游。
+关系方向始终是上游资产指向下游资产。查询层不能为了页面展示反转领域事实。
 
-## Package Shape
+## Extension Protocol
+
+当前没有活动的 `collector` package，也没有 Flink、Spark、Hadoop 占位接口。
+
+当真实平台事件、SDK 或采集协议出现时，新增 Collector 的同一个 PR 必须同时完成：
+
+- 明确 Collector 的输入、输出和 evidence ownership；
+- 将平台 SDK 限制在 adapter 边界；
+- 复用统一 Domain 与稳定写入入口；
+- 更新精确 package 图、依赖图、公共 API 与架构测试；
+- 增加真实行为测试，而不是只创建空目录或空接口。
+
+## Architecture Guards
+
+长期 contract 由以下测试保护：
 
 ```text
-io.yak.ops.business.lineage
-├── controller          # HTTP inbound + transport mapping
-├── service             # stable query / write / maintenance facades
-├── domain              # framework-free lineage domain/value objects
-├── analysis
-│   └── sql             # source-neutral SQL analysis contract
-├── collector           # real platform/source collectors when required
-├── repository          # persistence contracts + domain/DAO adapter
-│   └── support         # persistence-only codecs
-├── dao                 # MyBatis primitives / mapper / PO
-└── config              # persistence wiring + external infrastructure corridor
+LineageArchitectureTest
+LineageDependencyBoundaryTest
+LineageMavenDependencyBoundaryTest
+LineagePublicApiBoundaryTest
+LineageCodeStyleConventionTest
+LineageDocumentationContractTest
 ```
 
-技术名称不直接决定业务层级。未来 Flink、Spark、Hadoop 等能力只有在存在真实采集链路时，才进入 `collector/<platform>`；它们复用统一 Domain 和稳定写入边界，不复制 Service / DAO / Domain。
-
-## Evolution Rule
-
-后续演进遵守三条底线：
-
-1. package、POM 与业务行为修改分开评审；
-2. 外部模块依赖只能进入文档和测试声明的窄 corridor；
-3. 新 dependency 必须有真实 owner，不能为了临时编译把驱动、UI 或平台 SDK 塞进 Lineage。
+新增 package、跨模块类型或 Maven dependency 时，代码、文档和对应 guard 必须在同一个 PR 中一起变化。

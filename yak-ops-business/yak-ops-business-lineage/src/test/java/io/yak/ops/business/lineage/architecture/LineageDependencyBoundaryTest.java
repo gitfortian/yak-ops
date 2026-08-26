@@ -16,11 +16,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-/** Source-level guard for the permanent Lineage package roles and dependency boundaries. */
+/** Source-level guard for the final Lineage package roles and dependency boundaries. */
 class LineageDependencyBoundaryTest {
 
   private static final String BASE = "io.yak.ops.business.lineage";
@@ -28,9 +29,8 @@ class LineageDependencyBoundaryTest {
   private static final Map<String, Set<String>> ALLOWED_TOP_LEVEL_DEPENDENCIES =
       Map.ofEntries(
           Map.entry("controller", Set.of("domain", "service")),
-          Map.entry("service", Set.of("analysis", "collector", "domain", "repository")),
+          Map.entry("service", Set.of("analysis", "domain", "repository")),
           Map.entry("analysis", Set.of("domain")),
-          Map.entry("collector", Set.of("analysis", "domain")),
           Map.entry("repository", Set.of("dao", "domain")),
           Map.entry("dao", Set.of("config")),
           Map.entry("domain", Set.of()),
@@ -57,6 +57,9 @@ class LineageDependencyBoundaryTest {
           Set.of(
               "io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration",
               "io.yak.ops.business.datasource.config.DataSourceProperties"));
+
+  private static final Pattern ROOT_TYPE_REFERENCE =
+      Pattern.compile("\\bio\\.yak\\.ops\\.business\\.lineage\\.[A-Z][A-Za-z0-9_$]*");
 
   @Test
   void rootPackageMustRemainEmpty() throws IOException {
@@ -106,24 +109,25 @@ class LineageDependencyBoundaryTest {
   }
 
   @Test
-  void productionTopLevelPackagesMustBeDeclared() throws IOException {
-    Set<String> actual = new HashSet<>();
+  void productionTopLevelPackagesMustMatchContract() throws IOException {
+    Set<String> actual = new LinkedHashSet<>();
     try (Stream<Path> paths = Files.list(productionRoot())) {
       paths.filter(Files::isDirectory)
           .map(path -> path.getFileName().toString())
           .forEach(actual::add);
     }
 
-    assertThat(DECLARED_TOP_LEVEL_PACKAGES)
-        .as("New top-level Lineage packages require an architecture contract update")
-        .containsAll(actual);
+    assertThat(actual)
+        .as("Active Lineage packages must match the executable architecture contract exactly")
+        .containsExactlyInAnyOrderElementsOf(DECLARED_TOP_LEVEL_PACKAGES);
   }
 
   @Test
   void topLevelImportsFollowDeclaredDependencyGraph() throws IOException {
     for (Dependency dependency : packageDependencies()) {
-      assertThat(ALLOWED_TOP_LEVEL_DEPENDENCIES.getOrDefault(
-              dependency.sourcePackage(), Set.of()))
+      assertThat(
+              ALLOWED_TOP_LEVEL_DEPENDENCIES.getOrDefault(
+                  dependency.sourcePackage(), Set.of()))
           .as("%s imports %s", dependency.relativePath(), dependency.importedType())
           .contains(dependency.targetPackage());
     }
@@ -185,6 +189,7 @@ class LineageDependencyBoundaryTest {
     assertNoImports(
         "service",
         BASE + ".dao.",
+        BASE + ".config.",
         "com.baomidou.mybatisplus",
         "JdbcTemplate");
   }
@@ -199,7 +204,6 @@ class LineageDependencyBoundaryTest {
         BASE + ".service.",
         BASE + ".repository.",
         BASE + ".dao.",
-        BASE + ".collector.",
         BASE + ".config.");
   }
 
@@ -219,7 +223,6 @@ class LineageDependencyBoundaryTest {
         BASE + ".controller.",
         BASE + ".service.",
         BASE + ".analysis.",
-        BASE + ".collector.",
         BASE + ".repository.",
         BASE + ".domain.");
   }
@@ -234,16 +237,13 @@ class LineageDependencyBoundaryTest {
         BASE + ".service.",
         BASE + ".repository.",
         BASE + ".dao.",
-        BASE + ".analysis.",
-        BASE + ".collector.");
+        BASE + ".analysis.");
   }
 
   @Test
   void serviceStereotypeCannotLeakIntoInfrastructureOrDomain() throws IOException {
-    for (String packageName :
-        Set.of("analysis", "collector", "config", "dao", "domain", "repository")) {
+    for (String packageName : Set.of("analysis", "config", "dao", "domain", "repository")) {
       Path root = productionRoot().resolve(packageName);
-      if (!Files.isDirectory(root)) continue;
       for (Path file : javaFiles(root)) {
         String source = Files.readString(file, StandardCharsets.UTF_8);
         assertThat(source)
@@ -254,29 +254,13 @@ class LineageDependencyBoundaryTest {
   }
 
   @Test
-  void legacyRootContractsCannotReturnAcrossProductionSources() throws IOException {
-    Set<String> forbiddenImports =
-        Set.of(
-            "import " + BASE + ".LineageService;",
-            "import " + BASE + ".LineageMaintenanceService;",
-            "import " + BASE + ".LineageAsset;",
-            "import " + BASE + ".LineageAssetDraft;",
-            "import " + BASE + ".LineageAssetType;",
-            "import " + BASE + ".LineageDirection;",
-            "import " + BASE + ".LineageGraph;",
-            "import " + BASE + ".LineageRelation;",
-            "import " + BASE + ".LineageRelationDraft;",
-            "import " + BASE + ".LineageRelationType;",
-            "import " + BASE + ".SqlProjectionLineageAnalyzer;");
-
+  void rootPackageTypesCannotReturnAcrossProductionSources() throws IOException {
     try (Stream<Path> files = Files.walk(repositoryRoot())) {
       for (Path file : files.filter(this::isProductionJava).toList()) {
         String source = Files.readString(file, StandardCharsets.UTF_8);
-        for (String forbiddenImport : forbiddenImports) {
-          assertThat(source)
-              .as("Legacy Lineage root contract in %s", normalize(file))
-              .doesNotContain(forbiddenImport);
-        }
+        assertThat(ROOT_TYPE_REFERENCE.matcher(source).find())
+            .as("Lineage root-package type reference in %s", normalize(file))
+            .isFalse();
       }
     }
   }
@@ -384,8 +368,6 @@ class LineageDependencyBoundaryTest {
 
   private void assertNoImports(String packageName, String... forbiddenTokens) throws IOException {
     Path root = productionRoot().resolve(packageName);
-    if (!Files.isDirectory(root)) return;
-
     for (Path file : javaFiles(root)) {
       String source = Files.readString(file, StandardCharsets.UTF_8);
       String imports =
@@ -402,6 +384,7 @@ class LineageDependencyBoundaryTest {
 
   private Set<Path> javaFiles(Path root) throws IOException {
     Set<Path> result = new LinkedHashSet<>();
+    if (!Files.isDirectory(root)) return result;
     try (Stream<Path> files = Files.walk(root)) {
       files.filter(path -> path.toString().endsWith(".java")).forEach(result::add);
     }
