@@ -1,5 +1,10 @@
 import { latestAnalysisQueryId } from '@/components/analysis/query-runtime';
 import {
+  fetchDashboard,
+  fetchDashboardQueryPerformance,
+  type DashboardQueryPerformance,
+} from '@/services/dashboard';
+import {
   Alert,
   Button,
   Descriptions,
@@ -11,12 +16,7 @@ import {
 } from 'antd';
 import { Download, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { fetchDashboard } from './dashboard-service';
 import { getDashboardPerformanceQuery } from './performance-runtime';
-import {
-  fetchDashboardQueryPerformance,
-  type DashboardQueryPerformance,
-} from './performance-service';
 
 const formatTime = (value?: string) => {
   if (!value) return '-';
