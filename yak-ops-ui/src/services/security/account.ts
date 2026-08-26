@@ -1,4 +1,8 @@
-import { securityGetData, securityPostData } from './client';
+import {
+  securityGetData,
+  securityPostData,
+  type SecurityRequestOptions,
+} from './client';
 
 /**
  * Yak Security AccountController contract.
@@ -24,8 +28,10 @@ export const login = (body: AccountLoginDTO): Promise<void> =>
 export const googleLogin = (credential: string): Promise<void> =>
   securityPostData<void>('/api/v1/auth/google/login', { credential });
 
-export const getCurrentUser = (): Promise<API.CurrentUserVO> =>
-  securityGetData<API.CurrentUserVO>(`${ACCOUNT_API}/current`);
+export const getCurrentUser = (
+  options?: SecurityRequestOptions,
+): Promise<API.CurrentUserVO> =>
+  securityGetData<API.CurrentUserVO>(`${ACCOUNT_API}/current`, options);
 
 export const logout = (): Promise<void> =>
   securityPostData<void>(`${ACCOUNT_API}/logout`);
