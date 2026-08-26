@@ -1,31 +1,21 @@
-import YakButton from '@/components/YakButton';
+import { YakButton } from '@/components/ui';
+import { uploadDataSourceDriver } from '@/services/data-source';
 import { UploadOutlined } from '@ant-design/icons';
 import { Input, message, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { useMemo, useState } from 'react';
 
-import { uploadDataSourceDriver } from './service';
-
 const DEFAULT_MAX_SIZE_MB = 200;
 
 export interface DriverManagerProps {
-  /** 数据源插件类型，用于将驱动包上传到对应插件上下文。 */
   dbType: string;
-  /** Form.Item 注入的受控值。 */
   value?: string;
-  /** Form.Item 注入的受控变更回调。 */
   onChange?: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
   maxSizeMB?: number;
 }
 
-/**
- * 数据源驱动标准组件。
- *
- * 组件只关心 value/onChange，不依赖具体 FormInstance 或字段 key，
- * 因此可以被动态 Schema、普通表单或后续驱动管理页面直接复用。
- */
 const DriverManager = ({
   dbType,
   value,
@@ -58,7 +48,10 @@ const DriverManager = ({
       customRequest: async ({ file, onSuccess, onError }) => {
         try {
           setUploading(true);
-          const driverLocation = await uploadDataSourceDriver(dbType, file as File);
+          const driverLocation = await uploadDataSourceDriver(
+            dbType,
+            file as File,
+          );
           onChange?.(driverLocation);
           message.success('驱动包上传成功');
           onSuccess?.({ driverLocation });
