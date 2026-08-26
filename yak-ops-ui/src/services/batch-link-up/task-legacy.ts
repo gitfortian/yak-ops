@@ -9,14 +9,11 @@ export enum Operate {
 export const apiPrefix = '/api/v1/task-definition';
 
 export const taskDefinitionApi = {
-  create: (data: Record<string, unknown>) => HttpUtils.post(apiPrefix, data),
+  create: (data: any) => HttpUtils.post(apiPrefix, data),
 
-  batch: (data: Record<string, unknown>) =>
-    HttpUtils.post(`${apiPrefix}/batch`, data),
+  batch: (data: any) => HttpUtils.post(`${apiPrefix}/batch`, data),
 
-  page: (
-    data: Record<string, unknown>,
-  ): Promise<{ code: number; data: unknown; message?: string }> =>
+  page: (data: any): Promise<{ code: number; data: any; message?: string }> =>
     HttpUtils.post(`${apiPrefix}/page`, data),
 
   delete: (id: string) => HttpUtils.delete(`${apiPrefix}/${id}`),
@@ -29,25 +26,25 @@ export const taskScheduleApiPrefix = '/api/v1/task-schedule';
 
 export const taskScheduleApi = {
   getLast5ExecutionTimes: (cron: string) =>
-    HttpUtils.get<unknown[]>(
+    HttpUtils.get<any[]>(
       `${taskScheduleApiPrefix}/last5-execution-times?cron=${encodeURIComponent(cron)}`,
     ),
 
   stopSchedule: (taskScheduleId: string) =>
-    HttpUtils.get<unknown[]>(
+    HttpUtils.get<any[]>(
       `${taskScheduleApiPrefix}/stop-schedule?taskScheduleId=${encodeURIComponent(taskScheduleId)}`,
     ),
 
   startSchedule: (taskScheduleId: string) =>
-    HttpUtils.get<unknown[]>(
+    HttpUtils.get<any[]>(
       `${taskScheduleApiPrefix}/start-schedule?taskScheduleId=${encodeURIComponent(taskScheduleId)}`,
     ),
 };
 
 export const linkupClientApi = {
-  getLogsByInstanceId(instanceId: string | number, jobMode: unknown) {
-    return HttpUtils.get<unknown[]>(
-      `/api/v1/devops/client/instance/${instanceId}/logs?jobMode=${encodeURIComponent(String(jobMode ?? ''))}`,
+  getLogsByInstanceId(instanceId: string | number, jobMode: any) {
+    return HttpUtils.get<any[]>(
+      `/api/v1/devops/client/instance/${instanceId}/logs?jobMode=${encodeURIComponent(jobMode)}`,
     );
   },
 };
