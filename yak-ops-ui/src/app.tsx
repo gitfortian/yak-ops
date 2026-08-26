@@ -80,11 +80,17 @@ export async function getInitialState(): Promise<{
   syncDocumentLocale();
 
   const fetchUserInfo = async () => toCurrentUser(await getCurrentUser());
-  // Always probe cookie-backed authentication state, including after a reload on login.
+  const onLoginPage = isLoginPath(window.location.pathname);
+
+  // Probe cookie-backed authentication state on every route. The login page uses
+  // a silent probe so an expired session or an unavailable backend does not show
+  // an unrelated current-user notification before the user submits the form.
   let currentUser: API.CurrentUser | undefined;
   let currentUserLoadError = false;
   try {
-    currentUser = await fetchUserInfo();
+    currentUser = onLoginPage
+      ? toCurrentUser(await getCurrentUser({ skipErrorHandler: true }))
+      : await fetchUserInfo();
   } catch (error) {
     currentUserLoadError = true;
 
@@ -92,7 +98,7 @@ export async function getInitialState(): Promise<{
     // 避免一直停留在初始化动画。
     redirectAnonymousUser();
   }
-  if (currentUser && isLoginPath(window.location.pathname)) {
+  if (currentUser && onLoginPage) {
     const requested = new URLSearchParams(window.location.search).get(
       "returnTo"
     );
