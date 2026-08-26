@@ -7,29 +7,30 @@
 ## Design Principles
 
 1. **Domain first.** Asset / Relation / Evidence / Graph 不被 HTTP、MyBatis、Flink/Spark/Hadoop 类型污染。
-2. **Stable entry, specialized roles.** Controller 只进入稳定应用 Service；内部用 Analyzer / Collector / Resolver / Mapper / Repository 等角色表达职责。
+2. **Stable entry, specialized roles.** Controller 只进入稳定应用 Service；内部用 Analyzer / Collector / Resolver / Converter / Repository 等角色表达职责。
 3. **One lineage model.** 不为 Flink、Spark、Hadoop、Dataset、SQL Task 各建一套 Asset/Relation。
 4. **External technology stops at boundary.** Parser、SDK、CLI、HTTP client、MyBatis PO 不能穿透到 Core Domain。
 5. **Read does not mutate.** Graph/query side 不因读取失败反向改写领域事实。
 6. **Structure change is not behavior change.** package move、class split 与 REST / DB / Flyway / Domain semantic change 分开评审。
 7. **Architecture is executable.** 文档 contract 必须由 architecture/dependency tests 持续保护。
 
-## Target Package Map
+## Package Map
 
 ```text
 io.yak.ops.business.lineage
 ├── controller          # HTTP inbound + DTO/VO/converter
 ├── service             # stable application facades
 ├── domain              # framework-free core domain / value objects
-├── analysis            # source-neutral analysis contracts + implementations
-├── collector           # platform/source ingestion roles
+├── analysis
+│   └── sql             # source-neutral SQL projection contract
+├── collector           # platform/source ingestion roles when real collectors exist
 ├── repository          # persistence contracts + adapters
 │   └── support         # persistence-only codecs/mapping helpers
 ├── dao                 # MyBatis primitives / mapper / PO
 └── config              # module configuration
 ```
 
-`common / helper / utils / base` 不能成为新的业务大桶。需要新 top-level package 时，必须先更新架构文档并说明它代表的稳定业务角色。
+`common / helper / utils / base` 不能成为新的业务大桶。根包也不能重新承担兼容层。需要新 top-level package 时，必须先说明它代表的稳定角色并同步更新文档与护栏。
 
 ## Application Boundary
 
@@ -54,7 +55,7 @@ Query 只负责资产定位、搜索和有界图遍历；Write 负责资产/关�
 
 - **Service**：跨 HTTP / module caller 的稳定应用入口，负责事务边界和用例编排；
 - **Analyzer**：输入事实并产生分析结果，不拥有持久化 truth；
-- **Collector**：从 Flink / Spark / Hadoop 等来源获取 lineage evidence；
+- **Collector**：从运行平台或外部来源采集 lineage evidence；
 - **Resolver**：把外部引用解析为统一领域引用；
 - **Mapper / Converter**：边界表示转换，不承载业务状态机；
 - **Repository**：领域持久化 contract；
@@ -63,7 +64,7 @@ Query 只负责资产定位、搜索和有界图遍历；Write 负责资产/关�
 
 ## Domain Boundary
 
-未来 `domain/` 只能依赖 JDK 与必要的通用值类型，不依赖：
+`domain/` 只能依赖 JDK 与必要的通用值类型，不依赖：
 
 ```text
 Spring MVC / Spring Service
@@ -73,24 +74,49 @@ Repository implementation
 Flink / Spark / Hadoop SDK
 ```
 
-Asset / Relation / Graph 已位于 `domain/`；稳定应用入口已位于 `service/`。Domain 不依赖 Service、Repository、Controller 或平台 SDK。
+Asset / Relation / Graph 位于 `domain/`；稳定应用入口位于 `service/`。Domain 不依赖 Service、Repository、Controller、Analyzer 或平台 SDK。
 
-## Analysis / Collector Boundary
+## Analysis Boundary
 
-SQL projection 分析已经具备 source-neutral contract。后续实现按角色归位：
+共享 SQL projection contract 位于：
 
 ```text
-analysis/
-└── sql/
-    └── ...SqlProjectionLineageAnalyzer
-
-collector/
-├── flink/
-├── spark/
-└── hadoop/
+analysis/sql/SqlProjectionLineageAnalyzer
 ```
 
-技术实现复用统一 Domain，不允许出现 `flink/domain`、`spark/domain` 等平行领域模型。
+它只描述 source-neutral 输入输出，不依赖 Spring、Repository、DAO、Data Development 或具体 parser library。
+
+真实实现位于拥有 parser 的邻接上下文：
+
+```text
+data-development
+└── lineage/analysis/DevelopmentSqlProjectionLineageAnalyzer
+        -> SQL lineage parser
+        -> shared analysis/sql contract
+```
+
+Dataset 通过自身 `LineageProjectionAnalyzerAdapter` 和 `ObjectProvider` 使用该 contract。这样保持：
+
+```text
+Dataset -> Lineage contract
+Data Development -> Lineage contract
+Lineage -X-> Data Development parser implementation
+```
+
+## Collector Boundary
+
+当前没有为 Flink / Spark / Hadoop 创建空 Collector 层。只有出现真实平台事件、SDK 或采集协议时，才新增：
+
+```text
+collector/<platform>/<RoleImplementation>
+```
+
+平台实现必须：
+
+- 产出统一 Asset / Relation evidence；
+- 通过稳定写入/维护边界落图；
+- 把 SDK、事件结构和连接细节留在 adapter 内；
+- 不创建 `flink/domain`、`spark/service` 等平行业务层。
 
 ## Persistence Boundary
 
@@ -114,22 +140,24 @@ Mapper / PO / MyBatis / DB
 - Repository adapter 是 Domain ↔ Persistence 的转换位置；
 - `LineageJsonCodec` 等持久化表示 helper 留在 `repository.support`。
 
-## Transitional Root Debt
+## Root Package Rule
 
-Stage 3 后根包只剩：
+`io.yak.ops.business.lineage` 根包必须保持空白，不放 production Java 类型。公开 contract 也必须归属明确角色包：
 
 ```text
-SqlProjectionLineageAnalyzer
+domain/*
+service/*
+analysis/sql/*
 ```
 
-它是下一阶段需要归入 `analysis` 角色包的 source-neutral contract。根包不再允许新增 Domain 或 Service 类型。
+不保留旧根包兼容 wrapper。仓库级源码扫描会阻止旧 Service、Domain 和 Analyzer import 回流。
 
 ## Change Rules
 
 1. 一个 PR 一个主要边界或行为关注点；
-2. Stage 1 不改 REST、DB schema、Flyway 和领域语义；
-3. package move 与 behavior change 尽量分开；
-4. 新入口稳定后不长期保留 production 双入口；
-5. Maven 子模块拆分必须由真实依赖隔离需求驱动，不为目录美观提前拆 jar；
-6. 新 dependency 必须同时符合 `ARCHITECTURE.md + DEPENDENCIES.md`；
+2. package move 与 behavior change 尽量分开；
+3. 新入口稳定后不长期保留 production 双入口；
+4. Maven 子模块拆分必须由真实依赖隔离需求驱动，不为目录美观提前拆 jar；
+5. 新 dependency 必须同时符合 `ARCHITECTURE.md + DEPENDENCIES.md`；
+6. Collector / Resolver 等角色只因真实用例出现，不提前制造空抽象；
 7. dependency guard 的白名单只能因真实架构变化收窄或经评审调整，不能为了让测试通过随意扩大。

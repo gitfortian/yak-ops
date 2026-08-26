@@ -9,10 +9,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-/** Source-level guard for the staged Lineage package migration and long-term boundaries. */
+/** Source-level guard for the permanent Lineage package roles and dependency boundaries. */
 class LineageDependencyBoundaryTest {
 
   private static final String BASE = "io.yak.ops.business.lineage";
@@ -28,17 +29,17 @@ class LineageDependencyBoundaryTest {
           "repository",
           "service");
 
-  private static final Set<String> TRANSITIONAL_ROOT_TYPES =
-      Set.of("SqlProjectionLineageAnalyzer.java");
-
   private static final Set<String> STABLE_SERVICE_TYPES =
       Set.of(
           "LineageMaintenanceService.java",
           "LineageQueryService.java",
           "LineageWriteService.java");
 
+  private static final Set<String> ANALYSIS_ROLE_TYPES =
+      Set.of("sql/SqlProjectionLineageAnalyzer.java");
+
   @Test
-  void transitionalRootPackageDebtCannotGrow() throws IOException {
+  void rootPackageMustRemainEmpty() throws IOException {
     Set<String> actual = new HashSet<>();
     try (Stream<Path> files = Files.list(productionRoot())) {
       files.filter(Files::isRegularFile)
@@ -48,8 +49,8 @@ class LineageDependencyBoundaryTest {
     }
 
     assertThat(actual)
-        .as("Root-package debt is transitional: move/remove existing types, do not add new ones")
-        .containsExactlyInAnyOrderElementsOf(TRANSITIONAL_ROOT_TYPES);
+        .as("Lineage root package is not a compatibility bucket")
+        .isEmpty();
   }
 
   @Test
@@ -65,6 +66,23 @@ class LineageDependencyBoundaryTest {
     assertThat(actual)
         .as("Lineage stable application facade set is explicit")
         .containsExactlyInAnyOrderElementsOf(STABLE_SERVICE_TYPES);
+  }
+
+  @Test
+  void analysisRoleSetIsExplicit() throws IOException {
+    Path root = productionRoot().resolve("analysis");
+    Set<String> actual;
+    try (Stream<Path> files = Files.walk(root)) {
+      actual =
+          files.filter(path -> path.toString().endsWith(".java"))
+              .map(root::relativize)
+              .map(this::normalize)
+              .collect(Collectors.toSet());
+    }
+
+    assertThat(actual)
+        .as("Lineage analysis contracts are explicit role-owned types")
+        .containsExactlyInAnyOrderElementsOf(ANALYSIS_ROLE_TYPES);
   }
 
   @Test
@@ -98,6 +116,20 @@ class LineageDependencyBoundaryTest {
         BASE + ".dao.",
         "com.baomidou.mybatisplus",
         "JdbcTemplate");
+  }
+
+  @Test
+  void analysisPackageMustRemainSourceNeutral() throws IOException {
+    assertNoImports(
+        "analysis",
+        "org.springframework",
+        "com.baomidou.mybatisplus",
+        BASE + ".controller.",
+        BASE + ".service.",
+        BASE + ".repository.",
+        BASE + ".dao.",
+        BASE + ".collector.",
+        BASE + ".config.");
   }
 
   @Test
@@ -163,7 +195,8 @@ class LineageDependencyBoundaryTest {
             "import " + BASE + ".LineageGraph;",
             "import " + BASE + ".LineageRelation;",
             "import " + BASE + ".LineageRelationDraft;",
-            "import " + BASE + ".LineageRelationType;");
+            "import " + BASE + ".LineageRelationType;",
+            "import " + BASE + ".SqlProjectionLineageAnalyzer;");
 
     try (Stream<Path> files = Files.walk(repositoryRoot())) {
       for (Path file : files.filter(this::isProductionJava).toList()) {
@@ -215,7 +248,8 @@ class LineageDependencyBoundaryTest {
 
   private boolean isProductionJava(Path path) {
     String normalized = normalize(path);
-    return normalized.endsWith(".java") && normalized.contains("/src/main/java/")
+    return normalized.endsWith(".java")
+        && normalized.contains("/src/main/java/")
         && !normalized.contains("/target/");
   }
 

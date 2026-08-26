@@ -1,4 +1,4 @@
-package io.yak.ops.business.lineage;
+package io.yak.ops.business.lineage.analysis.sql;
 
 import java.util.List;
 import java.util.Objects;
@@ -6,9 +6,9 @@ import java.util.Objects;
 /**
  * Source-neutral contract for resolving a read-only SQL projection to physical source columns.
  *
- * <p>The lineage core deliberately owns only the contract. SQL parser implementations live in
- * authoring/runtime modules so Dataset and future consumers can reuse projection lineage without a
- * dependency on data-development or a concrete SQL parser library.
+ * <p>The Lineage module owns only this analysis role and its source-neutral values. Concrete SQL
+ * parser implementations remain in authoring/runtime modules so Dataset and future consumers can
+ * reuse projection lineage without depending on data-development or a parser library.
  */
 public interface SqlProjectionLineageAnalyzer {
 

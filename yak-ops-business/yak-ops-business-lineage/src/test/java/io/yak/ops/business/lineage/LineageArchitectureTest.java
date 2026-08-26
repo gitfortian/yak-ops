@@ -1,9 +1,11 @@
 package io.yak.ops.business.lineage;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer;
 import io.yak.ops.business.lineage.controller.v1.LineageController;
 import io.yak.ops.business.lineage.dao.LineageDao;
 import io.yak.ops.business.lineage.domain.LineageAsset;
@@ -37,6 +39,14 @@ class LineageArchitectureTest {
     assertServiceBoundary(LineageQueryService.class);
     assertServiceBoundary(LineageWriteService.class);
     assertServiceBoundary(LineageMaintenanceService.class);
+  }
+
+  @Test
+  void sqlProjectionAnalyzerIsAnAnalysisRoleContract() {
+    assertTrue(SqlProjectionLineageAnalyzer.class.isInterface());
+    assertEquals(
+        "io.yak.ops.business.lineage.analysis.sql",
+        SqlProjectionLineageAnalyzer.class.getPackageName());
   }
 
   @Test

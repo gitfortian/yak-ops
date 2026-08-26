@@ -1,9 +1,10 @@
-package io.yak.ops.business.development.service;
+package io.yak.ops.business.development.lineage.analysis;
 
-import io.yak.ops.business.lineage.SqlProjectionLineageAnalyzer;
+import io.yak.ops.business.development.service.SqlColumnLineageParser;
+import io.yak.ops.business.development.service.SqlTableLineageParser;
+import io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 /** Reuses the data-development SQL lineage engine for source-neutral SELECT projection analysis. */
@@ -26,9 +27,8 @@ public class DevelopmentSqlProjectionLineageAnalyzer implements SqlProjectionLin
 
     String normalized = stripTerminalSemicolon(sql);
     SqlColumnLineageParser.SchemaProvider provider = adapt(schemaProvider);
-    SqlColumnLineageParser.ParseResult parsed = parser.parse(
-        "CREATE TABLE " + SYNTHETIC_TARGET + " AS " + normalized,
-        provider);
+    SqlColumnLineageParser.ParseResult parsed =
+        parser.parse("CREATE TABLE " + SYNTHETIC_TARGET + " AS " + normalized, provider);
 
     List<ProjectionMapping> mappings = new ArrayList<>();
     for (SqlColumnLineageParser.ColumnMapping mapping : parsed.mappings()) {
@@ -36,20 +36,19 @@ public class DevelopmentSqlProjectionLineageAnalyzer implements SqlProjectionLin
           || !SYNTHETIC_TARGET.equalsIgnoreCase(mapping.targetTable().canonicalName())) {
         continue;
       }
-      mappings.add(new ProjectionMapping(
-          table(mapping.sourceTable()),
-          mapping.sourceColumnName(),
-          mapping.targetColumnName(),
-          MappingKind.valueOf(mapping.mappingKind().name()),
-          mapping.expression(),
-          mapping.outputOrdinal(),
-          mapping.sourceOrdinal()));
+      mappings.add(
+          new ProjectionMapping(
+              table(mapping.sourceTable()),
+              mapping.sourceColumnName(),
+              mapping.targetColumnName(),
+              MappingKind.valueOf(mapping.mappingKind().name()),
+              mapping.expression(),
+              mapping.outputOrdinal(),
+              mapping.sourceOrdinal()));
     }
 
     return new ProjectionResult(
-        mappings,
-        parsed.candidateOutputCount(),
-        parsed.unresolvedReferenceCount());
+        mappings, parsed.candidateOutputCount(), parsed.unresolvedReferenceCount());
   }
 
   private SqlColumnLineageParser.SchemaProvider adapt(SchemaProvider schemaProvider) {
@@ -59,8 +58,10 @@ public class DevelopmentSqlProjectionLineageAnalyzer implements SqlProjectionLin
       if (columns == null || columns.isEmpty()) return List.of();
       return columns.stream()
           .filter(column -> column != null && column.name() != null && !column.name().isBlank())
-          .map(column -> new SqlColumnLineageParser.SchemaColumn(
-              column.name(), column.ordinalPosition()))
+          .map(
+              column ->
+                  new SqlColumnLineageParser.SchemaColumn(
+                      column.name(), column.ordinalPosition()))
           .toList();
     };
   }

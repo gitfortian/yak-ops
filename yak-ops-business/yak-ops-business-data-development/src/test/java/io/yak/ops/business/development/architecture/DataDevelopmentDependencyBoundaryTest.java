@@ -20,19 +20,19 @@ import org.junit.jupiter.api.Test;
 class DataDevelopmentDependencyBoundaryTest {
 
   private static final String BASE = "io.yak.ops.business.development";
-  private static final Set<String> LEGACY_SERVICE_ALLOWLIST = Set.of(
-      "DerivedAwareSqlColumnLineageParser.java",
-      "DevelopmentDataServiceNodeService.java",
-      "DevelopmentDataServiceNodeSourceProvider.java",
-      "DevelopmentDataServiceSqlCompiler.java",
-      "DevelopmentDraftConflictException.java",
-      "DevelopmentSqlLineagePreviewService.java",
-      "DevelopmentSqlLineageService.java",
-      "DevelopmentSqlProjectionLineageAnalyzer.java",
-      "DevelopmentTaskValidationException.java",
-      "SqlColumnLineageParser.java",
-      "SqlTableLineageParser.java",
-      "TableIdentityResolver.java");
+  private static final Set<String> LEGACY_SERVICE_ALLOWLIST =
+      Set.of(
+          "DerivedAwareSqlColumnLineageParser.java",
+          "DevelopmentDataServiceNodeService.java",
+          "DevelopmentDataServiceNodeSourceProvider.java",
+          "DevelopmentDataServiceSqlCompiler.java",
+          "DevelopmentDraftConflictException.java",
+          "DevelopmentSqlLineagePreviewService.java",
+          "DevelopmentSqlLineageService.java",
+          "DevelopmentTaskValidationException.java",
+          "SqlColumnLineageParser.java",
+          "SqlTableLineageParser.java",
+          "TableIdentityResolver.java");
 
   @Test
   void packageGraphIsAcyclic() throws IOException {
@@ -75,10 +75,12 @@ class DataDevelopmentDependencyBoundaryTest {
     Path legacy = productionRoot().resolve("service");
     assertThat(legacy).isDirectory();
     try (Stream<Path> paths = Files.list(legacy)) {
-      Set<String> actual = paths
-          .filter(path -> path.toString().endsWith(".java"))
-          .map(path -> path.getFileName().toString())
-          .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+      Set<String> actual =
+          paths
+              .filter(path -> path.toString().endsWith(".java"))
+              .map(path -> path.getFileName().toString())
+              .collect(
+                  java.util.stream.Collectors.toCollection(LinkedHashSet::new));
       assertThat(actual).containsExactlyInAnyOrderElementsOf(LEGACY_SERVICE_ALLOWLIST);
     }
   }
@@ -90,7 +92,8 @@ class DataDevelopmentDependencyBoundaryTest {
     }
   }
 
-  private void assertPackageDoesNotImport(String packageName, String... forbidden) throws IOException {
+  private void assertPackageDoesNotImport(String packageName, String... forbidden)
+      throws IOException {
     Path directory = productionRoot().resolve(packageName);
     if (!Files.exists(directory)) return;
     try (Stream<Path> paths = Files.walk(directory)) {
@@ -161,7 +164,15 @@ class DataDevelopmentDependencyBoundaryTest {
     Path local = Path.of("src/main/java/io/yak/ops/business/development");
     if (Files.isDirectory(local)) return local;
     return Path.of(
-        "yak-ops-business", "yak-ops-business-data-development", "src", "main", "java",
-        "io", "yak", "ops", "business", "development");
+        "yak-ops-business",
+        "yak-ops-business-data-development",
+        "src",
+        "main",
+        "java",
+        "io",
+        "yak",
+        "ops",
+        "business",
+        "development");
   }
 }
