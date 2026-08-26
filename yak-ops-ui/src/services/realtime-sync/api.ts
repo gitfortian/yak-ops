@@ -13,6 +13,7 @@ import type {
   RealtimeEvent,
   RealtimeExecution,
   RealtimeJob,
+  RealtimeJobChange,
   RealtimeJobPage,
   RealtimeObservability,
   RealtimePageQuery,
@@ -193,15 +194,25 @@ export const listRealtimeCatalogColumns = (
 export const subscribeRealtimeSyncChanges = (
   handlers: RealtimeStreamHandlers,
 ): (() => void) => {
-  if (typeof EventSource === 'undefined') return () => undefined;
+  if (typeof EventSource === 'undefined') {
+    handlers.onError?.();
+    return () => undefined;
+  }
 
-  const source = new EventSource(`${REALTIME_SYNC_API}/stream`);
+  let source: EventSource;
+  try {
+    source = new EventSource(`${REALTIME_SYNC_API}/stream`);
+  } catch {
+    handlers.onError?.();
+    return () => undefined;
+  }
+
   source.onopen = () => handlers.onOpen?.();
   source.onerror = () => handlers.onError?.();
   source.addEventListener('realtime', (event) => {
     try {
       handlers.onChange?.(
-        JSON.parse((event as MessageEvent<string>).data),
+        JSON.parse((event as MessageEvent<string>).data) as RealtimeJobChange,
       );
     } catch {
       handlers.onInvalidMessage?.();
