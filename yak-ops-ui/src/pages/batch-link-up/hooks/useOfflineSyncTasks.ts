@@ -84,9 +84,9 @@ export const useOfflineSyncTasks = () => {
   }, [loadTasks]);
 
   const updateFilterDraft = useCallback(
-    <Field extends OfflineSyncSearchField>(
-      field: Field,
-      value: OfflineSyncSearchState[Field],
+    (
+      field: OfflineSyncSearchField,
+      value: OfflineSyncSearchState[OfflineSyncSearchField],
     ) => {
       setFilterDraft((current) => ({ ...current, [field]: value }));
     },
@@ -118,9 +118,9 @@ export const useOfflineSyncTasks = () => {
   );
 
   const changeQuickFilter = useCallback(
-    <Field extends OfflineSyncSearchField>(
-      field: Field,
-      value: OfflineSyncSearchState[Field],
+    (
+      field: OfflineSyncSearchField,
+      value: OfflineSyncSearchState[OfflineSyncSearchField],
     ) => {
       applySearch({ ...filterDraft, [field]: value });
     },
