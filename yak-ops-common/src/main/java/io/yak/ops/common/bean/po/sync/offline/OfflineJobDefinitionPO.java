@@ -15,6 +15,7 @@ import lombok.ToString;
 public class OfflineJobDefinitionPO {
   @TableId(type = IdType.INPUT)
   private Long id;
+  private Long projectId;
   private String jobName;
   @TableField(updateStrategy = FieldStrategy.ALWAYS) private String jobDesc;
   private String mode;

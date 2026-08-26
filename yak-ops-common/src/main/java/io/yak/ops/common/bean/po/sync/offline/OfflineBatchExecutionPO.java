@@ -13,29 +13,19 @@ import lombok.ToString;
 public class OfflineBatchExecutionPO {
   @TableId(type = IdType.AUTO)
   private Long id;
-
+  private Long projectId;
   private Long jobDefinitionId;
   private String batchKey;
   private String triggerType;
   private String batchScopeType;
-
-  @ToString.Exclude
-  private String batchScopeValue;
-
+  @ToString.Exclude private String batchScopeValue;
   private String batchScopeFingerprint;
-
-  @ToString.Exclude
-  private String definitionSnapshotJson;
-
+  @ToString.Exclude private String definitionSnapshotJson;
   private Integer definitionRevision;
   private Integer retryMaxAttempts;
   private Integer retryBackoffSeconds;
   private String configDigest;
-
-  /** Wave 5 后由 Batch Snapshot 持有的不含凭据逻辑 JobSpec；旧 Batch 迁移期允许为空。 */
-  @ToString.Exclude
-  private String logicalJobSpecJson;
-
+  @ToString.Exclude private String logicalJobSpecJson;
   private String status;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
