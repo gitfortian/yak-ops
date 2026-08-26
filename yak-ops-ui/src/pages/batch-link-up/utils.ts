@@ -11,6 +11,7 @@ import {
 import type {
   OfflineSyncPaginationState,
   OfflineSyncSearchState,
+  OfflineSyncTimeRange,
 } from './types';
 
 const DATE_TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss';
@@ -20,10 +21,13 @@ const positiveInteger = (value: string | null, fallback: number) => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const validTimeRange = (search: OfflineSyncSearchState) => {
+const validTimeRange = (
+  search: OfflineSyncSearchState,
+): OfflineSyncTimeRange | undefined => {
   const start = search.createTime?.[0];
   const end = search.createTime?.[1];
-  return start?.isValid() && end?.isValid() ? [start, end] as const : undefined;
+  if (!start || !end || !start.isValid() || !end.isValid()) return undefined;
+  return [start, end];
 };
 
 export const parseOfflineSyncSearchFromUrl = (
