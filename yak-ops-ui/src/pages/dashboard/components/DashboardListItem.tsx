@@ -21,13 +21,7 @@ interface DashboardListItemProps {
 }
 
 const DashboardPreview = ({ dashboard }: { dashboard: DashboardSummary }) => (
-  <button
-    type="button"
-    onClick={() => undefined}
-    tabIndex={-1}
-    aria-hidden="true"
-    className="pointer-events-none relative h-[160px] w-[120px] shrink-0 overflow-hidden rounded-[6px] border border-[#e6e8eb] bg-gradient-to-b from-[#fafafa] to-[#eceef1] p-0 text-left transition-[border-color,box-shadow] duration-150 ease-out group-hover:border-[#d9dce1] group-hover:shadow-[0_2px_8px_rgba(22,24,35,0.05)]"
-  >
+  <div className="relative h-[160px] w-[120px] shrink-0 overflow-hidden rounded-[6px] border border-[#e6e8eb] bg-gradient-to-b from-[#fafafa] to-[#eceef1] text-left transition-[border-color,box-shadow] duration-150 ease-out group-hover:border-[#d9dce1] group-hover:shadow-[0_2px_8px_rgba(22,24,35,0.05)]">
     <div className="absolute left-3 right-3 top-4 flex h-[62px] items-end gap-1.5">
       <span className="h-8 flex-1 rounded-[2px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
       <span className="h-[46px] flex-1 rounded-[2px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
@@ -43,7 +37,7 @@ const DashboardPreview = ({ dashboard }: { dashboard: DashboardSummary }) => (
     <div className="absolute right-2 top-2 flex h-[18px] min-w-[24px] items-center justify-center rounded-[3px] bg-[rgba(22,24,35,0.62)] px-1.5 text-[10px] font-medium text-white">
       V{dashboard.currentVersionNo || 0}
     </div>
-  </button>
+  </div>
 );
 
 const DashboardListItem = ({
