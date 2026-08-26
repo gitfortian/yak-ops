@@ -19,6 +19,7 @@ import lombok.ToString;
 @ToString
 public class DataSourceDefinition {
   private Long id;
+  private Long projectId;
   private String name;
   private DataSourceDbType dbType;
   @ToString.Exclude private String jdbcUrl;
@@ -48,7 +49,7 @@ public class DataSourceDefinition {
     return definition;
   }
 
-  /** Rehydrates an aggregate from persistence without replaying business state transitions. */
+  /** 保留旧持久化重建签名，供未接入 Project Space 的调用方继续使用。 */
   public static DataSourceDefinition restore(
       Long id,
       String name,
@@ -61,8 +62,38 @@ public class DataSourceDefinition {
       String originalJson,
       LocalDateTime createTime,
       LocalDateTime updateTime) {
+    return restore(
+        id,
+        null,
+        name,
+        dbType,
+        jdbcUrl,
+        environment,
+        connStatus,
+        remark,
+        connectionParams,
+        originalJson,
+        createTime,
+        updateTime);
+  }
+
+  /** Rehydrates an aggregate from persistence without replaying business state transitions. */
+  public static DataSourceDefinition restore(
+      Long id,
+      Long projectId,
+      String name,
+      DataSourceDbType dbType,
+      String jdbcUrl,
+      DataSourceEnvironment environment,
+      DataSourceConnStatus connStatus,
+      String remark,
+      String connectionParams,
+      String originalJson,
+      LocalDateTime createTime,
+      LocalDateTime updateTime) {
     DataSourceDefinition definition = new DataSourceDefinition();
     definition.id = id;
+    definition.projectId = projectId;
     definition.name = name;
     definition.dbType = dbType;
     definition.jdbcUrl = jdbcUrl;
@@ -74,6 +105,17 @@ public class DataSourceDefinition {
     definition.createTime = createTime;
     definition.updateTime = updateTime;
     return definition;
+  }
+
+  /** 在持久化前绑定可信 Project Space；已经归属其他项目时拒绝覆盖。 */
+  public void assignProject(Long projectId) {
+    if (projectId == null || projectId <= 0L) {
+      throw new IllegalArgumentException("projectId 必须大于 0");
+    }
+    if (this.projectId != null && !this.projectId.equals(projectId)) {
+      throw new IllegalStateException("数据源不允许跨 Project Space 迁移");
+    }
+    this.projectId = projectId;
   }
 
   /**

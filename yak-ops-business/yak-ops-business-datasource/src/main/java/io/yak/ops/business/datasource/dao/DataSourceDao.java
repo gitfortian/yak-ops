@@ -17,25 +17,51 @@ public interface DataSourceDao {
 
   DataSourcePO selectById(Long id);
 
+  DataSourcePO selectById(Long projectId, Long id);
+
   IPage<DataSourcePO> selectPage(PageQuery query);
 
   DataSourceSummaryRow selectSummary();
 
+  DataSourceSummaryRow selectSummary(Long projectId);
+
   List<DataSourcePO> selectAll(DataSourceDbType dbType);
+
+  List<DataSourcePO> selectAll(Long projectId, DataSourceDbType dbType);
 
   boolean existsByName(String name, Long excludeId);
 
+  boolean existsByName(Long projectId, String name, Long excludeId);
+
   boolean deleteById(Long id);
+
+  boolean deleteById(Long projectId, Long id);
 
   boolean updateConnectionStatus(Long id, DataSourceConnStatus connStatus);
 
+  boolean updateConnectionStatus(
+      Long projectId, Long id, DataSourceConnStatus connStatus);
+
   /** DAO 自有分页条件，不依赖 HTTP DTO。 */
   record PageQuery(
+      Long projectId,
       int pageNo,
       int pageSize,
       String name,
       String keyword,
       DataSourceDbType dbType,
       DataSourceEnvironment environment,
-      DataSourceConnStatus connStatus) {}
+      DataSourceConnStatus connStatus) {
+
+    public PageQuery(
+        int pageNo,
+        int pageSize,
+        String name,
+        String keyword,
+        DataSourceDbType dbType,
+        DataSourceEnvironment environment,
+        DataSourceConnStatus connStatus) {
+      this(null, pageNo, pageSize, name, keyword, dbType, environment, connStatus);
+    }
+  }
 }

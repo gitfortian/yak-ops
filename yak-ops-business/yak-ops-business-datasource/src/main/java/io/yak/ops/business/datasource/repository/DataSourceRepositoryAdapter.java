@@ -12,42 +12,64 @@ import io.yak.ops.business.datasource.domain.DataSourceSummary;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 /** MyBatis persistence adapter; persistence rehydration is explicit and cannot mutate aggregates via setters. */
 @Repository
 @ConditionalOnDataSourceEnabled
-@RequiredArgsConstructor
 public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   private final DataSourceDao dao;
+  private final CurrentProject currentProject;
+
+  @Autowired
+  public DataSourceRepositoryAdapter(DataSourceDao dao, CurrentProject currentProject) {
+    this.dao = dao;
+    this.currentProject = currentProject;
+  }
+
+  DataSourceRepositoryAdapter(DataSourceDao dao) {
+    this(dao, Optional::<io.yak.ops.core.project.ProjectContext>empty);
+  }
 
   @Override
   public Optional<DataSourceDefinition> findById(Long id) {
-    return Optional.ofNullable(toDomain(dao.selectById(id)));
+    Long projectId = currentProjectId();
+    DataSourcePO row = projectId == null ? dao.selectById(id) : dao.selectById(projectId, id);
+    return Optional.ofNullable(toDomain(row));
   }
 
   @Override
   public boolean insert(DataSourceDefinition definition) {
+    currentProject.current().ifPresent(context -> definition.assignProject(context.projectId()));
     return dao.addDataSource(toPO(definition)) > 0;
   }
 
   @Override
   public boolean update(DataSourceDefinition definition) {
+    ensureCurrentProject(definition.getProjectId());
     return dao.editDataSource(toPO(definition)) > 0;
   }
 
   @Override
   public boolean delete(Long id) {
-    return dao.deleteById(id);
+    Long projectId = currentProjectId();
+    return projectId == null ? dao.deleteById(id) : dao.deleteById(projectId, id);
   }
 
   @Override
   public boolean existsByName(String name, Long excludeId) {
-    return dao.existsByName(name, excludeId);
+    Long projectId = currentProjectId();
+    return projectId == null
+        ? dao.existsByName(name, excludeId)
+        : dao.existsByName(projectId, name, excludeId);
   }
 
   @Override
@@ -57,6 +79,7 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
     IPage<DataSourcePO> page =
         dao.selectPage(
             new PageQuery(
+                currentProjectId(),
                 condition.pageNo(),
                 condition.pageSize(),
                 condition.name(),
@@ -75,12 +98,17 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   @Override
   public List<DataSourceDefinition> findAll(DataSourceDbType dbType) {
-    return dao.selectAll(dbType).stream().map(this::toDomain).toList();
+    Long projectId = currentProjectId();
+    List<DataSourcePO> rows =
+        projectId == null ? dao.selectAll(dbType) : dao.selectAll(projectId, dbType);
+    return rows.stream().map(this::toDomain).toList();
   }
 
   @Override
   public DataSourceSummary summary() {
-    DataSourceSummaryRow row = dao.selectSummary();
+    Long projectId = currentProjectId();
+    DataSourceSummaryRow row =
+        projectId == null ? dao.selectSummary() : dao.selectSummary(projectId);
     return row == null
         ? DataSourceSummary.empty()
         : new DataSourceSummary(
@@ -93,13 +121,30 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   @Override
   public boolean updateConnectionStatus(Long id, DataSourceConnStatus status) {
-    return dao.updateConnectionStatus(id, status);
+    Long projectId = currentProjectId();
+    return projectId == null
+        ? dao.updateConnectionStatus(id, status)
+        : dao.updateConnectionStatus(projectId, id, status);
+  }
+
+  private Long currentProjectId() {
+    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  }
+
+  private void ensureCurrentProject(Long ownerProjectId) {
+    currentProject.current().ifPresent(
+        context -> {
+          if (!Objects.equals(context.projectId(), ownerProjectId)) {
+            throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+          }
+        });
   }
 
   private DataSourceDefinition toDomain(DataSourcePO po) {
     if (po == null) return null;
     return DataSourceDefinition.restore(
         po.getId(),
+        po.getProjectId(),
         po.getName(),
         po.getDbType(),
         po.getJdbcUrl(),
@@ -115,6 +160,7 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
   private DataSourcePO toPO(DataSourceDefinition definition) {
     DataSourcePO po = new DataSourcePO();
     po.setId(definition.getId());
+    po.setProjectId(definition.getProjectId());
     po.setName(definition.getName());
     po.setDbType(definition.getDbType());
     po.setJdbcUrl(definition.getJdbcUrl());

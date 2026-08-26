@@ -15,6 +15,8 @@ import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
 import io.yak.ops.common.constant.datasource.DataSourceConstants;
 import io.yak.ops.common.constant.datasource.DataSourcePermissionCode;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping(DataSourceConstants.API_PREFIX + "/catalog")
 @RequiresPermission(DataSourcePermissionCode.READ)
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DataSourceCatalogController {
   private final DataSourceCatalogReader catalogReader;
   private final CatalogRequestConverter requestConverter;

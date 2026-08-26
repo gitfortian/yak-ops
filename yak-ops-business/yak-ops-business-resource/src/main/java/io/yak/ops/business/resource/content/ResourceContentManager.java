@@ -6,6 +6,7 @@ import io.yak.ops.business.resource.domain.ResourceNode;
 import io.yak.ops.business.resource.domain.ResourceNodeFactory;
 import io.yak.ops.business.resource.domain.ResourcePath;
 import io.yak.ops.business.resource.domain.ResourceRevision;
+import io.yak.ops.business.resource.domain.ResourceStoragePath;
 import io.yak.ops.business.resource.exception.ResourceException;
 import io.yak.ops.business.resource.namespace.ResourceNamePolicy;
 import io.yak.ops.business.resource.namespace.ResourceNamespaceReader;
@@ -57,7 +58,7 @@ public class ResourceContentManager {
     String name = names.normalize(sourceName);
     ensureNameAvailable(parent.id(), name, null);
     ResourcePath fullPath = new ResourcePath(parent.fullPath()).child(name);
-    String storagePath = fullPath.storagePath();
+    String storagePath = ResourceStoragePath.forProject(parent.projectId(), fullPath);
     String contentType = policy.contentType(source.contentType());
     String checksumValue = checksum.sha256(source);
 
@@ -76,6 +77,7 @@ public class ResourceContentManager {
               source.size(),
               checksumValue,
               description);
+      resource.setProjectId(parent.projectId());
       insert(resource);
       changes.dispatchAfterCommit(resource, ResourceFileSyncAction.CREATED, null);
       return resource;
@@ -97,7 +99,7 @@ public class ResourceContentManager {
     policy.ensureEditableName(name);
     ensureNameAvailable(parent.id(), name, null);
     ResourcePath fullPath = new ResourcePath(parent.fullPath()).child(name);
-    String storagePath = fullPath.storagePath();
+    String storagePath = ResourceStoragePath.forProject(parent.projectId(), fullPath);
     String contentType = policy.contentType(command.contentType());
 
     storage.write(
@@ -121,6 +123,7 @@ public class ResourceContentManager {
               (long) content.length,
               checksum.sha256(content),
               command.description());
+      resource.setProjectId(parent.projectId());
       insert(resource);
       changes.dispatchAfterCommit(resource, ResourceFileSyncAction.CREATED, null);
       return resource;
@@ -238,9 +241,7 @@ public class ResourceContentManager {
   }
 
   private int lineCount(String content) {
-    if (content == null || content.isEmpty()) {
-      return 0;
-    }
+    if (content == null || content.isEmpty()) return 0;
     return (int) content.lines().count();
   }
 }

@@ -11,15 +11,12 @@ export type ProjectRequestRule = {
   mode: Exclude<ProjectMigrationMode, 'LEGACY_GLOBAL'>;
 };
 
-/**
- * Project-aware API rollout table.
- *
- * PR2 intentionally keeps this empty: all current business modules are still
- * LEGACY_GLOBAL. PR3+ will add a route only after its backend has entered
- * PROJECT_OPTIONAL/PROJECT_REQUIRED, so old modules never change semantics by
- * merely receiving the new infrastructure.
- */
-export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [];
+/** Project-aware API rollout table kept in lockstep with backend @ProjectScope adoption. */
+export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
+  { prefix: '/api/v1/data-source', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/resources', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/datasets', mode: 'PROJECT_OPTIONAL' },
+];
 
 const normalizePath = (url: string): string => {
   try {
