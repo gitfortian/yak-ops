@@ -1,6 +1,4 @@
 import { history } from '@umijs/max';
-import type { EChartsOption } from 'echarts';
-import ReactECharts from 'echarts-for-react';
 import {
   ChevronRight,
   Clock3,
@@ -13,12 +11,13 @@ import {
   DatasetOverview,
   useHomeAssetOverview,
 } from './HomeAssetOverview';
+import HomeDataServiceOverview from './HomeDataServiceOverview';
 import QualityOverview from './HomeQualityOverview';
 
 /**
  * 首页业务总览。
  *
- * 数据集、血缘与数据质量已接入真实统计；数据服务和仪表盘继续按后续阶段替换 mock。
+ * 数据集、血缘、数据质量与数据服务已接入真实统计；仪表盘继续按后续阶段替换 mock。
  */
 
 interface SectionHeaderProps {
@@ -57,131 +56,6 @@ function SectionHeader({
         </button>
       ) : null}
     </header>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* 数据服务                                                                   */
-/* -------------------------------------------------------------------------- */
-
-const serviceTrendOption: EChartsOption = {
-  animation: true,
-  animationDuration: 720,
-  grid: {
-    top: 12,
-    left: 8,
-    right: 8,
-    bottom: 20,
-    containLabel: false,
-  },
-  tooltip: {
-    trigger: 'axis',
-  },
-  xAxis: {
-    type: 'category',
-    boundaryGap: false,
-    data: ['08-20', '08-21', '08-22', '08-23', '08-24', '08-25', '08-26'],
-    axisLine: {
-      show: false,
-    },
-    axisTick: {
-      show: false,
-    },
-    axisLabel: {
-      color: '#a0a4ac',
-      fontSize: 9,
-    },
-  },
-  yAxis: {
-    type: 'value',
-    show: false,
-  },
-  series: [
-    {
-      name: '调用量',
-      type: 'line',
-      smooth: 0.42,
-      symbol: 'none',
-      data: [9800, 11420, 10860, 13600, 12180, 14920, 12860],
-      lineStyle: {
-        width: 2,
-        color: '#6490ee',
-      },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [
-            {
-              offset: 0,
-              color: 'rgba(100,144,238,0.18)',
-            },
-            {
-              offset: 1,
-              color: 'rgba(100,144,238,0.01)',
-            },
-          ],
-        },
-      },
-    },
-  ],
-};
-
-const serviceMetrics = [
-  {
-    label: 'API 总数',
-    value: '32',
-  },
-  {
-    label: '已发布',
-    value: '26',
-  },
-  {
-    label: '今日调用',
-    value: '12,860',
-  },
-  {
-    label: '成功率',
-    value: '99.2%',
-  },
-];
-
-function DataServiceOverview() {
-  return (
-    <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
-      <SectionHeader
-        title="数据服务"
-        description="近 7 日 API 服务运行情况"
-        onMore={() => history.push('/data-service/overview')}
-      />
-
-      <div className="mt-5">
-        <div className="grid grid-cols-2 divide-x divide-[#eef0f3] lg:grid-cols-4">
-          {serviceMetrics.map((item) => (
-            <div key={item.label} className="px-4 first:pl-0 last:pr-0">
-              <div className="text-[11px] text-[#92969f]">{item.label}</div>
-
-              <strong className="mt-1 block text-[24px] font-semibold tracking-[-0.6px] text-[#30343d]">
-                {item.value}
-              </strong>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-5 h-[126px]">
-          <ReactECharts
-            option={serviceTrendOption}
-            style={{
-              width: '100%',
-              height: '126px',
-            }}
-          />
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -380,7 +254,7 @@ export default function HomeWorkbench() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.32fr)_minmax(400px,0.68fr)]">
         <QualityOverview />
-        <DataServiceOverview />
+        <HomeDataServiceOverview />
       </div>
 
       <DataLineageOverview state={assetOverviewState} />
@@ -389,7 +263,7 @@ export default function HomeWorkbench() {
 
       <div className="flex items-center justify-center gap-2 py-2 text-[10px] text-[#aaadb4]">
         <Sparkles size={11} strokeWidth={1.8} />
-        数据集、血缘与数据质量已接入真实数据，数据服务和仪表盘将在后续阶段接入
+        数据集、血缘、数据质量与数据服务已接入真实数据，仪表盘将在后续阶段接入
       </div>
     </div>
   );
