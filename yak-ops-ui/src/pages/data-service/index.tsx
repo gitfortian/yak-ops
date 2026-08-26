@@ -6,7 +6,6 @@ import { useDataServiceMarketplace } from './hooks/useDataServiceMarketplace';
 const DataServicePage = () => {
   const {
     services,
-    dataSources,
     loading,
     keyword,
     submittedKeyword,
@@ -27,7 +26,6 @@ const DataServicePage = () => {
     deleteService,
     toggleService,
     copyEndpoint,
-    refresh,
   } = useDataServiceMarketplace();
 
   return (
@@ -70,9 +68,7 @@ const DataServicePage = () => {
       <DataServiceDetailNavigator
         open={Boolean(detailTarget)}
         service={detailTarget}
-        dataSources={dataSources}
         onClose={closeDetail}
-        onChanged={refresh}
       />
     </div>
   );
