@@ -53,44 +53,49 @@ const RealtimeSyncActionColumn = ({
     });
   };
 
-  const moreItems: MenuProps['items'] = [
-    { key: 'detail', label: '查看运行详情' },
-    {
-      key: 'validate',
-      label: 'Flink CDC 校验',
-      disabled: job.releaseState === 'PUBLISHED',
-    },
-    {
-      key: 'publish',
-      label: running ? '发布当前版本（不影响运行）' : '发布当前版本',
-      disabled: job.releaseState === 'PUBLISHED',
-    },
-    {
-      key: 'restart-execution',
-      label: '重启当前版本',
-      disabled: !stableRunning,
-    },
-    ...(job.publishedUpdateAvailable
-      ? [
-          {
-            key: 'apply-published-version',
-            label: '应用已发布版本',
-            disabled: !stableRunning,
-          },
-        ]
-      : []),
-    {
-      key: 'reconcile',
-      label: '立即状态对账',
-      disabled: !isRealtimeReconciliationState(job.observedState),
-    },
-    { type: 'divider' },
-    {
-      key: 'delete',
-      label: <span className="text-[#d92d20]">删除任务</span>,
-      disabled: job.desiredState !== 'STOPPED',
-    },
-  ];
+  const buildMoreItems = (): NonNullable<MenuProps['items']> => {
+    const items: NonNullable<MenuProps['items']> = [
+      { key: 'detail', label: '查看运行详情' },
+      {
+        key: 'validate',
+        label: 'Flink CDC 校验',
+        disabled: job.releaseState === 'PUBLISHED',
+      },
+      {
+        key: 'publish',
+        label: running ? '发布当前版本（不影响运行）' : '发布当前版本',
+        disabled: job.releaseState === 'PUBLISHED',
+      },
+      {
+        key: 'restart-execution',
+        label: '重启当前版本',
+        disabled: !stableRunning,
+      },
+    ];
+
+    if (job.publishedUpdateAvailable) {
+      items.push({
+        key: 'apply-published-version',
+        label: '应用已发布版本',
+        disabled: !stableRunning,
+      });
+    }
+
+    items.push(
+      {
+        key: 'reconcile',
+        label: '立即状态对账',
+        disabled: !isRealtimeReconciliationState(job.observedState),
+      },
+      { type: 'divider' },
+      {
+        key: 'delete',
+        label: <span className="text-[#d92d20]">删除任务</span>,
+        disabled: job.desiredState !== 'STOPPED',
+      },
+    );
+    return items;
+  };
 
   const handleMoreAction: MenuProps['onClick'] = ({ key, domEvent }) => {
     domEvent.stopPropagation();
@@ -153,12 +158,13 @@ const RealtimeSyncActionColumn = ({
 
       <Dropdown
         trigger={['click']}
-        menu={{ items: moreItems, onClick: handleMoreAction }}
+        menu={{ items: buildMoreItems(), onClick: handleMoreAction }}
       >
         <YakButton
           type="text"
           size="small"
           iconOnly
+          aria-label="更多任务操作"
           icon={<MoreOutlined />}
           className="!h-7 !w-7 !min-w-0 !p-0 !text-[#667085] hover:!bg-[#f2f4f7]"
         />
