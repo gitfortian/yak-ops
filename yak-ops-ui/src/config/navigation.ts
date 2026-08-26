@@ -2,6 +2,7 @@ import {
   type PermissionRequirement,
   satisfiesPermissionRequirement,
 } from '../utils/security/permission';
+import { productFeatures } from './productFeatures';
 
 export type NavigationIconKey =
   | 'home' | 'database' | 'sync' | 'realtime' | 'client' | 'connector'
@@ -95,13 +96,13 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'data-quality-execution-detail', path: '/data-quality/execution/:executionNo', title: '运行记录详情', component: './data-quality/execution/detail', hidden: true, parentId: 'data-quality-execution' },
   { id: 'data-quality-rule-template', mode: 'one', permission: 'quality:template:read', path: '/data-quality/rule-template', title: '规则模板库', component: './data-quality/rule-template', iconKey: 'quality', menuGroup: 'data-quality', order: 30 },
   { id: 'system-users', mode: 'one', permission: 'security:user:read', path: '/system/users', title: '用户管理', component: './system/users', iconKey: 'system', menuGroup: 'system', order: 10 },
-  { id: 'system-roles', mode: 'one', permission: 'security:role:read', path: '/system/roles', title: '角色管理', component: './system/roles', iconKey: 'system', menuGroup: 'system', order: 20 },
-  { id: 'system-permissions', mode: 'one', permission: 'security:permission:read', path: '/system/permissions', title: '权限管理', component: './system/permissions', iconKey: 'system', menuGroup: 'system', order: 30 },
-  { id: 'system-departments', mode: 'one', permission: 'security:department:read', path: '/system/departments', title: '部门管理', component: './system/departments', iconKey: 'system', menuGroup: 'system', order: 40 },
-  { id: 'system-security-projects', mode: 'one', permission: 'security:project:read', path: '/system/projects', title: 'Security 授权项目', component: './system/security-projects', iconKey: 'system', menuGroup: 'system', order: 50 },
-  { id: 'system-resource-permissions', mode: 'one', permission: 'security:resource-permission:read', path: '/system/resource-permissions', title: '资源授权', component: './system/resource-permissions', iconKey: 'system', menuGroup: 'system', order: 60 },
-  { id: 'system-configs', mode: 'one', permission: 'security:config:read', path: '/system/configs', title: '系统配置', component: './system/configs', iconKey: 'system', menuGroup: 'system', order: 70 },
-  { id: 'system-operation-logs', mode: 'one', permission: 'security:operation-log:read', path: '/system/oplogs', title: '操作日志', component: './system/oplogs', iconKey: 'system', menuGroup: 'system', order: 80 },
+  { id: 'system-departments', mode: 'one', permission: 'security:department:read', path: '/system/departments', title: '部门管理', component: './system/departments', iconKey: 'system', menuGroup: 'system', order: 20 },
+  { id: 'system-roles', mode: 'one', permission: 'security:role:read', path: '/system/roles', title: '角色与权限', component: './system/roles', iconKey: 'system', menuGroup: 'system', order: 30 },
+  { id: 'system-permissions', mode: 'one', permission: 'security:permission:read', path: '/system/permissions', title: '权限管理', component: './system/permissions', iconKey: 'system', menuGroup: 'system', hidden: true, order: 31 },
+  { id: 'system-security-projects', mode: 'one', permission: 'security:project:read', path: '/system/projects', title: '项目空间', component: './system/security-projects', iconKey: 'system', menuGroup: 'system', hidden: !productFeatures.projectSpace, order: 40 },
+  { id: 'system-resource-permissions', mode: 'one', permission: 'security:resource-permission:read', path: '/system/resource-permissions', title: '资源授权', component: './system/resource-permissions', iconKey: 'system', menuGroup: 'system', hidden: !productFeatures.resourceAuthorization, order: 50 },
+  { id: 'system-configs', mode: 'one', permission: 'security:config:read', path: '/system/configs', title: '系统配置', component: './system/configs', iconKey: 'system', menuGroup: 'system', hidden: !productFeatures.systemConfig, order: 60 },
+  { id: 'system-operation-logs', mode: 'one', permission: 'security:operation-log:read', path: '/system/oplogs', title: '操作日志', component: './system/oplogs', iconKey: 'system', menuGroup: 'system', order: 70 },
   { id: 'system-messages', mode: 'public', path: '/system/messages', title: '消息中心', component: './system/messages', iconKey: 'system', hidden: true, order: 90 },
 ];
 
