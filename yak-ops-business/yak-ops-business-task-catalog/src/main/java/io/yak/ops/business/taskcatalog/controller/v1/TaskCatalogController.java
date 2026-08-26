@@ -6,6 +6,8 @@ import io.yak.framework.common.Result;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/task-catalog/assets")
 @ConditionalOnDataSourceEnabled
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class TaskCatalogController {
 
   private final TaskCatalogService service;

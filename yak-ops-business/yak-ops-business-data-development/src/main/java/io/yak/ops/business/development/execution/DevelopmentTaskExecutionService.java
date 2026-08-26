@@ -6,6 +6,9 @@ import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionDetail;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionPage;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionSummary;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
@@ -15,6 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -30,10 +36,20 @@ public class DevelopmentTaskExecutionService {
 
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
+  private final CurrentProject currentProject;
 
-  public DevelopmentTaskExecutionService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+  @Autowired
+  public DevelopmentTaskExecutionService(
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      CurrentProject currentProject) {
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+    this.currentProject = currentProject;
+  }
+
+  public DevelopmentTaskExecutionService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    this(jdbcTemplate, objectMapper, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   public long createPending(
@@ -42,19 +58,22 @@ public class DevelopmentTaskExecutionService {
       String content,
       String configJson,
       String operatorName) {
+    ensureCurrentProject(node.projectId());
     String sql = "INSERT INTO yak_dev_task_execution "
-        + "(node_id, task_name, task_type, trigger_type, status, operator_name, content, config_json, "
-        + "start_time, create_time, update_time) VALUES (?, ?, ?, 'MANUAL', 'PENDING', ?, ?, ?, NOW(6), NOW(6), NOW(6))";
+        + "(project_id, node_id, task_name, task_type, trigger_type, status, operator_name, content, config_json, "
+        + "start_time, create_time, update_time) VALUES (?, ?, ?, ?, 'MANUAL', 'PENDING', ?, ?, ?, NOW(6), NOW(6), NOW(6))";
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(
         connection -> {
           PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-          statement.setLong(1, node.id());
-          statement.setString(2, node.name());
-          statement.setString(3, normalizeUpper(taskType));
-          statement.setString(4, normalizeOperator(operatorName));
-          statement.setString(5, content == null ? "" : content);
-          statement.setString(6, configJson == null || configJson.isBlank() ? "{}" : configJson);
+          if (node.projectId() == null) statement.setObject(1, null);
+          else statement.setLong(1, node.projectId());
+          statement.setLong(2, node.id());
+          statement.setString(3, node.name());
+          statement.setString(4, normalizeUpper(taskType));
+          statement.setString(5, normalizeOperator(operatorName));
+          statement.setString(6, content == null ? "" : content);
+          statement.setString(7, configJson == null || configJson.isBlank() ? "{}" : configJson);
           return statement;
         },
         keyHolder);
@@ -64,7 +83,7 @@ public class DevelopmentTaskExecutionService {
   }
 
   public void markRunning(long id, String runtimeExecutionId) {
-    jdbcTemplate.update(
+    updateById(
         "UPDATE yak_dev_task_execution SET runtime_execution_id = ?, status = 'RUNNING', update_time = NOW(6) WHERE id = ?",
         runtimeExecutionId,
         id);
@@ -76,14 +95,18 @@ public class DevelopmentTaskExecutionService {
       long durationMs,
       String errorMessage,
       Map<String, Object> output) {
-    jdbcTemplate.update(
-        "UPDATE yak_dev_task_execution SET status = ?, duration_ms = ?, error_message = ?, output_json = ?, "
-            + "end_time = NOW(6), update_time = NOW(6) WHERE id = ?",
-        normalizeUpper(status),
-        Math.max(0L, durationMs),
-        trim(errorMessage, 1000),
-        serializeOutput(output),
-        id);
+    Long projectId = currentProjectId();
+    String sql = "UPDATE yak_dev_task_execution SET status = ?, duration_ms = ?, error_message = ?, output_json = ?, "
+        + "end_time = NOW(6), update_time = NOW(6) WHERE id = ?"
+        + (projectId == null ? "" : " AND project_id = ?");
+    List<Object> args = new ArrayList<>();
+    args.add(normalizeUpper(status));
+    args.add(Math.max(0L, durationMs));
+    args.add(trim(errorMessage, 1000));
+    args.add(serializeOutput(output));
+    args.add(id);
+    if (projectId != null) args.add(projectId);
+    jdbcTemplate.update(sql, args.toArray());
   }
 
   public DevelopmentTaskExecutionPage page(
@@ -136,10 +159,15 @@ public class DevelopmentTaskExecutionService {
   }
 
   public DevelopmentTaskExecutionDetail get(long id) {
+    Long projectId = currentProjectId();
+    String sql = "SELECT id, node_id, task_name, task_type, trigger_type, runtime_execution_id, status, operator_name, "
+        + "duration_ms, error_message, content, config_json, output_json, start_time, end_time "
+        + "FROM yak_dev_task_execution WHERE id = ?"
+        + (projectId == null ? "" : " AND project_id = ?")
+        + " LIMIT 1";
+    Object[] args = projectId == null ? new Object[] {id} : new Object[] {id, projectId};
     List<DevelopmentTaskExecutionDetail> records = jdbcTemplate.query(
-        "SELECT id, node_id, task_name, task_type, trigger_type, runtime_execution_id, status, operator_name, "
-            + "duration_ms, error_message, content, config_json, output_json, start_time, end_time "
-            + "FROM yak_dev_task_execution WHERE id = ? LIMIT 1",
+        sql,
         (rs, rowNum) -> new DevelopmentTaskExecutionDetail(
             rs.getLong("id"),
             rs.getLong("node_id"),
@@ -156,9 +184,18 @@ public class DevelopmentTaskExecutionService {
             parseOutput(rs.getString("output_json")),
             toLocalDateTime(rs.getTimestamp("start_time")),
             toLocalDateTime(rs.getTimestamp("end_time"))),
-        id);
+        args);
     if (records.isEmpty()) throw new IllegalArgumentException("运行记录不存在：" + id);
     return records.get(0);
+  }
+
+  private void updateById(String baseSql, Object firstArgument, long id) {
+    Long projectId = currentProjectId();
+    if (projectId == null) {
+      jdbcTemplate.update(baseSql, firstArgument, id);
+      return;
+    }
+    jdbcTemplate.update(baseSql + " AND project_id = ?", firstArgument, id, projectId);
   }
 
   private String buildWhere(
@@ -170,6 +207,11 @@ public class DevelopmentTaskExecutionService {
       LocalDateTime endTime,
       List<Object> args) {
     StringBuilder where = new StringBuilder(" WHERE 1 = 1");
+    Long projectId = currentProjectId();
+    if (projectId != null) {
+      where.append(" AND project_id = ?");
+      args.add(projectId);
+    }
     String normalizedKeyword = trim(keyword, 200);
     if (normalizedKeyword != null && !normalizedKeyword.isBlank()) {
       where.append(" AND (task_name LIKE ? OR runtime_execution_id LIKE ? OR operator_name LIKE ?)");
@@ -190,6 +232,19 @@ public class DevelopmentTaskExecutionService {
       args.add(Timestamp.valueOf(endTime));
     }
     return where.toString();
+  }
+
+  private Long currentProjectId() {
+    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  }
+
+  private void ensureCurrentProject(Long ownerProjectId) {
+    currentProject.current().ifPresent(
+        context -> {
+          if (!Objects.equals(context.projectId(), ownerProjectId)) {
+            throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+          }
+        });
   }
 
   private void appendEquals(StringBuilder where, List<Object> args, String column, String value) {

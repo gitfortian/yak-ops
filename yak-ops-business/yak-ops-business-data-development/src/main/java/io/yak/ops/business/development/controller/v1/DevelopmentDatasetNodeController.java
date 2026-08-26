@@ -7,6 +7,8 @@ import io.yak.ops.business.dataset.DevelopmentDatasetFacade.FieldDraft;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.PreviewResult;
 import io.yak.ops.business.development.dataset.DevelopmentDatasetNodeService;
 import io.yak.ops.business.development.dataset.DevelopmentDatasetNodeService.DatasetNodeContext;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发 Dataset Node 接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DevelopmentDatasetNodeController {
 
   private final DevelopmentDatasetNodeService service;

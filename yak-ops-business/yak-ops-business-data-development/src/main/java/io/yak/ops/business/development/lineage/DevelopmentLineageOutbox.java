@@ -15,40 +15,64 @@ public class DevelopmentLineageOutbox {
   }
 
   public void enqueue(long nodeId, long revisionId) {
-    jdbc.update("INSERT IGNORE INTO yak_dev_lineage_outbox "
-        + "(task_id,node_id,revision_id,status,attempts,next_attempt_time,create_time,update_time) "
-        + "VALUES (?,?,?,'PENDING',0,NOW(6),NOW(6),NOW(6))",
-        UUID.randomUUID().toString(), nodeId, revisionId);
+    jdbc.update(
+        "INSERT IGNORE INTO yak_dev_lineage_outbox "
+            + "(task_id,project_id,node_id,revision_id,status,attempts,next_attempt_time,create_time,update_time) "
+            + "SELECT ?,project_id,id,?,'PENDING',0,NOW(6),NOW(6),NOW(6) FROM yak_dev_node WHERE id=?",
+        UUID.randomUUID().toString(),
+        revisionId,
+        nodeId);
   }
 
   public List<Task> due(int limit) {
-    return jdbc.query("SELECT task_id,node_id,revision_id,attempts FROM yak_dev_lineage_outbox "
+    return jdbc.query(
+        "SELECT task_id,project_id,node_id,revision_id,attempts FROM yak_dev_lineage_outbox "
             + "WHERE (status IN ('PENDING','FAILED') AND next_attempt_time<=NOW(6)) "
             + "OR (status='RUNNING' AND update_time<DATE_SUB(NOW(6), INTERVAL 10 MINUTE)) "
             + "ORDER BY create_time LIMIT ?",
-        (rs, row) -> new Task(rs.getString(1), rs.getLong(2), rs.getLong(3), rs.getInt(4)), limit);
+        (rs, row) ->
+            new Task(
+                rs.getString("task_id"),
+                rs.getObject("project_id") == null ? null : rs.getLong("project_id"),
+                rs.getLong("node_id"),
+                rs.getLong("revision_id"),
+                rs.getInt("attempts")),
+        limit);
   }
 
   public boolean claim(Task task) {
-    return jdbc.update("UPDATE yak_dev_lineage_outbox SET status='RUNNING',attempts=attempts+1,"
+    return jdbc.update(
+        "UPDATE yak_dev_lineage_outbox SET status='RUNNING',attempts=attempts+1,"
             + "update_time=NOW(6) WHERE task_id=? AND revision_id=? AND (status IN ('PENDING','FAILED') "
             + "OR (status='RUNNING' AND update_time<DATE_SUB(NOW(6), INTERVAL 10 MINUTE)))",
-        task.taskId(), task.revisionId()) == 1;
+        task.taskId(),
+        task.revisionId()) == 1;
   }
 
   public void complete(Task task) {
-    jdbc.update("UPDATE yak_dev_lineage_outbox SET status='SUCCEEDED',last_error=NULL,update_time=NOW(6) "
-        + "WHERE task_id=? AND revision_id=? AND status='RUNNING'", task.taskId(), task.revisionId());
+    jdbc.update(
+        "UPDATE yak_dev_lineage_outbox SET status='SUCCEEDED',last_error=NULL,update_time=NOW(6) "
+            + "WHERE task_id=? AND revision_id=? AND status='RUNNING'",
+        task.taskId(),
+        task.revisionId());
   }
 
   public void fail(Task task, Throwable failure) {
     long delay = Math.min(3600, 1L << Math.min(12, task.attempts()));
     String message = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-    jdbc.update("UPDATE yak_dev_lineage_outbox SET status='FAILED',last_error=?,"
+    jdbc.update(
+        "UPDATE yak_dev_lineage_outbox SET status='FAILED',last_error=?,"
             + "next_attempt_time=DATE_ADD(NOW(6), INTERVAL ? SECOND),update_time=NOW(6) "
             + "WHERE task_id=? AND revision_id=? AND status='RUNNING'",
-        message.substring(0, Math.min(2000, message.length())), delay, task.taskId(), task.revisionId());
+        message.substring(0, Math.min(2000, message.length())),
+        delay,
+        task.taskId(),
+        task.revisionId());
   }
 
-  public record Task(String taskId, long nodeId, long revisionId, int attempts) {}
+  public record Task(String taskId, Long projectId, long nodeId, long revisionId, int attempts) {
+    public Task(String taskId, long nodeId, long revisionId, int attempts) {
+      this(taskId, null, nodeId, revisionId, attempts);
+    }
+  }
 }

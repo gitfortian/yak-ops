@@ -6,6 +6,8 @@ import io.yak.framework.common.Result;
 import io.yak.ops.business.development.execution.DevelopmentTaskExecutionService;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionDetail;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionPage;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import java.time.LocalDateTime;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发运行记录接口")
 @RestController
 @RequestMapping("/api/v1/data-development/executions")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DevelopmentTaskExecutionController {
 
   private final DevelopmentTaskExecutionService service;
