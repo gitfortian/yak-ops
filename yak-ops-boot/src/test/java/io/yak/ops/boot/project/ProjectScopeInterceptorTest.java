@@ -57,16 +57,30 @@ class ProjectScopeInterceptorTest {
   }
 
   @Test
-  void requiredEndpointRejectsMissingProject() throws Exception {
+  void requiredEndpointRejectsMissingProjectForAuthenticatedUser() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    when(currentUserProvider.getCurrentUser(request)).thenReturn("alice");
+
     ProjectContextException error =
         assertThrows(
             ProjectContextException.class,
             () -> interceptor.preHandle(
-                new MockHttpServletRequest(),
+                request,
                 new MockHttpServletResponse(),
                 handler("required")));
 
     assertEquals(ProjectContextError.PROJECT_REQUIRED, error.getError());
+    verifyNoInteractions(accessGuard);
+  }
+
+  @Test
+  void anonymousRequiredRequestDefersToAuthenticationBoundary() throws Exception {
+    MockHttpServletRequest request = requestWithProject("7");
+
+    interceptor.preHandle(request, new MockHttpServletResponse(), handler("required"));
+
+    assertFalse(currentProject.isPresent());
+    verifyNoInteractions(accessGuard);
   }
 
   @Test
