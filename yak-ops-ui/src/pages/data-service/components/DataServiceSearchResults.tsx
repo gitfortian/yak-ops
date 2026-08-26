@@ -1,0 +1,277 @@
+import { YakButton } from '@/components/ui';
+import type { DataServiceApi } from '@/services/data-service';
+import {
+  Dropdown,
+  Modal,
+  Switch,
+  Table,
+  Tooltip,
+  type TableColumnsType,
+} from 'antd';
+import {
+  ArrowLeft,
+  Copy,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react';
+import { useMemo } from 'react';
+
+import { describeDataServiceSource } from '../utils';
+import DataServiceMethodBadge from './DataServiceMethodBadge';
+import DataServiceSearchBar from './DataServiceSearchBar';
+
+interface DataServiceSearchResultsProps {
+  keyword: string;
+  submittedKeyword: string;
+  loading: boolean;
+  records: DataServiceApi[];
+  callsByApiId: ReadonlyMap<number, number>;
+  dataSourceName: (dataSourceId?: number) => string;
+  onKeywordChange: (value: string) => void;
+  onSearch: () => void;
+  onReset: () => void;
+  onOpen: (service: DataServiceApi) => void;
+  onCopyEndpoint: (endpoint: string) => void;
+  onToggle: (service: DataServiceApi, enabled: boolean) => void;
+  onDelete: (service: DataServiceApi) => Promise<void>;
+}
+
+const DataServiceSearchResults = ({
+  keyword,
+  submittedKeyword,
+  loading,
+  records,
+  callsByApiId,
+  dataSourceName,
+  onKeywordChange,
+  onSearch,
+  onReset,
+  onOpen,
+  onCopyEndpoint,
+  onToggle,
+  onDelete,
+}: DataServiceSearchResultsProps) => {
+  const confirmDelete = (service: DataServiceApi) => {
+    Modal.confirm({
+      title: '删除 API',
+      content: `确认删除「${service.name}」？API Key、运行状态和相关文档也会一起移除。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => onDelete(service),
+    });
+  };
+
+  const columns = useMemo<TableColumnsType<DataServiceApi>>(
+    () => [
+      {
+        title: 'API',
+        dataIndex: 'name',
+        minWidth: 230,
+        render: (_value, service) => (
+          <div className="py-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onOpen(service)}
+                className="max-w-[220px] truncate border-0 bg-transparent p-0 text-left text-[13px] font-medium text-[#344054] hover:text-[#161823]"
+              >
+                {service.name}
+              </button>
+              <DataServiceMethodBadge />
+            </div>
+            <div className="mt-0.5 line-clamp-1 text-[11px] text-[#98a2b3]">
+              {service.description || '暂无描述'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: 'Endpoint',
+        dataIndex: 'runtimePath',
+        minWidth: 280,
+        render: (value: string) => (
+          <div className="flex items-center gap-1">
+            <span className="truncate font-mono text-[11px] text-[#667085]">
+              {value}
+            </span>
+            <Tooltip title="复制 Endpoint">
+              <YakButton
+                type="text"
+                size="small"
+                iconOnly
+                icon={<Copy size={13} />}
+                className="!h-6 !w-6 !min-w-0 !p-0"
+                onClick={() => onCopyEndpoint(value)}
+              />
+            </Tooltip>
+          </div>
+        ),
+      },
+      {
+        title: '来源',
+        key: 'source',
+        width: 210,
+        render: (_value, service) => {
+          const source = describeDataServiceSource(
+            service,
+            dataSourceName(service.dataSourceId),
+          );
+          return (
+            <div>
+              <div
+                className={
+                  source.muted
+                    ? 'text-[12px] font-medium text-[#667085]'
+                    : 'text-[12px] font-medium text-[#475467]'
+                }
+              >
+                {source.primary}
+              </div>
+              {source.secondary ? (
+                <div className="mt-0.5 text-[11px] text-[#98a2b3]">
+                  {source.secondary}
+                </div>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        title: '近期调用',
+        key: 'calls',
+        width: 100,
+        render: (_value, service) => (
+          <span className="text-[12px] text-[#475467]">
+            {callsByApiId.get(service.id) || 0}
+          </span>
+        ),
+      },
+      {
+        title: '状态',
+        dataIndex: 'enabled',
+        width: 135,
+        render: (enabled: boolean, service) => (
+          <div className="flex items-center gap-2">
+            <Switch
+              size="small"
+              checked={enabled}
+              onChange={(nextEnabled) => onToggle(service, nextEnabled)}
+            />
+            <span
+              className={
+                enabled
+                  ? 'text-[12px] text-[#344054]'
+                  : 'text-[12px] text-[#98a2b3]'
+              }
+            >
+              {enabled ? '运行中' : '已停用'}
+            </span>
+          </div>
+        ),
+      },
+      {
+        title: '操作',
+        key: 'actions',
+        width: 120,
+        fixed: 'right',
+        render: (_value, service) => (
+          <div className="flex items-center gap-2">
+            <YakButton
+              type="text"
+              size="small"
+              className="!h-7 !px-0 !text-[12px] !text-[#475467]"
+              onClick={() => onOpen(service)}
+            >
+              查看
+            </YakButton>
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: [
+                  {
+                    key: 'delete',
+                    danger: true,
+                    icon: <Trash2 size={14} />,
+                    label: '删除 API',
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'delete') confirmDelete(service);
+                },
+              }}
+            >
+              <YakButton
+                type="text"
+                size="small"
+                iconOnly
+                icon={<MoreHorizontal size={16} />}
+                className="!h-7 !w-7 !min-w-0 !p-0"
+              />
+            </Dropdown>
+          </div>
+        ),
+      },
+    ],
+    [
+      callsByApiId,
+      dataSourceName,
+      onCopyEndpoint,
+      onDelete,
+      onOpen,
+      onToggle,
+    ],
+  );
+
+  return (
+    <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
+      <header className="flex min-w-0 items-center gap-2">
+        <YakButton
+          type="text"
+          iconOnly
+          icon={<ArrowLeft size={15} />}
+          className="!-ml-2 !h-8 !w-8 !min-w-0 !p-0"
+          onClick={onReset}
+        />
+        <div className="min-w-0">
+          <h1 className="m-0 text-[17px] font-semibold text-[#161823]">
+            API 集市
+          </h1>
+          <div className="mt-1 truncate text-[12px] text-[#98a2b3]">
+            搜索 “{submittedKeyword}”
+          </div>
+        </div>
+      </header>
+
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="w-full max-w-[680px]">
+          <DataServiceSearchBar
+            compact
+            keyword={keyword}
+            loading={loading}
+            onKeywordChange={onKeywordChange}
+            onSearch={onSearch}
+          />
+        </div>
+        <span className="shrink-0 text-[12px] text-[#98a2b3]">
+          共 {records.length} 个结果
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 pt-4">
+        <Table<DataServiceApi>
+          rowKey="id"
+          size="small"
+          loading={loading}
+          dataSource={records}
+          columns={columns}
+          pagination={false}
+          scroll={{ x: 1080, y: 'calc(100vh - 235px)' }}
+          locale={{ emptyText: '没有找到匹配的 API' }}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default DataServiceSearchResults;
