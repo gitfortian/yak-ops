@@ -3,13 +3,17 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import { getCurrentUser } from '@/services/security/account';
 import { toCurrentUser } from '@/services/security/currentIdentity';
+import {
+  clearStoredProjectId,
+  readStoredProjectId,
+  storeProjectId,
+} from '@/utils/security/projectContext';
 
-const STORAGE_KEY = 'yak-security.current-project-id';
 export const SECURITY_SESSION_EXPIRED_EVENT = 'yak-security:session-expired';
 
 export const chooseSecurityProject = (
   projects: API.ProjectBrief[],
-  persistedId: string | null,
+  persistedId: string | null | undefined,
 ): API.ProjectBrief | undefined => projects.find((project) => String(project.id) === persistedId) ?? projects[0];
 
 type SecurityProjectValue = {
@@ -29,21 +33,21 @@ export function SecurityProjectProvider({ children }: { children: ReactNode }) {
 
   const selectProject = (project: API.ProjectBrief) => {
     if (!projects.some((candidate) => candidate.id === project.id)) return;
-    localStorage.setItem(STORAGE_KEY, String(project.id));
+    storeProjectId(project.id);
     setInitialState((state) => ({ ...state, currentProject: project, securityProject: project }));
   };
 
   const clearProject = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    clearStoredProjectId();
     setInitialState((state) => ({ ...state, currentProject: undefined, securityProject: undefined }));
   };
 
   const refreshProjects = async () => {
     const currentUser = toCurrentUser(await getCurrentUser());
     const nextProjects = currentUser.projectList ?? [];
-    const selected = chooseSecurityProject(nextProjects, localStorage.getItem(STORAGE_KEY));
-    if (selected) localStorage.setItem(STORAGE_KEY, String(selected.id));
-    else localStorage.removeItem(STORAGE_KEY);
+    const selected = chooseSecurityProject(nextProjects, readStoredProjectId());
+    if (selected) storeProjectId(selected.id);
+    else clearStoredProjectId();
     setInitialState((state) => ({
       ...state,
       currentUser,
@@ -53,7 +57,7 @@ export function SecurityProjectProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const selected = chooseSecurityProject(projects, localStorage.getItem(STORAGE_KEY));
+    const selected = chooseSecurityProject(projects, readStoredProjectId());
     if (selected) {
       if (selected.id !== currentProject?.id) selectProject(selected);
     } else if (currentProject) {
@@ -63,7 +67,7 @@ export function SecurityProjectProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const clearSession = () => {
-      localStorage.removeItem(STORAGE_KEY);
+      clearStoredProjectId();
       setInitialState((state) => ({
         ...state,
         currentUser: undefined,
