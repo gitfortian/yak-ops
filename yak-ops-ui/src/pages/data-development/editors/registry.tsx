@@ -5,7 +5,6 @@ import PythonIcon from '../icon/PythonIcon';
 
 import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
 import { JavaEditor, JavaRunConfig, JavaRunResult } from './java/JavaEditor';
-import SqlLineagePanel from '../components/workbench/SqlLineagePanel';
 import { PythonEditor, PythonRunConfig, PythonRunResult } from './python/PythonEditor';
 import { ShellEditor, ShellRunConfig, ShellRunResult } from './shell/ShellEditor';
 import { SqlEditor, SqlRunConfig, SqlRunResult } from './sql/SqlEditor';
@@ -54,7 +53,6 @@ const editorRegistry: Partial<Record<DevelopmentTaskType, DevelopmentEditorDefin
     Toolbar: SqlToolbar,
     panels: {
       'run-config': SqlRunConfig,
-      lineage: SqlLineagePanel,
     },
     RunResult: SqlRunResult,
   },
