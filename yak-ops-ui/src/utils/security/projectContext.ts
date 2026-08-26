@@ -1,0 +1,90 @@
+export const PROJECT_ID_HEADER = 'X-YAK-SECURITY-PROJECT-ID';
+export const CURRENT_PROJECT_STORAGE_KEY = 'yak-security.current-project-id';
+
+export type ProjectMigrationMode =
+  | 'LEGACY_GLOBAL'
+  | 'PROJECT_OPTIONAL'
+  | 'PROJECT_REQUIRED';
+
+export type ProjectRequestRule = {
+  prefix: string;
+  mode: Exclude<ProjectMigrationMode, 'LEGACY_GLOBAL'>;
+};
+
+/**
+ * Project-aware API rollout table.
+ *
+ * PR2 intentionally keeps this empty: all current business modules are still
+ * LEGACY_GLOBAL. PR3+ will add a route only after its backend has entered
+ * PROJECT_OPTIONAL/PROJECT_REQUIRED, so old modules never change semantics by
+ * merely receiving the new infrastructure.
+ */
+export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [];
+
+const normalizePath = (url: string): string => {
+  try {
+    return new URL(url, 'http://yak-ops.local').pathname.replace(/\/+$/, '') || '/';
+  } catch {
+    return url.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+  }
+};
+
+export const resolveProjectRequestMode = (
+  url: string,
+  rules: readonly ProjectRequestRule[] = PROJECT_REQUEST_RULES,
+): ProjectMigrationMode => {
+  const path = normalizePath(url);
+  const matched = rules
+    .filter(({ prefix }) => {
+      const normalizedPrefix = normalizePath(prefix);
+      return path === normalizedPrefix || path.startsWith(`${normalizedPrefix}/`);
+    })
+    .sort((left, right) => normalizePath(right.prefix).length - normalizePath(left.prefix).length)[0];
+
+  return matched?.mode ?? 'LEGACY_GLOBAL';
+};
+
+const normalizeProjectId = (value: unknown): string | undefined => {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) return undefined;
+  return normalized;
+};
+
+export const readStoredProjectId = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  return normalizeProjectId(window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY));
+};
+
+export const storeProjectId = (projectId: unknown): void => {
+  if (typeof window === 'undefined') return;
+  const normalized = normalizeProjectId(projectId);
+  if (normalized) window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, normalized);
+  else window.localStorage.removeItem(CURRENT_PROJECT_STORAGE_KEY);
+};
+
+export const clearStoredProjectId = (): void => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(CURRENT_PROJECT_STORAGE_KEY);
+};
+
+export const applyCurrentProjectHeader = (
+  url: string,
+  headers: HeadersInit | undefined,
+  projectId = readStoredProjectId(),
+  rules: readonly ProjectRequestRule[] = PROJECT_REQUEST_RULES,
+): HeadersInit => {
+  const mode = resolveProjectRequestMode(url, rules);
+  const normalizedProjectId = normalizeProjectId(projectId);
+  if (mode === 'LEGACY_GLOBAL' || !normalizedProjectId) return headers ?? {};
+
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+    const next = new Headers(headers);
+    next.set(PROJECT_ID_HEADER, normalizedProjectId);
+    return next;
+  }
+
+  return {
+    ...(headers ?? {}),
+    [PROJECT_ID_HEADER]: normalizedProjectId,
+  };
+};

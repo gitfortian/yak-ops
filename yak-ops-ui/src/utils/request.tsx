@@ -2,6 +2,7 @@
 import { extractErrorMessage, extractUnknownErrorMessage, isApiResponse, isSuccessfulResponse, isUnauthenticatedResponse, protocolForUrl, type ApiProtocol, type ApiResponse } from "@/services/http/response";
 import { notifyOnce } from "@/utils/notifyOnce";
 import { dispatchAuthenticationInvalidated } from "@/utils/security/authentication";
+import { applyCurrentProjectHeader } from "@/utils/security/projectContext";
 import { history } from "umi";
 import { extend } from "umi-request";
 
@@ -201,7 +202,7 @@ function createClient() {
 const request = createClient();
 
 request.interceptors.request.use((url: string, options: any) => {
-  const headers = options.headers || {};
+  const headers = applyCurrentProjectHeader(url, options.headers || {});
 
   return {
     url,
