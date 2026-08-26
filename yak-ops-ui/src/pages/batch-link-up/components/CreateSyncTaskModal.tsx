@@ -1,4 +1,8 @@
-import YakButton from '@/components/YakButton';
+import { YakButton } from '@/components/ui';
+import {
+  createOfflineSyncDraft,
+  getOfflineSyncUniqueId,
+} from '@/services/batch-link-up';
 import {
   ArrowRightOutlined,
   DatabaseOutlined,
@@ -31,15 +35,10 @@ import {
   BRAND_THEME,
 } from '@/styles/brand';
 
-import { linkupJobDefinitionApi } from '../api';
 import { generateDataSourceOptions } from '../DataSourceSelect';
 import { connectorIdForDataSourceType } from '../detail/form-schema/valueAdapter';
 import {
   buildCreatePayload,
-  extractGeneratedId,
-  extractSavedId,
-  isApiSuccess,
-  responseMessage,
   type CreateSyncEndpoint,
   type CreateSyncTaskValues,
   type SyncMode,
@@ -180,33 +179,15 @@ export default function CreateSyncTaskDrawer({
       const sink = resolveEndpoint(values.targetDbType, connectorOptions);
 
       setSubmitting(true);
-      const idResponse = await linkupJobDefinitionApi.getUniqueId();
-
-      if (!isApiSuccess(idResponse)) {
-        message.error(responseMessage(idResponse, '生成任务 ID 失败'));
-        return;
-      }
-
-      const taskId = extractGeneratedId(idResponse);
-      if (!taskId) {
-        message.error('生成任务 ID 失败');
-        return;
-      }
-
+      const taskId = String(await getOfflineSyncUniqueId());
       const payload = buildCreatePayload(
         taskId,
         normalizedValues,
         source,
         sink,
       );
-      const saveResponse = await linkupJobDefinitionApi.createDraft(payload);
-
-      if (!isApiSuccess(saveResponse)) {
-        message.error(responseMessage(saveResponse, '创建同步任务失败'));
-        return;
-      }
-
-      const createdId = extractSavedId(saveResponse, taskId);
+      const savedId = await createOfflineSyncDraft(payload);
+      const createdId = String(savedId ?? taskId);
       const path =
         normalizedValues.mode === 'GUIDE_MULTI'
           ? `/sync/batch-link-up/${createdId}/config/multi?scene=edit`
@@ -217,9 +198,11 @@ export default function CreateSyncTaskDrawer({
       message.success('任务草稿已创建，请继续配置数据源和同步表');
       onCreated(createdId, normalizedValues.mode);
       history.push(path);
-    } catch (error: any) {
-      if (error?.errorFields) return;
-      message.error(error?.message || '创建同步任务失败');
+    } catch (error) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return;
+      message.error(
+        error instanceof Error ? error.message : '创建同步任务失败',
+      );
     } finally {
       setSubmitting(false);
     }
