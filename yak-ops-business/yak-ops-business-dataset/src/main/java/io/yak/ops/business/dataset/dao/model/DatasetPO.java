@@ -13,6 +13,7 @@ public class DatasetPO {
 
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private Long developmentNodeId;
   private String name;
   private String description;

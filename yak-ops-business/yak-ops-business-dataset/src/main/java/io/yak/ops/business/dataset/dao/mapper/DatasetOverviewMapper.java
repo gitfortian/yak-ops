@@ -25,7 +25,22 @@ public interface DatasetOverviewMapper {
 
   @Select("""
       SELECT
+          (SELECT COUNT(*) FROM yak_dataset WHERE project_id = #{projectId}) AS datasetCount,
+          (SELECT COUNT(*)
+             FROM yak_dataset
+            WHERE project_id = #{projectId}
+              AND create_time >= #{from}
+              AND create_time < #{to}) AS createdCount
+      """)
+  DatasetOverviewSummaryPO selectSummaryByProject(
+      @Param("projectId") Long projectId,
+      @Param("from") Timestamp from,
+      @Param("to") Timestamp to);
+
+  @Select("""
+      SELECT
           id,
+          project_id AS projectId,
           development_node_id AS developmentNodeId,
           name,
           description,
@@ -42,6 +57,26 @@ public interface DatasetOverviewMapper {
   @Select("""
       SELECT
           id,
+          project_id AS projectId,
+          development_node_id AS developmentNodeId,
+          name,
+          description,
+          status,
+          current_version_id AS currentVersionId,
+          create_time AS createTime,
+          update_time AS updateTime
+      FROM yak_dataset
+      WHERE project_id = #{projectId}
+      ORDER BY update_time DESC, id DESC
+      LIMIT #{limit}
+      """)
+  List<DatasetPO> selectRecentByProject(
+      @Param("projectId") Long projectId, @Param("limit") int limit);
+
+  @Select("""
+      SELECT
+          id,
+          project_id AS projectId,
           development_node_id AS developmentNodeId,
           name,
           description,
@@ -55,4 +90,24 @@ public interface DatasetOverviewMapper {
       LIMIT #{limit}
       """)
   List<DatasetPO> selectRecentOnline(@Param("limit") int limit);
+
+  @Select("""
+      SELECT
+          id,
+          project_id AS projectId,
+          development_node_id AS developmentNodeId,
+          name,
+          description,
+          status,
+          current_version_id AS currentVersionId,
+          create_time AS createTime,
+          update_time AS updateTime
+      FROM yak_dataset
+      WHERE project_id = #{projectId}
+        AND status = 'ONLINE'
+      ORDER BY update_time DESC, id DESC
+      LIMIT #{limit}
+      """)
+  List<DatasetPO> selectRecentOnlineByProject(
+      @Param("projectId") Long projectId, @Param("limit") int limit);
 }

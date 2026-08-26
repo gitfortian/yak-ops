@@ -14,6 +14,8 @@ import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetDetailVO
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryPerformanceVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryResultVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetVO;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.HashSet;
 import java.util.List;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/datasets")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DatasetController {
 
   private final DatasetService datasetService;

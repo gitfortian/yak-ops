@@ -16,17 +16,31 @@ public interface DatasetDao {
 
   int updateCurrentVersion(long datasetId, long versionId);
 
+  int updateCurrentVersion(Long projectId, long datasetId, long versionId);
+
   int updateStatus(long datasetId, String status);
+
+  int updateStatus(Long projectId, long datasetId, String status);
 
   int updateMetadata(long datasetId, String name, String description);
 
+  int updateMetadata(Long projectId, long datasetId, String name, String description);
+
   DatasetPO selectDataset(long datasetId);
+
+  DatasetPO selectDataset(Long projectId, long datasetId);
 
   DatasetPO selectDatasetBySourceTaskAssetId(long sourceTaskAssetId);
 
+  DatasetPO selectDatasetBySourceTaskAssetId(Long projectId, long sourceTaskAssetId);
+
   DatasetPO selectDatasetByDevelopmentNodeId(long developmentNodeId);
 
+  DatasetPO selectDatasetByDevelopmentNodeId(Long projectId, long developmentNodeId);
+
   List<DatasetPO> selectDatasets();
+
+  List<DatasetPO> selectDatasets(Long projectId);
 
   DatasetVersionPO selectVersion(long versionId);
 

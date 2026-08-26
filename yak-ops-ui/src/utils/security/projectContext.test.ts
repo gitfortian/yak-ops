@@ -16,8 +16,14 @@ const rules: ProjectRequestRule[] = [
 describe('Project Space request context', () => {
   afterEach(() => clearStoredProjectId());
 
-  it('keeps all current routes legacy-global before a module opts into migration', () => {
-    expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('LEGACY_GLOBAL');
+  it('opts the first migrated business routes into optional project context', () => {
+    expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
+  });
+
+  it('keeps modules outside the rollout table legacy-global', () => {
+    expect(resolveProjectRequestMode('/api/v1/workflows')).toBe('LEGACY_GLOBAL');
   });
 
   it('uses the most specific project-aware route rule', () => {
@@ -26,15 +32,15 @@ describe('Project Space request context', () => {
   });
 
   it('never attaches a project header to a legacy-global route', () => {
-    const headers = applyCurrentProjectHeader('/api/v1/data-source', {}, '7');
+    const headers = applyCurrentProjectHeader('/api/v1/workflows', {}, '7');
     expect(headers).toEqual({});
   });
 
-  it('attaches the stored project only after a route opts into project migration', () => {
+  it('attaches the stored project to migrated routes', () => {
     storeProjectId(7);
     expect(readStoredProjectId()).toBe('7');
 
-    const headers = applyCurrentProjectHeader('/api/v1/data-source/1', {}, undefined, rules);
+    const headers = applyCurrentProjectHeader('/api/v1/data-source/1', {});
     expect(headers).toEqual({ [PROJECT_ID_HEADER]: '7' });
   });
 

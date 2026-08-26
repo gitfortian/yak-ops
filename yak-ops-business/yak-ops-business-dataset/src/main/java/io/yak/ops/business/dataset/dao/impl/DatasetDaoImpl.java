@@ -48,9 +48,15 @@ public class DatasetDaoImpl implements DatasetDao {
 
   @Override
   public int updateCurrentVersion(long datasetId, long versionId) {
+    return updateCurrentVersion(null, datasetId, versionId);
+  }
+
+  @Override
+  public int updateCurrentVersion(Long projectId, long datasetId, long versionId) {
     return datasetMapper.update(
         null,
         Wrappers.<DatasetPO>lambdaUpdate()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
             .eq(DatasetPO::getId, datasetId)
             .set(DatasetPO::getCurrentVersionId, versionId)
             .set(DatasetPO::getUpdateTime, Timestamp.from(Instant.now())));
@@ -58,9 +64,15 @@ public class DatasetDaoImpl implements DatasetDao {
 
   @Override
   public int updateStatus(long datasetId, String status) {
+    return updateStatus(null, datasetId, status);
+  }
+
+  @Override
+  public int updateStatus(Long projectId, long datasetId, String status) {
     return datasetMapper.update(
         null,
         Wrappers.<DatasetPO>lambdaUpdate()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
             .eq(DatasetPO::getId, datasetId)
             .set(DatasetPO::getStatus, status)
             .set(DatasetPO::getUpdateTime, Timestamp.from(Instant.now())));
@@ -68,9 +80,16 @@ public class DatasetDaoImpl implements DatasetDao {
 
   @Override
   public int updateMetadata(long datasetId, String name, String description) {
+    return updateMetadata(null, datasetId, name, description);
+  }
+
+  @Override
+  public int updateMetadata(
+      Long projectId, long datasetId, String name, String description) {
     return datasetMapper.update(
         null,
         Wrappers.<DatasetPO>lambdaUpdate()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
             .eq(DatasetPO::getId, datasetId)
             .set(DatasetPO::getName, name)
             .set(DatasetPO::getDescription, description)
@@ -79,11 +98,25 @@ public class DatasetDaoImpl implements DatasetDao {
 
   @Override
   public DatasetPO selectDataset(long datasetId) {
-    return datasetMapper.selectById(datasetId);
+    return selectDataset(null, datasetId);
+  }
+
+  @Override
+  public DatasetPO selectDataset(Long projectId, long datasetId) {
+    if (projectId == null) return datasetMapper.selectById(datasetId);
+    return datasetMapper.selectOne(
+        Wrappers.<DatasetPO>lambdaQuery()
+            .eq(DatasetPO::getProjectId, projectId)
+            .eq(DatasetPO::getId, datasetId));
   }
 
   @Override
   public DatasetPO selectDatasetBySourceTaskAssetId(long sourceTaskAssetId) {
+    return selectDatasetBySourceTaskAssetId(null, sourceTaskAssetId);
+  }
+
+  @Override
+  public DatasetPO selectDatasetBySourceTaskAssetId(Long projectId, long sourceTaskAssetId) {
     List<Object> values = versionMapper.selectObjs(
         Wrappers.<DatasetVersionPO>query()
             .select("dataset_id")
@@ -97,6 +130,7 @@ public class DatasetDaoImpl implements DatasetDao {
     if (datasetIds.isEmpty()) return null;
     return datasetMapper.selectList(
         Wrappers.<DatasetPO>lambdaQuery()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
             .in(DatasetPO::getId, datasetIds)
             .isNull(DatasetPO::getDevelopmentNodeId)
             .orderByDesc(DatasetPO::getUpdateTime)
@@ -108,15 +142,27 @@ public class DatasetDaoImpl implements DatasetDao {
 
   @Override
   public DatasetPO selectDatasetByDevelopmentNodeId(long developmentNodeId) {
+    return selectDatasetByDevelopmentNodeId(null, developmentNodeId);
+  }
+
+  @Override
+  public DatasetPO selectDatasetByDevelopmentNodeId(Long projectId, long developmentNodeId) {
     return datasetMapper.selectOne(
         Wrappers.<DatasetPO>lambdaQuery()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
             .eq(DatasetPO::getDevelopmentNodeId, developmentNodeId));
   }
 
   @Override
   public List<DatasetPO> selectDatasets() {
+    return selectDatasets(null);
+  }
+
+  @Override
+  public List<DatasetPO> selectDatasets(Long projectId) {
     return datasetMapper.selectList(
         Wrappers.<DatasetPO>lambdaQuery()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
             .orderByDesc(DatasetPO::getUpdateTime)
             .orderByDesc(DatasetPO::getId));
   }

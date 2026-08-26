@@ -14,20 +14,35 @@ import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
 import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
 import io.yak.ops.business.dataset.repository.support.DatasetJsonCodec;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 /** Dataset aggregate persistence adapter. Domain/PO conversion is isolated here. */
 @Repository
-@RequiredArgsConstructor
 public class DatasetRepositoryAdapter implements DatasetRepository {
 
   private final DatasetDao datasetDao;
   private final DatasetJsonCodec jsonCodec;
+  private final CurrentProject currentProject;
+
+  @Autowired
+  public DatasetRepositoryAdapter(
+      DatasetDao datasetDao, DatasetJsonCodec jsonCodec, CurrentProject currentProject) {
+    this.datasetDao = datasetDao;
+    this.jsonCodec = jsonCodec;
+    this.currentProject = currentProject;
+  }
+
+  DatasetRepositoryAdapter(DatasetDao datasetDao, DatasetJsonCodec jsonCodec) {
+    this(datasetDao, jsonCodec, Optional::<io.yak.ops.core.project.ProjectContext>empty);
+  }
 
   @Override
   public long insertDataset(String name, String description) {
@@ -42,6 +57,7 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
 
   private long insertDataset(Long developmentNodeId, String name, String description) {
     DatasetPO po = new DatasetPO();
+    po.setProjectId(currentProjectId());
     po.setDevelopmentNodeId(developmentNodeId);
     po.setName(name);
     po.setDescription(description);
@@ -55,6 +71,10 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
   @Override
   public long appendVersion(DatasetVersionDraft draft) {
     if (draft == null) throw new IllegalArgumentException("DatasetVersionDraft 不能为空");
+    Long projectId = currentProjectId();
+    if (projectId != null && datasetDao.selectDataset(projectId, draft.datasetId()) == null) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     DatasetVersionPO version = new DatasetVersionPO();
     version.setDatasetId(draft.datasetId());
     version.setVersionNo(draft.versionNo());
@@ -91,39 +111,70 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
 
   @Override
   public void updateCurrentVersion(long datasetId, long versionId) {
-    requireSingle(datasetDao.updateCurrentVersion(datasetId, versionId), datasetId);
+    Long projectId = currentProjectId();
+    requireSingle(
+        projectId == null
+            ? datasetDao.updateCurrentVersion(datasetId, versionId)
+            : datasetDao.updateCurrentVersion(projectId, datasetId, versionId),
+        datasetId);
   }
 
   @Override
   public void updateStatus(long datasetId, DatasetStatus status) {
-    requireSingle(datasetDao.updateStatus(datasetId, status.name()), datasetId);
+    Long projectId = currentProjectId();
+    requireSingle(
+        projectId == null
+            ? datasetDao.updateStatus(datasetId, status.name())
+            : datasetDao.updateStatus(projectId, datasetId, status.name()),
+        datasetId);
   }
 
   @Override
   public void updateMetadata(long datasetId, String name, String description) {
-    requireSingle(datasetDao.updateMetadata(datasetId, name, description), datasetId);
+    Long projectId = currentProjectId();
+    requireSingle(
+        projectId == null
+            ? datasetDao.updateMetadata(datasetId, name, description)
+            : datasetDao.updateMetadata(projectId, datasetId, name, description),
+        datasetId);
   }
 
   @Override
   public Optional<Dataset> findDataset(long datasetId) {
-    return Optional.ofNullable(datasetDao.selectDataset(datasetId)).map(this::toDomain);
+    Long projectId = currentProjectId();
+    DatasetPO row =
+        projectId == null
+            ? datasetDao.selectDataset(datasetId)
+            : datasetDao.selectDataset(projectId, datasetId);
+    return Optional.ofNullable(row).map(this::toDomain);
   }
 
   @Override
   public Optional<Dataset> findDatasetBySourceTaskAssetId(long sourceTaskAssetId) {
-    return Optional.ofNullable(datasetDao.selectDatasetBySourceTaskAssetId(sourceTaskAssetId))
-        .map(this::toDomain);
+    Long projectId = currentProjectId();
+    DatasetPO row =
+        projectId == null
+            ? datasetDao.selectDatasetBySourceTaskAssetId(sourceTaskAssetId)
+            : datasetDao.selectDatasetBySourceTaskAssetId(projectId, sourceTaskAssetId);
+    return Optional.ofNullable(row).map(this::toDomain);
   }
 
   @Override
   public Optional<Dataset> findDatasetByDevelopmentNodeId(long developmentNodeId) {
-    return Optional.ofNullable(datasetDao.selectDatasetByDevelopmentNodeId(developmentNodeId))
-        .map(this::toDomain);
+    Long projectId = currentProjectId();
+    DatasetPO row =
+        projectId == null
+            ? datasetDao.selectDatasetByDevelopmentNodeId(developmentNodeId)
+            : datasetDao.selectDatasetByDevelopmentNodeId(projectId, developmentNodeId);
+    return Optional.ofNullable(row).map(this::toDomain);
   }
 
   @Override
   public List<Dataset> listDatasets() {
-    return datasetDao.selectDatasets().stream().map(this::toDomain).toList();
+    Long projectId = currentProjectId();
+    List<DatasetPO> rows =
+        projectId == null ? datasetDao.selectDatasets() : datasetDao.selectDatasets(projectId);
+    return rows.stream().map(this::toDomain).toList();
   }
 
   @Override
@@ -144,6 +195,10 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
   @Override
   public int nextVersionNo(long datasetId) {
     return datasetDao.selectNextVersionNo(datasetId);
+  }
+
+  private Long currentProjectId() {
+    return currentProject.current().map(context -> context.projectId()).orElse(null);
   }
 
   private Dataset toDomain(DatasetPO po) {
