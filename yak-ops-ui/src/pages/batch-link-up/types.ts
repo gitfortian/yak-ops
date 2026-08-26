@@ -7,6 +7,8 @@ export interface OfflineSyncPaginationState {
   total: number;
 }
 
+export type OfflineSyncTimeRange = [Moment, Moment];
+
 export interface OfflineSyncSearchState {
   jobName?: string;
   id?: string;
@@ -15,7 +17,7 @@ export interface OfflineSyncSearchState {
   sinkType?: string;
   sourceTable?: string;
   sinkTable?: string;
-  createTime?: Moment[];
+  createTime?: OfflineSyncTimeRange;
 }
 
 export type OfflineSyncSearchField = keyof OfflineSyncSearchState;
