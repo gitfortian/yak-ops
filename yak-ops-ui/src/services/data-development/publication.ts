@@ -79,7 +79,9 @@ export const bringDataServiceOnline = async (
   }
 
   const apiId = state.detail?.id;
-  if (!apiId) throw new Error('线上 API 身份缺失，请刷新服务状态后重试');
+  if (!apiId || !state.detail) {
+    throw new Error('线上 API 身份缺失，请刷新服务状态后重试');
+  }
 
   let detail = state.detail;
   if (state.updateAvailable) {
