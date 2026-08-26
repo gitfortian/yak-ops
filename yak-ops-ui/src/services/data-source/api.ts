@@ -41,24 +41,31 @@ export const getDataSource = (id: DataSourceId): Promise<DataSourceRecord> =>
 export const listAllDataSources = (): Promise<DataSourcePageResult> =>
   HttpUtils.getData<DataSourcePageResult>(`${DATA_SOURCE_API_PREFIX}/all`);
 
-export const createDataSource = (
+export const createDataSource = async (
   payload: DataSourceSavePayload,
-): Promise<boolean> => HttpUtils.postData<boolean>(DATA_SOURCE_API_PREFIX, payload);
+): Promise<void> => {
+  await HttpUtils.postData<boolean>(DATA_SOURCE_API_PREFIX, payload);
+};
 
-export const updateDataSource = (
+export const updateDataSource = async (
   id: DataSourceId,
   payload: DataSourceSavePayload,
-): Promise<boolean> =>
-  HttpUtils.putData<boolean>(`${DATA_SOURCE_API_PREFIX}/${id}`, payload);
+): Promise<void> => {
+  await HttpUtils.putData<boolean>(`${DATA_SOURCE_API_PREFIX}/${id}`, payload);
+};
 
-export const deleteDataSource = (id: DataSourceId): Promise<boolean> =>
-  HttpUtils.deleteData<boolean>(`${DATA_SOURCE_API_PREFIX}/${id}`);
+export const deleteDataSource = async (id: DataSourceId): Promise<void> => {
+  await HttpUtils.deleteData<boolean>(`${DATA_SOURCE_API_PREFIX}/${id}`);
+};
 
-export const testDataSourceConnection = (id: DataSourceId): Promise<boolean> =>
-  HttpUtils.postData<boolean>(
+export const testDataSourceConnection = async (
+  id: DataSourceId,
+): Promise<void> => {
+  await HttpUtils.postData<boolean>(
     `${DATA_SOURCE_API_PREFIX}/${id}/connect-test`,
     {},
   );
+};
 
 export const testDataSourceConnectionWithParams = (
   payload: DataSourceConnectTestPayload,
@@ -80,8 +87,11 @@ export const getDataSourcePluginConfig = (
     `${DATA_SOURCE_API_PREFIX}/plugin/config${queryString({ pluginType })}`,
   );
 
-export const installDataSourcePlugin = (pluginType: string): Promise<boolean> =>
-  HttpUtils.postData<boolean>(
+export const installDataSourcePlugin = async (
+  pluginType: string,
+): Promise<void> => {
+  await HttpUtils.postData<boolean>(
     `${DATA_SOURCE_API_PREFIX}/plugin/config/install${queryString({ pluginType })}`,
     {},
   );
+};
