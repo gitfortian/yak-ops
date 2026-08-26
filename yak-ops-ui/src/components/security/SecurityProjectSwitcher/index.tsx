@@ -1,3 +1,4 @@
+import { productFeatures } from "@/config/productFeatures";
 import { useSecurityProject } from "@/contexts/SecurityProjectContext";
 import { getLocale, setLocale } from "@umijs/max";
 import { Dropdown } from "antd";
@@ -57,36 +58,41 @@ function LanguageSwitcher() {
   );
 }
 
-export default function SecurityProjectSwitcher() {
+function ProjectSwitcher() {
   const { projects, currentProject, selectProject } = useSecurityProject();
 
+  if (!projects.length) {
+    return <span className="whitespace-nowrap px-2 text-sm">暂无可用项目</span>;
+  }
+
+  return (
+    <Dropdown
+      menu={{
+        selectable: true,
+        selectedKeys: currentProject ? [String(currentProject.id)] : [],
+        items: projects.map((project) => ({
+          key: String(project.id),
+          label: project.projectName,
+          onClick: () => selectProject(project),
+        })),
+      }}
+    >
+      <button
+        type="button"
+        className="flex items-center gap-1 border-0 bg-transparent px-2 text-sm"
+      >
+        <span>{currentProject?.projectName}</span>
+        <ChevronDown className="h-3 w-3" />
+      </button>
+    </Dropdown>
+  );
+}
+
+export default function SecurityProjectSwitcher() {
   return (
     <div className="contents">
       <LanguageSwitcher />
-
-      {!projects.length ? (
-        <span className="whitespace-nowrap px-2 text-sm">暂无可用项目</span>
-      ) : (
-        <Dropdown
-          menu={{
-            selectable: true,
-            selectedKeys: currentProject ? [String(currentProject.id)] : [],
-            items: projects.map((project) => ({
-              key: String(project.id),
-              label: project.projectName,
-              onClick: () => selectProject(project),
-            })),
-          }}
-        >
-          <button
-            type="button"
-            className="flex items-center gap-1 border-0 bg-transparent px-2 text-sm"
-          >
-            <span>{currentProject?.projectName}</span>
-            <ChevronDown className="h-3 w-3" />
-          </button>
-        </Dropdown>
-      )}
+      {productFeatures.projectSpace ? <ProjectSwitcher /> : null}
     </div>
   );
 }
