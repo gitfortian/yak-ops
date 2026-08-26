@@ -25,15 +25,15 @@ export interface LinkupJobDefinition {
 export interface OfflineJobDefinitionVO extends LinkupJobDefinition {
   jobType?: 'BATCH';
   mode?: string;
-  releaseState?: string | number;
+  releaseState?: string;
   sourceType?: string;
   sinkType?: string;
   sourceDatasourceId?: BatchLinkUpId;
   sinkDatasourceId?: BatchLinkUpId;
   sourceDatasourceName?: string;
   sinkDatasourceName?: string;
-  sourceTable?: unknown;
-  sinkTable?: unknown;
+  sourceTable?: string;
+  sinkTable?: string;
   lastJobStatus?: string;
   lastErrorMessage?: string;
   instanceId?: BatchLinkUpId;
@@ -211,7 +211,7 @@ export interface DataSource {
 export interface HistoryItem {
   id: string;
   jobName: string;
-  jobStatus: unknown;
+  jobStatus: any;
   time: string;
   endTime?: string;
   startTime: string;
