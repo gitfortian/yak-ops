@@ -20,6 +20,12 @@ const positiveInteger = (value: string | null, fallback: number) => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const validTimeRange = (search: OfflineSyncSearchState) => {
+  const start = search.createTime?.[0];
+  const end = search.createTime?.[1];
+  return start?.isValid() && end?.isValid() ? [start, end] as const : undefined;
+};
+
 export const parseOfflineSyncSearchFromUrl = (
   search: string,
 ): OfflineSyncSearchState => {
@@ -85,9 +91,10 @@ export const buildOfflineSyncQueryString = (
     if (value) query.set(field, value);
   });
 
-  if (search.createTime?.length === 2) {
-    query.set('createTimeStart', search.createTime[0].format(DATE_TIME_FORMAT));
-    query.set('createTimeEnd', search.createTime[1].format(DATE_TIME_FORMAT));
+  const timeRange = validTimeRange(search);
+  if (timeRange) {
+    query.set('createTimeStart', timeRange[0].format(DATE_TIME_FORMAT));
+    query.set('createTimeEnd', timeRange[1].format(DATE_TIME_FORMAT));
   }
 
   query.set('current', String(pagination.current));
@@ -98,19 +105,22 @@ export const buildOfflineSyncQueryString = (
 export const buildOfflineSyncPageQuery = (
   search: OfflineSyncSearchState,
   pagination: Pick<OfflineSyncPaginationState, 'current' | 'pageSize'>,
-): OfflineSyncTaskPageQuery => ({
-  current: pagination.current,
-  pageSize: pagination.pageSize,
-  jobName: search.jobName?.trim() || undefined,
-  id: search.id?.trim() || undefined,
-  status: search.status?.trim() || undefined,
-  sourceType: search.sourceType?.trim() || undefined,
-  sinkType: search.sinkType?.trim() || undefined,
-  sourceTable: search.sourceTable?.trim() || undefined,
-  sinkTable: search.sinkTable?.trim() || undefined,
-  createTimeStart: search.createTime?.[0]?.format(DATE_TIME_FORMAT),
-  createTimeEnd: search.createTime?.[1]?.format(DATE_TIME_FORMAT),
-});
+): OfflineSyncTaskPageQuery => {
+  const timeRange = validTimeRange(search);
+  return {
+    current: pagination.current,
+    pageSize: pagination.pageSize,
+    jobName: search.jobName?.trim() || undefined,
+    id: search.id?.trim() || undefined,
+    status: search.status?.trim() || undefined,
+    sourceType: search.sourceType?.trim() || undefined,
+    sinkType: search.sinkType?.trim() || undefined,
+    sourceTable: search.sourceTable?.trim() || undefined,
+    sinkTable: search.sinkTable?.trim() || undefined,
+    createTimeStart: timeRange?.[0].format(DATE_TIME_FORMAT),
+    createTimeEnd: timeRange?.[1].format(DATE_TIME_FORMAT),
+  };
+};
 
 export const getOfflineSyncEditPath = (
   record: OfflineJobDefinitionVO,
