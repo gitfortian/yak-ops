@@ -1,134 +1,138 @@
-import {Code2, FlaskConical, ShieldCheck} from "lucide-react";
-import React from "react";
-import type {DataSourceGroup, DataSourceOptionItem} from "./types";
+import { Code2, FlaskConical, ShieldCheck } from 'lucide-react';
+import type { ReactNode } from 'react';
 
-export const PAGE_DEFAULT_PAGINATION = {
+import type {
+  DataSourceGroup,
+  DataSourceOptionItem,
+  DataSourceSummary,
+  PaginationInfo,
+} from './types';
+
+export const PAGE_DEFAULT_PAGINATION: PaginationInfo = {
   pageNo: 1,
   pageSize: 10,
   total: 0,
 };
 
+export const DATA_SOURCE_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+export const EMPTY_DATA_SOURCE_SUMMARY: DataSourceSummary = {
+  total: 0,
+  connected: 0,
+  disconnected: 0,
+  unknown: 0,
+  environmentCount: 0,
+};
+
 export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
-  {label: "MYSQL", value: "MYSQL"},
-  {label: "ORACLE", value: "ORACLE"},
-  {label: "POSTGRE_SQL", value: "POSTGRE_SQL"},
-  {label: "DORIS", value: "DORIS"},
-  {label: "KINGBASE", value: "KINGBASE"},
-  {label: "DAMENG", value: "DAMENG"},
+  { label: 'MYSQL', value: 'MYSQL' },
+  { label: 'ORACLE', value: 'ORACLE' },
+  { label: 'POSTGRE_SQL', value: 'POSTGRE_SQL' },
+  { label: 'DORIS', value: 'DORIS' },
+  { label: 'KINGBASE', value: 'KINGBASE' },
+  { label: 'DAMENG', value: 'DAMENG' },
 ];
 
 export const ENVIRONMENT_OPTIONS: DataSourceOptionItem[] = [
-  {label: "DEVELOP", value: "DEVELOP"},
-  {label: "TEST", value: "TEST"},
-  {label: "PROD", value: "PROD"},
+  { label: 'DEVELOP', value: 'DEVELOP' },
+  { label: 'TEST', value: 'TEST' },
+  { label: 'PROD', value: 'PROD' },
 ];
 
 export const dataSourceGroupList: DataSourceGroup[] = [
   {
-    groupName: "关系型数据库",
+    groupName: '关系型数据库',
     datasourceList: [
       {
         onlyDiScript: false,
-        dbType: "MYSQL",
-        type: "MYSQL",
-        connectorType: "Jdbc",
+        dbType: 'MYSQL',
+        type: 'MYSQL',
+        connectorType: 'Jdbc',
       },
       {
         onlyDiScript: false,
-        dbType: "ORACLE",
-        type: "ORACLE",
-        connectorType: "Jdbc",
+        dbType: 'ORACLE',
+        type: 'ORACLE',
+        connectorType: 'Jdbc',
       },
       {
         onlyDiScript: false,
-        dbType: "POSTGRE_SQL",
-        type: "POSTGRE_SQL",
-        connectorType: "Jdbc",
+        dbType: 'POSTGRE_SQL',
+        type: 'POSTGRE_SQL',
+        connectorType: 'Jdbc',
       },
       {
         onlyDiScript: false,
-        dbType: "KINGBASE",
-        type: "KINGBASE",
-        connectorType: "Jdbc",
+        dbType: 'KINGBASE',
+        type: 'KINGBASE',
+        connectorType: 'Jdbc',
       },
       {
         onlyDiScript: false,
-        dbType: "DAMENG",
-        type: "DAMENG",
-        connectorType: "Jdbc",
+        dbType: 'DAMENG',
+        type: 'DAMENG',
+        connectorType: 'Jdbc',
       },
     ],
   },
   {
-    groupName: "OLAP 数据库",
+    groupName: 'OLAP 数据库',
     datasourceList: [
       {
         onlyDiScript: false,
-        dbType: "DORIS",
-        type: "DORIS",
-        connectorType: "Doris",
+        dbType: 'DORIS',
+        type: 'DORIS',
+        connectorType: 'Doris',
       },
     ],
   },
 ];
 
-export const environmentTagConfigMap: Record<string,
-  {
-    text: string;
-    color: string;
-    backgroundColor: string;
-    icon: React.ReactNode;
-  }> = {
+interface EnvironmentTagConfig {
+  text: string;
+  color: string;
+  backgroundColor: string;
+  icon: ReactNode;
+}
+
+export const environmentTagConfigMap: Record<string, EnvironmentTagConfig> = {
   PROD: {
-    text: "生产",
-    color: "#ff4d4f",
-    backgroundColor: "#fff2f0",
-    icon: (
-      <div>
-        {" "}
-        <div className="flex items-center gap-2">
-          <span className="flex h-4 w-4 items-center justify-center rounded-lg ">
-            <ShieldCheck size={12}/>
-          </span>
-        </div>
-      </div>
-    ),
+    text: '生产',
+    color: '#ff4d4f',
+    backgroundColor: '#fff2f0',
+    icon: <ShieldCheck size={12} />,
   },
   TEST: {
-    text: "测试",
-    color: "#52c41a",
-    backgroundColor: "#f6ffed",
-    icon: (
-      <div>
-        {" "}
-        <div className="flex items-center gap-2">
-          <span className="flex h-4 w-4 items-center justify-center rounded-lg ">
-            <FlaskConical size={12}/>
-          </span>
-        </div>
-      </div>
-    ),
+    text: '测试',
+    color: '#52c41a',
+    backgroundColor: '#f6ffed',
+    icon: <FlaskConical size={12} />,
   },
   DEVELOP: {
-    text: "开发",
-    color: "#1677ff",
-    backgroundColor: "#e6f4ff",
-    icon: (
-      <div>
-        {" "}
-        <div className="flex items-center gap-2">
-          <span className="flex h-4 w-4 items-center justify-center rounded-lg ">
-            <Code2 size={12}/>
-          </span>
-        </div>
-      </div>
-    ),
+    text: '开发',
+    color: '#1677ff',
+    backgroundColor: '#e6f4ff',
+    icon: <Code2 size={12} />,
   },
 };
 
+export const ENVIRONMENT_FILTER_OPTIONS = ENVIRONMENT_OPTIONS.map((item) => ({
+  ...item,
+  label: environmentTagConfigMap[item.value]?.text || item.label,
+}));
+
+export const DATA_SOURCE_ENVIRONMENT_TABS = [
+  { key: 'all', label: '全部', value: undefined },
+  ...ENVIRONMENT_FILTER_OPTIONS.map((item) => ({
+    key: item.value,
+    label: item.label,
+    value: item.value,
+  })),
+];
+
 export const PAGE_ANIMATION = {
   fadeUp: {
-    hidden: {opacity: 0, y: 18},
+    hidden: { opacity: 0, y: 18 },
     visible: {
       opacity: 1,
       y: 0,
