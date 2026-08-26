@@ -1,4 +1,4 @@
-import { Button } from 'antd';
+import { YakButton } from '@/components/ui';
 import { Boxes, RefreshCw } from 'lucide-react';
 import {
   Component,
@@ -54,15 +54,17 @@ class ResourceEditorBoundary extends Component<
         <div className="text-center">
           <Boxes className="mx-auto text-[#98a2b3]" />
           <div className="mt-3 text-sm">资源编辑器加载异常</div>
-          <div className="mt-2 text-xs text-[#98a2b3]">{this.state.error}</div>
-          <Button
+          <div className="mt-2 text-xs text-[#98a2b3]">
+            {this.state.error}
+          </div>
+          <YakButton
             className="mt-4"
             size="small"
             icon={<RefreshCw size={13} />}
             onClick={() => this.setState({ error: undefined })}
           >
             重新渲染
-          </Button>
+          </YakButton>
         </div>
       </div>
     );
@@ -77,12 +79,15 @@ export default function DevelopmentEditorWorkspace({
   onCreateNode,
   onNodesChanged,
 }: DevelopmentEditorWorkspaceProps) {
-  const [focusedNodeId, setFocusedNodeId] = useState<DevelopmentId | undefined>(
-    selectedNodeId,
-  );
+  const [focusedNodeId, setFocusedNodeId] = useState<
+    DevelopmentId | undefined
+  >(selectedNodeId);
   const requestedNodeId = useMemo(() => {
     if (typeof window === 'undefined') return undefined;
-    return new URLSearchParams(window.location.search).get('nodeId')?.trim() || undefined;
+    return (
+      new URLSearchParams(window.location.search).get('nodeId')?.trim() ||
+      undefined
+    );
   }, []);
   const deepLinkAppliedRef = useRef(false);
 

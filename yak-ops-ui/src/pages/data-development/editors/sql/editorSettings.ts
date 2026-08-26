@@ -1,26 +1,15 @@
-import type { ApiResponse } from '@/services/http/response';
-import HttpUtils from '@/utils/HttpUtils';
+import {
+  getDevelopmentEditorSettings,
+  type YakEditorSettings,
+} from '@/services/data-development';
 import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
-export type YakEditorLineHighlight = 'line' | 'none' | 'gutter' | 'all';
-export type YakSqlCompletionFqn = 'none' | 'table' | 'all';
-export type YakRenderWhitespace = 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
-
-export interface YakEditorSettings {
-  theme: string;
-  fontSize: number;
-  fontFamily: string;
-  customFontFamily: string;
-  lineHeight: number;
-  showLineNumber: boolean;
-  showMinimap: boolean;
-  wordWrap: boolean;
-  folding: boolean;
-  renderLineHighlight: YakEditorLineHighlight;
-  keywordCase: 'lower' | 'upper';
-  sqlCompletionFQN: YakSqlCompletionFqn;
-  renderWhitespace: YakRenderWhitespace;
-}
+export type {
+  YakEditorLineHighlight,
+  YakEditorSettings,
+  YakRenderWhitespace,
+  YakSqlCompletionFqn,
+} from '@/services/data-development';
 
 export const DEFAULT_YAK_EDITOR_SETTINGS: YakEditorSettings = {
   theme: 'Yak-Light',
@@ -54,14 +43,26 @@ export interface YakEditorTheme {
   data: monaco.editor.IStandaloneThemeData;
 }
 
-const light = (background: string, foreground: string, keyword: string): monaco.editor.IStandaloneThemeData => ({
+const light = (
+  background: string,
+  foreground: string,
+  keyword: string,
+): monaco.editor.IStandaloneThemeData => ({
   base: 'vs',
   inherit: true,
   rules: [
-    { token: 'keyword.sql', foreground: keyword.replace('#', ''), fontStyle: 'bold' },
+    {
+      token: 'keyword.sql',
+      foreground: keyword.replace('#', ''),
+      fontStyle: 'bold',
+    },
     { token: 'string.sql', foreground: '067D68' },
     { token: 'number.sql', foreground: 'B54708' },
-    { token: 'comment.sql', foreground: '98A2B3', fontStyle: 'italic' },
+    {
+      token: 'comment.sql',
+      foreground: '98A2B3',
+      fontStyle: 'italic',
+    },
   ],
   colors: {
     'editor.background': background,
@@ -73,14 +74,26 @@ const light = (background: string, foreground: string, keyword: string): monaco.
   },
 });
 
-const dark = (background: string, foreground: string, keyword: string): monaco.editor.IStandaloneThemeData => ({
+const dark = (
+  background: string,
+  foreground: string,
+  keyword: string,
+): monaco.editor.IStandaloneThemeData => ({
   base: 'vs-dark',
   inherit: true,
   rules: [
-    { token: 'keyword.sql', foreground: keyword.replace('#', ''), fontStyle: 'bold' },
+    {
+      token: 'keyword.sql',
+      foreground: keyword.replace('#', ''),
+      fontStyle: 'bold',
+    },
     { token: 'string.sql', foreground: '9ECE6A' },
     { token: 'number.sql', foreground: 'FF9E64' },
-    { token: 'comment.sql', foreground: '6B7280', fontStyle: 'italic' },
+    {
+      token: 'comment.sql',
+      foreground: '6B7280',
+      fontStyle: 'italic',
+    },
   ],
   colors: {
     'editor.background': background,
@@ -92,20 +105,67 @@ const dark = (background: string, foreground: string, keyword: string): monaco.e
   },
 });
 
-// Theme set follows familiar SQL-editor presets; Chat2DB-specific branding is replaced by Yak.
 export const YAK_EDITOR_THEMES: YakEditorTheme[] = [
-  { name: 'Yak-Light', dark: false, data: light('#FFFFFF', '#344054', '#245BDB') },
-  { name: 'Yak-Dark', dark: true, data: dark('#17181C', '#D0D5DD', '#7AA2F7') },
-  { name: 'Darcula', dark: true, data: dark('#2B2B2B', '#A9B7C6', '#CC7832') },
-  { name: 'Erlang-Dark', dark: true, data: dark('#1F1F1F', '#D6D6D6', '#F08D49') },
-  { name: 'GitHub', dark: false, data: light('#FFFFFF', '#24292F', '#CF222E') },
-  { name: 'Material', dark: true, data: dark('#263238', '#EEFFFF', '#C792EA') },
-  { name: 'Night-Owl', dark: true, data: dark('#011627', '#D6DEEB', '#C792EA') },
-  { name: 'One-Dark-Pro', dark: true, data: dark('#282C34', '#ABB2BF', '#C678DD') },
-  { name: 'Solarized-Dark', dark: true, data: dark('#002B36', '#839496', '#B58900') },
-  { name: 'Solarized-Light', dark: false, data: light('#FDF6E3', '#657B83', '#B58900') },
-  { name: 'Tomorrow', dark: false, data: light('#FFFFFF', '#4D4D4C', '#8959A8') },
-  { name: 'Twilight', dark: true, data: dark('#141414', '#F8F8F8', '#CDA869') },
+  {
+    name: 'Yak-Light',
+    dark: false,
+    data: light('#FFFFFF', '#344054', '#245BDB'),
+  },
+  {
+    name: 'Yak-Dark',
+    dark: true,
+    data: dark('#17181C', '#D0D5DD', '#7AA2F7'),
+  },
+  {
+    name: 'Darcula',
+    dark: true,
+    data: dark('#2B2B2B', '#A9B7C6', '#CC7832'),
+  },
+  {
+    name: 'Erlang-Dark',
+    dark: true,
+    data: dark('#1F1F1F', '#D6D6D6', '#F08D49'),
+  },
+  {
+    name: 'GitHub',
+    dark: false,
+    data: light('#FFFFFF', '#24292F', '#CF222E'),
+  },
+  {
+    name: 'Material',
+    dark: true,
+    data: dark('#263238', '#EEFFFF', '#C792EA'),
+  },
+  {
+    name: 'Night-Owl',
+    dark: true,
+    data: dark('#011627', '#D6DEEB', '#C792EA'),
+  },
+  {
+    name: 'One-Dark-Pro',
+    dark: true,
+    data: dark('#282C34', '#ABB2BF', '#C678DD'),
+  },
+  {
+    name: 'Solarized-Dark',
+    dark: true,
+    data: dark('#002B36', '#839496', '#B58900'),
+  },
+  {
+    name: 'Solarized-Light',
+    dark: false,
+    data: light('#FDF6E3', '#657B83', '#B58900'),
+  },
+  {
+    name: 'Tomorrow',
+    dark: false,
+    data: light('#FFFFFF', '#4D4D4C', '#8959A8'),
+  },
+  {
+    name: 'Twilight',
+    dark: true,
+    data: dark('#141414', '#F8F8F8', '#CDA869'),
+  },
 ];
 
 const listeners = new Set<(settings: YakEditorSettings) => void>();
@@ -117,18 +177,23 @@ export const setYakEditorSettings = (settings: YakEditorSettings) => {
   listeners.forEach((listener) => listener(currentSettings));
 };
 
-export const subscribeYakEditorSettings = (listener: (settings: YakEditorSettings) => void) => {
+export const subscribeYakEditorSettings = (
+  listener: (settings: YakEditorSettings) => void,
+) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 
 export const ensureYakEditorSettingsLoaded = () => {
   if (!loadPromise) {
-    loadPromise = HttpUtils.get<YakEditorSettings>('/api/v1/data-development/editor-settings')
-      .then((response: ApiResponse<YakEditorSettings>) => {
-        const settings = { ...DEFAULT_YAK_EDITOR_SETTINGS, ...(response.data || {}) };
-        setYakEditorSettings(settings);
-        return settings;
+    loadPromise = getDevelopmentEditorSettings()
+      .then((settings) => {
+        const nextSettings = {
+          ...DEFAULT_YAK_EDITOR_SETTINGS,
+          ...(settings || {}),
+        };
+        setYakEditorSettings(nextSettings);
+        return nextSettings;
       })
       .catch(() => {
         loadPromise = undefined;
@@ -143,10 +208,15 @@ export const getYakEditorSettings = () => {
   return currentSettings;
 };
 
-export const editorOptionsFromSettings = (settings: YakEditorSettings): monaco.editor.IStandaloneEditorConstructionOptions => ({
+export const editorOptionsFromSettings = (
+  settings: YakEditorSettings,
+): monaco.editor.IStandaloneEditorConstructionOptions => ({
   theme: settings.theme,
   fontSize: settings.fontSize,
-  lineHeight: Math.max(16, Math.round(settings.fontSize * settings.lineHeight)),
+  lineHeight: Math.max(
+    16,
+    Math.round(settings.fontSize * settings.lineHeight),
+  ),
   fontFamily: settings.customFontFamily.trim() || settings.fontFamily,
   lineNumbers: settings.showLineNumber ? 'on' : 'off',
   minimap: { enabled: settings.showMinimap },
