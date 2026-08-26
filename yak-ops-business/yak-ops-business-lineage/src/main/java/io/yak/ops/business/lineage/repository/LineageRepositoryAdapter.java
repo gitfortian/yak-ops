@@ -11,6 +11,7 @@ import io.yak.ops.business.lineage.domain.LineageRelationDraft;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
 import io.yak.ops.business.lineage.repository.support.LineageJsonCodec;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +23,8 @@ import org.springframework.stereotype.Repository;
 /** Persistence adapter translating lineage domain models to database rows. */
 @Repository
 @RequiredArgsConstructor
-public class LineageRepositoryAdapter implements LineageRepository {
+public class LineageRepositoryAdapter
+    implements LineageRepository, LineageOverviewRepository {
 
   private final LineageDao lineageDao;
   private final LineageJsonCodec jsonCodec;
@@ -100,6 +102,26 @@ public class LineageRepositoryAdapter implements LineageRepository {
     return lineageDao.selectAssets(new LineageDao.AssetSearch(keyword, type, limit)).stream()
         .map(this::toAsset)
         .toList();
+  }
+
+  @Override
+  public long countAssets(LineageAssetType assetType) {
+    return lineageDao.countAssets(assetType == null ? null : assetType.name());
+  }
+
+  @Override
+  public long countAssetsUpdatedBetween(Instant start, Instant end) {
+    return lineageDao.countAssetsUpdatedBetween(Timestamp.from(start), Timestamp.from(end));
+  }
+
+  @Override
+  public long countRelations() {
+    return lineageDao.countRelations();
+  }
+
+  @Override
+  public List<LineageRelation> findRecentRelations(int limit) {
+    return lineageDao.selectRecentRelations(limit).stream().map(this::toRelation).toList();
   }
 
   @Override
@@ -185,7 +207,7 @@ public class LineageRepositoryAdapter implements LineageRepository {
         instant(row.getUpdateTime()));
   }
 
-  private static java.time.Instant instant(Timestamp value) {
+  private static Instant instant(Timestamp value) {
     return value == null ? null : value.toInstant();
   }
 }

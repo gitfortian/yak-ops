@@ -32,7 +32,8 @@ HTTP / neighboring module
 ```text
 query/LineageQueryService
   ├── LineageAssetReader
-  └── LineageGraphReader
+  ├── LineageGraphReader
+  └── LineageOverviewReader
 
 registration/LineageRegistrationService
   ├── LineageAssetRegistrar
