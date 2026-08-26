@@ -9,6 +9,7 @@ import io.yak.ops.business.dashboard.gateway.analysis.DashboardAnalysisGateway;
 import io.yak.ops.business.dashboard.gateway.lineage.DashboardLineageGraphGateway;
 import io.yak.ops.business.dashboard.lineage.DashboardLineageSynchronizer;
 import io.yak.ops.business.dashboard.publication.DashboardPublisher;
+import io.yak.ops.business.dashboard.repository.DashboardOverviewRepository;
 import io.yak.ops.business.dashboard.repository.DashboardReferenceRepository;
 import io.yak.ops.business.dashboard.repository.DashboardRepository;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepository;
@@ -67,7 +68,8 @@ class DashboardLayeringConventionTest {
     for (Class<?> contract : List.of(
         DashboardRepository.class,
         DashboardVersionRepository.class,
-        DashboardReferenceRepository.class)) {
+        DashboardReferenceRepository.class,
+        DashboardOverviewRepository.class)) {
       for (Method method : contract.getDeclaredMethods()) {
         assertThat(method.toGenericString())
             .doesNotContain(".dao.", "com.baomidou.mybatisplus", "controller.v1", "JdbcTemplate");

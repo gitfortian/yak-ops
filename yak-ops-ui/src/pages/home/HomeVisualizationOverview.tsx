@@ -1,12 +1,11 @@
 import { history } from '@umijs/max';
-import {
-  Clock3,
-  LayoutDashboard,
-  Monitor,
-} from 'lucide-react';
+import { Clock3, LayoutDashboard, Monitor } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { fetchDashboards } from '../dashboard/dashboard-service';
+import {
+  fetchDashboardOverview,
+  type DashboardOverview,
+} from '../dashboard/dashboard-overview-service';
 import type { DashboardSummary } from '../dashboard/model';
 import type { DigitalScreenInstance } from '../digital-screen/model';
 import { fetchDigitalScreens } from '../digital-screen/screen-service';
@@ -17,7 +16,7 @@ import {
 } from './homeAssetOverviewShared';
 
 interface VisualizationState {
-  dashboards?: DashboardSummary[];
+  dashboard?: DashboardOverview;
   screens?: DigitalScreenInstance[];
   dashboardLoading: boolean;
   screenLoading: boolean;
@@ -46,19 +45,28 @@ const timestamp = (value?: string) => {
 
 const dashboardItem = (value: DashboardSummary): VisualizationItem => {
   const published = Boolean(value.publishedVersionId);
-  const hasUnpublishedChanges = published
-    && value.currentVersionNo > value.publishedVersionNo;
+  const hasUnpublishedChanges =
+    published && value.currentVersionNo > value.publishedVersionNo;
   return {
     id: value.id,
     kind: 'dashboard',
     name: value.name,
     description: value.description || `Dashboard · v${value.currentVersionNo}`,
     updatedAt: value.updateTime || value.publishedTime || value.createTime,
-    status: hasUnpublishedChanges ? 'changed' : published ? 'published' : 'draft',
-    statusLabel: hasUnpublishedChanges ? '有未发布更新' : published ? '已发布' : '草稿',
-    path: published && !hasUnpublishedChanges
-      ? `/dashboard/${value.id}`
-      : `/dashboard/${value.id}/edit`,
+    status: hasUnpublishedChanges
+      ? 'changed'
+      : published
+        ? 'published'
+        : 'draft',
+    statusLabel: hasUnpublishedChanges
+      ? '有未发布更新'
+      : published
+        ? '已发布'
+        : '草稿',
+    path:
+      published && !hasUnpublishedChanges
+        ? `/dashboard/${value.id}`
+        : `/dashboard/${value.id}/edit`,
   };
 };
 
@@ -70,9 +78,10 @@ const screenItem = (value: DigitalScreenInstance): VisualizationItem => ({
   updatedAt: value.updatedAt || value.publishedAt || value.createdAt,
   status: value.status === 'published' ? 'published' : 'draft',
   statusLabel: value.status === 'published' ? '已发布' : '草稿',
-  path: value.status === 'published'
-    ? `/digital-screen/${value.id}`
-    : `/digital-screen/${value.id}/edit`,
+  path:
+    value.status === 'published'
+      ? `/digital-screen/${value.id}`
+      : `/digital-screen/${value.id}/edit`,
 });
 
 const statusClassName = (status: VisualizationItem['status']) => {
@@ -92,12 +101,12 @@ function useVisualizationOverview(): VisualizationState {
   useEffect(() => {
     let active = true;
 
-    fetchDashboards()
-      .then((dashboards) => {
+    fetchDashboardOverview(4)
+      .then((dashboard) => {
         if (!active) return;
         setState((current) => ({
           ...current,
-          dashboards,
+          dashboard,
           dashboardLoading: false,
           dashboardFailed: false,
         }));
@@ -199,7 +208,9 @@ function VisualizationCard({ item }: { item: VisualizationItem }) {
               {item.description}
             </p>
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] ${statusClassName(item.status)}`}>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] ${statusClassName(item.status)}`}
+          >
             {item.statusLabel}
           </span>
         </div>
@@ -218,21 +229,24 @@ function VisualizationCard({ item }: { item: VisualizationItem }) {
 
 export default function HomeVisualizationOverview() {
   const state = useVisualizationOverview();
-  const dashboards = state.dashboards;
+  const dashboard = state.dashboard;
   const screens = state.screens;
 
-  const publishedDashboards = dashboards?.filter((item) => item.publishedVersionId).length;
-  const publishedScreens = screens?.filter((item) => item.status === 'published').length;
+  const publishedScreens = screens?.filter(
+    (item) => item.status === 'published',
+  ).length;
 
   const recentItems = useMemo(() => {
     const items = [
-      ...(dashboards || []).map(dashboardItem),
+      ...(dashboard?.recentDashboards || []).map(dashboardItem),
       ...(screens || []).map(screenItem),
     ];
     return items
-      .sort((left, right) => timestamp(right.updatedAt) - timestamp(left.updatedAt))
+      .sort(
+        (left, right) => timestamp(right.updatedAt) - timestamp(left.updatedAt),
+      )
       .slice(0, 4);
-  }, [dashboards, screens]);
+  }, [dashboard, screens]);
 
   const loading = state.dashboardLoading || state.screenLoading;
   const allFailed = state.dashboardFailed && state.screenFailed;
@@ -247,12 +261,16 @@ export default function HomeVisualizationOverview() {
       <div className="mt-5 grid grid-cols-2 divide-x divide-[#eef0f3] lg:grid-cols-4">
         <OverviewMetric
           label="仪表盘"
-          value={state.dashboardFailed ? undefined : dashboards?.length}
+          value={state.dashboardFailed ? undefined : dashboard?.dashboardCount}
           route="/dashboard"
         />
         <OverviewMetric
           label="已发布仪表盘"
-          value={state.dashboardFailed ? undefined : publishedDashboards}
+          value={
+            state.dashboardFailed
+              ? undefined
+              : dashboard?.publishedDashboardCount
+          }
           route="/dashboard"
         />
         <OverviewMetric
@@ -268,9 +286,13 @@ export default function HomeVisualizationOverview() {
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-[#f0f1f3] pt-4">
-        <strong className="text-[12px] font-semibold text-[#444851]">最近更新</strong>
+        <strong className="text-[12px] font-semibold text-[#444851]">
+          最近更新
+        </strong>
         <span className="text-[10px] text-[#9ca0a8]">
-          {state.dashboardFailed || state.screenFailed ? '部分数据暂不可用' : '按更新时间排序'}
+          {state.dashboardFailed || state.screenFailed
+            ? '部分数据暂不可用'
+            : '按更新时间排序'}
         </span>
       </div>
 

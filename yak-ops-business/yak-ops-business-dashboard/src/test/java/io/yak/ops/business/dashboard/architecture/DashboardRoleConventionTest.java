@@ -17,7 +17,9 @@ import io.yak.ops.business.dashboard.lineage.DashboardLineageRefreshListener;
 import io.yak.ops.business.dashboard.lineage.DashboardLineageSynchronizer;
 import io.yak.ops.business.dashboard.publication.DashboardEffectiveSnapshotReader;
 import io.yak.ops.business.dashboard.publication.DashboardPublisher;
+import io.yak.ops.business.dashboard.read.DashboardOverviewReader;
 import io.yak.ops.business.dashboard.read.DashboardReader;
+import io.yak.ops.business.dashboard.repository.DashboardOverviewRepositoryAdapter;
 import io.yak.ops.business.dashboard.repository.DashboardReferenceRepositoryAdapter;
 import io.yak.ops.business.dashboard.repository.DashboardRepositoryAdapter;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepositoryAdapter;
@@ -54,7 +56,8 @@ class DashboardRoleConventionTest {
     for (Class<?> type : List.of(
         DashboardRepositoryAdapter.class,
         DashboardVersionRepositoryAdapter.class,
-        DashboardReferenceRepositoryAdapter.class)) {
+        DashboardReferenceRepositoryAdapter.class,
+        DashboardOverviewRepositoryAdapter.class)) {
       assertThat(type.isAnnotationPresent(Repository.class)).as(type.getName()).isTrue();
       assertThat(type.isAnnotationPresent(Service.class)).as(type.getName()).isFalse();
     }
@@ -64,6 +67,7 @@ class DashboardRoleConventionTest {
     return List.of(
         DashboardManager.class,
         DashboardReader.class,
+        DashboardOverviewReader.class,
         DashboardVersionAppender.class,
         DashboardVersionManager.class,
         DashboardVersionReader.class,

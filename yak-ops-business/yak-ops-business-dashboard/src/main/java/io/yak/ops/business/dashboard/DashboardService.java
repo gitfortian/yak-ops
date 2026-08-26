@@ -4,9 +4,11 @@ import io.yak.ops.business.dashboard.definition.DashboardManager;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.dashboard.domain.DashboardDetail;
 import io.yak.ops.business.dashboard.domain.DashboardDraft;
+import io.yak.ops.business.dashboard.domain.DashboardOverview;
 import io.yak.ops.business.dashboard.domain.DashboardVersion;
 import io.yak.ops.business.dashboard.domain.DashboardVersionDetail;
 import io.yak.ops.business.dashboard.publication.DashboardPublisher;
+import io.yak.ops.business.dashboard.read.DashboardOverviewReader;
 import io.yak.ops.business.dashboard.read.DashboardReader;
 import io.yak.ops.business.dashboard.version.DashboardVersionManager;
 import io.yak.ops.business.dashboard.version.DashboardVersionReader;
@@ -21,6 +23,7 @@ public class DashboardService {
 
   private final DashboardManager manager;
   private final DashboardReader reader;
+  private final DashboardOverviewReader overviewReader;
   private final DashboardVersionManager versions;
   private final DashboardVersionReader versionReader;
   private final DashboardPublisher publisher;
@@ -28,11 +31,13 @@ public class DashboardService {
   public DashboardService(
       DashboardManager manager,
       DashboardReader reader,
+      DashboardOverviewReader overviewReader,
       DashboardVersionManager versions,
       DashboardVersionReader versionReader,
       DashboardPublisher publisher) {
     this.manager = manager;
     this.reader = reader;
+    this.overviewReader = overviewReader;
     this.versions = versions;
     this.versionReader = versionReader;
     this.publisher = publisher;
@@ -40,6 +45,10 @@ public class DashboardService {
 
   public List<DashboardAsset> list() {
     return reader.list();
+  }
+
+  public DashboardOverview overview(int listLimit) {
+    return overviewReader.overview(listLimit);
   }
 
   public DashboardDetail get(long dashboardId) {
