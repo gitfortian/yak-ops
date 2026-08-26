@@ -1,12 +1,12 @@
+import {
+  fetchDashboardOverview,
+  type DashboardOverview,
+  type DashboardSummary,
+} from '@/services/dashboard';
 import { history } from '@umijs/max';
 import { Clock3, LayoutDashboard, Monitor } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import {
-  fetchDashboardOverview,
-  type DashboardOverview,
-} from '../dashboard/dashboard-overview-service';
-import type { DashboardSummary } from '../dashboard/model';
 import type { DigitalScreenInstance } from '../digital-screen/model';
 import { fetchDigitalScreens } from '../digital-screen/screen-service';
 import {
