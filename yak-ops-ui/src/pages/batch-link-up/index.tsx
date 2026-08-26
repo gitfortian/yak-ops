@@ -6,7 +6,7 @@ import { history } from '@umijs/max';
 import { ConfigProvider, message } from 'antd';
 import { useMemo } from 'react';
 
-import CreateSyncTaskDrawer from './components/CreateSyncTaskModal';
+import CreateSyncTaskDrawer from './components/CreateSyncTaskDrawer';
 import OfflineSyncFilterBar from './components/OfflineSyncFilterBar';
 import OfflineSyncPageHeader from './components/OfflineSyncPageHeader';
 import OfflineSyncTaskTable from './components/OfflineSyncTaskTable';
