@@ -1,12 +1,13 @@
-import type { ScreenAggregation, ScreenComponent } from '@/components/screen-engine';
 import type { DatasetField, PublishedDataset } from '@/components/analysis/model';
-import { Button, Select, Spin } from 'antd';
-import { Database, Plus, Trash2, Unlink } from 'lucide-react';
-import type { DigitalScreenComponentBinding } from './model';
+import type { ScreenAggregation, ScreenComponent } from '@/components/screen-engine';
+import { YakButton } from '@/components/ui';
 import {
-  SCREEN_AGGREGATION_LABELS,
   isBindableScreenComponent,
-} from './screen-data-service';
+  SCREEN_AGGREGATION_LABELS,
+  type DigitalScreenComponentBinding,
+} from '@/services/digital-screen';
+import { Select, Spin } from 'antd';
+import { Database, Plus, Trash2, Unlink } from 'lucide-react';
 
 const COMPONENT_LABELS: Record<ScreenComponent['type'], string> = {
   metric: '指标卡',
@@ -155,10 +156,7 @@ export function DataBindingPanel({
           variant="filled"
           placeholder="选择已上线数据集"
           optionFilterProp="label"
-          options={datasets.map((item) => ({
-            value: item.id,
-            label: item.name,
-          }))}
+          options={datasets.map((item) => ({ value: item.id, label: item.name }))}
           onChange={(datasetId?: string) => {
             if (!datasetId) {
               onChange(undefined);
@@ -198,7 +196,7 @@ export function DataBindingPanel({
           <div className="mt-4">
             <div className="flex items-center justify-between">
               <span className="text-[12px] text-[#667085]">指标</span>
-              <Button
+              <YakButton
                 type="text"
                 size="small"
                 icon={<Plus size={13} />}
@@ -207,7 +205,7 @@ export function DataBindingPanel({
                 className="px-1 text-[11px]"
               >
                 添加
-              </Button>
+              </YakButton>
             </div>
 
             <div className="mt-2 space-y-2">
@@ -238,12 +236,7 @@ export function DataBindingPanel({
                           });
                         }}
                       />
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<Trash2 size={13} />}
-                        onClick={() => removeMetric(index)}
-                      />
+                      <YakButton type="text" size="small" icon={<Trash2 size={13} />} onClick={() => removeMetric(index)} />
                     </div>
                     <Select
                       value={metric.aggregation}
@@ -278,7 +271,7 @@ export function DataBindingPanel({
               <Database size={13} />
               <span className="truncate">{dataset.name}</span>
             </div>
-            <Button
+            <YakButton
               type="text"
               size="small"
               icon={<Unlink size={12} />}
@@ -286,7 +279,7 @@ export function DataBindingPanel({
               onClick={() => onChange(undefined)}
             >
               清除
-            </Button>
+            </YakButton>
           </div>
 
           {queryError ? (

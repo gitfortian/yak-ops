@@ -1,57 +1,14 @@
-import type { PublishedDataset } from '@/components/analysis/model';
 import { ScreenRenderer } from '@/components/screen-engine';
-import { resolveScreenTemplateById } from '@/services/screen-template-service';
+import { YakButton } from '@/components/ui';
 import { history, useParams } from '@umijs/max';
-import { Button, message } from 'antd';
 import { ArrowLeft, Pencil } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import type { DigitalScreenBindings, DigitalScreenInstance } from './model';
-import { fetchDigitalScreenDatasets } from './screen-data-service';
-import { fetchDigitalScreen } from './screen-service';
-import { useScreenRuntimeData } from './use-screen-data';
-
-const EMPTY_BINDINGS: DigitalScreenBindings = {};
+import { useDigitalScreenViewer } from './hooks/useDigitalScreenViewer';
 
 export default function DigitalScreenViewerPage() {
   const { id } = useParams<{ id: string }>();
-  const [screen, setScreen] = useState<DigitalScreenInstance>();
-  const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
-  const [dataError, setDataError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const { screen, template, runtime, dataError, isLoading } = useDigitalScreenViewer(id);
 
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    void fetchDigitalScreen(id)
-      .then(setScreen)
-      .catch((error) => message.error(error instanceof Error ? error.message : '加载数字化大屏失败'))
-      .finally(() => setLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    let active = true;
-    setDataError('');
-    void fetchDigitalScreenDatasets()
-      .then((values) => {
-        if (active) setDatasets(values);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setDatasets([]);
-        setDataError(error instanceof Error ? error.message : '加载 Dataset 失败');
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const template = useMemo(
-    () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),
-    [screen],
-  );
-  const runtime = useScreenRuntimeData(template, screen?.bindings ?? EMPTY_BINDINGS, datasets);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#070b13] text-[13px] text-white/50">
         正在加载数字化大屏...
@@ -63,7 +20,7 @@ export default function DigitalScreenViewerPage() {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#070b13] text-white/70">
         <div className="text-[14px]">数字化大屏或模板不存在</div>
-        <Button type="link" onClick={() => history.push('/digital-screen')}>返回大屏列表</Button>
+        <YakButton type="link" onClick={() => history.push('/digital-screen')}>返回大屏列表</YakButton>
       </div>
     );
   }
@@ -81,20 +38,20 @@ export default function DigitalScreenViewerPage() {
       </div>
 
       <div className="absolute left-4 top-4 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-        <Button
+        <YakButton
           className="border-white/10 bg-black/45 text-white backdrop-blur"
           icon={<ArrowLeft size={14} />}
           onClick={() => history.push('/digital-screen')}
         >
           返回
-        </Button>
-        <Button
+        </YakButton>
+        <YakButton
           className="border-white/10 bg-black/45 text-white backdrop-blur"
           icon={<Pencil size={14} />}
           onClick={() => history.push(`/digital-screen/${screen.id}/edit`)}
         >
           编辑
-        </Button>
+        </YakButton>
       </div>
 
       {runtime.loadingCount ? (

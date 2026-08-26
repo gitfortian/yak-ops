@@ -13,9 +13,9 @@ import type {
   PublishedDataset,
   Scalar,
 } from '@/components/analysis/model';
-import type { DigitalScreenComponentBinding } from './model';
+import type { DigitalScreenComponentBinding } from './types';
 
-export const fetchDigitalScreenDatasets = fetchAnalysisDatasets;
+export const listDigitalScreenDatasets = fetchAnalysisDatasets;
 
 export const SCREEN_AGGREGATION_LABELS: Record<Aggregation, string> = {
   SUM: '求和',
@@ -68,7 +68,7 @@ const bindingIndex = (
   && (aggregation ? item.aggregation === aggregation : !item.aggregation)
 ));
 
-const cell = (
+const getCell = (
   result: DatasetQueryResult,
   row: Scalar[],
   fieldId: string,
@@ -78,33 +78,33 @@ const cell = (
   return index >= 0 ? row[index] : null;
 };
 
-const numericCell = (
+const getNumericCell = (
   result: DatasetQueryResult,
   row: Scalar[],
   fieldId: string,
   aggregation: Aggregation,
 ) => {
-  const value = Number(cell(result, row, fieldId, aggregation) ?? 0);
+  const value = Number(getCell(result, row, fieldId, aggregation) ?? 0);
   return Number.isFinite(value) ? value : 0;
 };
 
-const fieldLabel = (dataset: PublishedDataset, fieldId: string) => (
+const getFieldLabel = (dataset: PublishedDataset, fieldId: string) => (
   dataset.fields.find((field) => field.key === fieldId)?.label || fieldId
 );
 
-const metricLabel = (
+const getMetricLabel = (
   dataset: PublishedDataset,
   metric: DigitalScreenComponentBinding['metrics'][number],
-) => `${fieldLabel(dataset, metric.field)} · ${SCREEN_AGGREGATION_LABELS[metric.aggregation]}`;
+) => `${getFieldLabel(dataset, metric.field)} · ${SCREEN_AGGREGATION_LABELS[metric.aggregation]}`;
 
-const rowLabel = (
+const getRowLabel = (
   dataset: PublishedDataset,
   result: DatasetQueryResult,
   row: Scalar[],
   dimensions: string[],
 ) => dimensions.map((fieldId) => {
-  const value = cell(result, row, fieldId);
-  return value == null ? fieldLabel(dataset, fieldId) : String(value);
+  const value = getCell(result, row, fieldId);
+  return value == null ? getFieldLabel(dataset, fieldId) : String(value);
 }).join(' / ');
 
 export const toScreenComponentData = (
@@ -118,17 +118,17 @@ export const toScreenComponentData = (
     if (!metric) return undefined;
     const row = result.rows[0];
     return {
-      value: row ? numericCell(result, row, metric.field, metric.aggregation) : 0,
+      value: row ? getNumericCell(result, row, metric.field, metric.aggregation) : 0,
       trendLabel: `${dataset.name} · DV${result.datasetVersionNo}`,
     };
   }
 
   if (component.type === 'line' || component.type === 'bar') {
     return {
-      categories: result.rows.map((row) => rowLabel(dataset, result, row, binding.dimensions)),
+      categories: result.rows.map((row) => getRowLabel(dataset, result, row, binding.dimensions)),
       series: binding.metrics.map((metric) => ({
-        name: metricLabel(dataset, metric),
-        values: result.rows.map((row) => numericCell(
+        name: getMetricLabel(dataset, metric),
+        values: result.rows.map((row) => getNumericCell(
           result,
           row,
           metric.field,
@@ -143,8 +143,8 @@ export const toScreenComponentData = (
     if (!metric) return undefined;
     return {
       items: result.rows.map((row) => ({
-        name: rowLabel(dataset, result, row, binding.dimensions),
-        value: numericCell(result, row, metric.field, metric.aggregation),
+        name: getRowLabel(dataset, result, row, binding.dimensions),
+        value: getNumericCell(result, row, metric.field, metric.aggregation),
       })),
     };
   }
@@ -152,12 +152,12 @@ export const toScreenComponentData = (
   if (component.type === 'table') {
     const dimensionColumns = binding.dimensions.map((fieldId) => ({
       key: `dimension:${fieldId}`,
-      title: fieldLabel(dataset, fieldId),
+      title: getFieldLabel(dataset, fieldId),
       align: 'left' as const,
     }));
     const metricColumns = binding.metrics.map((metric) => ({
       key: `metric:${metric.field}:${metric.aggregation}`,
-      title: metricLabel(dataset, metric),
+      title: getMetricLabel(dataset, metric),
       align: 'right' as const,
     }));
     return {
@@ -165,10 +165,10 @@ export const toScreenComponentData = (
       rows: result.rows.map((row) => {
         const record: Record<string, Scalar> = {};
         binding.dimensions.forEach((fieldId) => {
-          record[`dimension:${fieldId}`] = cell(result, row, fieldId);
+          record[`dimension:${fieldId}`] = getCell(result, row, fieldId);
         });
         binding.metrics.forEach((metric) => {
-          record[`metric:${metric.field}:${metric.aggregation}`] = cell(
+          record[`metric:${metric.field}:${metric.aggregation}`] = getCell(
             result,
             row,
             metric.field,
