@@ -11,9 +11,9 @@ import io.yak.ops.business.lineage.dao.LineageDao;
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageRelation;
 import io.yak.ops.business.lineage.repository.LineageRepository;
-import io.yak.ops.business.lineage.service.LineageMaintenanceService;
-import io.yak.ops.business.lineage.service.LineageQueryService;
-import io.yak.ops.business.lineage.service.LineageWriteService;
+import io.yak.ops.business.lineage.maintenance.LineageMaintenanceService;
+import io.yak.ops.business.lineage.query.LineageQueryService;
+import io.yak.ops.business.lineage.registration.LineageRegistrationService;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
@@ -37,7 +37,7 @@ class LineageArchitectureTest {
   @Test
   void servicesDoNotDependOnPersistenceImplementationTypes() {
     assertServiceBoundary(LineageQueryService.class);
-    assertServiceBoundary(LineageWriteService.class);
+    assertServiceBoundary(LineageRegistrationService.class);
     assertServiceBoundary(LineageMaintenanceService.class);
   }
 

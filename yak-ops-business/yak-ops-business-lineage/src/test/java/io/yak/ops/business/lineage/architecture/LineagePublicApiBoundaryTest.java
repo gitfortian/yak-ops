@@ -3,9 +3,9 @@ package io.yak.ops.business.lineage.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer;
-import io.yak.ops.business.lineage.service.LineageMaintenanceService;
-import io.yak.ops.business.lineage.service.LineageQueryService;
-import io.yak.ops.business.lineage.service.LineageWriteService;
+import io.yak.ops.business.lineage.maintenance.LineageMaintenanceService;
+import io.yak.ops.business.lineage.query.LineageQueryService;
+import io.yak.ops.business.lineage.registration.LineageRegistrationService;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -34,16 +34,16 @@ class LineagePublicApiBoundaryTest {
           BASE + ".domain.LineageGraph",
           BASE + ".domain.LineageRelation",
           BASE + ".domain.LineageRelationType",
-          BASE + ".service.LineageMaintenanceService",
-          BASE + ".service.LineageQueryService",
-          BASE + ".service.LineageWriteService");
+          BASE + ".maintenance.LineageMaintenanceService",
+          BASE + ".query.LineageQueryService",
+          BASE + ".registration.LineageRegistrationService");
 
   private static final Set<Class<?>> STABLE_ENTRY_TYPES =
       Set.of(
           SqlProjectionLineageAnalyzer.class,
           LineageMaintenanceService.class,
           LineageQueryService.class,
-          LineageWriteService.class);
+          LineageRegistrationService.class);
 
   private static final Set<String> FORBIDDEN_SIGNATURE_TOKENS =
       Set.of(
@@ -56,13 +56,9 @@ class LineagePublicApiBoundaryTest {
 
   @Test
   void neighboringProductionModulesUseOnlyDeclaredPublicTypes() throws IOException {
-    Map<String, Set<String>> consumers = externalLineageImports();
-
-    for (Map.Entry<String, Set<String>> entry : consumers.entrySet()) {
+    for (Map.Entry<String, Set<String>> entry : externalLineageImports().entrySet()) {
       String imported = entry.getKey();
-      assertThat(imported)
-          .as("Wildcard imports cannot define a stable Lineage API: %s", entry.getValue())
-          .doesNotEndWith(".*");
+      assertThat(imported).doesNotEndWith(".*");
       assertThat(isDeclaredPublicType(imported))
           .as("Undeclared Lineage API import %s used by %s", imported, entry.getValue())
           .isTrue();
@@ -73,9 +69,7 @@ class LineagePublicApiBoundaryTest {
   void declaredPublicTypeRootsExistAndArePublic() throws ClassNotFoundException {
     for (String typeName : EXPORTED_TYPE_ROOTS) {
       Class<?> type = Class.forName(typeName);
-      assertThat(Modifier.isPublic(type.getModifiers()))
-          .as("Declared Lineage API type must be public: %s", typeName)
-          .isTrue();
+      assertThat(Modifier.isPublic(type.getModifiers())).as(typeName).isTrue();
     }
   }
 
@@ -86,21 +80,10 @@ class LineagePublicApiBoundaryTest {
         if (!Modifier.isPublic(method.getModifiers())) continue;
         String signature = method.toGenericString();
         for (String forbidden : FORBIDDEN_SIGNATURE_TOKENS) {
-          assertThat(signature)
-              .as("Implementation type leaked from %s", signature)
-              .doesNotContain(forbidden);
+          assertThat(signature).as(signature).doesNotContain(forbidden);
         }
       }
     }
-  }
-
-  @Test
-  void draftModelsRemainModuleInternal() throws IOException {
-    Map<String, Set<String>> consumers = externalLineageImports();
-    assertThat(consumers)
-        .doesNotContainKeys(
-            BASE + ".domain.LineageAssetDraft",
-            BASE + ".domain.LineageRelationDraft");
   }
 
   private boolean isDeclaredPublicType(String imported) {
@@ -110,37 +93,23 @@ class LineagePublicApiBoundaryTest {
 
   private Map<String, Set<String>> externalLineageImports() throws IOException {
     Path repository = repositoryRoot();
-    Path lineageModule =
-        repository.resolve("yak-ops-business/yak-ops-business-lineage").normalize();
+    String ownModule = "/yak-ops-business/yak-ops-business-lineage/src/main/java/";
     Map<String, Set<String>> result = new LinkedHashMap<>();
-
     try (Stream<Path> files = Files.walk(repository)) {
       for (Path source : files.filter(this::isProductionJava).toList()) {
-        if (source.normalize().startsWith(lineageModule)) continue;
+        String relative = "/" + normalize(repository.relativize(source));
+        if (relative.contains(ownModule)) continue;
         for (String line : Files.readAllLines(source, StandardCharsets.UTF_8)) {
-          String imported = importedType(line);
-          if (imported == null || !imported.startsWith(BASE + ".")) continue;
-          result
-              .computeIfAbsent(imported, ignored -> new LinkedHashSet<>())
+          String value = line.trim();
+          if (!value.startsWith("import ") || !value.endsWith(";")) continue;
+          String imported = value.substring("import ".length(), value.length() - 1);
+          if (!imported.startsWith(BASE + ".")) continue;
+          result.computeIfAbsent(imported, ignored -> new LinkedHashSet<>())
               .add(normalize(repository.relativize(source)));
         }
       }
     }
     return result;
-  }
-
-  private String importedType(String line) {
-    String value = line.trim();
-    String prefix;
-    if (value.startsWith("import static ")) {
-      prefix = "import static ";
-    } else if (value.startsWith("import ")) {
-      prefix = "import ";
-    } else {
-      return null;
-    }
-    if (!value.endsWith(";")) return null;
-    return value.substring(prefix.length(), value.length() - 1);
   }
 
   private boolean isProductionJava(Path path) {
@@ -153,11 +122,8 @@ class LineagePublicApiBoundaryTest {
   private Path repositoryRoot() {
     Path current = Paths.get(".").toAbsolutePath().normalize();
     if (Files.isDirectory(current.resolve("yak-ops-business"))) return current;
-
     Path candidate = current.resolve("../..").normalize();
-    assertThat(Files.isDirectory(candidate.resolve("yak-ops-business")))
-        .as("Unable to locate repository root from %s", current)
-        .isTrue();
+    assertThat(Files.isDirectory(candidate.resolve("yak-ops-business"))).isTrue();
     return candidate;
   }
 

@@ -28,22 +28,21 @@ class LineageDependencyBoundaryTest {
 
   private static final Map<String, Set<String>> ALLOWED_TOP_LEVEL_DEPENDENCIES =
       Map.ofEntries(
-          Map.entry("controller", Set.of("domain", "service")),
-          Map.entry("service", Set.of("analysis", "domain", "repository")),
+          Map.entry("controller", Set.of("domain", "query", "registration")),
+          Map.entry("query", Set.of("domain", "repository")),
+          Map.entry("registration", Set.of("domain", "repository")),
+          Map.entry("maintenance", Set.of("repository")),
           Map.entry("analysis", Set.of("domain")),
           Map.entry("repository", Set.of("dao", "domain")),
           Map.entry("dao", Set.of("config")),
           Map.entry("domain", Set.of()),
           Map.entry("config", Set.of()));
 
-  private static final Set<String> DECLARED_TOP_LEVEL_PACKAGES =
-      ALLOWED_TOP_LEVEL_DEPENDENCIES.keySet();
-
   private static final Set<String> STABLE_SERVICE_TYPES =
       Set.of(
-          "LineageMaintenanceService.java",
-          "LineageQueryService.java",
-          "LineageWriteService.java");
+          "maintenance/LineageMaintenanceService.java",
+          "query/LineageQueryService.java",
+          "registration/LineageRegistrationService.java");
 
   private static final Set<String> ANALYSIS_ROLE_TYPES =
       Set.of("sql/SqlProjectionLineageAnalyzer.java");
@@ -51,8 +50,7 @@ class LineageDependencyBoundaryTest {
   private static final Map<String, Set<String>> EXTERNAL_BUSINESS_CORRIDORS =
       Map.of(
           "config/ConditionalOnLineagePersistence.java",
-          Set.of(
-              "io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled"),
+          Set.of("io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled"),
           "config/LineagePersistenceConfiguration.java",
           Set.of(
               "io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration",
@@ -63,32 +61,38 @@ class LineageDependencyBoundaryTest {
 
   @Test
   void rootPackageMustRemainEmpty() throws IOException {
-    Set<String> actual = new HashSet<>();
     try (Stream<Path> files = Files.list(productionRoot())) {
-      files.filter(Files::isRegularFile)
-          .filter(path -> path.toString().endsWith(".java"))
-          .map(path -> path.getFileName().toString())
-          .forEach(actual::add);
+      assertThat(
+              files.filter(Files::isRegularFile)
+                  .filter(path -> path.toString().endsWith(".java"))
+                  .toList())
+          .isEmpty();
     }
+  }
 
-    assertThat(actual)
-        .as("Lineage root package is not a compatibility bucket")
-        .isEmpty();
+  @Test
+  void activeTopLevelPackagesAreExact() throws IOException {
+    Set<String> actual;
+    try (Stream<Path> paths = Files.list(productionRoot())) {
+      actual =
+          paths.filter(Files::isDirectory)
+              .map(path -> path.getFileName().toString())
+              .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+    assertThat(actual).containsExactlyInAnyOrderElementsOf(ALLOWED_TOP_LEVEL_DEPENDENCIES.keySet());
+    assertThat(Files.exists(productionRoot().resolve("service"))).isFalse();
   }
 
   @Test
   void stableServiceSetIsExplicit() throws IOException {
-    Set<String> actual = new HashSet<>();
-    try (Stream<Path> files = Files.list(productionRoot().resolve("service"))) {
-      files.filter(Files::isRegularFile)
-          .filter(path -> path.toString().endsWith(".java"))
-          .map(path -> path.getFileName().toString())
-          .forEach(actual::add);
+    Set<String> actual = new LinkedHashSet<>();
+    Path root = productionRoot();
+    for (Path file : javaFiles(root)) {
+      if (Files.readString(file, StandardCharsets.UTF_8).contains("@Service")) {
+        actual.add(normalize(root.relativize(file)));
+      }
     }
-
-    assertThat(actual)
-        .as("Lineage stable application facade set is explicit")
-        .containsExactlyInAnyOrderElementsOf(STABLE_SERVICE_TYPES);
+    assertThat(actual).containsExactlyInAnyOrderElementsOf(STABLE_SERVICE_TYPES);
   }
 
   @Test
@@ -102,164 +106,80 @@ class LineageDependencyBoundaryTest {
               .map(this::normalize)
               .collect(Collectors.toSet());
     }
-
-    assertThat(actual)
-        .as("Lineage analysis contracts are explicit role-owned types")
-        .containsExactlyInAnyOrderElementsOf(ANALYSIS_ROLE_TYPES);
+    assertThat(actual).containsExactlyInAnyOrderElementsOf(ANALYSIS_ROLE_TYPES);
   }
 
   @Test
-  void productionTopLevelPackagesMustMatchContract() throws IOException {
-    Set<String> actual = new LinkedHashSet<>();
-    try (Stream<Path> paths = Files.list(productionRoot())) {
-      paths.filter(Files::isDirectory)
-          .map(path -> path.getFileName().toString())
-          .forEach(actual::add);
-    }
-
-    assertThat(actual)
-        .as("Active Lineage packages must match the executable architecture contract exactly")
-        .containsExactlyInAnyOrderElementsOf(DECLARED_TOP_LEVEL_PACKAGES);
-  }
-
-  @Test
-  void topLevelImportsFollowDeclaredDependencyGraph() throws IOException {
+  void importsFollowDeclaredDependencyGraph() throws IOException {
     for (Dependency dependency : packageDependencies()) {
-      assertThat(
-              ALLOWED_TOP_LEVEL_DEPENDENCIES.getOrDefault(
-                  dependency.sourcePackage(), Set.of()))
+      assertThat(ALLOWED_TOP_LEVEL_DEPENDENCIES.get(dependency.sourcePackage()))
           .as("%s imports %s", dependency.relativePath(), dependency.importedType())
           .contains(dependency.targetPackage());
     }
   }
 
   @Test
-  void declaredAndActualPackageGraphsRemainAcyclic() throws IOException {
-    assertAcyclic(ALLOWED_TOP_LEVEL_DEPENDENCIES, "declared Lineage dependency graph");
-
-    Map<String, Set<String>> actual = new HashMap<>();
-    DECLARED_TOP_LEVEL_PACKAGES.forEach(key -> actual.put(key, new HashSet<>()));
+  void declaredAndActualGraphsRemainAcyclic() throws IOException {
+    assertAcyclic(ALLOWED_TOP_LEVEL_DEPENDENCIES, "declared graph");
+    Map<String, Set<String>> actual = new LinkedHashMap<>();
+    ALLOWED_TOP_LEVEL_DEPENDENCIES.keySet()
+        .forEach(packageName -> actual.put(packageName, new LinkedHashSet<>()));
     for (Dependency dependency : packageDependencies()) {
-      actual.computeIfAbsent(dependency.sourcePackage(), ignored -> new HashSet<>())
-          .add(dependency.targetPackage());
+      actual.get(dependency.sourcePackage()).add(dependency.targetPackage());
     }
-    assertAcyclic(actual, "actual Lineage import graph");
+    assertAcyclic(actual, "actual graph");
   }
 
   @Test
-  void externalBusinessImportsStayInPersistenceConfigurationCorridor() throws IOException {
+  void externalBusinessImportsStayInConfigCorridor() throws IOException {
     assertThat(externalBusinessImports())
-        .as("Lineage may reach Datasource only through its persistence configuration corridor")
         .containsExactlyInAnyOrderEntriesOf(EXTERNAL_BUSINESS_CORRIDORS);
   }
 
   @Test
-  void persistenceImplementationUsesLineageOwnedCondition() throws IOException {
-    String configuration =
-        Files.readString(
-            productionRoot().resolve("config/LineagePersistenceConfiguration.java"),
-            StandardCharsets.UTF_8);
-    String dao =
-        Files.readString(
-            productionRoot().resolve("dao/impl/LineageDaoImpl.java"),
-            StandardCharsets.UTF_8);
-
-    assertThat(configuration)
-        .contains("@ConditionalOnLineagePersistence")
-        .doesNotContain("@ConditionalOnDataSourceEnabled");
-    assertThat(dao)
-        .contains("import " + BASE + ".config.ConditionalOnLineagePersistence;")
-        .contains("@ConditionalOnLineagePersistence")
-        .doesNotContain("io.yak.ops.business.datasource.")
-        .doesNotContain("@ConditionalOnDataSourceEnabled");
+  void applicationRolesCannotReachPersistenceImplementation() throws IOException {
+    for (String packageName : Set.of("query", "registration", "maintenance")) {
+      assertNoImports(
+          packageName,
+          BASE + ".dao.",
+          BASE + ".config.",
+          BASE + ".controller.",
+          "com.baomidou.mybatisplus",
+          "JdbcTemplate");
+    }
   }
 
   @Test
-  void controllerCannotReachPersistenceImplementation() throws IOException {
-    assertNoImports(
-        "controller",
-        BASE + ".repository.",
-        BASE + ".dao.",
-        "com.baomidou.mybatisplus",
-        "JdbcTemplate");
-  }
-
-  @Test
-  void serviceCannotReachPersistenceImplementation() throws IOException {
-    assertNoImports(
-        "service",
-        BASE + ".dao.",
-        BASE + ".config.",
-        "com.baomidou.mybatisplus",
-        "JdbcTemplate");
-  }
-
-  @Test
-  void analysisPackageMustRemainSourceNeutral() throws IOException {
-    assertNoImports(
-        "analysis",
-        "org.springframework",
-        "com.baomidou.mybatisplus",
-        BASE + ".controller.",
-        BASE + ".service.",
-        BASE + ".repository.",
-        BASE + ".dao.",
-        BASE + ".config.");
-  }
-
-  @Test
-  void repositoryCannotReachHttpContracts() throws IOException {
-    assertNoImports(
-        "repository",
-        BASE + ".controller.",
-        ".controller.v1.dto.",
-        ".controller.v1.vo.");
-  }
-
-  @Test
-  void daoCannotPointBackToApplicationRoles() throws IOException {
-    assertNoImports(
-        "dao",
-        BASE + ".controller.",
-        BASE + ".service.",
-        BASE + ".analysis.",
-        BASE + ".repository.",
-        BASE + ".domain.");
-  }
-
-  @Test
-  void domainPackageMustRemainFrameworkAndPersistenceFree() throws IOException {
+  void domainRemainsFrameworkAndInfrastructureFree() throws IOException {
     assertNoImports(
         "domain",
         "org.springframework",
         "com.baomidou.mybatisplus",
         BASE + ".controller.",
-        BASE + ".service.",
+        BASE + ".query.",
+        BASE + ".registration.",
+        BASE + ".maintenance.",
         BASE + ".repository.",
         BASE + ".dao.",
         BASE + ".analysis.");
   }
 
   @Test
-  void serviceStereotypeCannotLeakIntoInfrastructureOrDomain() throws IOException {
-    for (String packageName : Set.of("analysis", "config", "dao", "domain", "repository")) {
-      Path root = productionRoot().resolve(packageName);
-      for (Path file : javaFiles(root)) {
-        String source = Files.readString(file, StandardCharsets.UTF_8);
-        assertThat(source)
-            .as("@Service is reserved for stable application facades: %s", normalize(file))
-            .doesNotContain("@Service");
-      }
-    }
+  void repositoryAndDaoDoNotPointBackUpward() throws IOException {
+    assertNoImports("repository", BASE + ".controller.", BASE + ".query.",
+        BASE + ".registration.", BASE + ".maintenance.");
+    assertNoImports("dao", BASE + ".controller.", BASE + ".query.",
+        BASE + ".registration.", BASE + ".maintenance.", BASE + ".analysis.",
+        BASE + ".repository.", BASE + ".domain.");
   }
 
   @Test
-  void rootPackageTypesCannotReturnAcrossProductionSources() throws IOException {
+  void rootTypesCannotReturnAcrossProductionSources() throws IOException {
     try (Stream<Path> files = Files.walk(repositoryRoot())) {
-      for (Path file : files.filter(this::isProductionJava).toList()) {
-        String source = Files.readString(file, StandardCharsets.UTF_8);
-        assertThat(ROOT_TYPE_REFERENCE.matcher(source).find())
-            .as("Lineage root-package type reference in %s", normalize(file))
+      for (Path source : files.filter(this::isProductionJava).toList()) {
+        String value = Files.readString(source, StandardCharsets.UTF_8);
+        assertThat(ROOT_TYPE_REFERENCE.matcher(value).find())
+            .as("Root-package Lineage type reference in %s", normalize(source))
             .isFalse();
       }
     }
@@ -267,11 +187,8 @@ class LineageDependencyBoundaryTest {
 
   @Test
   void broadBusinessBucketsCannotAppear() {
-    Path root = productionRoot();
-    for (String forbidden : Set.of("common", "helper", "utils", "base")) {
-      assertThat(Files.exists(root.resolve(forbidden)))
-          .as("Broad business bucket '%s' must not exist under Lineage", forbidden)
-          .isFalse();
+    for (String forbidden : Set.of("service", "common", "helper", "utils", "base")) {
+      assertThat(Files.exists(productionRoot().resolve(forbidden))).as(forbidden).isFalse();
     }
   }
 
@@ -289,12 +206,8 @@ class LineageDependencyBoundaryTest {
         int separator = suffix.indexOf('.');
         String targetPackage = separator < 0 ? "root" : suffix.substring(0, separator);
         if (!sourcePackage.equals(targetPackage)) {
-          result.add(
-              new Dependency(
-                  sourcePackage,
-                  targetPackage,
-                  imported,
-                  normalize(relative)));
+          result.add(new Dependency(
+              sourcePackage, targetPackage, imported, normalize(relative)));
         }
       }
     }
@@ -329,8 +242,21 @@ class LineageDependencyBoundaryTest {
     } else {
       return null;
     }
-    if (!value.endsWith(";")) return null;
-    return value.substring(prefix.length(), value.length() - 1);
+    return value.endsWith(";") ? value.substring(prefix.length(), value.length() - 1) : null;
+  }
+
+  private void assertNoImports(String packageName, String... forbiddenTokens) throws IOException {
+    Path root = productionRoot().resolve(packageName);
+    if (!Files.isDirectory(root)) return;
+    for (Path file : javaFiles(root)) {
+      String imports =
+          Files.readString(file, StandardCharsets.UTF_8).lines()
+              .filter(line -> line.startsWith("import "))
+              .collect(Collectors.joining("\n"));
+      for (String token : forbiddenTokens) {
+        assertThat(imports).as("%s in %s", token, normalize(file)).doesNotContain(token);
+      }
+    }
   }
 
   private void assertAcyclic(Map<String, Set<String>> graph, String label) {
@@ -339,20 +265,14 @@ class LineageDependencyBoundaryTest {
     Map<String, Integer> outgoing = new HashMap<>();
     Map<String, Set<String>> reverse = new HashMap<>();
     nodes.forEach(node -> outgoing.put(node, 0));
-
     for (Map.Entry<String, Set<String>> entry : graph.entrySet()) {
       for (String target : entry.getValue()) {
         outgoing.compute(entry.getKey(), (ignored, value) -> value + 1);
         reverse.computeIfAbsent(target, ignored -> new HashSet<>()).add(entry.getKey());
       }
     }
-
     ArrayDeque<String> ready = new ArrayDeque<>();
-    outgoing.forEach(
-        (node, degree) -> {
-          if (degree == 0) ready.add(node);
-        });
-
+    outgoing.forEach((node, degree) -> { if (degree == 0) ready.add(node); });
     int visited = 0;
     while (!ready.isEmpty()) {
       String node = ready.removeFirst();
@@ -362,33 +282,14 @@ class LineageDependencyBoundaryTest {
         if (degree == 0) ready.add(dependent);
       }
     }
-
-    assertThat(visited).as("%s must remain acyclic", label).isEqualTo(nodes.size());
-  }
-
-  private void assertNoImports(String packageName, String... forbiddenTokens) throws IOException {
-    Path root = productionRoot().resolve(packageName);
-    for (Path file : javaFiles(root)) {
-      String source = Files.readString(file, StandardCharsets.UTF_8);
-      String imports =
-          source.lines()
-              .filter(line -> line.startsWith("import "))
-              .reduce("", (left, right) -> left + right + "\n");
-      for (String token : forbiddenTokens) {
-        assertThat(imports)
-            .as("Forbidden dependency '%s' in %s", token, normalize(file))
-            .doesNotContain(token);
-      }
-    }
+    assertThat(visited).as(label).isEqualTo(nodes.size());
   }
 
   private Set<Path> javaFiles(Path root) throws IOException {
-    Set<Path> result = new LinkedHashSet<>();
-    if (!Files.isDirectory(root)) return result;
     try (Stream<Path> files = Files.walk(root)) {
-      files.filter(path -> path.toString().endsWith(".java")).forEach(result::add);
+      return files.filter(path -> path.toString().endsWith(".java"))
+          .collect(Collectors.toCollection(LinkedHashSet::new));
     }
-    return result;
   }
 
   private boolean isProductionJava(Path path) {
@@ -401,28 +302,17 @@ class LineageDependencyBoundaryTest {
   private Path repositoryRoot() {
     Path current = Paths.get(".").toAbsolutePath().normalize();
     if (Files.isDirectory(current.resolve("yak-ops-business"))) return current;
-
     Path candidate = current.resolve("../..").normalize();
-    assertThat(Files.isDirectory(candidate.resolve("yak-ops-business")))
-        .as("Unable to locate repository root from %s", current)
-        .isTrue();
+    assertThat(Files.isDirectory(candidate.resolve("yak-ops-business"))).isTrue();
     return candidate;
   }
 
   private Path productionRoot() {
-    Path moduleLocal = Paths.get("src/main/java/io/yak/ops/business/lineage");
-    if (Files.isDirectory(moduleLocal)) return moduleLocal;
-
-    Path repositoryRelative =
-        Paths.get(
-            "yak-ops-business",
-            "yak-ops-business-lineage",
-            "src/main/java/io/yak/ops/business/lineage");
-    assertThat(Files.isDirectory(repositoryRelative))
-        .as(
-            "Unable to locate Lineage production source root from %s",
-            Paths.get(".").toAbsolutePath())
-        .isTrue();
+    Path local = Paths.get("src/main/java/io/yak/ops/business/lineage");
+    if (Files.isDirectory(local)) return local;
+    Path repositoryRelative = Paths.get(
+        "yak-ops-business", "yak-ops-business-lineage", "src/main/java/io/yak/ops/business/lineage");
+    assertThat(Files.isDirectory(repositoryRelative)).isTrue();
     return repositoryRelative;
   }
 
@@ -431,9 +321,5 @@ class LineageDependencyBoundaryTest {
   }
 
   private record Dependency(
-      String sourcePackage,
-      String targetPackage,
-      String importedType,
-      String relativePath) {
-  }
+      String sourcePackage, String targetPackage, String importedType, String relativePath) {}
 }

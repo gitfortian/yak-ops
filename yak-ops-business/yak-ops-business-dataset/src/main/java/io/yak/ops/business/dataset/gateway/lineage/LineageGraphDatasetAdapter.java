@@ -2,10 +2,10 @@ package io.yak.ops.business.dataset.gateway.lineage;
 
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
-import io.yak.ops.business.lineage.service.LineageMaintenanceService;
+import io.yak.ops.business.lineage.maintenance.LineageMaintenanceService;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
-import io.yak.ops.business.lineage.service.LineageQueryService;
-import io.yak.ops.business.lineage.service.LineageWriteService;
+import io.yak.ops.business.lineage.query.LineageQueryService;
+import io.yak.ops.business.lineage.registration.LineageRegistrationService;
 import org.springframework.stereotype.Component;
 
 /** Adapts the shared lineage graph API to Dataset-owned asset/relation values. */
@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
 public class LineageGraphDatasetAdapter implements DatasetLineageGraphGateway {
 
   private final LineageQueryService queryService;
-  private final LineageWriteService writeService;
+  private final LineageRegistrationService writeService;
   private final LineageMaintenanceService maintenanceService;
 
   public LineageGraphDatasetAdapter(
       LineageQueryService queryService,
-      LineageWriteService writeService,
+      LineageRegistrationService writeService,
       LineageMaintenanceService maintenanceService) {
     this.queryService = queryService;
     this.writeService = writeService;
@@ -34,7 +34,7 @@ public class LineageGraphDatasetAdapter implements DatasetLineageGraphGateway {
   public Asset registerAsset(AssetSpec spec) {
     LineageAsset asset =
         writeService.registerAsset(
-            new LineageWriteService.RegisterAssetCommand(
+            new LineageRegistrationService.RegisterAssetCommand(
                 spec.assetKey(),
                 LineageAssetType.valueOf(spec.assetType().name()),
                 spec.name(),
@@ -59,7 +59,7 @@ public class LineageGraphDatasetAdapter implements DatasetLineageGraphGateway {
   @Override
   public void registerRelation(RelationSpec spec) {
     writeService.registerRelation(
-        new LineageWriteService.RegisterRelationCommand(
+        new LineageRegistrationService.RegisterRelationCommand(
             spec.sourceAssetId(),
             spec.targetAssetId(),
             LineageRelationType.valueOf(spec.relationType().name()),
