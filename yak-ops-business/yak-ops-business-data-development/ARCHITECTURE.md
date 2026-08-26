@@ -27,12 +27,13 @@ io.yak.ops.business.development
 ├── release             # published Task Catalog read/activation boundary
 │   └── model           # release-center query projections
 ├── editor              # editor preference boundary
-├── lineage             # outbox / worker / write transaction orchestration
+├── lineage             # outbox / worker / write transaction / analysis adapter
+│   └── analysis        # shared Lineage analysis-contract implementation
 ├── domain              # truth-bearing facts / value objects / invariants only
 ├── repository          # persistence contracts + adapters
 ├── dao                 # MyBatis persistence primitives
 ├── config              # module configuration
-└── service             # frozen legacy Data Service / SQL lineage algorithm island
+└── service             # frozen legacy Data Service / SQL parser algorithm island
 ```
 
 禁止新增 `common / helper / helpers / util / utils / base` 业务大桶。
@@ -85,7 +86,7 @@ Read Model 可以引用多个已有 truth owner 来组装接口返回，但不�
 
 ## Stable Application Entries
 
-Stage 2 之后的稳定入口按业务包放置：
+稳定入口按业务包放置：
 
 ```text
 node.DevelopmentNodeService
@@ -165,12 +166,21 @@ editor    -> user editor settings
 Task publish
    -> DevelopmentLineageOutbox
    -> DevelopmentLineageWorker
-   -> legacy SQL parser/analyzer preparation
+   -> legacy SQL parser preparation
+   -> lineage.analysis.DevelopmentSqlProjectionLineageAnalyzer
    -> DevelopmentLineageWriteTransaction
    -> yak-ops-business-lineage
 ```
 
-Outbox / Worker / transaction orchestration 已归 `lineage`。SQL Parser / Analyzer 的大算法当前继续留在 frozen legacy island，避免纯 package move 与算法变化混在同一 PR。
+Outbox / Worker / transaction orchestration 和 source-neutral projection analyzer adapter 已归 `lineage`。具体 SQL Parser 大算法仍留在 frozen legacy island；共享 Analyzer contract 由 `yak-ops-business-lineage.analysis.sql` 持有，Data Development 只提供基于现有 parser 的技术实现。
+
+固定方向：
+
+```text
+Dataset -> shared Lineage Analyzer contract
+Data Development lineage.analysis -> shared Lineage Analyzer contract
+shared Lineage -X-> Data Development parser implementation
+```
 
 ## Frozen Legacy Service Island
 
@@ -184,14 +194,13 @@ DevelopmentDataServiceSqlCompiler
 DevelopmentDraftConflictException
 DevelopmentSqlLineagePreviewService
 DevelopmentSqlLineageService
-DevelopmentSqlProjectionLineageAnalyzer
 DevelopmentTaskValidationException
 SqlColumnLineageParser
 SqlTableLineageParser
 TableIdentityResolver
 ```
 
-其中两个 Exception 是兼容 corridor；其余均为 Data Service / SQL Lineage 历史实现。
+其中两个 Exception 是兼容 corridor；其余均为 Data Service / SQL Lineage 历史实现。`DevelopmentSqlProjectionLineageAnalyzer` 已迁入 `lineage.analysis`，不得以 compatibility wrapper 形式回流。
 
 规则：
 
@@ -226,7 +235,8 @@ DataDevelopmentDependencyBoundaryTest
 
 DataDevelopmentRoleConventionTest
   -> stable @Service entries
-  -> technical roles do not masquerade as Service
+  -> Analyzer / Parser / Worker 等技术角色不伪装成 Service
+  -> moved roles cannot return as compatibility wrappers
   -> no new broad business buckets
 
 DataDevelopmentDomainModelPlacementTest

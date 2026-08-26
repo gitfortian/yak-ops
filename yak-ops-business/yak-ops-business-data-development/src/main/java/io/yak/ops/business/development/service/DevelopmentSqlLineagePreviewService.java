@@ -11,10 +11,10 @@ import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview.Previ
 import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview.PreviewGraph;
 import io.yak.ops.business.development.domain.DevelopmentSqlLineagePreview.PreviewRelation;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
+import io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
 import io.yak.ops.business.lineage.domain.LineageDirection;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
-import io.yak.ops.business.lineage.SqlProjectionLineageAnalyzer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

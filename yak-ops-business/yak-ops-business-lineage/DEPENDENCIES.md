@@ -1,6 +1,6 @@
 # Lineage Dependencies
 
-本文定义 Lineage 的 package 依赖方向与当前过渡 corridor。
+本文定义 Lineage 的 package 依赖方向与跨模块 corridor。
 
 ## Target Dependency Graph
 
@@ -25,10 +25,10 @@ config  <- infrastructure-only configuration
 
 | Source | May depend on |
 | --- | --- |
-| `controller` | `service`, transport-local mapper/dto/vo |
+| `controller` | `service`, transport-local converter/dto/vo |
 | `service` | `domain`, `analysis`, `collector`, `repository` |
-| `analysis` | `domain` |
-| `collector` | `domain`, `analysis` |
+| `analysis` | JDK, `domain` when a shared domain value is required |
+| `collector` | `domain`, `analysis`, stable service contract |
 | `repository` | `domain`, `dao`, `config`, `repository.support` |
 | `dao` | `config`, DAO-local mapper/model/support |
 | `domain` | no Lineage application/infrastructure package |
@@ -36,26 +36,43 @@ config  <- infrastructure-only configuration
 
 目标图不得形成 `domain -> repository -> service`、`dao -> repository` 或其他反向依赖。
 
-## Current Transitional Corridors
-
-Stage 3 已完成 Domain 与 Service 的物理归位：
+## Current Structure
 
 ```text
 controller -> service -> repository -> domain
                               └-----> dao
 
-cross-module gateway adapters -> query/write/maintenance service
+analysis/sql
+  -> source-neutral SQL projection contract
 ```
 
-根包只保留 `SqlProjectionLineageAnalyzer`，等待 Stage 4 进入 `analysis`。Service 不直接依赖 DAO/Mapper/PO，跨模块调用方不能重新引用旧根包 Service 或旧根包领域类型。
+根包没有 production Java 类型。Service 不直接依赖 DAO/Mapper/PO，跨模块调用方不能引用旧根包 Service、Domain 或 Analyzer。
 
-后续顺序：
+## SQL Analysis Corridors
+
+共享 contract：
 
 ```text
-Analyzer / Collector role placement
-  -> persistence and Maven dependency audit
-  -> final root-package cleanup and graph lock
+io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer
 ```
+
+允许的真实实现与消费边界：
+
+```text
+Data Development lineage/analysis implementation
+    -> shared SQL analysis contract
+
+Dataset gateway/lineage adapter
+    -> shared SQL analysis contract
+```
+
+Lineage 模块不能为了复用 parser 反向依赖 Data Development。Dataset 也不能直接依赖 Data Development parser；它只依赖自身 Gateway 和共享 contract。
+
+## Collector Corridors
+
+当前没有 Collector production implementation，也不以空目录或空接口模拟未来架构。
+
+出现 Flink / Spark / Hadoop 等真实采集能力时，平台依赖只能进入对应 `collector/<platform>` adapter。Collector 不得把 SDK 类型暴露给 Domain、Service 或 Repository contract。
 
 ## Forbidden Shortcuts
 
@@ -64,22 +81,23 @@ Analyzer / Collector role placement
 ```text
 controller -> repository / dao / mapper / PO
 service -> dao / mapper / PO
+analysis -> service / repository / dao / controller / Spring
 repository -> controller / DTO / VO
 dao -> controller / service / repository / domain orchestration
-domain -> Spring / MyBatis / repository / controller
+domain -> Spring / MyBatis / repository / controller / analysis
 ```
 
 HTTP transport mapping 留在 `controller`；持久化兼容转换留在 `repository`/`dao`；外部平台 SDK 留在 `analysis`/`collector` 的边界实现。
 
 ## External Module Dependencies
 
-Lineage 当前可以依赖 Yak Ops 公共能力与 datasource 业务模块，但不能为了 SQL lineage 直接反向依赖 data-development 的具体 parser/runtime 实现。
+跨业务模块复用 Lineage 时，依赖稳定公开 contract，不调用对方 DAO 或内部实现类。
 
-跨业务模块复用 Lineage 时，优先依赖稳定公开 contract，不允许调用对方 DAO 或内部实现类。
+具体 SQL parser 由 Data Development 持有；Lineage 只持有 source-neutral Analyzer contract。未来平台采集器同样由 adapter 所在模块持有技术实现，统一回到 Lineage Domain 和写入边界。
 
 ## Maven Boundary
 
-Stage 1 保持单一 `yak-ops-business-lineage` Maven module，不提前拆 `lineage-core / lineage-api / lineage-flink / lineage-spark`。
+保持单一 `yak-ops-business-lineage` Maven module，不提前拆 `lineage-core / lineage-api / lineage-flink / lineage-spark`。
 
 只有当出现真实的编译期隔离需求，例如某个平台 SDK 体积大、依赖冲突明显、需要独立发布或可选装载时，才考虑拆 Maven artifact。先把 Java 依赖方向拆清楚，再决定物理 jar 边界。
 
@@ -87,10 +105,14 @@ Stage 1 保持单一 `yak-ops-business-lineage` Maven module，不提前拆 `lin
 
 `LineageArchitectureTest` 保护反射可见的层次语义；`LineageDependencyBoundaryTest` 扫描 production source，保护：
 
-- 根包过渡债务不增长；
+- 根包保持空白；
 - top-level package 必须经过声明；
+- 稳定 Service 集合固定；
+- SQL Analyzer contract 只能位于 `analysis/sql`；
+- Analysis 保持 source-neutral、无 Spring/持久化依赖；
 - Controller 不穿透持久化；
 - Repository 不依赖 HTTP contract；
 - DAO 不反向依赖上层；
-- Domain package 保持 framework/persistence free；
+- Domain 保持 framework/persistence free；
+- 旧根包 Service、Domain 和 Analyzer import 不能回流；
 - `common/helper/utils/base` 业务大桶不能回流。

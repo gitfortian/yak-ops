@@ -11,15 +11,33 @@ Lineage 是 Yak Ops 的统一元数据血缘模块，负责维护可稳定寻址
 | [`REQUIREMENTS.md`](./REQUIREMENTS.md) | 模块需要提供什么能力、哪些事情不在这里做 |
 | [`DOMAIN.md`](./DOMAIN.md) | Asset / Relation / Evidence / Graph 的领域语义 |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 长期 package、角色与持久化边界 |
-| [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package 可以依赖谁、当前过渡债务是什么 |
+| [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package 可以依赖谁、跨模块 corridor 是什么 |
 | [`CODE_STYLE.md`](../../CODE_STYLE.md) | Yak Ops 仓库统一工程与代码规范 |
 | [`REVIEW.md`](./REVIEW.md) | Lineage PR 的评审标准 |
 
 ## Current Contract
 
-当前生产代码已形成 `controller -> query/write service -> repository -> dao` 的稳定入口。Stage 2 将 Asset / Relation / Graph 收拢到 `domain`；Stage 3 将读取、写入和维护用例分别收拢到 `LineageQueryService`、`LineageWriteService`、`LineageMaintenanceService`，并切换 Dataset、Analysis、Dashboard、Data Development 调用方。
+当前生产代码已形成：
 
-根包现在仅保留待 Stage 4 归位的 `SqlProjectionLineageAnalyzer` contract。本阶段不修改 REST、数据库、Flyway、领域行为和持久化语义。
+```text
+controller
+   -> query / write / maintenance service
+   -> repository
+   -> dao
+
+analysis/sql
+   -> source-neutral SQL projection analysis contract
+```
+
+共享分析契约的完整角色路径是：
+
+```text
+analysis/sql/SqlProjectionLineageAnalyzer
+```
+
+Asset / Relation / Graph 位于 `domain`，稳定应用入口位于 `service`。具体 SQL parser 实现在 Data Development 的 Lineage 角色包中，Dataset 只通过自身 Gateway Adapter 使用该 contract。
+
+`io.yak.ops.business.lineage` 根包不再承载 production Java 类型，也不作为兼容大桶。
 
 ## Core Model
 
@@ -37,21 +55,22 @@ LineageGraph = root + direction + bounded depth + assets + relations
 
 关系方向固定为**上游资产 -> 下游资产**。`READS_FROM / WRITES_TO / DERIVES_FROM / CONSUMES / CONTAINS` 描述下游如何使用、派生或包含上游。
 
-## Planned Package Shape
+## Package Shape
 
 ```text
 io.yak.ops.business.lineage
 ├── controller          # HTTP inbound + transport mapping
-├── service             # stable application facades
+├── service             # stable query / write / maintenance facades
 ├── domain              # framework-free lineage domain/value objects
-├── analysis            # source-neutral lineage analysis roles
-├── collector           # Flink/Spark/Hadoop 等来源的采集角色
+├── analysis
+│   └── sql             # source-neutral SQL analysis contract
+├── collector           # real platform/source collectors when required
 ├── repository          # persistence contracts + adapters
 ├── dao                 # MyBatis persistence primitives / PO
 └── config              # module configuration
 ```
 
-技术名称不直接决定业务层级。Flink、Spark、Hadoop 等实现应挂在明确角色下面，例如 `collector/flink`，而不是各自形成一套 Service / DAO / Domain。
+技术名称不直接决定业务层级。未来 Flink、Spark、Hadoop 等能力只有在存在真实采集链路时，才进入 `collector/<platform>`；它们复用统一 Domain 和稳定写入边界，不复制 Service / DAO / Domain。
 
 ## Evolution Rule
 

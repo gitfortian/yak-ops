@@ -12,15 +12,16 @@ import org.junit.jupiter.api.Test;
 
 class DataDevelopmentRoleConventionTest {
 
-  private static final Set<String> STABLE_SERVICE_ENTRIES = Set.of(
-      "dataset/DevelopmentDatasetNodeService.java",
-      "directory/DevelopmentDirectoryService.java",
-      "editor/DevelopmentEditorSettingsService.java",
-      "execution/DevelopmentTaskExecutionService.java",
-      "execution/DevelopmentTaskRunService.java",
-      "node/DevelopmentNodeService.java",
-      "release/DevelopmentReleaseService.java",
-      "task/DevelopmentTaskService.java");
+  private static final Set<String> STABLE_SERVICE_ENTRIES =
+      Set.of(
+          "dataset/DevelopmentDatasetNodeService.java",
+          "directory/DevelopmentDirectoryService.java",
+          "editor/DevelopmentEditorSettingsService.java",
+          "execution/DevelopmentTaskExecutionService.java",
+          "execution/DevelopmentTaskRunService.java",
+          "node/DevelopmentNodeService.java",
+          "release/DevelopmentReleaseService.java",
+          "task/DevelopmentTaskService.java");
 
   @Test
   void serviceStereotypeIsReservedForStableApplicationEntries() throws IOException {
@@ -42,7 +43,8 @@ class DataDevelopmentRoleConventionTest {
         String relative = relative(source);
         if (relative.startsWith("service/")) continue;
         String name = source.getFileName().toString();
-        if (name.matches(".*(Parser|Resolver|Validator|Normalizer|Publisher|Reader|Provider|Calculator|Worker|Outbox|WriteTransaction)\\.java")) {
+        if (name.matches(
+            ".*(Analyzer|Parser|Resolver|Validator|Normalizer|Publisher|Reader|Provider|Calculator|Worker|Outbox|WriteTransaction)\\.java")) {
           assertThat(Files.readString(source)).as(relative).doesNotContain("@Service");
         }
       }
@@ -51,21 +53,36 @@ class DataDevelopmentRoleConventionTest {
 
   @Test
   void movedRolesAreNotDuplicatedAsProductionCompatibilityWrappers() {
-    for (String moved : Set.of(
-        "DataDevelopmentTaskRevisionProvider.java",
-        "DevelopmentDatasetNodeService.java",
-        "DevelopmentDirectoryService.java",
-        "DevelopmentEditorSettingsService.java",
-        "DevelopmentLineageOutbox.java",
-        "DevelopmentLineageWorker.java",
-        "DevelopmentLineageWriteTransaction.java",
-        "DevelopmentNodeService.java",
-        "DevelopmentReleaseService.java",
-        "DevelopmentTaskExecutionService.java",
-        "DevelopmentTaskRunService.java",
-        "DevelopmentTaskService.java")) {
-      assertThat(Files.exists(productionRoot().resolve("service").resolve(moved))).as(moved).isFalse();
+    for (String moved :
+        Set.of(
+            "DataDevelopmentTaskRevisionProvider.java",
+            "DevelopmentDatasetNodeService.java",
+            "DevelopmentDirectoryService.java",
+            "DevelopmentEditorSettingsService.java",
+            "DevelopmentLineageOutbox.java",
+            "DevelopmentLineageWorker.java",
+            "DevelopmentLineageWriteTransaction.java",
+            "DevelopmentNodeService.java",
+            "DevelopmentReleaseService.java",
+            "DevelopmentSqlProjectionLineageAnalyzer.java",
+            "DevelopmentTaskExecutionService.java",
+            "DevelopmentTaskRunService.java",
+            "DevelopmentTaskService.java")) {
+      assertThat(Files.exists(productionRoot().resolve("service").resolve(moved)))
+          .as(moved)
+          .isFalse();
     }
+  }
+
+  @Test
+  void projectionAnalyzerLivesWithLineageRoles() {
+    assertThat(
+            Files.exists(
+                productionRoot()
+                    .resolve("lineage")
+                    .resolve("analysis")
+                    .resolve("DevelopmentSqlProjectionLineageAnalyzer.java")))
+        .isTrue();
   }
 
   private String relative(Path source) {
@@ -76,7 +93,15 @@ class DataDevelopmentRoleConventionTest {
     Path local = Path.of("src/main/java/io/yak/ops/business/development");
     if (Files.isDirectory(local)) return local;
     return Path.of(
-        "yak-ops-business", "yak-ops-business-data-development", "src", "main", "java",
-        "io", "yak", "ops", "business", "development");
+        "yak-ops-business",
+        "yak-ops-business-data-development",
+        "src",
+        "main",
+        "java",
+        "io",
+        "yak",
+        "ops",
+        "business",
+        "development");
   }
 }

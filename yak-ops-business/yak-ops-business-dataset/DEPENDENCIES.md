@@ -69,7 +69,7 @@ DatasetRepository
 DatasetLineageRefreshPublisher
 ```
 
-Publication 不直接依赖 TaskCatalogService、Datasource execution SPI、LineageService/Analyzer。
+Publication 不直接依赖 TaskCatalogService、Datasource execution SPI、Lineage Service/Analyzer。
 
 ## 5. Development Corridors
 
@@ -115,7 +115,7 @@ DatasetLineageSynchronizer   -> DatasetLineageGraphGateway
 DatasetLineageSnapshotReader -> DatasetRepository
 ```
 
-Lineage 不直接依赖 TaskCatalogService、DataSourceCatalogReader、SqlProjectionLineageAnalyzer、LineageService 或 LineageMaintenanceService。
+Lineage 不直接依赖 TaskCatalogService、DataSourceCatalogReader、共享 SQL Analyzer contract、Lineage application Service 或 LineageMaintenanceService。
 
 ## 9. External Module Boundaries
 
@@ -146,10 +146,11 @@ gateway/datasource/DataSourceSchemaSqlAdapter.java
 
 ```text
 gateway/lineage/LineageProjectionAnalyzerAdapter.java
- -> io.yak.ops.business.lineage.SqlProjectionLineageAnalyzer
+ -> io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer
 
 gateway/lineage/LineageGraphDatasetAdapter.java
- -> io.yak.ops.business.lineage.Lineage*
+ -> io.yak.ops.business.lineage.domain.*
+ -> io.yak.ops.business.lineage.service.*
 ```
 
 ### Core SQL Runtime

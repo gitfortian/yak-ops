@@ -20,7 +20,8 @@ dataset    -> domain + repository + Dataset / Task Catalog
 release    -> domain + repository + Task Catalog
              └── model = release read projection
 
-lineage    -> domain + repository + frozen SQL lineage implementation
+lineage    -> domain + repository + frozen SQL parser implementation
+           -> shared Lineage analysis/write contracts
 editor     -> local persistence boundary
 domain     -> framework-light truth/value types only
 ```
@@ -38,7 +39,7 @@ domain     -> framework-light truth/value types only
 | `execution` | `domain`, `task`; `execution.model` 只能作为 read/response projection |
 | `dataset` | `domain`, `repository` |
 | `release` | `domain`, `repository`; `release.model` 只能作为 read projection |
-| `lineage` | `domain`, `repository`, frozen legacy SQL lineage implementation |
+| `lineage` | `domain`, `repository`, frozen legacy SQL parser implementation |
 | `repository` | `domain`, `dao` |
 | `dao` | persistence primitives |
 | `domain` | JDK + compatibility serialization annotations |
@@ -68,9 +69,19 @@ Task authoring  -> TaskPluginRegistry / Task Catalog
 Execution       -> shared TaskExecutionGateway
 Dataset         -> DevelopmentDatasetFacade
 Data Service    -> Data Service publication/runtime boundary
-Lineage         -> Lineage application boundary / DataSource Catalog
+Lineage         -> Lineage application boundary / analysis contract / DataSource Catalog
 Node metadata   -> Task Catalog metadata projection
 ```
+
+SQL projection 方向固定为：
+
+```text
+lineage.analysis.DevelopmentSqlProjectionLineageAnalyzer
+    -> io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer
+    -> local frozen SQL parser
+```
+
+共享 Lineage 模块不允许反向进入 Data Development parser 实现。
 
 新增跨模块依赖前先回答：
 
@@ -92,18 +103,19 @@ Dependency Impact Analysis
 - Query/read 行为不得顺手修改 Draft/Revision/Execution truth。
 - 不创建 `common/helper/utils/base/service` 作为新功能的默认落点。
 - 不通过 `service` legacy island 作为“方便的中转层”形成新依赖。
+- Analyzer contract 不携带 Data Development parser、Spring 或持久化类型。
 
 ## Legacy Corridors
 
 当前仍有两类已知兼容边界：
 
 1. `service.DevelopmentDraftConflictException` / `service.DevelopmentTaskValidationException` 保留旧调用方类型兼容；
-2. Data Service 与 SQL Lineage Parser/Analyzer 大实现仍位于 frozen `service` island。
+2. Data Service 与 SQL Lineage Parser 大实现仍位于 frozen `service` island。
 
-这些是**固定债务，不是新代码模板**。架构测试会精确限制该目录文件集合；新增文件即失败。
+`DevelopmentSqlProjectionLineageAnalyzer` 已迁入 `lineage.analysis`，不再属于 legacy allowlist。这些剩余项是**固定债务，不是新代码模板**；架构测试会精确限制该目录文件集合，新增文件即失败。
 
 ## Persistence Note
 
-历史上的 Execution history、Editor settings、Lineage Outbox 仍直接使用 JDBC。这次领域模型整理不把 model placement 与 persistence redesign 混在一起。
+历史上的 Execution history、Editor settings、Lineage Outbox 仍直接使用 JDBC。这次角色归位不把 Analyzer package move 与 persistence redesign 混在一起。
 
 新持久化能力默认走 Repository contract；如果确实需要直接 JDBC，需要在 PR 中写清楚原因、truth owner 和事务边界。

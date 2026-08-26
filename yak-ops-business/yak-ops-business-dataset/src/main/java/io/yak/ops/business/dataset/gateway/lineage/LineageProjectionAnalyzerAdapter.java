@@ -1,7 +1,7 @@
 package io.yak.ops.business.dataset.gateway.lineage;
 
 import io.yak.ops.business.dataset.gateway.datasource.DatasetCatalogGateway;
-import io.yak.ops.business.lineage.SqlProjectionLineageAnalyzer;
+import io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,8 +48,7 @@ public class LineageProjectionAnalyzerAdapter implements DatasetProjectionAnalyz
     Map<String, List<SqlProjectionLineageAnalyzer.SchemaColumn>> cache = new LinkedHashMap<>();
     return table ->
         cache.computeIfAbsent(
-            table.canonicalName(),
-            ignored -> loadSchemaColumns(numericDataSourceId, table));
+            table.canonicalName(), ignored -> loadSchemaColumns(numericDataSourceId, table));
   }
 
   private List<SqlProjectionLineageAnalyzer.SchemaColumn> loadSchemaColumns(
