@@ -19,6 +19,9 @@ public class DataSourcePO {
   @TableId(type = IdType.AUTO)
   private Long id;
 
+  /** 所属 Project Space；兼容期允许历史数据为空。 */
+  private Long projectId;
+
   /** 数据源名称。 */
   private String name;
 
