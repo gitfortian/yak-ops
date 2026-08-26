@@ -159,13 +159,13 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
         connectionValues,
       );
 
-      const saved = isCreateMode
-        ? await createDataSource(payload)
-        : currentRecord?.id
-          ? await updateDataSource(currentRecord.id, payload)
-          : false;
-
-      if (!saved) return;
+      if (isCreateMode) {
+        await createDataSource(payload);
+      } else if (currentRecord?.id !== undefined && currentRecord.id !== null) {
+        await updateDataSource(currentRecord.id, payload);
+      } else {
+        return;
+      }
 
       const successCallback = successCallbackRef.current;
       message.success(isCreateMode ? '数据源创建成功' : '数据源更新成功');
@@ -285,7 +285,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       {showFormStep ? (
         <div className="datasource-editor-drawer__body datasource-editor-drawer__form h-full overflow-y-auto px-5 py-5">
           <DynamicDataSourceForm
-            key={`${operateType}-${selectedDbType}-${currentRecord?.id || 'create'}`}
+            key={`${operateType}-${selectedDbType}-${currentRecord?.id ?? 'create'}`}
             dbType={selectedDbType}
             form={basicForm}
             configForm={configForm}
