@@ -1,10 +1,11 @@
 import { ExclamationCircleOutlined } from "@ant-design/icons";
 import YakButton from "@/components/YakButton";
 import { login } from "@/services/security/account";
+import { notifyOnce } from "@/utils/notifyOnce";
 import { resetAuthenticationFailure } from "@/utils/request";
 import { getSafeReturnTo } from "@/utils/security/redirect";
 import { history, useIntl, useModel } from "@umijs/max";
-import { App, Form, Input, Popover, type InputProps } from "antd";
+import { Form, Input, Popover, type InputProps } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { useState } from "react";
 import { flushSync } from "react-dom";
@@ -132,7 +133,6 @@ export default function LoginPanel() {
   const [form] = useForm();
 
   const { initialState, setInitialState } = useModel("@@initialState");
-  const { message } = App.useApp();
   const intl = useIntl();
 
   const fetchUserInfo = async () => {
@@ -163,26 +163,38 @@ export default function LoginPanel() {
     userPassword: string;
   }) => {
     try {
-      await form.validateFields();
       setLoading(true);
 
       await login({
         userName: values.userName,
         pw: values.userPassword,
       });
+
+      const userInfo = await fetchUserInfo();
+      if (!userInfo) {
+        notifyOnce("login-current-user-missing", {
+          type: "error",
+          title: "登录未完成",
+          description: "登录请求已提交，但未能加载当前用户信息。",
+          meta: "请稍后重试",
+        });
+        return;
+      }
+
       resetAuthenticationFailure();
-      message.success(
-        intl.formatMessage({
+      notifyOnce("login-success", {
+        type: "success",
+        title: intl.formatMessage({
           id: "pages.login.success",
           defaultMessage: "登录成功！",
         }),
-      );
-
-      const userInfo = await fetchUserInfo();
-      if (!userInfo) throw new Error("登录后无法加载当前用户");
+        description: "正在进入 Yak Ops",
+        meta: "身份验证完成",
+        duration: 2,
+      });
       redirectAfterLogin();
     } catch (_error) {
-      // Request handling already surfaces authentication errors to the user.
+      // Global request handling surfaces HTTP, business and network failures once.
     } finally {
       setLoading(false);
     }
