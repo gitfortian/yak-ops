@@ -13,6 +13,7 @@ import lombok.Data;
 public class WorkflowScheduleTriggerPO {
   @TableId(type = IdType.INPUT)
   private String id;
+  private Long projectId;
   private String scheduleId;
   private String workflowId;
   private String backfillId;

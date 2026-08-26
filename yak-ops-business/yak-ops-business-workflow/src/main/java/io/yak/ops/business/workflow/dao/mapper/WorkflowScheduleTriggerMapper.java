@@ -12,12 +12,12 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
 
   @Insert("""
       INSERT IGNORE INTO yak_workflow_schedule_trigger
-        (id, schedule_id, workflow_id, backfill_id, trigger_id, dedupe_key, trigger_source,
+        (id, project_id, schedule_id, workflow_id, backfill_id, trigger_id, dedupe_key, trigger_source,
          planned_fire_time, actual_fire_time, business_date, execution_strategy, misfire_strategy,
          status, workflow_execution_id, execution_status, message, error_message,
          launched_at, completed_at, create_time, update_time)
       VALUES
-        (#{id}, #{scheduleId}, #{workflowId}, #{backfillId}, #{triggerId}, #{dedupeKey}, #{triggerSource},
+        (#{id}, #{projectId}, #{scheduleId}, #{workflowId}, #{backfillId}, #{triggerId}, #{dedupeKey}, #{triggerSource},
          #{plannedFireTime}, #{actualFireTime}, #{businessDate}, #{executionStrategy}, #{misfireStrategy},
          #{status}, #{workflowExecutionId}, #{executionStatus}, #{message}, #{errorMessage},
          #{launchedAt}, #{completedAt}, #{createTime}, #{updateTime})
@@ -51,7 +51,6 @@ public interface WorkflowScheduleTriggerMapper extends BaseMapper<WorkflowSchedu
       """)
   long countActiveExecutions(@Param("workflowId") String workflowId);
 
-  /** LAUNCHING 与 REACTIVATING 都是尚未由 Execution DB 完整体现的 durable 并发占位。 */
   @Select("""
       SELECT COUNT(*)
       FROM yak_workflow_schedule_trigger

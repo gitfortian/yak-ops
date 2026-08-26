@@ -9,6 +9,8 @@ import io.yak.ops.common.bean.dto.workflow.WorkflowBusinessDateRerunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBatchRetryVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceOperationsVO;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "工作流实例运维")
 @RestController
 @RequestMapping("/api/v1/workflows/instances")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class WorkflowInstanceOperationsController {
   private final WorkflowExecutionManager operations;
 
