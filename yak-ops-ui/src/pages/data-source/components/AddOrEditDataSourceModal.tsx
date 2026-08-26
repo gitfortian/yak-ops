@@ -1,42 +1,41 @@
-import YakButton from "@/components/YakButton";
-import { API_SUCCESS_CODE } from "@/services/http/response";
-import { useIntl } from "@umijs/max";
-import { Drawer, Form, message } from "antd";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-
-import { dataSourceGroupList } from "../constants";
-import DatabaseIcons from "../icon/DatabaseIcons";
+import { YakButton } from '@/components/ui';
 import {
   createDataSource,
   testDataSourceConnectionWithParams,
   updateDataSource,
-} from "../service";
+} from '@/services/data-source';
+import { useIntl } from '@umijs/max';
+import { Drawer, Form, message } from 'antd';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
+
+import { dataSourceGroupList } from '../constants';
+import DatabaseIcons from '../icon/DatabaseIcons';
 import type {
   DataSourceFormValues,
   DataSourceModalOpenPayload,
   DataSourceModalRef,
   DataSourceRecord,
-} from "../types";
-import { DataSourceOperateType } from "../types";
+} from '../types';
+import { DataSourceOperateType } from '../types';
 import {
   buildSubmitPayload,
   normalizeConnectionFormValues,
   parseOriginalJson,
-} from "../utils";
-import DataSourceTypeSelector from "./DataSourceTypeSelector";
-import DynamicDataSourceForm from "./DynamicDataSourceForm";
-import "./DataSourceEditorDrawer.less";
+} from '../utils';
+import DataSourceTypeSelector from './DataSourceTypeSelector';
+import DynamicDataSourceForm from './DynamicDataSourceForm';
+import './DataSourceEditorDrawer.less';
 
 const DRAWER_WIDTH = 620;
 
 const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
   const intl = useIntl();
   const [basicForm] = Form.useForm<DataSourceFormValues>();
-  const [configForm] = Form.useForm();
+  const [configForm] = Form.useForm<Record<string, unknown>>();
   const [open, setOpen] = useState(false);
   const [operateType, setOperateType] = useState(DataSourceOperateType.Create);
   const [currentRecord, setCurrentRecord] = useState<DataSourceRecord>();
-  const [selectedDbType, setSelectedDbType] = useState("");
+  const [selectedDbType, setSelectedDbType] = useState('');
   const [showFormStep, setShowFormStep] = useState(false);
   const [hideBackButton, setHideBackButton] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -49,7 +48,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
 
   const resetEditorState = () => {
     setCurrentRecord(undefined);
-    setSelectedDbType("");
+    setSelectedDbType('');
     setShowFormStep(false);
     setHideBackButton(false);
     setTesting(false);
@@ -65,16 +64,14 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
   };
 
   const handleAfterOpenChange = (visible: boolean) => {
-    if (!visible) {
-      resetEditorState();
-    }
+    if (!visible) resetEditorState();
   };
 
   const initializeEditForm = (record: DataSourceRecord) => {
     basicForm.setFieldsValue({
-      name: record.name || "",
-      environment: record.environment || "",
-      remark: record.remark || "",
+      name: record.name || '',
+      environment: record.environment || '',
+      remark: record.remark || '',
     });
   };
 
@@ -92,7 +89,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       setCurrentRecord(nextRecord);
 
       if (nextOperateType === DataSourceOperateType.Edit && nextRecord) {
-        setSelectedDbType(nextRecord.dbType || "");
+        setSelectedDbType(nextRecord.dbType || '');
         setShowFormStep(true);
         setHideBackButton(true);
         initializeEditForm(nextRecord);
@@ -118,7 +115,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
   const handleBackToTypeSelection = () => {
     if (busy) return;
     setShowFormStep(false);
-    setSelectedDbType("");
+    setSelectedDbType('');
     setHideBackButton(false);
     basicForm.resetFields();
     configForm.resetFields();
@@ -132,7 +129,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       const connectionValues = normalizeConnectionFormValues(
         await configForm.validateFields(),
       );
-      const response = await testDataSourceConnectionWithParams({
+      const connected = await testDataSourceConnectionWithParams({
         dataSourceId: isEditMode ? currentRecord?.id : undefined,
         dbType: selectedDbType,
         connJson: JSON.stringify({
@@ -141,13 +138,9 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
         }),
       });
 
-      if (response.code === API_SUCCESS_CODE && response.data === true) {
-        message.success("连接测试成功");
-      }
+      if (connected) message.success('连接测试成功');
     } catch (error) {
-      if (error && typeof error === "object" && "errorFields" in error) {
-        return;
-      }
+      if (error && typeof error === 'object' && 'errorFields' in error) return;
     } finally {
       setTesting(false);
     }
@@ -166,22 +159,20 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
         connectionValues,
       );
 
-      const response = isCreateMode
+      const saved = isCreateMode
         ? await createDataSource(payload)
         : currentRecord?.id
           ? await updateDataSource(currentRecord.id, payload)
-          : undefined;
+          : false;
 
-      if (!response || response.code !== API_SUCCESS_CODE) return;
+      if (!saved) return;
 
       const successCallback = successCallbackRef.current;
-      message.success(isCreateMode ? "数据源创建成功" : "数据源更新成功");
+      message.success(isCreateMode ? '数据源创建成功' : '数据源更新成功');
       setOpen(false);
       successCallback?.();
     } catch (error) {
-      if (error && typeof error === "object" && "errorFields" in error) {
-        return;
-      }
+      if (error && typeof error === 'object' && 'errorFields' in error) return;
     } finally {
       setSubmitting(false);
     }
@@ -189,22 +180,18 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
 
   const actionText = isEditMode
     ? intl.formatMessage({
-        id: "pages.datasource.modal.title.edit",
-        defaultMessage: "编辑",
+        id: 'pages.datasource.modal.title.edit',
+        defaultMessage: '编辑',
       })
     : intl.formatMessage({
-        id: "pages.datasource.modal.title.add",
-        defaultMessage: "新建",
+        id: 'pages.datasource.modal.title.add',
+        defaultMessage: '新建',
       });
 
   const drawerTitle = `${actionText}${intl.formatMessage({
-    id: "pages.datasource.common.title",
-    defaultMessage: "数据源",
+    id: 'pages.datasource.common.title',
+    defaultMessage: '数据源',
   })}`;
-
-  const subtitle = selectedDbType
-    ? `${selectedDbType} · ${isEditMode ? "修改连接与基础信息" : "配置连接与基础信息"}`
-    : "选择数据源类型后继续配置连接信息";
 
   const renderFooter = () => {
     if (!showFormStep) {
@@ -221,14 +208,11 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       <div className="flex items-center justify-between gap-3">
         <div>
           {isCreateMode && !hideBackButton ? (
-            <YakButton
-              disabled={busy}
-              onClick={handleBackToTypeSelection}
-            >
+            <YakButton disabled={busy} onClick={handleBackToTypeSelection}>
               上一步
             </YakButton>
           ) : (
-            <YakButton  disabled={busy} onClick={handleClose}>
+            <YakButton disabled={busy} onClick={handleClose}>
               取消
             </YakButton>
           )}
@@ -236,7 +220,6 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
 
         <div className="flex items-center gap-2">
           <YakButton
-            type="default"
             loading={testing}
             disabled={submitting}
             onClick={() => void handleTestConnection()}
@@ -250,7 +233,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
             disabled={testing}
             onClick={() => void handleSubmit()}
           >
-            {isCreateMode ? "创建数据源" : "保存修改"}
+            {isCreateMode ? '创建数据源' : '保存修改'}
           </YakButton>
         </div>
       </div>
@@ -271,18 +254,18 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       destroyOnClose
       styles={{
         header: {
-          padding: "15px 20px",
-          borderBottom: "1px solid #EEF0F3",
+          padding: '15px 20px',
+          borderBottom: '1px solid #EEF0F3',
         },
         body: {
           padding: 0,
-          overflow: "hidden",
-          background: "#FFFFFF",
+          overflow: 'hidden',
+          background: '#FFFFFF',
         },
         footer: {
-          padding: "12px 20px",
-          borderTop: "1px solid #EEF0F3",
-          background: "#FFFFFF",
+          padding: '12px 20px',
+          borderTop: '1px solid #EEF0F3',
+          background: '#FFFFFF',
         },
       }}
       title={
@@ -290,14 +273,10 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAECF0] bg-[#F7F8FA]">
             <DatabaseIcons dbType={selectedDbType} width="18" height="18" />
           </div>
-
           <div className="min-w-0">
             <div className="truncate text-[15px] font-semibold leading-6 text-[#161823]">
               {drawerTitle}
             </div>
-            {/* <div className="mt-0.5 truncate text-xs font-normal leading-5 text-[#8A8F99]">
-              {subtitle}
-            </div> */}
           </div>
         </div>
       }
@@ -306,7 +285,7 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
       {showFormStep ? (
         <div className="datasource-editor-drawer__body datasource-editor-drawer__form h-full overflow-y-auto px-5 py-5">
           <DynamicDataSourceForm
-            key={`${operateType}-${selectedDbType}-${currentRecord?.id || "create"}`}
+            key={`${operateType}-${selectedDbType}-${currentRecord?.id || 'create'}`}
             dbType={selectedDbType}
             form={basicForm}
             configForm={configForm}
@@ -330,6 +309,6 @@ const AddOrEditDataSourceModal = forwardRef<DataSourceModalRef>((_, ref) => {
   );
 });
 
-AddOrEditDataSourceModal.displayName = "AddOrEditDataSourceModal";
+AddOrEditDataSourceModal.displayName = 'AddOrEditDataSourceModal';
 
 export default AddOrEditDataSourceModal;
