@@ -45,12 +45,24 @@ public class ProjectScopeInterceptor implements HandlerInterceptor {
       return true;
     }
 
-    Long projectId = parseProjectId(request.getHeader(ProjectHeaders.PROJECT_ID), mode);
+    String rawProjectId = request.getHeader(ProjectHeaders.PROJECT_ID);
+    if (!StringUtils.hasText(rawProjectId) && mode == ProjectMigrationMode.PROJECT_OPTIONAL) {
+      return true;
+    }
+
+    // Authentication remains the outer boundary. If this interceptor happens to run before the
+    // Yak Security authentication interceptor, an anonymous request must still receive the normal
+    // authentication response instead of leaking Project Space validation semantics first.
+    String username = currentUserProvider.getCurrentUser(request);
+    if (!StringUtils.hasText(username)) {
+      return true;
+    }
+
+    Long projectId = parseProjectId(rawProjectId, mode);
     if (projectId == null) {
       return true;
     }
 
-    String username = currentUserProvider.getCurrentUser(request);
     ProjectContext context = accessGuard.requireAccessible(projectId, username);
     currentProject.bind(context);
     return true;
