@@ -13,8 +13,8 @@ import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.GraphView;
 import io.yak.ops.business.lineage.controller.v1.vo.LineageViews.RelationView;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
 import io.yak.ops.business.lineage.domain.LineageDirection;
-import io.yak.ops.business.lineage.service.LineageQueryService;
-import io.yak.ops.business.lineage.service.LineageWriteService;
+import io.yak.ops.business.lineage.query.LineageQueryService;
+import io.yak.ops.business.lineage.registration.LineageRegistrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LineageController {
 
   private final LineageQueryService queryService;
-  private final LineageWriteService writeService;
+  private final LineageRegistrationService writeService;
   private final LineageRequestConverter requestConverter;
   private final LineageViewConverter viewConverter;
 

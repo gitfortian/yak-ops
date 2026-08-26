@@ -1,165 +1,112 @@
 # Lineage Architecture
 
-本文定义 Lineage 当前有效的长期架构 contract：package 表达职责，稳定 Service 作为应用入口，专业能力以角色命名，外部技术停在边界。
-
-需求看 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，领域硬规则看 [`DOMAIN.md`](./DOMAIN.md)，依赖矩阵看 [`DEPENDENCIES.md`](./DEPENDENCIES.md)，评审标准看 [`REVIEW.md`](./REVIEW.md)。
+本文定义 Lineage 当前长期 contract：package 表达业务角色，稳定 facade 作为应用入口，专业能力使用 Reader、Registrar、Coordinator、Guard 等名称。
 
 ## Design Principles
 
-1. **Domain first.** Asset、Relation、Evidence、Graph 不被 HTTP、MyBatis 或平台 SDK 污染。
-2. **Stable entry, specialized roles.** Controller 和邻接模块进入稳定 Service 或明确的 Analyzer contract。
-3. **One lineage model.** Dataset、SQL Task、Flink、Spark、Hadoop 不各建一套 Asset/Relation。
-4. **External technology stops at boundary.** Parser、SDK、CLI、HTTP client、PO 不能穿透到 Domain。
-5. **Read does not mutate.** Graph/query side 不因读取失败反向改写领域事实。
-6. **Active structure is exact.** 文档和测试只声明真实存在的 package，不用未来占位白名单制造虚假架构。
-7. **Architecture is executable.** Package、公共 API、Maven、代码风格和文档 contract 都由测试保护。
+1. **Package expresses architecture.** 不建立通用 `service` 业务大桶。
+2. **Stable facade, specialized roles.** `@Service` 只用于跨 HTTP / module caller 的稳定入口。
+3. **Transaction stays at the facade.** 内部角色组件不扩散事务边界。
+4. **One lineage model.** Dataset、SQL Task、未来平台来源复用统一 Asset / Relation。
+5. **External technology stops at boundary.** Parser、SDK、MyBatis、PO 不穿透 Domain。
+6. **Active structure is exact.** 只为真实存在的 package 和依赖建白名单。
+7. **Architecture is executable.** Package、公共 API、Maven、角色和文档都有测试保护。
 
 ## Active Package Map
 
 ```text
 io.yak.ops.business.lineage
 ├── analysis
-│   └── sql             # source-neutral SQL projection contract
-├── config              # persistence enablement and Spring wiring
+│   └── sql
+├── config
 ├── controller
-│   └── v1              # HTTP inbound + DTO/VO/converter
+│   └── v1
 ├── dao
-│   ├── impl
-│   ├── mapper
-│   └── model           # MyBatis primitives and PO
-├── domain              # framework-free facts and value objects
-├── repository
-│   └── support         # persistence contract, adapter and codecs
-└── service             # stable query/write/maintenance facades
+├── domain
+├── query
+│   ├── LineageQueryService
+│   ├── LineageAssetReader
+│   └── LineageGraphReader
+├── registration
+│   ├── LineageRegistrationService
+│   ├── LineageAssetRegistrar
+│   ├── LineageRelationRegistrar
+│   └── LineageRegistrationDraftFactory
+├── maintenance
+│   ├── LineageMaintenanceService
+│   ├── LineageEvidenceReplacementCoordinator
+│   └── LineageRevisionGuard
+└── repository
 ```
 
-这七个 top-level package 是精确集合。新增或删除 package 必须同步修改架构文档与 dependency guard。
+`service / common / helper / utils / base` 不允许成为顶层业务 package。
 
-`common / helper / utils / base` 不能成为新业务大桶。根包也不能承担兼容层。
+## Application Roles
 
-## Application Boundary
+### Query
 
-当前稳定应用入口是：
+`LineageQueryService` 只保留只读事务与稳定入口；`LineageAssetReader` 负责资产定位/搜索，`LineageGraphReader` 负责有界图遍历。
 
-```text
-LineageController
-    ├── LineageQueryService
-    └── LineageWriteService
+### Registration
 
-neighboring module adapters / internal publishers
-    ├── LineageQueryService
-    ├── LineageWriteService
-    └── LineageMaintenanceService
-```
+`LineageRegistrationService` 保留注册事务；`LineageAssetRegistrar` 和 `LineageRelationRegistrar` 负责写入及批次去重，`LineageRegistrationDraftFactory` 负责校验、归一化和 Draft 构造。
 
-职责固定：
+### Maintenance
 
-- Query：资产定位、搜索和有界图遍历；
-- Write：资产/关系注册与批量写入；
-- Maintenance：evidence replacement、清理和 revision guard。
+`LineageMaintenanceService` 保留维护事务；`LineageEvidenceReplacementCoordinator` 负责 evidence replacement/清理，`LineageRevisionGuard` 负责 revision 并发保护。
 
-`@Service` 只用于这三个稳定入口。Analyzer、RepositoryAdapter、DAO、Converter 等角色不通过 `*Service` 掩盖职责。
+内部角色使用 `@Component` 或普通对象，不用更多 `*Service` 掩盖职责。
 
 ## Public API Boundary
 
-邻接业务模块可直接 import 的类型根只有：
+可跨模块编译依赖的类型根为：
 
 ```text
-io.yak.ops.business.lineage.analysis.sql.SqlProjectionLineageAnalyzer
+analysis.sql.SqlProjectionLineageAnalyzer
 
-io.yak.ops.business.lineage.domain.LineageAsset
-io.yak.ops.business.lineage.domain.LineageAssetType
-io.yak.ops.business.lineage.domain.LineageDirection
-io.yak.ops.business.lineage.domain.LineageGraph
-io.yak.ops.business.lineage.domain.LineageRelation
-io.yak.ops.business.lineage.domain.LineageRelationType
+domain.LineageAsset
+domain.LineageAssetType
+domain.LineageDirection
+domain.LineageGraph
+domain.LineageRelation
+domain.LineageRelationType
 
-io.yak.ops.business.lineage.service.LineageQueryService
-io.yak.ops.business.lineage.service.LineageWriteService
-io.yak.ops.business.lineage.service.LineageMaintenanceService
+query.LineageQueryService
+registration.LineageRegistrationService
+maintenance.LineageMaintenanceService
 ```
 
-公开嵌套命令、结果和 scope 跟随所属 Service/Analyzer 类型根。
-
-以下 package/type 即使因 Spring、MyBatis 或 Java 编译需要声明为 `public`，也仍是模块内部实现：
-
-```text
-controller/*
-config/*
-dao/*
-repository/*
-domain/LineageAssetDraft
-domain/LineageRelationDraft
-```
-
-跨模块调用方必须通过自身 Gateway/Adapter 隔离 Lineage contract，不能把 Lineage 类型扩散到自己的核心 Domain。
+Controller、Config、Repository、DAO、PO、`LineageAssetDraft` 与 `LineageRelationDraft` 不属于公共 contract。调用方继续通过自身 Gateway/Adapter 隔离 Lineage。
 
 ## Domain Boundary
 
-`domain/` 只保存资产、关系、图和必要值对象，不依赖：
-
-```text
-Spring MVC / Spring Service
-MyBatis / Mapper / PO
-Controller DTO / VO
-Repository / DAO
-SQL parser / platform SDK
-```
-
-Draft 是 Repository/Service 写入过程的内部表达，不属于邻接模块公共 API。
+`domain/` 不依赖 Spring MVC、Spring Service、Repository、DAO、MyBatis、PO、具体 SQL parser 或平台 SDK。角色拆分不改变 Asset、Relation、Evidence、Graph 语义。
 
 ## Analysis Boundary
 
-共享 SQL projection contract 位于：
-
-```text
-analysis/sql/SqlProjectionLineageAnalyzer
-```
-
-它只描述 source-neutral 输入输出，不依赖 Spring、Repository、DAO、Data Development 或具体 parser library。
-
-真实实现位于拥有 parser 的邻接上下文：
-
-```text
-data-development
-└── lineage/analysis/DevelopmentSqlProjectionLineageAnalyzer
-        -> local SQL lineage parser
-        -> shared Analyzer contract
-```
-
-依赖方向固定：
-
-```text
-Dataset -> Lineage Analyzer contract
-Data Development -> Lineage Analyzer contract
-Lineage -X-> Data Development parser implementation
-```
+`analysis/sql/SqlProjectionLineageAnalyzer` 是 source-neutral contract。Data Development 持有具体 parser 实现，Dataset 通过自身 Gateway Adapter 消费；Lineage 不反向依赖 parser 实现。
 
 ## Persistence Boundary
 
 ```text
-Service
-   ↓
+role facade
+    ↓
+role component
+    ↓
 LineageRepository
-   ↓
+    ↓
 LineageRepositoryAdapter
-   ↓
+    ↓
 LineageDao
-   ↓
-Mapper / PO / MyBatis / DB
+    ↓
+Mapper / PO / DB
 ```
 
-固定规则：
-
-- Repository contract 不暴露 DAO model、Mapper、Controller DTO/VO；
-- Service 不直接依赖 DAO、Mapper、PO 或 persistence config；
-- DAO 不反向依赖 Service、Repository 或 Domain orchestration；
-- RepositoryAdapter 是 Domain 与 Persistence 的转换位置；
-- JSON/compatibility codec 留在 `repository.support`。
+Facade 和内部角色不直接访问 DAO、Mapper、PO 或 persistence config。RepositoryAdapter 是 Domain 与 Persistence 的转换位置。
 
 ## Persistence Configuration Corridor
 
-Lineage 通过自己的条件注解表达装配语义：
+Datasource 只允许从两个 config 文件进入：
 
 ```text
 ConditionalOnLineagePersistence
@@ -170,63 +117,29 @@ LineagePersistenceConfiguration
     -> DataSourceProperties
 ```
 
-只有上述 `config` 文件可以直接 import Datasource 模块。DAO 只依赖 Lineage-owned condition，不感知 Datasource 的 enablement 类型。
+DAO 只感知 Lineage-owned condition。
 
 ## Extension Protocol
 
-当前没有活动的 Collector package。未来引入 Flink、Spark、Hadoop 或其他来源时，只有真实采集协议和调用链已经存在，才新增：
-
-```text
-collector/<platform>/<RoleImplementation>
-```
-
-首个 Collector PR 必须同时：
-
-1. 定义 evidence ownership、重放和 replacement 语义；
-2. 将 SDK/event 类型限制在 adapter 内；
-3. 复用现有 Domain 与 Write/Maintenance 边界；
-4. 更新精确 package 集合和依赖图；
-5. 评估是否需要新增公共 contract；
-6. 增加真实行为、失败和重复事件测试。
-
-禁止提前创建空 Collector、空 Resolver 或 `flink/domain`、`spark/service` 等平行业务层。
+当前没有活动 `collector` package。首个真实 Flink、Spark、Hadoop 接入必须同时说明 evidence ownership、事件重放、replacement scope、SDK adapter、失败恢复并补行为测试。禁止提前创建空 Collector，禁止复制 `flink/domain`、`spark/service` 等平行业务层。
 
 ## Root Package Rule
 
-`io.yak.ops.business.lineage` 根包必须保持空白，不放 production Java 类型。
-
-架构测试使用结构规则阻止任何 `io.yak.ops.business.lineage.<UppercaseType>` 引用回流，不再维护按类名枚举的临时黑名单。
+`io.yak.ops.business.lineage` 根包保持空白；公开 contract 必须归属 analysis/domain/query/registration/maintenance 的明确角色路径。
 
 ## Executable Guards
 
-```text
-LineageArchitectureTest
-  -> reflection-visible layering and domain serialization rules
-
-LineageDependencyBoundaryTest
-  -> exact active package set
-  -> declared/actual graph acyclic
-  -> package corridors and root-package structural ban
-
-LineageMavenDependencyBoundaryTest
-  -> direct dependency set and runtime capability owner
-
-LineagePublicApiBoundaryTest
-  -> exact cross-module type roots and signature purity
-
-LineageCodeStyleConventionTest
-  -> package/path, public type/file and role placement conventions
-
-LineageDocumentationContractTest
-  -> exact document set, cross-links and final-contract vocabulary
-```
+- `LineageArchitectureTest`：反射可见的层次与 Domain 规则；
+- `LineageDependencyBoundaryTest`：精确 package 集合和依赖图；
+- `LineageMavenDependencyBoundaryTest`：Maven runtime owner；
+- `LineagePublicApiBoundaryTest`：跨模块公共 surface；
+- `LineageCodeStyleConventionTest`：角色位置与源码约定；
+- `LineageDocumentationContractTest`：文档 contract。
 
 ## Change Rules
 
-1. 一个 PR 一个主要边界或行为关注点；
-2. package move 与行为修改分开；
-3. 新入口稳定后不保留 production 双入口；
-4. 新 package、新公共类型和新 Maven dependency 必须有明确真实调用方；
-5. Maven 子模块拆分由 SDK 隔离、依赖冲突、可选装载或独立发布需求驱动；
-6. 架构真的变化时，同一个 PR 同时修改代码、文档和 guard；
-7. 不允许为了让测试通过而扩大白名单或降低精确检查。
+- package move 与业务行为修改分开；
+- 新入口稳定后不保留旧兼容 facade；
+- 新 `@Service` 必须证明它是新的稳定应用入口；
+- 新 package、公共类型和 dependency 必须有真实调用方；
+- 架构变化同步更新代码、文档和 executable guard。

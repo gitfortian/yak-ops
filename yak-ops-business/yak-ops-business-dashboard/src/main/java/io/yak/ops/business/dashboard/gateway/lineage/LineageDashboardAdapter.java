@@ -4,10 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
-import io.yak.ops.business.lineage.service.LineageMaintenanceService;
+import io.yak.ops.business.lineage.maintenance.LineageMaintenanceService;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
-import io.yak.ops.business.lineage.service.LineageQueryService;
-import io.yak.ops.business.lineage.service.LineageWriteService;
+import io.yak.ops.business.lineage.query.LineageQueryService;
+import io.yak.ops.business.lineage.registration.LineageRegistrationService;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -16,13 +16,13 @@ import org.springframework.stereotype.Component;
 public class LineageDashboardAdapter implements DashboardLineageGraphGateway {
 
   private final LineageQueryService queryService;
-  private final LineageWriteService writeService;
+  private final LineageRegistrationService writeService;
   private final LineageMaintenanceService maintenance;
   private final ObjectMapper objectMapper;
 
   public LineageDashboardAdapter(
       LineageQueryService queryService,
-      LineageWriteService writeService,
+      LineageRegistrationService writeService,
       LineageMaintenanceService maintenance,
       ObjectMapper objectMapper) {
     this.queryService = queryService;
@@ -38,7 +38,7 @@ public class LineageDashboardAdapter implements DashboardLineageGraphGateway {
 
   @Override
   public Asset registerAsset(AssetSpec spec) {
-    LineageAsset asset = writeService.registerAsset(new LineageWriteService.RegisterAssetCommand(
+    LineageAsset asset = writeService.registerAsset(new LineageRegistrationService.RegisterAssetCommand(
         spec.assetKey(),
         assetType(spec.assetType()),
         spec.name(),
@@ -62,7 +62,7 @@ public class LineageDashboardAdapter implements DashboardLineageGraphGateway {
 
   @Override
   public void registerRelation(RelationSpec spec) {
-    writeService.registerRelation(new LineageWriteService.RegisterRelationCommand(
+    writeService.registerRelation(new LineageRegistrationService.RegisterRelationCommand(
         spec.sourceAssetId(),
         spec.targetAssetId(),
         relationType(spec.relationType()),

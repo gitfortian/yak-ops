@@ -20,9 +20,9 @@ import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.lineage.domain.LineageAsset;
 import io.yak.ops.business.lineage.domain.LineageAssetType;
-import io.yak.ops.business.lineage.service.LineageMaintenanceService;
+import io.yak.ops.business.lineage.maintenance.LineageMaintenanceService;
 import io.yak.ops.business.lineage.domain.LineageRelationType;
-import io.yak.ops.business.lineage.service.LineageWriteService;
+import io.yak.ops.business.lineage.registration.LineageRegistrationService;
 import io.yak.ops.spi.task.model.TaskDefinition;
 import java.sql.Types;
 import java.time.Instant;
@@ -33,18 +33,18 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-class DevelopmentSqlLineageWriteServiceTest {
+class DevelopmentSqlLineageServiceTest {
 
   @Test
   void replacesGeneratedRelationsWithTableAndColumnLineage() {
-    LineageWriteService lineageService = mock(LineageWriteService.class);
+    LineageRegistrationService lineageService = mock(LineageRegistrationService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
     when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
     stubAssetRegistration(lineageService);
-    DevelopmentSqlLineageWriteService service = new DevelopmentSqlLineageWriteService(
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
         lineageService, maintenanceService, tableParser, columnParser, objectMapper);
 
     String sql =
@@ -67,16 +67,16 @@ class DevelopmentSqlLineageWriteServiceTest {
     service.syncPublished(node(), revision(sql));
 
     verify(maintenanceService).beginReplacement(
-        DevelopmentSqlLineageWriteService.EVIDENCE_SOURCE_TYPE, "42", "DATA_DEVELOPMENT", "42");
+        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42", "DATA_DEVELOPMENT", "42");
     verify(maintenanceService).finishReplacement(null);
 
-    ArgumentCaptor<LineageWriteService.RegisterRelationCommand> relations =
-        ArgumentCaptor.forClass(LineageWriteService.RegisterRelationCommand.class);
+    ArgumentCaptor<LineageRegistrationService.RegisterRelationCommand> relations =
+        ArgumentCaptor.forClass(LineageRegistrationService.RegisterRelationCommand.class);
     verify(lineageService, times(3)).registerRelation(relations.capture());
-    ArgumentCaptor<List<LineageWriteService.RegisterRelationCommand>> columnRelations =
+    ArgumentCaptor<List<LineageRegistrationService.RegisterRelationCommand>> columnRelations =
         ArgumentCaptor.forClass(List.class);
     verify(lineageService).registerRelationsBatch(columnRelations.capture(), anyInt());
-    List<LineageWriteService.RegisterRelationCommand> allRelations =
+    List<LineageRegistrationService.RegisterRelationCommand> allRelations =
         new java.util.ArrayList<>(relations.getAllValues());
     allRelations.addAll(columnRelations.getValue());
 
@@ -90,14 +90,14 @@ class DevelopmentSqlLineageWriteServiceTest {
 
   @Test
   void columnAssetsAreParentedByStableTableAssets() {
-    LineageWriteService lineageService = mock(LineageWriteService.class);
+    LineageRegistrationService lineageService = mock(LineageRegistrationService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
     when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
     stubAssetRegistration(lineageService);
-    DevelopmentSqlLineageWriteService service = new DevelopmentSqlLineageWriteService(
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
         lineageService, maintenanceService, tableParser, columnParser, objectMapper);
 
     String sql = "INSERT INTO dws.sales (order_id) SELECT o.id FROM ods.orders o";
@@ -110,23 +110,23 @@ class DevelopmentSqlLineageWriteServiceTest {
 
     service.syncPublished(node(), revision(sql));
 
-    ArgumentCaptor<LineageWriteService.RegisterAssetCommand> assets =
-        ArgumentCaptor.forClass(LineageWriteService.RegisterAssetCommand.class);
+    ArgumentCaptor<LineageRegistrationService.RegisterAssetCommand> assets =
+        ArgumentCaptor.forClass(LineageRegistrationService.RegisterAssetCommand.class);
     verify(lineageService, times(3)).registerAsset(assets.capture());
-    ArgumentCaptor<List<LineageWriteService.RegisterAssetCommand>> columnAssets =
+    ArgumentCaptor<List<LineageRegistrationService.RegisterAssetCommand>> columnAssets =
         ArgumentCaptor.forClass(List.class);
     verify(lineageService).registerAssetsBatch(columnAssets.capture(), anyInt());
 
-    Map<String, LineageWriteService.RegisterAssetCommand> byKey = new LinkedHashMap<>();
-    for (LineageWriteService.RegisterAssetCommand command : assets.getAllValues()) {
+    Map<String, LineageRegistrationService.RegisterAssetCommand> byKey = new LinkedHashMap<>();
+    for (LineageRegistrationService.RegisterAssetCommand command : assets.getAllValues()) {
       byKey.put(command.assetKey(), command);
     }
-    for (LineageWriteService.RegisterAssetCommand command : columnAssets.getValue()) {
+    for (LineageRegistrationService.RegisterAssetCommand command : columnAssets.getValue()) {
       byKey.put(command.assetKey(), command);
     }
 
-    LineageWriteService.RegisterAssetCommand sourceColumn = byKey.get("column:12:.ods.orders.id");
-    LineageWriteService.RegisterAssetCommand targetColumn = byKey.get("column:12:.dws.sales.order_id");
+    LineageRegistrationService.RegisterAssetCommand sourceColumn = byKey.get("column:12:.ods.orders.id");
+    LineageRegistrationService.RegisterAssetCommand targetColumn = byKey.get("column:12:.dws.sales.order_id");
     assertNotNull(sourceColumn);
     assertNotNull(targetColumn);
     assertEquals(LineageAssetType.COLUMN, sourceColumn.assetType());
@@ -137,7 +137,7 @@ class DevelopmentSqlLineageWriteServiceTest {
 
   @Test
   void catalogSchemaEnablesStarAndImplicitTargetColumnLineage() {
-    LineageWriteService lineageService = mock(LineageWriteService.class);
+    LineageRegistrationService lineageService = mock(LineageRegistrationService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
     when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
@@ -146,7 +146,7 @@ class DevelopmentSqlLineageWriteServiceTest {
     ObjectMapper objectMapper = new ObjectMapper();
     stubAssetRegistration(lineageService);
 
-    DevelopmentSqlLineageWriteService service = new DevelopmentSqlLineageWriteService(
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
         lineageService, maintenanceService, tableParser, columnParser, objectMapper);
     service.setDataSourceCatalogReader(catalogReader);
 
@@ -169,13 +169,13 @@ class DevelopmentSqlLineageWriteServiceTest {
 
     service.syncPublished(node(), revision(sql));
 
-    ArgumentCaptor<LineageWriteService.RegisterRelationCommand> relations =
-        ArgumentCaptor.forClass(LineageWriteService.RegisterRelationCommand.class);
+    ArgumentCaptor<LineageRegistrationService.RegisterRelationCommand> relations =
+        ArgumentCaptor.forClass(LineageRegistrationService.RegisterRelationCommand.class);
     verify(lineageService, times(2)).registerRelation(relations.capture());
-    ArgumentCaptor<List<LineageWriteService.RegisterRelationCommand>> columnRelations =
+    ArgumentCaptor<List<LineageRegistrationService.RegisterRelationCommand>> columnRelations =
         ArgumentCaptor.forClass(List.class);
     verify(lineageService).registerRelationsBatch(columnRelations.capture(), anyInt());
-    List<LineageWriteService.RegisterRelationCommand> allRelations =
+    List<LineageRegistrationService.RegisterRelationCommand> allRelations =
         new java.util.ArrayList<>(relations.getAllValues());
     allRelations.addAll(columnRelations.getValue());
 
@@ -194,14 +194,14 @@ class DevelopmentSqlLineageWriteServiceTest {
 
   @Test
   void columnParserFailureKeepsCurrentTableLineage() {
-    LineageWriteService lineageService = mock(LineageWriteService.class);
+    LineageRegistrationService lineageService = mock(LineageRegistrationService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
     when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
     stubAssetRegistration(lineageService);
-    DevelopmentSqlLineageWriteService service = new DevelopmentSqlLineageWriteService(
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
         lineageService, maintenanceService, tableParser, columnParser, objectMapper);
 
     String sql = "INSERT INTO dws.sales (id) SELECT o.id FROM ods.orders o";
@@ -215,8 +215,8 @@ class DevelopmentSqlLineageWriteServiceTest {
 
     assertDoesNotThrow(() -> service.syncPublished(node(), revision(sql)));
 
-    ArgumentCaptor<LineageWriteService.RegisterRelationCommand> relations =
-        ArgumentCaptor.forClass(LineageWriteService.RegisterRelationCommand.class);
+    ArgumentCaptor<LineageRegistrationService.RegisterRelationCommand> relations =
+        ArgumentCaptor.forClass(LineageRegistrationService.RegisterRelationCommand.class);
     verify(lineageService, times(2)).registerRelation(relations.capture());
     assertEquals(1, count(relations, LineageRelationType.READS_FROM));
     assertEquals(1, count(relations, LineageRelationType.WRITES_TO));
@@ -225,14 +225,14 @@ class DevelopmentSqlLineageWriteServiceTest {
 
   @Test
   void tableParserFailureClearsStaleRelationsAndSkipsColumnParsing() {
-    LineageWriteService lineageService = mock(LineageWriteService.class);
+    LineageRegistrationService lineageService = mock(LineageRegistrationService.class);
     LineageMaintenanceService maintenanceService = mock(LineageMaintenanceService.class);
     when(maintenanceService.lockAndAcceptRevision(anyString(), anyInt())).thenReturn(true);
     SqlTableLineageParser tableParser = mock(SqlTableLineageParser.class);
     SqlColumnLineageParser columnParser = mock(SqlColumnLineageParser.class);
     ObjectMapper objectMapper = new ObjectMapper();
     stubAssetRegistration(lineageService);
-    DevelopmentSqlLineageWriteService service = new DevelopmentSqlLineageWriteService(
+    DevelopmentSqlLineageService service = new DevelopmentSqlLineageService(
         lineageService, maintenanceService, tableParser, columnParser, objectMapper);
 
     String sql = "SELECT FROM";
@@ -242,20 +242,20 @@ class DevelopmentSqlLineageWriteServiceTest {
     assertDoesNotThrow(() -> service.syncPublished(node(), revision(sql)));
 
     verify(maintenanceService).beginReplacement(
-        DevelopmentSqlLineageWriteService.EVIDENCE_SOURCE_TYPE, "42", "DATA_DEVELOPMENT", "42");
+        DevelopmentSqlLineageService.EVIDENCE_SOURCE_TYPE, "42", "DATA_DEVELOPMENT", "42");
     verify(maintenanceService).finishReplacement(null);
     verify(columnParser, never()).parse(any());
     verify(lineageService, never()).registerRelation(any());
   }
 
   private static long count(
-      ArgumentCaptor<LineageWriteService.RegisterRelationCommand> relations,
+      ArgumentCaptor<LineageRegistrationService.RegisterRelationCommand> relations,
       LineageRelationType type) {
     return count(relations.getAllValues(), type);
   }
 
   private static long count(
-      List<LineageWriteService.RegisterRelationCommand> relations, LineageRelationType type) {
+      List<LineageRegistrationService.RegisterRelationCommand> relations, LineageRelationType type) {
     return relations.stream()
         .filter(value -> value.relationType() == type)
         .count();
@@ -301,11 +301,11 @@ class DevelopmentSqlLineageWriteServiceTest {
         null);
   }
 
-  private static void stubAssetRegistration(LineageWriteService lineageService) {
+  private static void stubAssetRegistration(LineageRegistrationService lineageService) {
     AtomicLong ids = new AtomicLong(1);
     Map<String, Long> stableIds = new LinkedHashMap<>();
     when(lineageService.registerAsset(any())).thenAnswer(invocation -> {
-      LineageWriteService.RegisterAssetCommand command = invocation.getArgument(0);
+      LineageRegistrationService.RegisterAssetCommand command = invocation.getArgument(0);
       long id = stableIds.computeIfAbsent(command.assetKey(), ignored -> ids.getAndIncrement());
       return new LineageAsset(
           id,
@@ -325,9 +325,9 @@ class DevelopmentSqlLineageWriteServiceTest {
           Instant.parse("2026-08-20T00:00:00Z"));
     });
     when(lineageService.registerAssetsBatch(any(), anyInt())).thenAnswer(invocation -> {
-      List<LineageWriteService.RegisterAssetCommand> commands = invocation.getArgument(0);
+      List<LineageRegistrationService.RegisterAssetCommand> commands = invocation.getArgument(0);
       Map<String, LineageAsset> result = new LinkedHashMap<>();
-      for (LineageWriteService.RegisterAssetCommand command : commands) {
+      for (LineageRegistrationService.RegisterAssetCommand command : commands) {
         long id = stableIds.computeIfAbsent(command.assetKey(), ignored -> ids.getAndIncrement());
         result.put(command.assetKey(), new LineageAsset(
             id, command.assetKey(), command.assetType(), command.name(), command.sourceType(),
