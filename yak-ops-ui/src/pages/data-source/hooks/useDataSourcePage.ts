@@ -165,7 +165,14 @@ export const useDataSourcePage = () => {
 
   const loadRecordForEdit = useCallback(
     async (record: DataSourceRecord): Promise<DataSourceRecord | undefined> => {
-      if (!permissions.canUpdate || !record.id || editingId) return undefined;
+      if (
+        !permissions.canUpdate ||
+        record.id === undefined ||
+        record.id === null ||
+        editingId
+      ) {
+        return undefined;
+      }
 
       const id = dataSourceRecordKey(record.id);
       setEditingId(id);
@@ -190,7 +197,14 @@ export const useDataSourcePage = () => {
 
   const testRecord = useCallback(
     async (record: DataSourceRecord): Promise<boolean> => {
-      if (!permissions.canTest || !record.id || testingId) return false;
+      if (
+        !permissions.canTest ||
+        record.id === undefined ||
+        record.id === null ||
+        testingId
+      ) {
+        return false;
+      }
 
       const id = dataSourceRecordKey(record.id);
       setTestingId(id);
