@@ -10,9 +10,10 @@
 2. **Stable entry, specialized roles.** Controller 只进入稳定应用 Service；内部用 Analyzer / Collector / Resolver / Converter / Repository 等角色表达职责。
 3. **One lineage model.** 不为 Flink、Spark、Hadoop、Dataset、SQL Task 各建一套 Asset/Relation。
 4. **External technology stops at boundary.** Parser、SDK、CLI、HTTP client、MyBatis PO 不能穿透到 Core Domain。
-5. **Read does not mutate.** Graph/query side 不因读取失败反向改写领域事实。
-6. **Structure change is not behavior change.** package move、class split 与 REST / DB / Flyway / Domain semantic change 分开评审。
-7. **Architecture is executable.** 文档 contract 必须由 architecture/dependency tests 持续保护。
+5. **Dependency ownership is explicit.** Driver、vendor runtime、UI runtime 与 parser plugin 由实际装配者持有，不挂在 Lineage POM 里“顺便带上”。
+6. **Read does not mutate.** Graph/query side 不因读取失败反向改写领域事实。
+7. **Structure change is not behavior change.** package、POM、class split 与 REST / DB / Flyway / Domain semantic change 分开评审。
+8. **Architecture is executable.** 文档 contract 必须由 architecture/dependency tests 持续保护。
 
 ## Package Map
 
@@ -27,7 +28,7 @@ io.yak.ops.business.lineage
 ├── repository          # persistence contracts + adapters
 │   └── support         # persistence-only codecs/mapping helpers
 ├── dao                 # MyBatis primitives / mapper / PO
-└── config              # module configuration
+└── config              # Lineage wiring + narrow external infrastructure corridor
 ```
 
 `common / helper / utils / base` 不能成为新的业务大桶。根包也不能重新承担兼容层。需要新 top-level package 时，必须先说明它代表的稳定角色并同步更新文档与护栏。
@@ -60,7 +61,8 @@ Query 只负责资产定位、搜索和有界图遍历；Write 负责资产/关�
 - **Mapper / Converter**：边界表示转换，不承载业务状态机；
 - **Repository**：领域持久化 contract；
 - **RepositoryAdapter**：把领域模型翻译为 DAO/PO；
-- **DAO**：数据库读写 primitive，不承载应用编排。
+- **DAO**：数据库读写 primitive，不承载应用编排；
+- **Configuration**：装配本模块及窄外部基础设施 corridor，不承载业务用例。
 
 ## Domain Boundary
 
@@ -136,9 +138,56 @@ Mapper / PO / MyBatis / DB
 
 - Repository contract 不暴露 DAO model、Mapper、Controller DTO/VO；
 - Service 不直接依赖 DAO / Mapper / PO；
-- DAO 不反向依赖 Service / Controller / Repository；
+- DAO 不反向依赖 Service / Controller / Repository / Domain orchestration；
 - Repository adapter 是 Domain ↔ Persistence 的转换位置；
 - `LineageJsonCodec` 等持久化表示 helper 留在 `repository.support`。
+
+## Persistence Configuration Corridor
+
+Lineage 使用共享业务数据库，但不允许 Datasource 模块散落到 DAO、Repository 或 Service：
+
+```text
+config/ConditionalOnLineagePersistence
+    -> datasource.config.ConditionalOnDataSourceEnabled
+
+config/LineagePersistenceConfiguration
+    -> datasource.config.BusinessDatabaseConfiguration
+    -> datasource.config.DataSourceProperties
+```
+
+`LineageDaoImpl` 只使用 `ConditionalOnLineagePersistence`。因此未来 Datasource 开关或配置方式变化时，适配点留在 `config`，不会扩散到持久化 primitive。
+
+该 corridor 由源码级测试精确匹配文件和 imported type；新增外部 business import 默认失败。
+
+## Maven Assembly Boundary
+
+Lineage Maven module 保持自包含的业务实现，但不承担整个应用的运行时装配：
+
+| Capability | Owner |
+| --- | --- |
+| HTTP endpoint / validation | Lineage Web + Validation dependencies |
+| Transaction annotation | `spring-tx` |
+| Mapper / MyBatis API | MyBatis-Plus starter |
+| Migration API and Lineage migration bean | `flyway-core` |
+| OpenAPI source annotations | `swagger-annotations-jakarta` |
+| Shared MyBatis SQL parser runtime | Datasource module |
+| MySQL Flyway vendor runtime | Datasource module |
+| JDBC database drivers | Explicit application/plugin assembly, not Lineage |
+| Swagger UI/runtime | Explicit application assembly, not Lineage |
+
+`yak-ops-business-datasource` 在 Lineage POM 中是 optional：Lineage 编译仍能使用明确的配置 corridor，但下游必须显式选择 Datasource，不会因为使用血缘查询 contract 就被动继承数据库运行时。
+
+该表只定义 Lineage 的所有权边界，不宣称本阶段已经统一仓库内其他业务模块的历史 POM；其他模块若因自身持久化仍直接声明 runtime，后续按各自模块独立治理。
+
+以下依赖不得回到 Lineage POM：
+
+```text
+spring-boot-starter-jdbc
+springdoc-openapi-starter-webmvc-ui
+mybatis-plus-jsqlparser-4.9
+flyway-mysql
+mysql-connector-j
+```
 
 ## Root Package Rule
 
@@ -152,10 +201,26 @@ analysis/sql/*
 
 不保留旧根包兼容 wrapper。仓库级源码扫描会阻止旧 Service、Domain 和 Analyzer import 回流。
 
+## Executable Graph
+
+最终 top-level package 图由测试锁定并保持无环：
+
+```text
+controller -> service -> analysis / collector / repository / domain
+collector  -> analysis / domain
+analysis   -> domain
+repository -> dao / domain
+dao        -> config
+config     -> external persistence corridor only
+domain     -> no Lineage application/infrastructure package
+```
+
+文档中的允许边不代表必须提前创建实现；例如 Collector 仍然只在真实采集需求出现时新增。
+
 ## Change Rules
 
 1. 一个 PR 一个主要边界或行为关注点；
-2. package move 与 behavior change 尽量分开；
+2. package、POM 与 behavior change 尽量分开；
 3. 新入口稳定后不长期保留 production 双入口；
 4. Maven 子模块拆分必须由真实依赖隔离需求驱动，不为目录美观提前拆 jar；
 5. 新 dependency 必须同时符合 `ARCHITECTURE.md + DEPENDENCIES.md`；

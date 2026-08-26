@@ -1,7 +1,7 @@
 package io.yak.ops.business.lineage.dao.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.business.lineage.config.ConditionalOnLineagePersistence;
 import io.yak.ops.business.lineage.dao.LineageDao;
 import io.yak.ops.business.lineage.dao.mapper.LineageAssetMapper;
 import io.yak.ops.business.lineage.dao.mapper.LineageQueryMapper;
@@ -22,7 +22,7 @@ import org.springframework.util.StringUtils;
 /** MyBatis-Plus DAO with XML reserved for complex/atomic SQL. */
 @Repository
 @DependsOn("yakLineageFlyway")
-@ConditionalOnDataSourceEnabled
+@ConditionalOnLineagePersistence
 @RequiredArgsConstructor
 public class LineageDaoImpl implements LineageDao {
 

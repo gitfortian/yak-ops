@@ -1,7 +1,6 @@
 package io.yak.ops.business.lineage.config;
 
 import io.yak.ops.business.datasource.config.BusinessDatabaseConfiguration;
-import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.datasource.config.DataSourceProperties;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -14,7 +13,7 @@ import org.springframework.context.annotation.Import;
 
 /** Lineage persistence and Flyway configuration. */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnDataSourceEnabled
+@ConditionalOnLineagePersistence
 @EnableConfigurationProperties(DataSourceProperties.class)
 @Import(BusinessDatabaseConfiguration.class)
 public class LineagePersistenceConfiguration {
