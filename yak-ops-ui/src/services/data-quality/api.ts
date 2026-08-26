@@ -138,7 +138,10 @@ export const deleteCustomQualityTemplate = async (
 export const listQualityTableAssets = (
   query: QualityTableAssetPageQuery,
 ): Promise<TableAssetPageView> =>
-  HttpUtils.postData<TableAssetPageView>(DATA_QUALITY_TABLE_ASSET_API, query);
+  HttpUtils.postData<TableAssetPageView>(
+    `${DATA_QUALITY_TABLE_ASSET_API}/page`,
+    query,
+  );
 
 export const listQualityTableCandidates = (
   query: QualityTableCandidateQuery,
