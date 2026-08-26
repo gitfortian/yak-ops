@@ -137,8 +137,43 @@ export interface HomeAssetOverview {
   lineage: HomeAssetLineageOverview;
 }
 
+export interface HomeQualityDimension {
+  dimension: string;
+  total: number;
+  issues: number;
+  passRate: number | null;
+}
+
+export interface HomeQualityIssue {
+  id: string;
+  executionNo: string;
+  monitorId: string;
+  monitorName: string;
+  objectName?: string | null;
+  tableName?: string | null;
+  ruleName: string;
+  dimension: string;
+  columnName?: string | null;
+  checkResult: string;
+  queuedAt?: string | null;
+}
+
+export interface HomeQualityOverview {
+  rangeStart?: string | null;
+  rangeEnd?: string | null;
+  passRate: number | null;
+  monitoredTableCount: number | null;
+  enabledRuleCount: number | null;
+  todayExecutionCount: number | null;
+  todayIssueTableCount: number | null;
+  recentIssueCount: number | null;
+  dimensions: HomeQualityDimension[];
+  recentIssues: HomeQualityIssue[];
+}
+
 const PREFIX = '/api/v1/home/data-center';
 const ASSET_PREFIX = '/api/v1/home/assets';
+const QUALITY_PREFIX = '/api/v1/home/quality';
 
 export const homeDataCenterApi = {
   overview: (
@@ -160,4 +195,9 @@ export const homeDataCenterApi = {
 export const homeAssetOverviewApi = {
   overview: (): Promise<ApiResponse<HomeAssetOverview>> =>
     HttpUtils.get<HomeAssetOverview>(`${ASSET_PREFIX}/overview`),
+};
+
+export const homeQualityOverviewApi = {
+  overview: (): Promise<ApiResponse<HomeQualityOverview>> =>
+    HttpUtils.get<HomeQualityOverview>(`${QUALITY_PREFIX}/overview`),
 };

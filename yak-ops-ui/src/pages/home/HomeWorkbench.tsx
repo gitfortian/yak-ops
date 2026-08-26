@@ -2,25 +2,23 @@ import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
 import {
-  AlertTriangle,
-  CheckCircle2,
   ChevronRight,
   Clock3,
   LayoutDashboard,
   Sparkles,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
 
 import {
   DataLineageOverview,
   DatasetOverview,
   useHomeAssetOverview,
 } from './HomeAssetOverview';
+import QualityOverview from './HomeQualityOverview';
 
 /**
  * 首页业务总览。
  *
- * 数据集与血缘已接入真实统计；其他模块仍按后续阶段逐步替换 mock。
+ * 数据集、血缘与数据质量已接入真实统计；数据服务和仪表盘继续按后续阶段替换 mock。
  */
 
 interface SectionHeaderProps {
@@ -59,218 +57,6 @@ function SectionHeader({
         </button>
       ) : null}
     </header>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* 数据质量                                                                   */
-/* -------------------------------------------------------------------------- */
-
-const qualityRadarOption: EChartsOption = {
-  animation: true,
-  animationDuration: 760,
-  tooltip: {
-    trigger: 'item',
-  },
-  radar: {
-    center: ['50%', '51%'],
-    radius: '67%',
-    splitNumber: 4,
-    indicator: [
-      { name: '完整性', max: 100 },
-      { name: '唯一性', max: 100 },
-      { name: '一致性', max: 100 },
-      { name: '准确性', max: 100 },
-      { name: '及时性', max: 100 },
-    ],
-    axisName: {
-      color: '#7f848d',
-      fontSize: 11,
-    },
-    axisLine: {
-      lineStyle: {
-        color: '#e3e6eb',
-      },
-    },
-    splitLine: {
-      lineStyle: {
-        color: '#e9ebef',
-      },
-    },
-    splitArea: {
-      areaStyle: {
-        color: ['#ffffff', '#fafbfc'],
-      },
-    },
-  },
-  series: [
-    {
-      type: 'radar',
-      symbol: 'circle',
-      symbolSize: 4,
-      data: [
-        {
-          value: [98, 95, 93, 97, 91],
-          name: '质量评分',
-          lineStyle: {
-            width: 2,
-            color: '#6685ed',
-          },
-          itemStyle: {
-            color: '#6685ed',
-          },
-          areaStyle: {
-            color: 'rgba(102,133,237,0.13)',
-          },
-        },
-      ],
-    },
-  ],
-};
-
-const qualityIssues = [
-  {
-    table: 'ods_user_profile',
-    issue: '手机号字段完整性异常',
-    time: '10:24',
-  },
-  {
-    table: 'dwd_order_detail',
-    issue: '订单编号唯一性异常',
-    time: '09:42',
-  },
-  {
-    table: 'dws_goods_sale',
-    issue: '销售金额一致性异常',
-    time: '08:17',
-  },
-];
-
-function QualityOverview() {
-  return (
-    <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
-      <SectionHeader
-        title="数据质量"
-        description="关注质量健康度与需要处理的异常"
-        onMore={() => history.push('/data-quality/table-config')}
-      />
-
-      <div className="mt-4 grid min-h-[300px] grid-cols-1 gap-5 lg:grid-cols-[180px_250px_minmax(0,1fr)]">
-        <div className="flex flex-col justify-center">
-          <div className="text-[11px] font-medium text-[#8f949d]">
-            综合质量分
-          </div>
-
-          <div className="mt-1 flex items-end gap-1">
-            <strong className="text-[42px] font-semibold leading-[48px] tracking-[-1.5px] text-[#2f333c]">
-              96.8
-            </strong>
-
-            <span className="mb-1.5 text-[12px] text-[#9ca0a8]">
-              /100
-            </span>
-          </div>
-
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-[#3c9766]">
-            <CheckCircle2 size={13} strokeWidth={2} />
-            整体质量健康
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-4">
-            <QualityMetric label="监控表" value="38" />
-            <QualityMetric label="今日检测" value="126" />
-            <QualityMetric label="异常表" value="3" warning />
-            <QualityMetric label="规则" value="84" />
-          </div>
-        </div>
-
-        <div className="min-h-[250px]">
-          <ReactECharts
-            option={qualityRadarOption}
-            style={{
-              width: '100%',
-              height: '260px',
-            }}
-          />
-        </div>
-
-        <div className="min-w-0 border-t border-[#eef0f3] pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-          <div className="flex items-center justify-between">
-            <strong className="text-[13px] font-semibold text-[#40444d]">
-              最近异常
-            </strong>
-
-            <span className="flex items-center gap-1 text-[10px] text-[#a0a4ac]">
-              <AlertTriangle
-                size={11}
-                strokeWidth={1.8}
-                className="text-[#e46a73]"
-              />
-              3 项待关注
-            </span>
-          </div>
-
-          <div className="mt-3 divide-y divide-[#f0f1f3]">
-            {qualityIssues.map((item) => (
-              <button
-                key={`${item.table}-${item.issue}`}
-                type="button"
-                onClick={() => history.push('/data-quality/execution')}
-                className="group flex w-full items-center gap-3 border-0 bg-transparent py-3 text-left"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#fff2f3] text-[#e35d69]">
-                  <AlertTriangle size={14} strokeWidth={1.8} />
-                </span>
-
-                <span className="min-w-0 flex-1">
-                  <strong className="block truncate text-[12px] font-medium text-[#41454e]">
-                    {item.issue}
-                  </strong>
-
-                  <span className="mt-1 block truncate text-[10px] text-[#9ca0a8]">
-                    {item.table}
-                  </span>
-                </span>
-
-                <span className="shrink-0 text-[10px] text-[#9ca0a8]">
-                  {item.time}
-                </span>
-
-                <ChevronRight
-                  size={13}
-                  strokeWidth={1.8}
-                  className="shrink-0 text-[#b8bbc1] transition-transform group-hover:translate-x-0.5"
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function QualityMetric({
-  label,
-  value,
-  warning = false,
-}: {
-  label: string;
-  value: string;
-  warning?: boolean;
-}) {
-  return (
-    <div>
-      <div className="text-[10px] leading-4 text-[#999da5]">{label}</div>
-
-      <strong
-        className={`mt-0.5 block text-[18px] font-semibold leading-6 ${
-          warning ? 'text-[#dc5964]' : 'text-[#40444d]'
-        }`}
-      >
-        {value}
-      </strong>
-    </div>
   );
 }
 
@@ -603,7 +389,7 @@ export default function HomeWorkbench() {
 
       <div className="flex items-center justify-center gap-2 py-2 text-[10px] text-[#aaadb4]">
         <Sparkles size={11} strokeWidth={1.8} />
-        数据集与血缘已接入真实数据，其余总览将在后续阶段逐步接入
+        数据集、血缘与数据质量已接入真实数据，数据服务和仪表盘将在后续阶段接入
       </div>
     </div>
   );
