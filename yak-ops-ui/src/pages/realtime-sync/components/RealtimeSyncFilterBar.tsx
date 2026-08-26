@@ -1,0 +1,170 @@
+import { YakButton, YakTab } from '@/components/ui';
+import { FilterOutlined, SearchOutlined } from '@ant-design/icons';
+import { Input, Popover, Select } from 'antd';
+import { useState } from 'react';
+
+import {
+  REALTIME_SYNC_RELEASE_OPTIONS,
+  REALTIME_SYNC_STATUS_TABS,
+} from '../constants';
+import type {
+  RealtimeFilterField,
+  RealtimeFilterState,
+  RealtimePageStateGroup,
+} from '../types';
+
+interface RealtimeSyncFilterBarProps {
+  filterDraft: RealtimeFilterState;
+  activeStateGroup: RealtimePageStateGroup;
+  advancedFilterCount: number;
+  onDraftChange: <Field extends RealtimeFilterField>(
+    field: Field,
+    value: RealtimeFilterState[Field],
+  ) => void;
+  onStateGroupChange: (value: RealtimePageStateGroup) => void;
+  onReleaseStateChange: (
+    value: RealtimeFilterState['releaseState'],
+  ) => void;
+  onSearch: () => boolean;
+  onReset: () => void;
+}
+
+const RealtimeSyncFilterBar = ({
+  filterDraft,
+  activeStateGroup,
+  advancedFilterCount,
+  onDraftChange,
+  onStateGroupChange,
+  onReleaseStateChange,
+  onSearch,
+  onReset,
+}: RealtimeSyncFilterBarProps) => {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const applyAdvancedFilter = () => {
+    if (onSearch()) setAdvancedOpen(false);
+  };
+
+  const resetFilters = () => {
+    onReset();
+    setAdvancedOpen(false);
+  };
+
+  return (
+    <div className="border-b border-[#f0f0f0]">
+      <div className="flex min-h-[54px] items-center justify-between gap-4 py-2">
+        <div className="h-9 shrink-0">
+          <YakTab
+            size="small"
+            activeKey={activeStateGroup}
+            items={REALTIME_SYNC_STATUS_TABS.map((item) => ({
+              key: item.value,
+              label: item.label,
+            }))}
+            onChange={(value) =>
+              onStateGroupChange(value as RealtimePageStateGroup)
+            }
+          />
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto">
+          <Input
+            allowClear
+            variant="filled"
+            value={filterDraft.keyword}
+            prefix={<SearchOutlined className="text-[#98a2b3]" />}
+            placeholder="搜索任务名称 / 描述"
+            className="!h-9 !w-[240px] !min-w-[190px]"
+            onChange={(event) =>
+              onDraftChange('keyword', event.target.value || undefined)
+            }
+            onPressEnter={() => void onSearch()}
+          />
+
+          <Select
+            allowClear
+            variant="filled"
+            value={filterDraft.releaseState}
+            options={REALTIME_SYNC_RELEASE_OPTIONS.map((item) => ({
+              ...item,
+            }))}
+            placeholder="发布状态"
+            className="!h-9 !w-[135px] !min-w-[125px]"
+            onChange={onReleaseStateChange}
+          />
+
+          <YakButton className="!h-9 !px-4" onClick={() => void onSearch()}>
+            查询
+          </YakButton>
+
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            open={advancedOpen}
+            onOpenChange={setAdvancedOpen}
+            content={
+              <div className="w-[320px]">
+                <div className="text-[14px] font-semibold text-[#101828]">
+                  高级搜索
+                </div>
+                <div className="mt-1 text-[12px] text-[#98a2b3]">
+                  按任务 ID 精确定位实时任务
+                </div>
+
+                <div className="mt-4">
+                  <div className="mb-1.5 text-[12px] text-[#667085]">
+                    任务 ID
+                  </div>
+                  <Input
+                    allowClear
+                    variant="filled"
+                    value={filterDraft.id}
+                    placeholder="请输入数字任务 ID"
+                    onChange={(event) =>
+                      onDraftChange('id', event.target.value || undefined)
+                    }
+                    onPressEnter={applyAdvancedFilter}
+                  />
+                </div>
+
+                <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#f0f0f0] pt-4">
+                  <YakButton size="small" onClick={resetFilters}>
+                    重置全部
+                  </YakButton>
+                  <YakButton
+                    type="primary"
+                    danger
+                    size="small"
+                    onClick={applyAdvancedFilter}
+                  >
+                    应用筛选
+                  </YakButton>
+                </div>
+              </div>
+            }
+          >
+            <YakButton
+              size="small"
+              icon={<FilterOutlined />}
+              className={[
+                '!h-9 !px-3',
+                advancedFilterCount > 0
+                  ? '!border-[#ffccc7] !bg-[#fff1f0] !text-[#ff4d4f]'
+                  : '',
+              ].join(' ')}
+            >
+              高级搜索
+              {advancedFilterCount > 0 ? (
+                <span className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#ff4d4f] px-1 text-[10px] leading-[18px] text-white">
+                  {advancedFilterCount}
+                </span>
+              ) : null}
+            </YakButton>
+          </Popover>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default RealtimeSyncFilterBar;
