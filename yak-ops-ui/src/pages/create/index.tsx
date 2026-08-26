@@ -1625,7 +1625,7 @@ export default function UnifiedCreatePage() {
 
         {/* 中间表单区域 */}
         <main className="flex min-h-[600px] justify-center overflow-x-hidden bg-white px-6 py-12">
-          <div className="w-full max-w-[680px]">
+          <div className="w-full max-w-[780px]">
             <div
               id="quick-create-panel"
               role="tabpanel"
