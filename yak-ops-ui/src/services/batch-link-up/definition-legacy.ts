@@ -152,19 +152,19 @@ export const linkupJobScheduleApi = {
       `${linkupJobScheduleApiPrefix}/last5-execution-times?cron=${encodeURIComponent(cron)}`,
     ),
   stopSchedule: (jobScheduleId: string) =>
-    HttpUtils.get<unknown[]>(
+    HttpUtils.get<any[]>(
       `${linkupJobScheduleApiPrefix}/stop-schedule?scheduleId=${encodeURIComponent(jobScheduleId)}`,
     ),
   startSchedule: (jobScheduleId: string) =>
-    HttpUtils.get<unknown[]>(
+    HttpUtils.get<any[]>(
       `${linkupJobScheduleApiPrefix}/start-schedule?scheduleId=${encodeURIComponent(jobScheduleId)}`,
     ),
 };
 
 const linkupCopilotApiPrefix = '/api/v1/copilot/ai';
 export const linkupCopilotApi = {
-  copilot: (data: unknown) =>
-    HttpUtils.post<unknown[]>(`${linkupCopilotApiPrefix}/agent`, data as Record<string, unknown>),
+  copilot: (data: any) =>
+    HttpUtils.post<any[]>(`${linkupCopilotApiPrefix}/agent`, data),
 };
 
 export const batchJobInstanceApi = {
