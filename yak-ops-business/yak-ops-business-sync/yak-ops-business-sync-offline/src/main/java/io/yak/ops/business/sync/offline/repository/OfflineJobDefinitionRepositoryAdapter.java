@@ -10,7 +10,10 @@ import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -33,12 +36,14 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
 
   @Override
   public Optional<OfflineJobDefinition> findById(Long id) {
-    return Optional.ofNullable(toDomain(dao.selectById(id), false));
+    return Optional.ofNullable(toDomain(dao.selectById(id), Map.of()));
   }
 
   @Override
   public Optional<OfflineJobDefinition> findForViewById(Long id) {
-    return Optional.ofNullable(toDomain(dao.selectById(id), true));
+    OfflineJobDefinitionPO po = dao.selectById(id);
+    if (po == null) return Optional.empty();
+    return Optional.of(toDomain(po, dataSourceNames(List.of(po))));
   }
 
   @Override
@@ -82,19 +87,24 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
             q.current(), q.pageSize(), q.id(), q.jobName(), q.status(),
             q.sourceType(), q.sinkType(), q.sourceTable(), q.sinkTable(),
             q.createTimeStart(), q.createTimeEnd()));
-    List<OfflineJobDefinition> records = page.getRecords().stream()
-        .map(po -> toDomain(po, includeDisplayNames))
+    List<OfflineJobDefinitionPO> pageRecords = page.getRecords();
+    Map<Long, String> dataSourceNames =
+        includeDisplayNames ? dataSourceNames(pageRecords) : Map.of();
+    List<OfflineJobDefinition> records = pageRecords.stream()
+        .map(po -> toDomain(po, dataSourceNames))
         .toList();
     return new PageData<>(records, page.getTotal(), page.getPages(), page.getCurrent(), page.getSize());
   }
 
-  private OfflineJobDefinition toDomain(OfflineJobDefinitionPO po, boolean includeDisplayNames) {
+  private OfflineJobDefinition toDomain(
+      OfflineJobDefinitionPO po,
+      Map<Long, String> dataSourceNames) {
     if (po == null) return null;
     OfflineJobDefinition value = new OfflineJobDefinition();
     BeanUtils.copyProperties(po, value);
-    if (includeDisplayNames) {
-      value.setSourceDatasourceName(dataSourceName(po.getSourceDatasourceId()));
-      value.setSinkDatasourceName(dataSourceName(po.getSinkDatasourceId()));
+    if (!dataSourceNames.isEmpty()) {
+      value.setSourceDatasourceName(dataSourceNames.get(po.getSourceDatasourceId()));
+      value.setSinkDatasourceName(dataSourceNames.get(po.getSinkDatasourceId()));
     }
     return value;
   }
@@ -105,9 +115,26 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
     return po;
   }
 
-  private String dataSourceName(Long id) {
-    if (id == null) return null;
-    DataSourcePO dataSource = dataSourceDao.selectById(id);
-    return dataSource == null ? null : dataSource.getName();
+  private Map<Long, String> dataSourceNames(List<OfflineJobDefinitionPO> definitions) {
+    if (definitions == null || definitions.isEmpty()) return Map.of();
+    LinkedHashSet<Long> ids = new LinkedHashSet<>();
+    for (OfflineJobDefinitionPO definition : definitions) {
+      if (definition == null) continue;
+      if (definition.getSourceDatasourceId() != null) {
+        ids.add(definition.getSourceDatasourceId());
+      }
+      if (definition.getSinkDatasourceId() != null) {
+        ids.add(definition.getSinkDatasourceId());
+      }
+    }
+    if (ids.isEmpty()) return Map.of();
+
+    Map<Long, String> names = new LinkedHashMap<>();
+    for (DataSourcePO dataSource : dataSourceDao.selectByIds(List.copyOf(ids))) {
+      if (dataSource != null && dataSource.getId() != null) {
+        names.put(dataSource.getId(), dataSource.getName());
+      }
+    }
+    return names;
   }
 }

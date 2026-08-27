@@ -155,6 +155,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String query = resolveSql(value.query(), value);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(stripTrailingSemicolon(query))) {
+      statement.setQueryTimeout(timeoutSeconds);
       ResultSetMetaData metadata = statement.getMetaData();
       if (metadata != null) return columnsFromMetadata(metadata);
       statement.setMaxRows(1);
@@ -173,6 +174,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String query = buildQuery(value);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(query)) {
+      statement.setQueryTimeout(timeoutSeconds);
       statement.setMaxRows(safeLimit);
       try (ResultSet resultSet = statement.executeQuery()) {
         ResultSetMetaData metadata = resultSet.getMetaData();
@@ -185,7 +187,9 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
           }
           rows.add(row);
         }
-        return new DataSourceQueryResult(columns, rows, count(value));
+        // Preview is intentionally bounded and must not trigger an implicit full COUNT scan.
+        // The count endpoint remains available when an exact cardinality is explicitly required.
+        return new DataSourceQueryResult(columns, rows, rows.size());
       }
     } catch (Exception exception) {
       throw catalogError("查询预览数据失败", exception);
@@ -197,9 +201,11 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String query = buildQuery(requireRequest(request));
     String countSql = "SELECT COUNT(*) FROM (" + query + ") yak_ops_count";
     try (Connection opened = openConnection();
-        PreparedStatement statement = opened.prepareStatement(countSql);
-        ResultSet resultSet = statement.executeQuery()) {
-      return resultSet.next() ? resultSet.getLong(1) : 0L;
+        PreparedStatement statement = opened.prepareStatement(countSql)) {
+      statement.setQueryTimeout(timeoutSeconds);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        return resultSet.next() ? resultSet.getLong(1) : 0L;
+      }
     } catch (Exception exception) {
       throw catalogError("统计查询结果失败", exception);
     }
