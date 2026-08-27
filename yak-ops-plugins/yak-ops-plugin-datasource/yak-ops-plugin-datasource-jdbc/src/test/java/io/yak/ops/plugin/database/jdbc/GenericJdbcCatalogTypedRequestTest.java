@@ -85,9 +85,7 @@ class GenericJdbcCatalogTypedRequestTest {
 
     ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
     verify(opened).prepareStatement(sqlCaptor.capture());
-    assertThat(sqlCaptor.getValue())
-        .isEqualTo(
-            "SELECT * FROM (SELECT * FROM `demo`.`orders`) yak_ops_preview LIMIT 20");
+    assertThat(sqlCaptor.getValue()).isEqualTo("SELECT * FROM `demo`.`orders` LIMIT 20");
     assertThat(result.getData()).hasSize(1);
     assertThat(result.getTotal()).isEqualTo(1L);
     assertThat(countCalls.get()).isZero();
