@@ -15,7 +15,8 @@ import {
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
 import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useScreenRuntimeData } from '../../runtime/hooks/useScreenRuntimeData';
+import { isBindableScreenComponent } from '../../runtime/binding';
+import { useScreenRuntime } from '../../runtime/hooks/useScreenRuntime';
 
 const sameBindings = (left: DigitalScreenBindings, right: DigitalScreenBindings) => (
   JSON.stringify(left) === JSON.stringify(right)
@@ -47,7 +48,7 @@ export function useDigitalScreenEditor(id?: string) {
     () => template?.components.find((component) => component.id === selectedComponentId),
     [template, selectedComponentId],
   );
-  const runtime = useScreenRuntimeData(template, bindings, datasets);
+  const runtime = useScreenRuntime(template, bindings, datasets);
   const isDirty = useMemo(() => {
     if (!screen) return false;
     return name.trim() !== screen.name
@@ -118,7 +119,7 @@ export function useDigitalScreenEditor(id?: string) {
   useEffect(() => {
     if (!template) return;
     if (selectedComponentId && template.components.some((component) => component.id === selectedComponentId)) return;
-    const preferred = template.components.find((component) => component.type !== 'text')
+    const preferred = template.components.find(isBindableScreenComponent)
       || template.components[0];
     setSelectedComponentId(preferred?.id);
   }, [template, selectedComponentId]);
@@ -210,7 +211,7 @@ export function useDigitalScreenEditor(id?: string) {
     });
   };
 
-  const bindableCount = template?.components.filter((component) => component.type !== 'text').length ?? 0;
+  const bindableCount = template?.components.filter(isBindableScreenComponent).length ?? 0;
   const isSelectedQuerying = selectedComponent
     ? runtime.loadingIds.includes(selectedComponent.id)
     : false;
