@@ -1,4 +1,4 @@
-import { YakEmpty } from '@/components/ui';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import type { DataNode } from 'antd/es/tree';
 import type { TreeProps } from 'antd';
 import { Spin, Tooltip, Tree } from 'antd';
@@ -159,11 +159,14 @@ const DataSourceTreePane = ({
                   className="data-source-tree bg-transparent"
                 />
               ) : (
-                <YakEmpty
-                  compact
-                  title="暂无数据源"
-                  description="请先在数据源管理中创建可用数据源"
-                />
+                <div className="flex min-h-[180px] items-center justify-center">
+                  <YakOpsEmpty
+                    width={132}
+                    height={90}
+                    title="暂无数据源"
+                    description="请先在数据源管理中创建可用数据源"
+                  />
+                </div>
               )}
             </Spin>
           </div>
