@@ -1,9 +1,10 @@
 package io.yak.ops.business.quality.repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** 首页数据质量总览读模型 Repository。 */
+/** 数据质量总览读模型 Repository。 */
 public interface QualityOverviewRepository {
 
   OverviewStats stats(
@@ -12,7 +13,11 @@ public interface QualityOverviewRepository {
       LocalDateTime rangeStart,
       LocalDateTime rangeEnd);
 
+  AnalyticsStats analyticsStats(LocalDateTime rangeStart, LocalDateTime rangeEnd);
+
   List<DimensionSummary> dimensions(LocalDateTime rangeStart, LocalDateTime rangeEnd);
+
+  List<TrendSummary> trend(LocalDateTime rangeStart, LocalDateTime rangeEnd);
 
   List<IssueSummary> recentIssues(
       LocalDateTime rangeStart,
@@ -29,11 +34,38 @@ public interface QualityOverviewRepository {
       long recentIssueRuleCount) {
   }
 
+  record AnalyticsStats(
+      long executionCount,
+      long activeMonitorCount,
+      long executedRuleCount,
+      long passedRuleCount,
+      long failedRuleCount,
+      long errorRuleCount,
+      long issueExecutionCount,
+      long affectedMonitorCount,
+      long affectedTableCount,
+      long affectedColumnCount,
+      Double averageDurationMs,
+      LocalDateTime latestExecutionAt) {
+  }
+
   record DimensionSummary(
       String dimension,
       long total,
       long passed,
       long issues) {
+  }
+
+  record TrendSummary(
+      LocalDate date,
+      long executionCount,
+      long activeMonitorCount,
+      long executedRuleCount,
+      long passedRuleCount,
+      long failedRuleCount,
+      long errorRuleCount,
+      long issueExecutionCount,
+      Double averageDurationMs) {
   }
 
   record IssueSummary(

@@ -88,7 +88,7 @@ export const appRoutes: readonly NavigationRoute[] = [
   { id: 'workflow-instances', mode: 'public', path: '/workflow/instances', title: '工作流实例', component: './workflow/instances', iconKey: 'instance', menuGroup: 'workflow', order: 30 },
   { id: 'workflow-instance-detail', path: '/workflow/instances/:executionId', title: '工作流实例详情', component: './workflow/instances/detail', hidden: true, parentId: 'workflow-instances' },
   { id: 'resource-management', mode: 'one', permission: 'resource:view', path: '/resource-management', title: '文件资源', component: './resource-management', iconKey: 'database', menuGroup: 'resources', order: 10 },
-  { id: 'data-quality-overview', mode: 'any', permissions: ['quality:monitor:read', 'quality:execution:read', 'quality:template:read'], path: '/data-quality/overview', title: '质量总览', component: './data-quality/overview', iconKey: 'monitor', menuGroup: 'data-quality', order: 5 },
+  { id: 'data-quality-overview', mode: 'one', permission: 'quality:execution:read', path: '/data-quality/overview', title: '质量总览', component: './data-quality/overview', iconKey: 'monitor', menuGroup: 'data-quality', order: 5 },
   { id: 'data-quality-table-config', mode: 'one', permission: 'quality:monitor:read', path: '/data-quality/table-config', title: '数据表监控', component: './data-quality/table-config', iconKey: 'quality', menuGroup: 'data-quality', order: 10 },
   { id: 'data-quality-monitor-create', path: '/data-quality/monitor/create', title: '新增监控', component: './data-quality/monitor/editor', hidden: true, parentId: 'data-quality-table-config' },
   { id: 'data-quality-monitor-detail', path: '/data-quality/monitor/:id', title: '规则管理', component: './data-quality/monitor/detail', hidden: true, parentId: 'data-quality-table-config' },

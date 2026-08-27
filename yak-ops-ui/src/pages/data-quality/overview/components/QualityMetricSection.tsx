@@ -1,17 +1,34 @@
-import { YakButton, YakEmpty, YakTab } from '@/components/ui';
-import { CalendarDays, CircleHelp, Download } from 'lucide-react';
-import { Segmented, Tooltip, message } from 'antd';
+import { YakButton, YakTab } from '@/components/ui';
+import type { QualityOverviewView } from '@/services/data-quality';
+import { DatePicker, Segmented, Spin, Tooltip, message } from 'antd';
 import dayjs from 'dayjs';
+import { CircleHelp, Download, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { QualityOverviewTab } from '../constants';
+import type { QualityOverviewTabDefinition } from '../constants';
+import {
+  buildMetrics,
+  formatPeriodText,
+  rangeKey,
+  resolvePresetRange,
+  toPickerRange,
+  type OverviewDateRange,
+  type OverviewPeriodKey,
+  type OverviewSectionKind,
+} from '../utils';
+import QualityTrendChart from './QualityTrendChart';
 
-type PeriodKey = 'yesterday' | '7d' | '30d';
+const { RangePicker } = DatePicker;
 
 interface QualityMetricSectionProps {
   title: string;
-  subtitle: string;
-  tabs: QualityOverviewTab[];
+  tabs: QualityOverviewTabDefinition[];
   defaultTab: string;
+  section: OverviewSectionKind;
+  range: OverviewDateRange;
+  overview?: QualityOverviewView;
+  loading?: boolean;
+  onRangeChange: (range: OverviewDateRange) => void;
+  onRefresh: () => void;
 }
 
 const periodOptions = [
@@ -20,26 +37,20 @@ const periodOptions = [
   { label: '近30天', value: '30d' },
 ] as const;
 
-const resolveDateRange = (period: PeriodKey) => {
-  const end = dayjs().subtract(1, 'day');
-  if (period === 'yesterday') return [end, end] as const;
-  if (period === '7d') return [end.subtract(6, 'day'), end] as const;
-  return [end.subtract(29, 'day'), end] as const;
-};
+const presetForRange = (range: OverviewDateRange): OverviewPeriodKey | undefined =>
+  periodOptions.find((item) => rangeKey(resolvePresetRange(item.value)) === rangeKey(range))?.value;
 
-const MetricStrip = ({ tab }: { tab: QualityOverviewTab }) => (
+const MetricStrip = ({ metrics }: { metrics: ReturnType<typeof buildMetrics> }) => (
   <div className="overflow-x-auto border-y border-solid border-[#eceef2]">
     <div
       className="grid min-w-max"
-      style={{
-        gridTemplateColumns: `repeat(${tab.metrics.length}, minmax(150px, 1fr))`,
-      }}
+      style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(150px, 1fr))` }}
     >
-      {tab.metrics.map((metric, index) => (
+      {metrics.map((metric, index) => (
         <div
           key={metric.label}
           className={[
-            'min-h-[86px] bg-[#fafafa] px-4 py-3',
+            'min-h-[86px] bg-[#fafafa] px-4 py-3 transition-colors',
             index ? 'border-l border-solid border-[#eceef2]' : '',
           ].join(' ')}
         >
@@ -60,31 +71,60 @@ const MetricStrip = ({ tab }: { tab: QualityOverviewTab }) => (
   </div>
 );
 
+const exportOverviewCsv = (title: string, overview: QualityOverviewView) => {
+  const rows = [
+    ['日期', '执行次数', '活跃监控', '执行规则', '通过规则', '未通过规则', '异常规则', '问题执行', '通过率', '问题率', '平均耗时(ms)'],
+    ...overview.trend.map((point) => [
+      point.date,
+      point.executionCount,
+      point.activeMonitorCount,
+      point.executedRuleCount,
+      point.passedRuleCount,
+      point.failedRuleCount,
+      point.errorRuleCount,
+      point.issueExecutionCount,
+      point.passRate ?? '',
+      point.issueRate ?? '',
+      point.averageDurationMs ?? '',
+    ]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n')}`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${title}-${overview.rangeStart}-${overview.rangeEnd}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
+
 export default function QualityMetricSection({
   title,
-  subtitle,
   tabs,
   defaultTab,
+  section,
+  range,
+  overview,
+  loading = false,
+  onRangeChange,
+  onRefresh,
 }: QualityMetricSectionProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const [period, setPeriod] = useState<PeriodKey>('yesterday');
-
-  const currentTab = useMemo(
-    () => tabs.find((tab) => tab.key === activeTab) ?? tabs[0],
-    [activeTab, tabs],
+  const metrics = useMemo(
+    () => buildMetrics(section, activeTab, overview),
+    [activeTab, overview, section],
   );
-  const range = resolveDateRange(period);
-  const rangeLabel = `${range[0].format('MM.DD')}-${range[1].format('MM.DD')}`;
+  const selectedPreset = presetForRange(range);
 
   return (
     <section className="rounded-xl bg-white px-5 pb-6 pt-5 lg:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="m-0 text-[18px] font-semibold text-[#161823]">
-              {title}
-            </h2>
-            <span className="text-[11px] text-[#98a2b3]">{subtitle}</span>
+            <h2 className="m-0 text-[18px] font-semibold text-[#161823]">{title}</h2>
+            <span className="text-[11px] text-[#98a2b3]">{formatPeriodText(range)}</span>
           </div>
           <YakTab
             activeKey={activeTab}
@@ -97,36 +137,62 @@ export default function QualityMetricSection({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Segmented
             size="small"
-            value={period}
+            value={selectedPreset}
             options={periodOptions.map((item) => ({ ...item }))}
-            onChange={(value) => setPeriod(value as PeriodKey)}
+            onChange={(value) => onRangeChange(resolvePresetRange(value as OverviewPeriodKey))}
             className="!bg-[#f4f5f7]"
+          />
+          <RangePicker
+            size="small"
+            value={toPickerRange(range)}
+            format="MM.DD"
+            allowClear={false}
+            disabledDate={(current) => current.isAfter(dayjs().subtract(1, 'day'), 'day')}
+            onChange={(value) => {
+              const start = value?.[0];
+              const end = value?.[1];
+              if (!start || !end) return;
+              if (end.diff(start, 'day') > 89) {
+                message.warning('质量总览单次最多查询 90 天');
+                return;
+              }
+              onRangeChange({
+                startDate: start.format('YYYY-MM-DD'),
+                endDate: end.format('YYYY-MM-DD'),
+              });
+            }}
+            className="w-[150px]"
           />
           <YakButton
             size="small"
-            icon={<CalendarDays size={14} />}
-            onClick={() => message.info('日期范围选择将在真实数据接入阶段开放')}
+            icon={<RefreshCw size={14} />}
+            loading={loading}
+            onClick={onRefresh}
           >
-            {rangeLabel}
+            刷新
           </YakButton>
           <YakButton
             size="small"
             icon={<Download size={14} />}
-            onClick={() => message.info('导出能力将在后端数据接入后开放')}
+            onClick={() => {
+              if (!overview) {
+                message.info('当前统计周期暂无可导出的质量数据');
+                return;
+              }
+              exportOverviewCsv(title, overview);
+            }}
           >
             导出数据
           </YakButton>
         </div>
       </div>
 
-      <MetricStrip tab={currentTab} />
+      <MetricStrip metrics={metrics} />
 
-      <div className="flex min-h-[320px] items-center justify-center border-x border-b border-solid border-[#eceef2] bg-white">
-        <YakEmpty
-          compact
-          title={currentTab.emptyTitle}
-          description={currentTab.emptyDescription}
-        />
+      <div className="min-h-[340px] border-x border-b border-solid border-[#eceef2] bg-white">
+        <Spin spinning={loading}>
+          <QualityTrendChart overview={overview} section={section} tabKey={activeTab} />
+        </Spin>
       </div>
     </section>
   );

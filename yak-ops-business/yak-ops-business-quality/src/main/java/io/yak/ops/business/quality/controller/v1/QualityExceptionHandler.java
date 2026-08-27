@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
     QualityTemplateController.class,
     CustomTemplateController.class,
     QualityMonitorController.class,
-    QualityExecutionController.class
+    QualityExecutionController.class,
+    QualityOverviewController.class
 })
 public class QualityExceptionHandler {
 

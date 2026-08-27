@@ -52,6 +52,61 @@
          AND re.check_result IN ('NOT_PASSED', 'ERROR')) AS recent_issue_rule_count
   </select>
 
+  <select id="selectAnalyticsStats" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$AnalyticsStatsRow">
+    SELECT
+      execution_stats.execution_count,
+      execution_stats.active_monitor_count,
+      rule_stats.executed_rule_count,
+      rule_stats.passed_rule_count,
+      rule_stats.failed_rule_count,
+      rule_stats.error_rule_count,
+      execution_stats.issue_execution_count,
+      rule_stats.affected_monitor_count,
+      rule_stats.affected_table_count,
+      rule_stats.affected_column_count,
+      execution_stats.average_duration_ms,
+      execution_stats.latest_execution_at
+    FROM (
+      SELECT
+        COUNT(*) AS execution_count,
+        COUNT(DISTINCT e.monitor_id) AS active_monitor_count,
+        SUM(CASE
+          WHEN e.check_result IN ('NOT_PASSED', 'ERROR')
+            OR e.failed_rules &gt; 0 OR e.error_rules &gt; 0
+          THEN 1 ELSE 0 END) AS issue_execution_count,
+        AVG(e.duration_ms) AS average_duration_ms,
+        MAX(e.queued_at) AS latest_execution_at
+      FROM yak_quality_execution e
+      WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+    ) execution_stats
+    CROSS JOIN (
+      SELECT
+        COUNT(*) AS executed_rule_count,
+        SUM(CASE WHEN re.check_result = 'PASSED' THEN 1 ELSE 0 END) AS passed_rule_count,
+        SUM(CASE WHEN re.check_result = 'NOT_PASSED' THEN 1 ELSE 0 END) AS failed_rule_count,
+        SUM(CASE WHEN re.check_result = 'ERROR' THEN 1 ELSE 0 END) AS error_rule_count,
+        COUNT(DISTINCT CASE
+          WHEN re.check_result IN ('NOT_PASSED', 'ERROR') THEN e.monitor_id END) AS affected_monitor_count,
+        COUNT(DISTINCT CASE
+          WHEN re.check_result IN ('NOT_PASSED', 'ERROR')
+          THEN CONCAT(
+            e.data_source_id, '|', COALESCE(e.database_name, ''), '|',
+            COALESCE(e.schema_name, ''), '|', e.table_name)
+          END) AS affected_table_count,
+        COUNT(DISTINCT CASE
+          WHEN re.check_result IN ('NOT_PASSED', 'ERROR')
+            AND re.column_name IS NOT NULL AND re.column_name &lt;&gt; ''
+          THEN CONCAT(
+            e.data_source_id, '|', COALESCE(e.database_name, ''), '|',
+            COALESCE(e.schema_name, ''), '|', e.table_name, '|', re.column_name)
+          END) AS affected_column_count
+      FROM yak_quality_rule_execution re
+      INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+      WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+        AND re.check_result IN ('PASSED', 'NOT_PASSED', 'ERROR')
+    ) rule_stats
+  </select>
+
   <select id="selectDimensions" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$DimensionRow">
     SELECT
       <include refid="DimensionExpression"/> AS dimension,
@@ -64,7 +119,37 @@
     WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
       AND re.check_result IN ('PASSED', 'NOT_PASSED', 'ERROR')
     GROUP BY <include refid="DimensionExpression"/>
-    ORDER BY FIELD(dimension, '完整性', '准确性', '唯一性', '有效性', '一致性', '时效性', '自定义', '其他'), dimension
+    ORDER BY
+      CASE <include refid="DimensionExpression"/>
+        WHEN '完整性' THEN 1
+        WHEN '准确性' THEN 2
+        WHEN '唯一性' THEN 3
+        WHEN '有效性' THEN 4
+        WHEN '一致性' THEN 5
+        WHEN '时效性' THEN 6
+        WHEN '自定义' THEN 7
+        ELSE 99
+      END,
+      <include refid="DimensionExpression"/>
+  </select>
+
+  <select id="selectAnalyticsTrend" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$TrendRow">
+    SELECT
+      DATE(e.queued_at) AS stat_date,
+      COUNT(*) AS execution_count,
+      COUNT(DISTINCT e.monitor_id) AS active_monitor_count,
+      SUM(e.passed_rules + e.failed_rules + e.error_rules) AS executed_rule_count,
+      SUM(e.passed_rules) AS passed_rule_count,
+      SUM(e.failed_rules) AS failed_rule_count,
+      SUM(e.error_rules) AS error_rule_count,
+      SUM(CASE
+        WHEN e.check_result IN ('NOT_PASSED', 'ERROR') OR e.failed_rules &gt; 0 OR e.error_rules &gt; 0
+          THEN 1 ELSE 0 END) AS issue_execution_count,
+      AVG(e.duration_ms) AS average_duration_ms
+    FROM yak_quality_execution e
+    WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+    GROUP BY DATE(e.queued_at)
+    ORDER BY stat_date ASC
   </select>
 
   <select id="selectRecentIssues" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$IssueRow">
