@@ -1,11 +1,4 @@
-import {
-  Button,
-  Checkbox,
-  Drawer,
-  Empty,
-  Spin,
-  message,
-} from 'antd';
+import { Checkbox, Drawer, Spin, message } from 'antd';
 import {
   forwardRef,
   useCallback,
@@ -13,14 +6,15 @@ import {
   useState,
 } from 'react';
 
+import { YakButton, YakEmpty } from '@/components/ui';
 import {
-  type AssignInfo,
-  type SystemUser,
   assignRolesToUser,
   getUserRoleAssignments,
+  type AssignInfo,
+  type SystemUser,
 } from '@/services/security/users';
 
-import { errorText } from '../shared';
+import { getSystemErrorMessage } from '../../utils';
 
 export interface UserRoleAssignmentModalRef {
   open: (user: SystemUser) => Promise<void>;
@@ -35,44 +29,31 @@ const UserRoleAssignmentModal = forwardRef<
   UserRoleAssignmentModalProps
 >(({ onSuccess }, ref) => {
   const [open, setOpen] = useState(false);
-  const [target, setTarget] = useState<SystemUser>();
-  const [assignments, setAssignments] = useState<
-    AssignInfo[]
-  >([]);
-  const [selectedRoleIds, setSelectedRoleIds] =
-    useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [targetUser, setTargetUser] = useState<SystemUser>();
+  const [assignments, setAssignments] = useState<AssignInfo[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  /**
-   * 关闭角色分配抽屉并清理状态。
-   */
   const close = useCallback(() => {
-    if (saving) {
-      return;
-    }
-
+    if (isSaving) return;
     setOpen(false);
-    setTarget(undefined);
+    setTargetUser(undefined);
     setAssignments([]);
     setSelectedRoleIds([]);
-    setLoading(false);
-  }, [saving]);
+    setIsLoading(false);
+  }, [isSaving]);
 
-  /**
-   * 打开角色分配抽屉。
-   */
-  const show = useCallback(async (row: SystemUser) => {
-    setTarget(row);
+  const show = useCallback(async (user: SystemUser) => {
+    setTargetUser(user);
     setAssignments([]);
     setSelectedRoleIds([]);
     setOpen(true);
-    setLoading(true);
+    setIsLoading(true);
 
     try {
-      const data = await getUserRoleAssignments(row.id);
-      const result = Array.isArray(data) ? data : [];
-
+      const values = await getUserRoleAssignments(user.id);
+      const result = Array.isArray(values) ? values : [];
       setAssignments(result);
       setSelectedRoleIds(
         result
@@ -81,48 +62,34 @@ const UserRoleAssignmentModal = forwardRef<
           .filter(Number.isFinite),
       );
     } catch (error) {
-      
+      message.error(
+        getSystemErrorMessage(error, '角色分配信息加载失败'),
+      );
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: show,
-    }),
-    [show],
-  );
+  useImperativeHandle(ref, () => ({ open: show }), [show]);
 
-  /**
-   * 保存用户角色。
-   */
   const save = async () => {
-    if (!target || saving || loading) {
-      return;
-    }
-
-    setSaving(true);
+    if (!targetUser || isSaving || isLoading) return;
+    setIsSaving(true);
 
     try {
-      await assignRolesToUser(
-        target.id,
-        selectedRoleIds,
-      );
-
+      await assignRolesToUser(targetUser.id, selectedRoleIds);
       message.success('用户角色已更新');
-
       setOpen(false);
-      setTarget(undefined);
+      setTargetUser(undefined);
       setAssignments([]);
       setSelectedRoleIds([]);
-
       onSuccess();
     } catch (error) {
-      
+      message.error(
+        getSystemErrorMessage(error, '用户角色更新失败'),
+      );
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
@@ -133,52 +100,40 @@ const UserRoleAssignmentModal = forwardRef<
       width={520}
       forceRender
       maskClosable={false}
-      keyboard={!saving}
+      keyboard={!isSaving}
+      closable={!isSaving}
       onClose={close}
       extra={
         <div className="flex items-center gap-2">
-          <Button
-            disabled={saving}
-            onClick={close}
-          >
-            取消
-          </Button>
-
-          <Button
+          <YakButton disabled={isSaving} onClick={close}>取消</YakButton>
+          <YakButton
             type="primary"
-            loading={saving}
-            disabled={loading || !target}
+            loading={isSaving}
+            disabled={isLoading || !targetUser}
             onClick={() => void save()}
           >
             保存
-          </Button>
+          </YakButton>
         </div>
       }
     >
-      {target && (
+      {targetUser && (
         <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-          <div className="text-xs text-gray-500">
-            当前用户
-          </div>
-
+          <div className="text-xs text-gray-500">当前用户</div>
           <div className="mt-1 font-medium text-gray-900">
-            {target.realName || target.userName}
+            {targetUser.realName || targetUser.userName}
           </div>
-
-          {target.realName && (
+          {targetUser.realName && (
             <div className="mt-0.5 text-sm text-gray-500">
-              用户名：{target.userName}
+              用户名：{targetUser.userName}
             </div>
           )}
         </div>
       )}
 
-      <Spin spinning={loading}>
-        {!loading && assignments.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="暂无可分配角色"
-          />
+      <Spin spinning={isLoading}>
+        {!isLoading && assignments.length === 0 ? (
+          <YakEmpty compact title="暂无可分配角色" />
         ) : (
           <Checkbox.Group
             className="grid w-full grid-cols-2 gap-3"
@@ -193,26 +148,21 @@ const UserRoleAssignmentModal = forwardRef<
           >
             {assignments.map((item) => {
               const roleId = Number(item.id);
-              const checked =
-                selectedRoleIds.includes(roleId);
-
+              const checked = selectedRoleIds.includes(roleId);
               return (
                 <Checkbox
                   key={item.id}
                   value={roleId}
-                  disabled={saving}
+                  disabled={isSaving}
                   className={[
-                    'm-0 flex min-h-12 items-center',
-                    'rounded-lg border px-4 py-3',
+                    'm-0 flex min-h-12 items-center rounded-lg border px-4 py-3',
                     'transition-colors duration-200',
                     checked
                       ? 'border-primary bg-primary/5'
                       : 'border-gray-200 bg-white hover:border-gray-300',
                   ].join(' ')}
                 >
-                  <span className="ml-1 text-sm">
-                    {item.name}
-                  </span>
+                  <span className="ml-1 text-sm">{item.name}</span>
                 </Checkbox>
               );
             })}
@@ -223,7 +173,5 @@ const UserRoleAssignmentModal = forwardRef<
   );
 });
 
-UserRoleAssignmentModal.displayName =
-  'UserRoleAssignmentModal';
-
+UserRoleAssignmentModal.displayName = 'UserRoleAssignmentModal';
 export default UserRoleAssignmentModal;

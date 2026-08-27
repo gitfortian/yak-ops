@@ -11,6 +11,13 @@ export const SECURITY_PERMISSIONS = {
     resetPassword: 'security:user:reset-password',
     delete: 'security:user:delete',
   },
+  department: {
+    read: 'security:department:read',
+    create: 'security:department:create',
+    edit: 'security:department:edit',
+    import: 'security:department:import',
+    delete: 'security:department:delete',
+  },
   role: {
     read: 'security:role:read',
     create: 'security:role:create',
@@ -27,5 +34,6 @@ export const SECURITY_PERMISSIONS = {
 
 export type SecurityPermissionCode =
   | (typeof SECURITY_PERMISSIONS.user)[keyof typeof SECURITY_PERMISSIONS.user]
+  | (typeof SECURITY_PERMISSIONS.department)[keyof typeof SECURITY_PERMISSIONS.department]
   | (typeof SECURITY_PERMISSIONS.role)[keyof typeof SECURITY_PERMISSIONS.role]
   | (typeof SECURITY_PERMISSIONS.permission)[keyof typeof SECURITY_PERMISSIONS.permission];

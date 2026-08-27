@@ -1,28 +1,29 @@
 import { ApartmentOutlined } from '@ant-design/icons';
 import {
   Alert,
-  Button,
   Drawer,
   Form,
   Input,
-  Space,
   TreeSelect,
   message,
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
+import { YakButton } from '@/components/ui';
 import {
+  createDepartment,
   type DepartmentInput,
   type DepartmentVO,
-  createDepartment,
   updateDepartment,
 } from '@/services/security/departments';
 
+import { getSystemErrorMessage } from '../../utils';
 import {
   collectDepartmentIds,
   getDepartmentForest,
   getDirectChildren,
-} from './tree';
+} from '../tree';
+import { getDepartmentName } from '../utils';
 
 interface DepartmentEditorDrawerProps {
   open: boolean;
@@ -45,14 +46,6 @@ interface ParentTreeNode {
   children?: ParentTreeNode[];
 }
 
-const errorText = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message
-    ? error.message
-    : fallback;
-
-const departmentName = (department?: DepartmentVO): string =>
-  department?.deptName || '未命名部门';
-
 const toParentTreeData = (
   departments: DepartmentVO[],
   blockedIds: Set<number>,
@@ -60,9 +53,7 @@ const toParentTreeData = (
 ): ParentTreeNode[] =>
   departments.flatMap((department) => {
     const key = String(department.id);
-    if (path.has(key) || blockedIds.has(department.id)) {
-      return [];
-    }
+    if (path.has(key) || blockedIds.has(department.id)) return [];
 
     const nextPath = new Set(path);
     nextPath.add(key);
@@ -75,7 +66,7 @@ const toParentTreeData = (
     return [
       {
         value: department.id,
-        title: departmentName(department),
+        title: getDepartmentName(department),
         ...(children.length > 0 ? { children } : {}),
       },
     ];
@@ -90,12 +81,11 @@ export default function DepartmentEditorDrawer({
   onSuccess,
 }: DepartmentEditorDrawerProps) {
   const [form] = Form.useForm<DepartmentFormValues>();
-  const [saving, setSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const editing = Boolean(department);
 
   const blockedIds = useMemo(() => {
     if (!department) return new Set<number>();
-
     return new Set([
       department.id,
       ...collectDepartmentIds(getDirectChildren(department)),
@@ -118,23 +108,21 @@ export default function DepartmentEditorDrawer({
 
   useEffect(() => {
     if (!open) return;
-
     form.resetFields();
     form.setFieldsValue({
       deptName: department?.deptName ?? '',
       description: department?.description ?? '',
-      parentId:
-        department?.parentId ?? defaultParentId ?? 0,
+      parentId: department?.parentId ?? defaultParentId ?? 0,
     });
   }, [defaultParentId, department, form, open]);
 
   const close = () => {
-    if (!saving) onClose();
+    if (!isSaving) onClose();
   };
 
   const save = async (values: DepartmentFormValues) => {
-    if (saving) return;
-    setSaving(true);
+    if (isSaving) return;
+    setIsSaving(true);
 
     try {
       const body: DepartmentInput = {
@@ -144,10 +132,7 @@ export default function DepartmentEditorDrawer({
       };
 
       if (department) {
-        await updateDepartment({
-          ...body,
-          id: department.id,
-        });
+        await updateDepartment({ ...body, id: department.id });
       } else {
         await createDepartment(body);
       }
@@ -157,13 +142,13 @@ export default function DepartmentEditorDrawer({
       onSuccess();
     } catch (error) {
       message.error(
-        errorText(
+        getSystemErrorMessage(
           error,
           editing ? '部门更新失败' : '部门创建失败',
         ),
       );
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
@@ -174,22 +159,22 @@ export default function DepartmentEditorDrawer({
       width={520}
       forceRender
       maskClosable={false}
-      keyboard={!saving}
-      closable={!saving}
+      keyboard={!isSaving}
+      closable={!isSaving}
       onClose={close}
       extra={
-        <Space>
-          <Button disabled={saving} onClick={close}>
+        <div className="flex items-center gap-2">
+          <YakButton disabled={isSaving} onClick={close}>
             取消
-          </Button>
-          <Button
+          </YakButton>
+          <YakButton
             type="primary"
-            loading={saving}
+            loading={isSaving}
             onClick={() => form.submit()}
           >
             {editing ? '更新' : '保存'}
-          </Button>
-        </Space>
+          </YakButton>
+        </div>
       }
     >
       <Alert
@@ -208,7 +193,7 @@ export default function DepartmentEditorDrawer({
         form={form}
         layout="vertical"
         preserve={false}
-        disabled={saving}
+        disabled={isSaving}
         onFinish={(values) => void save(values)}
       >
         <Form.Item

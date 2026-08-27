@@ -1,5 +1,4 @@
 import {
-  Button,
   Drawer,
   Form,
   Input,
@@ -13,23 +12,24 @@ import {
   useState,
 } from 'react';
 
+import { YakButton } from '@/components/ui';
 import {
-  type SystemUser,
-  type UserCheckType,
-  type UserInput,
   checkUserField,
   createUser,
   getUserDetail,
+  type SystemUser,
+  type UserCheckType,
+  type UserInput,
   updateUser,
 } from '@/services/security/users';
 
+import { getSystemErrorMessage } from '../../utils';
 import {
   PHONE_PATTERN,
   USER_NAME_PATTERN,
-  cleanText,
-  errorText,
-  type RoleOption,
-} from '../shared';
+} from '../constants';
+import type { RoleOption } from '../types';
+import { cleanUserText } from '../utils';
 
 interface UserFormValues extends UserInput {
   confirmPassword?: string;
@@ -50,30 +50,20 @@ const UserEditorModal = forwardRef<
   UserEditorModalProps
 >(({ roleOptions, onSuccess }, ref) => {
   const [form] = Form.useForm<UserFormValues>();
-
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<SystemUser>();
-  const [saving, setSaving] = useState(false);
+  const [editingUser, setEditingUser] = useState<SystemUser>();
+  const [isSaving, setIsSaving] = useState(false);
 
-  /**
-   * 关闭抽屉并清理表单。
-   */
   const close = useCallback(() => {
-    if (saving) {
-      return;
-    }
+    if (isSaving) return;
 
     setOpen(false);
-    setEditing(undefined);
+    setEditingUser(undefined);
     form.resetFields();
-  }, [form, saving]);
+  }, [form, isSaving]);
 
-  /**
-   * 打开新增用户抽屉。
-   */
   const openCreate = useCallback(() => {
-    setEditing(undefined);
-
+    setEditingUser(undefined);
     form.resetFields();
     form.setFieldsValue({
       userName: '',
@@ -84,22 +74,14 @@ const UserEditorModal = forwardRef<
       confirmPassword: '',
       roleIds: [],
     });
-
     setOpen(true);
   }, [form]);
 
-  /**
-   * 打开编辑用户抽屉。
-   */
   const openEdit = useCallback(
     async (row: SystemUser) => {
       try {
-        // 列表中的手机号可能已经脱敏，
-        // 编辑前重新查询完整用户详情。
         const user = await getUserDetail(row.id);
-
-        setEditing(user);
-
+        setEditingUser(user);
         form.resetFields();
         form.setFieldsValue({
           userName: user.userName,
@@ -109,10 +91,11 @@ const UserEditorModal = forwardRef<
           roleIds:
             user.roleList?.map((role) => Number(role.id)) ?? [],
         });
-
         setOpen(true);
       } catch (error) {
-        
+        message.error(
+          getSystemErrorMessage(error, '用户详情加载失败'),
+        );
       }
     },
     [form],
@@ -120,28 +103,19 @@ const UserEditorModal = forwardRef<
 
   useImperativeHandle(
     ref,
-    () => ({
-      openCreate,
-      openEdit,
-    }),
+    () => ({ openCreate, openEdit }),
     [openCreate, openEdit],
   );
 
-  /**
-   * 字段唯一性校验。
-   */
   const uniqueValidator = (
     type: UserCheckType,
     originalValue?: string,
   ) =>
     async (_rule: unknown, value?: string) => {
-      const normalized = cleanText(value);
-
-      // 空值交由其他规则处理。
-      // 编辑时字段未发生变化，不需要请求后端校验。
+      const normalized = cleanUserText(value);
       if (
         !normalized ||
-        normalized === cleanText(originalValue)
+        normalized === cleanUserText(originalValue)
       ) {
         return;
       }
@@ -150,78 +124,73 @@ const UserEditorModal = forwardRef<
         await checkUserField(type, normalized);
       } catch (error) {
         throw new Error(
-          errorText(error, '该字段已存在或格式不正确'),
+          getSystemErrorMessage(
+            error,
+            '该字段已存在或格式不正确',
+          ),
         );
       }
     };
 
-  /**
-   * 保存或更新用户。
-   */
   const save = async (values: UserFormValues) => {
-    if (saving) {
-      return;
-    }
-
-    setSaving(true);
+    if (isSaving) return;
+    setIsSaving(true);
 
     try {
       const body: UserInput = {
-        userName: cleanText(values.userName),
-        realName: cleanText(values.realName),
-        phone: cleanText(values.phone),
-        email: cleanText(values.email),
+        userName: cleanUserText(values.userName),
+        realName: cleanUserText(values.realName),
+        phone: cleanUserText(values.phone),
+        email: cleanUserText(values.email),
         roleIds: values.roleIds ?? [],
       };
 
-      if (editing) {
+      if (editingUser) {
         await updateUser(body);
       } else {
         body.pw = values.pw ?? '';
         await createUser(body);
       }
 
-      message.success(
-        editing ? '用户已更新' : '用户已创建',
-      );
-
+      message.success(editingUser ? '用户已更新' : '用户已创建');
       setOpen(false);
-      setEditing(undefined);
+      setEditingUser(undefined);
       form.resetFields();
-
       onSuccess();
     } catch (error) {
-      
+      message.error(
+        getSystemErrorMessage(
+          error,
+          editingUser ? '用户更新失败' : '用户创建失败',
+        ),
+      );
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
   return (
     <Drawer
       open={open}
-      title={editing ? '编辑用户' : '新增用户'}
+      title={editingUser ? '编辑用户' : '新增用户'}
       width={520}
       forceRender
       maskClosable={false}
-      keyboard={!saving}
+      keyboard={!isSaving}
+      closable={!isSaving}
       onClose={close}
       extra={
         <div className="flex items-center gap-2">
-          <Button
-            disabled={saving}
-            onClick={close}
-          >
+          <YakButton disabled={isSaving} onClick={close}>
             取消
-          </Button>
-
-          <Button
+          </YakButton>
+          <YakButton
             type="primary"
-            loading={saving}
+            loading={isSaving}
             onClick={() => form.submit()}
           >
-            {editing ? '更新' : '保存'}
-          </Button>
+            {editingUser ? '更新' : '保存'}
+          </YakButton>
         </div>
       }
     >
@@ -229,7 +198,7 @@ const UserEditorModal = forwardRef<
         form={form}
         layout="vertical"
         preserve={false}
-        disabled={saving}
+        disabled={isSaving}
         onFinish={save}
       >
         <Form.Item
@@ -237,25 +206,21 @@ const UserEditorModal = forwardRef<
           label="用户名"
           validateTrigger="onBlur"
           rules={[
-            {
-              required: true,
-              message: '请输入用户名',
-            },
+            { required: true, message: '请输入用户名' },
             {
               pattern: USER_NAME_PATTERN,
-              message:
-                '用户名须为 5～50 位字母、数字或下划线',
+              message: '用户名须为 4～50 位字母、数字或下划线',
             },
             {
               validator: uniqueValidator(
                 1,
-                editing?.userName,
+                editingUser?.userName,
               ),
             },
           ]}
         >
           <Input
-            disabled={Boolean(editing) || saving}
+            disabled={Boolean(editingUser) || isSaving}
             placeholder="请输入用户名"
             maxLength={50}
           />
@@ -272,26 +237,17 @@ const UserEditorModal = forwardRef<
             },
           ]}
         >
-          <Input
-            placeholder="请输入真实姓名"
-            maxLength={64}
-          />
+          <Input placeholder="请输入真实姓名" maxLength={64} />
         </Form.Item>
 
-        {!editing && (
+        {!editingUser && (
           <>
             <Form.Item
               name="pw"
               label="初始密码"
               rules={[
-                {
-                  required: true,
-                  message: '请输入初始密码',
-                },
-                {
-                  min: 8,
-                  message: '密码至少 8 位',
-                },
+                { required: true, message: '请输入初始密码' },
+                { min: 8, message: '密码至少 8 位' },
               ]}
             >
               <Input.Password
@@ -306,23 +262,14 @@ const UserEditorModal = forwardRef<
               label="确认密码"
               dependencies={['pw']}
               rules={[
-                {
-                  required: true,
-                  message: '请再次输入密码',
-                },
+                { required: true, message: '请再次输入密码' },
                 ({ getFieldValue }) => ({
                   validator(_, value) {
-                    if (
-                      !value ||
-                      value === getFieldValue('pw')
-                    ) {
+                    if (!value || value === getFieldValue('pw')) {
                       return Promise.resolve();
                     }
-
                     return Promise.reject(
-                      new Error(
-                        '两次输入的密码不一致',
-                      ),
+                      new Error('两次输入的密码不一致'),
                     );
                   },
                 }),
@@ -343,35 +290,21 @@ const UserEditorModal = forwardRef<
           validateTrigger="onBlur"
           rules={[
             {
-              validator: async (
-                rule,
-                value?: string,
-              ) => {
-                const phone = cleanText(value);
-
-                // 手机号非必填。
-                if (!phone) {
-                  return;
-                }
-
+              validator: async (rule, value?: string) => {
+                const phone = cleanUserText(value);
+                if (!phone) return;
                 if (!PHONE_PATTERN.test(phone)) {
-                  throw new Error(
-                    '手机号格式不正确',
-                  );
+                  throw new Error('手机号格式不正确');
                 }
-
                 await uniqueValidator(
                   2,
-                  editing?.phone,
+                  editingUser?.phone,
                 )(rule, phone);
               },
             },
           ]}
         >
-          <Input
-            placeholder="请输入手机号"
-            maxLength={11}
-          />
+          <Input placeholder="请输入手机号" maxLength={11} />
         </Form.Item>
 
         <Form.Item
@@ -379,28 +312,19 @@ const UserEditorModal = forwardRef<
           label="邮箱"
           validateTrigger="onBlur"
           rules={[
-            {
-              type: 'email',
-              message: '邮箱格式不正确',
-            },
+            { type: 'email', message: '邮箱格式不正确' },
             {
               validator: uniqueValidator(
                 3,
-                editing?.email,
+                editingUser?.email,
               ),
             },
           ]}
         >
-          <Input
-            placeholder="请输入邮箱"
-            maxLength={128}
-          />
+          <Input placeholder="请输入邮箱" maxLength={128} />
         </Form.Item>
 
-        <Form.Item
-          name="roleIds"
-          label="角色"
-        >
+        <Form.Item name="roleIds" label="角色">
           <Select
             mode="multiple"
             allowClear

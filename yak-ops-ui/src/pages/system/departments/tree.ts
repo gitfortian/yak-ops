@@ -1,12 +1,14 @@
 import type { DepartmentVO } from '@/services/security/departments';
 
-export type DepartmentScope = 'all' | 'group' | 'leaf';
+import type {
+  DepartmentScope,
+  DepartmentTreeStats,
+} from './types';
 
-export interface DepartmentTreeStats {
-  total: number;
-  groups: number;
-  leaves: number;
-}
+export type {
+  DepartmentScope,
+  DepartmentTreeStats,
+} from './types';
 
 const safeChildren = (
   node?: DepartmentVO,
@@ -19,9 +21,7 @@ export const getDepartmentForest = (
 ): DepartmentVO[] => {
   if (!root) return [];
 
-  const virtualRoot =
-    Number(root.id) === 0 && !root.deptName;
-
+  const virtualRoot = Number(root.id) === 0 && !root.deptName;
   return virtualRoot ? safeChildren(root) : [root];
 };
 
@@ -76,10 +76,8 @@ export const filterDepartmentTree = (
       scope,
       nextPath,
     );
-
     const matched =
-      matchesScope(node, scope) &&
-      matchesKeyword(node, keyword);
+      matchesScope(node, scope) && matchesKeyword(node, keyword);
 
     return matched || children.length > 0
       ? [{ ...node, childList: children }]
@@ -154,7 +152,6 @@ export const findDepartmentPath = (
 
       const nextPath = new Set(path);
       nextPath.add(key);
-
       const found = visit(
         safeChildren(node),
         nextAncestors,

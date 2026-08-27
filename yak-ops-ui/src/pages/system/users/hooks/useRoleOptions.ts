@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  type RoleBrief,
   listRoles,
+  type RoleBrief,
 } from '@/services/security/users';
 
-import type { RoleOption } from '../shared';
+import type { RoleOption } from '../types';
 
 export function useRoleOptions(): RoleOption[] {
   const [roles, setRoles] = useState<RoleBrief[]>([]);
 
   const loadRoles = useCallback(async () => {
     try {
-      const data = await listRoles();
-      setRoles(Array.isArray(data) ? data : []);
+      const values = await listRoles();
+      setRoles(Array.isArray(values) ? values : []);
     } catch {
       setRoles([]);
     }
