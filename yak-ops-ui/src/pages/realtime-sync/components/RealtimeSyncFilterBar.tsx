@@ -40,6 +40,9 @@ const RealtimeSyncFilterBar = ({
   onReset,
 }: RealtimeSyncFilterBarProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const hasActiveFilters =
+    activeStateGroup !== 'ALL' ||
+    Boolean(filterDraft.keyword || filterDraft.releaseState || filterDraft.id);
 
   const applyAdvancedFilter = () => {
     if (onSearch()) setAdvancedOpen(false);
@@ -51,7 +54,7 @@ const RealtimeSyncFilterBar = ({
   };
 
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-4">
+    <div className="flex min-h-9 items-center justify-between gap-6">
       <YakFilterSwitch
         value={activeStateGroup}
         options={REALTIME_SYNC_STATUS_TABS}
@@ -76,9 +79,7 @@ const RealtimeSyncFilterBar = ({
           allowClear
           variant="filled"
           value={filterDraft.releaseState}
-          options={REALTIME_SYNC_RELEASE_OPTIONS.map((item) => ({
-            ...item,
-          }))}
+          options={REALTIME_SYNC_RELEASE_OPTIONS.map((item) => ({ ...item }))}
           placeholder="发布状态"
           className="!h-9 !w-[135px] !min-w-[125px]"
           onChange={onReleaseStateChange}
@@ -87,6 +88,16 @@ const RealtimeSyncFilterBar = ({
         <YakButton className="!h-9 !px-4" onClick={() => void onSearch()}>
           查询
         </YakButton>
+
+        {hasActiveFilters ? (
+          <YakButton
+            type="text"
+            className="!h-9 !px-2 !text-[#777c86]"
+            onClick={resetFilters}
+          >
+            重置
+          </YakButton>
+        ) : null}
 
         <Popover
           trigger="click"
@@ -124,7 +135,6 @@ const RealtimeSyncFilterBar = ({
                 </YakButton>
                 <YakButton
                   type="primary"
-                  danger
                   size="small"
                   onClick={applyAdvancedFilter}
                 >
