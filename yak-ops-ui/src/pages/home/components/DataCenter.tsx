@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import YakTab from '@/components/YakTab';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
@@ -332,59 +333,82 @@ function TrendChart({ values, labels, name }: TrendChartProps) {
   );
 }
 
-function LatestTaskCard({ task }: { task?: HomeLatestTask }) {
+function LatestTaskCard({
+  task,
+  loading,
+  failed,
+}: {
+  task?: HomeLatestTask;
+  loading: boolean;
+  failed: boolean;
+}) {
   return (
     <aside className="w-full shrink-0 lg:w-[220px] lg:border-r lg:border-[#edf0f3] lg:pr-5">
       <div className="mb-2 text-[13px] font-semibold leading-5 text-[#353842]">
         最新任务
       </div>
 
-      <button
-        type="button"
-        onClick={() => goToDetail(task?.detailPath)}
-        className="group relative h-[266px] w-full overflow-hidden rounded-[10px] border border-[#e8ebef] bg-[linear-gradient(150deg,#6c737d_0%,#9197a0_48%,#c0c4ca_100%)] text-left text-white transition-[border-color,transform] duration-200 hover:-translate-y-px hover:border-[#dfe3e8] lg:w-[198px]"
-      >
-        <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,.28)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.22)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <div className="pointer-events-none absolute -right-9 top-10 h-32 w-32 rounded-full border border-white/20" />
-        <div className="pointer-events-none absolute -right-2 top-16 h-24 w-24 rounded-full border border-white/20" />
+      {task ? (
+        <button
+          type="button"
+          onClick={() => goToDetail(task.detailPath)}
+          className="group relative h-[266px] w-full overflow-hidden rounded-[10px] border border-[#e8ebef] bg-[linear-gradient(150deg,#6c737d_0%,#9197a0_48%,#c0c4ca_100%)] text-left text-white transition-[border-color,transform] duration-200 hover:-translate-y-px hover:border-[#dfe3e8] lg:w-[198px]"
+        >
+          <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,.28)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.22)_1px,transparent_1px)] [background-size:22px_22px]" />
+          <div className="pointer-events-none absolute -right-9 top-10 h-32 w-32 rounded-full border border-white/20" />
+          <div className="pointer-events-none absolute -right-2 top-16 h-24 w-24 rounded-full border border-white/20" />
 
-        <div className="absolute left-4 top-3 z-10">
-          <div className="text-[12px] font-semibold text-white/95">{taskTypeLabel(task?.taskType)}</div>
-          <div className="mt-0.5 text-[11px] text-white/80">{formatCardDuration(task?.durationMs)}</div>
-        </div>
-
-        <Copy
-          size={14}
-          strokeWidth={1.8}
-          className="absolute right-3 top-3 z-10 text-white/90"
-        />
-
-        <div className="absolute inset-x-0 top-[50px] z-10 flex justify-center">
-          <div className="relative flex h-[122px] w-[122px] items-center justify-center">
-            <span className="absolute h-[112px] w-[112px] rounded-full border border-white/25" />
-            <span className="absolute h-[82px] w-[82px] rounded-full border border-white/18" />
-            <span className="absolute h-[52px] w-[52px] rounded-full bg-white/12 backdrop-blur-[2px]" />
-            <Database size={52} strokeWidth={1.15} className="relative text-white/95" />
+          <div className="absolute left-4 top-3 z-10">
+            <div className="text-[12px] font-semibold text-white/95">{taskTypeLabel(task.taskType)}</div>
+            <div className="mt-0.5 text-[11px] text-white/80">{formatCardDuration(task.durationMs)}</div>
           </div>
-        </div>
 
-        <div className="absolute inset-x-0 bottom-[70px] z-10 px-4">
-          <div className="truncate text-[12px] font-medium text-white/95">
-            {task?.taskName || '暂无运行任务'}
-          </div>
-        </div>
+          <Copy
+            size={14}
+            strokeWidth={1.8}
+            className="absolute right-3 top-3 z-10 text-white/90"
+          />
 
-        <div className="absolute inset-x-0 bottom-0 z-10 h-[70px] bg-black/20 px-4 backdrop-blur-[12px]">
-          <div className="flex h-1/2 items-center justify-between border-b border-white/12">
-            <span className="text-[11px] text-white/78">运行次数</span>
-            <strong className="text-[12px] font-semibold">{task?.runCount ?? 0}</strong>
+          <div className="absolute inset-x-0 top-[50px] z-10 flex justify-center">
+            <div className="relative flex h-[122px] w-[122px] items-center justify-center">
+              <span className="absolute h-[112px] w-[112px] rounded-full border border-white/25" />
+              <span className="absolute h-[82px] w-[82px] rounded-full border border-white/18" />
+              <span className="absolute h-[52px] w-[52px] rounded-full bg-white/12 backdrop-blur-[2px]" />
+              <Database size={52} strokeWidth={1.15} className="relative text-white/95" />
+            </div>
           </div>
-          <div className="flex h-1/2 items-center justify-between">
-            <span className="text-[11px] text-white/78">异常</span>
-            <strong className="text-[12px] font-semibold">{task?.exceptionCount ?? 0}</strong>
+
+          <div className="absolute inset-x-0 bottom-[70px] z-10 px-4">
+            <div className="truncate text-[12px] font-medium text-white/95">
+              {task.taskName}
+            </div>
           </div>
+
+          <div className="absolute inset-x-0 bottom-0 z-10 h-[70px] bg-black/20 px-4 backdrop-blur-[12px]">
+            <div className="flex h-1/2 items-center justify-between border-b border-white/12">
+              <span className="text-[11px] text-white/78">运行次数</span>
+              <strong className="text-[12px] font-semibold">{task.runCount}</strong>
+            </div>
+            <div className="flex h-1/2 items-center justify-between">
+              <span className="text-[11px] text-white/78">异常</span>
+              <strong className="text-[12px] font-semibold">{task.exceptionCount}</strong>
+            </div>
+          </div>
+        </button>
+      ) : loading || failed ? (
+        <div className="flex h-[266px] w-full items-center justify-center rounded-[10px] border border-[#e8ebef] bg-[#fafbfc] text-[11px] text-[#9da1a8] lg:w-[198px]">
+          {loading ? '任务数据加载中...' : '任务数据加载失败'}
         </div>
-      </button>
+      ) : (
+        <div className="flex h-[266px] w-full items-center justify-center rounded-[10px] border border-[#e8ebef] bg-[#fafbfc] lg:w-[198px]">
+          <YakOpsEmpty
+            width={150}
+            height={100}
+            title="暂无运行任务"
+            showCaption
+          />
+        </div>
+      )}
     </aside>
   );
 }
@@ -501,14 +525,38 @@ function OverviewMetrics({ metrics }: { metrics: OverviewMetric[] }) {
   );
 }
 
-function RecentTasksPanel({ items }: { items: HomeRecentTask[] }) {
+function RecentTasksPanel({
+  items,
+  loading,
+  failed,
+}: {
+  items: HomeRecentTask[];
+  loading: boolean;
+  failed: boolean;
+}) {
+  if (loading || failed) {
+    return (
+      <div className="flex min-h-[263px] items-center justify-center text-[12px] text-[#9da1a8]">
+        {loading ? '近期任务加载中...' : '近期任务加载失败'}
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex min-h-[263px] items-center justify-center">
+        <YakOpsEmpty
+          width={160}
+          height={108}
+          title="暂无近期任务"
+          showCaption
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[263px] pt-2">
-      {items.length === 0 && (
-        <div className="flex min-h-[240px] items-center justify-center text-[12px] text-[#9da1a8]">
-          暂无近期任务
-        </div>
-      )}
       {items.map((item) => (
         <button
           key={`${item.taskType}-${item.taskId}`}
@@ -561,32 +609,38 @@ function RecentTasksPanel({ items }: { items: HomeRecentTask[] }) {
 
 function EmptySchedulePanel({ periodLabel }: { periodLabel: string }) {
   return (
-    <div className="flex min-h-[263px] items-center justify-center pb-4">
-      <div className="text-center">
-        <div className="relative mx-auto flex h-[78px] w-[112px] items-center justify-center">
-          <span className="absolute left-[19px] top-[5px] flex h-7 w-7 items-center justify-center rounded-full bg-[#d9e7ff] text-[#4b7df3]">
-            <CircleHelp size={18} strokeWidth={2.1} />
-          </span>
-          <span className="absolute bottom-2 left-[38px] h-[40px] w-[54px] rounded-[12px] border border-[#dfe3e9] bg-[#fafbfc]" />
-          <RadioTower
-            size={45}
-            strokeWidth={1.25}
-            className="absolute bottom-[7px] right-[22px] text-[#9ba2ad]"
-          />
-        </div>
-        <div className="mt-1 text-[12px] text-[#8a8f98]">
-          {periodLabel}暂无调度数据
-        </div>
-        <div className="mt-1 text-[11px] text-[#b0b4bb]">
-          当前周期内没有可展示的调度记录
-        </div>
-      </div>
+    <div className="flex min-h-[263px] items-center justify-center">
+      <YakOpsEmpty
+        width={160}
+        height={108}
+        title={`${periodLabel}暂无调度数据`}
+        showCaption
+      />
     </div>
   );
 }
 
-function SchedulePanel({ items, periodLabel }: { items: HomeScheduleItem[]; periodLabel: string }) {
+function SchedulePanel({
+  items,
+  periodLabel,
+  loading,
+  failed,
+}: {
+  items: HomeScheduleItem[];
+  periodLabel: string;
+  loading: boolean;
+  failed: boolean;
+}) {
+  if (loading || failed) {
+    return (
+      <div className="flex min-h-[263px] items-center justify-center text-[12px] text-[#9da1a8]">
+        {loading ? '调度数据加载中...' : '调度数据加载失败'}
+      </div>
+    );
+  }
+
   if (items.length === 0) return <EmptySchedulePanel periodLabel={periodLabel} />;
+
   return (
     <div className="min-h-[263px] pt-2">
       {items.map((item) => (
@@ -645,6 +699,12 @@ export default function DataCenter() {
   const [overview, setOverview] = useState<HomeDataCenterOverview>();
   const [recentTasks, setRecentTasks] = useState<HomeRecentTask[]>([]);
   const [scheduleItems, setScheduleItems] = useState<HomeScheduleItem[]>([]);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewFailed, setOverviewFailed] = useState(false);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentFailed, setRecentFailed] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleFailed, setScheduleFailed] = useState(false);
   const fallbackPeriod = useMemo(() => buildPeriod(periodKey), [periodKey]);
   const periodLabel = periodOptions.find((item) => item.key === periodKey)!.label;
   const overviewMetrics = useMemo(
@@ -654,10 +714,17 @@ export default function DataCenter() {
 
   useEffect(() => {
     let active = true;
+    setOverviewLoading(true);
+    setOverviewFailed(false);
     void homeDataCenterApi.overview(periodKey).then((response) => {
-      if (active) setOverview(response.data);
+      if (!active) return;
+      setOverview(response.data);
+      setOverviewLoading(false);
     }).catch(() => {
-      if (active) setOverview(undefined);
+      if (!active) return;
+      setOverview(undefined);
+      setOverviewLoading(false);
+      setOverviewFailed(true);
     });
     return () => { active = false; };
   }, [periodKey]);
@@ -665,10 +732,17 @@ export default function DataCenter() {
   useEffect(() => {
     if (activeTab !== 'recent') return undefined;
     let active = true;
+    setRecentLoading(true);
+    setRecentFailed(false);
     void homeDataCenterApi.recent().then((response) => {
-      if (active) setRecentTasks(response.data?.items || []);
+      if (!active) return;
+      setRecentTasks(response.data?.items || []);
+      setRecentLoading(false);
     }).catch(() => {
-      if (active) setRecentTasks([]);
+      if (!active) return;
+      setRecentTasks([]);
+      setRecentLoading(false);
+      setRecentFailed(true);
     });
     return () => { active = false; };
   }, [activeTab]);
@@ -676,10 +750,17 @@ export default function DataCenter() {
   useEffect(() => {
     if (activeTab !== 'schedule') return undefined;
     let active = true;
+    setScheduleLoading(true);
+    setScheduleFailed(false);
     void homeDataCenterApi.schedule(periodKey).then((response) => {
-      if (active) setScheduleItems(response.data?.items || []);
+      if (!active) return;
+      setScheduleItems(response.data?.items || []);
+      setScheduleLoading(false);
     }).catch(() => {
-      if (active) setScheduleItems([]);
+      if (!active) return;
+      setScheduleItems([]);
+      setScheduleLoading(false);
+      setScheduleFailed(true);
     });
     return () => { active = false; };
   }, [activeTab, periodKey]);
@@ -692,6 +773,7 @@ export default function DataCenter() {
     : formatDate(fallbackPeriod.end);
   const trendLabels = overview?.trend?.labels || [];
   const trendValues = overview?.trend?.values || [];
+  const hasTrendData = trendValues.some((value) => value > 0);
 
   return (
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
@@ -716,7 +798,11 @@ export default function DataCenter() {
       </header>
 
       <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:gap-6">
-        <LatestTaskCard task={overview?.latestTask} />
+        <LatestTaskCard
+          task={overview?.latestTask}
+          loading={overviewLoading}
+          failed={overviewFailed}
+        />
 
         <div className="min-w-0 flex-1">
           <YakTab
@@ -738,20 +824,46 @@ export default function DataCenter() {
                 <span className="h-2 w-2 rounded-full bg-[#5b8cff]" />
                 运行次数
               </div>
-              <TrendChart
-                key={`trend-${periodKey}`}
-                values={trendValues}
-                labels={trendLabels}
-                name="运行次数"
-              />
+              {overviewLoading || overviewFailed ? (
+                <div className="flex h-[152px] items-center justify-center text-[12px] text-[#9da1a8]">
+                  {overviewLoading ? '运行数据加载中...' : '运行数据加载失败'}
+                </div>
+              ) : hasTrendData ? (
+                <TrendChart
+                  key={`trend-${periodKey}`}
+                  values={trendValues}
+                  labels={trendLabels}
+                  name="运行次数"
+                />
+              ) : (
+                <div className="flex h-[152px] items-center justify-center">
+                  <YakOpsEmpty
+                    width={120}
+                    height={80}
+                    title={`${periodLabel}暂无运行数据`}
+                    showCaption
+                  />
+                </div>
+              )}
               <OverviewMetrics metrics={overviewMetrics} />
             </div>
           )}
 
-          {activeTab === 'recent' && <RecentTasksPanel items={recentTasks} />}
+          {activeTab === 'recent' && (
+            <RecentTasksPanel
+              items={recentTasks}
+              loading={recentLoading}
+              failed={recentFailed}
+            />
+          )}
 
           {activeTab === 'schedule' && (
-            <SchedulePanel items={scheduleItems} periodLabel={periodLabel} />
+            <SchedulePanel
+              items={scheduleItems}
+              periodLabel={periodLabel}
+              loading={scheduleLoading}
+              failed={scheduleFailed}
+            />
           )}
         </div>
       </div>

@@ -1,7 +1,8 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
-import { Activity, GitBranch } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { useMemo } from 'react';
 
 import {
@@ -91,20 +92,22 @@ function LineagePreview({ state }: { state: HomeAssetOverviewState }) {
           option={graphOption}
           style={{ width: '100%', height: '276px' }}
         />
+      ) : state.loading || state.failed || unavailable ? (
+        <div className="relative flex h-full items-center justify-center text-[11px] text-[#a0a4ac]">
+          {state.loading
+            ? '血缘加载中...'
+            : state.failed
+              ? '血缘数据加载失败'
+              : '血缘数据暂不可用'}
+        </div>
       ) : (
-        <div className="relative flex h-full flex-col items-center justify-center text-[#a0a4ac]">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#8b93a0] shadow-sm">
-            <GitBranch size={18} strokeWidth={1.7} />
-          </span>
-          <span className="mt-3 text-[11px]">
-            {state.loading
-              ? '血缘加载中...'
-              : state.failed
-                ? '血缘数据加载失败'
-                : unavailable
-                  ? '血缘数据暂不可用'
-                  : '暂无血缘关系'}
-          </span>
+        <div className="relative flex h-full items-center justify-center">
+          <YakOpsEmpty
+            width={160}
+            height={108}
+            title="暂无血缘关系"
+            showCaption
+          />
         </div>
       )}
       <div className="absolute bottom-3 left-3 rounded-full border border-[#e6e8ec] bg-white/90 px-2.5 py-1 text-[9px] text-[#999da5] shadow-sm backdrop-blur">
@@ -190,15 +193,22 @@ export function DataLineageOverview({
                   <LineageUpdate key={item.id} item={item} />
                 ))}
               </div>
-            ) : (
+            ) : state.loading || state.failed || lineage?.assetCount == null ? (
               <div className="flex min-h-[118px] items-center justify-center text-[10px] text-[#a0a4ac]">
                 {state.loading
                   ? '数据加载中...'
                   : state.failed
                     ? '数据加载失败'
-                    : lineage?.assetCount == null
-                      ? '数据暂不可用'
-                      : '暂无最近关系'}
+                    : '数据暂不可用'}
+              </div>
+            ) : (
+              <div className="flex min-h-[118px] items-center justify-center">
+                <YakOpsEmpty
+                  width={100}
+                  height={66}
+                  title="暂无最近关系"
+                  showCaption
+                />
               </div>
             )}
           </div>

@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { ChevronRight } from 'lucide-react';
 
 import type { HomeAssetOverview } from './service';
@@ -107,15 +108,17 @@ export function EmptyList({
   unavailable: boolean;
   text: string;
 }) {
+  if (loading || failed || unavailable) {
+    return (
+      <div className="flex min-h-[214px] items-center justify-center text-[11px] text-[#a0a4ac]">
+        {loading ? '数据加载中...' : failed ? '数据加载失败' : '数据暂不可用'}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-[214px] items-center justify-center text-[11px] text-[#a0a4ac]">
-      {loading
-        ? '数据加载中...'
-        : failed
-          ? '数据加载失败'
-          : unavailable
-            ? '数据暂不可用'
-            : text}
+    <div className="flex min-h-[214px] items-center justify-center">
+      <YakOpsEmpty width={150} height={100} title={text} showCaption />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { listDigitalScreens, type DigitalScreenInstance } from '@/services/digital-screen';
 import {
   fetchDashboardOverview,
@@ -286,13 +287,18 @@ export default function HomeVisualizationOverview() {
             <VisualizationCard key={`${item.kind}-${item.id}`} item={item} />
           ))}
         </div>
-      ) : (
+      ) : loading || allFailed ? (
         <div className="flex min-h-[176px] items-center justify-center text-[11px] text-[#a0a4ac]">
-          {loading
-            ? '可视化数据加载中...'
-            : allFailed
-              ? '可视化数据加载失败'
-              : '暂无仪表盘或数字大屏'}
+          {loading ? '可视化数据加载中...' : '可视化数据加载失败'}
+        </div>
+      ) : (
+        <div className="flex min-h-[176px] items-center justify-center">
+          <YakOpsEmpty
+            width={150}
+            height={100}
+            title="暂无仪表盘或数字大屏"
+            showCaption
+          />
         </div>
       )}
     </section>
