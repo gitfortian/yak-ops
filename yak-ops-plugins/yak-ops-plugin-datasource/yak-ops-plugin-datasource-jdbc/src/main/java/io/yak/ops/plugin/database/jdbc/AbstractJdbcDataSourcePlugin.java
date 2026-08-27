@@ -283,7 +283,18 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
   @Override
   public DataSourceCatalog createCatalog(DataSourceConnection connection, int timeoutSeconds) {
-    return createJdbcCatalog(requireJdbcConnection(connection), Math.max(1, timeoutSeconds));
+    return createCatalog(connection, timeoutSeconds, timeoutSeconds);
+  }
+
+  @Override
+  public DataSourceCatalog createCatalog(
+      DataSourceConnection connection,
+      int connectionTimeoutSeconds,
+      int queryTimeoutSeconds) {
+    return createJdbcCatalog(
+        requireJdbcConnection(connection),
+        Math.max(1, connectionTimeoutSeconds),
+        Math.max(1, queryTimeoutSeconds));
   }
 
   @Override
@@ -297,10 +308,17 @@ public abstract class AbstractJdbcDataSourcePlugin implements DataSourcePlugin {
 
   protected DataSourceCatalog createJdbcCatalog(
       JdbcConnectionProperties connection, int timeoutSeconds) {
-    return new GenericJdbcCatalog(connection, timeoutSeconds) {
+    return createJdbcCatalog(connection, timeoutSeconds, timeoutSeconds);
+  }
+
+  protected DataSourceCatalog createJdbcCatalog(
+      JdbcConnectionProperties connection,
+      int connectionTimeoutSeconds,
+      int queryTimeoutSeconds) {
+    return new GenericJdbcCatalog(connection, connectionTimeoutSeconds, queryTimeoutSeconds) {
       @Override
       protected Connection openConnection() throws Exception {
-        return openJdbcConnection(connection, timeoutSeconds);
+        return openJdbcConnection(connection, connectionTimeoutSeconds);
       }
     };
   }
