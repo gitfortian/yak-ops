@@ -79,6 +79,18 @@ public class DataSourceDaoImpl implements DataSourceDao {
   }
 
   @Override
+  public List<DataSourcePO> selectByIds(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) return List.of();
+    List<Long> normalizedIds = ids.stream().filter(Objects::nonNull).distinct().toList();
+    if (normalizedIds.isEmpty()) return List.of();
+    Long projectId = currentProjectId();
+    return dataSourceMapper.selectList(
+        Wrappers.<DataSourcePO>lambdaQuery()
+            .eq(projectId != null, DataSourcePO::getProjectId, projectId)
+            .in(DataSourcePO::getId, normalizedIds));
+  }
+
+  @Override
   public IPage<DataSourcePO> selectPage(PageQuery query) {
     PageQuery condition = query == null
         ? new PageQuery(currentProjectId(), 1, 10, null, null, null, null, null)
