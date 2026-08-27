@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { YakButton, YakEmpty } from '@/components/ui';
 import {
   LINEAGE_ASSET_TYPES,
@@ -305,7 +306,15 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
             ) : null}
           </>
         ) : (
-          <YakEmpty title="暂无可展示的血缘关系" className="h-full min-h-[420px]" />
+          <div className="flex h-full min-h-[420px] items-center justify-center">
+            <YakOpsEmpty
+              width={180}
+              height={120}
+              title="暂无可展示的血缘关系"
+              description="采集到上下游关系后会在这里展示。"
+              showCaption
+            />
+          </div>
         )}
 
         {isGraphLoading && graph ? (
