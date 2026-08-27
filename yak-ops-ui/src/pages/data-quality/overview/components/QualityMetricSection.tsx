@@ -121,82 +121,89 @@ export default function QualityMetricSection({
 
   return (
     <section className="rounded-xl bg-white px-5 pb-6 pt-5 lg:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="m-0 text-[18px] font-semibold text-[#161823]">{title}</h2>
-            <span className="text-[11px] text-[#98a2b3]">{formatPeriodText(range)}</span>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="m-0 shrink-0 text-[18px] font-semibold text-[#161823]">{title}</h2>
+            <span className="whitespace-nowrap text-[11px] text-[#98a2b3]">
+              {formatPeriodText(range)}
+            </span>
           </div>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Segmented
+              size="small"
+              value={selectedPreset}
+              options={periodOptions.map((item) => ({ ...item }))}
+              onChange={(value) => onRangeChange(resolvePresetRange(value as OverviewPeriodKey))}
+              className={[
+                '!h-8 !rounded-lg !bg-[#f3f4f6] !p-1',
+                '[&_.ant-segmented-group]:!h-6 [&_.ant-segmented-group]:!gap-1',
+                '[&_.ant-segmented-item]:!min-w-[68px] [&_.ant-segmented-item]:!rounded-md [&_.ant-segmented-item]:!text-[13px] [&_.ant-segmented-item]:!font-medium [&_.ant-segmented-item]:!text-[#667085]',
+                '[&_.ant-segmented-item-label]:!min-h-0 [&_.ant-segmented-item-label]:!px-3 [&_.ant-segmented-item-label]:!leading-6',
+                '[&_.ant-segmented-thumb]:!rounded-md [&_.ant-segmented-thumb]:!bg-white [&_.ant-segmented-thumb]:!shadow-[0_1px_3px_rgba(16,24,40,0.08)]',
+                '[&_.ant-segmented-item-selected]:!bg-white [&_.ant-segmented-item-selected]:!font-semibold [&_.ant-segmented-item-selected]:!text-[#161823] [&_.ant-segmented-item-selected]:!shadow-[0_1px_3px_rgba(16,24,40,0.08)]',
+              ].join(' ')}
+            />
+
+            <div className="group relative h-8 w-[142px] shrink-0">
+              <div className="pointer-events-none flex h-8 items-center justify-center gap-2 rounded-lg bg-[#f3f4f6] px-3 text-[13px] font-medium text-[#161823] transition-colors group-hover:bg-[#e9eaed] group-focus-within:ring-2 group-focus-within:ring-[rgba(254,44,85,0.12)]">
+                <CalendarDays size={15} strokeWidth={1.8} />
+                <span>{compactRangeText(range)}</span>
+              </div>
+              <RangePicker
+                size="small"
+                value={toPickerRange(range)}
+                format="MM.DD"
+                allowClear={false}
+                disabledDate={(current) => current.isAfter(dayjs().subtract(1, 'day'), 'day')}
+                onChange={(value) => {
+                  const start = value?.[0];
+                  const end = value?.[1];
+                  if (!start || !end) return;
+                  if (end.diff(start, 'day') > 89) {
+                    message.warning('质量总览单次最多查询 90 天');
+                    return;
+                  }
+                  onRangeChange({
+                    startDate: start.format('YYYY-MM-DD'),
+                    endDate: end.format('YYYY-MM-DD'),
+                  });
+                }}
+                className="!absolute !inset-0 !h-8 !w-full !cursor-pointer !opacity-0"
+              />
+            </div>
+
+            <YakButton
+              size="small"
+              icon={<Download size={14} />}
+              className="!h-8 !rounded-lg !border-0 !bg-[#f3f4f6] !px-3 !text-[13px] !font-semibold !text-[#161823] !shadow-none hover:!bg-[#e9eaed]"
+              onClick={() => {
+                if (!overview) {
+                  message.info('当前统计周期暂无可导出的质量数据');
+                  return;
+                }
+                exportOverviewCsv(title, overview);
+              }}
+            >
+              导出数据
+            </YakButton>
+          </div>
+        </div>
+
+        <div className="min-h-[34px]">
           <YakTab
             activeKey={activeTab}
             onChange={setActiveTab}
-            className="mt-2 [&_.ant-tabs-nav]:!mb-0"
+            className="[&_.ant-tabs-nav]:!mb-0"
             items={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
           />
         </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Segmented
-            size="small"
-            value={selectedPreset}
-            options={periodOptions.map((item) => ({ ...item }))}
-            onChange={(value) => onRangeChange(resolvePresetRange(value as OverviewPeriodKey))}
-            className={[
-              '!h-8 !rounded-lg !bg-[#f3f4f6] !p-1',
-              '[&_.ant-segmented-group]:!h-6 [&_.ant-segmented-group]:!gap-1',
-              '[&_.ant-segmented-item]:!min-w-[68px] [&_.ant-segmented-item]:!rounded-md [&_.ant-segmented-item]:!text-[13px] [&_.ant-segmented-item]:!font-medium [&_.ant-segmented-item]:!text-[#667085]',
-              '[&_.ant-segmented-item-label]:!min-h-0 [&_.ant-segmented-item-label]:!px-3 [&_.ant-segmented-item-label]:!leading-6',
-              '[&_.ant-segmented-thumb]:!rounded-md [&_.ant-segmented-thumb]:!bg-white [&_.ant-segmented-thumb]:!shadow-[0_1px_3px_rgba(16,24,40,0.08)]',
-              '[&_.ant-segmented-item-selected]:!bg-white [&_.ant-segmented-item-selected]:!font-semibold [&_.ant-segmented-item-selected]:!text-[#161823] [&_.ant-segmented-item-selected]:!shadow-[0_1px_3px_rgba(16,24,40,0.08)]',
-            ].join(' ')}
-          />
-
-          <div className="group relative h-8 w-[142px] shrink-0">
-            <div className="pointer-events-none flex h-8 items-center justify-center gap-2 rounded-lg bg-[#f3f4f6] px-3 text-[13px] font-medium text-[#161823] transition-colors group-hover:bg-[#e9eaed] group-focus-within:ring-2 group-focus-within:ring-[rgba(254,44,85,0.12)]">
-              <CalendarDays size={15} strokeWidth={1.8} />
-              <span>{compactRangeText(range)}</span>
-            </div>
-            <RangePicker
-              size="small"
-              value={toPickerRange(range)}
-              format="MM.DD"
-              allowClear={false}
-              disabledDate={(current) => current.isAfter(dayjs().subtract(1, 'day'), 'day')}
-              onChange={(value) => {
-                const start = value?.[0];
-                const end = value?.[1];
-                if (!start || !end) return;
-                if (end.diff(start, 'day') > 89) {
-                  message.warning('质量总览单次最多查询 90 天');
-                  return;
-                }
-                onRangeChange({
-                  startDate: start.format('YYYY-MM-DD'),
-                  endDate: end.format('YYYY-MM-DD'),
-                });
-              }}
-              className="!absolute !inset-0 !h-8 !w-full !cursor-pointer !opacity-0"
-            />
-          </div>
-
-          <YakButton
-            size="small"
-            icon={<Download size={14} />}
-            className="!h-8 !rounded-lg !border-0 !bg-[#f3f4f6] !px-3 !text-[13px] !font-semibold !text-[#161823] !shadow-none hover:!bg-[#e9eaed]"
-            onClick={() => {
-              if (!overview) {
-                message.info('当前统计周期暂无可导出的质量数据');
-                return;
-              }
-              exportOverviewCsv(title, overview);
-            }}
-          >
-            导出数据
-          </YakButton>
-        </div>
       </div>
 
-      <MetricStrip metrics={metrics} />
+      <div className="mt-4">
+        <MetricStrip metrics={metrics} />
+      </div>
 
       <div className="min-h-[340px] border-x border-b border-solid border-[#eceef2] bg-white">
         <Spin spinning={loading}>
