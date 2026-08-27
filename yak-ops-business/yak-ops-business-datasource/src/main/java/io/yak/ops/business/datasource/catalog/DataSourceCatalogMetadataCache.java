@@ -47,9 +47,7 @@ public class DataSourceCatalogMetadataCache {
                   now + TimeUnit.SECONDS.toNanos(Math.max(1L, ttlSeconds)));
             });
 
-    if (entries.size() > MAX_ENTRIES) {
-      purgeExpired(System.nanoTime());
-    }
+    trimIfNecessary(System.nanoTime());
 
     @SuppressWarnings("unchecked")
     T value = (T) entry.value();
@@ -80,8 +78,19 @@ public class DataSourceCatalogMetadataCache {
     return entries.size();
   }
 
-  private void purgeExpired(long now) {
+  private void trimIfNecessary(long now) {
+    if (entries.size() <= MAX_ENTRIES) return;
+
     entries.entrySet().removeIf(entry -> entry.getValue().expiresAtNanos() <= now);
+    int excess = entries.size() - MAX_ENTRIES;
+    if (excess <= 0) return;
+
+    for (CacheKey key : entries.keySet()) {
+      if (excess <= 0) break;
+      if (entries.remove(key) != null) {
+        excess--;
+      }
+    }
   }
 
   public record CacheKey(
