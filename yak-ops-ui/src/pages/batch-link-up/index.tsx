@@ -3,7 +3,7 @@ import type {
   OfflineJobDefinitionVO,
 } from '@/services/batch-link-up';
 import { history } from '@umijs/max';
-import { ConfigProvider, message } from 'antd';
+import { ConfigProvider, Divider, message } from 'antd';
 import { useMemo } from 'react';
 
 import CreateSyncTaskDrawer from './components/CreateSyncTaskDrawer';
@@ -80,6 +80,8 @@ const OfflineSyncPage = () => {
               onAdvancedReset={resetAdvancedFilters}
             />
           </div>
+
+          <Divider style={{padding:0, margin: "8px 0"}}/>
 
           <div className="mt-4 flex min-h-0 flex-1 flex-col">
             <OfflineSyncTaskTable
