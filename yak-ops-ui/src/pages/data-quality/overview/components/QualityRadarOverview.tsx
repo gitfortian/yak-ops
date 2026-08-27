@@ -1,5 +1,6 @@
 import { YakButton, YakEmpty } from '@/components/ui';
 import type { QualityOverviewView } from '@/services/data-quality';
+import { BRAND_CSS_VARIABLES } from '@/styles/brand';
 import { history } from '@umijs/max';
 import { Spin } from 'antd';
 import { ArrowRight, CircleHelp } from 'lucide-react';
@@ -58,15 +59,14 @@ const QualityMetricCard = ({
 }) => (
   <button
     type="button"
-    onMouseEnter={onActivate}
-    onFocus={onActivate}
     onClick={onActivate}
     className={[
       'absolute z-10 min-w-[136px] rounded-lg bg-white px-3 py-2.5 text-left',
-      'shadow-[0_1px_2px_rgba(16,24,40,0.02)] transition-[border-color,box-shadow,transform] duration-150',
+      'transition-[background-color,border-color] duration-150 hover:bg-[var(--yak-brand-color-soft)]',
+      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--yak-brand-color-outline)]',
       active
-        ? 'border-2 border-solid border-[#4f7cff] shadow-[0_5px_16px_rgba(79,124,255,0.12)]'
-        : 'border border-solid border-[#e5e7eb] hover:border-[#bdc9ff]',
+        ? 'border-2 border-solid border-[var(--yak-brand-color)]'
+        : 'border border-solid border-[#e5e7eb] hover:border-[var(--yak-brand-color-border)]',
       position,
     ].join(' ')}
   >
@@ -83,11 +83,9 @@ const QualityMetricCard = ({
 
 const QualityRadar = ({
   metrics,
-  activeKey,
   onActivate,
 }: {
   metrics: RadarMetric[];
-  activeKey: string;
   onActivate: (key: string) => void;
 }) => {
   const hasCompleteRadar = metrics.every(
@@ -135,8 +133,8 @@ const QualityRadar = ({
       {hasCompleteRadar ? (
         <polygon
           points={dataPoints}
-          fill="rgba(79,124,255,0.10)"
-          stroke="#4f7cff"
+          fill="var(--yak-brand-color-soft)"
+          stroke="var(--yak-brand-color)"
           strokeWidth="2"
           strokeLinejoin="round"
         />
@@ -147,21 +145,38 @@ const QualityRadar = ({
         const hasRate = metric.passRate !== undefined && metric.passRate !== null;
         const rate = Math.max(0, Math.min(100, metric.passRate ?? 0));
         const [dataX, dataY] = pointAt((RADAR_RADIUS * rate) / 100, RADAR_ANGLES[index]);
-        const active = metric.key === activeKey;
         return (
           <g
             key={metric.key}
             role="button"
             tabIndex={0}
             aria-label={`${metric.label} ${formatRate(metric.passRate)}`}
-            onMouseEnter={() => onActivate(metric.key)}
-            onFocus={() => onActivate(metric.key)}
             onClick={() => onActivate(metric.key)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onActivate(metric.key);
+              }
+            }}
             className="cursor-pointer"
           >
-            <circle cx={targetX} cy={targetY} r={active ? 5 : 4} fill="#fff" stroke={active ? '#4f7cff' : '#d9dde4'} strokeWidth={active ? 2 : 1.5} />
+            <circle
+              cx={targetX}
+              cy={targetY}
+              r={4}
+              fill="#fff"
+              stroke="#d9dde4"
+              strokeWidth={1.5}
+            />
             {hasRate ? (
-              <circle cx={dataX} cy={dataY} r={active ? 4.5 : 3.5} fill="#fff" stroke="#4f7cff" strokeWidth="2" />
+              <circle
+                cx={dataX}
+                cy={dataY}
+                r={3.5}
+                fill="#fff"
+                stroke="var(--yak-brand-color)"
+                strokeWidth="2"
+              />
             ) : null}
           </g>
         );
@@ -214,7 +229,10 @@ export default function QualityRadarOverview({
   const contributors = overview?.issueContributors ?? [];
 
   return (
-    <section className="rounded-xl bg-white px-5 py-5 lg:px-6">
+    <section
+      className="rounded-xl bg-white px-5 py-5 lg:px-6"
+      style={BRAND_CSS_VARIABLES}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h1 className="m-0 text-[18px] font-semibold text-[#161823]">质量总览</h1>
         <span className="inline-flex items-center gap-1 text-[11px] text-[#98a2b3]">
@@ -227,7 +245,7 @@ export default function QualityRadarOverview({
         <div className="mt-4 grid gap-8 xl:grid-cols-[520px_minmax(0,1fr)]">
           <div className="min-w-0 overflow-x-auto">
             <div className="relative mx-auto h-[350px] min-w-[500px] max-w-[520px]">
-              <QualityRadar metrics={metrics} activeKey={activeKey} onActivate={setActiveKey} />
+              <QualityRadar metrics={metrics} onActivate={setActiveKey} />
               {metrics.map((metric, index) => (
                 <QualityMetricCard
                   key={metric.key}
@@ -239,7 +257,7 @@ export default function QualityRadarOverview({
               ))}
               <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 items-center gap-4 whitespace-nowrap text-[11px] text-[#667085]">
                 <span className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#4f7cff]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--yak-brand-color)]" />
                   当前通过率
                 </span>
                 <span className="flex items-center gap-1">
@@ -289,7 +307,7 @@ export default function QualityRadarOverview({
                         </span>
                         <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-[#e8ebef]">
                           <span
-                            className="block h-full rounded-full bg-[#fe2c55]"
+                            className="block h-full rounded-full bg-[var(--yak-brand-color)]"
                             style={{ width: `${Math.max(4, Math.min(100, item.ratio ?? 0))}%` }}
                           />
                         </span>
