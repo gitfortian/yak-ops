@@ -1,10 +1,11 @@
 <p align="center">
   <img
-    src="https://github.com/user-attachments/assets/901d765c-cbd7-4f39-ae3a-de6716ae09f2"
+    src="https://github.com/user-attachments/assets/74def480-8353-45d3-982e-54606cd54474"
     width="100%"
     alt="Yak Ops Banner"
   />
 </p>
+
 <img width="200" height="320" alt="99b465a562d33f20eb56e9202efe97dc" src="https://github.com/user-attachments/assets/8d5c03e6-c591-420c-a9cd-12df1de2cc6c" />
 
 
