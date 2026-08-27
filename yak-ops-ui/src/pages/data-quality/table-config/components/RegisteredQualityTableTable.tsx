@@ -1,4 +1,5 @@
-import { YakButton, YakEmpty } from '@/components/ui';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
+import { YakButton } from '@/components/ui';
 import type { TableAssetView } from '@/services/data-quality';
 import { Pagination, Spin, Table, Tag, Tooltip } from 'antd';
 
@@ -38,11 +39,14 @@ const RegisteredQualityTableTable = ({
           className={dataQualityTableClassName()}
           locale={{
             emptyText: (
-              <YakEmpty
-                compact
-                title="暂无已注册数据表"
-                description="点击右上角注册数据表后开始配置质量监控"
-              />
+              <div className="flex min-h-[220px] items-center justify-center">
+                <YakOpsEmpty
+                  width={176}
+                  height={120}
+                  title="暂无已注册数据表"
+                  description="点击右上角注册数据表后开始配置质量监控"
+                />
+              </div>
             ),
           }}
           columns={[
