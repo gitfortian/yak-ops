@@ -41,7 +41,7 @@ export const buildQualityDataSourceNodes = (
     .filter((item): item is QualityDataSourceNode => Boolean(item));
 
 export const groupQualityDataSourceNodes = (
-  nodes: QualityDataSourceNode[],
+  nodes: QualityDataSourceNode[] = [],
 ): QualityDataSourceGroup[] => {
   const groupMap = new Map<string, QualityDataSourceNode[]>();
   nodes.forEach((node) => {

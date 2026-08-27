@@ -88,6 +88,10 @@ describe('quality table registry helpers', () => {
     ]);
   });
 
+  it('returns no groups when source nodes are missing', () => {
+    expect(groupQualityDataSourceNodes()).toEqual([]);
+  });
+
   it('restores and clamps the source tree width', () => {
     expect(parseQualitySourceTreeWidth()).toBe(
       QUALITY_SOURCE_TREE_DEFAULT_WIDTH,
