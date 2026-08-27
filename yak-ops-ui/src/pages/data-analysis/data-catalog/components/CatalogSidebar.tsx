@@ -1,4 +1,4 @@
-import { YakEmpty } from '@/components/ui';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import type { CatalogDataset } from '@/services/data-analysis';
 import { Input, Spin, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
@@ -101,11 +101,19 @@ export function CatalogSidebar({
               className="catalog-tree bg-transparent"
             />
           ) : (
-            <YakEmpty
-              compact
-              className="mt-6"
-              title={keyword.trim() ? '未找到匹配 Dataset' : '暂无已发布 Dataset'}
-            />
+            <div className="flex min-h-[220px] items-center justify-center">
+              <YakOpsEmpty
+                width={138}
+                height={92}
+                title={keyword.trim() ? '未找到匹配 Dataset' : '暂无已发布 Dataset'}
+                description={
+                  keyword.trim()
+                    ? '换个关键词后重新搜索。'
+                    : '发布 Dataset 后会在目录中展示。'
+                }
+                showCaption
+              />
+            </div>
           )}
         </Spin>
       </div>
