@@ -122,6 +122,22 @@ export const dataSourceCatalogApi = {
       })}`,
     ),
 
+  searchTables: (
+    id: DataSourceId,
+    keyword?: string,
+    limit?: number,
+    database?: string,
+    schema?: string,
+  ): Promise<CommonApiResponse<DataSourceCatalogRow[]>> =>
+    HttpUtils.get<DataSourceCatalogRow[]>(
+      `${DATA_SOURCE_CATALOG_API_PREFIX}/${id}/tables/search${queryString({
+        database,
+        schema,
+        keyword,
+        limit,
+      })}`,
+    ),
+
   listColumns: (
     id: DataSourceId,
     database: string | undefined,
