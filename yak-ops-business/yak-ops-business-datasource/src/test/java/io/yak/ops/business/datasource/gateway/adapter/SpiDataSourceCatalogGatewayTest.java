@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.domain.ConnectionProfile;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
@@ -36,10 +37,12 @@ class SpiDataSourceCatalogGatewayTest {
   private final DataSourcePlugin plugin = mock(DataSourcePlugin.class);
   private final DataSourceConnection connection = mock(DataSourceConnection.class);
   private final DataSourceCatalog catalog = mock(DataSourceCatalog.class);
-  private final SpiDataSourceCatalogGateway gateway = new SpiDataSourceCatalogGateway(registry);
+  private final DataSourceProperties properties = properties();
+  private final SpiDataSourceCatalogGateway gateway =
+      new SpiDataSourceCatalogGateway(registry, properties);
 
   @Test
-  void listTablesTranslatesPluginMetadataToCatalogDomain() {
+  void listTablesTranslatesPluginMetadataAndBoundedQueryToCatalogDomain() {
     DataSourceDefinition dataSource = configuredDataSource();
     stubCatalog(dataSource, DataSourceCapability.CATALOG_METADATA);
     when(catalog.listTables(any(DataSourceCatalogQuery.class)))
@@ -50,14 +53,22 @@ class SpiDataSourceCatalogGatewayTest {
 
     List<CatalogTable> result =
         gateway.listTables(
-            dataSource, new CatalogTableQuery("orders_db", "public", "ord"), 5);
+            dataSource,
+            new CatalogTableQuery("orders_db", "public", "ord", 50),
+            5);
 
+    ArgumentCaptor<DataSourceCatalogQuery> queryCaptor =
+        ArgumentCaptor.forClass(DataSourceCatalogQuery.class);
+    verify(catalog).listTables(queryCaptor.capture());
+    assertThat(queryCaptor.getValue().getKeyword()).isEqualTo("ord");
+    assertThat(queryCaptor.getValue().getLimit()).isEqualTo(50);
     assertThat(result).hasSize(1);
     assertThat(result.getFirst().database()).isEqualTo("orders_db");
     assertThat(result.getFirst().schema()).isEqualTo("public");
     assertThat(result.getFirst().name()).isEqualTo("orders");
     assertThat(result.getFirst().type()).isEqualTo("TABLE");
     assertThat(result.getFirst().remarks()).isEqualTo("order table");
+    verify(plugin).createCatalog(connection, 5, 17);
   }
 
   @Test
@@ -83,13 +94,20 @@ class SpiDataSourceCatalogGatewayTest {
     assertThat(pluginRequest.query()).isEqualTo(request.sql());
     assertThat(pluginRequest.variables()).containsEntry("day", "2026-08-23");
     assertThat(result.total()).isZero();
+    verify(plugin).createCatalog(connection, 5, 17);
   }
 
   private void stubCatalog(DataSourceDefinition dataSource, DataSourceCapability capability) {
     when(registry.get(DataSourceDbType.MYSQL)).thenReturn(plugin);
     when(plugin.supports(capability)).thenReturn(true);
     when(plugin.parseConnection(dataSource.getConnectionParams())).thenReturn(connection);
-    when(plugin.createCatalog(connection, 5)).thenReturn(catalog);
+    when(plugin.createCatalog(connection, 5, 17)).thenReturn(catalog);
+  }
+
+  private DataSourceProperties properties() {
+    DataSourceProperties value = new DataSourceProperties();
+    value.getCatalog().setQueryTimeoutSeconds(17);
+    return value;
   }
 
   private DataSourceDefinition configuredDataSource() {
