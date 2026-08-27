@@ -1,5 +1,5 @@
 import type { PublishedDataset } from '@/services/dataset';
-import { getPublishedDatasetsByIds } from '@/services/dataset';
+import { resolvePublishedDatasetsByIds } from '@/services/dataset';
 import {
   getPublishedDigitalScreen,
   type DigitalScreenBindings,
@@ -58,9 +58,14 @@ export function useDigitalScreenViewer(id?: string) {
 
     const controller = new AbortController();
     setDataError('');
-    void getPublishedDatasetsByIds(runtimeDatasetIds, { signal: controller.signal })
-      .then((values) => {
-        if (!controller.signal.aborted) setDatasets(values);
+    void resolvePublishedDatasetsByIds(runtimeDatasetIds, { signal: controller.signal })
+      .then(({ datasets: values, errors }) => {
+        if (controller.signal.aborted) return;
+        setDatasets(values);
+        const messages = Object.values(errors);
+        setDataError(messages.length
+          ? `${messages.length} 个绑定 Dataset 元数据加载失败：${messages[0]}`
+          : '');
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
@@ -69,7 +74,7 @@ export function useDigitalScreenViewer(id?: string) {
       });
 
     return () => controller.abort();
-  }, [runtimeDatasetIds, runtimeDatasetKey]);
+  }, [runtimeDatasetKey]);
 
   const runtime = useScreenRuntime(
     template,
