@@ -1,8 +1,7 @@
 import { history } from '@umijs/max';
-import { ConfigProvider, Divider } from 'antd';
+import { ConfigProvider } from 'antd';
 
 import CreateRealtimeTaskDrawer from './components/CreateRealtimeTaskDrawer';
-import RealtimeSyncCapabilityBar from './components/RealtimeSyncCapabilityBar';
 import RealtimeSyncFilterBar from './components/RealtimeSyncFilterBar';
 import RealtimeSyncPageHeader from './components/RealtimeSyncPageHeader';
 import RealtimeSyncRuntimeDrawer from './components/RealtimeSyncRuntimeDrawer';
@@ -32,7 +31,6 @@ const RealtimeSyncPage = () => {
     changeReleaseState,
     resetFilters,
     changePagination,
-    refresh,
     performAction,
     openDetail,
     closeDetail,
@@ -43,10 +41,14 @@ const RealtimeSyncPage = () => {
   return (
     <ConfigProvider theme={REALTIME_SYNC_PAGE_THEME}>
       <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4">
-        <RealtimeSyncPageHeader streamConnected={streamConnected} />
+        <RealtimeSyncPageHeader
+          capabilities={capabilities}
+          streamConnected={streamConnected}
+          onCreate={() => setCreateOpen(true)}
+        />
 
-        <div className="mx-auto mt-3 flex w-full max-w-full flex-1 flex-col">
-          <div className="mb-3">
+        <div className="mx-auto mt-4 flex w-full max-w-full flex-1 flex-col">
+          <div className="border-b border-[#eceef2] pb-3">
             <RealtimeSyncFilterBar
               filterDraft={filterDraft}
               activeStateGroup={filters.stateGroup}
@@ -57,30 +59,23 @@ const RealtimeSyncPage = () => {
               onSearch={searchTasks}
               onReset={resetFilters}
             />
-
-            <RealtimeSyncCapabilityBar
-              capabilities={capabilities}
-              loading={loading}
-              onRefresh={() => void refresh()}
-              onCreate={() => setCreateOpen(true)}
-            />
           </div>
 
-          <Divider style={{ marginTop: 4, marginBottom: 16 }} />
-
-          <RealtimeSyncTaskTable
-            jobs={jobs}
-            loading={loading}
-            pagination={pagination}
-            dataSourceMap={dataSourceMap}
-            environmentMap={environmentMap}
-            onPaginationChange={changePagination}
-            onCopyTaskId={(id) => void copyTaskId(id)}
-            onEdit={(job) => history.push(getRealtimeEditPath(job))}
-            onDetail={(job) => void openDetail(job)}
-            onDelete={deleteTask}
-            onAction={performAction}
-          />
+          <div className="mt-3 flex min-h-0 flex-1 flex-col">
+            <RealtimeSyncTaskTable
+              jobs={jobs}
+              loading={loading}
+              pagination={pagination}
+              dataSourceMap={dataSourceMap}
+              environmentMap={environmentMap}
+              onPaginationChange={changePagination}
+              onCopyTaskId={(id) => void copyTaskId(id)}
+              onEdit={(job) => history.push(getRealtimeEditPath(job))}
+              onDetail={(job) => void openDetail(job)}
+              onDelete={deleteTask}
+              onAction={performAction}
+            />
+          </div>
         </div>
 
         <CreateRealtimeTaskDrawer
