@@ -126,12 +126,12 @@ const DataSourcePage = () => {
 
   return (
     <>
-      <div className="min-h-full bg-[#f7f8fa] text-[#242731]">
+      <div className="min-h-[calc(100dvh-56px)] bg-[#f7f8fa] text-[#242731]">
         <motion.main
           initial="hidden"
           animate="visible"
           variants={PAGE_ANIMATION.sectionStagger}
-          className="px-4 pb-4 pt-4"
+          className="flex min-h-[calc(100dvh-56px)] flex-col px-4 pb-4 pt-4"
         >
           <motion.section
             variants={PAGE_ANIMATION.fadeUp}
@@ -195,25 +195,28 @@ const DataSourcePage = () => {
                 />
               ) : null}
             </Spin>
-
-            {pagination.total > 0 ? (
-              <div className="mt-5 flex justify-end border-t border-[#eef0f2] pt-4">
-                <Pagination
-                  current={pagination.pageNo}
-                  pageSize={pagination.pageSize}
-                  total={pagination.total}
-                  showSizeChanger
-                  showQuickJumper
-                  pageSizeOptions={DATA_SOURCE_PAGE_SIZE_OPTIONS}
-                  disabled={loading}
-                  showTotal={(total, range) =>
-                    `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
-                  }
-                  onChange={changePage}
-                />
-              </div>
-            ) : null}
           </motion.section>
+
+          {pagination.total > 0 ? (
+            <motion.footer
+              variants={PAGE_ANIMATION.fadeUp}
+              className="mt-auto flex shrink-0 justify-end pt-4"
+            >
+              <Pagination
+                current={pagination.pageNo}
+                pageSize={pagination.pageSize}
+                total={pagination.total}
+                showSizeChanger
+                showQuickJumper
+                pageSizeOptions={DATA_SOURCE_PAGE_SIZE_OPTIONS}
+                disabled={loading}
+                showTotal={(total, range) =>
+                  `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+                }
+                onChange={changePage}
+              />
+            </motion.footer>
+          ) : null}
         </motion.main>
       </div>
 
