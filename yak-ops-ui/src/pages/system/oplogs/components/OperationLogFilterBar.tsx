@@ -4,37 +4,30 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import {
-  Button,
   DatePicker,
   Input,
   Popover,
   Select,
-  Space,
 } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
 
+import {
+  YakButton,
+  YakFilterSwitch,
+  type YakFilterSwitchOption,
+} from '@/components/ui';
 import type { OperationLogOptions } from '@/services/security/operationLogs';
-import YakButton from '@/components/YakButton';
 
-export interface OperationLogFilterValues {
-  operateType?: string;
-  operatePage?: string;
-  operationMethods?: string;
-  operator?: string;
-  operatorIp?: string;
-  target?: string;
-  targetType?: string;
-  detail?: string;
-  startTime?: number;
-  endTime?: number;
-}
-
-type SearchField =
-  | 'operator'
-  | 'target'
-  | 'detail'
-  | 'operatorIp';
+import {
+  ALL_OPERATION_METHOD_FILTER,
+  OPERATION_LOG_SEARCH_FIELDS,
+  OPERATION_LOG_SEARCH_PLACEHOLDERS,
+} from '../constants';
+import type {
+  OperationLogFilterValues,
+  OperationLogSearchField,
+} from '../types';
 
 interface OperationLogFilterBarProps {
   options: OperationLogOptions;
@@ -49,23 +42,6 @@ interface AdvancedFilters {
   targetType?: string;
   timeRange?: [Dayjs, Dayjs];
 }
-
-const SEARCH_FIELDS: Array<{
-  label: string;
-  value: SearchField;
-}> = [
-  { label: '操作人', value: 'operator' },
-  { label: '操作目标', value: 'target' },
-  { label: '操作详情', value: 'detail' },
-  { label: 'IP 地址', value: 'operatorIp' },
-];
-
-const SEARCH_PLACEHOLDERS: Record<SearchField, string> = {
-  operator: '请输入操作人',
-  target: '请输入操作目标',
-  detail: '请输入详情关键字',
-  operatorIp: '请输入 IP 地址',
-};
 
 const clean = (value?: string): string | undefined => {
   const normalized = value?.trim();
@@ -82,7 +58,7 @@ export default function OperationLogFilterBar({
   onRefresh,
 }: OperationLogFilterBarProps) {
   const [searchField, setSearchField] =
-    useState<SearchField>('operator');
+    useState<OperationLogSearchField>('operator');
   const [keyword, setKeyword] = useState('');
   const [method, setMethod] = useState<string>();
   const [advanced, setAdvanced] =
@@ -91,8 +67,15 @@ export default function OperationLogFilterBar({
     useState<AdvancedFilters>({});
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const methodOptions = useMemo(
-    () => Array.from(new Set(options.operationMethods)),
+  const methodFilterOptions = useMemo<
+    YakFilterSwitchOption<string>[]
+  >(
+    () => [
+      { value: ALL_OPERATION_METHOD_FILTER, label: '全部' },
+      ...Array.from(new Set(options.operationMethods)).map(
+        (value) => ({ value, label: value }),
+      ),
+    ],
     [options.operationMethods],
   );
 
@@ -116,23 +99,22 @@ export default function OperationLogFilterBar({
     };
 
     const normalizedKeyword = clean(nextKeyword);
-    if (normalizedKeyword) {
-      values[nextField] = normalizedKeyword;
-    }
-
+    if (normalizedKeyword) values[nextField] = normalizedKeyword;
     return values;
   };
 
   const submit = () => onSearch(createFilters());
 
-  const changeMethod = (nextMethod?: string) => {
+  const changeMethod = (value: string) => {
+    const nextMethod =
+      value === ALL_OPERATION_METHOD_FILTER ? undefined : value;
     setMethod(nextMethod);
     onSearch(
       createFilters(keyword, searchField, nextMethod, advanced),
     );
   };
 
-  const changeSearchField = (field: SearchField) => {
+  const changeSearchField = (field: OperationLogSearchField) => {
     setSearchField(field);
     setKeyword('');
     onSearch(createFilters('', field, method, advanced));
@@ -156,9 +138,7 @@ export default function OperationLogFilterBar({
     setAdvanced(empty);
     setDraftAdvanced(empty);
     setAdvancedOpen(false);
-    onSearch(
-      createFilters(keyword, searchField, method, empty),
-    );
+    onSearch(createFilters(keyword, searchField, method, empty));
   };
 
   const advancedCount = [
@@ -171,9 +151,7 @@ export default function OperationLogFilterBar({
   const advancedContent = (
     <div className="w-[360px] max-w-[calc(100vw-48px)] space-y-4 p-1">
       <div>
-        <div className="mb-1.5 text-sm text-slate-600">
-          操作类型
-        </div>
+        <div className="mb-1.5 text-sm text-slate-600">操作类型</div>
         <Select
           allowClear
           showSearch
@@ -191,9 +169,7 @@ export default function OperationLogFilterBar({
       </div>
 
       <div>
-        <div className="mb-1.5 text-sm text-slate-600">
-          操作页面
-        </div>
+        <div className="mb-1.5 text-sm text-slate-600">操作页面</div>
         <Select
           allowClear
           showSearch
@@ -211,9 +187,7 @@ export default function OperationLogFilterBar({
       </div>
 
       <div>
-        <div className="mb-1.5 text-sm text-slate-600">
-          目标类型
-        </div>
+        <div className="mb-1.5 text-sm text-slate-600">目标类型</div>
         <Select
           allowClear
           showSearch
@@ -231,9 +205,7 @@ export default function OperationLogFilterBar({
       </div>
 
       <div>
-        <div className="mb-1.5 text-sm text-slate-600">
-          操作时间
-        </div>
+        <div className="mb-1.5 text-sm text-slate-600">操作时间</div>
         <DatePicker.RangePicker
           showTime
           value={draftAdvanced.timeRange}
@@ -251,42 +223,29 @@ export default function OperationLogFilterBar({
       </div>
 
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-        <Button onClick={resetAdvanced}>重置</Button>
-        <Button type="primary" onClick={applyAdvanced}>
+        <YakButton onClick={resetAdvanced}>重置</YakButton>
+        <YakButton type="primary" onClick={applyAdvanced}>
           应用筛选
-        </Button>
+        </YakButton>
       </div>
     </div>
   );
 
   return (
     <div className="mb-4 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-      <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
-        {[undefined, ...methodOptions].map((value) => {
-          const active = method === value;
-          return (
-            <button
-              key={value ?? 'all'}
-              type="button"
-              className={[
-                'shrink-0 rounded px-3 py-1 text-sm font-medium leading-5 transition-colors',
-                active
-                  ? 'bg-[#f2f2f4] text-[#FE2C55]'
-                  : 'bg-[#f2f4f7] text-[#667085] hover:bg-[#e8eaef]',
-              ].join(' ')}
-              onClick={() => changeMethod(value)}
-            >
-              {value ?? '全部'}
-            </button>
-          );
-        })}
+      <div className="min-w-0 overflow-x-auto pb-1 xl:pb-0">
+        <YakFilterSwitch
+          value={method ?? ALL_OPERATION_METHOD_FILTER}
+          options={methodFilterOptions}
+          onChange={changeMethod}
+        />
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="flex h-8 w-[330px] max-w-full overflow-hidden rounded-md bg-[#f2f2f4]">
-          <Select<SearchField>
+          <Select<OperationLogSearchField>
             value={searchField}
-            options={SEARCH_FIELDS}
+            options={OPERATION_LOG_SEARCH_FIELDS}
             variant="borderless"
             popupMatchSelectWidth={120}
             className="h-8 w-[104px] shrink-0"
@@ -297,7 +256,7 @@ export default function OperationLogFilterBar({
             allowClear
             value={keyword}
             variant="borderless"
-            placeholder={SEARCH_PLACEHOLDERS[searchField]}
+            placeholder={OPERATION_LOG_SEARCH_PLACEHOLDERS[searchField]}
             suffix={
               <SearchOutlined
                 className="cursor-pointer text-slate-400 hover:text-slate-700"

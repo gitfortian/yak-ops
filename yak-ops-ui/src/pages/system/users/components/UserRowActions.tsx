@@ -1,4 +1,3 @@
-import YakButton from '@/components/YakButton';
 import {
   DeleteOutlined,
   DownOutlined,
@@ -16,6 +15,7 @@ import {
   type MenuProps,
 } from 'antd';
 
+import { YakButton } from '@/components/ui';
 import { SECURITY_PERMISSIONS } from '@/constants/securityPermissions';
 import { usePermissionAccess } from '@/hooks/usePermissionAccess';
 import {
@@ -23,6 +23,8 @@ import {
   forceLogoutUser,
   type SystemUser,
 } from '@/services/security/users';
+
+import { getSystemErrorMessage } from '../../utils';
 
 interface UserRowActionsProps {
   user: SystemUser;
@@ -51,7 +53,6 @@ export default function UserRowActions({
 }: UserRowActionsProps) {
   const { can } = usePermissionAccess();
   const isCurrentUser = user.userName === currentUserName;
-
   const canEdit = can(SECURITY_PERMISSIONS.user.update);
   const canAssignRole = can(SECURITY_PERMISSIONS.role.assign);
   const canResetPassword = can(
@@ -62,9 +63,14 @@ export default function UserRowActions({
   const remove = async () => {
     if (!canDelete) return;
 
-    await deleteSystemUser(user.id);
-    message.success('用户已删除');
-    onDeleted();
+    try {
+      await deleteSystemUser(user.id);
+      message.success('用户已删除');
+      onDeleted();
+    } catch (error) {
+      message.error(getSystemErrorMessage(error, '用户删除失败'));
+      throw error;
+    }
   };
 
   const confirmDelete = () => {
@@ -83,9 +89,7 @@ export default function UserRowActions({
       ),
       okText: '删除',
       cancelText: '取消',
-      okButtonProps: {
-        danger: true,
-      },
+      okButtonProps: { danger: true },
       centered: true,
       onOk: remove,
     });
@@ -109,8 +113,15 @@ export default function UserRowActions({
       cancelText: '取消',
       centered: true,
       onOk: async () => {
-        await forceLogoutUser(user.id);
-        message.success('用户已强制下线');
+        try {
+          await forceLogoutUser(user.id);
+          message.success('用户已强制下线');
+        } catch (error) {
+          message.error(
+            getSystemErrorMessage(error, '用户强制下线失败'),
+          );
+          throw error;
+        }
       },
     });
   };
@@ -124,7 +135,6 @@ export default function UserRowActions({
       label: '分配角色',
     });
   }
-
   if (canResetPassword) {
     menuItems.push({
       key: 'resetPassword',
@@ -132,7 +142,6 @@ export default function UserRowActions({
       label: '重置密码',
     });
   }
-
   if (canEdit) {
     menuItems.push({
       key: 'forceLogout',
@@ -141,12 +150,8 @@ export default function UserRowActions({
       disabled: isCurrentUser,
     });
   }
-
   if (canDelete) {
-    if (menuItems.length > 0) {
-      menuItems.push({ type: 'divider' });
-    }
-
+    if (menuItems.length > 0) menuItems.push({ type: 'divider' });
     menuItems.push({
       key: 'delete',
       icon: <DeleteOutlined />,
@@ -203,10 +208,7 @@ export default function UserRowActions({
         <Dropdown
           trigger={['click']}
           placement="bottomRight"
-          menu={{
-            items: menuItems,
-            onClick: handleMenuClick,
-          }}
+          menu={{ items: menuItems, onClick: handleMenuClick }}
         >
           <YakButton
             type="text"
