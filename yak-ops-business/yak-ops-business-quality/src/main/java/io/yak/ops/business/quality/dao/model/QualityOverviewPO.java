@@ -1,9 +1,10 @@
 package io.yak.ops.business.quality.dao.model;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Data;
 
-/** 首页质量总览使用的只读持久化投影。 */
+/** 数据质量总览使用的只读持久化投影。 */
 public final class QualityOverviewPO {
 
   private QualityOverviewPO() {
@@ -21,11 +22,40 @@ public final class QualityOverviewPO {
   }
 
   @Data
+  public static class AnalyticsStatsRow {
+    private Long executionCount;
+    private Long activeMonitorCount;
+    private Long executedRuleCount;
+    private Long passedRuleCount;
+    private Long failedRuleCount;
+    private Long errorRuleCount;
+    private Long issueExecutionCount;
+    private Long affectedMonitorCount;
+    private Long affectedTableCount;
+    private Long affectedColumnCount;
+    private Double averageDurationMs;
+    private LocalDateTime latestExecutionAt;
+  }
+
+  @Data
   public static class DimensionRow {
     private String dimension;
     private Long totalCount;
     private Long passedCount;
     private Long issueCount;
+  }
+
+  @Data
+  public static class TrendRow {
+    private LocalDate statDate;
+    private Long executionCount;
+    private Long activeMonitorCount;
+    private Long executedRuleCount;
+    private Long passedRuleCount;
+    private Long failedRuleCount;
+    private Long errorRuleCount;
+    private Long issueExecutionCount;
+    private Double averageDurationMs;
   }
 
   @Data

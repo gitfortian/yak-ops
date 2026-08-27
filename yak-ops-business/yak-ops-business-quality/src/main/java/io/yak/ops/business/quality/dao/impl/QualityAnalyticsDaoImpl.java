@@ -4,9 +4,11 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.dao.QualityAnalyticsDao;
 import io.yak.ops.business.quality.dao.mapper.QualityOverviewMapper;
 import io.yak.ops.business.quality.dao.mapper.QualityQueryMapper;
+import io.yak.ops.business.quality.dao.model.QualityOverviewPO.AnalyticsStatsRow;
 import io.yak.ops.business.quality.dao.model.QualityOverviewPO.DimensionRow;
 import io.yak.ops.business.quality.dao.model.QualityOverviewPO.IssueRow;
 import io.yak.ops.business.quality.dao.model.QualityOverviewPO.StatsRow;
+import io.yak.ops.business.quality.dao.model.QualityOverviewPO.TrendRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.ColumnReportRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.DimensionReportRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.OperationLogRow;
@@ -36,6 +38,8 @@ public class QualityAnalyticsDaoImpl implements QualityAnalyticsDao {
   @Override public List<OperationLogRow> selectOperationLogs(Map<String, Object> params) { return queryMapper.selectOperationLogs(params); }
 
   @Override public StatsRow selectHomeOverviewStats(Map<String, Object> params) { return overviewMapper.selectStats(params); }
+  @Override public AnalyticsStatsRow selectOverviewAnalyticsStats(Map<String, Object> params) { return overviewMapper.selectAnalyticsStats(params); }
   @Override public List<DimensionRow> selectHomeOverviewDimensions(Map<String, Object> params) { return overviewMapper.selectDimensions(params); }
+  @Override public List<TrendRow> selectOverviewAnalyticsTrend(Map<String, Object> params) { return overviewMapper.selectAnalyticsTrend(params); }
   @Override public List<IssueRow> selectHomeOverviewIssues(Map<String, Object> params) { return overviewMapper.selectRecentIssues(params); }
 }

@@ -2,9 +2,11 @@ package io.yak.ops.business.quality.repository;
 
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.dao.QualityAnalyticsDao;
+import io.yak.ops.business.quality.dao.model.QualityOverviewPO.AnalyticsStatsRow;
 import io.yak.ops.business.quality.dao.model.QualityOverviewPO.DimensionRow;
 import io.yak.ops.business.quality.dao.model.QualityOverviewPO.IssueRow;
 import io.yak.ops.business.quality.dao.model.QualityOverviewPO.StatsRow;
+import io.yak.ops.business.quality.dao.model.QualityOverviewPO.TrendRow;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** 首页质量总览持久化适配器。 */
+/** 数据质量总览持久化适配器。 */
 @Repository
 @RequiredArgsConstructor
 @ConditionalOnQualityEnabled
@@ -44,9 +46,39 @@ public class QualityOverviewRepositoryAdapter implements QualityOverviewReposito
   }
 
   @Override
+  public AnalyticsStats analyticsStats(LocalDateTime rangeStart, LocalDateTime rangeEnd) {
+    AnalyticsStatsRow row = analyticsDao.selectOverviewAnalyticsStats(
+        params(null, null, rangeStart, rangeEnd));
+    if (row == null) {
+      return new AnalyticsStats(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, null, null);
+    }
+    return new AnalyticsStats(
+        nvl(row.getExecutionCount()),
+        nvl(row.getActiveMonitorCount()),
+        nvl(row.getExecutedRuleCount()),
+        nvl(row.getPassedRuleCount()),
+        nvl(row.getFailedRuleCount()),
+        nvl(row.getErrorRuleCount()),
+        nvl(row.getIssueExecutionCount()),
+        nvl(row.getAffectedMonitorCount()),
+        nvl(row.getAffectedTableCount()),
+        nvl(row.getAffectedColumnCount()),
+        row.getAverageDurationMs(),
+        row.getLatestExecutionAt());
+  }
+
+  @Override
   public List<DimensionSummary> dimensions(LocalDateTime rangeStart, LocalDateTime rangeEnd) {
     return analyticsDao.selectHomeOverviewDimensions(params(null, null, rangeStart, rangeEnd)).stream()
         .map(this::dimension)
+        .toList();
+  }
+
+  @Override
+  public List<TrendSummary> trend(LocalDateTime rangeStart, LocalDateTime rangeEnd) {
+    return analyticsDao.selectOverviewAnalyticsTrend(params(null, null, rangeStart, rangeEnd)).stream()
+        .filter(row -> row.getStatDate() != null)
+        .map(this::trend)
         .toList();
   }
 
@@ -68,6 +100,19 @@ public class QualityOverviewRepositoryAdapter implements QualityOverviewReposito
         nvl(row.getTotalCount()),
         nvl(row.getPassedCount()),
         nvl(row.getIssueCount()));
+  }
+
+  private TrendSummary trend(TrendRow row) {
+    return new TrendSummary(
+        row.getStatDate(),
+        nvl(row.getExecutionCount()),
+        nvl(row.getActiveMonitorCount()),
+        nvl(row.getExecutedRuleCount()),
+        nvl(row.getPassedRuleCount()),
+        nvl(row.getFailedRuleCount()),
+        nvl(row.getErrorRuleCount()),
+        nvl(row.getIssueExecutionCount()),
+        row.getAverageDurationMs());
   }
 
   private IssueSummary issue(IssueRow row) {
