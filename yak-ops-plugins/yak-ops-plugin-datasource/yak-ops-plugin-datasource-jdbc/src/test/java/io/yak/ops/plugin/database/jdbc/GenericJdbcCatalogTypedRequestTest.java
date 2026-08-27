@@ -1,18 +1,25 @@
 package io.yak.ops.plugin.database.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import io.yak.ops.spi.datasource.catalog.DataSourceCatalogQuery;
 import io.yak.ops.spi.datasource.catalog.DataSourceCatalogReadRequest;
+import io.yak.ops.spi.datasource.metadata.DataSourceTable;
 import io.yak.ops.spi.datasource.query.DataSourceQueryResult;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -43,7 +50,7 @@ class GenericJdbcCatalogTypedRequestTest {
   }
 
   @Test
-  void previewDoesNotCountAndAppliesQueryTimeout() throws Exception {
+  void previewDoesNotCountAndAppliesIndependentQueryTimeout() throws Exception {
     Connection opened = mock(Connection.class);
     PreparedStatement statement = mock(PreparedStatement.class);
     ResultSet resultSet = mock(ResultSet.class);
@@ -59,7 +66,7 @@ class GenericJdbcCatalogTypedRequestTest {
     when(resultSet.getObject(1)).thenReturn(7L);
 
     GenericJdbcCatalog catalog =
-        new GenericJdbcCatalog(connection(), 5) {
+        new GenericJdbcCatalog(connection(), 5, 13) {
           @Override
           protected Connection openConnection() {
             return opened;
@@ -78,8 +85,39 @@ class GenericJdbcCatalogTypedRequestTest {
     assertThat(result.getData()).hasSize(1);
     assertThat(result.getTotal()).isEqualTo(1L);
     assertThat(countCalls.get()).isZero();
-    verify(statement).setQueryTimeout(5);
+    verify(statement).setQueryTimeout(13);
     verify(statement).setMaxRows(20);
+  }
+
+  @Test
+  void tableSearchPushesNormalizedPatternAndLimitToJdbcMetadata() throws Exception {
+    Connection opened = mock(Connection.class);
+    DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+    ResultSet resultSet = mock(ResultSet.class);
+    when(opened.getMetaData()).thenReturn(metadata);
+    when(metadata.storesLowerCaseIdentifiers()).thenReturn(true);
+    when(metadata.getSearchStringEscape()).thenReturn("\\");
+    when(metadata.getTables(eq("demo"), isNull(), eq("%orders%"), any(String[].class)))
+        .thenReturn(resultSet);
+    when(resultSet.next()).thenReturn(true, true, false);
+    when(resultSet.getString("TABLE_NAME")).thenReturn("orders");
+    when(resultSet.getString("TABLE_CAT")).thenReturn("demo");
+    when(resultSet.getString("TABLE_TYPE")).thenReturn("TABLE");
+
+    GenericJdbcCatalog catalog =
+        new GenericJdbcCatalog(connection(), 5, 13) {
+          @Override
+          protected Connection openConnection() {
+            return opened;
+          }
+        };
+
+    List<DataSourceTable> result =
+        catalog.listTables(new DataSourceCatalogQuery(null, null, "Orders", 1));
+
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst().getName()).isEqualTo("orders");
+    verify(metadata).getTables(eq("demo"), isNull(), eq("%orders%"), any(String[].class));
   }
 
   private JdbcConnectionProperties connection() {
