@@ -1,4 +1,4 @@
-import { YakButton, YakTab } from '@/components/ui';
+import { YakButton, YakFilterSwitch } from '@/components/ui';
 import { Input, Select } from 'antd';
 import {
   CalendarDays,
@@ -62,24 +62,23 @@ const DashboardPageHeader = ({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2 max-xl:flex-wrap">
-          <YakTab
-            size="small"
-            activeKey={status}
-            className="mr-1 !mb-0 [&_.ant-tabs-nav]:!mb-0"
-            items={DASHBOARD_STATUS_FILTERS.map((item) => ({
-              key: item.key,
+          <YakFilterSwitch
+            value={status}
+            options={DASHBOARD_STATUS_FILTERS.map((item) => ({
+              value: item.key,
               label: (
-                <span>
-                  {item.label}
+                <span className="inline-flex items-baseline gap-1">
+                  <span>{item.label}</span>
                   {item.key !== 'all' && statusCount(item.key) > 0 ? (
-                    <span className="ml-1 text-[10px] font-normal text-[#b0b5bd]">
+                    <span className="text-[10px] font-normal text-[#b0b5bd]">
                       {statusCount(item.key)}
                     </span>
                   ) : null}
                 </span>
               ),
             }))}
-            onChange={(key) => onStatusChange(key as DashboardStatusFilter)}
+            className="mr-1"
+            onChange={onStatusChange}
           />
 
           <Select<DashboardTimeRange>
