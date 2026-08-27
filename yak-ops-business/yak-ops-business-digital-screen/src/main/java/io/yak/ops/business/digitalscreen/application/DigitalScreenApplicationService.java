@@ -2,9 +2,11 @@ package io.yak.ops.business.digitalscreen.application;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.digitalscreen.domain.DigitalScreen;
-import io.yak.ops.business.digitalscreen.domain.DigitalScreenStatus;
+import io.yak.ops.business.digitalscreen.domain.DigitalScreenVersion;
+import io.yak.ops.business.digitalscreen.publication.DigitalScreenPublisher;
 import io.yak.ops.business.digitalscreen.repository.DigitalScreenRepository;
-import java.time.Instant;
+import io.yak.ops.business.digitalscreen.repository.DigitalScreenVersionRepository;
+import io.yak.ops.business.digitalscreen.version.DigitalScreenVersionReader;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Application service for mutable Digital Screen definitions. Versioning is intentionally deferred. */
+/** Stable Digital Screen application facade for draft editing and publication history. */
 @Service
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -24,6 +26,9 @@ public class DigitalScreenApplicationService {
   private static final String COPY_SUFFIX = " - 副本";
 
   private final DigitalScreenRepository repository;
+  private final DigitalScreenVersionRepository versionRepository;
+  private final DigitalScreenPublisher publisher;
+  private final DigitalScreenVersionReader versionReader;
 
   public List<DigitalScreen> list() {
     return repository.list();
@@ -31,6 +36,18 @@ public class DigitalScreenApplicationService {
 
   public DigitalScreen get(long id) {
     return repository.findById(id).orElseThrow(() -> notFound(id));
+  }
+
+  public List<DigitalScreenVersion> versions(long id) {
+    return versionReader.versions(id);
+  }
+
+  public DigitalScreenVersion version(long id, int versionNo) {
+    return versionReader.version(id, versionNo);
+  }
+
+  public DigitalScreenVersion published(long id) {
+    return versionReader.published(id);
   }
 
   @Transactional
@@ -56,16 +73,16 @@ public class DigitalScreenApplicationService {
     return repository.update(id, name, description, bindings);
   }
 
-  @Transactional
   public DigitalScreen publish(long id) {
-    get(id);
-    return repository.updateStatus(id, DigitalScreenStatus.PUBLISHED, Instant.now());
+    return publisher.publish(id);
   }
 
-  @Transactional
   public DigitalScreen offline(long id) {
-    get(id);
-    return repository.updateStatus(id, DigitalScreenStatus.DRAFT, null);
+    return publisher.offline(id);
+  }
+
+  public DigitalScreen rollback(long id, int versionNo) {
+    return publisher.rollback(id, versionNo);
   }
 
   @Transactional
@@ -81,6 +98,8 @@ public class DigitalScreenApplicationService {
 
   @Transactional
   public void delete(long id) {
+    get(id);
+    versionRepository.deleteByScreenId(id);
     if (!repository.deleteById(id)) throw notFound(id);
   }
 

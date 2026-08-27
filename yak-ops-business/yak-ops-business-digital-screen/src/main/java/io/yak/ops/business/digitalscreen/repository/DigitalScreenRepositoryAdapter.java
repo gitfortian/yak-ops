@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis-Plus persistence adapter for Digital Screen definitions. */
+/** MyBatis-Plus adapter for the mutable Digital Screen draft and publication pointer. */
 @Repository
 @DependsOn("yakDigitalScreenFlyway")
 @ConditionalOnDataSourceEnabled
@@ -43,6 +43,16 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
   }
 
   @Override
+  public DigitalScreen lockById(long id) {
+    DigitalScreenPO row = mapper.selectOne(
+        Wrappers.<DigitalScreenPO>lambdaQuery()
+            .eq(DigitalScreenPO::getId, id)
+            .last("FOR UPDATE"));
+    if (row == null) throw notFound(id);
+    return toDomain(row);
+  }
+
+  @Override
   public DigitalScreen insert(
       String name,
       String description,
@@ -57,6 +67,8 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
     row.setTemplateVersion(templateVersion);
     row.setStatus(DigitalScreenStatus.DRAFT.name());
     row.setBindingsJson(bindingsCodec.encode(bindings));
+    row.setRevision(1L);
+    row.setPublishedVersionNo(0);
     row.setCreateTime(Timestamp.from(now));
     row.setUpdateTime(Timestamp.from(now));
     if (mapper.insert(row) != 1 || row.getId() == null) {
@@ -78,26 +90,69 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
             .set(DigitalScreenPO::getName, name)
             .set(DigitalScreenPO::getDescription, description)
             .set(DigitalScreenPO::getBindingsJson, bindingsCodec.encode(bindings))
-            .set(DigitalScreenPO::getUpdateTime, Timestamp.from(Instant.now())));
+            .set(DigitalScreenPO::getUpdateTime, Timestamp.from(Instant.now()))
+            .setSql("revision = revision + 1"));
     requireUpdated(updated, id);
     return required(id);
   }
 
   @Override
-  public DigitalScreen updateStatus(
+  public DigitalScreen restoreDraft(
       long id,
-      DigitalScreenStatus status,
+      String name,
+      String description,
+      String templateId,
+      int templateVersion,
+      Map<String, Object> bindings) {
+    int updated = mapper.update(
+        null,
+        Wrappers.<DigitalScreenPO>lambdaUpdate()
+            .eq(DigitalScreenPO::getId, id)
+            .set(DigitalScreenPO::getName, name)
+            .set(DigitalScreenPO::getDescription, description)
+            .set(DigitalScreenPO::getTemplateId, templateId)
+            .set(DigitalScreenPO::getTemplateVersion, templateVersion)
+            .set(DigitalScreenPO::getBindingsJson, bindingsCodec.encode(bindings))
+            .set(DigitalScreenPO::getUpdateTime, Timestamp.from(Instant.now()))
+            .setSql("revision = revision + 1"));
+    requireUpdated(updated, id);
+    return required(id);
+  }
+
+  @Override
+  public DigitalScreen markPublished(
+      long id,
+      long versionId,
+      int versionNo,
+      long publishedRevision,
       Instant publishedTime) {
     Instant now = Instant.now();
     int updated = mapper.update(
         null,
         Wrappers.<DigitalScreenPO>lambdaUpdate()
             .eq(DigitalScreenPO::getId, id)
-            .set(DigitalScreenPO::getStatus, status.name())
-            .set(
-                DigitalScreenPO::getPublishedTime,
-                publishedTime == null ? null : Timestamp.from(publishedTime))
+            .set(DigitalScreenPO::getStatus, DigitalScreenStatus.PUBLISHED.name())
+            .set(DigitalScreenPO::getPublishedVersionId, versionId)
+            .set(DigitalScreenPO::getPublishedVersionNo, versionNo)
+            .set(DigitalScreenPO::getPublishedRevision, publishedRevision)
+            .set(DigitalScreenPO::getPublishedTime, Timestamp.from(publishedTime))
             .set(DigitalScreenPO::getUpdateTime, Timestamp.from(now)));
+    requireUpdated(updated, id);
+    return required(id);
+  }
+
+  @Override
+  public DigitalScreen offline(long id) {
+    int updated = mapper.update(
+        null,
+        Wrappers.<DigitalScreenPO>lambdaUpdate()
+            .eq(DigitalScreenPO::getId, id)
+            .set(DigitalScreenPO::getStatus, DigitalScreenStatus.DRAFT.name())
+            .set(DigitalScreenPO::getPublishedVersionId, null)
+            .set(DigitalScreenPO::getPublishedVersionNo, 0)
+            .set(DigitalScreenPO::getPublishedRevision, null)
+            .set(DigitalScreenPO::getPublishedTime, null)
+            .set(DigitalScreenPO::getUpdateTime, Timestamp.from(Instant.now())));
     requireUpdated(updated, id);
     return required(id);
   }
@@ -120,14 +175,22 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
   }
 
   private DigitalScreen toDomain(DigitalScreenPO row) {
+    Long publishedVersionId = row.getPublishedVersionId();
+    DigitalScreenStatus status = publishedVersionId == null
+        ? DigitalScreenStatus.DRAFT
+        : DigitalScreenStatus.PUBLISHED;
     return new DigitalScreen(
         row.getId(),
         row.getName(),
         row.getDescription(),
         row.getTemplateId(),
         row.getTemplateVersion() == null ? 1 : row.getTemplateVersion(),
-        DigitalScreenStatus.valueOf(row.getStatus()),
+        status,
         bindingsCodec.decode(row.getBindingsJson()),
+        row.getRevision() == null ? 1L : row.getRevision(),
+        row.getPublishedRevision(),
+        publishedVersionId,
+        row.getPublishedVersionNo() == null ? 0 : row.getPublishedVersionNo(),
         instant(row.getPublishedTime()),
         instant(row.getCreateTime()),
         instant(row.getUpdateTime()));

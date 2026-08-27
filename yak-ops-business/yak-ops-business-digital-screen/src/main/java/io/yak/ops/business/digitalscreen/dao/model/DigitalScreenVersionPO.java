@@ -7,21 +7,18 @@ import java.sql.Timestamp;
 import lombok.Data;
 
 @Data
-@TableName("yak_digital_screen")
-public class DigitalScreenPO {
+@TableName("yak_digital_screen_version")
+public class DigitalScreenVersionPO {
   @TableId(type = IdType.AUTO)
   private Long id;
-  private String name;
-  private String description;
-  private String templateId;
-  private Integer templateVersion;
-  private String status;
+  private Long screenId;
+  private Integer versionNo;
+  private Long sourceRevision;
+  private String nameSnapshot;
+  private String descriptionSnapshot;
+  private String templateIdSnapshot;
+  private Integer templateVersionSnapshot;
   private String bindingsJson;
-  private Long revision;
-  private Long publishedRevision;
-  private Long publishedVersionId;
-  private Integer publishedVersionNo;
   private Timestamp publishedTime;
   private Timestamp createTime;
-  private Timestamp updateTime;
 }
