@@ -1,7 +1,10 @@
 import type { ScreenTemplate } from '@/components/screen-engine';
 import type { PublishedDataset } from '@/services/dataset';
 import type { DigitalScreenBindings } from '@/services/digital-screen';
-import { canQueryScreenComponent } from './binding';
+import {
+  canQueryScreenComponent,
+  isBindableScreenComponent,
+} from './binding';
 import type { ScreenRuntimeCandidate } from './model';
 
 /** Builds execution candidates only. Request merging/caching belongs to PR 4. */
@@ -23,4 +26,6 @@ export const planScreenRuntimeQueries = (
 export const countBoundScreenComponents = (
   template: ScreenTemplate | undefined,
   bindings: DigitalScreenBindings,
-) => template?.components.filter((component) => Boolean(bindings[component.id])).length ?? 0;
+) => template?.components.filter((component) => (
+  isBindableScreenComponent(component) && Boolean(bindings[component.id])
+)).length ?? 0;
