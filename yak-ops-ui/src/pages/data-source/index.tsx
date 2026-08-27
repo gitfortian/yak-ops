@@ -126,7 +126,7 @@ const DataSourcePage = () => {
 
   return (
     <>
-      <div className="min-h-[calc(100dvh-56px)] bg-[#f7f8fa] text-[#242731]">
+      <div className="min-h-[calc(100dvh-56px)] bg-white text-[#242731]">
         <motion.main
           initial="hidden"
           animate="visible"
