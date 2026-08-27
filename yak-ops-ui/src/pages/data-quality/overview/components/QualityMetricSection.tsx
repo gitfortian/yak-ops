@@ -43,7 +43,7 @@ const compactRangeText = (range: OverviewDateRange) =>
   `${dayjs(range.startDate).format('MM.DD')}-${dayjs(range.endDate).format('MM.DD')}`;
 
 const MetricStrip = ({ metrics }: { metrics: ReturnType<typeof buildMetrics> }) => (
-  <div className="overflow-x-auto border-y border-solid border-[#eceef2]">
+  <div className="overflow-x-auto border border-solid border-[#eceef2]">
     <div
       className="grid min-w-max"
       style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(150px, 1fr))` }}
