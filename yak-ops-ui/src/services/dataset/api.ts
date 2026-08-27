@@ -59,6 +59,11 @@ export interface DatasetRequestOptions {
 
 export type DatasetQueryOptions = DatasetRequestOptions;
 
+export interface PublishedDatasetBatchResult {
+  datasets: PublishedDataset[];
+  errors: Record<string, string>;
+}
+
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
     throw new Error(response?.message || response?.msg || fallback);
@@ -155,24 +160,47 @@ export const getPublishedDataset = async (
   return toDataset(detail);
 };
 
-/** Viewer-oriented batch lookup: only resolve the Dataset ids referenced by the screen. */
+/**
+ * Viewer-oriented tolerant lookup: keep healthy Dataset metadata available while surfacing
+ * failures for the specific ids that could not be resolved.
+ */
+export const resolvePublishedDatasetsByIds = async (
+  datasetIds: string[],
+  options?: DatasetRequestOptions,
+): Promise<PublishedDatasetBatchResult> => {
+  const uniqueIds = [...new Set(datasetIds.filter(Boolean))];
+  if (!uniqueIds.length) return { datasets: [], errors: {} };
+
+  const details = await Promise.allSettled(
+    uniqueIds.map((datasetId) => getPublishedDataset(datasetId, options)),
+  );
+  const datasets: PublishedDataset[] = [];
+  const errors: Record<string, string> = {};
+
+  details.forEach((result, index) => {
+    const datasetId = uniqueIds[index];
+    if (result.status === 'fulfilled') {
+      datasets.push(result.value);
+      return;
+    }
+    errors[datasetId] = result.reason instanceof Error
+      ? result.reason.message
+      : `Dataset ${datasetId} 元数据加载失败`;
+  });
+
+  return { datasets, errors };
+};
+
+/** Compatibility convenience for callers that only need successfully resolved metadata. */
 export const getPublishedDatasetsByIds = async (
   datasetIds: string[],
   options?: DatasetRequestOptions,
 ): Promise<PublishedDataset[]> => {
-  const uniqueIds = [...new Set(datasetIds.filter(Boolean))];
-  if (!uniqueIds.length) return [];
-  const details = await Promise.allSettled(
-    uniqueIds.map((datasetId) => getPublishedDataset(datasetId, options)),
-  );
-  const available = details
-    .filter((item): item is PromiseFulfilledResult<PublishedDataset> => item.status === 'fulfilled')
-    .map((item) => item.value);
-  if (!available.length) {
-    const rejected = details.find((item): item is PromiseRejectedResult => item.status === 'rejected');
-    throw rejected?.reason instanceof Error ? rejected.reason : new Error('读取大屏绑定 Dataset 失败');
+  const result = await resolvePublishedDatasetsByIds(datasetIds, options);
+  if (!result.datasets.length && Object.keys(result.errors).length) {
+    throw new Error(Object.values(result.errors)[0] || '读取大屏绑定 Dataset 失败');
   }
-  return available;
+  return result.datasets;
 };
 
 export const queryDataset = async (
