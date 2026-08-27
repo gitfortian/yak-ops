@@ -1,13 +1,13 @@
 import type { TableColumnsType } from 'antd';
 import { Avatar, Space, Tag, Typography } from 'antd';
-import dayjs from 'dayjs';
 import type { CSSProperties } from 'react';
 import { useMemo } from 'react';
 
 import type { SystemUser } from '@/services/security/users';
 
+import { formatSystemDateTime } from '../../utils';
 import UserRowActions from '../components/UserRowActions';
-import type { RoleOption } from '../shared';
+import type { RoleOption } from '../types';
 
 interface UseUserColumnsOptions {
   roleOptions: RoleOption[];
@@ -23,12 +23,9 @@ type UserPresentation = SystemUser & {
   avatar?: string;
   motto?: string;
   signature?: string;
+  roleId?: number;
 };
 
-/**
- * 普通角色标签：
- * 使用浅灰背景和中性灰文字，避免跟页面品牌色抢视觉焦点。
- */
 const roleTagStyle: CSSProperties = {
   marginInlineEnd: 0,
   color: '#475569',
@@ -36,9 +33,6 @@ const roleTagStyle: CSSProperties = {
   borderColor: '#e2e8f0',
 };
 
-/**
- * 当前用户标签稍微加深边框，但仍保持中性色。
- */
 const currentUserTagStyle: CSSProperties = {
   marginInlineEnd: 0,
   color: '#334155',
@@ -46,9 +40,6 @@ const currentUserTagStyle: CSSProperties = {
   borderColor: '#cbd5e1',
 };
 
-/**
- * 默认头像使用深灰色。
- */
 const avatarStyle: CSSProperties = {
   color: '#ffffff',
   backgroundColor: '#475569',
@@ -57,18 +48,6 @@ const avatarStyle: CSSProperties = {
 const getAvatarText = (user: SystemUser): string => {
   const source = user.realName || user.userName || 'U';
   return source.slice(0, 1).toUpperCase();
-};
-
-const formatDateTime = (value?: string): string => {
-  if (!value) {
-    return '-';
-  }
-
-  const date = dayjs(value);
-
-  return date.isValid()
-    ? date.format('YYYY-MM-DD HH:mm:ss')
-    : value;
 };
 
 export function useUserColumns({
@@ -114,19 +93,13 @@ export function useUserColumns({
                   </Typography.Text>
 
                   {row.userName === currentUserName && (
-                    <Tag style={currentUserTagStyle}>
-                      当前用户
-                    </Tag>
+                    <Tag style={currentUserTagStyle}>当前用户</Tag>
                   )}
                 </div>
 
                 <div className="mt-1 truncate text-xs text-slate-500">
                   @{row.userName}
-
-                  <span className="mx-1 text-slate-300">
-                    ·
-                  </span>
-
+                  <span className="mx-1 text-slate-300">·</span>
                   ID {row.id}
                 </div>
 
@@ -148,7 +121,6 @@ export function useUserColumns({
             <div className="truncate text-sm text-slate-700">
               {row.email || '未设置邮箱'}
             </div>
-
             <div className="mt-1 truncate text-xs text-slate-400">
               {row.phone || '未设置手机号'}
             </div>
@@ -166,16 +138,13 @@ export function useUserColumns({
             : [];
 
           if (roles.length === 0) {
+            const presentation = row as UserPresentation;
             const role = roleOptions.find(
-              (item) => item.value === row.roleId,
+              (item) => item.value === presentation.roleId,
             );
 
             if (role) {
-              return (
-                <Tag style={roleTagStyle}>
-                  {role.label}
-                </Tag>
-              );
+              return <Tag style={roleTagStyle}>{role.label}</Tag>;
             }
 
             return (
@@ -189,24 +158,17 @@ export function useUserColumns({
           }
 
           const visibleRoles = roles.slice(0, 2);
-          const remainingCount =
-            roles.length - visibleRoles.length;
+          const remainingCount = roles.length - visibleRoles.length;
 
           return (
             <Space size={[4, 6]} wrap>
               {visibleRoles.map((role) => (
-                <Tag
-                  key={role.id}
-                  style={roleTagStyle}
-                >
+                <Tag key={role.id} style={roleTagStyle}>
                   {role.roleName}
                 </Tag>
               ))}
-
               {remainingCount > 0 && (
-                <Tag style={roleTagStyle}>
-                  +{remainingCount}
-                </Tag>
+                <Tag style={roleTagStyle}>+{remainingCount}</Tag>
               )}
             </Space>
           );
@@ -220,13 +182,10 @@ export function useUserColumns({
         render: (_, row) => (
           <div>
             <div className="text-sm text-slate-700">
-              {formatDateTime(
-                row.updateTime || row.createTime,
-              )}
+              {formatSystemDateTime(row.updateTime || row.createTime)}
             </div>
-
             <div className="mt-1 text-xs text-slate-400">
-              创建于 {formatDateTime(row.createTime)}
+              创建于 {formatSystemDateTime(row.createTime)}
             </div>
           </div>
         ),

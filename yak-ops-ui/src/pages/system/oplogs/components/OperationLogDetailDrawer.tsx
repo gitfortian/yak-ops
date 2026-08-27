@@ -5,17 +5,14 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import {
-  Alert,
   Descriptions,
   Drawer,
-  Empty,
   Space,
   Spin,
   Tag,
   Typography,
   message,
 } from 'antd';
-import dayjs from 'dayjs';
 import {
   forwardRef,
   useCallback,
@@ -24,29 +21,21 @@ import {
   useState,
 } from 'react';
 
+import { YakEmpty } from '@/components/ui';
 import {
   formatJsonText,
   getOperationLog,
-  isJsonText,
   type OperationLogDetail,
 } from '@/services/security/operationLogs';
+
+import {
+  formatSystemDateTime,
+  getSystemErrorMessage,
+} from '../../utils';
 
 export interface OperationLogDetailDrawerRef {
   open: (id: number) => Promise<void>;
 }
-
-const errorText = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message
-    ? error.message
-    : fallback;
-
-const displayTime = (value?: string): string => {
-  if (!value) return '-';
-  const time = dayjs(value);
-  return time.isValid()
-    ? time.format('YYYY-MM-DD HH:mm:ss')
-    : value;
-};
 
 const displayValue = (value?: string | number): string =>
   value === undefined || value === null || value === ''
@@ -58,14 +47,14 @@ const OperationLogDetailDrawer = forwardRef<
 >((_, ref) => {
   const requestSequenceRef = useRef(0);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [detail, setDetail] =
     useState<OperationLogDetail>();
 
   const show = useCallback(async (id: number) => {
     const sequence = ++requestSequenceRef.current;
     setOpen(true);
-    setLoading(true);
+    setIsLoading(true);
     setDetail(undefined);
 
     try {
@@ -75,11 +64,13 @@ const OperationLogDetailDrawer = forwardRef<
       }
     } catch (error) {
       if (sequence === requestSequenceRef.current) {
-        
+        message.error(
+          getSystemErrorMessage(error, '操作日志详情加载失败'),
+        );
       }
     } finally {
       if (sequence === requestSequenceRef.current) {
-        setLoading(false);
+        setIsLoading(false);
       }
     }
   }, []);
@@ -89,12 +80,11 @@ const OperationLogDetailDrawer = forwardRef<
   const close = () => {
     requestSequenceRef.current += 1;
     setOpen(false);
-    setLoading(false);
+    setIsLoading(false);
     setDetail(undefined);
   };
 
   const formattedDetail = formatJsonText(detail?.detail);
-  const detailIsJson = isJsonText(detail?.detail);
 
   return (
     <Drawer
@@ -104,9 +94,9 @@ const OperationLogDetailDrawer = forwardRef<
       destroyOnClose
       onClose={close}
     >
-      <Spin spinning={loading}>
-        {!loading && !detail ? (
-          <Empty description="暂无日志详情" />
+      <Spin spinning={isLoading}>
+        {!isLoading && !detail ? (
+          <YakEmpty compact title="暂无日志详情" />
         ) : detail ? (
           <div className="space-y-6">
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
@@ -124,9 +114,7 @@ const OperationLogDetailDrawer = forwardRef<
                         {detail.operationMethods}
                       </Tag>
                     )}
-                    {detail.targetType && (
-                      <Tag>{detail.targetType}</Tag>
-                    )}
+                    {detail.targetType && <Tag>{detail.targetType}</Tag>}
                   </Space>
                   <div className="mt-2 text-sm text-slate-500">
                     {displayValue(detail.target)}
@@ -171,9 +159,7 @@ const OperationLogDetailDrawer = forwardRef<
                     >
                       {detail.operatorIp}
                     </Typography.Text>
-                  ) : (
-                    '-'
-                  ),
+                  ) : '-'
                 },
                 {
                   key: 'operatePage',
@@ -183,9 +169,7 @@ const OperationLogDetailDrawer = forwardRef<
                 {
                   key: 'operationMethods',
                   label: '操作方法',
-                  children: displayValue(
-                    detail.operationMethods,
-                  ),
+                  children: displayValue(detail.operationMethods),
                 },
                 {
                   key: 'targetType',
@@ -201,9 +185,7 @@ const OperationLogDetailDrawer = forwardRef<
                     >
                       {detail.target}
                     </Typography.Text>
-                  ) : (
-                    '-'
-                  ),
+                  ) : '-'
                 },
                 {
                   key: 'createTime',
@@ -213,12 +195,12 @@ const OperationLogDetailDrawer = forwardRef<
                       操作时间
                     </Space>
                   ),
-                  children: displayTime(detail.createTime),
+                  children: formatSystemDateTime(detail.createTime),
                 },
                 {
                   key: 'updateTime',
                   label: '更新时间',
-                  children: displayTime(detail.updateTime),
+                  children: formatSystemDateTime(detail.updateTime),
                 },
               ]}
             />
@@ -248,8 +230,6 @@ const OperationLogDetailDrawer = forwardRef<
                 </pre>
               )}
             </div>
-
-           
           </div>
         ) : null}
       </Spin>
@@ -257,7 +237,5 @@ const OperationLogDetailDrawer = forwardRef<
   );
 });
 
-OperationLogDetailDrawer.displayName =
-  'OperationLogDetailDrawer';
-
+OperationLogDetailDrawer.displayName = 'OperationLogDetailDrawer';
 export default OperationLogDetailDrawer;
