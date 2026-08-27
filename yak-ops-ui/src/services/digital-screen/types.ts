@@ -23,9 +23,37 @@ export interface DigitalScreenInstance {
   templateVersion: 1;
   status: DigitalScreenStatus;
   bindings: DigitalScreenBindings;
+  /** Mutable Draft revision. Local repository compatibility keeps this optional. */
+  revision?: number;
+  publishedRevision?: number;
+  publishedVersionNo?: number;
+  hasUnpublishedChanges?: boolean;
   createdAt: string;
   updatedAt: string;
   publishedAt?: string;
+}
+
+export interface DigitalScreenVersionSummary {
+  id: string;
+  versionNo: number;
+  sourceRevision: number;
+  name: string;
+  publishedAt: string;
+  current: boolean;
+}
+
+export interface DigitalScreenVersion {
+  id: string;
+  screenId: string;
+  versionNo: number;
+  sourceRevision: number;
+  name: string;
+  description?: string;
+  templateId: string;
+  templateVersion: 1;
+  bindings: DigitalScreenBindings;
+  publishedAt: string;
+  createdAt: string;
 }
 
 export interface CreateDigitalScreenInput {

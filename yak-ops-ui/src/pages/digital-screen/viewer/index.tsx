@@ -6,7 +6,7 @@ import { useDigitalScreenViewer } from './hooks/useDigitalScreenViewer';
 
 export default function DigitalScreenViewerPage() {
   const { id } = useParams<{ id: string }>();
-  const { screen, template, runtime, dataError, isLoading } = useDigitalScreenViewer(id);
+  const { screen, template, runtime, loadError, dataError, isLoading } = useDigitalScreenViewer(id);
 
   if (isLoading) {
     return (
@@ -19,7 +19,7 @@ export default function DigitalScreenViewerPage() {
   if (!screen || !template) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-[#070b13] text-white/70">
-        <div className="text-[14px]">数字化大屏或模板不存在</div>
+        <div className="text-[14px]">{loadError || '数字化大屏尚未发布或模板不存在'}</div>
         <YakButton type="link" onClick={() => history.push('/digital-screen')}>返回大屏列表</YakButton>
       </div>
     );
@@ -67,7 +67,7 @@ export default function DigitalScreenViewerPage() {
       ) : null}
 
       <div className="absolute bottom-3 right-4 rounded-[4px] bg-black/35 px-2 py-1 text-[10px] text-white/35 opacity-0 transition-opacity group-hover:opacity-100">
-        {screen.name}
+        {screen.name} · V{screen.publishedVersionNo}
       </div>
     </div>
   );

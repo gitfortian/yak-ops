@@ -2,17 +2,24 @@ import type { PublishedDataset } from '@/services/dataset';
 import { listPublishedDatasets } from '@/services/dataset';
 import {
   getDigitalScreen,
+  listDigitalScreenVersions,
   publishDigitalScreen,
+  rollbackDigitalScreen,
   unpublishDigitalScreen,
   updateDigitalScreen,
   type DigitalScreenBindings,
   type DigitalScreenComponentBinding,
   type DigitalScreenInstance,
+  type DigitalScreenVersionSummary,
 } from '@/services/digital-screen';
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
 import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useScreenRuntimeData } from '../../runtime/hooks/useScreenRuntimeData';
+
+const sameBindings = (left: DigitalScreenBindings, right: DigitalScreenBindings) => (
+  JSON.stringify(left) === JSON.stringify(right)
+);
 
 export function useDigitalScreenEditor(id?: string) {
   const [screen, setScreen] = useState<DigitalScreenInstance>();
@@ -21,11 +28,16 @@ export function useDigitalScreenEditor(id?: string) {
   const [bindings, setBindings] = useState<DigitalScreenBindings>({});
   const [selectedComponentId, setSelectedComponentId] = useState<string>();
   const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
-  const [isDatasetsLoading, setIsDatasetsLoading] = useState(true);
   const [datasetsError, setDatasetsError] = useState('');
+  const [versions, setVersions] = useState<DigitalScreenVersionSummary[]>([]);
+  const [isDatasetsLoading, setIsDatasetsLoading] = useState(true);
+  const [isVersionsLoading, setIsVersionsLoading] = useState(false);
+  const [isVersionsOpen, setIsVersionsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isOfflining, setIsOfflining] = useState(false);
+  const [rollingBackVersionNo, setRollingBackVersionNo] = useState<number>();
 
   const template = useMemo(
     () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),
@@ -36,6 +48,19 @@ export function useDigitalScreenEditor(id?: string) {
     [template, selectedComponentId],
   );
   const runtime = useScreenRuntimeData(template, bindings, datasets);
+  const isDirty = useMemo(() => {
+    if (!screen) return false;
+    return name.trim() !== screen.name
+      || (description.trim() || '') !== (screen.description || '')
+      || !sameBindings(bindings, screen.bindings || {});
+  }, [bindings, description, name, screen]);
+
+  const applyScreen = useCallback((detail: DigitalScreenInstance) => {
+    setScreen(detail);
+    setName(detail.name);
+    setDescription(detail.description || '');
+    setBindings(detail.bindings || {});
+  }, []);
 
   const loadScreen = useCallback(async () => {
     if (!id) {
@@ -44,15 +69,24 @@ export function useDigitalScreenEditor(id?: string) {
     }
     setIsLoading(true);
     try {
-      const detail = await getDigitalScreen(id);
-      setScreen(detail);
-      setName(detail.name);
-      setDescription(detail.description || '');
-      setBindings(detail.bindings || {});
+      applyScreen(await getDigitalScreen(id));
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载数字化大屏失败');
     } finally {
       setIsLoading(false);
+    }
+  }, [applyScreen, id]);
+
+  const loadVersions = useCallback(async () => {
+    if (!id) return;
+    setIsVersionsLoading(true);
+    try {
+      setVersions(await listDigitalScreenVersions(id));
+    } catch (error) {
+      setVersions([]);
+      message.error(error instanceof Error ? error.message : '加载发布版本失败');
+    } finally {
+      setIsVersionsLoading(false);
     }
   }, [id]);
 
@@ -90,18 +124,21 @@ export function useDigitalScreenEditor(id?: string) {
   }, [template, selectedComponentId]);
 
   const saveScreen = async (showSuccessMessage = true) => {
-    if (!id) return undefined;
+    if (!id || !screen) return undefined;
     if (!name.trim()) {
       message.warning('请输入大屏名称');
       return undefined;
+    }
+    if (!isDirty) {
+      if (showSuccessMessage) message.info('当前草稿已是最新');
+      return screen;
     }
 
     setIsSaving(true);
     try {
       const updated = await updateDigitalScreen(id, { name, description, bindings });
-      setScreen(updated);
-      setBindings(updated.bindings);
-      if (showSuccessMessage) message.success('大屏已保存');
+      applyScreen(updated);
+      if (showSuccessMessage) message.success('草稿已保存');
       return updated;
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存数字化大屏失败');
@@ -111,21 +148,55 @@ export function useDigitalScreenEditor(id?: string) {
     }
   };
 
-  const togglePublish = async () => {
+  const publishScreen = async () => {
     if (!id || !screen) return;
     setIsPublishing(true);
     try {
       const saved = await saveScreen(false);
       if (!saved) return;
-      const updated = saved.status === 'published'
-        ? await unpublishDigitalScreen(id)
-        : await publishDigitalScreen(id);
-      setScreen(updated);
-      message.success(updated.status === 'published' ? '大屏已发布' : '大屏已取消发布');
+      const updated = await publishDigitalScreen(id);
+      applyScreen(updated);
+      message.success(`大屏已发布${updated.publishedVersionNo ? ` · V${updated.publishedVersionNo}` : ''}`);
+      if (isVersionsOpen) void loadVersions();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '更新发布状态失败');
+      message.error(error instanceof Error ? error.message : '发布数字化大屏失败');
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const offlineScreen = async () => {
+    if (!id || !screen || screen.status !== 'published') return;
+    setIsOfflining(true);
+    try {
+      const updated = await unpublishDigitalScreen(id);
+      applyScreen(updated);
+      message.success('大屏已取消发布，历史版本已保留');
+      if (isVersionsOpen) void loadVersions();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '取消发布失败');
+    } finally {
+      setIsOfflining(false);
+    }
+  };
+
+  const openVersions = () => {
+    setIsVersionsOpen(true);
+    void loadVersions();
+  };
+
+  const rollbackVersion = async (versionNo: number) => {
+    if (!id) return;
+    setRollingBackVersionNo(versionNo);
+    try {
+      const updated = await rollbackDigitalScreen(id, versionNo);
+      applyScreen(updated);
+      message.success(`已回滚 V${versionNo}，并追加发布为 V${updated.publishedVersionNo}`);
+      await loadVersions();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '回滚发布版本失败');
+    } finally {
+      setRollingBackVersionNo(undefined);
     }
   };
 
@@ -155,10 +226,16 @@ export function useDigitalScreenEditor(id?: string) {
     selectedComponentId,
     datasets,
     datasetsError,
+    versions,
     isDatasetsLoading,
+    isVersionsLoading,
+    isVersionsOpen,
     isLoading,
     isSaving,
     isPublishing,
+    isOfflining,
+    rollingBackVersionNo,
+    isDirty,
     template,
     selectedComponent,
     runtime,
@@ -168,8 +245,12 @@ export function useDigitalScreenEditor(id?: string) {
     setName,
     setDescription,
     setSelectedComponentId,
+    setIsVersionsOpen,
     saveScreen,
-    togglePublish,
+    publishScreen,
+    offlineScreen,
+    openVersions,
+    rollbackVersion,
     updateSelectedBinding,
   };
 }

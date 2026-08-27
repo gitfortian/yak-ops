@@ -1,12 +1,11 @@
 import type { PublishedDataset } from '@/services/dataset';
 import { listPublishedDatasets } from '@/services/dataset';
 import {
-  getDigitalScreen,
+  getPublishedDigitalScreen,
   type DigitalScreenBindings,
   type DigitalScreenInstance,
 } from '@/services/digital-screen';
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
-import { message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useScreenRuntimeData } from '../../runtime/hooks/useScreenRuntimeData';
 
@@ -15,6 +14,7 @@ const EMPTY_BINDINGS: DigitalScreenBindings = {};
 export function useDigitalScreenViewer(id?: string) {
   const [screen, setScreen] = useState<DigitalScreenInstance>();
   const [datasets, setDatasets] = useState<PublishedDataset[]>([]);
+  const [loadError, setLoadError] = useState('');
   const [dataError, setDataError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,9 +24,13 @@ export function useDigitalScreenViewer(id?: string) {
       return;
     }
     setIsLoading(true);
-    void getDigitalScreen(id)
+    setLoadError('');
+    void getPublishedDigitalScreen(id)
       .then(setScreen)
-      .catch((error) => message.error(error instanceof Error ? error.message : '加载数字化大屏失败'))
+      .catch((error) => {
+        setScreen(undefined);
+        setLoadError(error instanceof Error ? error.message : '加载已发布大屏失败');
+      })
       .finally(() => setIsLoading(false));
   }, [id]);
 
@@ -57,6 +61,7 @@ export function useDigitalScreenViewer(id?: string) {
     screen,
     template,
     runtime,
+    loadError,
     dataError,
     isLoading,
   };
