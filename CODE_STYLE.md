@@ -285,7 +285,93 @@ large formatting-only churn
 
 好的 diff 应让 reviewer 很快回答：为什么改、边界在哪、行为有没有变、哪个测试证明它。
 
-## 16. Review Questions
+## 16. Architecture-Driven Problem Solving
+
+遇到问题时，先根据当前模块的架构确定责任，再讨论修改方案。
+
+> **先问“这个问题属于谁”，再问“这个问题怎么解决”。**
+
+Yak Ops 是多 subsystem 工程，问题定位顺序固定为：
+
+```text
+subsystem
+  -> role / layer
+  -> owning boundary
+  -> layer-internal / cross-layer contract
+  -> evidence
+  -> minimal change
+  -> verification
+```
+
+先读当前 subsystem 的 `ARCHITECTURE.md / DOMAIN.md / DEPENDENCIES.md / REQUIREMENTS.md / README.md` 中实际存在的文档，再结合本文件判断。**角色名以模块真实结构为准，不为了套模板强行制造层。**
+
+常见 role 只用于帮助定位，不要求每个模块全部具备：
+
+```text
+Frontend / Page / Component
+Application / Use Case
+Domain
+Planner / Coordinator / Runtime
+Repository / Persistence
+Gateway / Client / External Integration
+Infrastructure
+Config
+```
+
+修改代码前先回答七个问题：
+
+1. **这个问题属于哪个 subsystem、哪个 role/layer？**
+2. **是层内部问题，还是层与层之间的 contract 问题？**
+3. **当前行为违反了哪个已有架构、领域或依赖约束？** 如果没有，是否真的缺少当前业务需要的能力？
+4. **这是局部问题还是公共问题？** 只发生在某个页面、服务、适配器，还是多个 subsystem 反复出现？
+5. **最小修改点在哪里？** 哪个模块、角色、类或接口真正拥有这个问题？
+6. **这次明确不应该改什么？** 把非目标写出来，防止局部问题扩散成 shared/common 或框架重构。
+7. **怎么证明改对了？** 明确 behavior test、architecture test、集成验证、日志、Metrics 或真实场景中的最小证据链。
+
+处理原则：
+
+- 先在最小 owning boundary 内解决，不因为一个具体问题扩大公共抽象。
+- 某个 subsystem 的局部问题，不先提升到 shared/common。
+- 外部系统或 adapter 能解决的问题，不先污染 Domain / Application。
+- 配置能解决的问题，不新增 Runtime / Framework 机制。
+- 没有证据前，不先增加新的 Manager、Coordinator、Runtime、State 或兼容层。
+- 只有多个真实场景反复出现同一种问题时，才抽象公共能力。
+
+### AI Collaboration Template
+
+向 AI 提问题时，不只说“帮我分析一下”，而是先要求它在现有架构和约束中完成问题归属：
+
+```text
+基于当前 subsystem 的 ARCHITECTURE.md / DOMAIN.md / DEPENDENCIES.md /
+REQUIREMENTS.md / README.md（以实际存在为准）以及仓库 CODE_STYLE.md，
+先不要改代码，回答：
+
+1. 问题属于哪个 subsystem 和 role/layer？
+2. 是层内问题还是 cross-layer contract 问题？
+3. 当前行为违反了哪个已有约束？
+4. 哪些证据能验证这个判断？
+5. 最小修改边界是什么？这次明确不应该改什么？
+6. 什么情况下才值得抽成 shared/common 或公共 Framework 能力？
+7. 最小验证方案是什么？
+
+确认责任边界和证据后，再给出实现方案。
+```
+
+长期执行顺序：
+
+```text
+架构
+  -> 约束
+  -> 问题定位
+  -> 证据
+  -> 最小改动
+  -> 验证
+  -> 重复出现再抽象
+```
+
+**实战驱动优化，问题就地解决，重复出现再抽象。**
+
+## 17. Review Questions
 
 提交前至少回答：
 
