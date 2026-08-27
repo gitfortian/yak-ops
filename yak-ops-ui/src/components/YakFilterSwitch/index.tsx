@@ -45,10 +45,10 @@ export default function YakFilterSwitch<Value extends string = string>({
             aria-pressed={active}
             className={[
               'flex h-8 items-center justify-center rounded-[8px] px-3.5 text-[13px] leading-none',
-              'transition-[background-color,color,box-shadow] duration-150 ease-out',
+              'transition-[background-color,color] duration-150 ease-out',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(254,44,85,0.14)]',
               active
-                ? 'bg-[#f2f3f5] font-semibold text-[#242731] shadow-[inset_0_0_0_1px_rgba(31,35,41,0.04)]'
+                ? 'bg-[#f2f3f5] font-semibold text-[#242731]'
                 : 'bg-transparent font-medium text-[#777c86] hover:bg-[#f7f8fa] hover:text-[#3f444e]',
             ].join(' ')}
             onClick={() => {
