@@ -10,6 +10,7 @@ import io.yak.ops.business.datasource.controller.v1.converter.CatalogRequestConv
 import io.yak.ops.business.datasource.controller.v1.converter.CatalogViewConverter;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnOptionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogColumnVO;
+import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogDiagnosticsVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogOptionVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceCatalogTableVO;
 import io.yak.ops.common.bean.vo.datasource.DataSourceQueryResultVO;
@@ -40,6 +41,8 @@ public class DataSourceCatalogController {
   private final CatalogRequestConverter requestConverter;
   private final CatalogViewConverter viewConverter;
 
+  @Operation(summary = "查询 Catalog 运行诊断") @GetMapping("/diagnostics")
+  public Result<DataSourceCatalogDiagnosticsVO> diagnostics() { return Result.success(viewConverter.diagnostics(catalogReader.diagnostics())); }
   @Operation(summary = "查询数据库列表") @GetMapping("/{id}/databases")
   public Result<List<String>> databases(@PathVariable("id") Long id) { return Result.success(catalogReader.listDatabases(id)); }
   @Operation(summary = "查询 Schema 列表") @GetMapping("/{id}/schemas")
