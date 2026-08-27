@@ -55,6 +55,7 @@ import {
   getDirectChildren,
   type DepartmentScope,
 } from './tree';
+import YakButton from '@/components/YakButton';
 
 const errorText = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message
