@@ -14,8 +14,12 @@ import { useMemo, type PointerEvent as ReactPointerEvent } from 'react';
 import type { QualityDataSourceNode } from '../types';
 import { groupQualityDataSourceNodes } from '../utils';
 
+const EMPTY_SOURCE_NODES: QualityDataSourceNode[] = [];
+
 interface DataSourceTreePaneProps {
-  sourceNodes: QualityDataSourceNode[];
+  sourceNodes?: QualityDataSourceNode[];
+  /** Compatibility with callers that still use the pre-refactor prop name. */
+  treeData?: QualityDataSourceNode[];
   treeLoading: boolean;
   selectedNodeKey?: string;
   leftWidth: number;
@@ -35,6 +39,7 @@ interface QualityTreeDataNode extends DataNode {
 
 const DataSourceTreePane = ({
   sourceNodes,
+  treeData: legacyTreeData,
   treeLoading,
   selectedNodeKey,
   leftWidth,
@@ -43,9 +48,12 @@ const DataSourceTreePane = ({
   onResizeStart,
   onCollapsedChange,
 }: DataSourceTreePaneProps) => {
+  const resolvedSourceNodes =
+    sourceNodes ?? legacyTreeData ?? EMPTY_SOURCE_NODES;
+
   const treeData = useMemo<QualityTreeDataNode[]>(
     () =>
-      groupQualityDataSourceNodes(sourceNodes).map((group) => ({
+      groupQualityDataSourceNodes(resolvedSourceNodes).map((group) => ({
         key: `type:${group.dataSourceType}`,
         title: group.dataSourceType,
         kind: 'group',
@@ -60,7 +68,7 @@ const DataSourceTreePane = ({
           isLeaf: true,
         })),
       })),
-    [sourceNodes],
+    [resolvedSourceNodes],
   );
 
   const renderTitle: TreeProps['titleRender'] = (rawNode) => {
