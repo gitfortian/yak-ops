@@ -33,9 +33,15 @@ export default function DigitalScreenEditorPage() {
       selectedComponentId={editor.selectedComponentId}
       datasets={editor.datasets}
       datasetsError={editor.datasetsError}
+      versions={editor.versions}
       isDatasetsLoading={editor.isDatasetsLoading}
+      isVersionsLoading={editor.isVersionsLoading}
+      isVersionsOpen={editor.isVersionsOpen}
       isSaving={editor.isSaving}
       isPublishing={editor.isPublishing}
+      isOfflining={editor.isOfflining}
+      rollingBackVersionNo={editor.rollingBackVersionNo}
+      isDirty={editor.isDirty}
       template={editor.template}
       selectedComponent={editor.selectedComponent}
       runtime={editor.runtime}
@@ -48,7 +54,11 @@ export default function DigitalScreenEditorPage() {
       onDescriptionChange={editor.setDescription}
       onComponentSelect={editor.setSelectedComponentId}
       onSave={() => void editor.saveScreen()}
-      onTogglePublish={() => void editor.togglePublish()}
+      onPublish={() => void editor.publishScreen()}
+      onOffline={() => void editor.offlineScreen()}
+      onOpenVersions={editor.openVersions}
+      onCloseVersions={() => editor.setIsVersionsOpen(false)}
+      onRollbackVersion={(versionNo) => void editor.rollbackVersion(versionNo)}
       onBindingChange={editor.updateSelectedBinding}
     />
   );

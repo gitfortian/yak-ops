@@ -10,10 +10,12 @@ import type {
   DigitalScreenBindings,
   DigitalScreenComponentBinding,
   DigitalScreenInstance,
+  DigitalScreenVersionSummary,
 } from '@/services/digital-screen';
-import { Input } from 'antd';
-import { ArrowLeft, Database, Eye, Save, Send } from 'lucide-react';
+import { Input, Popconfirm } from 'antd';
+import { ArrowLeft, CloudOff, Database, Eye, History, Save, Send } from 'lucide-react';
 import { DataBindingPanel } from './DataBindingPanel';
+import { VersionHistoryDrawer } from './VersionHistoryDrawer';
 
 interface ScreenRuntimeViewModel {
   data: ScreenDataOverrides;
@@ -31,9 +33,15 @@ interface DigitalScreenEditorViewProps {
   selectedComponentId?: string;
   datasets: PublishedDataset[];
   datasetsError: string;
+  versions: DigitalScreenVersionSummary[];
   isDatasetsLoading: boolean;
+  isVersionsLoading: boolean;
+  isVersionsOpen: boolean;
   isSaving: boolean;
   isPublishing: boolean;
+  isOfflining: boolean;
+  rollingBackVersionNo?: number;
+  isDirty: boolean;
   template?: ScreenTemplate;
   selectedComponent?: ScreenComponent;
   runtime: ScreenRuntimeViewModel;
@@ -46,7 +54,11 @@ interface DigitalScreenEditorViewProps {
   onDescriptionChange: (description: string) => void;
   onComponentSelect: (componentId: string) => void;
   onSave: () => void;
-  onTogglePublish: () => void;
+  onPublish: () => void;
+  onOffline: () => void;
+  onOpenVersions: () => void;
+  onCloseVersions: () => void;
+  onRollbackVersion: (versionNo: number) => void;
   onBindingChange: (binding?: DigitalScreenComponentBinding) => void;
 }
 
@@ -58,9 +70,15 @@ export function DigitalScreenEditorView({
   selectedComponentId,
   datasets,
   datasetsError,
+  versions,
   isDatasetsLoading,
+  isVersionsLoading,
+  isVersionsOpen,
   isSaving,
   isPublishing,
+  isOfflining,
+  rollingBackVersionNo,
+  isDirty,
   template,
   selectedComponent,
   runtime,
@@ -73,9 +91,20 @@ export function DigitalScreenEditorView({
   onDescriptionChange,
   onComponentSelect,
   onSave,
-  onTogglePublish,
+  onPublish,
+  onOffline,
+  onOpenVersions,
+  onCloseVersions,
+  onRollbackVersion,
   onBindingChange,
 }: DigitalScreenEditorViewProps) {
+  const hasSavedUnpublishedChanges = Boolean(screen.hasUnpublishedChanges);
+  const hasPendingPublish = isDirty || hasSavedUnpublishedChanges;
+  const isPublished = screen.status === 'published';
+  const statusLabel = isPublished
+    ? `${screen.publishedVersionNo ? `已发布 V${screen.publishedVersionNo}` : '已发布'}${hasPendingPublish ? ' · 有未发布更改' : ''}`
+    : '草稿';
+
   return (
     <div className="flex h-screen min-w-[1180px] flex-col overflow-hidden bg-[#f4f5f6] text-[#161823]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e5e7ea] bg-white px-4">
@@ -91,11 +120,13 @@ export function DigitalScreenEditorView({
           />
           <span className={[
             'ml-1 rounded-[4px] px-2 py-1 text-[11px] font-medium',
-            screen.status === 'published'
-              ? 'bg-[#edf8f2] text-[#27845a]'
+            isPublished
+              ? hasPendingPublish
+                ? 'bg-[#fff7e8] text-[#ad6800]'
+                : 'bg-[#edf8f2] text-[#27845a]'
               : 'bg-[#f2f3f4] text-[#7b818a]',
           ].join(' ')}>
-            {screen.status === 'published' ? '已发布' : '草稿'}
+            {statusLabel}
           </span>
           <span className="ml-1 text-[11px] text-[#98a2b3]">
             已绑定 {runtime.boundCount}/{bindableCount}
@@ -106,15 +137,34 @@ export function DigitalScreenEditorView({
         </div>
 
         <div className="flex items-center gap-2">
-          <YakButton icon={<Eye size={14} />} onClick={onPreview}>预览</YakButton>
-          <YakButton icon={<Save size={14} />} loading={isSaving} onClick={onSave}>保存</YakButton>
+          <YakButton icon={<History size={14} />} onClick={onOpenVersions}>版本历史</YakButton>
           <YakButton
-            type={screen.status === 'published' ? 'default' : 'primary'}
+            icon={<Eye size={14} />}
+            disabled={!isPublished}
+            onClick={onPreview}
+          >
+            线上预览
+          </YakButton>
+          <YakButton icon={<Save size={14} />} loading={isSaving} onClick={onSave}>保存</YakButton>
+          {isPublished ? (
+            <Popconfirm
+              title="确认取消发布？"
+              description="线上大屏会停止访问，但发布历史会继续保留。"
+              okText="取消发布"
+              cancelText="返回"
+              onConfirm={onOffline}
+            >
+              <YakButton icon={<CloudOff size={14} />} loading={isOfflining}>取消发布</YakButton>
+            </Popconfirm>
+          ) : null}
+          <YakButton
+            type="primary"
             icon={<Send size={14} />}
             loading={isPublishing}
-            onClick={onTogglePublish}
+            disabled={isPublished && !hasPendingPublish}
+            onClick={onPublish}
           >
-            {screen.status === 'published' ? '取消发布' : '发布'}
+            {isPublished ? '更新发布' : '发布'}
           </YakButton>
         </div>
       </header>
@@ -175,7 +225,7 @@ export function DigitalScreenEditorView({
               </div>
             </div>
             <div className="mt-2 text-[11px] leading-[18px] text-[#a3a8b0]">
-              布局由模板固定。点击左侧组件后，只配置它消费的数据，不修改模板设计。
+              布局由模板固定。编辑内容只写入 Draft，只有点击发布后才会生成新的线上快照。
             </div>
           </section>
 
@@ -201,6 +251,15 @@ export function DigitalScreenEditorView({
           </section>
         </aside>
       </div>
+
+      <VersionHistoryDrawer
+        open={isVersionsOpen}
+        versions={versions}
+        loading={isVersionsLoading}
+        rollingBackVersionNo={rollingBackVersionNo}
+        onClose={onCloseVersions}
+        onRollback={onRollbackVersion}
+      />
     </div>
   );
 }
