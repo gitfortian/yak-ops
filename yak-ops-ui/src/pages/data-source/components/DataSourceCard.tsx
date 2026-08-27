@@ -1,7 +1,7 @@
 import { YakButton } from '@/components/ui';
 import type { DataSourceRecord } from '@/services/data-source';
 import { motion } from 'framer-motion';
-import { Pencil, Trash2, Unplug } from 'lucide-react';
+import { Clock3, Pencil, Trash2, Unplug } from 'lucide-react';
 
 import { environmentTagConfigMap, PAGE_ANIMATION } from '../constants';
 import DatabaseIcons from '../icon/DatabaseIcons';
@@ -47,33 +47,43 @@ const DataSourceCard = ({
     <motion.article
       variants={PAGE_ANIMATION.fadeUp}
       className={[
-        'group min-w-0 overflow-hidden rounded-[9px] border border-black/[0.075] bg-white',
-        'transition-[transform,border-color,box-shadow] duration-200',
-        'hover:-translate-y-0.5 hover:border-black/[0.11] hover:shadow-[0_10px_28px_rgba(22,24,35,0.07)]',
+        'group relative min-w-0 overflow-hidden rounded-[16px] border border-[rgba(31,35,41,0.075)] bg-white/[0.98]',
+        'shadow-[0_3px_10px_rgba(31,35,41,0.035),0_1px_2px_rgba(31,35,41,0.02)]',
+        'transition-[transform,border-color,box-shadow] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
+        'hover:-translate-y-px hover:border-[rgba(31,35,41,0.11)] hover:shadow-[0_10px_24px_rgba(31,35,41,0.065),0_1px_2px_rgba(31,35,41,0.02)]',
         isListView
-          ? 'grid grid-cols-[minmax(360px,1.35fr)_minmax(360px,1fr)] max-xl:grid-cols-1'
+          ? 'grid grid-cols-[minmax(380px,1.5fr)_minmax(390px,1fr)] max-xl:grid-cols-1'
           : '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="flex min-h-[92px] items-start justify-between gap-[15px] bg-[radial-gradient(circle_at_100%_0,rgba(88,110,255,0.08),transparent_37%),linear-gradient(110deg,#fbfcff_0%,#f7f8fc_100%)] px-[19px] pb-4 pt-[19px]">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-[47px] w-[47px] shrink-0 items-center justify-center rounded-xl border border-black/[0.055] bg-white shadow-[0_5px_14px_rgba(22,24,35,0.055)]">
-            <DatabaseIcons dbType={record.dbType} width="30" height="30" />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 [background-image:radial-gradient(circle,rgba(94,117,163,0.14)_0.7px,transparent_0.8px)] [background-size:8px_8px] [mask-image:linear-gradient(115deg,#000_0%,rgba(0,0,0,0.18)_40%,transparent_72%)]"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-20 z-0 h-48 w-48 rounded-full bg-[#dce7ff]/35 blur-3xl transition-transform duration-300 group-hover:scale-110"
+      />
+
+      <div className="relative z-[1] flex min-h-[116px] items-start justify-between gap-4 px-[18px] pb-[17px] pt-[18px]">
+        <div className="flex min-w-0 items-start gap-[13px]">
+          <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px] border border-[rgba(31,35,41,0.07)] bg-[linear-gradient(145deg,#ffffff_0%,#f5f7fa_100%)] shadow-[0_5px_14px_rgba(31,35,41,0.055)] transition-transform duration-[260ms] group-hover:scale-[1.025]">
+            <DatabaseIcons dbType={record.dbType} width="31" height="31" />
           </div>
 
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0 pt-0.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h3
                 title={record.name}
-                className="m-0 min-w-0 truncate text-[15px] font-semibold text-[#161823]"
+                className="m-0 max-w-[260px] truncate text-[15px] font-semibold leading-[22px] text-[#292c35]"
               >
                 {record.name || '未命名数据源'}
               </h3>
 
               <span
-                className="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-[7px] text-[9px] font-semibold"
+                className="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-[7px] text-[10px] font-semibold"
                 style={{
                   color: environmentConfig.color,
                   background: environmentConfig.backgroundColor,
@@ -86,7 +96,7 @@ const DataSourceCard = ({
 
             <p
               title={record.jdbcUrl}
-              className="mt-1.5 max-w-[410px] truncate text-[11px] text-black/[0.43]"
+              className="mb-0 mt-2 max-w-[460px] truncate rounded-[7px] bg-[#f7f8fa]/90 px-2 py-1 text-[11px] leading-[18px] text-[#858a94]"
             >
               {record.jdbcUrl || '暂未配置连接地址'}
             </p>
@@ -94,7 +104,7 @@ const DataSourceCard = ({
         </div>
 
         {actionAvailable ? (
-          <div className="pointer-events-none flex shrink-0 -translate-y-1 gap-1 opacity-0 transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+          <div className="flex shrink-0 -translate-y-1 gap-1 opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
             {permissions.canTest ? (
               <YakButton
                 type="text"
@@ -103,8 +113,8 @@ const DataSourceCard = ({
                 title="测试连接"
                 loading={testingId === currentId}
                 disabled={Boolean(testingId) && testingId !== currentId}
-                className="!h-[29px] !w-[29px] !rounded-[7px] !border !border-black/[0.07] !bg-white/90 !p-0 !text-black/[0.52] hover:!text-[#4058c8]"
-                icon={<Unplug size={15} strokeWidth={1.9} />}
+                className="!h-[30px] !w-[30px] !rounded-[8px] !border !border-[#e9ebef] !bg-white/90 !p-0 !text-[#7e838d] !shadow-[0_1px_3px_rgba(31,35,41,0.035)] hover:!text-[#4058c8]"
+                icon={<Unplug size={14} strokeWidth={1.9} />}
                 onClick={() => onTestConnection(record)}
               />
             ) : null}
@@ -117,8 +127,8 @@ const DataSourceCard = ({
                 title="编辑数据源"
                 loading={editingId === currentId}
                 disabled={Boolean(editingId) && editingId !== currentId}
-                className="!h-[29px] !w-[29px] !rounded-[7px] !border !border-black/[0.07] !bg-white/90 !p-0 !text-black/[0.52] hover:!text-[#4058c8]"
-                icon={<Pencil size={15} strokeWidth={1.9} />}
+                className="!h-[30px] !w-[30px] !rounded-[8px] !border !border-[#e9ebef] !bg-white/90 !p-0 !text-[#7e838d] !shadow-[0_1px_3px_rgba(31,35,41,0.035)] hover:!text-[#4058c8]"
+                icon={<Pencil size={14} strokeWidth={1.9} />}
                 onClick={() => onEdit(record)}
               />
             ) : null}
@@ -130,8 +140,8 @@ const DataSourceCard = ({
                 danger
                 iconOnly
                 title="删除数据源"
-                className="!h-[29px] !w-[29px] !rounded-[7px] !border !border-black/[0.07] !bg-white/90 !p-0"
-                icon={<Trash2 size={15} strokeWidth={1.9} />}
+                className="!h-[30px] !w-[30px] !rounded-[8px] !border !border-[#e9ebef] !bg-white/90 !p-0 !shadow-[0_1px_3px_rgba(31,35,41,0.035)]"
+                icon={<Trash2 size={14} strokeWidth={1.9} />}
                 onClick={() => onDelete(record)}
               />
             ) : null}
@@ -141,30 +151,31 @@ const DataSourceCard = ({
 
       <div
         className={[
-          'grid grid-cols-3 px-[19px] py-[15px]',
+          'relative z-[1] grid grid-cols-[1.05fr_0.8fr_1.15fr] border-t border-[#eef0f3] bg-white/75 px-[18px] py-[14px]',
           isListView
-            ? 'items-center border-l border-black/[0.055] max-xl:border-l-0 max-xl:border-t'
+            ? 'items-center border-l border-t-0 max-xl:border-l-0 max-xl:border-t'
             : '',
         ]
           .filter(Boolean)
           .join(' ')}
       >
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-[10px] text-black/[0.38]">连接状态</span>
+        <div className="flex min-w-0 flex-col gap-1.5 pr-3">
+          <span className="text-[10px] leading-4 text-[#a0a4ad]">连接状态</span>
           <DataSourceStatus status={record.connStatus} />
         </div>
 
-        <div className="flex min-w-0 flex-col gap-1.5 border-l border-black/[0.06] pl-3.5">
-          <span className="text-[10px] text-black/[0.38]">数据源类型</span>
-          <strong className="truncate text-[11px] font-semibold text-black/[0.78]">
+        <div className="flex min-w-0 flex-col gap-1.5 border-l border-[#eff0f2] px-3">
+          <span className="text-[10px] leading-4 text-[#a0a4ad]">数据源类型</span>
+          <strong className="truncate text-[11px] font-semibold leading-[18px] text-[#5c616b]">
             {String(record.dbType || '-')}
           </strong>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-1.5 border-l border-black/[0.06] pl-3.5">
-          <span className="text-[10px] text-black/[0.38]">最近更新</span>
-          <strong className="truncate text-[11px] font-semibold text-black/[0.78]">
-            {record.updateTime || '-'}
+        <div className="flex min-w-0 flex-col gap-1.5 border-l border-[#eff0f2] pl-3">
+          <span className="text-[10px] leading-4 text-[#a0a4ad]">最近更新</span>
+          <strong className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium leading-[18px] text-[#737882]">
+            <Clock3 size={11} strokeWidth={1.8} className="shrink-0 text-[#9ca0a9]" />
+            <span className="truncate">{record.updateTime || '-'}</span>
           </strong>
         </div>
       </div>

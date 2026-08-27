@@ -37,14 +37,18 @@ const DataSourceToolbar = ({
 }: DataSourceToolbarProps) => (
   <motion.section
     variants={PAGE_ANIMATION.fadeUp}
-    className="mt-[26px] flex min-h-[62px] items-end justify-between gap-6 border-b border-black/[0.075] max-xl:flex-col max-xl:items-stretch max-xl:gap-3"
+    className="mt-[18px] flex min-h-[56px] items-end justify-between gap-6 border-b border-[#eceef1] max-xl:flex-col max-xl:items-stretch max-xl:gap-3"
   >
-    <div className="h-[35px]">
+    <div className="h-[34px]">
       <YakTab
         size="small"
         activeKey={environment || 'all'}
         className={[
+          '[&_.ant-tabs-tab]:!px-0',
+          '[&_.ant-tabs-tab]:!text-[13px]',
+          '[&_.ant-tabs-tab.ant-tabs-tab-active_.ant-tabs-tab-btn]:!font-semibold',
           '[&_.ant-tabs-tab.ant-tabs-tab-active_.ant-tabs-tab-btn]:!text-[#292c35]',
+          '[&_.ant-tabs-tab::after]:!h-0.5',
           '[&_.ant-tabs-tab::after]:!bg-[#252832]',
         ].join(' ')}
         items={DATA_SOURCE_ENVIRONMENT_TABS.map((item) => ({
@@ -60,7 +64,7 @@ const DataSourceToolbar = ({
       />
     </div>
 
-    <div className="flex items-center gap-2 pb-[11px] max-xl:justify-end max-xl:pb-3">
+    <div className="flex flex-wrap items-center justify-end gap-2 pb-[10px] max-xl:justify-start max-xl:pb-3">
       <Select
         allowClear
         variant="filled"
@@ -68,8 +72,11 @@ const DataSourceToolbar = ({
         className={[
           '!w-[132px]',
           '[&_.ant-select-selector]:!h-9',
-          '[&_.ant-select-selector]:!rounded-lg',
+          '[&_.ant-select-selector]:!rounded-[10px]',
+          '[&_.ant-select-selector]:!bg-[#f6f7f9]',
+          '[&_.ant-select-selection-item]:!text-[12px]',
           '[&_.ant-select-selection-item]:!leading-[36px]',
+          '[&_.ant-select-selection-placeholder]:!text-[12px]',
           '[&_.ant-select-selection-placeholder]:!leading-[36px]',
         ].join(' ')}
         placeholder="数据源类型"
@@ -82,35 +89,41 @@ const DataSourceToolbar = ({
         allowClear
         variant="filled"
         value={keyword}
-        prefix={<Search size={15} strokeWidth={1.8} />}
+        prefix={<Search size={15} strokeWidth={1.8} className="text-[#8f949e]" />}
         className={[
-          '!w-[300px]',
+          '!w-[292px] max-md:!w-[220px]',
           '[&.ant-input-affix-wrapper]:!h-9',
-          '[&.ant-input-affix-wrapper]:!rounded-lg',
-          '[&_.ant-input]:!text-xs',
+          '[&.ant-input-affix-wrapper]:!rounded-[10px]',
+          '[&.ant-input-affix-wrapper]:!bg-[#f6f7f9]',
+          '[&_.ant-input]:!text-[12px]',
         ].join(' ')}
         placeholder="搜索名称或连接地址"
         onChange={(event) => onKeywordChange(event.target.value)}
       />
 
       {hasActiveFilters ? (
-        <YakButton type="text" size="small" onClick={onReset}>
+        <YakButton
+          type="text"
+          size="small"
+          className="!h-9 !rounded-[9px] !px-2.5 !text-[12px] !text-[#777c86]"
+          onClick={onReset}
+        >
           重置
         </YakButton>
       ) : null}
 
-      <div className="flex overflow-hidden rounded-[7px] border border-black/[0.09] bg-white">
+      <div className="flex h-9 items-center gap-0.5 rounded-[10px] bg-[#f4f5f7] p-[3px]">
         <YakButton
           type="text"
           iconOnly
           title="卡片视图"
           className={[
-            '!h-[34px] !w-[34px] !rounded-none !border-0 !p-0',
+            '!h-[30px] !w-[30px] !rounded-[7px] !border-0 !p-0',
             viewMode === 'grid'
-              ? '!bg-[#f7f8fa] !text-[#252832]'
-              : '!bg-white !text-black/[0.53]',
+              ? '!bg-white !text-[#2d313a] !shadow-[0_1px_4px_rgba(31,35,41,0.10)]'
+              : '!bg-transparent !text-[#92969f] hover:!text-[#555b66]',
           ].join(' ')}
-          icon={<Grid2X2 size={16} strokeWidth={1.8} />}
+          icon={<Grid2X2 size={15} strokeWidth={1.8} />}
           onClick={() => onViewModeChange('grid')}
         />
 
@@ -119,12 +132,12 @@ const DataSourceToolbar = ({
           iconOnly
           title="列表视图"
           className={[
-            '!h-[34px] !w-[34px] !rounded-none !border-0 !border-l !border-l-black/[0.09] !p-0',
+            '!h-[30px] !w-[30px] !rounded-[7px] !border-0 !p-0',
             viewMode === 'list'
-              ? '!bg-[#f7f8fa] !text-[#252832]'
-              : '!bg-white !text-black/[0.53]',
+              ? '!bg-white !text-[#2d313a] !shadow-[0_1px_4px_rgba(31,35,41,0.10)]'
+              : '!bg-transparent !text-[#92969f] hover:!text-[#555b66]',
           ].join(' ')}
-          icon={<LayoutList size={17} strokeWidth={1.8} />}
+          icon={<LayoutList size={16} strokeWidth={1.8} />}
           onClick={() => onViewModeChange('list')}
         />
       </div>
