@@ -91,7 +91,6 @@ export default function SingleTablePreviewModal({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [preview, setPreview] = useState<DataSourcePreviewResult>(emptyPreview);
-  const [total, setTotal] = useState(0);
   const requestSequence = useRef(0);
 
   const requestBody = useMemo(
@@ -117,27 +116,22 @@ export default function SingleTablePreviewModal({
     setLoading(true);
     setErrorMessage('');
     setPreview(emptyPreview);
-    setTotal(0);
 
     try {
-      const [previewResponse, countResponse] = await Promise.all([
-        dataSourceCatalogApi.getTop20Data(dataSourceId, requestBody),
-        dataSourceCatalogApi.count(dataSourceId, requestBody),
-      ]);
+      const previewResponse = await dataSourceCatalogApi.getTop20Data(
+        dataSourceId,
+        requestBody,
+      );
 
       if (sequence !== requestSequence.current) return;
 
       if (previewResponse?.code !== API_SUCCESS_CODE) {
         throw new Error(responseMessage(previewResponse, '获取预览数据失败'));
       }
-      if (countResponse?.code !== API_SUCCESS_CODE) {
-        throw new Error(responseMessage(countResponse, '统计数据量失败'));
-      }
 
       const nextPreview =
         (previewResponse?.data as DataSourcePreviewResult | undefined) ||
         emptyPreview;
-      const nextTotal = Number(countResponse?.data ?? nextPreview.total ?? 0);
 
       setPreview({
         columns: Array.isArray(nextPreview.columns) ? nextPreview.columns : [],
@@ -146,11 +140,9 @@ export default function SingleTablePreviewModal({
           ? Number(nextPreview.total)
           : 0,
       });
-      setTotal(Number.isFinite(nextTotal) ? nextTotal : 0);
     } catch (error: any) {
       if (sequence !== requestSequence.current) return;
       setPreview(emptyPreview);
-      setTotal(0);
       setErrorMessage(error?.message || '获取数据预览失败');
     } finally {
       if (sequence === requestSequence.current) {
@@ -238,12 +230,6 @@ export default function SingleTablePreviewModal({
         <Tag bordered={false}>{readMode === 'sql' ? 'SQL 查询' : '数据表'}</Tag>
         <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#344054]">
           {previewTarget}
-        </div>
-        <div className="text-[12px] text-[#667085]">
-          总记录数：
-          <span className="ml-1 font-semibold text-[#161823]">
-            {total.toLocaleString()}
-          </span>
         </div>
         <div className="text-[12px] text-[#667085]">
           本次预览：
