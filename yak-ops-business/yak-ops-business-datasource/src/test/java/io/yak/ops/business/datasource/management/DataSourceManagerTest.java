@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.datasource.connection.DataSourceConnectionResolver;
 import io.yak.ops.business.datasource.domain.ConnectionProfile;
+import io.yak.ops.business.datasource.domain.DataSourceChangedEvent;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.query.DataSourceReader;
 import io.yak.ops.business.datasource.repository.DataSourceRepository;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class DataSourceManagerTest {
@@ -25,6 +27,7 @@ class DataSourceManagerTest {
   @Mock private DataSourceRepository repository;
   @Mock private DataSourceReader reader;
   @Mock private DataSourceConnectionResolver connectionResolver;
+  @Mock private ApplicationEventPublisher eventPublisher;
 
   @Test
   void createBuildsAggregateFromNormalizedConnectionProfile() {
@@ -53,7 +56,46 @@ class DataSourceManagerTest {
     assertThat(captor.getValue().getConnStatus()).isEqualTo(DataSourceConnStatus.UNKNOWN);
   }
 
+  @Test
+  void updatePublishesDatasourceChangedEvent() {
+    DataSourceConfigurationCommand command =
+        new DataSourceConfigurationCommand(
+            "orders-db",
+            DataSourceDbType.MYSQL,
+            DataSourceEnvironment.PROD,
+            "updated",
+            "{\"host\":\"db.internal\"}");
+    ConnectionProfile stored =
+        new ConnectionProfile(
+            "jdbc:mysql://127.0.0.1/orders",
+            "{\"host\":\"127.0.0.1\"}",
+            "{\"host\":\"127.0.0.1\"}");
+    ConnectionProfile merged =
+        new ConnectionProfile(
+            "jdbc:mysql://db.internal/orders",
+            "{\"host\":\"db.internal\"}",
+            "{\"host\":\"db.internal\"}");
+    DataSourceDefinition existing =
+        DataSourceDefinition.create(
+            "orders-db",
+            DataSourceDbType.MYSQL,
+            stored,
+            DataSourceEnvironment.PROD,
+            null);
+    when(reader.require(42L)).thenReturn(existing);
+    when(connectionResolver.mergeStoredSecrets(existing, command.connectionJson()))
+        .thenReturn(merged);
+    when(repository.update(existing)).thenReturn(true);
+
+    assertThat(manager().update(42L, command)).isTrue();
+
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue())
+        .isEqualTo(new DataSourceChangedEvent(42L));
+  }
+
   private DataSourceManager manager() {
-    return new DataSourceManager(repository, reader, connectionResolver);
+    return new DataSourceManager(repository, reader, connectionResolver, eventPublisher);
   }
 }
