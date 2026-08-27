@@ -104,8 +104,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   public List<DataSourceTable> listTables(DataSourceCatalogQuery query) {
     DataSourceCatalogQuery value =
         query == null ? new DataSourceCatalogQuery(null, null, null) : query;
-    String database = firstNonBlank(value.getDatabase(), connection.database());
-    String schema = firstNonBlank(value.getSchema(), connection.schema());
+    String database = metadataCatalog(value.getDatabase());
+    String schema = metadataSchema(value.getSchema());
     String keyword = trimToNull(value.getKeyword());
     int limit =
         value.getLimit() == null
@@ -138,8 +138,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   @Override
   public List<DataSourceColumn> listColumns(DataSourceTablePath tablePath) {
-    String database = firstNonBlank(tablePath.getDatabase(), connection.database());
-    String schema = firstNonBlank(tablePath.getSchema(), connection.schema());
+    String database = metadataCatalog(tablePath.getDatabase());
+    String schema = metadataSchema(tablePath.getSchema());
     try (Connection opened = openConnection()) {
       DatabaseMetaData metadata = opened.getMetaData();
       Set<String> primaryKeys = primaryKeys(metadata, database, schema, tablePath.getTable());
@@ -358,6 +358,26 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     }
     parts.add(quoteIdentifier(tablePath.getTable()));
     return String.join(".", parts);
+  }
+
+  private String metadataCatalog(String requestedDatabase) {
+    if (connection.dbType() == DataSourceDbType.ORACLE) {
+      // Oracle's JDBC catalog is not the service name. Supplying it can broaden or invalidate
+      // DatabaseMetaData lookups, so keep the catalog null and scope through schema instead.
+      return null;
+    }
+    return firstNonBlank(requestedDatabase, connection.database());
+  }
+
+  private String metadataSchema(String requestedSchema) {
+    String schema = firstNonBlank(requestedSchema, connection.schema());
+    if (connection.dbType() != DataSourceDbType.ORACLE) {
+      return schema;
+    }
+    if (isBlank(schema)) {
+      schema = trimToNull(connection.username());
+    }
+    return schema == null ? null : schema.toUpperCase(Locale.ROOT);
   }
 
   private String tableNamePattern(DatabaseMetaData metadata, String keyword) throws SQLException {
