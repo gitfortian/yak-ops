@@ -30,6 +30,30 @@ const codeMessage: Record<number, string> = {
   504: "网关超时。",
 };
 
+const getHttpErrorPresentation = (status: number) => {
+  if (status >= 500) {
+    return {
+      title: "服务暂时不可用",
+      meta: `HTTP ${status} · 请稍后重试`,
+    };
+  }
+
+  switch (status) {
+    case 400:
+      return { title: "请求参数有误", meta: "请检查输入内容" };
+    case 403:
+      return { title: "无权访问", meta: "权限不足" };
+    case 404:
+      return { title: "资源不存在", meta: "请确认资源仍然存在" };
+    case 405:
+      return { title: "请求方式不支持", meta: "请刷新页面后重试" };
+    case 422:
+      return { title: "数据校验未通过", meta: "请检查输入内容" };
+    default:
+      return { title: "请求失败", meta: `HTTP ${status}` };
+  }
+};
+
 export class BizError extends Error {
   code?: number;
   response?: ApiResponse<any>;
@@ -131,7 +155,8 @@ const errorHandler = (error: any): Response | undefined => {
   const skipErrorHandler = shouldSkipErrorHandler(error);
 
   // HTTP 异常。umi-request 会把 JSON 错误体放在 error.data 中，优先展示
-  // 后端真实 msg/message，而不是用通用 HTTP 状态文案覆盖它。
+  // 后端真实 msg/message；HTML 错误页等 transport diagnostics 会在
+  // services/http/response 边界被过滤，避免技术细节直接进入用户通知。
   if (response?.status) {
     const { status, url } = response;
     const protocol = protocolForUrl(url);
@@ -148,42 +173,13 @@ const errorHandler = (error: any): Response | undefined => {
       throw error;
     }
 
-    // Proxy errors often include the request URL in the error body already.
-    // Compare without the protocol so `localhost/...` and `http://localhost/...`
-    // are treated as the same endpoint instead of rendering two near-identical lines.
-    const normalizedRequestUrl = url
-      ?.replace(/^https?:\/\//i, "")
-      .toLowerCase();
-    const normalizedErrorText = errorText
-      .replace(/https?:\/\//gi, "")
-      .toLowerCase();
-    const shouldShowRequestUrl = Boolean(
-      url &&
-        normalizedRequestUrl &&
-        !normalizedErrorText.includes(normalizedRequestUrl)
-    );
-
     if (!skipErrorHandler) {
+      const presentation = getHttpErrorPresentation(status);
       notifyOnce(`http:${status}:${url || ""}:${errorText}`, {
         type: "error",
-        title: `请求错误 ${status}`,
-        description: (
-          <div>
-            <div>{errorText}</div>
-            {shouldShowRequestUrl ? (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  color: "rgba(23, 32, 51, 0.45)",
-                }}
-              >
-                {url}
-              </div>
-            ) : null}
-          </div>
-        ),
-        meta: status === 403 ? "权限不足" : undefined,
+        title: presentation.title,
+        description: errorText,
+        meta: presentation.meta,
         duration: 3.5,
       });
     }

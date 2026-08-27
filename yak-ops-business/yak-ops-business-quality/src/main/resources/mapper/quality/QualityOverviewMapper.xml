@@ -109,18 +109,25 @@
 
   <select id="selectDimensions" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$DimensionRow">
     SELECT
-      <include refid="DimensionExpression"/> AS dimension,
-      COUNT(*) AS total_count,
-      SUM(CASE WHEN re.check_result = 'PASSED' THEN 1 ELSE 0 END) AS passed_count,
-      SUM(CASE WHEN re.check_result IN ('NOT_PASSED', 'ERROR') THEN 1 ELSE 0 END) AS issue_count
-    FROM yak_quality_rule_execution re
-    INNER JOIN yak_quality_execution e ON e.id = re.execution_id
-    LEFT JOIN yak_quality_rule r ON r.id = re.rule_id
-    WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
-      AND re.check_result IN ('PASSED', 'NOT_PASSED', 'ERROR')
-    GROUP BY <include refid="DimensionExpression"/>
+      dimension_stats.dimension,
+      dimension_stats.total_count,
+      dimension_stats.passed_count,
+      dimension_stats.issue_count
+    FROM (
+      SELECT
+        <include refid="DimensionExpression"/> AS dimension,
+        COUNT(*) AS total_count,
+        SUM(CASE WHEN re.check_result = 'PASSED' THEN 1 ELSE 0 END) AS passed_count,
+        SUM(CASE WHEN re.check_result IN ('NOT_PASSED', 'ERROR') THEN 1 ELSE 0 END) AS issue_count
+      FROM yak_quality_rule_execution re
+      INNER JOIN yak_quality_execution e ON e.id = re.execution_id
+      LEFT JOIN yak_quality_rule r ON r.id = re.rule_id
+      WHERE e.queued_at &gt;= #{rangeStart} AND e.queued_at &lt; #{rangeEnd}
+        AND re.check_result IN ('PASSED', 'NOT_PASSED', 'ERROR')
+      GROUP BY <include refid="DimensionExpression"/>
+    ) dimension_stats
     ORDER BY
-      CASE <include refid="DimensionExpression"/>
+      CASE dimension_stats.dimension
         WHEN '完整性' THEN 1
         WHEN '准确性' THEN 2
         WHEN '唯一性' THEN 3
@@ -130,7 +137,7 @@
         WHEN '自定义' THEN 7
         ELSE 99
       END,
-      <include refid="DimensionExpression"/>
+      dimension_stats.dimension
   </select>
 
   <select id="selectAnalyticsTrend" resultType="io.yak.ops.business.quality.dao.model.QualityOverviewPO$TrendRow">

@@ -33,6 +33,19 @@ const unauthenticatedMessages = new Set([
   'LOGIN_EXPIRED',
 ]);
 
+const MAX_ERROR_MESSAGE_LENGTH = 240;
+const htmlDocumentPattern = /<(?:!doctype\s+html|html|head|body|title|style|script)\b/i;
+
+const normalizeDisplayErrorText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+
+  const text = value.trim().replace(/\s+/g, ' ');
+  if (!text || htmlDocumentPattern.test(text)) return undefined;
+  if (text.length <= MAX_ERROR_MESSAGE_LENGTH) return text;
+
+  return `${text.slice(0, MAX_ERROR_MESSAGE_LENGTH - 1).trimEnd()}…`;
+};
+
 const normalizeUnauthenticatedMessage = (message: string) =>
   message.trim().toUpperCase().replace(/[\s-]+/g, '_');
 
@@ -54,12 +67,15 @@ export const isSuccessfulResponse = (
 export const extractErrorMessage = (
   response: Partial<ApiResponse> | null | undefined,
   fallback = '操作失败',
-): string => response?.msg?.trim() || response?.message?.trim() || fallback;
+): string =>
+  normalizeDisplayErrorText(response?.msg) ||
+  normalizeDisplayErrorText(response?.message) ||
+  fallback;
 
 /**
- * Extract a useful server error from both the standard API envelope and common
- * HTTP error payloads. This prevents a real backend reason from being replaced
- * by a generic 4xx/5xx status description in the request error handler.
+ * Extract a user-facing server error from both the standard API envelope and
+ * common HTTP error payloads. HTML error pages and oversized diagnostics are
+ * transport details, not UI copy, so they are filtered or shortened here.
  */
 export const extractUnknownErrorMessage = (
   payload: unknown,
@@ -69,17 +85,14 @@ export const extractUnknownErrorMessage = (
     return extractErrorMessage(payload, fallback);
   }
 
-  if (typeof payload === 'string' && payload.trim()) {
-    return payload.trim();
-  }
+  const directMessage = normalizeDisplayErrorText(payload);
+  if (directMessage) return directMessage;
 
   if (payload && typeof payload === 'object') {
     const source = payload as Record<string, unknown>;
     for (const key of ['msg', 'message', 'error', 'detail']) {
-      const value = source[key];
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
+      const message = normalizeDisplayErrorText(source[key]);
+      if (message) return message;
     }
   }
 
