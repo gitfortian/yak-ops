@@ -42,13 +42,23 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   private static final Pattern PLUGIN_VARIABLE_PATTERN = Pattern.compile("\\$\\{var:([^}]+)}");
   private static final DateTimeFormatter DATETIME_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+  private static final int MAX_TABLE_SEARCH_LIMIT = 500;
 
   private final JdbcConnectionProperties connection;
-  private final int timeoutSeconds;
+  private final int connectionTimeoutSeconds;
+  private final int queryTimeoutSeconds;
 
   public GenericJdbcCatalog(JdbcConnectionProperties connection, int timeoutSeconds) {
+    this(connection, timeoutSeconds, timeoutSeconds);
+  }
+
+  public GenericJdbcCatalog(
+      JdbcConnectionProperties connection,
+      int connectionTimeoutSeconds,
+      int queryTimeoutSeconds) {
     this.connection = connection;
-    this.timeoutSeconds = Math.max(1, timeoutSeconds);
+    this.connectionTimeoutSeconds = Math.max(1, connectionTimeoutSeconds);
+    this.queryTimeoutSeconds = Math.max(1, queryTimeoutSeconds);
   }
 
   @Override
@@ -92,24 +102,35 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   @Override
   public List<DataSourceTable> listTables(DataSourceCatalogQuery query) {
-    String database = firstNonBlank(query == null ? null : query.getDatabase(), connection.database());
-    String schema = firstNonBlank(query == null ? null : query.getSchema(), connection.schema());
-    String keyword = query == null ? null : trimToNull(query.getKeyword());
-    try (Connection opened = openConnection();
-        ResultSet resultSet = opened.getMetaData().getTables(database, schema, "%", tableTypes())) {
-      List<DataSourceTable> tables = new ArrayList<>();
-      while (resultSet.next()) {
-        String name = resultSet.getString("TABLE_NAME");
-        if (!matchesKeyword(name, keyword)) continue;
-        tables.add(
-            new DataSourceTable(
-                resultSet.getString("TABLE_CAT"),
-                resultSet.getString("TABLE_SCHEM"),
-                name,
-                resultSet.getString("TABLE_TYPE"),
-                resultSet.getString("REMARKS")));
+    DataSourceCatalogQuery value =
+        query == null ? new DataSourceCatalogQuery(null, null, null) : query;
+    String database = firstNonBlank(value.getDatabase(), connection.database());
+    String schema = firstNonBlank(value.getSchema(), connection.schema());
+    String keyword = trimToNull(value.getKeyword());
+    int limit =
+        value.getLimit() == null
+            ? Integer.MAX_VALUE
+            : Math.min(MAX_TABLE_SEARCH_LIMIT, Math.max(1, value.getLimit()));
+
+    try (Connection opened = openConnection()) {
+      DatabaseMetaData metadata = opened.getMetaData();
+      String tableNamePattern = tableNamePattern(metadata, keyword);
+      try (ResultSet resultSet =
+          metadata.getTables(database, schema, tableNamePattern, tableTypes())) {
+        List<DataSourceTable> tables = new ArrayList<>();
+        while (resultSet.next() && tables.size() < limit) {
+          String name = resultSet.getString("TABLE_NAME");
+          if (!matchesKeyword(name, keyword)) continue;
+          tables.add(
+              new DataSourceTable(
+                  resultSet.getString("TABLE_CAT"),
+                  resultSet.getString("TABLE_SCHEM"),
+                  name,
+                  resultSet.getString("TABLE_TYPE"),
+                  resultSet.getString("REMARKS")));
+        }
+        return tables;
       }
-      return tables;
     } catch (Exception exception) {
       throw catalogError("读取表列表失败", exception);
     }
@@ -155,7 +176,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String query = resolveSql(value.query(), value);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(stripTrailingSemicolon(query))) {
-      statement.setQueryTimeout(timeoutSeconds);
+      statement.setQueryTimeout(queryTimeoutSeconds);
       ResultSetMetaData metadata = statement.getMetaData();
       if (metadata != null) return columnsFromMetadata(metadata);
       statement.setMaxRows(1);
@@ -174,7 +195,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String query = buildQuery(value);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(query)) {
-      statement.setQueryTimeout(timeoutSeconds);
+      statement.setQueryTimeout(queryTimeoutSeconds);
       statement.setMaxRows(safeLimit);
       try (ResultSet resultSet = statement.executeQuery()) {
         ResultSetMetaData metadata = resultSet.getMetaData();
@@ -202,7 +223,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     String countSql = "SELECT COUNT(*) FROM (" + query + ") yak_ops_count";
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(countSql)) {
-      statement.setQueryTimeout(timeoutSeconds);
+      statement.setQueryTimeout(queryTimeoutSeconds);
       try (ResultSet resultSet = statement.executeQuery()) {
         return resultSet.next() ? resultSet.getLong(1) : 0L;
       }
@@ -251,7 +272,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   protected Connection openConnection() throws Exception {
     Class.forName(connection.driverClassName());
-    DriverManager.setLoginTimeout(timeoutSeconds);
+    DriverManager.setLoginTimeout(connectionTimeoutSeconds);
     return DriverManager.getConnection(connection.jdbcUrl(), connectionPropertiesInternal());
   }
 
@@ -337,6 +358,25 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     }
     parts.add(quoteIdentifier(tablePath.getTable()));
     return String.join(".", parts);
+  }
+
+  private String tableNamePattern(DatabaseMetaData metadata, String keyword) throws SQLException {
+    if (keyword == null) return "%";
+
+    String normalized = keyword;
+    if (metadata.storesUpperCaseIdentifiers()) {
+      normalized = normalized.toUpperCase(Locale.ROOT);
+    } else if (metadata.storesLowerCaseIdentifiers()) {
+      normalized = normalized.toLowerCase(Locale.ROOT);
+    }
+
+    String escape = trimToNull(metadata.getSearchStringEscape());
+    if (escape != null) {
+      normalized = normalized.replace(escape, escape + escape);
+      normalized = normalized.replace("%", escape + "%");
+      normalized = normalized.replace("_", escape + "_");
+    }
+    return "%" + normalized + "%";
   }
 
   private List<DataSourceColumn> columnsFromMetadata(ResultSetMetaData metadata) throws SQLException {
