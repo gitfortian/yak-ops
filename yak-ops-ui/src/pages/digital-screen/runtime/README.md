@@ -1,9 +1,36 @@
 # Digital Screen Runtime
 
-`runtime` owns the execution path of a saved screen definition. It may resolve Dataset bindings,
-adapt query results and coordinate component runtime state, but it must not own screen persistence
-or editor-only state.
+`runtime` owns execution of a saved Digital Screen definition. Screen persistence and Draft/PublishedVersion lifecycle stay in `services/digital-screen`; Dataset HTTP stays in `services/dataset`.
 
-PR 0 introduces `ScreenRuntimeComponentRegistry` as an incremental extension point. Bar chart data
-adaptation is the first migrated plugin role; legacy component adapters remain as a fallback so this
-refactor does not change current screen behavior.
+## Roles
+
+```text
+Screen definition + Dataset catalog
+              |
+              v
+          planner.ts
+              |
+       Runtime candidates
+              |
+              v
+           query.ts
+              |
+              v
+  Runtime Component Registry
+   - bindable capability
+   - query contract
+   - data adapter
+              |
+              v
+       useScreenRuntime
+              |
+              v
+        ScreenRuntime.tsx
+              |
+              v
+ generic screen-engine renderer
+```
+
+`components/screen-engine/runtime` owns the React Renderer Registry. It only answers “how does this component render?” and intentionally knows nothing about Dataset bindings.
+
+PR 3 registers all current component types explicitly and removes the legacy adapter/render switches. PR 4 may optimize the planner/executor with request deduplication, caching, cancellation and refresh policies without changing Viewer or component plugins.

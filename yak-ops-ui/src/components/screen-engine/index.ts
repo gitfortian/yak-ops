@@ -6,6 +6,18 @@ export {
   listScreenTemplateCategories,
   listScreenTemplates,
 } from './registry';
+export {
+  defineScreenComponentRenderer,
+  screenComponentRendererRegistry,
+  ScreenComponentRendererRegistry,
+} from './runtime';
+export type {
+  ScreenComponentInteraction,
+  ScreenComponentRendererDefinition,
+  ScreenComponentRendererProps,
+  TypedScreenComponentRenderer,
+  TypedScreenComponentRendererProps,
+} from './runtime';
 export type {
   ScreenAggregation,
   ScreenBarComponent,

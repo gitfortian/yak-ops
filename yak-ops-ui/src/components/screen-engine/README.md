@@ -1,17 +1,31 @@
 # Screen Template Engine
 
-The screen template engine is the phase-1 foundation for Yak Ops digital screens. It keeps layout and visual design in a typed template document so later screen creation only needs to bind datasets into predefined component slots.
+`screen-engine` owns the generic, Dataset-agnostic rendering protocol used by Yak Ops digital screens. Layout, visual style and preview/runtime data are expressed through typed `ScreenTemplate` / `ScreenComponent` documents.
 
-## What phase 1 contains
+## Runtime boundaries
 
-- `ScreenTemplate` / `ScreenComponent` typed protocol.
-- Fixed 1920×1080 design canvas with responsive renderer.
-- Metric, line, bar, pie, table and text components.
-- Runtime data overrides keyed by component id for the next dataset-binding phase.
-- Template validation for duplicate ids, invalid bounds and malformed preview series.
-- Built-in template registry with three ready-to-render templates.
+```text
+ScreenTemplate
+     |
+     v
+ScreenRenderer                 # canvas / scaling / component iteration
+     |
+     v
+Renderer Registry              # component type -> React renderer
+     |
+     +-- metric
+     +-- line / bar / pie
+     +-- table
+     +-- text
+     +-- map
+     `-- ticker
+```
 
-## Usage
+The renderer registry only knows how to draw components. Dataset binding, query planning and result adaptation live in `pages/digital-screen/runtime`, so the generic engine stays reusable by template previews and other future consumers.
+
+## Public API
+
+`ScreenRenderer` keeps its original public contract:
 
 ```tsx
 import {
@@ -27,7 +41,7 @@ export default function Preview() {
 }
 ```
 
-Dataset integration can replace one component's preview payload without touching its layout or style:
+Runtime data can override one component without changing layout/style:
 
 ```tsx
 <ScreenRenderer
@@ -43,4 +57,8 @@ Dataset integration can replace one component's preview payload without touching
 />
 ```
 
-Phase 2 should resolve `dataBinding` through the existing dataset APIs and pass query results into the same `data` override channel.
+## Renderer roles
+
+Built-in renderer definitions are declared in `runtime/builtin-renderers.tsx` through `defineScreenComponentRenderer(...)` and assembled by `ScreenComponentRendererRegistry`. Adding a supported component role therefore extends the registry instead of adding another branch to a central rendering `switch`.
+
+The exported built-in registry is intentionally complete and duplicate registration is rejected. Digital Screen Dataset plugins use a separate registry because query/adapter concerns must not leak into this renderer layer.
