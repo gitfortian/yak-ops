@@ -192,10 +192,11 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   public DataSourceQueryResult preview(DataSourceCatalogReadRequest request, int limit) {
     DataSourceCatalogReadRequest value = requireRequest(request);
     int safeLimit = Math.max(1, Math.min(limit, 200));
-    String query = buildQuery(value);
+    String query = buildPreviewQuery(value, safeLimit);
     try (Connection opened = openConnection();
         PreparedStatement statement = opened.prepareStatement(query)) {
       statement.setQueryTimeout(queryTimeoutSeconds);
+      // Keep the JDBC-level cap as a second line of defense even though the SQL is already bounded.
       statement.setMaxRows(safeLimit);
       try (ResultSet resultSet = statement.executeQuery()) {
         ResultSetMetaData metadata = resultSet.getMetaData();
@@ -321,6 +322,23 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
       return stripTrailingSemicolon(resolveSql(request.query(), request));
     }
     return "SELECT * FROM " + buildTableReference(resolveTablePath(request.tablePath()));
+  }
+
+  private String buildPreviewQuery(DataSourceCatalogReadRequest request, int limit) {
+    String query = buildQuery(request);
+    if (!request.sqlMode()) {
+      return switch (connection.dbType()) {
+        case ORACLE, DAMENG -> query + " WHERE ROWNUM <= " + limit;
+        case MYSQL, POSTGRE_SQL, DORIS, KINGBASE -> query + " LIMIT " + limit;
+      };
+    }
+
+    return switch (connection.dbType()) {
+      case ORACLE, DAMENG ->
+          "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit;
+      case MYSQL, POSTGRE_SQL, DORIS, KINGBASE ->
+          "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
+    };
   }
 
   private DataSourceCatalogReadRequest requireRequest(DataSourceCatalogReadRequest request) {

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class GenericJdbcCatalogTypedRequestTest {
 
@@ -50,7 +51,7 @@ class GenericJdbcCatalogTypedRequestTest {
   }
 
   @Test
-  void previewDoesNotCountAndAppliesIndependentQueryTimeout() throws Exception {
+  void previewDoesNotCountAndAppliesSqlAndJdbcLimits() throws Exception {
     Connection opened = mock(Connection.class);
     PreparedStatement statement = mock(PreparedStatement.class);
     ResultSet resultSet = mock(ResultSet.class);
@@ -82,9 +83,82 @@ class GenericJdbcCatalogTypedRequestTest {
     DataSourceQueryResult result =
         catalog.preview(DataSourceCatalogReadRequest.table("orders", Map.of()), 20);
 
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    verify(opened).prepareStatement(sqlCaptor.capture());
+    assertThat(sqlCaptor.getValue()).isEqualTo("SELECT * FROM `demo`.`orders` LIMIT 20");
     assertThat(result.getData()).hasSize(1);
     assertThat(result.getTotal()).isEqualTo(1L);
     assertThat(countCalls.get()).isZero();
+    verify(statement).setQueryTimeout(13);
+    verify(statement).setMaxRows(20);
+  }
+
+  @Test
+  void customSqlPreviewAddsOuterLimitWithoutRewritingUserSql() throws Exception {
+    Connection opened = mock(Connection.class);
+    PreparedStatement statement = mock(PreparedStatement.class);
+    ResultSet resultSet = mock(ResultSet.class);
+    ResultSetMetaData metadata = mock(ResultSetMetaData.class);
+
+    when(opened.prepareStatement(anyString())).thenReturn(statement);
+    when(statement.executeQuery()).thenReturn(resultSet);
+    when(resultSet.getMetaData()).thenReturn(metadata);
+    when(metadata.getColumnCount()).thenReturn(0);
+    when(resultSet.next()).thenReturn(false);
+
+    GenericJdbcCatalog catalog =
+        new GenericJdbcCatalog(connection(), 5, 13) {
+          @Override
+          protected Connection openConnection() {
+            return opened;
+          }
+        };
+
+    catalog.preview(
+        DataSourceCatalogReadRequest.sql(
+            "select * from orders order by created_at desc limit 1000;", Map.of()),
+        20);
+
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    verify(opened).prepareStatement(sqlCaptor.capture());
+    assertThat(sqlCaptor.getValue())
+        .isEqualTo(
+            "SELECT * FROM (select * from orders order by created_at desc limit 1000) "
+                + "yak_ops_preview LIMIT 20");
+  }
+
+  @Test
+  void oraclePreviewUsesRowNumGuard() throws Exception {
+    Connection opened = mock(Connection.class);
+    PreparedStatement statement = mock(PreparedStatement.class);
+    ResultSet resultSet = mock(ResultSet.class);
+    ResultSetMetaData metadata = mock(ResultSetMetaData.class);
+
+    when(opened.prepareStatement(anyString())).thenReturn(statement);
+    when(statement.executeQuery()).thenReturn(resultSet);
+    when(resultSet.getMetaData()).thenReturn(metadata);
+    when(metadata.getColumnCount()).thenReturn(0);
+    when(resultSet.next()).thenReturn(false);
+
+    GenericJdbcCatalog catalog =
+        new GenericJdbcCatalog(oracleConnection(), 5, 13) {
+          @Override
+          protected Connection openConnection() {
+            return opened;
+          }
+        };
+
+    catalog.preview(
+        DataSourceCatalogReadRequest.sql(
+            "select * from patient order by patient_id", Map.of()),
+        20);
+
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    verify(opened).prepareStatement(sqlCaptor.capture());
+    assertThat(sqlCaptor.getValue())
+        .isEqualTo(
+            "SELECT * FROM (select * from patient order by patient_id) "
+                + "yak_ops_preview WHERE ROWNUM <= 20");
     verify(statement).setQueryTimeout(13);
     verify(statement).setMaxRows(20);
   }
