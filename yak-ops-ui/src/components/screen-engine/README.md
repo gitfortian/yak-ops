@@ -57,19 +57,8 @@ Runtime data can override one component without changing layout/style:
 />
 ```
 
-## Extending rendering
+## Renderer roles
 
-A renderer role is registered explicitly instead of adding another central `switch` branch:
+Built-in renderer definitions are declared in `runtime/builtin-renderers.tsx` through `defineScreenComponentRenderer(...)` and assembled by `ScreenComponentRendererRegistry`. Adding a supported component role therefore extends the registry instead of adding another branch to a central rendering `switch`.
 
-```tsx
-import {
-  defineScreenComponentRenderer,
-  screenComponentRendererRegistry,
-} from '@/components/screen-engine';
-
-screenComponentRendererRegistry.register(
-  defineScreenComponentRenderer('metric', MetricRenderer),
-);
-```
-
-Built-in types are already registered by the engine. Digital Screen runtime plugins use a separate registry because Dataset query/adapter concerns must not leak into this renderer layer.
+The exported built-in registry is intentionally complete and duplicate registration is rejected. Digital Screen Dataset plugins use a separate registry because query/adapter concerns must not leak into this renderer layer.
