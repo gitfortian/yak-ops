@@ -7,7 +7,7 @@ import {
 } from '@/services/digital-screen';
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
 import { useEffect, useMemo, useState } from 'react';
-import { useScreenRuntimeData } from '../../runtime/hooks/useScreenRuntimeData';
+import { useScreenRuntime } from '../../runtime/hooks/useScreenRuntime';
 
 const EMPTY_BINDINGS: DigitalScreenBindings = {};
 
@@ -55,7 +55,7 @@ export function useDigitalScreenViewer(id?: string) {
     () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),
     [screen],
   );
-  const runtime = useScreenRuntimeData(template, screen?.bindings ?? EMPTY_BINDINGS, datasets);
+  const runtime = useScreenRuntime(template, screen?.bindings ?? EMPTY_BINDINGS, datasets);
 
   return {
     screen,

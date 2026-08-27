@@ -1,7 +1,7 @@
-import { ScreenRenderer } from '@/components/screen-engine';
 import { YakButton } from '@/components/ui';
 import { history, useParams } from '@umijs/max';
 import { ArrowLeft, Pencil } from 'lucide-react';
+import { ScreenRuntime } from '../runtime/ScreenRuntime';
 import { useDigitalScreenViewer } from './hooks/useDigitalScreenViewer';
 
 export default function DigitalScreenViewerPage() {
@@ -34,7 +34,7 @@ export default function DigitalScreenViewerPage() {
         className="max-h-screen max-w-screen"
         style={{ width: `min(100vw, calc(100vh * ${ratio}))` }}
       >
-        <ScreenRenderer template={template} data={runtime.data} />
+        <ScreenRuntime template={template} runtime={runtime} />
       </div>
 
       <div className="absolute left-4 top-4 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
