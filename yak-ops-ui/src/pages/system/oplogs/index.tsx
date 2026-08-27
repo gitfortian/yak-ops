@@ -73,9 +73,6 @@ export default function OperationLogsPage() {
           dataSource={logs}
           loading={isLoading}
           pagination={false}
-          search={false}
-          options={false}
-          toolBarRender={false}
           bordered
           scroll={{ x: 'max-content' }}
         />

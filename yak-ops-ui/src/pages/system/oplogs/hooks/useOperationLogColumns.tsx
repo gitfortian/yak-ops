@@ -1,5 +1,5 @@
 import { EyeOutlined } from '@ant-design/icons';
-import type { ProColumns } from '@ant-design/pro-components';
+import type { TableColumnsType } from 'antd';
 import { Tag, Typography } from 'antd';
 import { useMemo } from 'react';
 
@@ -14,21 +14,25 @@ interface UseOperationLogColumnsOptions {
 
 export function useOperationLogColumns({
   onDetail,
-}: UseOperationLogColumnsOptions): ProColumns<OperationLog>[] {
-  return useMemo<ProColumns<OperationLog>[]>(
+}: UseOperationLogColumnsOptions): TableColumnsType<OperationLog> {
+  return useMemo<TableColumnsType<OperationLog>>(
     () => [
       {
         title: '日志 ID',
         dataIndex: 'id',
+        key: 'id',
         width: 110,
-        copyable: true,
-        search: false,
+        render: (value: number) => (
+          <Typography.Text copyable={{ text: String(value) }}>
+            {value}
+          </Typography.Text>
+        ),
       },
       {
         title: '操作',
         dataIndex: 'operateType',
+        key: 'operateType',
         width: 190,
-        search: false,
         render: (_, row) => (
           <div className="min-w-0">
             <div className="truncate font-medium text-slate-700">
@@ -45,8 +49,8 @@ export function useOperationLogColumns({
       {
         title: '操作人',
         dataIndex: 'operator',
+        key: 'operator',
         width: 180,
-        search: false,
         render: (_, row) => (
           <div className="min-w-0">
             <div className="truncate text-slate-700">
@@ -61,16 +65,16 @@ export function useOperationLogColumns({
       {
         title: '操作页面',
         dataIndex: 'operatePage',
+        key: 'operatePage',
         width: 180,
         ellipsis: true,
-        search: false,
-        renderText: (value) => value || '-',
+        render: (value?: string) => value || '-',
       },
       {
         title: '操作对象',
         dataIndex: 'target',
+        key: 'target',
         width: 260,
-        search: false,
         render: (_, row) => (
           <div className="min-w-0">
             <Typography.Text
@@ -89,13 +93,13 @@ export function useOperationLogColumns({
       {
         title: '操作时间',
         dataIndex: 'createTime',
+        key: 'createTime',
         width: 175,
-        search: false,
-        renderText: (value) => formatSystemDateTime(value),
+        render: (value?: string) => formatSystemDateTime(value),
       },
       {
         title: '操作',
-        valueType: 'option',
+        key: 'action',
         width: 90,
         fixed: 'right',
         render: (_, row) => (
