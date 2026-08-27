@@ -1,3 +1,5 @@
+import YakButton from '@/components/YakButton';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { BRAND_THEME } from '@/styles/brand';
 import { history } from '@umijs/max';
 import {
@@ -13,7 +15,6 @@ import {
 } from 'antd';
 import {
   ArrowUpRight,
-  Boxes,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -53,7 +54,6 @@ import {
   type LineageRelation,
 } from './types';
 import { lineageAssetVisual, lineageRelationColor } from './visual';
-import YakButton from '@/components/YakButton';
 
 const DEFAULT_DEPTH = 3;
 const SEARCH_LIMIT = 30;
@@ -176,192 +176,15 @@ const ImpactValue = ({ label, value }: { label: string; value: number }) => (
   </div>
 );
 
-const LineageEmptyIllustration = () => (
-  <svg
-    width="360"
-    height="236"
-    viewBox="0 0 360 236"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-    className="select-none"
-  >
-    <defs>
-      <linearGradient id="lineage-main-card" x1="111" y1="69" x2="241" y2="170">
-        <stop stopColor="#FFFFFF" />
-        <stop offset="1" stopColor="#F7F9FC" />
-      </linearGradient>
-      <linearGradient id="lineage-blue" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#93C5FD" />
-        <stop offset="1" stopColor="#4C78C9" />
-      </linearGradient>
-      <linearGradient id="lineage-purple" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#C4B5FD" />
-        <stop offset="1" stopColor="#8B5CF6" />
-      </linearGradient>
-      <linearGradient id="lineage-pink" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#FDA4AF" />
-        <stop offset="1" stopColor="#FE2C55" />
-      </linearGradient>
-      <linearGradient id="lineage-green" x1="0" y1="0" x2="1" y2="1">
-        <stop stopColor="#86EFAC" />
-        <stop offset="1" stopColor="#22A06B" />
-      </linearGradient>
-      <filter
-        id="lineage-shadow"
-        x="40"
-        y="22"
-        width="280"
-        height="196"
-        filterUnits="userSpaceOnUse"
-      >
-        <feDropShadow
-          dx="0"
-          dy="10"
-          stdDeviation="13"
-          floodColor="#1F2937"
-          floodOpacity="0.08"
-        />
-      </filter>
-      <filter
-        id="lineage-small-shadow"
-        x="0"
-        y="0"
-        width="360"
-        height="236"
-        filterUnits="userSpaceOnUse"
-      >
-        <feDropShadow
-          dx="0"
-          dy="6"
-          stdDeviation="7"
-          floodColor="#1F2937"
-          floodOpacity="0.07"
-        />
-      </filter>
-    </defs>
-
-    {/* subtle dots */}
-    <circle cx="47" cy="54" r="3.5" fill="#E1EAFE" />
-    <circle cx="313" cy="56" r="4" fill="#FCE0E6" />
-    <circle cx="58" cy="185" r="4" fill="#E9E2FF" />
-    <circle cx="303" cy="181" r="3.5" fill="#D9F2E5" />
-
-    {/* connectors */}
-    <path
-      d="M105 113C87 113 83 94 73 88"
-      stroke="#D8E2F2"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeDasharray="4 5"
-    />
-    <path
-      d="M174 68C174 53 156 47 148 42"
-      stroke="#E0D8F7"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeDasharray="4 5"
-    />
-    <path
-      d="M241 105C262 105 268 88 282 85"
-      stroke="#F5D5DD"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeDasharray="4 5"
-    />
-    <path
-      d="M200 167C204 184 223 190 233 194"
-      stroke="#D6ECDF"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeDasharray="4 5"
-    />
-
-    {/* connector joints */}
-    <circle cx="105" cy="113" r="4" fill="#FFFFFF" stroke="#AFC4E4" strokeWidth="2" />
-    <circle cx="174" cy="68" r="4" fill="#FFFFFF" stroke="#BCAAE9" strokeWidth="2" />
-    <circle cx="241" cy="105" r="4" fill="#FFFFFF" stroke="#E7A7B5" strokeWidth="2" />
-    <circle cx="200" cy="167" r="4" fill="#FFFFFF" stroke="#9FD1B4" strokeWidth="2" />
-
-    {/* main table node */}
-    <g filter="url(#lineage-shadow)">
-      <rect x="105" y="68" width="136" height="100" rx="18" fill="url(#lineage-main-card)" />
-      <rect
-        x="105.75"
-        y="68.75"
-        width="134.5"
-        height="98.5"
-        rx="17.25"
-        stroke="#E5EAF0"
-        strokeWidth="1.5"
-      />
-
-      <rect x="121" y="84" width="54" height="7" rx="3.5" fill="#DCE3EA" />
-      <rect x="183" y="84" width="38" height="7" rx="3.5" fill="#EEF1F5" />
-
-      <rect x="121" y="105" width="100" height="1.5" rx="0.75" fill="#EDF0F4" />
-      <circle cx="127" cy="118" r="4" fill="#93C5FD" />
-      <rect x="138" y="114.5" width="55" height="7" rx="3.5" fill="#E3E8EE" />
-      <rect x="199" y="114.5" width="22" height="7" rx="3.5" fill="#F1F3F6" />
-
-      <circle cx="127" cy="138" r="4" fill="#C4B5FD" />
-      <rect x="138" y="134.5" width="42" height="7" rx="3.5" fill="#E3E8EE" />
-      <rect x="186" y="134.5" width="35" height="7" rx="3.5" fill="#F1F3F6" />
-
-      <circle cx="127" cy="154" r="4" fill="#86EFAC" />
-      <rect x="138" y="150.5" width="67" height="7" rx="3.5" fill="#E3E8EE" />
-    </g>
-
-    {/* source database node */}
-    <g filter="url(#lineage-small-shadow)">
-      <rect x="39" y="62" width="54" height="54" rx="15" fill="#FFFFFF" />
-      <rect x="39.75" y="62.75" width="52.5" height="52.5" rx="14.25" stroke="#E6EBF1" strokeWidth="1.5" />
-      <ellipse cx="66" cy="77" rx="13" ry="5.5" fill="#DCEBFF" stroke="#8CB5EE" strokeWidth="1.4" />
-      <path d="M53 77V94C53 97 59 99.5 66 99.5C73 99.5 79 97 79 94V77" stroke="#7EA9E5" strokeWidth="1.5" />
-      <path d="M53 85C53 88 59 90.5 66 90.5C73 90.5 79 88 79 85" stroke="#A8C5EC" strokeWidth="1.3" />
-    </g>
-
-    {/* SQL task node */}
-    <g filter="url(#lineage-small-shadow)">
-      <rect x="124" y="19" width="50" height="42" rx="14" fill="#FFFFFF" />
-      <rect x="124.75" y="19.75" width="48.5" height="40.5" rx="13.25" stroke="#E6EBF1" strokeWidth="1.5" />
-      <path d="M144 31L138 40L144 49" stroke="url(#lineage-purple)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M154 31L160 40L154 49" stroke="url(#lineage-purple)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="149" cy="40" r="2.7" fill="#A78BFA" />
-    </g>
-
-    {/* chart node */}
-    <g filter="url(#lineage-small-shadow)">
-      <rect x="270" y="57" width="54" height="54" rx="15" fill="#FFFFFF" />
-      <rect x="270.75" y="57.75" width="52.5" height="52.5" rx="14.25" stroke="#E6EBF1" strokeWidth="1.5" />
-      <rect x="283" y="87" width="6" height="10" rx="3" fill="#FFD3DC" />
-      <rect x="293" y="79" width="6" height="18" rx="3" fill="#FF9DB0" />
-      <rect x="303" y="70" width="6" height="27" rx="3" fill="url(#lineage-pink)" />
-    </g>
-
-    {/* dashboard node */}
-    <g filter="url(#lineage-small-shadow)">
-      <rect x="214" y="181" width="58" height="42" rx="14" fill="#FFFFFF" />
-      <rect x="214.75" y="181.75" width="56.5" height="40.5" rx="13.25" stroke="#E6EBF1" strokeWidth="1.5" />
-      <rect x="226" y="192" width="14" height="8" rx="3" fill="#DDF4E7" />
-      <rect x="245" y="192" width="14" height="8" rx="3" fill="#C9EAD8" />
-      <rect x="226" y="204" width="14" height="7" rx="3" fill="#C9EAD8" />
-      <rect x="245" y="204" width="14" height="7" rx="3" fill="url(#lineage-green)" opacity="0.78" />
-    </g>
-  </svg>
-);
-
 const LineageEmptyState = () => (
   <div className="flex h-full min-h-[560px] items-center justify-center px-8">
-    <div className="flex max-w-[420px] flex-col items-center text-center">
-      <LineageEmptyIllustration />
-      <div className="-mt-1 text-[15px] font-semibold leading-6 text-[#30333B]">
-        选择一个资产
-      </div>
-      <div className="mt-1.5 text-[12px] leading-5 text-[#8A94A3]">
-        搜索后点击左侧结果，查看它的上下游关系。
-      </div>
-    </div>
+    <YakOpsEmpty
+      width={210}
+      height={142}
+      title="请选择一个资产"
+      description="搜索后点击左侧结果，查看它的上下游关系。"
+      showCaption
+    />
   </div>
 );
 
@@ -483,7 +306,6 @@ export default function LineagePage() {
       setSearching(false);
     }
   }, [searchKeyword, searchType]);
-
 
   const view = useMemo(() => {
     if (!graph) return undefined;
@@ -898,14 +720,14 @@ export default function LineagePage() {
                     })}
                   </div>
                 ) : hasSearched ? (
-                  <div className="flex h-40 flex-col items-center justify-center px-4 text-center">
-                    <Boxes size={18} className="text-[#B7BEC8]" />
-                    <div className="mt-2 text-[12px] font-medium text-[#667085]">
-                      未找到资产
-                    </div>
-                    <div className="mt-1 text-[11px] text-[#A3AAB5]">
-                      换个关键词试试
-                    </div>
+                  <div className="flex h-40 items-center justify-center px-2">
+                    <YakOpsEmpty
+                      width={120}
+                      height={82}
+                      title="未找到匹配资产"
+                      description="换个关键词后重新搜索。"
+                      showCaption
+                    />
                   </div>
                 ) : (
                   <div className="flex h-40 flex-col items-center justify-center px-4 text-center">

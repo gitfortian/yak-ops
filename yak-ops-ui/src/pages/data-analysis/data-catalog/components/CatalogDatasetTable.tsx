@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { YakButton, YakEmpty } from '@/components/ui';
 import type {
   CatalogDataset,
@@ -288,7 +289,19 @@ export function CatalogDatasetTable({
             columns={columns}
             dataSource={datasets}
             scroll={{ x: 1200 }}
-            locale={{ emptyText: '当前目录暂无 Dataset' }}
+            locale={{
+              emptyText: isLoading ? null : (
+                <div className="flex min-h-[300px] items-center justify-center">
+                  <YakOpsEmpty
+                    width={180}
+                    height={120}
+                    title="当前目录暂无 Dataset"
+                    description="发布或切换目录后可在这里查看 Dataset。"
+                    showCaption
+                  />
+                </div>
+              ),
+            }}
             onRow={(record) => ({
               onClick: () => onSelectDataset(record),
               style: { cursor: 'pointer' },
