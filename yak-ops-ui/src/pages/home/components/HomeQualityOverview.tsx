@@ -49,13 +49,17 @@ const relativeTime = (value?: string | null) => {
   if (!value) return '--';
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return value;
+
   const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
   if (minutes < 1) return '刚刚';
   if (minutes < 60) return `${minutes} 分钟前`;
+
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} 小时前`;
+
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days} 天前`;
+
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     month: '2-digit',
     day: '2-digit',
@@ -69,28 +73,31 @@ const healthState = (passRate?: number | null) => {
   if (passRate == null) {
     return {
       label: '暂无质量执行数据',
-      className: 'text-[#92969f]',
+      className: 'text-[#7f858e]',
       icon: null,
     };
   }
+
   if (passRate >= 95) {
     return {
       label: '整体质量健康',
-      className: 'text-[#3c9766]',
-      icon: <CheckCircle2 size={13} strokeWidth={2} />,
+      className: 'text-[#31865a]',
+      icon: <CheckCircle2 size={14} strokeWidth={2} />,
     };
   }
+
   if (passRate >= 80) {
     return {
       label: '质量表现需关注',
-      className: 'text-[#c4842c]',
-      icon: <AlertTriangle size={13} strokeWidth={1.9} />,
+      className: 'text-[#b87520]',
+      icon: <AlertTriangle size={14} strokeWidth={1.9} />,
     };
   }
+
   return {
     label: '质量问题较多',
-    className: 'text-[#dc5964]',
-    icon: <AlertTriangle size={13} strokeWidth={1.9} />,
+    className: 'text-[#d94d59]',
+    icon: <AlertTriangle size={14} strokeWidth={1.9} />,
   };
 };
 
@@ -101,6 +108,7 @@ const normalizeRadarDimensions = (
     const matched = dimensions.find((item) =>
       definition.aliases.includes(item.dimension),
     );
+
     return {
       dimension: definition.label,
       total: matched?.total ?? 0,
@@ -117,6 +125,7 @@ function useQualityOverview(): QualityOverviewState {
 
   useEffect(() => {
     let active = true;
+
     homeQualityOverviewApi
       .overview()
       .then((response) => {
@@ -125,6 +134,7 @@ function useQualityOverview(): QualityOverviewState {
           setState({ loading: false, failed: true });
           return;
         }
+
         setState({ data: response.data, loading: false, failed: false });
       })
       .catch(() => {
@@ -141,23 +151,18 @@ function useQualityOverview(): QualityOverviewState {
 
 function SectionHeader() {
   return (
-    <header className="flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <h2 className="text-xl font-semibold tracking-[-0.35px] text-[#252832]">
-          数据质量
-        </h2>
-        <p className="mt-1 text-[12px] leading-5 text-[#92969f]">
-          近 7 日质量维度健康度与最近质量问题
-        </p>
-      </div>
+    <header className="flex items-center justify-between gap-4">
+      <h2 className="m-0 text-xl font-semibold tracking-[-0.35px] text-[#20232b]">
+        数据质量
+      </h2>
 
       <button
         type="button"
         onClick={() => history.push('/data-quality/overview')}
-        className="mt-0.5 flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[12px] text-[#747982] transition-colors hover:text-[#252832]"
+        className="flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[13px] font-medium text-[#656b75] transition-colors hover:text-[#20232b]"
       >
         查看更多
-        <ChevronRight size={14} strokeWidth={1.8} />
+        <ChevronRight size={15} strokeWidth={1.9} />
       </button>
     </header>
   );
@@ -174,10 +179,12 @@ function QualityMetric({
 }) {
   return (
     <div className="min-w-0">
-      <div className="truncate text-[10px] leading-4 text-[#999da5]">{label}</div>
+      <div className="truncate text-[11px] font-medium leading-4 text-[#747b85]">
+        {label}
+      </div>
       <strong
-        className={`mt-0.5 block text-[16px] font-semibold leading-6 ${
-          warning && (value ?? 0) > 0 ? 'text-[#dc5964]' : 'text-[#40444d]'
+        className={`mt-1 block text-[18px] font-semibold leading-6 ${
+          warning && (value ?? 0) > 0 ? 'text-[#d94d59]' : 'text-[#343943]'
         }`}
       >
         {formatMetric(value)}
@@ -188,9 +195,6 @@ function QualityMetric({
 
 function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
   const hasCompleteRadar = dimensions.every((item) => item.passRate != null);
-  const coveredDimensionCount = dimensions.filter(
-    (item) => item.passRate != null,
-  ).length;
   const dimensionMap = new Map(
     dimensions.map((item) => [item.dimension, item]),
   );
@@ -211,14 +215,18 @@ function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
         }
       : { show: false },
     radar: {
-      center: ['50%', '51%'],
-      radius: '64%',
+      center: ['50%', '52%'],
+      radius: '72%',
       splitNumber: 4,
-      indicator: dimensions.map((item) => ({ name: item.dimension, max: 100 })),
+      indicator: dimensions.map((item) => ({
+        name: item.dimension,
+        max: 100,
+      })),
       axisName: {
-        color: '#747982',
-        fontSize: 10,
-        lineHeight: 15,
+        color: '#414751',
+        fontSize: 12,
+        fontWeight: 500,
+        lineHeight: 18,
         formatter: (name: string) => {
           const dimension = dimensionMap.get(name);
           return `${name}\n${formatRateWithUnit(dimension?.passRate)}`;
@@ -226,57 +234,39 @@ function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
       },
       axisLine: {
         lineStyle: {
-          color: '#e2e5ea',
+          color: '#d9dde4',
         },
       },
       splitLine: {
         lineStyle: {
-          color: '#e8ebef',
+          color: '#dfe3e9',
         },
       },
       splitArea: {
         areaStyle: {
-          color: ['#ffffff', '#fafbfc'],
+          color: ['#ffffff', '#f8f9fb'],
         },
       },
     },
-    graphic: hasCompleteRadar
-      ? undefined
-      : [
-          {
-            type: 'text',
-            left: 'center',
-            top: '48%',
-            style: {
-              text:
-                coveredDimensionCount > 0
-                  ? `已覆盖 ${coveredDimensionCount}/5 维`
-                  : '暂无维度数据',
-              fill: '#a0a4ac',
-              fontSize: 10,
-              textAlign: 'center',
-            },
-          },
-        ],
     series: hasCompleteRadar
       ? [
           {
             type: 'radar',
             symbol: 'circle',
-            symbolSize: 4,
+            symbolSize: 5,
             data: [
               {
                 value: dimensions.map((item) => item.passRate ?? 0),
                 name: '规则通过率',
                 lineStyle: {
-                  width: 2,
+                  width: 2.2,
                   color: BRAND_COLOR,
                 },
                 itemStyle: {
                   color: BRAND_COLOR,
                 },
                 areaStyle: {
-                  color: 'rgba(254,44,85,0.08)',
+                  color: 'rgba(254,44,85,0.1)',
                 },
               },
             ],
@@ -296,28 +286,26 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
   const option = useMemo(() => buildRadarOption(dimensions), [dimensions]);
 
   return (
-    <div className="min-w-0 rounded-[16px] bg-[#fafbfc] px-4 pb-3 pt-3.5">
+    <div className="min-w-0 rounded-[16px] border border-[#eef0f3] bg-[#fafbfc] px-4 pb-4 pt-4">
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <strong className="block text-[13px] font-semibold text-[#40444d]">
-            质量维度
-          </strong>
-          <span className="mt-1 block text-[10px] text-[#9ca0a8]">
-            五维规则通过率
-          </span>
-        </div>
+        <strong className="text-[15px] font-semibold leading-6 text-[#252a33]">
+          质量维度
+        </strong>
 
         <div className="shrink-0 text-right">
           <div className="flex items-end justify-end gap-1">
-            <strong className="text-[24px] font-semibold leading-7 tracking-[-0.6px] text-[#30343b]">
+            <strong className="text-[28px] font-semibold leading-8 tracking-[-0.7px] text-[#252a33]">
               {formatRate(data?.passRate)}
             </strong>
             {data?.passRate != null ? (
-              <span className="mb-0.5 text-[10px] text-[#9ca0a8]">%</span>
+              <span className="mb-0.5 text-[11px] font-medium text-[#747b85]">
+                %
+              </span>
             ) : null}
           </div>
+
           <div
-            className={`mt-1 flex items-center justify-end gap-1 text-[10px] font-medium ${health.className}`}
+            className={`mt-1 flex items-center justify-end gap-1 text-[11px] font-medium ${health.className}`}
           >
             {health.icon}
             {state.loading
@@ -329,15 +317,15 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
         </div>
       </div>
 
-      <div className="min-h-[220px]">
+      <div className="min-h-[270px]">
         <ReactECharts
           option={option}
           notMerge
-          style={{ width: '100%', height: '230px' }}
+          style={{ width: '100%', height: '278px' }}
         />
       </div>
 
-      <div className="grid grid-cols-4 gap-3 border-t border-[#eceef2] pt-3">
+      <div className="grid grid-cols-4 gap-3 border-t border-[#e6e9ee] pt-3.5">
         <QualityMetric label="监控表" value={data?.monitoredTableCount} />
         <QualityMetric label="今日检测" value={data?.todayExecutionCount} />
         <QualityMetric
@@ -353,6 +341,7 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
 
 function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
   const isError = issue.checkResult?.toUpperCase() === 'ERROR';
+
   return (
     <button
       type="button"
@@ -361,94 +350,89 @@ function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
           `/data-quality/execution/${encodeURIComponent(issue.executionNo)}`,
         )
       }
-      className="group flex w-full items-center gap-3 border-0 bg-transparent py-3 text-left"
+      className="group flex w-full items-center gap-3 border-0 bg-transparent py-3.5 text-left"
     >
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] ${
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] ${
           isError
             ? 'bg-[#fff4e8] text-[#d98932]'
             : 'bg-[#fff2f3] text-[#e35d69]'
         }`}
       >
-        <AlertTriangle size={14} strokeWidth={1.8} />
+        <AlertTriangle size={15} strokeWidth={1.9} />
       </span>
 
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
-          <strong className="truncate text-[12px] font-medium text-[#41454e]">
+          <strong className="truncate text-[13px] font-medium text-[#343943]">
             {issue.ruleName}
           </strong>
-          <span className="shrink-0 rounded-full bg-[#f0f2f5] px-2 py-0.5 text-[9px] text-[#7e838c]">
+          <span className="shrink-0 rounded-full bg-[#eceff3] px-2 py-0.5 text-[10px] font-medium text-[#666d78]">
             {issue.dimension}
           </span>
         </span>
-        <span className="mt-1 block truncate text-[10px] text-[#9ca0a8]">
+
+        <span className="mt-1 block truncate text-[11px] text-[#7f858f]">
           {objectLabel(issue)}
           {issue.columnName ? ` · ${issue.columnName}` : ''}
         </span>
       </span>
 
-      <span className="shrink-0 text-[10px] text-[#9ca0a8]">
+      <span className="shrink-0 text-[11px] text-[#858b94]">
         {relativeTime(issue.queuedAt)}
       </span>
 
       <ChevronRight
-        size={13}
-        strokeWidth={1.8}
-        className="shrink-0 text-[#b8bbc1] transition-transform group-hover:translate-x-0.5"
+        size={14}
+        strokeWidth={1.9}
+        className="shrink-0 text-[#a7acb4] transition-transform group-hover:translate-x-0.5"
       />
     </button>
   );
 }
 
 function RecentIssues({ state }: { state: QualityOverviewState }) {
-  const issues = state.data?.recentIssues || [];
+  const issues = state.data?.recentIssues ?? [];
+
   return (
-    <div className="min-w-0 rounded-[16px] bg-[#fafbfc] px-4 pb-3 pt-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <strong className="block text-[13px] font-semibold text-[#40444d]">
-            最近问题
-          </strong>
-          <span className="mt-1 block text-[10px] text-[#9ca0a8]">
-            最近规则执行中发现的质量问题
-          </span>
-        </div>
-        <span className="mt-0.5 flex shrink-0 items-center gap-1 text-[10px] text-[#a0a4ac]">
+    <div className="min-w-0 rounded-[16px] border border-[#eef0f3] bg-[#fafbfc] px-4 pb-4 pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <strong className="text-[15px] font-semibold leading-6 text-[#252a33]">
+          最近问题
+        </strong>
+
+        <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#747b85]">
           <AlertTriangle
-            size={11}
-            strokeWidth={1.8}
-            className="text-[#e46a73]"
+            size={12}
+            strokeWidth={1.9}
+            className="text-[#e35d69]"
           />
           {formatMetric(state.data?.recentIssueCount)} 项
         </span>
       </div>
 
       {issues.length > 0 ? (
-        <div className="mt-2 divide-y divide-[#eceef2]">
+        <div className="mt-2 divide-y divide-[#e7eaee]">
           {issues.map((issue) => (
             <RecentIssueRow key={issue.id} issue={issue} />
           ))}
         </div>
       ) : (
-        <div className="flex min-h-[250px] flex-col items-center justify-center text-center">
+        <div className="flex min-h-[318px] flex-col items-center justify-center text-center">
           {state.loading ? (
-            <span className="text-[10px] text-[#a0a4ac]">质量问题加载中...</span>
+            <span className="text-[11px] text-[#858b94]">质量问题加载中...</span>
           ) : state.failed ? (
-            <span className="text-[10px] text-[#a0a4ac]">质量数据加载失败</span>
+            <span className="text-[11px] text-[#858b94]">质量数据加载失败</span>
           ) : state.data?.recentIssueCount == null ? (
-            <span className="text-[10px] text-[#a0a4ac]">质量数据暂不可用</span>
+            <span className="text-[11px] text-[#858b94]">质量数据暂不可用</span>
           ) : (
             <>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf8f1] text-[#4b9a6d]">
-                <CheckCircle2 size={17} strokeWidth={1.9} />
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7ef] text-[#3d9667]">
+                <CheckCircle2 size={18} strokeWidth={2} />
               </span>
-              <strong className="mt-3 text-[12px] font-medium text-[#5d626b]">
+              <strong className="mt-3 text-[13px] font-medium text-[#4f5560]">
                 近 7 日暂无质量问题
               </strong>
-              <span className="mt-1 text-[10px] text-[#a0a4ac]">
-                当前规则执行结果保持健康
-              </span>
             </>
           )}
         </div>
@@ -464,7 +448,7 @@ export default function QualityOverview() {
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
       <SectionHeader />
 
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(320px,0.92fr)_minmax(0,1.08fr)]">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(380px,0.96fr)_minmax(0,1.04fr)]">
         <QualityRadarPanel state={state} />
         <RecentIssues state={state} />
       </div>
