@@ -105,7 +105,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     DataSourceCatalogQuery value =
         query == null ? new DataSourceCatalogQuery(null, null, null) : query;
     String database = metadataCatalog(value.getDatabase());
-    String schema = metadataSchema(value.getSchema());
+    String schema = metadataSchema(value.getSchema(), value.getLimit() != null);
     String keyword = trimToNull(value.getKeyword());
     int limit =
         value.getLimit() == null
@@ -139,7 +139,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   @Override
   public List<DataSourceColumn> listColumns(DataSourceTablePath tablePath) {
     String database = metadataCatalog(tablePath.getDatabase());
-    String schema = metadataSchema(tablePath.getSchema());
+    String schema = metadataSchema(tablePath.getSchema(), true);
     try (Connection opened = openConnection()) {
       DatabaseMetaData metadata = opened.getMetaData();
       Set<String> primaryKeys = primaryKeys(metadata, database, schema, tablePath.getTable());
@@ -369,12 +369,12 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     return firstNonBlank(requestedDatabase, connection.database());
   }
 
-  private String metadataSchema(String requestedSchema) {
+  private String metadataSchema(String requestedSchema, boolean narrowOracleDefault) {
     String schema = firstNonBlank(requestedSchema, connection.schema());
     if (connection.dbType() != DataSourceDbType.ORACLE) {
       return schema;
     }
-    if (isBlank(schema)) {
+    if (isBlank(schema) && narrowOracleDefault) {
       schema = trimToNull(connection.username());
     }
     return schema == null ? null : schema.toUpperCase(Locale.ROOT);
