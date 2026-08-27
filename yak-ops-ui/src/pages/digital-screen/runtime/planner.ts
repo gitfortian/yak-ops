@@ -33,6 +33,10 @@ export const planScreenRuntimeQueries = (
   });
 };
 
+export const collectBoundDatasetIds = (bindings: DigitalScreenBindings) => (
+  [...new Set(Object.values(bindings).map((binding) => binding.datasetId).filter(Boolean))]
+);
+
 export const countBoundScreenComponents = (
   template: ScreenTemplate | undefined,
   bindings: DigitalScreenBindings,

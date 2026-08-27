@@ -1,5 +1,5 @@
 import type { PublishedDataset } from '@/services/dataset';
-import { listPublishedDatasets } from '@/services/dataset';
+import { getPublishedDatasetsByIds } from '@/services/dataset';
 import {
   getPublishedDigitalScreen,
   type DigitalScreenBindings,
@@ -8,6 +8,7 @@ import {
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
 import { useEffect, useMemo, useState } from 'react';
 import { useScreenRuntime } from '../../runtime/hooks/useScreenRuntime';
+import { collectBoundDatasetIds } from '../../runtime/planner';
 import { SCREEN_RUNTIME_VIEWER_REFRESH_INTERVAL_MS } from '../../runtime/policy';
 
 const EMPTY_BINDINGS: DigitalScreenBindings = {};
@@ -38,22 +39,33 @@ export function useDigitalScreenViewer(id?: string) {
       .finally(() => setIsLoading(false));
   }, [id]);
 
+  const boundDatasetIds = useMemo(
+    () => collectBoundDatasetIds(screen?.bindings ?? EMPTY_BINDINGS),
+    [screen],
+  );
+  const boundDatasetKey = boundDatasetIds.join('|');
+
   useEffect(() => {
-    let active = true;
+    if (!boundDatasetIds.length) {
+      setDatasets([]);
+      setDataError('');
+      return undefined;
+    }
+
+    const controller = new AbortController();
     setDataError('');
-    void listPublishedDatasets()
+    void getPublishedDatasetsByIds(boundDatasetIds, { signal: controller.signal })
       .then((values) => {
-        if (active) setDatasets(values);
+        if (!controller.signal.aborted) setDatasets(values);
       })
       .catch((error) => {
-        if (!active) return;
+        if (controller.signal.aborted) return;
         setDatasets([]);
-        setDataError(error instanceof Error ? error.message : '加载 Dataset 失败');
+        setDataError(error instanceof Error ? error.message : '加载大屏绑定 Dataset 失败');
       });
-    return () => {
-      active = false;
-    };
-  }, []);
+
+    return () => controller.abort();
+  }, [boundDatasetIds, boundDatasetKey]);
 
   const template = useMemo(
     () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),

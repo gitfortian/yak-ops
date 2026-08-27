@@ -6,7 +6,10 @@ import {
   canQueryScreenComponent,
   isBindableScreenComponent,
 } from './binding';
-import { planScreenRuntimeQueries } from './planner';
+import {
+  collectBoundDatasetIds,
+  planScreenRuntimeQueries,
+} from './planner';
 import { screenRuntimeComponentRegistry } from './registry/builtin-plugins';
 
 const component = (type: ScreenComponent['type'], id = type) => ({
@@ -63,5 +66,15 @@ describe('digital screen runtime roles', () => {
 
     expect(plan).toHaveLength(2);
     expect(plan[0].queryKey).toBe(plan[1].queryKey);
+  });
+
+  it('collects only unique Dataset ids referenced by the screen bindings', () => {
+    const bindings: DigitalScreenBindings = {
+      line: binding,
+      bar: binding,
+      pie: { ...binding, datasetId: '99' },
+    };
+
+    expect(collectBoundDatasetIds(bindings)).toEqual(['12', '99']);
   });
 });

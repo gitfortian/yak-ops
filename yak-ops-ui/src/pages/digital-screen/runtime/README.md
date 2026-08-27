@@ -41,7 +41,8 @@ ScreenTemplate + bindings + Datasets
 - A refresh keeps the last successful component data visible while new data is loading.
 - Component/query failures remain isolated to the affected components.
 - Production Viewer refreshes every 30 seconds while the page is visible; background tabs pause polling and refresh once when visible again.
-- Editor remains event-driven and does not poll automatically.
+- Viewer loads metadata only for Dataset ids referenced by the current PublishedVersion instead of expanding the complete online Dataset catalog.
+- Editor remains event-driven and keeps the full Dataset catalog because the binding panel needs it.
 
 All timing/concurrency defaults live in `policy.ts` and can be overridden through `useScreenRuntime` options.
 

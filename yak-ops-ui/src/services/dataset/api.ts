@@ -52,10 +52,12 @@ interface DatasetDetailWire {
   fields: DatasetFieldWire[];
 }
 
-export interface DatasetQueryOptions {
-  /** Allows runtime callers to cancel stale Dataset requests without changing the backend contract. */
+export interface DatasetRequestOptions {
+  /** Allows callers to cancel stale Dataset requests without changing the backend contract. */
   signal?: AbortSignal;
 }
+
+export type DatasetQueryOptions = DatasetRequestOptions;
 
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
@@ -63,6 +65,10 @@ const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   }
   return response.data;
 };
+
+const requestOptions = (options?: DatasetRequestOptions) => (
+  options?.signal ? { signal: options.signal } : undefined
+);
 
 const fieldType = (value: DatasetFieldWire['dataType']): DatasetFieldType => {
   switch (value) {
@@ -102,6 +108,18 @@ const toDataset = (detail: DatasetDetailWire): PublishedDataset => {
   };
 };
 
+const fetchDatasetDetail = async (
+  datasetId: string,
+  fallback: string,
+  options?: DatasetRequestOptions,
+) => unwrap(
+  await HttpUtils.get<DatasetDetailWire>(
+    `${DATASET_API}/${datasetId}`,
+    requestOptions(options),
+  ),
+  fallback,
+);
+
 export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
   const list = unwrap(
     await HttpUtils.get<DatasetSummaryWire[]>(DATASET_API),
@@ -110,8 +128,8 @@ export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
   const online = (list || []).filter((dataset) => dataset.status === 'ONLINE' && dataset.currentVersionId);
   if (!online.length) return [];
   const details = await Promise.allSettled(
-    online.map(async (dataset) => unwrap(
-      await HttpUtils.get<DatasetDetailWire>(`${DATASET_API}/${dataset.id}`),
+    online.map((dataset) => fetchDatasetDetail(
+      String(dataset.id),
       `查询 Dataset ${dataset.name} 详情失败`,
     )),
   );
@@ -125,6 +143,38 @@ export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
   return available;
 };
 
+/** Fetches one currently published Dataset without first loading the entire Dataset catalog. */
+export const getPublishedDataset = async (
+  datasetId: string,
+  options?: DatasetRequestOptions,
+): Promise<PublishedDataset> => {
+  const detail = await fetchDatasetDetail(datasetId, `查询 Dataset ${datasetId} 详情失败`, options);
+  if (detail.dataset.status !== 'ONLINE' || !detail.currentVersion) {
+    throw new Error(`Dataset ${datasetId} 当前未发布`);
+  }
+  return toDataset(detail);
+};
+
+/** Viewer-oriented batch lookup: only resolve the Dataset ids referenced by the screen. */
+export const getPublishedDatasetsByIds = async (
+  datasetIds: string[],
+  options?: DatasetRequestOptions,
+): Promise<PublishedDataset[]> => {
+  const uniqueIds = [...new Set(datasetIds.filter(Boolean))];
+  if (!uniqueIds.length) return [];
+  const details = await Promise.allSettled(
+    uniqueIds.map((datasetId) => getPublishedDataset(datasetId, options)),
+  );
+  const available = details
+    .filter((item): item is PromiseFulfilledResult<PublishedDataset> => item.status === 'fulfilled')
+    .map((item) => item.value);
+  if (!available.length) {
+    const rejected = details.find((item): item is PromiseRejectedResult => item.status === 'rejected');
+    throw rejected?.reason instanceof Error ? rejected.reason : new Error('读取大屏绑定 Dataset 失败');
+  }
+  return available;
+};
+
 export const queryDataset = async (
   datasetId: string,
   payload: DatasetQueryPayload,
@@ -133,7 +183,7 @@ export const queryDataset = async (
   await HttpUtils.post<DatasetQueryResult>(
     `${DATASET_API}/${datasetId}/query`,
     payload,
-    options?.signal ? { signal: options.signal } : undefined,
+    requestOptions(options),
   ),
   'Dataset 查询失败',
 );
