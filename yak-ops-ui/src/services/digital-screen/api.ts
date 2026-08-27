@@ -1,12 +1,9 @@
-import { localScreenRepository } from './repository';
+import { httpScreenRepository } from './repository';
 import type { ScreenRepository } from './repository';
 import type { CreateDigitalScreenInput, UpdateDigitalScreenInput } from './types';
 
-/**
- * Stable application-facing façade. PR 1 can replace this repository binding with
- * an HTTP implementation without changing list/editor/viewer callers.
- */
-export const screenRepository: ScreenRepository = localScreenRepository;
+/** Stable application-facing façade backed by the server-side Digital Screen repository. */
+export const screenRepository: ScreenRepository = httpScreenRepository;
 
 export const listDigitalScreens = () => screenRepository.list();
 export const getDigitalScreen = (id: string) => screenRepository.get(id);
