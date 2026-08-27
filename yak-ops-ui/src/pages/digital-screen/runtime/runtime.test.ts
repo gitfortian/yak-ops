@@ -7,7 +7,7 @@ import {
   isBindableScreenComponent,
 } from './binding';
 import {
-  collectBoundDatasetIds,
+  collectScreenRuntimeDatasetIds,
   planScreenRuntimeQueries,
 } from './planner';
 import { screenRuntimeComponentRegistry } from './registry/builtin-plugins';
@@ -68,13 +68,21 @@ describe('digital screen runtime roles', () => {
     expect(plan[0].queryKey).toBe(plan[1].queryKey);
   });
 
-  it('collects only unique Dataset ids referenced by the screen bindings', () => {
+  it('collects only Dataset ids for queryable components in the active template', () => {
+    const template = {
+      components: [
+        component('line', 'line'),
+        component('bar', 'bar'),
+        component('map', 'map'),
+      ],
+    } as ScreenTemplate;
     const bindings: DigitalScreenBindings = {
       line: binding,
       bar: binding,
-      pie: { ...binding, datasetId: '99' },
+      map: { ...binding, datasetId: '77' },
+      removed: { ...binding, datasetId: '99' },
     };
 
-    expect(collectBoundDatasetIds(bindings)).toEqual(['12', '99']);
+    expect(collectScreenRuntimeDatasetIds(template, bindings)).toEqual(['12']);
   });
 });
