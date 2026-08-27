@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasource.gateway.adapter;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.business.datasource.config.DataSourceProperties;
 import io.yak.ops.business.datasource.domain.DataSourceDefinition;
 import io.yak.ops.business.datasource.domain.catalog.CatalogColumn;
 import io.yak.ops.business.datasource.domain.catalog.CatalogQueryResult;
@@ -29,16 +30,29 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Datasource Catalog SPI -> typed Business Catalog Gateway Adapter. */
 @Component
 @ConditionalOnDataSourceEnabled
-@RequiredArgsConstructor
 public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
 
   private final DataSourcePluginRegistry pluginRegistry;
+  private final DataSourceProperties properties;
+
+  @Autowired
+  public SpiDataSourceCatalogGateway(
+      DataSourcePluginRegistry pluginRegistry,
+      DataSourceProperties properties) {
+    this.pluginRegistry = pluginRegistry;
+    this.properties = properties;
+  }
+
+  /** Test/support constructor retaining the historical single-dependency shape. */
+  public SpiDataSourceCatalogGateway(DataSourcePluginRegistry pluginRegistry) {
+    this(pluginRegistry, new DataSourceProperties());
+  }
 
   @Override
   public List<String> listDatabases(DataSourceDefinition dataSource, int timeoutSeconds) {
@@ -71,7 +85,10 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
             catalog
                 .listTables(
                     new DataSourceCatalogQuery(
-                        value.database(), value.schema(), value.keyword()))
+                        value.database(),
+                        value.schema(),
+                        value.keyword(),
+                        value.limit()))
                 .stream()
                 .map(this::toTable)
                 .toList());
@@ -159,7 +176,7 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
 
   private <T> T execute(
       DataSourceDefinition dataSource,
-      int timeoutSeconds,
+      int connectionTimeoutSeconds,
       DataSourceCapability capability,
       Function<DataSourceCatalog, T> action) {
     if (dataSource == null || dataSource.getDbType() == null) {
@@ -173,7 +190,11 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
             "数据源插件未声明能力 " + capability.name() + "：" + plugin.dbType().name());
       }
       DataSourceConnection connection = plugin.parseConnection(dataSource.getConnectionParams());
-      DataSourceCatalog catalog = plugin.createCatalog(connection, Math.max(1, timeoutSeconds));
+      DataSourceCatalog catalog =
+          plugin.createCatalog(
+              connection,
+              Math.max(1, connectionTimeoutSeconds),
+              queryTimeoutSeconds());
       return action.apply(catalog);
     } catch (DataSourceException exception) {
       throw exception;
@@ -182,6 +203,10 @@ public class SpiDataSourceCatalogGateway implements DataSourceCatalogGateway {
     } catch (RuntimeException exception) {
       throw catalogException(exception);
     }
+  }
+
+  private int queryTimeoutSeconds() {
+    return Math.max(1, properties.getCatalog().getQueryTimeoutSeconds());
   }
 
   private DataSourceCatalogReadRequest toPluginRequest(CatalogReadRequest request) {
