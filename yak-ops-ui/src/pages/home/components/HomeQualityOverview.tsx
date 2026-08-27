@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { BRAND_COLOR } from '@/styles/brand';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
@@ -284,6 +285,7 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
     [data?.dimensions],
   );
   const option = useMemo(() => buildRadarOption(dimensions), [dimensions]);
+  const showEmpty = !state.loading && !state.failed && data?.passRate == null;
 
   return (
     <div className="min-w-0 rounded-[16px] border border-[#eef0f3] bg-[#fafbfc] px-4 pb-4 pt-4">
@@ -318,11 +320,22 @@ function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
       </div>
 
       <div className="min-h-[270px]">
-        <ReactECharts
-          option={option}
-          notMerge
-          style={{ width: '100%', height: '278px' }}
-        />
+        {showEmpty ? (
+          <div className="flex h-[278px] items-center justify-center">
+            <YakOpsEmpty
+              width={160}
+              height={108}
+              title="暂无质量执行数据"
+              showCaption
+            />
+          </div>
+        ) : (
+          <ReactECharts
+            option={option}
+            notMerge
+            style={{ width: '100%', height: '278px' }}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-4 gap-3 border-t border-[#e6e9ee] pt-3.5">
@@ -417,24 +430,22 @@ function RecentIssues({ state }: { state: QualityOverviewState }) {
             <RecentIssueRow key={issue.id} issue={issue} />
           ))}
         </div>
+      ) : state.loading || state.failed || state.data?.recentIssueCount == null ? (
+        <div className="flex min-h-[318px] items-center justify-center text-[11px] text-[#858b94]">
+          {state.loading
+            ? '质量问题加载中...'
+            : state.failed
+              ? '质量数据加载失败'
+              : '质量数据暂不可用'}
+        </div>
       ) : (
-        <div className="flex min-h-[318px] flex-col items-center justify-center text-center">
-          {state.loading ? (
-            <span className="text-[11px] text-[#858b94]">质量问题加载中...</span>
-          ) : state.failed ? (
-            <span className="text-[11px] text-[#858b94]">质量数据加载失败</span>
-          ) : state.data?.recentIssueCount == null ? (
-            <span className="text-[11px] text-[#858b94]">质量数据暂不可用</span>
-          ) : (
-            <>
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7ef] text-[#3d9667]">
-                <CheckCircle2 size={18} strokeWidth={2} />
-              </span>
-              <strong className="mt-3 text-[13px] font-medium text-[#4f5560]">
-                近 7 日暂无质量问题
-              </strong>
-            </>
-          )}
+        <div className="flex min-h-[318px] items-center justify-center">
+          <YakOpsEmpty
+            width={170}
+            height={114}
+            title="近 7 日暂无质量问题"
+            showCaption
+          />
         </div>
       )}
     </div>

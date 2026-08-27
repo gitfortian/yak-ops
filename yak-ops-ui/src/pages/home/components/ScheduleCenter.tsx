@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { history } from '@umijs/max';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -267,7 +268,14 @@ export default function ScheduleCenter() {
           ))}
 
           {calendar && calendar.overview.length === 0 && (
-            <div className="py-1 text-[11px] text-[#a0a4ac]">本月暂无调度配置</div>
+            <div className="flex min-h-[126px] items-center justify-center">
+              <YakOpsEmpty
+                width={116}
+                height={78}
+                title="本月暂无调度配置"
+                showCaption
+              />
+            </div>
           )}
         </div>
       </div>

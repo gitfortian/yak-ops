@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
@@ -123,14 +124,22 @@ function OverviewMetric({ label, value }: { label: string; value: string }) {
 }
 
 function TrendEmpty({ state }: { state: DataServiceOverviewState }) {
-  const text = state.loading
-    ? '数据加载中...'
-    : state.failed
-      ? '数据服务概览加载失败'
-      : '近 7 日暂无 API 调用';
+  if (state.loading || state.failed) {
+    return (
+      <div className="flex h-[126px] items-center justify-center text-[11px] text-[#a0a4ac]">
+        {state.loading ? '数据加载中...' : '数据服务概览加载失败'}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-[126px] items-center justify-center text-[11px] text-[#a0a4ac]">
-      {text}
+    <div className="flex h-[126px] items-center justify-center">
+      <YakOpsEmpty
+        width={116}
+        height={78}
+        title="近 7 日暂无 API 调用"
+        showCaption
+      />
     </div>
   );
 }
