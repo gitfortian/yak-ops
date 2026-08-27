@@ -1,1 +1,1 @@
-export { default } from './WorkflowDefinitionList';
+export { default } from './components/WorkflowDefinitionList';

@@ -8,7 +8,7 @@ import type {
   WorkflowFailureStrategy,
   WorkflowNodeFailurePolicy,
   WorkflowTriggerRule,
-} from './index';
+} from './instances';
 
 export type WorkflowDefinitionStatus = 'DRAFT' | 'ONLINE' | 'OFFLINE';
 
