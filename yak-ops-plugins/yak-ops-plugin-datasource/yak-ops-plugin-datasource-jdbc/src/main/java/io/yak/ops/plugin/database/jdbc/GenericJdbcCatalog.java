@@ -326,6 +326,13 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
 
   private String buildPreviewQuery(DataSourceCatalogReadRequest request, int limit) {
     String query = buildQuery(request);
+    if (!request.sqlMode()) {
+      return switch (connection.dbType()) {
+        case ORACLE, DAMENG -> query + " WHERE ROWNUM <= " + limit;
+        case MYSQL, POSTGRE_SQL, DORIS, KINGBASE -> query + " LIMIT " + limit;
+      };
+    }
+
     return switch (connection.dbType()) {
       case ORACLE, DAMENG ->
           "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit;
