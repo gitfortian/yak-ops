@@ -8,8 +8,12 @@ import {
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
 import { useEffect, useMemo, useState } from 'react';
 import { useScreenRuntime } from '../../runtime/hooks/useScreenRuntime';
+import { SCREEN_RUNTIME_VIEWER_REFRESH_INTERVAL_MS } from '../../runtime/policy';
 
 const EMPTY_BINDINGS: DigitalScreenBindings = {};
+const VIEWER_RUNTIME_OPTIONS = {
+  refreshIntervalMs: SCREEN_RUNTIME_VIEWER_REFRESH_INTERVAL_MS,
+} as const;
 
 export function useDigitalScreenViewer(id?: string) {
   const [screen, setScreen] = useState<DigitalScreenInstance>();
@@ -55,7 +59,12 @@ export function useDigitalScreenViewer(id?: string) {
     () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),
     [screen],
   );
-  const runtime = useScreenRuntime(template, screen?.bindings ?? EMPTY_BINDINGS, datasets);
+  const runtime = useScreenRuntime(
+    template,
+    screen?.bindings ?? EMPTY_BINDINGS,
+    datasets,
+    VIEWER_RUNTIME_OPTIONS,
+  );
 
   return {
     screen,

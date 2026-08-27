@@ -1,36 +1,53 @@
 # Digital Screen Runtime
 
-`runtime` owns execution of a saved Digital Screen definition. Screen persistence and Draft/PublishedVersion lifecycle stay in `services/digital-screen`; Dataset HTTP stays in `services/dataset`.
+`runtime` owns execution of a saved Digital Screen definition. Persistence belongs to
+`services/digital-screen`; rendering primitives belong to `components/screen-engine`.
 
-## Roles
+## Execution pipeline
 
 ```text
-Screen definition + Dataset catalog
-              |
-              v
-          planner.ts
-              |
-       Runtime candidates
-              |
-              v
-           query.ts
-              |
-              v
-  Runtime Component Registry
-   - bindable capability
-   - query contract
-   - data adapter
-              |
-              v
-       useScreenRuntime
-              |
-              v
-        ScreenRuntime.tsx
-              |
-              v
- generic screen-engine renderer
+ScreenTemplate + bindings + Datasets
+               |
+               v
+             Planner
+               |
+               v
+      ScreenRuntimeCandidate[]
+               |
+               v
+        Runtime Executor
+        /      |       \
+ Query Key   Cache   Concurrency
+    |          |          |
+    +----------+----------+
+               |
+               v
+          Dataset API
+               |
+               v
+       Component Adapter
+               |
+               v
+        ScreenRenderer
 ```
 
-`components/screen-engine/runtime` owns the React Renderer Registry. It only answers “how does this component render?” and intentionally knows nothing about Dataset bindings.
+## PR 4 runtime policy
 
-PR 3 registers all current component types explicitly and removes the legacy adapter/render switches. PR 4 may optimize the planner/executor with request deduplication, caching, cancellation and refresh policies without changing Viewer or component plugins.
+- Stable query keys include Dataset id/version and the complete query payload.
+- Candidates with the same key share one network request, even when component types differ.
+- Raw Dataset query results are cached per runtime session for 10 seconds by default.
+- At most 4 unique Dataset queries run concurrently by default.
+- Every execution owns an `AbortController`; changing bindings/template or leaving the page cancels stale requests.
+- A refresh keeps the last successful component data visible while new data is loading.
+- Component/query failures remain isolated to the affected components.
+- Production Viewer refreshes every 30 seconds while the page is visible; background tabs pause polling and refresh once when visible again.
+- Editor remains event-driven and does not poll automatically.
+
+All timing/concurrency defaults live in `policy.ts` and can be overridden through `useScreenRuntime` options.
+
+## Boundaries
+
+Runtime plugins answer: can a component bind/query, how is its query built, and how is raw Dataset data adapted.
+Renderer plugins answer only: how is a component drawn.
+
+PR 4 intentionally does **not** add global filters, component linkage, drill-down or cross-component interaction. Those are PR 5 concerns.

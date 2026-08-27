@@ -52,4 +52,16 @@ describe('digital screen runtime roles', () => {
     expect(planScreenRuntimeQueries(template, bindings, datasets).map((item) => item.component.id))
       .toEqual(['bound']);
   });
+
+  it('assigns the same query key to different component types with an identical Dataset query', () => {
+    const template = {
+      components: [component('line', 'line'), component('bar', 'bar')],
+    } as ScreenTemplate;
+    const bindings: DigitalScreenBindings = { line: binding, bar: binding };
+    const datasets = [{ id: '12', currentVersionNo: 3 }] as PublishedDataset[];
+    const plan = planScreenRuntimeQueries(template, bindings, datasets);
+
+    expect(plan).toHaveLength(2);
+    expect(plan[0].queryKey).toBe(plan[1].queryKey);
+  });
 });
