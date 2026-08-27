@@ -31,12 +31,14 @@ public class DataSourceCatalogReader {
   private final CatalogReadPolicy readPolicy;
   private final CatalogTableMatcher tableMatcher;
   private final DataSourceCatalogMetadataCache metadataCache;
+  private final DataSourceCatalogDiagnostics diagnostics;
 
   public List<String> listDatabases(Long dataSourceId) {
     DataSourceDefinition definition = dataSourceReader.require(dataSourceId);
     return cached(
         definition,
         "databases",
+        "listDatabases",
         () -> catalogGateway.listDatabases(definition, connectionTimeoutSeconds()));
   }
 
@@ -45,6 +47,7 @@ public class DataSourceCatalogReader {
     return cached(
         definition,
         "schemas",
+        "listSchemas",
         () -> catalogGateway.listSchemas(definition, database, connectionTimeoutSeconds()),
         database);
   }
@@ -59,6 +62,7 @@ public class DataSourceCatalogReader {
     return cached(
         definition,
         "tables",
+        "listTables",
         () -> catalogGateway.listTables(definition, query, connectionTimeoutSeconds()),
         query.database(),
         query.schema(),
@@ -83,6 +87,7 @@ public class DataSourceCatalogReader {
     return cached(
         definition,
         "table-search",
+        "searchTables",
         () -> catalogGateway.listTables(definition, query, connectionTimeoutSeconds()),
         query.database(),
         query.schema(),
@@ -100,6 +105,7 @@ public class DataSourceCatalogReader {
     return cached(
         definition,
         "columns",
+        "listColumns",
         () -> catalogGateway.listColumns(definition, path, connectionTimeoutSeconds()),
         path.database(),
         path.schema(),
@@ -121,48 +127,65 @@ public class DataSourceCatalogReader {
       Long dataSourceId,
       CatalogReadRequest request) {
     readPolicy.validateReadOnly(request);
-    return catalogGateway.describe(
-        dataSourceReader.require(dataSourceId),
-        request,
-        connectionTimeoutSeconds());
+    DataSourceDefinition definition = dataSourceReader.require(dataSourceId);
+    return diagnostics.observe(
+        definition,
+        "describe",
+        () -> catalogGateway.describe(definition, request, connectionTimeoutSeconds()));
   }
 
   public CatalogQueryResult preview(
       Long dataSourceId,
       CatalogReadRequest request) {
     readPolicy.validateReadOnly(request);
-    return catalogGateway.preview(
-        dataSourceReader.require(dataSourceId),
-        request,
-        PREVIEW_LIMIT,
-        connectionTimeoutSeconds());
+    DataSourceDefinition definition = dataSourceReader.require(dataSourceId);
+    return diagnostics.observe(
+        definition,
+        "preview",
+        () ->
+            catalogGateway.preview(
+                definition,
+                request,
+                PREVIEW_LIMIT,
+                connectionTimeoutSeconds()));
   }
 
   public Long count(
       Long dataSourceId,
       CatalogReadRequest request) {
     readPolicy.validateReadOnly(request);
-    return catalogGateway.count(
-        dataSourceReader.require(dataSourceId),
-        request,
-        connectionTimeoutSeconds());
+    DataSourceDefinition definition = dataSourceReader.require(dataSourceId);
+    return diagnostics.observe(
+        definition,
+        "count",
+        () -> catalogGateway.count(definition, request, connectionTimeoutSeconds()));
   }
 
   public String buildSqlTemplate(Long dataSourceId, String tablePath) {
-    return catalogGateway.buildSqlTemplate(
-        dataSourceReader.require(dataSourceId),
-        tablePath,
-        connectionTimeoutSeconds());
+    DataSourceDefinition definition = dataSourceReader.require(dataSourceId);
+    return diagnostics.observe(
+        definition,
+        "buildSqlTemplate",
+        () ->
+            catalogGateway.buildSqlTemplate(
+                definition,
+                tablePath,
+                connectionTimeoutSeconds()));
   }
 
   public String resolveSql(
       Long dataSourceId,
       CatalogReadRequest request) {
     readPolicy.requireSql(request);
-    return catalogGateway.resolveSql(
-        dataSourceReader.require(dataSourceId),
-        request,
-        connectionTimeoutSeconds());
+    DataSourceDefinition definition = dataSourceReader.require(dataSourceId);
+    return diagnostics.observe(
+        definition,
+        "resolveSql",
+        () -> catalogGateway.resolveSql(definition, request, connectionTimeoutSeconds()));
+  }
+
+  public DataSourceCatalogDiagnostics.Snapshot diagnostics() {
+    return diagnostics.snapshot();
   }
 
   private List<CatalogTable> listAllTables(Long dataSourceId) {
@@ -171,18 +194,21 @@ public class DataSourceCatalogReader {
     return cached(
         definition,
         "all-tables",
+        "listAllTables",
         () -> catalogGateway.listTables(definition, query, connectionTimeoutSeconds()));
   }
 
   private <T> T cached(
       DataSourceDefinition definition,
       String kind,
+      String operation,
       Supplier<T> loader,
       Object... qualifiers) {
     return metadataCache.getOrLoad(
         metadataCache.key(definition, kind, qualifiers),
         metadataCacheTtlSeconds(),
-        loader);
+        () -> diagnostics.observe(definition, operation, loader),
+        diagnostics::recordCacheLookup);
   }
 
   private int connectionTimeoutSeconds() {

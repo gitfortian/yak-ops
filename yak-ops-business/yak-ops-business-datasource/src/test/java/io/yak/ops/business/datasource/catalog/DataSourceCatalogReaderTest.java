@@ -41,7 +41,8 @@ class DataSourceCatalogReaderTest {
             properties,
             policy,
             matcher,
-            new DataSourceCatalogMetadataCache());
+            new DataSourceCatalogMetadataCache(),
+            mock(DataSourceCatalogDiagnostics.class));
     CatalogReadRequest request =
         new CatalogReadRequest(ReadMode.SQL, null, "DELETE FROM patient", List.of());
     doThrow(
@@ -67,6 +68,7 @@ class DataSourceCatalogReaderTest {
     CatalogReadPolicy policy = mock(CatalogReadPolicy.class);
     CatalogTableMatcher matcher = mock(CatalogTableMatcher.class);
     DataSourceCatalogMetadataCache cache = new DataSourceCatalogMetadataCache();
+    DataSourceCatalogDiagnostics diagnostics = new DataSourceCatalogDiagnostics(properties);
     DataSourceCatalogReader reader =
         new DataSourceCatalogReader(
             dataSourceReader,
@@ -74,7 +76,8 @@ class DataSourceCatalogReaderTest {
             properties,
             policy,
             matcher,
-            cache);
+            cache,
+            diagnostics);
 
     DataSourceDefinition definition = mock(DataSourceDefinition.class);
     when(definition.getId()).thenReturn(1L);
@@ -92,6 +95,14 @@ class DataSourceCatalogReaderTest {
     assertThat(queryCaptor.getValue().keyword()).isEqualTo("patient");
     assertThat(queryCaptor.getValue().limit()).isEqualTo(50);
     assertThat(cache.size()).isEqualTo(1);
+    assertThat(reader.diagnostics().cacheMisses()).isEqualTo(1L);
+    assertThat(reader.diagnostics().cacheHits()).isEqualTo(1L);
+    assertThat(reader.diagnostics().operations())
+        .singleElement()
+        .satisfies(operation -> {
+          assertThat(operation.operation()).isEqualTo("searchTables");
+          assertThat(operation.total()).isEqualTo(1L);
+        });
     verify(dataSourceReader, times(2)).require(1L);
   }
 }

@@ -122,6 +122,9 @@ public class DataSourceProperties {
     /** 下拉远程搜索一次最多返回的表数量。 */
     private int tableSearchLimit = 100;
 
+    /** 单次物理 Catalog 访问超过该阈值时记录慢操作；单位毫秒。 */
+    private long slowOperationThresholdMillis = 1000L;
+
     public int getConnectionTimeoutSeconds() {
       return connectionTimeoutSeconds;
     }
@@ -152,6 +155,14 @@ public class DataSourceProperties {
 
     public void setTableSearchLimit(int tableSearchLimit) {
       this.tableSearchLimit = tableSearchLimit;
+    }
+
+    public long getSlowOperationThresholdMillis() {
+      return slowOperationThresholdMillis;
+    }
+
+    public void setSlowOperationThresholdMillis(long slowOperationThresholdMillis) {
+      this.slowOperationThresholdMillis = slowOperationThresholdMillis;
     }
   }
 }

@@ -120,6 +120,31 @@ class GenericJdbcCatalogTypedRequestTest {
     verify(metadata).getTables(eq("demo"), isNull(), eq("%orders%"), any(String[].class));
   }
 
+  @Test
+  void oracleSearchUsesCurrentUserSchemaAndNoServiceNameCatalog() throws Exception {
+    Connection opened = mock(Connection.class);
+    DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+    ResultSet resultSet = mock(ResultSet.class);
+    when(opened.getMetaData()).thenReturn(metadata);
+    when(metadata.storesUpperCaseIdentifiers()).thenReturn(true);
+    when(metadata.getTables(isNull(), eq("APP_USER"), eq("%PATIENT%"), any(String[].class)))
+        .thenReturn(resultSet);
+    when(resultSet.next()).thenReturn(false);
+
+    GenericJdbcCatalog catalog =
+        new GenericJdbcCatalog(oracleConnection(), 5, 13) {
+          @Override
+          protected Connection openConnection() {
+            return opened;
+          }
+        };
+
+    catalog.listTables(new DataSourceCatalogQuery(null, null, "patient", 100));
+
+    verify(metadata)
+        .getTables(isNull(), eq("APP_USER"), eq("%PATIENT%"), any(String[].class));
+  }
+
   private JdbcConnectionProperties connection() {
     return new JdbcConnectionProperties(
         DataSourceDbType.MYSQL,
@@ -128,6 +153,19 @@ class GenericJdbcCatalogTypedRequestTest {
         "test_user",
         null,
         "demo",
+        null,
+        Map.of(),
+        "{}");
+  }
+
+  private JdbcConnectionProperties oracleConnection() {
+    return new JdbcConnectionProperties(
+        DataSourceDbType.ORACLE,
+        "jdbc:oracle:thin:@//localhost:1521/ORCL",
+        "oracle.jdbc.OracleDriver",
+        "app_user",
+        null,
+        "ORCL",
         null,
         Map.of(),
         "{}");

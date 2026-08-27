@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
@@ -27,25 +29,42 @@ public class DataSourceCatalogMetadataCache {
   private final ConcurrentMap<CacheKey, CacheEntry<?>> entries = new ConcurrentHashMap<>();
 
   public <T> T getOrLoad(CacheKey key, int ttlSeconds, Supplier<T> loader) {
+    return getOrLoad(key, ttlSeconds, loader, ignored -> {});
+  }
+
+  public <T> T getOrLoad(
+      CacheKey key,
+      int ttlSeconds,
+      Supplier<T> loader,
+      Consumer<Boolean> lookupObserver) {
     Objects.requireNonNull(key, "cache key must not be null");
     Objects.requireNonNull(loader, "cache loader must not be null");
+    Objects.requireNonNull(lookupObserver, "cache lookup observer must not be null");
     if (ttlSeconds <= 0) {
+      lookupObserver.accept(false);
       return loader.get();
     }
 
-    CacheEntry<?> entry =
-        entries.compute(
-            key,
-            (ignored, current) -> {
-              long now = System.nanoTime();
-              if (current != null && current.expiresAtNanos() > now) {
-                return current;
-              }
-              T value = loader.get();
-              return new CacheEntry<>(
-                  value,
-                  now + TimeUnit.SECONDS.toNanos(Math.max(1L, ttlSeconds)));
-            });
+    AtomicBoolean hit = new AtomicBoolean(false);
+    CacheEntry<?> entry;
+    try {
+      entry =
+          entries.compute(
+              key,
+              (ignored, current) -> {
+                long now = System.nanoTime();
+                if (current != null && current.expiresAtNanos() > now) {
+                  hit.set(true);
+                  return current;
+                }
+                T value = loader.get();
+                return new CacheEntry<>(
+                    value,
+                    now + TimeUnit.SECONDS.toNanos(Math.max(1L, ttlSeconds)));
+              });
+    } finally {
+      lookupObserver.accept(hit.get());
+    }
 
     trimIfNecessary(System.nanoTime());
 
@@ -68,6 +87,14 @@ public class DataSourceCatalogMetadataCache {
         definition.getUpdateTime(),
         Objects.requireNonNull(kind, "cache kind must not be null"),
         normalizedQualifiers);
+  }
+
+  /** Remove all local metadata cache entries for one datasource. */
+  public int invalidate(Long dataSourceId) {
+    if (dataSourceId == null) return 0;
+    int before = entries.size();
+    entries.keySet().removeIf(key -> Objects.equals(dataSourceId, key.dataSourceId()));
+    return Math.max(0, before - entries.size());
   }
 
   void clear() {
