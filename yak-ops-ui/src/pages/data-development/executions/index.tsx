@@ -1,3 +1,4 @@
+import { YakFilterSwitch } from '@/components/ui';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { history } from '@umijs/max';
 import {
@@ -31,12 +32,12 @@ import type {
 
 const { RangePicker } = DatePicker;
 
-const statusTabs: Array<{ label: string; value?: DevelopmentTaskExecutionStatus }> = [
-  { label: '全部记录' },
+const statusTabs = [
+  { label: '全部记录', value: 'ALL' },
   { label: '运行中', value: 'RUNNING' },
   { label: '成功', value: 'SUCCESS' },
   { label: '失败', value: 'FAILED' },
-];
+] as const;
 
 const taskTypeOptions = [
   { label: 'SQL', value: 'SQL' },
@@ -280,26 +281,17 @@ const ExecutionHistoryPage = () => {
 
         <div className="mt-3 border-b border-[#f0f0f0]">
           <div className="flex min-h-[54px] items-center justify-between gap-4 py-2">
-            <div className="flex shrink-0 items-center gap-1 rounded-lg bg-[#f5f5f6] p-1">
-              {statusTabs.map((item) => {
-                const active = status === item.value;
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => applyStatus(item.value)}
-                    className={[
-                      'h-8 rounded-md px-3.5 text-[13px] font-medium transition-all',
-                      active
-                        ? 'bg-white text-[#fe2c55] shadow-[0_1px_4px_rgba(16,24,40,0.08)]'
-                        : 'text-[#667085] hover:bg-white/70 hover:text-[#344054]',
-                    ].join(' ')}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
+            <YakFilterSwitch
+              value={status || 'ALL'}
+              options={statusTabs}
+              onChange={(value) =>
+                applyStatus(
+                  value === 'ALL'
+                    ? undefined
+                    : (value as DevelopmentTaskExecutionStatus),
+                )
+              }
+            />
 
             <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto">
               <Input

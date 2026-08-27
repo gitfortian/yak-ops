@@ -1,3 +1,4 @@
+import { YakFilterSwitch } from '@/components/ui';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import {
@@ -378,30 +379,24 @@ const ReleaseCenterPage = () => {
 
         <div className="mt-3 border-b border-[#f0f0f0]">
           <div className="flex min-h-[54px] items-center justify-between gap-4 py-2">
-            <div className="flex shrink-0 items-center gap-1 rounded-lg bg-[#f5f5f6] p-1">
-              {statusTabs.map((item) => {
-                const active = status === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setStatus(item.value);
-                      setPageNo(1);
-                    }}
-                    className={[
-                      'h-8 rounded-md px-3.5 text-[13px] font-medium transition-all',
-                      active
-                        ? 'bg-white text-[#fe2c55] shadow-[0_1px_4px_rgba(16,24,40,0.08)]'
-                        : 'text-[#667085] hover:bg-white/70 hover:text-[#344054]',
-                    ].join(' ')}
-                  >
-                    {item.label}
-                    <span className="ml-1 text-[11px] opacity-70">{tabCount(item.value)}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <YakFilterSwitch
+              value={status}
+              options={statusTabs.map((item) => ({
+                value: item.value,
+                label: (
+                  <span className="inline-flex items-baseline gap-1">
+                    <span>{item.label}</span>
+                    <span className="text-[11px] opacity-60">
+                      {tabCount(item.value)}
+                    </span>
+                  </span>
+                ),
+              }))}
+              onChange={(value) => {
+                setStatus(value);
+                setPageNo(1);
+              }}
+            />
 
             <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto">
               <Input
