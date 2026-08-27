@@ -1,10 +1,18 @@
-import { BRAND_COLOR } from '@/styles/brand';
-import { Button, Empty, Segmented, Select, Spin, Tag } from 'antd';
+import { YakButton, YakEmpty } from '@/components/ui';
 import {
-  ArrowUpRight,
-  GitBranch,
-  RefreshCw,
-} from 'lucide-react';
+  LINEAGE_ASSET_TYPES,
+  assetTypeLabel,
+  getLineageGraph,
+  searchLineageAssets,
+  type CatalogDataset,
+  type LineageAsset,
+  type LineageAssetType,
+  type LineageDirection,
+  type LineageGraph,
+} from '@/services/data-analysis';
+import { BRAND_COLOR } from '@/styles/brand';
+import { Segmented, Select, Spin, Tag } from 'antd';
+import { ArrowUpRight, GitBranch, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
@@ -14,26 +22,8 @@ import ReactFlow, {
   type Node,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import LineageNode, {
-  type LineageNodeData,
-} from '../lineage/LineageNode';
-import {
-  buildLineageView,
-  lineageLevels,
-} from '../lineage/graph-layout';
-import {
-  fetchLineageGraph,
-  searchLineageAssets,
-} from '../lineage/service';
-import {
-  LINEAGE_ASSET_TYPES,
-  assetTypeLabel,
-  type LineageAsset,
-  type LineageAssetType,
-  type LineageDirection,
-  type LineageGraph,
-} from '../lineage/types';
-import type { CatalogDataset } from './service';
+import LineageNode, { type LineageNodeData } from '../../lineage/LineageNode';
+import { buildLineageView, lineageLevels } from '../../lineage/graph-layout';
 
 const DEFAULT_DEPTH = 3;
 const nodeTypes = { lineage: LineageNode };
@@ -49,10 +39,7 @@ const uniqueAssets = (values: LineageAsset[]) => {
   return [...result.values()];
 };
 
-const pickDatasetAsset = (
-  dataset: CatalogDataset,
-  candidates: LineageAsset[],
-) => {
+const pickDatasetAsset = (dataset: CatalogDataset, candidates: LineageAsset[]) => {
   const sourceMatched = candidates.find(
     (asset) => String(asset.sourceId || '') === dataset.id,
   );
@@ -66,7 +53,6 @@ const pickDatasetAsset = (
       || key.endsWith(`/${normalizedId}`);
   });
   if (keyMatched) return keyMatched;
-
   return candidates.find((asset) => asset.name === dataset.name);
 };
 
@@ -90,7 +76,7 @@ const resolveDatasetAsset = async (dataset: CatalogDataset) => {
   return matched;
 };
 
-const typeCounts = (graph?: LineageGraph) => {
+const countAssetTypes = (graph?: LineageGraph) => {
   const counts = new Map<LineageAssetType, number>();
   graph?.nodes.forEach((asset) => {
     if (asset.id === graph.root.id) return;
@@ -102,8 +88,8 @@ const typeCounts = (graph?: LineageGraph) => {
 export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
   const [rootAsset, setRootAsset] = useState<LineageAsset>();
   const [graph, setGraph] = useState<LineageGraph>();
-  const [assetLoading, setAssetLoading] = useState(false);
-  const [graphLoading, setGraphLoading] = useState(false);
+  const [isAssetLoading, setIsAssetLoading] = useState(false);
+  const [isGraphLoading, setIsGraphLoading] = useState(false);
   const [error, setError] = useState('');
   const [depth, setDepth] = useState(DEFAULT_DEPTH);
   const [direction, setDirection] = useState<LineageDirection>('BOTH');
@@ -111,7 +97,7 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setAssetLoading(true);
+    setIsAssetLoading(true);
     setError('');
     setRootAsset(undefined);
     setGraph(undefined);
@@ -126,15 +112,12 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
         setRootAsset(asset);
       })
       .catch((requestError) => {
-        if (cancelled) return;
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : '查询 Dataset 血缘资产失败',
-        );
+        if (!cancelled) {
+          setError(requestError instanceof Error ? requestError.message : '查询 Dataset 血缘资产失败');
+        }
       })
       .finally(() => {
-        if (!cancelled) setAssetLoading(false);
+        if (!cancelled) setIsAssetLoading(false);
       });
 
     return () => {
@@ -145,24 +128,20 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
   useEffect(() => {
     if (!rootAsset) return;
     let cancelled = false;
-    setGraphLoading(true);
+    setIsGraphLoading(true);
     setError('');
 
-    void fetchLineageGraph(rootAsset.id, depth)
+    void getLineageGraph(rootAsset.id, depth)
       .then((value) => {
         if (!cancelled) setGraph(value);
       })
       .catch((requestError) => {
         if (cancelled) return;
         setGraph(undefined);
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : '加载 Dataset 血缘图失败',
-        );
+        setError(requestError instanceof Error ? requestError.message : '加载 Dataset 血缘图失败');
       })
       .finally(() => {
-        if (!cancelled) setGraphLoading(false);
+        if (!cancelled) setIsGraphLoading(false);
       });
 
     return () => {
@@ -182,10 +161,7 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
       position,
       draggable: false,
       selectable: false,
-      data: {
-        asset,
-        root: asset.id === graph?.root.id,
-      },
+      data: { asset, root: asset.id === graph?.root.id },
     })) || []
   ), [graph?.root.id, view?.nodes]);
 
@@ -201,10 +177,7 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
         height: 14,
         color: '#b9bec6',
       },
-      style: {
-        stroke: '#c9cdd3',
-        strokeWidth: 1.2,
-      },
+      style: { stroke: '#c9cdd3', strokeWidth: 1.2 },
     })) || []
   ), [view?.relations]);
 
@@ -221,8 +194,8 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
     return { upstream, downstream };
   }, [graph]);
 
-  const counts = useMemo(() => typeCounts(graph), [graph]);
-  const loading = assetLoading || graphLoading;
+  const counts = useMemo(() => countAssetTypes(graph), [graph]);
+  const isLoading = isAssetLoading || isGraphLoading;
   const graphKey = `${rootAsset?.id || 'empty'}:${depth}:${direction}:${refreshVersion}`;
 
   return (
@@ -248,26 +221,23 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
           value={depth}
           className="w-[76px]"
           onChange={setDepth}
-          options={[1, 2, 3, 4, 5].map((value) => ({
-            label: `${value} 层`,
-            value,
-          }))}
+          options={[1, 2, 3, 4, 5].map((value) => ({ label: `${value} 层`, value }))}
         />
-        <Button
+        <YakButton
           size="small"
           icon={<RefreshCw size={13} />}
-          loading={loading}
+          loading={isLoading}
           disabled={!rootAsset}
           onClick={() => setRefreshVersion((value) => value + 1)}
         >
           刷新
-        </Button>
+        </YakButton>
         <div className="ml-auto flex items-center gap-2 text-[12px] text-[#667085]">
           <span>上游 {summary.upstream}</span>
           <span className="h-3 w-px bg-[#dfe3e8]" />
           <span>下游 {summary.downstream}</span>
           {rootAsset ? (
-            <Button
+            <YakButton
               type="link"
               size="small"
               className="px-1"
@@ -275,7 +245,7 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
               icon={<ArrowUpRight size={12} />}
             >
               完整血缘
-            </Button>
+            </YakButton>
           ) : null}
         </div>
       </div>
@@ -303,17 +273,12 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
       </div>
 
       <div className="relative min-h-0 flex-1 bg-[#fcfcfd]">
-        {loading && !graph ? (
+        {isLoading && !graph ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
             <Spin tip="正在加载血缘..." />
           </div>
         ) : error && !graph ? (
-          <div className="flex h-full items-center justify-center px-6">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={error}
-            />
-          </div>
+          <YakEmpty title="血缘暂不可用" description={error} className="h-full min-h-[420px]" />
         ) : graph && flowNodes.length ? (
           <>
             <ReactFlow
@@ -340,12 +305,10 @@ export default function DatasetLineageTab({ dataset }: DatasetLineageTabProps) {
             ) : null}
           </>
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <Empty description="暂无可展示的血缘关系" />
-          </div>
+          <YakEmpty title="暂无可展示的血缘关系" className="h-full min-h-[420px]" />
         )}
 
-        {graphLoading && graph ? (
+        {isGraphLoading && graph ? (
           <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-2 rounded-[6px] border border-[#e4e7ec] bg-white px-2.5 py-1.5 text-[12px] text-[#667085] shadow-sm">
             <Spin size="small" /> 更新中
           </div>
