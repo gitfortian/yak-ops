@@ -44,6 +44,27 @@ describe('API response protocols', () => {
     expect(extractUnknownErrorMessage({}, 'fallback')).toBe('fallback');
   });
 
+  it('does not expose HTML error pages or oversized diagnostics to users', () => {
+    const htmlError =
+      '<!doctype html><html><head><title>HTTP Status 500 - Internal Server Error</title></head><body>stack trace</body></html>';
+
+    expect(extractUnknownErrorMessage(htmlError, '服务器发生错误')).toBe(
+      '服务器发生错误',
+    );
+    expect(
+      extractUnknownErrorMessage({ message: htmlError }, '请求失败'),
+    ).toBe('请求失败');
+    expect(
+      extractErrorMessage(
+        { code: 500, msg: htmlError, message: '数据查询失败' },
+        '操作失败',
+      ),
+    ).toBe('数据查询失败');
+    expect(extractUnknownErrorMessage('x'.repeat(300))).toBe(
+      `${'x'.repeat(239)}…`,
+    );
+  });
+
   it('recognizes authentication failures without treating forbidden as anonymous', () => {
     expect(isUnauthenticatedResponse({ code: 401 }, 'yak-ops')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 401 }, 'security')).toBe(true);
