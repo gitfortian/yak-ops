@@ -3,7 +3,7 @@ import type {
   QualityOverviewTrendPoint,
   QualityOverviewView,
 } from '@/services/data-quality';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OverviewSectionKind } from '../utils';
 import { formatCount } from '../utils';
 
@@ -19,7 +19,8 @@ interface SeriesDefinition {
   value: (point: QualityOverviewTrendPoint) => number;
 }
 
-const WIDTH = 1040;
+const DEFAULT_WIDTH = 1040;
+const MIN_CHART_WIDTH = 640;
 const HEIGHT = 300;
 const PADDING = { left: 54, right: 24, top: 28, bottom: 42 };
 
@@ -92,9 +93,27 @@ export default function QualityTrendChart({
   section,
   tabKey,
 }: QualityTrendChartProps) {
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(DEFAULT_WIDTH);
   const [activeIndex, setActiveIndex] = useState<number>();
   const trend = overview?.trend ?? [];
   const series = useMemo(() => seriesFor(section, tabKey), [section, tabKey]);
+
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container) return;
+
+    const syncWidth = () => {
+      setChartWidth(Math.max(MIN_CHART_WIDTH, Math.floor(container.clientWidth)));
+    };
+
+    syncWidth();
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(syncWidth);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   if (section === 'issue' && tabKey === 'dimension') {
     return <DimensionBars overview={overview} />;
@@ -112,11 +131,11 @@ export default function QualityTrendChart({
     );
   }
 
-  const chartWidth = WIDTH - PADDING.left - PADDING.right;
+  const plotWidth = chartWidth - PADDING.left - PADDING.right;
   const chartHeight = HEIGHT - PADDING.top - PADDING.bottom;
   const maxValue = Math.max(1, ...values);
   const xAt = (index: number) =>
-    PADDING.left + (trend.length === 1 ? chartWidth / 2 : (index / (trend.length - 1)) * chartWidth);
+    PADDING.left + (trend.length === 1 ? plotWidth / 2 : (index / (trend.length - 1)) * plotWidth);
   const yAt = (value: number) => PADDING.top + chartHeight - (value / maxValue) * chartHeight;
   const pointsFor = (item: SeriesDefinition) =>
     trend.map((point, index) => `${xAt(index)},${yAt(item.value(point))}`).join(' ');
@@ -135,75 +154,81 @@ export default function QualityTrendChart({
           </span>
         ))}
       </div>
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-[285px] w-full overflow-visible">
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = PADDING.top + chartHeight * ratio;
-          const label = Math.round(maxValue * (1 - ratio));
-          return (
-            <g key={ratio}>
-              <line x1={PADDING.left} y1={y} x2={WIDTH - PADDING.right} y2={y} stroke="#eef0f3" />
-              <text x={PADDING.left - 10} y={y + 4} textAnchor="end" fontSize="10" fill="#a0a6af">
-                {label}
-              </text>
-            </g>
-          );
-        })}
-        {series.map((item) => (
-          <polyline
-            key={item.label}
-            points={pointsFor(item)}
-            fill="none"
-            stroke={item.color}
-            strokeWidth="2.2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        ))}
-        {tickIndexes.map((index) => (
-          <text
-            key={`tick-${index}`}
-            x={xAt(index)}
-            y={HEIGHT - 14}
-            textAnchor="middle"
-            fontSize="10"
-            fill="#98a2b3"
-          >
-            {trend[index].date.slice(5)}
-          </text>
-        ))}
-        {trend.map((point, index) => {
-          const half = trend.length === 1 ? chartWidth / 2 : chartWidth / Math.max(2, trend.length - 1) / 2;
-          return (
-            <rect
-              key={point.date}
-              x={Math.max(PADDING.left, xAt(index) - half)}
-              y={PADDING.top}
-              width={Math.min(chartWidth, half * 2)}
-              height={chartHeight}
-              fill="transparent"
-              onMouseEnter={() => setActiveIndex(index)}
+      <div ref={chartContainerRef} className="w-full">
+        <svg
+          viewBox={`0 0 ${chartWidth} ${HEIGHT}`}
+          className="h-[285px] w-full overflow-visible"
+          preserveAspectRatio="none"
+        >
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const y = PADDING.top + chartHeight * ratio;
+            const label = Math.round(maxValue * (1 - ratio));
+            return (
+              <g key={ratio}>
+                <line x1={PADDING.left} y1={y} x2={chartWidth - PADDING.right} y2={y} stroke="#eef0f3" />
+                <text x={PADDING.left - 10} y={y + 4} textAnchor="end" fontSize="10" fill="#a0a6af">
+                  {label}
+                </text>
+              </g>
+            );
+          })}
+          {series.map((item) => (
+            <polyline
+              key={item.label}
+              points={pointsFor(item)}
+              fill="none"
+              stroke={item.color}
+              strokeWidth="2.2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
             />
-          );
-        })}
-        {activeIndex !== undefined
-          ? series.map((item) => (
-              <circle
-                key={`active-${item.label}`}
-                cx={xAt(activeIndex)}
-                cy={yAt(item.value(trend[activeIndex]))}
-                r="4"
-                fill="#fff"
-                stroke={item.color}
-                strokeWidth="2"
+          ))}
+          {tickIndexes.map((index) => (
+            <text
+              key={`tick-${index}`}
+              x={xAt(index)}
+              y={HEIGHT - 14}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#98a2b3"
+            >
+              {trend[index].date.slice(5)}
+            </text>
+          ))}
+          {trend.map((point, index) => {
+            const half = trend.length === 1 ? plotWidth / 2 : plotWidth / Math.max(2, trend.length - 1) / 2;
+            return (
+              <rect
+                key={point.date}
+                x={Math.max(PADDING.left, xAt(index) - half)}
+                y={PADDING.top}
+                width={Math.min(plotWidth, half * 2)}
+                height={chartHeight}
+                fill="transparent"
+                onMouseEnter={() => setActiveIndex(index)}
               />
-            ))
-          : null}
-      </svg>
+            );
+          })}
+          {activeIndex !== undefined
+            ? series.map((item) => (
+                <circle
+                  key={`active-${item.label}`}
+                  cx={xAt(activeIndex)}
+                  cy={yAt(item.value(trend[activeIndex]))}
+                  r="4"
+                  fill="#fff"
+                  stroke={item.color}
+                  strokeWidth="2"
+                />
+              ))
+            : null}
+        </svg>
+      </div>
 
       {active && activeIndex !== undefined ? (
         <div
           className="pointer-events-none absolute top-12 z-10 min-w-[150px] rounded-md border border-solid border-[#e5e7eb] bg-white px-3 py-2 text-[11px] shadow-[0_6px_18px_rgba(16,24,40,0.08)]"
-          style={{ left: `${Math.min(82, Math.max(8, (xAt(activeIndex) / WIDTH) * 100))}%` }}
+          style={{ left: `${Math.min(82, Math.max(8, (xAt(activeIndex) / chartWidth) * 100))}%` }}
         >
           <div className="mb-1.5 font-medium text-[#30343b]">{active.date}</div>
           {series.map((item) => (
