@@ -74,7 +74,7 @@ export function useDigitalScreenViewer(id?: string) {
       });
 
     return () => controller.abort();
-  }, [runtimeDatasetKey]);
+  }, [runtimeDatasetIds, runtimeDatasetKey]);
 
   const runtime = useScreenRuntime(
     template,
