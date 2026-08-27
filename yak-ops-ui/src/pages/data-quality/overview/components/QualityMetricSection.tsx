@@ -2,7 +2,7 @@ import { YakButton, YakTab } from '@/components/ui';
 import type { QualityOverviewView } from '@/services/data-quality';
 import { DatePicker, Segmented, Spin, Tooltip, message } from 'antd';
 import dayjs from 'dayjs';
-import { CircleHelp, Download, RefreshCw } from 'lucide-react';
+import { CalendarDays, CircleHelp, Download } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { QualityOverviewTabDefinition } from '../constants';
 import {
@@ -28,7 +28,6 @@ interface QualityMetricSectionProps {
   overview?: QualityOverviewView;
   loading?: boolean;
   onRangeChange: (range: OverviewDateRange) => void;
-  onRefresh: () => void;
 }
 
 const periodOptions = [
@@ -39,6 +38,9 @@ const periodOptions = [
 
 const presetForRange = (range: OverviewDateRange): OverviewPeriodKey | undefined =>
   periodOptions.find((item) => rangeKey(resolvePresetRange(item.value)) === rangeKey(range))?.value;
+
+const compactRangeText = (range: OverviewDateRange) =>
+  `${dayjs(range.startDate).format('MM.DD')}-${dayjs(range.endDate).format('MM.DD')}`;
 
 const MetricStrip = ({ metrics }: { metrics: ReturnType<typeof buildMetrics> }) => (
   <div className="overflow-x-auto border-y border-solid border-[#eceef2]">
@@ -109,7 +111,6 @@ export default function QualityMetricSection({
   overview,
   loading = false,
   onRangeChange,
-  onRefresh,
 }: QualityMetricSectionProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const metrics = useMemo(
@@ -140,40 +141,48 @@ export default function QualityMetricSection({
             value={selectedPreset}
             options={periodOptions.map((item) => ({ ...item }))}
             onChange={(value) => onRangeChange(resolvePresetRange(value as OverviewPeriodKey))}
-            className="!bg-[#f4f5f7]"
+            className={[
+              '!h-8 !rounded-lg !bg-[#f3f4f6] !p-1',
+              '[&_.ant-segmented-group]:!h-6 [&_.ant-segmented-group]:!gap-1',
+              '[&_.ant-segmented-item]:!min-w-[68px] [&_.ant-segmented-item]:!rounded-md [&_.ant-segmented-item]:!text-[13px] [&_.ant-segmented-item]:!font-medium [&_.ant-segmented-item]:!text-[#667085]',
+              '[&_.ant-segmented-item-label]:!min-h-0 [&_.ant-segmented-item-label]:!px-3 [&_.ant-segmented-item-label]:!leading-6',
+              '[&_.ant-segmented-thumb]:!rounded-md [&_.ant-segmented-thumb]:!bg-white [&_.ant-segmented-thumb]:!shadow-[0_1px_3px_rgba(16,24,40,0.08)]',
+              '[&_.ant-segmented-item-selected]:!bg-white [&_.ant-segmented-item-selected]:!font-semibold [&_.ant-segmented-item-selected]:!text-[#161823] [&_.ant-segmented-item-selected]:!shadow-[0_1px_3px_rgba(16,24,40,0.08)]',
+            ].join(' ')}
           />
-          <RangePicker
-            size="small"
-            value={toPickerRange(range)}
-            format="MM.DD"
-            allowClear={false}
-            disabledDate={(current) => current.isAfter(dayjs().subtract(1, 'day'), 'day')}
-            onChange={(value) => {
-              const start = value?.[0];
-              const end = value?.[1];
-              if (!start || !end) return;
-              if (end.diff(start, 'day') > 89) {
-                message.warning('质量总览单次最多查询 90 天');
-                return;
-              }
-              onRangeChange({
-                startDate: start.format('YYYY-MM-DD'),
-                endDate: end.format('YYYY-MM-DD'),
-              });
-            }}
-            className="w-[150px]"
-          />
-          <YakButton
-            size="small"
-            icon={<RefreshCw size={14} />}
-            loading={loading}
-            onClick={onRefresh}
-          >
-            刷新
-          </YakButton>
+
+          <div className="group relative h-8 w-[142px] shrink-0">
+            <div className="pointer-events-none flex h-8 items-center justify-center gap-2 rounded-lg bg-[#f3f4f6] px-3 text-[13px] font-medium text-[#161823] transition-colors group-hover:bg-[#e9eaed] group-focus-within:ring-2 group-focus-within:ring-[rgba(254,44,85,0.12)]">
+              <CalendarDays size={15} strokeWidth={1.8} />
+              <span>{compactRangeText(range)}</span>
+            </div>
+            <RangePicker
+              size="small"
+              value={toPickerRange(range)}
+              format="MM.DD"
+              allowClear={false}
+              disabledDate={(current) => current.isAfter(dayjs().subtract(1, 'day'), 'day')}
+              onChange={(value) => {
+                const start = value?.[0];
+                const end = value?.[1];
+                if (!start || !end) return;
+                if (end.diff(start, 'day') > 89) {
+                  message.warning('质量总览单次最多查询 90 天');
+                  return;
+                }
+                onRangeChange({
+                  startDate: start.format('YYYY-MM-DD'),
+                  endDate: end.format('YYYY-MM-DD'),
+                });
+              }}
+              className="!absolute !inset-0 !h-8 !w-full !cursor-pointer !opacity-0"
+            />
+          </div>
+
           <YakButton
             size="small"
             icon={<Download size={14} />}
+            className="!h-8 !rounded-lg !border-0 !bg-[#f3f4f6] !px-3 !text-[13px] !font-semibold !text-[#161823] !shadow-none hover:!bg-[#e9eaed]"
             onClick={() => {
               if (!overview) {
                 message.info('当前统计周期暂无可导出的质量数据');
