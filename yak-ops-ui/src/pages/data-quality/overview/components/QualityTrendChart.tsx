@@ -1,4 +1,4 @@
-import { YakEmpty } from '@/components/ui';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import type {
   QualityOverviewTrendPoint,
   QualityOverviewView,
@@ -58,11 +58,14 @@ const DimensionBars = ({ overview }: { overview?: QualityOverviewView }) => {
   const max = Math.max(1, ...rows.map((item) => item.issues));
   if (!rows.length) {
     return (
-      <YakEmpty
-        compact
-        title="暂无维度问题分布"
-        description="统计周期内出现质量问题后，这里会展示各质量维度的问题贡献"
-      />
+      <div className="flex min-h-[320px] items-center justify-center">
+        <YakOpsEmpty
+          width={180}
+          height={124}
+          title="暂无维度问题分布"
+          description="统计周期内出现质量问题后，这里会展示各质量维度的问题贡献"
+        />
+      </div>
     );
   }
   return (
@@ -100,12 +103,16 @@ export default function QualityTrendChart({
   const values = trend.flatMap((point) => series.map((item) => item.value(point)));
   const hasData = values.some((value) => value > 0);
   if (!trend.length || !hasData) {
+    const emptyTitle = section === 'issue' ? '暂无问题趋势数据' : '暂无质量趋势数据';
     return (
-      <YakEmpty
-        compact
-        title={section === 'issue' ? '暂无问题趋势数据' : '暂无质量趋势数据'}
-        description="当前统计周期没有可绘制的数据，切换时间范围后可重新查询"
-      />
+      <div className="flex min-h-[320px] items-center justify-center">
+        <YakOpsEmpty
+          width={180}
+          height={124}
+          title={emptyTitle}
+          description="当前统计周期没有可绘制的数据，切换时间范围后可重新查询"
+        />
+      </div>
     );
   }
 

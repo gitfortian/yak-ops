@@ -1,5 +1,6 @@
 import YakButton from '@/components/YakButton';
-import { Empty, Table, Tag } from "antd";
+import YakOpsEmpty from '@/components/YakOpsEmpty';
+import { Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useMemo, type MouseEvent } from "react";
@@ -312,7 +313,14 @@ const ExecutionRecordTable = ({
   );
 
   const emptyText = (
-    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行记录" />
+    <div className="flex min-h-[220px] items-center justify-center">
+      <YakOpsEmpty
+        width={176}
+        height={120}
+        title="暂无运行记录"
+        description="当前筛选条件下暂无数据质量运行记录"
+      />
+    </div>
   );
   const tableClassName = dataQualityTableClassName(
     "[&_.ant-table-container]:!rounded-none [&_.ant-table-container]:!border-x-0"
