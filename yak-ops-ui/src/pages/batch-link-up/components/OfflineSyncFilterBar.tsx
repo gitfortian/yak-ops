@@ -1,6 +1,6 @@
-import { YakButton } from '@/components/ui';
+import { YakButton, YakFilterSwitch } from '@/components/ui';
 import { FilterOutlined, SearchOutlined } from '@ant-design/icons';
-import { DatePicker, Input, Popover, Segmented, Select } from 'antd';
+import { DatePicker, Input, Popover, Select } from 'antd';
 import { useState } from 'react';
 
 import { OFFLINE_SYNC_STATUS_TABS } from '../constants';
@@ -11,28 +11,6 @@ import type {
 } from '../types';
 
 const { RangePicker } = DatePicker;
-
-const STATUS_SEGMENT_CLASS = [
-  '!h-9 !rounded-[10px] !bg-[#f4f5f7] !p-[3px]',
-  '[&_.ant-segmented-group]:!h-[30px]',
-  '[&_.ant-segmented-group]:!gap-1',
-  '[&_.ant-segmented-item]:!min-w-[72px]',
-  '[&_.ant-segmented-item]:!rounded-[7px]',
-  '[&_.ant-segmented-item]:!px-0',
-  '[&_.ant-segmented-item]:!text-[13px]',
-  '[&_.ant-segmented-item]:!font-medium',
-  '[&_.ant-segmented-item]:!text-[#747985]',
-  '[&_.ant-segmented-item-label]:!min-h-0',
-  '[&_.ant-segmented-item-label]:!px-3',
-  '[&_.ant-segmented-item-label]:!leading-[30px]',
-  '[&_.ant-segmented-thumb]:!rounded-[7px]',
-  '[&_.ant-segmented-thumb]:!bg-white',
-  '[&_.ant-segmented-thumb]:!shadow-[0_1px_4px_rgba(31,35,41,0.10)]',
-  '[&_.ant-segmented-item-selected]:!bg-white',
-  '[&_.ant-segmented-item-selected]:!font-semibold',
-  '[&_.ant-segmented-item-selected]:!text-[#252832]',
-  '[&_.ant-segmented-item-selected]:!shadow-[0_1px_4px_rgba(31,35,41,0.10)]',
-].join(' ');
 
 interface OfflineSyncFilterBarProps {
   filterDraft: OfflineSyncSearchState;
@@ -74,15 +52,10 @@ const OfflineSyncFilterBar = ({
 
   return (
     <div className="flex min-h-[44px] items-center justify-between gap-4">
-      <Segmented
-        size="small"
+      <YakFilterSwitch
         value={currentStatus}
-        options={OFFLINE_SYNC_STATUS_TABS.map((item) => ({
-          value: item.value,
-          label: item.label,
-        }))}
-        className={STATUS_SEGMENT_CLASS}
-        onChange={(value) => onStatusChange(String(value))}
+        options={OFFLINE_SYNC_STATUS_TABS}
+        onChange={onStatusChange}
       />
 
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto">
