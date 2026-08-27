@@ -33,9 +33,19 @@ export const planScreenRuntimeQueries = (
   });
 };
 
-export const collectBoundDatasetIds = (bindings: DigitalScreenBindings) => (
-  [...new Set(Object.values(bindings).map((binding) => binding.datasetId).filter(Boolean))]
-);
+/** Dataset ids the planner could execute once metadata is available. */
+export const collectScreenRuntimeDatasetIds = (
+  template: ScreenTemplate | undefined,
+  bindings: DigitalScreenBindings,
+) => {
+  if (!template) return [];
+  return [...new Set(template.components.flatMap((component) => {
+    const binding = bindings[component.id];
+    return binding && canQueryScreenComponent(component, binding)
+      ? [binding.datasetId]
+      : [];
+  }))];
+};
 
 export const countBoundScreenComponents = (
   template: ScreenTemplate | undefined,
