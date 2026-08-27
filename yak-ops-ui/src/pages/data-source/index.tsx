@@ -126,104 +126,135 @@ const DataSourcePage = () => {
 
   return (
     <>
-      <div className="min-h-full bg-[#f7f8fa] text-[#161823]">
-        <motion.div
+      <div className="relative min-h-full overflow-hidden bg-[#f7f8fa] text-[#242731]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-[120px] -top-[150px] h-[360px] w-[620px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(175,220,239,0.18)_0%,rgba(213,235,244,0.08)_48%,rgba(255,255,255,0)_74%)] blur-[24px]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-[220px] -right-[170px] h-[430px] w-[620px] rounded-full bg-[radial-gradient(circle_at_center,rgba(230,238,181,0.20),rgba(255,255,255,0)_70%)] blur-[22px]"
+        />
+
+        <motion.main
           initial="hidden"
           animate="visible"
           variants={PAGE_ANIMATION.sectionStagger}
-          className="min-h-[calc(100vh-132px)] rounded-[10px] border border-black/[0.025] bg-white px-[34px] pb-[38px] pt-[30px] shadow-[0_2px_12px_rgba(22,24,35,0.025)] max-xl:px-[26px]"
+          className="relative z-10 px-4 pb-4 pt-4"
         >
-          <motion.div variants={PAGE_ANIMATION.fadeUp}>
+          <motion.section
+            variants={PAGE_ANIMATION.fadeUp}
+            className="rounded-[22px] border border-[#f1f1f1] bg-white/[0.76] px-[22px] pb-[22px] pt-6 backdrop-blur-[8px]"
+          >
             <DataSourcePageHeader
               canCreate={permissions.canCreate}
               onCreate={handleCreate}
             />
-          </motion.div>
+            <DataSourceSummaryCards summary={summary} />
+          </motion.section>
 
-          <DataSourceSummaryCards summary={summary} />
-
-          <DataSourceToolbar
-            environment={environment}
-            dbType={dbType}
-            keyword={keyword}
-            viewMode={viewMode}
-            hasActiveFilters={hasActiveFilters}
-            onEnvironmentChange={setEnvironment}
-            onDbTypeChange={setDbType}
-            onKeywordChange={setKeyword}
-            onViewModeChange={setViewMode}
-            onReset={resetFilters}
-          />
-
-          <motion.div
+          <motion.section
             variants={PAGE_ANIMATION.fadeUp}
-            className="mb-3 mt-[15px] text-[11px] text-black/40"
+            className="mt-4 min-h-[420px] rounded-[22px] border border-[#f1f1f1] bg-white/[0.82] px-[22px] pb-[22px] pt-5 backdrop-blur-[8px]"
           >
-            共找到
-            <strong className="mx-1 font-semibold text-black/75">
-              {pagination.total}
-            </strong>
-            个数据源
-            {hasActiveFilters ? ' · 当前为筛选结果' : null}
-          </motion.div>
-
-          <Spin spinning={loading}>
-            <motion.section
-              variants={PAGE_ANIMATION.cardStagger}
-              initial="hidden"
-              animate="visible"
-              className={
-                viewMode === 'list'
-                  ? 'grid grid-cols-1 gap-4'
-                  : 'grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4'
-              }
-            >
-              {records.map((record, index) => (
-                <DataSourceCard
-                  key={
-                    dataSourceRecordKey(record.id) ||
-                    `${record.name || 'data-source'}-${index}`
-                  }
-                  record={record}
-                  viewMode={viewMode}
-                  permissions={permissions}
-                  testingId={testingId}
-                  editingId={editingId}
-                  onEdit={(item) => void handleEdit(item)}
-                  onDelete={handleDelete}
-                  onTestConnection={(item) => void handleTestConnection(item)}
-                />
-              ))}
-            </motion.section>
-
-            {!loading && records.length === 0 ? (
-              <DataSourceEmptyState
-                filtered={hasActiveFilters}
-                canCreate={permissions.canCreate}
-                onReset={resetFilters}
-                onCreate={handleCreate}
-              />
-            ) : null}
-          </Spin>
-
-          {pagination.total > 0 ? (
-            <div className="mt-6 flex justify-end">
-              <Pagination
-                current={pagination.pageNo}
-                pageSize={pagination.pageSize}
-                total={pagination.total}
-                showSizeChanger
-                showQuickJumper
-                pageSizeOptions={DATA_SOURCE_PAGE_SIZE_OPTIONS}
-                disabled={loading}
-                showTotal={(total, range) =>
-                  `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
-                }
-                onChange={changePage}
-              />
+            <div className="flex items-end justify-between gap-6">
+              <div>
+                <h2 className="m-0 text-[18px] font-semibold leading-7 tracking-[-0.3px] text-[#292c35]">
+                  数据源列表
+                </h2>
+                <p className="mb-0 mt-0.5 text-[12px] leading-5 text-[#9a9ea7]">
+                  按运行环境与类型筛选，快速检查连接状态
+                </p>
+              </div>
             </div>
-          ) : null}
-        </motion.div>
+
+            <DataSourceToolbar
+              environment={environment}
+              dbType={dbType}
+              keyword={keyword}
+              viewMode={viewMode}
+              hasActiveFilters={hasActiveFilters}
+              onEnvironmentChange={setEnvironment}
+              onDbTypeChange={setDbType}
+              onKeywordChange={setKeyword}
+              onViewModeChange={setViewMode}
+              onReset={resetFilters}
+            />
+
+            <motion.div
+              variants={PAGE_ANIMATION.fadeUp}
+              className="mb-3.5 mt-4 flex items-center gap-1 text-[11px] leading-5 text-[#9b9fa8]"
+            >
+              <span>共找到</span>
+              <strong className="font-semibold text-[#5f646e]">
+                {pagination.total}
+              </strong>
+              <span>个数据源</span>
+              {hasActiveFilters ? (
+                <span className="ml-1 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] text-[#858a94]">
+                  筛选结果
+                </span>
+              ) : null}
+            </motion.div>
+
+            <Spin spinning={loading}>
+              <motion.section
+                variants={PAGE_ANIMATION.cardStagger}
+                initial="hidden"
+                animate="visible"
+                className={
+                  viewMode === 'list'
+                    ? 'grid grid-cols-1 gap-[14px]'
+                    : 'grid grid-cols-1 gap-[14px] md:grid-cols-2 2xl:grid-cols-3'
+                }
+              >
+                {records.map((record, index) => (
+                  <DataSourceCard
+                    key={
+                      dataSourceRecordKey(record.id) ||
+                      `${record.name || 'data-source'}-${index}`
+                    }
+                    record={record}
+                    viewMode={viewMode}
+                    permissions={permissions}
+                    testingId={testingId}
+                    editingId={editingId}
+                    onEdit={(item) => void handleEdit(item)}
+                    onDelete={handleDelete}
+                    onTestConnection={(item) => void handleTestConnection(item)}
+                  />
+                ))}
+              </motion.section>
+
+              {!loading && records.length === 0 ? (
+                <DataSourceEmptyState
+                  filtered={hasActiveFilters}
+                  canCreate={permissions.canCreate}
+                  onReset={resetFilters}
+                  onCreate={handleCreate}
+                />
+              ) : null}
+            </Spin>
+
+            {pagination.total > 0 ? (
+              <div className="mt-6 flex justify-end border-t border-[#f0f1f3] pt-4">
+                <Pagination
+                  current={pagination.pageNo}
+                  pageSize={pagination.pageSize}
+                  total={pagination.total}
+                  showSizeChanger
+                  showQuickJumper
+                  pageSizeOptions={DATA_SOURCE_PAGE_SIZE_OPTIONS}
+                  disabled={loading}
+                  showTotal={(total, range) =>
+                    `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+                  }
+                  onChange={changePage}
+                />
+              </div>
+            ) : null}
+          </motion.section>
+        </motion.main>
       </div>
 
       <AddOrEditDataSourceModal ref={modalRef} />
