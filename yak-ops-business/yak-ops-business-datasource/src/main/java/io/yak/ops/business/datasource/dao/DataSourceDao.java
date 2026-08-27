@@ -19,6 +19,8 @@ public interface DataSourceDao {
 
   DataSourcePO selectById(Long projectId, Long id);
 
+  List<DataSourcePO> selectByIds(List<Long> ids);
+
   IPage<DataSourcePO> selectPage(PageQuery query);
 
   DataSourceSummaryRow selectSummary();
