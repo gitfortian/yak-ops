@@ -35,7 +35,6 @@ export default function DataQualityOverviewPage() {
             overview={overview.qualityOverview}
             loading={overview.qualityLoading}
             onRangeChange={overview.setQualityRange}
-            onRefresh={() => void overview.refresh(overview.qualityRange)}
           />
 
           <QualityMetricSection
@@ -47,7 +46,6 @@ export default function DataQualityOverviewPage() {
             overview={overview.issueOverview}
             loading={overview.issueLoading}
             onRangeChange={overview.setIssueRange}
-            onRefresh={() => void overview.refresh(overview.issueRange)}
           />
         </div>
 
