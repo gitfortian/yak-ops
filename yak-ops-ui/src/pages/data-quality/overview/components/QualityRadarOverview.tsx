@@ -1,4 +1,5 @@
-import { YakButton, YakEmpty } from '@/components/ui';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
+import { YakButton } from '@/components/ui';
 import type { QualityOverviewView } from '@/services/data-quality';
 import { BRAND_CSS_VARIABLES } from '@/styles/brand';
 import { history } from '@umijs/max';
@@ -319,11 +320,24 @@ export default function QualityRadarOverview({
                   ))}
                 </div>
               ) : (
-                <YakEmpty
-                  compact
-                  title="近 7 日暂无问题数据"
-                  description="统计周期内出现未通过或异常规则后，这里将展示问题贡献最高的质量维度"
-                />
+                <div className="flex min-h-[158px] flex-col items-center justify-center py-1 text-center">
+                  <YakOpsEmpty
+                    width={146}
+                    height={106}
+                    primaryColor="var(--yak-brand-color)"
+                    title="近 7 日暂无问题数据"
+                  />
+                  <div className="-mt-1 text-[13px] leading-5">
+                    <span className="text-[#667085]">近 7 日暂无问题数据，</span>
+                    <button
+                      type="button"
+                      onClick={() => history.push('/data-quality/execution')}
+                      className="border-0 bg-transparent p-0 font-medium text-[var(--yak-brand-color)] transition-opacity hover:opacity-75"
+                    >
+                      查看运行记录
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
