@@ -1,1 +1,1 @@
-export { default } from './CreatorWorkbenchPage';
+export { default } from './HomePage';
