@@ -13,32 +13,37 @@ interface SummaryItem {
   label: string;
   icon: ReactNode;
   iconClassName: string;
+  valueClassName: string;
 }
 
 const SUMMARY_ITEMS: SummaryItem[] = [
   {
     key: 'total',
     label: '全部数据源',
-    icon: <Database size={18} strokeWidth={1.85} />,
-    iconClassName: 'bg-[#eef2ff] text-[#5669da]',
+    icon: <Database size={17} strokeWidth={1.9} />,
+    iconClassName: 'bg-[#eef2ff] text-[#5868d8]',
+    valueClassName: 'text-[#242731]',
   },
   {
     key: 'connected',
     label: '连接正常',
-    icon: <CheckCircle2 size={18} strokeWidth={1.85} />,
-    iconClassName: 'bg-[#eef9f2] text-[#28a251]',
+    icon: <CheckCircle2 size={17} strokeWidth={1.9} />,
+    iconClassName: 'bg-[#edf8f1] text-[#2ea35d]',
+    valueClassName: 'text-[#242731]',
   },
   {
     key: 'disconnected',
     label: '连接异常',
-    icon: <XCircle size={18} strokeWidth={1.85} />,
-    iconClassName: 'bg-[#fff1f2] text-[#e55763]',
+    icon: <XCircle size={17} strokeWidth={1.9} />,
+    iconClassName: 'bg-[#fff1f2] text-[#e35b67]',
+    valueClassName: 'text-[#242731]',
   },
   {
     key: 'environmentCount',
     label: '运行环境',
-    icon: <Server size={18} strokeWidth={1.85} />,
-    iconClassName: 'bg-[#f0f3f6] text-[#667487]',
+    icon: <Server size={17} strokeWidth={1.9} />,
+    iconClassName: 'bg-[#f3f5f7] text-[#697587]',
+    valueClassName: 'text-[#242731]',
   },
 ];
 
@@ -48,14 +53,13 @@ interface DataSourceSummaryCardsProps {
 
 const DataSourceSummaryCards = ({ summary }: DataSourceSummaryCardsProps) => (
   <motion.section
-    variants={PAGE_ANIMATION.cardStagger}
-    className="mt-5 grid grid-cols-2 gap-x-6 border-y border-[#eef0f2] lg:grid-cols-4 lg:gap-x-8"
+    variants={PAGE_ANIMATION.fadeUp}
+    className="flex flex-wrap gap-3"
   >
     {SUMMARY_ITEMS.map((item) => (
-      <motion.div
+      <div
         key={item.key}
-        variants={PAGE_ANIMATION.fadeUp}
-        className="flex min-h-[74px] min-w-0 items-center gap-3 py-4"
+        className="flex min-w-[180px] flex-1 items-center gap-3 rounded-[14px] bg-[#fafbfc] px-4 py-3"
       >
         <span
           className={[
@@ -65,13 +69,22 @@ const DataSourceSummaryCards = ({ summary }: DataSourceSummaryCardsProps) => (
         >
           {item.icon}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#686d76]">
-          {item.label}
-        </span>
-        <strong className="shrink-0 text-[24px] font-semibold leading-8 tracking-[-0.6px] text-[#252832]">
+
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-medium text-[#606571]">
+            {item.label}
+          </div>
+        </div>
+
+        <strong
+          className={[
+            'ml-auto shrink-0 text-[28px] font-semibold leading-none tracking-[-0.6px]',
+            item.valueClassName,
+          ].join(' ')}
+        >
           {summary[item.key]}
         </strong>
-      </motion.div>
+      </div>
     ))}
   </motion.section>
 );

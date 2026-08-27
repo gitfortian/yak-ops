@@ -30,10 +30,6 @@ export default function HomeWorkbench() {
 
       <HomeVisualizationOverview />
 
-      <div className="flex items-center justify-center gap-2 py-2 text-[10px] text-[#aaadb4]">
-        <Sparkles size={11} strokeWidth={1.8} />
-        首页业务总览已接入当前真实数据源
-      </div>
     </div>
   );
 }
