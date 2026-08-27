@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import YakTab from '@/components/YakTab';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import {
@@ -9,7 +10,6 @@ import {
   Button,
   ConfigProvider,
   Dropdown,
-  Empty,
   Form,
   Input,
   Modal,
@@ -779,14 +779,22 @@ const TemplateLibraryPage = () => {
                       dataSource={data.records}
                       locale={{
                         emptyText: (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={
-                              activeTab === 'CUSTOM'
-                                ? '当前目录暂无自定义模板'
-                                : '暂无系统模板'
-                            }
-                          />
+                          <div className="flex min-h-[220px] items-center justify-center">
+                            <YakOpsEmpty
+                              width={176}
+                              height={120}
+                              title={
+                                activeTab === 'CUSTOM'
+                                  ? '当前目录暂无自定义模板'
+                                  : '暂无系统模板'
+                              }
+                              description={
+                                activeTab === 'CUSTOM'
+                                  ? '当前筛选条件下没有可展示的自定义规则模板'
+                                  : '当前筛选条件下没有可展示的系统规则模板'
+                              }
+                            />
+                          </div>
                         ),
                       }}
                       columns={[

@@ -1,4 +1,5 @@
-import { YakButton, YakEmpty } from '@/components/ui';
+import YakOpsEmpty from '@/components/YakOpsEmpty';
+import { YakButton } from '@/components/ui';
 import type { TableAssetView } from '@/services/data-quality';
 import { Input } from 'antd';
 import { Search } from 'lucide-react';
@@ -80,7 +81,9 @@ const RegisteredTablePanel = ({
 
       {!dataSourceId ? (
         <div className="flex min-h-0 flex-1 items-center justify-center">
-          <YakEmpty
+          <YakOpsEmpty
+            width={180}
+            height={124}
             title="请选择数据源"
             description="从左侧选择数据源后查看并注册质量监控表"
           />
