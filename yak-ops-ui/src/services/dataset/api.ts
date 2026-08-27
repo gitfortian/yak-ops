@@ -52,6 +52,11 @@ interface DatasetDetailWire {
   fields: DatasetFieldWire[];
 }
 
+export interface DatasetQueryOptions {
+  /** Allows runtime callers to cancel stale Dataset requests without changing the backend contract. */
+  signal?: AbortSignal;
+}
+
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
     throw new Error(response?.message || response?.msg || fallback);
@@ -123,8 +128,13 @@ export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
 export const queryDataset = async (
   datasetId: string,
   payload: DatasetQueryPayload,
+  options?: DatasetQueryOptions,
 ): Promise<DatasetQueryResult> => unwrap(
-  await HttpUtils.post<DatasetQueryResult>(`${DATASET_API}/${datasetId}/query`, payload),
+  await HttpUtils.post<DatasetQueryResult>(
+    `${DATASET_API}/${datasetId}/query`,
+    payload,
+    options?.signal ? { signal: options.signal } : undefined,
+  ),
   'Dataset 查询失败',
 );
 
