@@ -148,6 +148,21 @@ const errorHandler = (error: any): Response | undefined => {
       throw error;
     }
 
+    // Proxy errors often include the request URL in the error body already.
+    // Compare without the protocol so `localhost/...` and `http://localhost/...`
+    // are treated as the same endpoint instead of rendering two near-identical lines.
+    const normalizedRequestUrl = url
+      ?.replace(/^https?:\/\//i, "")
+      .toLowerCase();
+    const normalizedErrorText = errorText
+      .replace(/https?:\/\//gi, "")
+      .toLowerCase();
+    const shouldShowRequestUrl = Boolean(
+      url &&
+        normalizedRequestUrl &&
+        !normalizedErrorText.includes(normalizedRequestUrl)
+    );
+
     if (!skipErrorHandler) {
       notifyOnce(`http:${status}:${url || ""}:${errorText}`, {
         type: "error",
@@ -155,7 +170,7 @@ const errorHandler = (error: any): Response | undefined => {
         description: (
           <div>
             <div>{errorText}</div>
-            {url ? (
+            {shouldShowRequestUrl ? (
               <div
                 style={{
                   marginTop: 6,
@@ -168,7 +183,7 @@ const errorHandler = (error: any): Response | undefined => {
             ) : null}
           </div>
         ),
-        meta: status === 403 ? "权限不足" : "服务端返回异常",
+        meta: status === 403 ? "权限不足" : undefined,
         duration: 3.5,
       });
     }
