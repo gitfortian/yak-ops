@@ -2,6 +2,7 @@ package io.yak.ops.business.digitalscreen.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,7 +59,7 @@ class DigitalScreenPublisherTest {
     assertThat(publisher.publish(7L)).isSameAs(current);
 
     verify(versions, never()).nextVersionNo(7L);
-    verify(versions, never()).insert(any(), eq(4), any());
+    verify(versions, never()).insert(any(), anyInt(), any());
   }
 
   @Test

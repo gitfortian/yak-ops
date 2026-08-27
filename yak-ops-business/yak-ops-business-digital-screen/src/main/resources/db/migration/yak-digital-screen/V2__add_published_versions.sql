@@ -50,10 +50,10 @@ SELECT
 FROM yak_digital_screen
 WHERE status = 'PUBLISHED';
 
-UPDATE yak_digital_screen screen
-JOIN yak_digital_screen_version version
-  ON version.screen_id = screen.id AND version.version_no = 1
-SET screen.published_revision = screen.revision,
-    screen.published_version_id = version.id,
-    screen.published_version_no = 1
-WHERE screen.status = 'PUBLISHED';
+UPDATE yak_digital_screen s
+JOIN yak_digital_screen_version v
+  ON v.screen_id = s.id AND v.version_no = 1
+SET s.published_revision = s.revision,
+    s.published_version_id = v.id,
+    s.published_version_no = 1
+WHERE s.status = 'PUBLISHED';
