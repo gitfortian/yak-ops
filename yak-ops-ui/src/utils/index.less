@@ -1,14 +1,9 @@
 .pretty-notification-wrapper {
   background: transparent !important;
+  border: 0 !important;
+  border-radius: 18px !important;
   box-shadow: none !important;
   padding: 0 !important;
-
-  .ant-notification-notice {
-    background: transparent !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    border-radius: 18px !important;
-  }
 
   .ant-notification-notice-content {
     background: transparent !important;
@@ -29,6 +24,15 @@
     top: 14px !important;
     right: 14px !important;
   }
+}
+
+// Ant Design wraps every notice in an extra shadow container. The custom card
+// below already owns the border/radius/shadow, so flatten that framework layer
+// to avoid the doubled outline visible around the notification.
+.ant-notification-notice-wrapper:has(> .pretty-notification-wrapper) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 .pretty-notification-card {
