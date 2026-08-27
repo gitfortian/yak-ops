@@ -37,42 +37,40 @@ const DataSourceToolbar = ({
 }: DataSourceToolbarProps) => (
   <motion.section
     variants={PAGE_ANIMATION.fadeUp}
-    className="flex items-end justify-between gap-6 max-xl:flex-col max-xl:items-stretch max-xl:gap-3"
+    className="flex min-h-9 items-end justify-between gap-6 border-b border-solid border-[#eceef2] max-xl:flex-col max-xl:items-stretch max-xl:gap-3"
   >
     <div className="flex items-end">
-      <div className="relative w-fit pr-2 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-[#e9edf2]">
-        <YakTab
-          size="small"
-          activeKey={environment || "all"}
-          className={[
-            "[&_.ant-tabs-nav]:!mb-0",
-            "[&_.ant-tabs-nav::before]:!hidden",
-            "[&_.ant-tabs-tab]:!px-0",
-            "[&_.ant-tabs-tab]:!pb-[10px]",
-            "[&_.ant-tabs-tab+.ant-tabs-tab]:!ml-8",
-            "[&_.ant-tabs-tab]:!text-[13px]",
-            "[&_.ant-tabs-tab]:!text-[#8c919b]",
-            "[&_.ant-tabs-tab.ant-tabs-tab-active_.ant-tabs-tab-btn]:!font-semibold",
-            "[&_.ant-tabs-tab.ant-tabs-tab-active_.ant-tabs-tab-btn]:!text-[#292c35]",
-            "[&_.ant-tabs-tab::after]:!bottom-0",
-            "[&_.ant-tabs-tab::after]:!h-0.5",
-            "[&_.ant-tabs-tab::after]:!bg-[#252832]",
-          ].join(" ")}
-          items={DATA_SOURCE_ENVIRONMENT_TABS.map((item) => ({
-            key: item.key,
-            label: item.label,
-          }))}
-          onChange={(key) => {
-            const target = DATA_SOURCE_ENVIRONMENT_TABS.find(
-              (item) => item.key === key
-            );
-            onEnvironmentChange(target?.value);
-          }}
-        />
-      </div>
+      <YakTab
+        size="small"
+        activeKey={environment || "all"}
+        className={[
+          "[&_.ant-tabs-nav]:!mb-0",
+          "[&_.ant-tabs-nav::before]:!hidden",
+          "[&_.ant-tabs-tab]:!px-0",
+          "[&_.ant-tabs-tab]:!pb-[10px]",
+          "[&_.ant-tabs-tab+.ant-tabs-tab]:!ml-8",
+          "[&_.ant-tabs-tab]:!text-[13px]",
+          "[&_.ant-tabs-tab]:!text-[#8c919b]",
+          "[&_.ant-tabs-tab.ant-tabs-tab-active_.ant-tabs-tab-btn]:!font-semibold",
+          "[&_.ant-tabs-tab.ant-tabs-tab-active_.ant-tabs-tab-btn]:!text-[#292c35]",
+          "[&_.ant-tabs-tab::after]:!bottom-[-1px]",
+          "[&_.ant-tabs-tab::after]:!h-0.5",
+          "[&_.ant-tabs-tab::after]:!bg-[#252832]",
+        ].join(" ")}
+        items={DATA_SOURCE_ENVIRONMENT_TABS.map((item) => ({
+          key: item.key,
+          label: item.label,
+        }))}
+        onChange={(key) => {
+          const target = DATA_SOURCE_ENVIRONMENT_TABS.find(
+            (item) => item.key === key
+          );
+          onEnvironmentChange(target?.value);
+        }}
+      />
     </div>
 
-    <div className="flex flex-wrap items-center justify-end gap-2 max-xl:justify-start">
+    <div className="flex flex-wrap items-center justify-end gap-2 pb-px max-xl:justify-start">
       <Select
         allowClear
         variant="filled"
