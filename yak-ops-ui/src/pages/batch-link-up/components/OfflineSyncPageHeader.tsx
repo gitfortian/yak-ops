@@ -12,9 +12,6 @@ const OfflineSyncPageHeader = ({ onCreate }: OfflineSyncPageHeaderProps) => (
         <h1 className="m-0 text-[17px] font-semibold text-[#161823]">
           离线同步
         </h1>
-        <div className="mt-1 text-[12px] text-[#98a2b3]">
-          管理离线同步任务、发布状态、运行实例和调度信息
-        </div>
       </div>
 
       <YakButton
