@@ -126,47 +126,23 @@ const DataSourcePage = () => {
 
   return (
     <>
-      <div className="relative min-h-full overflow-hidden bg-[#f7f8fa] text-[#242731]">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-[120px] -top-[150px] h-[360px] w-[620px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(175,220,239,0.18)_0%,rgba(213,235,244,0.08)_48%,rgba(255,255,255,0)_74%)] blur-[24px]"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[220px] -right-[170px] h-[430px] w-[620px] rounded-full bg-[radial-gradient(circle_at_center,rgba(230,238,181,0.20),rgba(255,255,255,0)_70%)] blur-[22px]"
-        />
-
+      <div className="min-h-full bg-[#f7f8fa] text-[#242731]">
         <motion.main
           initial="hidden"
           animate="visible"
           variants={PAGE_ANIMATION.sectionStagger}
-          className="relative z-10 px-4 pb-4 pt-4"
+          className="px-4 pb-4 pt-4"
         >
           <motion.section
             variants={PAGE_ANIMATION.fadeUp}
-            className="rounded-[22px] border border-[#f1f1f1] bg-white/[0.76] px-[22px] pb-[22px] pt-6 backdrop-blur-[8px]"
+            className="rounded-[18px] border border-[#eef0f2] bg-white px-6 pb-5 pt-5 shadow-[0_2px_10px_rgba(31,35,41,0.025)] max-md:px-4"
           >
             <DataSourcePageHeader
               canCreate={permissions.canCreate}
               onCreate={handleCreate}
             />
-            <DataSourceSummaryCards summary={summary} />
-          </motion.section>
 
-          <motion.section
-            variants={PAGE_ANIMATION.fadeUp}
-            className="mt-4 min-h-[420px] rounded-[22px] border border-[#f1f1f1] bg-white/[0.82] px-[22px] pb-[22px] pt-5 backdrop-blur-[8px]"
-          >
-            <div className="flex items-end justify-between gap-6">
-              <div>
-                <h2 className="m-0 text-[18px] font-semibold leading-7 tracking-[-0.3px] text-[#292c35]">
-                  数据源列表
-                </h2>
-                <p className="mb-0 mt-0.5 text-[12px] leading-5 text-[#9a9ea7]">
-                  按运行环境与类型筛选，快速检查连接状态
-                </p>
-              </div>
-            </div>
+            <DataSourceSummaryCards summary={summary} />
 
             <DataSourceToolbar
               environment={environment}
@@ -181,22 +157,6 @@ const DataSourcePage = () => {
               onReset={resetFilters}
             />
 
-            <motion.div
-              variants={PAGE_ANIMATION.fadeUp}
-              className="mb-3.5 mt-4 flex items-center gap-1 text-[11px] leading-5 text-[#9b9fa8]"
-            >
-              <span>共找到</span>
-              <strong className="font-semibold text-[#5f646e]">
-                {pagination.total}
-              </strong>
-              <span>个数据源</span>
-              {hasActiveFilters ? (
-                <span className="ml-1 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] text-[#858a94]">
-                  筛选结果
-                </span>
-              ) : null}
-            </motion.div>
-
             <Spin spinning={loading}>
               <motion.section
                 variants={PAGE_ANIMATION.cardStagger}
@@ -204,8 +164,8 @@ const DataSourcePage = () => {
                 animate="visible"
                 className={
                   viewMode === 'list'
-                    ? 'grid grid-cols-1 gap-[14px]'
-                    : 'grid grid-cols-1 gap-[14px] md:grid-cols-2 2xl:grid-cols-3'
+                    ? 'mt-4 grid grid-cols-1 gap-[14px]'
+                    : 'mt-4 grid grid-cols-1 gap-[14px] md:grid-cols-2 2xl:grid-cols-3'
                 }
               >
                 {records.map((record, index) => (
@@ -237,7 +197,7 @@ const DataSourcePage = () => {
             </Spin>
 
             {pagination.total > 0 ? (
-              <div className="mt-6 flex justify-end border-t border-[#f0f1f3] pt-4">
+              <div className="mt-5 flex justify-end border-t border-[#eef0f2] pt-4">
                 <Pagination
                   current={pagination.pageNo}
                   pageSize={pagination.pageSize}
