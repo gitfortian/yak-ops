@@ -57,13 +57,9 @@ export function useScreenRuntime(
   const [refreshTick, setRefreshTick] = useState(0);
   const sequence = useRef(0);
   const previousPlanKey = useRef('');
+  const executionActive = useRef(false);
   const executor = useMemo(() => new ScreenRuntimeExecutor(), []);
-  const policy = useMemo(() => resolveScreenRuntimePolicy(options), [
-    options?.cacheTtlMs,
-    options?.debounceMs,
-    options?.maxConcurrency,
-    options?.refreshIntervalMs,
-  ]);
+  const policy = resolveScreenRuntimePolicy(options);
   const bindingKey = useMemo(() => JSON.stringify(bindings), [bindings]);
   const datasetKey = useMemo(
     () => datasets
@@ -85,10 +81,11 @@ export function useScreenRuntime(
     }
 
     const refreshWhenVisible = () => {
+      if (executionActive.current) return;
       if (typeof document === 'undefined' || document.visibilityState !== 'hidden') refresh();
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') refresh();
+      if (document.visibilityState === 'visible') refreshWhenVisible();
     };
     const timer = window.setInterval(refreshWhenVisible, policy.refreshIntervalMs);
     if (typeof document !== 'undefined') {
@@ -105,6 +102,7 @@ export function useScreenRuntime(
 
   useEffect(() => {
     if (!template) {
+      executionActive.current = false;
       previousPlanKey.current = '';
       setState(EMPTY_STATE);
       return undefined;
@@ -112,6 +110,7 @@ export function useScreenRuntime(
 
     const candidates = planScreenRuntimeQueries(template, bindings, datasets);
     if (!candidates.length) {
+      executionActive.current = false;
       previousPlanKey.current = planKey;
       setState(EMPTY_STATE);
       return undefined;
@@ -121,6 +120,7 @@ export function useScreenRuntime(
     const controller = new AbortController();
     const samePlan = previousPlanKey.current === planKey;
     previousPlanKey.current = planKey;
+    executionActive.current = true;
     const loadingIds = candidates.map(({ component }) => component.id);
 
     setState((current) => ({
@@ -138,6 +138,7 @@ export function useScreenRuntime(
         signal: controller.signal,
       }).then((result) => {
         if (requestId !== sequence.current || controller.signal.aborted) return;
+        executionActive.current = false;
         setState((current) => ({
           // Timed refreshes keep the last good value for a component whose new request failed.
           data: samePlan ? { ...current.data, ...result.data } : result.data,
@@ -152,6 +153,7 @@ export function useScreenRuntime(
           || controller.signal.aborted
           || isScreenRuntimeAbortError(error)
         ) return;
+        executionActive.current = false;
         const message = runtimeErrorMessage(error);
         setState((current) => ({
           ...current,
@@ -164,6 +166,7 @@ export function useScreenRuntime(
     return () => {
       window.clearTimeout(timer);
       controller.abort();
+      executionActive.current = false;
       if (sequence.current === requestId) sequence.current += 1;
     };
   }, [
