@@ -62,10 +62,10 @@ const QualityMetricCard = ({
     onClick={onActivate}
     className={[
       'absolute z-10 min-w-[136px] rounded-lg bg-white px-3 py-2.5 text-left',
-      'transition-[background-color,border-color] duration-150 hover:bg-[var(--yak-brand-color-soft)]',
+      'transition-[border-color] duration-150',
       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--yak-brand-color-outline)]',
       active
-        ? 'border-2 border-solid border-[var(--yak-brand-color)]'
+        ? 'border border-solid border-[var(--yak-brand-color)]'
         : 'border border-solid border-[#e5e7eb] hover:border-[var(--yak-brand-color-border)]',
       position,
     ].join(' ')}
@@ -174,8 +174,8 @@ const QualityRadar = ({
                 cy={dataY}
                 r={3.5}
                 fill="#fff"
-                stroke="var(--yak-brand-color)"
-                strokeWidth="2"
+                stroke="#d9dde4"
+                strokeWidth="1.5"
               />
             ) : null}
           </g>
