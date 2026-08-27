@@ -31,6 +31,8 @@ interface SingleTableConfigSectionProps {
   targetReady: boolean;
   sourceExtraParameters: ReactNode;
   sinkExtraParameters: ReactNode;
+  onSourceTableSearch: (keyword: string) => void;
+  onTargetTableSearch: (keyword: string) => void;
   onSourceChange: (patch: Record<string, any>) => void;
   onSinkChange: (patch: Record<string, any>) => void;
 }
@@ -84,6 +86,8 @@ export default function SingleTableConfigSection({
   targetReady,
   sourceExtraParameters,
   sinkExtraParameters,
+  onSourceTableSearch,
+  onTargetTableSearch,
   onSourceChange,
   onSinkChange,
 }: SingleTableConfigSectionProps) {
@@ -139,10 +143,14 @@ export default function SingleTableConfigSection({
                 value={sourceConfig.table || undefined}
                 options={sourceTables.map((table) => ({ label: table, value: table }))}
                 loading={sourceLoading}
+                filterOption={false}
                 notFoundContent={sourceLoading ? <Spin size="small" /> : undefined}
-                placeholder={sourceReady ? '请选择来源表' : '请先选择来源数据源'}
-                optionFilterProp="label"
+                placeholder={sourceReady ? '输入表名搜索' : '请先选择来源数据源'}
                 className="w-full"
+                onSearch={onSourceTableSearch}
+                onDropdownVisibleChange={(open) => {
+                  if (open) onSourceTableSearch('');
+                }}
                 onChange={(table: string) => onSourceChange({ table })}
               />
             </div>
@@ -197,9 +205,14 @@ export default function SingleTableConfigSection({
                 value={sinkConfig.table || undefined}
                 options={targetTables.map((table) => ({ label: table, value: table }))}
                 loading={targetLoading}
-                placeholder={targetReady ? '请选择目标表' : '请先选择目标数据源'}
-                optionFilterProp="label"
+                filterOption={false}
+                notFoundContent={targetLoading ? <Spin size="small" /> : undefined}
+                placeholder={targetReady ? '输入表名搜索' : '请先选择目标数据源'}
                 className="w-full"
+                onSearch={onTargetTableSearch}
+                onDropdownVisibleChange={(open) => {
+                  if (open) onTargetTableSearch('');
+                }}
                 onChange={(table: string) => onSinkChange({ table, primaryKey: '' })}
               />
             </div>

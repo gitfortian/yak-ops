@@ -23,6 +23,7 @@ interface MultiTableConfigSectionProps {
   targetReady: boolean;
   sourceExtraParameters: ReactNode;
   sinkExtraParameters: ReactNode;
+  onSourceTableSearch: (keyword: string) => void;
   onSourceChange: (patch: Record<string, any>) => void;
   onSinkChange: (patch: Record<string, any>) => void;
 }
@@ -96,6 +97,7 @@ export default function MultiTableConfigSection({
   targetReady,
   sourceExtraParameters,
   sinkExtraParameters,
+  onSourceTableSearch,
   onSourceChange,
   onSinkChange,
 }: MultiTableConfigSectionProps) {
@@ -170,7 +172,7 @@ export default function MultiTableConfigSection({
               showSelectAll
               operations={['添加', '移除']}
               titles={[
-                `可选表 (${sourceTables.length})`,
+                `当前结果 (${sourceTables.length})`,
                 `已选表 (${selectedTables.length})`,
               ]}
               listStyle={{
@@ -180,13 +182,13 @@ export default function MultiTableConfigSection({
               locale={{
                 itemUnit: '项',
                 itemsUnit: '项',
-                searchPlaceholder: '搜索表名',
+                searchPlaceholder: '输入表名远程搜索',
                 notFoundContent: sourceLoading ? (
                   <Spin size="small" />
                 ) : sourceReady ? (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="暂无数据表"
+                    description="暂无匹配数据表"
                   />
                 ) : (
                   '请先选择来源数据源'
@@ -203,6 +205,11 @@ export default function MultiTableConfigSection({
                 </span>
               )}
               className="w-full"
+              onSearch={(direction, value) => {
+                if (direction === 'left') {
+                  onSourceTableSearch(value);
+                }
+              }}
               onChange={(targetKeys) =>
                 onSourceChange({ tables: targetKeys.map(String) })
               }

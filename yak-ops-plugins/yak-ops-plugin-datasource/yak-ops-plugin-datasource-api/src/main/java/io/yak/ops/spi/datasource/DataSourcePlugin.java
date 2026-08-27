@@ -21,6 +21,19 @@ public interface DataSourcePlugin {
   /** Create the plugin-owned Catalog accessor. */
   DataSourceCatalog createCatalog(DataSourceConnection connection, int timeoutSeconds);
 
+  /**
+   * Create the plugin-owned Catalog accessor with independent connection and query timeouts.
+   *
+   * <p>Existing plugins keep source/binary behavior through the default bridge. Plugins that can
+   * enforce statement-level timeout should override this method.
+   */
+  default DataSourceCatalog createCatalog(
+      DataSourceConnection connection,
+      int connectionTimeoutSeconds,
+      int queryTimeoutSeconds) {
+    return createCatalog(connection, connectionTimeoutSeconds);
+  }
+
   /** Whether this plugin explicitly declares a stable capability. */
   default boolean supports(DataSourceCapability capability) {
     DataSourcePluginDescriptor value = descriptor();

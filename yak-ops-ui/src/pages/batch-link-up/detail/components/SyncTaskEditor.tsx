@@ -88,6 +88,7 @@ export default function SyncTaskEditor({
             targetReady={Boolean(targetId)}
             sourceExtraParameters={null}
             sinkExtraParameters={null}
+            onSourceTableSearch={sourceCatalog.search}
             onSourceChange={updateSource}
             onSinkChange={updateSink}
           />
@@ -106,6 +107,8 @@ export default function SyncTaskEditor({
             targetReady={Boolean(targetId)}
             sourceExtraParameters={null}
             sinkExtraParameters={null}
+            onSourceTableSearch={sourceCatalog.search}
+            onTargetTableSearch={targetCatalog.search}
             onSourceChange={updateSource}
             onSinkChange={updateSink}
           />
