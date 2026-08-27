@@ -6,11 +6,21 @@ public final class DataSourceCatalogQuery {
   private final String database;
   private final String schema;
   private final String keyword;
+  private final Integer limit;
 
   public DataSourceCatalogQuery(String database, String schema, String keyword) {
+    this(database, schema, keyword, null);
+  }
+
+  public DataSourceCatalogQuery(
+      String database,
+      String schema,
+      String keyword,
+      Integer limit) {
     this.database = database;
     this.schema = schema;
     this.keyword = keyword;
+    this.limit = limit == null ? null : Math.max(1, limit);
   }
 
   public String getDatabase() {
@@ -23,5 +33,9 @@ public final class DataSourceCatalogQuery {
 
   public String getKeyword() {
     return keyword;
+  }
+
+  public Integer getLimit() {
+    return limit;
   }
 }
