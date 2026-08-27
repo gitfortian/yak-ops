@@ -1,6 +1,6 @@
 import { ScreenRenderer } from '@/components/screen-engine';
 import type { ScreenTemplate } from '@/components/screen-engine';
-import { fetchDigitalScreens } from '@/pages/digital-screen/screen-service';
+import { listDigitalScreens } from '@/services/digital-screen';
 import {
   copyManagedScreenTemplate,
   deleteCustomScreenTemplate,
@@ -92,7 +92,7 @@ export default function ScreenTemplateSettingsPanel() {
   };
 
   const usageCount = async (templateId: string) => {
-    const screens = await fetchDigitalScreens();
+    const screens = await listDigitalScreens();
     return screens.filter((screen) => screen.templateId === templateId).length;
   };
 
