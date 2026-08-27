@@ -1,3 +1,4 @@
+import { BRAND_COLOR } from '@/styles/brand';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
@@ -21,13 +22,28 @@ interface QualityOverviewState {
   failed: boolean;
 }
 
+interface RadarDimensionDefinition {
+  label: string;
+  aliases: string[];
+}
+
 const COUNT_FORMATTER = new Intl.NumberFormat('zh-CN');
+const RADAR_DIMENSIONS: RadarDimensionDefinition[] = [
+  { label: '完整性', aliases: ['完整性'] },
+  { label: '唯一性', aliases: ['唯一性'] },
+  { label: '有效性', aliases: ['有效性'] },
+  { label: '准确性', aliases: ['准确性'] },
+  { label: '时效性', aliases: ['时效性', '及时性'] },
+];
 
 const formatMetric = (value?: number | null) =>
   value == null ? '--' : COUNT_FORMATTER.format(value);
 
 const formatRate = (value?: number | null) =>
   value == null ? '--' : value.toFixed(1);
+
+const formatRateWithUnit = (value?: number | null) =>
+  value == null ? '--' : `${formatRate(value)}%`;
 
 const relativeTime = (value?: string | null) => {
   if (!value) return '--';
@@ -78,6 +94,21 @@ const healthState = (passRate?: number | null) => {
   };
 };
 
+const normalizeRadarDimensions = (
+  dimensions: HomeQualityDimension[],
+): HomeQualityDimension[] =>
+  RADAR_DIMENSIONS.map((definition) => {
+    const matched = dimensions.find((item) =>
+      definition.aliases.includes(item.dimension),
+    );
+    return {
+      dimension: definition.label,
+      total: matched?.total ?? 0,
+      issues: matched?.issues ?? 0,
+      passRate: matched?.passRate ?? null,
+    };
+  });
+
 function useQualityOverview(): QualityOverviewState {
   const [state, setState] = useState<QualityOverviewState>({
     loading: true,
@@ -116,13 +147,13 @@ function SectionHeader() {
           数据质量
         </h2>
         <p className="mt-1 text-[12px] leading-5 text-[#92969f]">
-          近 7 日规则执行健康度与最近质量问题
+          近 7 日质量维度健康度与最近质量问题
         </p>
       </div>
 
       <button
         type="button"
-        onClick={() => history.push('/data-quality/table-config')}
+        onClick={() => history.push('/data-quality/overview')}
         className="mt-0.5 flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[12px] text-[#747982] transition-colors hover:text-[#252832]"
       >
         查看更多
@@ -142,10 +173,10 @@ function QualityMetric({
   warning?: boolean;
 }) {
   return (
-    <div>
-      <div className="text-[10px] leading-4 text-[#999da5]">{label}</div>
+    <div className="min-w-0">
+      <div className="truncate text-[10px] leading-4 text-[#999da5]">{label}</div>
       <strong
-        className={`mt-0.5 block text-[18px] font-semibold leading-6 ${
+        className={`mt-0.5 block text-[16px] font-semibold leading-6 ${
           warning && (value ?? 0) > 0 ? 'text-[#dc5964]' : 'text-[#40444d]'
         }`}
       >
@@ -156,33 +187,51 @@ function QualityMetric({
 }
 
 function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
+  const hasCompleteRadar = dimensions.every((item) => item.passRate != null);
+  const coveredDimensionCount = dimensions.filter(
+    (item) => item.passRate != null,
+  ).length;
+  const dimensionMap = new Map(
+    dimensions.map((item) => [item.dimension, item]),
+  );
+
   return {
-    animation: true,
+    animation: hasCompleteRadar,
     animationDuration: 650,
-    tooltip: {
-      trigger: 'item',
-      formatter: () =>
-        dimensions
-          .map((item) => `${item.dimension}：${formatRate(item.passRate)}%`)
-          .join('<br/>'),
-    },
+    tooltip: hasCompleteRadar
+      ? {
+          trigger: 'item',
+          formatter: () =>
+            dimensions
+              .map(
+                (item) =>
+                  `${item.dimension}：${formatRateWithUnit(item.passRate)}`,
+              )
+              .join('<br/>'),
+        }
+      : { show: false },
     radar: {
       center: ['50%', '51%'],
-      radius: '66%',
+      radius: '64%',
       splitNumber: 4,
       indicator: dimensions.map((item) => ({ name: item.dimension, max: 100 })),
       axisName: {
-        color: '#7f848d',
+        color: '#747982',
         fontSize: 10,
+        lineHeight: 15,
+        formatter: (name: string) => {
+          const dimension = dimensionMap.get(name);
+          return `${name}\n${formatRateWithUnit(dimension?.passRate)}`;
+        },
       },
       axisLine: {
         lineStyle: {
-          color: '#e3e6eb',
+          color: '#e2e5ea',
         },
       },
       splitLine: {
         lineStyle: {
-          color: '#e9ebef',
+          color: '#e8ebef',
         },
       },
       splitArea: {
@@ -191,88 +240,113 @@ function buildRadarOption(dimensions: HomeQualityDimension[]): EChartsOption {
         },
       },
     },
-    series: [
-      {
-        type: 'radar',
-        symbol: 'circle',
-        symbolSize: 4,
-        data: [
+    graphic: hasCompleteRadar
+      ? undefined
+      : [
           {
-            value: dimensions.map((item) => item.passRate ?? 0),
-            name: '规则通过率',
-            lineStyle: {
-              width: 2,
-              color: '#6685ed',
-            },
-            itemStyle: {
-              color: '#6685ed',
-            },
-            areaStyle: {
-              color: 'rgba(102,133,237,0.13)',
+            type: 'text',
+            left: 'center',
+            top: '48%',
+            style: {
+              text:
+                coveredDimensionCount > 0
+                  ? `已覆盖 ${coveredDimensionCount}/5 维`
+                  : '暂无维度数据',
+              fill: '#a0a4ac',
+              fontSize: 10,
+              textAlign: 'center',
             },
           },
         ],
-      },
-    ],
+    series: hasCompleteRadar
+      ? [
+          {
+            type: 'radar',
+            symbol: 'circle',
+            symbolSize: 4,
+            data: [
+              {
+                value: dimensions.map((item) => item.passRate ?? 0),
+                name: '规则通过率',
+                lineStyle: {
+                  width: 2,
+                  color: BRAND_COLOR,
+                },
+                itemStyle: {
+                  color: BRAND_COLOR,
+                },
+                areaStyle: {
+                  color: 'rgba(254,44,85,0.08)',
+                },
+              },
+            ],
+          },
+        ]
+      : [],
   };
 }
 
-function DimensionBars({ dimensions }: { dimensions: HomeQualityDimension[] }) {
-  return (
-    <div className="flex h-[250px] flex-col justify-center gap-5 px-3">
-      {dimensions.map((item) => (
-        <div key={item.dimension}>
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-[#777c85]">{item.dimension}</span>
-            <strong className="font-semibold text-[#4c515a]">
-              {formatRate(item.passRate)}%
-            </strong>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#eef0f4]">
-            <div
-              className="h-full rounded-full bg-[#7f94e8] transition-[width] duration-500"
-              style={{ width: `${Math.max(0, Math.min(100, item.passRate ?? 0))}%` }}
-            />
-          </div>
-          <div className="mt-1 text-[9px] text-[#a2a6ae]">
-            {formatMetric(item.total)} 次规则检查 · {formatMetric(item.issues)} 项问题
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DimensionHealth({ state }: { state: QualityOverviewState }) {
-  const dimensions = (state.data?.dimensions || []).filter(
-    (item) => item.passRate != null,
+function QualityRadarPanel({ state }: { state: QualityOverviewState }) {
+  const data = state.data;
+  const health = healthState(data?.passRate);
+  const dimensions = useMemo(
+    () => normalizeRadarDimensions(data?.dimensions ?? []),
+    [data?.dimensions],
   );
   const option = useMemo(() => buildRadarOption(dimensions), [dimensions]);
 
-  if (dimensions.length >= 3) {
-    return (
-      <div className="min-h-[250px]">
+  return (
+    <div className="min-w-0 rounded-[16px] bg-[#fafbfc] px-4 pb-3 pt-3.5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <strong className="block text-[13px] font-semibold text-[#40444d]">
+            质量维度
+          </strong>
+          <span className="mt-1 block text-[10px] text-[#9ca0a8]">
+            五维规则通过率
+          </span>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <div className="flex items-end justify-end gap-1">
+            <strong className="text-[24px] font-semibold leading-7 tracking-[-0.6px] text-[#30343b]">
+              {formatRate(data?.passRate)}
+            </strong>
+            {data?.passRate != null ? (
+              <span className="mb-0.5 text-[10px] text-[#9ca0a8]">%</span>
+            ) : null}
+          </div>
+          <div
+            className={`mt-1 flex items-center justify-end gap-1 text-[10px] font-medium ${health.className}`}
+          >
+            {health.icon}
+            {state.loading
+              ? '加载中...'
+              : state.failed
+                ? '加载失败'
+                : health.label}
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-[220px]">
         <ReactECharts
           option={option}
-          style={{ width: '100%', height: '260px' }}
+          notMerge
+          style={{ width: '100%', height: '230px' }}
         />
       </div>
-    );
-  }
 
-  if (dimensions.length > 0) {
-    return <DimensionBars dimensions={dimensions} />;
-  }
-
-  return (
-    <div className="flex h-[250px] items-center justify-center text-[11px] text-[#a0a4ac]">
-      {state.loading
-        ? '质量维度加载中...'
-        : state.failed
-          ? '质量维度加载失败'
-          : state.data?.passRate == null
-            ? '近 7 日暂无规则执行数据'
-            : '暂无质量维度数据'}
+      <div className="grid grid-cols-4 gap-3 border-t border-[#eceef2] pt-3">
+        <QualityMetric label="监控表" value={data?.monitoredTableCount} />
+        <QualityMetric label="今日检测" value={data?.todayExecutionCount} />
+        <QualityMetric
+          label="问题表"
+          value={data?.todayIssueTableCount}
+          warning
+        />
+        <QualityMetric label="启用规则" value={data?.enabledRuleCount} />
+      </div>
     </div>
   );
 }
@@ -300,11 +374,16 @@ function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
       </span>
 
       <span className="min-w-0 flex-1">
-        <strong className="block truncate text-[12px] font-medium text-[#41454e]">
-          {issue.ruleName}
-        </strong>
+        <span className="flex min-w-0 items-center gap-2">
+          <strong className="truncate text-[12px] font-medium text-[#41454e]">
+            {issue.ruleName}
+          </strong>
+          <span className="shrink-0 rounded-full bg-[#f0f2f5] px-2 py-0.5 text-[9px] text-[#7e838c]">
+            {issue.dimension}
+          </span>
+        </span>
         <span className="mt-1 block truncate text-[10px] text-[#9ca0a8]">
-          {objectLabel(issue)} · {issue.dimension}
+          {objectLabel(issue)}
           {issue.columnName ? ` · ${issue.columnName}` : ''}
         </span>
       </span>
@@ -325,36 +404,53 @@ function RecentIssueRow({ issue }: { issue: HomeQualityIssue }) {
 function RecentIssues({ state }: { state: QualityOverviewState }) {
   const issues = state.data?.recentIssues || [];
   return (
-    <div className="min-w-0 border-t border-[#eef0f3] pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-      <div className="flex items-center justify-between gap-3">
-        <strong className="text-[13px] font-semibold text-[#40444d]">
-          最近问题
-        </strong>
-        <span className="flex shrink-0 items-center gap-1 text-[10px] text-[#a0a4ac]">
+    <div className="min-w-0 rounded-[16px] bg-[#fafbfc] px-4 pb-3 pt-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <strong className="block text-[13px] font-semibold text-[#40444d]">
+            最近问题
+          </strong>
+          <span className="mt-1 block text-[10px] text-[#9ca0a8]">
+            最近规则执行中发现的质量问题
+          </span>
+        </div>
+        <span className="mt-0.5 flex shrink-0 items-center gap-1 text-[10px] text-[#a0a4ac]">
           <AlertTriangle
             size={11}
             strokeWidth={1.8}
             className="text-[#e46a73]"
           />
-          {formatMetric(state.data?.recentIssueCount)} 项近 7 日问题
+          {formatMetric(state.data?.recentIssueCount)} 项
         </span>
       </div>
 
       {issues.length > 0 ? (
-        <div className="mt-3 divide-y divide-[#f0f1f3]">
+        <div className="mt-2 divide-y divide-[#eceef2]">
           {issues.map((issue) => (
             <RecentIssueRow key={issue.id} issue={issue} />
           ))}
         </div>
       ) : (
-        <div className="flex min-h-[190px] items-center justify-center text-[10px] text-[#a0a4ac]">
-          {state.loading
-            ? '质量问题加载中...'
-            : state.failed
-              ? '质量数据加载失败'
-              : state.data?.recentIssueCount == null
-                ? '质量数据暂不可用'
-                : '近 7 日暂无质量问题'}
+        <div className="flex min-h-[250px] flex-col items-center justify-center text-center">
+          {state.loading ? (
+            <span className="text-[10px] text-[#a0a4ac]">质量问题加载中...</span>
+          ) : state.failed ? (
+            <span className="text-[10px] text-[#a0a4ac]">质量数据加载失败</span>
+          ) : state.data?.recentIssueCount == null ? (
+            <span className="text-[10px] text-[#a0a4ac]">质量数据暂不可用</span>
+          ) : (
+            <>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf8f1] text-[#4b9a6d]">
+                <CheckCircle2 size={17} strokeWidth={1.9} />
+              </span>
+              <strong className="mt-3 text-[12px] font-medium text-[#5d626b]">
+                近 7 日暂无质量问题
+              </strong>
+              <span className="mt-1 text-[10px] text-[#a0a4ac]">
+                当前规则执行结果保持健康
+              </span>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -363,52 +459,13 @@ function RecentIssues({ state }: { state: QualityOverviewState }) {
 
 export default function QualityOverview() {
   const state = useQualityOverview();
-  const data = state.data;
-  const health = healthState(data?.passRate);
 
   return (
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
       <SectionHeader />
 
-      <div className="mt-4 grid min-h-[300px] grid-cols-1 gap-5 lg:grid-cols-[180px_250px_minmax(0,1fr)]">
-        <div className="flex flex-col justify-center">
-          <div className="text-[11px] font-medium text-[#8f949d]">
-            近 7 日规则通过率
-          </div>
-
-          <div className="mt-1 flex items-end gap-1">
-            <strong className="text-[42px] font-semibold leading-[48px] tracking-[-1.5px] text-[#2f333c]">
-              {formatRate(data?.passRate)}
-            </strong>
-            {data?.passRate != null ? (
-              <span className="mb-1.5 text-[12px] text-[#9ca0a8]">%</span>
-            ) : null}
-          </div>
-
-          <div
-            className={`mt-1 flex items-center gap-1.5 text-[11px] font-medium ${health.className}`}
-          >
-            {health.icon}
-            {state.loading
-              ? '质量数据加载中...'
-              : state.failed
-                ? '质量数据加载失败'
-                : health.label}
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-4">
-            <QualityMetric label="监控表" value={data?.monitoredTableCount} />
-            <QualityMetric label="今日检测" value={data?.todayExecutionCount} />
-            <QualityMetric
-              label="问题表"
-              value={data?.todayIssueTableCount}
-              warning
-            />
-            <QualityMetric label="启用规则" value={data?.enabledRuleCount} />
-          </div>
-        </div>
-
-        <DimensionHealth state={state} />
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(320px,0.92fr)_minmax(0,1.08fr)]">
+        <QualityRadarPanel state={state} />
         <RecentIssues state={state} />
       </div>
     </section>
