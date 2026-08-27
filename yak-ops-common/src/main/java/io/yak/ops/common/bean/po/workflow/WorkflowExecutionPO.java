@@ -12,6 +12,7 @@ import lombok.Data;
 public class WorkflowExecutionPO {
   @TableId(type = IdType.INPUT)
   private String id;
+  private Long projectId;
   private String definitionId;
   private String sourceExecutionId;
   private String status;

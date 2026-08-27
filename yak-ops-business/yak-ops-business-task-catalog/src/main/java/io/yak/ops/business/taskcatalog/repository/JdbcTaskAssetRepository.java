@@ -2,6 +2,9 @@ package io.yak.ops.business.taskcatalog.repository;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
 import io.yak.ops.spi.task.model.TaskRevisionRef;
@@ -11,8 +14,10 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -28,10 +33,18 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
           + "FROM yak_task_asset";
 
   private final JdbcTemplate jdbcTemplate;
+  private final CurrentProject currentProject;
 
+  @Autowired
   public JdbcTaskAssetRepository(
-      @Qualifier("yakBusinessDataSource") DataSource dataSource) {
+      @Qualifier("yakBusinessDataSource") DataSource dataSource,
+      CurrentProject currentProject) {
     this.jdbcTemplate = new JdbcTemplate(dataSource);
+    this.currentProject = currentProject;
+  }
+
+  public JdbcTaskAssetRepository(DataSource dataSource) {
+    this(dataSource, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
@@ -43,6 +56,7 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
       String taskType,
       long revisionId,
       int revisionNo) {
+    Long effectiveProjectId = effectiveProjectId(projectId);
     jdbcTemplate.update(
         """
         INSERT INTO yak_task_asset (
@@ -60,7 +74,7 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
         """,
         source.name(),
         sourceRef,
-        projectId,
+        effectiveProjectId,
         name,
         taskType,
         revisionId,
@@ -71,21 +85,24 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
 
   @Override
   public Optional<TaskAsset> findById(long assetId) {
-    List<TaskAsset> values = jdbcTemplate.query(
-        SELECT_COLUMNS + " WHERE id = ? LIMIT 1",
-        JdbcTaskAssetRepository::mapRow,
-        assetId);
-    return values.stream().findFirst();
+    Long projectId = currentProjectId();
+    String sql = SELECT_COLUMNS + " WHERE id = ?"
+        + (projectId == null ? "" : " AND project_id = ?")
+        + " LIMIT 1";
+    Object[] args = projectId == null ? new Object[] {assetId} : new Object[] {assetId, projectId};
+    return jdbcTemplate.query(sql, JdbcTaskAssetRepository::mapRow, args).stream().findFirst();
   }
 
   @Override
   public Optional<TaskAsset> findBySource(TaskAssetSource source, String sourceRef) {
-    List<TaskAsset> values = jdbcTemplate.query(
-        SELECT_COLUMNS + " WHERE source = ? AND source_ref = ? LIMIT 1",
-        JdbcTaskAssetRepository::mapRow,
-        source.name(),
-        sourceRef);
-    return values.stream().findFirst();
+    Long projectId = currentProjectId();
+    String sql = SELECT_COLUMNS + " WHERE source = ? AND source_ref = ?"
+        + (projectId == null ? "" : " AND project_id = ?")
+        + " LIMIT 1";
+    Object[] args = projectId == null
+        ? new Object[] {source.name(), sourceRef}
+        : new Object[] {source.name(), sourceRef, projectId};
+    return jdbcTemplate.query(sql, JdbcTaskAssetRepository::mapRow, args).stream().findFirst();
   }
 
   @Override
@@ -95,6 +112,11 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
       String keyword) {
     StringBuilder sql = new StringBuilder(SELECT_COLUMNS).append(" WHERE 1 = 1");
     List<Object> args = new ArrayList<>();
+    Long projectId = currentProjectId();
+    if (projectId != null) {
+      sql.append(" AND project_id = ?");
+      args.add(projectId);
+    }
     if (source != null) {
       sql.append(" AND source = ?");
       args.add(source.name());
@@ -120,14 +142,19 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
       Long projectId,
       String name,
       String taskType) {
-    return jdbcTemplate.update(
-        "UPDATE yak_task_asset SET project_id = ?, name = ?, task_type = ?, update_time = NOW(6) "
-            + "WHERE source = ? AND source_ref = ?",
-        projectId,
-        name,
-        taskType,
-        source.name(),
-        sourceRef) > 0;
+    Long effectiveProjectId = effectiveProjectId(projectId);
+    Long currentProjectId = currentProjectId();
+    String sql = "UPDATE yak_task_asset SET project_id = ?, name = ?, task_type = ?, update_time = NOW(6) "
+        + "WHERE source = ? AND source_ref = ?"
+        + (currentProjectId == null ? "" : " AND (project_id = ? OR project_id IS NULL)");
+    List<Object> args = new ArrayList<>();
+    args.add(effectiveProjectId);
+    args.add(name);
+    args.add(taskType);
+    args.add(source.name());
+    args.add(sourceRef);
+    if (currentProjectId != null) args.add(currentProjectId);
+    return jdbcTemplate.update(sql, args.toArray()) > 0;
   }
 
   @Override
@@ -135,11 +162,29 @@ public class JdbcTaskAssetRepository implements TaskAssetRepository {
       TaskAssetSource source,
       String sourceRef,
       TaskAssetStatus status) {
-    return jdbcTemplate.update(
-        "UPDATE yak_task_asset SET status = ?, update_time = NOW(6) WHERE source = ? AND source_ref = ?",
-        status.name(),
-        source.name(),
-        sourceRef) > 0;
+    Long projectId = currentProjectId();
+    String sql = "UPDATE yak_task_asset SET status = ?, update_time = NOW(6) WHERE source = ? AND source_ref = ?"
+        + (projectId == null ? "" : " AND project_id = ?");
+    Object[] args = projectId == null
+        ? new Object[] {status.name(), source.name(), sourceRef}
+        : new Object[] {status.name(), source.name(), sourceRef, projectId};
+    return jdbcTemplate.update(sql, args) > 0;
+  }
+
+  private Long currentProjectId() {
+    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  }
+
+  private Long effectiveProjectId(Long sourceProjectId) {
+    return currentProject.current()
+        .map(
+            context -> {
+              if (sourceProjectId != null && !Objects.equals(context.projectId(), sourceProjectId)) {
+                throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+              }
+              return context.projectId();
+            })
+        .orElse(sourceProjectId);
   }
 
   private static TaskAsset mapRow(ResultSet resultSet, int rowNum) throws SQLException {

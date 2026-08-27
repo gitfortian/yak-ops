@@ -16,14 +16,21 @@ const rules: ProjectRequestRule[] = [
 describe('Project Space request context', () => {
   afterEach(() => clearStoredProjectId());
 
-  it('opts the first migrated business routes into optional project context', () => {
+  it('opts migrated resource and production routes into optional project context', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/data-development/nodes')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/task-catalog/assets')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-definition/page')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-instance/11')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_OPTIONAL');
   });
 
-  it('keeps modules outside the rollout table legacy-global', () => {
-    expect(resolveProjectRequestMode('/api/v1/workflows')).toBe('LEGACY_GLOBAL');
+  it('keeps platform-global capabilities outside the rollout table', () => {
+    expect(resolveProjectRequestMode('/api/v1/compute-environments')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/quality/templates')).toBe('LEGACY_GLOBAL');
   });
 
   it('uses the most specific project-aware route rule', () => {
@@ -32,7 +39,7 @@ describe('Project Space request context', () => {
   });
 
   it('never attaches a project header to a legacy-global route', () => {
-    const headers = applyCurrentProjectHeader('/api/v1/workflows', {}, '7');
+    const headers = applyCurrentProjectHeader('/api/v1/compute-environments', {}, '7');
     expect(headers).toEqual({});
   });
 
@@ -40,7 +47,7 @@ describe('Project Space request context', () => {
     storeProjectId(7);
     expect(readStoredProjectId()).toBe('7');
 
-    const headers = applyCurrentProjectHeader('/api/v1/data-source/1', {});
+    const headers = applyCurrentProjectHeader('/api/v1/workflows/definitions', {});
     expect(headers).toEqual({ [PROJECT_ID_HEADER]: '7' });
   });
 

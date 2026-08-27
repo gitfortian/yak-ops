@@ -11,7 +11,11 @@ import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDefinitionPO;
 import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDeploymentPO;
 import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobEventPO;
 import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobListRow;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
@@ -25,6 +29,23 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   private final RealtimeJobEventMapper eventMapper;
   private final RealtimeJobCommandMapper commandMapper;
   private final RealtimeJobQueryMapper queryMapper;
+  private final CurrentProject currentProject;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public RealtimeJobDaoImpl(
+      RealtimeJobDefinitionMapper definitionMapper,
+      RealtimeJobDeploymentMapper deploymentMapper,
+      RealtimeJobEventMapper eventMapper,
+      RealtimeJobCommandMapper commandMapper,
+      RealtimeJobQueryMapper queryMapper,
+      CurrentProject currentProject) {
+    this.definitionMapper = definitionMapper;
+    this.deploymentMapper = deploymentMapper;
+    this.eventMapper = eventMapper;
+    this.commandMapper = commandMapper;
+    this.queryMapper = queryMapper;
+    this.currentProject = currentProject;
+  }
 
   public RealtimeJobDaoImpl(
       RealtimeJobDefinitionMapper definitionMapper,
@@ -32,15 +53,18 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       RealtimeJobEventMapper eventMapper,
       RealtimeJobCommandMapper commandMapper,
       RealtimeJobQueryMapper queryMapper) {
-    this.definitionMapper = definitionMapper;
-    this.deploymentMapper = deploymentMapper;
-    this.eventMapper = eventMapper;
-    this.commandMapper = commandMapper;
-    this.queryMapper = queryMapper;
+    this(
+        definitionMapper,
+        deploymentMapper,
+        eventMapper,
+        commandMapper,
+        queryMapper,
+        Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public long insertDefinition(RealtimeJobDefinitionPO definition) {
+    bindCurrentProject(definition);
     definitionMapper.insert(definition);
     if (definition.getId() == null) throw new IllegalStateException("新增实时任务未返回主键");
     return definition.getId();
@@ -54,10 +78,12 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       String specJson,
       String digest,
       long environmentId) {
+    Long projectId = currentProjectId();
     return definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, id)
+            .eq(projectId != null, RealtimeJobDefinitionPO::getProjectId, projectId)
             .set(RealtimeJobDefinitionPO::getJobName, name)
             .set(RealtimeJobDefinitionPO::getDescription, description)
             .set(RealtimeJobDefinitionPO::getRuntimeEnvironmentId, environmentId)
@@ -69,10 +95,12 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public int publish(long id, int expectedDefinitionVersion, String expectedDigest) {
+    Long projectId = currentProjectId();
     return definitionMapper.update(
         null,
         Wrappers.<RealtimeJobDefinitionPO>lambdaUpdate()
             .eq(RealtimeJobDefinitionPO::getId, id)
+            .eq(projectId != null, RealtimeJobDefinitionPO::getProjectId, projectId)
             .eq(RealtimeJobDefinitionPO::getDefinitionVersion, expectedDefinitionVersion)
             .eq(RealtimeJobDefinitionPO::getConfigDigest, expectedDigest)
             .set(RealtimeJobDefinitionPO::getReleaseState, "PUBLISHED")
@@ -81,18 +109,29 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public Optional<RealtimeJobDefinitionPO> findDefinition(long id) {
-    return Optional.ofNullable(definitionMapper.selectById(id));
+    Long projectId = currentProjectId();
+    return Optional.ofNullable(
+        definitionMapper.selectOne(
+            Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
+                .eq(RealtimeJobDefinitionPO::getId, id)
+                .eq(projectId != null, RealtimeJobDefinitionPO::getProjectId, projectId)));
   }
 
   @Override
   public Optional<RealtimeJobDefinitionPO> lockDefinition(long id) {
-    return Optional.ofNullable(commandMapper.lockDefinition(id));
+    Long projectId = currentProjectId();
+    return Optional.ofNullable(
+        projectId == null
+            ? commandMapper.lockDefinition(id)
+            : commandMapper.lockDefinitionByProject(id, projectId));
   }
 
   @Override
   public Optional<RealtimeJobDeploymentPO> deploymentByIdempotencyKey(String key) {
+    Long projectId = currentProjectId();
     return deploymentMapper.selectList(
             Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
                 .eq(RealtimeJobDeploymentPO::getIdempotencyKey, key)
                 .last("LIMIT 1"))
         .stream()
@@ -101,8 +140,10 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public Optional<RealtimeJobDeploymentPO> latestDeployment(long definitionId) {
+    Long projectId = currentProjectId();
     return deploymentMapper.selectList(
             Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
                 .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
                 .orderByDesc(RealtimeJobDeploymentPO::getId)
                 .last("LIMIT 1"))
@@ -112,11 +153,17 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public Optional<RealtimeJobDeploymentPO> findDeployment(long deploymentId) {
-    return Optional.ofNullable(deploymentMapper.selectById(deploymentId));
+    Long projectId = currentProjectId();
+    return Optional.ofNullable(
+        deploymentMapper.selectOne(
+            Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
+                .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)));
   }
 
   @Override
   public long insertDeployment(RealtimeJobDeploymentPO deployment) {
+    deployment.setProjectId(resolveDeploymentProject(deployment));
     deploymentMapper.insert(deployment);
     if (deployment.getId() == null) throw new IllegalStateException("新增部署未返回主键");
     return deployment.getId();
@@ -125,11 +172,13 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   @Override
   public void bindDeploymentDefinitionVersion(
       long deploymentId, long definitionVersionId, int sourceDraftRevision) {
+    Long projectId = currentProjectId();
     int updated =
         deploymentMapper.update(
             null,
             Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
                 .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
                 .eq(RealtimeJobDeploymentPO::getStatus, "SUBMITTING")
                 .isNull(RealtimeJobDeploymentPO::getDefinitionVersionId)
                 .set(RealtimeJobDeploymentPO::getDefinitionVersionId, definitionVersionId)
@@ -142,11 +191,13 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   @Override
   public int markDeploymentRunning(
       long definitionId, long deploymentId, String engineJobId, String runtimeRevision) {
+    Long projectId = currentProjectId();
     return deploymentMapper.update(
         null,
         Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
             .eq(RealtimeJobDeploymentPO::getId, deploymentId)
             .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+            .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
             .eq(RealtimeJobDeploymentPO::getDesiredState, "RUNNING")
             .eq(RealtimeJobDeploymentPO::getObservedState, "STARTING")
             .set(RealtimeJobDeploymentPO::getGatewayJobId, engineJobId)
@@ -160,10 +211,12 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public void bindDeploymentForStop(long deploymentId, String engineJobId, String runtimeRevision) {
+    Long projectId = currentProjectId();
     deploymentMapper.update(
         null,
         Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
             .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+            .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
             .set(RealtimeJobDeploymentPO::getGatewayJobId, engineJobId)
             .set(RealtimeJobDeploymentPO::getRuntimeVersion, runtimeRevision)
             .set(RealtimeJobDeploymentPO::getRuntimeRevision, runtimeRevision)
@@ -181,11 +234,13 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       String message) {
     String desiredState = stopRequested ? "STOPPED" : (uncertain ? "RUNNING" : "STOPPED");
     String observedState = uncertain ? "UNKNOWN" : "FAILED";
+    Long projectId = currentProjectId();
     deploymentMapper.update(
         null,
         Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
             .eq(RealtimeJobDeploymentPO::getId, deploymentId)
             .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+            .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
             .set(RealtimeJobDeploymentPO::getDesiredState, desiredState)
             .set(RealtimeJobDeploymentPO::getObservedState, observedState)
             .set(RealtimeJobDeploymentPO::getStatus, observedState)
@@ -196,12 +251,14 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
   @Override
   public void markStopping(long definitionId, Long deploymentId) {
     if (deploymentId == null) return;
+    Long projectId = currentProjectId();
     int updated =
         deploymentMapper.update(
             null,
             Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
                 .eq(RealtimeJobDeploymentPO::getId, deploymentId)
                 .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
                 .set(RealtimeJobDeploymentPO::getDesiredState, "STOPPED")
                 .set(RealtimeJobDeploymentPO::getObservedState, "STOPPING")
                 .set(RealtimeJobDeploymentPO::getStatus, "STOPPING"));
@@ -217,12 +274,14 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       String commandType,
       long targetDefinitionVersionId,
       String idempotencyKey) {
+    Long projectId = currentProjectId();
     int updated =
         deploymentMapper.update(
             null,
             Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
                 .eq(RealtimeJobDeploymentPO::getId, deploymentId)
                 .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
                 .eq(RealtimeJobDeploymentPO::getDesiredState, "RUNNING")
                 .eq(RealtimeJobDeploymentPO::getObservedState, "RUNNING")
                 .eq(RealtimeJobDeploymentPO::getResultUncertain, false)
@@ -242,11 +301,13 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public void clearReplacementIntent(long deploymentId, String idempotencyKey) {
+    Long projectId = currentProjectId();
     int updated =
         deploymentMapper.update(
             null,
             Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
                 .eq(RealtimeJobDeploymentPO::getId, deploymentId)
+                .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
                 .eq(RealtimeJobDeploymentPO::getReplacementIdempotencyKey, idempotencyKey)
                 .set(RealtimeJobDeploymentPO::getReplacementCommandType, null)
                 .set(RealtimeJobDeploymentPO::getReplacementTargetDefinitionVersionId, null)
@@ -264,20 +325,28 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       String deploymentState,
       String engineJobId,
       String error) {
-    if (deploymentId != null) {
-      commandMapper.reconcileDeployment(
-          deploymentId, observedState, deploymentState, engineJobId, error);
+    if (deploymentId == null) return;
+    Long projectId = currentProjectId();
+    int updated = projectId == null
+        ? commandMapper.reconcileDeployment(
+            deploymentId, observedState, deploymentState, engineJobId, error)
+        : commandMapper.reconcileDeploymentByProject(
+            deploymentId, projectId, observedState, deploymentState, engineJobId, error);
+    if (projectId != null && updated != 1) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
   }
 
   @Override
   public void markTerminalFailure(long definitionId, Long deploymentId, String message) {
     if (deploymentId == null) return;
+    Long projectId = currentProjectId();
     deploymentMapper.update(
         null,
         Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
             .eq(RealtimeJobDeploymentPO::getId, deploymentId)
             .eq(RealtimeJobDeploymentPO::getDefinitionId, definitionId)
+            .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
             .set(RealtimeJobDeploymentPO::getDesiredState, "STOPPED")
             .set(RealtimeJobDeploymentPO::getObservedState, "FAILED")
             .set(RealtimeJobDeploymentPO::getStatus, "FAILED")
@@ -286,28 +355,36 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public List<RealtimeJobDeploymentPO> reconcileExecutions() {
-    return commandMapper.reconcileExecutions();
+    Long projectId = currentProjectId();
+    return projectId == null
+        ? commandMapper.reconcileExecutions()
+        : commandMapper.reconcileExecutionsByProject(projectId);
   }
 
   @Override
   public int deleteDefinition(long id) {
+    Long projectId = currentProjectId();
     int deleted =
         definitionMapper.delete(
-            Wrappers.<RealtimeJobDefinitionPO>lambdaQuery().eq(RealtimeJobDefinitionPO::getId, id));
+            Wrappers.<RealtimeJobDefinitionPO>lambdaQuery()
+                .eq(RealtimeJobDefinitionPO::getId, id)
+                .eq(projectId != null, RealtimeJobDefinitionPO::getProjectId, projectId));
     if (deleted != 1) return deleted;
-
-    // Audit-safe deletion remains a separate GAP; this change does not pretend to solve it.
     eventMapper.delete(
         Wrappers.<RealtimeJobEventPO>lambdaQuery()
             .eq(RealtimeJobEventPO::getDefinitionId, id));
     deploymentMapper.delete(
         Wrappers.<RealtimeJobDeploymentPO>lambdaQuery()
-            .eq(RealtimeJobDeploymentPO::getDefinitionId, id));
+            .eq(RealtimeJobDeploymentPO::getDefinitionId, id)
+            .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId));
     return deleted;
   }
 
   @Override
   public void insertEvent(RealtimeJobEventPO event) {
+    if (currentProjectId() != null && findDefinition(event.getDefinitionId()).isEmpty()) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     eventMapper.insert(event);
   }
 
@@ -318,6 +395,7 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public List<RealtimeJobEventPO> events(long definitionId) {
+    if (currentProjectId() != null && findDefinition(definitionId).isEmpty()) return List.of();
     return eventMapper.selectList(
         Wrappers.<RealtimeJobEventPO>lambdaQuery()
             .eq(RealtimeJobEventPO::getDefinitionId, definitionId)
@@ -327,10 +405,12 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public int bindRuntimeIdentity(String idempotencyKey, String runtimeJobName) {
+    Long projectId = currentProjectId();
     return deploymentMapper.update(
         null,
         Wrappers.<RealtimeJobDeploymentPO>lambdaUpdate()
             .eq(RealtimeJobDeploymentPO::getIdempotencyKey, idempotencyKey)
+            .eq(projectId != null, RealtimeJobDeploymentPO::getProjectId, projectId)
             .isNull(RealtimeJobDeploymentPO::getGatewayJobId)
             .eq(RealtimeJobDeploymentPO::getRuntimeIdentityState, "REQUIRED")
             .and(
@@ -351,7 +431,10 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
 
   @Override
   public long countPage(String keyword, Long id, String releaseState, String stateGroup) {
-    return queryMapper.count(keyword, id, releaseState, stateGroup);
+    Long projectId = currentProjectId();
+    return projectId == null
+        ? queryMapper.count(keyword, id, releaseState, stateGroup)
+        : queryMapper.countByProject(projectId, keyword, id, releaseState, stateGroup);
   }
 
   @Override
@@ -362,6 +445,41 @@ public class RealtimeJobDaoImpl implements RealtimeJobDao {
       String stateGroup,
       int limit,
       int offset) {
-    return queryMapper.page(keyword, id, releaseState, stateGroup, limit, offset);
+    Long projectId = currentProjectId();
+    return projectId == null
+        ? queryMapper.page(keyword, id, releaseState, stateGroup, limit, offset)
+        : queryMapper.pageByProject(
+            projectId, keyword, id, releaseState, stateGroup, limit, offset);
+  }
+
+  private Long currentProjectId() {
+    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  }
+
+  private void bindCurrentProject(RealtimeJobDefinitionPO definition) {
+    Long projectId = currentProjectId();
+    if (projectId == null) return;
+    if (definition.getProjectId() != null
+        && !Objects.equals(projectId, definition.getProjectId())) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    definition.setProjectId(projectId);
+  }
+
+  private Long resolveDeploymentProject(RealtimeJobDeploymentPO deployment) {
+    Long projectId = currentProjectId();
+    if (projectId != null) {
+      if (deployment.getProjectId() != null
+          && !Objects.equals(projectId, deployment.getProjectId())) {
+        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+      }
+      if (findDefinition(deployment.getDefinitionId()).isEmpty()) {
+        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+      }
+      return projectId;
+    }
+    if (deployment.getProjectId() != null) return deployment.getProjectId();
+    RealtimeJobDefinitionPO definition = definitionMapper.selectById(deployment.getDefinitionId());
+    return definition == null ? null : definition.getProjectId();
   }
 }

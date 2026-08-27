@@ -7,17 +7,13 @@ import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.ToString;
 
-/**
- * ExecutionAttempt 持久化兼容模型。
- *
- * <p>表名继续沿用 yak_offline_job_execution。batch_id 为空只表示 Wave 1 前历史记录；
- * definition/config/submittedConfig 等字段是历史审计兼容副本，运行真相在 BatchExecution。
- */
+/** ExecutionAttempt 持久化兼容模型。 */
 @Data
 @TableName("yak_offline_job_execution")
 public class OfflineJobExecutionPO {
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private Long jobDefinitionId;
   private Long batchId;
   private Integer definitionVersion;
@@ -35,16 +31,9 @@ public class OfflineJobExecutionPO {
   private Boolean retryCreated;
   private LocalDateTime nextRetryTime;
   private String configDigest;
-
-  @ToString.Exclude
-  private String definitionSnapshotJson;
-
-  @ToString.Exclude
-  private String submittedConfig;
-
-  @ToString.Exclude
-  private String engineSnapshotJson;
-
+  @ToString.Exclude private String definitionSnapshotJson;
+  @ToString.Exclude private String submittedConfig;
+  @ToString.Exclude private String engineSnapshotJson;
   private String errorMessage;
   private Long sourceRecordCount;
   private Long sinkAttemptedRecordCount;

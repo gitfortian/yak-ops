@@ -13,6 +13,7 @@ import lombok.Data;
 public class WorkflowBackfillPO {
   @TableId(type = IdType.INPUT)
   private String id;
+  private Long projectId;
   private String workflowId;
   private String workflowVersionId;
   private Integer workflowVersionNo;

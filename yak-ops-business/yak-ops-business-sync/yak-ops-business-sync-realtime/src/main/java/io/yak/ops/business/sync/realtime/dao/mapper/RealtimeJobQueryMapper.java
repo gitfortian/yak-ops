@@ -13,7 +13,23 @@ public interface RealtimeJobQueryMapper {
       @Param("releaseState") String releaseState,
       @Param("stateGroup") String stateGroup);
 
+  long countByProject(
+      @Param("projectId") long projectId,
+      @Param("keyword") String keyword,
+      @Param("id") Long id,
+      @Param("releaseState") String releaseState,
+      @Param("stateGroup") String stateGroup);
+
   List<RealtimeJobListRow> page(
+      @Param("keyword") String keyword,
+      @Param("id") Long id,
+      @Param("releaseState") String releaseState,
+      @Param("stateGroup") String stateGroup,
+      @Param("limit") int limit,
+      @Param("offset") int offset);
+
+  List<RealtimeJobListRow> pageByProject(
+      @Param("projectId") long projectId,
       @Param("keyword") String keyword,
       @Param("id") Long id,
       @Param("releaseState") String releaseState,

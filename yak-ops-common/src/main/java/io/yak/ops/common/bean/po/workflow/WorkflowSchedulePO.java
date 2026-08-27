@@ -12,6 +12,7 @@ import lombok.Data;
 public class WorkflowSchedulePO {
   @TableId(type = IdType.INPUT)
   private String id;
+  private Long projectId;
   private String workflowId;
   private String name;
   private String triggerType;

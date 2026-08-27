@@ -4,13 +4,14 @@
 
   <insert id="upsert" parameterType="io.yak.ops.common.bean.po.workflow.WorkflowDefinitionPO">
     INSERT INTO yak_workflow_definition
-      (id, name, description, status, draft_revision, latest_version_no, active_version_id,
+      (id, project_id, name, description, status, draft_revision, latest_version_no, active_version_id,
        draft_json, latest_execution_id, latest_execution_status, create_time, update_time)
     VALUES
-      (#{id}, #{name}, #{description}, #{status}, #{draftRevision}, #{latestVersionNo},
+      (#{id}, #{projectId}, #{name}, #{description}, #{status}, #{draftRevision}, #{latestVersionNo},
        #{activeVersionId}, #{draftJson}, #{latestExecutionId}, #{latestExecutionStatus},
        #{createTime}, #{updateTime})
     ON DUPLICATE KEY UPDATE
+      project_id = COALESCE(VALUES(project_id), project_id),
       name = VALUES(name),
       description = VALUES(description),
       status = VALUES(status),

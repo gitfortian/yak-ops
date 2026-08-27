@@ -11,6 +11,8 @@ import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "工作流定义接口")
 @RestController
 @RequestMapping("/api/v1/workflows/definitions")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class WorkflowDefinitionController {
 
   private final WorkflowDefinitionManager definitionService;

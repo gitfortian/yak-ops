@@ -17,6 +17,8 @@ import io.yak.ops.business.development.execution.model.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.node.DevelopmentNodeService;
 import io.yak.ops.business.development.service.DevelopmentSqlLineagePreviewService;
 import io.yak.ops.business.development.task.DevelopmentTaskService;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发任务接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DevelopmentTaskController {
 
   private final DevelopmentTaskService service;

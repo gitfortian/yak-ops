@@ -7,6 +7,8 @@ import io.yak.ops.business.development.api.DevelopmentDirectoryApi.CreateRequest
 import io.yak.ops.business.development.api.DevelopmentDirectoryApi.RenameRequest;
 import io.yak.ops.business.development.directory.DevelopmentDirectoryService;
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发目录接口")
 @RestController
 @RequestMapping("/api/v1/data-development/directories")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DevelopmentDirectoryController {
 
   private final DevelopmentDirectoryService service;

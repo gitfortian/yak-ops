@@ -11,6 +11,8 @@ import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService
 import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService.DataServiceNodeContext;
 import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService.PreviewResult;
 import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService.SaveDraftCommand;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发 Data Service Node 接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DevelopmentDataServiceNodeController {
 
   private final DevelopmentDataServiceNodeService service;

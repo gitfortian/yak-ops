@@ -15,6 +15,8 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
 import io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService;
 import io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/v1/realtime-sync")
 @RequiresPermission(RealtimePermissionCode.READ)
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class RealtimeJobController {
   private final RealtimeJobDefinitionService definitionService;
   private final RealtimeJobExecutionService executionService;
@@ -62,9 +65,8 @@ public class RealtimeJobController {
   @PostMapping
   @RequiresPermission(RealtimePermissionCode.CREATE)
   public Result<Long> create(@Valid @RequestBody RealtimeJobRequests.CreateRequest request) {
-    return Result.success(
-        definitionService.create(
-            request.name(), request.description(), request.runtimeEnvironmentId()));
+    return Result.success(definitionService.create(
+        request.name(), request.description(), request.runtimeEnvironmentId()));
   }
 
   @Operation(summary = "新建实时同步草稿")
@@ -72,13 +74,8 @@ public class RealtimeJobController {
   @RequiresPermission(RealtimePermissionCode.CREATE)
   public Result<Long> draft(@Valid @RequestBody RealtimeJobRequests.SaveRequest request) {
     CdcPipelineSpec spec = requestMapper.toSpec(request.spec());
-    return Result.success(
-        definitionService.save(
-            null,
-            request.name(),
-            request.description(),
-            spec,
-            request.runtimeEnvironmentId()));
+    return Result.success(definitionService.save(
+        null, request.name(), request.description(), spec, request.runtimeEnvironmentId()));
   }
 
   @Operation(summary = "校验未保存的实时同步定义")
@@ -86,10 +83,8 @@ public class RealtimeJobController {
   @RequiresPermission(RealtimePermissionCode.UPDATE)
   public Result<RealtimeViews.Validation> validateDefinition(
       @Valid @RequestBody RealtimeJobRequests.DefinitionValidationRequest request) {
-    return Result.success(
-        viewMapper.toView(
-            definitionService.validateDefinition(
-                requestMapper.toSpec(request.spec()), request.runtimeEnvironmentId())));
+    return Result.success(viewMapper.toView(definitionService.validateDefinition(
+        requestMapper.toSpec(request.spec()), request.runtimeEnvironmentId())));
   }
 
   @Operation(summary = "解析 Yak Realtime YAML")
@@ -103,8 +98,7 @@ public class RealtimeJobController {
   @PostMapping("/yaml/render")
   public Result<Map<String, String>> renderYaml(
       @Valid @RequestBody RealtimeJobRequests.YamlRenderRequest request) {
-    return Result.success(
-        Map.of("yaml", definitionService.renderYaml(requestMapper.toSpec(request.spec()))));
+    return Result.success(Map.of("yaml", definitionService.renderYaml(requestMapper.toSpec(request.spec()))));
   }
 
   @Operation(summary = "保存实时同步草稿")
@@ -113,13 +107,8 @@ public class RealtimeJobController {
   public Result<Long> save(
       @PathVariable long id, @Valid @RequestBody RealtimeJobRequests.SaveRequest request) {
     CdcPipelineSpec spec = requestMapper.toSpec(request.spec());
-    return Result.success(
-        definitionService.save(
-            id,
-            request.name(),
-            request.description(),
-            spec,
-            request.runtimeEnvironmentId()));
+    return Result.success(definitionService.save(
+        id, request.name(), request.description(), spec, request.runtimeEnvironmentId()));
   }
 
   @Operation(summary = "实时同步任务详情")
@@ -137,16 +126,13 @@ public class RealtimeJobController {
       @RequestParam(required = false) Long id,
       @RequestParam(required = false) String releaseState,
       @RequestParam(required = false) String stateGroup) {
-    return Result.success(
-        viewMapper.toView(
-            queryService.page(pageNo, pageSize, keyword, id, releaseState, stateGroup)));
+    return Result.success(viewMapper.toView(
+        queryService.page(pageNo, pageSize, keyword, id, releaseState, stateGroup)));
   }
 
   @Operation(summary = "订阅实时同步任务状态")
   @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter stream() {
-    return observabilityService.subscribe();
-  }
+  public SseEmitter stream() { return observabilityService.subscribe(); }
 
   @Operation(summary = "发布当前定义版本")
   @PostMapping("/{id}/publish")
@@ -198,7 +184,6 @@ public class RealtimeJobController {
     return Result.success(viewMapper.toView(executionService.applyPublishedVersion(id, key)));
   }
 
-  /** Compatibility endpoint. Semantics are RestartExecution and never upgrade to latest Published. */
   @Deprecated
   @Operation(summary = "兼容入口：重启当前 SyncExecution")
   @PostMapping("/{id}/restart")
@@ -227,8 +212,7 @@ public class RealtimeJobController {
   @Operation(summary = "查询任务状态事件")
   @GetMapping("/{id}/events")
   public Result<List<RealtimeViews.Event>> events(@PathVariable long id) {
-    return Result.success(
-        observabilityService.events(id).stream().map(viewMapper::toView).toList());
+    return Result.success(observabilityService.events(id).stream().map(viewMapper::toView).toList());
   }
 
   @Operation(summary = "查询指定 Flink CDC 运行环境能力")

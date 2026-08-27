@@ -7,6 +7,8 @@ import io.yak.ops.business.development.release.DevelopmentReleaseService;
 import io.yak.ops.business.development.release.model.DevelopmentReleaseDetail;
 import io.yak.ops.business.development.release.model.DevelopmentReleasePage;
 import io.yak.ops.business.development.release.model.DevelopmentReleaseSummary;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发发布中心接口")
 @RestController
 @RequestMapping("/api/v1/data-development/releases")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class DevelopmentReleaseController {
 
   private final DevelopmentReleaseService service;

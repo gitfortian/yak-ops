@@ -11,32 +11,61 @@ import io.yak.ops.business.datasource.dao.model.DataSourceSummaryRow;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.enums.datasource.DataSourceConnStatus;
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
 /** 基于 MyBatis-Plus 的数据源数据访问实现。 */
 @Repository
 @ConditionalOnDataSourceEnabled
-@RequiredArgsConstructor
 public class DataSourceDaoImpl implements DataSourceDao {
 
   private final DataSourceMapper dataSourceMapper;
+  private final CurrentProject currentProject;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public DataSourceDaoImpl(DataSourceMapper dataSourceMapper, CurrentProject currentProject) {
+    this.dataSourceMapper = dataSourceMapper;
+    this.currentProject = currentProject;
+  }
+
+  public DataSourceDaoImpl(DataSourceMapper dataSourceMapper) {
+    this(dataSourceMapper, Optional::<io.yak.ops.core.project.ProjectContext>empty);
+  }
 
   @Override
   public int addDataSource(DataSourcePO dataSourcePO) {
+    Long projectId = currentProjectId();
+    if (projectId != null) {
+      if (dataSourcePO.getProjectId() != null
+          && !Objects.equals(projectId, dataSourcePO.getProjectId())) {
+        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+      }
+      dataSourcePO.setProjectId(projectId);
+    }
     return dataSourceMapper.insert(dataSourcePO);
   }
 
   @Override
   public int editDataSource(DataSourcePO dataSourcePO) {
-    return dataSourceMapper.updateById(dataSourcePO);
+    Long projectId = currentProjectId();
+    if (projectId == null) return dataSourceMapper.updateById(dataSourcePO);
+    dataSourcePO.setProjectId(projectId);
+    return dataSourceMapper.update(
+        dataSourcePO,
+        Wrappers.<DataSourcePO>lambdaUpdate()
+            .eq(DataSourcePO::getProjectId, projectId)
+            .eq(DataSourcePO::getId, dataSourcePO.getId()));
   }
 
   @Override
   public DataSourcePO selectById(Long id) {
-    return selectById(null, id);
+    return selectById(currentProjectId(), id);
   }
 
   @Override
@@ -51,8 +80,17 @@ public class DataSourceDaoImpl implements DataSourceDao {
 
   @Override
   public IPage<DataSourcePO> selectPage(PageQuery query) {
-    PageQuery condition =
-        query == null ? new PageQuery(null, 1, 10, null, null, null, null, null) : query;
+    PageQuery condition = query == null
+        ? new PageQuery(currentProjectId(), 1, 10, null, null, null, null, null)
+        : new PageQuery(
+            query.projectId() == null ? currentProjectId() : query.projectId(),
+            query.pageNo(),
+            query.pageSize(),
+            query.name(),
+            query.keyword(),
+            query.dbType(),
+            query.environment(),
+            query.connStatus());
     Page<DataSourcePO> page =
         Page.of(Math.max(1, condition.pageNo()), Math.max(1, condition.pageSize()));
     return dataSourceMapper.selectPage(
@@ -64,7 +102,7 @@ public class DataSourceDaoImpl implements DataSourceDao {
 
   @Override
   public DataSourceSummaryRow selectSummary() {
-    return dataSourceMapper.selectSummary();
+    return selectSummary(currentProjectId());
   }
 
   @Override
@@ -76,7 +114,7 @@ public class DataSourceDaoImpl implements DataSourceDao {
 
   @Override
   public List<DataSourcePO> selectAll(DataSourceDbType dbType) {
-    return selectAll(null, dbType);
+    return selectAll(currentProjectId(), dbType);
   }
 
   @Override
@@ -91,7 +129,7 @@ public class DataSourceDaoImpl implements DataSourceDao {
 
   @Override
   public boolean existsByName(String name, Long excludeId) {
-    return existsByName(null, name, excludeId);
+    return existsByName(currentProjectId(), name, excludeId);
   }
 
   @Override
@@ -108,7 +146,7 @@ public class DataSourceDaoImpl implements DataSourceDao {
 
   @Override
   public boolean deleteById(Long id) {
-    return deleteById(null, id);
+    return deleteById(currentProjectId(), id);
   }
 
   @Override
@@ -124,7 +162,7 @@ public class DataSourceDaoImpl implements DataSourceDao {
 
   @Override
   public boolean updateConnectionStatus(Long id, DataSourceConnStatus connStatus) {
-    return updateConnectionStatus(null, id, connStatus);
+    return updateConnectionStatus(currentProjectId(), id, connStatus);
   }
 
   @Override
@@ -139,6 +177,10 @@ public class DataSourceDaoImpl implements DataSourceDao {
                     .eq(projectId != null, DataSourcePO::getProjectId, projectId)
                     .eq(DataSourcePO::getId, id))
             > 0;
+  }
+
+  private Long currentProjectId() {
+    return currentProject.current().map(context -> context.projectId()).orElse(null);
   }
 
   private LambdaQueryWrapper<DataSourcePO> queryWrapper(PageQuery query) {
