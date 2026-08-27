@@ -1,3 +1,4 @@
+import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { YakButton, YakTab } from '@/components/ui';
 import type {
   CatalogDataset,
@@ -230,7 +231,19 @@ export function CatalogDatasetDetail({
               columns={fieldColumns}
               dataSource={dataset.fields}
               scroll={{ x: 760 }}
-              locale={{ emptyText: '当前 Dataset 暂无字段' }}
+              locale={{
+                emptyText: (
+                  <div className="flex min-h-[280px] items-center justify-center">
+                    <YakOpsEmpty
+                      width={170}
+                      height={114}
+                      title="当前 Dataset 暂无字段"
+                      description="发布包含字段定义的版本后会在这里展示。"
+                      showCaption
+                    />
+                  </div>
+                ),
+              }}
             />
           ) : activeTab === 'versions' ? (
             <Table
@@ -241,7 +254,19 @@ export function CatalogDatasetDetail({
               columns={versionColumns}
               dataSource={[...dataset.versions].sort((left, right) => right.versionNo - left.versionNo)}
               scroll={{ x: 760 }}
-              locale={{ emptyText: '暂无 DatasetVersion' }}
+              locale={{
+                emptyText: (
+                  <div className="flex min-h-[280px] items-center justify-center">
+                    <YakOpsEmpty
+                      width={170}
+                      height={114}
+                      title="暂无 Dataset 版本"
+                      description="发布新版本后会在这里展示版本历史。"
+                      showCaption
+                    />
+                  </div>
+                ),
+              }}
             />
           ) : activeTab === 'lineage' ? (
             <DatasetLineageTab key={dataset.id} dataset={dataset} />
