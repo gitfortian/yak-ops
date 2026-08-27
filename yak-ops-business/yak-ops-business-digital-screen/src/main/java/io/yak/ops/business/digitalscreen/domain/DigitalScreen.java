@@ -1,6 +1,7 @@
 package io.yak.ops.business.digitalscreen.domain;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -18,6 +19,8 @@ public record DigitalScreen(
     Instant updateTime) {
 
   public DigitalScreen {
-    bindings = bindings == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(bindings));
+    bindings = bindings == null
+        ? Map.of()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
   }
 }
