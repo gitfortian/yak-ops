@@ -8,7 +8,7 @@ import {
 import { resolveScreenTemplateById } from '@/services/screen-template-service';
 import { useEffect, useMemo, useState } from 'react';
 import { useScreenRuntime } from '../../runtime/hooks/useScreenRuntime';
-import { collectBoundDatasetIds } from '../../runtime/planner';
+import { collectScreenRuntimeDatasetIds } from '../../runtime/planner';
 import { SCREEN_RUNTIME_VIEWER_REFRESH_INTERVAL_MS } from '../../runtime/policy';
 
 const EMPTY_BINDINGS: DigitalScreenBindings = {};
@@ -39,14 +39,18 @@ export function useDigitalScreenViewer(id?: string) {
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  const boundDatasetIds = useMemo(
-    () => collectBoundDatasetIds(screen?.bindings ?? EMPTY_BINDINGS),
+  const template = useMemo(
+    () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),
     [screen],
   );
-  const boundDatasetKey = boundDatasetIds.join('|');
+  const runtimeDatasetIds = useMemo(
+    () => collectScreenRuntimeDatasetIds(template, screen?.bindings ?? EMPTY_BINDINGS),
+    [screen, template],
+  );
+  const runtimeDatasetKey = runtimeDatasetIds.join('|');
 
   useEffect(() => {
-    if (!boundDatasetIds.length) {
+    if (!runtimeDatasetIds.length) {
       setDatasets([]);
       setDataError('');
       return undefined;
@@ -54,7 +58,7 @@ export function useDigitalScreenViewer(id?: string) {
 
     const controller = new AbortController();
     setDataError('');
-    void getPublishedDatasetsByIds(boundDatasetIds, { signal: controller.signal })
+    void getPublishedDatasetsByIds(runtimeDatasetIds, { signal: controller.signal })
       .then((values) => {
         if (!controller.signal.aborted) setDatasets(values);
       })
@@ -65,12 +69,8 @@ export function useDigitalScreenViewer(id?: string) {
       });
 
     return () => controller.abort();
-  }, [boundDatasetIds, boundDatasetKey]);
+  }, [runtimeDatasetIds, runtimeDatasetKey]);
 
-  const template = useMemo(
-    () => (screen ? resolveScreenTemplateById(screen.templateId) : undefined),
-    [screen],
-  );
   const runtime = useScreenRuntime(
     template,
     screen?.bindings ?? EMPTY_BINDINGS,
