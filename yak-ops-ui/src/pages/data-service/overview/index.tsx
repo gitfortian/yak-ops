@@ -1,15 +1,15 @@
+import YakButton from '@/components/YakButton';
+import {
+  getDataServiceOverview,
+  type DataServiceOverview,
+  type DataServiceOverviewFailure,
+  type DataServiceOverviewRange,
+} from '@/services/data-service';
 import { Button, Empty, Table, Tooltip, message, type TableColumnsType } from 'antd';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  fetchDataServiceOverview,
-  type DataServiceOverview,
-  type DataServiceOverviewFailure,
-  type DataServiceOverviewRange,
-} from './overview-service';
-import YakButton from '@/components/YakButton';
 
 const BRAND_COLOR = 'rgba(254,44,85,1)';
 const TEXT_PRIMARY = '#161823';
@@ -148,8 +148,8 @@ export default function DataServiceOverviewPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchDataServiceOverview(range);
-      setOverview(response.data || emptyOverview(range));
+      const data = await getDataServiceOverview(range);
+      setOverview(data || emptyOverview(range));
     } catch (error: any) {
       message.error(error?.message || '加载数据服务运行概览失败');
       setOverview(emptyOverview(range));

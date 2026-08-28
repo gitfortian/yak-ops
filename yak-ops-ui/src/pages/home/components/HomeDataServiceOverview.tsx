@@ -1,13 +1,13 @@
 import YakOpsEmpty from '@/components/YakOpsEmpty';
+import {
+  getDataServiceOverview,
+  type DataServiceOverview,
+} from '@/services/data-service';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import {
-  fetchDataServiceOverview,
-  type DataServiceOverview,
-} from '../../data-service/overview/overview-service';
 import { SectionHeader } from './homeAssetOverviewShared';
 
 interface DataServiceOverviewState {
@@ -32,14 +32,14 @@ function useDataServiceOverview(): DataServiceOverviewState {
 
   useEffect(() => {
     let active = true;
-    fetchDataServiceOverview('7d')
-      .then((response) => {
+    getDataServiceOverview('7d')
+      .then((data) => {
         if (!active) return;
-        if (!response.data) {
+        if (!data) {
           setState({ loading: false, failed: true });
           return;
         }
-        setState({ data: response.data, loading: false, failed: false });
+        setState({ data, loading: false, failed: false });
       })
       .catch(() => {
         if (active) setState({ loading: false, failed: true });

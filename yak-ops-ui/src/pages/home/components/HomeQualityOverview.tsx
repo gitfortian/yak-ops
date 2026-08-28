@@ -1,4 +1,10 @@
 import YakOpsEmpty from '@/components/YakOpsEmpty';
+import {
+  homeQualityOverviewApi,
+  type HomeQualityDimension,
+  type HomeQualityIssue,
+  type HomeQualityOverview,
+} from '@/services/home';
 import { BRAND_COLOR } from '@/styles/brand';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
@@ -9,13 +15,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-
-import {
-  homeQualityOverviewApi,
-  type HomeQualityDimension,
-  type HomeQualityIssue,
-  type HomeQualityOverview,
-} from './service';
 
 interface QualityOverviewState {
   data?: HomeQualityOverview;
