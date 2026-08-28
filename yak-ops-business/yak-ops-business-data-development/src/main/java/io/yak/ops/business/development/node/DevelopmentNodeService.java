@@ -32,6 +32,11 @@ public class DevelopmentNodeService {
     return repository.list();
   }
 
+  /** Lightweight overview count that avoids materializing editor/publish metadata for every node. */
+  public long count() {
+    return repository.count();
+  }
+
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
   public DevelopmentNode create(
       String name,

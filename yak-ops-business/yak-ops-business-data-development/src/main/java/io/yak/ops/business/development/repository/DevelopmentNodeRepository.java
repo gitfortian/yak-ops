@@ -18,6 +18,11 @@ public interface DevelopmentNodeRepository {
 
   List<DevelopmentNode> list();
 
+  /** Lightweight count for overview/read-model callers; adapters should override when possible. */
+  default long count() {
+    return list().size();
+  }
+
   boolean existsByName(Long directoryId, String name);
 
   boolean existsInDirectory(Long directoryId);

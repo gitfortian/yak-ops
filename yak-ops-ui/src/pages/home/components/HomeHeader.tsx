@@ -1,13 +1,16 @@
+import type { HomeCockpitHeaderStats } from '@/services/home';
 import { history } from '@umijs/max';
 import { ChevronRight, Database } from 'lucide-react';
 
-import { useHomeHeaderStats } from '../hooks/useHomeHeaderStats';
-
 interface ProfileStatProps {
   label: string;
-  value: number;
+  value: number | string;
   arrow?: boolean;
   onClick?: () => void;
+}
+
+interface HomeHeaderProps {
+  stats?: HomeCockpitHeaderStats;
 }
 
 function ProfileStat({ label, value, arrow = false, onClick }: ProfileStatProps) {
@@ -30,8 +33,16 @@ function ProfileStat({ label, value, arrow = false, onClick }: ProfileStatProps)
   );
 }
 
-export function HomeHeader() {
-  const stats = useHomeHeaderStats();
+function scrollToAttention() {
+  document
+    .getElementById('home-attention-center')
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+export function HomeHeader({ stats }: HomeHeaderProps) {
+  const dataSourceCount = stats?.dataSourceCount ?? '--';
+  const runningCount = stats?.runningCount ?? '--';
+  const attentionCount = stats?.attentionCount ?? '--';
 
   return (
     <header className="flex h-[116px] items-center px-4">
@@ -58,20 +69,20 @@ export function HomeHeader() {
           <div className="mt-2.5 flex items-center gap-[27px]">
             <ProfileStat
               label="数据源"
-              value={stats.dataSourceCount}
+              value={dataSourceCount}
               arrow
               onClick={() => history.push('/data-source')}
             />
             <ProfileStat
               label="运行中"
-              value={stats.runningCount}
+              value={runningCount}
               arrow
               onClick={() => history.push('/data-development/executions')}
             />
             <ProfileStat
-              label="近7日异常"
-              value={stats.exceptionCount}
-              onClick={() => history.push('/data-development/executions')}
+              label="待处理"
+              value={attentionCount}
+              onClick={scrollToAttention}
             />
           </div>
         </div>

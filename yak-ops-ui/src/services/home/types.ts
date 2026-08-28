@@ -196,3 +196,41 @@ export interface HomeScheduleCalendar {
   days: HomeScheduleDay[];
   overview: HomeScheduleSummary[];
 }
+
+export type HomeLifecycleStatus = 'READY' | 'ATTENTION' | 'EMPTY' | 'UNAVAILABLE';
+export type HomeAttentionSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
+
+export interface HomeCockpitHeaderStats {
+  dataSourceCount: number;
+  runningCount: number;
+  attentionCount: number;
+}
+
+export interface HomeLifecycleStage {
+  key: string;
+  title: string;
+  description: string;
+  status: HomeLifecycleStatus;
+  value: number | null;
+  valueLabel: string;
+  issueCount: number;
+}
+
+export interface HomeAttentionItem {
+  key: string;
+  severity: HomeAttentionSeverity;
+  title: string;
+  description: string;
+  count: number;
+}
+
+export interface HomeAttentionSummary {
+  total: number;
+  items: HomeAttentionItem[];
+}
+
+export interface HomeCockpitOverview {
+  header: HomeCockpitHeaderStats;
+  lifecycle: HomeLifecycleStage[];
+  attention: HomeAttentionSummary;
+}

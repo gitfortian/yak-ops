@@ -34,6 +34,10 @@ public class DigitalScreenApplicationService {
     return repository.list();
   }
 
+  public long count() {
+    return repository.count();
+  }
+
   public DigitalScreen get(long id) {
     return repository.findById(id).orElseThrow(() -> notFound(id));
   }

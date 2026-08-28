@@ -144,7 +144,8 @@ public class OfflineExecutionOverviewRepositoryAdapter
         scope.params().toArray());
   }
 
-  private Metrics metrics(LocalDateTime start, LocalDateTime end) {
+  @Override
+  public Metrics metrics(LocalDateTime start, LocalDateTime end) {
     Scope scope = scope("e");
     String sql = """
         SELECT COALESCE(SUM(CASE WHEN UPPER(e.status) IN (%s) THEN 1 ELSE 0 END), 0) AS success_count,

@@ -105,7 +105,8 @@ public class QualityExecutionOverviewRepositoryAdapter
     return List.copyOf(result);
   }
 
-  private Metrics metrics(LocalDateTime start, LocalDateTime end) {
+  @Override
+  public Metrics metrics(LocalDateTime start, LocalDateTime end) {
     String sql = """
         SELECT COALESCE(SUM(CASE WHEN UPPER(e.execution_status) IN (%s) THEN 1 ELSE 0 END), 0) AS success_count,
                COALESCE(SUM(CASE WHEN UPPER(e.execution_status) IN (%s) THEN 1 ELSE 0 END), 0) AS failed_count,
