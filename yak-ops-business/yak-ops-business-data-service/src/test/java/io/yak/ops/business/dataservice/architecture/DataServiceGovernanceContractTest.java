@@ -84,8 +84,12 @@ class DataServiceGovernanceContractTest {
   }
 
   private Path permissionSource() {
-    return Path.of(
+    Path moduleRun = Path.of(
         "..", "..", "yak-ops-common", "src", "main", "java", "io", "yak", "ops", "common",
         "constant", "dataservice", "DataServicePermissionCode.java").normalize();
+    if (Files.isRegularFile(moduleRun)) return moduleRun;
+    return Path.of(
+        "yak-ops-common", "src", "main", "java", "io", "yak", "ops", "common", "constant",
+        "dataservice", "DataServicePermissionCode.java");
   }
 }
