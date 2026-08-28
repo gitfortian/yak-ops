@@ -1,79 +1,58 @@
 package io.yak.ops.boot.home;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.yak.ops.business.quality.dao.mapper.QualityExecutionMapper;
-import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobDefinitionMapper;
-import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobExecutionMapper;
-import io.yak.ops.business.workflow.dao.mapper.WorkflowExecutionMapper;
-import io.yak.ops.business.workflow.dao.mapper.WorkflowScheduleMapper;
-import io.yak.ops.common.bean.po.quality.QualityExecutionPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
-import io.yak.ops.common.bean.po.sync.offline.OfflineJobExecutionPO;
-import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
-import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
+import io.yak.ops.business.quality.workspace.QualityExecutionOverviewReader;
+import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionOverviewReader;
+import io.yak.ops.business.workflow.execution.WorkflowExecutionOverviewReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** 首页数据中心运行统计聚合服务。 */
+/** 首页数据中心只读聚合；领域运行语义由各业务 Reader 自己拥有。 */
 @Service
-@RequiredArgsConstructor
 public class HomeDataCenterService {
 
+  private static final Logger LOG = LoggerFactory.getLogger(HomeDataCenterService.class);
   private static final DateTimeFormatter DAY_LABEL = DateTimeFormatter.ofPattern("MM-dd");
-  private static final Set<String> WORKFLOW_RUNNING =
-      Set.of("CREATED", "RUNNING", "PAUSING", "PAUSED", "RESUMING");
-  private static final Set<String> WORKFLOW_SUCCESS =
-      Set.of("SUCCESS", "SUCCESS_WITH_WARNINGS", "WARNING");
-  private static final Set<String> WORKFLOW_FAILED = Set.of("FAILED", "TIMED_OUT");
-  private static final Set<String> QUALITY_RUNNING = Set.of("QUEUED", "RUNNING");
-  private static final Set<String> QUALITY_SUCCESS = Set.of("SUCCESS", "SUCCEEDED", "COMPLETED");
-  private static final Set<String> QUALITY_FAILED = Set.of("FAILED", "ERROR", "TIMED_OUT");
-  private static final Set<String> OFFLINE_RUNNING = Set.of("CREATED", "SUBMITTED", "QUEUED", "RUNNING");
-  private static final Set<String> OFFLINE_SUCCESS = Set.of("SUCCEEDED", "SUCCESS", "FINISHED", "COMPLETED");
-  private static final Set<String> OFFLINE_FAILED = Set.of("FAILED", "LOST");
+  private static final int RECENT_TASK_LIMIT = 5;
+  private static final int SCHEDULE_SOURCE_LIMIT = 20;
 
-  private final ObjectProvider<OfflineJobExecutionMapper> offlineExecutionMapperProvider;
-  private final ObjectProvider<OfflineJobDefinitionMapper> offlineDefinitionMapperProvider;
-  private final ObjectProvider<WorkflowExecutionMapper> workflowExecutionMapperProvider;
-  private final ObjectProvider<WorkflowScheduleMapper> workflowScheduleMapperProvider;
-  private final ObjectProvider<QualityExecutionMapper> qualityExecutionMapperProvider;
+  private final ObjectProvider<OfflineExecutionOverviewReader> offlineReaderProvider;
+  private final ObjectProvider<WorkflowExecutionOverviewReader> workflowReaderProvider;
+  private final ObjectProvider<QualityExecutionOverviewReader> qualityReaderProvider;
+
+  public HomeDataCenterService(
+      ObjectProvider<OfflineExecutionOverviewReader> offlineReaderProvider,
+      ObjectProvider<WorkflowExecutionOverviewReader> workflowReaderProvider,
+      ObjectProvider<QualityExecutionOverviewReader> qualityReaderProvider) {
+    this.offlineReaderProvider = offlineReaderProvider;
+    this.workflowReaderProvider = workflowReaderProvider;
+    this.qualityReaderProvider = qualityReaderProvider;
+  }
 
   public OverviewResponse overview(String periodValue) {
     PeriodRange range = PeriodRange.resolve(periodValue);
     PeriodRange previous = range.previous();
+    List<SourceOverview> current = sourceOverviews(range);
+    List<SourceOverview> previousSnapshots = sourceOverviews(previous);
 
-    List<RuntimeExecution> current = executions(range.start(), range.end());
-    List<RuntimeExecution> previousExecutions = executions(previous.start(), previous.end());
-
-    Metrics currentMetrics = metrics(current, range.end());
-    Metrics previousMetrics = metrics(previousExecutions, previous.end());
-    LatestTask latestTask = latestTask(current);
-
+    Metrics currentMetrics = mergeMetrics(current);
+    Metrics previousMetrics = mergeMetrics(previousSnapshots);
     return new OverviewResponse(
-        new PeriodView(range.start().toLocalDate().toString(), range.end().minusNanos(1).toLocalDate().toString()),
-        latestTask,
-        trend(range, current),
+        period(range),
+        latestTask(current),
+        mergeTrend(range, current),
         currentMetrics,
         compare(currentMetrics, previousMetrics));
   }
@@ -81,317 +60,397 @@ public class HomeDataCenterService {
   public RecentResponse recent() {
     LocalDateTime end = LocalDateTime.now().plusNanos(1);
     LocalDateTime start = end.minusDays(7);
-    List<RuntimeExecution> all = executions(start, end);
+    List<SourceTask> items = new ArrayList<>();
+    items.addAll(offlineRecentTasks(start, end));
+    items.addAll(workflowRecentTasks(start, end));
+    items.addAll(qualityRecentTasks(start, end));
+    items.sort(Comparator.comparing(SourceTask::lastRunTime).reversed());
 
-    Map<String, List<RuntimeExecution>> grouped =
-        all.stream().collect(Collectors.groupingBy(RuntimeExecution::taskKey));
-
-    List<RecentTask> items = new ArrayList<>();
-      List<RecentTask> finalItems = items;
-      grouped.values().forEach(group -> {
-      RuntimeExecution latest = group.stream().max(Comparator.comparing(RuntimeExecution::occurredAt)).orElse(null);
-      if (latest == null) return;
-      long success = group.stream().filter(RuntimeExecution::success).count();
-      long failed = group.stream().filter(RuntimeExecution::failed).count();
-      finalItems.add(new RecentTask(
-          latest.taskId(),
-          latest.taskType(),
-          latest.taskName(),
-          latest.occurredAt().toString(),
-          group.size(),
-          success,
-          failed,
-          latest.durationMs(),
-          latest.status(),
-          detailPath(latest)));
-    });
-
-    items.sort(Comparator.comparing(RecentTask::lastRunTime).reversed());
-    if (items.size() > 5) items = new ArrayList<>(items.subList(0, 5));
-    return new RecentResponse(items);
+    return new RecentResponse(items.stream()
+        .limit(RECENT_TASK_LIMIT)
+        .map(this::recentTask)
+        .toList());
   }
 
   public ScheduleResponse schedules(String periodValue) {
     PeriodRange range = PeriodRange.resolve(periodValue);
-    List<ScheduleItem> items = new ArrayList<>();
-
-    OfflineJobDefinitionMapper offlineMapper = offlineDefinitionMapperProvider.getIfAvailable();
-    if (offlineMapper != null) {
-      List<OfflineJobDefinitionPO> definitions = offlineMapper.selectList(
-          new LambdaQueryWrapper<OfflineJobDefinitionPO>()
-              .eq(OfflineJobDefinitionPO::getScheduleEnabled, true)
-              .orderByDesc(OfflineJobDefinitionPO::getScheduleNextFireTime)
-              .last("LIMIT 20"));
-      for (OfflineJobDefinitionPO definition : definitions) {
-        items.add(new ScheduleItem(
-            String.valueOf(definition.getId()),
-            "OFFLINE_SYNC",
-            defaultText(definition.getJobName(), "离线同步任务"),
-            definition.getCronExpression(),
-            "ENABLED",
-            toText(definition.getScheduleLastFireTime()),
-            toText(definition.getScheduleNextFireTime()),
-            "/sync/batch-link-up/" + definition.getId() + "/detail"));
-      }
-    }
-
-    WorkflowScheduleMapper workflowMapper = workflowScheduleMapperProvider.getIfAvailable();
-    if (workflowMapper != null) {
-      List<WorkflowSchedulePO> schedules = workflowMapper.selectList(
-          new LambdaQueryWrapper<WorkflowSchedulePO>()
-              .orderByDesc(WorkflowSchedulePO::getNextFireTime)
-              .last("LIMIT 20"));
-      for (WorkflowSchedulePO schedule : schedules) {
-        items.add(new ScheduleItem(
-            schedule.getId(),
-            "WORKFLOW",
-            defaultText(schedule.getName(), "工作流调度"),
-            schedule.getCronExpression(),
-            defaultText(schedule.getStatus(), "UNKNOWN"),
-            toText(schedule.getLastFireTime()),
-            toText(schedule.getNextFireTime()),
-            "/workflow/schedules"));
-      }
-    }
-
+    List<SourceSchedule> items = new ArrayList<>();
+    items.addAll(offlineSchedules());
+    items.addAll(workflowSchedules());
     items.sort(Comparator.comparing(
-        ScheduleItem::nextScheduleTime,
+        SourceSchedule::nextScheduleTime,
         Comparator.nullsLast(Comparator.naturalOrder())));
-    if (items.size() > 8) items = new ArrayList<>(items.subList(0, 8));
-    return new ScheduleResponse(
-        new PeriodView(range.start().toLocalDate().toString(), range.end().minusNanos(1).toLocalDate().toString()),
-        items.size(),
-        items);
+
+    List<ScheduleItem> result = items.stream().limit(8).map(this::scheduleItem).toList();
+    return new ScheduleResponse(period(range), result.size(), result);
   }
 
-  private List<RuntimeExecution> executions(LocalDateTime start, LocalDateTime end) {
-    List<RuntimeExecution> result = new ArrayList<>();
-    result.addAll(offlineExecutions(start, end));
-    result.addAll(workflowExecutions(start, end));
-    result.addAll(qualityExecutions(start, end));
-    result.sort(Comparator.comparing(RuntimeExecution::occurredAt));
-    return result;
+  private List<SourceOverview> sourceOverviews(PeriodRange range) {
+    boolean hourly = range.days() == 1;
+    return List.of(
+        offlineOverview(range.start(), range.end(), hourly),
+        workflowOverview(range.start(), range.end(), hourly),
+        qualityOverview(range.start(), range.end(), hourly));
   }
 
-  private List<RuntimeExecution> offlineExecutions(LocalDateTime start, LocalDateTime end) {
-    OfflineJobExecutionMapper mapper = offlineExecutionMapperProvider.getIfAvailable();
-    if (mapper == null) return List.of();
-
-    List<OfflineJobExecutionPO> rows = mapper.selectList(
-        new LambdaQueryWrapper<OfflineJobExecutionPO>()
-            .ge(OfflineJobExecutionPO::getCreateTime, start)
-            .lt(OfflineJobExecutionPO::getCreateTime, end)
-            .orderByAsc(OfflineJobExecutionPO::getCreateTime));
-
-    OfflineJobDefinitionMapper definitionMapper = offlineDefinitionMapperProvider.getIfAvailable();
-    Map<Long, String> names = new HashMap<>();
-    if (definitionMapper != null) {
-      Set<Long> ids = rows.stream()
-          .map(OfflineJobExecutionPO::getJobDefinitionId)
-          .filter(Objects::nonNull)
-          .collect(Collectors.toSet());
-      if (!ids.isEmpty()) {
-        names = definitionMapper.selectBatchIds(ids).stream()
-            .collect(Collectors.toMap(OfflineJobDefinitionPO::getId, OfflineJobDefinitionPO::getJobName, (a, b) -> a));
-      }
-    }
-
-    Map<Long, String> finalNames = names;
-    return rows.stream().map(row -> {
-      String status = normalize(row.getStatus());
-      LocalDateTime occurredAt = firstNonNull(row.getStartTime(), row.getCreateTime(), row.getUpdateTime());
-      return new RuntimeExecution(
+  private SourceOverview offlineOverview(
+      LocalDateTime start, LocalDateTime end, boolean hourly) {
+    OfflineExecutionOverviewReader reader = offlineReaderProvider.getIfAvailable();
+    if (reader == null) return SourceOverview.empty("OFFLINE_SYNC");
+    try {
+      OfflineExecutionOverviewReader.Overview overview = reader.overview(start, end, hourly);
+      return new SourceOverview(
           "OFFLINE_SYNC",
-          String.valueOf(row.getJobDefinitionId()),
-          defaultText(finalNames.get(row.getJobDefinitionId()), "离线同步任务 #" + row.getJobDefinitionId()),
-          status,
-          occurredAt,
-          row.getEndTime(),
-          zero(row.getDurationMillis()),
-          zero(row.getSinkSuccessRecordCount()),
-          "SCHEDULE".equalsIgnoreCase(row.getTriggerType()),
-          OFFLINE_SUCCESS.contains(status),
-          OFFLINE_FAILED.contains(status),
-          OFFLINE_RUNNING.contains(status),
-          row.getErrorMessage(),
-          String.valueOf(row.getId()));
-    }).toList();
+          sourceMetrics(overview.metrics()),
+          overview.trend().stream()
+              .map(item -> new SourceTrend(item.bucket(), item.count()))
+              .toList(),
+          offlineExecution(overview.latest()));
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页离线同步运行读模型失败", exception);
+      return SourceOverview.empty("OFFLINE_SYNC");
+    }
   }
 
-  private List<RuntimeExecution> workflowExecutions(LocalDateTime start, LocalDateTime end) {
-    WorkflowExecutionMapper mapper = workflowExecutionMapperProvider.getIfAvailable();
-    if (mapper == null) return List.of();
-    ZoneId zone = ZoneId.systemDefault();
-    Instant startInstant = start.atZone(zone).toInstant();
-    Instant endInstant = end.atZone(zone).toInstant();
-
-    List<WorkflowExecutionPO> rows = mapper.selectList(
-        new LambdaQueryWrapper<WorkflowExecutionPO>()
-            .ge(WorkflowExecutionPO::getCreatedAt, startInstant)
-            .lt(WorkflowExecutionPO::getCreatedAt, endInstant)
-            .orderByAsc(WorkflowExecutionPO::getCreatedAt));
-
-    return rows.stream().map(row -> {
-      String status = normalize(row.getStatus());
-      Instant started = firstNonNull(row.getRunStartedAt(), row.getCreatedAt(), row.getUpdatedAt());
-      long duration = row.getEndedAt() == null || started == null
-          ? 0L
-          : Math.max(0L, Duration.between(started, row.getEndedAt()).toMillis());
-      return new RuntimeExecution(
+  private SourceOverview workflowOverview(
+      LocalDateTime start, LocalDateTime end, boolean hourly) {
+    WorkflowExecutionOverviewReader reader = workflowReaderProvider.getIfAvailable();
+    if (reader == null) return SourceOverview.empty("WORKFLOW");
+    try {
+      WorkflowExecutionOverviewReader.Overview overview = reader.overview(start, end, hourly);
+      return new SourceOverview(
           "WORKFLOW",
-          defaultText(row.getDefinitionId(), row.getId()),
-          defaultText(row.getWorkflowName(), "工作流 #" + row.getDefinitionId()),
-          status,
-          LocalDateTime.ofInstant(started == null ? Instant.EPOCH : started, zone),
-          row.getEndedAt() == null ? null : LocalDateTime.ofInstant(row.getEndedAt(), zone),
-          duration,
-          0L,
-          false,
-          WORKFLOW_SUCCESS.contains(status),
-          WORKFLOW_FAILED.contains(status),
-          WORKFLOW_RUNNING.contains(status),
-          null,
-          row.getId());
-    }).toList();
+          sourceMetrics(overview.metrics()),
+          overview.trend().stream()
+              .map(item -> new SourceTrend(item.bucket(), item.count()))
+              .toList(),
+          workflowExecution(overview.latest()));
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页工作流运行读模型失败", exception);
+      return SourceOverview.empty("WORKFLOW");
+    }
   }
 
-  private List<RuntimeExecution> qualityExecutions(LocalDateTime start, LocalDateTime end) {
-    QualityExecutionMapper mapper = qualityExecutionMapperProvider.getIfAvailable();
-    if (mapper == null) return List.of();
-
-    List<QualityExecutionPO> rows = mapper.selectList(
-        new LambdaQueryWrapper<QualityExecutionPO>()
-            .ge(QualityExecutionPO::getQueuedAt, start)
-            .lt(QualityExecutionPO::getQueuedAt, end)
-            .orderByAsc(QualityExecutionPO::getQueuedAt));
-
-    return rows.stream().map(row -> {
-      String status = normalize(row.getExecutionStatus());
-      LocalDateTime occurredAt = firstNonNull(row.getStartedAt(), row.getQueuedAt(), row.getCreatedAt());
-      // 质量检查结果 FAIL 仅表示发现质量问题；技术执行成功仍计入成功任务。
-      boolean success = QUALITY_SUCCESS.contains(status);
-      return new RuntimeExecution(
+  private SourceOverview qualityOverview(
+      LocalDateTime start, LocalDateTime end, boolean hourly) {
+    QualityExecutionOverviewReader reader = qualityReaderProvider.getIfAvailable();
+    if (reader == null) return SourceOverview.empty("DATA_QUALITY");
+    try {
+      QualityExecutionOverviewReader.Overview overview = reader.overview(start, end, hourly);
+      return new SourceOverview(
           "DATA_QUALITY",
-          String.valueOf(row.getMonitorId()),
-          defaultText(row.getMonitorName(), "数据质量任务 #" + row.getMonitorId()),
-          status,
-          occurredAt,
-          row.getFinishedAt(),
-          zero(row.getDurationMs()),
-          0L,
-          "SCHEDULE".equalsIgnoreCase(row.getTriggerType()),
-          success,
-          QUALITY_FAILED.contains(status),
-          QUALITY_RUNNING.contains(status),
-          row.getErrorMessage(),
-          row.getExecutionNo());
-    }).toList();
+          sourceMetrics(overview.metrics()),
+          overview.trend().stream()
+              .map(item -> new SourceTrend(item.bucket(), item.count()))
+              .toList(),
+          qualityExecution(overview.latest()));
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页数据质量运行读模型失败", exception);
+      return SourceOverview.empty("DATA_QUALITY");
+    }
   }
 
-  private Metrics metrics(List<RuntimeExecution> executions, LocalDateTime end) {
-    long success = executions.stream().filter(RuntimeExecution::success).count();
-    long failed = executions.stream().filter(RuntimeExecution::failed).count();
-    long schedule = executions.stream().filter(RuntimeExecution::scheduled).count();
-    long processed = executions.stream()
-        .filter(item -> "OFFLINE_SYNC".equals(item.taskType()))
-        .mapToLong(RuntimeExecution::processedRecords)
-        .sum();
-    List<Long> durations = executions.stream()
-        .filter(item -> !item.running() && item.durationMs() > 0)
-        .map(RuntimeExecution::durationMs)
-        .toList();
-    long avgDuration = durations.isEmpty()
+  private SourceMetrics sourceMetrics(OfflineExecutionOverviewReader.Metrics metrics) {
+    return new SourceMetrics(
+        metrics.successCount(), metrics.runningCount(), metrics.failedCount(),
+        metrics.scheduleCount(), metrics.processedRecords(), metrics.durationTotalMs(),
+        metrics.durationSampleCount());
+  }
+
+  private SourceMetrics sourceMetrics(WorkflowExecutionOverviewReader.Metrics metrics) {
+    return new SourceMetrics(
+        metrics.successCount(), metrics.runningCount(), metrics.failedCount(),
+        metrics.scheduleCount(), metrics.processedRecords(), metrics.durationTotalMs(),
+        metrics.durationSampleCount());
+  }
+
+  private SourceMetrics sourceMetrics(QualityExecutionOverviewReader.Metrics metrics) {
+    return new SourceMetrics(
+        metrics.successCount(), metrics.runningCount(), metrics.failedCount(),
+        metrics.scheduleCount(), metrics.processedRecords(), metrics.durationTotalMs(),
+        metrics.durationSampleCount());
+  }
+
+  private Metrics mergeMetrics(List<SourceOverview> overviews) {
+    long success = 0L;
+    long running = 0L;
+    long failed = 0L;
+    long schedule = 0L;
+    long processed = 0L;
+    long durationTotal = 0L;
+    long durationSamples = 0L;
+    for (SourceOverview overview : overviews) {
+      SourceMetrics metrics = overview.metrics();
+      success += metrics.successCount();
+      running += metrics.runningCount();
+      failed += metrics.failedCount();
+      schedule += metrics.scheduleCount();
+      processed += metrics.processedRecords();
+      durationTotal += metrics.durationTotalMs();
+      durationSamples += metrics.durationSampleCount();
+    }
+    long avgDuration = durationSamples == 0L
         ? 0L
-        : Math.round(durations.stream().mapToLong(Long::longValue).average().orElse(0D));
-    long running = runningAt(end);
+        : Math.round(durationTotal / (double) durationSamples);
     return new Metrics(success, running, failed, schedule, processed, avgDuration);
   }
 
-  private long runningAt(LocalDateTime point) {
-    long count = 0L;
-
-    OfflineJobExecutionMapper offline = offlineExecutionMapperProvider.getIfAvailable();
-    if (offline != null) {
-      count += offline.selectCount(
-          new LambdaQueryWrapper<OfflineJobExecutionPO>()
-              .le(OfflineJobExecutionPO::getCreateTime, point)
-              .and(wrapper -> wrapper.isNull(OfflineJobExecutionPO::getEndTime)
-                  .or().gt(OfflineJobExecutionPO::getEndTime, point)));
-    }
-
-    WorkflowExecutionMapper workflow = workflowExecutionMapperProvider.getIfAvailable();
-    if (workflow != null) {
-      Instant instant = point.atZone(ZoneId.systemDefault()).toInstant();
-      count += workflow.selectCount(
-          new LambdaQueryWrapper<WorkflowExecutionPO>()
-              .le(WorkflowExecutionPO::getCreatedAt, instant)
-              .and(wrapper -> wrapper.isNull(WorkflowExecutionPO::getEndedAt)
-                  .or().gt(WorkflowExecutionPO::getEndedAt, instant)));
-    }
-
-    QualityExecutionMapper quality = qualityExecutionMapperProvider.getIfAvailable();
-    if (quality != null) {
-      count += quality.selectCount(
-          new LambdaQueryWrapper<QualityExecutionPO>()
-              .le(QualityExecutionPO::getQueuedAt, point)
-              .and(wrapper -> wrapper.isNull(QualityExecutionPO::getFinishedAt)
-                  .or().gt(QualityExecutionPO::getFinishedAt, point)));
-    }
-    return count;
-  }
-
-  private Trend trend(PeriodRange range, List<RuntimeExecution> executions) {
-    if (range.days() == 1) {
-      List<String> labels = List.of("00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00");
-      long[] buckets = new long[7];
-      for (RuntimeExecution execution : executions) {
-        int index = Math.min(5, Math.max(0, execution.occurredAt().getHour() / 4));
-        buckets[index]++;
+  private Trend mergeTrend(PeriodRange range, List<SourceOverview> overviews) {
+    Map<LocalDateTime, Long> counts = new LinkedHashMap<>();
+    for (SourceOverview overview : overviews) {
+      for (SourceTrend item : overview.trend()) {
+        counts.merge(item.bucket(), item.count(), Long::sum);
       }
-      // 最后一个点保持 0，用于保留现有 24:00 坐标与折线收尾。
-      List<Long> values = new ArrayList<>();
-      for (long bucket : buckets) values.add(bucket);
+    }
+
+    List<String> labels = new ArrayList<>();
+    List<Long> values = new ArrayList<>();
+    if (range.days() == 1) {
+      for (int hour = 0; hour <= 24; hour += 4) {
+        labels.add(String.format(Locale.ROOT, "%02d:00", hour));
+        values.add(hour == 24
+            ? 0L
+            : counts.getOrDefault(range.start().toLocalDate().atTime(hour, 0), 0L));
+      }
       return new Trend(labels, values);
     }
 
-    Map<LocalDate, Long> counts = executions.stream().collect(Collectors.groupingBy(
-        item -> item.occurredAt().toLocalDate(), LinkedHashMap::new, Collectors.counting()));
-    List<String> labels = new ArrayList<>();
-    List<Long> values = new ArrayList<>();
     for (int i = 0; i < range.days(); i++) {
       LocalDate day = range.start().toLocalDate().plusDays(i);
       labels.add(DAY_LABEL.format(day));
-      values.add(counts.getOrDefault(day, 0L));
+      values.add(counts.getOrDefault(day.atStartOfDay(), 0L));
     }
     return new Trend(labels, values);
   }
 
-  private LatestTask latestTask(List<RuntimeExecution> current) {
-    RuntimeExecution latest = current.stream()
-        .max(Comparator.comparing(RuntimeExecution::occurredAt))
+  private LatestTask latestTask(List<SourceOverview> current) {
+    SourceExecution latest = current.stream()
+        .map(SourceOverview::latest)
+        .filter(item -> item != null && item.occurredAt() != null)
+        .max(Comparator.comparing(SourceExecution::occurredAt))
         .orElseGet(this::latestExecutionAcrossAll);
     if (latest == null) return null;
 
-    LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-    List<RuntimeExecution> recentRuns = executions(sevenDaysAgo, LocalDateTime.now().plusNanos(1)).stream()
-        .filter(item -> item.taskKey().equals(latest.taskKey()))
-        .toList();
-    long exceptions = recentRuns.stream().filter(RuntimeExecution::failed).count();
+    LocalDateTime end = LocalDateTime.now().plusNanos(1);
+    SourceTask activity = taskSummary(latest.taskType(), latest.taskId(), end.minusDays(7), end);
     return new LatestTask(
         latest.taskId(),
         latest.taskType(),
         latest.taskName(),
         latest.durationMs(),
-        recentRuns.size(),
-        exceptions,
+        activity == null ? 0L : activity.runCount(),
+        activity == null ? 0L : activity.failedCount(),
         latest.status(),
-        detailPath(latest));
+        detailPath(latest.taskType(), latest.taskId(), latest.executionId()));
   }
 
-  private RuntimeExecution latestExecutionAcrossAll() {
+  private SourceExecution latestExecutionAcrossAll() {
     LocalDateTime end = LocalDateTime.now().plusNanos(1);
-    List<RuntimeExecution> candidates = executions(end.minusDays(90), end);
-    return candidates.stream().max(Comparator.comparing(RuntimeExecution::occurredAt)).orElse(null);
+    LocalDateTime start = end.minusDays(90);
+    List<SourceExecution> candidates = new ArrayList<>();
+
+    OfflineExecutionOverviewReader offline = offlineReaderProvider.getIfAvailable();
+    if (offline != null) {
+      try {
+        SourceExecution item = offlineExecution(offline.latest(start, end));
+        if (item != null) candidates.add(item);
+      } catch (RuntimeException exception) {
+        LOG.warn("加载首页离线同步最近运行失败", exception);
+      }
+    }
+
+    WorkflowExecutionOverviewReader workflow = workflowReaderProvider.getIfAvailable();
+    if (workflow != null) {
+      try {
+        SourceExecution item = workflowExecution(workflow.latest(start, end));
+        if (item != null) candidates.add(item);
+      } catch (RuntimeException exception) {
+        LOG.warn("加载首页工作流最近运行失败", exception);
+      }
+    }
+
+    QualityExecutionOverviewReader quality = qualityReaderProvider.getIfAvailable();
+    if (quality != null) {
+      try {
+        SourceExecution item = qualityExecution(quality.latest(start, end));
+        if (item != null) candidates.add(item);
+      } catch (RuntimeException exception) {
+        LOG.warn("加载首页质量最近运行失败", exception);
+      }
+    }
+
+    return candidates.stream()
+        .filter(item -> item.occurredAt() != null)
+        .max(Comparator.comparing(SourceExecution::occurredAt))
+        .orElse(null);
+  }
+
+  private SourceTask taskSummary(
+      String taskType, String taskId, LocalDateTime start, LocalDateTime end) {
+    try {
+      return switch (taskType) {
+        case "OFFLINE_SYNC" -> {
+          OfflineExecutionOverviewReader reader = offlineReaderProvider.getIfAvailable();
+          yield reader == null ? null : offlineTask(reader.taskSummary(taskId, start, end));
+        }
+        case "WORKFLOW" -> {
+          WorkflowExecutionOverviewReader reader = workflowReaderProvider.getIfAvailable();
+          yield reader == null ? null : workflowTask(reader.taskSummary(taskId, start, end));
+        }
+        case "DATA_QUALITY" -> {
+          QualityExecutionOverviewReader reader = qualityReaderProvider.getIfAvailable();
+          yield reader == null ? null : qualityTask(reader.taskSummary(taskId, start, end));
+        }
+        default -> null;
+      };
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页任务运行摘要失败: taskType={}, taskId={}", taskType, taskId, exception);
+      return null;
+    }
+  }
+
+  private List<SourceTask> offlineRecentTasks(LocalDateTime start, LocalDateTime end) {
+    OfflineExecutionOverviewReader reader = offlineReaderProvider.getIfAvailable();
+    if (reader == null) return List.of();
+    try {
+      return reader.recentTasks(start, end, RECENT_TASK_LIMIT).stream()
+          .map(this::offlineTask)
+          .toList();
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页离线同步近期任务失败", exception);
+      return List.of();
+    }
+  }
+
+  private List<SourceTask> workflowRecentTasks(LocalDateTime start, LocalDateTime end) {
+    WorkflowExecutionOverviewReader reader = workflowReaderProvider.getIfAvailable();
+    if (reader == null) return List.of();
+    try {
+      return reader.recentTasks(start, end, RECENT_TASK_LIMIT).stream()
+          .map(this::workflowTask)
+          .toList();
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页工作流近期任务失败", exception);
+      return List.of();
+    }
+  }
+
+  private List<SourceTask> qualityRecentTasks(LocalDateTime start, LocalDateTime end) {
+    QualityExecutionOverviewReader reader = qualityReaderProvider.getIfAvailable();
+    if (reader == null) return List.of();
+    try {
+      return reader.recentTasks(start, end, RECENT_TASK_LIMIT).stream()
+          .map(this::qualityTask)
+          .toList();
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页质量近期任务失败", exception);
+      return List.of();
+    }
+  }
+
+  private List<SourceSchedule> offlineSchedules() {
+    OfflineExecutionOverviewReader reader = offlineReaderProvider.getIfAvailable();
+    if (reader == null) return List.of();
+    try {
+      return reader.schedules(SCHEDULE_SOURCE_LIMIT).stream()
+          .map(item -> new SourceSchedule(
+              "OFFLINE_SYNC",
+              item.taskId(),
+              item.taskName(),
+              item.cronExpression(),
+              item.status(),
+              item.lastScheduleTime(),
+              item.nextScheduleTime()))
+          .toList();
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页离线同步调度摘要失败", exception);
+      return List.of();
+    }
+  }
+
+  private List<SourceSchedule> workflowSchedules() {
+    WorkflowExecutionOverviewReader reader = workflowReaderProvider.getIfAvailable();
+    if (reader == null) return List.of();
+    try {
+      return reader.schedules(SCHEDULE_SOURCE_LIMIT).stream()
+          .map(item -> new SourceSchedule(
+              "WORKFLOW",
+              item.taskId(),
+              item.taskName(),
+              item.cronExpression(),
+              item.status(),
+              item.lastScheduleTime(),
+              item.nextScheduleTime()))
+          .toList();
+    } catch (RuntimeException exception) {
+      LOG.warn("加载首页工作流调度摘要失败", exception);
+      return List.of();
+    }
+  }
+
+  private SourceExecution offlineExecution(OfflineExecutionOverviewReader.Execution item) {
+    return item == null ? null : new SourceExecution(
+        "OFFLINE_SYNC", item.taskId(), item.taskName(), item.status(),
+        item.occurredAt(), item.durationMs(), item.executionId());
+  }
+
+  private SourceExecution workflowExecution(WorkflowExecutionOverviewReader.Execution item) {
+    return item == null ? null : new SourceExecution(
+        "WORKFLOW", item.taskId(), item.taskName(), item.status(),
+        item.occurredAt(), item.durationMs(), item.executionId());
+  }
+
+  private SourceExecution qualityExecution(QualityExecutionOverviewReader.Execution item) {
+    return item == null ? null : new SourceExecution(
+        "DATA_QUALITY", item.taskId(), item.taskName(), item.status(),
+        item.occurredAt(), item.durationMs(), item.executionId());
+  }
+
+  private SourceTask offlineTask(OfflineExecutionOverviewReader.TaskSummary item) {
+    return item == null ? null : new SourceTask(
+        "OFFLINE_SYNC", item.taskId(), item.taskName(), item.lastRunTime(), item.runCount(),
+        item.successCount(), item.failedCount(), item.lastDurationMs(), item.lastStatus(),
+        item.executionId());
+  }
+
+  private SourceTask workflowTask(WorkflowExecutionOverviewReader.TaskSummary item) {
+    return item == null ? null : new SourceTask(
+        "WORKFLOW", item.taskId(), item.taskName(), item.lastRunTime(), item.runCount(),
+        item.successCount(), item.failedCount(), item.lastDurationMs(), item.lastStatus(),
+        item.executionId());
+  }
+
+  private SourceTask qualityTask(QualityExecutionOverviewReader.TaskSummary item) {
+    return item == null ? null : new SourceTask(
+        "DATA_QUALITY", item.taskId(), item.taskName(), item.lastRunTime(), item.runCount(),
+        item.successCount(), item.failedCount(), item.lastDurationMs(), item.lastStatus(),
+        item.executionId());
+  }
+
+  private RecentTask recentTask(SourceTask item) {
+    return new RecentTask(
+        item.taskId(),
+        item.taskType(),
+        item.taskName(),
+        item.lastRunTime().toString(),
+        item.runCount(),
+        item.successCount(),
+        item.failedCount(),
+        item.lastDurationMs(),
+        item.lastStatus(),
+        detailPath(item.taskType(), item.taskId(), item.executionId()));
+  }
+
+  private ScheduleItem scheduleItem(SourceSchedule item) {
+    return new ScheduleItem(
+        item.taskId(),
+        item.taskType(),
+        item.taskName(),
+        item.cronExpression(),
+        item.status(),
+        text(item.lastScheduleTime()),
+        text(item.nextScheduleTime()),
+        detailPath(item.taskType(), item.taskId(), null));
   }
 
   private MetricCompare compare(Metrics current, Metrics previous) {
@@ -411,39 +470,25 @@ public class HomeDataCenterService {
         .divide(BigDecimal.valueOf(previous), 1, RoundingMode.HALF_UP);
   }
 
-  private String detailPath(RuntimeExecution execution) {
-    return switch (execution.taskType()) {
-      case "OFFLINE_SYNC" -> "/sync/batch-link-up/" + execution.taskId() + "/detail";
-      case "WORKFLOW" -> "/workflow/instances";
-      case "DATA_QUALITY" -> "/data-quality/execution/" + execution.executionId();
+  private String detailPath(String taskType, String taskId, String executionId) {
+    return switch (taskType) {
+      case "OFFLINE_SYNC" -> "/sync/batch-link-up/" + taskId + "/detail";
+      case "WORKFLOW" -> executionId == null ? "/workflow/schedules" : "/workflow/instances";
+      case "DATA_QUALITY" -> executionId == null
+          ? "/data-quality/overview"
+          : "/data-quality/execution/" + executionId;
       default -> "/home";
     };
   }
 
-  private static String normalize(String value) {
-    return value == null ? "UNKNOWN" : value.trim().toUpperCase(Locale.ROOT);
+  private PeriodView period(PeriodRange range) {
+    return new PeriodView(
+        range.start().toLocalDate().toString(),
+        range.end().minusNanos(1).toLocalDate().toString());
   }
 
-  private static long zero(Long value) {
-    return value == null ? 0L : value;
-  }
-
-  private static String defaultText(String value, String fallback) {
-    return value == null || value.isBlank() ? fallback : value;
-  }
-
-  private static String toText(LocalDateTime value) {
+  private static String text(LocalDateTime value) {
     return value == null ? null : value.toString();
-  }
-
-  private static String toText(Instant value) {
-    return value == null ? null : LocalDateTime.ofInstant(value, ZoneId.systemDefault()).toString();
-  }
-
-  @SafeVarargs
-  private static <T> T firstNonNull(T... values) {
-    for (T value : values) if (value != null) return value;
-    return null;
   }
 
   public record OverviewResponse(
@@ -509,25 +554,60 @@ public class HomeDataCenterService {
       String nextScheduleTime,
       String detailPath) {}
 
-  private record RuntimeExecution(
+  private record SourceOverview(
+      String taskType,
+      SourceMetrics metrics,
+      List<SourceTrend> trend,
+      SourceExecution latest) {
+    static SourceOverview empty(String taskType) {
+      return new SourceOverview(taskType, SourceMetrics.empty(), List.of(), null);
+    }
+  }
+
+  private record SourceMetrics(
+      long successCount,
+      long runningCount,
+      long failedCount,
+      long scheduleCount,
+      long processedRecords,
+      long durationTotalMs,
+      long durationSampleCount) {
+    static SourceMetrics empty() {
+      return new SourceMetrics(0L, 0L, 0L, 0L, 0L, 0L, 0L);
+    }
+  }
+
+  private record SourceTrend(LocalDateTime bucket, long count) {}
+
+  private record SourceExecution(
       String taskType,
       String taskId,
       String taskName,
       String status,
       LocalDateTime occurredAt,
-      LocalDateTime endedAt,
       long durationMs,
-      long processedRecords,
-      boolean scheduled,
-      boolean success,
-      boolean failed,
-      boolean running,
-      String errorMessage,
-      String executionId) {
-    String taskKey() {
-      return taskType + ":" + taskId;
-    }
-  }
+      String executionId) {}
+
+  private record SourceTask(
+      String taskType,
+      String taskId,
+      String taskName,
+      LocalDateTime lastRunTime,
+      long runCount,
+      long successCount,
+      long failedCount,
+      long lastDurationMs,
+      String lastStatus,
+      String executionId) {}
+
+  private record SourceSchedule(
+      String taskType,
+      String taskId,
+      String taskName,
+      String cronExpression,
+      String status,
+      LocalDateTime lastScheduleTime,
+      LocalDateTime nextScheduleTime) {}
 
   private record PeriodRange(LocalDateTime start, LocalDateTime end, int days) {
     static PeriodRange resolve(String value) {
