@@ -121,6 +121,7 @@ public class DataServiceApiKeyManager {
   }
 
   private DataServiceApiKey requireKey(Long apiId, Long keyId) {
+    dataServiceReader.require(apiId);
     if (keyId == null) throw new IllegalArgumentException("API Key ID 不能为空");
     DataServiceApiKey key = keyRepository.findById(keyId)
         .orElseThrow(() -> new IllegalArgumentException("API Key 不存在：" + keyId));
