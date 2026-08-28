@@ -14,7 +14,7 @@ import {
   type DataSourceOption,
 } from '@/services/data-service';
 import { BRAND_THEME } from '@/styles/brand';
-import { history, useParams } from '@umijs/max';
+import { history, useAccess, useParams } from '@umijs/max';
 import {
   Button,
   ConfigProvider,
@@ -137,6 +137,10 @@ const ApiIllustration = () => (
 export default function DataServiceDetailPage() {
   const params = useParams<{ id?: string }>();
   const apiId = Number(params.id || 0);
+  const access = useAccess();
+  const canManageAccess = access.hasPermission('data-service:access');
+  const canRuntime = access.hasPermission('data-service:runtime');
+  const canObserve = access.hasPermission('data-service:observe');
 
   const [service, setService] = useState<DataServiceApi>();
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
@@ -154,24 +158,27 @@ export default function DataServiceDetailPage() {
 
     setLoading(true);
     try {
-      const [serviceResponse, dataSourceResponse, runtimeResponse, keyResponse, logResponse] = await Promise.all([
+      const [serviceResponse, dataSourceResponse] = await Promise.all([
         getDataService(apiId),
         listDataServiceDataSources(),
-        getDataServiceRuntime(apiId),
-        listDataServiceKeys(apiId),
-        listDataServiceLogs(apiId, 50),
       ]);
       setService(serviceResponse);
       setDataSources(dataSourceResponse);
+
+      const [runtimeResponse, keyResponse, logResponse] = await Promise.all([
+        canRuntime ? getDataServiceRuntime(apiId) : Promise.resolve(undefined),
+        canManageAccess ? listDataServiceKeys(apiId) : Promise.resolve(undefined),
+        canObserve ? listDataServiceLogs(apiId, 50) : Promise.resolve(undefined),
+      ]);
       setRuntime(runtimeResponse);
-      setKeys(keyResponse);
-      setLogs(logResponse);
+      setKeys(keyResponse || []);
+      setLogs(logResponse || []);
     } catch (error: any) {
       message.error(error?.message || '加载 API 详情失败');
     } finally {
       setLoading(false);
     }
-  }, [apiId]);
+  }, [apiId, canManageAccess, canObserve, canRuntime]);
 
   useEffect(() => {
     void load();
@@ -268,12 +275,12 @@ export default function DataServiceDetailPage() {
     <div className="grid gap-3 xl:grid-cols-2">
       <SectionCard title="API 概览">
         <div className="grid grid-cols-2 gap-3 p-5 md:grid-cols-3">
-          <MetricTile label="调用次数" value={runtime?.totalCalls || 0} />
-          <MetricTile label="成功率" value={percent(runtime?.successRate)} />
-          <MetricTile label="平均耗时" value={`${runtime?.averageDurationMs || 0} ms`} />
-          <MetricTile label="P95" value={`${runtime?.p95DurationMs || 0} ms`} />
-          <MetricTile label="API Keys" value={keys.length} />
-          <MetricTile label="最近调用" value={latestActivity(runtime)} />
+          <MetricTile label="调用次数" value={canRuntime ? runtime?.totalCalls || 0 : '—'} />
+          <MetricTile label="成功率" value={canRuntime ? percent(runtime?.successRate) : '—'} />
+          <MetricTile label="平均耗时" value={canRuntime ? `${runtime?.averageDurationMs || 0} ms` : '—'} />
+          <MetricTile label="P95" value={canRuntime ? `${runtime?.p95DurationMs || 0} ms` : '—'} />
+          <MetricTile label="API Keys" value={canManageAccess ? keys.length : '—'} />
+          <MetricTile label="最近调用" value={canRuntime ? latestActivity(runtime) : '—'} />
         </div>
       </SectionCard>
 
@@ -381,9 +388,9 @@ export default function DataServiceDetailPage() {
     children: ReactNode;
   }> = [
     { key: 'overview', label: '总览', children: overviewContent },
-    { key: 'access', label: 'API Key', children: accessContent },
-    { key: 'runtime', label: 'Runtime', children: runtimeContent },
-    { key: 'logs', label: '调用记录', children: logsContent },
+    ...(canManageAccess ? [{ key: 'access' as const, label: 'API Key', children: accessContent }] : []),
+    ...(canRuntime ? [{ key: 'runtime' as const, label: 'Runtime', children: runtimeContent }] : []),
+    ...(canObserve ? [{ key: 'logs' as const, label: '调用记录', children: logsContent }] : []),
   ];
 
   return (
@@ -432,13 +439,15 @@ export default function DataServiceDetailPage() {
                 </div>
               </div>
               <div className="min-w-0 xl:justify-self-end">
-                <Button
-                  type="primary"
-                  icon={<PlayCircle size={14} />}
-                  onClick={() => history.push(`/data-service/debug?apiId=${service.id}`)}
-                >
-                  调试
-                </Button>
+                {canRuntime ? (
+                  <Button
+                    type="primary"
+                    icon={<PlayCircle size={14} />}
+                    onClick={() => history.push(`/data-service/debug?apiId=${service.id}`)}
+                  >
+                    调试
+                  </Button>
+                ) : null}
               </div>
             </div>
           </section>
