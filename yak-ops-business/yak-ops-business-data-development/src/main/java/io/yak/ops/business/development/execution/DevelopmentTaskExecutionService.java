@@ -10,6 +10,8 @@ import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -26,7 +28,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
 
-/** Durable run history for data-development tasks. */
+/** Durable execution history and persistence boundary for data-development manual runs. */
 @Service
 public class DevelopmentTaskExecutionService {
 
@@ -52,16 +54,29 @@ public class DevelopmentTaskExecutionService {
     this(jdbcTemplate, objectMapper, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
+  /** Source-compatible entry for callers that predate persisted schema/retry metadata. */
   public long createPending(
       DevelopmentNode node,
       String taskType,
       String content,
       String configJson,
       String operatorName) {
+    return createPending(node, taskType, 1, content, configJson, operatorName, null);
+  }
+
+  public long createPending(
+      DevelopmentNode node,
+      String taskType,
+      int schemaVersion,
+      String content,
+      String configJson,
+      String operatorName,
+      Long retryOfExecutionId) {
     ensureCurrentProject(node.projectId());
     String sql = "INSERT INTO yak_dev_task_execution "
-        + "(project_id, node_id, task_name, task_type, trigger_type, status, operator_name, content, config_json, "
-        + "start_time, create_time, update_time) VALUES (?, ?, ?, ?, 'MANUAL', 'PENDING', ?, ?, ?, NOW(6), NOW(6), NOW(6))";
+        + "(project_id, node_id, task_name, task_type, schema_version, trigger_type, status, operator_name, "
+        + "retry_of_execution_id, content, config_json, start_time, create_time, update_time) "
+        + "VALUES (?, ?, ?, ?, ?, 'MANUAL', 'PENDING', ?, ?, ?, ?, NOW(6), NOW(6), NOW(6))";
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(
         connection -> {
@@ -71,9 +86,12 @@ public class DevelopmentTaskExecutionService {
           statement.setLong(2, node.id());
           statement.setString(3, node.name());
           statement.setString(4, normalizeUpper(taskType));
-          statement.setString(5, normalizeOperator(operatorName));
-          statement.setString(6, content == null ? "" : content);
-          statement.setString(7, configJson == null || configJson.isBlank() ? "{}" : configJson);
+          statement.setInt(5, Math.max(1, schemaVersion));
+          statement.setString(6, normalizeOperator(operatorName));
+          if (retryOfExecutionId == null) statement.setObject(7, null);
+          else statement.setLong(7, retryOfExecutionId);
+          statement.setString(8, content == null ? "" : content);
+          statement.setString(9, configJson == null || configJson.isBlank() ? "{}" : configJson);
           return statement;
         },
         keyHolder);
@@ -82,11 +100,37 @@ public class DevelopmentTaskExecutionService {
     return key.longValue();
   }
 
+  public void attachRuntime(long id, String runtimeExecutionId, String status) {
+    String normalized = normalizeUpper(status);
+    if (!"PENDING".equals(normalized) && !"RUNNING".equals(normalized)) normalized = "RUNNING";
+    Long projectId = currentProjectId();
+    String sql = "UPDATE yak_dev_task_execution SET runtime_execution_id = ?, status = ?, update_time = NOW(6) "
+        + "WHERE id = ? AND status IN ('PENDING', 'RUNNING')"
+        + (projectId == null ? "" : " AND project_id = ?");
+    List<Object> args = new ArrayList<>();
+    args.add(runtimeExecutionId);
+    args.add(normalized);
+    args.add(id);
+    if (projectId != null) args.add(projectId);
+    jdbcTemplate.update(sql, args.toArray());
+  }
+
   public void markRunning(long id, String runtimeExecutionId) {
-    updateById(
-        "UPDATE yak_dev_task_execution SET runtime_execution_id = ?, status = 'RUNNING', update_time = NOW(6) WHERE id = ?",
-        runtimeExecutionId,
-        id);
+    attachRuntime(id, runtimeExecutionId, "RUNNING");
+  }
+
+  public void updateActiveStatus(long id, String status) {
+    String normalized = normalizeUpper(status);
+    if (!"PENDING".equals(normalized) && !"RUNNING".equals(normalized)) return;
+    Long projectId = currentProjectId();
+    String sql = "UPDATE yak_dev_task_execution SET status = ?, update_time = NOW(6) "
+        + "WHERE id = ? AND status IN ('PENDING', 'RUNNING')"
+        + (projectId == null ? "" : " AND project_id = ?");
+    List<Object> args = new ArrayList<>();
+    args.add(normalized);
+    args.add(id);
+    if (projectId != null) args.add(projectId);
+    jdbcTemplate.update(sql, args.toArray());
   }
 
   public void complete(
@@ -98,7 +142,8 @@ public class DevelopmentTaskExecutionService {
     Long projectId = currentProjectId();
     String sql = "UPDATE yak_dev_task_execution SET status = ?, duration_ms = ?, error_message = ?, output_json = ?, "
         + "end_time = NOW(6), update_time = NOW(6) WHERE id = ?"
-        + (projectId == null ? "" : " AND project_id = ?");
+        + (projectId == null ? "" : " AND project_id = ?")
+        + " AND status IN ('PENDING', 'RUNNING')";
     List<Object> args = new ArrayList<>();
     args.add(normalizeUpper(status));
     args.add(Math.max(0L, durationMs));
@@ -132,8 +177,9 @@ public class DevelopmentTaskExecutionService {
     rowArgs.add(normalizedPageSize);
     rowArgs.add((normalizedPageNo - 1) * normalizedPageSize);
     List<DevelopmentTaskExecutionSummary> records = jdbcTemplate.query(
-        "SELECT id, node_id, task_name, task_type, trigger_type, runtime_execution_id, status, operator_name, "
-            + "duration_ms, error_message, start_time, end_time FROM yak_dev_task_execution"
+        "SELECT id, node_id, task_name, task_type, schema_version, trigger_type, runtime_execution_id, "
+            + "retry_of_execution_id, status, operator_name, duration_ms, error_message, start_time, end_time "
+            + "FROM yak_dev_task_execution"
             + where
             + " ORDER BY start_time DESC, id DESC LIMIT ? OFFSET ?",
         (rs, rowNum) -> new DevelopmentTaskExecutionSummary(
@@ -141,8 +187,10 @@ public class DevelopmentTaskExecutionService {
             rs.getLong("node_id"),
             rs.getString("task_name"),
             rs.getString("task_type"),
+            rs.getInt("schema_version"),
             rs.getString("trigger_type"),
             rs.getString("runtime_execution_id"),
+            nullableLong(rs.getLong("retry_of_execution_id"), rs.wasNull()),
             rs.getString("status"),
             rs.getString("operator_name"),
             nullableLong(rs.getLong("duration_ms"), rs.wasNull()),
@@ -160,42 +208,64 @@ public class DevelopmentTaskExecutionService {
 
   public DevelopmentTaskExecutionDetail get(long id) {
     Long projectId = currentProjectId();
-    String sql = "SELECT id, node_id, task_name, task_type, trigger_type, runtime_execution_id, status, operator_name, "
-        + "duration_ms, error_message, content, config_json, output_json, start_time, end_time "
-        + "FROM yak_dev_task_execution WHERE id = ?"
+    String sql = detailSelect()
+        + " WHERE id = ?"
         + (projectId == null ? "" : " AND project_id = ?")
         + " LIMIT 1";
     Object[] args = projectId == null ? new Object[] {id} : new Object[] {id, projectId};
-    List<DevelopmentTaskExecutionDetail> records = jdbcTemplate.query(
-        sql,
-        (rs, rowNum) -> new DevelopmentTaskExecutionDetail(
-            rs.getLong("id"),
-            rs.getLong("node_id"),
-            rs.getString("task_name"),
-            rs.getString("task_type"),
-            rs.getString("trigger_type"),
-            rs.getString("runtime_execution_id"),
-            rs.getString("status"),
-            rs.getString("operator_name"),
-            nullableLong(rs.getLong("duration_ms"), rs.wasNull()),
-            rs.getString("error_message"),
-            rs.getString("content"),
-            rs.getString("config_json"),
-            parseOutput(rs.getString("output_json")),
-            toLocalDateTime(rs.getTimestamp("start_time")),
-            toLocalDateTime(rs.getTimestamp("end_time"))),
-        args);
+    List<DevelopmentTaskExecutionDetail> records = jdbcTemplate.query(sql, this::mapDetail, args);
     if (records.isEmpty()) throw new IllegalArgumentException("运行记录不存在：" + id);
     return records.get(0);
   }
 
-  private void updateById(String baseSql, Object firstArgument, long id) {
+  Optional<DevelopmentTaskExecutionDetail> findLatestActiveByNode(long nodeId) {
     Long projectId = currentProjectId();
-    if (projectId == null) {
-      jdbcTemplate.update(baseSql, firstArgument, id);
-      return;
-    }
-    jdbcTemplate.update(baseSql + " AND project_id = ?", firstArgument, id, projectId);
+    String sql = detailSelect()
+        + " WHERE node_id = ? AND status IN ('PENDING', 'RUNNING')"
+        + (projectId == null ? "" : " AND project_id = ?")
+        + " ORDER BY start_time DESC, id DESC LIMIT 1";
+    Object[] args = projectId == null
+        ? new Object[] {nodeId}
+        : new Object[] {nodeId, projectId};
+    List<DevelopmentTaskExecutionDetail> records = jdbcTemplate.query(sql, this::mapDetail, args);
+    return records.stream().findFirst();
+  }
+
+  List<DevelopmentTaskExecutionDetail> listActiveForReconciliation(int limit) {
+    int safeLimit = Math.max(1, Math.min(500, limit));
+    return jdbcTemplate.query(
+        detailSelect()
+            + " WHERE status IN ('PENDING', 'RUNNING')"
+            + " ORDER BY start_time ASC, id ASC LIMIT ?",
+        this::mapDetail,
+        safeLimit);
+  }
+
+  private DevelopmentTaskExecutionDetail mapDetail(ResultSet rs, int rowNum) throws SQLException {
+    return new DevelopmentTaskExecutionDetail(
+        rs.getLong("id"),
+        rs.getLong("node_id"),
+        rs.getString("task_name"),
+        rs.getString("task_type"),
+        rs.getInt("schema_version"),
+        rs.getString("trigger_type"),
+        rs.getString("runtime_execution_id"),
+        nullableLong(rs.getLong("retry_of_execution_id"), rs.wasNull()),
+        rs.getString("status"),
+        rs.getString("operator_name"),
+        nullableLong(rs.getLong("duration_ms"), rs.wasNull()),
+        rs.getString("error_message"),
+        rs.getString("content"),
+        rs.getString("config_json"),
+        parseOutput(rs.getString("output_json")),
+        toLocalDateTime(rs.getTimestamp("start_time")),
+        toLocalDateTime(rs.getTimestamp("end_time")));
+  }
+
+  private String detailSelect() {
+    return "SELECT id, node_id, task_name, task_type, schema_version, trigger_type, runtime_execution_id, "
+        + "retry_of_execution_id, status, operator_name, duration_ms, error_message, content, config_json, "
+        + "output_json, start_time, end_time FROM yak_dev_task_execution";
   }
 
   private String buildWhere(
