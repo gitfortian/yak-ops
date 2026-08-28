@@ -1,5 +1,27 @@
--- Data Service cluster runtime: shared rate limiting, monotonic cache generation and audit lifecycle.
+-- Data Service dedicated Flyway baseline after the legacy shared yak-datasource history.
+--
+-- Historical Data Service V3~V10 remain frozen in yak_ds_schema_history for checksum/history
+-- compatibility. The previously pending V11/V12/V13 changes are consolidated here so Data
+-- Service no longer competes with Datasource for the same Flyway version sequence.
 
+-- Stage 1 reliability: bounded detail-page invocation-log read.
+ALTER TABLE yak_ops_data_service_call_log
+    ADD KEY idx_yak_ops_data_service_log_api_time_id (api_id, create_time, id);
+
+-- Stage 2 governance: Project-scoped management truth while public runtime paths remain global.
+-- Project IDs stay nullable at the physical layer because the application compatibility backfill
+-- resolves legacy ownership dynamically before PROJECT_REQUIRED management endpoints are used.
+ALTER TABLE yak_ops_data_service_api
+    ADD COLUMN project_id BIGINT UNSIGNED DEFAULT NULL COMMENT 'Yak Security Project Space ID' AFTER id,
+    ADD KEY idx_yak_ops_data_service_project_update (project_id, update_time, id),
+    ADD KEY idx_yak_ops_data_service_project_enabled (project_id, enabled);
+
+ALTER TABLE yak_ops_data_service_call_log
+    ADD COLUMN project_id BIGINT UNSIGNED DEFAULT NULL COMMENT '调用发生时的数据服务 Project Space ID' AFTER id,
+    ADD KEY idx_yak_ops_data_service_log_project_time (project_id, create_time, id),
+    ADD KEY idx_yak_ops_data_service_log_project_api_time (project_id, api_id, create_time, id);
+
+-- Stage 3 cluster runtime: monotonic cache generation, shared rate limiting and audit rollups.
 ALTER TABLE yak_ops_data_service_api
     ADD COLUMN runtime_generation BIGINT UNSIGNED NOT NULL DEFAULT 1
         COMMENT 'Monotonic runtime cache namespace generation' AFTER circuit_recovery_seconds;

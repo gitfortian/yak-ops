@@ -11,6 +11,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 包职责、角色协作、关键流程和扩展边界 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 顶层 package 依赖矩阵、允许/禁止的 corridor |
 | [REVIEW.md](REVIEW.md) | 修改本模块时的设计与 Review Checklist |
+| [MIGRATIONS.md](MIGRATIONS.md) | Data Service 独立 Flyway namespace、历史冻结与版本规则 |
 | [RUNTIME_RELIABILITY.md](RUNTIME_RELIABILITY.md) | Stage 1 调用结果/审计隔离、版本化缓存和服务级日志读取契约 |
 | [PROJECT_GOVERNANCE.md](PROJECT_GOVERNANCE.md) | Stage 2 Management Plane Project/RBAC 与 Public Invocation Plane 的强边界 |
 | [CLUSTER_RUNTIME.md](CLUSTER_RUNTIME.md) | Stage 3 集群限流、Runtime 指标、缓存代际、日志生命周期与审计脱敏 |
@@ -45,7 +46,7 @@ Access  Runtime  Documentation
 ```text
 dataservice
 ├── access          # API Key lifecycle / authorization / cluster-wide rate limit
-├── config          # module wiring / conditions
+├── config          # module wiring / conditions / dedicated Data Service Flyway
 ├── controller      # HTTP boundary only
 ├── dao             # MyBatis persistence projection
 ├── documentation   # contract docs / OpenAPI projection
@@ -74,6 +75,7 @@ dataservice
 9. Node-local Cache identity 必须带 persisted `runtime_generation` 和 Runtime shape，防止 republish/并发设置更新后跨节点误用旧结果。
 10. Yak Ops Management Plane 必须同时通过 Project Space 和 RBAC；外部 `/runtime/{servicePath}` 不接收 Yak Project Header，只按全局 runtime path + NONE/API_KEY 调用。
 11. Raw invocation log 有明确 retention，并在事务内按小时 rollup；长期统计不能依赖无限增长的 raw 表。
+12. Data Service 新迁移只能进入 `db/migration/yak-data-service` 和 `yak_data_service_schema_history`；共享 `yak-datasource` 下的 V3~V10 仅作为已执行历史冻结。
 
 ## 修改入口
 
@@ -84,10 +86,11 @@ dataservice
 2. DOMAIN.md       -> 哪个事实/不变量受到影响？
 3. ARCHITECTURE.md -> 职责应该归哪个角色？
 4. DEPENDENCIES.md -> 是否引入新的 package edge？
-5. Tests / Guards  -> 是否有对应行为和架构护栏？
-6. REVIEW.md       -> 合并前逐项检查。
+5. MIGRATIONS.md   -> 是否修改数据库结构/Flyway namespace？
+6. Tests / Guards  -> 是否有对应行为和架构护栏？
+7. REVIEW.md       -> 合并前逐项检查。
 ```
 
-涉及调用审计、Cache identity 或服务级调用日志读取时查看 `RUNTIME_RELIABILITY.md`；涉及 Project ownership、RBAC 或外部 Invocation 边界时查看 `PROJECT_GOVERNANCE.md`；涉及多实例限流、指标、rollup 或敏感参数时查看 `CLUSTER_RUNTIME.md`。
+涉及调用审计、Cache identity 或服务级调用日志读取时查看 `RUNTIME_RELIABILITY.md`；涉及 Project ownership、RBAC 或外部 Invocation 边界时查看 `PROJECT_GOVERNANCE.md`；涉及多实例限流、指标、rollup 或敏感参数时查看 `CLUSTER_RUNTIME.md`；涉及 schema/Flyway 变更时先查看 `MIGRATIONS.md`。
 
 如果需求无法由当前模型表达，先报告 `Requirement Gap` / `Domain Gap`，不要用临时 Map key、boolean、PO 字段或 Controller DTO 绕过模型。
