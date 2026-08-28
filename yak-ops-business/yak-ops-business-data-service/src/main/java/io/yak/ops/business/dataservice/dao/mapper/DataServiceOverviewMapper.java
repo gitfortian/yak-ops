@@ -15,8 +15,9 @@ public interface DataServiceOverviewMapper {
 
   @Select("""
       SELECT
-          (SELECT COUNT(*) FROM yak_ops_data_service_api) AS apiTotal,
-          (SELECT COUNT(*) FROM yak_ops_data_service_api WHERE enabled = 1) AS runningApis,
+          (SELECT COUNT(*) FROM yak_ops_data_service_api WHERE project_id = #{projectId}) AS apiTotal,
+          (SELECT COUNT(*) FROM yak_ops_data_service_api
+             WHERE project_id = #{projectId} AND enabled = 1) AS runningApis,
           COUNT(*) AS totalCalls,
           COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) AS successCalls,
           COALESCE(SUM(CASE WHEN duration_ms > 0 THEN duration_ms ELSE 0 END), 0)
@@ -24,11 +25,14 @@ public interface DataServiceOverviewMapper {
           COALESCE(SUM(CASE WHEN row_count > 0 THEN row_count ELSE 0 END), 0)
               AS totalRows
       FROM yak_ops_data_service_call_log
-      WHERE create_time >= #{from}
+      WHERE project_id = #{projectId}
+        AND create_time >= #{from}
         AND create_time <= #{to}
       """)
   DataServiceOverviewSummaryPO selectSummary(
-      @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+      @Param("projectId") Long projectId,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to);
 
   @Select("""
       SELECT
@@ -39,12 +43,14 @@ public interface DataServiceOverviewMapper {
           COALESCE(SUM(CASE WHEN duration_ms > 0 THEN duration_ms ELSE 0 END), 0)
               AS totalDurationMs
       FROM yak_ops_data_service_call_log
-      WHERE create_time >= #{from}
+      WHERE project_id = #{projectId}
+        AND create_time >= #{from}
         AND create_time <= #{to}
       GROUP BY FLOOR(TIMESTAMPDIFF(MINUTE, #{from}, create_time) / #{bucketMinutes})
       ORDER BY bucketIndex
       """)
   List<DataServiceOverviewTrendPO> selectTrend(
+      @Param("projectId") Long projectId,
       @Param("from") LocalDateTime from,
       @Param("to") LocalDateTime to,
       @Param("bucketMinutes") int bucketMinutes);
@@ -61,14 +67,17 @@ public interface DataServiceOverviewMapper {
               ELSE 0
           END), 0) AS totalDurationMs
       FROM yak_ops_data_service_call_log call_log
-      LEFT JOIN yak_ops_data_service_api api ON api.id = call_log.api_id
-      WHERE call_log.create_time >= #{from}
+      LEFT JOIN yak_ops_data_service_api api
+        ON api.id = call_log.api_id AND api.project_id = call_log.project_id
+      WHERE call_log.project_id = #{projectId}
+        AND call_log.create_time >= #{from}
         AND call_log.create_time <= #{to}
       GROUP BY call_log.api_id
       ORDER BY calls DESC, call_log.api_id ASC
       LIMIT #{limit}
       """)
   List<DataServiceOverviewHotApiPO> selectHotApis(
+      @Param("projectId") Long projectId,
       @Param("from") LocalDateTime from,
       @Param("to") LocalDateTime to,
       @Param("limit") int limit);
