@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import io.yak.ops.business.dataservice.repository.DataServiceObservabilityMaintenanceRepository;
 import io.yak.ops.business.dataservice.repository.DataServiceRateLimitRepository;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -40,6 +40,7 @@ class DataServiceObservabilityMaintenanceTest {
     order.verify(repository).oldestRawHourBefore(rawCutoff);
     order.verify(repository).rollupAndDeleteHour(second);
     verify(repository).deleteRollupsBefore(now.minusDays(365));
-    verify(rateRepository).deleteBefore(now.toEpochSecond(ZoneOffset.UTC) / 60L - 2L);
+    verify(rateRepository).deleteBefore(
+        now.atZone(ZoneId.systemDefault()).toEpochSecond() / 60L - 2L);
   }
 }
