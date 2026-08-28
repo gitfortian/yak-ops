@@ -11,10 +11,8 @@ import net.sf.jsqlparser.statement.select.Select;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterUtils;
 import org.springframework.jdbc.core.namedparam.ParsedSql;
-import org.springframework.stereotype.Component;
 
 /** SQL validation and named-parameter compilation owned by Data Development authoring. */
-@Component
 public class DevelopmentDataServiceSqlCompiler {
 
   public CompiledSql compile(String sql, Map<String, ?> parameters) {
