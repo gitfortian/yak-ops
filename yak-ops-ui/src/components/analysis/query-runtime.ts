@@ -1,9 +1,9 @@
-import { queryAnalysisDataset } from './dataset-service';
+import { queryDataset } from '@/services/dataset';
 import type {
   DatasetQueryPayload,
   DatasetQueryResult,
   PublishedDataset,
-} from './model';
+} from '@/services/dataset';
 
 const QUERY_RESULT_TTL_MS = 1_500;
 const MAX_QUERY_ENTRIES = 64;
@@ -65,7 +65,7 @@ const rememberQueryId = (key: string, queryId?: string) => {
 export const queryAnalysisDatasetShared = (
   dataset: Pick<PublishedDataset, 'id' | 'currentVersionNo'>,
   payload: DatasetQueryPayload,
-  loader: AnalysisQueryLoader = queryAnalysisDataset,
+  loader: AnalysisQueryLoader = queryDataset,
 ): Promise<DatasetQueryResult> => {
   const now = Date.now();
   const key = analysisQueryCacheKey(dataset, payload);
