@@ -1,4 +1,4 @@
--- Data Service Stage 3: cluster-safe rate limiting, monotonic runtime generation and observability lifecycle.
+-- Data Service cluster runtime: shared rate limiting, monotonic cache generation and audit lifecycle.
 
 ALTER TABLE yak_ops_data_service_api
     ADD COLUMN runtime_generation BIGINT UNSIGNED NOT NULL DEFAULT 1
@@ -6,7 +6,7 @@ ALTER TABLE yak_ops_data_service_api
 
 CREATE TABLE IF NOT EXISTS yak_ops_data_service_rate_window (
     api_key_id BIGINT UNSIGNED NOT NULL COMMENT 'Data Service API Key ID',
-    window_minute BIGINT NOT NULL COMMENT 'UTC epoch minute',
+    window_minute BIGINT NOT NULL COMMENT 'Epoch minute shared across instances',
     request_count INT NOT NULL DEFAULT 0 COMMENT 'Cluster-wide calls admitted in this window',
     update_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
         ON UPDATE CURRENT_TIMESTAMP(3) COMMENT 'Last update time',
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS yak_ops_data_service_rate_window (
 CREATE TABLE IF NOT EXISTS yak_ops_data_service_call_log_hourly (
     project_id BIGINT UNSIGNED NOT NULL COMMENT 'Project Space ID',
     api_id BIGINT UNSIGNED NOT NULL COMMENT 'Data Service API ID',
-    bucket_hour DATETIME NOT NULL COMMENT 'UTC hour bucket',
+    bucket_hour DATETIME NOT NULL COMMENT 'Application/database local hour bucket',
     service_name VARCHAR(256) NOT NULL COMMENT 'Service name snapshot',
     service_path VARCHAR(512) NOT NULL COMMENT 'Service path snapshot',
     total_calls BIGINT NOT NULL DEFAULT 0,
