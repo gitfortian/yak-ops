@@ -1,9 +1,10 @@
+import YakButton from '@/components/YakButton';
+import { useAccess } from '@umijs/max';
 import { Tooltip } from 'antd';
 import { LoaderCircle, Play, Rocket, Save } from 'lucide-react';
 
 import type { DevelopmentEditorDefinition } from '../../editors/types';
 import type { DevelopmentDirectory, DevelopmentNode } from '../../types';
-import YakButton from '@/components/YakButton';
 
 interface EditorToolbarProps {
   node: DevelopmentNode;
@@ -35,6 +36,10 @@ const EditorToolbar = ({
   publishing,
   lineageLoading,
 }: EditorToolbarProps) => {
+  const access = useAccess();
+  const canExecute = access.hasPermission('data-development:execute');
+  const canEdit = access.hasPermission('data-development:edit');
+  const canPublish = access.hasPermission('data-development:publish');
   const Toolbar = definition.Toolbar;
   const capabilities = definition.capabilities;
 
@@ -60,10 +65,13 @@ const EditorToolbar = ({
           <div className="flex h-full min-w-0 items-center">
             <div className="flex h-full items-center gap-0.5">
               {capabilities.run ? (
-                <Tooltip title={running ? '运行中' : '运行'} mouseEnterDelay={0.35}>
+                <Tooltip
+                  title={!canExecute ? '无执行权限' : running ? '运行中' : '运行'}
+                  mouseEnterDelay={0.35}
+                >
                   <YakButton
                     aria-label="运行"
-                    disabled={running}
+                    disabled={running || !canExecute}
                     onClick={onRun}
                     className={iconButtonClassName}
                   >
@@ -76,10 +84,13 @@ const EditorToolbar = ({
                 </Tooltip>
               ) : null}
               {capabilities.save ? (
-                <Tooltip title="保存草稿" mouseEnterDelay={0.35}>
+                <Tooltip
+                  title={!canEdit ? '无编辑权限' : '保存草稿'}
+                  mouseEnterDelay={0.35}
+                >
                   <YakButton
                     aria-label="保存草稿"
-                    disabled={saving || publishing || running}
+                    disabled={saving || publishing || running || !canEdit}
                     onClick={onSave}
                     className={iconButtonClassName}
                   >
@@ -92,10 +103,13 @@ const EditorToolbar = ({
                 </Tooltip>
               ) : null}
               {capabilities.publish ? (
-                <Tooltip title="发布版本" mouseEnterDelay={0.35}>
+                <Tooltip
+                  title={!canPublish ? '无发布权限' : '发布版本'}
+                  mouseEnterDelay={0.35}
+                >
                   <YakButton
                     aria-label="发布版本"
-                    disabled={saving || publishing || running}
+                    disabled={saving || publishing || running || !canPublish}
                     onClick={onPublish}
                     className={iconButtonClassName}
                   >
