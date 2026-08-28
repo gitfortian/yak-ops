@@ -1,4 +1,11 @@
-import { GitBranch, LoaderCircle, RotateCcw, Square, Table2, X } from 'lucide-react';
+import {
+  GitBranch,
+  LoaderCircle,
+  RotateCcw,
+  Square,
+  Table2,
+  X,
+} from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useState } from 'react';
 
@@ -123,7 +130,14 @@ const RunResultPanel = ({
   };
 
   const Result = definition.RunResult;
-  const executionLabel = result?.executionId ? `Execution #${result.executionId}` : undefined;
+  const executionLabel = result?.executionId
+    ? `Execution #${result.executionId}`
+    : undefined;
+  // Existing editor result renderers only distinguish RUNNING vs terminal states.
+  // Keep PENDING visible in the control-plane header while rendering the body as in-progress.
+  const renderedResult = result?.status === 'PENDING'
+    ? { ...result, status: 'RUNNING' as const }
+    : result;
 
   return (
     <div
@@ -192,7 +206,7 @@ const RunResultPanel = ({
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                {actualView === 'result' && onCancel ? (
+                {actualView === 'result' && result?.executionId && onCancel ? (
                   <button
                     type="button"
                     disabled={actionLoading}
@@ -243,7 +257,11 @@ const RunResultPanel = ({
                   onRefresh={onRefreshLineage}
                 />
               ) : Result ? (
-                <Result node={node} directory={directory} result={result} />
+                <Result
+                  node={node}
+                  directory={directory}
+                  result={renderedResult}
+                />
               ) : (
                 <div className="flex h-full items-center justify-center text-center">
                   <div>
