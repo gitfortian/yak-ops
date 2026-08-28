@@ -5,6 +5,7 @@ import io.yak.ops.business.dataservice.dao.mapper.DataServiceCallLogMapper;
 import io.yak.ops.business.dataservice.dao.model.DataServiceCallLogPO;
 import io.yak.ops.business.dataservice.domain.InvocationRecord;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.CurrentProject;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -16,9 +17,13 @@ import org.springframework.stereotype.Repository;
 public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRepository {
 
   private final DataServiceCallLogMapper mapper;
+  private final CurrentProject currentProject;
 
   @Override
   public InvocationRecord save(InvocationRecord record) {
+    if (record == null || record.projectId() == null || record.projectId() <= 0L) {
+      throw new IllegalArgumentException("调用日志缺少 Project Space");
+    }
     DataServiceCallLogPO po = toPo(record);
     mapper.insert(po);
     return toDomain(po);
@@ -26,9 +31,11 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
 
   @Override
   public List<InvocationRecord> recent(int limit) {
+    Long projectId = currentProject.requireProjectId();
     int size = normalizeLimit(limit);
     return mapper.selectList(
             Wrappers.<DataServiceCallLogPO>lambdaQuery()
+                .eq(DataServiceCallLogPO::getProjectId, projectId)
                 .orderByDesc(DataServiceCallLogPO::getCreateTime)
                 .orderByDesc(DataServiceCallLogPO::getId)
                 .last("LIMIT " + size))
@@ -40,9 +47,11 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
     if (apiId == null || apiId <= 0L) {
       throw new IllegalArgumentException("数据服务 ID 必须大于 0");
     }
+    Long projectId = currentProject.requireProjectId();
     int size = normalizeLimit(limit);
     return mapper.selectList(
             Wrappers.<DataServiceCallLogPO>lambdaQuery()
+                .eq(DataServiceCallLogPO::getProjectId, projectId)
                 .eq(DataServiceCallLogPO::getApiId, apiId)
                 .orderByDesc(DataServiceCallLogPO::getCreateTime)
                 .orderByDesc(DataServiceCallLogPO::getId)
@@ -52,8 +61,10 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
 
   @Override
   public List<InvocationRecord> between(LocalDateTime from, LocalDateTime to) {
+    Long projectId = currentProject.requireProjectId();
     return mapper.selectList(
             Wrappers.<DataServiceCallLogPO>lambdaQuery()
+                .eq(DataServiceCallLogPO::getProjectId, projectId)
                 .ge(from != null, DataServiceCallLogPO::getCreateTime, from)
                 .le(to != null, DataServiceCallLogPO::getCreateTime, to)
                 .orderByAsc(DataServiceCallLogPO::getCreateTime)
@@ -67,8 +78,8 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
 
   private InvocationRecord toDomain(DataServiceCallLogPO po) {
     return new InvocationRecord(
-        po.getId(), po.getApiId(), po.getServiceName(), po.getServicePath(), po.getCallerType(),
-        po.getApiKeyId(), po.getApiKeyName(), po.getApiKeyPrefix(), po.getParamsJson(),
+        po.getId(), po.getProjectId(), po.getApiId(), po.getServiceName(), po.getServicePath(),
+        po.getCallerType(), po.getApiKeyId(), po.getApiKeyName(), po.getApiKeyPrefix(), po.getParamsJson(),
         Boolean.TRUE.equals(po.getSuccess()), value(po.getDurationMs()), value(po.getRowCount()),
         po.getErrorMessage(), po.getCreateTime());
   }
@@ -76,6 +87,7 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
   private DataServiceCallLogPO toPo(InvocationRecord record) {
     DataServiceCallLogPO po = new DataServiceCallLogPO();
     po.setId(record.id());
+    po.setProjectId(record.projectId());
     po.setApiId(record.apiId());
     po.setServiceName(record.serviceName());
     po.setServicePath(record.servicePath());
