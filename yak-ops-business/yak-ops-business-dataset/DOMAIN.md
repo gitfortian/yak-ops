@@ -122,7 +122,18 @@ Query Runtime 不允许：
 Query Performance != Query Result != Dataset truth
 ```
 
-诊断记录只用于解释 latency/rows/truncation，不参与 Dataset/Version 生命周期。
+它可以描述一次 Query attempt 的：
+
+```text
+queryId
+terminal status (SUCCESS / REJECTED / FAILED / TIMEOUT)
+failure stage / error evidence
+latency breakdown
+rows / truncation
+privacy-safe SQL preview / fingerprint
+```
+
+这些证据只用于定位运行问题，不参与 Dataset/Version 生命周期，也不能反向改变 QueryResult 或原业务异常。
 
 ## 9. DevelopmentNode Binding
 
@@ -182,6 +193,8 @@ DatasetVersion append
 DatasetField schema
 currentVersion pointer
 ```
+
+Query Performance 虽然通过独立 Repository port 持久化，但仍只是 observability read model，不属于 Dataset aggregate truth。
 
 Repository 不拥有 Publication policy、Query routing 或 Lineage behavior。
 

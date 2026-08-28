@@ -35,10 +35,7 @@ public class DatasetQueryService {
   public DatasetQueryService(
       DatasetQueryCoordinator coordinator,
       DatasetQueryPerformanceReader performanceReader) {
-    this(
-        coordinator,
-        performanceReader,
-        null,
+    this(coordinator, performanceReader, null,
         Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
@@ -47,14 +44,24 @@ public class DatasetQueryService {
   }
 
   public List<DatasetQueryPerformance> recentPerformance(Set<Long> datasetIds, int limit) {
-    return recentPerformance(datasetIds, Set.of(), limit);
+    return recentPerformance(datasetIds, Set.of(), Set.of(), null, limit);
   }
 
   public List<DatasetQueryPerformance> recentPerformance(
       Set<Long> datasetIds, Set<String> queryIds, int limit) {
+    return recentPerformance(datasetIds, queryIds, Set.of(), null, limit);
+  }
+
+  public List<DatasetQueryPerformance> recentPerformance(
+      Set<Long> datasetIds,
+      Set<String> queryIds,
+      Set<DatasetQueryStatus> statuses,
+      Long minTotalMillis,
+      int limit) {
     ScopedDatasetIds scope = scopedDatasetIds(datasetIds);
     if (scope.projectScoped() && scope.datasetIds().isEmpty()) return List.of();
-    return performanceReader.recent(scope.datasetIds(), queryIds, limit);
+    return performanceReader.recent(
+        scope.datasetIds(), queryIds, statuses, minTotalMillis, limit);
   }
 
   private ScopedDatasetIds scopedDatasetIds(Set<Long> requested) {

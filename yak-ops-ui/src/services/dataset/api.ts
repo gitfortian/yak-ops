@@ -10,6 +10,8 @@ import type {
   DatasetManagementItem,
   DatasetManagementVersion,
   DatasetQueryPayload,
+  DatasetQueryPerformance,
+  DatasetQueryPerformanceQuery,
   DatasetQueryResult,
   PublishedDataset,
 } from './model';
@@ -22,6 +24,7 @@ import type {
 
 const DATASET_API = '/api/v1/datasets';
 const DATASET_CATALOG_API = `${DATASET_API}/catalog`;
+const DATASET_QUERY_PERFORMANCE_API = `${DATASET_API}/query-performance`;
 
 export interface DatasetRequestOptions {
   /** Allows callers to cancel stale Dataset requests without changing the backend contract. */
@@ -188,6 +191,28 @@ const catalogUrl = (datasetIds?: string[], onlineOnly = false) => {
   return params.length ? `${DATASET_CATALOG_API}?${params.join('&')}` : DATASET_CATALOG_API;
 };
 
+const queryPerformanceUrl = (query: DatasetQueryPerformanceQuery = {}) => {
+  const params: string[] = [];
+  if (query.datasetIds?.length) {
+    params.push(`datasetIds=${query.datasetIds.map(encodeURIComponent).join(',')}`);
+  }
+  if (query.queryIds?.length) {
+    params.push(`queryIds=${query.queryIds.map(encodeURIComponent).join(',')}`);
+  }
+  if (query.statuses?.length) {
+    params.push(`statuses=${query.statuses.map(encodeURIComponent).join(',')}`);
+  }
+  if (query.minTotalMillis != null) {
+    params.push(`minTotalMillis=${Math.max(0, Math.floor(query.minTotalMillis))}`);
+  }
+  if (query.limit != null) {
+    params.push(`limit=${Math.max(1, Math.min(200, Math.floor(query.limit)))}`);
+  }
+  return params.length
+    ? `${DATASET_QUERY_PERFORMANCE_API}?${params.join('&')}`
+    : DATASET_QUERY_PERFORMANCE_API;
+};
+
 const fetchDatasetCatalog = async (
   datasetIds?: string[],
   options?: DatasetRequestOptions,
@@ -256,6 +281,17 @@ export const offlineDataset = async (
   await HttpUtils.post<DatasetDetailWire>(`${DATASET_API}/${datasetId}/offline`, {}),
   '下线 Dataset 失败',
 ));
+
+export const listDatasetQueryPerformance = async (
+  query: DatasetQueryPerformanceQuery = {},
+  options?: DatasetRequestOptions,
+): Promise<DatasetQueryPerformance[]> => unwrap(
+  await HttpUtils.get<DatasetQueryPerformance[]>(
+    queryPerformanceUrl(query),
+    requestOptions(options),
+  ),
+  '查询 Dataset 运行诊断失败',
+) || [];
 
 export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => (
   await fetchDatasetCatalog(undefined, undefined, true)

@@ -72,10 +72,12 @@ public class DatasetViewConverter {
   }
 
   public DatasetQueryPerformanceVO performance(DatasetQueryPerformance value) {
-    return new DatasetQueryPerformanceVO(value.queryId(), value.datasetId(), value.datasetName(),
-        value.datasetVersionId(), value.datasetVersionNo(), value.sourceType(), value.dataSourceId(),
-        value.sql(), value.waitMillis(), value.prepareMillis(), value.executeMillis(),
+    return new DatasetQueryPerformanceVO(
+        value.queryId(), value.datasetId(), value.datasetName(), value.datasetVersionId(),
+        value.datasetVersionNo(), value.sourceType(), value.dataSourceId(), value.sql(),
+        value.sqlHash(), value.status().name(), value.failureStage(), value.errorType(),
+        value.errorMessage(), value.waitMillis(), value.prepareMillis(), value.executeMillis(),
         value.transferMillis(), value.totalMillis(), value.returnedRows(), value.truncated(),
-        value.startedAt());
+        value.startedAt(), value.finishedAt());
   }
 }

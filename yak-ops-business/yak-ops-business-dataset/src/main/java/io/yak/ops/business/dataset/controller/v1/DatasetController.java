@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.dataset.DatasetQueryService;
+import io.yak.ops.business.dataset.DatasetQueryStatus;
 import io.yak.ops.business.dataset.DatasetService;
 import io.yak.ops.business.dataset.controller.v1.converter.DatasetRequestConverter;
 import io.yak.ops.business.dataset.controller.v1.converter.DatasetViewConverter;
@@ -58,15 +59,19 @@ public class DatasetController {
         datasetService.catalog(datasetIds, onlineOnly).stream().map(viewConverter::catalog).toList());
   }
 
-  @Operation(summary = "查询最近的 Dataset SQL 性能诊断记录")
+  @Operation(summary = "查询 Dataset SQL 运行诊断记录")
   @GetMapping("/query-performance")
   public Result<List<DatasetQueryPerformanceVO>> queryPerformance(
       @RequestParam(value = "datasetIds", required = false) List<Long> datasetIds,
       @RequestParam(value = "queryIds", required = false) List<String> queryIds,
+      @RequestParam(value = "statuses", required = false) List<DatasetQueryStatus> statuses,
+      @RequestParam(value = "minTotalMillis", required = false) Long minTotalMillis,
       @RequestParam(value = "limit", defaultValue = "100") int limit) {
     Set<Long> datasetFilters = datasetIds == null ? Set.of() : new HashSet<>(datasetIds);
     Set<String> queryFilters = queryIds == null ? Set.of() : new HashSet<>(queryIds);
-    return Result.success(queryService.recentPerformance(datasetFilters, queryFilters, limit).stream()
+    Set<DatasetQueryStatus> statusFilters = statuses == null ? Set.of() : new HashSet<>(statuses);
+    return Result.success(queryService.recentPerformance(
+            datasetFilters, queryFilters, statusFilters, minTotalMillis, limit).stream()
         .map(viewConverter::performance)
         .toList());
   }

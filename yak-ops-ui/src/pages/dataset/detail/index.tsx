@@ -41,6 +41,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import DatasetQueryDiagnostics from './DatasetQueryDiagnostics';
 
 const SOURCE_TYPE_LABELS: Record<DatasetSourceType, string> = {
   QUERY_REVISION: 'SQL 任务版本',
@@ -77,7 +78,7 @@ const sourceSummary = (version?: DatasetManagementVersion) => {
   return SOURCE_TYPE_LABELS[version.sourceType];
 };
 
-type DetailTab = 'overview' | 'schema' | 'versions' | 'query' | 'source';
+type DetailTab = 'overview' | 'schema' | 'versions' | 'query' | 'diagnostics' | 'source';
 
 function DatasetQueryPlayground({ dataset }: { dataset: DatasetManagementDetail }) {
   const sortedVersions = useMemo(
@@ -490,6 +491,7 @@ export default function DatasetDetailPage() {
               { key: 'schema', label: `字段 Schema ${dataset.fields.length}` },
               { key: 'versions', label: `版本历史 ${dataset.versions.length}` },
               { key: 'query', label: 'Query Playground' },
+              { key: 'diagnostics', label: '运行诊断' },
               { key: 'source', label: '来源信息' },
             ]}
             onChange={(key) => setActiveTab(key as DetailTab)}
@@ -553,6 +555,7 @@ export default function DatasetDetailPage() {
           )}
 
           {activeTab === 'query' && <DatasetQueryPlayground dataset={dataset} />}
+          {activeTab === 'diagnostics' && <DatasetQueryDiagnostics datasetId={dataset.id} />}
 
           {activeTab === 'source' && (
             <div className="space-y-4">

@@ -106,6 +106,16 @@ DatasetQueryService
  -> DatasetQueryResult
 ```
 
+每次 Query attempt 都会生成唯一 `queryId`，并形成 `SUCCESS / REJECTED / FAILED / TIMEOUT` 之一的诊断终态。正常 datasource 模式下诊断 evidence 持久化并可跨实例读取；持久化异常时仅退化到 bounded local fallback，不改变原查询结果或原业务异常。SQL 只保存去字面量后的 preview 与 SHA-256 shape fingerprint。
+
+诊断入口：
+
+```text
+GET /api/v1/datasets/query-performance
+```
+
+支持 datasetId / queryId / terminal status / 最小总耗时过滤。
+
 Data Development：
 
 ```text

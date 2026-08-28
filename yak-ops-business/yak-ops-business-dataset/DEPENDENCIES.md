@@ -14,7 +14,7 @@ root public contract 不作为内部图节点；以下是明确业务子 package
 | `publication` | `definition`, `gateway`, `lineage`, `repository`, `schema` |
 | `schema` | `gateway`, `repository` |
 | `query` | `gateway`, `observability`, `repository` |
-| `observability` | none |
+| `observability` | `repository` |
 | `lineage` | `gateway`, `repository` |
 | `gateway` | none |
 | `repository` | `dao` |
@@ -92,6 +92,18 @@ Query 的 TaskCatalog 访问只允许 `QueryRevisionDatasetSourceAdapter -> Data
 
 Source adapters 可直接依赖 `io.yak.ops.core.execution.sql.*`；它们本身就是 Dataset Query Runtime adapter 边界。Coordinator / Registry / Compiler 不允许直接依赖 Core SQL Runtime。
 
+Observability 持久化只允许通过一个窄 Repository port：
+
+```text
+DatasetQueryPerformanceRecorder / DatasetQueryPerformanceReader
+ -> DatasetQueryPerformanceStore
+ -> DatasetQueryPerformanceStoreAdapter
+ -> DatasetDao
+ -> DatasetQueryPerformanceMapper / PO
+```
+
+`observability` 不直接 import DAO / Mapper / PO；Repository Adapter 也不直接使用 MyBatis，继续遵守 `repository -> dao -> mapper/PO` 的底层方向。
+
 ## 7. Schema Corridors
 
 Schema 只通过 Dataset-owned Gateway 使用外部来源：
@@ -165,12 +177,15 @@ query/adapter/SqlQueryDatasetSourceAdapter.java
 
 ```text
 config/DatasetPersistenceConfiguration.java
+dao/impl/DatasetDaoImpl.java
  -> io.yak.ops.business.datasource.config.*
 ```
 
-这是共享 business database / feature configuration wiring，不是 Dataset 业务能力调用。
+前者负责共享 business database / Flyway wiring；后者沿用既有 datasource-enabled DAO 条件。这个 corridor 仅限基础设施开关，不是 Dataset 业务能力调用。
 
 ## 10. Persistence Boundary
+
+Dataset aggregate：
 
 ```text
 Business role
@@ -178,6 +193,16 @@ Business role
  -> DatasetRepositoryAdapter
  -> DatasetDao
  -> PO / Mapper / MyBatis
+```
+
+Query observability read model：
+
+```text
+Observability role
+ -> DatasetQueryPerformanceStore
+ -> DatasetQueryPerformanceStoreAdapter
+ -> DatasetDao
+ -> DatasetQueryPerformanceMapper / PO / MyBatis
 ```
 
 Repository contract 不暴露：

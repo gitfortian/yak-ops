@@ -91,11 +91,16 @@ public final class DatasetViews {
       String queryId,
       @JsonSerialize(using = ToStringSerializer.class) long datasetId,
       String datasetName,
-      @JsonSerialize(using = ToStringSerializer.class) long datasetVersionId,
-      int datasetVersionNo,
+      @JsonSerialize(using = ToStringSerializer.class) Long datasetVersionId,
+      Integer datasetVersionNo,
       String sourceType,
       String dataSourceId,
       String sql,
+      String sqlHash,
+      String status,
+      String failureStage,
+      String errorType,
+      String errorMessage,
       long waitMillis,
       long prepareMillis,
       long executeMillis,
@@ -103,6 +108,7 @@ public final class DatasetViews {
       long totalMillis,
       int returnedRows,
       boolean truncated,
-      Instant startedAt) {
+      Instant startedAt,
+      Instant finishedAt) {
   }
 }

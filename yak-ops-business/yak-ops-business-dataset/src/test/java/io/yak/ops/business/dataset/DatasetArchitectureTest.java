@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.yak.ops.business.dataset.controller.v1.DatasetController;
+import io.yak.ops.business.dataset.controller.v1.converter.DatasetRequestConverter;
+import io.yak.ops.business.dataset.controller.v1.converter.DatasetViewConverter;
 import io.yak.ops.business.dataset.dao.DatasetDao;
 import io.yak.ops.business.dataset.definition.DatasetBindingPolicy;
 import io.yak.ops.business.dataset.definition.DatasetManager;
@@ -53,8 +55,8 @@ class DatasetArchitectureTest {
         Set.of(
             DatasetService.class,
             DatasetQueryService.class,
-            io.yak.ops.business.dataset.controller.v1.mapper.DatasetRequestMapper.class,
-            io.yak.ops.business.dataset.controller.v1.mapper.DatasetViewMapper.class);
+            DatasetRequestConverter.class,
+            DatasetViewConverter.class);
     for (Field field : DatasetController.class.getDeclaredFields()) {
       assertThat(field.getType())
           .as("DatasetController.%s must use a stable facade or HTTP mapper", field.getName())
