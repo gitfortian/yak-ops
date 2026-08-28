@@ -98,7 +98,19 @@ export type DevelopmentTaskExecutionStatus =
   | 'CANCELLED'
   | 'TIMEOUT';
 
+/** Immediate acknowledgement after the shared Task Runtime accepts an editor run. */
+export interface DevelopmentTaskExecutionSubmission {
+  id: DevelopmentId;
+  nodeId: DevelopmentId;
+  taskType: DevelopmentTaskType;
+  runtimeExecutionId?: string | null;
+  status: DevelopmentTaskExecutionStatus;
+}
+
+/** Workbench projection of one durable execution. */
 export interface DevelopmentTaskRunResult {
+  executionId?: DevelopmentId;
+  runtimeExecutionId?: string | null;
   status: DevelopmentTaskExecutionStatus;
   message: string;
   durationMs: number;
@@ -203,8 +215,10 @@ export interface DevelopmentTaskExecutionSummary {
   nodeId: DevelopmentId;
   taskName: string;
   taskType: DevelopmentTaskType;
+  schemaVersion: number;
   triggerType: string;
   runtimeExecutionId?: string | null;
+  retryOfExecutionId?: DevelopmentId | null;
   status: DevelopmentTaskExecutionStatus;
   operatorName?: string | null;
   durationMs?: number | null;

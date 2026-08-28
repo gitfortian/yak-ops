@@ -15,6 +15,7 @@ Node != Draft != Revision != Execution
 - `ARCHITECTURE.md`：代码角色与 package owner
 - `DEPENDENCIES.md`：允许的依赖方向与跨模块 corridor
 - `REVIEW.md`：提交前和 Review 时怎么检查
+- `EXECUTION_CONTROL_PLANE.md`：编辑器异步提交、Execution 控制 API、重连与运行时恢复语义
 - `../../CODE_STYLE.md`：仓库通用代码规范
 
 ## Package Map

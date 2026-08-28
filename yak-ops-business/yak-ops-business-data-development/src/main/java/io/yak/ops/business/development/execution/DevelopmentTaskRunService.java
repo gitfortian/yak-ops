@@ -3,6 +3,8 @@ package io.yak.ops.business.development.execution;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionDetail;
+import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionSubmission;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskRunResult;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.development.task.DevelopmentTaskDefinitionNormalizer;
@@ -21,7 +23,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-/** Executes the current editor definition through the shared Task Runtime. */
+/** Submits current editor definitions through the shared Task Runtime. */
 @Service
 public class DevelopmentTaskRunService {
 
@@ -59,65 +61,61 @@ public class DevelopmentTaskRunService {
     this.objectMapper = objectMapper;
   }
 
-  /** Kept for source-compatible tests and internal callers. */
-  public DevelopmentTaskRunResult run(
-      Long nodeId,
-      String taskType,
-      int schemaVersion,
-      String content,
-      String configJson) {
-    return run(nodeId, taskType, schemaVersion, content, configJson, "unknown");
-  }
-
-  public DevelopmentTaskRunResult run(
+  public DevelopmentTaskExecutionSubmission submit(
       Long nodeId,
       String taskType,
       int schemaVersion,
       String content,
       String configJson,
       String operatorName) {
+    return submit(nodeId, taskType, schemaVersion, content, configJson, operatorName, null);
+  }
+
+  public DevelopmentTaskExecutionSubmission submit(
+      Long nodeId,
+      String taskType,
+      int schemaVersion,
+      String content,
+      String configJson,
+      String operatorName,
+      Long retryOfExecutionId) {
     DevelopmentNode node = nodes.requireNode(nodeId);
     TaskDefinition definition =
         definitions.normalize(node, taskType, schemaVersion, content, configJson);
-    if (!taskExecutionGateway.supports(definition.taskType())) {
-      throw new DevelopmentTaskValidationException(
-          "当前未安装 " + definition.taskType() + " Task Runtime，无法运行",
-          List.of(new TaskValidationIssue(
-              "TASK_RUNTIME_NOT_INSTALLED",
-              "taskType",
-              "Task runtime is not installed: " + definition.taskType())));
-    }
+    requireRuntime(definition);
 
     long started = System.nanoTime();
     long historyId = executionService.createPending(
         node,
         definition.taskType(),
+        schemaVersion,
         definition.content(),
         definition.configJson(),
-        operatorName);
+        operatorName,
+        retryOfExecutionId);
     try {
       TaskVersionSnapshot snapshot = currentDraftSnapshot(node, definition);
       TaskExecution execution = taskExecutionGateway.start(
           snapshot,
           TaskExecutionTrigger.MANUAL,
           null,
-          Map.of("nodeId", String.valueOf(nodeId)));
-      executionService.markRunning(historyId, execution.executionId());
-
-      TaskExecution completed = awaitTerminal(snapshot.type(), execution);
-      TaskExecutionStatus status = mapStatus(completed);
-      long durationMs = elapsedMillis(started);
-      executionService.complete(
+          Map.of("nodeId", String.valueOf(nodeId), "executionHistoryId", String.valueOf(historyId)));
+      TaskExecutionStatus status = mapStatus(execution);
+      executionService.attachRuntime(historyId, execution.executionId(), status.name());
+      if (terminal(status)) {
+        executionService.complete(
+            historyId,
+            status.name(),
+            elapsedMillis(started),
+            execution.errorMessage(),
+            execution.output());
+      }
+      return new DevelopmentTaskExecutionSubmission(
           historyId,
-          status.name(),
-          durationMs,
-          completed.errorMessage(),
-          completed.output());
-      return new DevelopmentTaskRunResult(
-          status,
-          completed.errorMessage(),
-          durationMs,
-          completed.output());
+          node.id(),
+          definition.taskType(),
+          execution.executionId(),
+          status);
     } catch (DevelopmentTaskValidationException exception) {
       executionService.complete(
           historyId,
@@ -142,18 +140,92 @@ public class DevelopmentTaskRunService {
               message)));
     } catch (Exception exception) {
       String message = safeMessage(exception);
-      long durationMs = elapsedMillis(started);
       executionService.complete(
           historyId,
           TaskExecutionStatus.FAILED.name(),
-          durationMs,
+          elapsedMillis(started),
           message,
           Map.of());
-      return new DevelopmentTaskRunResult(
-          TaskExecutionStatus.FAILED,
-          message,
-          durationMs,
-          Map.of());
+      return new DevelopmentTaskExecutionSubmission(
+          historyId,
+          node.id(),
+          definition.taskType(),
+          null,
+          TaskExecutionStatus.FAILED);
+    }
+  }
+
+  /**
+   * Legacy synchronous corridor for focused internal callers. HTTP editor runs use {@link #submit} and
+   * must not wait for terminal runtime state.
+   */
+  @Deprecated
+  public DevelopmentTaskRunResult run(
+      Long nodeId,
+      String taskType,
+      int schemaVersion,
+      String content,
+      String configJson) {
+    return run(nodeId, taskType, schemaVersion, content, configJson, "unknown");
+  }
+
+  @Deprecated
+  public DevelopmentTaskRunResult run(
+      Long nodeId,
+      String taskType,
+      int schemaVersion,
+      String content,
+      String configJson,
+      String operatorName) {
+    long started = System.nanoTime();
+    DevelopmentTaskExecutionSubmission submission =
+        submit(nodeId, taskType, schemaVersion, content, configJson, operatorName);
+    if (terminal(submission.status()) || submission.runtimeExecutionId() == null) {
+      return resultFromHistory(executionService.get(submission.id()));
+    }
+
+    TaskExecution completed = awaitTerminal(submission.taskType(), submission.runtimeExecutionId());
+    TaskExecutionStatus status = mapStatus(completed);
+    long durationMs = elapsedMillis(started);
+    executionService.complete(
+        submission.id(),
+        status.name(),
+        durationMs,
+        completed.errorMessage(),
+        completed.output());
+    return new DevelopmentTaskRunResult(
+        status,
+        completed.errorMessage(),
+        durationMs,
+        completed.output());
+  }
+
+  static TaskExecutionStatus mapStatus(TaskExecution execution) {
+    String status = execution.status() == null
+        ? ""
+        : execution.status().trim().toUpperCase(Locale.ROOT);
+    return switch (status) {
+      case "PENDING" -> TaskExecutionStatus.PENDING;
+      case "RUNNING" -> TaskExecutionStatus.RUNNING;
+      case "SUCCEEDED" -> TaskExecutionStatus.SUCCESS;
+      case "CANCELED" -> TaskExecutionStatus.CANCELLED;
+      case "TIMED_OUT" -> TaskExecutionStatus.TIMEOUT;
+      default -> TaskExecutionStatus.FAILED;
+    };
+  }
+
+  static boolean terminal(TaskExecutionStatus status) {
+    return status != TaskExecutionStatus.PENDING && status != TaskExecutionStatus.RUNNING;
+  }
+
+  private void requireRuntime(TaskDefinition definition) {
+    if (!taskExecutionGateway.supports(definition.taskType())) {
+      throw new DevelopmentTaskValidationException(
+          "当前未安装 " + definition.taskType() + " Task Runtime，无法运行",
+          List.of(new TaskValidationIssue(
+              "TASK_RUNTIME_NOT_INSTALLED",
+              "taskType",
+              "Task runtime is not installed: " + definition.taskType())));
     }
   }
 
@@ -174,8 +246,8 @@ public class DevelopmentTaskRunService {
     }
   }
 
-  private TaskExecution awaitTerminal(String taskType, TaskExecution execution) {
-    TaskExecution current = execution;
+  private TaskExecution awaitTerminal(String taskType, String executionId) {
+    TaskExecution current = taskExecutionGateway.status(taskType, executionId);
     while (!current.terminal()) {
       try {
         Thread.sleep(10L);
@@ -184,7 +256,7 @@ public class DevelopmentTaskRunService {
         try {
           taskExecutionGateway.cancel(taskType, current.executionId());
         } catch (RuntimeException ignored) {
-          // Preserve the original interruption as the manual-run result.
+          // Preserve the original interruption as the legacy manual-run result.
         }
         throw new IllegalStateException("等待任务执行结果时被中断", exception);
       }
@@ -193,18 +265,18 @@ public class DevelopmentTaskRunService {
     return current;
   }
 
-  private TaskExecutionStatus mapStatus(TaskExecution execution) {
-    String status = execution.status() == null
-        ? ""
-        : execution.status().trim().toUpperCase(Locale.ROOT);
-    return switch (status) {
-      case "PENDING" -> TaskExecutionStatus.PENDING;
-      case "RUNNING" -> TaskExecutionStatus.RUNNING;
-      case "SUCCEEDED" -> TaskExecutionStatus.SUCCESS;
-      case "CANCELED" -> TaskExecutionStatus.CANCELLED;
-      case "TIMED_OUT" -> TaskExecutionStatus.TIMEOUT;
-      default -> TaskExecutionStatus.FAILED;
-    };
+  private DevelopmentTaskRunResult resultFromHistory(DevelopmentTaskExecutionDetail detail) {
+    TaskExecutionStatus status;
+    try {
+      status = TaskExecutionStatus.valueOf(detail.status());
+    } catch (RuntimeException exception) {
+      status = TaskExecutionStatus.FAILED;
+    }
+    return new DevelopmentTaskRunResult(
+        status,
+        detail.errorMessage(),
+        detail.durationMs() == null ? 0L : detail.durationMs(),
+        detail.output());
   }
 
   private long elapsedMillis(long started) {

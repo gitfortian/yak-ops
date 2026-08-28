@@ -1,4 +1,11 @@
-import { GitBranch, LoaderCircle, Table2, X } from 'lucide-react';
+import {
+  GitBranch,
+  LoaderCircle,
+  RotateCcw,
+  Square,
+  Table2,
+  X,
+} from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useState } from 'react';
 
@@ -24,6 +31,9 @@ interface RunResultPanelProps {
   lineagePreview?: DevelopmentSqlLineagePreview;
   lineageLoading?: boolean;
   onRefreshLineage?: () => void;
+  onCancel?: () => void;
+  onRetry?: () => void;
+  actionLoading?: boolean;
   onClose: () => void;
 }
 
@@ -45,6 +55,7 @@ const initialHeight = () => {
 
 const statusText = (result?: DevelopmentTaskRunResult) => {
   if (!result) return undefined;
+  if (result.status === 'PENDING') return '等待中';
   if (result.status === 'RUNNING') return '运行中';
   if (result.status === 'SUCCESS') return `完成 · ${result.durationMs} ms`;
   if (result.status === 'CANCELLED') return '已取消';
@@ -60,6 +71,9 @@ const tabClassName = (active: boolean) => [
     : 'text-[#8a8f99] hover:text-[#475467]',
 ].join(' ');
 
+const actionClassName =
+  'inline-flex h-7 items-center gap-1 rounded-[3px] px-2 text-[11px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054] disabled:cursor-not-allowed disabled:opacity-45';
+
 const RunResultPanel = ({
   open,
   node,
@@ -71,6 +85,9 @@ const RunResultPanel = ({
   lineagePreview,
   lineageLoading = false,
   onRefreshLineage,
+  onCancel,
+  onRetry,
+  actionLoading = false,
   onClose,
 }: RunResultPanelProps) => {
   const [height, setHeight] = useState(initialHeight);
@@ -113,6 +130,14 @@ const RunResultPanel = ({
   };
 
   const Result = definition.RunResult;
+  const executionLabel = result?.executionId
+    ? `Execution #${result.executionId}`
+    : undefined;
+  // Existing editor result renderers only distinguish RUNNING vs terminal states.
+  // Keep PENDING visible in the control-plane header while rendering the body as in-progress.
+  const renderedResult = result?.status === 'PENDING'
+    ? { ...result, status: 'RUNNING' as const }
+    : result;
 
   return (
     <div
@@ -159,10 +184,16 @@ const RunResultPanel = ({
                 <span className="max-w-[240px] truncate text-[11px] text-[#98a2b3]">
                   当前节点：{node.name}
                 </span>
-                {actualView === 'result' && result?.status === 'RUNNING' ? (
+                {actualView === 'result' && executionLabel ? (
+                  <span className="shrink-0 font-mono text-[10px] text-[#98a2b3]">
+                    {executionLabel}
+                  </span>
+                ) : null}
+                {actualView === 'result'
+                  && (result?.status === 'RUNNING' || result?.status === 'PENDING') ? (
                   <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-[#667085]">
                     <LoaderCircle size={12} className="animate-spin" />
-                    运行中
+                    {statusText(result)}
                   </span>
                 ) : actualView === 'result' && statusText(result) ? (
                   <span className="shrink-0 text-[11px] text-[#667085]">
@@ -174,15 +205,47 @@ const RunResultPanel = ({
                   </span>
                 ) : null}
               </div>
-              <button
-                type="button"
-                title="关闭"
-                aria-label="关闭底部面板"
-                onClick={onClose}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
-              >
-                <X size={14} strokeWidth={1.8} />
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                {actualView === 'result' && result?.executionId && onCancel ? (
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    className={actionClassName}
+                    onClick={onCancel}
+                  >
+                    {actionLoading ? (
+                      <LoaderCircle size={12} className="animate-spin" />
+                    ) : (
+                      <Square size={11} strokeWidth={1.8} />
+                    )}
+                    停止
+                  </button>
+                ) : null}
+                {actualView === 'result' && onRetry ? (
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    className={actionClassName}
+                    onClick={onRetry}
+                  >
+                    {actionLoading ? (
+                      <LoaderCircle size={12} className="animate-spin" />
+                    ) : (
+                      <RotateCcw size={12} strokeWidth={1.8} />
+                    )}
+                    重试
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  title="关闭"
+                  aria-label="关闭底部面板"
+                  onClick={onClose}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] text-[#667085] transition-colors hover:bg-[#f5f5f6] hover:text-[#344054]"
+                >
+                  <X size={14} strokeWidth={1.8} />
+                </button>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-hidden bg-white">
@@ -194,7 +257,11 @@ const RunResultPanel = ({
                   onRefresh={onRefreshLineage}
                 />
               ) : Result ? (
-                <Result node={node} directory={directory} result={result} />
+                <Result
+                  node={node}
+                  directory={directory}
+                  result={renderedResult}
+                />
               ) : (
                 <div className="flex h-full items-center justify-center text-center">
                   <div>

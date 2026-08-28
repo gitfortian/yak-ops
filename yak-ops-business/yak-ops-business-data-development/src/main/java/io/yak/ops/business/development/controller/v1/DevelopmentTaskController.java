@@ -13,7 +13,7 @@ import io.yak.ops.business.development.domain.DevelopmentTaskDraft;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevision;
 import io.yak.ops.business.development.domain.DevelopmentTaskRevisionSummary;
 import io.yak.ops.business.development.execution.DevelopmentTaskRunService;
-import io.yak.ops.business.development.execution.model.DevelopmentTaskRunResult;
+import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionSubmission;
 import io.yak.ops.business.development.node.DevelopmentNodeService;
 import io.yak.ops.business.development.service.DevelopmentSqlLineagePreviewService;
 import io.yak.ops.business.development.task.DevelopmentTaskService;
@@ -79,14 +79,14 @@ public class DevelopmentTaskController {
     return Result.success(saved);
   }
 
-  @Operation(summary = "运行当前编辑器任务")
+  @Operation(summary = "提交当前编辑器任务")
   @PostMapping("/{nodeId}/run")
-  public Result<DevelopmentTaskRunResult> run(
+  public Result<DevelopmentTaskExecutionSubmission> run(
       @PathVariable("nodeId") Long nodeId,
       @Valid @RequestBody RunRequest request,
       HttpServletRequest servletRequest) {
     return Result.success(
-        runService.run(
+        runService.submit(
             nodeId,
             request.taskType(),
             request.schemaVersion(),
