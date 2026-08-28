@@ -3,6 +3,7 @@ import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 import { isQueryableDatasetSourceType } from './constants';
 import type {
+  DatasetCatalogWire,
   DatasetDetailWire,
   DatasetField,
   DatasetFieldType,
@@ -15,6 +16,7 @@ import type {
 } from './types';
 
 const DATASET_API = '/api/v1/datasets';
+const DATASET_CATALOG_API = `${DATASET_API}/catalog`;
 
 export interface DatasetRequestOptions {
   /** Allows callers to cancel stale Dataset requests without changing the backend contract. */
@@ -27,6 +29,11 @@ export interface PublishedDatasetBatchResult {
   datasets: PublishedDataset[];
   errors: Record<string, string>;
 }
+
+type DatasetMetadataWire = Pick<
+  DatasetDetailWire,
+  'dataset' | 'currentVersion' | 'fields'
+>;
 
 const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
@@ -84,7 +91,7 @@ const datasetVersionSource = (version?: DatasetVersionWire | null) => {
   }
 };
 
-const toDataset = (detail: DatasetDetailWire): PublishedDataset => {
+const toDataset = (detail: DatasetMetadataWire): PublishedDataset => {
   const version = detail.currentVersion;
   const source = datasetVersionSource(version);
   return {
@@ -112,46 +119,44 @@ const fetchDatasetDetail = async (
   fallback,
 );
 
-export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
-  const list = unwrap(
-    await HttpUtils.get<DatasetSummaryWire[]>(DATASET_API),
-    '查询 Dataset 列表失败',
-  );
-  const online = (list || []).filter(
-    (dataset) => dataset.status === 'ONLINE' && dataset.currentVersionId,
-  );
-  if (!online.length) return [];
-
-  const details = await Promise.allSettled(
-    online.map((dataset) => fetchDatasetDetail(
-      String(dataset.id),
-      `查询 Dataset ${dataset.name} 详情失败`,
-    )),
-  );
-  const available = details
-    .filter(
-      (item): item is PromiseFulfilledResult<DatasetDetailWire> => item.status === 'fulfilled',
-    )
-    .map((item) => item.value)
-    .filter(
-      (detail) => Boolean(
-        detail.currentVersion
-        && isQueryableDatasetSourceType(detail.currentVersion.sourceType),
-      ),
-    )
-    .map(toDataset);
-  if (!available.length) {
-    const rejected = details.find(
-      (item): item is PromiseRejectedResult => item.status === 'rejected',
-    );
-    if (rejected) {
-      throw rejected.reason instanceof Error
-        ? rejected.reason
-        : new Error('读取 Dataset 详情失败');
-    }
-  }
-  return available;
+const catalogUrl = (datasetIds?: string[]) => {
+  if (!datasetIds?.length) return DATASET_CATALOG_API;
+  return `${DATASET_CATALOG_API}?datasetIds=${datasetIds.map(encodeURIComponent).join(',')}`;
 };
+
+const fetchDatasetCatalog = async (
+  datasetIds?: string[],
+  options?: DatasetRequestOptions,
+): Promise<DatasetCatalogWire[]> => unwrap(
+  await HttpUtils.get<DatasetCatalogWire[]>(
+    catalogUrl(datasetIds),
+    requestOptions(options),
+  ),
+  '查询 Dataset Catalog 失败',
+) || [];
+
+const isPublishedQueryableCatalogEntry = (entry: DatasetCatalogWire) => Boolean(
+  entry.dataset.status === 'ONLINE'
+  && entry.currentVersion
+  && isQueryableDatasetSourceType(entry.currentVersion.sourceType),
+);
+
+const catalogEntryError = (datasetId: string, entry?: DatasetCatalogWire) => {
+  if (!entry) return `Dataset ${datasetId} 不存在或当前项目不可见`;
+  if (entry.dataset.status !== 'ONLINE' || !entry.currentVersion) {
+    return `Dataset ${datasetId} 当前未发布`;
+  }
+  if (!isQueryableDatasetSourceType(entry.currentVersion.sourceType)) {
+    return `Dataset ${datasetId} 来源类型 ${entry.currentVersion.sourceType} 尚未接入查询运行时`;
+  }
+  return '';
+};
+
+export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => (
+  await fetchDatasetCatalog()
+)
+  .filter(isPublishedQueryableCatalogEntry)
+  .map(toDataset);
 
 /** Fetches one currently published Dataset without first loading the entire Dataset catalog. */
 export const getPublishedDataset = async (
@@ -175,8 +180,8 @@ export const getPublishedDataset = async (
 };
 
 /**
- * Viewer-oriented tolerant lookup: keep healthy Dataset metadata available while surfacing
- * failures for the specific ids that could not be resolved.
+ * Viewer-oriented tolerant lookup: resolve all requested Dataset metadata in one catalog request,
+ * while preserving per-id availability errors for callers that can render partial content.
  */
 export const resolvePublishedDatasetsByIds = async (
   datasetIds: string[],
@@ -185,21 +190,19 @@ export const resolvePublishedDatasetsByIds = async (
   const uniqueIds = [...new Set(datasetIds.filter(Boolean))];
   if (!uniqueIds.length) return { datasets: [], errors: {} };
 
-  const details = await Promise.allSettled(
-    uniqueIds.map((datasetId) => getPublishedDataset(datasetId, options)),
-  );
+  const catalog = await fetchDatasetCatalog(uniqueIds, options);
+  const entries = new Map(catalog.map((entry) => [String(entry.dataset.id), entry]));
   const datasets: PublishedDataset[] = [];
   const errors: Record<string, string> = {};
 
-  details.forEach((result, index) => {
-    const datasetId = uniqueIds[index];
-    if (result.status === 'fulfilled') {
-      datasets.push(result.value);
+  uniqueIds.forEach((datasetId) => {
+    const entry = entries.get(datasetId);
+    const error = catalogEntryError(datasetId, entry);
+    if (error) {
+      errors[datasetId] = error;
       return;
     }
-    errors[datasetId] = result.reason instanceof Error
-      ? result.reason.message
-      : `Dataset ${datasetId} 元数据加载失败`;
+    datasets.push(toDataset(entry!));
   });
 
   return { datasets, errors };
