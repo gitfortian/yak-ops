@@ -12,6 +12,7 @@ public interface QualityCatalogDao {
   List<TemplateRow> selectTemplates(Map<String, Object> params);
   TemplateRow selectTemplate(long id, boolean customOnly);
   long countSystemTemplates();
+  List<TemplateCount> selectTemplateCounts(Boolean builtin, Long folderId, boolean folderFilter);
   List<FolderRow> selectFolders();
   boolean folderNameExists(Long parentId, String name, Long excludeId);
   long insertFolder(QualityTemplateFolderPO folder);
@@ -21,4 +22,6 @@ public interface QualityCatalogDao {
   long insertTemplate(QualityRuleTemplatePO template);
   boolean updateCustomTemplate(QualityRuleTemplatePO template);
   boolean softDeleteCustomTemplate(long id);
+
+  record TemplateCount(boolean builtin, String dimension, long count) {}
 }

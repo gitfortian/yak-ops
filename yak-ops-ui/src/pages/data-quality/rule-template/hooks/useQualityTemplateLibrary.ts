@@ -4,6 +4,7 @@ import {
   createQualityTemplateFolder,
   deleteCustomQualityTemplate,
   deleteQualityTemplateFolder,
+  getQualityTemplateCatalogSummary,
   listCustomQualityTemplates,
   listQualityTemplateFolders,
   listQualityTemplates,
@@ -104,22 +105,7 @@ export const useQualityTemplateLibrary = () => {
 
   const loadCatalogMeta = useCallback(async () => {
     try {
-      const [systemData, customData] = await Promise.all([
-        listQualityTemplates(),
-        listCustomQualityTemplates(),
-      ]);
-      const systemRecords = systemData.records.filter((template) => template.builtin);
-      const systemDimensions: Record<string, number> = {};
-      systemRecords.forEach((template) => {
-        systemDimensions[template.dimension] =
-          (systemDimensions[template.dimension] || 0) + 1;
-      });
-      setCatalogMeta({
-        systemTotal: systemRecords.length,
-        customTotal: customData.summary.customTotal ?? customData.records.length,
-        systemDimensions,
-        customDimensions: customData.summary.dimensions || {},
-      });
+      setCatalogMeta(await getQualityTemplateCatalogSummary());
     } catch (error) {
       message.error(errorMessage(error, '模板统计加载失败'));
     }

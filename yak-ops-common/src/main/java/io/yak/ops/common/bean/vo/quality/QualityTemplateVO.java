@@ -24,5 +24,12 @@ public final class QualityTemplateVO {
       int sortOrder) {}
 
   public record Summary(long total, Map<String, Long> dimensions) {}
+
+  public record CatalogSummary(
+      long systemTotal,
+      long customTotal,
+      Map<String, Long> systemDimensions,
+      Map<String, Long> customDimensions) {}
+
   public record ListView(List<Template> records, Summary summary) {}
 }

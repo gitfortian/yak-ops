@@ -11,6 +11,15 @@ import java.util.List;
 public final class QualityExecutionVO {
   private QualityExecutionVO() {}
 
+  public record Status(
+      String executionNo,
+      ExecutionStatus executionStatus,
+      CheckResult checkResult,
+      @QualityDateTimeFormat LocalDateTime startedAt,
+      @QualityDateTimeFormat LocalDateTime finishedAt,
+      Long durationMs,
+      String errorMessage) {}
+
   public record RuleExecution(
       Long id,
       Long ruleId,

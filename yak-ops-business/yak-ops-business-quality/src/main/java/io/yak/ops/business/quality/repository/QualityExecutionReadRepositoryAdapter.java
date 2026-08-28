@@ -27,10 +27,20 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 @ConditionalOnQualityEnabled
 @DependsOn("qualityFlyway")
-public class QualityExecutionWorkspaceRepositoryAdapter
-    implements QualityExecutionWorkspaceRepository {
+public class QualityExecutionReadRepositoryAdapter implements QualityExecutionReadRepository {
 
   private final QualityExecutionDao executionDao;
+
+  @Override
+  public PageData<Execution> page(QualityQuery.Execution query) {
+    Map<String, Object> params = params(query);
+    long total = executionDao.countExecutions(params);
+    paginate(params, query.current(), query.pageSize());
+    List<Execution> records = executionDao.selectExecutions(params).stream()
+        .map(po -> execution(po, List.of()))
+        .toList();
+    return pageData(records, total, query.current(), query.pageSize());
+  }
 
   @Override
   public PageData<Execution> page(QualityQuery.ExecutionWorkspace query) {
@@ -38,7 +48,8 @@ public class QualityExecutionWorkspaceRepositoryAdapter
     long total = executionDao.countExecutionWorkspace(params);
     paginate(params, query.current(), query.pageSize());
     List<Execution> records = executionDao.selectExecutionWorkspace(params).stream()
-        .map(po -> execution(po, List.of())).toList();
+        .map(po -> execution(po, List.of()))
+        .toList();
     return pageData(records, total, query.current(), query.pageSize());
   }
 
@@ -48,7 +59,8 @@ public class QualityExecutionWorkspaceRepositoryAdapter
     long total = executionDao.countRuleExecutionWorkspace(params);
     paginate(params, query.current(), query.pageSize());
     List<RuleExecutionWorkspaceItem> records = executionDao.selectRuleExecutionWorkspace(params).stream()
-        .map(this::ruleItem).toList();
+        .map(this::ruleItem)
+        .toList();
     return pageData(records, total, query.current(), query.pageSize());
   }
 
@@ -57,8 +69,28 @@ public class QualityExecutionWorkspaceRepositoryAdapter
     QualityExecutionPO po = executionDao.selectByExecutionNo(executionNo);
     if (po == null) return Optional.empty();
     List<RuleExecution> rules = executionDao.selectRuleExecutions(po.getId()).stream()
-        .map(this::ruleExecution).toList();
+        .map(this::ruleExecution)
+        .toList();
     return Optional.of(execution(po, rules));
+  }
+
+  @Override
+  public Optional<Execution> findSummary(String executionNo) {
+    return Optional.ofNullable(executionDao.selectByExecutionNo(executionNo))
+        .map(po -> execution(po, List.of()));
+  }
+
+  private Map<String, Object> params(QualityQuery.Execution query) {
+    Map<String, Object> params = new LinkedHashMap<>();
+    putLike(params, "keyword", query.keyword());
+    params.put("monitorId", query.monitorId());
+    if (query.executionStatus() != null) {
+      params.put("executionStatus", query.executionStatus().name());
+    }
+    if (query.checkResult() != null) {
+      params.put("checkResult", query.checkResult().name());
+    }
+    return params;
   }
 
   private Map<String, Object> params(QualityQuery.ExecutionWorkspace query) {
@@ -125,11 +157,7 @@ public class QualityExecutionWorkspaceRepositoryAdapter
     params.put("offset", (current - 1L) * pageSize);
   }
 
-  private static <T> PageData<T> pageData(
-      List<T> records,
-      long total,
-      int current,
-      int pageSize) {
+  private static <T> PageData<T> pageData(List<T> records, long total, int current, int pageSize) {
     long pages = pageSize <= 0 ? 0L : (total + pageSize - 1L) / pageSize;
     return new PageData<>(records, total, pages, current, pageSize);
   }

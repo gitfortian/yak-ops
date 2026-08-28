@@ -6,9 +6,16 @@ import io.yak.ops.business.quality.domain.QualityDomain.RuleExecutionWorkspaceIt
 import io.yak.ops.business.quality.domain.QualityQuery;
 import java.util.Optional;
 
-/** 执行工作台读模型 Repository。 */
-public interface QualityExecutionWorkspaceRepository {
+/** Canonical read-side repository for quality execution projections. */
+public interface QualityExecutionReadRepository {
+  PageData<Execution> page(QualityQuery.Execution query);
+
   PageData<Execution> page(QualityQuery.ExecutionWorkspace query);
+
   PageData<RuleExecutionWorkspaceItem> pageRules(QualityQuery.ExecutionWorkspace query);
+
   Optional<Execution> find(String executionNo);
+
+  /** Lightweight execution projection without rule details, intended for status tracking. */
+  Optional<Execution> findSummary(String executionNo);
 }

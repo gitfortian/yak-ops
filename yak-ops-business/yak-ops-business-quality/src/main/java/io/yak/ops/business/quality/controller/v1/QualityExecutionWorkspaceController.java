@@ -7,8 +7,8 @@ import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.quality.QualityPermissionCode;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.controller.v1.converter.QualityExecutionWorkspaceConverter;
+import io.yak.ops.business.quality.execution.QualityExecutionReader;
 import io.yak.ops.business.quality.workspace.QualityExecutionLogProjector;
-import io.yak.ops.business.quality.workspace.QualityExecutionWorkspaceReader;
 import io.yak.ops.common.bean.dto.quality.QualityExecutionWorkspaceDTO;
 import io.yak.ops.common.bean.vo.quality.QualityExecutionWorkspaceVO;
 import jakarta.validation.Valid;
@@ -25,12 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-quality/execution/workspace")
 @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
 public class QualityExecutionWorkspaceController {
-  private final QualityExecutionWorkspaceReader reader;
+  private final QualityExecutionReader reader;
   private final QualityExecutionLogProjector logProjector;
   private final QualityExecutionWorkspaceConverter converter;
 
   public QualityExecutionWorkspaceController(
-      QualityExecutionWorkspaceReader reader,
+      QualityExecutionReader reader,
       QualityExecutionLogProjector logProjector,
       QualityExecutionWorkspaceConverter converter) {
     this.reader = reader;

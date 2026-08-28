@@ -32,7 +32,6 @@ import io.yak.ops.business.quality.template.QualityTemplateReader;
 import io.yak.ops.business.quality.template.TemplateFolderManager;
 import io.yak.ops.business.quality.template.TemplateFolderReader;
 import io.yak.ops.business.quality.workspace.QualityExecutionLogProjector;
-import io.yak.ops.business.quality.workspace.QualityExecutionWorkspaceReader;
 import io.yak.ops.business.quality.workspace.QualityOverviewReader;
 import io.yak.ops.business.quality.workspace.QualityWorkspaceReader;
 import java.util.List;
@@ -76,7 +75,6 @@ class QualityRoleConventionTest {
             TemplateFolderReader.class,
             QualityWorkspaceReader.class,
             QualityOverviewReader.class,
-            QualityExecutionWorkspaceReader.class,
             QualityExecutionLogProjector.class,
             DataSourceQualityCatalogAdapter.class)) {
       assertThat(role.getAnnotation(Component.class))

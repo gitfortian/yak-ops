@@ -44,12 +44,6 @@ public class CustomTemplateRepositoryAdapter implements CustomTemplateRepository
     return catalogDao.selectTemplates(params).stream().map(this::template).toList();
   }
 
-  @Override
-  public List<CustomTemplate> listAllCustom() {
-    return list(new QualityQuery.CustomTemplate(null, null, null, false));
-  }
-
-  @Override public long countSystem() { return catalogDao.countSystemTemplates(); }
   @Override public Optional<CustomTemplate> find(long id) { return Optional.ofNullable(catalogDao.selectTemplate(id, true)).map(this::template); }
   @Override public List<TemplateFolder> listFolders() { return catalogDao.selectFolders().stream().map(this::folder).toList(); }
   @Override public Optional<TemplateFolder> findFolder(long id) { return listFolders().stream().filter(value -> value.id() == id).findFirst(); }

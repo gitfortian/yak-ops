@@ -11,8 +11,6 @@ import java.util.Optional;
 /** 自定义质量模板 Repository。 */
 public interface CustomTemplateRepository {
   List<CustomTemplate> list(QualityQuery.CustomTemplate query);
-  List<CustomTemplate> listAllCustom();
-  long countSystem();
   Optional<CustomTemplate> find(long id);
   List<TemplateFolder> listFolders();
   Optional<TemplateFolder> findFolder(long id);

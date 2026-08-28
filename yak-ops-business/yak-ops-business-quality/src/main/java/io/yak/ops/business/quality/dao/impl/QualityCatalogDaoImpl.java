@@ -1,5 +1,6 @@
 package io.yak.ops.business.quality.dao.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.dao.QualityCatalogDao;
@@ -39,6 +40,26 @@ public class QualityCatalogDaoImpl implements QualityCatalogDao {
   @Override
   public long countSystemTemplates() {
     return queryMapper.countSystemTemplates();
+  }
+
+  @Override
+  public List<TemplateCount> selectTemplateCounts(Boolean builtin, Long folderId, boolean folderFilter) {
+    QueryWrapper<QualityRuleTemplatePO> query = new QueryWrapper<>();
+    query.select("builtin", "quality_dimension", "COUNT(*) AS template_count")
+        .eq("enabled", true)
+        .apply("COALESCE(deleted, 0) = 0");
+    if (builtin != null) query.eq("builtin", builtin);
+    if (folderFilter) {
+      if (folderId == null || folderId == 0L) query.isNull("folder_id");
+      else query.eq("folder_id", folderId);
+    }
+    query.groupBy("builtin", "quality_dimension");
+    return templateMapper.selectMaps(query).stream()
+        .map(row -> new TemplateCount(
+            booleanValue(value(row, "builtin")),
+            stringValue(value(row, "quality_dimension", "qualityDimension")),
+            longValue(value(row, "template_count", "templateCount"))))
+        .toList();
   }
 
   @Override
@@ -125,5 +146,29 @@ public class QualityCatalogDaoImpl implements QualityCatalogDao {
             .set(QualityRuleTemplatePO::getEnabled, false)
             .set(QualityRuleTemplatePO::getDeleted, true)
             .set(QualityRuleTemplatePO::getUpdatedAt, LocalDateTime.now())) > 0;
+  }
+
+  private static Object value(Map<String, Object> row, String... keys) {
+    for (String key : keys) {
+      if (row.containsKey(key)) return row.get(key);
+      String upper = key.toUpperCase();
+      if (row.containsKey(upper)) return row.get(upper);
+    }
+    return null;
+  }
+
+  private static boolean booleanValue(Object value) {
+    if (value instanceof Boolean result) return result;
+    if (value instanceof Number number) return number.intValue() != 0;
+    return value != null && Boolean.parseBoolean(value.toString());
+  }
+
+  private static long longValue(Object value) {
+    if (value instanceof Number number) return number.longValue();
+    return value == null ? 0L : Long.parseLong(value.toString());
+  }
+
+  private static String stringValue(Object value) {
+    return value == null ? "" : value.toString();
   }
 }

@@ -7,6 +7,7 @@ import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.template.CustomTemplateCommand;
 import io.yak.ops.business.quality.template.CustomTemplatePolicy;
 import io.yak.ops.business.quality.template.CustomTemplateReader.CustomTemplateList;
+import io.yak.ops.business.quality.template.QualityTemplateReader.CatalogSummary;
 import io.yak.ops.business.quality.template.QualityTemplateReader.TemplateList;
 import io.yak.ops.common.bean.dto.quality.CustomQualityTemplateDTO;
 import io.yak.ops.common.bean.vo.quality.CustomQualityTemplateVO;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component;
 public class QualityTemplateConverter {
   public QualityQuery.Template templateQuery(String keyword, String dimension, RuleScope scope) { return new QualityQuery.Template(keyword, dimension, scope); }
   public QualityTemplateVO.ListView templateList(TemplateList list) { return new QualityTemplateVO.ListView(list.records().stream().map(this::template).toList(), new QualityTemplateVO.Summary(list.summary().total(), list.summary().dimensions())); }
+  public QualityTemplateVO.CatalogSummary catalogSummary(CatalogSummary value) { return new QualityTemplateVO.CatalogSummary(value.systemTotal(), value.customTotal(), value.systemDimensions(), value.customDimensions()); }
   public QualityTemplateVO.Template template(Template value) { return new QualityTemplateVO.Template(value.id(), value.code(), value.name(), value.description(), value.ruleType(), value.scope(), value.dimension(), value.parameterSchema(), value.builtin(), value.enabled(), value.ruleCount(), value.sortOrder()); }
   public QualityQuery.CustomTemplate customQuery(String keyword, String dimension, Long folderId) { Long normalizedFolder = CustomTemplatePolicy.folderId(folderId); return new QualityQuery.CustomTemplate(text(keyword), text(dimension), normalizedFolder, folderId != null); }
   public CustomQualityTemplateVO.ListView customList(CustomTemplateList list) { return new CustomQualityTemplateVO.ListView(list.records().stream().map(this::customTemplate).toList(), new CustomQualityTemplateVO.Summary(list.summary().scopeTotal(), list.summary().systemTotal(), list.summary().customTotal(), list.summary().dimensions())); }
