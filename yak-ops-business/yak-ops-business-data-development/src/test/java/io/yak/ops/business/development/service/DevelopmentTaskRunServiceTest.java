@@ -3,11 +3,12 @@ package io.yak.ops.business.development.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +47,7 @@ class DevelopmentTaskRunServiceTest {
     runtimeExecutor = new RecordingRuntimeExecutor();
     executionService = mock(DevelopmentTaskExecutionService.class);
     when(executionService.createPending(
-            any(), anyString(), any(Integer.class), anyString(), anyString(), anyString(), any()))
+            any(), anyString(), anyInt(), anyString(), anyString(), anyString(), any()))
         .thenReturn(99L);
     service =
         new DevelopmentTaskRunService(
