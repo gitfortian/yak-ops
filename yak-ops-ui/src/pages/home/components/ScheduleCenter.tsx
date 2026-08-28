@@ -1,12 +1,12 @@
 import YakOpsEmpty from '@/components/YakOpsEmpty';
-import { history } from '@umijs/max';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
 import {
   homeScheduleCenterApi,
   type HomeScheduleCalendar,
   type HomeScheduleDay,
-} from './schedule-service';
+} from '@/services/home';
+import { history } from '@umijs/max';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 

@@ -1,5 +1,4 @@
 import HttpUtils from '@/utils/HttpUtils';
-import type { CommonApiResponse } from '../service';
 
 export type DataServiceOverviewRange = '24h' | '7d' | '30d';
 
@@ -48,7 +47,11 @@ export interface DataServiceOverview {
   recentFailures: DataServiceOverviewFailure[];
 }
 
-const PREFIX = '/api/v1/data-service/overview';
+const DATA_SERVICE_OVERVIEW_API = '/api/v1/data-service/overview';
 
-export const fetchDataServiceOverview = (range: DataServiceOverviewRange) =>
-  HttpUtils.get<DataServiceOverview>(`${PREFIX}?range=${encodeURIComponent(range)}`);
+export const getDataServiceOverview = (
+  range: DataServiceOverviewRange,
+): Promise<DataServiceOverview> =>
+  HttpUtils.getData<DataServiceOverview>(
+    `${DATA_SERVICE_OVERVIEW_API}?range=${encodeURIComponent(range)}`,
+  );

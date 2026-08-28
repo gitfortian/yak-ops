@@ -1,7 +1,7 @@
+import { homeAssetOverviewApi } from '@/services/home';
 import { useEffect, useState } from 'react';
 
 import type { HomeAssetOverviewState } from './homeAssetOverviewShared';
-import { homeAssetOverviewApi } from './service';
 
 export type { HomeAssetOverviewState } from './homeAssetOverviewShared';
 export { DatasetOverview } from './HomeDatasetOverview';
