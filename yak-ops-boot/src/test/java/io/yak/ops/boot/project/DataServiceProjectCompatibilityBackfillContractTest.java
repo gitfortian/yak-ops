@@ -12,6 +12,7 @@ class DataServiceProjectCompatibilityBackfillContractTest {
   void sourceManagedApisKeepAuthoringProjectBeforeLegacyFallback() throws Exception {
     String source = Files.readString(source());
     assertThat(source)
+        .contains("dataDevelopmentBackfill.backfillLegacyRows()")
         .contains("DATA_DEVELOPMENT_DATA_SERVICE")
         .contains("JOIN yak_dev_node node")
         .contains("api.project_id <> node.project_id")
