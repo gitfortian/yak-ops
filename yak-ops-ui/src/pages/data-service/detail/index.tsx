@@ -1,4 +1,19 @@
 import YakTab from '@/components/YakTab';
+import {
+  DATA_SERVICE_NODE_SOURCE,
+  LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE,
+  getDataService,
+  getDataServiceRuntime,
+  listDataServiceDataSources,
+  listDataServiceKeys,
+  listDataServiceLogs,
+  type DataServiceApi,
+  type DataServiceApiKey,
+  type DataServiceCallLog,
+  type DataServiceRuntimeStatus,
+  type DataSourceOption,
+} from '@/services/data-service';
+import { BRAND_THEME } from '@/styles/brand';
 import { history, useParams } from '@umijs/max';
 import {
   Button,
@@ -12,23 +27,6 @@ import {
 } from 'antd';
 import { ArrowLeft, PlayCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-
-import { BRAND_THEME } from '@/styles/brand';
-
-import {
-  DATA_SERVICE_NODE_SOURCE,
-  LEGACY_DATA_DEVELOPMENT_RELEASE_SOURCE,
-  fetchDataServiceKeys,
-  fetchDataServiceLogs,
-  fetchDataServiceRuntime,
-  fetchDataServices,
-  fetchDataSourceOptions,
-  type DataServiceApi,
-  type DataServiceApiKey,
-  type DataServiceCallLog,
-  type DataServiceRuntimeStatus,
-  type DataSourceOption,
-} from '../service';
 
 type DetailTabKey = 'overview' | 'access' | 'runtime' | 'logs';
 
@@ -156,18 +154,18 @@ export default function DataServiceDetailPage() {
 
     setLoading(true);
     try {
-      const [servicesResponse, dataSourceResponse, runtimeResponse, keyResponse, logResponse] = await Promise.all([
-        fetchDataServices(),
-        fetchDataSourceOptions(),
-        fetchDataServiceRuntime(apiId),
-        fetchDataServiceKeys(apiId),
-        fetchDataServiceLogs(),
+      const [serviceResponse, dataSourceResponse, runtimeResponse, keyResponse, logResponse] = await Promise.all([
+        getDataService(apiId),
+        listDataServiceDataSources(),
+        getDataServiceRuntime(apiId),
+        listDataServiceKeys(apiId),
+        listDataServiceLogs(apiId, 50),
       ]);
-      setService((servicesResponse.data || []).find((item) => Number(item.id) === apiId));
-      setDataSources(dataSourceResponse.data || []);
-      setRuntime(runtimeResponse.data);
-      setKeys(keyResponse.data || []);
-      setLogs(logResponse.data || []);
+      setService(serviceResponse);
+      setDataSources(dataSourceResponse);
+      setRuntime(runtimeResponse);
+      setKeys(keyResponse);
+      setLogs(logResponse);
     } catch (error: any) {
       message.error(error?.message || '加载 API 详情失败');
     } finally {
@@ -187,11 +185,6 @@ export default function DataServiceDetailPage() {
     return dataSources.find((item) => String(item.value) === String(service.dataSourceId))?.label
       || `#${service.dataSourceId}`;
   }, [dataSources, service?.dataSourceId]);
-
-  const serviceLogs = useMemo(
-    () => logs.filter((item) => Number(item.apiId) === apiId).slice(0, 50),
-    [apiId, logs],
-  );
 
   const activeKeys = useMemo(
     () => keys.filter((item) => item.enabled).length,
@@ -363,12 +356,12 @@ export default function DataServiceDetailPage() {
   const logsContent = (
     <SectionCard title="调用记录">
       <div className="p-5">
-        {serviceLogs.length ? (
+        {logs.length ? (
           <Table<DataServiceCallLog>
             rowKey="id"
             size="small"
             columns={logColumns}
-            dataSource={serviceLogs}
+            dataSource={logs}
             pagination={false}
             scroll={{ x: 760 }}
             className="[&_.ant-table-container]:!rounded-md [&_.ant-table-container]:!border [&_.ant-table-container]:!border-solid [&_.ant-table-container]:!border-[#eceef1] [&_.ant-table-thead>tr>th]:!h-10 [&_.ant-table-thead>tr>th]:!bg-[#f7f7f8] [&_.ant-table-thead>tr>th]:!text-[12px] [&_.ant-table-tbody>tr>td]:!py-3 [&_.ant-table-tbody>tr>td]:!text-[12px]"
