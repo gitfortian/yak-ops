@@ -6,14 +6,22 @@ import java.util.Optional;
 
 public interface DataServiceRepository {
 
+  /** Management-plane lookup scoped to the trusted CurrentProject. */
   Optional<DataServiceDefinition> findById(Long id);
 
+  /** Management-plane path lookup scoped to the trusted CurrentProject. */
   Optional<DataServiceDefinition> findByPath(String path);
 
+  /** Public invocation-plane lookup. Runtime paths remain globally unique. */
+  Optional<DataServiceDefinition> findByRuntimePath(String path);
+
+  /** Management-plane source lookup scoped to the trusted CurrentProject. */
   Optional<DataServiceDefinition> findBySource(String sourceType, String sourceRef);
 
+  /** Management-plane catalog scoped to the trusted CurrentProject. */
   List<DataServiceDefinition> findAll();
 
+  /** Runtime paths are globally unique because the invocation URL has no Project namespace. */
   boolean existsByPath(String path, Long excludeId);
 
   DataServiceDefinition save(DataServiceDefinition definition);
