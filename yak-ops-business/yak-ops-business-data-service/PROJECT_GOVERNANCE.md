@@ -44,7 +44,7 @@ Invocation
 
 API Key 和 Documentation 不重复保存 `project_id`；它们通过父 `api_id` 的 Project ownership 受控。Key update/rotate/delete 必须先确认父 API 属于 CurrentProject，不能只凭 keyId/apiId 修改。
 
-## Global runtime path
+## Narrow global read corridors
 
 外部 Invocation URL 没有 Project namespace，因此 `DataServiceSettings.path` 继续保持**全局唯一**：
 
@@ -53,14 +53,21 @@ Project A /orders
 Project B /orders   <- rejected
 ```
 
-Repository 只有一个明确的全局读 corridor：
+Repository 只允许两个明确、窄化的全局只读 corridor：
 
 ```text
-DataServiceReader.requireByPath
-  -> DataServiceRepository.findByRuntimePath
+1. DataServiceReader.requireByPath
+     -> DataServiceRepository.findByRuntimePath
+     -> external Invocation only
+
+2. DataServiceReader.count
+     -> DataServiceRepository.count
+     -> Home cockpit scalar aggregate only
 ```
 
-它只服务外部 Invocation。其他 `findById / findBySource / findAll / save / delete` 都必须受 CurrentProject 约束。
+`count` 只返回跨 Project 的单个 API 数量，不返回 ID、Path、Source、SQL、Project ID 或任何 Definition 列表，不能演化成通用 cross-project query API。
+
+除此之外，`findById / findByPath / findBySource / findAll / save / delete` 都必须受 CurrentProject 约束。
 
 ## Permissions
 
@@ -87,12 +94,13 @@ Flyway V12 只扩展 nullable `project_id` 列；Project ID 来自 Yak Security�
 ApplicationReady backfill 顺序：
 
 1. 确保 compatibility default Project；
-2. `DATA_DEVELOPMENT_DATA_SERVICE` 来源优先从 `yak_dev_node.project_id` 推断 API ownership；
-3. 发现已有 API ownership 与 owning Data Development node 冲突则启动失败；
-4. 其余 legacy API 归 compatibility default Project；
-5. Call Log 优先继承现存 API Project；
-6. 已删除 API 的孤立历史日志归 compatibility default Project；
-7. 断言 API / Call Log 不再存在 NULL project。
+2. 先完成 Data Development 的幂等 Project ownership backfill；
+3. `DATA_DEVELOPMENT_DATA_SERVICE` 来源从 `yak_dev_node.project_id` 推断 API ownership；
+4. 发现已有 API ownership 与 owning Data Development node 冲突则启动失败；
+5. 其余 legacy API 归 compatibility default Project；
+6. Call Log 优先继承现存 API Project；
+7. 已删除 API 的孤立历史日志归 compatibility default Project；
+8. 断言 API / Call Log 不再存在 NULL project。
 
 这保证 Data Development Stage 2 已建立的 authoring Project 与 Data Service Runtime projection 不被二次切割。
 
@@ -101,7 +109,8 @@ ApplicationReady backfill 顺序：
 - Management Controller 必须 `PROJECT_REQUIRED`。
 - Public `DataServiceInvocationController` 禁止 `@ProjectScope` / Yak `@RequiresPermission`。
 - Project header 不能作为外部 Invocation 的授权选择器。
-- `findByRuntimePath` 不能被管理页面复用。
+- `findByRuntimePath` 只能服务外部 Invocation。
+- `count` 只能服务平台级 scalar overview，不能返回或定位跨 Project Definition。
 - Management Repository query/update/delete 必须包含 CurrentProject predicate。
 - Overview / logs 只能聚合当前 Project 的 invocation evidence。
 - Runtime path 继续全局唯一，直到未来显式设计 Project-aware public namespace。
