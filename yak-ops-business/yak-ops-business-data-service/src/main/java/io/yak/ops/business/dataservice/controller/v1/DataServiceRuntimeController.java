@@ -55,6 +55,14 @@ public class DataServiceRuntimeController {
   @GetMapping("/logs/recent")
   public Result<List<InvocationRecord>> logs() { return Result.success(callLogReader.recent()); }
 
+  @Operation(summary = "查询指定数据服务最近调用记录")
+  @GetMapping("/{id}/logs")
+  public Result<List<InvocationRecord>> logsByApi(
+      @PathVariable("id") Long id,
+      @RequestParam(value = "limit", defaultValue = "50") int limit) {
+    return Result.success(callLogReader.recentByApi(id, limit));
+  }
+
   @Operation(summary = "调用已发布的数据服务")
   @GetMapping("/runtime/{*servicePath}")
   public Result<DataServiceQueryResponse> invoke(@PathVariable("servicePath") String servicePath,
