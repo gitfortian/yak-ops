@@ -17,6 +17,7 @@ class DataDevelopmentRoleConventionTest {
           "dataset/DevelopmentDatasetNodeService.java",
           "directory/DevelopmentDirectoryService.java",
           "editor/DevelopmentEditorSettingsService.java",
+          "execution/DevelopmentTaskExecutionControlService.java",
           "execution/DevelopmentTaskExecutionService.java",
           "execution/DevelopmentTaskRunService.java",
           "node/DevelopmentNodeService.java",
