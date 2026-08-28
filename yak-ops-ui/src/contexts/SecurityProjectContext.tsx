@@ -1,6 +1,6 @@
 import { useModel } from '@umijs/max';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useMemo } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo } from 'react';
 import { getCurrentUser } from '@/services/security/account';
 import { toCurrentUser } from '@/services/security/currentIdentity';
 import {
@@ -56,7 +56,8 @@ export function SecurityProjectProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Persist the selected project before descendant passive effects issue project-scoped requests.
     const selected = chooseSecurityProject(projects, readStoredProjectId());
     if (selected) {
       if (selected.id !== currentProject?.id) selectProject(selected);
