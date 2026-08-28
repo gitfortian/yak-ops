@@ -32,7 +32,7 @@ public class OfflineSyncConfiguration {
     return Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration/yak-offline-sync")
-        .table("yak_offline_core_schema_history")
+        .table("yak_offline_sync_schema_history")
         .baselineVersion(MigrationVersion.fromVersion("0"))
         .baselineOnMigrate(true)
         .load();
