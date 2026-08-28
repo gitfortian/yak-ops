@@ -17,6 +17,7 @@ class DataDevelopmentArchitectureDocumentationTest {
       "ARCHITECTURE.md",
       "DEPENDENCIES.md",
       "REVIEW.md",
+      "MIGRATIONS.md",
       "EXECUTION_CONTROL_PLANE.md",
       "PROJECT_GOVERNANCE.md",
       "ENGINEERING_HARDENING.md");
