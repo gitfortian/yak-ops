@@ -29,17 +29,24 @@ public class DataServiceProjectCompatibilityBackfill {
   private static final String DATA_DEVELOPMENT_SOURCE = "DATA_DEVELOPMENT_DATA_SERVICE";
 
   private final ProjectCompatibilityCoordinator projectCoordinator;
+  private final DataDevelopmentProjectCompatibilityBackfill dataDevelopmentBackfill;
   private final JdbcTemplate jdbcTemplate;
 
   public DataServiceProjectCompatibilityBackfill(
       ProjectCompatibilityCoordinator projectCoordinator,
+      DataDevelopmentProjectCompatibilityBackfill dataDevelopmentBackfill,
       @Qualifier("yakBusinessDataSource") DataSource dataSource) {
     this.projectCoordinator = projectCoordinator;
+    this.dataDevelopmentBackfill = dataDevelopmentBackfill;
     this.jdbcTemplate = new JdbcTemplate(dataSource);
   }
 
   @EventListener(ApplicationReadyEvent.class)
   public void backfillLegacyRows() {
+    // Source-managed runtime projections must observe the final authoring Project ownership. The
+    // Data Development backfill is idempotent, so calling it here also removes listener-order races.
+    dataDevelopmentBackfill.backfillLegacyRows();
+
     long defaultProjectId = projectCoordinator.ensureRequiredDefaultProject();
     failOnManagedSourceProjectMismatch();
 
