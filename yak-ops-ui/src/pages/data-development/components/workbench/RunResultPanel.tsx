@@ -1,3 +1,4 @@
+import { useAccess } from '@umijs/max';
 import {
   GitBranch,
   LoaderCircle,
@@ -90,6 +91,8 @@ const RunResultPanel = ({
   actionLoading = false,
   onClose,
 }: RunResultPanelProps) => {
+  const access = useAccess();
+  const canExecute = access.hasPermission('data-development:execute');
   const [height, setHeight] = useState(initialHeight);
   const [resizing, setResizing] = useState(false);
   const lineageAvailable = node.type === 'SQL' && Boolean(onRefreshLineage);
@@ -206,7 +209,7 @@ const RunResultPanel = ({
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                {actualView === 'result' && result?.executionId && onCancel ? (
+                {canExecute && actualView === 'result' && result?.executionId && onCancel ? (
                   <button
                     type="button"
                     disabled={actionLoading}
@@ -221,7 +224,7 @@ const RunResultPanel = ({
                     停止
                   </button>
                 ) : null}
-                {actualView === 'result' && onRetry ? (
+                {canExecute && actualView === 'result' && onRetry ? (
                   <button
                     type="button"
                     disabled={actionLoading}
