@@ -26,6 +26,14 @@ public class DataServiceReader {
     return repository.findAll();
   }
 
+  /**
+   * Platform-wide aggregate count used by the Home cockpit. This returns only one scalar and does
+   * not expose Data Service identities or definitions across Project Spaces.
+   */
+  public long count() {
+    return repository.count();
+  }
+
   /** Management-plane source lookup: always scoped to the trusted CurrentProject. */
   public Optional<DataServiceDefinition> findBySource(String sourceType, String sourceRef) {
     return repository.findBySource(sourceType, sourceRef);
@@ -33,7 +41,7 @@ public class DataServiceReader {
 
   /**
    * Invocation-plane lookup. Runtime paths are globally unique and external callers do not carry a
-   * Yak Project header, so this is the one deliberate global Data Service read corridor.
+   * Yak Project header, so this is the deliberate global definition-read corridor.
    */
   public DataServiceDefinition requireByPath(String path) {
     return repository.findByRuntimePath(path)
