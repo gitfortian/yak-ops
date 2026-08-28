@@ -4,6 +4,7 @@ import io.yak.ops.business.dataservice.domain.access.DataServiceApiKey;
 import io.yak.ops.business.dataservice.repository.DataServiceRateLimitRepository;
 import java.time.Clock;
 import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,6 +20,7 @@ public class DataServiceRateLimiter {
   private final DataServiceRateLimitRepository repository;
   private final Clock clock;
 
+  @Autowired
   public DataServiceRateLimiter(DataServiceRateLimitRepository repository) {
     this(repository, Clock.systemUTC());
   }
