@@ -13,6 +13,7 @@ public class DataServiceApiPO {
 
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private String name;
   private String path;
   private Long dataSourceId;
