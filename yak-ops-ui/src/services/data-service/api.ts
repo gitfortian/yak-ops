@@ -38,6 +38,9 @@ const queryString = (params: object) => {
 export const listDataServices = (): Promise<DataServiceApi[]> =>
   HttpUtils.getData<DataServiceApi[]>(DATA_SERVICE_API_PREFIX);
 
+export const getDataService = (id: number): Promise<DataServiceApi> =>
+  HttpUtils.getData<DataServiceApi>(`${DATA_SERVICE_API_PREFIX}/${id}`);
+
 export const listDataServiceSources = ({
   sourceType,
   pageNo = 1,
@@ -203,6 +206,14 @@ export const testDataService = (
 export const listRecentDataServiceLogs = (): Promise<DataServiceCallLog[]> =>
   HttpUtils.getData<DataServiceCallLog[]>(
     `${DATA_SERVICE_API_PREFIX}/logs/recent`,
+  );
+
+export const listDataServiceLogs = (
+  id: number,
+  limit = 50,
+): Promise<DataServiceCallLog[]> =>
+  HttpUtils.getData<DataServiceCallLog[]>(
+    `${DATA_SERVICE_API_PREFIX}/${id}/logs${queryString({ limit })}`,
   );
 
 export const listDataServiceDataSources = (): Promise<DataSourceOption[]> =>
