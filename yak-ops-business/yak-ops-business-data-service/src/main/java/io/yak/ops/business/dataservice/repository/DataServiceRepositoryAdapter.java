@@ -10,7 +10,9 @@ import io.yak.ops.business.dataservice.domain.RuntimePolicy;
 import io.yak.ops.business.dataservice.domain.SourceReference;
 import io.yak.ops.business.dataservice.domain.access.AuthMode;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.CurrentProject;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -21,18 +23,39 @@ import org.springframework.stereotype.Repository;
 public class DataServiceRepositoryAdapter implements DataServiceRepository {
 
   private final DataServiceApiMapper mapper;
+  private final CurrentProject currentProject;
 
   @Override
   public Optional<DataServiceDefinition> findById(Long id) {
-    return Optional.ofNullable(id == null ? null : mapper.selectById(id)).map(this::toDomain);
+    if (id == null) return Optional.empty();
+    Long projectId = currentProject.requireProjectId();
+    return Optional.ofNullable(mapper.selectOne(
+            Wrappers.<DataServiceApiPO>lambdaQuery()
+                .eq(DataServiceApiPO::getId, id)
+                .eq(DataServiceApiPO::getProjectId, projectId)
+                .last("LIMIT 1")))
+        .map(this::toDomain);
   }
 
   @Override
   public Optional<DataServiceDefinition> findByPath(String path) {
     if (path == null) return Optional.empty();
+    Long projectId = currentProject.requireProjectId();
+    return Optional.ofNullable(mapper.selectOne(
+            Wrappers.<DataServiceApiPO>lambdaQuery()
+                .eq(DataServiceApiPO::getProjectId, projectId)
+                .eq(DataServiceApiPO::getPath, path)
+                .last("LIMIT 1")))
+        .map(this::toDomain);
+  }
+
+  @Override
+  public Optional<DataServiceDefinition> findByRuntimePath(String path) {
+    if (path == null) return Optional.empty();
     return Optional.ofNullable(mapper.selectOne(
             Wrappers.<DataServiceApiPO>lambdaQuery()
                 .eq(DataServiceApiPO::getPath, path)
+                .isNotNull(DataServiceApiPO::getProjectId)
                 .last("LIMIT 1")))
         .map(this::toDomain);
   }
@@ -40,8 +63,10 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
   @Override
   public Optional<DataServiceDefinition> findBySource(String sourceType, String sourceRef) {
     if (sourceType == null || sourceRef == null) return Optional.empty();
+    Long projectId = currentProject.requireProjectId();
     return Optional.ofNullable(mapper.selectOne(
             Wrappers.<DataServiceApiPO>lambdaQuery()
+                .eq(DataServiceApiPO::getProjectId, projectId)
                 .eq(DataServiceApiPO::getSourceType, sourceType)
                 .eq(DataServiceApiPO::getSourceRef, sourceRef)
                 .last("LIMIT 1")))
@@ -50,8 +75,10 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
 
   @Override
   public List<DataServiceDefinition> findAll() {
+    Long projectId = currentProject.requireProjectId();
     return mapper.selectList(
             Wrappers.<DataServiceApiPO>lambdaQuery()
+                .eq(DataServiceApiPO::getProjectId, projectId)
                 .orderByDesc(DataServiceApiPO::getUpdateTime)
                 .orderByDesc(DataServiceApiPO::getId))
         .stream().map(this::toDomain).toList();
@@ -68,15 +95,32 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
 
   @Override
   public DataServiceDefinition save(DataServiceDefinition definition) {
+    Long projectId = currentProject.requireProjectId();
+    if (definition == null || !Objects.equals(projectId, definition.projectId())) {
+      throw new IllegalArgumentException("数据服务不属于当前 Project Space");
+    }
     DataServiceApiPO po = toPo(definition);
-    if (definition.id() == null) mapper.insert(po);
-    else mapper.updateById(po);
+    if (definition.id() == null) {
+      mapper.insert(po);
+    } else {
+      int updated = mapper.update(
+          po,
+          Wrappers.<DataServiceApiPO>lambdaUpdate()
+              .eq(DataServiceApiPO::getId, definition.id())
+              .eq(DataServiceApiPO::getProjectId, projectId));
+      if (updated != 1) throw new IllegalArgumentException("数据服务不存在：" + definition.id());
+    }
     return toDomain(po);
   }
 
   @Override
   public boolean delete(Long id) {
-    return id != null && mapper.deleteById(id) > 0;
+    if (id == null) return false;
+    Long projectId = currentProject.requireProjectId();
+    return mapper.delete(
+        Wrappers.<DataServiceApiPO>lambdaQuery()
+            .eq(DataServiceApiPO::getId, id)
+            .eq(DataServiceApiPO::getProjectId, projectId)) > 0;
   }
 
   private DataServiceDefinition toDomain(DataServiceApiPO po) {
@@ -91,13 +135,14 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
         value(po.getCacheMaxEntries(), 200), Boolean.TRUE.equals(po.getCircuitBreakerEnabled()),
         value(po.getCircuitFailureThreshold(), 5), value(po.getCircuitRecoverySeconds(), 30));
     return DataServiceDefinition.restore(
-        po.getId(), settings, runtime, source, policy, AuthMode.parse(po.getAuthMode()),
+        po.getId(), po.getProjectId(), settings, runtime, source, policy, AuthMode.parse(po.getAuthMode()),
         po.getCreateTime(), po.getUpdateTime());
   }
 
   private DataServiceApiPO toPo(DataServiceDefinition definition) {
     DataServiceApiPO po = new DataServiceApiPO();
     po.setId(definition.id());
+    po.setProjectId(definition.projectId());
     DataServiceSettings settings = definition.settings();
     po.setName(settings.name());
     po.setPath(settings.path());
