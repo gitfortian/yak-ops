@@ -5,6 +5,7 @@ import io.yak.ops.business.dataservice.repository.DataServiceRateLimitRepository
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -42,7 +43,9 @@ public class DataServiceObservabilityMaintenance {
   }
 
   void maintainAt(LocalDateTime now) {
-    LocalDateTime rawCutoff = now.minusDays(rawRetentionDays);
+    // Only roll a complete hour whose end is outside the raw-retention window. Keeping the
+    // boundary hour raw avoids dropping still-retained rows from 30d overview queries.
+    LocalDateTime rawCutoff = now.minusDays(rawRetentionDays).truncatedTo(ChronoUnit.HOURS);
     int buckets = 0;
     int rawRows = 0;
     while (buckets < maxHourlyBucketsPerRun) {
