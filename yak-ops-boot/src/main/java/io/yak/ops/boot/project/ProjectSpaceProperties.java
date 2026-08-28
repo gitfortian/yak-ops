@@ -19,6 +19,7 @@ public class ProjectSpaceProperties {
     private boolean bootstrapDefaultProject;
     private String defaultProjectName = "默认空间";
     private String defaultOwnerUsername = "root";
+    private String defaultDepartmentName = "默认部门";
 
     public boolean isBootstrapDefaultProject() {
       return bootstrapDefaultProject;
@@ -42,6 +43,14 @@ public class ProjectSpaceProperties {
 
     public void setDefaultOwnerUsername(String defaultOwnerUsername) {
       this.defaultOwnerUsername = defaultOwnerUsername;
+    }
+
+    public String getDefaultDepartmentName() {
+      return defaultDepartmentName;
+    }
+
+    public void setDefaultDepartmentName(String defaultDepartmentName) {
+      this.defaultDepartmentName = defaultDepartmentName;
     }
   }
 }
