@@ -32,7 +32,7 @@ SELECT permissions.permission_code,
        permissions.menu_code,
        parent.app_name
 FROM yak_security_permission parent
-JOIN (
+CROSS JOIN (
     SELECT 'data-development:read' AS permission_code,
            '查看数据开发' AS permission_name,
            '查看开发目录、节点、草稿、版本、运行记录和发布中心' AS description,
