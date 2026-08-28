@@ -50,14 +50,17 @@ class DataServiceGovernanceContractTest {
   }
 
   @Test
-  void repositoryKeepsOneExplicitGlobalRuntimeReadCorridor() throws IOException {
+  void repositoryKeepsOnlyNarrowGlobalReadCorridors() throws IOException {
     String repository = Files.readString(repositorySource());
     String reader = Files.readString(readerSource());
     assertThat(repository)
         .contains("findByRuntimePath")
+        .contains("public long count()")
         .contains("currentProject.requireProjectId()")
         .contains("DataServiceApiPO::getProjectId");
-    assertThat(reader).contains("repository.findByRuntimePath(path)");
+    assertThat(reader)
+        .contains("repository.findByRuntimePath(path)")
+        .contains("repository.count()");
   }
 
   private Path controllerRoot() {
