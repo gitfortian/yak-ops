@@ -1,8 +1,8 @@
 /**
  * @deprecated New data-service code should import from `@/services/data-service`.
  *
- * Detail, debug, overview and log pages still use the historical response
- * envelope. Keep this facade until those routes are migrated independently.
+ * Debug, overview and log pages still use the historical response envelope.
+ * Keep this facade until those routes are migrated independently.
  */
 export * from '@/services/data-service/legacy';
 export {

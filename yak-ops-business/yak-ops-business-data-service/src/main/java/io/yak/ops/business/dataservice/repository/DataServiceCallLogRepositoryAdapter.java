@@ -26,9 +26,24 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
 
   @Override
   public List<InvocationRecord> recent(int limit) {
-    int size = Math.max(1, Math.min(1_000, limit));
+    int size = normalizeLimit(limit);
     return mapper.selectList(
             Wrappers.<DataServiceCallLogPO>lambdaQuery()
+                .orderByDesc(DataServiceCallLogPO::getCreateTime)
+                .orderByDesc(DataServiceCallLogPO::getId)
+                .last("LIMIT " + size))
+        .stream().map(this::toDomain).toList();
+  }
+
+  @Override
+  public List<InvocationRecord> recentByApi(Long apiId, int limit) {
+    if (apiId == null || apiId <= 0L) {
+      throw new IllegalArgumentException("数据服务 ID 必须大于 0");
+    }
+    int size = normalizeLimit(limit);
+    return mapper.selectList(
+            Wrappers.<DataServiceCallLogPO>lambdaQuery()
+                .eq(DataServiceCallLogPO::getApiId, apiId)
                 .orderByDesc(DataServiceCallLogPO::getCreateTime)
                 .orderByDesc(DataServiceCallLogPO::getId)
                 .last("LIMIT " + size))
@@ -44,6 +59,10 @@ public class DataServiceCallLogRepositoryAdapter implements DataServiceCallLogRe
                 .orderByAsc(DataServiceCallLogPO::getCreateTime)
                 .orderByAsc(DataServiceCallLogPO::getId))
         .stream().map(this::toDomain).toList();
+  }
+
+  private int normalizeLimit(int limit) {
+    return Math.max(1, Math.min(1_000, limit));
   }
 
   private InvocationRecord toDomain(DataServiceCallLogPO po) {

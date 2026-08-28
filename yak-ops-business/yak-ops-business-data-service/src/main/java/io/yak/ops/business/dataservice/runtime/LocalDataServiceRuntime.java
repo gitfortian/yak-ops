@@ -68,8 +68,15 @@ public class LocalDataServiceRuntime {
     return response;
   }
 
-  public String cacheKey(String compiledSql, List<Object> bindings) {
-    StringBuilder raw = new StringBuilder(compiledSql == null ? "" : compiledSql).append('\u001f');
+  /**
+   * Cache identity includes a persisted runtime namespace so a republish/settings generation cannot
+   * accidentally reuse an older node-local cache entry when cross-node invalidation is unavailable.
+   */
+  public String cacheKey(String namespace, String compiledSql, List<Object> bindings) {
+    StringBuilder raw = new StringBuilder(namespace == null ? "" : namespace)
+        .append('\u001d')
+        .append(compiledSql == null ? "" : compiledSql)
+        .append('\u001f');
     if (bindings != null) {
       for (Object value : bindings) {
         raw.append(value == null ? "<null>" : value.getClass().getName() + ':' + value).append('\u001e');
@@ -81,6 +88,11 @@ public class LocalDataServiceRuntime {
     } catch (Exception exception) {
       throw new IllegalStateException("无法生成数据服务缓存 Key", exception);
     }
+  }
+
+  /** Compatibility overload for callers/tests that do not yet supply a runtime generation. */
+  public String cacheKey(String compiledSql, List<Object> bindings) {
+    return cacheKey("", compiledSql, bindings);
   }
 
   public DataServiceRuntimeSnapshot snapshot(Long apiId, RuntimePolicy policy) {

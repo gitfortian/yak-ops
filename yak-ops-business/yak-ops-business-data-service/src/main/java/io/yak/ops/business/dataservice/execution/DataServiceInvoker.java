@@ -5,6 +5,7 @@ import io.yak.ops.business.dataservice.access.DataServiceRateLimitException;
 import io.yak.ops.business.dataservice.access.DataServiceUnauthorizedException;
 import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
 import io.yak.ops.business.dataservice.domain.DataServiceQueryResponse;
+import io.yak.ops.business.dataservice.domain.SourceReference;
 import io.yak.ops.business.dataservice.domain.access.AccessContext;
 import io.yak.ops.business.dataservice.query.DataServiceReader;
 import io.yak.ops.business.dataservice.runtime.LocalDataServiceRuntime;
@@ -14,6 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -21,6 +24,7 @@ import org.springframework.util.StringUtils;
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DataServiceInvoker {
+  private static final Logger LOGGER = LoggerFactory.getLogger(DataServiceInvoker.class);
   private static final int DEFAULT_PAGE_SIZE = 20;
   private final DataServiceReader reader;
   private final DataServiceAuthorizer authorizer;
@@ -40,7 +44,7 @@ public class DataServiceInvoker {
     try {
       access = authorizer.authorize(definition, rawApiKey);
     } catch (DataServiceUnauthorizedException | DataServiceRateLimitException exception) {
-      recorder.record(definition, parameters, false, 0L, 0, safeMessage(exception), AccessContext.rejectedApiKey());
+      audit(definition, parameters, false, 0L, 0, safeMessage(exception), AccessContext.rejectedApiKey());
       throw exception;
     }
     return execute(definition, parameters, access, true);
@@ -61,18 +65,62 @@ public class DataServiceInvoker {
           bindings.add("__yak_page_size=" + pagination.pageSize());
           bindings.add("__yak_return_total=" + pagination.returnTotalNum());
         }
-        String cacheKey = runtime.cacheKey(compiled.sql(), bindings);
+        String cacheKey = runtime.cacheKey(runtimeNamespace(definition), compiled.sql(), bindings);
         response = runtime.execute(definition.id(), definition.runtimePolicy(), cacheKey,
             () -> queryExecutor.execute(definition, compiled, pagination));
       } else {
         response = queryExecutor.execute(definition, compiled, pagination);
       }
-      recorder.record(definition, parameters, true, response.durationMs(), response.rowCount(), null, access);
+      audit(definition, parameters, true, response.durationMs(), response.rowCount(), null, access);
       return response;
     } catch (RuntimeException exception) {
-      recorder.record(definition, parameters, false, elapsedMs(started), 0, safeMessage(exception), access);
+      audit(definition, parameters, false, elapsedMs(started), 0, safeMessage(exception), access);
       throw exception;
     }
+  }
+
+  /**
+   * Invocation audit is evidence, not the business result. A logging outage must never turn a
+   * successful query into a failed API call or replace the original invocation exception.
+   */
+  private void audit(
+      DataServiceDefinition definition,
+      Map<String, String> parameters,
+      boolean success,
+      long durationMs,
+      int rowCount,
+      String errorMessage,
+      AccessContext access) {
+    try {
+      recorder.record(definition, parameters, success, durationMs, rowCount, errorMessage, access);
+    } catch (RuntimeException auditFailure) {
+      LOGGER.warn(
+          "Data Service invocation audit failed: apiId={}, success={}, cause={}",
+          definition == null ? null : definition.id(),
+          success,
+          safeMessage(auditFailure));
+    }
+  }
+
+  /**
+   * Persisted generation namespace protects node-local caches after republish/settings updates even
+   * when another JVM did not receive the local invalidation call.
+   */
+  String runtimeNamespace(DataServiceDefinition definition) {
+    SourceReference source = definition.sourceReference();
+    return new StringBuilder("api=")
+        .append(definition.id())
+        .append("|source=")
+        .append(source.sourceType())
+        .append(':')
+        .append(source.sourceRef())
+        .append("|revision=")
+        .append(source.sourceRevisionId())
+        .append(':')
+        .append(source.sourceRevisionNo())
+        .append("|generation=")
+        .append(definition.updateTime())
+        .toString();
   }
 
   private DataServicePagination pagination(DataServiceDefinition definition, Map<String, String> parameters) {

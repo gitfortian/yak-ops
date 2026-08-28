@@ -86,6 +86,7 @@ Source Provider
 - 服务停用、删除、重新发布关键 Runtime 配置时必须使本机旧状态失效。
 - Circuit 打开时返回 503。
 - Cache key 必须覆盖 compiled SQL 和绑定值；分页控制也必须进入 key，避免页间串数据。
+- Cache identity 还必须包含服务端持久化的 Runtime generation / Source Revision 身份；即使另一 JVM 未收到本地 invalidation，也不能让新 Revision 命中旧 Revision 的缓存结果。
 - 本地 Metrics 可以用于运行诊断，但不能反向覆盖持久化业务状态。
 
 ## 7. Documentation / OpenAPI
@@ -100,7 +101,7 @@ Source Provider
 
 ## 8. Observability
 
-每次真实调用必须能记录：
+正常情况下，每次真实调用必须能记录：
 
 - Data Service ID / 名称 / Path 快照；
 - Caller 类型；
@@ -111,6 +112,13 @@ Source Provider
 - row count；
 - error message；
 - create time。
+
+调用审计是 evidence，不是业务结果 Truth：
+
+- 调用日志持久化失败不能把已经成功的查询变成失败响应；
+- 调用日志持久化失败不能覆盖原始 SQL / 鉴权 / 限流异常；
+- 审计故障允许降级为内部告警/日志，业务调用语义保持原状；
+- 单个服务详情的调用记录必须支持按 Data Service ID 有界读取，不能依赖“读取全局最近日志后在浏览器过滤”。
 
 运行概览需要支持 `24h / 7d / 30d`，至少提供 API 数量、启停数量、调用量、成功率、平均耗时、返回行数、趋势、热点 API 和近期失败。
 
