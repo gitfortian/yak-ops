@@ -30,10 +30,21 @@ public class DataServiceInvocationRecorder {
       AccessContext access) {
     AccessContext caller = access == null ? AccessContext.publicAccess() : access;
     repository.save(new InvocationRecord(
-        null, definition.id(), definition.settings().name(), definition.settings().path(),
-        caller.callerType(), caller.apiKeyId(), caller.apiKeyName(), caller.apiKeyPrefix(),
-        limit(json(parameters == null ? Map.of() : parameters), 4_000), success, durationMs, rowCount,
-        limit(errorMessage, 1_000), LocalDateTime.now()));
+        null,
+        definition.projectId(),
+        definition.id(),
+        definition.settings().name(),
+        definition.settings().path(),
+        caller.callerType(),
+        caller.apiKeyId(),
+        caller.apiKeyName(),
+        caller.apiKeyPrefix(),
+        limit(json(parameters == null ? Map.of() : parameters), 4_000),
+        success,
+        durationMs,
+        rowCount,
+        limit(errorMessage, 1_000),
+        LocalDateTime.now()));
   }
 
   private String json(Object value) {
