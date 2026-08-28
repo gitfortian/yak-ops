@@ -27,6 +27,18 @@ class LocalDataServiceRuntimeTest {
   }
 
   @Test
+  void runtimeGenerationParticipatesInCacheIdentity() {
+    LocalDataServiceRuntime runtime = new LocalDataServiceRuntime();
+
+    String revisionOne = runtime.cacheKey("api=1|revision=10:1", "select ?", List.of(7));
+    String revisionTwo = runtime.cacheKey("api=1|revision=11:2", "select ?", List.of(7));
+
+    assertThat(revisionOne).isNotEqualTo(revisionTwo);
+    assertThat(revisionOne)
+        .isEqualTo(runtime.cacheKey("api=1|revision=10:1", "select ?", List.of(7)));
+  }
+
+  @Test
   void circuitOpensAfterConfiguredFailures() {
     LocalDataServiceRuntime runtime = new LocalDataServiceRuntime();
     RuntimePolicy policy = new RuntimePolicy(false, 60, 20, true, 1, 30);
