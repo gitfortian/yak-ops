@@ -19,9 +19,9 @@ import org.springframework.util.StringUtils;
 /**
  * Coordinates the compatibility Project Space used by Expand/Backfill/Contract migrations.
  *
- * <p>Generic bootstrap remains opt-in. A capability that explicitly cuts over to
- * PROJECT_REQUIRED may call {@link #ensureRequiredDefaultProject()} so its legacy global rows can
- * be moved into one concrete Project Space before the strong project boundary becomes visible.</p>
+ * <p>Generic bootstrap remains opt-in. A capability that explicitly cuts to PROJECT_REQUIRED may
+ * call {@link #ensureRequiredDefaultProject()} so its legacy global rows can be moved into one
+ * concrete Project Space before the strong project boundary becomes visible.</p>
  */
 @Component
 public class ProjectCompatibilityCoordinator {
@@ -93,7 +93,7 @@ public class ProjectCompatibilityCoordinator {
     UserBriefVO owner = userService.getUserBriefByUsername(ownerUsername);
     if (owner == null || owner.getId() == null) {
       throw new IllegalStateException(
-          "Data Development Project Space cutover requires compatibility owner user: "
+          "PROJECT_REQUIRED cutover requires compatibility owner user: "
               + ownerUsername
               + ". Configure yak.project-space.compatibility.default-owner-username if needed.");
     }
