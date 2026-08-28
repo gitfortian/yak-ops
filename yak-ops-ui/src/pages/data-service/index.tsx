@@ -17,6 +17,9 @@ const DataServicePage = () => {
     searchResults,
     searching,
     totalCalls,
+    canObserve,
+    canManage,
+    canDelete,
     dataSourceName,
     changeKeyword,
     search,
@@ -37,6 +40,8 @@ const DataServicePage = () => {
           loading={loading}
           records={searchResults}
           callsByApiId={callsByApiId}
+          canManage={canManage}
+          canDelete={canDelete}
           dataSourceName={dataSourceName}
           onKeywordChange={changeKeyword}
           onSearch={search}
@@ -58,6 +63,7 @@ const DataServicePage = () => {
           totalServices={services.length}
           runningServices={runningServices.length}
           totalCalls={totalCalls}
+          canObserve={canObserve}
           dataSourceName={dataSourceName}
           onKeywordChange={changeKeyword}
           onSearch={search}

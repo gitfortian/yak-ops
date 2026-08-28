@@ -8,7 +8,7 @@ export type ProjectMigrationMode =
 
 export type ProjectRequestRule = {
   prefix: string;
-  mode: Exclude<ProjectMigrationMode, 'LEGACY_GLOBAL'>;
+  mode: ProjectMigrationMode;
 };
 
 /** Project-aware API rollout table kept in lockstep with backend @ProjectScope adoption. */
@@ -17,6 +17,10 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/resources', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/datasets', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/data-development', mode: 'PROJECT_REQUIRED' },
+  // Data Service management is project-scoped, but the external runtime URL is intentionally
+  // global and protected by the published NONE/API_KEY contract rather than Yak console headers.
+  { prefix: '/api/v1/data-service/runtime', mode: 'LEGACY_GLOBAL' },
+  { prefix: '/api/v1/data-service', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/task-catalog', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/job/batch-definition', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/job/batch-execution', mode: 'PROJECT_OPTIONAL' },

@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 public final class DataServiceDefinition {
 
   private Long id;
+  private Long projectId;
   private DataServiceSettings settings;
   private PublishedRuntimeSnapshot runtimeSnapshot;
   private SourceReference sourceReference;
@@ -17,13 +18,26 @@ public final class DataServiceDefinition {
 
   private DataServiceDefinition() {}
 
+  /** @deprecated Production creation must supply the owning Project Space. */
+  @Deprecated(forRemoval = false)
   public static DataServiceDefinition create(
       DataServiceSettings settings,
       PublishedRuntimeSnapshot runtimeSnapshot,
       SourceReference sourceReference,
       RuntimePolicy runtimePolicy,
       LocalDateTime now) {
+    return create(null, settings, runtimeSnapshot, sourceReference, runtimePolicy, now);
+  }
+
+  public static DataServiceDefinition create(
+      Long projectId,
+      DataServiceSettings settings,
+      PublishedRuntimeSnapshot runtimeSnapshot,
+      SourceReference sourceReference,
+      RuntimePolicy runtimePolicy,
+      LocalDateTime now) {
     DataServiceDefinition definition = new DataServiceDefinition();
+    definition.projectId = normalizeProjectId(projectId);
     definition.settings = requireSettings(settings);
     definition.runtimeSnapshot = requireRuntime(runtimeSnapshot);
     definition.sourceReference = requireSource(sourceReference);
@@ -34,6 +48,8 @@ public final class DataServiceDefinition {
     return definition;
   }
 
+  /** @deprecated Persistence adapters should restore the owning Project Space explicitly. */
+  @Deprecated(forRemoval = false)
   public static DataServiceDefinition restore(
       Long id,
       DataServiceSettings settings,
@@ -43,8 +59,31 @@ public final class DataServiceDefinition {
       AuthMode authMode,
       LocalDateTime createTime,
       LocalDateTime updateTime) {
+    return restore(
+        id,
+        null,
+        settings,
+        runtimeSnapshot,
+        sourceReference,
+        runtimePolicy,
+        authMode,
+        createTime,
+        updateTime);
+  }
+
+  public static DataServiceDefinition restore(
+      Long id,
+      Long projectId,
+      DataServiceSettings settings,
+      PublishedRuntimeSnapshot runtimeSnapshot,
+      SourceReference sourceReference,
+      RuntimePolicy runtimePolicy,
+      AuthMode authMode,
+      LocalDateTime createTime,
+      LocalDateTime updateTime) {
     DataServiceDefinition definition = new DataServiceDefinition();
     definition.id = id;
+    definition.projectId = normalizeProjectId(projectId);
     definition.settings = requireSettings(settings);
     definition.runtimeSnapshot = requireRuntime(runtimeSnapshot);
     definition.sourceReference = requireSource(sourceReference);
@@ -90,6 +129,10 @@ public final class DataServiceDefinition {
     this.updateTime = now;
   }
 
+  private static Long normalizeProjectId(Long value) {
+    return value == null || value <= 0L ? null : value;
+  }
+
   private static DataServiceSettings requireSettings(DataServiceSettings value) {
     if (value == null) throw new IllegalArgumentException("Data Service settings must not be null");
     return value;
@@ -106,6 +149,7 @@ public final class DataServiceDefinition {
   }
 
   public Long id() { return id; }
+  public Long projectId() { return projectId; }
   public DataServiceSettings settings() { return settings; }
   public PublishedRuntimeSnapshot runtimeSnapshot() { return runtimeSnapshot; }
   public SourceReference sourceReference() { return sourceReference; }

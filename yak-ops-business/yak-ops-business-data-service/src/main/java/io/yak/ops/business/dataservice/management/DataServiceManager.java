@@ -10,6 +10,7 @@ import io.yak.ops.business.dataservice.query.DataServiceReader;
 import io.yak.ops.business.dataservice.repository.DataServiceRepository;
 import io.yak.ops.business.dataservice.runtime.DataServiceRuntimePolicyManager;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.CurrentProject;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class DataServiceManager {
   private final DataServiceReader reader;
   private final DataServiceApiKeyManager apiKeyManager;
   private final DataServiceRuntimePolicyManager runtimeManager;
+  private final CurrentProject currentProject;
 
   @Transactional
   public DataServiceDefinition savePublished(
@@ -32,8 +34,18 @@ public class DataServiceManager {
     ensurePathAvailable(existing == null ? null : existing.id(), settings.path());
     LocalDateTime now = LocalDateTime.now();
     DataServiceDefinition definition;
-    if (existing == null) definition = DataServiceDefinition.create(settings, runtime, source, RuntimePolicy.defaults(true), now);
-    else { definition = existing; definition.republish(settings, runtime, source, now); }
+    if (existing == null) {
+      definition = DataServiceDefinition.create(
+          currentProject.requireProjectId(),
+          settings,
+          runtime,
+          source,
+          RuntimePolicy.defaults(true),
+          now);
+    } else {
+      definition = existing;
+      definition.republish(settings, runtime, source, now);
+    }
     DataServiceDefinition saved = repository.save(definition);
     runtimeManager.invalidate(saved.id());
     return saved;

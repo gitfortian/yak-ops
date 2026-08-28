@@ -9,6 +9,7 @@ import io.yak.ops.business.dataservice.dao.model.DataServiceOverviewSummaryPO;
 import io.yak.ops.business.dataservice.dao.model.DataServiceOverviewTrendPO;
 import io.yak.ops.business.dataservice.domain.InvocationRecord;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.CurrentProject;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -23,6 +24,7 @@ public class DataServiceOverviewRepositoryAdapter implements DataServiceOverview
 
   private final DataServiceOverviewMapper overviewMapper;
   private final DataServiceCallLogMapper callLogMapper;
+  private final CurrentProject currentProject;
 
   @Override
   public Snapshot load(
@@ -38,24 +40,26 @@ public class DataServiceOverviewRepositoryAdapter implements DataServiceOverview
       throw new IllegalArgumentException("Data Service overview 时间范围无效");
     }
 
+    Long projectId = currentProject.requireProjectId();
     int minutes = Math.max(1, bucketMinutes);
     int buckets = Math.max(1, bucketCount);
     int hotLimit = normalizeLimit(hotApiLimit);
     int failures = normalizeLimit(failureLimit);
-    DataServiceOverviewSummaryPO summary = overviewMapper.selectSummary(from, to);
+    DataServiceOverviewSummaryPO summary = overviewMapper.selectSummary(projectId, from, to);
 
     List<TrendBucket> trend =
-        overviewMapper.selectTrend(from, to, minutes).stream()
+        overviewMapper.selectTrend(projectId, from, to, minutes).stream()
             .filter(value -> value.getBucketIndex() != null)
             .filter(value -> value.getBucketIndex() >= 0 && value.getBucketIndex() < buckets)
             .map(this::trend)
             .toList();
     List<ApiStatistics> hotApis =
-        overviewMapper.selectHotApis(from, to, hotLimit).stream().map(this::hotApi).toList();
+        overviewMapper.selectHotApis(projectId, from, to, hotLimit).stream().map(this::hotApi).toList();
     List<InvocationRecord> recentFailures =
         callLogMapper
             .selectList(
                 Wrappers.<DataServiceCallLogPO>lambdaQuery()
+                    .eq(DataServiceCallLogPO::getProjectId, projectId)
                     .ge(DataServiceCallLogPO::getCreateTime, from)
                     .le(DataServiceCallLogPO::getCreateTime, to)
                     .eq(DataServiceCallLogPO::getSuccess, false)
@@ -100,6 +104,7 @@ public class DataServiceOverviewRepositoryAdapter implements DataServiceOverview
   private InvocationRecord invocation(DataServiceCallLogPO value) {
     return new InvocationRecord(
         value.getId(),
+        value.getProjectId(),
         value.getApiId(),
         value.getServiceName(),
         value.getServicePath(),

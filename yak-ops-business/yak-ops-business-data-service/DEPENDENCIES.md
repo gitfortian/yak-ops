@@ -12,7 +12,9 @@
 6. `publication.source` 是跨模块 Source Provider 的公开 extension contract，保持 JDK-only。
 7. Data Service 不反向依赖 Data Development implementation。
 8. SQL 物理执行只走 `yak-ops-core` `SqlExecutionRuntime`，不访问 Datasource DAO/Mapper。
-9. 不通过 `service/common/helper/utils/util/base` 等模糊 package 绕过依赖矩阵。
+9. Project-aware management persistence 只通过 `yak-ops-core` `CurrentProject` 获取受信 Project identity。
+10. Public Invocation 只能通过显式 `findByRuntimePath` global read corridor 绕开 CurrentProject；其他 repository read/write 不允许退化成 global。
+11. 不通过 `service/common/helper/utils/util/base` 等模糊 package 绕过依赖矩阵。
 
 ## 2. 顶层依赖图
 
@@ -34,6 +36,7 @@ controller
    +--> query --> repository
 
 all business packages may depend on domain where required
+repository -> core CurrentProject for management ownership predicates
 config and domain have no internal outward dependencies
 ```
 
@@ -93,7 +96,7 @@ execution -> domain <- runtime
 execution -> runtime
 ```
 
-## 6. Persistence Corridor
+## 6. Persistence / Project Corridor
 
 唯一允许的业务到 ORM 路径：
 
@@ -106,6 +109,8 @@ Repository interface
     v
 RepositoryAdapter
     |
+    +--> CurrentProject (management ownership)
+    |
     v
 DAO Mapper / PO
 ```
@@ -116,7 +121,32 @@ DAO Mapper / PO
 repository/DataServiceRepositoryAdapter
   -> dao.mapper.DataServiceApiMapper
   -> dao.model.DataServiceApiPO
+  -> io.yak.ops.core.project.CurrentProject
 ```
+
+Management repository methods：
+
+```text
+findById
+findByPath
+findBySource
+findAll
+save
+delete
+```
+
+都必须绑定 `CurrentProject`。
+
+Public Runtime 唯一例外：
+
+```text
+DataServiceInvocationController
+  -> DataServiceInvoker
+  -> DataServiceReader.requireByPath
+  -> DataServiceRepository.findByRuntimePath
+```
+
+该 corridor 不读取 Yak Project Header，因为外部调用地址没有 Project namespace；它从全局唯一 path resolve 出 `DataServiceDefinition(projectId)` 后，再按 NONE/API_KEY 执行。
 
 禁止：
 
@@ -130,6 +160,8 @@ access -> dao
 documentation -> dao
 observability -> dao
 domain -> repository/dao
+management page -> findByRuntimePath
+external invocation -> CurrentProject selector
 ```
 
 `repository` 可以使用 MyBatis type，因为 Adapter 就是 persistence boundary；其他业务 package 不可以。
@@ -161,6 +193,8 @@ publication.source -> query/repository/management/execution/access/runtime
 
 Provider 负责返回**不可变、可发布的来源事实**，而不是进入 Data Service 内部执行链路。
 
+Source-managed Data Service 的 owner-context permission 由上游 authoring context 负责；Data Service 的 Project/RBAC 不能成为绕过 authoring ownership 的新 corridor。
+
 ## 8. Datasource / Core Corridor
 
 Data Service 当前允许的跨模块基础依赖：
@@ -168,9 +202,12 @@ Data Service 当前允许的跨模块基础依赖：
 ```text
 io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled
 io.yak.ops.core.execution.sql.*
+io.yak.ops.core.project.CurrentProject
+io.yak.ops.core.project.ProjectScope
+io.yak.ops.core.project.ProjectMigrationMode
 ```
 
-`ConditionalOnDataSourceEnabled` 只是模块启用条件；物理 SQL 通过 core contract 执行。
+`ConditionalOnDataSourceEnabled` 只是模块启用条件；物理 SQL 通过 core contract 执行；Project types 只承担 Management Plane 的受信 scope contract。
 
 禁止 Data Service 生产代码依赖：
 
@@ -186,12 +223,16 @@ io.yak.ops.business.development.*
 
 ## 9. HTTP Boundary
 
-Controller 可以使用：
+Management Controller 可以使用：
 
 - `Result`；
 - Spring MVC annotation；
+- `@ProjectScope(PROJECT_REQUIRED)`；
 - capability-owned input/view records；
-- Domain query result / audit projection。
+- Domain query result / audit projection；
+- action-specific Yak Security permission annotation。
+
+`DataServiceInvocationController` 是唯一 Public Invocation Controller：禁止添加 Yak Project Scope 或 Console RBAC；外部鉴权只来自已发布的 NONE/API_KEY contract。
 
 Controller 不应：
 
@@ -206,7 +247,7 @@ Controller 不应：
 `domain/**` 只表达 business fact/value：
 
 ```text
-DataServiceDefinition
+DataServiceDefinition(projectId)
 DataServiceSettings
 PublishedRuntimeSnapshot
 SourceReference
@@ -214,7 +255,7 @@ RuntimePolicy
 DataServiceQueryResponse
 DataServiceApiKey
 DataServiceDocumentation
-InvocationRecord
+InvocationRecord(projectId snapshot)
 ```
 
 Domain 不依赖：
@@ -257,7 +298,7 @@ Dependency Impact
 - target package:
 - why current owner cannot handle it:
 - cycle check:
-- persistence / source / datasource corridor impact:
+- persistence / source / datasource / project corridor impact:
 - DEPENDENCIES.md updated: yes/no
 ```
 

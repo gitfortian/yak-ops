@@ -12,6 +12,7 @@
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 顶层 package 依赖矩阵、允许/禁止的 corridor |
 | [REVIEW.md](REVIEW.md) | 修改本模块时的设计与 Review Checklist |
 | [RUNTIME_RELIABILITY.md](RUNTIME_RELIABILITY.md) | Stage 1 调用结果/审计隔离、版本化缓存和服务级日志读取契约 |
+| [PROJECT_GOVERNANCE.md](PROJECT_GOVERNANCE.md) | Management Plane Project/RBAC 与 Public Invocation Plane 的强边界 |
 | [../../CODE_STYLE.md](../../CODE_STYLE.md) | 仓库统一 Java / Role-oriented 工程约定 |
 
 ## 能力地图
@@ -70,6 +71,7 @@ dataservice
 7. Data Development 等上游模块只能实现 `publication.source.DataServiceSourceProvider`，不能依赖 Data Service 内部 Manager/Repository/Runtime。
 8. Invocation audit 是 evidence：日志持久化故障不能改变已经确定的业务调用结果或覆盖原始异常。
 9. Node-local Cache identity 必须带 persisted runtime generation，防止 republish 后跨节点误用旧代际结果。
+10. Yak Ops Management Plane 必须同时通过 Project Space 和 RBAC；外部 `/runtime/{servicePath}` 不接收 Yak Project Header，只按全局 runtime path + NONE/API_KEY 调用。
 
 ## 修改入口
 
@@ -84,6 +86,6 @@ dataservice
 6. REVIEW.md       -> 合并前逐项检查。
 ```
 
-涉及调用审计、Cache identity 或服务级调用日志读取时，同时查看 `RUNTIME_RELIABILITY.md`。
+涉及调用审计、Cache identity 或服务级调用日志读取时查看 `RUNTIME_RELIABILITY.md`；涉及 Project ownership、RBAC 或外部 Invocation 边界时查看 `PROJECT_GOVERNANCE.md`。
 
 如果需求无法由当前模型表达，先报告 `Requirement Gap` / `Domain Gap`，不要用临时 Map key、boolean、PO 字段或 Controller DTO 绕过模型。
