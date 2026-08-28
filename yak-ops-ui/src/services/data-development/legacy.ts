@@ -18,9 +18,9 @@ import type {
   DevelopmentTaskExecutionDetail,
   DevelopmentTaskExecutionPage,
   DevelopmentTaskExecutionQuery,
+  DevelopmentTaskExecutionSubmission,
   DevelopmentTaskRevision,
   DevelopmentTaskRevisionSummary,
-  DevelopmentTaskRunResult,
   SaveDevelopmentTaskDraftPayload,
   YakEditorSettings,
 } from './types';
@@ -96,8 +96,8 @@ export const saveDevelopmentTaskDraft = (
 export const runDevelopmentTask = (
   nodeId: DevelopmentId,
   payload: DevelopmentTaskDefinition,
-): Promise<ApiResponse<DevelopmentTaskRunResult>> =>
-  HttpUtils.post<DevelopmentTaskRunResult>(`${NODE_API}/${nodeId}/run`, payload);
+): Promise<ApiResponse<DevelopmentTaskExecutionSubmission>> =>
+  HttpUtils.post<DevelopmentTaskExecutionSubmission>(`${NODE_API}/${nodeId}/run`, payload);
 
 /** Compatibility request used by the page coordinator to enrich SQL metadata. */
 export const previewDevelopmentSqlLineageRequest = (
@@ -120,6 +120,23 @@ export const getDevelopmentTaskExecution = (
   id: DevelopmentId,
 ): Promise<ApiResponse<DevelopmentTaskExecutionDetail>> =>
   HttpUtils.get<DevelopmentTaskExecutionDetail>(`${EXECUTION_API}/${id}`);
+
+export const getActiveDevelopmentTaskExecution = (
+  nodeId: DevelopmentId,
+): Promise<ApiResponse<DevelopmentTaskExecutionDetail | null>> =>
+  HttpUtils.get<DevelopmentTaskExecutionDetail | null>(
+    `${EXECUTION_API}/active?nodeId=${encodeURIComponent(nodeId)}`,
+  );
+
+export const cancelDevelopmentTaskExecution = (
+  id: DevelopmentId,
+): Promise<ApiResponse<DevelopmentTaskExecutionDetail>> =>
+  HttpUtils.post<DevelopmentTaskExecutionDetail>(`${EXECUTION_API}/${id}/cancel`);
+
+export const retryDevelopmentTaskExecution = (
+  id: DevelopmentId,
+): Promise<ApiResponse<DevelopmentTaskExecutionSubmission>> =>
+  HttpUtils.post<DevelopmentTaskExecutionSubmission>(`${EXECUTION_API}/${id}/retry`);
 
 export const listDevelopmentReleases = (
   query: DevelopmentReleaseQuery,

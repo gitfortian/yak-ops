@@ -13,11 +13,21 @@ import {
   prepareDevelopmentTaskDefinition,
   restoreDevelopmentTaskOriginal,
 } from '../../editors/taskPersistence';
+import {
+  executionDetailToRunResult,
+  executionSubmissionToRunResult,
+  isDevelopmentExecutionActive,
+  isDevelopmentExecutionRetryable,
+} from '../../executions/execution-state';
 import { isDevelopmentTaskNode } from '../../node-model';
 import {
+  cancelDevelopmentTaskExecution,
+  getActiveDevelopmentTaskExecution,
   getDevelopmentTaskDraft,
+  getDevelopmentTaskExecution,
   previewDevelopmentSqlLineage,
   publishDevelopmentTask,
+  retryDevelopmentTaskExecution,
   runDevelopmentTask,
   saveDevelopmentTaskDraft,
 } from '../../service';
@@ -140,11 +150,14 @@ const DevelopmentWorkbench = ({
   const [runResults, setRunResults] = useState<
     Partial<Record<DevelopmentId, DevelopmentTaskRunResult>>
   >({});
+  const [executionIds, setExecutionIds] = useState<
+    Partial<Record<DevelopmentId, DevelopmentId>>
+  >({});
+  const [executionActionNodeIds, setExecutionActionNodeIds] = useState<DevelopmentId[]>([]);
   const [lineagePreviews, setLineagePreviews] = useState<
     Partial<Record<DevelopmentId, DevelopmentSqlLineagePreview>>
   >({});
   const [lineageLoadingNodeIds, setLineageLoadingNodeIds] = useState<DevelopmentId[]>([]);
-  const [runningNodeIds, setRunningNodeIds] = useState<DevelopmentId[]>([]);
   const [pendingClose, setPendingClose] = useState<PendingCloseRequest>();
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -176,6 +189,10 @@ const DevelopmentWorkbench = ({
     );
     setResourceDirtyNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
     setLineageLoadingNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
+    setExecutionActionNodeIds((current) => current.filter((nodeId) => nodeMap.has(nodeId)));
+    setExecutionIds((current) => Object.fromEntries(
+      Object.entries(current).filter(([nodeId]) => nodeMap.has(nodeId)),
+    ));
   }, [nodeMap]);
 
   useEffect(() => {
@@ -200,6 +217,80 @@ const DevelopmentWorkbench = ({
     };
   }, [activeNodeId, nodeMap]);
 
+  useEffect(() => {
+    if (!activeNodeId || executionIds[activeNodeId]) return;
+    const node = nodeMap.get(activeNodeId);
+    if (!node || !isDevelopmentTaskNode(node)) return;
+
+    let active = true;
+    getActiveDevelopmentTaskExecution(node.id)
+      .then((response) => {
+        if (!active) return;
+        const execution = responseData(response, '读取当前运行实例失败');
+        if (!execution) return;
+        setRunResults((current) => ({
+          ...current,
+          [node.id]: executionDetailToRunResult(execution),
+        }));
+        if (isDevelopmentExecutionActive(execution.status)) {
+          setExecutionIds((current) => ({ ...current, [node.id]: execution.id }));
+          setRunPanelOpen(true);
+          setBottomPanelView('result');
+        }
+      })
+      .catch(() => {
+        // Reattach is best-effort; normal draft/editor loading must remain usable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeNodeId, executionIds, nodeMap]);
+
+  useEffect(() => {
+    const tracked = Object.entries(executionIds).filter(
+      (entry): entry is [DevelopmentId, DevelopmentId] => Boolean(entry[1]),
+    );
+    if (!tracked.length) return;
+
+    let disposed = false;
+    const refresh = async () => {
+      await Promise.all(tracked.map(async ([nodeId, executionId]) => {
+        try {
+          const detail = responseData(
+            await getDevelopmentTaskExecution(executionId),
+            '刷新运行状态失败',
+          );
+          if (disposed) return;
+          setRunResults((current) => ({
+            ...current,
+            [nodeId]: executionDetailToRunResult(detail),
+          }));
+          if (!isDevelopmentExecutionActive(detail.status)) {
+            setExecutionIds((current) => {
+              if (current[nodeId] !== executionId) return current;
+              const next = { ...current };
+              delete next[nodeId];
+              return next;
+            });
+            if (detail.status === 'FAILED' || detail.status === 'TIMEOUT') {
+              message.error(detail.errorMessage || '任务执行失败');
+            }
+          }
+        } catch {
+          // The durable execution page remains the source of truth; retry on the next tick.
+        }
+      }));
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 1200);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [executionIds]);
+
   const activeResource = activeNodeId ? nodeMap.get(activeNodeId) : undefined;
   const activeTaskNode = activeResource && isDevelopmentTaskNode(activeResource)
     ? activeResource
@@ -207,8 +298,10 @@ const DevelopmentWorkbench = ({
   const activeDirectory = activeResource?.directoryId
     ? directoryMap.get(activeResource.directoryId)
     : undefined;
-  const activeRunning = activeTaskNode
-    ? runningNodeIds.includes(activeTaskNode.id)
+  const activeRunResult = activeTaskNode ? runResults[activeTaskNode.id] : undefined;
+  const activeRunning = isDevelopmentExecutionActive(activeRunResult?.status);
+  const activeExecutionActionLoading = activeTaskNode
+    ? executionActionNodeIds.includes(activeTaskNode.id)
     : false;
   const activeLineageLoading = activeTaskNode
     ? lineageLoadingNodeIds.includes(activeTaskNode.id)
@@ -278,16 +371,15 @@ const DevelopmentWorkbench = ({
   };
 
   const runActiveTask = async (contentOverride?: string) => {
-    if (!activeTaskNode || runningNodeIds.includes(activeTaskNode.id)) return;
+    if (!activeTaskNode || activeRunning) return;
     const node = activeTaskNode;
     const startedAt = Date.now();
     setRunPanelOpen(true);
     setBottomPanelView('result');
-    setRunningNodeIds((current) => [...current, node.id]);
     setRunResults((current) => ({
       ...current,
       [node.id]: {
-        status: 'RUNNING',
+        status: 'PENDING',
         message: '',
         durationMs: 0,
         output: {},
@@ -300,14 +392,27 @@ const DevelopmentWorkbench = ({
         contentOverride === undefined
           ? definition
           : { ...definition, content: contentOverride };
-      const result = responseData(
+      const submission = responseData(
         await runDevelopmentTask(node.id, runDefinition),
-        '运行任务失败',
+        '提交任务失败',
       );
-      setRunResults((current) => ({ ...current, [node.id]: result }));
-      if (result.status === 'FAILED' || result.status === 'TIMEOUT') {
-        message.error(result.message || 'SQL 执行失败');
+      setRunResults((current) => ({
+        ...current,
+        [node.id]: executionSubmissionToRunResult(submission),
+      }));
+      if (isDevelopmentExecutionActive(submission.status)) {
+        setExecutionIds((current) => ({ ...current, [node.id]: submission.id }));
+        return;
       }
+
+      const detail = responseData(
+        await getDevelopmentTaskExecution(submission.id),
+        '读取运行结果失败',
+      );
+      setRunResults((current) => ({
+        ...current,
+        [node.id]: executionDetailToRunResult(detail),
+      }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '运行任务失败';
       setRunResults((current) => ({
@@ -320,8 +425,66 @@ const DevelopmentWorkbench = ({
         },
       }));
       message.error(errorMessage);
+    }
+  };
+
+  const cancelActiveExecution = async () => {
+    if (!activeTaskNode || !activeRunResult?.executionId || !activeRunning) return;
+    const nodeId = activeTaskNode.id;
+    setExecutionActionNodeIds((current) =>
+      current.includes(nodeId) ? current : [...current, nodeId],
+    );
+    try {
+      const detail = responseData(
+        await cancelDevelopmentTaskExecution(activeRunResult.executionId),
+        '取消任务失败',
+      );
+      setRunResults((current) => ({
+        ...current,
+        [nodeId]: executionDetailToRunResult(detail),
+      }));
+      if (!isDevelopmentExecutionActive(detail.status)) {
+        setExecutionIds((current) => {
+          const next = { ...current };
+          delete next[nodeId];
+          return next;
+        });
+      }
+      message.success(detail.status === 'CANCELLED' ? '任务已取消' : '已提交取消请求');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '取消任务失败');
     } finally {
-      setRunningNodeIds((current) => current.filter((nodeId) => nodeId !== node.id));
+      setExecutionActionNodeIds((current) => current.filter((id) => id !== nodeId));
+    }
+  };
+
+  const retryActiveExecution = async () => {
+    if (
+      !activeTaskNode
+      || !activeRunResult?.executionId
+      || !isDevelopmentExecutionRetryable(activeRunResult.status)
+    ) return;
+    const nodeId = activeTaskNode.id;
+    setExecutionActionNodeIds((current) =>
+      current.includes(nodeId) ? current : [...current, nodeId],
+    );
+    try {
+      const submission = responseData(
+        await retryDevelopmentTaskExecution(activeRunResult.executionId),
+        '重试任务失败',
+      );
+      setRunResults((current) => ({
+        ...current,
+        [nodeId]: executionSubmissionToRunResult(submission),
+      }));
+      if (isDevelopmentExecutionActive(submission.status)) {
+        setExecutionIds((current) => ({ ...current, [nodeId]: submission.id }));
+      }
+      message.success('任务已重新提交');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '重试任务失败');
+    } finally {
+      setExecutionActionNodeIds((current) => current.filter((id) => id !== nodeId));
     }
   };
 
@@ -569,7 +732,7 @@ const DevelopmentWorkbench = ({
                 node={activeTaskNode}
                 directory={activeDirectory}
                 definition={definition}
-                result={runResults[activeTaskNode.id]}
+                result={activeRunResult}
                 view={bottomPanelView}
                 onViewChange={setBottomPanelView}
                 lineagePreview={lineagePreviews[activeTaskNode.id]}
@@ -577,6 +740,11 @@ const DevelopmentWorkbench = ({
                 onRefreshLineage={activeTaskNode.type === 'SQL'
                   ? () => void previewActiveLineage()
                   : undefined}
+                onCancel={activeRunning ? () => void cancelActiveExecution() : undefined}
+                onRetry={isDevelopmentExecutionRetryable(activeRunResult?.status)
+                  ? () => void retryActiveExecution()
+                  : undefined}
+                actionLoading={activeExecutionActionLoading}
                 onClose={() => setRunPanelOpen(false)}
               />
             </div>

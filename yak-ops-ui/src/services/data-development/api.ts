@@ -17,9 +17,9 @@ import type {
   DevelopmentTaskExecutionDetail,
   DevelopmentTaskExecutionPage,
   DevelopmentTaskExecutionQuery,
+  DevelopmentTaskExecutionSubmission,
   DevelopmentTaskRevision,
   DevelopmentTaskRevisionSummary,
-  DevelopmentTaskRunResult,
   SaveDevelopmentTaskDraftPayload,
   YakEditorSettings,
 } from './types';
@@ -107,12 +107,12 @@ export const saveDevelopmentTaskDraft = (
     payload,
   );
 
-/** Execute the current editor definition without implicitly saving it. */
+/** Submit current editor definition and return immediately with durable execution identity. */
 export const runDevelopmentTask = (
   nodeId: DevelopmentId,
   payload: DevelopmentTaskDefinition,
-): Promise<DevelopmentTaskRunResult> =>
-  HttpUtils.postData<DevelopmentTaskRunResult>(
+): Promise<DevelopmentTaskExecutionSubmission> =>
+  HttpUtils.postData<DevelopmentTaskExecutionSubmission>(
     `${resourcePath(NODE_API, nodeId)}/run`,
     payload,
   );
@@ -139,6 +139,29 @@ export const getDevelopmentTaskExecution = (
 ): Promise<DevelopmentTaskExecutionDetail> =>
   HttpUtils.getData<DevelopmentTaskExecutionDetail>(
     resourcePath(EXECUTION_API, id),
+  );
+
+export const getActiveDevelopmentTaskExecution = (
+  nodeId: DevelopmentId,
+): Promise<DevelopmentTaskExecutionDetail | null> =>
+  HttpUtils.getData<DevelopmentTaskExecutionDetail | null>(
+    `${EXECUTION_API}/active?nodeId=${encodeURIComponent(nodeId)}`,
+  );
+
+export const cancelDevelopmentTaskExecution = (
+  id: DevelopmentId,
+): Promise<DevelopmentTaskExecutionDetail> =>
+  HttpUtils.postData<DevelopmentTaskExecutionDetail>(
+    `${resourcePath(EXECUTION_API, id)}/cancel`,
+    {},
+  );
+
+export const retryDevelopmentTaskExecution = (
+  id: DevelopmentId,
+): Promise<DevelopmentTaskExecutionSubmission> =>
+  HttpUtils.postData<DevelopmentTaskExecutionSubmission>(
+    `${resourcePath(EXECUTION_API, id)}/retry`,
+    {},
   );
 
 export const listDevelopmentReleases = (
