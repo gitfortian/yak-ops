@@ -4,7 +4,7 @@ import io.yak.ops.business.dataservice.repository.DataServiceObservabilityMainte
 import io.yak.ops.business.dataservice.repository.DataServiceRateLimitRepository;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -53,7 +53,7 @@ public class DataServiceObservabilityMaintenance {
     }
 
     int expiredRollups = repository.deleteRollupsBefore(now.minusDays(rollupRetentionDays));
-    long minuteFloor = now.toEpochSecond(ZoneOffset.UTC) / 60L;
+    long minuteFloor = now.atZone(ZoneId.systemDefault()).toEpochSecond() / 60L;
     int expiredRateWindows = rateLimitRepository.deleteBefore(minuteFloor - 2L);
 
     if (buckets > 0 || expiredRollups > 0 || expiredRateWindows > 0) {
