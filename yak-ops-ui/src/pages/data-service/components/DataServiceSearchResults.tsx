@@ -26,6 +26,8 @@ interface DataServiceSearchResultsProps {
   loading: boolean;
   records: DataServiceApi[];
   callsByApiId: ReadonlyMap<number, number>;
+  canManage: boolean;
+  canDelete: boolean;
   dataSourceName: (dataSourceId?: number) => string;
   onKeywordChange: (value: string) => void;
   onSearch: () => void;
@@ -42,6 +44,8 @@ const DataServiceSearchResults = ({
   loading,
   records,
   callsByApiId,
+  canManage,
+  canDelete,
   dataSourceName,
   onKeywordChange,
   onSearch,
@@ -143,7 +147,7 @@ const DataServiceSearchResults = ({
         width: 100,
         render: (_value, service) => (
           <span className="text-[12px] text-[#475467]">
-            {callsByApiId.get(service.id) || 0}
+            {callsByApiId.get(service.id) ?? '—'}
           </span>
         ),
       },
@@ -156,6 +160,7 @@ const DataServiceSearchResults = ({
             <Switch
               size="small"
               checked={enabled}
+              disabled={!canManage}
               onChange={(nextEnabled) => onToggle(service, nextEnabled)}
             />
             <span
@@ -185,36 +190,40 @@ const DataServiceSearchResults = ({
             >
               查看
             </YakButton>
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: [
-                  {
-                    key: 'delete',
-                    danger: true,
-                    icon: <Trash2 size={14} />,
-                    label: '删除 API',
+            {canDelete ? (
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'delete',
+                      danger: true,
+                      icon: <Trash2 size={14} />,
+                      label: '删除 API',
+                    },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'delete') confirmDelete(service);
                   },
-                ],
-                onClick: ({ key }) => {
-                  if (key === 'delete') confirmDelete(service);
-                },
-              }}
-            >
-              <YakButton
-                type="text"
-                size="small"
-                iconOnly
-                icon={<MoreHorizontal size={16} />}
-                className="!h-7 !w-7 !min-w-0 !p-0"
-              />
-            </Dropdown>
+                }}
+              >
+                <YakButton
+                  type="text"
+                  size="small"
+                  iconOnly
+                  icon={<MoreHorizontal size={16} />}
+                  className="!h-7 !w-7 !min-w-0 !p-0"
+                />
+              </Dropdown>
+            ) : null}
           </div>
         ),
       },
     ],
     [
       callsByApiId,
+      canDelete,
+      canManage,
       dataSourceName,
       onCopyEndpoint,
       onDelete,
