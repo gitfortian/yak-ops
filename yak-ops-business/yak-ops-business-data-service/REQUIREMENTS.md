@@ -11,8 +11,9 @@ Data Service 将已发布的数据定义转化为稳定、可调用、可保护�
 - 稳定服务身份与上游 Revision 更新之间的解耦；
 - SQL / Datasource 来源可信；
 - 调用参数安全绑定；
-- API Key 鉴权和调用方识别；
-- 缓存、熔断等单节点 Runtime 保护；
+- API Key 鉴权、调用方识别和集群共享调用配额；
+- Cache / Circuit 等低延迟 Runtime 保护；
+- 多实例调用指标、审计生命周期和敏感参数保护；
 - 文档、OpenAPI、调用日志和运行概览；
 - 不绕过 Datasource 的统一 SQL Execution。
 
@@ -23,6 +24,7 @@ Data Service 将已发布的数据定义转化为稳定、可调用、可保护�
 - 启用/停用不能改变已发布 SQL、Datasource 或 Source Revision。
 - 删除服务时必须清理其 API Key，并移除当前节点的 Runtime state。
 - Runtime/Access 配置可以独立调整，不要求重新发布上游 Revision。
+- Data Service 必须维护持久化的单调 Runtime generation，用于区分不同发布/配置代际。
 
 ## 3. Publication
 
@@ -64,9 +66,11 @@ Source Provider
 - raw secret 永不落库；持久化只保存不可逆 hash 和可识别 prefix。
 - Key 可以设置名称、每分钟调用上限、过期时间和 enabled 状态。
 - 已启用 `API_KEY` 时不能禁用或删除最后一个有效 Key。
-- 鉴权失败返回 401；超过本节点限流返回 429。
+- 鉴权失败返回 401；超过调用上限返回 429。
+- `rateLimitPerMinute` 必须表示**整个 Yak Ops 集群共享的每 Key 固定窗口配额**，不能按 JVM/Pod 各自放大。
+- 共享限流协调存储不可用时必须 fail closed，不能静默绕过配额。
+- Key rotate / disable / delete 必须使对应共享限流窗口失效；过期窗口清理由维护任务处理，不能把扫描清理放在调用热路径。
 - 成功鉴权后调用日志需要记录 Key ID / Name / Prefix 快照，不记录 raw secret。
-- 当前 rate limit 是**进程本地 fixed-window 保护**，不是多节点全局配额 Truth。
 - Console 管理 API Key 时必须先确认父 Data Service 属于 CurrentProject；keyId 不能绕过 Project ownership。
 
 ## 6. Runtime Resilience
@@ -82,13 +86,15 @@ Source Provider
 
 要求：
 
-- Cache、Circuit state、Runtime metrics 当前均为单进程状态。
-- Runtime Policy 变化时必须清理受影响的本地缓存/熔断状态。
-- 服务停用、删除、重新发布关键 Runtime 配置时必须使本机旧状态失效。
+- Result Cache 与 Circuit state 可以保持 node-local，以避免把请求数据面强耦合到共享协调存储。
+- Runtime Policy 变化时必须清理当前节点受影响的缓存/熔断状态。
+- 服务停用、删除、重新发布关键 Runtime 配置时必须使当前节点旧状态失效。
 - Circuit 打开时返回 503。
 - Cache key 必须覆盖 compiled SQL 和绑定值；分页控制也必须进入 key，避免页间串数据。
-- Cache identity 还必须包含服务端持久化的 Runtime generation / Source Revision 身份；即使另一 JVM 未收到本地 invalidation，也不能让新 Revision 命中旧 Revision 的缓存结果。
-- 本地 Metrics 可以用于运行诊断，但不能反向覆盖持久化业务状态。
+- Cache identity 必须包含持久化 `runtime_generation`、Source Revision 以及影响执行/缓存的 Runtime shape；即使另一 JVM 未收到主动 invalidation，也不能命中新代际下的旧结果。
+- Runtime generation 必须是持久化单调值，不能依赖时间戳精度作为唯一代际标识。
+- Runtime 状态接口必须区分**集群调用指标**与**当前实例 resilience evidence**；不能把 node-local cache/circuit 冒充集群状态。
+- 集群调用指标至少覆盖 total/success/failure、success rate、average duration、最近成功/失败；P95 如果基于有限样本，必须明确是 bounded recent sample，而不是宣称全历史精确分位数。
 
 ## 7. Documentation / OpenAPI
 
@@ -107,7 +113,7 @@ Source Provider
 - Data Service ID / Project ID / 名称 / Path 快照；
 - Caller 类型；
 - API Key ID / 名称 / Prefix（如果存在）；
-- 请求参数 JSON（受长度限制）；
+- 请求参数 JSON（受长度限制且在持久化前脱敏）；
 - 成功/失败；
 - duration；
 - row count；
@@ -119,8 +125,17 @@ Source Provider
 - 调用日志持久化失败不能把已经成功的查询变成失败响应；
 - 调用日志持久化失败不能覆盖原始 SQL / 鉴权 / 限流异常；
 - 审计故障允许降级为内部告警/日志，业务调用语义保持原状；
+- password/token/authorization/API Key/credential 等 Secret 参数必须在 JSON 序列化前完全脱敏；手机号、证件号、邮箱等常见个人标识必须按规则掩码；
 - 单个服务详情的调用记录必须支持按 Data Service ID 有界读取，不能依赖“读取全局最近日志后在浏览器过滤”；
 - Console 的日志、Overview、热点和失败聚合必须只读取 CurrentProject 的调用 evidence。
+
+调用证据必须有生命周期：
+
+- raw invocation log 有有限 retention，默认 30 天；
+- 超过 raw retention 的完整小时必须先聚合到 hourly rollup，再删除对应 raw 行；
+- 同一小时的 rollup 与 raw delete 必须在同一事务中完成，避免双算或证据丢失；
+- hourly rollup 也必须有有限 retention，默认 365 天；
+- 单轮维护必须有上限，不能用一个长事务一次处理全部历史积压。
 
 运行概览需要支持 `24h / 7d / 30d`，至少提供 API 数量、启停数量、调用量、成功率、平均耗时、返回行数、趋势、热点 API 和近期失败。
 
@@ -141,7 +156,7 @@ Invocation Plane -> global service path + NONE/API_KEY
 - Project membership 与 RBAC 是两个独立 gate，不能用其中一个替代另一个；
 - `/api/v1/data-service/runtime/{servicePath}` 是 Public Invocation Plane，不要求也不信任 Yak Project Header；
 - Public Invocation 只能通过全局唯一 runtime path 找到服务，再按已发布 `NONE/API_KEY` 契约鉴权；
-- Repository 只能为 Public Invocation 保留一个明确的 global-by-path read corridor，其他 management read/write 必须使用 CurrentProject；
+- Repository 只允许明确声明的全局窄 corridor，例如 Public Invocation 的 global-by-path 和首页只读 count；其他 management read/write 必须使用 CurrentProject；
 - Source-managed Data Service 仍必须从 owning authoring context 发起定义变更，Project/RBAC 不能绕过该 owner boundary。
 
 ## 10. 模块边界
@@ -151,10 +166,11 @@ Invocation Plane -> global service path + NONE/API_KEY
 - Data Service definition；
 - Source publication / republish；
 - Data Service invocation；
-- API Key / auth / local rate limit；
-- local cache / circuit / metrics；
+- API Key / auth / cluster-wide rate limit；
+- node-local cache / circuit；
+- cluster invocation metric projection；
 - API documentation / OpenAPI；
-- invocation audit / overview；
+- sanitized invocation audit / overview / retention / hourly rollup；
 - Data Service Management Plane 的 Project ownership / RBAC boundary。
 
 本模块不负责：
@@ -163,8 +179,9 @@ Invocation Plane -> global service path + NONE/API_KEY
 - Datasource connection/catalog/plugin 管理；
 - Offline / Realtime Sync 调度；
 - 任意 DML/DDL；
-- 分布式缓存 Truth；
-- 多节点全局限流；
+- shared result-cache Truth；
+- distributed circuit-breaker state machine；
+- API Gateway；
 - 数据血缘或质量计算；
 - 用 Project Header 替代 Public Runtime API Key 鉴权。
 
@@ -175,7 +192,7 @@ Invocation Plane -> global service path + NONE/API_KEY
 ```text
 /api/v1/data-service REST 路径
 /api/v1/data-service/runtime/{servicePath} 外部调用地址
-现有主要 JSON shape
+现有主要 JSON shape（允许向 Runtime status 增加兼容字段）
 yak_ops_data_service_* 表的既有业务字段与 Flyway 历史
 yak-ops-core SqlExecutionRuntime contract
 Datasource Plugin / Catalog contract
@@ -183,7 +200,7 @@ Data Development SourceProvider 业务语义
 401 / 429 / 503 HTTP 状态语义
 ```
 
-Project cutover 可以通过 Expand + Backfill 增加 `project_id`，但不能把动态 compatibility Project ID 硬编码进静态 Flyway。
+Project cutover 可以通过 Expand + Backfill 增加 `project_id`，Stage 3 可以通过新 Flyway 增加 Runtime coordination / rollup 表，但不能改写已有 Flyway 历史。
 
 ## 12. 需求变更协议
 
