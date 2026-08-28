@@ -104,14 +104,17 @@ class DataServiceInvokerTest {
   void runtimeNamespaceChangesWhenPersistedGenerationChanges() {
     DataServiceDefinition newer = DataServiceDefinition.restore(
         7L,
+        3L,
+        12L,
         definition.settings(),
         definition.runtimeSnapshot(),
-        new SourceReference("TEST", "orders", 102L, 2),
+        definition.sourceReference(),
         definition.runtimePolicy(),
         AuthMode.NONE,
         LocalDateTime.of(2026, 8, 28, 10, 0),
-        LocalDateTime.of(2026, 8, 28, 10, 10));
+        LocalDateTime.of(2026, 8, 28, 10, 0));
 
+    assertThat(definition.runtimeGeneration()).isEqualTo(11L);
     assertThat(invoker.runtimeNamespace(definition))
         .isNotEqualTo(invoker.runtimeNamespace(newer));
   }
@@ -119,6 +122,8 @@ class DataServiceInvokerTest {
   private DataServiceDefinition definition() {
     return DataServiceDefinition.restore(
         7L,
+        3L,
+        11L,
         new DataServiceSettings("Orders", "/orders", 100, 30, true, null, false),
         new PublishedRuntimeSnapshot(9L, "select id from orders where id = :id"),
         new SourceReference("TEST", "orders", 101L, 1),
