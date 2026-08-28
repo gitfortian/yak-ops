@@ -49,8 +49,8 @@ public class DataDevelopmentProjectCompatibilityBackfill {
             + "  FROM yak_dev_node "
             + "  WHERE directory_id IS NOT NULL AND directory_id > 0 AND project_id IS NOT NULL "
             + "  GROUP BY directory_id HAVING COUNT(DISTINCT project_id) = 1"
-            + ") owner ON owner.directory_id = d.id "
-            + "SET d.project_id = owner.project_id WHERE d.project_id IS NULL");
+            + ") scoped_owner ON scoped_owner.directory_id = d.id "
+            + "SET d.project_id = scoped_owner.project_id WHERE d.project_id IS NULL");
     int defaultDirectories = jdbcTemplate.update(
         "UPDATE yak_dev_directory SET project_id = ? WHERE project_id IS NULL",
         defaultProjectId);
