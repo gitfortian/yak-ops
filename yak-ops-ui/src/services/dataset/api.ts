@@ -1,56 +1,20 @@
 import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
+import { isQueryableDatasetSourceType } from './constants';
 import type {
+  DatasetDetailWire,
   DatasetField,
   DatasetFieldType,
+  DatasetFieldWire,
   DatasetQueryPayload,
   DatasetQueryResult,
+  DatasetSummaryWire,
+  DatasetVersionWire,
   PublishedDataset,
 } from './types';
 
 const DATASET_API = '/api/v1/datasets';
-
-interface DatasetSummaryWire {
-  id: string;
-  name: string;
-  description?: string | null;
-  status: 'ONLINE' | 'OFFLINE';
-  currentVersionId?: string | null;
-  createTime?: string;
-  updateTime?: string;
-}
-
-interface DatasetVersionWire {
-  id: string;
-  datasetId: string;
-  versionNo: number;
-  sourceType: 'QUERY_REVISION' | 'TABLE' | 'VIEW';
-  sourceTaskAssetId: string;
-  sourceTaskRevisionId: string;
-  sourceTaskRevisionNo: number;
-  schemaSnapshot?: string;
-  createTime?: string;
-}
-
-interface DatasetFieldWire {
-  fieldId: string;
-  versionId: string;
-  physicalName: string;
-  displayName: string;
-  dataType: 'STRING' | 'NUMBER' | 'DATE' | 'DATETIME' | 'BOOLEAN' | 'UNKNOWN';
-  nullable: boolean;
-  description?: string | null;
-  defaultRole: 'DIMENSION' | 'MEASURE';
-  sortOrder: number;
-}
-
-interface DatasetDetailWire {
-  dataset: DatasetSummaryWire;
-  currentVersion?: DatasetVersionWire | null;
-  versions: DatasetVersionWire[];
-  fields: DatasetFieldWire[];
-}
 
 export interface DatasetRequestOptions {
   /** Allows callers to cancel stale Dataset requests without changing the backend contract. */
@@ -96,17 +60,40 @@ const toField = (field: DatasetFieldWire): DatasetField => ({
   description: field.description || undefined,
 });
 
+const datasetVersionSource = (version?: DatasetVersionWire | null) => {
+  if (!version) {
+    return { id: '', name: '尚未绑定版本' };
+  }
+  switch (version.sourceType) {
+    case 'QUERY_REVISION':
+      return {
+        id: String(version.sourceTaskAssetId),
+        name: `SQL TaskAsset #${version.sourceTaskAssetId} · V${version.sourceTaskRevisionNo}`,
+      };
+    case 'SQL_QUERY': {
+      const dataSourceId = version.dataSourceId?.trim() || '';
+      return {
+        id: '',
+        name: dataSourceId ? `Standalone SQL · 数据源 ${dataSourceId}` : 'Standalone SQL',
+      };
+    }
+    case 'TABLE':
+      return { id: '', name: '数据表 Dataset（查询运行时尚未接入）' };
+    case 'VIEW':
+      return { id: '', name: '视图 Dataset（查询运行时尚未接入）' };
+  }
+};
+
 const toDataset = (detail: DatasetDetailWire): PublishedDataset => {
   const version = detail.currentVersion;
+  const source = datasetVersionSource(version);
   return {
     id: String(detail.dataset.id),
     name: detail.dataset.name,
     description: detail.dataset.description || '',
     status: detail.dataset.status,
-    sourceTaskId: version ? String(version.sourceTaskAssetId) : '',
-    sourceTaskName: version
-      ? `SQL TaskAsset #${version.sourceTaskAssetId} · V${version.sourceTaskRevisionNo}`
-      : '尚未绑定版本',
+    sourceTaskId: source.id,
+    sourceTaskName: source.name,
     currentVersionNo: version?.versionNo,
     updatedAt: detail.dataset.updateTime || detail.dataset.createTime || '',
     fields: (detail.fields || []).map(toField),
@@ -130,8 +117,11 @@ export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
     await HttpUtils.get<DatasetSummaryWire[]>(DATASET_API),
     '查询 Dataset 列表失败',
   );
-  const online = (list || []).filter((dataset) => dataset.status === 'ONLINE' && dataset.currentVersionId);
+  const online = (list || []).filter(
+    (dataset) => dataset.status === 'ONLINE' && dataset.currentVersionId,
+  );
   if (!online.length) return [];
+
   const details = await Promise.allSettled(
     online.map((dataset) => fetchDatasetDetail(
       String(dataset.id),
@@ -139,11 +129,26 @@ export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => {
     )),
   );
   const available = details
-    .filter((item): item is PromiseFulfilledResult<DatasetDetailWire> => item.status === 'fulfilled')
-    .map((item) => toDataset(item.value));
+    .filter(
+      (item): item is PromiseFulfilledResult<DatasetDetailWire> => item.status === 'fulfilled',
+    )
+    .map((item) => item.value)
+    .filter(
+      (detail) => Boolean(
+        detail.currentVersion
+        && isQueryableDatasetSourceType(detail.currentVersion.sourceType),
+      ),
+    )
+    .map(toDataset);
   if (!available.length) {
-    const rejected = details.find((item): item is PromiseRejectedResult => item.status === 'rejected');
-    throw rejected?.reason instanceof Error ? rejected.reason : new Error('读取 Dataset 详情失败');
+    const rejected = details.find(
+      (item): item is PromiseRejectedResult => item.status === 'rejected',
+    );
+    if (rejected) {
+      throw rejected.reason instanceof Error
+        ? rejected.reason
+        : new Error('读取 Dataset 详情失败');
+    }
   }
   return available;
 };
@@ -153,9 +158,18 @@ export const getPublishedDataset = async (
   datasetId: string,
   options?: DatasetRequestOptions,
 ): Promise<PublishedDataset> => {
-  const detail = await fetchDatasetDetail(datasetId, `查询 Dataset ${datasetId} 详情失败`, options);
+  const detail = await fetchDatasetDetail(
+    datasetId,
+    `查询 Dataset ${datasetId} 详情失败`,
+    options,
+  );
   if (detail.dataset.status !== 'ONLINE' || !detail.currentVersion) {
     throw new Error(`Dataset ${datasetId} 当前未发布`);
+  }
+  if (!isQueryableDatasetSourceType(detail.currentVersion.sourceType)) {
+    throw new Error(
+      `Dataset ${datasetId} 来源类型 ${detail.currentVersion.sourceType} 尚未接入查询运行时`,
+    );
   }
   return toDataset(detail);
 };

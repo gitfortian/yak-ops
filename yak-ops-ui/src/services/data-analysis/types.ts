@@ -1,13 +1,14 @@
-export type CatalogDatasetStatus = 'ONLINE' | 'OFFLINE';
-export type CatalogDatasetSourceType = 'QUERY_REVISION' | 'TABLE' | 'VIEW';
-export type CatalogDatasetFieldRole = 'DIMENSION' | 'MEASURE';
-export type CatalogDatasetFieldType =
-  | 'STRING'
-  | 'NUMBER'
-  | 'DATE'
-  | 'DATETIME'
-  | 'BOOLEAN'
-  | 'UNKNOWN';
+import type {
+  DatasetFieldDataType,
+  DatasetFieldRole,
+  DatasetSourceType,
+  DatasetStatus,
+} from '@/services/dataset';
+
+export type CatalogDatasetStatus = DatasetStatus;
+export type CatalogDatasetSourceType = DatasetSourceType;
+export type CatalogDatasetFieldRole = DatasetFieldRole;
+export type CatalogDatasetFieldType = DatasetFieldDataType;
 
 export interface CatalogDirectory {
   id: string;
@@ -20,9 +21,11 @@ export interface CatalogDatasetVersion {
   id: string;
   versionNo: number;
   sourceType: CatalogDatasetSourceType;
-  sourceTaskAssetId: string;
-  sourceTaskRevisionId: string;
-  sourceTaskRevisionNo: number;
+  sourceTaskAssetId?: string;
+  sourceTaskRevisionId?: string;
+  sourceTaskRevisionNo?: number;
+  dataSourceId?: string;
+  sql?: string;
   createTime?: string;
 }
 
@@ -49,6 +52,7 @@ export interface CatalogDataset {
   createTime?: string;
   updateTime?: string;
   analysisCount: number;
+  /** Current source display label. Historical property name retained for compatibility. */
   sourceTaskName?: string;
   sourceNodeId?: string;
   directoryId?: string;

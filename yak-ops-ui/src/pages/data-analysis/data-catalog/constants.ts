@@ -2,6 +2,7 @@ import type {
   CatalogDatasetFieldRole,
   CatalogDatasetSourceType,
 } from '@/services/data-analysis';
+import type { QueryableDatasetSourceType } from '@/services/dataset';
 
 export const DEFAULT_LEFT_WIDTH = 286;
 export const MIN_LEFT_WIDTH = 220;
@@ -11,10 +12,19 @@ export const ROOT_KEY = 'catalog:root';
 export const UNGROUPED_KEY = 'catalog:ungrouped';
 
 export const SOURCE_TYPE_LABELS: Record<CatalogDatasetSourceType, string> = {
-  QUERY_REVISION: 'SQL 查询',
-  TABLE: '数据表',
-  VIEW: '视图',
+  QUERY_REVISION: 'SQL 任务',
+  SQL_QUERY: 'Standalone SQL',
+  TABLE: '数据表（未接入）',
+  VIEW: '视图（未接入）',
 };
+
+export const QUERYABLE_SOURCE_TYPE_OPTIONS: Array<{
+  label: string;
+  value: QueryableDatasetSourceType;
+}> = [
+  { label: 'SQL 任务', value: 'QUERY_REVISION' },
+  { label: 'Standalone SQL', value: 'SQL_QUERY' },
+];
 
 export const FIELD_ROLE_LABELS: Record<CatalogDatasetFieldRole, string> = {
   DIMENSION: '维度',

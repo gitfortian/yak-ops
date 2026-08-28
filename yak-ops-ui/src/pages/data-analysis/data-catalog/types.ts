@@ -1,9 +1,10 @@
-import type { CatalogDatasetSourceType, CatalogDatasetStatus } from '@/services/data-analysis';
+import type { CatalogDatasetStatus } from '@/services/data-analysis';
+import type { QueryableDatasetSourceType } from '@/services/dataset';
 import type { DataNode } from 'antd/es/tree';
 
 export type CatalogTreeNodeKind = 'root' | 'directory' | 'dataset' | 'ungrouped';
 export type CatalogStatusFilter = 'ALL' | CatalogDatasetStatus;
-export type CatalogSourceTypeFilter = 'ALL' | CatalogDatasetSourceType;
+export type CatalogSourceTypeFilter = 'ALL' | QueryableDatasetSourceType;
 export type CatalogDetailTab = 'fields' | 'versions' | 'overview' | 'lineage';
 
 export interface CatalogTreeNode extends DataNode {

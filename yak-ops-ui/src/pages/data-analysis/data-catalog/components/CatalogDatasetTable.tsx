@@ -4,12 +4,20 @@ import type {
   CatalogDataset,
   CatalogDatasetStatus,
 } from '@/services/data-analysis';
+import { isQueryableDatasetSourceType } from '@/services/dataset';
 import { Input, Pagination, Popconfirm, Select, Table, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { BarChart3, Clock3, Search, TableProperties } from 'lucide-react';
-import { SOURCE_TYPE_LABELS } from '../constants';
+import {
+  QUERYABLE_SOURCE_TYPE_OPTIONS,
+  SOURCE_TYPE_LABELS,
+} from '../constants';
 import type { CatalogSourceTypeFilter, CatalogStatusFilter } from '../types';
-import { formatDateTime, getSchemaSummary } from '../utils';
+import {
+  formatDateTime,
+  getDatasetVersionSourceSummary,
+  getSchemaSummary,
+} from '../utils';
 
 interface CatalogDatasetTableProps {
   scopeTitle: string;
@@ -104,19 +112,25 @@ export function CatalogDatasetTable({
     {
       title: '来源',
       width: 210,
-      render: (_, record) => record.currentVersion ? (
-        <div className="min-w-0">
-          <div className="truncate text-[14px] text-[#344054]">
-            {record.sourceTaskName || `TaskAsset #${record.currentVersion.sourceTaskAssetId}`}
+      render: (_, record) => {
+        if (!record.currentVersion) {
+          return <span className="text-[12px] text-[#8a8f99]">尚无当前版本</span>;
+        }
+        const source = getDatasetVersionSourceSummary(
+          record.currentVersion,
+          record.sourceTaskName,
+        );
+        return (
+          <div className="min-w-0">
+            <div className="truncate text-[14px] text-[#344054]">
+              {source.title}
+            </div>
+            <div className="mt-0.5 text-[12px] text-[#8a8f99]">
+              {SOURCE_TYPE_LABELS[record.currentVersion.sourceType]} · {source.detail}
+            </div>
           </div>
-          <div className="mt-0.5 text-[12px] text-[#8a8f99]">
-            {SOURCE_TYPE_LABELS[record.currentVersion.sourceType]} · SQL V
-            {record.currentVersion.sourceTaskRevisionNo}
-          </div>
-        </div>
-      ) : (
-        <span className="text-[12px] text-[#8a8f99]">尚无当前版本</span>
-      ),
+        );
+      },
     },
     {
       title: 'Schema',
@@ -170,51 +184,59 @@ export function CatalogDatasetTable({
       title: '操作',
       fixed: 'right',
       width: 170,
-      render: (_, record) => (
-        <div className="flex items-center gap-1">
-          <Tooltip
-            title={
-              record.status === 'ONLINE'
-                ? '使用当前 Dataset 创建分析'
-                : 'Dataset 上线后才能创建 Analysis'
-            }
-          >
-            <YakButton
-              type="link"
-              size="small"
-              disabled={record.status !== 'ONLINE' || !record.currentVersion}
-              href={
-                record.status === 'ONLINE' && record.currentVersion
-                  ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(record.id)}`
-                  : undefined
+      render: (_, record) => {
+        const hasQueryableVersion = Boolean(
+          record.currentVersion
+          && isQueryableDatasetSourceType(record.currentVersion.sourceType),
+        );
+        const canCreateAnalysis = record.status === 'ONLINE' && hasQueryableVersion;
+        const createAnalysisTip = !record.currentVersion
+          ? 'Dataset 尚无当前版本'
+          : !hasQueryableVersion
+            ? `${SOURCE_TYPE_LABELS[record.currentVersion.sourceType]}尚未接入 Dataset Query Runtime`
+            : record.status === 'ONLINE'
+              ? '使用当前 Dataset 创建分析'
+              : 'Dataset 上线后才能创建 Analysis';
+        return (
+          <div className="flex items-center gap-1">
+            <Tooltip title={createAnalysisTip}>
+              <YakButton
+                type="link"
+                size="small"
+                disabled={!canCreateAnalysis}
+                href={
+                  canCreateAnalysis
+                    ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(record.id)}`
+                    : undefined
+                }
+                onClick={(event) => event.stopPropagation()}
+              >
+                创建分析
+              </YakButton>
+            </Tooltip>
+            <Popconfirm
+              title={record.status === 'ONLINE' ? '确认下线这个 Dataset？' : '确认上线这个 Dataset？'}
+              description={
+                record.status === 'ONLINE'
+                  ? '下线后现有 Analysis 将无法继续查询。'
+                  : '上线后可继续用于图表分析和仪表盘。'
               }
-              onClick={(event) => event.stopPropagation()}
+              okText="确认"
+              cancelText="取消"
+              onConfirm={() => onToggleStatus(record)}
             >
-              创建分析
-            </YakButton>
-          </Tooltip>
-          <Popconfirm
-            title={record.status === 'ONLINE' ? '确认下线这个 Dataset？' : '确认上线这个 Dataset？'}
-            description={
-              record.status === 'ONLINE'
-                ? '下线后现有 Analysis 将无法继续查询。'
-                : '上线后可继续用于图表分析和仪表盘。'
-            }
-            okText="确认"
-            cancelText="取消"
-            onConfirm={() => onToggleStatus(record)}
-          >
-            <YakButton
-              type="text"
-              size="small"
-              loading={statusUpdatingId === record.id}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {record.status === 'ONLINE' ? '下线' : '上线'}
-            </YakButton>
-          </Popconfirm>
-        </div>
-      ),
+              <YakButton
+                type="text"
+                size="small"
+                loading={statusUpdatingId === record.id}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {record.status === 'ONLINE' ? '下线' : '上线'}
+              </YakButton>
+            </Popconfirm>
+          </div>
+        );
+      },
     },
   ];
 
@@ -253,13 +275,11 @@ export function CatalogDatasetTable({
             <Select
               variant="filled"
               value={sourceType}
-              className="w-[116px]"
+              className="w-[142px]"
               onChange={onSourceTypeChange}
               options={[
                 { label: '全部来源', value: 'ALL' },
-                { label: 'SQL 查询', value: 'QUERY_REVISION' },
-                { label: '数据表', value: 'TABLE' },
-                { label: '视图', value: 'VIEW' },
+                ...QUERYABLE_SOURCE_TYPE_OPTIONS,
               ]}
             />
             <YakButton onClick={onReset}>重置</YakButton>

@@ -1,5 +1,6 @@
 import type {
   CatalogDataset,
+  CatalogDatasetVersion,
   CatalogDirectory,
 } from '@/services/data-analysis';
 import {
@@ -47,6 +48,40 @@ export const getSchemaSummary = (dataset: CatalogDataset) => {
     (field) => field.defaultRole === 'MEASURE',
   ).length;
   return { fields: dataset.fields.length, dimensions, metrics };
+};
+
+export const getDatasetVersionSourceSummary = (
+  version: CatalogDatasetVersion,
+  sourceTaskName?: string,
+) => {
+  switch (version.sourceType) {
+    case 'QUERY_REVISION':
+      return {
+        title:
+          sourceTaskName
+          || (version.sourceTaskAssetId
+            ? `TaskAsset #${version.sourceTaskAssetId}`
+            : 'SQL TaskAsset'),
+        detail: version.sourceTaskRevisionNo
+          ? `SQL V${version.sourceTaskRevisionNo}`
+          : `Dataset DV${version.versionNo}`,
+      };
+    case 'SQL_QUERY':
+      return {
+        title: version.dataSourceId ? `数据源 ${version.dataSourceId}` : 'Standalone SQL',
+        detail: `Standalone SQL · DV${version.versionNo}`,
+      };
+    case 'TABLE':
+      return {
+        title: '数据表来源',
+        detail: '查询运行时尚未接入',
+      };
+    case 'VIEW':
+      return {
+        title: '视图来源',
+        detail: '查询运行时尚未接入',
+      };
+  }
 };
 
 const getDirectoryAncestors = (
