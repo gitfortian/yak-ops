@@ -5,6 +5,7 @@ import io.yak.ops.business.dataservice.access.DataServiceRateLimitException;
 import io.yak.ops.business.dataservice.access.DataServiceUnauthorizedException;
 import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
 import io.yak.ops.business.dataservice.domain.DataServiceQueryResponse;
+import io.yak.ops.business.dataservice.domain.RuntimePolicy;
 import io.yak.ops.business.dataservice.domain.SourceReference;
 import io.yak.ops.business.dataservice.domain.access.AccessContext;
 import io.yak.ops.business.dataservice.query.DataServiceReader;
@@ -103,11 +104,13 @@ public class DataServiceInvoker {
   }
 
   /**
-   * Persisted monotonic generation protects node-local caches after republish/settings updates even
-   * when another JVM did not receive an explicit local invalidation call.
+   * Persisted monotonic generation is the primary cross-node cache namespace. Runtime-affecting
+   * settings/policy are also included so concurrent admin writes that observed the same generation
+   * still cannot reuse one another's cached results.
    */
   String runtimeNamespace(DataServiceDefinition definition) {
     SourceReference source = definition.sourceReference();
+    RuntimePolicy policy = definition.runtimePolicy();
     return new StringBuilder("api=")
         .append(definition.id())
         .append("|source=")
@@ -120,6 +123,16 @@ public class DataServiceInvoker {
         .append(source.sourceRevisionNo())
         .append("|generation=")
         .append(definition.runtimeGeneration())
+        .append("|maxRows=")
+        .append(definition.settings().maxRows())
+        .append("|pagination=")
+        .append(definition.settings().paginationEnabled())
+        .append("|cache=")
+        .append(policy.cacheEnabled())
+        .append(':')
+        .append(policy.cacheTtlSeconds())
+        .append(':')
+        .append(policy.cacheMaxEntries())
         .toString();
   }
 
