@@ -185,7 +185,7 @@ public class LocalDataServiceRuntime {
           breaker.state(), breaker.openUntil(), metric.totalCalls(), metric.successCalls(),
           metric.failureCalls(), metric.cacheHits(), metric.circuitRejected(), metric.successRate(),
           metric.cacheHitRate(), metric.averageDurationMs(), metric.p95DurationMs(),
-          metric.lastSuccessAt(), metric.lastFailureAt());
+          metric.lastSuccessAt(), metric.lastFailureAt(), "LOCAL");
     }
   }
 
