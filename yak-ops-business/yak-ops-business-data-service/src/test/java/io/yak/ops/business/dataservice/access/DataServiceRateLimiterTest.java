@@ -1,5 +1,6 @@
 package io.yak.ops.business.dataservice.access;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -12,10 +13,24 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class DataServiceRateLimiterTest {
 
   private static final Instant NOW = Instant.parse("2026-08-28T04:50:00Z");
+
+  @Test
+  void springCanCreateRateLimiterWithRepositoryConstructor() {
+    DataServiceRateLimitRepository repository = mock(DataServiceRateLimitRepository.class);
+
+    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+      context.registerBean(DataServiceRateLimitRepository.class, () -> repository);
+      context.register(DataServiceRateLimiter.class);
+      context.refresh();
+
+      assertThat(context.getBean(DataServiceRateLimiter.class)).isNotNull();
+    }
+  }
 
   @Test
   void delegatesAdmissionToSharedRepositoryWindow() {
