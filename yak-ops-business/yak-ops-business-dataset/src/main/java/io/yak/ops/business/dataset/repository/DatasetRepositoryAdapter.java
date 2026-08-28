@@ -19,6 +19,8 @@ import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,6 +92,7 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
     }
 
     long versionId = version.getId();
+    List<DatasetFieldPO> rows = new ArrayList<>(draft.fields().size());
     for (int index = 0; index < draft.fields().size(); index++) {
       DatasetFieldDefinition field = draft.fields().get(index);
       DatasetFieldPO po = new DatasetFieldPO();
@@ -102,8 +105,13 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
       po.setDescription(field.description());
       po.setDefaultRole(field.defaultRole().name());
       po.setSortOrder(index + 1);
-      if (datasetDao.insertField(po) != 1) {
-        throw new IllegalStateException("保存 Dataset 字段失败：" + field.fieldId());
+      rows.add(po);
+    }
+    if (!rows.isEmpty()) {
+      int affectedRows = datasetDao.insertFields(rows);
+      if (affectedRows != rows.size()) {
+        throw new IllegalStateException(
+            "保存 Dataset 字段失败：expected=" + rows.size() + ", actual=" + affectedRows);
       }
     }
     return versionId;
@@ -178,8 +186,21 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
   }
 
   @Override
+  public List<Dataset> listDatasetsByIds(Collection<Long> datasetIds) {
+    Long projectId = currentProjectId();
+    return datasetDao.selectDatasetsByIds(projectId, datasetIds).stream()
+        .map(this::toDomain)
+        .toList();
+  }
+
+  @Override
   public Optional<DatasetVersion> findVersion(long versionId) {
     return Optional.ofNullable(datasetDao.selectVersion(versionId)).map(this::toDomain);
+  }
+
+  @Override
+  public Optional<DatasetVersion> findVersion(long datasetId, int versionNo) {
+    return Optional.ofNullable(datasetDao.selectVersion(datasetId, versionNo)).map(this::toDomain);
   }
 
   @Override
@@ -188,8 +209,18 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
   }
 
   @Override
+  public List<DatasetVersion> listVersionsByIds(Collection<Long> versionIds) {
+    return datasetDao.selectVersionsByIds(versionIds).stream().map(this::toDomain).toList();
+  }
+
+  @Override
   public List<DatasetField> listFields(long versionId) {
     return datasetDao.selectFields(versionId).stream().map(this::toDomain).toList();
+  }
+
+  @Override
+  public List<DatasetField> listFieldsByVersionIds(Collection<Long> versionIds) {
+    return datasetDao.selectFieldsByVersionIds(versionIds).stream().map(this::toDomain).toList();
   }
 
   @Override

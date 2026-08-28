@@ -10,6 +10,7 @@ import io.yak.ops.business.dataset.controller.v1.converter.DatasetViewConverter;
 import io.yak.ops.business.dataset.controller.v1.dto.DatasetRequests.CreateDatasetVersionRequest;
 import io.yak.ops.business.dataset.controller.v1.dto.DatasetRequests.PublishDatasetRequest;
 import io.yak.ops.business.dataset.controller.v1.dto.DatasetRequests.QueryDatasetRequest;
+import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetCatalogVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetDetailVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryPerformanceVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryResultVO;
@@ -46,6 +47,13 @@ public class DatasetController {
   @GetMapping
   public Result<List<DatasetVO>> list() {
     return Result.success(datasetService.list().stream().map(viewConverter::dataset).toList());
+  }
+
+  @Operation(summary = "批量查询 Dataset 当前版本与字段目录")
+  @GetMapping("/catalog")
+  public Result<List<DatasetCatalogVO>> catalog(
+      @RequestParam(value = "datasetIds", required = false) List<Long> datasetIds) {
+    return Result.success(datasetService.catalog(datasetIds).stream().map(viewConverter::catalog).toList());
   }
 
   @Operation(summary = "查询最近的 Dataset SQL 性能诊断记录")

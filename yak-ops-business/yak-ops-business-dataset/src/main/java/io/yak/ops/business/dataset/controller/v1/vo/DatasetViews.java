@@ -47,6 +47,10 @@ public final class DatasetViews {
       int sortOrder) {
   }
 
+  public record DatasetCatalogVO(
+      DatasetVO dataset, DatasetVersionVO currentVersion, List<DatasetFieldVO> fields) {
+  }
+
   public record DatasetDetailVO(
       DatasetVO dataset,
       DatasetVersionVO currentVersion,

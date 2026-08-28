@@ -1,11 +1,13 @@
 package io.yak.ops.business.dataset.controller.v1.converter;
 
 import io.yak.ops.business.dataset.Dataset;
+import io.yak.ops.business.dataset.DatasetCatalogEntry;
 import io.yak.ops.business.dataset.DatasetDetail;
 import io.yak.ops.business.dataset.DatasetField;
 import io.yak.ops.business.dataset.DatasetQueryPerformance;
 import io.yak.ops.business.dataset.DatasetQueryResult;
 import io.yak.ops.business.dataset.DatasetVersion;
+import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetCatalogVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetDetailVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetFieldVO;
 import io.yak.ops.business.dataset.controller.v1.vo.DatasetViews.DatasetQueryBindingVO;
@@ -39,6 +41,13 @@ public class DatasetViewConverter {
     return new DatasetFieldVO(value.fieldId(), value.versionId(), value.physicalName(),
         value.displayName(), value.dataType().name(), value.nullable(), value.description(),
         value.defaultRole().name(), value.sortOrder());
+  }
+
+  public DatasetCatalogVO catalog(DatasetCatalogEntry value) {
+    return new DatasetCatalogVO(
+        dataset(value.dataset()),
+        version(value.currentVersion()),
+        value.fields().stream().map(this::field).toList());
   }
 
   public DatasetDetailVO detail(DatasetDetail value) {

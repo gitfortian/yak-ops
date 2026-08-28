@@ -11,6 +11,7 @@ import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
@@ -22,6 +23,8 @@ import org.springframework.stereotype.Repository;
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 public class DatasetDaoImpl implements DatasetDao {
+
+  private static final int FIELD_INSERT_BATCH_SIZE = 200;
 
   private final DatasetMapper datasetMapper;
   private final DatasetVersionMapper versionMapper;
@@ -44,6 +47,19 @@ public class DatasetDaoImpl implements DatasetDao {
   @Override
   public int insertField(DatasetFieldPO field) {
     return fieldMapper.insert(field);
+  }
+
+  @Override
+  public int insertFields(List<DatasetFieldPO> fields) {
+    if (fields == null || fields.isEmpty()) {
+      return 0;
+    }
+    int affectedRows = 0;
+    for (int start = 0; start < fields.size(); start += FIELD_INSERT_BATCH_SIZE) {
+      int end = Math.min(start + FIELD_INSERT_BATCH_SIZE, fields.size());
+      affectedRows += fieldMapper.insertBatch(fields.subList(start, end));
+    }
+    return affectedRows;
   }
 
   @Override
@@ -168,8 +184,29 @@ public class DatasetDaoImpl implements DatasetDao {
   }
 
   @Override
+  public List<DatasetPO> selectDatasetsByIds(Long projectId, Collection<Long> datasetIds) {
+    if (datasetIds == null || datasetIds.isEmpty()) {
+      return List.of();
+    }
+    return datasetMapper.selectList(
+        Wrappers.<DatasetPO>lambdaQuery()
+            .eq(projectId != null, DatasetPO::getProjectId, projectId)
+            .in(DatasetPO::getId, datasetIds)
+            .orderByDesc(DatasetPO::getUpdateTime)
+            .orderByDesc(DatasetPO::getId));
+  }
+
+  @Override
   public DatasetVersionPO selectVersion(long versionId) {
     return versionMapper.selectById(versionId);
+  }
+
+  @Override
+  public DatasetVersionPO selectVersion(long datasetId, int versionNo) {
+    return versionMapper.selectOne(
+        Wrappers.<DatasetVersionPO>lambdaQuery()
+            .eq(DatasetVersionPO::getDatasetId, datasetId)
+            .eq(DatasetVersionPO::getVersionNo, versionNo));
   }
 
   @Override
@@ -181,10 +218,33 @@ public class DatasetDaoImpl implements DatasetDao {
   }
 
   @Override
+  public List<DatasetVersionPO> selectVersionsByIds(Collection<Long> versionIds) {
+    if (versionIds == null || versionIds.isEmpty()) {
+      return List.of();
+    }
+    return versionMapper.selectList(
+        Wrappers.<DatasetVersionPO>lambdaQuery()
+            .in(DatasetVersionPO::getId, versionIds));
+  }
+
+  @Override
   public List<DatasetFieldPO> selectFields(long versionId) {
     return fieldMapper.selectList(
         Wrappers.<DatasetFieldPO>lambdaQuery()
             .eq(DatasetFieldPO::getVersionId, versionId)
+            .orderByAsc(DatasetFieldPO::getSortOrder)
+            .orderByAsc(DatasetFieldPO::getPhysicalName));
+  }
+
+  @Override
+  public List<DatasetFieldPO> selectFieldsByVersionIds(Collection<Long> versionIds) {
+    if (versionIds == null || versionIds.isEmpty()) {
+      return List.of();
+    }
+    return fieldMapper.selectList(
+        Wrappers.<DatasetFieldPO>lambdaQuery()
+            .in(DatasetFieldPO::getVersionId, versionIds)
+            .orderByAsc(DatasetFieldPO::getVersionId)
             .orderByAsc(DatasetFieldPO::getSortOrder)
             .orderByAsc(DatasetFieldPO::getPhysicalName));
   }

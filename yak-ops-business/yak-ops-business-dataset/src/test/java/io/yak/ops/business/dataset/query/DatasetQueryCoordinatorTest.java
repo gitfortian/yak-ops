@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,11 +71,10 @@ class DatasetQueryCoordinatorTest {
 
     Dataset dataset = dataset(21L, 32L);
     DatasetVersion v1 = version(31L, 21L, 1, DatasetSourceType.QUERY_REVISION);
-    DatasetVersion v2 = version(32L, 21L, 2, DatasetSourceType.SQL_QUERY);
     DatasetQueryRequest request =
         new DatasetQueryRequest(1, List.of(), List.of(), List.of(), List.of(), 10, null);
     when(repository.findDataset(21L)).thenReturn(Optional.of(dataset));
-    when(repository.listVersions(21L)).thenReturn(List.of(v2, v1));
+    when(repository.findVersion(21L, 1)).thenReturn(Optional.of(v1));
     when(repository.listFields(31L)).thenReturn(List.of());
     when(registry.require(DatasetSourceType.QUERY_REVISION)).thenReturn(adapter);
     when(adapter.execute(any(), any(), any(), any()))
@@ -92,6 +92,8 @@ class DatasetQueryCoordinatorTest {
     DatasetQueryResult result = coordinator.query(21L, request);
 
     assertEquals(31L, result.datasetVersionId());
+    verify(repository).findVersion(21L, 1);
+    verify(repository, never()).listVersions(21L);
     verify(registry).require(DatasetSourceType.QUERY_REVISION);
     verify(adapter).execute(dataset, v1, List.of(), request);
   }
