@@ -1,9 +1,11 @@
 package io.yak.ops.boot.project;
 
+import io.yak.framework.security.common.dto.dept.DeptSaveDTO;
 import io.yak.framework.security.common.dto.project.ProjectSaveDTO;
 import io.yak.framework.security.common.vo.project.ProjectBriefVO;
 import io.yak.framework.security.common.vo.project.ProjectVO;
 import io.yak.framework.security.common.vo.user.UserBriefVO;
+import io.yak.framework.security.service.DeptService;
 import io.yak.framework.security.service.ProjectService;
 import io.yak.framework.security.service.UserService;
 import java.util.Collections;
@@ -28,18 +30,22 @@ public class ProjectCompatibilityCoordinator {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ProjectCompatibilityCoordinator.class);
+  private static final long ROOT_DEPARTMENT_ID = 0L;
 
   private final ProjectSpaceProperties properties;
   private final ProjectService projectService;
   private final UserService userService;
+  private final DeptService deptService;
 
   public ProjectCompatibilityCoordinator(
       ProjectSpaceProperties properties,
       ProjectService projectService,
-      UserService userService) {
+      UserService userService,
+      DeptService deptService) {
     this.properties = properties;
     this.projectService = projectService;
     this.userService = userService;
+    this.deptService = deptService;
   }
 
   /**
@@ -109,6 +115,7 @@ public class ProjectCompatibilityCoordinator {
     input.setProjectName(normalizedProjectName());
     input.setDescription("Yak Ops Project Space compatibility default project");
     input.setRunning(Boolean.TRUE);
+    input.setDeptId(resolveCompatibilityDepartmentId(owner));
     input.setOwnerIdList(Collections.singletonList(owner.getId()));
     input.setUserIdList(userIds);
 
@@ -125,10 +132,61 @@ public class ProjectCompatibilityCoordinator {
     }
   }
 
+  private long resolveCompatibilityDepartmentId(UserBriefVO owner) {
+    Long ownerDepartmentId = owner.getDeptId();
+    if (ownerDepartmentId != null && ownerDepartmentId > 0) {
+      return ownerDepartmentId;
+    }
+
+    String departmentName = normalizedDepartmentName();
+    OptionalLong existing = findRootDepartmentId(departmentName);
+    if (existing.isPresent()) {
+      return existing.getAsLong();
+    }
+
+    DeptSaveDTO input = new DeptSaveDTO();
+    input.setDeptName(departmentName);
+    input.setDescription("Yak Ops Project Space compatibility default department");
+    input.setParentId(ROOT_DEPARTMENT_ID);
+
+    try {
+      deptService.createDept(input);
+    } catch (RuntimeException exception) {
+      // Multi-instance startup can race on department creation as well.
+      OptionalLong concurrent = findRootDepartmentId(departmentName);
+      if (concurrent.isPresent()) {
+        return concurrent.getAsLong();
+      }
+      throw exception;
+    }
+
+    return findRootDepartmentId(departmentName)
+        .orElseThrow(
+            () -> new IllegalStateException(
+                "Compatibility department was created but cannot be resolved: " + departmentName));
+  }
+
+  private OptionalLong findRootDepartmentId(String departmentName) {
+    List<Long> ids =
+        deptService.getDeptIdListByParentIdAndDeptName(ROOT_DEPARTMENT_ID, departmentName);
+    return (ids == null ? Collections.<Long>emptyList() : ids).stream()
+        .filter(id -> id != null && id > 0)
+        .mapToLong(Long::longValue)
+        .findFirst();
+  }
+
   private String normalizedProjectName() {
     String name = properties.getCompatibility().getDefaultProjectName();
     if (!StringUtils.hasText(name)) {
       throw new IllegalStateException("Default Project Space name must not be blank");
+    }
+    return name.trim();
+  }
+
+  private String normalizedDepartmentName() {
+    String name = properties.getCompatibility().getDefaultDepartmentName();
+    if (!StringUtils.hasText(name)) {
+      throw new IllegalStateException("Default compatibility department name must not be blank");
     }
     return name.trim();
   }
