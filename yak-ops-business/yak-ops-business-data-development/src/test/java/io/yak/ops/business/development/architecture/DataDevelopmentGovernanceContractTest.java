@@ -2,6 +2,7 @@ package io.yak.ops.business.development.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.yak.ops.common.constant.development.DataDevelopmentPermissionCode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,21 +60,21 @@ class DataDevelopmentGovernanceContractTest {
   }
 
   @Test
-  void permissionContractKeepsHighRiskActionsSeparate() throws IOException {
-    Path constants = moduleRoot()
-        .resolve("../../yak-ops-common/src/main/java/io/yak/ops/common/constant/development")
-        .normalize()
-        .resolve("DataDevelopmentPermissionCode.java");
-    String source = Files.readString(constants);
-    for (String code : List.of(
-        "data-development:read",
-        "data-development:edit",
-        "data-development:delete",
-        "data-development:execute",
-        "data-development:publish",
-        "data-development:release")) {
-      assertThat(source).contains(code);
-    }
+  void permissionContractKeepsHighRiskActionsSeparate() {
+    assertThat(List.of(
+        DataDevelopmentPermissionCode.READ,
+        DataDevelopmentPermissionCode.EDIT,
+        DataDevelopmentPermissionCode.DELETE,
+        DataDevelopmentPermissionCode.EXECUTE,
+        DataDevelopmentPermissionCode.PUBLISH,
+        DataDevelopmentPermissionCode.RELEASE))
+        .containsExactly(
+            "data-development:read",
+            "data-development:edit",
+            "data-development:delete",
+            "data-development:execute",
+            "data-development:publish",
+            "data-development:release");
   }
 
   private void assertContains(String controller, String... fragments) throws IOException {
