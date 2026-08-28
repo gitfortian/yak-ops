@@ -1,6 +1,6 @@
 package io.yak.ops.business.dataservice.repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 /** Cluster-wide invocation metric projection built from durable audit evidence and rollups. */
@@ -14,6 +14,6 @@ public interface DataServiceRuntimeMetricsRepository {
       long failureCalls,
       long totalDurationMs,
       List<Long> recentDurationsMs,
-      LocalDateTime lastSuccessAt,
-      LocalDateTime lastFailureAt) {}
+      Instant lastSuccessAt,
+      Instant lastFailureAt) {}
 }
