@@ -8,6 +8,7 @@ import {
   type DataServiceCallLog,
   type DataSourceOption,
 } from '@/services/data-service';
+import { useAccess } from '@umijs/max';
 import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -23,6 +24,10 @@ import {
 } from '../utils';
 
 export const useDataServiceMarketplace = () => {
+  const access = useAccess();
+  const canObserve = access.hasPermission('data-service:observe');
+  const canManage = access.hasPermission('data-service:manage');
+  const canDelete = access.hasPermission('data-service:delete');
   const requestSequenceRef = useRef(0);
   const [services, setServices] = useState<DataServiceApi[]>([]);
   const [dataSources, setDataSources] = useState<DataSourceOption[]>([]);
@@ -41,7 +46,7 @@ export const useDataServiceMarketplace = () => {
       const [serviceResult, dataSourceResult, logResult] = await Promise.all([
         listDataServices(),
         listDataServiceDataSources(),
-        listRecentDataServiceLogs(),
+        canObserve ? listRecentDataServiceLogs() : Promise.resolve([]),
       ]);
       if (requestSequence !== requestSequenceRef.current) return;
 
@@ -65,7 +70,7 @@ export const useDataServiceMarketplace = () => {
         setLoading(false);
       }
     }
-  }, []);
+  }, [canObserve]);
 
   useEffect(() => {
     void loadMarketplace();
@@ -91,8 +96,8 @@ export const useDataServiceMarketplace = () => {
     [services],
   );
   const hotServices = useMemo(
-    () => selectHotDataServices(services, callsByApiId),
-    [callsByApiId, services],
+    () => canObserve ? selectHotDataServices(services, callsByApiId) : [],
+    [callsByApiId, canObserve, services],
   );
   const searchResults = useMemo(
     () =>
@@ -134,6 +139,10 @@ export const useDataServiceMarketplace = () => {
 
   const deleteService = useCallback(
     async (service: DataServiceApi) => {
+      if (!canDelete) {
+        message.warning('无删除数据服务权限');
+        return;
+      }
       try {
         await deleteDataService(service.id);
         setDetailTarget((current) =>
@@ -146,11 +155,15 @@ export const useDataServiceMarketplace = () => {
         throw error;
       }
     },
-    [loadMarketplace],
+    [canDelete, loadMarketplace],
   );
 
   const toggleService = useCallback(
     async (service: DataServiceApi, enabled: boolean) => {
+      if (!canManage) {
+        message.warning('无管理数据服务权限');
+        return;
+      }
       try {
         await setDataServiceEnabled(service.id, enabled);
         message.success(enabled ? 'API 已启用' : 'API 已停用');
@@ -161,7 +174,7 @@ export const useDataServiceMarketplace = () => {
         );
       }
     },
-    [loadMarketplace],
+    [canManage, loadMarketplace],
   );
 
   const copyEndpoint = useCallback(async (endpoint: string) => {
@@ -185,7 +198,10 @@ export const useDataServiceMarketplace = () => {
     hotServices,
     searchResults,
     searching: Boolean(submittedKeyword.trim()),
-    totalCalls: logs.length,
+    totalCalls: canObserve ? logs.length : undefined,
+    canObserve,
+    canManage,
+    canDelete,
     dataSourceName,
     changeKeyword,
     search,
