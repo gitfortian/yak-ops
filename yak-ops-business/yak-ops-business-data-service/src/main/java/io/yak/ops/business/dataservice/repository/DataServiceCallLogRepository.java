@@ -10,5 +10,7 @@ public interface DataServiceCallLogRepository {
 
   List<InvocationRecord> recent(int limit);
 
+  List<InvocationRecord> recentByApi(Long apiId, int limit);
+
   List<InvocationRecord> between(LocalDateTime from, LocalDateTime to);
 }
