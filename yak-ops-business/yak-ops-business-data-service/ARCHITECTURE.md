@@ -1,6 +1,6 @@
 # Data Service Architecture
 
-> 本文是 `yak-ops-business-data-service` 的长期架构契约，描述职责归属、依赖方向和运行边界。历史迁移过程看 Git / PR。通用 Role Vocabulary 与 Java 规范遵循仓库根目录 [`CODE_STYLE.md`](../../CODE_STYLE.md)。
+> 本文是 `yak-ops-business-data-service` 的长期架构契约，描述职责归属、依赖方向和运行边界。历史迁移过程看 Git / PR。通用 Role Vocabulary 与 Java 规范遵循仓库根目录 [`CODE_STYLE.md`](../../CODE_STYLE.md)。Project/RBAC 与公网调用边界详见 `PROJECT_GOVERNANCE.md`。
 
 ## 1. 模块定位
 
@@ -15,7 +15,8 @@ Data Service 位于“已发布数据资产”与“在线查询调用”之间�
 - API Key 生命周期、鉴权和本地限流；
 - 单节点 Cache / Circuit Breaker / Runtime Metrics；
 - API contract documentation / OpenAPI；
-- invocation audit / overview。
+- invocation audit / overview；
+- Yak Ops Management Plane 的 Project ownership 与 RBAC。
 
 不负责：
 
@@ -24,7 +25,8 @@ Data Service 位于“已发布数据资产”与“在线查询调用”之间�
 - Offline/Realtime Sync orchestration；
 - 任意 DML/DDL；
 - 全局分布式缓存/限流；
-- 血缘、质量、指标计算。
+- 血缘、质量、指标计算；
+- 用 Yak Project Header 替代 Public Runtime 的 NONE/API_KEY 鉴权。
 
 ## 2. 设计原则
 
@@ -36,8 +38,9 @@ Data Service 位于“已发布数据资产”与“在线查询调用”之间�
 6. **SQL Trust Boundary 在服务端。** SQL/dataSourceId 只能来自 Source Provider，HTTP settings 更新不能注入执行定义。
 7. **安全 Secret 最小暴露。** raw API key 只在 create/rotate 返回一次，之后只使用 hash + prefix。
 8. **读写角色分开。** Manager/Publisher 管 command，Reader 管 query/projection。
-9. **依赖图无环。** 不通过白名单接受 Query↔Execution、Runtime↔Execution 等反向依赖。
-10. **结构重构默认不改行为。** REST、DB、HTTP status、SqlExecution contract 变化必须先更新 Requirements/Domain。
+9. **管理面与调用面分离。** Console Management 使用 Project + RBAC；外部 Invocation 使用全局 path + NONE/API_KEY。
+10. **依赖图无环。** 不通过白名单接受 Query↔Execution、Runtime↔Execution 等反向依赖。
+11. **结构重构默认不改行为。** REST、DB、HTTP status、SqlExecution contract 变化必须先更新 Requirements/Domain。
 
 ## 3. 总体架构
 
@@ -55,7 +58,7 @@ Data Development / other published source
          +--------+---------+
                   |
                   v
-        DataServiceDefinition
+ DataServiceDefinition(projectId)
       +-----------+-----------+
       |           |           |
       v           v           v
@@ -73,7 +76,23 @@ Data Development / other published source
                   v
               Datasource
 
-Invocation -> Recorder -> CallLogRepository -> Observability
+Invocation -> Recorder -> CallLogRepository(projectId snapshot) -> Observability
+```
+
+入口明确分成两个平面：
+
+```text
+Yak Ops User
+   -> Project membership
+   -> Data Service RBAC
+   -> Management Controllers
+   -> project-scoped Repository
+
+External Client
+   -> /api/v1/data-service/runtime/{servicePath}
+   -> NONE / X-API-Key
+   -> global findByRuntimePath
+   -> resolved DataServiceDefinition(projectId)
 ```
 
 ## 4. 包结构与职责
@@ -81,7 +100,7 @@ Invocation -> Recorder -> CallLogRepository -> Observability
 ```text
 dataservice
 ├── controller
-│   └── v1                 # REST mapping / request boundary
+│   └── v1                 # Console management + isolated public invocation boundary
 ├── publication
 │   └── source             # publish / republish / source extension contract
 ├── management             # stable aggregate command lifecycle
@@ -94,7 +113,7 @@ dataservice
 ├── domain
 │   ├── access
 │   └── documentation      # business facts / values
-├── repository             # persistence ports and explicit adapters
+├── repository             # persistence ports + Project-aware adapters
 ├── dao                    # MyBatis mapper / PO
 └── config                 # module wiring / conditional configuration
 ```
@@ -117,7 +136,7 @@ dataservice
 | `Runtime` | process-local resilience / metrics | `LocalDataServiceRuntime` |
 | `Recorder` | 调用完成后的审计写入 | `DataServiceInvocationRecorder` |
 | `Repository` | Domain persistence port | `DataServiceRepository` |
-| `Adapter` | Domain ↔ persistence translation | `DataServiceRepositoryAdapter` |
+| `Adapter` | Domain ↔ persistence / Project translation | `DataServiceRepositoryAdapter` |
 | `Renderer` | typed contract -> presentation artifact | `OpenApiRenderer` |
 | `Factory` | read-side projection construction | `DataServiceViewFactory` |
 
@@ -128,8 +147,10 @@ dataservice
 ### 6.1 初次发布
 
 ```text
-HTTP publish request
+PROJECT_REQUIRED HTTP publish request
        |
+       +-- Project membership
+       +-- data-service:publish
        v
 PublicationReader.normalizeIdentity
        |
@@ -143,8 +164,9 @@ SourceProvider.resolve
        v
 DataServiceManager.savePublished
        |
+       +-- bind CurrentProject.projectId
        v
-Repository
+Project-scoped Repository
 ```
 
 Source Provider 是**扩展 contract**，不是 Data Service 的内部 Repository。
@@ -158,15 +180,18 @@ Source owns:
 name/path/maxRows/timeout/pagination/description/contract
 
 Data Service owns:
-enabled/auth/API keys/runtime policy/runtime local state
+projectId/enabled/auth/API keys/runtime policy/runtime local state
 ```
 
 这条边界用于避免一个已发布 Revision 在 Data Development 和 Data Service 两侧同时被编辑成不同定义。
+
+Data Development source-managed API 的 Project ownership 必须与 owning Data Development Node 对齐；兼容迁移优先从 Source Node 推断，不允许把同一 authoring/runtime projection 拆到两个 Project。
 
 ### 6.3 Republish
 
 ```text
 same Data Service ID
+same Project ownership
       |
 resolve latest immutable source revision
       |
@@ -179,15 +204,50 @@ resolve latest immutable source revision
 invalidate local runtime state
 ```
 
-## 7. Invocation
+## 7. Management Plane
+
+Console 管理入口统一 `PROJECT_REQUIRED`，并按动作使用显式权限：
 
 ```text
-HTTP runtime request
+READ      -> marketplace / detail / docs / OpenAPI
+PUBLISH   -> sources / publish / republish / publication state
+MANAGE    -> settings / enable-disable / editable docs
+DELETE    -> delete
+ACCESS    -> auth mode / API key lifecycle
+RUNTIME   -> runtime policy / console test
+OBSERVE   -> overview / invocation logs
+```
+
+Repository 的 Console 方法必须绑定 `CurrentProject`：
+
+```text
+findById
+findByPath
+findBySource
+findAll
+save
+delete
+```
+
+API Key / Documentation 不重复持久化 projectId，但任何 Console mutation/read 必须先经过父 Data Service 的 Project ownership。
+
+## 8. Public Invocation Plane
+
+```text
+GET /api/v1/data-service/runtime/{servicePath}
+       |
+       v
+DataServiceInvocationController
        |
        v
 DataServiceInvoker
        |
-       +-- DataServiceReader: require enabled definition
+       +-- DataServiceReader.requireByPath
+       |       |
+       |       v
+       |  Repository.findByRuntimePath   # sole global Data Service read corridor
+       |
+       +-- require enabled definition
        +-- DataServiceAuthorizer: NONE / API_KEY
        +-- pagination normalization
        +-- DataServiceSqlCompiler: SELECT + named bindings
@@ -197,12 +257,14 @@ DataServiceInvoker
        |       v
        |   SqlExecutionRuntime
        |
-       +-- DataServiceInvocationRecorder
+       +-- DataServiceInvocationRecorder(projectId snapshot)
 ```
 
-Console test 调用真实 Datasource，但有意绕过外部 cache/circuit 行为，用于检查当前数据源和 SQL。
+`DataServiceInvocationController` 故意没有 Yak `@ProjectScope` / `@RequiresPermission`。外部调用方不需要也不能使用 `X-YAK-SECURITY-PROJECT-ID` 选择服务；Path 因此继续跨 Project 全局唯一。
 
-## 8. SQL read-side corridor
+Console test 调用真实 Datasource，但有意绕过外部 cache/circuit 行为，用于检查当前数据源和 SQL；它属于 Management Plane，需要 RUNTIME 权限和当前 Project。
+
+## 9. SQL read-side corridor
 
 `DataServiceView` 需要展示 SQL parameter names，但 Query 不能反向依赖 Execution implementation。
 
@@ -217,7 +279,7 @@ execution.DataServiceSqlCompiler      <--- implementation
 
 `DataServiceQueryResponse` 放在 Domain，因为它同时被 Execution、Runtime 和 HTTP boundary 使用，是 runtime-neutral value，不属于 Execution implementation。
 
-## 9. Runtime Truth
+## 10. Runtime Truth
 
 ```text
 Persisted:
@@ -237,16 +299,18 @@ RuntimeManager 负责 Policy command + invalidation；LocalRuntime 不直接操�
 
 当前 Cache/Circuit/Metrics 是 node-local。未来若引入 Redis/global quota，需要新增明确的 distributed Runtime port，不得把当前内存 Map 伪装成集群事实。
 
-## 10. Access Security
+## 11. Access Security
 
 ```text
-create/rotate
+create/rotate (Management Plane)
+  -> verify parent API in CurrentProject
   -> SecureRandom raw key
   -> SHA-256 hash persisted
   -> prefix persisted
   -> raw key returned once
 
-invoke
+invoke (Public Invocation Plane)
+  -> global path resolves API
   -> hash incoming X-API-Key
   -> repository lookup
   -> enabled / expiry
@@ -254,9 +318,9 @@ invoke
   -> mark last used
 ```
 
-Controller、日志、Domain 持久化都不保存 raw secret。
+Controller、日志、Domain 持久化都不保存 raw secret。Public Invocation 的 Key lookup 属于已解析 API 的访问执行过程，不读取 Yak Project Header。
 
-## 11. Documentation
+## 12. Documentation
 
 ```text
 Published SQL
@@ -273,18 +337,29 @@ Saved documentation ---------------------+
 
 SQL parameter names 是事实，description/example 是人工/上游元数据。文档不能创造不存在的 SQL 参数。
 
-## 12. Observability
+Documentation projection 自身不重复保存 Project identity；Console 入口先验证父 API ownership。
+
+## 13. Observability
 
 `DataServiceInvocationRecorder` 写入完成后的调用事实；`DataServiceCallLogReader` 和 `DataServiceOverviewReader` 只做 read-side。
 
-Observability 不参与调用成功与否的业务判定，不拥有 Runtime state machine。
+Invocation Record 快照 `projectId`，因此 API 删除后历史 evidence 仍能归属 Project。Console 的日志、Overview、热点 API、失败记录全部按 CurrentProject 聚合。
 
-## 13. Persistence Boundary
+Observability 不参与调用成功与否的业务判定，不拥有 Runtime state machine；audit persistence failure 不能覆盖业务成功或原始调用异常。
+
+## 14. Persistence Boundary
 
 允许：
 
 ```text
-RepositoryAdapter -> DAO Mapper / PO
+Management Business Role
+   -> Repository
+   -> CurrentProject predicate
+   -> DAO Mapper / PO
+
+Public Invocation
+   -> DataServiceReader.requireByPath
+   -> Repository.findByRuntimePath
 ```
 
 禁止：
@@ -296,11 +371,13 @@ Manager      -> Mapper / PO
 Execution    -> Mapper / PO
 Runtime      -> Mapper / PO
 Domain       -> Mapper / PO
+Management   -> findByRuntimePath
+Invocation   -> Yak Project Header selector
 ```
 
 PO 字段可以为了 ORM 使用 setter；Domain 通过 constructor/behavior 表达状态。
 
-## 14. Cross-module Boundary
+## 15. Cross-module Boundary
 
 允许上游模块依赖：
 
@@ -310,19 +387,40 @@ io.yak.ops.business.dataservice.publication.source.DataServiceSourceProvider
 
 Data Service 不反向依赖 Data Development implementation。
 
-Data Service 的物理 SQL 能力只依赖 `yak-ops-core` execution contract，不依赖 Datasource DAO/Mapper。
+Data Service 的物理 SQL 能力只依赖 `yak-ops-core` execution contract；Project management 只依赖 `yak-ops-core` 的 Project scope/current-project contract，不依赖 Yak Security implementation。
 
-## 15. Failure Semantics
+## 16. Failure Semantics
 
 - invalid source / invalid settings / invalid SQL -> 业务参数错误；
-- missing/invalid API key -> 401；
+- missing/invalid Console Project -> Project contract error；
+- missing Console permission -> RBAC forbidden；
+- missing/invalid Public API key -> 401；
 - local rate limit -> 429；
 - circuit open -> 503；
-- datasource/query failure -> 调用失败并记录 audit；
+- datasource/query failure -> 调用失败并尽力记录 audit；
+- audit persistence failure 不改变已经确定的调用结果；
 - documentation error 不改变已发布 SQL；
 - observability read failure 不应被解释成 Data Service definition state。
 
-## 16. 修改协议
+## 17. Architecture Guards
+
+```text
+DataServiceDependencyBoundaryTest
+  -> package graph / persistence / cross-module corridors
+
+DataServiceCodeStyleConventionTest
+  -> role-oriented source conventions / secret boundaries
+
+DataServiceGovernanceContractTest
+  -> Management Controllers are PROJECT_REQUIRED
+  -> Public Invocation Controller has no Project/RBAC annotation
+  -> permission vocabulary remains explicit
+  -> only findByRuntimePath is a deliberate global runtime corridor
+```
+
+Project compatibility backfill 另由 Boot contract test 守住：source-managed API 先继承 Data Development node Project，再对 legacy global rows 使用 compatibility Project。
+
+## 18. 修改协议
 
 新能力进入前回答：
 
@@ -330,7 +428,9 @@ Data Service 的物理 SQL 能力只依赖 `yak-ops-core` execution contract，�
 Architecture Impact
 - capability owner package:
 - command/read/runtime role:
+- management vs invocation plane:
 - persisted truth vs process-local state:
+- project ownership impact:
 - new package dependency edge:
 - SourceProvider / SqlExecution boundary impact:
 - REST/DB compatibility impact:
