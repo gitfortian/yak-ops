@@ -99,6 +99,7 @@ describe('permission-aware navigation', () => {
     expect(readOnly?.routes.map((route) => route.id)).toEqual(['data-service-api']);
     expect(getActiveNavigationId('/data-service/api/42', dataServiceRead)).toBe('data-service-api');
     expect(getActiveNavigationId('/data-service/debug', dataServiceRead)).toBeUndefined();
+    expect(getActiveNavigationId('/data-service/debug', ['data-service:runtime'])).toBeUndefined();
     expect(getActiveNavigationId('/data-service/overview', dataServiceRead)).toBeUndefined();
 
     const full = getMainNavigationGroups(dataServiceAll).find(
