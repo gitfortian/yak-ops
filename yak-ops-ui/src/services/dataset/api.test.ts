@@ -1,5 +1,6 @@
 import HttpUtils from '@/utils/HttpUtils';
 import {
+  getPublishedDataset,
   listPublishedDatasets,
   resolvePublishedDatasetsByIds,
 } from './api';
@@ -49,16 +50,29 @@ describe('Dataset catalog API', () => {
   it('loads the published Dataset catalog with one HTTP request', async () => {
     const get = jest.spyOn(HttpUtils, 'get').mockResolvedValue({
       code: 200,
-      data: [catalogEntry('1'), catalogEntry('2', 'OFFLINE')],
+      data: [catalogEntry('1')],
     } as any);
 
     const result = await listPublishedDatasets();
 
     expect(get).toHaveBeenCalledTimes(1);
-    expect(get.mock.calls[0][0]).toBe('/api/v1/datasets/catalog');
+    expect(get.mock.calls[0][0]).toBe('/api/v1/datasets/catalog?onlineOnly=true');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('1');
     expect(result[0].fields).toHaveLength(1);
+  });
+
+  it('loads one Dataset through the catalog without requesting version history', async () => {
+    const get = jest.spyOn(HttpUtils, 'get').mockResolvedValue({
+      code: 200,
+      data: [catalogEntry('7')],
+    } as any);
+
+    const result = await getPublishedDataset('7');
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get.mock.calls[0][0]).toBe('/api/v1/datasets/catalog?datasetIds=7');
+    expect(result.id).toBe('7');
   });
 
   it('resolves requested ids in one batch and preserves per-id availability errors', async () => {

@@ -52,8 +52,10 @@ public class DatasetController {
   @Operation(summary = "批量查询 Dataset 当前版本与字段目录")
   @GetMapping("/catalog")
   public Result<List<DatasetCatalogVO>> catalog(
-      @RequestParam(value = "datasetIds", required = false) List<Long> datasetIds) {
-    return Result.success(datasetService.catalog(datasetIds).stream().map(viewConverter::catalog).toList());
+      @RequestParam(value = "datasetIds", required = false) List<Long> datasetIds,
+      @RequestParam(value = "onlineOnly", defaultValue = "false") boolean onlineOnly) {
+    return Result.success(
+        datasetService.catalog(datasetIds, onlineOnly).stream().map(viewConverter::catalog).toList());
   }
 
   @Operation(summary = "查询最近的 Dataset SQL 性能诊断记录")

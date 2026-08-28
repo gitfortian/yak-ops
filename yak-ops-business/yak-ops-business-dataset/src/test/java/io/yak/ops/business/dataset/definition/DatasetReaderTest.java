@@ -26,16 +26,17 @@ class DatasetReaderTest {
   void catalogLoadsCurrentMetadataWithBulkRepositoryReads() {
     DatasetRepository repository = mock(DatasetRepository.class);
     DatasetReader reader = new DatasetReader(repository);
-    Dataset versioned = dataset(21L, 31L);
-    Dataset empty = dataset(22L, null);
+    Dataset versioned = dataset(21L, 31L, DatasetStatus.ONLINE);
+    Dataset empty = dataset(22L, null, DatasetStatus.ONLINE);
+    Dataset offline = dataset(23L, 32L, DatasetStatus.OFFLINE);
     DatasetVersion version = version(31L, 21L, 2);
     DatasetField field = field("amount", 31L);
 
-    when(repository.listDatasets()).thenReturn(List.of(versioned, empty));
+    when(repository.listDatasets()).thenReturn(List.of(versioned, empty, offline));
     when(repository.listVersionsByIds(List.of(31L))).thenReturn(List.of(version));
     when(repository.listFieldsByVersionIds(List.of(31L))).thenReturn(List.of(field));
 
-    List<DatasetCatalogEntry> result = reader.catalog(null);
+    List<DatasetCatalogEntry> result = reader.catalog(null, true);
 
     assertThat(result).hasSize(2);
     assertThat(result.get(0).dataset()).isEqualTo(versioned);
@@ -54,7 +55,7 @@ class DatasetReaderTest {
   void catalogUsesRequestedIdsWithoutLoadingTheWholeDatasetList() {
     DatasetRepository repository = mock(DatasetRepository.class);
     DatasetReader reader = new DatasetReader(repository);
-    Dataset dataset = dataset(21L, null);
+    Dataset dataset = dataset(21L, null, DatasetStatus.ONLINE);
     when(repository.listDatasetsByIds(List.of(21L, 22L))).thenReturn(List.of(dataset));
 
     List<DatasetCatalogEntry> result = reader.catalog(List.of(21L, 22L, 21L));
@@ -64,12 +65,12 @@ class DatasetReaderTest {
     verify(repository, never()).listDatasets();
   }
 
-  private Dataset dataset(long datasetId, Long currentVersionId) {
+  private Dataset dataset(long datasetId, Long currentVersionId, DatasetStatus status) {
     return new Dataset(
         datasetId,
         "dataset-" + datasetId,
         null,
-        DatasetStatus.ONLINE,
+        status,
         currentVersionId,
         Instant.EPOCH,
         Instant.EPOCH);

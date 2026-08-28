@@ -4,13 +4,11 @@ import HttpUtils from '@/utils/HttpUtils';
 import { isQueryableDatasetSourceType } from './constants';
 import type {
   DatasetCatalogWire,
-  DatasetDetailWire,
   DatasetField,
   DatasetFieldType,
   DatasetFieldWire,
   DatasetQueryPayload,
   DatasetQueryResult,
-  DatasetSummaryWire,
   DatasetVersionWire,
   PublishedDataset,
 } from './types';
@@ -31,7 +29,7 @@ export interface PublishedDatasetBatchResult {
 }
 
 type DatasetMetadataWire = Pick<
-  DatasetDetailWire,
+  DatasetCatalogWire,
   'dataset' | 'currentVersion' | 'fields'
 >;
 
@@ -107,29 +105,24 @@ const toDataset = (detail: DatasetMetadataWire): PublishedDataset => {
   };
 };
 
-const fetchDatasetDetail = async (
-  datasetId: string,
-  fallback: string,
-  options?: DatasetRequestOptions,
-) => unwrap(
-  await HttpUtils.get<DatasetDetailWire>(
-    `${DATASET_API}/${datasetId}`,
-    requestOptions(options),
-  ),
-  fallback,
-);
-
-const catalogUrl = (datasetIds?: string[]) => {
-  if (!datasetIds?.length) return DATASET_CATALOG_API;
-  return `${DATASET_CATALOG_API}?datasetIds=${datasetIds.map(encodeURIComponent).join(',')}`;
+const catalogUrl = (datasetIds?: string[], onlineOnly = false) => {
+  const params: string[] = [];
+  if (datasetIds?.length) {
+    params.push(`datasetIds=${datasetIds.map(encodeURIComponent).join(',')}`);
+  }
+  if (onlineOnly) {
+    params.push('onlineOnly=true');
+  }
+  return params.length ? `${DATASET_CATALOG_API}?${params.join('&')}` : DATASET_CATALOG_API;
 };
 
 const fetchDatasetCatalog = async (
   datasetIds?: string[],
   options?: DatasetRequestOptions,
+  onlineOnly = false,
 ): Promise<DatasetCatalogWire[]> => unwrap(
   await HttpUtils.get<DatasetCatalogWire[]>(
-    catalogUrl(datasetIds),
+    catalogUrl(datasetIds, onlineOnly),
     requestOptions(options),
   ),
   '查询 Dataset Catalog 失败',
@@ -153,30 +146,23 @@ const catalogEntryError = (datasetId: string, entry?: DatasetCatalogWire) => {
 };
 
 export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => (
-  await fetchDatasetCatalog()
+  await fetchDatasetCatalog(undefined, undefined, true)
 )
   .filter(isPublishedQueryableCatalogEntry)
   .map(toDataset);
 
-/** Fetches one currently published Dataset without first loading the entire Dataset catalog. */
+/** Fetches one currently published Dataset without loading its version history. */
 export const getPublishedDataset = async (
   datasetId: string,
   options?: DatasetRequestOptions,
 ): Promise<PublishedDataset> => {
-  const detail = await fetchDatasetDetail(
-    datasetId,
-    `查询 Dataset ${datasetId} 详情失败`,
-    options,
-  );
-  if (detail.dataset.status !== 'ONLINE' || !detail.currentVersion) {
-    throw new Error(`Dataset ${datasetId} 当前未发布`);
+  const catalog = await fetchDatasetCatalog([datasetId], options);
+  const entry = catalog.find((candidate) => String(candidate.dataset.id) === datasetId);
+  const error = catalogEntryError(datasetId, entry);
+  if (error) {
+    throw new Error(error);
   }
-  if (!isQueryableDatasetSourceType(detail.currentVersion.sourceType)) {
-    throw new Error(
-      `Dataset ${datasetId} 来源类型 ${detail.currentVersion.sourceType} 尚未接入查询运行时`,
-    );
-  }
-  return toDataset(detail);
+  return toDataset(entry!);
 };
 
 /**

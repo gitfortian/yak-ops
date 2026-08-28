@@ -4,6 +4,7 @@ import io.yak.ops.business.dataset.Dataset;
 import io.yak.ops.business.dataset.DatasetCatalogEntry;
 import io.yak.ops.business.dataset.DatasetDetail;
 import io.yak.ops.business.dataset.DatasetField;
+import io.yak.ops.business.dataset.DatasetStatus;
 import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.repository.DatasetRepository;
 import java.util.Collection;
@@ -36,10 +37,20 @@ public class DatasetReader {
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
   public List<DatasetCatalogEntry> catalog(Collection<Long> datasetIds) {
+    return catalog(datasetIds, false);
+  }
+
+  @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
+  public List<DatasetCatalogEntry> catalog(Collection<Long> datasetIds, boolean onlineOnly) {
     List<Long> requestedIds = normalizeCatalogDatasetIds(datasetIds);
     List<Dataset> datasets = requestedIds.isEmpty()
         ? repository.listDatasets()
         : repository.listDatasetsByIds(requestedIds);
+    if (onlineOnly) {
+      datasets = datasets.stream()
+          .filter(dataset -> dataset.status() == DatasetStatus.ONLINE)
+          .toList();
+    }
     if (datasets.isEmpty()) {
       return List.of();
     }
