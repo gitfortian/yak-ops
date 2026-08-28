@@ -19,8 +19,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data-service/publication")
 public class DataServicePublicationStateController {
   private final DataServicePublicationReader reader;
+
   @Operation(summary = "查询已发布来源与 Runtime 的同步状态")
   @GetMapping("/state")
   public Result<PublicationState> state(@RequestParam("sourceType") String sourceType,
-      @RequestParam("sourceRef") String sourceRef) { return Result.success(reader.state(sourceType, sourceRef)); }
+      @RequestParam("sourceRef") String sourceRef) {
+    if (reader.managesServiceDefinition(sourceType)) {
+      throw new IllegalStateException("该发布来源由所属 authoring context 管理，请从来源工作台查询发布状态");
+    }
+    return Result.success(reader.state(sourceType, sourceRef));
+  }
 }
