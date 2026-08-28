@@ -58,6 +58,12 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
   }
 
   @Override
+  public long count() {
+    Long count = mapper.selectCount(Wrappers.<DataServiceApiPO>lambdaQuery());
+    return count == null ? 0L : count;
+  }
+
+  @Override
   public boolean existsByPath(String path, Long excludeId) {
     Long count = mapper.selectCount(
         Wrappers.<DataServiceApiPO>lambdaQuery()

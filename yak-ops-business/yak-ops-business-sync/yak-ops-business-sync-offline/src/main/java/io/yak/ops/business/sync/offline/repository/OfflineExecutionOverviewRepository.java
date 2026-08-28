@@ -8,6 +8,12 @@ public interface OfflineExecutionOverviewRepository {
 
   Overview overview(LocalDateTime start, LocalDateTime end, boolean hourlyTrend);
 
+  /** Lightweight metrics-only path for first-screen summaries. */
+  default Metrics metrics(LocalDateTime start, LocalDateTime end) {
+    Overview overview = overview(start, end, false);
+    return overview == null || overview.metrics() == null ? Metrics.empty() : overview.metrics();
+  }
+
   Execution latest(LocalDateTime start, LocalDateTime end);
 
   TaskSummary taskSummary(String taskId, LocalDateTime start, LocalDateTime end);

@@ -24,6 +24,10 @@ public class DataServiceReader {
     return repository.findAll();
   }
 
+  public long count() {
+    return repository.count();
+  }
+
   public Optional<DataServiceDefinition> findBySource(String sourceType, String sourceRef) {
     return repository.findBySource(sourceType, sourceRef);
   }

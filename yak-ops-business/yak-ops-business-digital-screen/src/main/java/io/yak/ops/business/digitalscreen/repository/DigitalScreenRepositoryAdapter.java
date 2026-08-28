@@ -38,6 +38,12 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
   }
 
   @Override
+  public long count() {
+    Long count = mapper.selectCount(Wrappers.<DigitalScreenPO>lambdaQuery());
+    return count == null ? 0L : count;
+  }
+
+  @Override
   public Optional<DigitalScreen> findById(long id) {
     return Optional.ofNullable(mapper.selectById(id)).map(this::toDomain);
   }

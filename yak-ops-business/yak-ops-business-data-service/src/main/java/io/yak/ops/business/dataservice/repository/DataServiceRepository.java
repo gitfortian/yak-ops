@@ -14,6 +14,11 @@ public interface DataServiceRepository {
 
   List<DataServiceDefinition> findAll();
 
+  /** Lightweight overview count; adapters should override to avoid materializing definitions. */
+  default long count() {
+    return findAll().size();
+  }
+
   boolean existsByPath(String path, Long excludeId);
 
   DataServiceDefinition save(DataServiceDefinition definition);
