@@ -11,6 +11,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 包职责、角色协作、关键流程和扩展边界 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 顶层 package 依赖矩阵、允许/禁止的 corridor |
 | [REVIEW.md](REVIEW.md) | 修改本模块时的设计与 Review Checklist |
+| [RUNTIME_RELIABILITY.md](RUNTIME_RELIABILITY.md) | Stage 1 调用结果/审计隔离、版本化缓存和服务级日志读取契约 |
 | [../../CODE_STYLE.md](../../CODE_STYLE.md) | 仓库统一 Java / Role-oriented 工程约定 |
 
 ## 能力地图
@@ -67,6 +68,8 @@ dataservice
 5. `API_KEY` 的 raw secret 只在 create/rotate 成功时返回一次；数据库只保存 hash + prefix。
 6. 数据服务只允许单条只读 SELECT，物理执行统一走 `yak-ops-core` 的 `SqlExecutionRuntime`。
 7. Data Development 等上游模块只能实现 `publication.source.DataServiceSourceProvider`，不能依赖 Data Service 内部 Manager/Repository/Runtime。
+8. Invocation audit 是 evidence：日志持久化故障不能改变已经确定的业务调用结果或覆盖原始异常。
+9. Node-local Cache identity 必须带 persisted runtime generation，防止 republish 后跨节点误用旧代际结果。
 
 ## 修改入口
 
@@ -80,5 +83,7 @@ dataservice
 5. Tests / Guards  -> 是否有对应行为和架构护栏？
 6. REVIEW.md       -> 合并前逐项检查。
 ```
+
+涉及调用审计、Cache identity 或服务级调用日志读取时，同时查看 `RUNTIME_RELIABILITY.md`。
 
 如果需求无法由当前模型表达，先报告 `Requirement Gap` / `Domain Gap`，不要用临时 Map key、boolean、PO 字段或 Controller DTO 绕过模型。
