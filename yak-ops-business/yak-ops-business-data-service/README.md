@@ -11,7 +11,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 包职责、角色协作、关键流程和扩展边界 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 顶层 package 依赖矩阵、允许/禁止的 corridor |
 | [REVIEW.md](REVIEW.md) | 修改本模块时的设计与 Review Checklist |
-| [MIGRATIONS.md](MIGRATIONS.md) | Data Service 独立 Flyway namespace、历史冻结与版本规则 |
+| [MIGRATIONS.md](MIGRATIONS.md) | Data Service 独立 Flyway namespace、一期 V1 baseline 与后续版本规则 |
 | [RUNTIME_RELIABILITY.md](RUNTIME_RELIABILITY.md) | Stage 1 调用结果/审计隔离、版本化缓存和服务级日志读取契约 |
 | [PROJECT_GOVERNANCE.md](PROJECT_GOVERNANCE.md) | Stage 2 Management Plane Project/RBAC 与 Public Invocation Plane 的强边界 |
 | [CLUSTER_RUNTIME.md](CLUSTER_RUNTIME.md) | Stage 3 集群限流、Runtime 指标、缓存代际、日志生命周期与审计脱敏 |
@@ -75,7 +75,7 @@ dataservice
 9. Node-local Cache identity 必须带 persisted `runtime_generation` 和 Runtime shape，防止 republish/并发设置更新后跨节点误用旧结果。
 10. Yak Ops Management Plane 必须同时通过 Project Space 和 RBAC；外部 `/runtime/{servicePath}` 不接收 Yak Project Header，只按全局 runtime path + NONE/API_KEY 调用。
 11. Raw invocation log 有明确 retention，并在事务内按小时 rollup；长期统计不能依赖无限增长的 raw 表。
-12. Data Service 新迁移只能进入 `db/migration/yak-data-service` 和 `yak_data_service_schema_history`；共享 `yak-datasource` 下的 V3~V10 仅作为已执行历史冻结。
+12. Data Service 数据库结构只由 `db/migration/yak-data-service` 和 `yak_data_service_schema_history` 管理；Datasource 拥有独立的 `yak-datasource` namespace，两个模块禁止共享 Flyway 版本序列。
 
 ## 修改入口
 

@@ -22,54 +22,39 @@ class DataServiceFlywayContractTest {
   }
 
   @Test
-  void dedicatedNamespaceStartsWithOneConsolidatedVersion() throws IOException {
-    List<String> migrations;
-    try (var paths = Files.list(dedicatedMigrationRoot())) {
-      migrations = paths
-          .filter(Files::isRegularFile)
-          .map(path -> path.getFileName().toString())
-          .filter(name -> name.endsWith(".sql"))
-          .sorted()
-          .toList();
-    }
-
-    assertThat(migrations)
-        .containsExactly("V1__consolidate_data_service_governance_runtime.sql");
+  void dedicatedNamespaceContainsOnlyFirstReleaseBaseline() throws IOException {
+    assertThat(sqlFiles(dedicatedMigrationRoot()))
+        .containsExactly("V1__baseline_data_service.sql");
 
     String migration = Files.readString(
-        dedicatedMigrationRoot().resolve("V1__consolidate_data_service_governance_runtime.sql"));
+        dedicatedMigrationRoot().resolve("V1__baseline_data_service.sql"));
     assertThat(migration)
-        .contains("idx_yak_ops_data_service_log_api_time_id")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_api")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_api_key")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_documentation")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_call_log")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_rate_window")
+        .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_call_log_hourly")
         .contains("project_id")
         .contains("runtime_generation")
-        .contains("yak_ops_data_service_rate_window")
-        .contains("yak_ops_data_service_call_log_hourly");
+        .doesNotContain("ALTER TABLE");
   }
 
   @Test
-  void legacySharedHistoryStopsBeforeTheDatasourceV11Boundary() throws IOException {
-    List<String> migrations;
-    try (var paths = Files.list(legacyMigrationRoot())) {
-      migrations = paths
+  void dataServiceDoesNotContributeToDatasourceMigrationNamespace() throws IOException {
+    assertThat(sqlFiles(legacyDatasourceMigrationRoot())).isEmpty();
+  }
+
+  private List<String> sqlFiles(Path root) throws IOException {
+    if (!Files.isDirectory(root)) return List.of();
+    try (var paths = Files.list(root)) {
+      return paths
           .filter(Files::isRegularFile)
           .map(path -> path.getFileName().toString())
           .filter(name -> name.endsWith(".sql"))
           .sorted()
           .toList();
     }
-
-    assertThat(migrations)
-        .contains(
-            "V3__create_data_service_tables.sql",
-            "V4__add_data_service_source.sql",
-            "V5__add_data_service_api_security.sql",
-            "V6__add_data_service_runtime_resilience.sql",
-            "V7__add_data_service_documentation.sql",
-            "V9__add_data_service_pagination.sql",
-            "V10__add_data_service_overview_indexes.sql")
-        .noneMatch(name -> name.startsWith("V11__")
-            || name.startsWith("V12__")
-            || name.startsWith("V13__"));
   }
 
   private Path configurationSource() {
@@ -89,7 +74,7 @@ class DataServiceFlywayContractTest {
         "migration", "yak-data-service");
   }
 
-  private Path legacyMigrationRoot() {
+  private Path legacyDatasourceMigrationRoot() {
     Path local = Path.of("src/main/resources/db/migration/yak-datasource");
     if (Files.isDirectory(local)) return local;
     return Path.of(
