@@ -5,12 +5,17 @@ import { isQueryableDatasetSourceType } from './constants';
 import type {
   DatasetField,
   DatasetFieldType,
+  DatasetManagementDetail,
+  DatasetManagementField,
+  DatasetManagementItem,
+  DatasetManagementVersion,
   DatasetQueryPayload,
   DatasetQueryResult,
   PublishedDataset,
 } from './model';
 import type {
   DatasetCatalogWire,
+  DatasetDetailWire,
   DatasetFieldWire,
   DatasetVersionWire,
 } from './types';
@@ -107,6 +112,71 @@ const toDataset = (detail: DatasetMetadataWire): PublishedDataset => {
   };
 };
 
+const optionalSourceId = (value?: string | null) => (
+  value && value !== '0' ? String(value) : undefined
+);
+
+const toManagementVersion = (
+  version?: DatasetVersionWire | null,
+): DatasetManagementVersion | undefined => version ? ({
+  id: String(version.id),
+  datasetId: String(version.datasetId),
+  versionNo: version.versionNo,
+  sourceType: version.sourceType,
+  sourceTaskAssetId: optionalSourceId(version.sourceTaskAssetId),
+  sourceTaskRevisionId: optionalSourceId(version.sourceTaskRevisionId),
+  sourceTaskRevisionNo: version.sourceTaskRevisionNo > 0
+    ? version.sourceTaskRevisionNo
+    : undefined,
+  dataSourceId: version.dataSourceId?.trim() || undefined,
+  sql: version.sql?.trim() || undefined,
+  schemaSnapshot: version.schemaSnapshot?.trim() || undefined,
+  createTime: version.createTime,
+}) : undefined;
+
+const toManagementField = (field: DatasetFieldWire): DatasetManagementField => ({
+  fieldId: field.fieldId,
+  versionId: String(field.versionId),
+  physicalName: field.physicalName,
+  displayName: field.displayName || field.physicalName,
+  dataType: field.dataType,
+  nullable: field.nullable,
+  description: field.description || undefined,
+  defaultRole: field.defaultRole,
+  sortOrder: field.sortOrder,
+});
+
+const toManagementItem = (entry: DatasetCatalogWire): DatasetManagementItem => ({
+  id: String(entry.dataset.id),
+  name: entry.dataset.name,
+  description: entry.dataset.description || '',
+  status: entry.dataset.status,
+  currentVersionId: entry.dataset.currentVersionId == null
+    ? undefined
+    : String(entry.dataset.currentVersionId),
+  currentVersion: toManagementVersion(entry.currentVersion),
+  fields: (entry.fields || []).map(toManagementField),
+  createTime: entry.dataset.createTime,
+  updateTime: entry.dataset.updateTime,
+});
+
+const toManagementDetail = (detail: DatasetDetailWire): DatasetManagementDetail => ({
+  id: String(detail.dataset.id),
+  name: detail.dataset.name,
+  description: detail.dataset.description || '',
+  status: detail.dataset.status,
+  currentVersionId: detail.dataset.currentVersionId == null
+    ? undefined
+    : String(detail.dataset.currentVersionId),
+  currentVersion: toManagementVersion(detail.currentVersion),
+  versions: (detail.versions || [])
+    .map(toManagementVersion)
+    .filter((version): version is DatasetManagementVersion => Boolean(version)),
+  fields: (detail.fields || []).map(toManagementField),
+  createTime: detail.dataset.createTime,
+  updateTime: detail.dataset.updateTime,
+});
+
 const catalogUrl = (datasetIds?: string[], onlineOnly = false) => {
   const params: string[] = [];
   if (datasetIds?.length) {
@@ -146,6 +216,46 @@ const catalogEntryError = (datasetId: string, entry?: DatasetCatalogWire) => {
   }
   return '';
 };
+
+/** Management list: one catalog request, no per-row detail fan-out. */
+export const listDatasetsForManagement = async (
+  options?: DatasetRequestOptions,
+): Promise<DatasetManagementItem[]> => (
+  await fetchDatasetCatalog(undefined, options)
+).map(toManagementItem);
+
+/** Load full version history only after entering one Dataset detail. */
+export const getDatasetForManagement = async (
+  datasetId: string,
+  options?: DatasetRequestOptions,
+): Promise<DatasetManagementDetail> => toManagementDetail(unwrap(
+  await HttpUtils.get<DatasetDetailWire>(
+    `${DATASET_API}/${datasetId}`,
+    requestOptions(options),
+  ),
+  '查询 Dataset 详情失败',
+));
+
+export const createDatasetVersion = async (
+  datasetId: string,
+): Promise<DatasetManagementDetail> => toManagementDetail(unwrap(
+  await HttpUtils.post<DatasetDetailWire>(`${DATASET_API}/${datasetId}/versions`, {}),
+  '发布 Dataset 新版本失败',
+));
+
+export const onlineDataset = async (
+  datasetId: string,
+): Promise<DatasetManagementDetail> => toManagementDetail(unwrap(
+  await HttpUtils.post<DatasetDetailWire>(`${DATASET_API}/${datasetId}/online`, {}),
+  '上线 Dataset 失败',
+));
+
+export const offlineDataset = async (
+  datasetId: string,
+): Promise<DatasetManagementDetail> => toManagementDetail(unwrap(
+  await HttpUtils.post<DatasetDetailWire>(`${DATASET_API}/${datasetId}/offline`, {}),
+  '下线 Dataset 失败',
+));
 
 export const listPublishedDatasets = async (): Promise<PublishedDataset[]> => (
   await fetchDatasetCatalog(undefined, undefined, true)
