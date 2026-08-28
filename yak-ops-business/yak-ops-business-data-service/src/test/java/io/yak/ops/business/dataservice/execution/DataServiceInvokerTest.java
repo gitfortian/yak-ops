@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -63,21 +64,21 @@ class DataServiceInvokerTest {
         false,
         1,
         8L);
-    when(executor.execute(eq(definition), any(), eq(null))).thenReturn(response);
+    when(executor.execute(eq(definition), any(), isNull())).thenReturn(response);
     doThrow(new IllegalStateException("audit db down"))
         .when(recorder)
-        .record(eq(definition), any(), eq(true), anyLong(), eq(1), eq(null), any());
+        .record(eq(definition), any(), eq(true), anyLong(), eq(1), isNull(), any());
 
     DataServiceQueryResponse result = invoker.invoke("orders", Map.of("id", "1"), null);
 
     assertThat(result.rows()).containsExactly(Map.of("id", 1L));
-    verify(executor).execute(eq(definition), any(), eq(null));
+    verify(executor).execute(eq(definition), any(), isNull());
   }
 
   @Test
   void invocationFailureIsNotReplacedByAuditStorageFailure() {
     IllegalStateException queryFailure = new IllegalStateException("datasource down");
-    when(executor.execute(eq(definition), any(), eq(null))).thenThrow(queryFailure);
+    when(executor.execute(eq(definition), any(), isNull())).thenThrow(queryFailure);
     doThrow(new IllegalStateException("audit db down"))
         .when(recorder)
         .record(eq(definition), any(), eq(false), anyLong(), eq(0), eq("datasource down"), any());
