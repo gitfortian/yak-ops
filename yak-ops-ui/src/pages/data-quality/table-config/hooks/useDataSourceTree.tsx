@@ -160,8 +160,6 @@ export const useDataSourceTree = () => {
     selectedSourceNode,
     selectedNodeKey,
     sourceNodes,
-    // Compatibility alias for execution pages that still use the pre-refactor name.
-    treeData: sourceNodes,
     treeLoading,
     leftWidth,
     collapsed,

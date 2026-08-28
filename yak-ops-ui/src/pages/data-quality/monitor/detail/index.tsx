@@ -1,197 +1,62 @@
-import { API_SUCCESS_CODE } from '@/services/http/response';
 import { BRAND_THEME } from '@/styles/brand';
 import { history, useParams } from '@umijs/max';
-import { ConfigProvider, Modal, Spin, message } from 'antd';
-import dayjs from 'dayjs';
-import { useCallback, useEffect, useState } from 'react';
-import { qualityMonitorApi, qualityWorkspaceApi } from '../../service';
-import type {
-  MonitorReportView,
-  MonitorWorkspaceView,
-  OperationLogPageView,
-} from '../../types';
+import { ConfigProvider, Spin } from 'antd';
+
+import { useMonitorDetailPage } from './hooks/useMonitorDetailPage';
 import MonitorListTab from './MonitorListTab';
 import OperationLogDrawer from './OperationLogDrawer';
 import QualityReportTab from './QualityReportTab';
 import RuleManagementTab from './RuleManagementTab';
 import WorkspaceHeader from './WorkspaceHeader';
-import type { WorkspaceTab } from './model';
-
-const unwrap = <T,>(response: {
-  code: number;
-  data: T;
-  message?: string;
-  msg?: string;
-}) => {
-  if (response.code !== API_SUCCESS_CODE) {
-    throw new Error(response.message || response.msg || '请求失败');
-  }
-  return response.data;
-};
-
-const EMPTY_OPERATION_LOG: OperationLogPageView = {
-  records: [],
-  total: 0,
-  current: 1,
-  pageSize: 10,
-};
 
 const MonitorDetailPage = () => {
   const params = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('rules');
-  const [workspace, setWorkspace] = useState<MonitorWorkspaceView>();
-  const [report, setReport] = useState<MonitorReportView>();
-  const [reportDate, setReportDate] = useState(
-    dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
-  );
-  const [operationLog, setOperationLog] = useState<OperationLogPageView>(
-    EMPTY_OPERATION_LOG,
-  );
-  const [loading, setLoading] = useState(true);
-  const [reportLoading, setReportLoading] = useState(false);
-  const [logLoading, setLogLoading] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-
-  const loadWorkspace = useCallback(async () => {
-    if (!params.id) return;
-    setLoading(true);
-    try {
-      setWorkspace(unwrap(await qualityWorkspaceApi.workspace(params.id)));
-    } catch (error: any) {
-      message.error(error?.message || '质量监控工作台加载失败');
-    } finally {
-      setLoading(false);
-    }
-  }, [params.id]);
-
-  const loadReport = useCallback(
-    async (date: string) => {
-      if (!params.id) return;
-      setReportLoading(true);
-      try {
-        setReport(
-          unwrap(await qualityWorkspaceApi.report(params.id, { date })),
-        );
-      } catch (error: any) {
-        message.error(error?.message || '质量报告加载失败');
-      } finally {
-        setReportLoading(false);
-      }
-    },
-    [params.id],
-  );
-
-  const loadOperationLog = useCallback(
-    async (current = operationLog.current, pageSize = operationLog.pageSize) => {
-      if (!params.id) return;
-      setLogLoading(true);
-      try {
-        setOperationLog(
-          unwrap(
-            await qualityWorkspaceApi.operationLogs(params.id, {
-              current,
-              pageSize,
-            }),
-          ),
-        );
-      } catch (error: any) {
-        message.error(error?.message || '操作日志加载失败');
-      } finally {
-        setLogLoading(false);
-      }
-    },
-    [operationLog.current, operationLog.pageSize, params.id],
-  );
-
-  useEffect(() => {
-    void loadWorkspace();
-  }, [loadWorkspace]);
-
-  useEffect(() => {
-    if (activeTab === 'report') {
-      void loadReport(reportDate);
-    }
-  }, [activeTab, loadReport, reportDate]);
-
-  const run = async () => {
-    if (!params.id) return;
-    setRunning(true);
-    try {
-      const result = unwrap(await qualityMonitorApi.run(params.id));
-      message.success(`质量检查已提交：${result.executionNo}`);
-      window.setTimeout(() => void loadWorkspace(), 1800);
-    } catch (error: any) {
-      message.error(error?.message || '运行失败');
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const removeMonitor = () => {
-    if (!params.id) return;
-    Modal.confirm({
-      title: '删除质量监控？',
-      content: '删除后将保留历史执行记录，但不再允许继续运行。',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          unwrap(await qualityMonitorApi.remove(params.id));
-          message.success('质量监控已删除');
-          history.push('/data-quality/table-config');
-        } catch (error: any) {
-          message.error(error?.message || '删除失败');
-        }
-      },
-    });
-  };
-
-  const openLog = () => {
-    setLogOpen(true);
-    void loadOperationLog(1, operationLog.pageSize);
-  };
+  const detail = useMonitorDetailPage(params.id);
 
   return (
     <ConfigProvider theme={BRAND_THEME}>
       <div className="flex h-[calc(100vh-64px)] min-h-[620px] flex-col overflow-hidden bg-white">
         <WorkspaceHeader
-          workspace={workspace}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
+          workspace={detail.workspace}
+          activeTab={detail.activeTab}
+          onTabChange={detail.setActiveTab}
           onBack={() => history.push('/data-quality/table-config')}
         />
 
-        <Spin spinning={loading} wrapperClassName="min-h-0 flex-1 overflow-hidden ">
-          {workspace ? (
+        <Spin
+          spinning={detail.loading}
+          wrapperClassName="min-h-0 flex-1 overflow-hidden "
+        >
+          {detail.workspace ? (
             <div className="flex h-full min-h-0 flex-col">
-              {activeTab === 'rules' ? (
+              {detail.activeTab === 'rules' ? (
                 <RuleManagementTab
-                  workspace={workspace}
-                  running={running}
-                  onRun={run}
-                  onOpenLog={openLog}
-                  onRefresh={loadWorkspace}
-                  onRemoveMonitor={removeMonitor}
+                  workspace={detail.workspace}
+                  running={detail.running}
+                  onRun={() => void detail.run()}
+                  onOpenLog={detail.openLog}
+                  onRefresh={detail.loadWorkspace}
+                  onRemoveMonitor={detail.removeMonitor}
                 />
               ) : null}
 
-              {activeTab === 'monitors' ? (
+              {detail.activeTab === 'monitors' ? (
                 <MonitorListTab
-                  workspace={workspace}
-                  running={running}
-                  onRun={run}
-                  onRefresh={loadWorkspace}
-                  onRemove={removeMonitor}
-                  onOpenLog={openLog}
+                  workspace={detail.workspace}
+                  running={detail.running}
+                  onRun={() => void detail.run()}
+                  onRefresh={detail.loadWorkspace}
+                  onRemove={detail.removeMonitor}
+                  onOpenLog={detail.openLog}
                 />
               ) : null}
 
-              {activeTab === 'report' ? (
+              {detail.activeTab === 'report' ? (
                 <QualityReportTab
-                  report={report}
-                  loading={reportLoading}
-                  reportDate={reportDate}
-                  onDateChange={setReportDate}
+                  report={detail.report}
+                  loading={detail.reportLoading}
+                  reportDate={detail.reportDate}
+                  onDateChange={detail.setReportDate}
                 />
               ) : null}
             </div>
@@ -199,12 +64,12 @@ const MonitorDetailPage = () => {
         </Spin>
 
         <OperationLogDrawer
-          open={logOpen}
-          loading={logLoading}
-          data={operationLog}
-          onClose={() => setLogOpen(false)}
+          open={detail.logOpen}
+          loading={detail.logLoading}
+          data={detail.operationLog}
+          onClose={() => detail.setLogOpen(false)}
           onPageChange={(current, pageSize) =>
-            void loadOperationLog(current, pageSize)
+            void detail.loadOperationLog(current, pageSize)
           }
         />
       </div>
