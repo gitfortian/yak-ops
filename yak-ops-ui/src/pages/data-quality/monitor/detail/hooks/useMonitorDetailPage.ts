@@ -1,0 +1,155 @@
+import {
+  deleteQualityMonitor,
+  getQualityMonitorReport,
+  getQualityMonitorWorkspace,
+  listQualityMonitorOperationLogs,
+  runQualityMonitor,
+  type MonitorReportView,
+  type MonitorWorkspaceView,
+  type OperationLogPageView,
+} from '@/services/data-quality';
+import { history } from '@umijs/max';
+import { Modal, message } from 'antd';
+import dayjs from 'dayjs';
+import { useCallback, useEffect, useState } from 'react';
+
+import type { WorkspaceTab } from '../model';
+
+const EMPTY_OPERATION_LOG: OperationLogPageView = {
+  records: [],
+  total: 0,
+  current: 1,
+  pageSize: 10,
+};
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+export const useMonitorDetailPage = (monitorId?: string) => {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('rules');
+  const [workspace, setWorkspace] = useState<MonitorWorkspaceView>();
+  const [report, setReport] = useState<MonitorReportView>();
+  const [reportDate, setReportDate] = useState(
+    dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
+  );
+  const [operationLog, setOperationLog] = useState<OperationLogPageView>(
+    EMPTY_OPERATION_LOG,
+  );
+  const [loading, setLoading] = useState(true);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  const loadWorkspace = useCallback(async () => {
+    if (!monitorId) return;
+    setLoading(true);
+    try {
+      setWorkspace(await getQualityMonitorWorkspace(monitorId));
+    } catch (error) {
+      message.error(errorMessage(error, '质量监控工作台加载失败'));
+    } finally {
+      setLoading(false);
+    }
+  }, [monitorId]);
+
+  const loadReport = useCallback(
+    async (date: string) => {
+      if (!monitorId) return;
+      setReportLoading(true);
+      try {
+        setReport(await getQualityMonitorReport(monitorId, date));
+      } catch (error) {
+        message.error(errorMessage(error, '质量报告加载失败'));
+      } finally {
+        setReportLoading(false);
+      }
+    },
+    [monitorId],
+  );
+
+  const loadOperationLog = useCallback(
+    async (current = operationLog.current, pageSize = operationLog.pageSize) => {
+      if (!monitorId) return;
+      setLogLoading(true);
+      try {
+        setOperationLog(
+          await listQualityMonitorOperationLogs(monitorId, current, pageSize),
+        );
+      } catch (error) {
+        message.error(errorMessage(error, '操作日志加载失败'));
+      } finally {
+        setLogLoading(false);
+      }
+    },
+    [monitorId, operationLog.current, operationLog.pageSize],
+  );
+
+  useEffect(() => {
+    void loadWorkspace();
+  }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (activeTab === 'report') {
+      void loadReport(reportDate);
+    }
+  }, [activeTab, loadReport, reportDate]);
+
+  const run = useCallback(async () => {
+    if (!monitorId) return;
+    setRunning(true);
+    try {
+      const result = await runQualityMonitor(monitorId);
+      message.success(`质量检查已提交：${result.executionNo}`);
+      window.setTimeout(() => void loadWorkspace(), 1800);
+    } catch (error) {
+      message.error(errorMessage(error, '运行失败'));
+    } finally {
+      setRunning(false);
+    }
+  }, [loadWorkspace, monitorId]);
+
+  const removeMonitor = useCallback(() => {
+    if (!monitorId) return;
+    Modal.confirm({
+      title: '删除质量监控？',
+      content: '删除后将保留历史执行记录，但不再允许继续运行。',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteQualityMonitor(monitorId);
+          message.success('质量监控已删除');
+          history.push('/data-quality/table-config');
+        } catch (error) {
+          message.error(errorMessage(error, '删除失败'));
+        }
+      },
+    });
+  }, [monitorId]);
+
+  const openLog = useCallback(() => {
+    setLogOpen(true);
+    void loadOperationLog(1, operationLog.pageSize);
+  }, [loadOperationLog, operationLog.pageSize]);
+
+  return {
+    activeTab,
+    setActiveTab,
+    workspace,
+    report,
+    reportDate,
+    setReportDate,
+    operationLog,
+    loading,
+    reportLoading,
+    logLoading,
+    logOpen,
+    setLogOpen,
+    running,
+    loadWorkspace,
+    loadOperationLog,
+    run,
+    removeMonitor,
+    openLog,
+  };
+};
