@@ -103,8 +103,8 @@ public class DataServiceInvoker {
   }
 
   /**
-   * Persisted generation namespace protects node-local caches after republish/settings updates even
-   * when another JVM did not receive the local invalidation call.
+   * Persisted monotonic generation protects node-local caches after republish/settings updates even
+   * when another JVM did not receive an explicit local invalidation call.
    */
   String runtimeNamespace(DataServiceDefinition definition) {
     SourceReference source = definition.sourceReference();
@@ -119,7 +119,7 @@ public class DataServiceInvoker {
         .append(':')
         .append(source.sourceRevisionNo())
         .append("|generation=")
-        .append(definition.updateTime())
+        .append(definition.runtimeGeneration())
         .toString();
   }
 
