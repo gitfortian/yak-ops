@@ -9,6 +9,7 @@ import io.yak.ops.business.dataservice.repository.DataServiceObservabilityMainte
 import io.yak.ops.business.dataservice.repository.DataServiceRateLimitRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -16,7 +17,7 @@ import org.mockito.InOrder;
 class DataServiceObservabilityMaintenanceTest {
 
   @Test
-  void rollsOnlyBoundedOldHoursThenExpiresRollupsAndRateWindows() {
+  void rollsOnlyBoundedFullyExpiredHoursThenExpiresRollupsAndRateWindows() {
     DataServiceObservabilityMaintenanceRepository repository =
         mock(DataServiceObservabilityMaintenanceRepository.class);
     DataServiceRateLimitRepository rateRepository = mock(DataServiceRateLimitRepository.class);
@@ -25,7 +26,7 @@ class DataServiceObservabilityMaintenanceTest {
     LocalDateTime now = LocalDateTime.of(2026, 8, 28, 4, 50);
     LocalDateTime first = LocalDateTime.of(2026, 6, 1, 1, 0);
     LocalDateTime second = LocalDateTime.of(2026, 6, 1, 2, 0);
-    LocalDateTime rawCutoff = now.minusDays(30);
+    LocalDateTime rawCutoff = now.minusDays(30).truncatedTo(ChronoUnit.HOURS);
 
     when(repository.oldestRawHourBefore(rawCutoff))
         .thenReturn(Optional.of(first), Optional.of(second));
