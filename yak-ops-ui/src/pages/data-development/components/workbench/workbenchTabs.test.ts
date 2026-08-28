@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import { closeTabs, tabActionTargets } from './workbenchTabs';
 
 describe('workbench tab close rules', () => {
