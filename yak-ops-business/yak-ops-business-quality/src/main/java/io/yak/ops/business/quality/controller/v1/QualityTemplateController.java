@@ -36,6 +36,12 @@ public class QualityTemplateController {
     return Result.success(converter.templateList(reader.list(converter.templateQuery(keyword, dimension, scope))));
   }
 
+  @Operation(summary = "查询规则模板目录统计")
+  @GetMapping("/summary")
+  public Result<QualityTemplateVO.CatalogSummary> summary() {
+    return Result.success(converter.catalogSummary(reader.catalog()));
+  }
+
   @Operation(summary = "查询规则模板详情")
   @GetMapping("/{id}")
   public Result<QualityTemplateVO.Template> detail(@PathVariable long id) {

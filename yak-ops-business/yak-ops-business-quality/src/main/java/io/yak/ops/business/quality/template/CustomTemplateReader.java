@@ -4,6 +4,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.CustomTemplate;
 import io.yak.ops.business.quality.domain.QualityQuery;
 import io.yak.ops.business.quality.repository.CustomTemplateRepository;
+import io.yak.ops.business.quality.repository.QualityTemplateCatalogRepository;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnQualityEnabled
 public class CustomTemplateReader {
   private final CustomTemplateRepository repository;
+  private final QualityTemplateCatalogRepository catalogRepository;
 
-  public CustomTemplateReader(CustomTemplateRepository repository) {
+  public CustomTemplateReader(
+      CustomTemplateRepository repository,
+      QualityTemplateCatalogRepository catalogRepository) {
     this.repository = repository;
+    this.catalogRepository = catalogRepository;
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
@@ -26,14 +31,15 @@ public class CustomTemplateReader {
     QualityQuery.CustomTemplate normalized = query == null
         ? new QualityQuery.CustomTemplate(null, null, null, false)
         : query;
-    List<CustomTemplate> all = repository.listAllCustom();
-    List<CustomTemplate> scope = repository.list(new QualityQuery.CustomTemplate(
-        null, null, normalized.folderId(), normalized.folderFilter()));
-    Map<String, Long> dimensions = new LinkedHashMap<>();
-    scope.forEach(template -> dimensions.merge(template.dimension(), 1L, Long::sum));
+    var catalog = catalogRepository.global();
+    var scope = catalogRepository.customScope(normalized.folderId(), normalized.folderFilter());
     return new CustomTemplateList(
         repository.list(normalized),
-        new Summary(scope.size(), repository.countSystem(), all.size(), dimensions));
+        new Summary(
+            scope.total(),
+            catalog.systemTotal(),
+            catalog.customTotal(),
+            scope.dimensions()));
   }
 
   @Transactional(readOnly = true, transactionManager = "yakBusinessTransactionManager")
@@ -49,9 +55,9 @@ public class CustomTemplateReader {
   }
 
   public record Summary(
-      int scopeTotal,
+      long scopeTotal,
       long systemTotal,
-      int customTotal,
+      long customTotal,
       Map<String, Long> dimensions) {
     public Summary {
       dimensions = dimensions == null

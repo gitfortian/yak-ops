@@ -24,21 +24,29 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnQualityEnabled
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/data-quality/execution")
-@RequiresPermission(QualityPermissionCode.EXECUTION_READ)
 public class QualityExecutionController {
   private final QualityExecutionReader reader;
   private final QualityExecutionConverter converter;
 
   @Operation(summary = "分页查询执行记录")
   @PostMapping("/page")
+  @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
   public Result<QualityExecutionVO.Page> page(
       @Valid @RequestBody(required = false) QualityExecutionDTO.PageRequest request) {
     var query = converter.query(request);
     return Result.success(converter.page(reader.page(query), query));
   }
 
+  @Operation(summary = "查询执行状态")
+  @GetMapping("/{executionNo}/status")
+  @RequiresPermission(QualityPermissionCode.MONITOR_RUN)
+  public Result<QualityExecutionVO.Status> status(@PathVariable String executionNo) {
+    return Result.success(converter.status(reader.requireSummary(executionNo)));
+  }
+
   @Operation(summary = "查询执行详情")
   @GetMapping("/{executionNo}")
+  @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
   public Result<QualityExecutionVO.Detail> detail(@PathVariable String executionNo) {
     return Result.success(converter.detail(reader.require(executionNo)));
   }

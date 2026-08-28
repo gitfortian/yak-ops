@@ -1,5 +1,6 @@
 import {
   deleteQualityMonitor,
+  getQualityExecutionStatus,
   getQualityMonitorReport,
   getQualityMonitorWorkspace,
   listQualityMonitorOperationLogs,
@@ -7,6 +8,7 @@ import {
   type MonitorReportView,
   type MonitorWorkspaceView,
   type OperationLogPageView,
+  type QualityExecutionStatusView,
 } from '@/services/data-quality';
 import { history } from '@umijs/max';
 import { Modal, message } from 'antd';
@@ -22,8 +24,30 @@ const EMPTY_OPERATION_LOG: OperationLogPageView = {
   pageSize: 10,
 };
 
+const RUN_POLL_INTERVAL_MS = 1000;
+const RUN_POLL_MAX_ATTEMPTS = 30;
+const TERMINAL_EXECUTION_STATUSES = new Set(['SUCCESS', 'FAILED']);
+
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
+
+const sleep = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+
+const waitForExecution = async (
+  executionNo: string,
+): Promise<QualityExecutionStatusView | undefined> => {
+  for (let attempt = 0; attempt < RUN_POLL_MAX_ATTEMPTS; attempt += 1) {
+    const status = await getQualityExecutionStatus(executionNo);
+    if (TERMINAL_EXECUTION_STATUSES.has(status.executionStatus)) {
+      return status;
+    }
+    if (attempt < RUN_POLL_MAX_ATTEMPTS - 1) {
+      await sleep(RUN_POLL_INTERVAL_MS);
+    }
+  }
+  return undefined;
+};
 
 export const useMonitorDetailPage = (monitorId?: string) => {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('rules');
@@ -98,12 +122,26 @@ export const useMonitorDetailPage = (monitorId?: string) => {
   const run = useCallback(async () => {
     if (!monitorId) return;
     setRunning(true);
+    let executionNo: string;
     try {
       const result = await runQualityMonitor(monitorId);
-      message.success(`质量检查已提交：${result.executionNo}`);
-      window.setTimeout(() => void loadWorkspace(), 1800);
+      executionNo = result.executionNo;
+      message.success(`质量检查已提交：${executionNo}`);
     } catch (error) {
       message.error(errorMessage(error, '运行失败'));
+      setRunning(false);
+      return;
+    }
+
+    try {
+      const status = await waitForExecution(executionNo);
+      await loadWorkspace();
+      if (!status) {
+        message.warning('质量检查仍在执行，可在运行记录中继续查看进度');
+      }
+    } catch (error) {
+      await loadWorkspace();
+      message.warning(errorMessage(error, '质量检查已提交，但状态跟踪失败'));
     } finally {
       setRunning(false);
     }
