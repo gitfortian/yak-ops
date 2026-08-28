@@ -13,7 +13,8 @@ interface DataServiceMarketplaceHomeProps {
   callsByApiId: ReadonlyMap<number, number>;
   totalServices: number;
   runningServices: number;
-  totalCalls: number;
+  totalCalls?: number;
+  canObserve: boolean;
   dataSourceName: (dataSourceId?: number) => string;
   onKeywordChange: (value: string) => void;
   onSearch: () => void;
@@ -29,6 +30,7 @@ const DataServiceMarketplaceHome = ({
   totalServices,
   runningServices,
   totalCalls,
+  canObserve,
   dataSourceName,
   onKeywordChange,
   onSearch,
@@ -120,7 +122,7 @@ const DataServiceMarketplaceHome = ({
               <div className="rounded-lg bg-white px-3 py-3">
                 <div className="text-[10px] text-[#98a2b3]">近期调用</div>
                 <div className="mt-1 text-[21px] font-semibold tabular-nums text-[#161823]">
-                  {totalCalls}
+                  {canObserve ? totalCalls || 0 : '—'}
                 </div>
               </div>
             </div>
@@ -158,7 +160,7 @@ const DataServiceMarketplaceHome = ({
               <div className="flex h-[190px] items-center justify-center rounded-lg bg-white">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="暂无调用记录"
+                  description={canObserve ? '暂无调用记录' : '无运行观测权限'}
                 />
               </div>
             )}
