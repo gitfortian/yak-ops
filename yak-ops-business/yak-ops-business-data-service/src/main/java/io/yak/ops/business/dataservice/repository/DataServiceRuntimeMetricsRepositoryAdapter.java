@@ -2,7 +2,8 @@ package io.yak.ops.business.dataservice.repository;
 
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.core.project.CurrentProject;
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -63,8 +64,8 @@ public class DataServiceRuntimeMetricsRepositoryAdapter
             resultSet.getLong("success_calls"),
             resultSet.getLong("failure_calls"),
             resultSet.getLong("total_duration_ms"),
-            resultSet.getObject("last_success_at", LocalDateTime.class),
-            resultSet.getObject("last_failure_at", LocalDateTime.class)),
+            instant(resultSet.getTimestamp("last_success_at")),
+            instant(resultSet.getTimestamp("last_failure_at"))),
         projectId,
         apiId,
         projectId,
@@ -90,13 +91,17 @@ public class DataServiceRuntimeMetricsRepositoryAdapter
         value.lastFailureAt());
   }
 
+  private static Instant instant(Timestamp value) {
+    return value == null ? null : value.toInstant();
+  }
+
   private record Aggregate(
       long totalCalls,
       long successCalls,
       long failureCalls,
       long totalDurationMs,
-      LocalDateTime lastSuccessAt,
-      LocalDateTime lastFailureAt) {
+      Instant lastSuccessAt,
+      Instant lastFailureAt) {
     static Aggregate empty() { return new Aggregate(0L, 0L, 0L, 0L, null, null); }
   }
 }
