@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.yak.ops.business.dataset.dao.DatasetDao;
 import io.yak.ops.business.dataset.dao.mapper.DatasetFieldMapper;
 import io.yak.ops.business.dataset.dao.mapper.DatasetMapper;
+import io.yak.ops.business.dataset.dao.mapper.DatasetQueryPerformanceMapper;
 import io.yak.ops.business.dataset.dao.mapper.DatasetVersionMapper;
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
+import io.yak.ops.business.dataset.dao.model.DatasetQueryPerformancePO;
 import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import java.sql.Timestamp;
@@ -25,10 +27,13 @@ import org.springframework.stereotype.Repository;
 public class DatasetDaoImpl implements DatasetDao {
 
   private static final int FIELD_INSERT_BATCH_SIZE = 200;
+  private static final int MAX_QUERY_PERFORMANCE_LIMIT = 200;
+  private static final int MAX_QUERY_PERFORMANCE_CLEANUP_BATCH = 5000;
 
   private final DatasetMapper datasetMapper;
   private final DatasetVersionMapper versionMapper;
   private final DatasetFieldMapper fieldMapper;
+  private final DatasetQueryPerformanceMapper queryPerformanceMapper;
 
   @Override
   public int insertDataset(DatasetPO dataset) {
@@ -257,5 +262,47 @@ public class DatasetDaoImpl implements DatasetDao {
             .eq("dataset_id", datasetId));
     if (values == null || values.isEmpty() || values.get(0) == null) return 1;
     return ((Number) values.get(0)).intValue();
+  }
+
+  @Override
+  public int insertQueryPerformance(DatasetQueryPerformancePO trace) {
+    return queryPerformanceMapper.insert(trace);
+  }
+
+  @Override
+  public List<DatasetQueryPerformancePO> selectQueryPerformance(
+      Long projectId,
+      Collection<Long> datasetIds,
+      Collection<String> queryIds,
+      Collection<String> statuses,
+      Long minTotalMillis,
+      int requestedLimit) {
+    int limit = Math.max(1, Math.min(requestedLimit, MAX_QUERY_PERFORMANCE_LIMIT));
+    var query = Wrappers.<DatasetQueryPerformancePO>lambdaQuery();
+    if (projectId == null) {
+      query.isNull(DatasetQueryPerformancePO::getProjectId);
+    } else {
+      query.eq(DatasetQueryPerformancePO::getProjectId, projectId);
+    }
+    query.in(datasetIds != null && !datasetIds.isEmpty(),
+            DatasetQueryPerformancePO::getDatasetId, datasetIds)
+        .in(queryIds != null && !queryIds.isEmpty(),
+            DatasetQueryPerformancePO::getQueryId, queryIds)
+        .in(statuses != null && !statuses.isEmpty(),
+            DatasetQueryPerformancePO::getStatus, statuses)
+        .ge(minTotalMillis != null,
+            DatasetQueryPerformancePO::getTotalMillis,
+            minTotalMillis == null ? 0L : Math.max(0L, minTotalMillis))
+        .orderByDesc(DatasetQueryPerformancePO::getStartedAt)
+        .orderByDesc(DatasetQueryPerformancePO::getId)
+        .last("LIMIT " + limit);
+    return queryPerformanceMapper.selectList(query);
+  }
+
+  @Override
+  public int deleteQueryPerformanceBefore(Instant cutoff, int requestedLimit) {
+    if (cutoff == null) return 0;
+    int limit = Math.max(1, Math.min(requestedLimit, MAX_QUERY_PERFORMANCE_CLEANUP_BATCH));
+    return queryPerformanceMapper.deleteBefore(Timestamp.from(cutoff), limit);
   }
 }

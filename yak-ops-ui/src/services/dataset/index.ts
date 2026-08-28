@@ -14,8 +14,11 @@ export type {
   DatasetQueryFilter,
   DatasetQueryMetric,
   DatasetQueryPayload,
+  DatasetQueryPerformance,
+  DatasetQueryPerformanceQuery,
   DatasetQueryResult,
   DatasetQuerySort,
+  DatasetQueryStatus,
   PublishedDataset,
   Scalar,
 } from './model';

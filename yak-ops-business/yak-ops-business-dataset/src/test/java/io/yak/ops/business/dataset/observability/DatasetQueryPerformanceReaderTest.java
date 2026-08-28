@@ -1,9 +1,15 @@
 package io.yak.ops.business.dataset.observability;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.dataset.DatasetQueryPerformance;
+import io.yak.ops.business.dataset.DatasetQueryStatus;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +41,43 @@ class DatasetQueryPerformanceReaderTest {
     assertEquals(2, traces.size());
     assertEquals("q3", traces.get(0).queryId());
     assertEquals("q1", traces.get(1).queryId());
+  }
+
+  @Test
+  void filtersByTerminalStatusAndSlowQueryThreshold() {
+    DatasetQueryPerformanceBuffer buffer = new DatasetQueryPerformanceBuffer();
+    buffer.add(failedTrace("failed-fast", 1L, DatasetQueryStatus.FAILED, 200L));
+    buffer.add(failedTrace("timeout-slow", 1L, DatasetQueryStatus.TIMEOUT, 5_000L));
+    buffer.add(trace("success-slow", 1L, 6_000L));
+    DatasetQueryPerformanceReader reader = new DatasetQueryPerformanceReader(buffer);
+
+    var traces = reader.recent(
+        Set.of(1L), Set.of(), Set.of(DatasetQueryStatus.TIMEOUT), 3_000L, 10);
+
+    assertEquals(1, traces.size());
+    assertEquals("timeout-slow", traces.get(0).queryId());
+  }
+
+  @Test
+  void localFallbackNeverLeaksAcrossProjectScopes() {
+    DatasetQueryPerformanceBuffer buffer = new DatasetQueryPerformanceBuffer();
+    buffer.add(10L, trace("project-10", 1L, 10L));
+    buffer.add(20L, trace("project-20", 1L, 20L));
+    buffer.add(null, trace("legacy", 1L, 30L));
+    CurrentProject project10 = mock(CurrentProject.class);
+    when(project10.current()).thenReturn(Optional.of(new ProjectContext(10L, "p10")));
+
+    DatasetQueryPerformanceReader scopedReader =
+        new DatasetQueryPerformanceReader(buffer, null, project10);
+    DatasetQueryPerformanceReader legacyReader = new DatasetQueryPerformanceReader(buffer);
+
+    var projectTraces = scopedReader.recent(Set.of(1L), 10);
+    var legacyTraces = legacyReader.recent(Set.of(1L), 10);
+
+    assertEquals(1, projectTraces.size());
+    assertEquals("project-10", projectTraces.get(0).queryId());
+    assertEquals(1, legacyTraces.size());
+    assertEquals("legacy", legacyTraces.get(0).queryId());
   }
 
   @Test
@@ -74,7 +117,35 @@ class DatasetQueryPerformanceReaderTest {
         totalMillis,
         1,
         false,
-        Instant.parse("2026-08-18T10:00:00Z"));
+        Instant.parse("2026-08-18T10:00:00Z").plusMillis(totalMillis));
+  }
+
+  private static DatasetQueryPerformance failedTrace(
+      String queryId, long datasetId, DatasetQueryStatus status, long totalMillis) {
+    Instant startedAt = Instant.parse("2026-08-18T10:00:00Z").plusMillis(totalMillis);
+    return new DatasetQueryPerformance(
+        queryId,
+        datasetId,
+        "dataset-" + datasetId,
+        datasetId * 10,
+        1,
+        "SQL_QUERY",
+        "ds-1",
+        "select * from t where id = 42",
+        null,
+        status,
+        "EXECUTE_SOURCE",
+        "RuntimeException",
+        "boom",
+        0L,
+        1L,
+        0L,
+        0L,
+        totalMillis,
+        0,
+        false,
+        startedAt,
+        startedAt.plusMillis(totalMillis));
   }
 
   private record Fixture(

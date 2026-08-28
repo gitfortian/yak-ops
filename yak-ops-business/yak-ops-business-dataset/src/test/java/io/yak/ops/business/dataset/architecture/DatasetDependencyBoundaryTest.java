@@ -41,7 +41,7 @@ class DatasetDependencyBoundaryTest {
           Map.entry("publication", Set.of("definition", "gateway", "lineage", "repository", "schema")),
           Map.entry("schema", Set.of("gateway", "repository")),
           Map.entry("query", Set.of("gateway", "observability", "repository")),
-          Map.entry("observability", Set.of()),
+          Map.entry("observability", Set.of("repository")),
           Map.entry("lineage", Set.of("gateway", "repository")),
           Map.entry("gateway", Set.of()),
           Map.entry("repository", Set.of("dao")),
@@ -91,6 +91,10 @@ class DatasetDependencyBoundaryTest {
         "query",
         "observability",
         Set.of(BASE + ".observability.DatasetQueryPerformanceRecorder"));
+    assertExactCorridor(
+        "observability",
+        "repository",
+        Set.of(BASE + ".repository.DatasetQueryPerformanceStore"));
 
     assertThat(crossing("lineage", "definition"))
         .as("Lineage must not point back to Definition")
@@ -136,7 +140,10 @@ class DatasetDependencyBoundaryTest {
       } else if (type.startsWith("io.yak.ops.business.datasource.catalog.")) {
         assertThat(path).isEqualTo("gateway/datasource/DataSourceDatasetCatalogAdapter.java");
       } else if (type.startsWith("io.yak.ops.business.datasource.config.")) {
-        assertThat(path).isEqualTo("config/DatasetPersistenceConfiguration.java");
+        assertThat(path)
+            .isIn(
+                "config/DatasetPersistenceConfiguration.java",
+                "dao/impl/DatasetDaoImpl.java");
       } else if (type.startsWith("io.yak.ops.spi.datasource.execution.")) {
         assertThat(path).isEqualTo("gateway/datasource/DataSourceSchemaSqlAdapter.java");
       } else if (type.startsWith("io.yak.ops.business.lineage.")) {

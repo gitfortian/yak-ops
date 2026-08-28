@@ -130,15 +130,37 @@ SQL_QUERY      -> SqlQueryDatasetSourceAdapter
 
 Query adapters 本身就是 Runtime boundary，可以直接调用 `io.yak.ops.core.execution.sql.*`；业务 Coordinator 不直接依赖 Core SQL Runtime。
 
+每次 Query attempt 在进入业务校验前生成 `queryId`，并最终形成以下一种终态：
+
+```text
+SUCCESS / REJECTED / FAILED / TIMEOUT
+```
+
+失败会保留可定位的 `failureStage`，但原业务异常仍按原语义抛给调用者。
+
 ## 8. Observability
 
 ```text
-DatasetQueryPerformanceBuffer
 DatasetQueryPerformanceRecorder
+ -> privacy-safe SQL evidence
+ -> DatasetQueryPerformanceStore
+ -> DatasetQueryPerformanceStoreAdapter
+ -> DatasetDao
+ -> DatasetQueryPerformanceMapper / PO / MyBatis
+
 DatasetQueryPerformanceReader
+ -> persisted cross-instance evidence
+ + bounded local fallback
 ```
 
-Buffer 为 bounded process-local evidence，不承担业务持久化。
+规则：
+
+- 正常情况下 Query trace 持久化，应用重启或切换实例后仍可查询；
+- 持久化异常时退化到最多 500 条的 process-local fallback；
+- Observability 写入、读取或清理失败不能反向改变 Dataset Query 业务结果；
+- Project Context 严格隔离：有项目只读该项目，无项目只读 `project_id IS NULL`；
+- SQL 仅保存去注释、去字面量后的 preview 和 SHA-256 fingerprint，不持久化原始过滤值；
+- 默认保留 7 天，清理周期和批量大小通过 `yak.dataset.query-observability.*` 调整。
 
 ## 9. Development
 
@@ -214,6 +236,8 @@ DatasetLineageGraphGateway
 
 ## 12. Persistence
 
+Dataset business truth：
+
 ```text
 Application role
  -> DatasetRepository
@@ -222,13 +246,23 @@ Application role
  -> mapper / PO / MyBatis
 ```
 
+Query observability read model：
+
+```text
+Observability role
+ -> DatasetQueryPerformanceStore
+ -> DatasetQueryPerformanceStoreAdapter
+ -> DatasetDao
+ -> DatasetQueryPerformanceMapper / PO / MyBatis
+```
+
 Repository contract 只暴露 Dataset-owned domain/value，不暴露 Controller DTO/VO、PO、Mapper 或 MyBatis 类型。
 
 ## 13. Config
 
 `DatasetPersistenceConfiguration` 只负责 Dataset Flyway 和共享业务数据库 wiring。
 
-它可以复用 Datasource 模块的 `BusinessDatabaseConfiguration / ConditionalOnDataSourceEnabled / DataSourceProperties`，但不能反向手工创建 Dataset business role Bean。
+它可以复用 Datasource 模块的 `BusinessDatabaseConfiguration / ConditionalOnDataSourceEnabled / DataSourceProperties`；`DatasetDaoImpl` 沿用同一 datasource-enabled 条件，但业务角色不直接依赖 Datasource 配置能力。
 
 ## 14. Change Rule
 

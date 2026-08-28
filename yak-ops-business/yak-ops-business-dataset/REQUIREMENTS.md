@@ -61,7 +61,8 @@ Dataset 查询必须绑定 exact DatasetVersion：
 - QUERY_REVISION 必须解析版本中固定的 TaskRevision；
 - SQL_QUERY 必须使用版本中固定的 dataSourceId + SQL；
 - SQL 保持单条、只读、安全字段/filter/limit 规则；
-- Query Performance 记录失败或缺失不能改变查询业务真相。
+- 每次 Query attempt 必须生成唯一 queryId，并形成 `SUCCESS / REJECTED / FAILED / TIMEOUT` 之一的终态诊断；
+- Query Performance 记录、读取或清理失败不能改变查询业务真相，也不能覆盖原始业务异常。
 
 ## 7. Analysis Binding
 
@@ -109,26 +110,34 @@ Dataset transaction commit
 
 ## 10. Observability
 
-Query Performance 只保存进程内诊断窗口：
+Query Performance 是派生诊断 evidence，不属于 Dataset / Version / QueryResult 的业务状态，并必须满足：
 
-- newest first；
-- bounded window；
-- 支持 datasetId / queryId 过滤；
-- 不成为 Dataset、Version 或 QueryResult 的业务状态。
+- 正常路径持久化，重启和多实例切换后仍可查询；
+- newest first，查询窗口有上限；
+- 支持 datasetId / queryId / terminal status / 最小总耗时过滤；
+- Project Context 严格隔离，有项目只读该项目，无项目只读 legacy/null scope；
+- 只保存脱敏 SQL preview 和 SQL shape fingerprint，不持久化原始字面量过滤值；
+- 持久化不可用时允许退化到 bounded process-local fallback；
+- fallback 不能跨 project scope 泄漏；
+- 诊断保留期必须有界，默认保留 7 天并支持配置；
+- Observability 自身异常不得影响 Dataset Query 结果。
 
 ## 11. Compatibility
 
-纯架构治理不得顺手改变：
+除非 Requirement 明确演进，否则不得顺手改变：
 
-- `/api/v1/datasets/**` route；
-- HTTP DTO / VO JSON shape；
+- `/api/v1/datasets/**` 既有 route 语义；
 - `DatasetService` public methods / compatibility records；
-- `DatasetQueryService` public API；
 - `DevelopmentDatasetFacade` public API；
-- Dataset database schema / Flyway；
-- DAO / Repository contract；
 - persisted sourceType/status values；
-- SQL runtime behavior；
+- exact DatasetVersion SQL runtime behavior；
 - Lineage shared graph API。
 
-如需改变以上 contract，应独立更新 Requirement / Domain / migration，而不是混入治理 PR。
+允许 additive contract 演进时必须同步 Requirement / Domain / migration / tests，例如新增：
+
+- Query Performance 可选过滤参数；
+- Query Performance VO 的诊断字段；
+- observability read-model Flyway 表；
+- Repository/DAO 的窄 observability persistence contract。
+
+这类演进必须保持现有 Query/Analysis/Dashboard 调用兼容，不能混入无关业务语义变化。

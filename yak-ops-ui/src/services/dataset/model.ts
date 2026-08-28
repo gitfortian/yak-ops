@@ -134,3 +134,40 @@ export interface DatasetQueryResult {
   truncated: boolean;
   elapsedMillis: number;
 }
+
+export type DatasetQueryStatus = 'SUCCESS' | 'REJECTED' | 'FAILED' | 'TIMEOUT';
+
+/** Persisted, privacy-safe diagnostics for one Dataset Query Runtime attempt. */
+export interface DatasetQueryPerformance {
+  queryId: string;
+  datasetId: string;
+  datasetName?: string | null;
+  datasetVersionId?: string | null;
+  datasetVersionNo?: number | null;
+  sourceType?: DatasetSourceType | null;
+  dataSourceId?: string | null;
+  /** Literal values are redacted by the backend before this preview is persisted. */
+  sql?: string | null;
+  sqlHash?: string | null;
+  status: DatasetQueryStatus;
+  failureStage?: string | null;
+  errorType?: string | null;
+  errorMessage?: string | null;
+  waitMillis: number;
+  prepareMillis: number;
+  executeMillis: number;
+  transferMillis: number;
+  totalMillis: number;
+  returnedRows: number;
+  truncated: boolean;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+export interface DatasetQueryPerformanceQuery {
+  datasetIds?: string[];
+  queryIds?: string[];
+  statuses?: DatasetQueryStatus[];
+  minTotalMillis?: number;
+  limit?: number;
+}

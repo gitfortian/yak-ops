@@ -2,7 +2,9 @@ package io.yak.ops.business.dataset.dao;
 
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
+import io.yak.ops.business.dataset.dao.model.DatasetQueryPerformancePO;
 import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
@@ -60,4 +62,16 @@ public interface DatasetDao {
   List<DatasetFieldPO> selectFieldsByVersionIds(Collection<Long> versionIds);
 
   int selectNextVersionNo(long datasetId);
+
+  int insertQueryPerformance(DatasetQueryPerformancePO trace);
+
+  List<DatasetQueryPerformancePO> selectQueryPerformance(
+      Long projectId,
+      Collection<Long> datasetIds,
+      Collection<String> queryIds,
+      Collection<String> statuses,
+      Long minTotalMillis,
+      int limit);
+
+  int deleteQueryPerformanceBefore(Instant cutoff, int limit);
 }
