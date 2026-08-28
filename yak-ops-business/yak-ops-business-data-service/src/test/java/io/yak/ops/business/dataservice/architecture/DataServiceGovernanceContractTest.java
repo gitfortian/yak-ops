@@ -37,6 +37,14 @@ class DataServiceGovernanceContractTest {
   }
 
   @Test
+  void managementRbacHasExplicitYakSecurityCompileDependency() throws IOException {
+    String pom = Files.readString(modulePom());
+    assertThat(pom)
+        .contains("<groupId>io.yak.framework</groupId>")
+        .contains("<artifactId>yak-security-spring-boot-starter</artifactId>");
+  }
+
+  @Test
   void permissionVocabularyIsExplicitAndStable() throws IOException {
     String source = Files.readString(permissionSource());
     assertThat(source)
@@ -61,6 +69,12 @@ class DataServiceGovernanceContractTest {
     assertThat(reader)
         .contains("repository.findByRuntimePath(path)")
         .contains("repository.count()");
+  }
+
+  private Path modulePom() {
+    Path local = Path.of("pom.xml");
+    if (Files.isRegularFile(local)) return local;
+    return Path.of("yak-ops-business", "yak-ops-business-data-service", "pom.xml");
   }
 
   private Path controllerRoot() {
