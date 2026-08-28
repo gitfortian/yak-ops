@@ -16,7 +16,9 @@ class DataDevelopmentArchitectureDocumentationTest {
       "DOMAIN.md",
       "ARCHITECTURE.md",
       "DEPENDENCIES.md",
-      "REVIEW.md");
+      "REVIEW.md",
+      "EXECUTION_CONTROL_PLANE.md",
+      "PROJECT_GOVERNANCE.md");
 
   @Test
   void architectureContractDocumentsExistAndReadmeLinksThem() throws IOException {
