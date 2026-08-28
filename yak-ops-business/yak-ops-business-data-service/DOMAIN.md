@@ -6,6 +6,7 @@
 
 ```text
 DataServiceDefinition (Aggregate Root)
+├── projectId
 ├── DataServiceSettings
 ├── PublishedRuntimeSnapshot
 ├── SourceReference
@@ -19,7 +20,7 @@ Documentation
 └── DataServiceDocumentation
 
 Observability
-└── InvocationRecord
+└── InvocationRecord(projectId snapshot)
 
 Invocation Result
 └── DataServiceQueryResponse
@@ -52,6 +53,7 @@ immutable source revision
 
 `DataServiceDefinition` 是稳定 Data Service 的 Aggregate Root。
 
+- `projectId`：Yak Ops Management Plane 所属 Project Space。
 - `DataServiceSettings`：name/path/maxRows/timeout/enabled/description/pagination。
 - `PublishedRuntimeSnapshot`：已发布的 `dataSourceId + SQL`。
 - `SourceReference`：来源类型、引用、固定 Revision。
@@ -59,6 +61,8 @@ immutable source revision
 - `AuthMode`：NONE/API_KEY。
 
 运行调用读取这里的持久化快照，不在每次请求时重新解析上游 Source。
+
+`projectId` 是 Console ownership，不进入 Public Runtime URL。外部调用通过全局唯一 path 找到 Definition 后，自然获得该服务的 Project identity；调用方不能通过 Project Header 选择或覆盖服务归属。
 
 ### 2.3 Process-local Runtime Truth
 
@@ -75,25 +79,27 @@ Runtime metrics
 ## 3. DataServiceDefinition 不变量
 
 1. Data Service ID 一旦创建就是稳定服务身份。
-2. name/path 必须有效；path 唯一。
-3. `PublishedRuntimeSnapshot.dataSourceId` 必须指向有效已发布 Datasource identity。
-4. `PublishedRuntimeSnapshot.sql` 必须存在，并在 Publication / Execution boundary 验证为单条 SELECT。
-5. `SourceReference` 固定到不可变 Revision；republish 更新引用而不是新建服务身份。
-6. republish 不能重置 `AuthMode` 或 `RuntimePolicy`。
-7. 服务侧 settings 更新不能改 SQL/dataSourceId/source revision。
-8. enable/disable 只改变服务可调用性。
-9. Aggregate 通过领域行为变更，不把 PO setter 暴露为业务 API。
-10. PO/Mapper 不是业务事实，持久化重建由 Repository Adapter 负责。
+2. Project ownership 创建后属于稳定管理事实；republish 不改变 `projectId`。
+3. name/path 必须有效；由于 Public Invocation URL 没有 Project namespace，path 跨 Project 全局唯一。
+4. `PublishedRuntimeSnapshot.dataSourceId` 必须指向有效已发布 Datasource identity。
+5. `PublishedRuntimeSnapshot.sql` 必须存在，并在 Publication / Execution boundary 验证为单条 SELECT。
+6. `SourceReference` 固定到不可变 Revision；republish 更新引用而不是新建服务身份。
+7. republish 不能重置 `AuthMode`、`RuntimePolicy` 或 Project ownership。
+8. 服务侧 settings 更新不能改 SQL/dataSourceId/source revision/projectId。
+9. enable/disable 只改变服务可调用性。
+10. Aggregate 通过领域行为变更，不把 PO setter 暴露为业务 API。
+11. PO/Mapper 不是业务事实，持久化重建由 Repository Adapter 负责。
 
 ## 4. Publication 生命周期
 
 ```text
                 publish
-ONLINE Source -------------> DataServiceDefinition
+ONLINE Source -------------> DataServiceDefinition(projectId)
                                   |
                                   | republish newer Revision
                                   v
                          same Data Service ID
+                         same Project ownership
                          new SourceReference
                          new RuntimeSnapshot
                          preserved Auth/Policy
@@ -108,10 +114,12 @@ Source Revision owns:
 name / path / maxRows / timeout / pagination / description / contract
 
 Data Service owns:
-enabled / auth / API keys / runtime policy / local runtime state
+projectId / enabled / auth / API keys / runtime policy / local runtime state
 ```
 
 客户端不能用 publish/update 请求覆盖 Source-owned 字段。
+
+Data Development source-managed 服务的 Project ownership 必须与 owning Data Development node 一致。Legacy backfill 优先从 source node 推断；发现已持久化 ownership 冲突时应拒绝启动而不是静默迁移。
 
 ### Frozen Legacy Source
 
@@ -119,7 +127,8 @@ enabled / auth / API keys / runtime policy / local runtime state
 
 - 已发布 Runtime Snapshot 继续是有效运行事实；
 - 不重新解析一个不存在的 Source；
-- 不允许假装 republish 成功。
+- 不允许假装 republish 成功；
+- Legacy global row 在 Project cutover 时进入 compatibility Project。
 
 ## 5. Access 不变量
 
@@ -141,6 +150,8 @@ prefix ----------------------------> persisted for identification/audit
 - rotate 替换 hash/prefix，并使本机旧 rate-limit bucket 失效。
 - successful authorize 更新 `lastUsedAt`。
 - rate limit bucket 是进程本地状态，不是 Aggregate。
+- Console Key lifecycle 必须先通过父 Data Service 的 CurrentProject ownership；不能只凭 keyId 修改另一 Project 的 Key。
+- Public Invocation 的 Key 查找属于已解析 Data Service 的访问执行过程，不依赖 Yak Console Project Header。
 
 ## 6. SQL Template / Invocation 不变量
 
@@ -166,6 +177,7 @@ SqlExecutionRuntime
 - Pagination control 不进入 SQL bindings，但进入 cache identity。
 - `DataServiceQueryResponse` 是 runtime-neutral Domain value，Runtime 不依赖 Execution package。
 - `SqlExecutionRuntime` 是唯一物理 SQL 调用入口。
+- Public Invocation 只允许通过全局 path resolve corridor 读取 Definition；所有 Console ID/source/list read 都是 Project-scoped。
 
 ## 7. Runtime Policy 与 State
 
@@ -217,21 +229,42 @@ current parameter contract
 
 删除的 SQL 参数不能继续出现在当前文档；新增参数必须出现，即使只有默认 type。
 
+Documentation 自身不重复存 Project identity；Console reader/manager 必须先通过父 Data Service ownership，再读写文档 projection。
+
 ## 9. InvocationRecord
 
 `InvocationRecord` 是调用审计事实，而不是执行生命周期 Aggregate。
 
 它保存调用完成后的快照：
 
+- Project ID；
 - 服务身份/名称/Path；
 - Caller/API Key identification；
 - 参数 JSON；
 - success/duration/rows/error；
 - 时间。
 
-历史记录不因 Data Service 后续改名或 Key rotate 而重写。
+Project ID 必须在 Invocation 时从 resolved Data Service Definition 快照下来。历史记录不因 Data Service 后续改名、删除或 Key rotate 而重写，因此 Overview/Logs 在服务删除后仍能按 Project 归属查询。
 
-## 10. Persistence Projection
+## 10. Management vs Invocation boundary
+
+```text
+Console request
+  -> PROJECT_REQUIRED
+  -> Project membership
+  -> Data Service RBAC
+  -> project-scoped repository
+
+External request
+  -> global runtime path
+  -> NONE/API_KEY
+  -> global findByRuntimePath only
+  -> resolved Definition(projectId)
+```
+
+Project Header 不是 Public Invocation authorization input，也不能被外部客户端用于跨 Project 选择服务。
+
+## 11. Persistence Projection
 
 ```text
 Database PO
@@ -245,7 +278,9 @@ Domain
 
 允许 `dao/model` 使用 Lombok bean/setter 适配 ORM；Domain 不因此恢复为 `@Data` 贫血 Bean。
 
-## 11. 修改协议
+管理 Repository 的 `findById/findByPath/findBySource/findAll/save/delete` 必须绑定 CurrentProject。`findByRuntimePath` 是唯一显式 global read corridor，且只服务 Invocation Plane。
+
+## 12. 修改协议
 
 ```text
 Domain Impact Analysis
@@ -253,6 +288,7 @@ Domain Impact Analysis
 - Truth owner:
 - invariant/lifecycle impact:
 - process-local vs persisted impact:
+- Project/Invocation plane impact:
 - Domain Gap: yes/no
 
 Domain Compliance Report
