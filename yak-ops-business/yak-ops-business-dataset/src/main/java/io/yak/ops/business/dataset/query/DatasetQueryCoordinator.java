@@ -91,9 +91,8 @@ public class DatasetQueryCoordinator {
     if (versionNo <= 0) {
       throw new IllegalArgumentException("versionNo 必须大于 0");
     }
-    return repository.listVersions(dataset.id()).stream()
-        .filter(version -> version.versionNo() == versionNo)
-        .findFirst()
+    return repository
+        .findVersion(dataset.id(), versionNo)
         .orElseThrow(
             () ->
                 new IllegalArgumentException(

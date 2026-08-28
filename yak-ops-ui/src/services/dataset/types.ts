@@ -58,6 +58,13 @@ export interface DatasetFieldWire {
   sortOrder: number;
 }
 
+/** HTTP contract for GET /api/v1/datasets/catalog. */
+export interface DatasetCatalogWire {
+  dataset: DatasetSummaryWire;
+  currentVersion?: DatasetVersionWire | null;
+  fields: DatasetFieldWire[];
+}
+
 /** HTTP contract for DatasetDetailVO. */
 export interface DatasetDetailWire {
   dataset: DatasetSummaryWire;

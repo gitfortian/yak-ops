@@ -5,6 +5,7 @@ import io.yak.ops.business.dataset.DatasetField;
 import io.yak.ops.business.dataset.DatasetStatus;
 import io.yak.ops.business.dataset.DatasetVersion;
 import io.yak.ops.business.dataset.DatasetVersionDraft;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,11 +33,19 @@ public interface DatasetRepository {
 
   List<Dataset> listDatasets();
 
+  List<Dataset> listDatasetsByIds(Collection<Long> datasetIds);
+
   Optional<DatasetVersion> findVersion(long versionId);
+
+  Optional<DatasetVersion> findVersion(long datasetId, int versionNo);
 
   List<DatasetVersion> listVersions(long datasetId);
 
+  List<DatasetVersion> listVersionsByIds(Collection<Long> versionIds);
+
   List<DatasetField> listFields(long versionId);
+
+  List<DatasetField> listFieldsByVersionIds(Collection<Long> versionIds);
 
   int nextVersionNo(long datasetId);
 }

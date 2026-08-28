@@ -3,6 +3,7 @@ package io.yak.ops.business.dataset.dao;
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
 import io.yak.ops.business.dataset.dao.model.DatasetPO;
 import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
+import java.util.Collection;
 import java.util.List;
 
 /** Database access boundary. MyBatis/PO types stay below the Repository adapter. */
@@ -13,6 +14,8 @@ public interface DatasetDao {
   int insertVersion(DatasetVersionPO version);
 
   int insertField(DatasetFieldPO field);
+
+  int insertFields(List<DatasetFieldPO> fields);
 
   int updateCurrentVersion(long datasetId, long versionId);
 
@@ -42,11 +45,19 @@ public interface DatasetDao {
 
   List<DatasetPO> selectDatasets(Long projectId);
 
+  List<DatasetPO> selectDatasetsByIds(Long projectId, Collection<Long> datasetIds);
+
   DatasetVersionPO selectVersion(long versionId);
+
+  DatasetVersionPO selectVersion(long datasetId, int versionNo);
 
   List<DatasetVersionPO> selectVersions(long datasetId);
 
+  List<DatasetVersionPO> selectVersionsByIds(Collection<Long> versionIds);
+
   List<DatasetFieldPO> selectFields(long versionId);
+
+  List<DatasetFieldPO> selectFieldsByVersionIds(Collection<Long> versionIds);
 
   int selectNextVersionNo(long datasetId);
 }

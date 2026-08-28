@@ -66,6 +66,14 @@ public class DatasetService {
     return reader.list();
   }
 
+  public List<DatasetCatalogEntry> catalog(Collection<Long> datasetIds) {
+    return reader.catalog(datasetIds);
+  }
+
+  public List<DatasetCatalogEntry> catalog(Collection<Long> datasetIds, boolean onlineOnly) {
+    return reader.catalog(datasetIds, onlineOnly);
+  }
+
   public DatasetOverviewSnapshot overview(Instant from, Instant to, int listLimit) {
     return overviewReader.overview(from, to, listLimit);
   }
