@@ -25,6 +25,10 @@ public class WorkflowExecutionOverviewReader {
     return overview(repository.overview(start, end, hourlyTrend));
   }
 
+  public Metrics metrics(LocalDateTime start, LocalDateTime end) {
+    return metrics(repository.metrics(start, end));
+  }
+
   public Execution latest(LocalDateTime start, LocalDateTime end) {
     return execution(repository.latest(start, end));
   }

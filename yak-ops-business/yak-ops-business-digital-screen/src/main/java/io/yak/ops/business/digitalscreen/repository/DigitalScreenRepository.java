@@ -11,6 +11,11 @@ public interface DigitalScreenRepository {
 
   List<DigitalScreen> list();
 
+  /** Lightweight overview count; adapters should override to avoid decoding screen bindings. */
+  default long count() {
+    return list().size();
+  }
+
   Optional<DigitalScreen> findById(long id);
 
   DigitalScreen lockById(long id);

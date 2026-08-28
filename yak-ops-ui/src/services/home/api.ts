@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 import type {
   HomeAssetOverview,
+  HomeCockpitOverview,
   HomeDataCenterOverview,
   HomeDataCenterPeriod,
   HomeQualityOverview,
@@ -10,10 +11,16 @@ import type {
   HomeScheduleResponse,
 } from './types';
 
+const COCKPIT_PREFIX = '/api/v1/home/cockpit';
 const DATA_CENTER_PREFIX = '/api/v1/home/data-center';
 const ASSET_PREFIX = '/api/v1/home/assets';
 const QUALITY_PREFIX = '/api/v1/home/quality';
 const SCHEDULE_CENTER_PREFIX = '/api/v1/home/schedule-center';
+
+export const homeCockpitApi = {
+  overview: (): Promise<ApiResponse<HomeCockpitOverview>> =>
+    HttpUtils.get<HomeCockpitOverview>(COCKPIT_PREFIX),
+};
 
 export const homeDataCenterApi = {
   overview: (

@@ -12,7 +12,7 @@ class HomeReadModelBoundaryTest {
 
   @Test
   void dataCenterMustComposeDomainReadersInsteadOfPersistenceInternals() throws IOException {
-    String source = Files.readString(homeDataCenterSource(), StandardCharsets.UTF_8);
+    String source = readHomeSource("HomeDataCenterService.java");
 
     assertThat(source)
         .contains(
@@ -26,9 +26,49 @@ class HomeReadModelBoundaryTest {
             "JdbcTemplate");
   }
 
-  private Path homeDataCenterSource() {
-    Path local = Path.of("src/main/java/io/yak/ops/boot/home/HomeDataCenterService.java");
-    if (Files.isRegularFile(local)) return local;
+  @Test
+  void cockpitMustComposeStableDomainReadSidesInsteadOfPersistenceInternals() throws IOException {
+    String source = readHomeSource("HomeCockpitService.java");
+
+    assertThat(source)
+        .contains(
+            "DataSourceReader",
+            "OfflineExecutionOverviewReader",
+            "DevelopmentNodeService",
+            "WorkflowExecutionOverviewReader",
+            "QualityOverviewReader",
+            "QualityExecutionOverviewReader",
+            "DataServiceReader",
+            "DashboardService",
+            "DigitalScreenApplicationService")
+        .doesNotContain(
+            ".dao.mapper.",
+            ".bean.po.",
+            "LambdaQueryWrapper",
+            "JdbcTemplate");
+  }
+
+  @Test
+  void cockpitBackendMustNotOwnFrontendRoutes() throws IOException {
+    String source = readHomeSource("HomeCockpitService.java");
+
+    assertThat(source)
+        .doesNotContain(
+            "\"/data-source\"",
+            "\"/sync/",
+            "\"/data-development",
+            "\"/workflow/",
+            "\"/data-quality/",
+            "\"/data-analysis/",
+            "\"/data-service/",
+            "\"/dashboard\"");
+  }
+
+  private String readHomeSource(String fileName) throws IOException {
+    Path local = Path.of("src/main/java/io/yak/ops/boot/home", fileName);
+    if (Files.isRegularFile(local)) {
+      return Files.readString(local, StandardCharsets.UTF_8);
+    }
 
     Path repositoryRelative = Path.of(
         "yak-ops-boot",
@@ -40,10 +80,10 @@ class HomeReadModelBoundaryTest {
         "ops",
         "boot",
         "home",
-        "HomeDataCenterService.java");
+        fileName);
     assertThat(Files.isRegularFile(repositoryRelative))
-        .as("HomeDataCenterService source must be available")
+        .as(fileName + " source must be available")
         .isTrue();
-    return repositoryRelative;
+    return Files.readString(repositoryRelative, StandardCharsets.UTF_8);
   }
 }

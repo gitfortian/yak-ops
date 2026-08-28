@@ -87,6 +87,14 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
   }
 
   @Override
+  public long count() {
+    Long projectId = currentProjectId();
+    return mapper.selectCount(
+        new LambdaQueryWrapper<DevelopmentNodePO>()
+            .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId));
+  }
+
+  @Override
   public boolean existsByName(Long directoryId, String name) {
     Long projectId = currentProjectId();
     return mapper.selectCount(

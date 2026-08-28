@@ -145,7 +145,8 @@ public class WorkflowExecutionOverviewRepositoryAdapter
         scope.params().toArray());
   }
 
-  private Metrics metrics(LocalDateTime start, LocalDateTime end) {
+  @Override
+  public Metrics metrics(LocalDateTime start, LocalDateTime end) {
     Scope scope = scope("e");
     String duration = "GREATEST(0, TIMESTAMPDIFF(MICROSECOND, "
         + "COALESCE(e.run_started_at, e.created_at, e.updated_at), e.ended_at) / 1000)";
