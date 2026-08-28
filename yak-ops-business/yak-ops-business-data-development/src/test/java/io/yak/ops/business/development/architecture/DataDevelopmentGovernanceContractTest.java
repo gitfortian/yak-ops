@@ -19,7 +19,8 @@ class DataDevelopmentGovernanceContractTest {
       "DevelopmentReleaseController.java",
       "DevelopmentEditorSettingsController.java",
       "DevelopmentDatasetNodeController.java",
-      "DevelopmentDataServiceNodeController.java");
+      "DevelopmentDataServiceNodeController.java",
+      "DevelopmentDataServicePublicationController.java");
 
   @Test
   void everyDataDevelopmentControllerRequiresProjectAndReadPermission() throws IOException {
@@ -57,6 +58,8 @@ class DataDevelopmentGovernanceContractTest {
         "@RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)",
         "@RequiresPermission(DataDevelopmentPermissionCode.EDIT)",
         "@RequiresPermission(DataDevelopmentPermissionCode.PUBLISH)");
+    assertContains("DevelopmentDataServicePublicationController.java",
+        "@RequiresPermission(DataDevelopmentPermissionCode.RELEASE)");
   }
 
   @Test
