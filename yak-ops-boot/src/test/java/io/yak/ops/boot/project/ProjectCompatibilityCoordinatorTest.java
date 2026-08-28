@@ -22,7 +22,7 @@ import org.mockito.ArgumentCaptor;
 class ProjectCompatibilityCoordinatorTest {
 
   @Test
-  void createsRootDepartmentBeforeFreshCompatibilityProject() {
+  void createsRootDepartmentAndKeepsOwnerOutOfNormalMembers() {
     ProjectSpaceProperties properties = new ProjectSpaceProperties();
     ProjectService projectService = mock(ProjectService.class);
     UserService userService = mock(UserService.class);
@@ -33,9 +33,13 @@ class ProjectCompatibilityCoordinatorTest {
     owner.setUserName("root");
     owner.setDeptId(null);
 
+    UserBriefVO member = new UserBriefVO();
+    member.setId(2L);
+    member.setUserName("member");
+
     when(projectService.getProjectBriefList()).thenReturn(Collections.emptyList());
     when(userService.getUserBriefByUsername("root")).thenReturn(owner);
-    when(userService.getAllUserBriefList()).thenReturn(List.of(owner));
+    when(userService.getAllUserBriefList()).thenReturn(List.of(owner, member, owner));
     when(deptService.getDeptIdListByParentIdAndDeptName(0L, "默认部门"))
         .thenReturn(Collections.emptyList(), List.of(7L));
 
@@ -58,5 +62,6 @@ class ProjectCompatibilityCoordinatorTest {
     assertThat(projectCaptor.getValue().getProjectName()).isEqualTo("默认空间");
     assertThat(projectCaptor.getValue().getDeptId()).isEqualTo(7L);
     assertThat(projectCaptor.getValue().getOwnerIdList()).containsExactly(1L);
+    assertThat(projectCaptor.getValue().getUserIdList()).containsExactly(2L);
   }
 }

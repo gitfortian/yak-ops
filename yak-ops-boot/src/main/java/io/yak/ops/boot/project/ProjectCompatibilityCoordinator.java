@@ -104,10 +104,12 @@ public class ProjectCompatibilityCoordinator {
               + ". Configure yak.project-space.compatibility.default-owner-username if needed.");
     }
 
+    Long ownerId = owner.getId();
     List<UserBriefVO> users = userService.getAllUserBriefList();
     List<Long> userIds = (users == null ? Collections.<UserBriefVO>emptyList() : users).stream()
         .map(UserBriefVO::getId)
         .filter(id -> id != null && id > 0)
+        .filter(id -> !ownerId.equals(id))
         .distinct()
         .toList();
 
@@ -116,7 +118,7 @@ public class ProjectCompatibilityCoordinator {
     input.setDescription("Yak Ops Project Space compatibility default project");
     input.setRunning(Boolean.TRUE);
     input.setDeptId(resolveCompatibilityDepartmentId(owner));
-    input.setOwnerIdList(Collections.singletonList(owner.getId()));
+    input.setOwnerIdList(Collections.singletonList(ownerId));
     input.setUserIdList(userIds);
 
     try {
