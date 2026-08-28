@@ -11,6 +11,7 @@ REQUIREMENTS.md      -> 模块需要什么
 ARCHITECTURE.md      -> 代码如何组织、职责归谁
 DEPENDENCIES.md      -> package 允许怎么依赖
 DOMAIN.md            -> 业务事实和不变量
+MIGRATIONS.md        -> Datasource 独立 Flyway namespace 与一期 V1 baseline
 ../../CODE_STYLE.md  -> Yak Ops 仓库统一工程与代码规范
 REVIEW.md            -> 按什么标准 Review
 PLUGIN.md            -> Datasource Plugin 开发标准（插件模块）
@@ -157,6 +158,8 @@ DataSourceRepository
 
 `DataSourceDefinition.restore(...)` 负责持久化重建；Aggregate 不开放 public setter。
 
+Flyway 只扫描 Datasource 自己的 `db/migration/yak-datasource`，并使用 `yak_datasource_schema_history`；Data Service 使用自己的 `yak-data-service` namespace，两个模块不共享 migration version sequence。详细规则见 `MIGRATIONS.md`。
+
 ## 架构护栏
 
 测试会检查：
@@ -166,6 +169,7 @@ Domain boundary
 Gateway contract
 Top-level dependency matrix + acyclic graph
 raw SPI / HTTP Map / persistence corridor
+Flyway namespace / first-release baseline
 no broad service/common/helper/utils/util/base package
 no default @Service / ServiceImpl
 repository-level code-style regressions
@@ -179,12 +183,14 @@ repository-level code-style regressions
 
 ```text
 REST API 路径和主要 JSON shape
-yak_ops_data_source / Flyway
+yak_ops_data_source 当前表语义
 yak-ops-core SQL Execution contract
 Datasource Plugin SPI v1 contract
 内置数据库插件运行行为
 Task Plugin SQL execution provider
 ```
+
+当前仍处于第一期，Flyway 开发期增量已 squash 为 `V1__baseline_datasource.sql`；正式发布后 migration 才进入不可变兼容期。
 
 未来 Plugin SPI breaking change 必须通过新 API version + migration plan，不连带修改 REST/DB。
 

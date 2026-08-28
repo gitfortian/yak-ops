@@ -26,7 +26,7 @@ public class DataSourceConfiguration {
     return Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration/yak-datasource")
-        .table("yak_ds_schema_history")
+        .table("yak_datasource_schema_history")
         .baselineVersion(MigrationVersion.fromVersion("0"))
         .baselineOnMigrate(true)
         .load();
