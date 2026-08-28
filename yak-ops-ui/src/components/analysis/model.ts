@@ -1,28 +1,24 @@
-export type DatasetFieldRole = 'dimension' | 'metric';
-export type DatasetFieldType = 'string' | 'number' | 'date' | 'datetime' | 'boolean' | 'unknown';
-export type Scalar = string | number | boolean | null;
+import type {
+  Aggregation,
+  DatasetFieldRole,
+  Scalar,
+} from '@/services/dataset/model';
 
-export interface DatasetField {
-  key: string;
-  label: string;
-  physicalName: string;
-  dataType: DatasetFieldType;
-  role: DatasetFieldRole;
-  nullable: boolean;
-  description?: string;
-}
-
-export interface PublishedDataset {
-  id: string;
-  name: string;
-  description: string;
-  status: 'ONLINE' | 'OFFLINE';
-  sourceTaskId: string;
-  sourceTaskName: string;
-  currentVersionNo?: number;
-  updatedAt: string;
-  fields: DatasetField[];
-}
+export type {
+  Aggregation,
+  DatasetField,
+  DatasetFieldRole,
+  DatasetFieldType,
+  DatasetQueryColumn,
+  DatasetQueryColumnBinding,
+  DatasetQueryFilter,
+  DatasetQueryMetric,
+  DatasetQueryPayload,
+  DatasetQueryResult,
+  DatasetQuerySort,
+  PublishedDataset,
+  Scalar,
+} from '@/services/dataset/model';
 
 export type BasicChartType = 'metric' | 'bar' | 'line' | 'pie' | 'table';
 export type AdvancedChartType =
@@ -33,7 +29,6 @@ export type AdvancedChartType =
   | 'funnel'
   | 'treemap';
 export type ChartType = BasicChartType | AdvancedChartType;
-export type Aggregation = 'SUM' | 'AVG' | 'COUNT' | 'COUNT_DISTINCT' | 'MAX' | 'MIN';
 export type SortDirection = 'asc' | 'desc';
 export type FilterOperator = 'eq' | 'neq' | 'contains' | 'gt' | 'gte' | 'lt' | 'lte';
 
@@ -95,8 +90,8 @@ export type AnalysisTableDensity = 'compact' | 'comfortable' | 'relaxed';
 
 /**
  * Versioned visual appearance grammar. The original four booleans stay required for
- * backwards source compatibility; Phase 7 properties are optional so old persisted
- * Analysis / Dashboard snapshots continue to deserialize without migration.
+ * backwards source compatibility; optional properties let old persisted Analysis / Dashboard
+ * snapshots continue to deserialize without migration.
  */
 export interface AnalysisVisualConfig {
   version?: 1;
@@ -184,7 +179,7 @@ export interface AnalysisComputationConfig {
   version: 1;
   metrics?: Record<string, AnalysisMetricComputation>;
   topN?: AnalysisTopNConfig;
-  /** Optional Phase 9 chart-local calculated metrics. */
+  /** Optional chart-local calculated metrics. */
   calculatedFields?: AnalysisCalculatedField[];
 }
 
@@ -201,7 +196,7 @@ export interface AnalysisSpec {
   filters: AnalysisFilter[];
   sort?: AnalysisSort;
   style: AnalysisVisualConfig;
-  /** Optional Phase 8+ analysis semantics. Legacy snapshots resolve to raw metric values. */
+  /** Optional analysis semantics. Legacy snapshots resolve to raw metric values. */
   analysis?: AnalysisComputationConfig;
   limit?: number;
   timeoutSeconds?: number;
@@ -221,59 +216,4 @@ export interface AnalysisSelection {
   value: Scalar;
   label: string;
   rowIndex: number;
-}
-
-export interface DatasetQueryMetric {
-  fieldId: string;
-  aggregation: Aggregation;
-}
-
-export interface DatasetQueryFilter {
-  fieldId: string;
-  operator: 'EQ' | 'NE' | 'GT' | 'GTE' | 'LT' | 'LTE' | 'LIKE';
-  value: Scalar;
-}
-
-export interface DatasetQuerySort {
-  fieldId: string;
-  aggregation?: Aggregation;
-  direction: 'ASC' | 'DESC';
-}
-
-export interface DatasetQueryPayload {
-  dimensions: string[];
-  metrics: DatasetQueryMetric[];
-  filters: DatasetQueryFilter[];
-  sorts: DatasetQuerySort[];
-  limit: number;
-  timeoutSeconds: number;
-}
-
-export interface DatasetQueryColumnBinding {
-  key: string;
-  fieldId: string;
-  displayName: string;
-  dataType: string;
-  aggregation?: Aggregation | null;
-}
-
-export interface DatasetQueryColumn {
-  name: string;
-  label: string;
-  typeName: string;
-  jdbcType: number;
-  nullable: boolean;
-}
-
-export interface DatasetQueryResult {
-  queryId?: string;
-  datasetId: string;
-  datasetVersionId: string;
-  datasetVersionNo: number;
-  bindings: DatasetQueryColumnBinding[];
-  columns: DatasetQueryColumn[];
-  rows: Scalar[][];
-  returnedRows: number;
-  truncated: boolean;
-  elapsedMillis: number;
 }

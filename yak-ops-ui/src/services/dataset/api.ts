@@ -3,14 +3,16 @@ import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 import { isQueryableDatasetSourceType } from './constants';
 import type {
-  DatasetCatalogWire,
   DatasetField,
   DatasetFieldType,
-  DatasetFieldWire,
   DatasetQueryPayload,
   DatasetQueryResult,
-  DatasetVersionWire,
   PublishedDataset,
+} from './model';
+import type {
+  DatasetCatalogWire,
+  DatasetFieldWire,
+  DatasetVersionWire,
 } from './types';
 
 const DATASET_API = '/api/v1/datasets';
