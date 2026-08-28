@@ -4,10 +4,10 @@
 
 ## 设计原则
 
-1. **业务子系统优先。** package 要能表达 Node、Task、Execution、Dataset、Release、Lineage 等业务角色。
+1. **业务子系统优先。** package 要能表达 Node、Task、Execution、Dataset、Data Service Publication、Release、Lineage 等业务角色。
 2. **Service 是入口角色，不是分层目录。** 允许稳定 Application Service，禁止通用 Service 大桶。
 3. **名字表达职责。** Manager / Publisher / Validator / Normalizer / Coordinator / Resolver / Parser / Analyzer / Reader / Gateway / Worker 各自只承担对应角色。
-4. **Truth 只有一个 owner。** Node、Draft、Revision、Execution、Task Catalog projection、Lineage evidence 不互相冒充。
+4. **Truth 只有一个 owner。** Node、Draft、Revision、Execution、Task Catalog projection、Data Service Runtime projection、Lineage evidence 不互相冒充。
 5. **Domain 只放领域事实。** 纯 API / query read model 跟随所属业务子系统，不因为是 record 就进入 `domain`。
 6. **结构重构不偷改行为。** package move 与 REST / DB / Domain semantic change 分开。
 7. **外部系统停在边界。** Task Runtime、Task Catalog、Dataset、Data Service Runtime、Lineage、DataSource 都是邻接上下文。
@@ -24,6 +24,7 @@ io.yak.ops.business.development
 ├── execution           # editor manual run + execution history
 │   └── model           # execution query / response projections
 ├── dataset             # Dataset output-node application boundary
+├── dataservice         # Data Service Node -> Runtime publication owner boundary
 ├── release             # published Task Catalog read/activation boundary
 │   └── model           # release-center query projections
 ├── editor              # editor preference boundary
@@ -95,6 +96,7 @@ task.DevelopmentTaskService
 execution.DevelopmentTaskRunService
 execution.DevelopmentTaskExecutionService
 dataset.DevelopmentDatasetNodeService
+dataservice.DevelopmentDataServicePublicationService
 release.DevelopmentReleaseService
 editor.DevelopmentEditorSettingsService
 ```
@@ -146,17 +148,20 @@ Editor Run 使用临时 `TaskVersionSnapshot(version=0)`。它不是 Publish，�
 
 Execution history 是 Data Development 的运行记录；真正的 executor runtime state 仍由共享 Task Runtime 提供。`execution.model` 只是读侧 / response projection，不拥有运行状态。
 
-## Node / Directory / Dataset / Release
+## Node / Directory / Dataset / Data Service Publication / Release
 
 这些能力不再放在通用 service 包：
 
 ```text
-node      -> Node identity / rename / delete / updater metadata
-directory -> hierarchy / path / empty-delete rule
-dataset   -> Dataset-owned datasource + SQL + field contract
-release   -> Task Catalog release projection + online/offline/activate
-editor    -> user editor settings
+node        -> Node identity / rename / delete / updater metadata
+directory   -> hierarchy / path / empty-delete rule
+dataset     -> Dataset-owned datasource + SQL + field contract
+dataservice -> Data Service Node 对相邻 Runtime projection 的上线/下线 owner boundary
+release     -> Task Catalog release projection + online/offline/activate
+editor      -> user editor settings
 ```
+
+`DevelopmentDataServicePublicationService` 不拥有 Data Service Runtime truth。它只保证 source-managed Runtime 的创建、重发和启停必须从 Data Development authoring context 进入；通用 Data Service 管理 API 不得绕过这个 owner boundary 修改 Data Development 来源的服务。
 
 `Release` 读取 Task Catalog projection 与 immutable Task Revision，但不能修改历史 Revision。Release API 的 `Summary / Page / Detail` 位于 `release.model`，避免把组合查询结果伪装成核心领域事实。
 
@@ -164,8 +169,9 @@ editor    -> user editor settings
 
 ```text
 Task publish
-   -> DevelopmentLineageOutbox
+   -> DevelopmentLineageOutbox(project_id)
    -> DevelopmentLineageWorker
+   -> ProjectContextScope(project_id)
    -> legacy SQL parser preparation
    -> lineage.analysis.DevelopmentSqlProjectionLineageAnalyzer
    -> DevelopmentLineageWriteTransaction
@@ -173,6 +179,8 @@ Task publish
 ```
 
 Outbox / Worker / transaction orchestration 和 source-neutral projection analyzer adapter 已归 `lineage`。具体 SQL Parser 大算法仍留在 frozen legacy island；共享 Analyzer contract 由 `yak-ops-business-lineage.analysis.sql` 持有，Data Development 只提供基于现有 parser 的技术实现。
+
+后台 Outbox 不能在空 `CurrentProject` 下读取 Node/Revision。Worker 必须从持久化 `project_id` 恢复受信项目上下文，并校验 Outbox 与 Node 的项目身份一致后才能写 Lineage。
 
 固定方向：
 
@@ -238,6 +246,10 @@ DataDevelopmentRoleConventionTest
   -> Analyzer / Parser / Worker 等技术角色不伪装成 Service
   -> moved roles cannot return as compatibility wrappers
   -> no new broad business buckets
+
+DataDevelopmentGovernanceContractTest
+  -> every Data Development controller is PROJECT_REQUIRED + READ
+  -> EDIT / DELETE / EXECUTE / PUBLISH / RELEASE stay explicit
 
 DataDevelopmentDomainModelPlacementTest
   -> Release / Execution read models cannot return to core domain

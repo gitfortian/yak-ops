@@ -4,10 +4,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.extend.CurrentUserProvider;
+import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.development.api.DevelopmentNodeApi.CreateRequest;
 import io.yak.ops.business.development.api.DevelopmentNodeApi.RenameRequest;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.node.DevelopmentNodeService;
+import io.yak.ops.common.constant.development.DataDevelopmentPermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发节点接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
+@RequiresPermission(DataDevelopmentPermissionCode.READ)
 public class DevelopmentNodeController {
 
   private final DevelopmentNodeService service;
@@ -46,6 +49,7 @@ public class DevelopmentNodeController {
   }
 
   @Operation(summary = "新建数据开发节点")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
   @PostMapping
   public Result<DevelopmentNode> create(
       @Valid @RequestBody CreateRequest request,
@@ -59,6 +63,7 @@ public class DevelopmentNodeController {
   }
 
   @Operation(summary = "重命名数据开发节点")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
   @PutMapping("/{id}/name")
   public Result<DevelopmentNode> rename(
       @PathVariable("id") Long id,
@@ -69,6 +74,7 @@ public class DevelopmentNodeController {
   }
 
   @Operation(summary = "删除数据开发节点")
+  @RequiresPermission(DataDevelopmentPermissionCode.DELETE)
   @DeleteMapping("/{id}")
   public Result<Boolean> delete(@PathVariable("id") Long id) {
     service.delete(id);

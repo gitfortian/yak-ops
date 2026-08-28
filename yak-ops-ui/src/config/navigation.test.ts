@@ -9,6 +9,7 @@ import {
 
 describe('permission-aware navigation', () => {
   const batchRead = ['task:batch:read'];
+  const developmentRead = ['data-development:read'];
 
   it('uses route permission metadata and lets details inherit their parent', () => {
     const list = appRoutes.find((route) => route.id === 'batch-link-up')!;
@@ -22,13 +23,17 @@ describe('permission-aware navigation', () => {
 
   it('keeps public groups while filtering permission-protected groups and quick-create independently', () => {
     expect(getMainNavigationGroups([]).map((group) => group.id)).toEqual([
-      'development',
       'workflow',
       'data-analysis',
       'data-service',
     ]);
     expect(getMainNavigationGroups(batchRead).map((group) => group.id)).toEqual([
       'integration',
+      'workflow',
+      'data-analysis',
+      'data-service',
+    ]);
+    expect(getMainNavigationGroups(developmentRead).map((group) => group.id)).toEqual([
       'development',
       'workflow',
       'data-analysis',
@@ -111,17 +116,25 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/settings', [])).toBe('settings');
   });
 
-  it('registers development task, release center and execution history as sibling pages', () => {
-    const development = getMainNavigationGroups([]).find((group) => group.id === 'development');
+  it('requires data-development read permission for workbench, releases, executions and child routes', () => {
+    const development = getMainNavigationGroups(developmentRead).find(
+      (group) => group.id === 'development',
+    );
     expect(development?.routes.map((route) => route.id)).toEqual([
       'data-development',
       'data-development-release',
       'data-development-execution',
     ]);
-    expect(getActiveNavigationId('/data-development/releases', [])).toBe(
+    expect(getMainNavigationGroups([]).some((group) => group.id === 'development')).toBe(false);
+    expect(getActiveNavigationId('/data-development', [])).toBeUndefined();
+    expect(getActiveNavigationId('/data-development/task/42', [])).toBeUndefined();
+    expect(getActiveNavigationId('/data-development/task/42', developmentRead)).toBe(
+      'data-development',
+    );
+    expect(getActiveNavigationId('/data-development/releases', developmentRead)).toBe(
       'data-development-release',
     );
-    expect(getActiveNavigationId('/data-development/executions', [])).toBe(
+    expect(getActiveNavigationId('/data-development/executions', developmentRead)).toBe(
       'data-development-execution',
     );
   });
@@ -155,7 +168,7 @@ describe('permission-aware navigation', () => {
 
   it('does not expose removed modules', () => {
     expect(getActiveNavigationId('/sync/realtime-link-up', ['task:realtime:read'])).toBeUndefined();
-    expect(getActiveNavigationId('/data-development/workbench', batchRead)).toBeUndefined();
+    expect(getActiveNavigationId('/data-development/workbench', developmentRead)).toBeUndefined();
     expect(getActiveNavigationId('/data-quality/report', ['quality:report:read'])).toBeUndefined();
   });
 });

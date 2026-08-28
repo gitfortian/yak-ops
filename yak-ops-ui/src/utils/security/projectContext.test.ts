@@ -16,11 +16,11 @@ const rules: ProjectRequestRule[] = [
 describe('Project Space request context', () => {
   afterEach(() => clearStoredProjectId());
 
-  it('opts migrated resource and production routes into optional project context', () => {
+  it('keeps transitional routes optional while data development requires a project', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
-    expect(resolveProjectRequestMode('/api/v1/data-development/nodes')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/data-development/nodes')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/task-catalog/assets')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/job/batch-definition/page')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/job/batch-instance/11')).toBe('PROJECT_OPTIONAL');
@@ -43,10 +43,16 @@ describe('Project Space request context', () => {
     expect(headers).toEqual({});
   });
 
-  it('attaches the stored project to migrated routes', () => {
+  it('attaches the stored project to required data-development routes', () => {
     storeProjectId(7);
     expect(readStoredProjectId()).toBe('7');
 
+    const headers = applyCurrentProjectHeader('/api/v1/data-development/nodes', {});
+    expect(headers).toEqual({ [PROJECT_ID_HEADER]: '7' });
+  });
+
+  it('still attaches the stored project to optional migrated routes', () => {
+    storeProjectId(7);
     const headers = applyCurrentProjectHeader('/api/v1/workflows/definitions', {});
     expect(headers).toEqual({ [PROJECT_ID_HEADER]: '7' });
   });

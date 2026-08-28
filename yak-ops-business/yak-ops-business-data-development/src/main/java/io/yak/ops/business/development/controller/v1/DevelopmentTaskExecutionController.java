@@ -4,11 +4,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.extend.CurrentUserProvider;
+import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.development.execution.DevelopmentTaskExecutionControlService;
 import io.yak.ops.business.development.execution.DevelopmentTaskExecutionService;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionDetail;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionPage;
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionSubmission;
+import io.yak.ops.common.constant.development.DataDevelopmentPermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发运行记录接口")
 @RestController
 @RequestMapping("/api/v1/data-development/executions")
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
+@RequiresPermission(DataDevelopmentPermissionCode.READ)
 public class DevelopmentTaskExecutionController {
 
   private final DevelopmentTaskExecutionService service;
@@ -73,6 +76,7 @@ public class DevelopmentTaskExecutionController {
   }
 
   @Operation(summary = "取消数据开发运行实例")
+  @RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)
   @PostMapping("/{id}/cancel")
   public Result<DevelopmentTaskExecutionDetail> cancel(@PathVariable("id") Long id) {
     if (id == null || id <= 0L) throw new IllegalArgumentException("运行记录 ID 非法");
@@ -80,6 +84,7 @@ public class DevelopmentTaskExecutionController {
   }
 
   @Operation(summary = "重试数据开发运行实例")
+  @RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)
   @PostMapping("/{id}/retry")
   public Result<DevelopmentTaskExecutionSubmission> retry(
       @PathVariable("id") Long id,

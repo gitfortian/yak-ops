@@ -1,3 +1,4 @@
+import { useAccess } from '@umijs/max';
 import { Tooltip, message } from 'antd';
 import {
   GitBranch,
@@ -57,6 +58,11 @@ const SqlToolbar = ({
   publishing,
   lineageLoading,
 }: DevelopmentEditorToolbarContext) => {
+  const access = useAccess();
+  const canExecute = access.hasPermission('data-development:execute');
+  const canEdit = access.hasPermission('data-development:edit');
+  const canPublish = access.hasPermission('data-development:publish');
+
   const execute = (command: SqlEditorCommand, fallback: string) => {
     if (!executeSqlEditorCommand(node.id, command)) {
       message.info(fallback);
@@ -67,8 +73,8 @@ const SqlToolbar = ({
     <div className="flex h-full w-full min-w-0 items-center justify-between gap-3">
       <div className="flex shrink-0 items-center gap-0.5">
         <ToolbarButton
-          title={running ? 'SQL 运行中' : '运行当前 SQL'}
-          disabled={running}
+          title={!canExecute ? '无执行权限' : running ? 'SQL 运行中' : '运行当前 SQL'}
+          disabled={running || !canExecute}
           onClick={onRun}
         >
           {running ? (
@@ -79,8 +85,8 @@ const SqlToolbar = ({
         </ToolbarButton>
         <ToolbarDivider />
         <ToolbarButton
-          title="保存草稿"
-          disabled={saving || publishing || running}
+          title={!canEdit ? '无编辑权限' : '保存草稿'}
+          disabled={saving || publishing || running || !canEdit}
           onClick={onSave}
         >
           {saving ? (
@@ -90,8 +96,8 @@ const SqlToolbar = ({
           )}
         </ToolbarButton>
         <ToolbarButton
-          title="发布版本"
-          disabled={saving || publishing || running}
+          title={!canPublish ? '无发布权限' : '发布版本'}
+          disabled={saving || publishing || running || !canPublish}
           onClick={onPublish}
         >
           {publishing ? (
@@ -116,14 +122,14 @@ const SqlToolbar = ({
         <ToolbarDivider />
         <ToolbarButton
           title="撤销"
-          disabled={running}
+          disabled={running || !canEdit}
           onClick={() => execute('undo', 'SQL 编辑器尚未就绪')}
         >
           <Undo2 size={15} strokeWidth={1.8} />
         </ToolbarButton>
         <ToolbarButton
           title="重做"
-          disabled={running}
+          disabled={running || !canEdit}
           onClick={() => execute('redo', 'SQL 编辑器尚未就绪')}
         >
           <Redo2 size={15} strokeWidth={1.8} />
@@ -137,7 +143,7 @@ const SqlToolbar = ({
         <ToolbarDivider />
         <ToolbarButton
           title="格式化 SQL"
-          disabled={running}
+          disabled={running || !canEdit}
           onClick={() => execute('format', 'SQL 编辑器尚未就绪')}
         >
           <Wand2 size={15} strokeWidth={1.8} />

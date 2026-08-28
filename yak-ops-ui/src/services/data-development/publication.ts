@@ -2,7 +2,7 @@ import HttpUtils from '@/utils/HttpUtils';
 
 import type { DevelopmentId } from './types';
 
-const DATA_SERVICE_API = '/api/v1/data-service';
+const NODE_API = '/api/v1/data-development/nodes';
 export const DATA_SERVICE_NODE_SOURCE =
   'DATA_DEVELOPMENT_DATA_SERVICE' as const;
 
@@ -41,64 +41,28 @@ export interface DataServicePublicationState {
   detail?: DataServiceRuntimeApiSnapshot | null;
 }
 
-const queryString = (params: Record<string, unknown>) => {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).length > 0) {
-      search.set(key, String(value));
-    }
-  });
-  const value = search.toString();
-  return value ? `?${value}` : '';
-};
+const publicationPath = (nodeId: DevelopmentId) =>
+  `${NODE_API}/${encodeURIComponent(nodeId)}/data-service/publication`;
 
 export const fetchDataServicePublicationState = (
   nodeId: DevelopmentId,
 ): Promise<DataServicePublicationState> =>
-  HttpUtils.getData<DataServicePublicationState>(
-    `${DATA_SERVICE_API}/publication/state${queryString({
-      sourceType: DATA_SERVICE_NODE_SOURCE,
-      sourceRef: nodeId,
-    })}`,
-  );
+  HttpUtils.getData<DataServicePublicationState>(publicationPath(nodeId));
 
-/** Product-level online action hiding publish, republish and enable details. */
+/** Product-level online action owned by the project-governed Data Development boundary. */
 export const bringDataServiceOnline = async (
   nodeId: DevelopmentId,
-  state?: DataServicePublicationState,
-): Promise<DataServiceRuntimeApiSnapshot> => {
-  if (!state?.published) {
-    return HttpUtils.postData<DataServiceRuntimeApiSnapshot>(
-      `${DATA_SERVICE_API}/publish`,
-      {
-        sourceType: DATA_SERVICE_NODE_SOURCE,
-        sourceRef: nodeId,
-        enabled: true,
-      },
-    );
-  }
+  _state?: DataServicePublicationState,
+): Promise<DataServiceRuntimeApiSnapshot> =>
+  HttpUtils.postData<DataServiceRuntimeApiSnapshot>(
+    `${publicationPath(nodeId)}/online`,
+    {},
+  );
 
-  const apiId = state.detail?.id;
-  if (!apiId || !state.detail) {
-    throw new Error('线上 API 身份缺失，请刷新服务状态后重试');
-  }
-
-  let detail = state.detail;
-  if (state.updateAvailable) {
-    detail = await HttpUtils.postData<DataServiceRuntimeApiSnapshot>(
-      `${DATA_SERVICE_API}/${encodeURIComponent(apiId)}/republish`,
-      {},
-    );
-  }
-
-  if (!detail.enabled) {
-    detail = await HttpUtils.putData<DataServiceRuntimeApiSnapshot>(
-      `${DATA_SERVICE_API}/${encodeURIComponent(apiId)}/enabled${queryString({
-        enabled: true,
-      })}`,
-      {},
-    );
-  }
-
-  return detail;
-};
+export const takeDataServiceOffline = (
+  nodeId: DevelopmentId,
+): Promise<DataServiceRuntimeApiSnapshot> =>
+  HttpUtils.postData<DataServiceRuntimeApiSnapshot>(
+    `${publicationPath(nodeId)}/offline`,
+    {},
+  );

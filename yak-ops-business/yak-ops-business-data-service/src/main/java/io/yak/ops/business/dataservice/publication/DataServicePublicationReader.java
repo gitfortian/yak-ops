@@ -23,6 +23,10 @@ public class DataServicePublicationReader {
   private final DataServiceReader dataServiceReader;
   private final DataServiceViewFactory viewFactory;
 
+  public boolean managesServiceDefinition(String sourceType) {
+    return sourceRegistry.require(sourceType).managesServiceDefinition();
+  }
+
   public SourcePage sources(String sourceType, int pageNo, int pageSize, String keyword) {
     return sourceRegistry.require(sourceType).list(
         Math.max(1, pageNo), Math.max(1, Math.min(MAX_SOURCE_PAGE_SIZE, pageSize)), normalizeKeyword(keyword));

@@ -14,6 +14,7 @@ class DataDevelopmentRoleConventionTest {
 
   private static final Set<String> STABLE_SERVICE_ENTRIES =
       Set.of(
+          "dataservice/DevelopmentDataServicePublicationService.java",
           "dataset/DevelopmentDatasetNodeService.java",
           "directory/DevelopmentDirectoryService.java",
           "editor/DevelopmentEditorSettingsService.java",

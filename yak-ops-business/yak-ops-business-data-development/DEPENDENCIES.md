@@ -6,7 +6,7 @@
 
 ```text
 controller
-   -> node / directory / task / execution / dataset / release / editor
+   -> node / directory / task / execution / dataset / dataservice / release / editor
    -> frozen legacy preview corridor
 
 node       -> domain + repository -> dao
@@ -17,11 +17,13 @@ execution  -> domain + task + shared Task Runtime
              └── model = execution read/response projection
 
 dataset    -> domain + repository + Dataset / Task Catalog
+dataservice -> domain + repository + adjacent Data Service publication/runtime boundary
 release    -> domain + repository + Task Catalog
              └── model = release read projection
 
 lineage    -> domain + repository + frozen SQL parser implementation
            -> shared Lineage analysis/write contracts
+           -> ProjectContextScope for persisted background project restoration
 editor     -> local persistence boundary
 domain     -> framework-light truth/value types only
 ```
@@ -32,12 +34,13 @@ domain     -> framework-light truth/value types only
 
 | From | Allowed module-internal targets |
 |---|---|
-| `controller` | `node`, `directory`, `task`, `execution`, `dataset`, `release`, `editor`, legacy preview |
+| `controller` | `node`, `directory`, `task`, `execution`, `dataset`, `dataservice`, `release`, `editor`, legacy preview |
 | `node` | `domain`, `repository` |
 | `directory` | `domain`, `repository` |
 | `task` | `domain`, `repository`, `lineage`, compatibility exception corridor |
 | `execution` | `domain`, `task`; `execution.model` 只能作为 read/response projection |
 | `dataset` | `domain`, `repository` |
+| `dataservice` | `domain`, `repository`; adjacent Data Service publication/runtime application boundary |
 | `release` | `domain`, `repository`; `release.model` 只能作为 read projection |
 | `lineage` | `domain`, `repository`, frozen legacy SQL parser implementation |
 | `repository` | `domain`, `dao` |
@@ -70,8 +73,11 @@ Execution       -> shared TaskExecutionGateway
 Dataset         -> DevelopmentDatasetFacade
 Data Service    -> Data Service publication/runtime boundary
 Lineage         -> Lineage application boundary / analysis contract / DataSource Catalog
+Background work -> ProjectContextScope using persisted project_id
 Node metadata   -> Task Catalog metadata projection
 ```
+
+Data Service Runtime 的 truth 仍由 `yak-ops-business-data-service` 持有。Data Development 只拥有 source-managed publication 的 owner boundary：通用 Data Service 管理 API 不得直接 mutate Data Development 来源的 Runtime projection；上线、更新上线和下线必须经 `dataservice.DevelopmentDataServicePublicationService`。
 
 SQL projection 方向固定为：
 
@@ -82,6 +88,16 @@ lineage.analysis.DevelopmentSqlProjectionLineageAnalyzer
 ```
 
 共享 Lineage 模块不允许反向进入 Data Development parser 实现。
+
+Scheduled/Outbox 工作方向固定为：
+
+```text
+persisted project_id
+    -> ProjectContextScope
+    -> project-scoped Repository / adjacent context IO
+```
+
+后台任务不得因为没有 HTTP Header 而退化成 global repository read。
 
 新增跨模块依赖前先回答：
 
@@ -99,11 +115,12 @@ Dependency Impact Analysis
 
 - Controller 不直接访问 Repository / DAO。
 - Domain 不依赖 Controller、Repository、DAO、Task Runtime、Lineage Service、Spring JDBC、MyBatis，也不依赖 release/execution read model。
-- Task / Node / Directory / Dataset / Release 不直接进入本模块 DAO。
+- Task / Node / Directory / Dataset / Data Service publication / Release 不直接进入本模块 DAO。
 - Query/read 行为不得顺手修改 Draft/Revision/Execution truth。
 - 不创建 `common/helper/utils/base/service` 作为新功能的默认落点。
 - 不通过 `service` legacy island 作为“方便的中转层”形成新依赖。
 - Analyzer contract 不携带 Data Development parser、Spring 或持久化类型。
+- Data Development 来源的 Data Service Runtime 不允许通过通用管理 API 绕过 authoring-context permission。
 
 ## Legacy Corridors
 

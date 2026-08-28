@@ -52,12 +52,14 @@ public class DataServiceController {
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "50") int pageSize,
       @RequestParam(value = "keyword", required = false) String keyword) {
+    rejectManagedSource(sourceType);
     return Result.success(publicationReader.sources(sourceType, pageNo, pageSize, keyword));
   }
 
   @Operation(summary = "从已发布来源创建或更新数据服务")
   @PostMapping("/publish")
   public Result<DataServiceView> publish(@RequestBody PublishDataServiceRequest request) {
+    rejectManagedSource(request.sourceType());
     return Result.success(publisher.publish(new PublishRequest(request.sourceType(), request.sourceRef(), request.name(),
         request.path(), request.maxRows(), request.timeoutSeconds(), request.enabled(), request.description())));
   }
@@ -79,6 +81,7 @@ public class DataServiceController {
   @PostMapping("/{id}/republish")
   public Result<DataServiceView> republish(@PathVariable("id") Long id,
       @RequestBody(required = false) RepublishDataServiceRequest request) {
+    rejectManagedService(id);
     RepublishDataServiceRequest values = request == null
         ? new RepublishDataServiceRequest(null, null, null, null, null, null) : request;
     return Result.success(publisher.republish(id, new PublicationSettings(values.name(), values.path(), values.maxRows(),
@@ -88,6 +91,7 @@ public class DataServiceController {
   @Operation(summary = "删除 API 服务")
   @DeleteMapping("/{id}")
   public Result<Boolean> delete(@PathVariable("id") Long id) {
+    rejectManagedService(id);
     manager.delete(id);
     documentationManager.deleteForApi(id);
     return Result.success(Boolean.TRUE);
@@ -96,7 +100,20 @@ public class DataServiceController {
   @Operation(summary = "启用或停用 API 服务")
   @PutMapping("/{id}/enabled")
   public Result<DataServiceView> setEnabled(@PathVariable("id") Long id, @RequestParam("enabled") boolean enabled) {
+    rejectManagedService(id);
     return Result.success(viewFactory.view(manager.setEnabled(id, enabled)));
+  }
+
+  private void rejectManagedSource(String sourceType) {
+    if (publicationReader.managesServiceDefinition(sourceType)) {
+      throw new IllegalStateException("该发布来源由所属 authoring context 管理，请从来源工作台执行发布操作");
+    }
+  }
+
+  private void rejectManagedService(Long apiId) {
+    if (publisher.managesServiceDefinition(apiId)) {
+      throw new IllegalStateException("该 API 由所属 authoring context 管理，请从来源工作台执行变更");
+    }
   }
 
   public record PublishDataServiceRequest(String sourceType, String sourceRef, String name, String path,
