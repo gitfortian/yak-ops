@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.extend.CurrentUserProvider;
+import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.LineagePreviewRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.PublishRequest;
 import io.yak.ops.business.development.api.DevelopmentTaskApi.RunRequest;
@@ -17,6 +18,7 @@ import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionS
 import io.yak.ops.business.development.node.DevelopmentNodeService;
 import io.yak.ops.business.development.service.DevelopmentSqlLineagePreviewService;
 import io.yak.ops.business.development.task.DevelopmentTaskService;
+import io.yak.ops.common.constant.development.DataDevelopmentPermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,7 +36,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发任务接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
+@RequiresPermission(DataDevelopmentPermissionCode.READ)
 public class DevelopmentTaskController {
 
   private final DevelopmentTaskService service;
@@ -63,6 +66,7 @@ public class DevelopmentTaskController {
   }
 
   @Operation(summary = "保存节点草稿")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
   @PutMapping("/{nodeId}/draft")
   public Result<DevelopmentTaskDraft> saveDraft(
       @PathVariable("nodeId") Long nodeId,
@@ -80,6 +84,7 @@ public class DevelopmentTaskController {
   }
 
   @Operation(summary = "提交当前编辑器任务")
+  @RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)
   @PostMapping("/{nodeId}/run")
   public Result<DevelopmentTaskExecutionSubmission> run(
       @PathVariable("nodeId") Long nodeId,
@@ -110,6 +115,7 @@ public class DevelopmentTaskController {
   }
 
   @Operation(summary = "发布节点版本")
+  @RequiresPermission(DataDevelopmentPermissionCode.PUBLISH)
   @PostMapping("/{nodeId}/publish")
   public Result<DevelopmentTaskRevision> publish(
       @PathVariable("nodeId") Long nodeId,

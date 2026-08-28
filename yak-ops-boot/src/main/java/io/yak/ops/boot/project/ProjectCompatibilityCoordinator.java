@@ -17,10 +17,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Coordinates the opt-in default Project Space used by later Expand/Backfill/Contract migrations.
+ * Coordinates the compatibility Project Space used by Expand/Backfill/Contract migrations.
  *
- * <p>The bootstrap is disabled by default. Merely adding PR2 therefore never mutates Yak Security
- * data and never injects a default project into legacy global queries.</p>
+ * <p>Generic bootstrap remains opt-in. A capability that explicitly cuts over to
+ * PROJECT_REQUIRED may call {@link #ensureRequiredDefaultProject()} so its legacy global rows can
+ * be moved into one concrete Project Space before the strong project boundary becomes visible.</p>
  */
 @Component
 public class ProjectCompatibilityCoordinator {
@@ -65,13 +66,25 @@ public class ProjectCompatibilityCoordinator {
         .findFirst();
   }
 
-  /** Creates the compatibility project only when the explicit bootstrap switch is enabled. */
+  /** Creates the compatibility project only when the generic bootstrap switch is enabled. */
   public synchronized long ensureDefaultProject() {
+    return ensureDefaultProject(false);
+  }
+
+  /**
+   * Ensures a compatibility project for a capability whose HTTP contract is now PROJECT_REQUIRED.
+   * This does not globally enable optional Project Space bootstrap for unrelated modules.
+   */
+  public synchronized long ensureRequiredDefaultProject() {
+    return ensureDefaultProject(true);
+  }
+
+  private long ensureDefaultProject(boolean requiredCutover) {
     OptionalLong existing = findDefaultProjectId();
     if (existing.isPresent()) {
       return existing.getAsLong();
     }
-    if (!properties.getCompatibility().isBootstrapDefaultProject()) {
+    if (!requiredCutover && !properties.getCompatibility().isBootstrapDefaultProject()) {
       throw new IllegalStateException(
           "Default Project Space bootstrap is disabled; enable yak.project-space.compatibility.bootstrap-default-project explicitly");
     }
@@ -79,7 +92,10 @@ public class ProjectCompatibilityCoordinator {
     String ownerUsername = properties.getCompatibility().getDefaultOwnerUsername();
     UserBriefVO owner = userService.getUserBriefByUsername(ownerUsername);
     if (owner == null || owner.getId() == null) {
-      throw new IllegalStateException("Default Project Space owner does not exist: " + ownerUsername);
+      throw new IllegalStateException(
+          "Data Development Project Space cutover requires compatibility owner user: "
+              + ownerUsername
+              + ". Configure yak.project-space.compatibility.default-owner-username if needed.");
     }
 
     List<UserBriefVO> users = userService.getAllUserBriefList();

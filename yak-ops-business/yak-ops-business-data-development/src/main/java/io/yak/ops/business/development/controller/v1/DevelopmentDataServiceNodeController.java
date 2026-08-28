@@ -3,6 +3,7 @@ package io.yak.ops.business.development.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
+import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceDefinition.ParameterContract;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceDefinition.ResponseFieldContract;
 import io.yak.ops.business.development.domain.DevelopmentDataServiceRevision;
@@ -11,6 +12,7 @@ import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService
 import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService.DataServiceNodeContext;
 import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService.PreviewResult;
 import io.yak.ops.business.development.service.DevelopmentDataServiceNodeService.SaveDraftCommand;
+import io.yak.ops.common.constant.development.DataDevelopmentPermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
@@ -33,7 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发 Data Service Node 接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
+@RequiresPermission(DataDevelopmentPermissionCode.READ)
 public class DevelopmentDataServiceNodeController {
 
   private final DevelopmentDataServiceNodeService service;
@@ -49,6 +52,7 @@ public class DevelopmentDataServiceNodeController {
   }
 
   @Operation(summary = "执行当前查询 SQL，并返回结果数据、请求参数与响应字段")
+  @RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)
   @PostMapping("/{nodeId}/data-service/preview")
   public Result<PreviewResult> preview(
       @PathVariable("nodeId") long nodeId,
@@ -63,6 +67,7 @@ public class DevelopmentDataServiceNodeController {
   }
 
   @Operation(summary = "保存独立 Data Service Node 草稿")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
   @PutMapping("/{nodeId}/data-service/draft")
   public Result<DataServiceNodeContext> saveDraft(
       @PathVariable("nodeId") long nodeId,
@@ -94,6 +99,7 @@ public class DevelopmentDataServiceNodeController {
   }
 
   @Operation(summary = "发布不可变 Data Service Node Revision")
+  @RequiresPermission(DataDevelopmentPermissionCode.PUBLISH)
   @PostMapping("/{nodeId}/data-service/publish")
   public Result<DevelopmentDataServiceRevision> publish(
       @PathVariable("nodeId") long nodeId,

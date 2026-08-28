@@ -3,10 +3,12 @@ package io.yak.ops.business.development.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
+import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.FieldDraft;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.PreviewResult;
 import io.yak.ops.business.development.dataset.DevelopmentDatasetNodeService;
 import io.yak.ops.business.development.dataset.DevelopmentDatasetNodeService.DatasetNodeContext;
+import io.yak.ops.common.constant.development.DataDevelopmentPermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
@@ -25,7 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "数据开发 Dataset Node 接口")
 @RestController
 @RequestMapping("/api/v1/data-development/nodes")
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
+@RequiresPermission(DataDevelopmentPermissionCode.READ)
 public class DevelopmentDatasetNodeController {
 
   private final DevelopmentDatasetNodeService service;
@@ -41,6 +44,7 @@ public class DevelopmentDatasetNodeController {
   }
 
   @Operation(summary = "基于 Dataset 自有 SQL 发现输出字段")
+  @RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)
   @PostMapping("/{nodeId}/dataset/preview")
   public Result<List<FieldDraft>> preview(
       @PathVariable("nodeId") long nodeId,
@@ -49,6 +53,7 @@ public class DevelopmentDatasetNodeController {
   }
 
   @Operation(summary = "执行 Dataset 自有 SQL，并返回结果数据与输出字段")
+  @RequiresPermission(DataDevelopmentPermissionCode.EXECUTE)
   @PostMapping("/{nodeId}/dataset/query")
   public Result<PreviewResult> query(
       @PathVariable("nodeId") long nodeId,
@@ -57,6 +62,7 @@ public class DevelopmentDatasetNodeController {
   }
 
   @Operation(summary = "保存 Dataset Node 并冻结数据源、SQL 与字段契约")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
   @PutMapping("/{nodeId}/dataset")
   public Result<DatasetNodeContext> save(
       @PathVariable("nodeId") long nodeId,
