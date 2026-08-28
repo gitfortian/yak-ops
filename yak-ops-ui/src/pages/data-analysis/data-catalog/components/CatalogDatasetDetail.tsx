@@ -5,7 +5,8 @@ import type {
   CatalogDatasetFieldRole,
   CatalogDatasetSourceType,
 } from '@/services/data-analysis';
-import { Popconfirm, Table, Tag } from 'antd';
+import { isQueryableDatasetSourceType } from '@/services/dataset';
+import { Popconfirm, Table, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { BarChart3, GitBranch, Rows3, Sigma, TableProperties } from 'lucide-react';
 import {
@@ -14,7 +15,11 @@ import {
   SOURCE_TYPE_LABELS,
 } from '../constants';
 import type { CatalogDetailTab } from '../types';
-import { formatDateTime, getSchemaSummary } from '../utils';
+import {
+  formatDateTime,
+  getDatasetVersionSourceSummary,
+  getSchemaSummary,
+} from '../utils';
 import DatasetLineageTab from './DatasetLineageTab';
 
 interface CatalogDatasetDetailProps {
@@ -108,17 +113,16 @@ export function CatalogDatasetDetail({
       ),
     },
     {
-      title: '来源任务',
-      render: (_, record) => (
-        <div>
-          <div className="text-[14px] text-[#344054]">
-            {dataset.sourceTaskName || `TaskAsset #${record.sourceTaskAssetId}`}
+      title: '来源',
+      render: (_, record) => {
+        const source = getDatasetVersionSourceSummary(record, dataset.sourceTaskName);
+        return (
+          <div>
+            <div className="text-[14px] text-[#344054]">{source.title}</div>
+            <div className="mt-0.5 text-[12px] text-[#8a8f99]">{source.detail}</div>
           </div>
-          <div className="mt-0.5 text-[12px] text-[#8a8f99]">
-            SQL V{record.sourceTaskRevisionNo}
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: '发布时间',
@@ -141,11 +145,35 @@ export function CatalogDatasetDetail({
     },
   ];
 
-  const datasetType = dataset.currentVersion
-    ? dataset.currentVersion.sourceType === 'QUERY_REVISION'
-      ? 'SQL 数据集'
-      : `${SOURCE_TYPE_LABELS[dataset.currentVersion.sourceType]}数据集`
-    : '-';
+  const datasetType = (() => {
+    switch (dataset.currentVersion?.sourceType) {
+      case 'QUERY_REVISION':
+        return 'SQL 任务数据集';
+      case 'SQL_QUERY':
+        return 'Standalone SQL 数据集';
+      case 'TABLE':
+        return '数据表 Dataset（未接入查询运行时）';
+      case 'VIEW':
+        return '视图 Dataset（未接入查询运行时）';
+      default:
+        return '-';
+    }
+  })();
+  const currentSource = dataset.currentVersion
+    ? getDatasetVersionSourceSummary(dataset.currentVersion, dataset.sourceTaskName)
+    : undefined;
+  const hasQueryableVersion = Boolean(
+    dataset.currentVersion
+    && isQueryableDatasetSourceType(dataset.currentVersion.sourceType),
+  );
+  const canCreateAnalysis = dataset.status === 'ONLINE' && hasQueryableVersion;
+  const createAnalysisTip = !dataset.currentVersion
+    ? 'Dataset 尚无当前版本'
+    : !hasQueryableVersion
+      ? `${SOURCE_TYPE_LABELS[dataset.currentVersion.sourceType]}尚未接入 Dataset Query Runtime`
+      : dataset.status === 'ONLINE'
+        ? '使用当前 Dataset 创建分析'
+        : 'Dataset 上线后才能创建 Analysis';
 
   const detailItems = [
     { label: '类型', value: datasetType },
@@ -153,7 +181,7 @@ export function CatalogDatasetDetail({
       label: '所属目录',
       value: dataset.directoryPath || (dataset.sourceNodeId ? '根目录' : '未分组'),
     },
-    { label: '来源任务', value: dataset.sourceTaskName || '-' },
+    { label: '来源', value: currentSource?.title || '-' },
     { label: '数据描述', value: dataset.description || '无' },
     { label: '更新时间', value: formatDateTime(dataset.updateTime || dataset.createTime) },
     { label: '创建时间', value: formatDateTime(dataset.createTime) },
@@ -197,18 +225,22 @@ export function CatalogDatasetDetail({
               {dataset.status === 'ONLINE' ? '下线' : '上线'}
             </YakButton>
           </Popconfirm>
-          <YakButton
-            type="primary"
-            icon={<BarChart3 size={13} />}
-            disabled={dataset.status !== 'ONLINE' || !dataset.currentVersion}
-            href={
-              dataset.status === 'ONLINE' && dataset.currentVersion
-                ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(dataset.id)}`
-                : undefined
-            }
-          >
-            创建分析
-          </YakButton>
+          <Tooltip title={createAnalysisTip}>
+            <span>
+              <YakButton
+                type="primary"
+                icon={<BarChart3 size={13} />}
+                disabled={!canCreateAnalysis}
+                href={
+                  canCreateAnalysis
+                    ? `/data-analysis/chart-analysis?datasetId=${encodeURIComponent(dataset.id)}`
+                    : undefined
+                }
+              >
+                创建分析
+              </YakButton>
+            </span>
+          </Tooltip>
         </div>
       </div>
 

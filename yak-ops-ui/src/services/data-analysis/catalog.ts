@@ -8,16 +8,18 @@ import {
   type DevelopmentNode,
   type DevelopmentReleaseSummary,
 } from '@/services/data-development';
+import type {
+  DatasetDetailWire,
+  DatasetFieldWire,
+  DatasetSummaryWire,
+  DatasetVersionWire,
+} from '@/services/dataset';
 import type { ApiResponse } from '@/services/http/response';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 import HttpUtils from '@/utils/HttpUtils';
 import type {
   CatalogDataset,
   CatalogDatasetField,
-  CatalogDatasetFieldRole,
-  CatalogDatasetFieldType,
-  CatalogDatasetSourceType,
-  CatalogDatasetStatus,
   CatalogDatasetVersion,
   CatalogDirectory,
   CatalogWorkspace,
@@ -25,49 +27,6 @@ import type {
 
 const DATASET_API = '/api/v1/datasets';
 const RELEASE_PAGE_SIZE = 100;
-
-type WireId = string | number;
-
-interface DatasetSummaryWire {
-  id: WireId;
-  name: string;
-  description?: string | null;
-  status: CatalogDatasetStatus;
-  currentVersionId?: WireId | null;
-  createTime?: string;
-  updateTime?: string;
-}
-
-interface DatasetVersionWire {
-  id: WireId;
-  datasetId: WireId;
-  versionNo: number;
-  sourceType: CatalogDatasetSourceType;
-  sourceTaskAssetId: WireId;
-  sourceTaskRevisionId: WireId;
-  sourceTaskRevisionNo: number;
-  schemaSnapshot?: string | null;
-  createTime?: string;
-}
-
-interface DatasetFieldWire {
-  fieldId: string;
-  versionId: WireId;
-  physicalName: string;
-  displayName: string;
-  dataType: CatalogDatasetFieldType;
-  nullable: boolean;
-  description?: string | null;
-  defaultRole: CatalogDatasetFieldRole;
-  sortOrder: number;
-}
-
-interface DatasetDetailWire {
-  dataset: DatasetSummaryWire;
-  currentVersion?: DatasetVersionWire | null;
-  versions?: DatasetVersionWire[];
-  fields?: DatasetFieldWire[];
-}
 
 interface DevelopmentTopology {
   directories: DevelopmentDirectory[];
@@ -82,15 +41,29 @@ const unwrap = <T,>(response: ApiResponse<T>, fallback: string): T => {
   return response.data;
 };
 
-const toVersion = (value: DatasetVersionWire): CatalogDatasetVersion => ({
-  id: String(value.id),
-  versionNo: value.versionNo,
-  sourceType: value.sourceType,
-  sourceTaskAssetId: String(value.sourceTaskAssetId),
-  sourceTaskRevisionId: String(value.sourceTaskRevisionId),
-  sourceTaskRevisionNo: value.sourceTaskRevisionNo,
-  createTime: value.createTime,
-});
+const toVersion = (value: DatasetVersionWire): CatalogDatasetVersion => {
+  const taskBacked = value.sourceType === 'QUERY_REVISION';
+  return {
+    id: String(value.id),
+    versionNo: value.versionNo,
+    sourceType: value.sourceType,
+    sourceTaskAssetId:
+      taskBacked && value.sourceTaskAssetId !== '0'
+        ? String(value.sourceTaskAssetId)
+        : undefined,
+    sourceTaskRevisionId:
+      taskBacked && value.sourceTaskRevisionId !== '0'
+        ? String(value.sourceTaskRevisionId)
+        : undefined,
+    sourceTaskRevisionNo:
+      taskBacked && value.sourceTaskRevisionNo > 0
+        ? value.sourceTaskRevisionNo
+        : undefined,
+    dataSourceId: value.dataSourceId?.trim() || undefined,
+    sql: value.sql?.trim() || undefined,
+    createTime: value.createTime,
+  };
+};
 
 const toField = (value: DatasetFieldWire): CatalogDatasetField => ({
   fieldId: value.fieldId,
@@ -170,7 +143,9 @@ const toDataset = (
   topology?: DevelopmentTopology,
 ): CatalogDataset => {
   const currentVersion = detail.currentVersion ? toVersion(detail.currentVersion) : undefined;
-  const assetId = currentVersion?.sourceTaskAssetId;
+  const assetId = currentVersion?.sourceType === 'QUERY_REVISION'
+    ? currentVersion.sourceTaskAssetId
+    : undefined;
   const release = assetId
     ? topology?.releases.find((item) => String(item.assetId) === assetId)
     : undefined;
@@ -181,6 +156,11 @@ const toDataset = (
   const directory = directoryId
     ? topology?.directories.find((item) => String(item.id) === directoryId)
     : undefined;
+  const sourceDisplayName = currentVersion?.sourceType === 'SQL_QUERY'
+    ? currentVersion.dataSourceId
+      ? `Standalone SQL · 数据源 ${currentVersion.dataSourceId}`
+      : 'Standalone SQL'
+    : release?.taskName;
 
   return {
     id: String(detail.dataset.id),
@@ -196,7 +176,7 @@ const toDataset = (
     createTime: detail.dataset.createTime,
     updateTime: detail.dataset.updateTime,
     analysisCount: counts.get(String(detail.dataset.id)) || 0,
-    sourceTaskName: release?.taskName,
+    sourceTaskName: sourceDisplayName,
     sourceNodeId: release ? String(release.nodeId) : undefined,
     directoryId,
     directoryPath: directory?.path,
