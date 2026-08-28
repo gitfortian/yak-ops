@@ -10,6 +10,12 @@ import {
 describe('permission-aware navigation', () => {
   const batchRead = ['task:batch:read'];
   const developmentRead = ['data-development:read'];
+  const dataServiceRead = ['data-service:read'];
+  const dataServiceAll = [
+    'data-service:read',
+    'data-service:runtime',
+    'data-service:observe',
+  ];
 
   it('uses route permission metadata and lets details inherit their parent', () => {
     const list = appRoutes.find((route) => route.id === 'batch-link-up')!;
@@ -25,16 +31,18 @@ describe('permission-aware navigation', () => {
     expect(getMainNavigationGroups([]).map((group) => group.id)).toEqual([
       'workflow',
       'data-analysis',
-      'data-service',
     ]);
     expect(getMainNavigationGroups(batchRead).map((group) => group.id)).toEqual([
       'integration',
       'workflow',
       'data-analysis',
-      'data-service',
     ]);
     expect(getMainNavigationGroups(developmentRead).map((group) => group.id)).toEqual([
       'development',
+      'workflow',
+      'data-analysis',
+    ]);
+    expect(getMainNavigationGroups(dataServiceRead).map((group) => group.id)).toEqual([
       'workflow',
       'data-analysis',
       'data-service',
@@ -82,25 +90,31 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/data-analysis/chart-analysis', [])).toBe('dashboard');
   });
 
-  it('registers api marketplace, debug, runtime overview and call logs as data-service pages', () => {
-    const dataService = getMainNavigationGroups([]).find((group) => group.id === 'data-service');
-    expect(dataService?.title).toBe('数据服务');
-    expect(dataService?.routes.map((route) => route.id)).toEqual([
+  it('gates data-service pages by read, runtime and observe permissions', () => {
+    expect(getMainNavigationGroups([]).some((group) => group.id === 'data-service')).toBe(false);
+
+    const readOnly = getMainNavigationGroups(dataServiceRead).find(
+      (group) => group.id === 'data-service',
+    );
+    expect(readOnly?.routes.map((route) => route.id)).toEqual(['data-service-api']);
+    expect(getActiveNavigationId('/data-service/api/42', dataServiceRead)).toBe('data-service-api');
+    expect(getActiveNavigationId('/data-service/debug', dataServiceRead)).toBeUndefined();
+    expect(getActiveNavigationId('/data-service/overview', dataServiceRead)).toBeUndefined();
+
+    const full = getMainNavigationGroups(dataServiceAll).find(
+      (group) => group.id === 'data-service',
+    );
+    expect(full?.title).toBe('数据服务');
+    expect(full?.routes.map((route) => route.id)).toEqual([
       'data-service-api',
       'data-service-debug',
       'data-service-overview',
       'data-service-logs',
     ]);
-    expect(dataService?.routes.map((route) => route.title)).toEqual([
-      'API 集市',
-      'API 调试',
-      '运行概览',
-      '调用记录',
-    ]);
-    expect(getActiveNavigationId('/data-service', [])).toBe('data-service-api');
-    expect(getActiveNavigationId('/data-service/debug', [])).toBe('data-service-debug');
-    expect(getActiveNavigationId('/data-service/overview', [])).toBe('data-service-overview');
-    expect(getActiveNavigationId('/data-service/logs', [])).toBe('data-service-logs');
+    expect(getActiveNavigationId('/data-service', dataServiceAll)).toBe('data-service-api');
+    expect(getActiveNavigationId('/data-service/debug', dataServiceAll)).toBe('data-service-debug');
+    expect(getActiveNavigationId('/data-service/overview', dataServiceAll)).toBe('data-service-overview');
+    expect(getActiveNavigationId('/data-service/logs', dataServiceAll)).toBe('data-service-logs');
   });
 
   it('registers home before other standalone navigation', () => {
