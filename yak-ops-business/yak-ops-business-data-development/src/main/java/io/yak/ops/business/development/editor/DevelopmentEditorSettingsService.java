@@ -2,10 +2,9 @@ package io.yak.ops.business.development.editor;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.development.repository.DevelopmentEditorSettingRepository;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,30 +14,21 @@ public class DevelopmentEditorSettingsService {
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-  private final JdbcTemplate jdbcTemplate;
+  private final DevelopmentEditorSettingRepository repository;
   private final ObjectMapper objectMapper;
 
-  public DevelopmentEditorSettingsService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-    this.jdbcTemplate = jdbcTemplate;
+  public DevelopmentEditorSettingsService(
+      DevelopmentEditorSettingRepository repository,
+      ObjectMapper objectMapper) {
+    this.repository = repository;
     this.objectMapper = objectMapper;
   }
 
   public Map<String, Object> get(String userKey) {
-    List<String> values = jdbcTemplate.query(
-        "SELECT setting_json FROM yak_dev_editor_setting WHERE user_key = ? LIMIT 1",
-        (rs, rowNum) -> rs.getString(1),
-        normalizeUserKey(userKey));
-    if (values.isEmpty()) {
-      return defaults();
-    }
-    try {
-      Map<String, Object> stored = objectMapper.readValue(values.get(0), MAP_TYPE);
-      Map<String, Object> result = defaults();
-      result.putAll(stored);
-      return result;
-    } catch (Exception ex) {
-      throw new IllegalStateException("Invalid persisted editor settings", ex);
-    }
+    String normalizedUserKey = normalizeUserKey(userKey);
+    return repository.findJson(normalizedUserKey)
+        .map(this::deserialize)
+        .orElseGet(this::defaults);
   }
 
   @Transactional
@@ -52,15 +42,23 @@ public class DevelopmentEditorSettingsService {
     normalized.put("lineHeight", clampDouble(normalized.get("lineHeight"), 1.0, 3.0, 1.6));
 
     try {
-      String json = objectMapper.writeValueAsString(normalized);
-      jdbcTemplate.update(
-          "INSERT INTO yak_dev_editor_setting (user_key, setting_json, create_time, update_time) "
-              + "VALUES (?, ?, NOW(6), NOW(6)) "
-              + "ON DUPLICATE KEY UPDATE setting_json = VALUES(setting_json), update_time = NOW(6)",
-          normalizeUserKey(userKey), json);
+      repository.upsertJson(
+          normalizeUserKey(userKey),
+          objectMapper.writeValueAsString(normalized));
       return normalized;
     } catch (Exception ex) {
       throw new IllegalStateException("Failed to persist editor settings", ex);
+    }
+  }
+
+  private Map<String, Object> deserialize(String json) {
+    try {
+      Map<String, Object> stored = objectMapper.readValue(json, MAP_TYPE);
+      Map<String, Object> result = defaults();
+      result.putAll(stored);
+      return result;
+    } catch (Exception ex) {
+      throw new IllegalStateException("Invalid persisted editor settings", ex);
     }
   }
 

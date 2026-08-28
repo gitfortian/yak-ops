@@ -1,6 +1,4 @@
-import { API_SUCCESS_CODE } from '@/services/http/response';
-import { Button, Modal, message } from 'antd';
-import { TriangleAlert } from 'lucide-react';
+import { message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { getEditorDefinition } from '../../editors/registry';
@@ -34,14 +32,11 @@ import {
 import type {
   DevelopmentDirectory,
   DevelopmentId,
-  DevelopmentNode,
   DevelopmentResourceNode,
   DevelopmentSqlLineagePreview,
   DevelopmentTaskDraft,
   DevelopmentTaskRunResult,
 } from '../../types';
-import DataServiceNodeEditor from '../data-service/DataServiceNodeEditor';
-import DatasetNodeEditor from '../dataset/DatasetNodeEditor';
 import EditorHost from './EditorHost';
 import EditorTabs, { type EditorTabAction } from './EditorTabs';
 import EditorToolbar from './EditorToolbar';
@@ -49,6 +44,13 @@ import RightPanel from './RightPanel';
 import RunResultPanel, {
   type WorkbenchBottomPanelView,
 } from './RunResultPanel';
+import {
+  DataServiceWorkbenchEditor,
+  DatasetWorkbenchEditor,
+} from './StandaloneResourceEditors';
+import UnsavedChangesModal from './UnsavedChangesModal';
+import { responseData } from './workbenchResponse';
+import { closeTabs, tabActionTargets } from './workbenchTabs';
 
 interface DevelopmentWorkbenchProps {
   nodes: DevelopmentResourceNode[];
@@ -62,78 +64,6 @@ interface PendingCloseRequest {
   nodeIds: DevelopmentId[];
   dirtyNodeIds: DevelopmentId[];
 }
-
-interface StandaloneWorkbenchEditorProps {
-  node: DevelopmentResourceNode;
-  active: boolean;
-  onSaved?: () => void | Promise<void>;
-  onDirtyChange: (dirty: boolean) => void;
-}
-
-interface DataServiceWorkbenchEditorProps extends StandaloneWorkbenchEditorProps {
-  onOpenSourceNode: (nodeId: DevelopmentId) => void;
-}
-
-/** Keep standalone resource identity stable when the directory tree refreshes. */
-const DataServiceWorkbenchEditor = ({
-  node,
-  active,
-  onSaved,
-  onOpenSourceNode,
-  onDirtyChange,
-}: DataServiceWorkbenchEditorProps) => {
-  const stableNode = useMemo(() => node, [node.id, node.name]);
-
-  return (
-    <div
-      className={[
-        'min-h-0 flex-1 overflow-hidden',
-        active ? 'flex' : 'hidden',
-      ].join(' ')}
-    >
-      <DataServiceNodeEditor
-        node={stableNode}
-        onSaved={onSaved}
-        onOpenSourceNode={onOpenSourceNode}
-        onDirtyChange={onDirtyChange}
-      />
-    </div>
-  );
-};
-
-const DatasetWorkbenchEditor = ({
-  node,
-  active,
-  onSaved,
-  onDirtyChange,
-}: StandaloneWorkbenchEditorProps) => {
-  const stableNode = useMemo(() => node, [node.id, node.name]);
-
-  return (
-    <div
-      className={[
-        'min-h-0 flex-1 overflow-hidden',
-        active ? 'flex' : 'hidden',
-      ].join(' ')}
-    >
-      <DatasetNodeEditor
-        node={stableNode}
-        onSaved={onSaved}
-        onDirtyChange={onDirtyChange}
-      />
-    </div>
-  );
-};
-
-const responseData = <T,>(
-  response: { code?: number; data?: T; msg?: string; message?: string },
-  fallback: string,
-): T => {
-  if (response?.code !== API_SUCCESS_CODE || response.data === undefined) {
-    throw new Error(response?.message || response?.msg || fallback);
-  }
-  return response.data;
-};
 
 const DevelopmentWorkbench = ({
   nodes,
@@ -546,20 +476,20 @@ const DevelopmentWorkbench = ({
   const closeNodes = (nodeIds: DevelopmentId[]) => {
     if (!nodeIds.length) return;
 
+    const { nextOpenNodeIds, nextActiveNodeId } = closeTabs(
+      openNodeIds,
+      activeNodeId,
+      nodeIds,
+    );
     const closeSet = new Set(nodeIds);
-    const currentIndex = activeNodeId ? openNodeIds.indexOf(activeNodeId) : -1;
-    const next = openNodeIds.filter((id) => !closeSet.has(id));
-    setOpenNodeIds(next);
+    setOpenNodeIds(nextOpenNodeIds);
     setResourceDirtyNodeIds((current) => current.filter((id) => !closeSet.has(id)));
 
-    if (!activeNodeId || !closeSet.has(activeNodeId)) return;
+    if (!activeNodeId || nextActiveNodeId === activeNodeId) return;
 
-    const nextActiveId =
-      next[Math.min(Math.max(currentIndex, 0), next.length - 1)] ||
-      next[next.length - 1];
-    setActiveNodeId(nextActiveId);
-    onNodeFocus(nextActiveId);
-    const nextNode = nextActiveId ? nodeMap.get(nextActiveId) : undefined;
+    setActiveNodeId(nextActiveNodeId);
+    onNodeFocus(nextActiveNodeId);
+    const nextNode = nextActiveNodeId ? nodeMap.get(nextActiveNodeId) : undefined;
     if (!nextNode || !isDevelopmentTaskNode(nextNode)) {
       setRunPanelOpen(false);
     } else if (nextNode.type !== 'SQL') {
@@ -631,36 +561,13 @@ const DevelopmentWorkbench = ({
   };
 
   const handleTabAction = (action: EditorTabAction) => {
-    if (!activeNodeId) return;
-    const activeIndex = openNodeIds.indexOf(activeNodeId);
-    if (activeIndex < 0) return;
-
-    if (action === 'close-current') {
-      requestCloseNodes([activeNodeId]);
-      return;
-    }
-    if (action === 'close-all') {
-      requestCloseNodes(openNodeIds);
-      return;
-    }
-    if (action === 'close-others') {
-      requestCloseNodes(openNodeIds.filter((nodeId) => nodeId !== activeNodeId));
-      return;
-    }
-    if (action === 'close-left') {
-      requestCloseNodes(openNodeIds.slice(0, activeIndex));
-      return;
-    }
-    if (action === 'close-right') {
-      requestCloseNodes(openNodeIds.slice(activeIndex + 1));
-    }
+    requestCloseNodes(tabActionTargets(action, openNodeIds, activeNodeId));
   };
 
-  const pendingDirtyNodes = pendingClose?.dirtyNodeIds
+  const pendingDirtyNames = pendingClose?.dirtyNodeIds
     .map((nodeId) => nodeMap.get(nodeId))
-    .filter((node): node is DevelopmentNode => Boolean(node && isDevelopmentTaskNode(node)));
-  const pendingDirtyCount = pendingDirtyNodes?.length || 0;
-  const pendingDirtyName = pendingDirtyNodes?.[0]?.name || '当前编辑器';
+    .filter((node): node is DevelopmentResourceNode => Boolean(node && isDevelopmentTaskNode(node)))
+    .map((node) => node.name) || [];
 
   if (!openNodeIds.length || !activeResource) {
     return (
@@ -773,72 +680,14 @@ const DevelopmentWorkbench = ({
         ))}
       </div>
 
-      <Modal
+      <UnsavedChangesModal
         open={Boolean(pendingClose)}
-        title={null}
-        footer={null}
-        width={520}
-        centered
-        maskClosable={false}
-        closable={!closeSaving}
-        onCancel={() => {
-          if (!closeSaving) setPendingClose(undefined);
-        }}
-      >
-        <div className="flex gap-4 px-1 py-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center text-[#f79009]">
-            <TriangleAlert size={36} strokeWidth={1.7} />
-          </div>
-
-          <div className="min-w-0 flex-1 pt-1">
-            <div className="text-[16px] font-medium leading-6 text-[#1f2937]">
-              {pendingDirtyCount <= 1 ? (
-                <>
-                  是否要保存对 <span className="font-semibold">{pendingDirtyName}</span>{' '}
-                  的更改？
-                </>
-              ) : (
-                <>是否要保存 {pendingDirtyCount} 个已修改编辑器的更改？</>
-              )}
-            </div>
-
-            <div className="mt-4 text-[13px] leading-5 text-[#475467]">
-              如果不保存，{pendingDirtyCount <= 1 ? '你的更改' : '这些更改'}将丢失。
-            </div>
-
-            {pendingDirtyCount > 1 ? (
-              <div
-                className="mt-2 max-w-[360px] truncate text-[12px] text-[#98a2b3]"
-                title={pendingDirtyNodes?.map((node) => node.name).join('、')}
-              >
-                {pendingDirtyNodes?.map((node) => node.name).join('、')}
-              </div>
-            ) : null}
-
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                type="primary"
-                loading={closeSaving}
-                onClick={() => void resolvePendingClose(true)}
-              >
-                {pendingDirtyCount > 1 ? '保存全部' : '保存'}
-              </Button>
-              <Button
-                disabled={closeSaving}
-                onClick={() => void resolvePendingClose(false)}
-              >
-                {pendingDirtyCount > 1 ? '全部不保存' : '不保存'}
-              </Button>
-              <Button
-                disabled={closeSaving}
-                onClick={() => setPendingClose(undefined)}
-              >
-                取消
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+        saving={closeSaving}
+        dirtyNames={pendingDirtyNames}
+        onSave={() => resolvePendingClose(true)}
+        onDiscard={() => resolvePendingClose(false)}
+        onCancel={() => setPendingClose(undefined)}
+      />
     </main>
   );
 };

@@ -58,6 +58,7 @@ class DataDevelopmentRoleConventionTest {
     for (String moved :
         Set.of(
             "DataDevelopmentTaskRevisionProvider.java",
+            "DevelopmentDataServiceNodeSourceProvider.java",
             "DevelopmentDatasetNodeService.java",
             "DevelopmentDirectoryService.java",
             "DevelopmentEditorSettingsService.java",

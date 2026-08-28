@@ -1,79 +1,65 @@
 package io.yak.ops.business.development.lineage;
 
+import io.yak.ops.business.development.repository.DevelopmentLineageOutboxRepository;
+import io.yak.ops.business.development.repository.DevelopmentLineageOutboxRepository.OutboxRecord;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 /** Durable SQL-lineage work committed atomically with the published revision. */
-@Repository
+@Component
 public class DevelopmentLineageOutbox {
-  private final JdbcTemplate jdbc;
 
-  public DevelopmentLineageOutbox(JdbcTemplate jdbc) {
-    this.jdbc = jdbc;
+  private final DevelopmentLineageOutboxRepository repository;
+
+  public DevelopmentLineageOutbox(DevelopmentLineageOutboxRepository repository) {
+    this.repository = repository;
   }
 
   public void enqueue(long nodeId, long revisionId) {
-    jdbc.update(
-        "INSERT IGNORE INTO yak_dev_lineage_outbox "
-            + "(task_id,project_id,node_id,revision_id,status,attempts,next_attempt_time,create_time,update_time) "
-            + "SELECT ?,project_id,id,?,'PENDING',0,NOW(6),NOW(6),NOW(6) FROM yak_dev_node "
-            + "WHERE id=? AND project_id IS NOT NULL",
-        UUID.randomUUID().toString(),
-        revisionId,
-        nodeId);
+    repository.enqueue(UUID.randomUUID().toString(), nodeId, revisionId);
   }
 
   /** Cross-project dispatcher query; each returned task restores its project before processing. */
   public List<Task> due(int limit) {
-    return jdbc.query(
-        "SELECT task_id,project_id,node_id,revision_id,attempts FROM yak_dev_lineage_outbox "
-            + "WHERE project_id IS NOT NULL AND ((status IN ('PENDING','FAILED') AND next_attempt_time<=NOW(6)) "
-            + "OR (status='RUNNING' AND update_time<DATE_SUB(NOW(6), INTERVAL 10 MINUTE))) "
-            + "ORDER BY create_time LIMIT ?",
-        (rs, row) ->
-            new Task(
-                rs.getString("task_id"),
-                rs.getLong("project_id"),
-                rs.getLong("node_id"),
-                rs.getLong("revision_id"),
-                rs.getInt("attempts")),
-        limit);
+    return repository.due(limit).stream().map(DevelopmentLineageOutbox::toTask).toList();
   }
 
   public boolean claim(Task task) {
-    return jdbc.update(
-        "UPDATE yak_dev_lineage_outbox SET status='RUNNING',attempts=attempts+1,"
-            + "update_time=NOW(6) WHERE task_id=? AND project_id=? AND revision_id=? "
-            + "AND (status IN ('PENDING','FAILED') "
-            + "OR (status='RUNNING' AND update_time<DATE_SUB(NOW(6), INTERVAL 10 MINUTE)))",
-        task.taskId(),
-        task.projectId(),
-        task.revisionId()) == 1;
+    return repository.claim(toRecord(task));
   }
 
   public void complete(Task task) {
-    jdbc.update(
-        "UPDATE yak_dev_lineage_outbox SET status='SUCCEEDED',last_error=NULL,update_time=NOW(6) "
-            + "WHERE task_id=? AND project_id=? AND revision_id=? AND status='RUNNING'",
-        task.taskId(),
-        task.projectId(),
-        task.revisionId());
+    repository.complete(toRecord(task));
   }
 
   public void fail(Task task, Throwable failure) {
     long delay = Math.min(3600, 1L << Math.min(12, task.attempts()));
-    String message = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-    jdbc.update(
-        "UPDATE yak_dev_lineage_outbox SET status='FAILED',last_error=?,"
-            + "next_attempt_time=DATE_ADD(NOW(6), INTERVAL ? SECOND),update_time=NOW(6) "
-            + "WHERE task_id=? AND project_id=? AND revision_id=? AND status='RUNNING'",
+    String message = failure.getMessage() == null
+        ? failure.getClass().getSimpleName()
+        : failure.getMessage();
+    repository.fail(
+        toRecord(task),
         message.substring(0, Math.min(2000, message.length())),
-        delay,
+        delay);
+  }
+
+  private static Task toTask(OutboxRecord record) {
+    return new Task(
+        record.taskId(),
+        record.projectId(),
+        record.nodeId(),
+        record.revisionId(),
+        record.attempts());
+  }
+
+  private static OutboxRecord toRecord(Task task) {
+    return new OutboxRecord(
         task.taskId(),
         task.projectId(),
-        task.revisionId());
+        task.nodeId(),
+        task.revisionId(),
+        task.attempts());
   }
 
   public record Task(String taskId, Long projectId, long nodeId, long revisionId, int attempts) {

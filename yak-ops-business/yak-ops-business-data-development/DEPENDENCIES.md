@@ -9,23 +9,23 @@ controller
    -> node / directory / task / execution / dataset / dataservice / release / editor
    -> frozen legacy preview corridor
 
-node       -> domain + repository -> dao
-directory  -> domain + repository -> dao
-task       -> domain + repository -> dao
-           -> lineage (outbox only)
-execution  -> domain + task + shared Task Runtime
-             └── model = execution read/response projection
+node        -> domain + repository -> dao
+directory   -> domain + repository -> dao
+task        -> domain + repository -> dao
+            -> lineage (outbox only)
+execution   -> domain + task + repository + shared Task Runtime
+              └── model = execution read/response projection
 
-dataset    -> domain + repository + Dataset / Task Catalog
+dataset     -> domain + repository + Dataset / Task Catalog
 dataservice -> domain + repository + adjacent Data Service publication/runtime boundary
-release    -> domain + repository + Task Catalog
-             └── model = release read projection
+release     -> domain + repository + Task Catalog
+              └── model = release read projection
 
-lineage    -> domain + repository + frozen SQL parser implementation
-           -> shared Lineage analysis/write contracts
-           -> ProjectContextScope for persisted background project restoration
-editor     -> local persistence boundary
-domain     -> framework-light truth/value types only
+lineage     -> domain + repository + frozen SQL parser implementation
+            -> shared Lineage analysis/write contracts
+            -> ProjectContextScope for persisted background project restoration
+editor      -> repository
+domain      -> framework-light truth/value types only
 ```
 
 依赖必须总体向边界流动，不能通过扩大白名单掩盖循环。
@@ -38,13 +38,14 @@ domain     -> framework-light truth/value types only
 | `node` | `domain`, `repository` |
 | `directory` | `domain`, `repository` |
 | `task` | `domain`, `repository`, `lineage`, compatibility exception corridor |
-| `execution` | `domain`, `task`; `execution.model` 只能作为 read/response projection |
+| `execution` | `domain`, `task`, `repository`; `execution.model` 只能作为 read/response projection |
 | `dataset` | `domain`, `repository` |
 | `dataservice` | `domain`, `repository`; adjacent Data Service publication/runtime application boundary |
 | `release` | `domain`, `repository`; `release.model` 只能作为 read projection |
 | `lineage` | `domain`, `repository`, frozen legacy SQL parser implementation |
-| `repository` | `domain`, `dao` |
-| `dao` | persistence primitives |
+| `editor` | `repository` |
+| `repository` | `domain`, `dao`, persistence primitives |
+| `dao` | MyBatis persistence primitives |
 | `domain` | JDK + compatibility serialization annotations |
 
 ## Read Model Rule
@@ -89,7 +90,7 @@ lineage.analysis.DevelopmentSqlProjectionLineageAnalyzer
 
 共享 Lineage 模块不允许反向进入 Data Development parser 实现。
 
-Scheduled/Outbox 工作方向固定为：
+Scheduled / Reconciler / Outbox 工作方向固定为：
 
 ```text
 persisted project_id
@@ -97,7 +98,7 @@ persisted project_id
     -> project-scoped Repository / adjacent context IO
 ```
 
-后台任务不得因为没有 HTTP Header 而退化成 global repository read。
+后台任务不得因为没有 HTTP Header 而退化成 global repository read/write。
 
 新增跨模块依赖前先回答：
 
@@ -111,11 +112,24 @@ Dependency Impact Analysis
 - DEPENDENCIES / guard updated: yes/no
 ```
 
+## Persistence Boundary
+
+Application role 只依赖 Repository contract，JDBC/MyBatis 细节留在 adapter/DAO：
+
+```text
+application role -> repository contract -> JDBC/MyBatis adapter -> database
+```
+
+Stage 3 已把 Execution history、Editor settings、Lineage Outbox 三个历史 direct-JDBC 边界全部下沉到 Repository adapter。`execution`、`editor`、`lineage` 不再直接 import `JdbcTemplate`，architecture test 会阻止这种依赖重新出现。
+
+Repository contract 可以使用所属业务事实或自己的 persistence record，但不得反向依赖 application service，从而避免 `repository <-> execution/editor/lineage` package cycle。
+
 ## Forbidden Shortcuts
 
 - Controller 不直接访问 Repository / DAO。
 - Domain 不依赖 Controller、Repository、DAO、Task Runtime、Lineage Service、Spring JDBC、MyBatis，也不依赖 release/execution read model。
-- Task / Node / Directory / Dataset / Data Service publication / Release 不直接进入本模块 DAO。
+- Task / Node / Directory / Execution / Dataset / Data Service publication / Release / Lineage / Editor 不直接进入本模块 DAO。
+- Application role 不直接持有 `JdbcTemplate`；只有 Repository adapter 可以拥有 SQL persistence primitive。
 - Query/read 行为不得顺手修改 Draft/Revision/Execution truth。
 - 不创建 `common/helper/utils/base/service` 作为新功能的默认落点。
 - 不通过 `service` legacy island 作为“方便的中转层”形成新依赖。
@@ -124,15 +138,8 @@ Dependency Impact Analysis
 
 ## Legacy Corridors
 
-当前仍有两类已知兼容边界：
+当前剩余 legacy `service` 主要是 SQL Lineage Parser 大实现、`DevelopmentDataServiceNodeService` 大应用入口和两个兼容异常。
 
-1. `service.DevelopmentDraftConflictException` / `service.DevelopmentTaskValidationException` 保留旧调用方类型兼容；
-2. Data Service 与 SQL Lineage Parser 大实现仍位于 frozen `service` island。
+`DevelopmentDataServiceNodeSourceProvider` 已迁入 `dataservice`；`DevelopmentDataServiceSqlCompiler` 的核心实现也已迁入 `dataservice`，旧包只保留无业务逻辑的 Spring compatibility shell，等待 Data Service Node 大入口在独立机械迁移中归位。
 
 `DevelopmentSqlProjectionLineageAnalyzer` 已迁入 `lineage.analysis`，不再属于 legacy allowlist。这些剩余项是**固定债务，不是新代码模板**；架构测试会精确限制该目录文件集合，新增文件即失败。
-
-## Persistence Note
-
-历史上的 Execution history、Editor settings、Lineage Outbox 仍直接使用 JDBC。这次角色归位不把 Analyzer package move 与 persistence redesign 混在一起。
-
-新持久化能力默认走 Repository contract；如果确实需要直接 JDBC，需要在 PR 中写清楚原因、truth owner 和事务边界。

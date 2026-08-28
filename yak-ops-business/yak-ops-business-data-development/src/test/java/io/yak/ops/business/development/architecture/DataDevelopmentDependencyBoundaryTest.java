@@ -24,7 +24,6 @@ class DataDevelopmentDependencyBoundaryTest {
       Set.of(
           "DerivedAwareSqlColumnLineageParser.java",
           "DevelopmentDataServiceNodeService.java",
-          "DevelopmentDataServiceNodeSourceProvider.java",
           "DevelopmentDataServiceSqlCompiler.java",
           "DevelopmentDraftConflictException.java",
           "DevelopmentSqlLineagePreviewService.java",
@@ -52,8 +51,17 @@ class DataDevelopmentDependencyBoundaryTest {
 
   @Test
   void applicationRolesDoNotReachDaoDirectly() throws IOException {
-    for (String role : List.of("node", "directory", "task", "dataset", "release", "lineage")) {
+    for (String role : List.of(
+        "node", "directory", "task", "execution", "dataset", "dataservice", "release", "lineage", "editor")) {
       assertPackageDoesNotImport(role, BASE + ".dao");
+    }
+  }
+
+  @Test
+  void applicationRolesDoNotOwnJdbcTemplates() throws IOException {
+    for (String role : List.of(
+        "node", "directory", "task", "execution", "dataset", "dataservice", "release", "lineage", "editor", "service")) {
+      assertPackageDoesNotImport(role, "org.springframework.jdbc.core.JdbcTemplate");
     }
   }
 
@@ -83,6 +91,14 @@ class DataDevelopmentDependencyBoundaryTest {
                   java.util.stream.Collectors.toCollection(LinkedHashSet::new));
       assertThat(actual).containsExactlyInAnyOrderElementsOf(LEGACY_SERVICE_ALLOWLIST);
     }
+  }
+
+  @Test
+  void dataServiceRuntimeProviderLivesWithItsOwnerContext() {
+    assertThat(productionRoot().resolve("dataservice/DevelopmentDataServiceNodeSourceProvider.java"))
+        .isRegularFile();
+    assertThat(productionRoot().resolve("service/DevelopmentDataServiceNodeSourceProvider.java"))
+        .doesNotExist();
   }
 
   @Test

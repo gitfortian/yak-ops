@@ -4,6 +4,8 @@ import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionD
 import io.yak.ops.business.development.execution.model.DevelopmentTaskExecutionSubmission;
 import io.yak.ops.business.job.task.TaskExecution;
 import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import io.yak.ops.spi.task.model.TaskExecutionStatus;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -22,14 +24,17 @@ public class DevelopmentTaskExecutionControlService {
   private final DevelopmentTaskExecutionService histories;
   private final DevelopmentTaskRunService runService;
   private final TaskExecutionGateway taskExecutionGateway;
+  private final ProjectContextScope projectContextScope;
 
   public DevelopmentTaskExecutionControlService(
       DevelopmentTaskExecutionService histories,
       DevelopmentTaskRunService runService,
-      TaskExecutionGateway taskExecutionGateway) {
+      TaskExecutionGateway taskExecutionGateway,
+      ProjectContextScope projectContextScope) {
     this.histories = histories;
     this.runService = runService;
     this.taskExecutionGateway = taskExecutionGateway;
+    this.projectContextScope = projectContextScope;
   }
 
   public DevelopmentTaskExecutionDetail refresh(long id) {
@@ -78,11 +83,14 @@ public class DevelopmentTaskExecutionControlService {
   }
 
   void reconcileActiveExecutions(int limit) {
-    for (DevelopmentTaskExecutionDetail execution : histories.listActiveForReconciliation(limit)) {
+    for (DevelopmentTaskExecutionService.ReconciliationCandidate candidate
+        : histories.listActiveForReconciliation(limit)) {
       try {
-        reconcile(execution);
+        projectContextScope.run(
+            new ProjectContext(candidate.projectId(), null),
+            () -> reconcile(candidate.execution()));
       } catch (RuntimeException ignored) {
-        // A transient runtime lookup failure must not stop reconciliation of other executions.
+        // One project/runtime failure must not block reconciliation for other executions.
       }
     }
   }
