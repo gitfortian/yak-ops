@@ -3,6 +3,7 @@ package io.yak.ops.business.dataservice.execution;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -65,7 +66,7 @@ class DataServiceInvokerTest {
     when(executor.execute(eq(definition), any(), eq(null))).thenReturn(response);
     doThrow(new IllegalStateException("audit db down"))
         .when(recorder)
-        .record(eq(definition), any(), eq(true), any(Long.class), eq(1), eq(null), any());
+        .record(eq(definition), any(), eq(true), anyLong(), eq(1), eq(null), any());
 
     DataServiceQueryResponse result = invoker.invoke("orders", Map.of("id", "1"), null);
 
@@ -79,7 +80,7 @@ class DataServiceInvokerTest {
     when(executor.execute(eq(definition), any(), eq(null))).thenThrow(queryFailure);
     doThrow(new IllegalStateException("audit db down"))
         .when(recorder)
-        .record(eq(definition), any(), eq(false), any(Long.class), eq(0), eq("datasource down"), any());
+        .record(eq(definition), any(), eq(false), anyLong(), eq(0), eq("datasource down"), any());
 
     assertThatThrownBy(() -> invoker.invoke("/orders", Map.of("id", "1"), null))
         .isSameAs(queryFailure);
