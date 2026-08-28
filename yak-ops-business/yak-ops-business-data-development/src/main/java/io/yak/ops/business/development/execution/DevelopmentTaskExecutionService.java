@@ -236,7 +236,7 @@ public class DevelopmentTaskExecutionService {
     return jdbcTemplate.query(
         detailSelect()
             + " WHERE status IN ('PENDING', 'RUNNING')"
-            + " ORDER BY start_time ASC, id ASC LIMIT ?",
+            + " ORDER BY update_time ASC, id ASC LIMIT ?",
         this::mapDetail,
         safeLimit);
   }
