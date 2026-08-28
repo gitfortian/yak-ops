@@ -13,6 +13,7 @@ public final class DataServiceDefinition {
   private SourceReference sourceReference;
   private RuntimePolicy runtimePolicy;
   private AuthMode authMode;
+  private long runtimeGeneration;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
 
@@ -43,6 +44,7 @@ public final class DataServiceDefinition {
     definition.sourceReference = requireSource(sourceReference);
     definition.runtimePolicy = runtimePolicy == null ? RuntimePolicy.defaults(true) : runtimePolicy;
     definition.authMode = AuthMode.NONE;
+    definition.runtimeGeneration = 1L;
     definition.createTime = now;
     definition.updateTime = now;
     return definition;
@@ -62,6 +64,7 @@ public final class DataServiceDefinition {
     return restore(
         id,
         null,
+        1L,
         settings,
         runtimeSnapshot,
         sourceReference,
@@ -81,6 +84,30 @@ public final class DataServiceDefinition {
       AuthMode authMode,
       LocalDateTime createTime,
       LocalDateTime updateTime) {
+    return restore(
+        id,
+        projectId,
+        1L,
+        settings,
+        runtimeSnapshot,
+        sourceReference,
+        runtimePolicy,
+        authMode,
+        createTime,
+        updateTime);
+  }
+
+  public static DataServiceDefinition restore(
+      Long id,
+      Long projectId,
+      Long runtimeGeneration,
+      DataServiceSettings settings,
+      PublishedRuntimeSnapshot runtimeSnapshot,
+      SourceReference sourceReference,
+      RuntimePolicy runtimePolicy,
+      AuthMode authMode,
+      LocalDateTime createTime,
+      LocalDateTime updateTime) {
     DataServiceDefinition definition = new DataServiceDefinition();
     definition.id = id;
     definition.projectId = normalizeProjectId(projectId);
@@ -89,6 +116,7 @@ public final class DataServiceDefinition {
     definition.sourceReference = requireSource(sourceReference);
     definition.runtimePolicy = runtimePolicy == null ? RuntimePolicy.defaults(false) : runtimePolicy;
     definition.authMode = authMode == null ? AuthMode.NONE : authMode;
+    definition.runtimeGeneration = normalizeGeneration(runtimeGeneration);
     definition.createTime = createTime;
     definition.updateTime = updateTime;
     return definition;
@@ -96,7 +124,7 @@ public final class DataServiceDefinition {
 
   public void updateSettings(DataServiceSettings settings, LocalDateTime now) {
     this.settings = requireSettings(settings);
-    this.updateTime = now;
+    touch(now);
   }
 
   public void republish(
@@ -107,7 +135,7 @@ public final class DataServiceDefinition {
     this.settings = requireSettings(settings);
     this.runtimeSnapshot = requireRuntime(runtimeSnapshot);
     this.sourceReference = requireSource(sourceReference);
-    this.updateTime = now;
+    touch(now);
   }
 
   public void setEnabled(boolean enabled, LocalDateTime now) {
@@ -115,22 +143,31 @@ public final class DataServiceDefinition {
     this.settings = new DataServiceSettings(
         current.name(), current.path(), current.maxRows(), current.timeoutSeconds(), enabled,
         current.description(), current.paginationEnabled());
-    this.updateTime = now;
+    touch(now);
   }
 
   public void setAuthMode(AuthMode mode, LocalDateTime now) {
     this.authMode = mode == null ? AuthMode.NONE : mode;
-    this.updateTime = now;
+    touch(now);
   }
 
   public void updateRuntimePolicy(RuntimePolicy policy, LocalDateTime now) {
     if (policy == null) throw new IllegalArgumentException("Runtime policy must not be null");
     this.runtimePolicy = policy;
+    touch(now);
+  }
+
+  private void touch(LocalDateTime now) {
+    this.runtimeGeneration = runtimeGeneration == Long.MAX_VALUE ? 1L : runtimeGeneration + 1L;
     this.updateTime = now;
   }
 
   private static Long normalizeProjectId(Long value) {
     return value == null || value <= 0L ? null : value;
+  }
+
+  private static long normalizeGeneration(Long value) {
+    return value == null || value <= 0L ? 1L : value;
   }
 
   private static DataServiceSettings requireSettings(DataServiceSettings value) {
@@ -155,6 +192,7 @@ public final class DataServiceDefinition {
   public SourceReference sourceReference() { return sourceReference; }
   public RuntimePolicy runtimePolicy() { return runtimePolicy; }
   public AuthMode authMode() { return authMode; }
+  public long runtimeGeneration() { return runtimeGeneration; }
   public LocalDateTime createTime() { return createTime; }
   public LocalDateTime updateTime() { return updateTime; }
 }

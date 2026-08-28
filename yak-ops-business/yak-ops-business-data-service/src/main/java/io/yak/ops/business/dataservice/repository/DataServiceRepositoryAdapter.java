@@ -143,8 +143,8 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
         value(po.getCacheMaxEntries(), 200), Boolean.TRUE.equals(po.getCircuitBreakerEnabled()),
         value(po.getCircuitFailureThreshold(), 5), value(po.getCircuitRecoverySeconds(), 30));
     return DataServiceDefinition.restore(
-        po.getId(), po.getProjectId(), settings, runtime, source, policy, AuthMode.parse(po.getAuthMode()),
-        po.getCreateTime(), po.getUpdateTime());
+        po.getId(), po.getProjectId(), po.getRuntimeGeneration(), settings, runtime, source, policy,
+        AuthMode.parse(po.getAuthMode()), po.getCreateTime(), po.getUpdateTime());
   }
 
   private DataServiceApiPO toPo(DataServiceDefinition definition) {
@@ -170,6 +170,7 @@ public class DataServiceRepositoryAdapter implements DataServiceRepository {
     po.setCircuitBreakerEnabled(policy.circuitBreakerEnabled());
     po.setCircuitFailureThreshold(policy.failureThreshold());
     po.setCircuitRecoverySeconds(policy.recoverySeconds());
+    po.setRuntimeGeneration(definition.runtimeGeneration());
     SourceReference source = definition.sourceReference();
     po.setSourceType(source.sourceType());
     po.setSourceRef(source.sourceRef());

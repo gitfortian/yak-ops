@@ -7,6 +7,7 @@
 ```text
 DataServiceDefinition (Aggregate Root)
 ├── projectId
+├── runtimeGeneration
 ├── DataServiceSettings
 ├── PublishedRuntimeSnapshot
 ├── SourceReference
@@ -20,15 +21,16 @@ Documentation
 └── DataServiceDocumentation
 
 Observability
-└── InvocationRecord(projectId snapshot)
+├── InvocationRecord(projectId snapshot)
+└── hourly invocation rollup
 
 Invocation Result
 └── DataServiceQueryResponse
 ```
 
-## 2. 三层 Truth
+## 2. 四层 Truth
 
-Data Service 最重要的领域边界不是“Controller/Service/DAO”，而是三种不同生命周期的事实。
+Data Service 最重要的领域边界不是“Controller/Service/DAO”，而是不同生命周期的事实。
 
 ### 2.1 Upstream Revision Truth
 
@@ -47,7 +49,7 @@ immutable source revision
         +-- request/response contract
 ```
 
-它决定**发布时应该复制什么**，但不是 Data Service Runtime 的在线查询入口。
+它决定发布时应该复制什么，但不是 Runtime 的在线查询入口。
 
 ### 2.2 Persisted Data Service Truth
 
@@ -59,22 +61,38 @@ immutable source revision
 - `SourceReference`：来源类型、引用、固定 Revision。
 - `RuntimePolicy`：Cache/Circuit 的持久化策略。
 - `AuthMode`：NONE/API_KEY。
+- `runtimeGeneration`：单调持久化 Runtime 代际；每次会影响在线行为的 Aggregate 变更都推进代际。
 
 运行调用读取这里的持久化快照，不在每次请求时重新解析上游 Source。
 
 `projectId` 是 Console ownership，不进入 Public Runtime URL。外部调用通过全局唯一 path 找到 Definition 后，自然获得该服务的 Project identity；调用方不能通过 Project Header 选择或覆盖服务归属。
 
-### 2.3 Process-local Runtime Truth
+### 2.3 Cluster coordination / evidence truth
+
+多实例之间需要共享的运行事实通过明确 persistence port 表达：
+
+```text
+API Key minute-window usage
+Invocation audit evidence
+Hourly invocation rollup
+```
+
+- API Key minute-window usage 是集群配额事实，不属于单个 JVM。
+- Invocation / hourly rollup 是跨实例可聚合的调用 evidence。
+- 它们不能反向成为 Data Service Definition 或 RuntimePolicy 的 owner。
+
+### 2.4 Process-local resilience truth
 
 `LocalDataServiceRuntime` 维护：
 
 ```text
-Cache entries
+Caffeine cache entries
 Circuit state
-Runtime metrics
+Local cache-hit evidence
+Local circuit-rejected evidence
 ```
 
-这些状态只对当前 JVM 节点成立，不持久化，不代表集群全局事实。
+这些状态只对当前 JVM 成立。它们不持久化，也不代表集群全局 resilience 状态。
 
 ## 3. DataServiceDefinition 不变量
 
@@ -87,19 +105,21 @@ Runtime metrics
 7. republish 不能重置 `AuthMode`、`RuntimePolicy` 或 Project ownership。
 8. 服务侧 settings 更新不能改 SQL/dataSourceId/source revision/projectId。
 9. enable/disable 只改变服务可调用性。
-10. Aggregate 通过领域行为变更，不把 PO setter 暴露为业务 API。
-11. PO/Mapper 不是业务事实，持久化重建由 Repository Adapter 负责。
+10. `runtimeGeneration` 必须是正数，在线行为发生变更时推进；旧代际不能继续复用新请求的 cache identity。
+11. Aggregate 通过领域行为变更，不把 PO setter 暴露为业务 API。
+12. PO/Mapper 不是业务事实，持久化重建由 Repository Adapter 负责。
 
 ## 4. Publication 生命周期
 
 ```text
                 publish
-ONLINE Source -------------> DataServiceDefinition(projectId)
+ONLINE Source -------------> DataServiceDefinition(projectId, generation=1)
                                   |
                                   | republish newer Revision
                                   v
                          same Data Service ID
                          same Project ownership
+                         newer runtimeGeneration
                          new SourceReference
                          new RuntimeSnapshot
                          preserved Auth/Policy
@@ -114,7 +134,7 @@ Source Revision owns:
 name / path / maxRows / timeout / pagination / description / contract
 
 Data Service owns:
-projectId / enabled / auth / API keys / runtime policy / local runtime state
+projectId / enabled / auth / API keys / runtime policy / runtimeGeneration
 ```
 
 客户端不能用 publish/update 请求覆盖 Source-owned 字段。
@@ -147,9 +167,9 @@ prefix ----------------------------> persisted for identification/audit
 - raw secret 永不写 PO、日志、Domain `toString()` 或普通响应。
 - API_KEY 模式必须至少有一个 enabled 且未过期的 Key。
 - 最后一个有效 Key 不能被 disable/delete。
-- rotate 替换 hash/prefix，并使本机旧 rate-limit bucket 失效。
+- rotate 替换 hash/prefix，并清理该 Key 的共享 minute-window usage。
 - successful authorize 更新 `lastUsedAt`。
-- rate limit bucket 是进程本地状态，不是 Aggregate。
+- `rateLimitPerMinute` 是集群共享配额策略；当前 minute-window usage 是 cluster coordination truth，不是 API Key Aggregate 字段。
 - Console Key lifecycle 必须先通过父 Data Service 的 CurrentProject ownership；不能只凭 keyId 修改另一 Project 的 Key。
 - Public Invocation 的 Key 查找属于已解析 Data Service 的访问执行过程，不依赖 Yak Console Project Header。
 
@@ -164,8 +184,10 @@ named parameter validation
    v
 CompiledSql(sql + bindings)
    |
+   +--> cluster API Key admission
+   |
    v
-Local Runtime protection
+Node-local Runtime protection
    |
    v
 SqlExecutionRuntime
@@ -179,7 +201,7 @@ SqlExecutionRuntime
 - `SqlExecutionRuntime` 是唯一物理 SQL 调用入口。
 - Public Invocation 只允许通过全局 path resolve corridor 读取 Definition；所有 Console ID/source/list read 都是 Project-scoped。
 
-## 7. Runtime Policy 与 State
+## 7. Runtime Policy / Cache / Metrics
 
 `RuntimePolicy` 是持久化业务策略：
 
@@ -192,19 +214,27 @@ failureThreshold
 recoverySeconds
 ```
 
-`LocalDataServiceRuntime` 根据 Policy 构造本地状态：
+`LocalDataServiceRuntime` 根据 Policy 构造当前实例的 Cache/Circuit。
+
+Cache correctness 不要求共享 Cache Truth。每次请求的 cache namespace 至少覆盖：
 
 ```text
-RuntimePolicy change
-       |
-       v
-invalidate cache / reset affected circuit
-       |
-       v
-new local state follows persisted policy
+stable API identity
+source revision
+runtimeGeneration
+runtime-affecting settings/policy
+compiled SQL
+bindings/pagination
 ```
 
-本机 Metrics 只用于诊断，不写回 Aggregate。
+因此另一实例即使没有收到主动 invalidate，也不能让新代际命中旧结果。
+
+Runtime status 明确混合两种 evidence：
+
+- total/success/failure/average/last activity：来自持久化 audit + rollup 的集群调用 evidence；
+- cache entries/hits、circuit state/rejected：当前实例 resilience evidence。
+
+返回模型必须显式标识 metric scope，禁止把两者当成同一层 Truth。
 
 ## 8. Documentation 不变量
 
@@ -215,23 +245,11 @@ new local state follows persisted policy
 - response field docs；
 - update time。
 
-当前 SQL 参数名是 parameter docs 的事实来源：
-
-```text
-current SQL names + saved docs
-          |
-          v
-merge descriptions/examples by name
-          |
-          v
-current parameter contract
-```
-
-删除的 SQL 参数不能继续出现在当前文档；新增参数必须出现，即使只有默认 type。
+当前 SQL 参数名是 parameter docs 的事实来源。删除的 SQL 参数不能继续出现在当前文档；新增参数必须出现，即使只有默认 type。
 
 Documentation 自身不重复存 Project identity；Console reader/manager 必须先通过父 Data Service ownership，再读写文档 projection。
 
-## 9. InvocationRecord
+## 9. InvocationRecord / Audit Lifecycle
 
 `InvocationRecord` 是调用审计事实，而不是执行生命周期 Aggregate。
 
@@ -240,11 +258,21 @@ Documentation 自身不重复存 Project identity；Console reader/manager 必�
 - Project ID；
 - 服务身份/名称/Path；
 - Caller/API Key identification；
-- 参数 JSON；
+- **脱敏后的**参数 JSON；
 - success/duration/rows/error；
 - 时间。
 
-Project ID 必须在 Invocation 时从 resolved Data Service Definition 快照下来。历史记录不因 Data Service 后续改名、删除或 Key rotate 而重写，因此 Overview/Logs 在服务删除后仍能按 Project 归属查询。
+Project ID 必须在 Invocation 时从 resolved Data Service Definition 快照下来。历史记录不因 Data Service 后续改名、删除或 Key rotate 而重写。
+
+Secret / personal identifier 必须在 JSON 序列化前处理；Audit Repository 不应收到 raw password/token/credential。
+
+Raw evidence 有有限生命周期。完整小时在同一事务内：
+
+```text
+raw rows -> hourly aggregate -> delete same raw hour
+```
+
+事务失败必须同时保留/回滚两边，不能产生双算或丢数。
 
 ## 10. Management vs Invocation boundary
 
@@ -267,18 +295,18 @@ Project Header 不是 Public Invocation authorization input，也不能被外部
 ## 11. Persistence Projection
 
 ```text
-Database PO
+Database PO / coordination table
    |
    v
 Repository Adapter
    |
    v
-Domain
+Domain / capability port
 ```
 
 允许 `dao/model` 使用 Lombok bean/setter 适配 ORM；Domain 不因此恢复为 `@Data` 贫血 Bean。
 
-管理 Repository 的 `findById/findByPath/findBySource/findAll/save/delete` 必须绑定 CurrentProject。`findByRuntimePath` 是唯一显式 global read corridor，且只服务 Invocation Plane。
+管理 Repository 的 `findById/findByPath/findBySource/findAll/save/delete` 必须绑定 CurrentProject。Public path lookup 和平台级 count 是显式窄 global corridor；共享 rate-window / rollup 属于 Runtime/Observability coordination corridor，不得被 Controller 直接访问。
 
 ## 12. 修改协议
 
@@ -287,7 +315,7 @@ Domain Impact Analysis
 - Aggregate/value object:
 - Truth owner:
 - invariant/lifecycle impact:
-- process-local vs persisted impact:
+- node-local vs cluster/persisted impact:
 - Project/Invocation plane impact:
 - Domain Gap: yes/no
 

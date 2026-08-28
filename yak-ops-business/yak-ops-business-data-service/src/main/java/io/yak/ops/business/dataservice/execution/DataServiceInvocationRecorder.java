@@ -11,7 +11,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Persists bounded invocation audit evidence; it does not own Data Service runtime truth. */
+/** Persists bounded, sanitized invocation audit evidence; it does not own runtime truth. */
 @Component
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -19,6 +19,7 @@ public class DataServiceInvocationRecorder {
 
   private final DataServiceCallLogRepository repository;
   private final ObjectMapper objectMapper;
+  private final DataServiceAuditSanitizer sanitizer;
 
   public void record(
       DataServiceDefinition definition,
@@ -29,6 +30,7 @@ public class DataServiceInvocationRecorder {
       String errorMessage,
       AccessContext access) {
     AccessContext caller = access == null ? AccessContext.publicAccess() : access;
+    Map<String, String> safeParameters = sanitizer.sanitize(parameters);
     repository.save(new InvocationRecord(
         null,
         definition.projectId(),
@@ -39,7 +41,7 @@ public class DataServiceInvocationRecorder {
         caller.apiKeyId(),
         caller.apiKeyName(),
         caller.apiKeyPrefix(),
-        limit(json(parameters == null ? Map.of() : parameters), 4_000),
+        limit(json(safeParameters), 4_000),
         success,
         durationMs,
         rowCount,

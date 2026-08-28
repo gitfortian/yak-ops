@@ -99,6 +99,10 @@ export interface DataServiceRuntimeConfig {
   recoverySeconds: number;
 }
 
+export type DataServiceRuntimeMetricsScope =
+  | 'LOCAL'
+  | 'CLUSTER_INVOCATION_LOCAL_RESILIENCE';
+
 export interface DataServiceRuntimeStatus extends DataServiceRuntimeConfig {
   apiId: number;
   cacheEntries: number;
@@ -115,6 +119,7 @@ export interface DataServiceRuntimeStatus extends DataServiceRuntimeConfig {
   p95DurationMs: number;
   lastSuccessAt?: string | null;
   lastFailureAt?: string | null;
+  metricsScope?: DataServiceRuntimeMetricsScope;
 }
 
 export interface DataServiceParameterDoc {

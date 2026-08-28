@@ -2,7 +2,7 @@ package io.yak.ops.business.dataservice.runtime;
 
 import java.time.Instant;
 
-/** Process-local runtime evidence exposed for observability. */
+/** Runtime status: cluster invocation metrics plus node-local cache/circuit evidence. */
 public record DataServiceRuntimeSnapshot(
     Long apiId,
     boolean cacheEnabled,
@@ -24,4 +24,5 @@ public record DataServiceRuntimeSnapshot(
     long averageDurationMs,
     long p95DurationMs,
     Instant lastSuccessAt,
-    Instant lastFailureAt) {}
+    Instant lastFailureAt,
+    String metricsScope) {}

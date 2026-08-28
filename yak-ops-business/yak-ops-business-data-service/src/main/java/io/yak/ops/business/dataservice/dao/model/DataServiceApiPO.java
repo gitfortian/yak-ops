@@ -29,6 +29,7 @@ public class DataServiceApiPO {
   private Boolean circuitBreakerEnabled;
   private Integer circuitFailureThreshold;
   private Integer circuitRecoverySeconds;
+  private Long runtimeGeneration;
   private String description;
   private String sourceType;
   private String sourceRef;
