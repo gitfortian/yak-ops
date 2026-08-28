@@ -13,6 +13,7 @@ public class DataServiceCallLogPO {
 
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private Long apiId;
   private String serviceName;
   private String servicePath;
