@@ -9,11 +9,15 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
 import io.yak.ops.business.taskcatalog.repository.TaskAssetRepository;
+import io.yak.ops.business.taskcatalog.spi.TaskAssetRevisionProvider;
+import io.yak.ops.business.taskcatalog.spi.TaskSourceRevision;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
+import io.yak.ops.spi.task.model.TaskDefinition;
 import io.yak.ops.spi.task.model.TaskRevisionRef;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class TaskCatalogServiceTest {
@@ -83,6 +87,34 @@ class TaskCatalogServiceTest {
         TaskAssetSource.DATA_DEVELOPMENT,
         TaskAssetStatus.ONLINE,
         "统计");
+  }
+
+  @Test
+  void revisionProjectMustMatchPublishedAssetProject() {
+    TaskAssetRepository repository = mock(TaskAssetRepository.class);
+    TaskAssetRevisionProvider provider = new TaskAssetRevisionProvider() {
+      @Override
+      public TaskAssetSource source() {
+        return TaskAssetSource.DATA_DEVELOPMENT;
+      }
+
+      @Override
+      public Optional<TaskSourceRevision> resolve(String sourceRef, long revisionId) {
+        return Optional.of(new TaskSourceRevision(
+            101L,
+            2,
+            new TaskDefinition("SQL", 1, "select 1", "{}"),
+            "checksum",
+            8L));
+      }
+    };
+    TaskCatalogService service = new TaskCatalogService(repository, List.of(provider));
+    when(repository.findById(9L)).thenReturn(Optional.of(asset(9L, 101L, 2)));
+
+    IllegalStateException exception =
+        assertThrows(IllegalStateException.class, () -> service.resolveRevision(9L, 101L));
+
+    assertTrue(exception.getMessage().contains("Project"));
   }
 
   private TaskAsset asset(long id, long revisionId, int revisionNo) {
