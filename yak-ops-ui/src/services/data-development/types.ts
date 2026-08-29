@@ -51,7 +51,6 @@ export type DevelopmentResourceNode =
 export interface CreateDevelopmentNodePayload {
   name: string;
   type: DevelopmentNodeType;
-  projectId?: DevelopmentId;
   /** Omit to create the node in the data-development root. */
   directoryId?: DevelopmentId;
 }
@@ -90,124 +89,10 @@ export interface DevelopmentTaskRevision
   definition: DevelopmentTaskDefinition;
 }
 
-export type DevelopmentTaskExecutionStatus =
-  | 'PENDING'
-  | 'RUNNING'
-  | 'SUCCESS'
-  | 'FAILED'
-  | 'CANCELLED'
-  | 'TIMEOUT';
-
-/** Immediate acknowledgement after the shared Task Runtime accepts an editor run. */
 export interface DevelopmentTaskExecutionSubmission {
   id: DevelopmentId;
-  nodeId: DevelopmentId;
-  taskType: DevelopmentTaskType;
+  status: string;
   runtimeExecutionId?: string | null;
-  status: DevelopmentTaskExecutionStatus;
-}
-
-/** Workbench projection of one durable execution. */
-export interface DevelopmentTaskRunResult {
-  executionId?: DevelopmentId;
-  runtimeExecutionId?: string | null;
-  status: DevelopmentTaskExecutionStatus;
-  message: string;
-  durationMs: number;
-  output: Record<string, unknown>;
-}
-
-export interface DevelopmentSqlResultColumn {
-  name: string;
-  label: string;
-  typeName?: string;
-  jdbcType?: number;
-  nullable?: boolean;
-}
-
-export interface DevelopmentSqlRunOutput {
-  kind?: 'RESULT_SET' | 'UPDATE_COUNT';
-  columns?: DevelopmentSqlResultColumn[];
-  rows?: unknown[][];
-  returnedRows?: number;
-  affectedRows?: number;
-  truncated?: boolean;
-  dataSourceId?: string;
-}
-
-export interface DevelopmentSqlLineagePreviewRequest
-  extends DevelopmentTaskDefinition {
-  databaseName?: string;
-  schemaName?: string;
-}
-
-export type DevelopmentSqlLineagePreviewStatus =
-  | 'SUCCESS'
-  | 'PARTIAL'
-  | 'UNRESOLVED'
-  | 'FAILED';
-
-export interface DevelopmentSqlLineagePreviewAsset {
-  id: string;
-  assetKey: string;
-  assetType: 'TABLE' | 'SQL_TASK';
-  name: string;
-  sourceType?: string;
-  sourceId?: string;
-  parentAssetId?: string;
-  dataSourceId?: string;
-  databaseName?: string;
-  schemaName?: string;
-  tableName?: string;
-  columnName?: string;
-  properties?: Record<string, unknown>;
-}
-
-export interface DevelopmentSqlLineagePreviewRelation {
-  id: string;
-  sourceAssetId: string;
-  targetAssetId: string;
-  relationType: 'READS_FROM' | 'WRITES_TO';
-  sourceType?: string;
-  sourceId?: string;
-  expression?: string;
-  properties?: Record<string, unknown>;
-}
-
-export interface DevelopmentSqlLineagePreviewGraph {
-  root: DevelopmentSqlLineagePreviewAsset;
-  direction: 'BOTH';
-  depth: number;
-  nodes: DevelopmentSqlLineagePreviewAsset[];
-  relations: DevelopmentSqlLineagePreviewRelation[];
-}
-
-export interface DevelopmentSqlLineageColumnMapping {
-  sourceTable: string;
-  sourceColumn: string;
-  sourceDataType?: string | null;
-  targetTable?: string | null;
-  targetColumn: string;
-  targetDataType?: string | null;
-  mappingKind: 'IDENTITY' | 'TRANSFORMATION' | 'AGGREGATION';
-  expression?: string | null;
-  outputOrdinal: number;
-  sourceOrdinal: number;
-}
-
-export interface DevelopmentSqlLineagePreview {
-  status: DevelopmentSqlLineagePreviewStatus;
-  dataSourceId: string;
-  statementCount: number;
-  inputTableCount: number;
-  outputTableCount: number;
-  columnMappingCount: number;
-  candidateOutputColumnCount: number;
-  unresolvedColumnReferenceCount: number;
-  parseError?: string | null;
-  columnParseError?: string | null;
-  graph: DevelopmentSqlLineagePreviewGraph;
-  columnMappings: DevelopmentSqlLineageColumnMapping[];
 }
 
 export interface DevelopmentTaskExecutionSummary {
@@ -215,11 +100,10 @@ export interface DevelopmentTaskExecutionSummary {
   nodeId: DevelopmentId;
   taskName: string;
   taskType: DevelopmentTaskType;
-  schemaVersion: number;
   triggerType: string;
   runtimeExecutionId?: string | null;
   retryOfExecutionId?: DevelopmentId | null;
-  status: DevelopmentTaskExecutionStatus;
+  status: string;
   operatorName?: string | null;
   durationMs?: number | null;
   errorMessage?: string | null;
@@ -229,9 +113,10 @@ export interface DevelopmentTaskExecutionSummary {
 
 export interface DevelopmentTaskExecutionDetail
   extends DevelopmentTaskExecutionSummary {
+  schemaVersion: number;
   content: string;
   configJson: string;
-  output: Record<string, unknown>;
+  outputJson?: string | null;
 }
 
 export interface DevelopmentTaskExecutionPage {
@@ -242,31 +127,30 @@ export interface DevelopmentTaskExecutionPage {
 }
 
 export interface DevelopmentTaskExecutionQuery {
-  pageNo?: number;
-  pageSize?: number;
   keyword?: string;
-  status?: DevelopmentTaskExecutionStatus;
-  taskType?: DevelopmentTaskType;
+  status?: string;
+  taskType?: string;
   triggerType?: string;
   startTime?: string;
   endTime?: string;
+  pageNo?: number;
+  pageSize?: number;
 }
-
-export type DevelopmentReleaseStatus = 'ONLINE' | 'OFFLINE' | 'DISABLED';
 
 export interface DevelopmentReleaseSummary {
   assetId: DevelopmentId;
-  nodeId: DevelopmentId;
-  taskName: string;
-  taskType: DevelopmentTaskType;
-  status: DevelopmentReleaseStatus;
+  sourceRef: string;
+  name: string;
+  taskType: string;
+  status: string;
   currentRevisionId: DevelopmentId;
   currentRevisionNo: number;
-  latestRevisionNo: number;
-  hasNewerRevision: boolean;
-  checksum: string;
-  revisionCreateTime?: string | null;
   updateTime?: string | null;
+}
+
+export interface DevelopmentReleaseDetail {
+  asset: DevelopmentReleaseSummary;
+  revisions: DevelopmentTaskRevisionSummary[];
 }
 
 export interface DevelopmentReleasePage {
@@ -274,46 +158,54 @@ export interface DevelopmentReleasePage {
   total: number;
   pageNo: number;
   pageSize: number;
-  onlineCount: number;
-  offlineCount: number;
-  disabledCount: number;
-}
-
-export interface DevelopmentReleaseDetail {
-  release: DevelopmentReleaseSummary;
-  currentRevision: DevelopmentTaskRevision;
-  revisions: DevelopmentTaskRevisionSummary[];
 }
 
 export interface DevelopmentReleaseQuery {
+  keyword?: string;
+  status?: string;
+  taskType?: string;
   pageNo?: number;
   pageSize?: number;
-  keyword?: string;
-  status?: DevelopmentReleaseStatus | 'ALL';
-  taskType?: DevelopmentTaskType;
 }
 
-export type YakEditorLineHighlight = 'line' | 'none' | 'gutter' | 'all';
-export type YakSqlCompletionFqn = 'none' | 'table' | 'all';
-export type YakRenderWhitespace =
-  | 'none'
-  | 'boundary'
-  | 'selection'
-  | 'trailing'
-  | 'all';
+export interface DevelopmentSqlLineagePreviewRequest {
+  sql: string;
+  dataSourceId?: DevelopmentId;
+  databaseName?: string;
+  schemaName?: string;
+}
+
+export interface DevelopmentSqlLineageAssetView {
+  assetKey: string;
+  assetType: string;
+  name: string;
+  dataSourceId?: string | null;
+  databaseName?: string | null;
+  schemaName?: string | null;
+  tableName?: string | null;
+  columnName?: string | null;
+}
+
+export interface DevelopmentSqlLineageRelationView {
+  sourceAssetKey: string;
+  targetAssetKey: string;
+  relationType: string;
+  expression?: string | null;
+  confidence?: number | null;
+}
+
+export interface DevelopmentSqlLineagePreview {
+  supported: boolean;
+  message?: string | null;
+  assets: DevelopmentSqlLineageAssetView[];
+  relations: DevelopmentSqlLineageRelationView[];
+}
 
 export interface YakEditorSettings {
-  theme: string;
   fontSize: number;
-  fontFamily: string;
-  customFontFamily: string;
-  lineHeight: number;
-  showLineNumber: boolean;
-  showMinimap: boolean;
-  wordWrap: boolean;
-  folding: boolean;
-  renderLineHighlight: YakEditorLineHighlight;
-  keywordCase: 'lower' | 'upper';
-  sqlCompletionFQN: YakSqlCompletionFqn;
-  renderWhitespace: YakRenderWhitespace;
+  tabSize: number;
+  insertSpaces: boolean;
+  wordWrap: string;
+  minimapEnabled: boolean;
+  lineNumbers: string;
 }
