@@ -9,6 +9,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.controller.v1.converter.QualityOverviewConverter;
 import io.yak.ops.business.quality.workspace.QualityOverviewReader;
 import io.yak.ops.common.bean.vo.quality.QualityOverviewVO;
+import io.yak.ops.core.project.ProjectScope;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnQualityEnabled
 @RequestMapping("/api/v1/data-quality/overview")
 @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
+@ProjectScope
 public class QualityOverviewController {
 
   private final QualityOverviewReader reader;
@@ -37,11 +39,12 @@ public class QualityOverviewController {
   @GetMapping
   public Result<QualityOverviewVO.Overview> overview(
       @RequestParam(required = false)
-      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-      LocalDate startDate,
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate startDate,
       @RequestParam(required = false)
-      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-      LocalDate endDate) {
-    return Result.success(converter.overview(reader.analytics(startDate, endDate)));
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate endDate) {
+    return Result.success(
+        converter.overview(reader.analytics(startDate, endDate)));
   }
 }

@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
@@ -22,6 +23,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 public class QualityConfiguration {
 
   @Bean(initMethod = "migrate")
+  @DependsOn("opsDataSourceFlyway")
   public Flyway qualityFlyway(
       @Qualifier("yakBusinessDataSource") DataSource dataSource) {
     return Flyway.configure()

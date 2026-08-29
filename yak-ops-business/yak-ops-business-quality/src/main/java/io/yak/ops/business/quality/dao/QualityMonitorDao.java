@@ -17,6 +17,7 @@ public interface QualityMonitorDao {
   long countMonitors(Map<String, Object> params);
   List<MonitorRow> selectMonitors(Map<String, Object> params);
   MonitorRow selectMonitor(long id);
+  List<ProjectMonitorRef> selectScheduledMonitorsForRecovery();
   List<TableMonitorSummaryRow> selectTableSummaries(Map<String, Object> params);
   long insertMonitor(QualityMonitorPO monitor);
   boolean updateMonitor(QualityMonitorPO monitor);
@@ -39,4 +40,12 @@ public interface QualityMonitorDao {
   int upsertTableAssets(List<QualityTableAssetPO> assets);
   int countMonitorsForAsset(long assetId);
   boolean softDeleteTableAsset(long assetId);
+
+  /** Explicit cross-Project startup dispatch reference; ordinary CRUD remains CurrentProject-bound. */
+  record ProjectMonitorRef(long projectId, long monitorId) {
+    public ProjectMonitorRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId must be positive");
+      if (monitorId <= 0L) throw new IllegalArgumentException("monitorId must be positive");
+    }
+  }
 }

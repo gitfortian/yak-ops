@@ -5,10 +5,10 @@ Data Quality 是 Yak Ops 的数据质量控制面，负责数据表资产注册�
 当前核心执行关系：
 
 ```text
-Table Asset
-    -> Monitor + Rules + Settings
-    -> enqueue immutable QualityExecutionPlan
-    -> Execution + RuleExecution evidence
+Project-scoped Table Asset
+    -> Project-scoped Monitor + Rules + Settings
+    -> enqueue immutable QualityExecutionPlan(projectId)
+    -> Project-scoped Execution + RuleExecution evidence
 ```
 
 ## Read First
@@ -21,6 +21,7 @@ Table Asset
 | --- | --- |
 | [`REQUIREMENTS.md`](./REQUIREMENTS.md) | 模块必须提供哪些行为 |
 | [`DOMAIN.md`](./DOMAIN.md) | 哪些业务事实和生命周期不能违反 |
+| [`PROJECT_SPACE.md`](./PROJECT_SPACE.md) | 哪些事实属于 Project、后台如何恢复上下文 |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 代码放哪里、各角色如何协作 |
 | [`DEPENDENCIES.md`](./DEPENDENCIES.md) | package 可以依赖谁、跨边界走哪里 |
 | [`../../CODE_STYLE.md`](../../CODE_STYLE.md) | Yak Ops 统一工程与角色规范 |
@@ -50,18 +51,32 @@ production 不再维护 `quality/service/**`。Quality 当前也不引入一个�
 ## Truth Ownership
 
 ```text
-TableAsset                  = 已注册的数据质量物理表事实
-Monitor + Rules + Settings  = 当前质量监控定义事实
-QualityExecutionPlan        = enqueue 时冻结的不可变执行快照
-Execution                   = 一次质量检查的持久化执行事实
-RuleExecution               = 单条规则的执行证据
-Yak Schedule                = 时间触发投影，不是 Monitor 配置真相
-AlertEvent                  = 告警/通知证据，不是 Execution 状态真相
+CurrentProject               = 当前请求可信的工作空间边界
+TableAsset                   = 当前 Project 已注册的数据质量物理表事实
+Monitor + Rules + Settings   = 当前 Project 的质量监控定义事实
+QualityExecutionPlan         = enqueue 时冻结的 Project + 规则执行快照
+Execution                    = 当前 Project 的一次质量检查持久化事实
+RuleExecution                = 单条规则的执行证据，通过 Execution 继承 Project
+Yak Schedule                 = 携带 Project 的时间触发投影，不是 Monitor 配置真相
+AlertEvent                   = 告警/通知证据，通过 Monitor/Execution 继承 Project
+Rule Template / Folder       = 平台级全局模板能力
 ```
 
-已入队或运行中的执行不得通过回读当前 Monitor / Rule / Settings 改写自己的执行快照。
+已入队或运行中的执行不得通过回读当前 Monitor / Rule / Settings 改写自己的执行快照，也不得在异步线程中依赖原 HTTP 上下文。
 
 ## Main Boundaries
+
+Project Space：
+
+```text
+HTTP @ProjectScope
+    -> trusted CurrentProject
+    -> project-scoped Repository / DAO
+
+Background payload.projectId
+    -> ProjectContextScope
+    -> normal Quality application roles
+```
 
 Datasource：
 
@@ -87,9 +102,9 @@ Execution：
 QualityExecutionManager
     -> QualityExecutionPlanFactory
     -> immutable QualityExecutionPlan
-    -> QualityExecutionDispatcher (afterCommit)
+    -> QualityExecutionDispatcher (afterCommit + ProjectContextScope)
     -> QualityExecutionWorker
     -> QualityAlertRecorder
 ```
 
-完整依赖矩阵和窄 corridor 见 `DEPENDENCIES.md`。
+完整 Project 归属见 `PROJECT_SPACE.md`，依赖矩阵和窄 corridor 见 `DEPENDENCIES.md`。

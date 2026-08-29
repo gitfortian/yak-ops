@@ -13,6 +13,8 @@ import io.yak.ops.business.quality.template.TemplateFolderManager;
 import io.yak.ops.business.quality.template.TemplateFolderReader;
 import io.yak.ops.common.bean.dto.quality.CustomQualityTemplateDTO;
 import io.yak.ops.common.bean.vo.quality.CustomQualityTemplateVO;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/data-quality/template")
 @RequiresPermission(QualityPermissionCode.TEMPLATE_READ)
+@ProjectScope(ProjectMigrationMode.LEGACY_GLOBAL)
 public class CustomTemplateController {
   private final CustomTemplateReader reader;
   private final CustomTemplateManager manager;
@@ -46,7 +49,9 @@ public class CustomTemplateController {
       @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(value = "dimension", required = false) String dimension,
       @RequestParam(value = "folderId", required = false) Long folderId) {
-    return Result.success(converter.customList(reader.list(converter.customQuery(keyword, dimension, folderId))));
+    return Result.success(
+        converter.customList(
+            reader.list(converter.customQuery(keyword, dimension, folderId))));
   }
 
   @Operation(summary = "查询自定义规则模板详情")
@@ -67,7 +72,11 @@ public class CustomTemplateController {
   public Result<CustomQualityTemplateVO.Folder> createFolder(
       @Valid @RequestBody CustomQualityTemplateDTO.SaveFolderRequest request,
       Principal principal) {
-    return Result.success(converter.folder(folderManager.create(converter.folderCommand(request), operator(principal))));
+    return Result.success(
+        converter.folder(
+            folderManager.create(
+                converter.folderCommand(request),
+                operator(principal))));
   }
 
   @Operation(summary = "更新自定义模板目录")
@@ -77,14 +86,22 @@ public class CustomTemplateController {
       @PathVariable long id,
       @Valid @RequestBody CustomQualityTemplateDTO.SaveFolderRequest request,
       Principal principal) {
-    return Result.success(converter.folder(folderManager.update(id, converter.folderCommand(request), operator(principal))));
+    return Result.success(
+        converter.folder(
+            folderManager.update(
+                id,
+                converter.folderCommand(request),
+                operator(principal))));
   }
 
   @Operation(summary = "删除自定义模板目录")
   @DeleteMapping("/folder/{id}")
   @RequiresPermission(QualityPermissionCode.TEMPLATE_DELETE)
-  public Result<Boolean> deleteFolder(@PathVariable long id, Principal principal) {
-    return Result.success(folderManager.delete(id, operator(principal)));
+  public Result<Boolean> deleteFolder(
+      @PathVariable long id,
+      Principal principal) {
+    return Result.success(
+        folderManager.delete(id, operator(principal)));
   }
 
   @Operation(summary = "创建自定义规则模板")
@@ -93,7 +110,11 @@ public class CustomTemplateController {
   public Result<CustomQualityTemplateVO.Template> create(
       @Valid @RequestBody CustomQualityTemplateDTO.SaveTemplateRequest request,
       Principal principal) {
-    return Result.success(converter.customTemplate(manager.create(converter.customCommand(request), operator(principal))));
+    return Result.success(
+        converter.customTemplate(
+            manager.create(
+                converter.customCommand(request),
+                operator(principal))));
   }
 
   @Operation(summary = "更新自定义规则模板")
@@ -103,7 +124,12 @@ public class CustomTemplateController {
       @PathVariable long id,
       @Valid @RequestBody CustomQualityTemplateDTO.SaveTemplateRequest request,
       Principal principal) {
-    return Result.success(converter.customTemplate(manager.update(id, converter.customCommand(request), operator(principal))));
+    return Result.success(
+        converter.customTemplate(
+            manager.update(
+                id,
+                converter.customCommand(request),
+                operator(principal))));
   }
 
   @Operation(summary = "复制自定义规则模板")
@@ -113,7 +139,12 @@ public class CustomTemplateController {
       @PathVariable long id,
       @Valid @RequestBody CustomQualityTemplateDTO.CopyTemplateRequest request,
       Principal principal) {
-    return Result.success(converter.customTemplate(manager.copy(id, converter.copyCommand(request), operator(principal))));
+    return Result.success(
+        converter.customTemplate(
+            manager.copy(
+                id,
+                converter.copyCommand(request),
+                operator(principal))));
   }
 
   @Operation(summary = "删除自定义规则模板")
@@ -124,7 +155,10 @@ public class CustomTemplateController {
   }
 
   private static String operator(Principal principal) {
-    return principal == null || principal.getName() == null || principal.getName().isBlank()
-        ? "system" : principal.getName();
+    return principal == null
+            || principal.getName() == null
+            || principal.getName().isBlank()
+        ? "system"
+        : principal.getName();
   }
 }

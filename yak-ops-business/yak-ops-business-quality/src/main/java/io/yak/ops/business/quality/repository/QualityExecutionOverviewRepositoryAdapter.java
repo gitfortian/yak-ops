@@ -1,6 +1,7 @@
 package io.yak.ops.business.quality.repository;
 
 import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
+import io.yak.ops.core.project.CurrentProject;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -12,12 +13,14 @@ import java.util.List;
 import java.util.Locale;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** MySQL-backed data-quality execution overview projection. */
+/** MySQL-backed, Project-scoped data-quality execution overview projection. */
 @Repository
 @ConditionalOnQualityEnabled
+@DependsOn("qualityFlyway")
 public class QualityExecutionOverviewRepositoryAdapter
     implements QualityExecutionOverviewRepository {
 
@@ -26,37 +29,37 @@ public class QualityExecutionOverviewRepositoryAdapter
   private static final String RUNNING_STATUSES = "'QUEUED','RUNNING'";
 
   private final JdbcTemplate jdbc;
+  private final CurrentProject currentProject;
 
   public QualityExecutionOverviewRepositoryAdapter(
-      @Qualifier("yakBusinessDataSource") DataSource dataSource) {
+      @Qualifier("yakBusinessDataSource") DataSource dataSource,
+      CurrentProject currentProject) {
     this.jdbc = new JdbcTemplate(dataSource);
+    this.currentProject = currentProject;
   }
 
   @Override
-  public Overview overview(LocalDateTime start, LocalDateTime end, boolean hourlyTrend) {
-    return new Overview(metrics(start, end), trend(start, end, hourlyTrend), latest(start, end));
+  public Overview overview(
+      LocalDateTime start,
+      LocalDateTime end,
+      boolean hourlyTrend) {
+    long projectId = currentProjectId();
+    return new Overview(
+        metrics(projectId, start, end),
+        trend(projectId, start, end, hourlyTrend),
+        latest(projectId, start, end));
   }
 
   @Override
   public Execution latest(LocalDateTime start, LocalDateTime end) {
-    String sql = """
-        SELECT CAST(e.monitor_id AS CHAR) AS task_id,
-               e.monitor_name AS task_name,
-               e.execution_status AS status,
-               COALESCE(e.started_at, e.queued_at, e.created_at) AS occurred_at,
-               COALESCE(e.duration_ms, 0) AS duration_ms,
-               e.execution_no AS execution_id
-          FROM yak_quality_execution e
-         WHERE e.queued_at >= ? AND e.queued_at < ?
-         ORDER BY COALESCE(e.started_at, e.queued_at, e.created_at) DESC, e.id DESC
-         LIMIT 1
-        """;
-    List<Execution> rows = jdbc.query(sql, this::execution, start, end);
-    return rows.isEmpty() ? null : rows.get(0);
+    return latest(currentProjectId(), start, end);
   }
 
   @Override
-  public TaskSummary taskSummary(String taskId, LocalDateTime start, LocalDateTime end) {
+  public TaskSummary taskSummary(
+      String taskId,
+      LocalDateTime start,
+      LocalDateTime end) {
     if (taskId == null || taskId.isBlank()) return null;
     long id;
     try {
@@ -64,6 +67,7 @@ public class QualityExecutionOverviewRepositoryAdapter
     } catch (NumberFormatException ignored) {
       return null;
     }
+    long projectId = currentProjectId();
     String sql = """
         SELECT e.monitor_id AS task_id,
                MAX(e.monitor_name) AS task_name,
@@ -72,17 +76,25 @@ public class QualityExecutionOverviewRepositoryAdapter
                SUM(CASE WHEN UPPER(e.execution_status) IN (%s) THEN 1 ELSE 0 END) AS failed_count,
                MAX(COALESCE(e.started_at, e.queued_at, e.created_at)) AS last_run_time
           FROM yak_quality_execution e
-         WHERE e.queued_at >= ? AND e.queued_at < ?
+         WHERE e.project_id = ?
+           AND e.queued_at >= ? AND e.queued_at < ?
            AND e.monitor_id = ?
          GROUP BY e.monitor_id
         """.formatted(SUCCESS_STATUSES, FAILED_STATUSES);
-    List<TaskAggregate> aggregates = jdbc.query(sql, this::taskAggregate, start, end, id);
+    List<TaskAggregate> aggregates =
+        jdbc.query(sql, this::taskAggregate, projectId, start, end, id);
     if (aggregates.isEmpty()) return null;
-    return summary(aggregates.get(0), latestForTask(id, start, end));
+    return summary(
+        aggregates.get(0),
+        latestForTask(projectId, id, start, end));
   }
 
   @Override
-  public List<TaskSummary> recentTasks(LocalDateTime start, LocalDateTime end, int limit) {
+  public List<TaskSummary> recentTasks(
+      LocalDateTime start,
+      LocalDateTime end,
+      int limit) {
+    long projectId = currentProjectId();
     int boundedLimit = Math.max(1, Math.min(limit, 20));
     String sql = """
         SELECT e.monitor_id AS task_id,
@@ -92,21 +104,59 @@ public class QualityExecutionOverviewRepositoryAdapter
                SUM(CASE WHEN UPPER(e.execution_status) IN (%s) THEN 1 ELSE 0 END) AS failed_count,
                MAX(COALESCE(e.started_at, e.queued_at, e.created_at)) AS last_run_time
           FROM yak_quality_execution e
-         WHERE e.queued_at >= ? AND e.queued_at < ?
+         WHERE e.project_id = ?
+           AND e.queued_at >= ? AND e.queued_at < ?
          GROUP BY e.monitor_id
          ORDER BY last_run_time DESC
          LIMIT %d
         """.formatted(SUCCESS_STATUSES, FAILED_STATUSES, boundedLimit);
-    List<TaskAggregate> aggregates = jdbc.query(sql, this::taskAggregate, start, end);
+    List<TaskAggregate> aggregates =
+        jdbc.query(sql, this::taskAggregate, projectId, start, end);
     List<TaskSummary> result = new ArrayList<>(aggregates.size());
     for (TaskAggregate aggregate : aggregates) {
-      result.add(summary(aggregate, latestForTask(aggregate.taskId(), start, end)));
+      result.add(
+          summary(
+              aggregate,
+              latestForTask(
+                  projectId,
+                  aggregate.taskId(),
+                  start,
+                  end)));
     }
     return List.copyOf(result);
   }
 
   @Override
   public Metrics metrics(LocalDateTime start, LocalDateTime end) {
+    return metrics(currentProjectId(), start, end);
+  }
+
+  private Execution latest(
+      long projectId,
+      LocalDateTime start,
+      LocalDateTime end) {
+    String sql = """
+        SELECT CAST(e.monitor_id AS CHAR) AS task_id,
+               e.monitor_name AS task_name,
+               e.execution_status AS status,
+               COALESCE(e.started_at, e.queued_at, e.created_at) AS occurred_at,
+               COALESCE(e.duration_ms, 0) AS duration_ms,
+               e.execution_no AS execution_id
+          FROM yak_quality_execution e
+         WHERE e.project_id = ?
+           AND e.queued_at >= ? AND e.queued_at < ?
+         ORDER BY COALESCE(e.started_at, e.queued_at, e.created_at) DESC, e.id DESC
+         LIMIT 1
+        """;
+    List<Execution> rows =
+        jdbc.query(sql, this::execution, projectId, start, end);
+    return rows.isEmpty() ? null : rows.get(0);
+  }
+
+  private Metrics metrics(
+      long projectId,
+      LocalDateTime start,
+      LocalDateTime end) {
     String sql = """
         SELECT COALESCE(SUM(CASE WHEN UPPER(e.execution_status) IN (%s) THEN 1 ELSE 0 END), 0) AS success_count,
                COALESCE(SUM(CASE WHEN UPPER(e.execution_status) IN (%s) THEN 1 ELSE 0 END), 0) AS failed_count,
@@ -116,53 +166,77 @@ public class QualityExecutionOverviewRepositoryAdapter
                COALESCE(SUM(CASE WHEN UPPER(e.execution_status) NOT IN (%s)
                                   AND COALESCE(e.duration_ms, 0) > 0 THEN 1 ELSE 0 END), 0) AS duration_sample_count
           FROM yak_quality_execution e
-         WHERE e.queued_at >= ? AND e.queued_at < ?
+         WHERE e.project_id = ?
+           AND e.queued_at >= ? AND e.queued_at < ?
         """.formatted(
-            SUCCESS_STATUSES, FAILED_STATUSES, RUNNING_STATUSES, RUNNING_STATUSES);
-    Metrics aggregate = jdbc.queryForObject(
-        sql,
-        (rs, rowNum) -> new Metrics(
-            rs.getLong("success_count"),
-            0L,
-            rs.getLong("failed_count"),
-            rs.getLong("schedule_count"),
-            0L,
-            rs.getLong("duration_total_ms"),
-            rs.getLong("duration_sample_count")),
-        start,
-        end);
-    return (aggregate == null ? Metrics.empty() : aggregate).withRunning(runningAt(end));
+            SUCCESS_STATUSES,
+            FAILED_STATUSES,
+            RUNNING_STATUSES,
+            RUNNING_STATUSES);
+    Metrics aggregate =
+        jdbc.queryForObject(
+            sql,
+            (rs, rowNum) ->
+                new Metrics(
+                    rs.getLong("success_count"),
+                    0L,
+                    rs.getLong("failed_count"),
+                    rs.getLong("schedule_count"),
+                    0L,
+                    rs.getLong("duration_total_ms"),
+                    rs.getLong("duration_sample_count")),
+            projectId,
+            start,
+            end);
+    return (aggregate == null ? Metrics.empty() : aggregate)
+        .withRunning(runningAt(projectId, end));
   }
 
-  private long runningAt(LocalDateTime point) {
+  private long runningAt(long projectId, LocalDateTime point) {
     String sql = """
         SELECT COUNT(*)
           FROM yak_quality_execution e
-         WHERE e.queued_at <= ?
+         WHERE e.project_id = ?
+           AND e.queued_at <= ?
            AND (e.finished_at IS NULL OR e.finished_at > ?)
         """;
-    Long value = jdbc.queryForObject(sql, Long.class, point, point);
+    Long value = jdbc.queryForObject(sql, Long.class, projectId, point, point);
     return value == null ? 0L : value;
   }
 
-  private List<TrendPoint> trend(LocalDateTime start, LocalDateTime end, boolean hourly) {
+  private List<TrendPoint> trend(
+      long projectId,
+      LocalDateTime start,
+      LocalDateTime end,
+      boolean hourly) {
     String occurredAt = "COALESCE(e.started_at, e.queued_at, e.created_at)";
-    String bucketHour = hourly ? "FLOOR(HOUR(" + occurredAt + ") / 4) * 4" : "0";
-    String sql = "SELECT DATE(" + occurredAt + ") AS bucket_date, "
-        + bucketHour + " AS bucket_hour, COUNT(*) AS total "
-        + "FROM yak_quality_execution e "
-        + "WHERE e.queued_at >= ? AND e.queued_at < ? "
-        + "GROUP BY bucket_date, bucket_hour ORDER BY bucket_date, bucket_hour";
+    String bucketHour =
+        hourly ? "FLOOR(HOUR(" + occurredAt + ") / 4) * 4" : "0";
+    String sql =
+        "SELECT DATE("
+            + occurredAt
+            + ") AS bucket_date, "
+            + bucketHour
+            + " AS bucket_hour, COUNT(*) AS total "
+            + "FROM yak_quality_execution e "
+            + "WHERE e.project_id = ? AND e.queued_at >= ? AND e.queued_at < ? "
+            + "GROUP BY bucket_date, bucket_hour ORDER BY bucket_date, bucket_hour";
     return jdbc.query(
         sql,
-        (rs, rowNum) -> new TrendPoint(
-            date(rs, "bucket_date").atTime(rs.getInt("bucket_hour"), 0),
-            rs.getLong("total")),
+        (rs, rowNum) ->
+            new TrendPoint(
+                date(rs, "bucket_date").atTime(rs.getInt("bucket_hour"), 0),
+                rs.getLong("total")),
+        projectId,
         start,
         end);
   }
 
-  private Execution latestForTask(long taskId, LocalDateTime start, LocalDateTime end) {
+  private Execution latestForTask(
+      long projectId,
+      long taskId,
+      LocalDateTime start,
+      LocalDateTime end) {
     String sql = """
         SELECT CAST(e.monitor_id AS CHAR) AS task_id,
                e.monitor_name AS task_name,
@@ -171,12 +245,20 @@ public class QualityExecutionOverviewRepositoryAdapter
                COALESCE(e.duration_ms, 0) AS duration_ms,
                e.execution_no AS execution_id
           FROM yak_quality_execution e
-         WHERE e.queued_at >= ? AND e.queued_at < ?
+         WHERE e.project_id = ?
+           AND e.queued_at >= ? AND e.queued_at < ?
            AND e.monitor_id = ?
          ORDER BY COALESCE(e.started_at, e.queued_at, e.created_at) DESC, e.id DESC
          LIMIT 1
         """;
-    List<Execution> rows = jdbc.query(sql, this::execution, start, end, taskId);
+    List<Execution> rows =
+        jdbc.query(
+            sql,
+            this::execution,
+            projectId,
+            start,
+            end,
+            taskId);
     return rows.isEmpty() ? null : rows.get(0);
   }
 
@@ -191,7 +273,8 @@ public class QualityExecutionOverviewRepositoryAdapter
         rs.getString("execution_id"));
   }
 
-  private TaskAggregate taskAggregate(ResultSet rs, int rowNum) throws SQLException {
+  private TaskAggregate taskAggregate(ResultSet rs, int rowNum)
+      throws SQLException {
     return new TaskAggregate(
         rs.getLong("task_id"),
         rs.getString("task_name"),
@@ -215,12 +298,18 @@ public class QualityExecutionOverviewRepositoryAdapter
         last == null ? null : last.executionId());
   }
 
-  private static LocalDate date(ResultSet rs, String column) throws SQLException {
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
+  }
+
+  private static LocalDate date(ResultSet rs, String column)
+      throws SQLException {
     Date value = rs.getDate(column);
     return value == null ? LocalDate.of(1970, 1, 1) : value.toLocalDate();
   }
 
-  private static LocalDateTime localDateTime(ResultSet rs, String column) throws SQLException {
+  private static LocalDateTime localDateTime(ResultSet rs, String column)
+      throws SQLException {
     Timestamp value = rs.getTimestamp(column);
     return value == null ? null : value.toLocalDateTime();
   }

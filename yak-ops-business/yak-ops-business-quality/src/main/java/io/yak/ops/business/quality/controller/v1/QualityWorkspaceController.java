@@ -9,6 +9,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.controller.v1.converter.QualityWorkspaceConverter;
 import io.yak.ops.business.quality.workspace.QualityWorkspaceReader;
 import io.yak.ops.common.bean.vo.quality.QualityWorkspaceVO;
+import io.yak.ops.core.project.ProjectScope;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,18 +23,22 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnQualityEnabled
 @RequestMapping("/api/v1/data-quality/monitor")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
+@ProjectScope
 public class QualityWorkspaceController {
   private final QualityWorkspaceReader reader;
   private final QualityWorkspaceConverter converter;
 
-  public QualityWorkspaceController(QualityWorkspaceReader reader, QualityWorkspaceConverter converter) {
+  public QualityWorkspaceController(
+      QualityWorkspaceReader reader,
+      QualityWorkspaceConverter converter) {
     this.reader = reader;
     this.converter = converter;
   }
 
   @Operation(summary = "查询质量监控工作台")
   @GetMapping("/{id}/workspace")
-  public Result<QualityWorkspaceVO.MonitorWorkspace> workspace(@PathVariable long id) {
+  public Result<QualityWorkspaceVO.MonitorWorkspace> workspace(
+      @PathVariable long id) {
     return Result.success(converter.workspace(reader.workspace(id)));
   }
 
@@ -42,7 +47,8 @@ public class QualityWorkspaceController {
   public Result<QualityWorkspaceVO.MonitorReport> report(
       @PathVariable long id,
       @RequestParam(value = "date", required = false)
-      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate date) {
     return Result.success(converter.report(reader.report(id, date)));
   }
 
@@ -52,6 +58,7 @@ public class QualityWorkspaceController {
       @PathVariable long id,
       @RequestParam(value = "current", required = false) Integer current,
       @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-    return Result.success(converter.operationLogs(reader.operationLogs(id, current, pageSize)));
+    return Result.success(
+        converter.operationLogs(reader.operationLogs(id, current, pageSize)));
   }
 }

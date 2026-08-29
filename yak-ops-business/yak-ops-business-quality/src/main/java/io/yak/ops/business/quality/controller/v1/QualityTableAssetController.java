@@ -12,6 +12,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.controller.v1.converter.QualityTableAssetConverter;
 import io.yak.ops.common.bean.dto.quality.QualityTableAssetDTO;
 import io.yak.ops.common.bean.vo.quality.QualityTableAssetVO;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/data-quality/table-asset")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
+@ProjectScope
 public class QualityTableAssetController {
   private final QualityTableAssetReader reader;
   private final QualityTableCandidateReader candidateReader;
@@ -42,7 +44,8 @@ public class QualityTableAssetController {
 
   @Operation(summary = "分页查询已注册数据表")
   @PostMapping("/page")
-  public Result<QualityTableAssetVO.Page> page(@Valid @RequestBody QualityTableAssetDTO.PageRequest request) {
+  public Result<QualityTableAssetVO.Page> page(
+      @Valid @RequestBody QualityTableAssetDTO.PageRequest request) {
     var query = converter.query(request);
     return Result.success(converter.page(reader.page(query), query));
   }
@@ -56,8 +59,15 @@ public class QualityTableAssetController {
       @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(defaultValue = "1") @Min(1) int current,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-    return Result.success(converter.candidates(candidateReader.candidates(
-        dataSourceId, databaseName, schemaName, keyword, current, pageSize)));
+    return Result.success(
+        converter.candidates(
+            candidateReader.candidates(
+                dataSourceId,
+                databaseName,
+                schemaName,
+                keyword,
+                current,
+                pageSize)));
   }
 
   @Operation(summary = "批量注册数据表")
@@ -66,7 +76,11 @@ public class QualityTableAssetController {
   public Result<QualityTableAssetVO.RegisterResult> register(
       @Valid @RequestBody QualityTableAssetDTO.RegisterRequest request,
       Principal principal) {
-    return Result.success(converter.register(manager.register(converter.command(request), operator(principal))));
+    return Result.success(
+        converter.register(
+            manager.register(
+                converter.command(request),
+                operator(principal))));
   }
 
   @Operation(summary = "取消注册数据表")
@@ -77,7 +91,10 @@ public class QualityTableAssetController {
   }
 
   private static String operator(Principal principal) {
-    return principal == null || principal.getName() == null || principal.getName().isBlank()
-        ? "system" : principal.getName();
+    return principal == null
+            || principal.getName() == null
+            || principal.getName().isBlank()
+        ? "system"
+        : principal.getName();
   }
 }

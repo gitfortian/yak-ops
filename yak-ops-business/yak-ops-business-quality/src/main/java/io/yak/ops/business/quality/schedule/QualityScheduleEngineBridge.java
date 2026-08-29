@@ -12,6 +12,7 @@ import io.yak.ops.business.quality.domain.QualityDomain.MonitorSettings;
 import io.yak.ops.common.enums.quality.QualityEnums.RunMode;
 import io.yak.ops.common.schedule.YakScheduleGateway;
 import io.yak.ops.common.schedule.YakScheduleNamespaces;
+import io.yak.ops.core.project.CurrentProject;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,12 +29,15 @@ public class QualityScheduleEngineBridge {
 
   private final YakScheduleGateway gateway;
   private final QualityScheduleCalculator calculator;
+  private final CurrentProject currentProject;
 
   public QualityScheduleEngineBridge(
       ObjectProvider<ScheduleManager> scheduleManagers,
-      QualityScheduleCalculator calculator) {
+      QualityScheduleCalculator calculator,
+      CurrentProject currentProject) {
     this.gateway = new YakScheduleGateway(scheduleManagers::getIfAvailable, NAMESPACE);
     this.calculator = calculator;
+    this.currentProject = currentProject;
   }
 
   public boolean available() {
@@ -72,17 +76,21 @@ public class QualityScheduleEngineBridge {
       throw new IllegalArgumentException("质量监控未配置调度触发");
     }
 
-    String cron = calculator.cronExpression(
-        settings.scheduleFrequency(),
-        settings.scheduleTime(),
-        settings.scheduleWeekday(),
-        settings.cronExpression());
+    long projectId = currentProject.requireProjectId();
+    String cron =
+        calculator.cronExpression(
+            settings.scheduleFrequency(),
+            settings.scheduleTime(),
+            settings.scheduleWeekday(),
+            settings.cronExpression());
 
     Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("projectId", projectId);
     payload.put("monitorId", monitor.id());
 
     Map<String, String> metadata = new LinkedHashMap<>();
     metadata.put("source", "yak-ops");
+    metadata.put("projectId", String.valueOf(projectId));
     metadata.put("monitorId", String.valueOf(monitor.id()));
     metadata.put("dataSourceId", String.valueOf(monitor.dataSourceId()));
     metadata.put("tableName", monitor.tableName());

@@ -10,6 +10,7 @@ import io.yak.ops.business.quality.controller.v1.converter.QualityExecutionConve
 import io.yak.ops.business.quality.execution.QualityExecutionReader;
 import io.yak.ops.common.bean.dto.quality.QualityExecutionDTO;
 import io.yak.ops.common.bean.vo.quality.QualityExecutionVO;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnQualityEnabled
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/data-quality/execution")
+@ProjectScope
 public class QualityExecutionController {
   private final QualityExecutionReader reader;
   private final QualityExecutionConverter converter;
@@ -40,14 +42,17 @@ public class QualityExecutionController {
   @Operation(summary = "查询执行状态")
   @GetMapping("/{executionNo}/status")
   @RequiresPermission(QualityPermissionCode.MONITOR_RUN)
-  public Result<QualityExecutionVO.Status> status(@PathVariable String executionNo) {
-    return Result.success(converter.status(reader.requireSummary(executionNo)));
+  public Result<QualityExecutionVO.Status> status(
+      @PathVariable String executionNo) {
+    return Result.success(
+        converter.status(reader.requireSummary(executionNo)));
   }
 
   @Operation(summary = "查询执行详情")
   @GetMapping("/{executionNo}")
   @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
-  public Result<QualityExecutionVO.Detail> detail(@PathVariable String executionNo) {
+  public Result<QualityExecutionVO.Detail> detail(
+      @PathVariable String executionNo) {
     return Result.success(converter.detail(reader.require(executionNo)));
   }
 }

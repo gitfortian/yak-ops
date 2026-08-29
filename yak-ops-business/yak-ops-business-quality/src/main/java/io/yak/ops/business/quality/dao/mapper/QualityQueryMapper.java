@@ -1,6 +1,7 @@
 package io.yak.ops.business.quality.dao.mapper;
 
 import io.yak.ops.common.bean.po.quality.QualityExecutionPO;
+import io.yak.ops.common.bean.po.quality.QualityMonitorPO;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.ColumnReportRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.DimensionReportRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.FolderRow;
@@ -28,12 +29,15 @@ public interface QualityQueryMapper {
 
   long countMonitors(Map<String, Object> params);
   List<MonitorRow> selectMonitors(Map<String, Object> params);
-  MonitorRow selectMonitor(@Param("id") long id);
+  MonitorRow selectMonitor(@Param("projectId") long projectId, @Param("id") long id);
+  List<QualityMonitorPO> selectScheduledMonitorsForRecovery();
   List<TableMonitorSummaryRow> selectTableSummaries(Map<String, Object> params);
 
   long countTableAssets(Map<String, Object> params);
   List<TableAssetRow> selectTableAssets(Map<String, Object> params);
-  int countMonitorsForAsset(@Param("assetId") long assetId);
+  int countMonitorsForAsset(
+      @Param("projectId") long projectId,
+      @Param("assetId") long assetId);
 
   long countExecutions(Map<String, Object> params);
   List<QualityExecutionPO> selectExecutions(Map<String, Object> params);
@@ -42,11 +46,15 @@ public interface QualityQueryMapper {
   long countRuleExecutionWorkspace(Map<String, Object> params);
   List<RuleExecutionWorkspaceRow> selectRuleExecutionWorkspace(Map<String, Object> params);
 
-  WorkspaceStatsRow selectWorkspaceStats(@Param("monitorId") long monitorId);
+  WorkspaceStatsRow selectWorkspaceStats(
+      @Param("projectId") long projectId,
+      @Param("monitorId") long monitorId);
   ReportOverviewRow selectReportOverview(Map<String, Object> params);
   List<DimensionReportRow> selectDimensionReport(Map<String, Object> params);
   List<TrendPointRow> selectTrend(Map<String, Object> params);
   List<ColumnReportRow> selectColumnReport(Map<String, Object> params);
-  long countOperationLogs(@Param("monitorId") long monitorId);
+  long countOperationLogs(
+      @Param("projectId") long projectId,
+      @Param("monitorId") long monitorId);
   List<OperationLogRow> selectOperationLogs(Map<String, Object> params);
 }

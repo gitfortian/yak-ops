@@ -39,6 +39,10 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11/events')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/table-asset/page')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/monitor/42')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/execution/page')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/overview')).toBe('PROJECT_REQUIRED');
   });
 
   it('keeps platform capabilities, public runtimes and engine health global', () => {
@@ -50,6 +54,10 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/job/batch-execution/health')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/executor/health')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/compute-environments')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/template')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/template/42')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/template/custom')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/template/folder')).toBe('LEGACY_GLOBAL');
   });
 
   it('keeps unrelated global capabilities outside the rollout table', () => {
@@ -59,6 +67,7 @@ describe('Project Space request context', () => {
   it('uses the most specific project-aware route rule', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source/1', rules)).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/data-source/admin/1', rules)).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-quality/template/1')).toBe('LEGACY_GLOBAL');
   });
 
   it('never attaches a project header to a legacy-global route', () => {
@@ -67,6 +76,7 @@ describe('Project Space request context', () => {
     expect(applyCurrentProjectHeader('/api/v1/resources/storage-plugins', {}, '7')).toEqual({});
     expect(applyCurrentProjectHeader('/api/v1/data-service/runtime/orders', {}, '7')).toEqual({});
     expect(applyCurrentProjectHeader('/api/v1/job/batch-execution/health', {}, '7')).toEqual({});
+    expect(applyCurrentProjectHeader('/api/v1/data-quality/template/custom', {}, '7')).toEqual({});
   });
 
   it('attaches the stored project to required management routes', () => {
@@ -86,12 +96,16 @@ describe('Project Space request context', () => {
       '/api/v1/realtime-sync/42',
       '/api/v1/realtime-sync/42/observability',
       '/api/v1/workflows/definitions',
+      '/api/v1/data-quality/table-asset/page',
+      '/api/v1/data-quality/monitor/42',
+      '/api/v1/data-quality/execution/page',
+      '/api/v1/data-quality/overview',
     ]) {
       expect(applyCurrentProjectHeader(url, {})).toEqual({ [PROJECT_ID_HEADER]: '7' });
     }
   });
 
-  it('still attaches the stored project to optional Task Catalog routes', () => {
+  it('still attaches the stored project to optional migrated routes', () => {
     storeProjectId(7);
     expect(applyCurrentProjectHeader('/api/v1/task-catalog/assets', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',

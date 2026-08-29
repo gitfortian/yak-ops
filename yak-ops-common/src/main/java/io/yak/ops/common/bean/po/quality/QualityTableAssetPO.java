@@ -11,6 +11,7 @@ import lombok.Data;
 public class QualityTableAssetPO {
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private Long dataSourceId;
   private String dataSourceName;
   private String databaseName;
