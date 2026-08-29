@@ -9,4 +9,16 @@ public interface WorkflowBackfillDao {
   int update(WorkflowBackfillPO backfill);
   WorkflowBackfillPO select(String id);
   List<WorkflowBackfillPO> selectList(String workflowId, String scheduleId);
+
+  /** Explicit cross-Project startup dispatcher for RUNNING batches. */
+  List<ProjectBackfillRef> selectRunningForReconciliation();
+
+  record ProjectBackfillRef(long projectId, String backfillId) {
+    public ProjectBackfillRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId must be positive");
+      if (backfillId == null || backfillId.isBlank()) {
+        throw new IllegalArgumentException("backfillId must not be blank");
+      }
+    }
+  }
 }
