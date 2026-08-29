@@ -2,6 +2,17 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.yak.ops.business.lineage.dao.mapper.LineageWriteMapper">
 
+    <update id="claimLegacyAssetProject">
+        UPDATE yak_metadata_asset legacy
+        LEFT JOIN yak_metadata_asset scoped
+          ON scoped.asset_key = legacy.asset_key
+         AND scoped.project_id = #{projectId}
+        SET legacy.project_id = #{projectId}, legacy.update_time = NOW(6)
+        WHERE legacy.asset_key = #{assetKey}
+          AND legacy.project_id IS NULL
+          AND scoped.id IS NULL
+    </update>
+
     <insert id="upsertAsset">
         INSERT INTO yak_metadata_asset
             (project_id, asset_key, asset_type, name, source_type, source_id, parent_asset_id,
