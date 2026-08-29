@@ -6,7 +6,7 @@
  * while removing unfinished entry points from the default navigation.
  */
 export const productFeatures = {
-  projectSpace: false,
+  projectSpace: true,
   resourceAuthorization: false,
   systemConfig: false,
 } as const;
