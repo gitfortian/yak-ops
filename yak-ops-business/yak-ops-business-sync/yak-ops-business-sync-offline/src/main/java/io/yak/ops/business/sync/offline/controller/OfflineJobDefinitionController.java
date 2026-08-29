@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/job/batch-definition")
 @RequiredArgsConstructor
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
 public class OfflineJobDefinitionController {
 
   private final OfflineJobDefinitionService service;

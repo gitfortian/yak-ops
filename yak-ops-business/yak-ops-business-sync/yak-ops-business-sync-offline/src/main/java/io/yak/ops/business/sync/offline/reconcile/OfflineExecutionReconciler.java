@@ -9,6 +9,9 @@ import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpNodeResponse;
 import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository.ProjectExecutionRef;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,22 +35,45 @@ public class OfflineExecutionReconciler {
   private final OfflineJobExecutionService executionService;
   private final LinkUpClient linkUpClient;
   private final OfflineSyncProperties properties;
+  private final ProjectContextScope projectScope;
 
   @Scheduled(
       initialDelayString = "${yak.sync.offline.control.reconcile-delay-millis:5000}",
       fixedDelayString = "${yak.sync.offline.control.reconcile-delay-millis:5000}")
   public void reconcile() {
     int limit = Math.max(1, properties.getControl().getScanBatchSize());
-    List<OfflineJobExecution> activeExecutions = executionRepository.findActiveExecutions(limit);
+    List<ProjectExecutionRef> active =
+        executionRepository.findActiveExecutionsForReconciliation(limit);
     LinkUpProbe probe = probeLinkUp();
 
-    for (OfflineJobExecution execution : activeExecutions) {
-      reconcileExecution(execution, probe);
+    for (ProjectExecutionRef candidate : active) {
+      runInProject(candidate, execution -> reconcileExecution(execution, probe));
     }
 
     LocalDateTime now = LocalDateTime.now();
-    for (OfflineJobExecution execution : executionRepository.findRetryCandidates(now, limit)) {
-      retry(execution);
+    for (ProjectExecutionRef candidate :
+        executionRepository.findRetryCandidatesForReconciliation(now, limit)) {
+      runInProject(candidate, this::retry);
+    }
+  }
+
+  private void runInProject(
+      ProjectExecutionRef candidate,
+      java.util.function.Consumer<OfflineJobExecution> action) {
+    try {
+      projectScope.run(
+          new ProjectContext(candidate.projectId(), null),
+          () -> {
+            OfflineJobExecution execution =
+                executionRepository.findById(candidate.executionId()).orElse(null);
+            if (execution != null) action.accept(execution);
+          });
+    } catch (RuntimeException exception) {
+      LOG.warn(
+          "Offline execution background processing failed, projectId={}, executionId={}",
+          candidate.projectId(),
+          candidate.executionId(),
+          exception);
     }
   }
 

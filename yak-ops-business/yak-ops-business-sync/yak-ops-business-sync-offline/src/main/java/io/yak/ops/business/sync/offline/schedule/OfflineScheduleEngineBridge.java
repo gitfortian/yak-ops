@@ -70,12 +70,15 @@ public class OfflineScheduleEngineBridge {
       throw new IllegalArgumentException("离线同步任务未配置 Cron 调度");
     }
 
+    long projectId = definition.requireProjectId();
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("definitionId", definition.getId());
+    payload.put("projectId", projectId);
 
     Map<String, String> metadata = new LinkedHashMap<>();
     metadata.put("source", "yak-ops");
     metadata.put("definitionId", String.valueOf(definition.getId()));
+    metadata.put("projectId", String.valueOf(projectId));
     put(metadata, "mode", definition.getMode());
     put(metadata, "sourceType", definition.getSourceType());
     put(metadata, "sinkType", definition.getSinkType());

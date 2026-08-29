@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.currentProject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -22,7 +23,7 @@ class OfflineBatchExecutionAttemptMappingTest {
     OfflineBatchExecutionDao dao = mock(OfflineBatchExecutionDao.class);
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
     OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+        new OfflineBatchExecutionRepositoryAdapter(dao, executions, currentProject());
 
     OfflineBatchExecutionPO batch = batch(77L);
     OfflineJobExecution persisted =

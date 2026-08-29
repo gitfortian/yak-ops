@@ -33,7 +33,7 @@ class OfflineSlimSchemaTest {
   void baselineContainsCurrentBatchAttemptProjectAndCursorShape() throws Exception {
     String sql = read(BASELINE);
 
-    assertTrue(sql.contains("project_id BIGINT NULL"));
+    assertTrue(sql.contains("project_id BIGINT NOT NULL"));
     assertTrue(sql.contains("batch_id BIGINT NULL"));
     assertTrue(sql.contains("logical_job_spec_json LONGTEXT NULL"));
     assertTrue(sql.contains("yak_offline_sync_cursor"));

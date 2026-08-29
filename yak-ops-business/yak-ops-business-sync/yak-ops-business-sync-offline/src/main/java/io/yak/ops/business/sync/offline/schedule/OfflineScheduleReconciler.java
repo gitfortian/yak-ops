@@ -4,7 +4,10 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.domain.OfflineSchedule;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
+import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository.ProjectDefinitionRef;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,16 +29,19 @@ public class OfflineScheduleReconciler {
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineScheduleEngineBridge engine;
   private final OfflineScheduleLifecycle lifecycle;
+  private final ProjectContextScope projectScope;
 
   public OfflineScheduleReconciler(
       OfflineJobDefinitionRepository definitionRepository,
       OfflineScheduleRepository scheduleRepository,
       OfflineScheduleEngineBridge engine,
-      OfflineScheduleLifecycle lifecycle) {
+      OfflineScheduleLifecycle lifecycle,
+      ProjectContextScope projectScope) {
     this.definitionRepository = definitionRepository;
     this.scheduleRepository = scheduleRepository;
     this.engine = engine;
     this.lifecycle = lifecycle;
+    this.projectScope = projectScope;
   }
 
   @Order(40)
@@ -46,7 +52,7 @@ public class OfflineScheduleReconciler {
       return;
     }
 
-    Map<Long, OfflineSchedule> active = activeSchedules();
+    Map<Long, ScheduledDefinition> active = activeSchedules();
     engine.list().forEach(snapshot -> {
       long definitionId;
       try {
@@ -67,52 +73,73 @@ public class OfflineScheduleReconciler {
     });
 
     LocalDateTime now = LocalDateTime.now();
-    active.forEach((definitionId, schedule) -> {
-      LocalDateTime persistedNextFireTime = schedule.nextFireTime();
-      try {
-        lifecycle.sync(definitionId);
-        LOGGER.info("[offline-schedule] reconciled definition={}", definitionId);
-      } catch (RuntimeException exception) {
-        LOGGER.error(
-            "[offline-schedule] reconcile failed definition={}, message={}",
-            definitionId,
-            exception.getMessage(),
-            exception);
-        return;
-      }
-
-      if (persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)) {
-        try {
-          engine.runNowIfPresent(definitionId);
-          LOGGER.info(
-              "[offline-schedule] recovered missed trigger definition={}, planned={}",
-              definitionId,
-              persistedNextFireTime);
-        } catch (RuntimeException exception) {
-          LOGGER.warn(
-              "[offline-schedule] missed trigger recovery skipped definition={}, planned={}, message={}",
-              definitionId,
-              persistedNextFireTime,
-              exception.getMessage());
-        }
-      }
-    });
+    active.forEach(
+        (definitionId, scheduled) ->
+            projectScope.run(
+                new ProjectContext(scheduled.projectId(), null),
+                () -> reconcileInProject(definitionId, scheduled.schedule(), now)));
   }
 
-  private Map<Long, OfflineSchedule> activeSchedules() {
-    Map<Long, OfflineSchedule> result = new LinkedHashMap<>();
-    for (OfflineSchedule schedule : scheduleRepository.findAllSchedules()) {
-      if (schedule == null
-          || schedule.jobDefinitionId() == null
-          || !schedule.enabled()
-          || !StringUtils.hasText(schedule.cronExpression())) {
-        continue;
+  private void reconcileInProject(
+      long definitionId, OfflineSchedule schedule, LocalDateTime now) {
+    LocalDateTime persistedNextFireTime = schedule.nextFireTime();
+    try {
+      lifecycle.sync(definitionId);
+      LOGGER.info("[offline-schedule] reconciled definition={}", definitionId);
+    } catch (RuntimeException exception) {
+      LOGGER.error(
+          "[offline-schedule] reconcile failed definition={}, message={}",
+          definitionId,
+          exception.getMessage(),
+          exception);
+      return;
+    }
+
+    if (persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)) {
+      try {
+        engine.runNowIfPresent(definitionId);
+        LOGGER.info(
+            "[offline-schedule] recovered missed trigger definition={}, planned={}",
+            definitionId,
+            persistedNextFireTime);
+      } catch (RuntimeException exception) {
+        LOGGER.warn(
+            "[offline-schedule] missed trigger recovery skipped definition={}, planned={}, message={}",
+            definitionId,
+            persistedNextFireTime,
+            exception.getMessage());
       }
-      OfflineJobDefinition definition = definitionRepository.findById(schedule.jobDefinitionId()).orElse(null);
-      if (definition != null && "ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
-        result.put(schedule.jobDefinitionId(), schedule);
+    }
+  }
+
+  private Map<Long, ScheduledDefinition> activeSchedules() {
+    Map<Long, ScheduledDefinition> result = new LinkedHashMap<>();
+    for (ProjectDefinitionRef candidate : definitionRepository.findScheduledForReconciliation()) {
+      ScheduledDefinition scheduled =
+          projectScope.call(
+              new ProjectContext(candidate.projectId(), null),
+              () -> activeSchedule(candidate));
+      if (scheduled != null) {
+        result.put(candidate.definitionId(), scheduled);
       }
     }
     return result;
   }
+
+  private ScheduledDefinition activeSchedule(ProjectDefinitionRef candidate) {
+    OfflineJobDefinition definition =
+        definitionRepository.findById(candidate.definitionId()).orElse(null);
+    OfflineSchedule schedule = scheduleRepository.findSchedule(candidate.definitionId());
+    if (definition == null
+        || definition.requireProjectId() != candidate.projectId()
+        || schedule == null
+        || !schedule.enabled()
+        || !StringUtils.hasText(schedule.cronExpression())
+        || !"ONLINE".equalsIgnoreCase(definition.getReleaseState())) {
+      return null;
+    }
+    return new ScheduledDefinition(candidate.projectId(), schedule);
+  }
+
+  private record ScheduledDefinition(long projectId, OfflineSchedule schedule) {}
 }

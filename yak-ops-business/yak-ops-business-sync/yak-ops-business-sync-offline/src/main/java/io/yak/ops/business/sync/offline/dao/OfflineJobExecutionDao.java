@@ -18,11 +18,17 @@ public interface OfflineJobExecutionDao {
 
   boolean updateById(OfflineJobExecutionPO executionPO);
 
-  /** 只扫描绑定 Batch 的活动 Attempt。 */
+  /** Project-scoped active Attempt query. */
   List<OfflineJobExecutionPO> selectActiveExecutions(int limit);
 
-  /** 只扫描绑定 Batch 的 Retry candidate。 */
+  /** Explicit cross-Project reconcile scan. */
+  List<OfflineJobExecutionPO> selectActiveExecutionsForReconciliation(int limit);
+
+  /** Project-scoped Retry candidate query. */
   List<OfflineJobExecutionPO> selectRetryCandidates(LocalDateTime now, int limit);
+
+  /** Explicit cross-Project retry dispatcher scan. */
+  List<OfflineJobExecutionPO> selectRetryCandidatesForReconciliation(LocalDateTime now, int limit);
 
   /** 原子保留一次 FAILED Attempt 的 Retry 创建权。 */
   boolean reserveRetry(Long executionId, LocalDateTime updateTime);

@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.currentProject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,7 +18,7 @@ class OfflineJobExecutionRepositoryAdapterTest {
     OfflineJobExecutionDao dao = mock(OfflineJobExecutionDao.class);
     when(dao.reserveRetry(org.mockito.ArgumentMatchers.eq(9L), any())).thenReturn(true);
     OfflineJobExecutionRepositoryAdapter repository =
-        new OfflineJobExecutionRepositoryAdapter(dao);
+        new OfflineJobExecutionRepositoryAdapter(dao, currentProject());
 
     assertThat(repository.reserveRetry(9L)).isTrue();
     verify(dao).reserveRetry(org.mockito.ArgumentMatchers.eq(9L), any());
@@ -27,7 +28,7 @@ class OfflineJobExecutionRepositoryAdapterTest {
   void rejectsInvalidRetryReservationIdentityBeforeDao() {
     OfflineJobExecutionDao dao = mock(OfflineJobExecutionDao.class);
     OfflineJobExecutionRepositoryAdapter repository =
-        new OfflineJobExecutionRepositoryAdapter(dao);
+        new OfflineJobExecutionRepositoryAdapter(dao, currentProject());
 
     assertThatThrownBy(() -> repository.reserveRetry(0L))
         .isInstanceOf(IllegalArgumentException.class)

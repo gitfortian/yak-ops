@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.currentProject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,7 +24,8 @@ class OfflineScheduleRepositoryAdapterTest {
 
   @Test
   void saveScheduleUsesScopedUpdateAndPreservesLastFireHistory() {
-    OfflineScheduleRepositoryAdapter repository = new OfflineScheduleRepositoryAdapter(dao);
+    OfflineScheduleRepositoryAdapter repository =
+        new OfflineScheduleRepositoryAdapter(dao, currentProject());
     LocalDateTime previousLastFire = LocalDateTime.of(2026, 8, 8, 9, 0);
     LocalDateTime nextFire = LocalDateTime.of(2026, 8, 10, 9, 0);
 

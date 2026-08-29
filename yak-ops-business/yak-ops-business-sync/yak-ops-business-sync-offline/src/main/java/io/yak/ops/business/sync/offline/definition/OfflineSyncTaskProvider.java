@@ -7,8 +7,10 @@ import io.yak.ops.business.job.task.TaskRegistration;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
+import io.yak.ops.core.project.CurrentProject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -20,10 +22,22 @@ public class OfflineSyncTaskProvider implements TaskProvider {
   private static final String RELEASE_STATE_ONLINE = "ONLINE";
 
   private final ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider;
+  private final CurrentProject currentProject;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  public OfflineSyncTaskProvider(
+      ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider,
+      CurrentProject currentProject) {
+    this.definitionServiceProvider = definitionServiceProvider;
+    this.currentProject = currentProject;
+  }
+
+  /** Compatibility constructor for focused tests; unscoped discovery intentionally returns empty. */
   public OfflineSyncTaskProvider(
       ObjectProvider<OfflineJobDefinitionService> definitionServiceProvider) {
-    this.definitionServiceProvider = definitionServiceProvider;
+    this(
+        definitionServiceProvider,
+        Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
@@ -33,6 +47,7 @@ public class OfflineSyncTaskProvider implements TaskProvider {
 
   @Override
   public TaskVersionSnapshot snapshot(String taskId) {
+    currentProject.requireProjectId();
     OfflineJobDefinition current = service().require(parseTaskId(taskId));
     if (!isWorkflowEligible(current)) {
       throw new IllegalArgumentException("离线同步任务当前不可用于工作流：" + taskId);
@@ -42,6 +57,10 @@ public class OfflineSyncTaskProvider implements TaskProvider {
 
   @Override
   public List<TaskRegistration> registrations() {
+    // Job Registry is GLOBAL infrastructure. It must not turn an empty ProjectContext into a
+    // cross-Project Offline task enumeration; Project-aware callers refresh the registry in scope.
+    if (!currentProject.isPresent()) return List.of();
+
     OfflineJobDefinitionService service = definitionServiceProvider.getIfAvailable();
     if (service == null) return List.of();
 
@@ -67,6 +86,7 @@ public class OfflineSyncTaskProvider implements TaskProvider {
     if (!isWorkflowEligible(definition)) {
       throw new IllegalArgumentException("离线同步任务当前不可用于工作流：" + definition.getId());
     }
+    definition.requireProjectId();
     String logicalJobSpec = service().resolveLogicalJobSpec(definition);
     String id = String.valueOf(definition.getId());
     String name = definition.getJobName();

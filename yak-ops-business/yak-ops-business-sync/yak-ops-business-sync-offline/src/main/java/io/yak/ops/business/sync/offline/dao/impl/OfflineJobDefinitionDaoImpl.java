@@ -20,7 +20,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
@@ -38,7 +37,6 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
   private final OfflineWriteMapper writeMapper;
   private final CurrentProject currentProject;
 
-  @org.springframework.beans.factory.annotation.Autowired
   public OfflineJobDefinitionDaoImpl(
       OfflineJobDefinitionMapper mapper,
       OfflineJobExecutionMapper executionMapper,
@@ -52,22 +50,13 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
     this.currentProject = currentProject;
   }
 
-  public OfflineJobDefinitionDaoImpl(
-      OfflineJobDefinitionMapper mapper,
-      OfflineJobExecutionMapper executionMapper,
-      OfflineExecutionEventMapper eventMapper,
-      OfflineWriteMapper writeMapper) {
-    this(mapper, executionMapper, eventMapper, writeMapper,
-        Optional::<io.yak.ops.core.project.ProjectContext>empty);
-  }
-
   @Override
   public OfflineJobDefinitionPO selectById(Long id) {
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     return mapper.selectOne(
         Wrappers.<OfflineJobDefinitionPO>lambdaQuery()
             .eq(OfflineJobDefinitionPO::getId, id)
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId));
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId));
   }
 
   @Override
@@ -78,8 +67,7 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
 
   @Override
   public boolean updateById(OfflineJobDefinitionPO definitionPO) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return mapper.updateById(definitionPO) > 0;
+    long projectId = requiredProjectId();
     bindCurrentProject(definitionPO);
     return mapper.update(
         definitionPO,
@@ -90,13 +78,13 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
 
   @Override
   public boolean deleteById(Long id) {
-    Long projectId = currentProjectId();
-    if (projectId != null && selectById(id) == null) return false;
+    long projectId = requiredProjectId();
+    if (selectById(id) == null) return false;
     List<Long> executionIds = executionMapper.selectObjs(
             Wrappers.<OfflineJobExecutionPO>query()
                 .select("id")
                 .eq("job_definition_id", id)
-                .eq(projectId != null, "project_id", projectId))
+                .eq("project_id", projectId))
         .stream()
         .filter(Number.class::isInstance)
         .map(Number.class::cast)
@@ -105,7 +93,7 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
     boolean deleted = mapper.delete(
         Wrappers.<OfflineJobDefinitionPO>lambdaQuery()
             .eq(OfflineJobDefinitionPO::getId, id)
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId)) > 0;
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId)) > 0;
     if (!deleted) return false;
     if (!executionIds.isEmpty()) {
       eventMapper.delete(
@@ -115,16 +103,16 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
     executionMapper.delete(
         Wrappers.<OfflineJobExecutionPO>lambdaQuery()
             .eq(OfflineJobExecutionPO::getJobDefinitionId, id)
-            .eq(projectId != null, OfflineJobExecutionPO::getProjectId, projectId));
+            .eq(OfflineJobExecutionPO::getProjectId, projectId));
     return true;
   }
 
   @Override
   public boolean existsByName(String jobName, Long excludeId) {
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     LambdaQueryWrapper<OfflineJobDefinitionPO> query =
         new LambdaQueryWrapper<OfflineJobDefinitionPO>()
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId)
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId)
             .eq(OfflineJobDefinitionPO::getJobName, jobName);
     if (excludeId != null) query.ne(OfflineJobDefinitionPO::getId, excludeId);
     return mapper.selectCount(query) > 0L;
@@ -135,10 +123,10 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
     PageQuery condition = query == null
         ? new PageQuery(1, 10, null, null, null, null, null, null, null, null, null)
         : query;
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     LambdaQueryWrapper<OfflineJobDefinitionPO> wrapper =
         new LambdaQueryWrapper<OfflineJobDefinitionPO>()
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId);
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId);
     if (StringUtils.hasText(condition.jobName())) {
       wrapper.like(OfflineJobDefinitionPO::getJobName, condition.jobName().trim());
     }
@@ -168,17 +156,27 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
 
   @Override
   public List<OfflineJobDefinitionPO> selectWithCron() {
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     return mapper.selectList(
         new LambdaQueryWrapper<OfflineJobDefinitionPO>()
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId)
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId)
+            .isNotNull(OfflineJobDefinitionPO::getCronExpression)
+            .orderByAsc(OfflineJobDefinitionPO::getId));
+  }
+
+  @Override
+  public List<OfflineJobDefinitionPO> selectWithCronForReconciliation() {
+    return mapper.selectList(
+        new LambdaQueryWrapper<OfflineJobDefinitionPO>()
+            .isNotNull(OfflineJobDefinitionPO::getProjectId)
             .isNotNull(OfflineJobDefinitionPO::getCronExpression)
             .orderByAsc(OfflineJobDefinitionPO::getId));
   }
 
   @Override
   public Long lockById(Long id) {
-    if (currentProjectId() != null && selectById(id) == null) return null;
+    requiredProjectId();
+    if (selectById(id) == null) return null;
     return writeMapper.lockDefinition(id);
   }
 
@@ -192,12 +190,12 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
       int retryBackoffSeconds,
       LocalDateTime nextFireTime,
       LocalDateTime updateTime) {
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     return mapper.update(
         null,
         Wrappers.<OfflineJobDefinitionPO>lambdaUpdate()
             .eq(OfflineJobDefinitionPO::getId, id)
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId)
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId)
             .set(OfflineJobDefinitionPO::getScheduleJson, scheduleJson)
             .set(OfflineJobDefinitionPO::getScheduleEnabled, enabled)
             .set(OfflineJobDefinitionPO::getCronExpression, cronExpression)
@@ -210,12 +208,12 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
   @Override
   public void updateScheduleRuntime(
       Long id, LocalDateTime lastFireTime, LocalDateTime nextFireTime, LocalDateTime updateTime) {
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     mapper.update(
         null,
         Wrappers.<OfflineJobDefinitionPO>lambdaUpdate()
             .eq(OfflineJobDefinitionPO::getId, id)
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId)
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId)
             .set(OfflineJobDefinitionPO::getScheduleLastFireTime, lastFireTime)
             .set(OfflineJobDefinitionPO::getScheduleNextFireTime, nextFireTime)
             .set(OfflineJobDefinitionPO::getUpdateTime, updateTime));
@@ -223,12 +221,12 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
 
   @Override
   public void clearSchedule(Long id, LocalDateTime updateTime) {
-    Long projectId = currentProjectId();
+    long projectId = requiredProjectId();
     mapper.update(
         null,
         Wrappers.<OfflineJobDefinitionPO>lambdaUpdate()
             .eq(OfflineJobDefinitionPO::getId, id)
-            .eq(projectId != null, OfflineJobDefinitionPO::getProjectId, projectId)
+            .eq(OfflineJobDefinitionPO::getProjectId, projectId)
             .set(OfflineJobDefinitionPO::getScheduleJson, null)
             .set(OfflineJobDefinitionPO::getScheduleEnabled, false)
             .set(OfflineJobDefinitionPO::getCronExpression, null)
@@ -239,13 +237,12 @@ public class OfflineJobDefinitionDaoImpl implements OfflineJobDefinitionDao {
             .set(OfflineJobDefinitionPO::getUpdateTime, updateTime));
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private long requiredProjectId() {
+    return currentProject.requireProjectId();
   }
 
   private void bindCurrentProject(OfflineJobDefinitionPO definitionPO) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return;
+    long projectId = requiredProjectId();
     if (definitionPO.getProjectId() != null
         && !Objects.equals(projectId, definitionPO.getProjectId())) {
       throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);

@@ -1,5 +1,7 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.PROJECT_ID;
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.currentProject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -30,10 +32,9 @@ class OfflineJobDefinitionRepositoryAdapterTest {
     when(dao.selectById(42L)).thenReturn(po);
 
     OfflineJobDefinition result =
-        new OfflineJobDefinitionRepositoryAdapter(dao, dataSourceDao)
-            .findById(42L)
-            .orElseThrow();
+        repository().findById(42L).orElseThrow();
 
+    assertThat(result.getProjectId()).isEqualTo(PROJECT_ID);
     assertThat(result.getSourceDatasourceName()).isNull();
     assertThat(result.getSinkDatasourceName()).isNull();
     verifyNoInteractions(dataSourceDao);
@@ -47,10 +48,7 @@ class OfflineJobDefinitionRepositoryAdapterTest {
     when(dao.selectById(42L)).thenReturn(po);
     when(dataSourceDao.selectByIds(List.of(1L, 2L))).thenReturn(List.of(source, sink));
 
-    OfflineJobDefinition result =
-        new OfflineJobDefinitionRepositoryAdapter(dao, dataSourceDao)
-            .findForViewById(42L)
-            .orElseThrow();
+    OfflineJobDefinition result = repository().findForViewById(42L).orElseThrow();
 
     assertThat(result.getSourceDatasourceName()).isEqualTo("source-mysql");
     assertThat(result.getSinkDatasourceName()).isEqualTo("sink-mysql");
@@ -75,14 +73,19 @@ class OfflineJobDefinitionRepositoryAdapterTest {
                 dataSource(2L, "sink-mysql"),
                 dataSource(3L, "archive-mysql")));
 
-    new OfflineJobDefinitionRepositoryAdapter(dao, dataSourceDao).pageForView(null);
+    repository().pageForView(null);
 
     verify(dataSourceDao).selectByIds(List.of(1L, 2L, 3L));
+  }
+
+  private OfflineJobDefinitionRepositoryAdapter repository() {
+    return new OfflineJobDefinitionRepositoryAdapter(dao, dataSourceDao, currentProject());
   }
 
   private OfflineJobDefinitionPO definition() {
     OfflineJobDefinitionPO po = new OfflineJobDefinitionPO();
     po.setId(42L);
+    po.setProjectId(PROJECT_ID);
     po.setJobName("demo");
     po.setSourceDatasourceId(1L);
     po.setSinkDatasourceId(2L);
