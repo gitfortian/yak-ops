@@ -21,6 +21,10 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/resources/storage-plugins', mode: 'LEGACY_GLOBAL' },
   { prefix: '/api/v1/resources', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/datasets', mode: 'PROJECT_REQUIRED' },
+  // BI definition planes are Project-owned; published snapshots remain authenticated management APIs.
+  { prefix: '/api/v1/analyses', mode: 'PROJECT_REQUIRED' },
+  { prefix: '/api/v1/dashboards', mode: 'PROJECT_REQUIRED' },
+  { prefix: '/api/v1/digital-screens', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/home', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/data-development', mode: 'PROJECT_REQUIRED' },
   // Data Service management is project-scoped, but the external runtime URL is intentionally

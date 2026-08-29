@@ -2,6 +2,7 @@ package io.yak.ops.business.dashboard.composition;
 
 import io.yak.ops.business.dashboard.domain.WidgetSpec;
 import io.yak.ops.business.dashboard.gateway.analysis.DashboardAnalysisGateway;
+import io.yak.ops.business.dashboard.gateway.dataset.DashboardDatasetGateway;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,14 +17,17 @@ public class DashboardWidgetPolicy {
   private static final int MAX_INLINE_JSON = 65535;
 
   private final DashboardAnalysisGateway analyses;
+  private final DashboardDatasetGateway datasets;
   private final DashboardLayoutPolicy layout;
   private final DashboardJsonPolicy json;
 
   public DashboardWidgetPolicy(
       DashboardAnalysisGateway analyses,
+      DashboardDatasetGateway datasets,
       DashboardLayoutPolicy layout,
       DashboardJsonPolicy json) {
     this.analyses = analyses;
+    this.datasets = datasets;
     this.layout = layout;
     this.json = json;
   }
@@ -51,17 +55,20 @@ public class DashboardWidgetPolicy {
         throw new IllegalArgumentException(
             "Widget 必须且只能选择 analysisId 或 inlineAnalysis：" + widgetKey);
       }
+
+      Object inlineAnalysis = inline
+          ? json.requireObject(value.inlineAnalysis(), "inlineAnalysis：" + widgetKey, MAX_INLINE_JSON)
+          : null;
       if (linked) {
         if (value.analysisId() <= 0L) {
           throw new IllegalArgumentException("analysisId 必须大于 0");
         }
         analyses.requireExists(value.analysisId());
+      } else {
+        requireInlineDataset(inlineAnalysis, widgetKey);
       }
 
       layout.validate(value, widgetKey);
-      Object inlineAnalysis = inline
-          ? json.requireObject(value.inlineAnalysis(), "inlineAnalysis：" + widgetKey, MAX_INLINE_JSON)
-          : null;
       normalized.add(new WidgetSpec(
           widgetKey,
           value.analysisId(),
@@ -75,6 +82,16 @@ public class DashboardWidgetPolicy {
           value.minH()));
     }
     return new Result(List.copyOf(normalized), Set.copyOf(widgetKeys));
+  }
+
+  private void requireInlineDataset(Object inlineAnalysis, String widgetKey) {
+    Long datasetId = json.optionalPositiveLongField(
+        inlineAnalysis,
+        "datasetId",
+        "inlineAnalysis：" + widgetKey);
+    if (datasetId != null) {
+      datasets.requireExists(datasetId);
+    }
   }
 
   private String required(String value, String label, int maxLength) {

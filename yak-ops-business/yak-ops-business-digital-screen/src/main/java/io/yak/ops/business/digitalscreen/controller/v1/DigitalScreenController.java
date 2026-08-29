@@ -12,6 +12,7 @@ import io.yak.ops.business.digitalscreen.controller.v1.dto.DigitalScreenRequests
 import io.yak.ops.business.digitalscreen.controller.v1.vo.DigitalScreenViews.DigitalScreenVO;
 import io.yak.ops.business.digitalscreen.controller.v1.vo.DigitalScreenViews.DigitalScreenVersionSummaryVO;
 import io.yak.ops.business.digitalscreen.controller.v1.vo.DigitalScreenViews.DigitalScreenVersionVO;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,10 +26,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Digital Screen HTTP adapter. Viewer endpoints expose immutable published snapshots. */
+/** Digital Screen management HTTP adapter. Viewer routes expose immutable project-owned snapshots. */
 @Tag(name = "数字化大屏接口")
 @RestController
 @Validated
+@ProjectScope
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/digital-screens")

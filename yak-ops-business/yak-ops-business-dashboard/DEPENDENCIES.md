@@ -2,63 +2,61 @@
 
 ## Direction
 
-Dependencies point from transport/application orchestration toward explicit business/persistence ports. Cross-module dependencies pass through Dashboard-owned gateways.
+Dependencies point from transport/application orchestration toward explicit business and persistence ports. Cross-module dependencies pass only through Dashboard-owned gateways.
 
 ## Package matrix
 
 | Source | Allowed direct Dashboard dependencies |
 | --- | --- |
 | root `DashboardService` | `definition`, `read`, `version`, `publication`, `domain` |
-| `controller` | root stable facade, controller DTO/VO/mapper, domain types needed by transport mappers |
+| `controller` | root stable facade, controller DTO/VO/converter, domain values needed by transport conversion |
 | `definition` | `read`, `change`, `domain`, `composition`, version appender, `repository` ports |
 | `read` | `domain`, `repository` ports |
 | `change` | JDK only |
 | `version` | `read`, `change`, `domain`, `composition`, `repository` ports |
 | `publication` | `read`, `change`, `domain`, `repository` ports |
-| `composition` | `domain`, `gateway.analysis` port |
+| `composition` | `domain`, `gateway.analysis`, `gateway.dataset` ports |
 | `reference` | `repository` reference port plus external Analysis deletion extension contract |
-| `lineage` | `change`, `domain`, `publication` effective read-side, `gateway.lineage` port |
-| `gateway.analysis` | Dashboard-owned port; adapter may call Analysis stable reference facade |
+| `lineage` | `change`, `domain`, `publication`, `gateway.lineage` port |
+| `gateway.analysis` | Dashboard-owned port; adapter may call the Analysis stable reference facade |
+| `gateway.dataset` | Dashboard-owned port; adapter may call the Dataset stable scoped reader |
 | `gateway.lineage` | Dashboard-owned port; adapter may call Lineage module APIs |
 | `repository` | `domain`, `dao`, `repository.codec`, infrastructure annotations |
 | `repository.codec` | Jackson persistence infrastructure only |
-| `dao` | DAO/PO/Mapper/MyBatis + datasource infrastructure |
+| `dao` | DAO/PO/Mapper/MyBatis, `CurrentProject`, datasource infrastructure |
 | `domain` | JDK only |
 | `config` | wiring/infrastructure only |
 
-The matrix describes permitted direction, not permission for every class to depend on every package in its row. Keep dependencies narrower when possible.
+The matrix describes permitted direction, not permission for every class to depend on every package in its row. Keep dependencies narrower when possible, and keep the actual graph acyclic.
 
 ## Stable facade corridor
 
-HTTP and compatibility callers enter through:
+HTTP callers enter through:
 
 ```text
-DashboardController
+DashboardController / DashboardOverviewController
     -> DashboardService
 ```
 
-Controller must not inject repositories, DAOs, cross-module gateways or lineage internals.
+Both controllers are `PROJECT_REQUIRED`. They must not inject repositories, DAOs, cross-module adapters or lineage internals.
 
-## Shared read and change roles
+## Project context corridor
 
-`DashboardReader` lives in `read` rather than Definition because Version and Publication also need Dashboard identity/current reads. `DashboardChangedEvent` lives in neutral `change` for the same reason.
-
-This deliberately prevents:
+`yak_dashboard` is a Project root. `DashboardVersion`, Widget, Filter, Binding and Interaction inherit ownership through their owning Dashboard.
 
 ```text
-definition -> version
-version    -> definition
+HTTP @ProjectScope
+    -> trusted CurrentProject
+    -> root DAO predicate: project_id = currentProject.requireProjectId()
 ```
 
-from becoming a package cycle.
+Child reads and writes must prove the parent Dashboard before returning or mutating inherited rows. A request ID from another workspace is treated as absent in the current workspace.
 
-`read` depends only on Repository/Domain. `change` is framework-free and depends only on JDK types.
+After-commit work freezes `projectId` in `DashboardChangedEvent` and restores it through `ProjectContextScope`. It must not assume the request ThreadLocal survives commit callbacks.
 
 ## Analysis corridor
 
 Composition cannot import the Analysis module directly.
-
-The only Dashboard business corridor is:
 
 ```text
 composition
@@ -67,15 +65,26 @@ composition
  -> AnalysisReferenceService
 ```
 
-Only `gateway/analysis/AnalysisDashboardAdapter` may import Analysis application/reference implementation types for reusable widget validation.
+Only `gateway/analysis/AnalysisDashboardAdapter` may import Analysis application/reference types. Because Analysis reads are Project-scoped, this corridor also proves that reusable widget references belong to the current Project.
 
-Dashboard's Analysis deletion guard is the inverse extension mechanism already defined by Analysis. The guard implementation may implement `AnalysisDeletionGuard`, but it must query Dashboard history through `DashboardReferenceRepository`, not DAO.
+Dashboard's Analysis deletion guard is the inverse extension mechanism defined by Analysis. It queries historical references through `DashboardReferenceRepository`, whose implementation constrains the reference join by the current Project.
+
+## Dataset corridor
+
+`activeDatasetId` and an explicit `inlineAnalysis.datasetId` are Project references. Dashboard validates only identity and same-Project ownership here; Dataset ONLINE state, schema compatibility and query execution remain Dataset-owned concerns.
+
+```text
+composition
+ -> DashboardDatasetGateway
+ -> DatasetDashboardAdapter
+ -> DatasetReader
+```
+
+Only `gateway/dataset/DatasetDashboardAdapter` may import Dataset implementation APIs. No controller, composition policy, repository or DAO may bypass this port.
 
 ## Lineage corridor
 
-Dashboard lineage business code cannot import `LineageService`, `LineageMaintenanceService`, Lineage PO/model types or ObjectMapper for graph translation.
-
-The only graph corridor is:
+Dashboard lineage business code cannot import Lineage implementation types.
 
 ```text
 lineage
@@ -84,7 +93,7 @@ lineage
  -> Lineage module
 ```
 
-Only `gateway/lineage/LineageDashboardAdapter` may know the Lineage module API and graph JSON translation infrastructure.
+Only `gateway/lineage/LineageDashboardAdapter` may know the Lineage API and graph translation infrastructure.
 
 ## Repository corridor
 
@@ -97,88 +106,32 @@ application role
  -> DashboardDao
 ```
 
-Repository interfaces must not expose:
-
-- `DashboardPO` or other DAO models;
-- MyBatis Mapper types;
-- `JdbcTemplate`;
-- controller DTO/VO;
-- serialized JSON strings as the business representation of version composition.
+Repository interfaces must not expose PO/MyBatis types, controller DTO/VO or serialized JSON strings as business contracts.
 
 ## Domain purity
 
-`domain` must not import:
-
-- Spring;
-- Jackson transport/persistence infrastructure;
-- MyBatis;
-- Dashboard DAO/repository adapters;
-- controller DTO/VO;
-- Analysis module APIs;
-- Lineage module APIs.
-
-Domain types remain plain Java records/enums/value objects.
+`domain` must not import Spring, Jackson, MyBatis, DAO/repository adapters, controller types, Analysis APIs, Dataset APIs or Lineage APIs. Domain values remain plain Java records, enums and value objects.
 
 ## Version and publication separation
 
-`version` owns append/read/restore. It must not update the published pointer.
+`version` owns append/read/restore and must not update the published pointer. `publication` owns the published-pointer transition and must not append or mutate historical versions. This protects `current != published` as a first-class invariant.
 
-`publication` owns published-pointer transition and effective-snapshot selection. It must not append or mutate historical version rows.
+## Infrastructure dependencies
 
-This separation protects:
+Dashboard directly depends on:
 
-```text
-current != published
-```
+- `yak-ops-core` for trusted Project context;
+- `yak-ops-business-datasource` for business DataSource/Flyway/MyBatis infrastructure;
+- `yak-ops-business-analysis` through the Analysis gateway adapter;
+- `yak-ops-business-dataset` through the Dataset gateway adapter;
+- `yak-ops-business-lineage` through the Lineage gateway adapter.
 
-as a first-class Dashboard invariant.
-
-## Effective projection corridor
-
-Derived consumers that need the effective Dashboard snapshot should use `DashboardEffectiveSnapshotReader` rather than reproducing:
-
-```text
-published if present else current
-```
-
-in multiple places.
-
-Lineage currently uses this read-side policy.
-
-## Datasource dependency
-
-Dashboard retains a direct Maven dependency on `yak-ops-business-datasource` because persistence/configuration reuses:
-
-- conditional datasource enablement;
-- business DataSource wiring;
-- Flyway/MyBatis infrastructure.
-
-This is an infrastructure dependency. It must not leak into Dashboard domain/composition/version/publication business semantics beyond configuration/conditional annotations already required for module activation.
-
-## Dataset dependency
-
-Dashboard does not currently require a direct Dataset business dependency. `activeDatasetId` remains optional metadata and inline lineage parsing is projection-only evidence.
-
-Do not add Dataset validation as a side effect of architecture refactoring.
+A Maven dependency does not grant arbitrary package access. Owner-defined gateways remain mandatory.
 
 ## Forbidden broad buckets
 
-Do not reintroduce top-level production packages named:
+Do not reintroduce top-level production packages named `service`, `common`, `helper`, `helpers`, `utils`, `util`, `base`, `persistence` or `support`.
 
-```text
-service
-common
-helper
-helpers
-utils
-util
-base
-persistence
-support
-```
+## Change rule
 
-Use the role vocabulary from repository `CODE_STYLE.md` and the Dashboard architecture instead.
-
-## Acyclic rule
-
-The Dashboard package graph must remain acyclic. A new import that creates a cycle is an architecture defect even when compilation succeeds.
+A dependency-graph change requires the truth owner, this contract and executable architecture tests to change together. Do not delete or weaken a guard merely to make a new import compile.

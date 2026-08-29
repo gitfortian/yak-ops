@@ -10,6 +10,7 @@ import io.yak.ops.business.dashboard.domain.GlobalFilterSpec;
 import io.yak.ops.business.dashboard.domain.InteractionSpec;
 import io.yak.ops.business.dashboard.domain.WidgetSpec;
 import io.yak.ops.business.dashboard.read.DashboardReader;
+import io.yak.ops.core.project.CurrentProject;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ public class DashboardVersionManager {
   private final DashboardVersionReader versions;
   private final DashboardCompositionNormalizer composition;
   private final DashboardVersionAppender appender;
+  private final CurrentProject currentProject;
   private final ApplicationEventPublisher events;
 
   public DashboardVersionManager(
@@ -30,20 +32,23 @@ public class DashboardVersionManager {
       DashboardVersionReader versions,
       DashboardCompositionNormalizer composition,
       DashboardVersionAppender appender,
+      CurrentProject currentProject,
       ApplicationEventPublisher events) {
     this.dashboards = dashboards;
     this.versions = versions;
     this.composition = composition;
     this.appender = appender;
+    this.currentProject = currentProject;
     this.events = events;
   }
 
   @Transactional("yakBusinessTransactionManager")
   public DashboardDetail saveVersion(long dashboardId, DashboardDraft draft) {
+    long projectId = currentProject.requireProjectId();
     dashboards.require(dashboardId);
     DashboardDraft normalized = composition.normalize(draft);
     appender.appendNext(dashboardId, normalized);
-    events.publishEvent(DashboardChangedEvent.refreshed(dashboardId));
+    events.publishEvent(DashboardChangedEvent.refreshed(projectId, dashboardId));
     return dashboards.get(dashboardId);
   }
 

@@ -43,19 +43,24 @@ class DashboardArchitectureDocumentationTest {
         .contains("Restore is copy-forward")
         .contains("Analysis owns reusable analytical definitions")
         .contains("Lineage owns graph truth")
+        .contains("ProjectContextScope")
         .contains("version allocation concurrency");
   }
 
   @Test
-  void dependencyContractNamesTheTwoCrossModuleGateways() throws IOException {
+  void dependencyContractNamesAllCrossModuleGatewaysAndProjectCorridors() throws IOException {
     String dependencies = Files.readString(moduleRoot().resolve("DEPENDENCIES.md"));
 
     assertThat(dependencies)
         .contains("DashboardAnalysisGateway")
         .contains("AnalysisDashboardAdapter")
+        .contains("DashboardDatasetGateway")
+        .contains("DatasetDashboardAdapter")
         .contains("DashboardLineageGraphGateway")
         .contains("LineageDashboardAdapter")
         .contains("DashboardReferenceRepository")
+        .contains("CurrentProject")
+        .contains("ProjectContextScope")
         .contains("acyclic");
   }
 

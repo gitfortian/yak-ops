@@ -1,12 +1,10 @@
 # Analysis Architecture
 
-## 1. Purpose
+## Purpose
 
-Analysis 是 reusable analytical definition control plane，不是 query execution runtime。
+Analysis is a Project-owned reusable analytical-definition control plane, not a query execution runtime. Definition, query semantics, visualization, Dataset binding, references, Lineage projection and persistence retain explicit roles.
 
-架构目标：让 Definition、Query Semantics、Visualization、Dataset Binding、Reference、Lineage Projection 和 Persistence 各自拥有明确角色。
-
-## 2. Package Map
+## Package map
 
 ```text
 io.yak.ops.business.analysis
@@ -16,7 +14,7 @@ io.yak.ops.business.analysis
 ├── controller/v1
 │   ├── dto
 │   ├── vo
-│   └── mapper
+│   └── converter
 ├── definition
 ├── domain
 ├── query
@@ -32,153 +30,67 @@ io.yak.ops.business.analysis
 └── config
 ```
 
-根 package 的三个 public type 是稳定兼容边界。新的实现角色必须进入明确 subsystem。
+The root public types remain compatibility boundaries. New implementation roles belong to a named subsystem.
 
-## 3. Stable Facades
+## Stable facades
 
-### AnalysisService
+`AnalysisService` delegates use cases to `AnalysisManager` and `AnalysisReader`. `AnalysisReferenceService` exposes only narrow existence validation for downstream modules. `AnalysisDeletionGuard` is the stable extension point used by owners such as Dashboard.
 
-保留给 HTTP 与已有 application caller：
-
-```text
-AnalysisService
-    -> AnalysisManager
-    -> AnalysisReader
-```
-
-它不拥有另一套 lifecycle，不直接依赖 Repository/DAO/Dataset/Lineage。
-
-### AnalysisReferenceService
-
-提供下游模块最小引用能力：
+## Definition flow
 
 ```text
-requireExists(analysisId)
+HTTP @ProjectScope
+ -> AnalysisService
+ -> AnalysisManager
+ -> AnalysisDefinitionNormalizer
+ -> AnalysisDatasetGateway
+ -> persist with trusted CurrentProject.projectId
+ -> publish AnalysisChangedEvent(projectId, analysisId)
 ```
 
-Dashboard 不需要通过完整 AnalysisService 获取内部定义来做引用校验。
+Create/update normalize query and visual semantics and validate the Dataset through the owner-defined gateway. Delete runs every guard before removing metadata. No request field owns Project identity.
 
-### AnalysisDeletionGuard
-
-稳定 cross-domain extension point。Dashboard 等 owner 可以阻止删除仍被引用的 Analysis。
-
-## 4. Definition
-
-`definition` 拥有当前 Analysis command/read lifecycle：
-
-```text
-AnalysisManager
-AnalysisReader
-AnalysisDefinitionNormalizer
-AnalysisSaveCommand
-AnalysisChangedEvent
-```
-
-Create/update 流程：
-
-```text
-validate command
-    -> normalize query
-    -> normalize visual config
-    -> validate Dataset binding
-    -> persist current definition
-    -> publish AnalysisChangedEvent
-```
-
-Delete 流程：
-
-```text
-require current Analysis
-    -> deletion guards
-    -> delete metadata
-    -> publish deleted fact
-```
-
-## 5. Query And Visualization
-
-`query` 只表达 declarative analysis semantics 和标准化角色。
-
-```text
-AnalysisQueryNormalizer
-    -> AnalysisChartBindingPolicy
-```
-
-`visualization` 拥有 chart type、chart binding constraint 和 chart-local visual defaults。
-
-没有 Analysis Runtime/Engine package；真正查询 Dataset 的能力不在本模块。
-
-## 6. Dataset Boundary
-
-Analysis-owned Port：
+## Dataset boundary
 
 ```text
 AnalysisDatasetGateway
+ -> DatasetAnalysisAdapter
+ -> DatasetBindingPolicy
 ```
 
-Adapter：
+Only the adapter knows Dataset implementation APIs. Because Dataset binding is Project-scoped, the reference must belong to the current Project in addition to satisfying Dataset's ONLINE/current-schema contract.
 
-```text
-DatasetAnalysisAdapter
-    -> DatasetBindingPolicy
-```
-
-只有 adapter 可以理解 Dataset 模块的具体 API。Definition 只依赖自己的 Gateway。
-
-## 7. Reference Boundary
-
-```text
-AnalysisReferenceService
-    -> AnalysisReferenceReader
-    -> AnalysisReader
-```
-
-Reference 是窄 read-side，不产生 mutation。
-
-## 8. Lineage Projection
-
-```text
-AnalysisChangedEvent
-    -> AnalysisLineageRefreshListener   (AFTER_COMMIT)
-    -> AnalysisLineageSynchronizer      (REQUIRES_NEW)
-    -> AnalysisLineageGraphGateway
-    -> LineageAnalysisAdapter
-    -> shared Lineage module
-```
-
-`AnalysisFieldUsageExtractor` 负责把 QuerySpec 转成稳定 usage evidence。
-
-Synchronizer 只依赖 Analysis-owned gateway，不依赖 LineageService、LineageMaintenanceService、LineageAsset 或 ObjectMapper。
-
-## 9. Persistence
+## Persistence
 
 ```text
 Definition / Reader
-    -> AnalysisRepository
-    -> AnalysisRepositoryAdapter
-    -> AnalysisDao
-    -> AnalysisMapper / AnalysisPO
-    -> MySQL
+ -> AnalysisRepository
+ -> AnalysisRepositoryAdapter
+ -> AnalysisDao
+ -> AnalysisMapper / AnalysisPO
 ```
 
-`AnalysisJsonCodec` 位于 `repository/codec`，负责 JSON column representation。
+`yak_analysis` is a Project root. DAO insert stores `CurrentProject.requireProjectId()` and all reads/updates/deletes include the same trusted predicate. `AnalysisJsonCodec` alone owns JSON-column representation.
 
-Application/Domain 不读取或写入 `query_spec_json` / `visual_config_json` 字符串。
+## Lineage projection
 
-## 10. Infrastructure Dependency
+```text
+AnalysisChangedEvent(projectId, analysisId)
+ -> AFTER_COMMIT listener
+ -> ProjectContextScope
+ -> AnalysisLineageSynchronizer (REQUIRES_NEW)
+ -> AnalysisLineageGraphGateway
+ -> LineageAnalysisAdapter
+```
 
-Analysis 复用业务 DataSource 与 `ConditionalOnDataSourceEnabled` 等基础设施 wiring；这不表示 Analysis 拥有 Datasource 业务领域。
+The listener restores the frozen Project before reading Analysis state or updating derived graph evidence. Projection failure is logged and cannot roll back committed Analysis truth.
 
-`AnalysisPersistenceConfiguration` 当前仍依赖 Dataset Flyway 初始化顺序，这是部署/初始化约束，不是 Dataset truth ownership。
+## Dependency and stereotype rules
 
-## 11. Stereotypes
+Controller enters only through stable facades. Definition reaches Dataset and Lineage only through Analysis-owned ports. Domain/query/visualization values do not depend on Spring, HTTP, MyBatis or external business implementations.
 
-- `@Service`：仅稳定 `AnalysisService` / `AnalysisReferenceService`；
-- `@Component`：Manager、Reader、Normalizer、Policy、Collector、Extractor、Synchronizer、Gateway Adapter、Codec、HTTP Mapper；
-- `@Repository`：Repository/DAO persistence adapter；
-- Domain/value object：不使用 Spring stereotype。
+`@Service` is reserved for stable facades; explicit internal roles use `@Component`; persistence adapters use `@Repository`.
 
-## 12. Compatibility Rule
+## Compatibility
 
-架构重构默认保持 REST、DB、Dataset binding、Dashboard reference、Lineage evidence 和 query semantic 行为。
-
-如果要新增 Analysis Version、Execution 或 Runtime，必须作为独立领域设计，而不是扩张现有 Manager/Normalizer。
+REST paths, request/response fields, Dataset binding semantics, Dashboard reference guards, Lineage evidence and query semantics remain stable. Analysis Version, execution, result cache and runtime remain explicit non-goals until separately designed.

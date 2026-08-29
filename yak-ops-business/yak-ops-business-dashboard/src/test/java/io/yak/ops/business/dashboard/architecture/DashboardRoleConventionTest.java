@@ -11,6 +11,7 @@ import io.yak.ops.business.dashboard.composition.DashboardLayoutPolicy;
 import io.yak.ops.business.dashboard.composition.DashboardWidgetPolicy;
 import io.yak.ops.business.dashboard.definition.DashboardManager;
 import io.yak.ops.business.dashboard.gateway.analysis.AnalysisDashboardAdapter;
+import io.yak.ops.business.dashboard.gateway.dataset.DatasetDashboardAdapter;
 import io.yak.ops.business.dashboard.gateway.lineage.LineageDashboardAdapter;
 import io.yak.ops.business.dashboard.lineage.DashboardInlineLineageExtractor;
 import io.yak.ops.business.dashboard.lineage.DashboardLineageRefreshListener;
@@ -80,6 +81,7 @@ class DashboardRoleConventionTest {
         DashboardInteractionPolicy.class,
         DashboardJsonPolicy.class,
         AnalysisDashboardAdapter.class,
+        DatasetDashboardAdapter.class,
         LineageDashboardAdapter.class,
         DashboardLineageRefreshListener.class,
         DashboardLineageSynchronizer.class,

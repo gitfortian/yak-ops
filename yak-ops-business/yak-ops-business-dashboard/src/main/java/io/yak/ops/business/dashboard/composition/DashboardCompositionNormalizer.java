@@ -1,6 +1,7 @@
 package io.yak.ops.business.dashboard.composition;
 
 import io.yak.ops.business.dashboard.domain.DashboardDraft;
+import io.yak.ops.business.dashboard.gateway.dataset.DashboardDatasetGateway;
 import java.util.Objects;
 import org.springframework.stereotype.Component;
 
@@ -12,16 +13,19 @@ public class DashboardCompositionNormalizer {
   private final DashboardWidgetPolicy widgets;
   private final DashboardFilterPolicy filters;
   private final DashboardInteractionPolicy interactions;
+  private final DashboardDatasetGateway datasets;
 
   public DashboardCompositionNormalizer(
       DashboardJsonPolicy json,
       DashboardWidgetPolicy widgets,
       DashboardFilterPolicy filters,
-      DashboardInteractionPolicy interactions) {
+      DashboardInteractionPolicy interactions,
+      DashboardDatasetGateway datasets) {
     this.json = json;
     this.widgets = widgets;
     this.filters = filters;
     this.interactions = interactions;
+    this.datasets = datasets;
   }
 
   public DashboardDraft normalize(DashboardDraft draft) {
@@ -31,6 +35,9 @@ public class DashboardCompositionNormalizer {
     Long activeDatasetId = draft.activeDatasetId();
     if (activeDatasetId != null && activeDatasetId <= 0L) {
       activeDatasetId = null;
+    }
+    if (activeDatasetId != null) {
+      datasets.requireExists(activeDatasetId);
     }
 
     Object theme = json.requireObject(draft.theme(), "Dashboard Theme", 16000);

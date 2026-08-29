@@ -56,6 +56,19 @@ class DashboardDependencyBoundaryTest {
   }
 
   @Test
+  void compositionEntersDatasetOnlyThroughDashboardOwnedGateway() throws IOException {
+    assertPackageDoesNotImport("composition", "io.yak.ops.business.dataset");
+
+    for (Path source : productionJavaFiles()) {
+      String relative = relative(source);
+      String text = Files.readString(source);
+      if (text.contains("import io.yak.ops.business.dataset.")) {
+        assertThat(relative).isEqualTo("gateway/dataset/DatasetDashboardAdapter.java");
+      }
+    }
+  }
+
+  @Test
   void lineageEntersSharedGraphOnlyThroughDashboardOwnedGateway() throws IOException {
     assertPackageDoesNotImport("lineage", "io.yak.ops.business.lineage");
 

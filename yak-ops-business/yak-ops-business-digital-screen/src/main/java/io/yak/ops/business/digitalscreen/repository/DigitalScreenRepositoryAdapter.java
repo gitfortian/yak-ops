@@ -7,6 +7,7 @@ import io.yak.ops.business.digitalscreen.dao.model.DigitalScreenPO;
 import io.yak.ops.business.digitalscreen.domain.DigitalScreen;
 import io.yak.ops.business.digitalscreen.domain.DigitalScreenStatus;
 import io.yak.ops.business.digitalscreen.repository.codec.DigitalScreenBindingsCodec;
+import io.yak.ops.core.project.CurrentProject;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -16,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis-Plus adapter for the mutable Digital Screen draft and publication pointer. */
+/** MyBatis-Plus adapter for project-owned Digital Screen drafts and publication pointers. */
 @Repository
 @DependsOn("yakDigitalScreenFlyway")
 @ConditionalOnDataSourceEnabled
@@ -25,11 +26,13 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
 
   private final DigitalScreenMapper mapper;
   private final DigitalScreenBindingsCodec bindingsCodec;
+  private final CurrentProject currentProject;
 
   @Override
   public List<DigitalScreen> list() {
     return mapper.selectList(
             Wrappers.<DigitalScreenPO>lambdaQuery()
+                .eq(DigitalScreenPO::getProjectId, projectId())
                 .orderByDesc(DigitalScreenPO::getUpdateTime)
                 .orderByDesc(DigitalScreenPO::getId))
         .stream()
@@ -39,19 +42,26 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
 
   @Override
   public long count() {
-    Long count = mapper.selectCount(Wrappers.<DigitalScreenPO>lambdaQuery());
+    Long count = mapper.selectCount(
+        Wrappers.<DigitalScreenPO>lambdaQuery()
+            .eq(DigitalScreenPO::getProjectId, projectId()));
     return count == null ? 0L : count;
   }
 
   @Override
   public Optional<DigitalScreen> findById(long id) {
-    return Optional.ofNullable(mapper.selectById(id)).map(this::toDomain);
+    return Optional.ofNullable(mapper.selectOne(
+            Wrappers.<DigitalScreenPO>lambdaQuery()
+                .eq(DigitalScreenPO::getProjectId, projectId())
+                .eq(DigitalScreenPO::getId, id)))
+        .map(this::toDomain);
   }
 
   @Override
   public DigitalScreen lockById(long id) {
     DigitalScreenPO row = mapper.selectOne(
         Wrappers.<DigitalScreenPO>lambdaQuery()
+            .eq(DigitalScreenPO::getProjectId, projectId())
             .eq(DigitalScreenPO::getId, id)
             .last("FOR UPDATE"));
     if (row == null) throw notFound(id);
@@ -67,6 +77,7 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
       Map<String, Object> bindings) {
     Instant now = Instant.now();
     DigitalScreenPO row = new DigitalScreenPO();
+    row.setProjectId(projectId());
     row.setName(name);
     row.setDescription(description);
     row.setTemplateId(templateId);
@@ -92,6 +103,7 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
     int updated = mapper.update(
         null,
         Wrappers.<DigitalScreenPO>lambdaUpdate()
+            .eq(DigitalScreenPO::getProjectId, projectId())
             .eq(DigitalScreenPO::getId, id)
             .set(DigitalScreenPO::getName, name)
             .set(DigitalScreenPO::getDescription, description)
@@ -113,6 +125,7 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
     int updated = mapper.update(
         null,
         Wrappers.<DigitalScreenPO>lambdaUpdate()
+            .eq(DigitalScreenPO::getProjectId, projectId())
             .eq(DigitalScreenPO::getId, id)
             .set(DigitalScreenPO::getName, name)
             .set(DigitalScreenPO::getDescription, description)
@@ -136,6 +149,7 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
     int updated = mapper.update(
         null,
         Wrappers.<DigitalScreenPO>lambdaUpdate()
+            .eq(DigitalScreenPO::getProjectId, projectId())
             .eq(DigitalScreenPO::getId, id)
             .set(DigitalScreenPO::getStatus, DigitalScreenStatus.PUBLISHED.name())
             .set(DigitalScreenPO::getPublishedVersionId, versionId)
@@ -152,6 +166,7 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
     int updated = mapper.update(
         null,
         Wrappers.<DigitalScreenPO>lambdaUpdate()
+            .eq(DigitalScreenPO::getProjectId, projectId())
             .eq(DigitalScreenPO::getId, id)
             .set(DigitalScreenPO::getStatus, DigitalScreenStatus.DRAFT.name())
             .set(DigitalScreenPO::getPublishedVersionId, null)
@@ -165,7 +180,10 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
 
   @Override
   public boolean deleteById(long id) {
-    return mapper.deleteById(id) == 1;
+    return mapper.delete(
+        Wrappers.<DigitalScreenPO>lambdaQuery()
+            .eq(DigitalScreenPO::getProjectId, projectId())
+            .eq(DigitalScreenPO::getId, id)) == 1;
   }
 
   private DigitalScreen required(long id) {
@@ -204,5 +222,9 @@ public class DigitalScreenRepositoryAdapter implements DigitalScreenRepository {
 
   private Instant instant(Timestamp value) {
     return value == null ? null : value.toInstant();
+  }
+
+  private long projectId() {
+    return currentProject.requireProjectId();
   }
 }

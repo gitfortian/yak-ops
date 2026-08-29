@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.yak.ops.business.analysis.AnalysisReferenceService;
 import io.yak.ops.business.analysis.AnalysisService;
-import io.yak.ops.business.analysis.controller.v1.mapper.AnalysisRequestMapper;
-import io.yak.ops.business.analysis.controller.v1.mapper.AnalysisViewMapper;
+import io.yak.ops.business.analysis.controller.v1.converter.AnalysisRequestConverter;
+import io.yak.ops.business.analysis.controller.v1.converter.AnalysisViewConverter;
 import io.yak.ops.business.analysis.definition.AnalysisDefinitionNormalizer;
 import io.yak.ops.business.analysis.definition.AnalysisManager;
 import io.yak.ops.business.analysis.definition.AnalysisReader;
@@ -55,8 +55,8 @@ class AnalysisRoleConventionTest {
         DatasetAnalysisAdapter.class,
         LineageAnalysisAdapter.class,
         AnalysisJsonCodec.class,
-        AnalysisRequestMapper.class,
-        AnalysisViewMapper.class)) {
+        AnalysisRequestConverter.class,
+        AnalysisViewConverter.class)) {
       assertThat(role.getAnnotation(Component.class))
           .as("%s must remain an explicit internal component role", role.getSimpleName())
           .isNotNull();

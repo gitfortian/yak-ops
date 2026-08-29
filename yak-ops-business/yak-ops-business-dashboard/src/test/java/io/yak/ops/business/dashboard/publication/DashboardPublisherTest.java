@@ -13,6 +13,8 @@ import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
 import io.yak.ops.business.dashboard.read.DashboardReader;
 import io.yak.ops.business.dashboard.repository.DashboardRepository;
 import io.yak.ops.business.dashboard.repository.DashboardVersionRepository;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -22,12 +24,13 @@ import org.springframework.context.ApplicationEventPublisher;
 class DashboardPublisherTest {
 
   @Test
-  void publishMovesOnlyPublishedPointerToCurrentVersion() {
+  void publishMovesPointerAndPublishesProjectScopedChangeFact() {
     DashboardReader reader = mock(DashboardReader.class);
     DashboardRepository dashboards = mock(DashboardRepository.class);
     DashboardVersionRepository versions = mock(DashboardVersionRepository.class);
     ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    DashboardPublisher publisher = new DashboardPublisher(reader, dashboards, versions, events);
+    DashboardPublisher publisher = new DashboardPublisher(
+        reader, dashboards, versions, currentProject(23L), events);
     DashboardAsset dashboard = new DashboardAsset(
         7L, "D", null, 12L, 3, 10L, 2, Instant.EPOCH, Instant.EPOCH, Instant.EPOCH);
     DashboardVersion version = new DashboardVersion(12L, 7L, 3, "D", null, null, Instant.EPOCH);
@@ -44,6 +47,10 @@ class DashboardPublisherTest {
 
     assertThat(published).isSameAs(detail);
     verify(dashboards).updatePublishedVersion(7L, 12L, 3);
-    verify(events).publishEvent(DashboardChangedEvent.refreshed(7L));
+    verify(events).publishEvent(DashboardChangedEvent.refreshed(23L, 7L));
+  }
+
+  private CurrentProject currentProject(long projectId) {
+    return () -> Optional.of(new ProjectContext(projectId, "P" + projectId));
   }
 }

@@ -12,6 +12,7 @@ public class AnalysisPO {
 
   @TableId(value = "id", type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private String name;
   private String description;
   private Long datasetId;

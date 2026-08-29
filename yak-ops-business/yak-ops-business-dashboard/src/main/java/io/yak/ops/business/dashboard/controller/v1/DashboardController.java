@@ -9,6 +9,7 @@ import io.yak.ops.business.dashboard.controller.v1.converter.DashboardViewConver
 import io.yak.ops.business.dashboard.controller.v1.dto.SaveDashboardRequest;
 import io.yak.ops.business.dashboard.controller.v1.vo.DashboardViews;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "BI 仪表盘接口")
 @RestController
 @Validated
+@ProjectScope
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/dashboards")
