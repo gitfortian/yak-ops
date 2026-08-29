@@ -53,7 +53,7 @@ public class DevelopmentLineageWorker {
     if (!outbox.claim(task)) return;
     try {
       DevelopmentNode node = nodes.findById(task.nodeId()).orElseThrow();
-      if (!task.projectId().equals(node.projectId())) {
+      if (!task.projectId().equals(node.requireProjectId())) {
         throw new IllegalStateException(
             "Lineage outbox project does not match development node: task="
                 + task.taskId()
@@ -63,6 +63,15 @@ public class DevelopmentLineageWorker {
                 + node.projectId());
       }
       DevelopmentTaskRevision revision = revisions.findById(task.revisionId()).orElseThrow();
+      if (!node.id().equals(revision.nodeId())) {
+        throw new IllegalStateException(
+            "Lineage outbox revision does not belong to development node: task="
+                + task.taskId()
+                + ", nodeId="
+                + node.id()
+                + ", revisionNodeId="
+                + revision.nodeId());
+      }
       DevelopmentSqlLineageService.PreparedLineage prepared = lineage.prepare(node, revision);
       writer.writeIfLatest(node, revision, prepared);
       outbox.complete(task);
