@@ -35,6 +35,7 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
   private final WorkflowNodeExecutionMapper nodeExecutionMapper;
   private final WorkflowNodeAttemptMapper nodeAttemptMapper;
   private final WorkflowDefinitionMapper definitionMapper;
+  private final WorkflowVersionMapper versionMapper;
   private final CurrentProject currentProject;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -49,6 +50,7 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
     this.nodeExecutionMapper = nodeExecutionMapper;
     this.nodeAttemptMapper = nodeAttemptMapper;
     this.definitionMapper = definitionMapper;
+    this.versionMapper = versionMapper;
     this.currentProject = currentProject;
   }
 
@@ -97,7 +99,18 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
   @Override
   public int upsertExecution(WorkflowExecutionPO execution) {
     long projectId = currentProjectId();
+    WorkflowExecutionPO existing = executionMapper.selectById(execution.getId());
+    if (existing != null
+        && (existing.getProjectId() == null || !Objects.equals(existing.getProjectId(), projectId))) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     if (execution.getProjectId() != null && !Objects.equals(execution.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    if (execution.getDefinitionId() == null
+        || execution.getDefinitionId().isBlank()
+        || versionMapper == null
+        || versionMapper.selectByIdAndProject(execution.getDefinitionId(), projectId) == null) {
       throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
     if (execution.getSourceExecutionId() != null

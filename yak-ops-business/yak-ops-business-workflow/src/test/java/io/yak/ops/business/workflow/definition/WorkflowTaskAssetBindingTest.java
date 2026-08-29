@@ -1,7 +1,5 @@
 package io.yak.ops.business.workflow.definition;
 
-import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -15,10 +13,14 @@ import io.yak.ops.business.taskcatalog.domain.TaskAssetRevision;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.business.taskcatalog.spi.TaskSourceRevision;
 import io.yak.ops.business.workflow.repository.NoopWorkflowDefinitionRepository;
+import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextException;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
 import io.yak.ops.spi.task.model.TaskDefinition;
@@ -26,6 +28,7 @@ import io.yak.ops.spi.task.model.TaskRevisionRef;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -48,23 +51,20 @@ class WorkflowTaskAssetBindingTest {
         "select 2 as version",
         "{\"dataSourceId\":\"1\"}");
 
-    TaskAsset assetV1 = asset(101L, 1);
-    TaskAsset assetV2 = asset(102L, 2);
+    TaskAsset assetV1 = asset(7L, "SQL", 101L, 1);
+    TaskAsset assetV2 = asset(7L, "SQL", 102L, 2);
     AtomicReference<TaskAsset> currentAsset = new AtomicReference<>(assetV1);
 
     when(taskCatalogService.get(12L)).thenAnswer(invocation -> currentAsset.get());
     when(taskCatalogService.resolveRevision(12L, 101L)).thenReturn(new TaskAssetRevision(
         assetV1,
-        new TaskSourceRevision(101L, 1, definitionV1, "checksum-v1")));
+        new TaskSourceRevision(101L, 1, definitionV1, "checksum-v1", 7L)));
     when(taskCatalogService.resolveRevision(12L, 102L)).thenReturn(new TaskAssetRevision(
         assetV2,
-        new TaskSourceRevision(102L, 2, definitionV2, "checksum-v2")));
+        new TaskSourceRevision(102L, 2, definitionV2, "checksum-v2", 7L)));
 
-    WorkflowDefinitionManager service = new WorkflowDefinitionManager(
-        runtimeService,
-        taskRegistry,
-        taskCatalogService,
-        NoopWorkflowDefinitionRepository.INSTANCE);
+    WorkflowDefinitionManager service = projectAwareService(
+        runtimeService, taskRegistry, taskCatalogService, 7L);
 
     WorkflowDefinitionVO created = service.create(
         new WorkflowDefinitionCreateDTO("日报工作流", "验证固定 TaskRevision"));
@@ -111,17 +111,23 @@ class WorkflowTaskAssetBindingTest {
     WorkflowRuntime runtimeService = mock(WorkflowRuntime.class);
     TaskRegistry taskRegistry = mock(TaskRegistry.class);
     TaskCatalogService taskCatalogService = mock(TaskCatalogService.class);
-    WorkflowDefinitionManager service = new WorkflowDefinitionManager(
-        runtimeService,
-        taskRegistry,
-        taskCatalogService,
-        NoopWorkflowDefinitionRepository.INSTANCE);
+    WorkflowDefinitionManager service = projectAwareService(
+        runtimeService, taskRegistry, taskCatalogService, 7L);
 
     WorkflowDefinitionVO created = service.create(
         new WorkflowDefinitionCreateDTO("边界工作流", "输出资源不能参与编排"));
 
     for (String taskType : List.of("DATASET", "DATA_SERVICE")) {
-      when(taskCatalogService.get(12L)).thenReturn(asset(taskType, 101L, 1));
+      TaskAsset asset = asset(7L, taskType, 101L, 1);
+      TaskDefinition definition = new TaskDefinition(
+          taskType,
+          1,
+          "{}",
+          "{}");
+      when(taskCatalogService.get(12L)).thenReturn(asset);
+      when(taskCatalogService.resolveRevision(12L, 101L)).thenReturn(new TaskAssetRevision(
+          asset,
+          new TaskSourceRevision(101L, 1, definition, "checksum", 7L)));
       service.update(created.id(), updateRequest(101L, 1));
 
       IllegalArgumentException exception = assertThrows(
@@ -130,6 +136,38 @@ class WorkflowTaskAssetBindingTest {
 
       assertTrue(exception.getMessage().contains("不能进入工作流编排"));
     }
+  }
+
+  @Test
+  void rejectsTaskAssetOwnedByAnotherProject() {
+    WorkflowRuntime runtimeService = mock(WorkflowRuntime.class);
+    TaskRegistry taskRegistry = mock(TaskRegistry.class);
+    TaskCatalogService taskCatalogService = mock(TaskCatalogService.class);
+    WorkflowDefinitionManager service = projectAwareService(
+        runtimeService, taskRegistry, taskCatalogService, 7L);
+    TaskAsset otherProjectAsset = asset(9L, "SQL", 101L, 1);
+    when(taskCatalogService.get(12L)).thenReturn(otherProjectAsset);
+
+    WorkflowDefinitionVO created = service.create(
+        new WorkflowDefinitionCreateDTO("跨 Project 工作流", "验证绑定隔离"));
+    service.update(created.id(), updateRequest(101L, 1));
+
+    assertThrows(ProjectContextException.class, () -> service.online(created.id()));
+  }
+
+  private static WorkflowDefinitionManager projectAwareService(
+      WorkflowRuntime runtimeService,
+      TaskRegistry taskRegistry,
+      TaskCatalogService taskCatalogService,
+      long projectId) {
+    CurrentProject currentProject =
+        () -> Optional.of(new ProjectContext(projectId, "Project " + projectId));
+    return new WorkflowDefinitionManager(
+        runtimeService,
+        taskRegistry,
+        taskCatalogService,
+        NoopWorkflowDefinitionRepository.INSTANCE,
+        currentProject);
   }
 
   private static WorkflowDefinitionUpdateDTO updateRequest(long revisionId, int revisionNo) {
@@ -159,17 +197,13 @@ class WorkflowTaskAssetBindingTest {
         "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
-  private static TaskAsset asset(long revisionId, int revisionNo) {
-    return asset("SQL", revisionId, revisionNo);
-  }
-
-  private static TaskAsset asset(String taskType, long revisionId, int revisionNo) {
+  private static TaskAsset asset(long projectId, String taskType, long revisionId, int revisionNo) {
     Instant now = Instant.parse("2026-08-12T00:00:00Z");
     return new TaskAsset(
         12L,
         TaskAssetSource.DATA_DEVELOPMENT,
         "10001",
-        7L,
+        projectId,
         "今天统计",
         taskType,
         TaskAssetStatus.ONLINE,

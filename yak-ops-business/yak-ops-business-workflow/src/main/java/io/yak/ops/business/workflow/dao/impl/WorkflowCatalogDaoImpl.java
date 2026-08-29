@@ -68,9 +68,13 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
 
   @Override
   public List<WorkflowVersionPO> selectPublishedVersions(String workflowId) {
-    requireAccessible(workflowId);
+    long projectId = currentProjectId();
+    if (!accessible(workflowId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     return versionMapper.selectList(
         Wrappers.<WorkflowVersionPO>lambdaQuery()
+            .eq(WorkflowVersionPO::getProjectId, projectId)
             .eq(WorkflowVersionPO::getWorkflowId, workflowId)
             .eq(WorkflowVersionPO::getVersionKind, "PUBLISHED")
             .orderByAsc(WorkflowVersionPO::getVersionNo));
@@ -98,7 +102,19 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
 
   @Override
   public int insertVersion(WorkflowVersionPO version) {
-    requireAccessible(version.getWorkflowId());
+    long projectId = currentProjectId();
+    if (version.getProjectId() != null && !Objects.equals(version.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    String workflowId = normalize(version.getWorkflowId());
+    if (workflowId != null && !accessible(workflowId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    if (workflowId == null && !"RUNTIME".equalsIgnoreCase(version.getVersionKind())) {
+      throw new IllegalArgumentException("Only RUNTIME workflow versions may omit workflowId");
+    }
+    version.setWorkflowId(workflowId);
+    version.setProjectId(projectId);
     return versionMapper.insert(version);
   }
 
@@ -154,10 +170,7 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
             .eq(WorkflowDefinitionPO::getProjectId, projectId)) > 0L;
   }
 
-  private void requireAccessible(String workflowId) {
-    long projectId = currentProjectId();
-    if (!accessible(workflowId, projectId)) {
-      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-    }
+  private String normalize(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 }

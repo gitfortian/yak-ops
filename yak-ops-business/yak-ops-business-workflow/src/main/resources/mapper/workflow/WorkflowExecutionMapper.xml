@@ -50,7 +50,9 @@
   <select id="countActiveExecutions" resultType="long">
     SELECT COUNT(*)
     FROM yak_workflow_execution e
-    LEFT JOIN yak_workflow_version v ON v.id = e.definition_id
+    LEFT JOIN yak_workflow_version v
+      ON v.id = e.definition_id
+     AND v.project_id = #{projectId}
     LEFT JOIN yak_workflow_definition d
       ON d.id = #{workflowId}
      AND d.project_id = #{projectId}
@@ -67,6 +69,7 @@
     FROM yak_workflow_execution e
     LEFT JOIN yak_workflow_version v
       ON v.id = e.definition_id
+     AND v.project_id = #{projectId}
     WHERE e.id = #{executionId}
       AND e.project_id = #{projectId}
   </select>
