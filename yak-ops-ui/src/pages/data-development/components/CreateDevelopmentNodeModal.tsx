@@ -11,13 +11,11 @@ interface CreateDevelopmentNodeModalProps {
   open: boolean;
   type: DevelopmentNodeType;
   directories: DevelopmentDirectory[];
-  defaultProjectId?: DevelopmentId;
   defaultDirectoryId?: DevelopmentId;
   loading?: boolean;
   onCancel: () => void;
   onNext: (
     type: DevelopmentNodeType,
-    projectId: DevelopmentId | undefined,
     directoryId: DevelopmentId | undefined,
     name: string,
   ) => void;
@@ -29,14 +27,12 @@ const CreateDevelopmentNodeModal = ({
   open,
   type: initialType,
   directories,
-  defaultProjectId,
   defaultDirectoryId,
   loading = false,
   onCancel,
   onNext,
 }: CreateDevelopmentNodeModalProps) => {
   const [type, setType] = useState<DevelopmentNodeType>(initialType);
-  const [projectId, setProjectId] = useState<DevelopmentId>();
   const [directoryId, setDirectoryId] = useState<DevelopmentId>();
   const [name, setName] = useState('');
 
@@ -66,16 +62,15 @@ const CreateDevelopmentNodeModal = ({
   useEffect(() => {
     if (!open) return;
     setType(initialType);
-    setProjectId(defaultProjectId);
     setDirectoryId(defaultDirectoryId);
     setName('');
-  }, [defaultDirectoryId, defaultProjectId, initialType, open]);
+  }, [defaultDirectoryId, initialType, open]);
 
   const normalizedName = name.trim();
 
   const submit = () => {
     if (!normalizedName || loading) return;
-    onNext(type, projectId, directoryId, normalizedName);
+    onNext(type, directoryId, normalizedName);
   };
 
   return (
