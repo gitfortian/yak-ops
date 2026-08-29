@@ -1,0 +1,33 @@
+name: Stage 10 Project Space Inventory
+
+on:
+  push:
+    branches:
+      - feat/stage-10-project-space-architecture-audit-20260830
+  workflow_dispatch:
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory Project Space architecture
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo '=== UNANNOTATED_YAK_CONTROLLERS ==='
+          while IFS= read -r file; do
+            if ! grep -q '@ProjectScope' "$file"; then
+              echo "$file"
+            fi
+          done < <(grep -RIl --include='*.java' '@RestController' yak-ops-* | sort)
+          echo '=== MODE_IMPORTS_AND_TOKENS ==='
+          grep -RInE --include='*.java' --include='*.ts' --include='*.tsx' 'ProjectMigrationMode|PROJECT_OPTIONAL|LEGACY_GLOBAL' yak-ops-* || true
+          echo '=== TASK_CATALOG_CALLERS ==='
+          grep -RInE --include='*.java' 'TaskCatalogService|upsertPublished\(|updateSourceMetadata\(|TaskAssetRevisionProvider|TaskSourceRevision' yak-ops-* || true
+          echo '=== LINEAGE_EXPLICIT_PROJECT_CALLERS ==='
+          grep -RInE --include='*.java' 'selectAssetByKey\([^,]+,[^)]+\)|sourceProjectId\(|new LineageAssetDraft|new LineageRelationDraft' yak-ops-* || true
+          echo '=== PROJECT_OPTIONAL_RUNTIME_ACCESS ==='
+          grep -RInE --exclude-dir=target --include='*.java' 'currentProject\.current\(|projectId[[:space:]]*==[[:space:]]*null|projectId[[:space:]]*!=[[:space:]]*null|\.eq\(projectId != null|\.eq\(projectId == null' yak-ops-* || true
+          echo '=== GLOBAL_OR_LEGACY_METHODS ==='
+          grep -RInEi --exclude-dir=target --exclude='*.sql' --include='*.java' --include='*.xml' 'project_id[[:space:]]+is[[:space:]]+null|find[A-Za-z]*Global|claimLegacy|CompatibilityBackfill|ProjectCompatibilityCoordinator|selectById\([^,]+\)[[:space:]]*:[[:space:]]*' yak-ops-* || true
