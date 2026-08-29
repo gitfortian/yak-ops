@@ -100,6 +100,7 @@ public class DevelopmentDatasetFacade {
     return new NodeDataset(
         String.valueOf(developmentNodeId),
         String.valueOf(dataset.id()),
+        dataset.requireProjectId(),
         dataset.name(),
         dataset.description(),
         dataset.status().name(),
@@ -185,6 +186,7 @@ public class DevelopmentDatasetFacade {
   public record NodeDataset(
       String developmentNodeId,
       String datasetId,
+      long projectId,
       String name,
       String description,
       String status,
@@ -192,7 +194,34 @@ public class DevelopmentDatasetFacade {
       List<VersionSnapshot> versions,
       List<FieldSnapshot> fields,
       Instant createTime,
-      Instant updateTime) {}
+      Instant updateTime) {
+
+    /** Compatibility constructor for callers that do not provide a Project-aware snapshot yet. */
+    public NodeDataset(
+        String developmentNodeId,
+        String datasetId,
+        String name,
+        String description,
+        String status,
+        VersionSnapshot currentVersion,
+        List<VersionSnapshot> versions,
+        List<FieldSnapshot> fields,
+        Instant createTime,
+        Instant updateTime) {
+      this(
+          developmentNodeId,
+          datasetId,
+          0L,
+          name,
+          description,
+          status,
+          currentVersion,
+          versions,
+          fields,
+          createTime,
+          updateTime);
+    }
+  }
 
   public record VersionSnapshot(
       String versionId,
