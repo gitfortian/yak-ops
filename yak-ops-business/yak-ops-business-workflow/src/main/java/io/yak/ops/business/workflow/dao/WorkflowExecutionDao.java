@@ -25,6 +25,9 @@ public interface WorkflowExecutionDao {
 
   List<String> selectRecoverableExecutionIds();
 
+  /** Explicit cross-Project startup dispatcher. Returned refs carry only durable identity. */
+  List<ProjectExecutionRef> selectRecoverableExecutionsForDispatch();
+
   long countActiveExecutions(String workflowId);
 
   String selectEffectiveRuntimeMetadata(String executionId);
@@ -32,4 +35,13 @@ public interface WorkflowExecutionDao {
   WorkflowNodeAttemptPO selectAttempt(String attemptId);
 
   int bindExternalExecution(String attemptId, String externalExecutionId);
+
+  record ProjectExecutionRef(long projectId, String executionId) {
+    public ProjectExecutionRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId must be positive");
+      if (executionId == null || executionId.isBlank()) {
+        throw new IllegalArgumentException("executionId must not be blank");
+      }
+    }
+  }
 }
