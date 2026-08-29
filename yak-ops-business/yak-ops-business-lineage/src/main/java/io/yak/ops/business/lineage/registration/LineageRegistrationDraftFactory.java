@@ -8,9 +8,15 @@ import io.yak.ops.business.lineage.domain.LineageRelationType;
 import io.yak.ops.business.lineage.registration.LineageRegistrationService.RegisterAssetCommand;
 import io.yak.ops.business.lineage.registration.LineageRegistrationService.RegisterRelationCommand;
 import io.yak.ops.business.lineage.repository.LineageRepository;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Validates application commands and converts them into persistence-neutral domain drafts. */
@@ -18,9 +24,18 @@ import org.springframework.stereotype.Component;
 public class LineageRegistrationDraftFactory {
 
   private final LineageRepository repository;
+  private final CurrentProject currentProject;
 
-  public LineageRegistrationDraftFactory(LineageRepository repository) {
+  @Autowired
+  public LineageRegistrationDraftFactory(
+      LineageRepository repository, CurrentProject currentProject) {
     this.repository = repository;
+    this.currentProject = currentProject;
+  }
+
+  /** Compatibility constructor for focused unit tests. */
+  public LineageRegistrationDraftFactory(LineageRepository repository) {
+    this(repository, Optional::<ProjectContext>empty);
   }
 
   public LineageAssetDraft asset(RegisterAssetCommand command, boolean validateParent) {
@@ -29,12 +44,17 @@ public class LineageRegistrationDraftFactory {
     LineageAssetType assetType = Objects.requireNonNull(command.assetType(), "assetType");
     String name = optional(command.name(), 200);
     if (name == null) name = assetKey;
+    Long projectId = resolveSourceProject(command.sourceProjectId());
     Long parentAssetId = command.parentAssetId();
     if (parentAssetId != null) {
       requirePositive(parentAssetId, "parentAssetId");
-      if (validateParent) requireAsset(parentAssetId);
+      if (validateParent) {
+        LineageAsset parent = requireAsset(parentAssetId);
+        projectId = reconcileProject(projectId, parent.projectId());
+      }
     }
     return new LineageAssetDraft(
+        projectId,
         assetKey,
         assetType,
         name,
@@ -57,9 +77,12 @@ public class LineageRegistrationDraftFactory {
     if (command.sourceAssetId() == command.targetAssetId()) {
       throw new IllegalArgumentException("血缘关系不能指向资产自身");
     }
+    Long projectId = resolveSourceProject(command.sourceProjectId());
     if (validateAssets) {
-      requireAsset(command.sourceAssetId());
-      requireAsset(command.targetAssetId());
+      LineageAsset source = requireAsset(command.sourceAssetId());
+      LineageAsset target = requireAsset(command.targetAssetId());
+      projectId = reconcileProject(projectId, source.projectId());
+      projectId = reconcileProject(projectId, target.projectId());
     }
     LineageRelationType type =
         Objects.requireNonNull(command.relationType(), "relationType");
@@ -70,6 +93,7 @@ public class LineageRegistrationDraftFactory {
       throw new IllegalArgumentException("confidence 必须在 0 到 1 之间");
     }
     return new LineageRelationDraft(
+        projectId,
         command.sourceAssetId(),
         command.targetAssetId(),
         type,
@@ -80,6 +104,33 @@ public class LineageRegistrationDraftFactory {
         valueOrEmpty(command.version(), 128),
         command.observedAt() == null ? Instant.now() : command.observedAt(),
         command.properties());
+  }
+
+  private Long resolveSourceProject(Long sourceProjectId) {
+    Long normalized = normalizeProjectId(sourceProjectId);
+    return currentProject.current()
+        .map(
+            context -> {
+              if (normalized != null && !Objects.equals(context.projectId(), normalized)) {
+                throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+              }
+              return context.projectId();
+            })
+        .orElse(normalized);
+  }
+
+  private Long reconcileProject(Long expected, Long actual) {
+    Long normalizedActual = normalizeProjectId(actual);
+    if (expected == null) return normalizedActual;
+    if (normalizedActual == null) return expected;
+    if (!Objects.equals(expected, normalizedActual)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    return expected;
+  }
+
+  private Long normalizeProjectId(Long value) {
+    return value == null || value <= 0L ? null : value;
   }
 
   private LineageAsset requireAsset(long assetId) {
