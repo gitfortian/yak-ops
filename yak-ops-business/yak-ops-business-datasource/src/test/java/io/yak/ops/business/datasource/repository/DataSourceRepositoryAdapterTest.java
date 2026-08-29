@@ -1,6 +1,7 @@
 package io.yak.ops.business.datasource.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,7 @@ import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import io.yak.ops.common.enums.datasource.DataSourceEnvironment;
 import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,17 +31,21 @@ class DataSourceRepositoryAdapterTest {
   void mapsPersistenceRowToDomainIncludingRuntimeConnectionData() {
     DataSourcePO po = new DataSourcePO();
     po.setId(42L);
+    po.setProjectId(7L);
     po.setName("orders-db");
     po.setDbType(DataSourceDbType.MYSQL);
     po.setEnvironment(DataSourceEnvironment.PROD);
     po.setConnStatus(DataSourceConnStatus.CONNECTED);
     po.setConnectionParams("{\"host\":\"127.0.0.1\"}");
     po.setOriginalJson("{\"host\":\"127.0.0.1\"}");
-    when(dao.selectById(42L)).thenReturn(po);
+    CurrentProject currentProject = project(7L);
+    when(dao.selectById(7L, 42L)).thenReturn(po);
 
-    DataSourceDefinition result = new DataSourceRepositoryAdapter(dao).findById(42L).orElseThrow();
+    DataSourceDefinition result =
+        new DataSourceRepositoryAdapter(dao, currentProject).findById(42L).orElseThrow();
 
     assertThat(result.getId()).isEqualTo(42L);
+    assertThat(result.getProjectId()).isEqualTo(7L);
     assertThat(result.getDbType()).isEqualTo(DataSourceDbType.MYSQL);
     assertThat(result.getEnvironment()).isEqualTo(DataSourceEnvironment.PROD);
     assertThat(result.getConnStatus()).isEqualTo(DataSourceConnStatus.CONNECTED);
@@ -52,7 +58,7 @@ class DataSourceRepositoryAdapterTest {
     po.setId(42L);
     po.setProjectId(7L);
     po.setName("orders-db");
-    CurrentProject currentProject = () -> Optional.of(new ProjectContext(7L, "Project A"));
+    CurrentProject currentProject = project(7L);
     when(dao.selectById(7L, 42L)).thenReturn(po);
 
     DataSourceDefinition result =
@@ -63,21 +69,32 @@ class DataSourceRepositoryAdapterTest {
   }
 
   @Test
-  void mapsDaoSummaryProjectionToDomain() {
+  void mapsProjectQualifiedSummaryProjectionToDomain() {
     DataSourceSummaryRow row = new DataSourceSummaryRow();
     row.setTotal(8L);
     row.setConnected(5L);
     row.setDisconnected(2L);
     row.setUnknown(1L);
     row.setEnvironmentCount(3L);
-    when(dao.selectSummary()).thenReturn(row);
+    when(dao.selectSummary(7L)).thenReturn(row);
 
-    DataSourceSummary result = new DataSourceRepositoryAdapter(dao).summary();
+    DataSourceSummary result = new DataSourceRepositoryAdapter(dao, project(7L)).summary();
 
     assertThat(result.total()).isEqualTo(8L);
     assertThat(result.connected()).isEqualTo(5L);
     assertThat(result.disconnected()).isEqualTo(2L);
     assertThat(result.unknown()).isEqualTo(1L);
     assertThat(result.environmentCount()).isEqualTo(3L);
+    verify(dao).selectSummary(7L);
+  }
+
+  @Test
+  void rejectsBusinessReadsWithoutCurrentProject() {
+    assertThatThrownBy(() -> new DataSourceRepositoryAdapter(dao).findById(42L))
+        .isInstanceOf(ProjectContextException.class);
+  }
+
+  private static CurrentProject project(long projectId) {
+    return () -> Optional.of(new ProjectContext(projectId, "Project " + projectId));
   }
 }

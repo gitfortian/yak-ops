@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping(DataSourceConstants.API_PREFIX)
 @RequiresPermission(DataSourcePermissionCode.READ)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
 public class DataSourceController {
   private final DataSourceManager manager;
   private final DataSourceReader reader;

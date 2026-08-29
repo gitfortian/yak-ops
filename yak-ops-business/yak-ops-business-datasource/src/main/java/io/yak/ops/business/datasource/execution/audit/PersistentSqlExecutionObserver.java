@@ -9,6 +9,7 @@ import io.yak.ops.core.execution.sql.SqlExecutionSnapshot;
 import io.yak.ops.core.execution.sql.SqlFingerprint;
 import io.yak.ops.core.execution.sql.SqlStatementSnapshot;
 import io.yak.ops.core.execution.sql.SqlStatementStatus;
+import io.yak.ops.core.project.CurrentProject;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -26,8 +27,9 @@ import org.springframework.stereotype.Component;
 /**
  * Persists completed SQL execution metadata without retaining result rows or bind parameters.
  *
- * <p>The bounded queue deliberately decouples audit I/O from user SQL latency. Saturation drops the
- * audit item and emits a warning rather than changing the SQL execution outcome.
+ * <p>The bounded queue deliberately decouples audit I/O from user SQL latency. Project ownership is
+ * captured before the audit batch crosses the async queue so ThreadLocal request context is never
+ * consulted by the background writer.
  */
 @Component
 @ConditionalOnDataSourceEnabled
@@ -38,10 +40,12 @@ public final class PersistentSqlExecutionObserver implements SqlExecutionObserve
   private static final int SQL_PREVIEW_LIMIT = 2048;
 
   private final SqlExecutionAuditStore store;
+  private final CurrentProject currentProject;
   private final ThreadPoolExecutor executor;
 
-  public PersistentSqlExecutionObserver(SqlExecutionAuditStore store) {
+  public PersistentSqlExecutionObserver(SqlExecutionAuditStore store, CurrentProject currentProject) {
     this.store = store;
+    this.currentProject = currentProject;
     this.executor = new ThreadPoolExecutor(
         2,
         2,
@@ -55,7 +59,20 @@ public final class PersistentSqlExecutionObserver implements SqlExecutionObserve
   @Override
   public void onExecutionCompleted(SqlExecutionSnapshot snapshot) {
     if (snapshot == null || !snapshot.terminal()) return;
-    AuditBatch batch = map(snapshot);
+
+    Long projectId = currentProject.current().map(context -> context.projectId()).orElse(null);
+    if (projectId == null || projectId <= 0L) {
+      // A successful datasource SQL execution should already have resolved a project-scoped
+      // DataSource. Persisting a global audit row would reopen the isolation boundary, so fail
+      // closed for observability and keep the SQL outcome untouched.
+      log.warn(
+          "SQL execution completed without Project Space; dropping audit: executionId={}, dataSourceId={}",
+          snapshot.executionId(),
+          snapshot.dataSourceId());
+      return;
+    }
+
+    AuditBatch batch = map(snapshot, projectId);
     try {
       executor.execute(() -> persist(batch));
     } catch (RejectedExecutionException exception) {
@@ -88,7 +105,12 @@ public final class PersistentSqlExecutionObserver implements SqlExecutionObserve
   }
 
   static AuditBatch map(SqlExecutionSnapshot snapshot) {
+    return map(snapshot, null);
+  }
+
+  static AuditBatch map(SqlExecutionSnapshot snapshot, Long projectId) {
     SqlExecutionAuditPO execution = new SqlExecutionAuditPO();
+    execution.setProjectId(projectId);
     execution.setExecutionId(snapshot.executionId());
     execution.setDataSourceId(snapshot.dataSourceId());
     execution.setCaller(snapshot.context().caller());

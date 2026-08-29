@@ -13,7 +13,10 @@ export type ProjectRequestRule = {
 
 /** Project-aware API rollout table kept in lockstep with backend @ProjectScope adoption. */
 export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
-  { prefix: '/api/v1/data-source', mode: 'PROJECT_OPTIONAL' },
+  // Connector/plugin definitions are platform capabilities shared by every workspace.
+  { prefix: '/api/v1/data-source/plugin/config', mode: 'LEGACY_GLOBAL' },
+  { prefix: '/api/v1/data-source', mode: 'PROJECT_REQUIRED' },
+  { prefix: '/api/v1/sql-executions', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/resources', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/datasets', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/home', mode: 'PROJECT_REQUIRED' },

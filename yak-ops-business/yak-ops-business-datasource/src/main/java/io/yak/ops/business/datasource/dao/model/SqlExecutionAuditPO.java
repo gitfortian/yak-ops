@@ -17,6 +17,7 @@ public class SqlExecutionAuditPO {
   @TableId(type = IdType.AUTO)
   private Long id;
 
+  private Long projectId;
   private String executionId;
   private String dataSourceId;
   private SqlExecutionCaller caller;

@@ -16,8 +16,11 @@ const rules: ProjectRequestRule[] = [
 describe('Project Space request context', () => {
   afterEach(() => clearStoredProjectId());
 
-  it('keeps transitional routes optional while strong management planes require a project', () => {
-    expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_OPTIONAL');
+  it('requires a project for datasource and other completed project planes', () => {
+    expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-source/1')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/data-source/catalog/1/tables')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/sql-executions/page')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/home/cockpit')).toBe('PROJECT_REQUIRED');
@@ -33,7 +36,9 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_OPTIONAL');
   });
 
-  it('keeps public data service invocation outside the project management plane', () => {
+  it('keeps datasource plugin metadata and public data service runtime global', () => {
+    expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config?pluginType=MYSQL')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config/install')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders/by-id')).toBe('LEGACY_GLOBAL');
   });
@@ -51,6 +56,8 @@ describe('Project Space request context', () => {
   it('never attaches a project header to a legacy-global route', () => {
     const headers = applyCurrentProjectHeader('/api/v1/compute-environments', {}, '7');
     expect(headers).toEqual({});
+    const pluginHeaders = applyCurrentProjectHeader('/api/v1/data-source/plugin/config', {}, '7');
+    expect(pluginHeaders).toEqual({});
     const runtimeHeaders = applyCurrentProjectHeader('/api/v1/data-service/runtime/orders', {}, '7');
     expect(runtimeHeaders).toEqual({});
   });
@@ -59,6 +66,12 @@ describe('Project Space request context', () => {
     storeProjectId(7);
     expect(readStoredProjectId()).toBe('7');
 
+    expect(applyCurrentProjectHeader('/api/v1/data-source/42', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
+    expect(applyCurrentProjectHeader('/api/v1/sql-executions/page', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
     expect(applyCurrentProjectHeader('/api/v1/home/cockpit', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',
     });

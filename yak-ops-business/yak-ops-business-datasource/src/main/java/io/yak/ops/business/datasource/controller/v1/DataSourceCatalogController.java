@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping(DataSourceConstants.API_PREFIX + "/catalog")
 @RequiresPermission(DataSourcePermissionCode.READ)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
 public class DataSourceCatalogController {
   private final DataSourceCatalogReader catalogReader;
   private final CatalogRequestConverter requestConverter;
