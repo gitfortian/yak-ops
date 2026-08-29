@@ -19,10 +19,13 @@ public interface LineageWriteMapper {
 
   int upsertRelations(@Param("rows") List<LineageRelationPO> rows);
 
-  LineageAssetPO selectAssetForUpdate(@Param("assetKey") String assetKey);
+  LineageAssetPO selectAssetForUpdate(
+      @Param("assetKey") String assetKey,
+      @Param("projectId") Long projectId);
 
   int deleteUnreferencedOwnedAssets(
       @Param("assetIds") Set<Long> assetIds,
       @Param("ownerType") String ownerType,
-      @Param("ownerId") String ownerId);
+      @Param("ownerId") String ownerId,
+      @Param("projectId") Long projectId);
 }
