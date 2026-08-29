@@ -36,7 +36,9 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/job/batch-instance', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/job/batch-control', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/executor', mode: 'PROJECT_REQUIRED' },
-  { prefix: '/api/v1/realtime-sync', mode: 'PROJECT_OPTIONAL' },
+  // Flink compute environments are platform runtime capabilities; Realtime jobs are Project-owned.
+  { prefix: '/api/v1/compute-environments', mode: 'LEGACY_GLOBAL' },
+  { prefix: '/api/v1/realtime-sync', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/workflows', mode: 'PROJECT_OPTIONAL' },
 ];
 

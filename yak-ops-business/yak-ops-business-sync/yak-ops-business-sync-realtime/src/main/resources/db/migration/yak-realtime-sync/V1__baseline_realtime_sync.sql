@@ -1,5 +1,5 @@
--- Consolidated Realtime Sync schema baseline.
--- Runtime/definition/version/execution/event references are logical and enforced by application services.
+-- Consolidated Realtime Sync schema baseline for the first formal release.
+-- Compute Environment and Runtime Lease are GLOBAL; Definition is PROJECT_ROOT and Deployment is PROJECT_RUNTIME.
 CREATE TABLE IF NOT EXISTS yak_compute_environment (
     id BIGINT NOT NULL AUTO_INCREMENT,
     name VARCHAR(120) NOT NULL,
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS yak_compute_environment (
 
 CREATE TABLE IF NOT EXISTS yak_realtime_job_definition (
     id BIGINT NOT NULL AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
     job_name VARCHAR(200) NOT NULL,
     description VARCHAR(1000) NULL,
     runtime_environment_id BIGINT NOT NULL,
@@ -37,7 +38,8 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_definition (
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     update_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_realtime_name (job_name),
+    UNIQUE KEY uk_realtime_project_name (project_id, job_name),
+    KEY idx_realtime_project_state (project_id, release_state, update_time),
     KEY idx_realtime_states (desired_state, observed_state),
     KEY idx_realtime_definition_environment (runtime_environment_id),
     KEY idx_realtime_published_definition_version (published_definition_version_id)
@@ -63,6 +65,7 @@ CREATE TABLE IF NOT EXISTS yak_realtime_definition_version (
 
 CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     id BIGINT NOT NULL AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
     definition_id BIGINT NOT NULL,
     definition_version_id BIGINT NULL,
     definition_version INT NOT NULL,
@@ -90,8 +93,10 @@ CREATE TABLE IF NOT EXISTS yak_realtime_job_deployment (
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     update_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_realtime_idempotency (idempotency_key),
+    UNIQUE KEY uk_realtime_project_idempotency (project_id, idempotency_key),
     UNIQUE KEY uk_realtime_runtime_job_name (runtime_job_name),
+    KEY idx_realtime_deployment_project_state (project_id, observed_state, update_time),
+    KEY idx_realtime_deployment_project_definition (project_id, definition_id, id),
     KEY idx_realtime_deployment_definition (definition_id, id),
     KEY idx_realtime_deployment_definition_version (definition_version_id, id),
     KEY idx_realtime_execution_state (definition_id, observed_state, id),

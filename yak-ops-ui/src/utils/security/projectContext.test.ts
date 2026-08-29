@@ -16,7 +16,7 @@ const rules: ProjectRequestRule[] = [
 describe('Project Space request context', () => {
   afterEach(() => clearStoredProjectId());
 
-  it('requires a project for datasource and other completed project planes', () => {
+  it('requires a project for completed project planes', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-source/1')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-source/catalog/1/tables')).toBe('PROJECT_REQUIRED');
@@ -36,11 +36,12 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/job/batch-instance/11')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/job/batch-control/executions/11/events')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/executor/batch-execute')).toBe('PROJECT_REQUIRED');
-    expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/realtime-sync/11/events')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_OPTIONAL');
   });
 
-  it('keeps datasource and storage plugin metadata plus public runtimes and engine health global', () => {
+  it('keeps platform capabilities, public runtimes and engine health global', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config?pluginType=MYSQL')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config/install')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/resources/storage-plugins')).toBe('LEGACY_GLOBAL');
@@ -48,10 +49,10 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders/by-id')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/job/batch-execution/health')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/executor/health')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/compute-environments')).toBe('LEGACY_GLOBAL');
   });
 
-  it('keeps platform-global capabilities outside the rollout table', () => {
-    expect(resolveProjectRequestMode('/api/v1/compute-environments')).toBe('LEGACY_GLOBAL');
+  it('keeps unrelated global capabilities outside the rollout table', () => {
     expect(resolveProjectRequestMode('/api/v1/quality/templates')).toBe('LEGACY_GLOBAL');
   });
 
@@ -61,55 +62,39 @@ describe('Project Space request context', () => {
   });
 
   it('never attaches a project header to a legacy-global route', () => {
-    const headers = applyCurrentProjectHeader('/api/v1/compute-environments', {}, '7');
-    expect(headers).toEqual({});
-    const pluginHeaders = applyCurrentProjectHeader('/api/v1/data-source/plugin/config', {}, '7');
-    expect(pluginHeaders).toEqual({});
-    const storagePluginHeaders = applyCurrentProjectHeader('/api/v1/resources/storage-plugins', {}, '7');
-    expect(storagePluginHeaders).toEqual({});
-    const runtimeHeaders = applyCurrentProjectHeader('/api/v1/data-service/runtime/orders', {}, '7');
-    expect(runtimeHeaders).toEqual({});
-    const offlineHealthHeaders = applyCurrentProjectHeader('/api/v1/job/batch-execution/health', {}, '7');
-    expect(offlineHealthHeaders).toEqual({});
+    expect(applyCurrentProjectHeader('/api/v1/compute-environments', {}, '7')).toEqual({});
+    expect(applyCurrentProjectHeader('/api/v1/data-source/plugin/config', {}, '7')).toEqual({});
+    expect(applyCurrentProjectHeader('/api/v1/resources/storage-plugins', {}, '7')).toEqual({});
+    expect(applyCurrentProjectHeader('/api/v1/data-service/runtime/orders', {}, '7')).toEqual({});
+    expect(applyCurrentProjectHeader('/api/v1/job/batch-execution/health', {}, '7')).toEqual({});
   });
 
   it('attaches the stored project to required management routes', () => {
     storeProjectId(7);
     expect(readStoredProjectId()).toBe('7');
 
-    expect(applyCurrentProjectHeader('/api/v1/data-source/42', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/sql-executions/page', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/resources/42/download', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/datasets/42', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/home/cockpit', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/data-development/nodes', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/data-service/7', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/job/batch-definition/page', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
-    expect(applyCurrentProjectHeader('/api/v1/job/batch-instance/42', {})).toEqual({
-      [PROJECT_ID_HEADER]: '7',
-    });
+    for (const url of [
+      '/api/v1/data-source/42',
+      '/api/v1/sql-executions/page',
+      '/api/v1/resources/42/download',
+      '/api/v1/datasets/42',
+      '/api/v1/home/cockpit',
+      '/api/v1/data-development/nodes',
+      '/api/v1/data-service/7',
+      '/api/v1/job/batch-definition/page',
+      '/api/v1/job/batch-instance/42',
+      '/api/v1/realtime-sync/42',
+      '/api/v1/realtime-sync/42/observability',
+    ]) {
+      expect(applyCurrentProjectHeader(url, {})).toEqual({ [PROJECT_ID_HEADER]: '7' });
+    }
   });
 
   it('still attaches the stored project to optional migrated routes', () => {
     storeProjectId(7);
-    const headers = applyCurrentProjectHeader('/api/v1/workflows/definitions', {});
-    expect(headers).toEqual({ [PROJECT_ID_HEADER]: '7' });
+    expect(applyCurrentProjectHeader('/api/v1/workflows/definitions', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
   });
 
   it('drops invalid persisted project identifiers', () => {

@@ -3,7 +3,12 @@
 <mapper namespace="io.yak.ops.business.sync.realtime.dao.mapper.RealtimeJobQueryMapper">
   <sql id="latestExecutionJoin">
     LEFT JOIN yak_realtime_job_deployment p
-      ON p.id = (SELECT MAX(p2.id) FROM yak_realtime_job_deployment p2 WHERE p2.definition_id = d.id)
+      ON p.id = (
+        SELECT MAX(p2.id)
+        FROM yak_realtime_job_deployment p2
+        WHERE p2.definition_id = d.id
+          AND p2.project_id = d.project_id
+      )
   </sql>
 
   <sql id="filters">
@@ -62,30 +67,12 @@
     p.update_time AS deployment_update_time
   </sql>
 
-  <select id="count" resultType="long">
-    SELECT COUNT(*)
-    FROM yak_realtime_job_definition d
-    <include refid="latestExecutionJoin"/>
-    WHERE 1 = 1
-    <include refid="filters"/>
-  </select>
-
   <select id="countByProject" resultType="long">
     SELECT COUNT(*)
     FROM yak_realtime_job_definition d
     <include refid="latestExecutionJoin"/>
     WHERE d.project_id = #{projectId}
     <include refid="filters"/>
-  </select>
-
-  <select id="page" resultType="io.yak.ops.business.sync.realtime.dao.model.RealtimeJobListRow">
-    SELECT <include refid="columns"/>
-    FROM yak_realtime_job_definition d
-    <include refid="latestExecutionJoin"/>
-    WHERE 1 = 1
-    <include refid="filters"/>
-    ORDER BY d.update_time DESC, d.id DESC
-    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <select id="pageByProject" resultType="io.yak.ops.business.sync.realtime.dao.model.RealtimeJobListRow">
