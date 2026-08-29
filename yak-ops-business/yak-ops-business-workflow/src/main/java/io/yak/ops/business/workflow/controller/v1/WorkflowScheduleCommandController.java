@@ -9,7 +9,6 @@ import io.yak.ops.business.workflow.schedule.WorkflowScheduleRevision;
 import io.yak.ops.common.bean.dto.workflow.WorkflowScheduleCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowScheduleUpdateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowScheduleVO;
-import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/workflows/schedules")
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope
 public class WorkflowScheduleCommandController {
   private final WorkflowScheduleCreateCommand creator;
   private final WorkflowScheduleRevision revision;

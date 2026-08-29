@@ -20,11 +20,29 @@ public interface WorkflowRuntimeRepository {
 
   List<String> listExecutionIds();
 
+  /** Current-Project recovery list used after ProjectContext has been restored. */
   List<String> findRecoverableExecutionIds();
+
+  /**
+   * Explicit cross-Project startup discovery. Business IO must restore the returned Project before
+   * calling any ordinary repository/runtime method.
+   */
+  default List<ProjectExecutionRef> findRecoverableExecutionsForDispatch() {
+    return List.of();
+  }
 
   void bindExternalExecution(String attemptId, String externalExecutionId);
 
   Optional<String> findExternalExecution(String attemptId);
+
+  record ProjectExecutionRef(long projectId, String executionId) {
+    public ProjectExecutionRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId must be positive");
+      if (executionId == null || executionId.isBlank()) {
+        throw new IllegalArgumentException("executionId must not be blank");
+      }
+    }
+  }
 
   record RuntimeMetadataRecord(
       String name,

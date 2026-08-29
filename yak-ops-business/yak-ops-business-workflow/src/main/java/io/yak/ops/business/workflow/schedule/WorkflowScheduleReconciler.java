@@ -1,11 +1,14 @@
 package io.yak.ops.business.workflow.schedule;
 
+import io.yak.ops.business.workflow.dao.WorkflowScheduleDao;
+import io.yak.ops.business.workflow.dao.WorkflowScheduleDao.ProjectScheduleRef;
+import io.yak.ops.business.workflow.dao.WorkflowScheduleTriggerDao;
 import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
 import io.yak.ops.business.workflow.schedule.engine.WorkflowScheduleEngineBridge;
 import io.yak.ops.business.workflow.schedule.trigger.WorkflowScheduleTriggerCoordinator;
-
-import io.yak.ops.business.workflow.dao.WorkflowScheduleDao;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -18,36 +21,38 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-/**
- * 应用启动后以 yak_workflow_schedule 为事实来源，对 Yak Schedule/Quartz 与 Trigger Ledger 做对账恢复。
- *
- * <p>即便 Quartz 使用 memory store，ONLINE 计划、错过触发和串行等待队列都可从业务数据库恢复。</p>
- */
+/** 启动后以 Project-scoped business schedule 为事实来源恢复 Yak Schedule 与 Trigger Ledger。 */
 @Component
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleReconciler {
   private static final Logger log = LoggerFactory.getLogger(WorkflowScheduleReconciler.class);
 
   private final WorkflowScheduleDao dao;
+  private final WorkflowScheduleTriggerDao triggerDao;
   private final WorkflowDefinitionManager definitions;
   private final WorkflowScheduleEngineBridge engine;
   private final WorkflowScheduleRuntimeState runtimeState;
   private final WorkflowScheduleMisfireRecovery misfireRecovery;
   private final WorkflowScheduleTriggerCoordinator coordinator;
+  private final ProjectContextScope projectScope;
 
   public WorkflowScheduleReconciler(
       WorkflowScheduleDao dao,
+      WorkflowScheduleTriggerDao triggerDao,
       WorkflowDefinitionManager definitions,
       WorkflowScheduleEngineBridge engine,
       WorkflowScheduleRuntimeState runtimeState,
       WorkflowScheduleMisfireRecovery misfireRecovery,
-      WorkflowScheduleTriggerCoordinator coordinator) {
+      WorkflowScheduleTriggerCoordinator coordinator,
+      ProjectContextScope projectScope) {
     this.dao = dao;
+    this.triggerDao = triggerDao;
     this.definitions = definitions;
     this.engine = engine;
     this.runtimeState = runtimeState;
     this.misfireRecovery = misfireRecovery;
     this.coordinator = coordinator;
+    this.projectScope = projectScope;
   }
 
   @Order(20)
@@ -58,14 +63,15 @@ public class WorkflowScheduleReconciler {
       return;
     }
 
-    List<WorkflowSchedulePO> schedules = dao.selectSchedules(null, null);
-    Map<String, WorkflowSchedulePO> byId = new HashMap<>();
-    schedules.forEach(item -> byId.put(item.getId(), item));
+    List<ProjectScheduleRef> candidates = dao.selectSchedulesForReconciliation();
+    Map<String, ProjectScheduleRef> byId = new HashMap<>();
+    candidates.forEach(item -> byId.put(item.scheduleId(), item));
 
+    // Engine schedules with no persisted business owner are stale. Existing OFFLINE schedules are
+    // handled inside their Project after scoped reload.
     engine.list().forEach(snapshot -> {
       String scheduleId = snapshot.definition().key().name();
-      WorkflowSchedulePO local = byId.get(scheduleId);
-      if (local == null || !"ONLINE".equals(local.getStatus())) {
+      if (!byId.containsKey(scheduleId)) {
         try {
           engine.deleteIfPresent(scheduleId);
         } catch (RuntimeException exception) {
@@ -78,67 +84,93 @@ public class WorkflowScheduleReconciler {
     });
 
     Instant now = Instant.now();
-    for (WorkflowSchedulePO schedule : schedules) {
-      if (!"ONLINE".equals(schedule.getStatus())) continue;
-      Instant missedFireTime = null;
+    for (ProjectScheduleRef candidate : candidates) {
       try {
-        var workflow = definitions.get(schedule.getWorkflowId());
-        boolean workflowReady = "ONLINE".equals(workflow.status()) && workflow.activeVersionId() != null;
-        boolean expired = schedule.getEndTime() != null && !schedule.getEndTime().isAfter(now);
-        if (!workflowReady || expired) {
-          markOffline(schedule, now);
-          engine.deleteIfPresent(schedule.getId());
-          continue;
-        }
-
-        Instant persistedNextFireTime = schedule.getNextFireTime();
-        missedFireTime = persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)
-            ? persistedNextFireTime
-            : null;
-
-        var snapshot = engine.save(schedule);
-        runtimeState.syncSnapshot(schedule, snapshot);
-        log.info(
-            "[workflow-schedule] reconciled schedule={}, workflow={}, nextFireTime={}",
-            schedule.getId(),
-            schedule.getWorkflowId(),
-            snapshot.nextFireTime());
+        projectScope.run(
+            new ProjectContext(candidate.projectId(), null),
+            () -> reconcileInProject(candidate, now));
       } catch (RuntimeException exception) {
-        runtimeState.clearNext(schedule.getId());
         log.error(
-            "[workflow-schedule] reconcile failed schedule={}, workflow={}, message={}",
-            schedule.getId(),
-            schedule.getWorkflowId(),
+            "[workflow-schedule] reconcile failed projectId={}, schedule={}, message={}",
+            candidate.projectId(),
+            candidate.scheduleId(),
             exception.getMessage(),
             exception);
-        continue;
-      }
-
-      if (missedFireTime != null) {
-        try {
-          misfireRecovery.recover(schedule, missedFireTime, now);
-          log.info(
-              "[workflow-schedule] recovered misfire schedule={}, planned={}, policy={}",
-              schedule.getId(), missedFireTime, schedule.getMisfireStrategy());
-        } catch (RuntimeException exception) {
-          log.error(
-              "[workflow-schedule] misfire recovery failed schedule={}, planned={}, policy={}, message={}",
-              schedule.getId(),
-              missedFireTime,
-              schedule.getMisfireStrategy(),
-              exception.getMessage(),
-              exception);
-        }
       }
     }
 
+    // Pending Trigger Ledger rows may outlive a Schedule (for Backfill/ops rerun), so discover their
+    // Project identities independently instead of deriving recovery only from current schedules.
+    for (Long projectId : triggerDao.selectPendingProjectIdsForRecovery()) {
+      try {
+        projectScope.run(new ProjectContext(projectId, null), coordinator::recoverPending);
+      } catch (RuntimeException exception) {
+        log.error(
+            "[workflow-schedule] trigger ledger recovery failed projectId={}, message={}",
+            projectId,
+            exception.getMessage(),
+            exception);
+      }
+    }
+  }
+
+  private void reconcileInProject(ProjectScheduleRef candidate, Instant now) {
+    WorkflowSchedulePO schedule = dao.selectSchedule(candidate.scheduleId());
+    if (schedule == null) return;
+    if (!"ONLINE".equals(schedule.getStatus())) {
+      engine.deleteIfPresent(schedule.getId());
+      runtimeState.clearNext(schedule.getId());
+      return;
+    }
+
+    Instant missedFireTime = null;
     try {
-      coordinator.recoverPending();
+      var workflow = definitions.get(schedule.getWorkflowId());
+      boolean workflowReady = "ONLINE".equals(workflow.status()) && workflow.activeVersionId() != null;
+      boolean expired = schedule.getEndTime() != null && !schedule.getEndTime().isAfter(now);
+      if (!workflowReady || expired) {
+        markOffline(schedule, now);
+        engine.deleteIfPresent(schedule.getId());
+        return;
+      }
+
+      Instant persistedNextFireTime = schedule.getNextFireTime();
+      missedFireTime = persistedNextFireTime != null && !persistedNextFireTime.isAfter(now)
+          ? persistedNextFireTime
+          : null;
+
+      var snapshot = engine.save(schedule);
+      runtimeState.syncSnapshot(schedule, snapshot);
+      log.info(
+          "[workflow-schedule] reconciled projectId={}, schedule={}, workflow={}, nextFireTime={}",
+          candidate.projectId(),
+          schedule.getId(),
+          schedule.getWorkflowId(),
+          snapshot.nextFireTime());
     } catch (RuntimeException exception) {
-      log.error(
-          "[workflow-schedule] trigger ledger recovery failed message={}",
-          exception.getMessage(),
-          exception);
+      runtimeState.clearNext(schedule.getId());
+      throw exception;
+    }
+
+    if (missedFireTime != null) {
+      try {
+        misfireRecovery.recover(schedule, missedFireTime, now);
+        log.info(
+            "[workflow-schedule] recovered misfire projectId={}, schedule={}, planned={}, policy={}",
+            candidate.projectId(),
+            schedule.getId(),
+            missedFireTime,
+            schedule.getMisfireStrategy());
+      } catch (RuntimeException exception) {
+        log.error(
+            "[workflow-schedule] misfire recovery failed projectId={}, schedule={}, planned={}, policy={}, message={}",
+            candidate.projectId(),
+            schedule.getId(),
+            missedFireTime,
+            schedule.getMisfireStrategy(),
+            exception.getMessage(),
+            exception);
+      }
     }
   }
 

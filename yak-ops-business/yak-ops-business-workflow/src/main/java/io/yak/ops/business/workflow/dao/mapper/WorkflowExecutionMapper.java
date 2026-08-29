@@ -9,11 +9,18 @@ import org.apache.ibatis.annotations.Param;
 public interface WorkflowExecutionMapper extends BaseMapper<WorkflowExecutionPO> {
   int upsert(WorkflowExecutionPO execution);
 
-  List<String> selectExecutionIds();
+  List<String> selectExecutionIds(@Param("projectId") long projectId);
 
-  List<String> selectRecoverableExecutionIds();
+  List<String> selectRecoverableExecutionIds(@Param("projectId") long projectId);
 
-  long countActiveExecutions(@Param("workflowId") String workflowId);
+  /** Explicit cross-Project dispatcher used only to discover durable startup recovery identities. */
+  List<WorkflowExecutionPO> selectRecoverableExecutionsForDispatch();
 
-  String selectEffectiveRuntimeMetadata(@Param("executionId") String executionId);
+  long countActiveExecutions(
+      @Param("workflowId") String workflowId,
+      @Param("projectId") long projectId);
+
+  String selectEffectiveRuntimeMetadata(
+      @Param("executionId") String executionId,
+      @Param("projectId") long projectId);
 }

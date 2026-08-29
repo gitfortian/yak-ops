@@ -12,6 +12,10 @@ public interface WorkflowScheduleTriggerDao {
   WorkflowScheduleTriggerPO selectByExecutionId(String executionId);
   WorkflowScheduleTriggerPO selectNextWaiting(String workflowId);
   List<WorkflowScheduleTriggerPO> selectPending();
+
+  /** Explicit cross-Project startup dispatcher; callers must restore each Project before recovery. */
+  List<Long> selectPendingProjectIdsForRecovery();
+
   List<WorkflowScheduleTriggerPO> selectQueuedBySchedule(String scheduleId);
   List<WorkflowScheduleTriggerPO> selectByBackfillId(String backfillId);
   List<WorkflowScheduleTriggerPO> selectTriggers(

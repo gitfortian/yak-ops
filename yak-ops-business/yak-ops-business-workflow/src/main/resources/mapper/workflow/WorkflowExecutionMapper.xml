@@ -10,7 +10,7 @@
       (#{id}, #{projectId}, #{definitionId}, #{sourceExecutionId}, #{status}, #{inputJson}, #{schedulingStopped},
        #{runStartedAt}, #{pausedAt}, #{pausedDurationMs}, #{createdAt}, #{updatedAt}, #{endedAt})
     ON DUPLICATE KEY UPDATE
-      project_id = COALESCE(VALUES(project_id), project_id),
+      project_id = VALUES(project_id),
       definition_id = VALUES(definition_id),
       source_execution_id = VALUES(source_execution_id),
       status = VALUES(status),
@@ -26,22 +26,38 @@
   <select id="selectExecutionIds" resultType="java.lang.String">
     SELECT id
     FROM yak_workflow_execution
+    WHERE project_id = #{projectId}
     ORDER BY created_at DESC
   </select>
 
   <select id="selectRecoverableExecutionIds" resultType="java.lang.String">
     SELECT e.id
     FROM yak_workflow_execution e
-    WHERE e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
+    WHERE e.project_id = #{projectId}
+      AND e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
     ORDER BY e.created_at
+  </select>
+
+  <select id="selectRecoverableExecutionsForDispatch"
+          resultType="io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO">
+    SELECT e.id, e.project_id
+    FROM yak_workflow_execution e
+    WHERE e.status IN ('CREATED', 'RUNNING', 'PAUSING', 'PAUSED', 'RESUMING')
+      AND e.project_id IS NOT NULL
+    ORDER BY e.project_id, e.created_at
   </select>
 
   <select id="countActiveExecutions" resultType="long">
     SELECT COUNT(*)
     FROM yak_workflow_execution e
-    LEFT JOIN yak_workflow_version v ON v.id = e.definition_id
-    LEFT JOIN yak_workflow_definition d ON d.id = #{workflowId}
-    WHERE (
+    LEFT JOIN yak_workflow_version v
+      ON v.id = e.definition_id
+     AND v.project_id = #{projectId}
+    LEFT JOIN yak_workflow_definition d
+      ON d.id = #{workflowId}
+     AND d.project_id = #{projectId}
+    WHERE e.project_id = #{projectId}
+      AND (
         v.workflow_id = #{workflowId}
         OR e.id = d.latest_execution_id
       )
@@ -53,6 +69,8 @@
     FROM yak_workflow_execution e
     LEFT JOIN yak_workflow_version v
       ON v.id = e.definition_id
+     AND v.project_id = #{projectId}
     WHERE e.id = #{executionId}
+      AND e.project_id = #{projectId}
   </select>
 </mapper>

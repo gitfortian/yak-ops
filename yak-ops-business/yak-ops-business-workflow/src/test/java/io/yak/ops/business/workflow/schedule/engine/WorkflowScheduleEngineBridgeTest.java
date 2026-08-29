@@ -1,6 +1,7 @@
 package io.yak.ops.business.workflow.schedule.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,7 +22,7 @@ import org.springframework.beans.factory.ObjectProvider;
 class WorkflowScheduleEngineBridgeTest {
 
   @Test
-  void shouldMapWorkflowScheduleToYakScheduleDefinition() {
+  void shouldMapWorkflowScheduleToYakScheduleDefinitionWithProjectIdentity() {
     ScheduleManager manager = mock(ScheduleManager.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<ScheduleManager> provider = mock(ObjectProvider.class);
@@ -52,6 +53,8 @@ class WorkflowScheduleEngineBridgeTest {
     assertThat(definition.target().handler()).isEqualTo("workflowScheduleHandler");
     assertThat(definition.target().payload()).containsEntry("scheduleId", "schedule-1");
     assertThat(definition.target().payload()).containsEntry("workflowId", "workflow-1");
+    assertThat(definition.target().payload()).containsEntry("projectId", 7L);
+    assertThat(definition.metadata()).containsEntry("projectId", "7");
     assertThat(definition.policy().concurrencyPolicy()).isEqualTo(ConcurrencyPolicy.FORBID);
     assertThat(definition.policy().misfirePolicy()).isEqualTo(MisfirePolicy.FIRE_ONCE_NOW);
     assertThat(definition.policy().triggerRetries()).isZero();
@@ -70,9 +73,23 @@ class WorkflowScheduleEngineBridgeTest {
     assertThat(definition.policy().misfirePolicy()).isEqualTo(MisfirePolicy.IGNORE);
   }
 
+  @Test
+  void shouldRejectScheduleWithoutDurableProjectIdentity() {
+    @SuppressWarnings("unchecked")
+    ObjectProvider<ScheduleManager> provider = mock(ObjectProvider.class);
+    WorkflowScheduleEngineBridge bridge = new WorkflowScheduleEngineBridge(provider);
+    WorkflowSchedulePO schedule = schedule("SERIAL_WAIT", "FIRE_ONCE");
+    schedule.setProjectId(null);
+
+    assertThatThrownBy(() -> bridge.toDefinition(schedule))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Project identity");
+  }
+
   private WorkflowSchedulePO schedule(String concurrency, String misfire) {
     WorkflowSchedulePO value = new WorkflowSchedulePO();
     value.setId("schedule-1");
+    value.setProjectId(7L);
     value.setWorkflowId("workflow-1");
     value.setName("每日订单同步");
     value.setStatus("ONLINE");

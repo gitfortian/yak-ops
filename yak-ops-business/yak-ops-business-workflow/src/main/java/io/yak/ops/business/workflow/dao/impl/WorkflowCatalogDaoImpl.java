@@ -19,7 +19,7 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 基于 MyBatis-Plus 的工作流定义与版本 DAO。 */
+/** 基于 MyBatis-Plus 的工作流定义与版本 DAO；普通业务路径必须绑定 trusted CurrentProject。 */
 @Repository
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(
@@ -45,6 +45,7 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
     this.currentProject = currentProject;
   }
 
+  /** Test-only compatibility constructor. All operations still fail closed without CurrentProject. */
   public WorkflowCatalogDaoImpl(
       WorkflowDefinitionMapper definitionMapper,
       WorkflowVersionMapper versionMapper,
@@ -58,18 +59,22 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
 
   @Override
   public List<WorkflowDefinitionPO> selectDefinitions() {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return definitionMapper.selectList(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
-            .eq(projectId != null, WorkflowDefinitionPO::getProjectId, projectId)
+            .eq(WorkflowDefinitionPO::getProjectId, projectId)
             .orderByDesc(WorkflowDefinitionPO::getUpdateTime));
   }
 
   @Override
   public List<WorkflowVersionPO> selectPublishedVersions(String workflowId) {
-    if (!accessible(workflowId)) return List.of();
+    long projectId = currentProjectId();
+    if (!accessible(workflowId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     return versionMapper.selectList(
         Wrappers.<WorkflowVersionPO>lambdaQuery()
+            .eq(WorkflowVersionPO::getProjectId, projectId)
             .eq(WorkflowVersionPO::getWorkflowId, workflowId)
             .eq(WorkflowVersionPO::getVersionKind, "PUBLISHED")
             .orderByAsc(WorkflowVersionPO::getVersionNo));
@@ -77,42 +82,52 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
 
   @Override
   public WorkflowVersionPO selectVersionById(String versionId) {
-    WorkflowVersionPO version = versionMapper.selectById(versionId);
-    if (version == null || currentProjectId() == null) return version;
-    return accessible(version.getWorkflowId()) ? version : null;
+    return versionMapper.selectByIdAndProject(versionId, currentProjectId());
   }
 
   @Override
   public int upsertDefinition(WorkflowDefinitionPO definition) {
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      WorkflowDefinitionPO existing = definitionMapper.selectById(definition.getId());
-      if (existing != null
-          && existing.getProjectId() != null
-          && !Objects.equals(existing.getProjectId(), projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      definition.setProjectId(projectId);
+    long projectId = currentProjectId();
+    WorkflowDefinitionPO existing = definitionMapper.selectById(definition.getId());
+    if (existing != null
+        && (existing.getProjectId() == null || !Objects.equals(existing.getProjectId(), projectId))) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
+    if (definition.getProjectId() != null && !Objects.equals(definition.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    definition.setProjectId(projectId);
     return definitionMapper.upsert(definition);
   }
 
   @Override
   public int insertVersion(WorkflowVersionPO version) {
-    requireAccessible(version.getWorkflowId());
+    long projectId = currentProjectId();
+    if (version.getProjectId() != null && !Objects.equals(version.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    String workflowId = normalize(version.getWorkflowId());
+    if (workflowId != null && !accessible(workflowId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    if (workflowId == null && !"RUNTIME".equalsIgnoreCase(version.getVersionKind())) {
+      throw new IllegalArgumentException("Only RUNTIME workflow versions may omit workflowId");
+    }
+    version.setWorkflowId(workflowId);
+    version.setProjectId(projectId);
     return versionMapper.insert(version);
   }
 
   @Override
   @Transactional(transactionManager = "yakBusinessTransactionManager")
   public int deleteDefinition(String workflowId) {
-    Long projectId = currentProjectId();
-    if (projectId != null && !accessible(workflowId)) return 0;
+    long projectId = currentProjectId();
+    if (!accessible(workflowId, projectId)) return 0;
     List<String> scheduleIds = scheduleMapper.selectObjs(
             Wrappers.<WorkflowSchedulePO>query()
                 .select("id")
                 .eq("workflow_id", workflowId)
-                .eq(projectId != null, "project_id", projectId))
+                .eq("project_id", projectId))
         .stream()
         .filter(String.class::isInstance)
         .map(String.class::cast)
@@ -121,35 +136,33 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
     int deleted = definitionMapper.delete(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
             .eq(WorkflowDefinitionPO::getId, workflowId)
-            .eq(projectId != null, WorkflowDefinitionPO::getProjectId, projectId));
+            .eq(WorkflowDefinitionPO::getProjectId, projectId));
     if (deleted != 1 || scheduleIds.isEmpty()) return deleted;
 
     scheduleMapper.delete(
         Wrappers.<WorkflowSchedulePO>lambdaQuery()
             .in(WorkflowSchedulePO::getId, scheduleIds)
-            .eq(projectId != null, WorkflowSchedulePO::getProjectId, projectId));
+            .eq(WorkflowSchedulePO::getProjectId, projectId));
     return deleted;
   }
 
   @Override
   public int initializeEngineDefinition(String versionId, String engineDefinitionJson) {
-    if (selectVersionById(versionId) == null) return 0;
-    return versionMapper.initializeEngineDefinition(versionId, engineDefinitionJson);
+    long projectId = currentProjectId();
+    return versionMapper.initializeEngineDefinition(versionId, projectId, engineDefinitionJson);
   }
 
   @Override
   public int initializeRuntimeMetadata(String versionId, String runtimeMetadataJson) {
-    if (selectVersionById(versionId) == null) return 0;
-    return versionMapper.initializeRuntimeMetadata(versionId, runtimeMetadataJson);
+    long projectId = currentProjectId();
+    return versionMapper.initializeRuntimeMetadata(versionId, projectId, runtimeMetadataJson);
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
   }
 
-  private boolean accessible(String workflowId) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return true;
+  private boolean accessible(String workflowId, long projectId) {
     if (workflowId == null || workflowId.isBlank()) return false;
     return definitionMapper.selectCount(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
@@ -157,9 +170,7 @@ public class WorkflowCatalogDaoImpl implements WorkflowCatalogDao {
             .eq(WorkflowDefinitionPO::getProjectId, projectId)) > 0L;
   }
 
-  private void requireAccessible(String workflowId) {
-    if (!accessible(workflowId)) {
-      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-    }
+  private String normalize(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 }

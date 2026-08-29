@@ -11,7 +11,6 @@ import io.yak.ops.common.bean.po.workflow.WorkflowDefinitionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowNodeAttemptPO;
 import io.yak.ops.common.bean.po.workflow.WorkflowNodeExecutionPO;
-import io.yak.ops.common.bean.po.workflow.WorkflowVersionPO;
 import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
@@ -22,7 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** 基于 MyBatis-Plus 的工作流执行 DAO。 */
+/** 基于 MyBatis-Plus 的工作流执行 DAO；普通运行时访问全部 fail-closed。 */
 @Repository
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(
@@ -31,8 +30,6 @@ import org.springframework.stereotype.Repository;
     havingValue = "true",
     matchIfMissing = true)
 public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
-  private static final List<String> ACTIVE_STATUSES =
-      List.of("CREATED", "RUNNING", "PAUSING", "PAUSED", "RESUMING");
 
   private final WorkflowExecutionMapper executionMapper;
   private final WorkflowNodeExecutionMapper nodeExecutionMapper;
@@ -57,6 +54,7 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
     this.currentProject = currentProject;
   }
 
+  /** Test-only compatibility constructor. Calls still fail closed without CurrentProject. */
   public WorkflowExecutionDaoImpl(
       WorkflowExecutionMapper executionMapper,
       WorkflowNodeExecutionMapper nodeExecutionMapper,
@@ -72,16 +70,16 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
 
   @Override
   public WorkflowExecutionPO selectExecution(String executionId) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return executionMapper.selectOne(
         Wrappers.<WorkflowExecutionPO>lambdaQuery()
             .eq(WorkflowExecutionPO::getId, executionId)
-            .eq(projectId != null, WorkflowExecutionPO::getProjectId, projectId));
+            .eq(WorkflowExecutionPO::getProjectId, projectId));
   }
 
   @Override
   public List<WorkflowNodeExecutionPO> selectNodeExecutions(String executionId) {
-    if (!executionAccessible(executionId)) return List.of();
+    requireExecution(executionId);
     return nodeExecutionMapper.selectList(
         Wrappers.<WorkflowNodeExecutionPO>lambdaQuery()
             .eq(WorkflowNodeExecutionPO::getWorkflowExecutionId, executionId)
@@ -90,7 +88,7 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
 
   @Override
   public List<WorkflowNodeAttemptPO> selectNodeAttempts(String executionId) {
-    if (!executionAccessible(executionId)) return List.of();
+    requireExecution(executionId);
     return nodeAttemptMapper.selectList(
         Wrappers.<WorkflowNodeAttemptPO>lambdaQuery()
             .eq(WorkflowNodeAttemptPO::getWorkflowExecutionId, executionId)
@@ -100,7 +98,27 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
 
   @Override
   public int upsertExecution(WorkflowExecutionPO execution) {
-    execution.setProjectId(resolveProjectId(execution));
+    long projectId = currentProjectId();
+    WorkflowExecutionPO existing = executionMapper.selectById(execution.getId());
+    if (existing != null
+        && (existing.getProjectId() == null || !Objects.equals(existing.getProjectId(), projectId))) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    if (execution.getProjectId() != null && !Objects.equals(execution.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    if (execution.getDefinitionId() == null
+        || execution.getDefinitionId().isBlank()
+        || versionMapper == null
+        || versionMapper.selectByIdAndProject(execution.getDefinitionId(), projectId) == null) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    if (execution.getSourceExecutionId() != null
+        && !execution.getSourceExecutionId().isBlank()
+        && selectExecution(execution.getSourceExecutionId()) == null) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    execution.setProjectId(projectId);
     return executionMapper.upsert(execution);
   }
 
@@ -118,8 +136,10 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
 
   @Override
   public int updateExecution(WorkflowExecutionPO execution) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return executionMapper.updateById(execution);
+    long projectId = currentProjectId();
+    if (execution.getProjectId() != null && !Objects.equals(execution.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     execution.setProjectId(projectId);
     return executionMapper.update(
         execution,
@@ -130,50 +150,39 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
 
   @Override
   public List<String> selectExecutionIds() {
-    Long projectId = currentProjectId();
-    if (projectId == null) return executionMapper.selectExecutionIds();
-    return executionMapper.selectObjs(
-            Wrappers.<WorkflowExecutionPO>lambdaQuery()
-                .select(WorkflowExecutionPO::getId)
-                .eq(WorkflowExecutionPO::getProjectId, projectId)
-                .orderByDesc(WorkflowExecutionPO::getCreatedAt))
-        .stream()
-        .map(String::valueOf)
-        .toList();
+    return executionMapper.selectExecutionIds(currentProjectId());
   }
 
   @Override
   public List<String> selectRecoverableExecutionIds() {
-    Long projectId = currentProjectId();
-    if (projectId == null) return executionMapper.selectRecoverableExecutionIds();
-    return executionMapper.selectObjs(
-            Wrappers.<WorkflowExecutionPO>lambdaQuery()
-                .select(WorkflowExecutionPO::getId)
-                .eq(WorkflowExecutionPO::getProjectId, projectId)
-                .in(WorkflowExecutionPO::getStatus, ACTIVE_STATUSES)
-                .orderByAsc(WorkflowExecutionPO::getCreatedAt))
-        .stream()
-        .map(String::valueOf)
+    return executionMapper.selectRecoverableExecutionIds(currentProjectId());
+  }
+
+  @Override
+  public List<ProjectExecutionRef> selectRecoverableExecutionsForDispatch() {
+    return executionMapper.selectRecoverableExecutionsForDispatch().stream()
+        .filter(value -> value.getProjectId() != null && value.getProjectId() > 0L)
+        .map(value -> new ProjectExecutionRef(value.getProjectId(), value.getId()))
         .toList();
   }
 
   @Override
   public long countActiveExecutions(String workflowId) {
-    Long projectId = currentProjectId();
-    if (projectId != null && !workflowAccessible(workflowId, projectId)) return 0L;
-    return executionMapper.countActiveExecutions(workflowId);
+    long projectId = currentProjectId();
+    if (!workflowAccessible(workflowId, projectId)) return 0L;
+    return executionMapper.countActiveExecutions(workflowId, projectId);
   }
 
   @Override
   public String selectEffectiveRuntimeMetadata(String executionId) {
-    if (!executionAccessible(executionId)) return null;
-    return executionMapper.selectEffectiveRuntimeMetadata(executionId);
+    return executionMapper.selectEffectiveRuntimeMetadata(executionId, currentProjectId());
   }
 
   @Override
   public WorkflowNodeAttemptPO selectAttempt(String attemptId) {
+    currentProjectId();
     WorkflowNodeAttemptPO attempt = nodeAttemptMapper.selectById(attemptId);
-    if (attempt == null || !executionAccessible(attempt.getWorkflowExecutionId())) return null;
+    if (attempt == null || selectExecution(attempt.getWorkflowExecutionId()) == null) return null;
     return attempt;
   }
 
@@ -183,48 +192,20 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
     return nodeAttemptMapper.bindExternalExecution(attemptId, externalExecutionId);
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
   }
 
-  private boolean executionAccessible(String executionId) {
-    return currentProjectId() == null || selectExecution(executionId) != null;
-  }
-
-  private void requireExecution(String executionId) {
-    if (!executionAccessible(executionId)) {
+  private WorkflowExecutionPO requireExecution(String executionId) {
+    WorkflowExecutionPO execution = selectExecution(executionId);
+    if (execution == null) {
       throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
+    return execution;
   }
 
-  private Long resolveProjectId(WorkflowExecutionPO execution) {
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      if (execution.getProjectId() != null
-          && !Objects.equals(execution.getProjectId(), projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      return projectId;
-    }
-    if (execution.getProjectId() != null) return execution.getProjectId();
-    if (execution.getSourceExecutionId() != null) {
-      WorkflowExecutionPO source = executionMapper.selectById(execution.getSourceExecutionId());
-      if (source != null && source.getProjectId() != null) return source.getProjectId();
-    }
-    if (versionMapper != null && definitionMapper != null) {
-      WorkflowVersionPO version = versionMapper.selectById(execution.getDefinitionId());
-      if (version != null && version.getWorkflowId() != null) {
-        WorkflowDefinitionPO definition = definitionMapper.selectById(version.getWorkflowId());
-        if (definition != null) return definition.getProjectId();
-      }
-      WorkflowDefinitionPO definition = definitionMapper.selectById(execution.getDefinitionId());
-      if (definition != null) return definition.getProjectId();
-    }
-    return null;
-  }
-
-  private boolean workflowAccessible(String workflowId, Long projectId) {
-    if (definitionMapper == null) return true;
+  private boolean workflowAccessible(String workflowId, long projectId) {
+    if (definitionMapper == null || workflowId == null || workflowId.isBlank()) return false;
     return definitionMapper.selectCount(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
             .eq(WorkflowDefinitionPO::getId, workflowId)

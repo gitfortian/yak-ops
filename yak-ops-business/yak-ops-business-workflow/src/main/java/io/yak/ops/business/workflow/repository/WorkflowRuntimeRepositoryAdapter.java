@@ -80,6 +80,13 @@ public class WorkflowRuntimeRepositoryAdapter implements WorkflowRuntimeReposito
   }
 
   @Override
+  public List<ProjectExecutionRef> findRecoverableExecutionsForDispatch() {
+    return executionDao.selectRecoverableExecutionsForDispatch().stream()
+        .map(value -> new ProjectExecutionRef(value.projectId(), value.executionId()))
+        .toList();
+  }
+
+  @Override
   public void bindExternalExecution(String attemptId, String externalExecutionId) {
     if (attemptId == null || attemptId.isBlank()
         || externalExecutionId == null || externalExecutionId.isBlank()) {

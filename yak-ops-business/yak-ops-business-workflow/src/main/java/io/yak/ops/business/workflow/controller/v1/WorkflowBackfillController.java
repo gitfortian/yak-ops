@@ -8,7 +8,6 @@ import io.yak.ops.business.workflow.backfill.WorkflowBackfillQuery;
 import io.yak.ops.common.bean.dto.workflow.WorkflowBackfillCreateDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillPreviewVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowBackfillVO;
-import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -26,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/workflows/backfills")
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope
 public class WorkflowBackfillController {
   private final WorkflowBackfillManager service;
   private final WorkflowBackfillQuery query;

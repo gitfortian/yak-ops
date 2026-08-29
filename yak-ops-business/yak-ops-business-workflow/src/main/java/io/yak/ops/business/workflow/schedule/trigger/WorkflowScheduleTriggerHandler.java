@@ -1,21 +1,23 @@
 package io.yak.ops.business.workflow.schedule.trigger;
 
+import io.yak.framework.schedule.api.ScheduleExecutionContext;
+import io.yak.framework.schedule.api.ScheduleExecutionResult;
+import io.yak.framework.schedule.api.ScheduleHandler;
 import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleLifecycle;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleQuery;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleRuntimeState;
 import io.yak.ops.business.workflow.schedule.engine.WorkflowScheduleEngineBridge;
-
-import io.yak.framework.schedule.api.ScheduleExecutionContext;
-import io.yak.framework.schedule.api.ScheduleExecutionResult;
-import io.yak.framework.schedule.api.ScheduleHandler;
 import io.yak.ops.common.bean.po.workflow.WorkflowSchedulePO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.time.Instant;
+import java.util.Objects;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** Yak Schedule 工作流 Handler：校验调度窗口后统一进入 Trigger Ledger 协调器。 */
+/** Yak Schedule 工作流 Handler：从 durable payload 恢复 Project 后进入 Trigger Ledger 协调器。 */
 @Component(WorkflowScheduleEngineBridge.HANDLER)
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
@@ -25,6 +27,7 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
   private final WorkflowScheduleLifecycle lifecycle;
   private final WorkflowScheduleEngineBridge engine;
   private final WorkflowScheduleRuntimeState runtimeState;
+  private final ProjectContextScope projectScope;
 
   public WorkflowScheduleTriggerHandler(
       WorkflowScheduleQuery schedules,
@@ -32,24 +35,37 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
       WorkflowScheduleTriggerCoordinator coordinator,
       WorkflowScheduleLifecycle lifecycle,
       WorkflowScheduleEngineBridge engine,
-      WorkflowScheduleRuntimeState runtimeState) {
+      WorkflowScheduleRuntimeState runtimeState,
+      ProjectContextScope projectScope) {
     this.schedules = schedules;
     this.definitions = definitions;
     this.coordinator = coordinator;
     this.lifecycle = lifecycle;
     this.engine = engine;
     this.runtimeState = runtimeState;
+    this.projectScope = projectScope;
   }
 
   @Override
   public ScheduleExecutionResult execute(ScheduleExecutionContext context) {
+    long projectId = context.requiredLong("projectId");
+    return projectScope.call(
+        new ProjectContext(projectId, null),
+        () -> executeInProject(context, projectId));
+  }
+
+  private ScheduleExecutionResult executeInProject(
+      ScheduleExecutionContext context, long projectId) {
     String scheduleId = context.requiredString("scheduleId");
     WorkflowSchedulePO schedule;
     try {
       schedule = schedules.require(scheduleId);
     } catch (IllegalArgumentException missing) {
       engine.deleteIfPresent(scheduleId);
-      return ScheduleExecutionResult.accepted(null, "调度定义已删除，清理残留引擎计划");
+      return ScheduleExecutionResult.accepted(null, "调度定义已删除或不属于当前 Project，清理残留引擎计划");
+    }
+    if (!Objects.equals(schedule.getProjectId(), projectId)) {
+      throw new IllegalStateException("Workflow Schedule durable Project identity 不一致：" + scheduleId);
     }
 
     Instant plannedFireTime = context.scheduledFireTime() == null

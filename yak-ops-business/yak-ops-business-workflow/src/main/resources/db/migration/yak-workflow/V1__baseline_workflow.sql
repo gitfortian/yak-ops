@@ -1,7 +1,9 @@
 -- Consolidated Workflow schema baseline.
 -- Workflow lifecycle and schedule cleanup are handled in application transactions; no physical FK constraints are created.
+-- Stage 8.1 Project Space is part of the first-release baseline: roots and independently recovered runtime facts persist project_id directly.
 CREATE TABLE IF NOT EXISTS yak_workflow_definition (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     name VARCHAR(200) NOT NULL,
     description VARCHAR(1000) NULL,
     status VARCHAR(32) NOT NULL,
@@ -15,11 +17,13 @@ CREATE TABLE IF NOT EXISTS yak_workflow_definition (
     update_time DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
     KEY idx_yak_workflow_definition_status (status),
-    KEY idx_yak_workflow_definition_update_time (update_time)
+    KEY idx_yak_workflow_definition_update_time (update_time),
+    KEY idx_yak_workflow_definition_project_status (project_id, status, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_version (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     workflow_id VARCHAR(80) NULL,
     version_no INT NULL,
     version_kind VARCHAR(16) NOT NULL DEFAULT 'PUBLISHED',
@@ -32,11 +36,13 @@ CREATE TABLE IF NOT EXISTS yak_workflow_version (
     create_time DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_yak_workflow_version_no (workflow_id, version_no),
-    KEY idx_yak_workflow_version_workflow (workflow_id, create_time)
+    KEY idx_yak_workflow_version_workflow (workflow_id, create_time),
+    KEY idx_yak_workflow_version_project_workflow (project_id, workflow_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_execution (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     definition_id VARCHAR(80) NOT NULL,
     source_execution_id VARCHAR(80) NULL,
     status VARCHAR(32) NOT NULL,
@@ -60,7 +66,9 @@ CREATE TABLE IF NOT EXISTS yak_workflow_execution (
     KEY idx_yak_workflow_execution_status (status, updated_at),
     KEY idx_yak_workflow_execution_version (workflow_version_id),
     KEY idx_yak_workflow_execution_created (created_at),
-    KEY idx_yak_workflow_execution_definition_status (definition_id, status, created_at)
+    KEY idx_yak_workflow_execution_definition_status (definition_id, status, created_at),
+    KEY idx_yak_workflow_execution_project_status (project_id, status, updated_at),
+    KEY idx_yak_workflow_execution_project_definition (project_id, definition_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_node_execution (
@@ -102,6 +110,7 @@ CREATE TABLE IF NOT EXISTS yak_workflow_node_attempt (
 
 CREATE TABLE IF NOT EXISTS yak_workflow_schedule (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     workflow_id VARCHAR(80) NOT NULL,
     name VARCHAR(200) NOT NULL,
     trigger_type VARCHAR(32) NOT NULL DEFAULT 'CRON',
@@ -121,11 +130,14 @@ CREATE TABLE IF NOT EXISTS yak_workflow_schedule (
     UNIQUE KEY uk_yak_workflow_schedule_name (workflow_id, name),
     KEY idx_yak_workflow_schedule_status (status, update_time),
     KEY idx_yak_workflow_schedule_workflow (workflow_id, update_time),
-    KEY idx_yak_workflow_schedule_next_fire (status, next_fire_time)
+    KEY idx_yak_workflow_schedule_next_fire (status, next_fire_time),
+    KEY idx_yak_workflow_schedule_project_status (project_id, status, next_fire_time),
+    KEY idx_yak_workflow_schedule_project_workflow (project_id, workflow_id, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_schedule_trigger (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     schedule_id VARCHAR(80) NOT NULL,
     workflow_id VARCHAR(80) NOT NULL,
     backfill_id VARCHAR(80) NULL,
@@ -153,11 +165,14 @@ CREATE TABLE IF NOT EXISTS yak_workflow_schedule_trigger (
     KEY idx_yak_workflow_schedule_trigger_execution (workflow_execution_id),
     KEY idx_yak_workflow_schedule_trigger_schedule (schedule_id, create_time),
     KEY idx_yak_workflow_schedule_trigger_backfill (backfill_id, status, planned_fire_time),
-    KEY idx_yak_workflow_schedule_trigger_business_date (workflow_id, business_date)
+    KEY idx_yak_workflow_schedule_trigger_business_date (workflow_id, business_date),
+    KEY idx_yak_workflow_trigger_project_status (project_id, status, planned_fire_time),
+    KEY idx_yak_workflow_trigger_project_workflow (project_id, workflow_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_backfill (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     workflow_id VARCHAR(80) NOT NULL,
     workflow_version_id VARCHAR(80) NOT NULL,
     workflow_version_no INT NOT NULL,
@@ -182,5 +197,7 @@ CREATE TABLE IF NOT EXISTS yak_workflow_backfill (
     KEY idx_yak_workflow_backfill_schedule (schedule_id, create_time),
     KEY idx_yak_workflow_backfill_status (status, create_time),
     KEY idx_yak_workflow_backfill_operation (operation_type, create_time),
-    KEY idx_yak_workflow_backfill_source_execution (source_execution_id)
+    KEY idx_yak_workflow_backfill_source_execution (source_execution_id),
+    KEY idx_yak_workflow_backfill_project_status (project_id, status, create_time),
+    KEY idx_yak_workflow_backfill_project_workflow (project_id, workflow_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
