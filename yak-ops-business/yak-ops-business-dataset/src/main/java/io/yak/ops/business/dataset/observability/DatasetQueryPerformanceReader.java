@@ -41,7 +41,7 @@ public class DatasetQueryPerformanceReader {
     this.currentProject = currentProject;
   }
 
-  /** Compatibility constructor for unit tests and datasource-disabled runtime. */
+  /** Compatibility constructor for focused tests; project-scoped reads fail closed. */
   public DatasetQueryPerformanceReader(DatasetQueryPerformanceBuffer buffer) {
     this(buffer, null, Optional::<ProjectContext>empty);
   }
@@ -66,7 +66,7 @@ public class DatasetQueryPerformanceReader {
     Set<String> normalizedQueryIds = queryIds == null ? Set.of() : Set.copyOf(queryIds);
     Set<DatasetQueryStatus> normalizedStatuses = statuses == null ? Set.of() : Set.copyOf(statuses);
     Long normalizedMin = minTotalMillis == null ? null : Math.max(0L, minTotalMillis);
-    Long projectId = currentProject.current().map(ProjectContext::projectId).orElse(null);
+    Long projectId = currentProject.requireProjectId();
 
     List<DatasetQueryPerformance> combined = new ArrayList<>();
     DatasetQueryPerformanceStore store = storeProvider == null ? null : storeProvider.getIfAvailable();
