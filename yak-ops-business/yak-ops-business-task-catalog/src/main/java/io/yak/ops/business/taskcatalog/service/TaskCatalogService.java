@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +59,7 @@ public class TaskCatalogService {
   public TaskAsset publish(
       TaskAssetSource source,
       String sourceRef,
-      Long projectId,
+      Long sourceProjectId,
       String name,
       String taskType,
       long revisionId,
@@ -71,7 +72,7 @@ public class TaskCatalogService {
     return repository.upsertPublished(
         source,
         normalizeSourceRef(sourceRef),
-        normalizeProjectId(projectId),
+        normalizeProjectId(sourceProjectId),
         normalizeName(name),
         normalizedTaskType,
         revisionId,
@@ -106,6 +107,13 @@ public class TaskCatalogService {
           "任务资产类型与版本类型不一致：asset=" + asset.taskType()
               + "，revision=" + revision.definition().taskType());
     }
+    if (asset.projectId() != null
+        && revision.sourceProjectId() != null
+        && !Objects.equals(asset.projectId(), revision.sourceProjectId())) {
+      throw new IllegalStateException(
+          "任务资产 Project 与来源版本 Project 不一致：assetProject=" + asset.projectId()
+              + "，sourceProject=" + revision.sourceProjectId());
+    }
     return new TaskAssetRevision(asset, revision);
   }
 
@@ -118,14 +126,14 @@ public class TaskCatalogService {
   public void updateSourceMetadata(
       TaskAssetSource source,
       String sourceRef,
-      Long projectId,
+      Long sourceProjectId,
       String name,
       String taskType) {
     if (source == null) throw new IllegalArgumentException("任务资产来源不能为空");
     repository.updateSourceMetadata(
         source,
         normalizeSourceRef(sourceRef),
-        normalizeProjectId(projectId),
+        normalizeProjectId(sourceProjectId),
         normalizeName(name),
         normalizeTaskType(taskType));
   }
