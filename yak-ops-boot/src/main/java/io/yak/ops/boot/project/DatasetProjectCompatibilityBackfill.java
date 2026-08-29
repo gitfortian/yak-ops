@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Completes the Dataset Project Space cutover after the nullable V3 expand migration.
+ * Completes the Dataset Project Space cutover after the nullable project expand migration.
  *
  * <p>Dataset is the Project Root. Version and Field rows inherit ownership through their parent
  * Dataset and therefore do not receive duplicate project columns. Historical Dataset ownership is
@@ -56,10 +56,11 @@ public class DatasetProjectCompatibilityBackfill {
     dataSourceBackfill.backfillLegacyRows();
     dataDevelopmentBackfill.backfillLegacyRows();
 
-    // Stage 4 intentionally left projection rows nullable until their producer became Project-aware.
-    // Dataset cannot guess TaskAsset ownership, but a referenced DATA_DEVELOPMENT asset can be
-    // claimed safely from its producer DevelopmentNode source truth before Dataset is cut over.
+    // The projection rollout intentionally allowed nullable TaskAsset ownership until the producer
+    // became Project-aware. Dataset cannot guess that ownership, but a referenced DATA_DEVELOPMENT
+    // asset can be claimed safely from its producer DevelopmentNode source truth.
     int claimedTaskAssets = claimReferencedDataDevelopmentTaskAssets();
+    assertNoUnscopedReferencedTaskAssets();
 
     long defaultProjectId = projectCoordinator.ensureRequiredDefaultProject();
     failOnAmbiguousSourceOwnership();
@@ -146,6 +147,14 @@ public class DatasetProjectCompatibilityBackfill {
             + "SET a.project_id = n.project_id, a.update_time = NOW(6) "
             + "WHERE a.project_id IS NULL AND n.project_id IS NOT NULL",
         DATA_DEVELOPMENT_SOURCE);
+  }
+
+  private void assertNoUnscopedReferencedTaskAssets() {
+    assertNoRows(
+        "SELECT COUNT(DISTINCT a.id) FROM yak_dataset_version v "
+            + "JOIN yak_task_asset a ON a.id = v.source_task_asset_id "
+            + "WHERE v.source_task_asset_id > 0 AND a.project_id IS NULL",
+        "Dataset-referenced TaskAsset rows without Project ownership; republish or migrate the owning producer first");
   }
 
   private void failOnAmbiguousSourceOwnership() {
