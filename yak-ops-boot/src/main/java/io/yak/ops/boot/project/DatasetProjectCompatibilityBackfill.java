@@ -31,6 +31,7 @@ public class DatasetProjectCompatibilityBackfill {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(DatasetProjectCompatibilityBackfill.class);
+  private static final String DATA_DEVELOPMENT_SOURCE = "DATA_DEVELOPMENT";
 
   private final ProjectCompatibilityCoordinator projectCoordinator;
   private final DataSourceProjectCompatibilityBackfill dataSourceBackfill;
@@ -54,6 +55,11 @@ public class DatasetProjectCompatibilityBackfill {
     // called explicitly here to remove ApplicationReady listener-order races.
     dataSourceBackfill.backfillLegacyRows();
     dataDevelopmentBackfill.backfillLegacyRows();
+
+    // Stage 4 intentionally left projection rows nullable until their producer became Project-aware.
+    // Dataset cannot guess TaskAsset ownership, but a referenced DATA_DEVELOPMENT asset can be
+    // claimed safely from its producer DevelopmentNode source truth before Dataset is cut over.
+    int claimedTaskAssets = claimReferencedDataDevelopmentTaskAssets();
 
     long defaultProjectId = projectCoordinator.ensureRequiredDefaultProject();
     failOnAmbiguousSourceOwnership();
@@ -98,14 +104,48 @@ public class DatasetProjectCompatibilityBackfill {
     assertNoDiagnosticOwnershipMismatch();
 
     LOGGER.info(
-        "Dataset Project Space backfill complete: defaultProjectId={}, fromDevelopmentNode={}, fromTaskAsset={}, fromDataSource={}, defaultDatasets={}, inheritedDiagnostics={}, defaultDiagnostics={}",
+        "Dataset Project Space backfill complete: defaultProjectId={}, claimedTaskAssets={}, fromDevelopmentNode={}, fromTaskAsset={}, fromDataSource={}, defaultDatasets={}, inheritedDiagnostics={}, defaultDiagnostics={}",
         defaultProjectId,
+        claimedTaskAssets,
         fromDevelopmentNode,
         fromTaskAsset,
         fromDataSource,
         defaultDatasets,
         inheritedDiagnostics,
         defaultDiagnostics);
+  }
+
+  private int claimReferencedDataDevelopmentTaskAssets() {
+    Long conflicts = jdbcTemplate.queryForObject(
+        "SELECT COUNT(1) FROM yak_task_asset legacy "
+            + "JOIN (SELECT DISTINCT source_task_asset_id FROM yak_dataset_version "
+            + "WHERE source_task_asset_id > 0) referenced ON referenced.source_task_asset_id = legacy.id "
+            + "JOIN yak_dev_node n ON legacy.source = ? "
+            + "AND legacy.source_ref REGEXP '^[0-9]+$' "
+            + "AND n.id = CAST(legacy.source_ref AS UNSIGNED) "
+            + "JOIN yak_task_asset scoped ON scoped.source = legacy.source "
+            + "AND scoped.source_ref = legacy.source_ref "
+            + "AND scoped.project_id = n.project_id AND scoped.id <> legacy.id "
+            + "WHERE legacy.project_id IS NULL AND n.project_id IS NOT NULL",
+        Long.class,
+        DATA_DEVELOPMENT_SOURCE);
+    if (conflicts != null && conflicts > 0L) {
+      throw new IllegalStateException(
+          "Dataset Project Space cutover found "
+              + conflicts
+              + " referenced legacy TaskAsset rows that already have a different scoped projection identity. Resolve or republish these Data Development assets before startup.");
+    }
+
+    return jdbcTemplate.update(
+        "UPDATE yak_task_asset a "
+            + "JOIN (SELECT DISTINCT source_task_asset_id FROM yak_dataset_version "
+            + "WHERE source_task_asset_id > 0) referenced ON referenced.source_task_asset_id = a.id "
+            + "JOIN yak_dev_node n ON a.source = ? "
+            + "AND a.source_ref REGEXP '^[0-9]+$' "
+            + "AND n.id = CAST(a.source_ref AS UNSIGNED) "
+            + "SET a.project_id = n.project_id, a.update_time = NOW(6) "
+            + "WHERE a.project_id IS NULL AND n.project_id IS NOT NULL",
+        DATA_DEVELOPMENT_SOURCE);
   }
 
   private void failOnAmbiguousSourceOwnership() {
