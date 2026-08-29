@@ -19,6 +19,8 @@ Dataset HTTP APIs are `PROJECT_REQUIRED`.
 
 Normal Dataset repository operations require `CurrentProject.requireProjectId()` and do not fall back to global reads when project context is missing. This covers root CRUD and inherited Version / Field reads.
 
+Dataset overview and query-performance reads are also fail-closed by Project. The query-performance recorder remains best-effort: an observability persistence failure may fall back to an in-memory buffer, but that fallback is tagged with the current Project when available and cannot be read through an unscoped Dataset API.
+
 The frontend request policy marks `/api/v1/datasets/**` as `PROJECT_REQUIRED`; Project identity is carried by the trusted request context rather than Dataset payloads.
 
 ## Source binding
@@ -51,7 +53,18 @@ The AFTER_COMMIT event carries durable Project identity explicitly so a future a
 
 `DatasetProjectCompatibilityBackfill` runs after Dataset Flyway and explicitly completes DataSource / Data Development backfills first.
 
-Before mutating Dataset ownership it checks whether trusted sources disagree. Candidate ownership comes from:
+Stage 4 intentionally allowed Task Catalog projection rows to remain `project_id IS NULL` until their real producer became Project-aware. A historical Dataset may already reference one of those legacy TaskAssets. Before Dataset ownership is inferred, the backfill may claim only this narrow case:
+
+```text
+DatasetVersion.source_task_asset_id
+    -> legacy TaskAsset(source=DATA_DEVELOPMENT, project=NULL)
+    -> TaskAsset.source_ref
+    -> owning DevelopmentNode.project_id
+```
+
+This is not Dataset choosing a Project. The Project comes from the Data Development producer Source Truth. If a scoped TaskAsset with the same source/sourceRef/project already exists under another identity, startup fails instead of silently merging immutable references.
+
+Before mutating Dataset ownership it then checks whether trusted sources disagree. Candidate ownership comes from:
 
 1. existing `yak_dataset.project_id`;
 2. owning `yak_dev_node.project_id` for Development Dataset Nodes;
@@ -67,7 +80,7 @@ Startup then asserts:
 - no Dataset remains with `project_id IS NULL`;
 - no query-performance row remains with `project_id IS NULL`;
 - Dataset / DevelopmentNode ownership agrees;
-- Dataset / TaskAsset ownership agrees where TaskAsset already has Project identity;
+- Dataset / TaskAsset ownership agrees where TaskAsset has Project identity;
 - Dataset / DataSource ownership agrees where the stored datasource id resolves to a scoped DataSource;
 - Dataset query diagnostics agree with their Dataset owner.
 
