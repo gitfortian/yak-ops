@@ -14,6 +14,7 @@ public class LineageRelationPO {
 
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private Long sourceAssetId;
   private Long targetAssetId;
   private String relationType;

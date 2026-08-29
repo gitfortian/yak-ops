@@ -6,9 +6,15 @@
         SELECT source_asset_id AS asset_id
         FROM yak_metadata_relation
         WHERE source_type = #{sourceType} AND source_id = #{sourceId}
+        <if test="projectId != null">
+            AND project_id = #{projectId}
+        </if>
         UNION
         SELECT target_asset_id AS asset_id
         FROM yak_metadata_relation
         WHERE source_type = #{sourceType} AND source_id = #{sourceId}
+        <if test="projectId != null">
+            AND project_id = #{projectId}
+        </if>
     </select>
 </mapper>

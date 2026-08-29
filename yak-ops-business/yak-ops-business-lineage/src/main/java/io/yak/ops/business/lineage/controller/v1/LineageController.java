@@ -15,6 +15,8 @@ import io.yak.ops.business.lineage.domain.LineageAssetType;
 import io.yak.ops.business.lineage.domain.LineageDirection;
 import io.yak.ops.business.lineage.query.LineageQueryService;
 import io.yak.ops.business.lineage.registration.LineageRegistrationService;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -36,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/lineage")
+@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
 public class LineageController {
 
   private final LineageQueryService queryService;

@@ -10,5 +10,6 @@ public interface LineageQueryMapper {
 
   List<Long> selectAssetIdsByEvidence(
       @Param("sourceType") String sourceType,
-      @Param("sourceId") String sourceId);
+      @Param("sourceId") String sourceId,
+      @Param("projectId") Long projectId);
 }

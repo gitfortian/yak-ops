@@ -33,7 +33,7 @@ public class LineageRepositoryAdapter
   public LineageAsset upsertAsset(LineageAssetDraft draft) {
     LineageAssetPO row = toAssetPO(draft);
     lineageDao.upsertAsset(row);
-    return Optional.ofNullable(lineageDao.selectAssetByKey(draft.assetKey()))
+    return Optional.ofNullable(lineageDao.selectAssetByKey(draft.assetKey(), draft.projectId()))
         .map(this::toAsset)
         .orElseThrow(() -> new IllegalStateException("保存血缘资产后无法读取资产"));
   }
@@ -141,6 +141,7 @@ public class LineageRepositoryAdapter
 
   private LineageAssetPO toAssetPO(LineageAssetDraft draft) {
     LineageAssetPO row = new LineageAssetPO();
+    row.setProjectId(draft.projectId());
     row.setAssetKey(draft.assetKey());
     row.setAssetType(draft.assetType().name());
     row.setName(draft.name());
@@ -158,6 +159,7 @@ public class LineageRepositoryAdapter
 
   private LineageRelationPO toRelationPO(LineageRelationDraft draft) {
     LineageRelationPO row = new LineageRelationPO();
+    row.setProjectId(draft.projectId());
     row.setSourceAssetId(draft.sourceAssetId());
     row.setTargetAssetId(draft.targetAssetId());
     row.setRelationType(draft.relationType().name());
@@ -174,6 +176,7 @@ public class LineageRepositoryAdapter
   private LineageAsset toAsset(LineageAssetPO row) {
     return new LineageAsset(
         row.getId(),
+        row.getProjectId(),
         row.getAssetKey(),
         LineageAssetType.valueOf(row.getAssetType()),
         row.getName(),
@@ -193,6 +196,7 @@ public class LineageRepositoryAdapter
   private LineageRelation toRelation(LineageRelationPO row) {
     return new LineageRelation(
         row.getId(),
+        row.getProjectId(),
         row.getSourceAssetId(),
         row.getTargetAssetId(),
         LineageRelationType.valueOf(row.getRelationType()),

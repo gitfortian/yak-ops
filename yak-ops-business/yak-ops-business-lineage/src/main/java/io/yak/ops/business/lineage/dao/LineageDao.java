@@ -29,6 +29,8 @@ public interface LineageDao {
 
   LineageAssetPO selectAssetByKey(String assetKey);
 
+  LineageAssetPO selectAssetByKey(String assetKey, Long projectId);
+
   List<LineageAssetPO> selectAssets(AssetSearch query);
 
   long countAssets(String assetType);

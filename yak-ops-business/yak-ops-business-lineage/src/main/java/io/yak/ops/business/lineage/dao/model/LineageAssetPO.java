@@ -13,6 +13,7 @@ public class LineageAssetPO {
 
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private String assetKey;
   private String assetType;
   private String name;
