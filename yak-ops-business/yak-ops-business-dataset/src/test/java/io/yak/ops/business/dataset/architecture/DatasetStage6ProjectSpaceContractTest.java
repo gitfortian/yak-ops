@@ -29,6 +29,10 @@ class DatasetStage6ProjectSpaceContractTest {
         .contains("datasetDao.selectVersion(requiredProjectId(), versionId)")
         .contains("datasetDao.selectFields(requiredProjectId(), versionId)")
         .doesNotContain("currentProject.current()");
+
+    assertThat(source("observability/DatasetQueryPerformanceReader.java"))
+        .contains("currentProject.requireProjectId()")
+        .doesNotContain("orElse(null)");
   }
 
   @Test
