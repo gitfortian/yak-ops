@@ -7,10 +7,10 @@ import java.util.Optional;
 /** Durable repository for data-development tree node metadata. */
 public interface DevelopmentNodeRepository {
 
+  /** Creates a Project Root in the trusted CurrentProject owned by the persistence adapter. */
   DevelopmentNode insert(
       String name,
       String type,
-      Long projectId,
       Long directoryId,
       boolean configured);
 
