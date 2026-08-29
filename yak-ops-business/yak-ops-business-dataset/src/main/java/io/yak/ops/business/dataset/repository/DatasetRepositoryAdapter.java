@@ -2,8 +2,8 @@ package io.yak.ops.business.dataset.repository;
 
 import io.yak.ops.business.dataset.Dataset;
 import io.yak.ops.business.dataset.DatasetField;
-import io.yak.ops.business.dataset.DatasetFieldDefinition;
 import io.yak.ops.business.dataset.DatasetFieldDataType;
+import io.yak.ops.business.dataset.DatasetFieldDefinition;
 import io.yak.ops.business.dataset.DatasetFieldRole;
 import io.yak.ops.business.dataset.DatasetSourceType;
 import io.yak.ops.business.dataset.DatasetStatus;
@@ -42,6 +42,7 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
     this.currentProject = currentProject;
   }
 
+  /** Compatibility constructor for focused tests; project-scoped operations fail closed. */
   public DatasetRepositoryAdapter(DatasetDao datasetDao, DatasetJsonCodec jsonCodec) {
     this(datasetDao, jsonCodec, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
@@ -59,7 +60,7 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
 
   private long insertDataset(Long developmentNodeId, String name, String description) {
     DatasetPO po = new DatasetPO();
-    po.setProjectId(currentProjectId());
+    po.setProjectId(requiredProjectId());
     po.setDevelopmentNodeId(developmentNodeId);
     po.setName(name);
     po.setDescription(description);
@@ -73,8 +74,8 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
   @Override
   public long appendVersion(DatasetVersionDraft draft) {
     if (draft == null) throw new IllegalArgumentException("DatasetVersionDraft 不能为空");
-    Long projectId = currentProjectId();
-    if (projectId != null && datasetDao.selectDataset(projectId, draft.datasetId()) == null) {
+    Long projectId = requiredProjectId();
+    if (datasetDao.selectDataset(projectId, draft.datasetId()) == null) {
       throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
     DatasetVersionPO version = new DatasetVersionPO();
@@ -119,122 +120,114 @@ public class DatasetRepositoryAdapter implements DatasetRepository {
 
   @Override
   public void updateCurrentVersion(long datasetId, long versionId) {
-    Long projectId = currentProjectId();
-    requireSingle(
-        projectId == null
-            ? datasetDao.updateCurrentVersion(datasetId, versionId)
-            : datasetDao.updateCurrentVersion(projectId, datasetId, versionId),
-        datasetId);
+    Long projectId = requiredProjectId();
+    DatasetVersionPO version = datasetDao.selectVersion(projectId, versionId);
+    if (version == null || version.getDatasetId() == null || version.getDatasetId() != datasetId) {
+      throw new IllegalArgumentException(
+          "DatasetVersion 不属于当前 Project 的 Dataset：datasetId="
+              + datasetId
+              + ", versionId="
+              + versionId);
+    }
+    requireSingle(datasetDao.updateCurrentVersion(projectId, datasetId, versionId), datasetId);
   }
 
   @Override
   public void updateStatus(long datasetId, DatasetStatus status) {
-    Long projectId = currentProjectId();
-    requireSingle(
-        projectId == null
-            ? datasetDao.updateStatus(datasetId, status.name())
-            : datasetDao.updateStatus(projectId, datasetId, status.name()),
-        datasetId);
+    Long projectId = requiredProjectId();
+    requireSingle(datasetDao.updateStatus(projectId, datasetId, status.name()), datasetId);
   }
 
   @Override
   public void updateMetadata(long datasetId, String name, String description) {
-    Long projectId = currentProjectId();
-    requireSingle(
-        projectId == null
-            ? datasetDao.updateMetadata(datasetId, name, description)
-            : datasetDao.updateMetadata(projectId, datasetId, name, description),
-        datasetId);
+    Long projectId = requiredProjectId();
+    requireSingle(datasetDao.updateMetadata(projectId, datasetId, name, description), datasetId);
   }
 
   @Override
   public Optional<Dataset> findDataset(long datasetId) {
-    Long projectId = currentProjectId();
-    DatasetPO row =
-        projectId == null
-            ? datasetDao.selectDataset(datasetId)
-            : datasetDao.selectDataset(projectId, datasetId);
-    return Optional.ofNullable(row).map(this::toDomain);
+    return Optional.ofNullable(datasetDao.selectDataset(requiredProjectId(), datasetId)).map(this::toDomain);
   }
 
   @Override
   public Optional<Dataset> findDatasetBySourceTaskAssetId(long sourceTaskAssetId) {
-    Long projectId = currentProjectId();
-    DatasetPO row =
-        projectId == null
-            ? datasetDao.selectDatasetBySourceTaskAssetId(sourceTaskAssetId)
-            : datasetDao.selectDatasetBySourceTaskAssetId(projectId, sourceTaskAssetId);
-    return Optional.ofNullable(row).map(this::toDomain);
+    return Optional.ofNullable(
+            datasetDao.selectDatasetBySourceTaskAssetId(requiredProjectId(), sourceTaskAssetId))
+        .map(this::toDomain);
   }
 
   @Override
   public Optional<Dataset> findDatasetByDevelopmentNodeId(long developmentNodeId) {
-    Long projectId = currentProjectId();
-    DatasetPO row =
-        projectId == null
-            ? datasetDao.selectDatasetByDevelopmentNodeId(developmentNodeId)
-            : datasetDao.selectDatasetByDevelopmentNodeId(projectId, developmentNodeId);
-    return Optional.ofNullable(row).map(this::toDomain);
+    return Optional.ofNullable(
+            datasetDao.selectDatasetByDevelopmentNodeId(requiredProjectId(), developmentNodeId))
+        .map(this::toDomain);
   }
 
   @Override
   public List<Dataset> listDatasets() {
-    Long projectId = currentProjectId();
-    List<DatasetPO> rows =
-        projectId == null ? datasetDao.selectDatasets() : datasetDao.selectDatasets(projectId);
-    return rows.stream().map(this::toDomain).toList();
+    return datasetDao.selectDatasets(requiredProjectId()).stream().map(this::toDomain).toList();
   }
 
   @Override
   public List<Dataset> listDatasetsByIds(Collection<Long> datasetIds) {
-    Long projectId = currentProjectId();
-    return datasetDao.selectDatasetsByIds(projectId, datasetIds).stream()
+    return datasetDao.selectDatasetsByIds(requiredProjectId(), datasetIds).stream()
         .map(this::toDomain)
         .toList();
   }
 
   @Override
   public Optional<DatasetVersion> findVersion(long versionId) {
-    return Optional.ofNullable(datasetDao.selectVersion(versionId)).map(this::toDomain);
+    return Optional.ofNullable(datasetDao.selectVersion(requiredProjectId(), versionId))
+        .map(this::toDomain);
   }
 
   @Override
   public Optional<DatasetVersion> findVersion(long datasetId, int versionNo) {
-    return Optional.ofNullable(datasetDao.selectVersion(datasetId, versionNo)).map(this::toDomain);
+    return Optional.ofNullable(datasetDao.selectVersion(requiredProjectId(), datasetId, versionNo))
+        .map(this::toDomain);
   }
 
   @Override
   public List<DatasetVersion> listVersions(long datasetId) {
-    return datasetDao.selectVersions(datasetId).stream().map(this::toDomain).toList();
+    return datasetDao.selectVersions(requiredProjectId(), datasetId).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   @Override
   public List<DatasetVersion> listVersionsByIds(Collection<Long> versionIds) {
-    return datasetDao.selectVersionsByIds(versionIds).stream().map(this::toDomain).toList();
+    return datasetDao.selectVersionsByIds(requiredProjectId(), versionIds).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   @Override
   public List<DatasetField> listFields(long versionId) {
-    return datasetDao.selectFields(versionId).stream().map(this::toDomain).toList();
+    return datasetDao.selectFields(requiredProjectId(), versionId).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   @Override
   public List<DatasetField> listFieldsByVersionIds(Collection<Long> versionIds) {
-    return datasetDao.selectFieldsByVersionIds(versionIds).stream().map(this::toDomain).toList();
+    return datasetDao.selectFieldsByVersionIds(requiredProjectId(), versionIds).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   @Override
   public int nextVersionNo(long datasetId) {
-    return datasetDao.selectNextVersionNo(datasetId);
+    return datasetDao.selectNextVersionNo(requiredProjectId(), datasetId);
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private Long requiredProjectId() {
+    return currentProject.requireProjectId();
   }
 
   private Dataset toDomain(DatasetPO po) {
     return new Dataset(
         po.getId(),
+        po.getProjectId(),
         po.getName(),
         po.getDescription(),
         DatasetStatus.valueOf(po.getStatus()),
