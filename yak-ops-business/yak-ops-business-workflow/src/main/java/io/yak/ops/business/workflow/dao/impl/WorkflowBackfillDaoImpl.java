@@ -16,7 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** 基于 MyBatis-Plus 的 Backfill 批次 DAO。 */
+/** Backfill DAO；普通 CRUD fail-closed，跨 Project 只允许显式 reconciliation dispatcher。 */
 @Repository
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(
@@ -39,21 +39,21 @@ public class WorkflowBackfillDaoImpl implements WorkflowBackfillDao {
     this.currentProject = currentProject;
   }
 
+  /** Test-only compatibility constructor. Calls still fail closed without CurrentProject. */
   public WorkflowBackfillDaoImpl(WorkflowBackfillMapper mapper) {
     this(mapper, null, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public int insert(WorkflowBackfillPO backfill) {
-    backfill.setProjectId(resolveProjectId(backfill.getProjectId(), backfill.getWorkflowId()));
+    backfill.setProjectId(requireOwnedProject(backfill.getProjectId(), backfill.getWorkflowId()));
     return mapper.insert(backfill);
   }
 
   @Override
   public int update(WorkflowBackfillPO backfill) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return mapper.updateById(backfill);
-    backfill.setProjectId(resolveProjectId(backfill.getProjectId(), backfill.getWorkflowId()));
+    long projectId = requireOwnedProject(backfill.getProjectId(), backfill.getWorkflowId());
+    backfill.setProjectId(projectId);
     return mapper.update(
         backfill,
         Wrappers.<WorkflowBackfillPO>lambdaUpdate()
@@ -63,18 +63,18 @@ public class WorkflowBackfillDaoImpl implements WorkflowBackfillDao {
 
   @Override
   public WorkflowBackfillPO select(String id) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectOne(
         Wrappers.<WorkflowBackfillPO>lambdaQuery()
             .eq(WorkflowBackfillPO::getId, id)
-            .eq(projectId != null, WorkflowBackfillPO::getProjectId, projectId));
+            .eq(WorkflowBackfillPO::getProjectId, projectId));
   }
 
   @Override
   public List<WorkflowBackfillPO> selectList(String workflowId, String scheduleId) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     var query = Wrappers.<WorkflowBackfillPO>lambdaQuery()
-        .eq(projectId != null, WorkflowBackfillPO::getProjectId, projectId);
+        .eq(WorkflowBackfillPO::getProjectId, projectId);
     if (workflowId != null && !workflowId.isBlank()) {
       query.eq(WorkflowBackfillPO::getWorkflowId, workflowId.trim());
     }
@@ -84,27 +84,38 @@ public class WorkflowBackfillDaoImpl implements WorkflowBackfillDao {
     return mapper.selectList(query.orderByDesc(WorkflowBackfillPO::getCreateTime));
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  @Override
+  public List<ProjectBackfillRef> selectRunningForReconciliation() {
+    return mapper.selectList(
+            Wrappers.<WorkflowBackfillPO>lambdaQuery()
+                .select(WorkflowBackfillPO::getId, WorkflowBackfillPO::getProjectId)
+                .eq(WorkflowBackfillPO::getStatus, "RUNNING")
+                .isNotNull(WorkflowBackfillPO::getProjectId)
+                .orderByAsc(WorkflowBackfillPO::getProjectId)
+                .orderByAsc(WorkflowBackfillPO::getCreateTime))
+        .stream()
+        .filter(value -> value.getProjectId() != null && value.getProjectId() > 0L)
+        .map(value -> new ProjectBackfillRef(value.getProjectId(), value.getId()))
+        .toList();
   }
 
-  private Long resolveProjectId(Long storedProjectId, String workflowId) {
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      if (storedProjectId != null && !Objects.equals(storedProjectId, projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      if (definitionMapper != null && !workflowOwned(workflowId, projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      return projectId;
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
+  }
+
+  private long requireOwnedProject(Long storedProjectId, String workflowId) {
+    long projectId = currentProjectId();
+    if (storedProjectId != null && !Objects.equals(storedProjectId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
-    if (storedProjectId != null || definitionMapper == null) return storedProjectId;
-    WorkflowDefinitionPO definition = definitionMapper.selectById(workflowId);
-    return definition == null ? null : definition.getProjectId();
+    if (definitionMapper == null || !workflowOwned(workflowId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    return projectId;
   }
 
-  private boolean workflowOwned(String workflowId, Long projectId) {
+  private boolean workflowOwned(String workflowId, long projectId) {
+    if (workflowId == null || workflowId.isBlank()) return false;
     return definitionMapper.selectCount(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
             .eq(WorkflowDefinitionPO::getId, workflowId)
