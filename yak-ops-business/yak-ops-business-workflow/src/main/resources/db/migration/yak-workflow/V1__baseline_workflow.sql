@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS yak_workflow_definition (
 
 CREATE TABLE IF NOT EXISTS yak_workflow_version (
     id VARCHAR(80) NOT NULL,
+    project_id BIGINT NOT NULL,
     workflow_id VARCHAR(80) NULL,
     version_no INT NULL,
     version_kind VARCHAR(16) NOT NULL DEFAULT 'PUBLISHED',
@@ -35,7 +36,8 @@ CREATE TABLE IF NOT EXISTS yak_workflow_version (
     create_time DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_yak_workflow_version_no (workflow_id, version_no),
-    KEY idx_yak_workflow_version_workflow (workflow_id, create_time)
+    KEY idx_yak_workflow_version_workflow (workflow_id, create_time),
+    KEY idx_yak_workflow_version_project_workflow (project_id, workflow_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_execution (
