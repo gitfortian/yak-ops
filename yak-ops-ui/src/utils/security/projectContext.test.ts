@@ -20,6 +20,8 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/home/cockpit')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/home/data-center/overview?period=7d')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-development/nodes')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-service')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-service/7')).toBe('PROJECT_REQUIRED');
@@ -57,6 +59,9 @@ describe('Project Space request context', () => {
     storeProjectId(7);
     expect(readStoredProjectId()).toBe('7');
 
+    expect(applyCurrentProjectHeader('/api/v1/home/cockpit', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
     expect(applyCurrentProjectHeader('/api/v1/data-development/nodes', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',
     });

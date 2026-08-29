@@ -16,6 +16,7 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/data-source', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/resources', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/datasets', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/home', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/data-development', mode: 'PROJECT_REQUIRED' },
   // Data Service management is project-scoped, but the external runtime URL is intentionally
   // global and protected by the published NONE/API_KEY contract rather than Yak console headers.
