@@ -17,4 +17,16 @@ public interface WorkflowScheduleDao {
   int updateRuntimeState(String id, Instant lastFireTime, Instant nextFireTime);
 
   int deleteSchedule(String id);
+
+  /** Explicit cross-Project startup dispatcher. */
+  List<ProjectScheduleRef> selectSchedulesForReconciliation();
+
+  record ProjectScheduleRef(long projectId, String scheduleId) {
+    public ProjectScheduleRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId must be positive");
+      if (scheduleId == null || scheduleId.isBlank()) {
+        throw new IllegalArgumentException("scheduleId must not be blank");
+      }
+    }
+  }
 }
