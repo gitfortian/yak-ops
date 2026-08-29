@@ -56,6 +56,11 @@ public class DatasetProjectCompatibilityBackfill {
     dataSourceBackfill.backfillLegacyRows();
     dataDevelopmentBackfill.backfillLegacyRows();
 
+    // Preflight includes the producer-derived Project of legacy Data Development TaskAssets before
+    // any Dataset-owned projection row is mutated. A conflict therefore fails without partial
+    // Dataset/TaskAsset cutover writes.
+    failOnAmbiguousSourceOwnership();
+
     // The projection rollout intentionally allowed nullable TaskAsset ownership until the producer
     // became Project-aware. Dataset cannot guess that ownership, but a referenced DATA_DEVELOPMENT
     // asset can be claimed safely from its producer DevelopmentNode source truth.
@@ -63,7 +68,6 @@ public class DatasetProjectCompatibilityBackfill {
     assertNoUnscopedReferencedTaskAssets();
 
     long defaultProjectId = projectCoordinator.ensureRequiredDefaultProject();
-    failOnAmbiguousSourceOwnership();
 
     int fromDevelopmentNode = jdbcTemplate.update(
         "UPDATE yak_dataset d "
@@ -172,6 +176,14 @@ public class DatasetProjectCompatibilityBackfill {
             + "JOIN yak_task_asset a ON a.id = v.source_task_asset_id "
             + "WHERE v.source_task_asset_id > 0 AND a.project_id IS NOT NULL "
             + "UNION ALL "
+            + "SELECT v.dataset_id, n.project_id FROM yak_dataset_version v "
+            + "JOIN yak_task_asset a ON a.id = v.source_task_asset_id "
+            + "JOIN yak_dev_node n ON a.source = ? "
+            + "AND a.source_ref REGEXP '^[0-9]+$' "
+            + "AND n.id = CAST(a.source_ref AS UNSIGNED) "
+            + "WHERE v.source_task_asset_id > 0 AND a.project_id IS NULL "
+            + "AND n.project_id IS NOT NULL "
+            + "UNION ALL "
             + "SELECT v.dataset_id, s.project_id FROM yak_dataset_version v "
             + "JOIN yak_ops_data_source s ON v.data_source_id REGEXP '^[0-9]+$' "
             + "AND s.id = CAST(v.data_source_id AS UNSIGNED) "
@@ -179,7 +191,8 @@ public class DatasetProjectCompatibilityBackfill {
             + ") candidate GROUP BY candidate.dataset_id "
             + "HAVING COUNT(DISTINCT candidate.project_id) > 1"
             + ") conflicts",
-        Long.class);
+        Long.class,
+        DATA_DEVELOPMENT_SOURCE);
     if (conflicts != null && conflicts > 0L) {
       throw new IllegalStateException(
           "Dataset Project Space cutover found "
