@@ -8,6 +8,7 @@ import io.yak.ops.business.analysis.controller.v1.converter.AnalysisRequestConve
 import io.yak.ops.business.analysis.controller.v1.converter.AnalysisViewConverter;
 import io.yak.ops.business.analysis.controller.v1.dto.AnalysisRequests.SaveAnalysisRequest;
 import io.yak.ops.business.analysis.controller.v1.vo.AnalysisViews;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.validation.annotation.Validated;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "BI 图表分析接口")
 @Validated
 @RestController
+@ProjectScope
 @RequestMapping("/api/v1/analyses")
 public class AnalysisController {
 

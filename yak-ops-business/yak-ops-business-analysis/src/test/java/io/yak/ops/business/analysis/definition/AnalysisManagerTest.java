@@ -17,21 +17,24 @@ import io.yak.ops.business.analysis.query.AnalysisQuerySpec;
 import io.yak.ops.business.analysis.repository.AnalysisRepository;
 import io.yak.ops.business.analysis.visualization.AnalysisChartType;
 import io.yak.ops.business.analysis.visualization.AnalysisVisualConfig;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
 class AnalysisManagerTest {
 
   @Test
-  void createPersistsNormalizedDefinitionAndPublishesProjectionFact() {
+  void createPersistsNormalizedDefinitionAndPublishesProjectScopedProjectionFact() {
     AnalysisRepository repository = mock(AnalysisRepository.class);
     AnalysisDefinitionNormalizer normalizer = mock(AnalysisDefinitionNormalizer.class);
     AnalysisReader reader = mock(AnalysisReader.class);
     ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     AnalysisManager manager = new AnalysisManager(
-        repository, normalizer, reader, events, List.of());
+        repository, normalizer, reader, currentProject(23L), events, List.of());
     AnalysisSaveCommand command = command();
     AnalysisDefinition definition = definition();
     AnalysisAsset stored = asset(11L);
@@ -43,7 +46,7 @@ class AnalysisManagerTest {
     AnalysisAsset created = manager.create(command);
 
     assertThat(created.id()).isEqualTo(11L);
-    verify(events).publishEvent(AnalysisChangedEvent.refreshed(11L));
+    verify(events).publishEvent(AnalysisChangedEvent.refreshed(23L, 11L));
   }
 
   @Test
@@ -54,7 +57,7 @@ class AnalysisManagerTest {
     ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     AnalysisDeletionGuard guard = mock(AnalysisDeletionGuard.class);
     AnalysisManager manager = new AnalysisManager(
-        repository, normalizer, reader, events, List.of(guard));
+        repository, normalizer, reader, currentProject(23L), events, List.of(guard));
     when(reader.require(7L)).thenReturn(asset(7L));
     doThrow(new IllegalStateException("still referenced"))
         .when(guard)
@@ -63,6 +66,10 @@ class AnalysisManagerTest {
     assertThatThrownBy(() -> manager.delete(7L))
         .isInstanceOf(IllegalStateException.class);
     verify(repository, never()).delete(7L);
+  }
+
+  private static CurrentProject currentProject(long projectId) {
+    return () -> Optional.of(new ProjectContext(projectId, "P" + projectId));
   }
 
   private static AnalysisSaveCommand command() {
