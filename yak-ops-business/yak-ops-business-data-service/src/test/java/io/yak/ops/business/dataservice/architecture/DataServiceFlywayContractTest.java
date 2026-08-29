@@ -22,13 +22,15 @@ class DataServiceFlywayContractTest {
   }
 
   @Test
-  void dedicatedNamespaceContainsOnlyFirstReleaseBaseline() throws IOException {
+  void dedicatedNamespaceContainsBaselineAndProjectContract() throws IOException {
     assertThat(sqlFiles(dedicatedMigrationRoot()))
-        .containsExactly("V1__baseline_data_service.sql");
+        .containsExactly(
+            "V1__baseline_data_service.sql",
+            "V2__contract_project_scope.sql");
 
-    String migration = Files.readString(
+    String baseline = Files.readString(
         dedicatedMigrationRoot().resolve("V1__baseline_data_service.sql"));
-    assertThat(migration)
+    assertThat(baseline)
         .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_api")
         .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_api_key")
         .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_service_documentation")
@@ -38,6 +40,14 @@ class DataServiceFlywayContractTest {
         .contains("project_id")
         .contains("runtime_generation")
         .doesNotContain("ALTER TABLE");
+
+    String contract = Files.readString(
+        dedicatedMigrationRoot().resolve("V2__contract_project_scope.sql"));
+    assertThat(contract)
+        .contains("ALTER TABLE yak_ops_data_service_api")
+        .contains("ALTER TABLE yak_ops_data_service_call_log")
+        .contains("project_id BIGINT UNSIGNED NOT NULL")
+        .doesNotContain("UPDATE yak_ops_data_service");
   }
 
   @Test

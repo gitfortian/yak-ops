@@ -23,9 +23,12 @@ import io.yak.ops.business.dataservice.domain.access.AccessContext;
 import io.yak.ops.business.dataservice.domain.access.AuthMode;
 import io.yak.ops.business.dataservice.query.DataServiceReader;
 import io.yak.ops.business.dataservice.runtime.LocalDataServiceRuntime;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +38,7 @@ class DataServiceInvokerTest {
   private DataServiceAuthorizer authorizer;
   private DataServiceQueryExecutor executor;
   private DataServiceInvocationRecorder recorder;
+  private ProjectContextScope projectContextScope;
   private DataServiceInvoker invoker;
   private DataServiceDefinition definition;
 
@@ -44,16 +48,33 @@ class DataServiceInvokerTest {
     authorizer = mock(DataServiceAuthorizer.class);
     executor = mock(DataServiceQueryExecutor.class);
     recorder = mock(DataServiceInvocationRecorder.class);
+    projectContextScope = mock(ProjectContextScope.class);
+    when(projectContextScope.call(any(), any())).thenAnswer(invocation -> {
+      Supplier<?> action = invocation.getArgument(1);
+      return action.get();
+    });
     invoker = new DataServiceInvoker(
         reader,
         authorizer,
         new DataServiceSqlCompiler(),
         executor,
         new LocalDataServiceRuntime(),
-        recorder);
+        recorder,
+        projectContextScope);
     definition = definition();
     when(reader.requireByPath("/orders")).thenReturn(definition);
     when(authorizer.authorize(definition, null)).thenReturn(AccessContext.publicAccess());
+  }
+
+  @Test
+  void publicInvocationRestoresResolvedApiProjectContext() {
+    DataServiceQueryResponse response = new DataServiceQueryResponse(
+        List.of("id"), List.of(Map.of("id", 1L)), false, 1, 8L);
+    when(executor.execute(eq(definition), any(), isNull())).thenReturn(response);
+
+    invoker.invoke("orders", Map.of("id", "1"), null);
+
+    verify(projectContextScope).call(eq(new ProjectContext(3L, null)), any());
   }
 
   @Test
