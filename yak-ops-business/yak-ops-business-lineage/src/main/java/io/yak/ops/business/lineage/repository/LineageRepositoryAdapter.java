@@ -33,7 +33,7 @@ public class LineageRepositoryAdapter
   public LineageAsset upsertAsset(LineageAssetDraft draft) {
     LineageAssetPO row = toAssetPO(draft);
     lineageDao.upsertAsset(row);
-    return Optional.ofNullable(lineageDao.selectAssetByKey(draft.assetKey()))
+    return Optional.ofNullable(lineageDao.selectAssetByKey(draft.assetKey(), draft.projectId()))
         .map(this::toAsset)
         .orElseThrow(() -> new IllegalStateException("保存血缘资产后无法读取资产"));
   }
