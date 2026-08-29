@@ -41,11 +41,9 @@ public class DevelopmentNodeService {
   public DevelopmentNode create(
       String name,
       String type,
-      Long projectId,
       Long directoryId) {
     DevelopmentNodeName nodeName = DevelopmentNodeName.of(name);
     DevelopmentNodeType nodeType = DevelopmentNodeType.require(type);
-    Long normalizedProjectId = normalizeProjectId(projectId);
     Long normalizedDirectoryId = normalizeDirectoryId(directoryId);
 
     if (normalizedDirectoryId != null
@@ -59,9 +57,21 @@ public class DevelopmentNodeService {
     return repository.insert(
         nodeName.value(),
         nodeType.name(),
-        normalizedProjectId,
         normalizedDirectoryId,
         false);
+  }
+
+  /**
+   * Compatibility entry for pre-Stage-5A internal callers. The supplied projectId is intentionally
+   * ignored; Project Root ownership is resolved only from trusted CurrentProject in the repository.
+   */
+  @Deprecated
+  public DevelopmentNode create(
+      String name,
+      String type,
+      Long ignoredProjectId,
+      Long directoryId) {
+    return create(name, type, directoryId);
   }
 
   @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
@@ -113,10 +123,6 @@ public class DevelopmentNodeService {
           TaskAssetSource.DATA_DEVELOPMENT,
           String.valueOf(current.id()));
     }
-  }
-
-  private Long normalizeProjectId(Long projectId) {
-    return projectId == null || projectId <= 0L ? null : projectId;
   }
 
   private Long normalizeDirectoryId(Long directoryId) {
