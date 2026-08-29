@@ -75,6 +75,9 @@
                create_time, update_time
         FROM yak_metadata_asset
         WHERE asset_key = #{assetKey}
+        <if test="projectId != null">
+            AND project_id = #{projectId}
+        </if>
         LIMIT 1
         FOR UPDATE
     </select>
@@ -91,6 +94,9 @@
         </foreach>
           AND asset.source_type = #{ownerType}
           AND asset.source_id = #{ownerId}
+        <if test="projectId != null">
+          AND asset.project_id = #{projectId}
+        </if>
           AND outgoing.id IS NULL
           AND incoming.id IS NULL
           AND child.id IS NULL
