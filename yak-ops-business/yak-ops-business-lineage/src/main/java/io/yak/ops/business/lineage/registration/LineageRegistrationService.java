@@ -59,7 +59,38 @@ public class LineageRegistrationService {
       String schemaName,
       String tableName,
       String columnName,
-      JsonNode properties) {
+      JsonNode properties,
+      Long sourceProjectId) {
+
+    /** Compatibility constructor; HTTP and pre-Stage-4 producers do not provide project identity. */
+    public RegisterAssetCommand(
+        String assetKey,
+        LineageAssetType assetType,
+        String name,
+        String sourceType,
+        String sourceId,
+        Long parentAssetId,
+        String dataSourceId,
+        String databaseName,
+        String schemaName,
+        String tableName,
+        String columnName,
+        JsonNode properties) {
+      this(
+          assetKey,
+          assetType,
+          name,
+          sourceType,
+          sourceId,
+          parentAssetId,
+          dataSourceId,
+          databaseName,
+          schemaName,
+          tableName,
+          columnName,
+          properties,
+          null);
+    }
   }
 
   public record RegisterRelationCommand(
@@ -72,6 +103,33 @@ public class LineageRegistrationService {
       BigDecimal confidence,
       String version,
       Instant observedAt,
-      JsonNode properties) {
+      JsonNode properties,
+      Long sourceProjectId) {
+
+    /** Compatibility constructor for existing producers; project will be derived from endpoints/context. */
+    public RegisterRelationCommand(
+        long sourceAssetId,
+        long targetAssetId,
+        LineageRelationType relationType,
+        String sourceType,
+        String sourceId,
+        String expression,
+        BigDecimal confidence,
+        String version,
+        Instant observedAt,
+        JsonNode properties) {
+      this(
+          sourceAssetId,
+          targetAssetId,
+          relationType,
+          sourceType,
+          sourceId,
+          expression,
+          confidence,
+          version,
+          observedAt,
+          properties,
+          null);
+    }
   }
 }
