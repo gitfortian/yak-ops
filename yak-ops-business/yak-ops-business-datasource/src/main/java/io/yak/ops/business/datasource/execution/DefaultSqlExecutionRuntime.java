@@ -20,6 +20,9 @@ import io.yak.ops.core.execution.sql.SqlStatementClassification;
 import io.yak.ops.core.execution.sql.SqlStatementClassifier;
 import io.yak.ops.core.execution.sql.SqlStatementRequest;
 import io.yak.ops.core.execution.sql.SqlTransactionMode;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import jakarta.annotation.PreDestroy;
 import java.sql.SQLTimeoutException;
 import java.util.ArrayList;
@@ -47,6 +50,8 @@ public final class DefaultSqlExecutionRuntime implements SqlExecutionRuntime {
   private final SqlExecutionGateway executionGateway;
   private final SqlStatementClassifier statementClassifier;
   private final SqlExecutionPolicy executionPolicy;
+  private final CurrentProject currentProject;
+  private final ProjectContextScope projectContextScope;
   private final ExecutorService lifecycleExecutor;
   private final ConcurrentMap<String, RuntimeExecution> executions = new ConcurrentHashMap<>();
   private final ConcurrentLinkedDeque<String> completedOrder = new ConcurrentLinkedDeque<>();
@@ -55,17 +60,47 @@ public final class DefaultSqlExecutionRuntime implements SqlExecutionRuntime {
   @Autowired
   public DefaultSqlExecutionRuntime(
       SqlExecutionGateway executionGateway,
+      SqlExecutionPolicy executionPolicy,
+      CurrentProject currentProject,
+      ProjectContextScope projectContextScope) {
+    this(
+        executionGateway,
+        new LexicalSqlStatementClassifier(),
+        executionPolicy,
+        currentProject,
+        projectContextScope);
+  }
+
+  /** Compatibility entry point for direct unit construction; Spring always uses the annotated one. */
+  public DefaultSqlExecutionRuntime(
+      SqlExecutionGateway executionGateway,
       SqlExecutionPolicy executionPolicy) {
-    this(executionGateway, new LexicalSqlStatementClassifier(), executionPolicy);
+    this(
+        executionGateway,
+        new LexicalSqlStatementClassifier(),
+        executionPolicy,
+        null,
+        null);
   }
 
   DefaultSqlExecutionRuntime(
       SqlExecutionGateway executionGateway,
       SqlStatementClassifier statementClassifier,
       SqlExecutionPolicy executionPolicy) {
+    this(executionGateway, statementClassifier, executionPolicy, null, null);
+  }
+
+  private DefaultSqlExecutionRuntime(
+      SqlExecutionGateway executionGateway,
+      SqlStatementClassifier statementClassifier,
+      SqlExecutionPolicy executionPolicy,
+      CurrentProject currentProject,
+      ProjectContextScope projectContextScope) {
     this.executionGateway = Objects.requireNonNull(executionGateway, "executionGateway");
     this.statementClassifier = Objects.requireNonNull(statementClassifier, "statementClassifier");
     this.executionPolicy = Objects.requireNonNull(executionPolicy, "executionPolicy");
+    this.currentProject = currentProject;
+    this.projectContextScope = projectContextScope;
     this.lifecycleExecutor = Executors.newVirtualThreadPerTaskExecutor();
   }
 
@@ -84,13 +119,19 @@ public final class DefaultSqlExecutionRuntime implements SqlExecutionRuntime {
       classifications.add(classifyAndValidate(plan.context(), statement.sql()));
     }
 
+    ProjectContext projectContext = currentProject == null ? null : currentProject.require();
     String executionId = "sql-" + UUID.randomUUID();
     SqlExecutionAggregate aggregate =
         new SqlExecutionAggregate(executionId, plan, classifications);
     RuntimeExecution execution = new RuntimeExecution(aggregate);
     executions.put(executionId, execution);
     try {
-      lifecycleExecutor.submit(() -> run(execution));
+      Runnable action = () -> run(execution);
+      if (projectContext != null && projectContextScope != null) {
+        lifecycleExecutor.submit(() -> projectContextScope.run(projectContext, action));
+      } else {
+        lifecycleExecutor.submit(action);
+      }
     } catch (RuntimeException exception) {
       execution.failBeforeStart(exception);
       retainCompleted(executionId);

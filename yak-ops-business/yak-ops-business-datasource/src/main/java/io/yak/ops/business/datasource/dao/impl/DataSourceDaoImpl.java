@@ -20,7 +20,14 @@ import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-/** 基于 MyBatis-Plus 的数据源数据访问实现。 */
+/**
+ * 基于 MyBatis-Plus 的数据源数据访问实现。
+ *
+ * <p>DataSource 对外业务面统一通过 project-required Repository 访问。这里暂保留“无 CurrentProject
+ * 时按显式 ID 解析”的底层兼容通道，供尚处迁移期的 Offline/Realtime 后台任务恢复已持久化的数据源引用；
+ * 一旦存在 CurrentProject，则所有查询和写入都严格按该项目过滤。后续这些后台模块完成 project context
+ * 恢复后，应删除这条 legacy corridor。
+ */
 @Repository
 @ConditionalOnDataSourceEnabled
 public class DataSourceDaoImpl implements DataSourceDao {

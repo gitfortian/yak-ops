@@ -8,18 +8,21 @@ import io.yak.ops.business.datasource.dao.model.SqlExecutionAuditPO;
 import io.yak.ops.business.datasource.dao.model.SqlExecutionAuditQuery;
 import io.yak.ops.business.datasource.dao.model.SqlExecutionAuditSummaryRow;
 import io.yak.ops.business.datasource.dao.model.SqlStatementExecutionAuditPO;
+import io.yak.ops.core.project.CurrentProject;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** SQL execution observability read-side role returning business projections. */
+/** SQL execution observability read-side role returning project-scoped business projections. */
 @Component
 @ConditionalOnDataSourceEnabled
 public class SqlExecutionAuditReader {
 
   private final SqlExecutionAuditDao auditDao;
+  private final CurrentProject currentProject;
 
-  public SqlExecutionAuditReader(SqlExecutionAuditDao auditDao) {
+  public SqlExecutionAuditReader(SqlExecutionAuditDao auditDao, CurrentProject currentProject) {
     this.auditDao = auditDao;
+    this.currentProject = currentProject;
   }
 
   public PageData<SqlExecutionAuditRecord> page(SqlExecutionAuditCriteria criteria) {
@@ -37,13 +40,17 @@ public class SqlExecutionAuditReader {
     if (executionId == null || executionId.isBlank()) {
       throw new IllegalArgumentException("executionId must not be blank");
     }
+    long projectId = currentProject.requireProjectId();
     String normalizedId = executionId.trim();
-    SqlExecutionAuditPO execution = auditDao.selectByExecutionId(normalizedId);
+    SqlExecutionAuditPO execution = auditDao.selectByExecutionId(projectId, normalizedId);
     if (execution == null) {
+      // Cross-project IDs deliberately look identical to an unknown ID.
       throw new IllegalArgumentException("SQL execution audit not found: " + normalizedId);
     }
     List<SqlStatementAuditRecord> statements =
-        auditDao.selectStatements(normalizedId).stream().map(this::statementRecord).toList();
+        auditDao.selectStatements(projectId, normalizedId).stream()
+            .map(this::statementRecord)
+            .toList();
     return new SqlExecutionAuditDetail(executionRecord(execution), statements);
   }
 
@@ -95,7 +102,8 @@ public class SqlExecutionAuditReader {
         value.sqlFingerprint(),
         value.minDurationMs(),
         value.startedFrom(),
-        value.startedTo());
+        value.startedTo())
+        .scopedTo(currentProject.requireProjectId());
   }
 
   private SqlExecutionAuditRecord executionRecord(SqlExecutionAuditPO row) {

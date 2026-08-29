@@ -21,17 +21,28 @@ class DataSourceFlywayContractTest {
   }
 
   @Test
-  void datasourceNamespaceContainsOnlyFirstReleaseBaseline() throws IOException {
+  void datasourceNamespaceContainsBaselineAndProjectScopeExpandMigration() throws IOException {
     assertThat(sqlFiles(migrationRoot()))
-        .containsExactly("V1__baseline_datasource.sql");
+        .containsExactly(
+            "V1__baseline_datasource.sql",
+            "V2__add_project_scope_to_sql_execution.sql");
 
-    String migration = Files.readString(migrationRoot().resolve("V1__baseline_datasource.sql"));
-    assertThat(migration)
+    String baseline = Files.readString(migrationRoot().resolve("V1__baseline_datasource.sql"));
+    assertThat(baseline)
         .contains("CREATE TABLE IF NOT EXISTS yak_ops_data_source")
         .contains("CREATE TABLE IF NOT EXISTS yak_ops_sql_execution")
         .contains("CREATE TABLE IF NOT EXISTS yak_ops_sql_statement_execution")
         .contains("project_id")
         .doesNotContain("ALTER TABLE");
+
+    String projectScope =
+        Files.readString(
+            migrationRoot().resolve("V2__add_project_scope_to_sql_execution.sql"));
+    assertThat(projectScope)
+        .contains("ALTER TABLE yak_ops_sql_execution")
+        .contains("ADD COLUMN project_id BIGINT NULL")
+        .contains("idx_yak_ops_sql_execution_project_started")
+        .contains("idx_yak_ops_sql_execution_project_status_started");
   }
 
   private List<String> sqlFiles(Path root) throws IOException {

@@ -16,7 +16,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis-Plus implementation of the SQL execution audit DAO. */
+/** MyBatis-Plus implementation of the project-scoped SQL execution audit DAO. */
 @Repository
 @ConditionalOnDataSourceEnabled
 @RequiredArgsConstructor
@@ -27,6 +27,9 @@ public class SqlExecutionAuditDaoImpl implements SqlExecutionAuditDao {
 
   @Override
   public void insertExecution(SqlExecutionAuditPO execution) {
+    if (execution == null || execution.getProjectId() == null || execution.getProjectId() <= 0L) {
+      throw new IllegalArgumentException("SQL execution audit requires projectId");
+    }
     executionMapper.insert(execution);
   }
 
@@ -44,17 +47,20 @@ public class SqlExecutionAuditDaoImpl implements SqlExecutionAuditDao {
   }
 
   @Override
-  public SqlExecutionAuditPO selectByExecutionId(String executionId) {
+  public SqlExecutionAuditPO selectByExecutionId(Long projectId, String executionId) {
     if (executionId == null || executionId.isBlank()) return null;
+    long scopedProjectId = requireProjectId(projectId);
     return executionMapper.selectOne(
         Wrappers.<SqlExecutionAuditPO>lambdaQuery()
+            .eq(SqlExecutionAuditPO::getProjectId, scopedProjectId)
             .eq(SqlExecutionAuditPO::getExecutionId, executionId.trim())
             .last("LIMIT 1"));
   }
 
   @Override
-  public List<SqlStatementExecutionAuditPO> selectStatements(String executionId) {
+  public List<SqlStatementExecutionAuditPO> selectStatements(Long projectId, String executionId) {
     if (executionId == null || executionId.isBlank()) return List.of();
+    if (selectByExecutionId(projectId, executionId) == null) return List.of();
     return statementMapper.selectList(
         Wrappers.<SqlStatementExecutionAuditPO>lambdaQuery()
             .eq(SqlStatementExecutionAuditPO::getExecutionId, executionId.trim())
@@ -82,9 +88,16 @@ public class SqlExecutionAuditDaoImpl implements SqlExecutionAuditDao {
   }
 
   private static SqlExecutionAuditQuery requireQuery(SqlExecutionAuditQuery query) {
-    return query == null
-        ? new SqlExecutionAuditQuery(
-            1, 20, null, null, null, null, null, null, null, null, null, null, null, null)
-        : query;
+    if (query == null || query.getProjectId() == null || query.getProjectId() <= 0L) {
+      throw new IllegalArgumentException("SQL execution audit query requires projectId");
+    }
+    return query;
+  }
+
+  private static long requireProjectId(Long projectId) {
+    if (projectId == null || projectId <= 0L) {
+      throw new IllegalArgumentException("projectId must be positive");
+    }
+    return projectId;
   }
 }

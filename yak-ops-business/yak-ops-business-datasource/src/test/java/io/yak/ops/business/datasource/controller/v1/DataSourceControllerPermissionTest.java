@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.common.constant.datasource.DataSourcePermissionCode;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +16,16 @@ class DataSourceControllerPermissionTest {
     assertPermission(DataSourceController.class, DataSourcePermissionCode.READ);
     assertPermission(DataSourceCatalogController.class, DataSourcePermissionCode.READ);
     assertPermission(DataSourcePluginConfigController.class, DataSourcePermissionCode.READ);
+  }
+
+  @Test
+  void shouldRequireProjectForDatasourceBusinessControllers() {
+    assertProjectMode(DataSourceController.class, ProjectMigrationMode.PROJECT_REQUIRED);
+    assertProjectMode(DataSourceCatalogController.class, ProjectMigrationMode.PROJECT_REQUIRED);
+    assertProjectMode(SqlExecutionAuditController.class, ProjectMigrationMode.PROJECT_REQUIRED);
+
+    // Connector/plugin definitions are platform capabilities rather than project-owned data.
+    assertThat(DataSourcePluginConfigController.class.getAnnotation(ProjectScope.class)).isNull();
   }
 
   @Test
@@ -43,5 +55,11 @@ class DataSourceControllerPermissionTest {
     RequiresPermission permission = method.getAnnotation(RequiresPermission.class);
     assertThat(permission).isNotNull();
     assertThat(permission.value()).isEqualTo(expected);
+  }
+
+  private void assertProjectMode(Class<?> controllerType, ProjectMigrationMode expected) {
+    ProjectScope projectScope = controllerType.getAnnotation(ProjectScope.class);
+    assertThat(projectScope).isNotNull();
+    assertThat(projectScope.value()).isEqualTo(expected);
   }
 }

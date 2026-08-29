@@ -52,8 +52,10 @@ class PersistentSqlExecutionObserverTest {
         finished,
         null);
 
-    PersistentSqlExecutionObserver.AuditBatch batch = PersistentSqlExecutionObserver.map(snapshot);
+    PersistentSqlExecutionObserver.AuditBatch batch =
+        PersistentSqlExecutionObserver.map(snapshot, 7L);
 
+    assertEquals(7L, batch.execution().getProjectId());
     assertEquals("bruce", batch.execution().getOperatorName());
     assertEquals(1L, batch.execution().getReturnedRows());
     assertEquals(1, batch.execution().getSucceededStatementCount());

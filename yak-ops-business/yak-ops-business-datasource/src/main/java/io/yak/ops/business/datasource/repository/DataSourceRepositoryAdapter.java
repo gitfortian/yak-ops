@@ -21,7 +21,7 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis persistence adapter; persistence rehydration is explicit and cannot mutate aggregates via setters. */
+/** MyBatis persistence adapter; every business operation is scoped to the trusted CurrentProject. */
 @Repository
 @ConditionalOnDataSourceEnabled
 public class DataSourceRepositoryAdapter implements DataSourceRepository {
@@ -35,20 +35,23 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
     this.currentProject = currentProject;
   }
 
+  /** Test-only compatibility constructor. Calls still fail closed until a CurrentProject is supplied. */
   public DataSourceRepositoryAdapter(DataSourceDao dao) {
     this(dao, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public Optional<DataSourceDefinition> findById(Long id) {
-    Long projectId = currentProjectId();
-    DataSourcePO row = projectId == null ? dao.selectById(id) : dao.selectById(projectId, id);
-    return Optional.ofNullable(toDomain(row));
+    return Optional.ofNullable(toDomain(dao.selectById(currentProjectId(), id)));
   }
 
   @Override
   public boolean insert(DataSourceDefinition definition) {
-    currentProject.current().ifPresent(context -> definition.assignProject(context.projectId()));
+    long projectId = currentProjectId();
+    if (definition.getProjectId() != null && !Objects.equals(projectId, definition.getProjectId())) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    definition.assignProject(projectId);
     return dao.addDataSource(toPO(definition)) > 0;
   }
 
@@ -60,16 +63,12 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   @Override
   public boolean delete(Long id) {
-    Long projectId = currentProjectId();
-    return projectId == null ? dao.deleteById(id) : dao.deleteById(projectId, id);
+    return dao.deleteById(currentProjectId(), id);
   }
 
   @Override
   public boolean existsByName(String name, Long excludeId) {
-    Long projectId = currentProjectId();
-    return projectId == null
-        ? dao.existsByName(name, excludeId)
-        : dao.existsByName(projectId, name, excludeId);
+    return dao.existsByName(currentProjectId(), name, excludeId);
   }
 
   @Override
@@ -98,17 +97,12 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   @Override
   public List<DataSourceDefinition> findAll(DataSourceDbType dbType) {
-    Long projectId = currentProjectId();
-    List<DataSourcePO> rows =
-        projectId == null ? dao.selectAll(dbType) : dao.selectAll(projectId, dbType);
-    return rows.stream().map(this::toDomain).toList();
+    return dao.selectAll(currentProjectId(), dbType).stream().map(this::toDomain).toList();
   }
 
   @Override
   public DataSourceSummary summary() {
-    Long projectId = currentProjectId();
-    DataSourceSummaryRow row =
-        projectId == null ? dao.selectSummary() : dao.selectSummary(projectId);
+    DataSourceSummaryRow row = dao.selectSummary(currentProjectId());
     return row == null
         ? DataSourceSummary.empty()
         : new DataSourceSummary(
@@ -121,23 +115,18 @@ public class DataSourceRepositoryAdapter implements DataSourceRepository {
 
   @Override
   public boolean updateConnectionStatus(Long id, DataSourceConnStatus status) {
-    Long projectId = currentProjectId();
-    return projectId == null
-        ? dao.updateConnectionStatus(id, status)
-        : dao.updateConnectionStatus(projectId, id, status);
+    return dao.updateConnectionStatus(currentProjectId(), id, status);
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
   }
 
   private void ensureCurrentProject(Long ownerProjectId) {
-    currentProject.current().ifPresent(
-        context -> {
-          if (!Objects.equals(context.projectId(), ownerProjectId)) {
-            throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-          }
-        });
+    long projectId = currentProjectId();
+    if (ownerProjectId == null || !Objects.equals(projectId, ownerProjectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
   }
 
   private DataSourceDefinition toDomain(DataSourcePO po) {
