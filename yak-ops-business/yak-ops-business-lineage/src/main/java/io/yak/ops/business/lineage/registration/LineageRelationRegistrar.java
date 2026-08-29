@@ -31,7 +31,7 @@ public class LineageRelationRegistrar {
     if (commands == null || commands.isEmpty()) return;
     Map<String, LineageRelationDraft> drafts = new LinkedHashMap<>();
     for (RegisterRelationCommand command : commands) {
-      LineageRelationDraft draft = draftFactory.relation(command, false);
+      LineageRelationDraft draft = draftFactory.relation(command, true);
       String identity =
           draft.sourceAssetId()
               + "\u0000"
