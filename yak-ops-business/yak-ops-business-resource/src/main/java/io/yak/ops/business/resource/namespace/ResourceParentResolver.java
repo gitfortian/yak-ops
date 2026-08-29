@@ -39,7 +39,7 @@ public class ResourceParentResolver {
   public Parent resolve(Long parentId) {
     long normalized = normalize(parentId);
     if (normalized == 0L) {
-      Long projectId = currentProject.current().map(context -> context.projectId()).orElse(null);
+      Long projectId = currentProject.requireProjectId();
       return new Parent(0L, "/", storage.defaultType(), projectId);
     }
     ResourceNode parent =
@@ -47,6 +47,10 @@ public class ResourceParentResolver {
             .orElseThrow(() -> new ResourceException(ResourceErrorCode.PARENT_NOT_FOUND));
     if (parent.getNodeType() != ResourceNodeType.DIRECTORY) {
       throw new ResourceException(ResourceErrorCode.PARENT_NOT_DIRECTORY);
+    }
+    Long projectId = currentProject.requireProjectId();
+    if (!projectId.equals(parent.getProjectId())) {
+      throw new ResourceException(ResourceErrorCode.PARENT_NOT_FOUND);
     }
     return new Parent(
         parent.getId(), parent.getFullPath(), parent.getStorageType(), parent.getProjectId());

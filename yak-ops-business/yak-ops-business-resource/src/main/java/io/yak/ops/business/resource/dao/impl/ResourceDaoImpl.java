@@ -10,17 +10,19 @@ import io.yak.ops.business.resource.dao.mapper.ResourceMapper;
 import io.yak.ops.common.bean.po.resource.ResourcePO;
 import java.util.Collections;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
 /** 基于 MyBatis-Plus 的资源数据访问实现。 */
 @Repository
 @ConditionalOnResourceEnabled
-@RequiredArgsConstructor
 public class ResourceDaoImpl implements ResourceDao {
 
   private final ResourceMapper resourceMapper;
+
+  public ResourceDaoImpl(ResourceMapper resourceMapper) {
+    this.resourceMapper = resourceMapper;
+  }
 
   @Override
   public int insert(ResourcePO resourcePO) {
@@ -30,6 +32,18 @@ public class ResourceDaoImpl implements ResourceDao {
   @Override
   public boolean update(ResourcePO resourcePO) {
     return resourcePO != null && resourceMapper.updateById(resourcePO) > 0;
+  }
+
+  @Override
+  public boolean update(Long projectId, ResourcePO resourcePO) {
+    if (projectId == null || resourcePO == null || resourcePO.getId() == null) return false;
+    resourcePO.setProjectId(projectId);
+    return resourceMapper.update(
+            resourcePO,
+            Wrappers.<ResourcePO>lambdaUpdate()
+                .eq(ResourcePO::getProjectId, projectId)
+                .eq(ResourcePO::getId, resourcePO.getId()))
+        > 0;
   }
 
   @Override
@@ -160,6 +174,16 @@ public class ResourceDaoImpl implements ResourceDao {
     if (resources == null || resources.isEmpty()) return true;
     for (ResourcePO resource : resources) {
       if (resourceMapper.updateById(resource) <= 0) return false;
+    }
+    return true;
+  }
+
+  @Override
+  public boolean updateBatch(Long projectId, List<ResourcePO> resources) {
+    if (resources == null || resources.isEmpty()) return true;
+    if (projectId == null) return false;
+    for (ResourcePO resource : resources) {
+      if (!update(projectId, resource)) return false;
     }
     return true;
   }

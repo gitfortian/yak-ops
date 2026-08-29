@@ -17,7 +17,9 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/data-source/plugin/config', mode: 'LEGACY_GLOBAL' },
   { prefix: '/api/v1/data-source', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/sql-executions', mode: 'PROJECT_REQUIRED' },
-  { prefix: '/api/v1/resources', mode: 'PROJECT_OPTIONAL' },
+  // Storage plugin metadata is platform-global; resource namespace/content is workspace-owned.
+  { prefix: '/api/v1/resources/storage-plugins', mode: 'LEGACY_GLOBAL' },
+  { prefix: '/api/v1/resources', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/datasets', mode: 'PROJECT_OPTIONAL' },
   { prefix: '/api/v1/home', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/data-development', mode: 'PROJECT_REQUIRED' },

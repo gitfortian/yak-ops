@@ -1,6 +1,7 @@
 package io.yak.ops.business.resource.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import io.yak.ops.common.enums.resource.ResourceNodeType;
 import io.yak.ops.common.enums.resource.ResourceStorageType;
 import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,8 +32,8 @@ class ResourceRepositoryAdapterTest {
   @Mock private ResourceDao resourceDao;
 
   @Test
-  void insertPropagatesGeneratedIdBackToDomain() {
-    ResourceRepositoryAdapter adapter = new ResourceRepositoryAdapter(resourceDao);
+  void insertPropagatesTrustedProjectAndGeneratedIdBackToDomain() {
+    ResourceRepositoryAdapter adapter = new ResourceRepositoryAdapter(resourceDao, project(7L));
     ResourceNode node = new ResourceNode();
     node.setName("README.md");
     node.setFullPath("/README.md");
@@ -49,9 +51,11 @@ class ResourceRepositoryAdapterTest {
 
     assertThat(adapter.insert(node)).isTrue();
     assertThat(node.getId()).isEqualTo(42L);
+    assertThat(node.getProjectId()).isEqualTo(7L);
 
     ArgumentCaptor<ResourcePO> captor = ArgumentCaptor.forClass(ResourcePO.class);
     verify(resourceDao).insert(captor.capture());
+    assertThat(captor.getValue().getProjectId()).isEqualTo(7L);
     assertThat(captor.getValue().getFullPath()).isEqualTo("/README.md");
     assertThat(captor.getValue().getNodeType()).isEqualTo(ResourceNodeType.FILE);
   }
@@ -61,21 +65,55 @@ class ResourceRepositoryAdapterTest {
     ResourcePO po = new ResourcePO();
     po.setId(9L);
     po.setProjectId(7L);
-    CurrentProject currentProject = () -> Optional.of(new ProjectContext(7L, "Project A"));
     when(resourceDao.selectById(7L, 9L)).thenReturn(po);
 
     ResourceNode result =
-        new ResourceRepositoryAdapter(resourceDao, currentProject).findById(9L).orElseThrow();
+        new ResourceRepositoryAdapter(resourceDao, project(7L)).findById(9L).orElseThrow();
 
     assertThat(result.getProjectId()).isEqualTo(7L);
     verify(resourceDao).selectById(7L, 9L);
   }
 
   @Test
-  void pageMapsDomainQueryToDaoQueryAndBack() {
+  void legacyRuntimeLookupCanStillResolveByIdWithoutProject() {
+    ResourcePO po = new ResourcePO();
+    po.setId(9L);
+    when(resourceDao.selectById(9L)).thenReturn(po);
+
+    assertThat(new ResourceRepositoryAdapter(resourceDao).findById(9L)).isPresent();
+
+    verify(resourceDao).selectById(9L);
+  }
+
+  @Test
+  void updateUsesProjectQualifiedMutation() {
+    ResourceNode node = new ResourceNode();
+    node.setId(9L);
+    node.setProjectId(7L);
+    node.setName("job.sql");
+    when(resourceDao.update(org.mockito.ArgumentMatchers.eq(7L), any(ResourcePO.class)))
+        .thenReturn(true);
+
+    assertThat(new ResourceRepositoryAdapter(resourceDao, project(7L)).update(node)).isTrue();
+
+    verify(resourceDao).update(org.mockito.ArgumentMatchers.eq(7L), any(ResourcePO.class));
+  }
+
+  @Test
+  void broadQueriesFailClosedWithoutProject() {
     ResourceRepositoryAdapter adapter = new ResourceRepositoryAdapter(resourceDao);
+
+    assertThatThrownBy(() -> adapter.page(new ResourceQuery(1, 20, null, null, null)))
+        .isInstanceOf(ProjectContextException.class);
+    assertThatThrownBy(adapter::findAll).isInstanceOf(ProjectContextException.class);
+  }
+
+  @Test
+  void pageMapsTrustedProjectAndDomainQueryToDaoQueryAndBack() {
+    ResourceRepositoryAdapter adapter = new ResourceRepositoryAdapter(resourceDao, project(7L));
     ResourcePO po = new ResourcePO();
     po.setId(7L);
+    po.setProjectId(7L);
     po.setName("job.sql");
     po.setNodeType(ResourceNodeType.FILE);
     po.setStorageType(ResourceStorageType.LOCAL);
@@ -95,8 +133,13 @@ class ResourceRepositoryAdapterTest {
 
     ArgumentCaptor<PageQuery> captor = ArgumentCaptor.forClass(PageQuery.class);
     verify(resourceDao).selectPage(captor.capture());
+    assertThat(captor.getValue().projectId()).isEqualTo(7L);
     assertThat(captor.getValue().parentId()).isEqualTo(3L);
     assertThat(captor.getValue().keyword()).isEqualTo("job");
     assertThat(captor.getValue().nodeType()).isEqualTo(ResourceNodeType.FILE);
+  }
+
+  private CurrentProject project(long projectId) {
+    return () -> Optional.of(new ProjectContext(projectId, "Project " + projectId));
   }
 }
