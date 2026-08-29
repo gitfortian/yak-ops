@@ -18,6 +18,8 @@ class DatasetProjectCompatibilityBackfillContractTest {
         .contains("legacy.source_ref REGEXP '^[0-9]+$'")
         .contains("scoped.project_id = n.project_id")
         .contains("SET a.project_id = n.project_id")
+        .contains("assertNoUnscopedReferencedTaskAssets()")
+        .contains("Dataset-referenced TaskAsset rows without Project ownership")
         .contains("failOnAmbiguousSourceOwnership()")
         .contains("JOIN yak_dev_node n ON n.id = d.development_node_id")
         .contains("JOIN yak_task_asset a ON a.id = v.source_task_asset_id")
