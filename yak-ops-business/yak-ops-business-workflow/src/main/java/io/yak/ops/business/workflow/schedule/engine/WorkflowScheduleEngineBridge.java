@@ -23,7 +23,8 @@ import org.springframework.stereotype.Component;
 /**
  * Yak Ops Workflow Schedule 到 Yak Framework ScheduleManager 的适配层。
  *
- * <p>业务表是调度定义的事实来源；Yak Schedule 只负责时间触发和引擎路由。</p>
+ * <p>业务表是调度定义的事实来源；Yak Schedule 只负责时间触发和引擎路由。Project identity 必须随
+ * durable target payload 一起持久化，不能依赖创建计划时的 HTTP ThreadLocal。</p>
  */
 @Component
 public class WorkflowScheduleEngineBridge {
@@ -66,14 +67,17 @@ public class WorkflowScheduleEngineBridge {
 
   ScheduleDefinition toDefinition(WorkflowSchedulePO schedule) {
     if (schedule == null) throw new IllegalArgumentException("工作流调度不能为空");
+    long projectId = requireProjectId(schedule);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("scheduleId", schedule.getId());
     payload.put("workflowId", schedule.getWorkflowId());
+    payload.put("projectId", projectId);
 
     Map<String, String> metadata = new LinkedHashMap<>();
     metadata.put("source", "yak-ops");
     metadata.put("workflowId", schedule.getWorkflowId());
     metadata.put("scheduleId", schedule.getId());
+    metadata.put("projectId", String.valueOf(projectId));
     if (schedule.getStartTime() != null) metadata.put("startTime", schedule.getStartTime().toString());
     if (schedule.getEndTime() != null) metadata.put("endTime", schedule.getEndTime().toString());
 
@@ -92,6 +96,14 @@ public class WorkflowScheduleEngineBridge {
 
   ScheduleKey key(String scheduleId) {
     return gateway.key(name(scheduleId));
+  }
+
+  private long requireProjectId(WorkflowSchedulePO schedule) {
+    Long value = schedule.getProjectId();
+    if (value == null || value <= 0L) {
+      throw new IllegalStateException("工作流调度缺少 Project identity：" + schedule.getId());
+    }
+    return value;
   }
 
   private String name(String scheduleId) {
