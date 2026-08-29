@@ -45,6 +45,7 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
   public DevelopmentNode insert(
       String name,
       String type,
+      Long ignoredProjectId,
       Long directoryId,
       boolean configured) {
     Long projectId = requiredProjectId();
