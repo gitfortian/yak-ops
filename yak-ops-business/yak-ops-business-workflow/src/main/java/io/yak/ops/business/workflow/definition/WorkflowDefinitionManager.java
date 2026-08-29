@@ -1,12 +1,11 @@
 package io.yak.ops.business.workflow.definition;
 
-import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
 import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
+import io.yak.ops.business.workflow.definition.WorkflowTaskBindingResolver.BindingView;
 import io.yak.ops.business.workflow.domain.WorkflowEdgeSpec;
 import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
 import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
@@ -15,7 +14,7 @@ import io.yak.ops.business.workflow.repository.NoopWorkflowDefinitionRepository;
 import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository;
 import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository.DefinitionRecord;
 import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository.VersionRecord;
-import io.yak.ops.business.workflow.definition.WorkflowTaskBindingResolver.BindingView;
+import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionUpdateDTO.EdgeDTO;
@@ -26,6 +25,7 @@ import io.yak.ops.common.bean.vo.workflow.WorkflowDefinitionVO.NodeVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO.TaskBindingVO;
+import io.yak.ops.core.project.CurrentProject;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -57,6 +57,11 @@ public class WorkflowDefinitionManager {
   private final WorkflowTaskBindingResolver taskBindingResolver;
   private final WorkflowDefinitionRepository persistence;
   private final WorkflowExecutionDao executionDao;
+
+  /**
+   * Process-local aggregate cache only. It is never an authorization source: durable deployments
+   * prove current-Project visibility through WorkflowDefinitionRepository before reading this map.
+   */
   private final ConcurrentMap<String, WorkflowDefinitionAggregate> definitions = new ConcurrentHashMap<>();
 
   @Autowired
@@ -67,13 +72,15 @@ public class WorkflowDefinitionManager {
       ObjectMapper objectMapper,
       ObjectProvider<WorkflowDefinitionRepository> persistence,
       ObjectProvider<WorkflowExecutionDao> executionDao,
+      CurrentProject currentProject,
       @Value("${yak.database.enabled:true}") boolean databaseEnabled) {
     this(
         runtimeService,
         new WorkflowTaskBindingResolver(
             taskRegistry,
             taskCatalogService.getIfAvailable(),
-            objectMapper),
+            objectMapper,
+            currentProject),
         resolvePersistence(persistence, databaseEnabled),
         resolveExecutionDao(executionDao, databaseEnabled));
   }
@@ -124,6 +131,21 @@ public class WorkflowDefinitionManager {
         null);
   }
 
+  /** Project-aware focused-test constructor for Task Catalog binding tests. */
+  public WorkflowDefinitionManager(
+      WorkflowRuntime runtimeService,
+      TaskRegistry taskRegistry,
+      TaskCatalogService taskCatalogService,
+      WorkflowDefinitionRepository persistence,
+      CurrentProject currentProject) {
+    this(
+        runtimeService,
+        new WorkflowTaskBindingResolver(
+            taskRegistry, taskCatalogService, new ObjectMapper(), currentProject),
+        persistence,
+        null);
+  }
+
   private WorkflowDefinitionManager(
       WorkflowRuntime runtimeService,
       WorkflowTaskBindingResolver taskBindingResolver,
@@ -133,7 +155,8 @@ public class WorkflowDefinitionManager {
     this.taskBindingResolver = taskBindingResolver;
     this.persistence = persistence;
     this.executionDao = executionDao;
-    restoreCatalog();
+    // Do not restore a global catalog during bean construction. Durable catalog reads require the
+    // trusted CurrentProject and are loaded lazily by list()/require() after ProjectScope binds it.
   }
 
   private static WorkflowDefinitionRepository resolvePersistence(
@@ -160,7 +183,8 @@ public class WorkflowDefinitionManager {
   public List<WorkflowDefinitionVO> list(String keyword, String status) {
     String k = normalize(keyword);
     String s = normalizeUpper(status);
-    return definitions.values().stream()
+    List<WorkflowDefinitionAggregate> visible = visibleDefinitions();
+    return visible.stream()
         .filter(x -> k == null
             || x.name.toLowerCase(Locale.ROOT).contains(k)
             || text(x.description).toLowerCase(Locale.ROOT).contains(k))
@@ -641,8 +665,38 @@ public class WorkflowDefinitionManager {
 
   private WorkflowDefinitionAggregate require(String id) {
     if (!StringUtils.hasText(id)) throw new IllegalArgumentException("工作流 ID 不能为空");
-    WorkflowDefinitionAggregate state = definitions.get(id.trim());
-    if (state == null) throw new IllegalArgumentException("工作流定义不存在：" + id);
+    String normalizedId = id.trim();
+    if (!persistence.authoritative()) {
+      WorkflowDefinitionAggregate state = definitions.get(normalizedId);
+      if (state == null) throw new IllegalArgumentException("工作流定义不存在：" + id);
+      return state;
+    }
+
+    DefinitionRecord record = persistence.findDefinition(normalizedId)
+        .orElseThrow(() -> new IllegalArgumentException("工作流定义不存在：" + id));
+    return definitions.computeIfAbsent(normalizedId, ignored -> hydrate(record));
+  }
+
+  private List<WorkflowDefinitionAggregate> visibleDefinitions() {
+    if (!persistence.authoritative()) return List.copyOf(definitions.values());
+    return persistence.loadDefinitions().stream()
+        .map(record -> definitions.computeIfAbsent(record.id(), ignored -> hydrate(record)))
+        .toList();
+  }
+
+  private WorkflowDefinitionAggregate hydrate(DefinitionRecord record) {
+    WorkflowDefinitionAggregate state = fromRecord(record);
+    List<WorkflowVersion> versions = persistence.loadVersions(record.id()).stream()
+        .map(this::fromRecord)
+        .toList();
+    state.versions = new ArrayList<>(versions);
+    if (StringUtils.hasText(record.activeVersionId())) {
+      state.activeVersion = versions.stream()
+          .filter(version -> record.activeVersionId().equals(version.id()))
+          .findFirst()
+          .orElseThrow(() -> new IllegalStateException(
+              "工作流激活版本不存在：" + record.id() + " -> " + record.activeVersionId()));
+    }
     return state;
   }
 
@@ -656,24 +710,6 @@ public class WorkflowDefinitionManager {
 
   private boolean isActive(String status) {
     return status != null && ACTIVE.contains(status.toUpperCase(Locale.ROOT));
-  }
-
-  private void restoreCatalog() {
-    for (DefinitionRecord record : persistence.loadDefinitions()) {
-      WorkflowDefinitionAggregate state = fromRecord(record);
-      List<WorkflowVersion> versions = persistence.loadVersions(record.id()).stream()
-          .map(this::fromRecord)
-          .toList();
-      state.versions = new ArrayList<>(versions);
-      if (StringUtils.hasText(record.activeVersionId())) {
-        state.activeVersion = versions.stream()
-            .filter(version -> record.activeVersionId().equals(version.id()))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException(
-                "工作流激活版本不存在：" + record.id() + " -> " + record.activeVersionId()));
-      }
-      definitions.put(state.id, state);
-    }
   }
 
   private DefinitionRecord toRecord(WorkflowDefinitionAggregate state) {
