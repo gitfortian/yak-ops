@@ -12,6 +12,7 @@ import lombok.Data;
 public class WorkflowVersionPO {
   @TableId(type = IdType.INPUT)
   private String id;
+  private Long projectId;
   private String workflowId;
   private Integer versionNo;
   private String versionKind;
