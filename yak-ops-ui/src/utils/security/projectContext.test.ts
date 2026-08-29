@@ -24,6 +24,9 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/resources/42/download')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/analyses/1')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/dashboards/1/versions')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/digital-screens/1/published')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/home/cockpit')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/home/data-center/overview?period=7d')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-development/nodes')).toBe('PROJECT_REQUIRED');
@@ -88,6 +91,9 @@ describe('Project Space request context', () => {
       '/api/v1/sql-executions/page',
       '/api/v1/resources/42/download',
       '/api/v1/datasets/42',
+      '/api/v1/analyses/42',
+      '/api/v1/dashboards/42/publish',
+      '/api/v1/digital-screens/42/versions',
       '/api/v1/home/cockpit',
       '/api/v1/data-development/nodes',
       '/api/v1/data-service/7',

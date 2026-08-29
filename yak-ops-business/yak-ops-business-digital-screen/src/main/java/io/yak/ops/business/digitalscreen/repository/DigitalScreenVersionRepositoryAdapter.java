@@ -10,12 +10,13 @@ import io.yak.ops.business.digitalscreen.repository.codec.DigitalScreenBindingsC
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** MyBatis-Plus adapter for append-only Digital Screen published snapshots. */
+/** MyBatis-Plus adapter for inherited, append-only Digital Screen published snapshots. */
 @Repository
 @DependsOn("yakDigitalScreenFlyway")
 @ConditionalOnDataSourceEnabled
@@ -23,10 +24,12 @@ import org.springframework.stereotype.Repository;
 public class DigitalScreenVersionRepositoryAdapter implements DigitalScreenVersionRepository {
 
   private final DigitalScreenVersionMapper mapper;
+  private final DigitalScreenRepository screens;
   private final DigitalScreenBindingsCodec bindingsCodec;
 
   @Override
   public List<DigitalScreenVersion> list(long screenId) {
+    requireOwnedScreen(screenId);
     return mapper.selectList(
             Wrappers.<DigitalScreenVersionPO>lambdaQuery()
                 .eq(DigitalScreenVersionPO::getScreenId, screenId)
@@ -38,11 +41,16 @@ public class DigitalScreenVersionRepositoryAdapter implements DigitalScreenVersi
 
   @Override
   public Optional<DigitalScreenVersion> findById(long versionId) {
-    return Optional.ofNullable(mapper.selectById(versionId)).map(this::toDomain);
+    DigitalScreenVersionPO row = mapper.selectById(versionId);
+    if (row == null || screens.findById(row.getScreenId()).isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(toDomain(row));
   }
 
   @Override
   public Optional<DigitalScreenVersion> findByVersionNo(long screenId, int versionNo) {
+    requireOwnedScreen(screenId);
     return Optional.ofNullable(mapper.selectOne(
             Wrappers.<DigitalScreenVersionPO>lambdaQuery()
                 .eq(DigitalScreenVersionPO::getScreenId, screenId)
@@ -52,6 +60,7 @@ public class DigitalScreenVersionRepositoryAdapter implements DigitalScreenVersi
 
   @Override
   public int nextVersionNo(long screenId) {
+    requireOwnedScreen(screenId);
     DigitalScreenVersionPO latest = mapper.selectOne(
         Wrappers.<DigitalScreenVersionPO>lambdaQuery()
             .eq(DigitalScreenVersionPO::getScreenId, screenId)
@@ -62,6 +71,8 @@ public class DigitalScreenVersionRepositoryAdapter implements DigitalScreenVersi
 
   @Override
   public DigitalScreenVersion insert(DigitalScreen draft, int versionNo, Instant publishedTime) {
+    Objects.requireNonNull(draft, "draft");
+    requireOwnedScreen(draft.id());
     DigitalScreenVersionPO row = new DigitalScreenVersionPO();
     row.setScreenId(draft.id());
     row.setVersionNo(versionNo);
@@ -81,8 +92,14 @@ public class DigitalScreenVersionRepositoryAdapter implements DigitalScreenVersi
 
   @Override
   public void deleteByScreenId(long screenId) {
+    requireOwnedScreen(screenId);
     mapper.delete(Wrappers.<DigitalScreenVersionPO>lambdaQuery()
         .eq(DigitalScreenVersionPO::getScreenId, screenId));
+  }
+
+  private void requireOwnedScreen(long screenId) {
+    screens.findById(screenId).orElseThrow(() -> new IllegalArgumentException(
+        "数字化大屏不存在或已被删除：" + screenId));
   }
 
   private DigitalScreenVersion toDomain(DigitalScreenVersionPO row) {
