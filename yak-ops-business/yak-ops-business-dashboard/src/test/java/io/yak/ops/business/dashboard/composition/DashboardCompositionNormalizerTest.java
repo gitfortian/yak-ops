@@ -82,14 +82,9 @@ class DashboardCompositionNormalizerTest {
   private DashboardCompositionNormalizer normalizer(
       DashboardAnalysisGateway analyses,
       DashboardDatasetGateway datasets) {
-    ObjectMapper objectMapper = new ObjectMapper();
-    DashboardJsonPolicy json = new DashboardJsonPolicy(objectMapper);
-    DashboardWidgetPolicy widgets = new DashboardWidgetPolicy(
-        analyses,
-        datasets,
-        new DashboardLayoutPolicy(),
-        json,
-        objectMapper);
+    DashboardJsonPolicy json = new DashboardJsonPolicy(new ObjectMapper());
+    DashboardWidgetPolicy widgets =
+        new DashboardWidgetPolicy(analyses, datasets, new DashboardLayoutPolicy(), json);
     return new DashboardCompositionNormalizer(
         json,
         widgets,

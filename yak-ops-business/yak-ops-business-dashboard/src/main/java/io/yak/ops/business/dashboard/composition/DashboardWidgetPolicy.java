@@ -1,7 +1,5 @@
 package io.yak.ops.business.dashboard.composition;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.dashboard.domain.WidgetSpec;
 import io.yak.ops.business.dashboard.gateway.analysis.DashboardAnalysisGateway;
 import io.yak.ops.business.dashboard.gateway.dataset.DashboardDatasetGateway;
@@ -22,19 +20,16 @@ public class DashboardWidgetPolicy {
   private final DashboardDatasetGateway datasets;
   private final DashboardLayoutPolicy layout;
   private final DashboardJsonPolicy json;
-  private final ObjectMapper objectMapper;
 
   public DashboardWidgetPolicy(
       DashboardAnalysisGateway analyses,
       DashboardDatasetGateway datasets,
       DashboardLayoutPolicy layout,
-      DashboardJsonPolicy json,
-      ObjectMapper objectMapper) {
+      DashboardJsonPolicy json) {
     this.analyses = analyses;
     this.datasets = datasets;
     this.layout = layout;
     this.json = json;
-    this.objectMapper = objectMapper;
   }
 
   public Result normalize(List<WidgetSpec> values) {
@@ -90,27 +85,13 @@ public class DashboardWidgetPolicy {
   }
 
   private void requireInlineDataset(Object inlineAnalysis, String widgetKey) {
-    JsonNode root = objectMapper.valueToTree(inlineAnalysis);
-    JsonNode value = root == null ? null : root.get("datasetId");
-    if (value == null || value.isNull()) return;
-
-    long datasetId;
-    try {
-      if (value.isIntegralNumber()) {
-        datasetId = value.longValue();
-      } else if (value.isTextual()) {
-        datasetId = Long.parseLong(value.asText().trim());
-      } else {
-        throw new NumberFormatException("not an integer");
-      }
-    } catch (RuntimeException exception) {
-      throw new IllegalArgumentException(
-          "inlineAnalysis.datasetId 非法：" + widgetKey, exception);
+    Long datasetId = json.optionalPositiveLongField(
+        inlineAnalysis,
+        "datasetId",
+        "inlineAnalysis：" + widgetKey);
+    if (datasetId != null) {
+      datasets.requireExists(datasetId);
     }
-    if (datasetId <= 0L) {
-      throw new IllegalArgumentException("inlineAnalysis.datasetId 必须大于 0：" + widgetKey);
-    }
-    datasets.requireExists(datasetId);
   }
 
   private String required(String value, String label, int maxLength) {

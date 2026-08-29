@@ -2,256 +2,141 @@
 
 ## Architecture principle
 
-Package names describe business capability and role. Dashboard uses explicit boundaries rather than a generic Service/Support layer.
+Dashboard is a Project-owned, versioned composition control plane. Package names describe business capability and role; cross-module access uses owner-defined gateways instead of a generic Service/Support layer.
 
 ```text
-HTTP
-  -> DashboardService facade
+HTTP @ProjectScope
+  -> DashboardService
       -> Definition / Version / Publication
           -> shared Read side
           -> Composition
-          -> Dashboard-owned gateways
+              -> Analysis gateway
+              -> Dataset gateway
           -> Repositories
-              -> DAO
+              -> DAO + trusted CurrentProject
 
-Committed Dashboard change
-  -> Change fact
-  -> after-commit Lineage listener
-      -> effective snapshot reader
-      -> Lineage synchronizer
-          -> DashboardLineageGraphGateway
-              -> Lineage adapter
+Committed Dashboard change(projectId, dashboardId)
+  -> AFTER_COMMIT listener
+  -> ProjectContextScope
+  -> effective snapshot reader
+  -> Lineage gateway
 ```
 
 ## Package roles
 
 ### Root facade
 
-`DashboardService` is the stable application/HTTP compatibility facade. It delegates to explicit internal roles and should not absorb their implementation logic.
+`DashboardService` is the stable application and HTTP compatibility facade. It delegates to explicit internal roles and does not absorb their implementation logic.
 
 ### `definition`
 
-Owns stable Dashboard identity mutation use cases.
-
-- `DashboardManager`: create/delete identity lifecycle.
-
-Definition uses the shared `read` role for identity/current reads and the neutral `change` fact for derived projection notification. It may delegate version append during initial V1 creation without making Version depend back on Definition.
+`DashboardManager` owns stable Dashboard identity create/delete. The root identity is persisted with `project_id` from `CurrentProject`; callers never choose ownership through request data.
 
 ### `read`
 
-`DashboardReader` is the shared read-side entry for Dashboard identity and current detail.
-
-It depends only on Domain and Repository ports, so Definition, Version, Publication and the stable facade can reuse it without creating package cycles.
+`DashboardReader` is the shared read-side entry for Dashboard identity and current detail. Repository reads fail closed when the requested Dashboard is outside the current Project.
 
 ### `change`
 
-`DashboardChangedEvent` is the committed mutation fact consumed by derived projections. It is a tiny framework-free value and does not depend on Definition, Version, Publication or Lineage.
+`DashboardChangedEvent` is a framework-free committed fact containing `projectId`, `dashboardId` and deletion semantics. The frozen Project is required because after-commit projection cannot depend on the original request ThreadLocal.
 
 ### `version`
 
-Owns immutable version lifecycle.
-
-- `DashboardVersionAppender`: append snapshot then move current pointer.
-- `DashboardVersionManager`: save and restore use cases.
-- `DashboardVersionReader`: version history and immutable snapshot reads.
-
-This package may use shared `read` and `change` roles. It must not implement publication semantics.
+`DashboardVersionAppender`, `DashboardVersionManager` and `DashboardVersionReader` own append-only version history. Every child operation first proves its owning Dashboard in the current Project. Version code does not publish.
 
 ### `publication`
 
-Owns the published pointer and effective-snapshot selection.
-
-- `DashboardPublisher`: move published pointer to current.
-- `DashboardEffectiveSnapshotReader`: choose published when present, otherwise current for downstream effective projection.
-
-Publication uses shared `read`, Repository ports and the neutral change fact. It must not mutate immutable versions.
+`DashboardPublisher` moves the published pointer to the current immutable version. `DashboardEffectiveSnapshotReader` selects published when present and current otherwise. Publication does not append or rewrite historical versions.
 
 ### `composition`
 
-Owns normalization of candidate Dashboard composition.
+`DashboardCompositionNormalizer` coordinates candidate validation. Widget, layout, filter, interaction and JSON policies keep their focused rules.
 
-- `DashboardCompositionNormalizer`: orchestration only.
-- `DashboardWidgetPolicy`: widget identity/content-mode rules.
-- `DashboardLayoutPolicy`: grid constraints.
-- `DashboardFilterPolicy`: global-filter/binding rules.
-- `DashboardInteractionPolicy`: interaction graph rules.
-- `DashboardJsonPolicy`: dynamic JSON shape/size boundary.
+Composition enters external truth only through:
 
-Composition may enter Analysis only through `DashboardAnalysisGateway`.
+```text
+DashboardAnalysisGateway
+DashboardDatasetGateway
+```
+
+A reusable Analysis, `activeDatasetId`, and an explicit inline `datasetId` must resolve inside the current Project. This is an ownership check, not Dataset ONLINE/schema/query validation.
 
 ### `gateway/analysis`
 
-Dashboard-owned port for validating reusable Analysis references.
-
 ```text
-Dashboard composition
-  -> DashboardAnalysisGateway
+DashboardAnalysisGateway
   -> AnalysisDashboardAdapter
   -> AnalysisReferenceService
 ```
 
-Only the adapter knows the Analysis module API.
+### `gateway/dataset`
+
+```text
+DashboardDatasetGateway
+  -> DatasetDashboardAdapter
+  -> DatasetReader
+```
 
 ### `reference`
 
-Hosts Dashboard's implementation of the Analysis deletion guard. It asks `DashboardReferenceRepository` about historical references rather than reaching into DAO directly.
+Dashboard implements Analysis deletion safety through `DashboardReferenceRepository`. Historical widget references remain relevant and the SQL join is constrained by Dashboard Project ownership.
 
 ### `lineage`
 
-Owns derived lineage projection, not Dashboard command truth.
+`DashboardLineageRefreshListener` restores the event's Project with `ProjectContextScope`, then reads the effective snapshot. `DashboardLineageSynchronizer` owns deterministic projection and `DashboardInlineLineageExtractor` owns best-effort inline evidence parsing. Shared graph access goes only through `DashboardLineageGraphGateway`.
 
-- `DashboardLineageRefreshListener`: after-commit trigger and failure isolation.
-- `DashboardLineageSynchronizer`: independent-transaction projection convergence.
-- `DashboardInlineLineageExtractor`: best-effort inline payload interpretation.
+### `repository` and `dao`
 
-The listener consumes the neutral `change` fact and effective publication read-side. Lineage enters the shared graph only through `DashboardLineageGraphGateway`.
-
-### `gateway/lineage`
-
-Dashboard-owned graph contract and adapter.
-
-Only `LineageDashboardAdapter` may translate to Lineage module types and ObjectMapper/JsonNode infrastructure required by that external contract.
-
-### `repository`
-
-Business persistence ports are split by role:
-
-- `DashboardRepository`: identity and current/published pointers;
-- `DashboardVersionRepository`: immutable version snapshots;
-- `DashboardReferenceRepository`: historical Analysis reference query.
-
-Adapters translate to DAO/PO and may use the persistence codec.
-
-### `repository/codec`
-
-`DashboardJsonCodec` owns persistence serialization for Dashboard JSON columns. JSON persistence details do not leak into application/domain APIs.
-
-### `dao`
-
-Database-facing persistence implementation. DAO may expose PO/MyBatis details internally but not upward through repository contracts.
+Repository ports expose domain/JDK values. Adapters translate persistence representations. DAO owns MyBatis details and applies `project_id` to root CRUD, overview aggregation and cross-domain reference joins. Child tables inherit through their parent and are never returned by a globally trusted child ID alone.
 
 ### `domain`
 
-Framework-free Dashboard semantic values and snapshots.
-
-Domain does not depend on Spring, HTTP, MyBatis, DAO, Repository adapters, Analysis implementation APIs or Lineage implementation APIs.
+Domain values are framework-free and do not import Analysis, Dataset or Lineage implementation APIs.
 
 ### `controller/v1`
 
-HTTP transport boundary. DTO/VO/mappers remain here. Controller enters the application through `DashboardService` and never through repositories, DAOs or gateway adapters.
+Controllers are `PROJECT_REQUIRED`, enter through `DashboardService`, and preserve existing REST/JSON compatibility.
 
-### `config`
-
-Infrastructure wiring only.
-
-## Save flow
+## Create and save flow
 
 ```text
-HTTP request
- -> DashboardService.saveVersion
- -> DashboardVersionManager
- -> DashboardReader
- -> DashboardCompositionNormalizer
- -> policies / Analysis gateway
- -> DashboardVersionAppender
- -> DashboardVersionRepository.appendVersion
- -> DashboardRepository.updateCurrentVersion
- -> publish DashboardChangedEvent
+request
+ -> trusted Project context
+ -> normalize candidate
+ -> prove Analysis/Dataset references
+ -> create or require Project-owned Dashboard
+ -> append immutable version
+ -> move current pointer
+ -> publish DashboardChangedEvent(projectId, dashboardId)
  -> commit
- -> after-commit lineage projection
-```
-
-## Create flow
-
-```text
-normalize candidate
- -> create Dashboard identity
- -> append V1
- -> move current pointer to V1
- -> publish change fact
- -> commit
+ -> restore Project for lineage projection
 ```
 
 ## Restore flow
 
 ```text
-read historical immutable snapshot Vn
- -> convert snapshot to candidate DashboardDraft
- -> normalize
- -> append next version Vm
+read Project-owned historical Vn
+ -> copy snapshot to candidate
+ -> normalize and prove current references
+ -> append next Vm
  -> current = Vm
  -> published unchanged
 ```
 
-No historical version row is reactivated or mutated.
+Restore is copy-forward; no old version row is reactivated or mutated.
 
 ## Publish flow
 
-```text
-require Dashboard through shared read side
- -> require current version
- -> if current == published: no-op
- -> update published pointer to current
- -> publish change fact
- -> commit
-```
+Publishing proves the Dashboard and target version share the current Project, then moves only the published pointer. Re-publishing the same current version is a business no-op.
 
-## Lineage flow
+## Persistence and migration
 
-```text
-DashboardChangedEvent AFTER_COMMIT
- -> deleted? clear evidence
- -> otherwise DashboardEffectiveSnapshotReader
-      published if present
-      else current
- -> DashboardLineageSynchronizer (REQUIRES_NEW)
- -> DashboardLineageGraphGateway
- -> LineageDashboardAdapter
- -> shared Lineage graph
-```
+`yak_dashboard` is `PROJECT_ROOT`. `yak_dashboard_version` and all component rows are inherited facts.
 
-Failure after the Dashboard commit is logged and isolated.
+Historical ownership is backfilled only when all explicit Dataset/Analysis evidence resolves and agrees on one Project. Empty, orphaned or mixed-Project Dashboards remain unresolved and the subsequent `NOT NULL` contract blocks deployment rather than guessing.
 
-## Persistence flow
+## Compatibility and known gap
 
-```text
-Application role
- -> Repository port
- -> Repository adapter
- -> DAO
- -> MyBatis / Dashboard tables
-```
+The REST paths, request/response fields, long-ID serialization, append-only history, current/published divergence and deprecated activate alias remain stable.
 
-Repository adapters own persistence mapping. Application roles do not know PO/Mapper/JdbcTemplate.
-
-## Acyclic application graph
-
-The shared `read` and `change` packages are intentionally lower-level than Definition/Version/Publication:
-
-```text
-definition -> read / change / version-appender
-version    -> read / change
-publication-> read / change
-read       -> repository / domain
-change     -> JDK only
-```
-
-Version does not depend on Definition, which closes the Stage 1 `definition <-> version` package cycle.
-
-## Architecture exclusions
-
-Do not introduce top-level production buckets such as:
-
-```text
-service/
-common/
-helper/
-helpers/
-utils/
-util/
-base/
-persistence/
-support/
-```
-
-A new class must state the Dashboard capability and role it belongs to.
+The known version allocation concurrency boundary remains: the unique `(dashboard_id, version_no)` key protects durable uniqueness, while richer retry/CAS allocation is future work.
