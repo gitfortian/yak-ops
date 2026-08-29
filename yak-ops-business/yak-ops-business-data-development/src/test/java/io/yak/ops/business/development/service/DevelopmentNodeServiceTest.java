@@ -98,6 +98,7 @@ class DevelopmentNodeServiceTest {
     public DevelopmentNode insert(
         String name,
         String type,
+        Long ignoredProjectId,
         Long directoryId,
         boolean configured) {
       Long id = ids.getAndIncrement();
