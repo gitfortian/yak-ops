@@ -7,7 +7,6 @@ import io.yak.ops.business.workflow.schedule.WorkflowScheduleQuery;
 import io.yak.ops.business.workflow.schedule.trigger.WorkflowScheduleTriggerQuery;
 import io.yak.ops.common.bean.vo.workflow.WorkflowScheduleTriggerVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowScheduleVO;
-import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/workflows/schedules")
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope
 public class WorkflowScheduleQueryController {
   private final WorkflowScheduleQuery query;
   private final WorkflowScheduleTriggerQuery triggerQuery;
