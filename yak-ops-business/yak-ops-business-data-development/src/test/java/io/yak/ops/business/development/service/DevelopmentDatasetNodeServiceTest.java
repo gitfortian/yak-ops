@@ -7,12 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.FieldDraft;
 import io.yak.ops.business.dataset.DevelopmentDatasetFacade.NodeDataset;
+import io.yak.ops.business.development.dataset.DevelopmentDatasetNodeService;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.taskcatalog.domain.TaskAsset;
@@ -87,7 +89,7 @@ class DevelopmentDatasetNodeServiceTest {
     when(catalog.list("DATA_DEVELOPMENT", "ONLINE", null)).thenReturn(List.of(asset));
     when(nodes.updateConfigured(501L, true)).thenReturn(true);
     NodeDataset saved = new NodeDataset(
-        "501", "21", "sales_dataset", "销售数据", "ONLINE", null,
+        "501", "21", 7L, "sales_dataset", "销售数据", "ONLINE", null,
         List.of(), List.of(), Instant.EPOCH, Instant.EPOCH);
     when(datasets.save(eq(501L), eq(11L), eq("sales_dataset"), eq("销售数据"), anyList()))
         .thenReturn(saved);
@@ -119,6 +121,49 @@ class DevelopmentDatasetNodeServiceTest {
         () -> service.preview(501L, 11L));
 
     assertEquals("Dataset 只能选择同项目的 SQL 来源", error.getMessage());
+  }
+
+  @Test
+  void getRejectsDatasetOwnedByAnotherProject() {
+    DevelopmentNodeRepository nodes = mock(DevelopmentNodeRepository.class);
+    TaskCatalogService catalog = mock(TaskCatalogService.class);
+    DevelopmentDatasetFacade datasets = mock(DevelopmentDatasetFacade.class);
+    DevelopmentDatasetNodeService service = new DevelopmentDatasetNodeService(nodes, catalog, datasets);
+
+    when(nodes.findById(501L)).thenReturn(Optional.of(node(501L, "sales_dataset", "DATASET", true, 7L)));
+    when(datasets.findByDevelopmentNodeId(501L)).thenReturn(Optional.of(new NodeDataset(
+        "501", "21", 8L, "sales_dataset", "销售数据", "ONLINE", null,
+        List.of(), List.of(), Instant.EPOCH, Instant.EPOCH)));
+
+    IllegalStateException error = assertThrows(
+        IllegalStateException.class,
+        () -> service.get(501L));
+
+    assertTrue(error.getMessage().contains("Dataset 与数据开发节点 Project 不一致"));
+    assertTrue(error.getMessage().contains("nodeProjectId=7"));
+    assertTrue(error.getMessage().contains("datasetProjectId=8"));
+  }
+
+  @Test
+  void saveRejectsDatasetProjectDriftBeforeMarkingNodeConfigured() {
+    DevelopmentNodeRepository nodes = mock(DevelopmentNodeRepository.class);
+    TaskCatalogService catalog = mock(TaskCatalogService.class);
+    DevelopmentDatasetFacade datasets = mock(DevelopmentDatasetFacade.class);
+    DevelopmentDatasetNodeService service = new DevelopmentDatasetNodeService(nodes, catalog, datasets);
+
+    DevelopmentNode datasetNode = node(501L, "sales_dataset", "DATASET", false, 7L);
+    when(nodes.findById(501L)).thenReturn(Optional.of(datasetNode));
+    when(datasets.save(eq(501L), eq("10"), eq("select 1"), eq("sales_dataset"), eq("销售数据"), anyList()))
+        .thenReturn(new NodeDataset(
+            "501", "21", 8L, "sales_dataset", "销售数据", "DRAFT", null,
+            List.of(), List.of(), Instant.EPOCH, Instant.EPOCH));
+
+    IllegalStateException error = assertThrows(
+        IllegalStateException.class,
+        () -> service.save(501L, "10", "select 1", "销售数据", List.of()));
+
+    assertTrue(error.getMessage().contains("Dataset 与数据开发节点 Project 不一致"));
+    verify(nodes, never()).updateConfigured(501L, true);
   }
 
   private static DevelopmentNode node(
