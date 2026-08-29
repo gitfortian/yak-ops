@@ -52,7 +52,12 @@ export interface SecurityProjectPage {
 export interface SecurityProjectInput {
   projectName: string;
   description?: string;
-  deptId?: number;
+  deptId: number;
+}
+
+export interface SecurityProjectCreateInput extends SecurityProjectInput {
+  ownerIdList?: number[];
+  userIdList?: number[];
 }
 
 export interface SecurityProjectDeleteCheck {
@@ -193,7 +198,7 @@ export const getSecurityProject = async (
   );
 
 export const createSecurityProject = async (
-  body: SecurityProjectInput,
+  body: SecurityProjectCreateInput,
 ): Promise<SecurityProjectSummary> =>
   toProject(
     await securityPostData<BackendProjectVO>(
@@ -281,7 +286,7 @@ export const checkSecurityProjectDeletion = async (
     resourceNameList,
     reason: deletable
       ? undefined
-      : `项目仍关联 ${resourceNameList.length} 个资源，不能删除。`,
+      : `工作空间仍关联 ${resourceNameList.length} 个资源，不能删除。`,
     references: {
       resources: resourceNameList.length,
     },
