@@ -34,10 +34,6 @@ import {
   parseDevelopmentTreeWidth,
 } from '../utils';
 
-interface UseDataDevelopmentPageOptions {
-  defaultProjectId?: DevelopmentId;
-}
-
 const initialTreeWidth = () => {
   if (typeof window === 'undefined') return parseDevelopmentTreeWidth(null);
   return parseDevelopmentTreeWidth(
@@ -45,9 +41,7 @@ const initialTreeWidth = () => {
   );
 };
 
-export const useDataDevelopmentPage = ({
-  defaultProjectId,
-}: UseDataDevelopmentPageOptions = {}) => {
+export const useDataDevelopmentPage = () => {
   const requestSequenceRef = useRef(0);
   const [directories, setDirectories] = useState<DevelopmentDirectory[]>([]);
   const [nodes, setNodes] = useState<DevelopmentResourceNode[]>([]);
@@ -210,7 +204,6 @@ export const useDataDevelopmentPage = ({
   const submitNode = useCallback(
     async (
       type: DevelopmentNodeType,
-      projectId: DevelopmentId | undefined,
       directoryId: DevelopmentId | undefined,
       name: string,
     ) => {
@@ -219,7 +212,6 @@ export const useDataDevelopmentPage = ({
         const created = await createDevelopmentNode({
           name,
           type,
-          projectId: projectId || defaultProjectId,
           directoryId,
         });
         setCreateNodeOpen(false);
@@ -233,7 +225,7 @@ export const useDataDevelopmentPage = ({
         setNodeSaving(false);
       }
     },
-    [defaultProjectId, loadTree],
+    [loadTree],
   );
 
   const copyResourceText = useCallback(
