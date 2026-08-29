@@ -11,6 +11,8 @@ import io.yak.ops.business.dataservice.domain.access.AccessContext;
 import io.yak.ops.business.dataservice.query.DataServiceReader;
 import io.yak.ops.business.dataservice.runtime.LocalDataServiceRuntime;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +35,7 @@ public class DataServiceInvoker {
   private final DataServiceQueryExecutor queryExecutor;
   private final LocalDataServiceRuntime runtime;
   private final DataServiceInvocationRecorder recorder;
+  private final ProjectContextScope projectContextScope;
 
   public DataServiceQueryResponse test(Long id, Map<String, String> parameters) {
     return execute(reader.require(id), parameters, AccessContext.console(), false);
@@ -40,6 +43,14 @@ public class DataServiceInvoker {
 
   public DataServiceQueryResponse invoke(String servicePath, Map<String, String> parameters, String rawApiKey) {
     DataServiceDefinition definition = reader.requireByPath(normalizePath(servicePath));
+    ProjectContext projectContext = requireProjectContext(definition);
+    return projectContextScope.call(
+        projectContext,
+        () -> invokeInProject(definition, parameters, rawApiKey));
+  }
+
+  private DataServiceQueryResponse invokeInProject(
+      DataServiceDefinition definition, Map<String, String> parameters, String rawApiKey) {
     if (!definition.settings().enabled()) throw new IllegalStateException("数据服务未启用：" + definition.settings().path());
     AccessContext access;
     try {
@@ -49,6 +60,15 @@ public class DataServiceInvoker {
       throw exception;
     }
     return execute(definition, parameters, access, true);
+  }
+
+  private ProjectContext requireProjectContext(DataServiceDefinition definition) {
+    Long projectId = definition == null ? null : definition.projectId();
+    if (projectId == null || projectId <= 0L) {
+      throw new IllegalStateException("数据服务缺少有效的 Project Space 归属：apiId="
+          + (definition == null ? null : definition.id()));
+    }
+    return new ProjectContext(projectId, null);
   }
 
   private DataServiceQueryResponse execute(
