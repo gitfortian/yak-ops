@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnOfflineSyncEnabled
 @RestController
 @RequiredArgsConstructor
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
 public class OfflineJobExecutionController {
 
   private final OfflineJobExecutionService service;

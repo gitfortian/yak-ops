@@ -10,10 +10,14 @@ import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -26,9 +30,11 @@ import org.springframework.stereotype.Repository;
 public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefinitionRepository {
   private final OfflineJobDefinitionDao dao;
   private final DataSourceDao dataSourceDao;
+  private final CurrentProject currentProject;
 
   @Override
   public void lock(Long id) {
+    requireProject();
     if (dao.lockById(id) == null) {
       throw new IllegalArgumentException("离线同步任务不存在：" + id);
     }
@@ -36,11 +42,13 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
 
   @Override
   public Optional<OfflineJobDefinition> findById(Long id) {
+    requireProject();
     return Optional.ofNullable(toDomain(dao.selectById(id), Map.of()));
   }
 
   @Override
   public Optional<OfflineJobDefinition> findForViewById(Long id) {
+    requireProject();
     OfflineJobDefinitionPO po = dao.selectById(id);
     if (po == null) return Optional.empty();
     return Optional.of(toDomain(po, dataSourceNames(List.of(po))));
@@ -48,32 +56,49 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
 
   @Override
   public boolean insert(OfflineJobDefinition definition) {
+    bindCurrentProject(definition);
     return dao.insert(toPO(definition));
   }
 
   @Override
   public boolean update(OfflineJobDefinition definition) {
+    bindCurrentProject(definition);
     return dao.updateById(toPO(definition));
   }
 
   @Override
   public boolean delete(Long id) {
+    requireProject();
     return dao.deleteById(id);
   }
 
   @Override
   public boolean existsByName(String jobName, Long excludeId) {
+    requireProject();
     return dao.existsByName(jobName, excludeId);
   }
 
   @Override
   public PageData<OfflineJobDefinition> page(OfflineDefinitionQuery query) {
+    requireProject();
     return page(query, false);
   }
 
   @Override
   public PageData<OfflineJobDefinition> pageForView(OfflineDefinitionQuery query) {
+    requireProject();
     return page(query, true);
+  }
+
+  @Override
+  public List<ProjectDefinitionRef> findScheduledForReconciliation() {
+    return dao.selectWithCronForReconciliation().stream()
+        .map(
+            po ->
+                new ProjectDefinitionRef(
+                    requirePersistedProject(po.getProjectId(), po.getId()),
+                    requirePositive(po.getId(), "definitionId")))
+        .toList();
   }
 
   private PageData<OfflineJobDefinition> page(
@@ -102,6 +127,7 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
     if (po == null) return null;
     OfflineJobDefinition value = new OfflineJobDefinition();
     BeanUtils.copyProperties(po, value);
+    value.requireProjectId();
     if (!dataSourceNames.isEmpty()) {
       value.setSourceDatasourceName(dataSourceNames.get(po.getSourceDatasourceId()));
       value.setSinkDatasourceName(dataSourceNames.get(po.getSinkDatasourceId()));
@@ -136,5 +162,30 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
       }
     }
     return names;
+  }
+
+  private long requireProject() {
+    return currentProject.requireProjectId();
+  }
+
+  private void bindCurrentProject(OfflineJobDefinition definition) {
+    if (definition == null) throw new IllegalArgumentException("离线同步任务不能为空");
+    long projectId = requireProject();
+    if (definition.getProjectId() != null && !Objects.equals(definition.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    definition.setProjectId(projectId);
+  }
+
+  private long requirePersistedProject(Long projectId, Long definitionId) {
+    if (projectId == null || projectId <= 0L) {
+      throw new IllegalStateException("离线同步任务缺少 Project：" + definitionId);
+    }
+    return projectId;
+  }
+
+  private long requirePositive(Long value, String name) {
+    if (value == null || value <= 0L) throw new IllegalStateException(name + " 必须大于 0");
+    return value;
   }
 }

@@ -18,8 +18,11 @@ public interface OfflineBatchExecutionRepository {
   /** 返回任务最近一个占用执行槽位的 Batch；命令判断不得回退到 Task last-*。 */
   Optional<BatchExecution> findLatestOccupyingByTaskId(long taskId);
 
-  /** Wave 5 Backfill queue：只返回尚未创建 Attempt 1 的 PENDING Backfill Batch。 */
+  /** Project-scoped PENDING Backfill query. */
   List<BatchExecution> findPendingBackfills(int limit);
+
+  /** Cross-Project dispatcher identity only; restore Project before loading the Batch. */
+  List<ProjectBatchRef> findPendingBackfillsForDispatch(int limit);
 
   /** PENDING -> RUNNING CAS reservation，防止多节点重复创建 Backfill Attempt 1。 */
   boolean reservePendingBackfill(long batchId);
@@ -27,4 +30,11 @@ public interface OfflineBatchExecutionRepository {
   BatchExecution insert(BatchExecution batch);
 
   boolean update(BatchExecution batch);
+
+  record ProjectBatchRef(long projectId, long batchId) {
+    public ProjectBatchRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId 必须大于 0");
+      if (batchId <= 0L) throw new IllegalArgumentException("batchId 必须大于 0");
+    }
+  }
 }

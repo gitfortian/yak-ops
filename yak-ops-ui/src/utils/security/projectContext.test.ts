@@ -31,18 +31,23 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/data-service/7')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-service/overview')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/task-catalog/assets')).toBe('PROJECT_OPTIONAL');
-    expect(resolveProjectRequestMode('/api/v1/job/batch-definition/page')).toBe('PROJECT_OPTIONAL');
-    expect(resolveProjectRequestMode('/api/v1/job/batch-instance/11')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-definition/page')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-execution/11/execute')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-instance/11')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-control/executions/11/events')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/executor/batch-execute')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_OPTIONAL');
   });
 
-  it('keeps datasource and storage plugin metadata plus public data service runtime global', () => {
+  it('keeps datasource and storage plugin metadata plus public runtimes and engine health global', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config?pluginType=MYSQL')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config/install')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/resources/storage-plugins')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders/by-id')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/job/batch-execution/health')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/executor/health')).toBe('LEGACY_GLOBAL');
   });
 
   it('keeps platform-global capabilities outside the rollout table', () => {
@@ -64,6 +69,8 @@ describe('Project Space request context', () => {
     expect(storagePluginHeaders).toEqual({});
     const runtimeHeaders = applyCurrentProjectHeader('/api/v1/data-service/runtime/orders', {}, '7');
     expect(runtimeHeaders).toEqual({});
+    const offlineHealthHeaders = applyCurrentProjectHeader('/api/v1/job/batch-execution/health', {}, '7');
+    expect(offlineHealthHeaders).toEqual({});
   });
 
   it('attaches the stored project to required management routes', () => {
@@ -89,6 +96,12 @@ describe('Project Space request context', () => {
       [PROJECT_ID_HEADER]: '7',
     });
     expect(applyCurrentProjectHeader('/api/v1/data-service/7', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
+    expect(applyCurrentProjectHeader('/api/v1/job/batch-definition/page', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
+    expect(applyCurrentProjectHeader('/api/v1/job/batch-instance/42', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',
     });
   });

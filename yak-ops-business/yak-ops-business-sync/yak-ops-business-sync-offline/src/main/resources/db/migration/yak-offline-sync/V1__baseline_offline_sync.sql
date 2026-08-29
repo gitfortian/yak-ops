@@ -9,7 +9,7 @@
 
 CREATE TABLE IF NOT EXISTS yak_offline_job_definition (
     id BIGINT NOT NULL COMMENT '任务定义 ID',
-    project_id BIGINT NULL COMMENT 'Yak Security Project ID',
+    project_id BIGINT NOT NULL COMMENT 'Yak Security Project ID',
     job_name VARCHAR(200) NOT NULL COMMENT '任务名称',
     job_desc VARCHAR(1000) NULL COMMENT '任务描述',
     mode VARCHAR(32) NOT NULL COMMENT 'GUIDE_SINGLE/GUIDE_MULTI',
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS yak_offline_job_definition (
 
 CREATE TABLE IF NOT EXISTS yak_offline_batch_execution (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '业务批次 ID',
-    project_id BIGINT NULL COMMENT 'Yak Security Project ID',
+    project_id BIGINT NOT NULL COMMENT 'Yak Security Project ID',
     job_definition_id BIGINT NOT NULL COMMENT '离线同步任务 ID',
     batch_key VARCHAR(512) NOT NULL COMMENT '任务内稳定业务批次身份',
     trigger_type VARCHAR(32) NOT NULL COMMENT 'MANUAL/SCHEDULE/WORKFLOW/BACKFILL',
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS yak_offline_batch_execution (
 
 CREATE TABLE IF NOT EXISTS yak_offline_job_execution (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '执行实例 ID',
-    project_id BIGINT NULL COMMENT 'Yak Security Project ID',
+    project_id BIGINT NOT NULL COMMENT 'Yak Security Project ID',
     job_definition_id BIGINT NOT NULL,
     batch_id BIGINT NULL COMMENT '所属业务批次 ID',
     definition_version INT NOT NULL DEFAULT 1,

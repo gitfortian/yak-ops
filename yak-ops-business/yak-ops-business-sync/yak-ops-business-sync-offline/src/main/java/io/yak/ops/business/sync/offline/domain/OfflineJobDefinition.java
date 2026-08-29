@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OfflineJobDefinition {
   private Long id;
+  private Long projectId;
   private String jobName;
   private String jobDesc;
   private String mode;
@@ -48,4 +49,12 @@ public class OfflineJobDefinition {
   private LocalDateTime lastEndTime;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;
+
+  /** Definition is the Offline Sync Project source truth. */
+  public long requireProjectId() {
+    if (projectId == null || projectId <= 0L) {
+      throw new IllegalStateException("离线同步任务缺少有效的 Project Space 归属：" + id);
+    }
+    return projectId;
+  }
 }

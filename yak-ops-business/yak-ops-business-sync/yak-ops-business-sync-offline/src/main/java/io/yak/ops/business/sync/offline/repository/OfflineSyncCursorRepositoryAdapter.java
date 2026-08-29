@@ -11,17 +11,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
-/** OfflineSyncCursor 与持久化模型之间的适配器。 */
+/** OfflineSyncCursor 与持久化模型之间的适配器；Project 从所属 Definition 继承。 */
 @ConditionalOnOfflineSyncEnabled
 @Repository
 @RequiredArgsConstructor
 public class OfflineSyncCursorRepositoryAdapter implements OfflineSyncCursorRepository {
 
   private final OfflineSyncCursorDao dao;
+  private final OfflineJobDefinitionRepository definitionRepository;
 
   @Override
   public Optional<OfflineSyncCursor> find(long taskId, String cursorId) {
-    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    requireTask(taskId);
     return Optional.ofNullable(toDomain(dao.select(taskId, requireText(cursorId, "cursorId 不能为空"))));
   }
 
@@ -31,7 +32,7 @@ public class OfflineSyncCursorRepositoryAdapter implements OfflineSyncCursorRepo
       String cursorId,
       String sourceColumn,
       String initialPosition) {
-    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    requireTask(taskId);
     String normalizedId = requireText(cursorId, "cursorId 不能为空");
     String normalizedColumn = requireText(sourceColumn, "sourceColumn 不能为空");
     String normalizedPosition = requireText(initialPosition, "initialPosition 不能为空");
@@ -69,6 +70,7 @@ public class OfflineSyncCursorRepositoryAdapter implements OfflineSyncCursorRepo
       String nextPosition,
       long succeededBatchId) {
     Objects.requireNonNull(current, "current cursor 不能为空");
+    requireTask(current.taskId());
     String expected = requireText(expectedPosition, "expectedPosition 不能为空");
     String next = requireText(nextPosition, "nextPosition 不能为空");
     if (!current.position().equals(expected)) return false;
@@ -81,6 +83,12 @@ public class OfflineSyncCursorRepositoryAdapter implements OfflineSyncCursorRepo
         next,
         succeededBatchId,
         LocalDateTime.now());
+  }
+
+  private void requireTask(long taskId) {
+    if (taskId <= 0L) throw new IllegalArgumentException("TaskId 必须大于 0");
+    definitionRepository.findById(taskId)
+        .orElseThrow(() -> new IllegalArgumentException("离线同步任务不存在：" + taskId));
   }
 
   private OfflineSyncCursor validateRoute(OfflineSyncCursor cursor, String sourceColumn) {

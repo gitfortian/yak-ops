@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.offline.schedule;
 
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.PROJECT_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
@@ -30,7 +31,10 @@ class OfflineScheduleEngineBridgeTest {
     assertThat(definition.trigger().expression()).isEqualTo("0 5 9 ? * *");
     assertThat(definition.trigger().zoneId()).isEqualTo(ZoneId.systemDefault());
     assertThat(definition.target().handler()).isEqualTo("offlineSyncScheduleHandler");
-    assertThat(definition.target().payload()).containsEntry("definitionId", 42L);
+    assertThat(definition.target().payload())
+        .containsEntry("definitionId", 42L)
+        .containsEntry("projectId", PROJECT_ID);
+    assertThat(definition.metadata()).containsEntry("projectId", String.valueOf(PROJECT_ID));
     assertThat(definition.policy().concurrencyPolicy()).isEqualTo(ConcurrencyPolicy.FORBID);
     assertThat(definition.policy().misfirePolicy()).isEqualTo(MisfirePolicy.FIRE_ONCE_NOW);
     assertThat(definition.policy().triggerRetries()).isZero();
@@ -53,6 +57,7 @@ class OfflineScheduleEngineBridgeTest {
   private OfflineJobDefinition definition(String state) {
     return OfflineJobDefinition.builder()
         .id(42L)
+        .projectId(PROJECT_ID)
         .jobName("订单离线同步")
         .mode("FULL")
         .sourceType("MYSQL")

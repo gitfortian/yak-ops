@@ -22,6 +22,9 @@ public interface OfflineJobDefinitionDao {
 
   List<OfflineJobDefinitionPO> selectWithCron();
 
+  /** Explicit cross-Project startup dispatcher scan. Business IO must restore each row's Project. */
+  List<OfflineJobDefinitionPO> selectWithCronForReconciliation();
+
   Long lockById(Long id);
 
   boolean updateSchedule(

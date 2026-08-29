@@ -17,6 +17,9 @@ public interface OfflineBatchExecutionDao {
 
   List<OfflineBatchExecutionPO> selectPendingBackfills(int limit);
 
+  /** Explicit cross-Project dispatcher scan; rows must carry durable project_id. */
+  List<OfflineBatchExecutionPO> selectPendingBackfillsForDispatch(int limit);
+
   boolean reservePendingBackfill(Long batchId, LocalDateTime updateTime);
 
   boolean insert(OfflineBatchExecutionPO batchPO);

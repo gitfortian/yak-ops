@@ -259,10 +259,8 @@ public class OfflineExecutionOverviewRepositoryAdapter
   }
 
   private Scope scope(String alias) {
-    Long projectId = currentProject.current().map(context -> context.projectId()).orElse(null);
-    return projectId == null
-        ? new Scope("", List.of())
-        : new Scope(" AND " + alias + ".project_id = ?", List.of(projectId));
+    Long projectId = currentProject.requireProjectId();
+    return new Scope(" AND " + alias + ".project_id = ?", List.of(projectId));
   }
 
   private Object[] args(Scope scope, Object... values) {

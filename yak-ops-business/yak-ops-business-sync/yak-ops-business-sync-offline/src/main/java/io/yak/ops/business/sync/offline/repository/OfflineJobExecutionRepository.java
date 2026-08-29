@@ -14,11 +14,22 @@ public interface OfflineJobExecutionRepository {
   List<OfflineJobExecution> findByBatchId(Long batchId);
   boolean insert(OfflineJobExecution execution);
   boolean update(OfflineJobExecution execution);
-  /** 只返回已绑定 Batch 的活动 Attempt；Wave 1 前 batchless history 不参与 reconcile。 */
+  /** Project-scoped active Attempt query. */
   List<OfflineJobExecution> findActiveExecutions(int limit);
-  /** 只返回已绑定 Batch 且到期的 FAILED Attempt。 */
+  /** Cross-Project dispatcher identities; restore Project before business IO. */
+  List<ProjectExecutionRef> findActiveExecutionsForReconciliation(int limit);
+  /** Project-scoped retry candidate query. */
   List<OfflineJobExecution> findRetryCandidates(LocalDateTime now, int limit);
+  /** Cross-Project retry dispatcher identities; restore Project before business IO. */
+  List<ProjectExecutionRef> findRetryCandidatesForReconciliation(LocalDateTime now, int limit);
   /** 原子保留一次 FAILED Attempt 的 Retry 创建权。 */
   boolean reserveRetry(Long executionId);
   PageData<OfflineJobExecution> page(OfflineExecutionQuery query);
+
+  record ProjectExecutionRef(long projectId, long executionId) {
+    public ProjectExecutionRef {
+      if (projectId <= 0L) throw new IllegalArgumentException("projectId 必须大于 0");
+      if (executionId <= 0L) throw new IllegalArgumentException("executionId 必须大于 0");
+    }
+  }
 }

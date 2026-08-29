@@ -1,5 +1,6 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.currentProject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,8 +30,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
     when(executions.findByBatchId(anyLong())).thenReturn(List.of());
-    OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+    OfflineBatchExecutionRepositoryAdapter repository = repository(dao, executions);
 
     BatchExecution source = new BatchExecution(
         null,
@@ -63,8 +63,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
     when(executions.findByBatchId(anyLong())).thenReturn(List.of());
-    OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+    OfflineBatchExecutionRepositoryAdapter repository = repository(dao, executions);
 
     BatchExecution running = repository.insert(new BatchExecution(
         null,
@@ -98,8 +97,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
     when(executions.findByBatchId(anyLong())).thenReturn(List.of());
-    OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+    OfflineBatchExecutionRepositoryAdapter repository = repository(dao, executions);
 
     BatchExecution pending = repository.insert(new BatchExecution(
         null,
@@ -121,8 +119,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
   void hydratesBoundLegacyExecutionsAsAttempts() {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
-    OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+    OfflineBatchExecutionRepositoryAdapter repository = repository(dao, executions);
 
     BatchExecution inserted = repository.insert(new BatchExecution(
         null,
@@ -159,8 +156,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
   void missingBatchLogicalJobSpecDoesNotFallBackToAttemptCopy() {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
-    OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+    OfflineBatchExecutionRepositoryAdapter repository = repository(dao, executions);
 
     BatchExecution inserted = repository.insert(new BatchExecution(
         null,
@@ -197,8 +193,7 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     FakeBatchDao dao = new FakeBatchDao();
     OfflineJobExecutionRepository executions = mock(OfflineJobExecutionRepository.class);
     when(executions.findByBatchId(anyLong())).thenReturn(List.of());
-    OfflineBatchExecutionRepositoryAdapter repository =
-        new OfflineBatchExecutionRepositoryAdapter(dao, executions);
+    OfflineBatchExecutionRepositoryAdapter repository = repository(dao, executions);
 
     BatchExecution source = new BatchExecution(
         null,
@@ -216,6 +211,11 @@ class OfflineBatchExecutionRepositoryAdapterTest {
     assertThatThrownBy(() -> repository.findById(inserted.id()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("fingerprint");
+  }
+
+  private OfflineBatchExecutionRepositoryAdapter repository(
+      OfflineBatchExecutionDao dao, OfflineJobExecutionRepository executions) {
+    return new OfflineBatchExecutionRepositoryAdapter(dao, executions, currentProject());
   }
 
   private ExecutionSnapshot snapshot(int revision, int maxAttempts) {
@@ -265,6 +265,11 @@ class OfflineBatchExecutionRepositoryAdapterTest {
               && "PENDING".equals(stored.getStatus())
           ? List.of(stored)
           : List.of();
+    }
+
+    @Override
+    public List<OfflineBatchExecutionPO> selectPendingBackfillsForDispatch(int limit) {
+      return selectPendingBackfills(limit);
     }
 
     @Override

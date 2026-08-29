@@ -17,6 +17,7 @@ import io.yak.ops.business.sync.offline.domain.core.ExecutionAttempt;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.common.bean.po.sync.offline.OfflineBatchExecutionPO;
+import io.yak.ops.core.project.CurrentProject;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -42,14 +43,17 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   private final OfflineBatchExecutionDao dao;
   private final OfflineJobExecutionRepository executionRepository;
+  private final CurrentProject currentProject;
 
   @Override
   public Optional<BatchExecution> findById(Long id) {
+    requireProject();
     return Optional.ofNullable(toDomain(dao.selectById(id)));
   }
 
   @Override
   public Optional<BatchExecution> findByTaskIdAndBatchKey(long taskId, BatchKey batchKey) {
+    requireProject();
     requirePositive(taskId, "TaskId");
     Objects.requireNonNull(batchKey, "BatchKey 不能为空");
     return Optional.ofNullable(toDomain(dao.selectByTaskIdAndBatchKey(taskId, batchKey.value())));
@@ -57,12 +61,14 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   @Override
   public boolean hasOccupyingBatch(long taskId) {
+    requireProject();
     requirePositive(taskId, "TaskId");
     return dao.existsByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES);
   }
 
   @Override
   public Optional<BatchExecution> findLatestOccupyingByTaskId(long taskId) {
+    requireProject();
     requirePositive(taskId, "TaskId");
     return Optional.ofNullable(
         toDomain(dao.selectLatestByTaskIdAndStatuses(taskId, OCCUPYING_STATUSES)));
@@ -70,17 +76,31 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   @Override
   public List<BatchExecution> findPendingBackfills(int limit) {
+    requireProject();
     return dao.selectPendingBackfills(Math.max(1, limit)).stream().map(this::toDomain).toList();
   }
 
   @Override
+  public List<ProjectBatchRef> findPendingBackfillsForDispatch(int limit) {
+    return dao.selectPendingBackfillsForDispatch(Math.max(1, limit)).stream()
+        .map(
+            po ->
+                new ProjectBatchRef(
+                    positive(po.getProjectId(), "ProjectId"),
+                    positive(po.getId(), "BatchExecutionId")))
+        .toList();
+  }
+
+  @Override
   public boolean reservePendingBackfill(long batchId) {
+    requireProject();
     requirePositive(batchId, "BatchExecutionId");
     return dao.reservePendingBackfill(batchId, LocalDateTime.now());
   }
 
   @Override
   public BatchExecution insert(BatchExecution batch) {
+    requireProject();
     Objects.requireNonNull(batch, "BatchExecution 不能为空");
     if (batch.id() != null) {
       throw new IllegalArgumentException("新 Batch 不应预先包含 ID");
@@ -106,6 +126,7 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   @Override
   public boolean update(BatchExecution batch) {
+    requireProject();
     Objects.requireNonNull(batch, "BatchExecution 不能为空");
     if (batch.id() == null) {
       throw new IllegalArgumentException("更新 Batch 必须包含 ID");
@@ -384,5 +405,9 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
 
   private double value(Double value, double fallback) {
     return value == null ? fallback : value;
+  }
+
+  private void requireProject() {
+    currentProject.requireProjectId();
   }
 }
