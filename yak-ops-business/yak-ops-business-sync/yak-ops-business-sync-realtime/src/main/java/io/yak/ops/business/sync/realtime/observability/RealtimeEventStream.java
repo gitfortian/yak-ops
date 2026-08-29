@@ -1,6 +1,7 @@
 package io.yak.ops.business.sync.realtime.observability;
 
 import io.yak.ops.business.sync.realtime.domain.RealtimeJobChangeEvent;
+import io.yak.ops.core.project.CurrentProject;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
@@ -17,13 +18,15 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/** Broadcasts committed realtime job changes and heartbeats to authenticated UI clients. */
+/** Broadcasts committed realtime job changes only to subscribers of the same trusted Project. */
 @Component
 public class RealtimeEventStream {
 
   private static final Logger LOG = LoggerFactory.getLogger(RealtimeEventStream.class);
   private static final long STREAM_TIMEOUT_MILLIS = Duration.ofHours(1).toMillis();
-  private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+
+  private final CurrentProject currentProject;
+  private final CopyOnWriteArrayList<ProjectSubscriber> subscribers = new CopyOnWriteArrayList<>();
   private final ScheduledExecutorService heartbeat =
       Executors.newSingleThreadScheduledExecutor(
           runnable -> {
@@ -32,18 +35,21 @@ public class RealtimeEventStream {
             return thread;
           });
 
-  public RealtimeEventStream() {
+  public RealtimeEventStream(CurrentProject currentProject) {
+    this.currentProject = currentProject;
     heartbeat.scheduleAtFixedRate(this::heartbeat, 15, 15, TimeUnit.SECONDS);
   }
 
   public SseEmitter subscribe() {
+    long projectId = currentProject.requireProjectId();
     SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
-    emitters.add(emitter);
-    Runnable cleanup = () -> emitters.remove(emitter);
+    ProjectSubscriber subscriber = new ProjectSubscriber(projectId, emitter);
+    subscribers.add(subscriber);
+    Runnable cleanup = () -> subscribers.remove(subscriber);
     emitter.onCompletion(cleanup);
     emitter.onTimeout(cleanup);
     emitter.onError(ignored -> cleanup.run());
-    send(emitter, "connected", Map.of("timestamp", Instant.now().toString()));
+    send(subscriber, "connected", Map.of("timestamp", Instant.now().toString()));
     return emitter;
   }
 
@@ -51,26 +57,29 @@ public class RealtimeEventStream {
       phase = TransactionPhase.AFTER_COMMIT,
       fallbackExecution = true)
   public void publish(RealtimeJobChangeEvent event) {
-    for (SseEmitter emitter : emitters) {
-      send(emitter, "realtime", event);
+    long projectId = currentProject.requireProjectId();
+    for (ProjectSubscriber subscriber : subscribers) {
+      if (subscriber.projectId() == projectId) {
+        send(subscriber, "realtime", event);
+      }
     }
   }
 
   private void heartbeat() {
-    for (SseEmitter emitter : emitters) {
-      send(emitter, "ping", Map.of("timestamp", Instant.now().toString()));
+    for (ProjectSubscriber subscriber : subscribers) {
+      send(subscriber, "ping", Map.of("timestamp", Instant.now().toString()));
     }
   }
 
-  private void send(SseEmitter emitter, String name, Object payload) {
+  private void send(ProjectSubscriber subscriber, String name, Object payload) {
     try {
-      emitter.send(
+      subscriber.emitter().send(
           SseEmitter.event()
               .name(name)
               .id(Long.toString(System.nanoTime()))
               .data(payload));
     } catch (IOException | IllegalStateException exception) {
-      emitters.remove(emitter);
+      subscribers.remove(subscriber);
       LOG.debug("Realtime SSE client disconnected: {}", exception.getMessage());
     }
   }
@@ -78,7 +87,9 @@ public class RealtimeEventStream {
   @PreDestroy
   void shutdown() {
     heartbeat.shutdownNow();
-    emitters.forEach(SseEmitter::complete);
-    emitters.clear();
+    subscribers.forEach(subscriber -> subscriber.emitter().complete());
+    subscribers.clear();
   }
+
+  private record ProjectSubscriber(long projectId, SseEmitter emitter) {}
 }

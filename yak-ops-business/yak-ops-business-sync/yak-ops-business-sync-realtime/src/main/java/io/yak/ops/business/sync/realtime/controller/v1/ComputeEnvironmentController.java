@@ -10,6 +10,8 @@ import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeRequestMap
 import io.yak.ops.business.sync.realtime.controller.v1.mapper.RealtimeViewMapper;
 import io.yak.ops.business.sync.realtime.controller.v1.vo.ComputeEnvironmentViews;
 import io.yak.ops.business.sync.realtime.environment.ComputeEnvironmentService;
+import io.yak.ops.core.project.ProjectMigrationMode;
+import io.yak.ops.core.project.ProjectScope;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/compute-environments")
 @RequiresPermission(RealtimePermissionCode.READ)
+@ProjectScope(ProjectMigrationMode.LEGACY_GLOBAL)
 public class ComputeEnvironmentController {
 
   private final ComputeEnvironmentService service;

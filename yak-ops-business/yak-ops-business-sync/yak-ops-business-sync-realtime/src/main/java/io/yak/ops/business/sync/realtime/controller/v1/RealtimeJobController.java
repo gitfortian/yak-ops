@@ -15,7 +15,6 @@ import io.yak.ops.business.sync.realtime.domain.CdcPipelineSpec;
 import io.yak.ops.business.sync.realtime.execution.RealtimeJobExecutionService;
 import io.yak.ops.business.sync.realtime.execution.query.RealtimeJobQueryService;
 import io.yak.ops.business.sync.realtime.observability.RealtimeObservabilityService;
-import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -37,7 +36,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/v1/realtime-sync")
 @RequiresPermission(RealtimePermissionCode.READ)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope
 public class RealtimeJobController {
   private final RealtimeJobDefinitionService definitionService;
   private final RealtimeJobExecutionService executionService;

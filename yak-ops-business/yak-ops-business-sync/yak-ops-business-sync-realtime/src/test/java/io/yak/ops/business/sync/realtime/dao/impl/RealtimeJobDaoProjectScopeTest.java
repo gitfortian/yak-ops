@@ -1,6 +1,7 @@
 package io.yak.ops.business.sync.realtime.dao.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import io.yak.ops.business.sync.realtime.dao.mapper.RealtimeJobQueryMapper;
 import io.yak.ops.business.sync.realtime.dao.model.RealtimeJobDefinitionPO;
 import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,5 +57,19 @@ class RealtimeJobDaoProjectScopeTest {
         ArgumentCaptor.forClass(RealtimeJobDefinitionPO.class);
     org.mockito.Mockito.verify(definitionMapper).insert(captor.capture());
     assertThat(captor.getValue().getProjectId()).isEqualTo(7L);
+  }
+
+  @Test
+  void ordinaryLookupFailsClosedWithoutCurrentProject() {
+    RealtimeJobDaoImpl dao =
+        new RealtimeJobDaoImpl(
+            definitionMapper,
+            deploymentMapper,
+            eventMapper,
+            commandMapper,
+            queryMapper);
+
+    assertThatThrownBy(() -> dao.findDefinition(11L))
+        .isInstanceOf(ProjectContextException.class);
   }
 }

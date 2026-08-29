@@ -3,6 +3,7 @@ package io.yak.ops.business.sync.realtime.engine;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.yak.ops.business.sync.realtime.domain.ComputeEnvironmentSnapshot;
 import io.yak.ops.business.sync.realtime.repository.RealtimeRuntimeIdentityStore;
+import io.yak.ops.core.project.CurrentProject;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -13,11 +14,15 @@ public class RecoverableRealtimeEngineGateway implements RealtimeEngineGateway {
 
   private final FlinkCdcEngineGateway delegate;
   private final RealtimeRuntimeIdentityStore identityStore;
+  private final CurrentProject currentProject;
 
   public RecoverableRealtimeEngineGateway(
-      FlinkCdcEngineGateway delegate, RealtimeRuntimeIdentityStore identityStore) {
+      FlinkCdcEngineGateway delegate,
+      RealtimeRuntimeIdentityStore identityStore,
+      CurrentProject currentProject) {
     this.delegate = delegate;
     this.identityStore = identityStore;
+    this.currentProject = currentProject;
   }
 
   @Override
@@ -38,10 +43,13 @@ public class RecoverableRealtimeEngineGateway implements RealtimeEngineGateway {
   @Override
   public DeployResult deploy(
       ComputeEnvironmentSnapshot environment, RealtimeDeployRequest request) {
-    String runtimeJobName = RealtimeRuntimeIdentity.jobName(request.idempotencyKey());
+    String runtimeIdentitySeed = runtimeIdentitySeed(request.idempotencyKey());
+    String runtimeJobName = RealtimeRuntimeIdentity.jobName(runtimeIdentitySeed);
     String recoverableYaml =
-        RealtimeRuntimeIdentity.decoratePipeline(request.pipelineYaml(), request.idempotencyKey());
+        RealtimeRuntimeIdentity.decoratePipeline(request.pipelineYaml(), runtimeIdentitySeed);
 
+    // Persist the raw Project-local idempotency key; only the external Flink identity is globally
+    // namespaced by Project so two workspaces may safely reuse the same Idempotency-Key.
     identityStore.bind(request.idempotencyKey(), runtimeJobName);
     RealtimeDeployRequest recoverable =
         new RealtimeDeployRequest(
@@ -60,5 +68,9 @@ public class RecoverableRealtimeEngineGateway implements RealtimeEngineGateway {
   @Override
   public void stop(ComputeEnvironmentSnapshot environment, String jobId) {
     delegate.stop(environment, jobId);
+  }
+
+  private String runtimeIdentitySeed(String idempotencyKey) {
+    return currentProject.requireProjectId() + ":" + idempotencyKey;
   }
 }
