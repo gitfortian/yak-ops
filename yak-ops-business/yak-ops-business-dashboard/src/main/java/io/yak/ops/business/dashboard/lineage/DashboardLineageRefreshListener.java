@@ -4,6 +4,8 @@ import io.yak.ops.business.dashboard.change.DashboardChangedEvent;
 import io.yak.ops.business.dashboard.domain.DashboardVersionSnapshot;
 import io.yak.ops.business.dashboard.publication.DashboardEffectiveSnapshotReader;
 import io.yak.ops.business.dashboard.publication.DashboardEffectiveSnapshotReader.EffectiveSnapshot;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,35 +21,45 @@ public class DashboardLineageRefreshListener {
 
   private final DashboardEffectiveSnapshotReader snapshots;
   private final DashboardLineageSynchronizer lineage;
+  private final ProjectContextScope projectContextScope;
 
   public DashboardLineageRefreshListener(
       DashboardEffectiveSnapshotReader snapshots,
-      DashboardLineageSynchronizer lineage) {
+      DashboardLineageSynchronizer lineage,
+      ProjectContextScope projectContextScope) {
     this.snapshots = snapshots;
     this.lineage = lineage;
+    this.projectContextScope = projectContextScope;
   }
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   public void refresh(DashboardChangedEvent event) {
-    if (event == null || event.dashboardId() <= 0L) return;
+    if (event == null || event.projectId() <= 0L || event.dashboardId() <= 0L) return;
     try {
-      if (event.deleted()) {
-        lineage.clear(event.dashboardId());
-        return;
-      }
-      EffectiveSnapshot effective = snapshots.read(event.dashboardId());
-      DashboardVersionSnapshot snapshot = effective.snapshot();
-      lineage.syncVersion(
-          effective.dashboard(),
-          snapshot == null ? null : snapshot.version(),
-          snapshot == null ? List.of() : snapshot.widgets(),
-          effective.published());
+      projectContextScope.run(
+          new ProjectContext(event.projectId(), null),
+          () -> refreshWithinProject(event));
     } catch (RuntimeException exception) {
       LOGGER.warn(
-          "Dashboard lineage refresh failed after commit for dashboard {}: {}",
+          "Dashboard lineage refresh failed after commit for project {} dashboard {}: {}",
+          event.projectId(),
           event.dashboardId(),
           exception.getMessage(),
           exception);
     }
+  }
+
+  private void refreshWithinProject(DashboardChangedEvent event) {
+    if (event.deleted()) {
+      lineage.clear(event.dashboardId());
+      return;
+    }
+    EffectiveSnapshot effective = snapshots.read(event.dashboardId());
+    DashboardVersionSnapshot snapshot = effective.snapshot();
+    lineage.syncVersion(
+        effective.dashboard(),
+        snapshot == null ? null : snapshot.version(),
+        snapshot == null ? List.of() : snapshot.widgets(),
+        effective.published());
   }
 }

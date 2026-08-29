@@ -11,6 +11,7 @@ import lombok.Data;
 public class DashboardPO {
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private String name;
   private String description;
   private Long currentVersionId;

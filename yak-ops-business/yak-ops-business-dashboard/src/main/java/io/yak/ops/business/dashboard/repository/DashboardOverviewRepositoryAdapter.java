@@ -5,6 +5,7 @@ import io.yak.ops.business.dashboard.dao.model.DashboardOverviewSummaryPO;
 import io.yak.ops.business.dashboard.dao.model.DashboardPO;
 import io.yak.ops.business.dashboard.domain.DashboardAsset;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
+import io.yak.ops.core.project.CurrentProject;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -18,17 +19,20 @@ import org.springframework.stereotype.Repository;
 public class DashboardOverviewRepositoryAdapter implements DashboardOverviewRepository {
 
   private final DashboardOverviewMapper mapper;
+  private final CurrentProject currentProject;
 
   @Override
   public Summary summarize() {
-    DashboardOverviewSummaryPO value = mapper.selectSummary();
+    DashboardOverviewSummaryPO value = mapper.selectSummary(projectId());
     if (value == null) return new Summary(0L, 0L);
     return new Summary(number(value.getDashboardCount()), number(value.getPublishedDashboardCount()));
   }
 
   @Override
   public List<DashboardAsset> listRecent(int limit) {
-    return mapper.selectRecent(normalizeLimit(limit)).stream().map(this::toDomain).toList();
+    return mapper.selectRecent(projectId(), normalizeLimit(limit)).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   private DashboardAsset toDomain(DashboardPO value) {
@@ -59,5 +63,9 @@ public class DashboardOverviewRepositoryAdapter implements DashboardOverviewRepo
 
   private Instant instant(Timestamp value) {
     return value == null ? null : value.toInstant();
+  }
+
+  private long projectId() {
+    return currentProject.requireProjectId();
   }
 }

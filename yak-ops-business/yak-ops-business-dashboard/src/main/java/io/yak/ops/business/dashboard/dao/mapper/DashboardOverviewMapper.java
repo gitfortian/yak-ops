@@ -19,8 +19,9 @@ public interface DashboardOverviewMapper {
               ELSE 0
           END), 0) AS publishedDashboardCount
       FROM yak_dashboard
+      WHERE project_id = #{projectId}
       """)
-  DashboardOverviewSummaryPO selectSummary();
+  DashboardOverviewSummaryPO selectSummary(@Param("projectId") long projectId);
 
   @Select("""
       SELECT
@@ -35,8 +36,11 @@ public interface DashboardOverviewMapper {
           create_time AS createTime,
           update_time AS updateTime
       FROM yak_dashboard
+      WHERE project_id = #{projectId}
       ORDER BY update_time DESC, id DESC
       LIMIT #{limit}
       """)
-  List<DashboardPO> selectRecent(@Param("limit") int limit);
+  List<DashboardPO> selectRecent(
+      @Param("projectId") long projectId,
+      @Param("limit") int limit);
 }
