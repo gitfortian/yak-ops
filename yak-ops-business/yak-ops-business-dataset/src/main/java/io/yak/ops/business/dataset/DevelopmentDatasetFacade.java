@@ -100,6 +100,7 @@ public class DevelopmentDatasetFacade {
     return new NodeDataset(
         String.valueOf(developmentNodeId),
         String.valueOf(dataset.id()),
+        dataset.requireProjectId(),
         dataset.name(),
         dataset.description(),
         dataset.status().name(),
@@ -185,6 +186,7 @@ public class DevelopmentDatasetFacade {
   public record NodeDataset(
       String developmentNodeId,
       String datasetId,
+      long projectId,
       String name,
       String description,
       String status,
