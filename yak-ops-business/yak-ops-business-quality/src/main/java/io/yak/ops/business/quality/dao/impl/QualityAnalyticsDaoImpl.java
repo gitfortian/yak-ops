@@ -15,6 +15,8 @@ import io.yak.ops.common.bean.po.quality.QualityQueryPO.OperationLogRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.ReportOverviewRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.TrendPointRow;
 import io.yak.ops.common.bean.po.quality.QualityQueryPO.WorkspaceStatsRow;
+import io.yak.ops.core.project.CurrentProject;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,18 +30,76 @@ import org.springframework.stereotype.Repository;
 public class QualityAnalyticsDaoImpl implements QualityAnalyticsDao {
   private final QualityQueryMapper queryMapper;
   private final QualityOverviewMapper overviewMapper;
+  private final CurrentProject currentProject;
 
-  @Override public WorkspaceStatsRow selectStats(long monitorId) { return queryMapper.selectWorkspaceStats(monitorId); }
-  @Override public ReportOverviewRow selectOverview(Map<String, Object> params) { return queryMapper.selectReportOverview(params); }
-  @Override public List<DimensionReportRow> selectDimensions(Map<String, Object> params) { return queryMapper.selectDimensionReport(params); }
-  @Override public List<TrendPointRow> selectTrend(Map<String, Object> params) { return queryMapper.selectTrend(params); }
-  @Override public List<ColumnReportRow> selectColumns(Map<String, Object> params) { return queryMapper.selectColumnReport(params); }
-  @Override public long countOperationLogs(long monitorId) { return queryMapper.countOperationLogs(monitorId); }
-  @Override public List<OperationLogRow> selectOperationLogs(Map<String, Object> params) { return queryMapper.selectOperationLogs(params); }
+  @Override
+  public WorkspaceStatsRow selectStats(long monitorId) {
+    return queryMapper.selectWorkspaceStats(currentProjectId(), monitorId);
+  }
 
-  @Override public StatsRow selectHomeOverviewStats(Map<String, Object> params) { return overviewMapper.selectStats(params); }
-  @Override public AnalyticsStatsRow selectOverviewAnalyticsStats(Map<String, Object> params) { return overviewMapper.selectAnalyticsStats(params); }
-  @Override public List<DimensionRow> selectHomeOverviewDimensions(Map<String, Object> params) { return overviewMapper.selectDimensions(params); }
-  @Override public List<TrendRow> selectOverviewAnalyticsTrend(Map<String, Object> params) { return overviewMapper.selectAnalyticsTrend(params); }
-  @Override public List<IssueRow> selectHomeOverviewIssues(Map<String, Object> params) { return overviewMapper.selectRecentIssues(params); }
+  @Override
+  public ReportOverviewRow selectOverview(Map<String, Object> params) {
+    return queryMapper.selectReportOverview(scoped(params));
+  }
+
+  @Override
+  public List<DimensionReportRow> selectDimensions(Map<String, Object> params) {
+    return queryMapper.selectDimensionReport(scoped(params));
+  }
+
+  @Override
+  public List<TrendPointRow> selectTrend(Map<String, Object> params) {
+    return queryMapper.selectTrend(scoped(params));
+  }
+
+  @Override
+  public List<ColumnReportRow> selectColumns(Map<String, Object> params) {
+    return queryMapper.selectColumnReport(scoped(params));
+  }
+
+  @Override
+  public long countOperationLogs(long monitorId) {
+    return queryMapper.countOperationLogs(currentProjectId(), monitorId);
+  }
+
+  @Override
+  public List<OperationLogRow> selectOperationLogs(Map<String, Object> params) {
+    return queryMapper.selectOperationLogs(scoped(params));
+  }
+
+  @Override
+  public StatsRow selectHomeOverviewStats(Map<String, Object> params) {
+    return overviewMapper.selectStats(scoped(params));
+  }
+
+  @Override
+  public AnalyticsStatsRow selectOverviewAnalyticsStats(Map<String, Object> params) {
+    return overviewMapper.selectAnalyticsStats(scoped(params));
+  }
+
+  @Override
+  public List<DimensionRow> selectHomeOverviewDimensions(Map<String, Object> params) {
+    return overviewMapper.selectDimensions(scoped(params));
+  }
+
+  @Override
+  public List<TrendRow> selectOverviewAnalyticsTrend(Map<String, Object> params) {
+    return overviewMapper.selectAnalyticsTrend(scoped(params));
+  }
+
+  @Override
+  public List<IssueRow> selectHomeOverviewIssues(Map<String, Object> params) {
+    return overviewMapper.selectRecentIssues(scoped(params));
+  }
+
+  private Map<String, Object> scoped(Map<String, Object> params) {
+    Map<String, Object> scoped = new LinkedHashMap<>();
+    if (params != null) scoped.putAll(params);
+    scoped.put("projectId", currentProjectId());
+    return scoped;
+  }
+
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
+  }
 }

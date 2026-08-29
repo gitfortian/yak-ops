@@ -12,6 +12,7 @@ import io.yak.ops.business.quality.monitor.QualityMonitorManager;
 import io.yak.ops.business.quality.monitor.QualityMonitorReader;
 import io.yak.ops.common.bean.dto.quality.QualityMonitorDTO;
 import io.yak.ops.common.bean.vo.quality.QualityMonitorVO;
+import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/data-quality/monitor")
 @RequiresPermission(QualityPermissionCode.MONITOR_READ)
+@ProjectScope
 public class QualityMonitorController {
   private final QualityMonitorReader reader;
   private final QualityMonitorManager manager;
@@ -52,7 +54,9 @@ public class QualityMonitorController {
       @RequestParam long dataSourceId,
       @RequestParam(value = "databaseName", required = false) String databaseName,
       @RequestParam(value = "schemaName", required = false) String schemaName) {
-    return Result.success(converter.tableSummaries(reader.tableSummaries(dataSourceId, databaseName, schemaName)));
+    return Result.success(
+        converter.tableSummaries(
+            reader.tableSummaries(dataSourceId, databaseName, schemaName)));
   }
 
   @Operation(summary = "查询质量监控详情")
@@ -72,7 +76,8 @@ public class QualityMonitorController {
   @RequiresPermission(QualityPermissionCode.MONITOR_CREATE)
   public Result<QualityMonitorVO.Detail> create(
       @Valid @RequestBody QualityMonitorDTO.SaveRequest request) {
-    return Result.success(converter.detail(manager.create(converter.command(request))));
+    return Result.success(
+        converter.detail(manager.create(converter.command(request))));
   }
 
   @Operation(summary = "更新质量监控")
@@ -81,7 +86,8 @@ public class QualityMonitorController {
   public Result<QualityMonitorVO.Detail> update(
       @PathVariable long id,
       @Valid @RequestBody QualityMonitorDTO.SaveRequest request) {
-    return Result.success(converter.detail(manager.update(id, converter.command(request))));
+    return Result.success(
+        converter.detail(manager.update(id, converter.command(request))));
   }
 
   @Operation(summary = "删除质量监控")
@@ -94,12 +100,18 @@ public class QualityMonitorController {
   @Operation(summary = "手动运行质量监控")
   @PostMapping("/{id}/run")
   @RequiresPermission(QualityPermissionCode.MONITOR_RUN)
-  public Result<QualityMonitorVO.Run> run(@PathVariable long id, Principal principal) {
-    return Result.success(converter.run(executionManager.run(id, operator(principal))));
+  public Result<QualityMonitorVO.Run> run(
+      @PathVariable long id,
+      Principal principal) {
+    return Result.success(
+        converter.run(executionManager.run(id, operator(principal))));
   }
 
   private static String operator(Principal principal) {
-    return principal == null || principal.getName() == null || principal.getName().isBlank()
-        ? "system" : principal.getName();
+    return principal == null
+            || principal.getName() == null
+            || principal.getName().isBlank()
+        ? "system"
+        : principal.getName();
   }
 }

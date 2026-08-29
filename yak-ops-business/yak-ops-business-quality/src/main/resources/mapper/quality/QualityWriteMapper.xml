@@ -4,16 +4,16 @@
 
   <select id="lockMonitor" resultType="long">
     SELECT id FROM yak_quality_monitor
-    WHERE id = #{monitorId} AND deleted = 0
+    WHERE project_id = #{projectId} AND id = #{monitorId} AND deleted = 0
     FOR UPDATE
   </select>
 
   <insert id="upsertTableAsset">
     INSERT INTO yak_quality_table_asset (
-      data_source_id, data_source_name, database_name, schema_name, table_name,
+      project_id, data_source_id, data_source_name, database_name, schema_name, table_name,
       table_type, remarks, registered_by, registered_at, deleted
     ) VALUES (
-      #{dataSourceId}, #{dataSourceName}, #{databaseName}, #{schemaName}, #{tableName},
+      #{projectId}, #{dataSourceId}, #{dataSourceName}, #{databaseName}, #{schemaName}, #{tableName},
       #{tableType}, #{remarks}, #{registeredBy}, CURRENT_TIMESTAMP(3), 0
     )
     ON DUPLICATE KEY UPDATE

@@ -11,6 +11,7 @@ import lombok.Data;
 public class QualityExecutionPO {
   @TableId(type = IdType.AUTO)
   private Long id;
+  private Long projectId;
   private String executionNo;
   private Long monitorId;
   private String monitorName;
