@@ -10,7 +10,6 @@ import io.yak.framework.workflow.engine.spi.ExecutionRepository;
 import io.yak.framework.workflow.engine.spi.WorkflowDefinitionRepository;
 import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskRegistry;
-import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository;
 import io.yak.ops.business.workflow.repository.WorkflowRuntimeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,7 +40,9 @@ class WorkflowPersistenceWiringTest {
     assertThatThrownBy(() -> new WorkflowDefinitionManager(
         mock(WorkflowRuntime.class),
         mock(TaskRegistry.class),
-        provider(beans, WorkflowDefinitionRepository.class),
+        provider(
+            beans,
+            io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository.class),
         true))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("WorkflowDefinitionRepository");

@@ -39,7 +39,7 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   // Flink compute environments are platform runtime capabilities; Realtime jobs are Project-owned.
   { prefix: '/api/v1/compute-environments', mode: 'LEGACY_GLOBAL' },
   { prefix: '/api/v1/realtime-sync', mode: 'PROJECT_REQUIRED' },
-  { prefix: '/api/v1/workflows', mode: 'PROJECT_OPTIONAL' },
+  { prefix: '/api/v1/workflows', mode: 'PROJECT_REQUIRED' },
 ];
 
 const normalizePath = (url: string): string => {

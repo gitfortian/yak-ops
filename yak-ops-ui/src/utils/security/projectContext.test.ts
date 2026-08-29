@@ -38,7 +38,7 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/executor/batch-execute')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11/events')).toBe('PROJECT_REQUIRED');
-    expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_REQUIRED');
   });
 
   it('keeps platform capabilities, public runtimes and engine health global', () => {
@@ -85,14 +85,15 @@ describe('Project Space request context', () => {
       '/api/v1/job/batch-instance/42',
       '/api/v1/realtime-sync/42',
       '/api/v1/realtime-sync/42/observability',
+      '/api/v1/workflows/definitions',
     ]) {
       expect(applyCurrentProjectHeader(url, {})).toEqual({ [PROJECT_ID_HEADER]: '7' });
     }
   });
 
-  it('still attaches the stored project to optional migrated routes', () => {
+  it('still attaches the stored project to optional Task Catalog routes', () => {
     storeProjectId(7);
-    expect(applyCurrentProjectHeader('/api/v1/workflows/definitions', {})).toEqual({
+    expect(applyCurrentProjectHeader('/api/v1/task-catalog/assets', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',
     });
   });
