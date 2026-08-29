@@ -7,11 +7,20 @@ import io.yak.ops.business.workflow.domain.WorkflowRunSpec;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Durable business catalog boundary for editable workflows and immutable published versions. */
 public interface WorkflowDefinitionRepository {
 
   List<DefinitionRecord> loadDefinitions();
+
+  /** Current-Project lookup. Durable implementations must fail closed below this boundary. */
+  default Optional<DefinitionRecord> findDefinition(String workflowId) {
+    if (workflowId == null || workflowId.isBlank()) return Optional.empty();
+    return loadDefinitions().stream()
+        .filter(value -> workflowId.trim().equals(value.id()))
+        .findFirst();
+  }
 
   List<VersionRecord> loadVersions(String workflowId);
 
@@ -21,6 +30,11 @@ public interface WorkflowDefinitionRepository {
   void publish(DefinitionRecord definition, VersionRecord version);
 
   void deleteDefinition(String workflowId);
+
+  /** Database-disabled fallback keeps WorkflowDefinitionManager's in-memory catalog authoritative. */
+  default boolean authoritative() {
+    return true;
+  }
 
   record DefinitionRecord(
       String id,
