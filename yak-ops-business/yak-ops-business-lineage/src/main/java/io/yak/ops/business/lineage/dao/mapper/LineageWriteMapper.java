@@ -11,6 +11,10 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface LineageWriteMapper {
 
+  int claimLegacyAssetProject(
+      @Param("assetKey") String assetKey,
+      @Param("projectId") Long projectId);
+
   int upsertAsset(@Param("row") LineageAssetPO row);
 
   int upsertRelation(@Param("row") LineageRelationPO row);
