@@ -62,7 +62,7 @@ DatasetVersion.source_task_asset_id
     -> owning DevelopmentNode.project_id
 ```
 
-This is not Dataset choosing a Project. The Project comes from the Data Development producer Source Truth. If a scoped TaskAsset with the same source/sourceRef/project already exists under another identity, startup fails instead of silently merging immutable references.
+This is not Dataset choosing a Project. The Project comes from the Data Development producer Source Truth. If a scoped TaskAsset with the same source/sourceRef/project already exists under another identity, startup fails instead of silently merging immutable references. If any Dataset-referenced TaskAsset still has no Project after this producer-owned claim, startup also fails; Dataset is not allowed to move itself to a default Project while retaining an unscoped source reference.
 
 Before mutating Dataset ownership it then checks whether trusted sources disagree. Candidate ownership comes from:
 
@@ -77,6 +77,7 @@ After conflict validation, ownership is inferred from those sources in that orde
 
 Startup then asserts:
 
+- every Dataset-referenced TaskAsset has Project ownership;
 - no Dataset remains with `project_id IS NULL`;
 - no query-performance row remains with `project_id IS NULL`;
 - Dataset / DevelopmentNode ownership agrees;
