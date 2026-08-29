@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 首页系统全貌与待处理事项接口。 */
+/** 首页头部摘要接口。 */
 @RestController
 @RequestMapping("/api/v1/home/cockpit")
 public class HomeCockpitController {

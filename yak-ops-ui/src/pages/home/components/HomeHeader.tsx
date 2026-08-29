@@ -33,16 +33,9 @@ function ProfileStat({ label, value, arrow = false, onClick }: ProfileStatProps)
   );
 }
 
-function scrollToAttention() {
-  document
-    .getElementById('home-attention-center')
-    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 export function HomeHeader({ stats }: HomeHeaderProps) {
   const dataSourceCount = stats?.dataSourceCount ?? '--';
   const runningCount = stats?.runningCount ?? '--';
-  const attentionCount = stats?.attentionCount ?? '--';
 
   return (
     <header className="flex h-[116px] items-center px-4">
@@ -78,11 +71,6 @@ export function HomeHeader({ stats }: HomeHeaderProps) {
               value={runningCount}
               arrow
               onClick={() => history.push('/data-development/executions')}
-            />
-            <ProfileStat
-              label="待处理"
-              value={attentionCount}
-              onClick={scrollToAttention}
             />
           </div>
         </div>
