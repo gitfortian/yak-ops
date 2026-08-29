@@ -32,7 +32,7 @@ public class LineageAssetRegistrar {
     if (commands == null || commands.isEmpty()) return Map.of();
     Map<String, LineageAssetDraft> drafts = new LinkedHashMap<>();
     for (RegisterAssetCommand command : commands) {
-      LineageAssetDraft draft = draftFactory.asset(command, false);
+      LineageAssetDraft draft = draftFactory.asset(command, true);
       drafts.putIfAbsent(draft.assetKey(), draft);
     }
     return repository.upsertAssets(List.copyOf(drafts.values()), batchSize);
