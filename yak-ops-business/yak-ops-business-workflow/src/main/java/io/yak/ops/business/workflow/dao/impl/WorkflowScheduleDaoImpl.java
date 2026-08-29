@@ -17,7 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** 基于 MyBatis-Plus 的工作流调度定义 DAO。 */
+/** 工作流调度定义 DAO；普通 CRUD fail-closed，跨 Project 仅允许显式 startup dispatcher。 */
 @Repository
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(
@@ -40,15 +40,16 @@ public class WorkflowScheduleDaoImpl implements WorkflowScheduleDao {
     this.currentProject = currentProject;
   }
 
+  /** Test-only compatibility constructor. Calls still fail closed without CurrentProject. */
   public WorkflowScheduleDaoImpl(WorkflowScheduleMapper mapper) {
     this(mapper, null, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public List<WorkflowSchedulePO> selectSchedules(String workflowId, String status) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     var query = Wrappers.<WorkflowSchedulePO>lambdaQuery()
-        .eq(projectId != null, WorkflowSchedulePO::getProjectId, projectId);
+        .eq(WorkflowSchedulePO::getProjectId, projectId);
     if (workflowId != null && !workflowId.isBlank()) {
       query.eq(WorkflowSchedulePO::getWorkflowId, workflowId.trim());
     }
@@ -60,24 +61,23 @@ public class WorkflowScheduleDaoImpl implements WorkflowScheduleDao {
 
   @Override
   public WorkflowSchedulePO selectSchedule(String id) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectOne(
         Wrappers.<WorkflowSchedulePO>lambdaQuery()
             .eq(WorkflowSchedulePO::getId, id)
-            .eq(projectId != null, WorkflowSchedulePO::getProjectId, projectId));
+            .eq(WorkflowSchedulePO::getProjectId, projectId));
   }
 
   @Override
   public int insertSchedule(WorkflowSchedulePO schedule) {
-    schedule.setProjectId(resolveProjectId(schedule.getProjectId(), schedule.getWorkflowId()));
+    schedule.setProjectId(requireOwnedProject(schedule.getProjectId(), schedule.getWorkflowId()));
     return mapper.insert(schedule);
   }
 
   @Override
   public int updateSchedule(WorkflowSchedulePO schedule) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return mapper.updateById(schedule);
-    schedule.setProjectId(resolveProjectId(schedule.getProjectId(), schedule.getWorkflowId()));
+    long projectId = requireOwnedProject(schedule.getProjectId(), schedule.getWorkflowId());
+    schedule.setProjectId(projectId);
     return mapper.update(
         schedule,
         Wrappers.<WorkflowSchedulePO>lambdaUpdate()
@@ -87,46 +87,56 @@ public class WorkflowScheduleDaoImpl implements WorkflowScheduleDao {
 
   @Override
   public int updateRuntimeState(String id, Instant lastFireTime, Instant nextFireTime) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.update(
         null,
         Wrappers.<WorkflowSchedulePO>lambdaUpdate()
             .eq(WorkflowSchedulePO::getId, id)
-            .eq(projectId != null, WorkflowSchedulePO::getProjectId, projectId)
+            .eq(WorkflowSchedulePO::getProjectId, projectId)
             .set(WorkflowSchedulePO::getLastFireTime, lastFireTime)
             .set(WorkflowSchedulePO::getNextFireTime, nextFireTime));
   }
 
   @Override
   public int deleteSchedule(String id) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.delete(
         Wrappers.<WorkflowSchedulePO>lambdaQuery()
             .eq(WorkflowSchedulePO::getId, id)
-            .eq(projectId != null, WorkflowSchedulePO::getProjectId, projectId));
+            .eq(WorkflowSchedulePO::getProjectId, projectId));
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  @Override
+  public List<ProjectScheduleRef> selectSchedulesForReconciliation() {
+    return mapper.selectList(
+            Wrappers.<WorkflowSchedulePO>lambdaQuery()
+                .select(WorkflowSchedulePO::getId, WorkflowSchedulePO::getProjectId)
+                .isNotNull(WorkflowSchedulePO::getProjectId)
+                .orderByAsc(WorkflowSchedulePO::getProjectId)
+                .orderByAsc(WorkflowSchedulePO::getId))
+        .stream()
+        .filter(value -> value.getProjectId() != null && value.getProjectId() > 0L)
+        .map(value -> new ProjectScheduleRef(value.getProjectId(), value.getId()))
+        .toList();
   }
 
-  private Long resolveProjectId(Long storedProjectId, String workflowId) {
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      if (storedProjectId != null && !Objects.equals(storedProjectId, projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      if (definitionMapper != null && !workflowOwned(workflowId, projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      return projectId;
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
+  }
+
+  private long requireOwnedProject(Long storedProjectId, String workflowId) {
+    long projectId = currentProjectId();
+    if (storedProjectId != null && !Objects.equals(storedProjectId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
-    if (storedProjectId != null || definitionMapper == null) return storedProjectId;
-    WorkflowDefinitionPO definition = definitionMapper.selectById(workflowId);
-    return definition == null ? null : definition.getProjectId();
+    if (definitionMapper == null || !workflowOwned(workflowId, projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    return projectId;
   }
 
-  private boolean workflowOwned(String workflowId, Long projectId) {
+  private boolean workflowOwned(String workflowId, long projectId) {
+    if (workflowId == null || workflowId.isBlank()) return false;
     return definitionMapper.selectCount(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
             .eq(WorkflowDefinitionPO::getId, workflowId)
