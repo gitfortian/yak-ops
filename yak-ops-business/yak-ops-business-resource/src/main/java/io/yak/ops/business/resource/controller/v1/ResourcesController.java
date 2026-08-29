@@ -59,7 +59,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/resources")
 @RequiresPermission(ResourcePermissionCode.READ)
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
 public class ResourcesController {
 
   private final ResourceNamespaceManager namespaceManager;
@@ -184,6 +184,7 @@ public class ResourcesController {
 
   @Operation(summary = "查询已安装存储插件")
   @GetMapping("/storage-plugins")
+  @ProjectScope(ProjectMigrationMode.LEGACY_GLOBAL)
   public Result<List<ResourceStoragePluginVO>> storagePlugins() {
     return Result.success(storageReader.list().stream().map(viewConverter::storagePlugin).toList());
   }

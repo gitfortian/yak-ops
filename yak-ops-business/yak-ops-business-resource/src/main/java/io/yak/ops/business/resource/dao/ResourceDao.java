@@ -12,6 +12,8 @@ public interface ResourceDao {
 
   boolean update(ResourcePO resourcePO);
 
+  boolean update(Long projectId, ResourcePO resourcePO);
+
   ResourcePO selectById(Long id);
 
   ResourcePO selectById(Long projectId, Long id);
@@ -40,6 +42,8 @@ public interface ResourceDao {
   IPage<ResourcePO> selectPage(PageQuery query);
 
   boolean updateBatch(List<ResourcePO> resources);
+
+  boolean updateBatch(Long projectId, List<ResourcePO> resources);
 
   boolean deleteBatch(List<Long> ids);
 

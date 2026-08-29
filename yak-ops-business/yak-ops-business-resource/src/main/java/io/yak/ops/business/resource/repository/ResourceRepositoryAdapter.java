@@ -38,6 +38,10 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
   @Override
   public Optional<ResourceNode> findById(Long id) {
     Long projectId = currentProjectId();
+    // Temporary read-only runtime corridor: ResourceResolver can still be entered by legacy task
+    // runtimes that have not restored ProjectContext yet. HTTP Resource APIs are PROJECT_REQUIRED,
+    // and every broad query/mutation below is fail-closed. Remove this fallback after task runtime
+    // project restoration is complete.
     ResourcePO row =
         projectId == null ? resourceDao.selectById(id) : resourceDao.selectById(projectId, id);
     return Optional.ofNullable(row).map(this::toDomain);
@@ -45,30 +49,21 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
 
   @Override
   public Optional<ResourceNode> findByFullPath(String fullPath) {
-    Long projectId = currentProjectId();
-    ResourcePO row =
-        projectId == null
-            ? resourceDao.selectByFullPath(fullPath)
-            : resourceDao.selectByFullPath(projectId, fullPath);
-    return Optional.ofNullable(row).map(this::toDomain);
+    long projectId = requireProjectId();
+    return Optional.ofNullable(resourceDao.selectByFullPath(projectId, fullPath)).map(this::toDomain);
   }
 
   @Override
   public boolean existsByParentAndName(Long parentId, String name, Long excludeId) {
-    Long projectId = currentProjectId();
-    return projectId == null
-        ? resourceDao.existsByParentAndName(parentId, name, excludeId)
-        : resourceDao.existsByParentAndName(projectId, parentId, name, excludeId);
+    return resourceDao.existsByParentAndName(requireProjectId(), parentId, name, excludeId);
   }
 
   @Override
   public boolean insert(ResourceNode resource) {
     if (resource == null) return false;
-    currentProject.current().ifPresent(
-        context -> {
-          ensureCurrentProject(resource.getProjectId());
-          resource.setProjectId(context.projectId());
-        });
+    long projectId = requireProjectId();
+    ensureCurrentProject(resource.getProjectId(), projectId);
+    resource.setProjectId(projectId);
     ResourcePO po = toPersistence(resource);
     boolean inserted = resourceDao.insert(po) > 0;
     if (inserted) resource.setId(po.getId());
@@ -78,66 +73,62 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
   @Override
   public boolean update(ResourceNode resource) {
     if (resource == null) return false;
-    ensureCurrentProject(resource.getProjectId());
-    return resourceDao.update(toPersistence(resource));
+    long projectId = requireProjectId();
+    ensureCurrentProject(resource.getProjectId(), projectId);
+    resource.setProjectId(projectId);
+    return resourceDao.update(projectId, toPersistence(resource));
   }
 
   @Override
   public boolean updateBatch(List<ResourceNode> resources) {
     if (resources == null || resources.isEmpty()) return true;
-    resources.forEach(resource -> ensureCurrentProject(resource.getProjectId()));
-    return resourceDao.updateBatch(resources.stream().map(this::toPersistence).toList());
+    long projectId = requireProjectId();
+    resources.forEach(
+        resource -> {
+          ensureCurrentProject(resource.getProjectId(), projectId);
+          resource.setProjectId(projectId);
+        });
+    return resourceDao.updateBatch(
+        projectId, resources.stream().map(this::toPersistence).toList());
   }
 
   @Override
   public boolean deleteBatch(List<Long> ids) {
-    Long projectId = currentProjectId();
-    return projectId == null
-        ? resourceDao.deleteBatch(ids)
-        : resourceDao.deleteBatch(projectId, ids);
+    return resourceDao.deleteBatch(requireProjectId(), ids);
   }
 
   @Override
   public List<ResourceNode> findChildren(Long parentId, String keyword) {
-    Long projectId = currentProjectId();
-    List<ResourcePO> rows =
-        projectId == null
-            ? resourceDao.selectChildren(parentId, keyword)
-            : resourceDao.selectChildren(projectId, parentId, keyword);
-    return rows.stream().map(this::toDomain).toList();
+    return resourceDao.selectChildren(requireProjectId(), parentId, keyword).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   @Override
   public List<ResourceNode> findAll() {
-    Long projectId = currentProjectId();
-    List<ResourcePO> rows =
-        projectId == null ? resourceDao.selectAll() : resourceDao.selectAll(projectId);
-    return rows.stream().map(this::toDomain).toList();
+    return resourceDao.selectAll(requireProjectId()).stream().map(this::toDomain).toList();
   }
 
   @Override
   public List<ResourceNode> findDescendants(String fullPath) {
-    Long projectId = currentProjectId();
-    List<ResourcePO> rows =
-        projectId == null
-            ? resourceDao.selectDescendants(fullPath)
-            : resourceDao.selectDescendants(projectId, fullPath);
-    return rows.stream().map(this::toDomain).toList();
+    return resourceDao.selectDescendants(requireProjectId(), fullPath).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   @Override
   public PageData<ResourceNode> page(ResourceQuery query) {
-    ResourceQuery condition = query == null
-        ? new ResourceQuery(1, 20, null, null, null)
-        : query;
-    IPage<ResourcePO> page = resourceDao.selectPage(
-        new PageQuery(
-            currentProjectId(),
-            condition.pageNo(),
-            condition.pageSize(),
-            condition.parentId(),
-            condition.keyword(),
-            condition.nodeType()));
+    ResourceQuery condition =
+        query == null ? new ResourceQuery(1, 20, null, null, null) : query;
+    IPage<ResourcePO> page =
+        resourceDao.selectPage(
+            new PageQuery(
+                requireProjectId(),
+                condition.pageNo(),
+                condition.pageSize(),
+                condition.parentId(),
+                condition.keyword(),
+                condition.nodeType()));
     return new PageData<>(
         page.getRecords().stream().map(this::toDomain).toList(),
         page.getTotal(),
@@ -150,13 +141,14 @@ public class ResourceRepositoryAdapter implements ResourceRepository {
     return currentProject.current().map(context -> context.projectId()).orElse(null);
   }
 
-  private void ensureCurrentProject(Long ownerProjectId) {
-    currentProject.current().ifPresent(
-        context -> {
-          if (ownerProjectId != null && !Objects.equals(context.projectId(), ownerProjectId)) {
-            throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-          }
-        });
+  private long requireProjectId() {
+    return currentProject.requireProjectId();
+  }
+
+  private void ensureCurrentProject(Long ownerProjectId, long currentProjectId) {
+    if (ownerProjectId != null && !Objects.equals(currentProjectId, ownerProjectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
   }
 
   ResourceNode toDomain(ResourcePO po) {

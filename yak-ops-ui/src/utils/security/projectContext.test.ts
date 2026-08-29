@@ -21,7 +21,8 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source/1')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-source/catalog/1/tables')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/sql-executions/page')).toBe('PROJECT_REQUIRED');
-    expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/resources/42/download')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
     expect(resolveProjectRequestMode('/api/v1/home/cockpit')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/home/data-center/overview?period=7d')).toBe('PROJECT_REQUIRED');
@@ -36,9 +37,10 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_OPTIONAL');
   });
 
-  it('keeps datasource plugin metadata and public data service runtime global', () => {
+  it('keeps datasource and storage plugin metadata plus public data service runtime global', () => {
     expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config?pluginType=MYSQL')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-source/plugin/config/install')).toBe('LEGACY_GLOBAL');
+    expect(resolveProjectRequestMode('/api/v1/resources/storage-plugins')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders')).toBe('LEGACY_GLOBAL');
     expect(resolveProjectRequestMode('/api/v1/data-service/runtime/orders/by-id')).toBe('LEGACY_GLOBAL');
   });
@@ -58,6 +60,8 @@ describe('Project Space request context', () => {
     expect(headers).toEqual({});
     const pluginHeaders = applyCurrentProjectHeader('/api/v1/data-source/plugin/config', {}, '7');
     expect(pluginHeaders).toEqual({});
+    const storagePluginHeaders = applyCurrentProjectHeader('/api/v1/resources/storage-plugins', {}, '7');
+    expect(storagePluginHeaders).toEqual({});
     const runtimeHeaders = applyCurrentProjectHeader('/api/v1/data-service/runtime/orders', {}, '7');
     expect(runtimeHeaders).toEqual({});
   });
@@ -70,6 +74,9 @@ describe('Project Space request context', () => {
       [PROJECT_ID_HEADER]: '7',
     });
     expect(applyCurrentProjectHeader('/api/v1/sql-executions/page', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
+    expect(applyCurrentProjectHeader('/api/v1/resources/42/download', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',
     });
     expect(applyCurrentProjectHeader('/api/v1/home/cockpit', {})).toEqual({
