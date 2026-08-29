@@ -51,17 +51,31 @@ public interface DatasetDao {
 
   DatasetVersionPO selectVersion(long versionId);
 
+  DatasetVersionPO selectVersion(Long projectId, long versionId);
+
   DatasetVersionPO selectVersion(long datasetId, int versionNo);
+
+  DatasetVersionPO selectVersion(Long projectId, long datasetId, int versionNo);
 
   List<DatasetVersionPO> selectVersions(long datasetId);
 
+  List<DatasetVersionPO> selectVersions(Long projectId, long datasetId);
+
   List<DatasetVersionPO> selectVersionsByIds(Collection<Long> versionIds);
+
+  List<DatasetVersionPO> selectVersionsByIds(Long projectId, Collection<Long> versionIds);
 
   List<DatasetFieldPO> selectFields(long versionId);
 
+  List<DatasetFieldPO> selectFields(Long projectId, long versionId);
+
   List<DatasetFieldPO> selectFieldsByVersionIds(Collection<Long> versionIds);
 
+  List<DatasetFieldPO> selectFieldsByVersionIds(Long projectId, Collection<Long> versionIds);
+
   int selectNextVersionNo(long datasetId);
+
+  int selectNextVersionNo(Long projectId, long datasetId);
 
   int insertQueryPerformance(DatasetQueryPerformancePO trace);
 
