@@ -1,0 +1,27 @@
+name: Stage 10 Project Space Inventory
+
+on:
+  push:
+    branches:
+      - feat/stage-10-project-space-architecture-audit-20260830
+  workflow_dispatch:
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory Project Space legacy corridors
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo '=== MODE_TOKENS ==='
+          grep -RInE --include='*.java' --include='*.ts' --include='*.tsx' --include='*.md' 'PROJECT_OPTIONAL|LEGACY_GLOBAL' . || true
+          echo '=== PROJECT_SCOPE_ANNOTATIONS ==='
+          grep -RInE --include='*.java' '@ProjectScope' yak-ops-* || true
+          echo '=== RUNTIME_NULL_OR_GLOBAL_LOOKUPS ==='
+          grep -RInEi --exclude-dir=target --exclude-dir=node_modules --exclude-dir=.git --exclude='*.sql' --include='*.java' --include='*.xml' --include='*.ts' --include='*.tsx' 'project_id[[:space:]]+is[[:space:]]+null|projectId[[:space:]]*==[[:space:]]*null|projectId[[:space:]]*!=[[:space:]]*null|find[A-Za-z]*Global|global[A-Za-z]*Lookup|claimLegacyProject|adopt[A-Za-z]*Project|CompatibilityBackfill|ProjectCompatibilityCoordinator' . || true
+          echo '=== CURRENT_PROJECT_OPTIONAL_ACCESS ==='
+          grep -RInE --exclude-dir=target --exclude-dir=.git --include='*.java' 'currentProject\.current\(|CurrentProject.*Optional|Optional<.*ProjectContext' yak-ops-* || true
+          echo '=== PROJECT_ROUTE_RULES ==='
+          grep -RInE --include='*.ts' --include='*.tsx' 'ProjectMigrationMode|ProjectRequestRule|task-catalog|LEGACY_GLOBAL|PROJECT_OPTIONAL' yak-ops-ui/src || true
