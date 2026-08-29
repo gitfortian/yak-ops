@@ -107,6 +107,9 @@ final class WorkflowTaskBindingResolver {
           latest.taskRevisionId(),
           latest.revisionNo(),
           latest.revisionNo() > node.taskRevisionNo());
+    } catch (ProjectContextException exception) {
+      // Project absence and cross-Project access are authorization failures, not stale bindings.
+      throw exception;
     } catch (RuntimeException ignored) {
       return BindingView.unresolved(node);
     }
