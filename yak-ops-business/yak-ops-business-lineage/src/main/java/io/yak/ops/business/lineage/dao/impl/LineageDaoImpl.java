@@ -61,6 +61,7 @@ public class LineageDaoImpl implements LineageDao {
 
   @Override
   public int upsertAsset(LineageAssetPO asset) {
+    claimLegacyAsset(asset);
     return writeMapper.upsertAsset(asset);
   }
 
@@ -76,6 +77,7 @@ public class LineageDaoImpl implements LineageDao {
     Map<String, LineageAssetPO> result = new LinkedHashMap<>();
     for (int start = 0; start < assets.size(); start += batchSize) {
       List<LineageAssetPO> batch = assets.subList(start, Math.min(start + batchSize, assets.size()));
+      batch.forEach(this::claimLegacyAsset);
       writeMapper.upsertAssets(batch);
       List<String> keys = batch.stream().map(LineageAssetPO::getAssetKey).toList();
       assetMapper.selectList(
@@ -137,11 +139,16 @@ public class LineageDaoImpl implements LineageDao {
 
   @Override
   public LineageAssetPO selectAssetByKey(String assetKey) {
-    Long projectId = currentProjectId();
+    return selectAssetByKey(assetKey, null);
+  }
+
+  @Override
+  public LineageAssetPO selectAssetByKey(String assetKey, Long projectId) {
+    Long effectiveProjectId = projectId == null ? currentProjectId() : projectId;
     return assetMapper.selectOne(
         Wrappers.<LineageAssetPO>lambdaQuery()
             .eq(LineageAssetPO::getAssetKey, assetKey)
-            .eq(projectId != null, LineageAssetPO::getProjectId, projectId)
+            .eq(effectiveProjectId != null, LineageAssetPO::getProjectId, effectiveProjectId)
             .last("LIMIT 1"));
   }
 
@@ -256,6 +263,12 @@ public class LineageDaoImpl implements LineageDao {
             .in(LineageRelationPO::getTargetAssetId, targetAssetIds)
             .eq(projectId != null, LineageRelationPO::getProjectId, projectId)
             .orderByAsc(LineageRelationPO::getId));
+  }
+
+  private void claimLegacyAsset(LineageAssetPO asset) {
+    if (asset != null && asset.getProjectId() != null) {
+      writeMapper.claimLegacyAssetProject(asset.getAssetKey(), asset.getProjectId());
+    }
   }
 
   private Long currentProjectId() {
