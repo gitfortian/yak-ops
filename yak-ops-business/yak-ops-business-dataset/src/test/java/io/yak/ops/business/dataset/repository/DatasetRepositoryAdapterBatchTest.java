@@ -13,9 +13,13 @@ import io.yak.ops.business.dataset.DatasetFieldRole;
 import io.yak.ops.business.dataset.DatasetVersionDraft;
 import io.yak.ops.business.dataset.dao.DatasetDao;
 import io.yak.ops.business.dataset.dao.model.DatasetFieldPO;
+import io.yak.ops.business.dataset.dao.model.DatasetPO;
 import io.yak.ops.business.dataset.dao.model.DatasetVersionPO;
 import io.yak.ops.business.dataset.repository.support.DatasetJsonCodec;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -25,13 +29,19 @@ class DatasetRepositoryAdapterBatchTest {
   void appendVersionWritesFieldContractInOneBatchBoundary() {
     DatasetDao datasetDao = mock(DatasetDao.class);
     DatasetJsonCodec jsonCodec = mock(DatasetJsonCodec.class);
-    DatasetRepositoryAdapter repository = new DatasetRepositoryAdapter(datasetDao, jsonCodec);
+    CurrentProject currentProject = () -> Optional.of(new ProjectContext(7L, "Project A"));
+    DatasetRepositoryAdapter repository =
+        new DatasetRepositoryAdapter(datasetDao, jsonCodec, currentProject);
     List<DatasetFieldDefinition> fields = List.of(
         field("order_id", DatasetFieldRole.DIMENSION),
         field("amount", DatasetFieldRole.MEASURE));
     DatasetVersionDraft draft =
         DatasetVersionDraft.sqlQuery(7L, 3, "ds-1", "select 1", fields);
+    DatasetPO parent = new DatasetPO();
+    parent.setId(7L);
+    parent.setProjectId(7L);
 
+    when(datasetDao.selectDataset(7L, 7L)).thenReturn(parent);
     when(jsonCodec.schemaSnapshot(fields)).thenReturn("[]");
     when(datasetDao.insertVersion(any(DatasetVersionPO.class)))
         .thenAnswer(invocation -> {

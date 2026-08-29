@@ -27,18 +27,16 @@ public class DatasetOverviewRepositoryAdapter implements DatasetOverviewReposito
     this.currentProject = currentProject;
   }
 
+  /** Compatibility constructor for focused tests; project-scoped reads fail closed. */
   public DatasetOverviewRepositoryAdapter(DatasetOverviewMapper mapper) {
     this(mapper, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public Summary summarize(Instant from, Instant to) {
-    Long projectId = currentProjectId();
+    long projectId = currentProject.requireProjectId();
     DatasetOverviewSummaryPO value =
-        projectId == null
-            ? mapper.selectSummary(Timestamp.from(from), Timestamp.from(to))
-            : mapper.selectSummaryByProject(
-                projectId, Timestamp.from(from), Timestamp.from(to));
+        mapper.selectSummaryByProject(projectId, Timestamp.from(from), Timestamp.from(to));
     if (value == null) return new Summary(0L, 0L);
     return new Summary(number(value.getDatasetCount()), number(value.getCreatedCount()));
   }
@@ -46,32 +44,23 @@ public class DatasetOverviewRepositoryAdapter implements DatasetOverviewReposito
   @Override
   public List<Dataset> listRecent(int limit) {
     int normalized = normalizeLimit(limit);
-    Long projectId = currentProjectId();
-    List<DatasetPO> rows =
-        projectId == null
-            ? mapper.selectRecent(normalized)
-            : mapper.selectRecentByProject(projectId, normalized);
-    return rows.stream().map(this::toDomain).toList();
+    long projectId = currentProject.requireProjectId();
+    return mapper.selectRecentByProject(projectId, normalized).stream().map(this::toDomain).toList();
   }
 
   @Override
   public List<Dataset> listRecentOnline(int limit) {
     int normalized = normalizeLimit(limit);
-    Long projectId = currentProjectId();
-    List<DatasetPO> rows =
-        projectId == null
-            ? mapper.selectRecentOnline(normalized)
-            : mapper.selectRecentOnlineByProject(projectId, normalized);
-    return rows.stream().map(this::toDomain).toList();
-  }
-
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+    long projectId = currentProject.requireProjectId();
+    return mapper.selectRecentOnlineByProject(projectId, normalized).stream()
+        .map(this::toDomain)
+        .toList();
   }
 
   private Dataset toDomain(DatasetPO value) {
     return new Dataset(
         value.getId(),
+        value.getProjectId(),
         value.getName(),
         value.getDescription(),
         DatasetStatus.valueOf(value.getStatus()),

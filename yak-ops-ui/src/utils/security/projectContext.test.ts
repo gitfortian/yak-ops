@@ -23,7 +23,7 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/sql-executions/page')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/resources/tree')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/resources/42/download')).toBe('PROJECT_REQUIRED');
-    expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_OPTIONAL');
+    expect(resolveProjectRequestMode('/api/v1/datasets/1')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/home/cockpit')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/home/data-center/overview?period=7d')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-development/nodes')).toBe('PROJECT_REQUIRED');
@@ -77,6 +77,9 @@ describe('Project Space request context', () => {
       [PROJECT_ID_HEADER]: '7',
     });
     expect(applyCurrentProjectHeader('/api/v1/resources/42/download', {})).toEqual({
+      [PROJECT_ID_HEADER]: '7',
+    });
+    expect(applyCurrentProjectHeader('/api/v1/datasets/42', {})).toEqual({
       [PROJECT_ID_HEADER]: '7',
     });
     expect(applyCurrentProjectHeader('/api/v1/home/cockpit', {})).toEqual({

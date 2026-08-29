@@ -8,6 +8,7 @@ import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
 import io.yak.ops.spi.task.model.TaskAssetSource;
 import io.yak.ops.spi.task.model.TaskAssetStatus;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,7 @@ public class TaskCatalogDatasetAdapter implements DatasetTaskCatalogGateway {
     this.currentProject = currentProject;
   }
 
+  /** Compatibility constructor for focused tests; project-scoped access fails closed. */
   public TaskCatalogDatasetAdapter(TaskCatalogService taskCatalogService) {
     this(taskCatalogService, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
@@ -33,7 +35,7 @@ public class TaskCatalogDatasetAdapter implements DatasetTaskCatalogGateway {
   @Override
   public DatasetTaskAssetSnapshot get(long assetId) {
     TaskAsset asset = taskCatalogService.get(assetId);
-    requireCurrentProject(asset);
+    requireCurrentProject(asset.projectId());
     long revisionId =
         asset.currentRevision() == null ? 0L : asset.currentRevision().taskRevisionId();
     int revisionNo = asset.currentRevision() == null ? 0 : asset.currentRevision().revisionNo();
@@ -59,6 +61,8 @@ public class TaskCatalogDatasetAdapter implements DatasetTaskCatalogGateway {
   @Override
   public DatasetTaskRevisionSnapshot resolveRevision(long assetId, long revisionId) {
     TaskAssetRevision resolved = taskCatalogService.resolveRevision(assetId, revisionId);
+    requireCurrentProject(resolved.asset().projectId());
+    requireCurrentProject(resolved.revision().sourceProjectId());
     return new DatasetTaskRevisionSnapshot(
         assetId,
         resolved.revision().revisionId(),
@@ -68,12 +72,10 @@ public class TaskCatalogDatasetAdapter implements DatasetTaskCatalogGateway {
         resolved.revision().definition().configJson());
   }
 
-  private void requireCurrentProject(TaskAsset asset) {
-    currentProject.current().ifPresent(
-        context -> {
-          if (asset.projectId() != null && !asset.projectId().equals(context.projectId())) {
-            throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-          }
-        });
+  private void requireCurrentProject(Long sourceProjectId) {
+    Long projectId = currentProject.requireProjectId();
+    if (!Objects.equals(projectId, sourceProjectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
   }
 }
