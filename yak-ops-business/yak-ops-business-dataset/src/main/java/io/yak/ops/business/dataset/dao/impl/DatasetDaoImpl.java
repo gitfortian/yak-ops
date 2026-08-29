@@ -207,6 +207,13 @@ public class DatasetDaoImpl implements DatasetDao {
   }
 
   @Override
+  public DatasetVersionPO selectVersion(Long projectId, long versionId) {
+    return projectId == null
+        ? selectVersion(versionId)
+        : versionMapper.selectProjectVersion(projectId, versionId);
+  }
+
+  @Override
   public DatasetVersionPO selectVersion(long datasetId, int versionNo) {
     return versionMapper.selectOne(
         Wrappers.<DatasetVersionPO>lambdaQuery()
@@ -215,11 +222,25 @@ public class DatasetDaoImpl implements DatasetDao {
   }
 
   @Override
+  public DatasetVersionPO selectVersion(Long projectId, long datasetId, int versionNo) {
+    return projectId == null
+        ? selectVersion(datasetId, versionNo)
+        : versionMapper.selectProjectVersionNo(projectId, datasetId, versionNo);
+  }
+
+  @Override
   public List<DatasetVersionPO> selectVersions(long datasetId) {
     return versionMapper.selectList(
         Wrappers.<DatasetVersionPO>lambdaQuery()
             .eq(DatasetVersionPO::getDatasetId, datasetId)
             .orderByDesc(DatasetVersionPO::getVersionNo));
+  }
+
+  @Override
+  public List<DatasetVersionPO> selectVersions(Long projectId, long datasetId) {
+    return projectId == null
+        ? selectVersions(datasetId)
+        : versionMapper.selectProjectVersions(projectId, datasetId);
   }
 
   @Override
@@ -233,12 +254,30 @@ public class DatasetDaoImpl implements DatasetDao {
   }
 
   @Override
+  public List<DatasetVersionPO> selectVersionsByIds(
+      Long projectId, Collection<Long> versionIds) {
+    if (versionIds == null || versionIds.isEmpty()) {
+      return List.of();
+    }
+    return projectId == null
+        ? selectVersionsByIds(versionIds)
+        : versionMapper.selectProjectVersionsByIds(projectId, versionIds);
+  }
+
+  @Override
   public List<DatasetFieldPO> selectFields(long versionId) {
     return fieldMapper.selectList(
         Wrappers.<DatasetFieldPO>lambdaQuery()
             .eq(DatasetFieldPO::getVersionId, versionId)
             .orderByAsc(DatasetFieldPO::getSortOrder)
             .orderByAsc(DatasetFieldPO::getPhysicalName));
+  }
+
+  @Override
+  public List<DatasetFieldPO> selectFields(Long projectId, long versionId) {
+    return projectId == null
+        ? selectFields(versionId)
+        : fieldMapper.selectProjectFields(projectId, versionId);
   }
 
   @Override
@@ -255,6 +294,17 @@ public class DatasetDaoImpl implements DatasetDao {
   }
 
   @Override
+  public List<DatasetFieldPO> selectFieldsByVersionIds(
+      Long projectId, Collection<Long> versionIds) {
+    if (versionIds == null || versionIds.isEmpty()) {
+      return List.of();
+    }
+    return projectId == null
+        ? selectFieldsByVersionIds(versionIds)
+        : fieldMapper.selectProjectFieldsByVersionIds(projectId, versionIds);
+  }
+
+  @Override
   public int selectNextVersionNo(long datasetId) {
     List<Object> values = versionMapper.selectObjs(
         Wrappers.<DatasetVersionPO>query()
@@ -262,6 +312,13 @@ public class DatasetDaoImpl implements DatasetDao {
             .eq("dataset_id", datasetId));
     if (values == null || values.isEmpty() || values.get(0) == null) return 1;
     return ((Number) values.get(0)).intValue();
+  }
+
+  @Override
+  public int selectNextVersionNo(Long projectId, long datasetId) {
+    if (projectId == null) return selectNextVersionNo(datasetId);
+    Integer value = versionMapper.selectProjectNextVersionNo(projectId, datasetId);
+    return value == null ? 1 : value;
   }
 
   @Override
