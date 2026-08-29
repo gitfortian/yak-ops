@@ -21,11 +21,12 @@ class DataSourceFlywayContractTest {
   }
 
   @Test
-  void datasourceNamespaceContainsBaselineAndProjectScopeExpandMigration() throws IOException {
+  void datasourceNamespaceContainsExpandAndContractProjectScopeMigrations() throws IOException {
     assertThat(sqlFiles(migrationRoot()))
         .containsExactly(
             "V1__baseline_datasource.sql",
-            "V2__add_project_scope_to_sql_execution.sql");
+            "V2__add_project_scope_to_sql_execution.sql",
+            "V3__contract_project_scope.sql");
 
     String baseline = Files.readString(migrationRoot().resolve("V1__baseline_datasource.sql"));
     assertThat(baseline)
@@ -35,14 +36,24 @@ class DataSourceFlywayContractTest {
         .contains("project_id")
         .doesNotContain("ALTER TABLE");
 
-    String projectScope =
+    String projectScopeExpand =
         Files.readString(
             migrationRoot().resolve("V2__add_project_scope_to_sql_execution.sql"));
-    assertThat(projectScope)
+    assertThat(projectScopeExpand)
         .contains("ALTER TABLE yak_ops_sql_execution")
         .contains("ADD COLUMN project_id BIGINT NULL")
         .contains("idx_yak_ops_sql_execution_project_started")
         .contains("idx_yak_ops_sql_execution_project_status_started");
+
+    String projectScopeContract =
+        Files.readString(migrationRoot().resolve("V3__contract_project_scope.sql"));
+    assertThat(projectScopeContract)
+        .contains("ALTER TABLE yak_ops_data_source")
+        .contains("ALTER TABLE yak_ops_sql_execution")
+        .contains("MODIFY COLUMN project_id BIGINT NOT NULL")
+        .contains("performs no implicit backfill")
+        .doesNotContain("UPDATE yak_ops_data_source")
+        .doesNotContain("UPDATE yak_ops_sql_execution");
   }
 
   private List<String> sqlFiles(Path root) throws IOException {
