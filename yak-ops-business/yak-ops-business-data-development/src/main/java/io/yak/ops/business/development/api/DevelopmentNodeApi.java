@@ -9,10 +9,10 @@ public final class DevelopmentNodeApi {
 
   private DevelopmentNodeApi() {}
 
+  /** Project ownership is resolved exclusively from the trusted CurrentProject request context. */
   public record CreateRequest(
       @NotBlank String name,
       @NotBlank String type,
-      @Min(0) Long projectId,
       @Min(0) Long directoryId) {
   }
 

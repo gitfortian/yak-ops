@@ -7,12 +7,25 @@ import java.util.Optional;
 /** Durable repository for data-development tree node metadata. */
 public interface DevelopmentNodeRepository {
 
+  /**
+   * Compatibility contract for pre-Stage-5A callers. Production persistence must not trust the
+   * supplied projectId; it is retained only to avoid a wide source-compatibility break.
+   */
   DevelopmentNode insert(
       String name,
       String type,
-      Long projectId,
+      Long ignoredProjectId,
       Long directoryId,
       boolean configured);
+
+  /** Creates a Project Root whose ownership is resolved by the persistence adapter. */
+  default DevelopmentNode insert(
+      String name,
+      String type,
+      Long directoryId,
+      boolean configured) {
+    return insert(name, type, null, directoryId, configured);
+  }
 
   Optional<DevelopmentNode> findById(Long id);
 

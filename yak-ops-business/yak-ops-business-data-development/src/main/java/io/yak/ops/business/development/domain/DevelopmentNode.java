@@ -40,6 +40,14 @@ public record DevelopmentNode(
     return nodeType().supportsTaskLifecycle();
   }
 
+  /** Data Development nodes are Project Roots and must never execute/publish without ownership. */
+  public Long requireProjectId() {
+    if (projectId == null || projectId <= 0L) {
+      throw new IllegalStateException("数据开发节点缺少有效 Project 归属：" + id);
+    }
+    return projectId;
+  }
+
   /** Guards the mutable Draft -> immutable Revision lifecycle at the domain identity boundary. */
   public void requireTaskLifecycle() {
     if (!supportsTaskLifecycle()) {

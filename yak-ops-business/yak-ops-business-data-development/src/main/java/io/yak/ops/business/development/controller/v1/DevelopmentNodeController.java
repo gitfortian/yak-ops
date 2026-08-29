@@ -57,7 +57,6 @@ public class DevelopmentNodeController {
     DevelopmentNode created = service.create(
         request.name(),
         request.type(),
-        request.projectId(),
         request.directoryId());
     return Result.success(service.recordUpdater(created.id(), operatorName(servletRequest)));
   }

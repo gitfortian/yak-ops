@@ -32,6 +32,7 @@ public class DevelopmentTaskPublisher {
       DevelopmentTaskDraft draft,
       TaskDefinition definition,
       String checksum) {
+    Long sourceProjectId = node.requireProjectId();
     DevelopmentTaskRevision latest = revisionRepository.findLatestByNodeId(node.id()).orElse(null);
     DevelopmentTaskRevision published;
     if (latest != null && latest.represents(draft.draftRevision(), checksum)) {
@@ -50,7 +51,7 @@ public class DevelopmentTaskPublisher {
     taskCatalogService.publish(
         TaskAssetSource.DATA_DEVELOPMENT,
         String.valueOf(node.id()),
-        node.projectId(),
+        sourceProjectId,
         node.name(),
         definition.taskType(),
         published.id(),

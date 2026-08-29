@@ -28,15 +28,17 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
     this.currentProject = currentProject;
   }
 
+  /** Compatibility constructor for focused tests; project-scoped operations will fail closed. */
   public DevelopmentDirectoryRepositoryAdapter(DevelopmentDirectoryMapper mapper) {
     this(mapper, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public DevelopmentDirectory insert(Long parentId, String name) {
+    Long projectId = requiredProjectId();
     Instant now = Instant.now();
     DevelopmentDirectoryPO po = new DevelopmentDirectoryPO();
-    po.setProjectId(currentProjectId());
+    po.setProjectId(projectId);
     po.setParentId(toStoredParentId(parentId));
     po.setName(name);
     po.setCreateTime(now);
@@ -47,21 +49,21 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
 
   @Override
   public Optional<DevelopmentDirectory> findById(Long id) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return Optional.ofNullable(
             mapper.selectOne(
                 new LambdaQueryWrapper<DevelopmentDirectoryPO>()
                     .eq(DevelopmentDirectoryPO::getId, id)
-                    .eq(projectId != null, DevelopmentDirectoryPO::getProjectId, projectId)))
+                    .eq(DevelopmentDirectoryPO::getProjectId, projectId)))
         .map(this::toDomain);
   }
 
   @Override
   public List<DevelopmentDirectory> list() {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.selectList(
             new LambdaQueryWrapper<DevelopmentDirectoryPO>()
-                .eq(projectId != null, DevelopmentDirectoryPO::getProjectId, projectId)
+                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
                 .orderByAsc(DevelopmentDirectoryPO::getName)
                 .orderByAsc(DevelopmentDirectoryPO::getId))
         .stream()
@@ -71,10 +73,10 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
 
   @Override
   public boolean existsByName(Long parentId, String name) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.selectCount(
             new LambdaQueryWrapper<DevelopmentDirectoryPO>()
-                .eq(projectId != null, DevelopmentDirectoryPO::getProjectId, projectId)
+                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
                 .eq(DevelopmentDirectoryPO::getParentId, toStoredParentId(parentId))
                 .eq(DevelopmentDirectoryPO::getName, name))
         > 0L;
@@ -82,22 +84,22 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
 
   @Override
   public boolean hasChildren(Long id) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.selectCount(
             new LambdaQueryWrapper<DevelopmentDirectoryPO>()
-                .eq(projectId != null, DevelopmentDirectoryPO::getProjectId, projectId)
+                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
                 .eq(DevelopmentDirectoryPO::getParentId, id))
         > 0L;
   }
 
   @Override
   public boolean updateName(Long id, String name) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.update(
             null,
             new LambdaUpdateWrapper<DevelopmentDirectoryPO>()
                 .eq(DevelopmentDirectoryPO::getId, id)
-                .eq(projectId != null, DevelopmentDirectoryPO::getProjectId, projectId)
+                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
                 .set(DevelopmentDirectoryPO::getName, name)
                 .set(DevelopmentDirectoryPO::getUpdateTime, Instant.now()))
         > 0;
@@ -105,16 +107,16 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
 
   @Override
   public boolean deleteById(Long id) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.delete(
             new LambdaQueryWrapper<DevelopmentDirectoryPO>()
                 .eq(DevelopmentDirectoryPO::getId, id)
-                .eq(projectId != null, DevelopmentDirectoryPO::getProjectId, projectId))
+                .eq(DevelopmentDirectoryPO::getProjectId, projectId))
         > 0;
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private Long requiredProjectId() {
+    return currentProject.requireProjectId();
   }
 
   private Long toStoredParentId(Long parentId) {

@@ -35,6 +35,7 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
     this.currentProject = currentProject;
   }
 
+  /** Compatibility constructor for focused tests; project-scoped operations will fail closed. */
   public DevelopmentNodeRepositoryAdapter(
       DevelopmentNodeMapper mapper, JdbcTemplate jdbcTemplate) {
     this(mapper, jdbcTemplate, Optional::<io.yak.ops.core.project.ProjectContext>empty);
@@ -44,14 +45,15 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
   public DevelopmentNode insert(
       String name,
       String type,
-      Long projectId,
+      Long ignoredProjectId,
       Long directoryId,
       boolean configured) {
+    Long projectId = requiredProjectId();
     Instant now = Instant.now();
     DevelopmentNodePO po = new DevelopmentNodePO();
     po.setName(name);
     po.setType(type);
-    po.setProjectId(currentProjectId() == null ? projectId : currentProjectId());
+    po.setProjectId(projectId);
     po.setDirectoryId(toStoredDirectoryId(directoryId));
     po.setConfigured(configured);
     po.setDeleted(false);
@@ -63,21 +65,21 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   @Override
   public Optional<DevelopmentNode> findById(Long id) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return Optional.ofNullable(
             mapper.selectOne(
                 new LambdaQueryWrapper<DevelopmentNodePO>()
                     .eq(DevelopmentNodePO::getId, id)
-                    .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)))
+                    .eq(DevelopmentNodePO::getProjectId, projectId)))
         .map(po -> toDomain(po, hasUnpublishedChanges(po.getId())));
   }
 
   @Override
   public List<DevelopmentNode> list() {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     List<DevelopmentNodePO> nodes = mapper.selectList(
         new LambdaQueryWrapper<DevelopmentNodePO>()
-            .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)
+            .eq(DevelopmentNodePO::getProjectId, projectId)
             .orderByAsc(DevelopmentNodePO::getName)
             .orderByAsc(DevelopmentNodePO::getId));
     Map<Long, Boolean> pendingPublishByNodeId = loadPendingPublishByNodeId(projectId);
@@ -88,18 +90,18 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   @Override
   public long count() {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.selectCount(
         new LambdaQueryWrapper<DevelopmentNodePO>()
-            .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId));
+            .eq(DevelopmentNodePO::getProjectId, projectId));
   }
 
   @Override
   public boolean existsByName(Long directoryId, String name) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.selectCount(
             new LambdaQueryWrapper<DevelopmentNodePO>()
-                .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)
+                .eq(DevelopmentNodePO::getProjectId, projectId)
                 .eq(DevelopmentNodePO::getDirectoryId, toStoredDirectoryId(directoryId))
                 .eq(DevelopmentNodePO::getName, name))
         > 0L;
@@ -107,22 +109,22 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   @Override
   public boolean existsInDirectory(Long directoryId) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.selectCount(
             new LambdaQueryWrapper<DevelopmentNodePO>()
-                .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)
+                .eq(DevelopmentNodePO::getProjectId, projectId)
                 .eq(DevelopmentNodePO::getDirectoryId, toStoredDirectoryId(directoryId)))
         > 0L;
   }
 
   @Override
   public boolean updateName(Long id, String name) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.update(
             null,
             new LambdaUpdateWrapper<DevelopmentNodePO>()
                 .eq(DevelopmentNodePO::getId, id)
-                .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)
+                .eq(DevelopmentNodePO::getProjectId, projectId)
                 .set(DevelopmentNodePO::getName, name)
                 .set(DevelopmentNodePO::getUpdateTime, Instant.now()))
         > 0;
@@ -130,12 +132,12 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   @Override
   public boolean updateConfigured(Long id, boolean configured) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.update(
             null,
             new LambdaUpdateWrapper<DevelopmentNodePO>()
                 .eq(DevelopmentNodePO::getId, id)
-                .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)
+                .eq(DevelopmentNodePO::getProjectId, projectId)
                 .set(DevelopmentNodePO::getConfigured, configured)
                 .set(DevelopmentNodePO::getUpdateTime, Instant.now()))
         > 0;
@@ -143,28 +145,28 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
 
   @Override
   public boolean updateUpdatedBy(Long id, String updatedBy) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.update(
             null,
             new LambdaUpdateWrapper<DevelopmentNodePO>()
                 .eq(DevelopmentNodePO::getId, id)
-                .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId)
+                .eq(DevelopmentNodePO::getProjectId, projectId)
                 .set(DevelopmentNodePO::getUpdatedBy, updatedBy))
         > 0;
   }
 
   @Override
   public boolean deleteById(Long id) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     return mapper.delete(
             new LambdaQueryWrapper<DevelopmentNodePO>()
                 .eq(DevelopmentNodePO::getId, id)
-                .eq(projectId != null, DevelopmentNodePO::getProjectId, projectId))
+                .eq(DevelopmentNodePO::getProjectId, projectId))
         > 0;
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private Long requiredProjectId() {
+    return currentProject.requireProjectId();
   }
 
   private Long toStoredDirectoryId(Long directoryId) {
@@ -177,9 +179,8 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
         + "FROM yak_dev_task_draft d "
         + "JOIN yak_dev_node n ON n.id = d.node_id "
         + "LEFT JOIN yak_dev_task_revision r ON r.node_id = d.node_id "
-        + (projectId == null ? "" : "WHERE n.project_id = ? ")
+        + "WHERE n.project_id = ? "
         + "GROUP BY d.node_id, d.draft_revision";
-    Object[] args = projectId == null ? new Object[0] : new Object[] {projectId};
     jdbcTemplate.query(
         sql,
         rs -> {
@@ -189,7 +190,7 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
           boolean hasPublishedRevision = !rs.wasNull();
           result.put(nodeId, !hasPublishedRevision || draftRevision > publishedDraftRevision);
         },
-        args);
+        projectId);
     return result;
   }
 

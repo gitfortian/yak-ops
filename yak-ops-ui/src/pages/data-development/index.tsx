@@ -1,4 +1,3 @@
-import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import { BRAND_THEME } from '@/styles/brand';
 import { ConfigProvider } from 'antd';
 
@@ -11,11 +10,7 @@ import RenameResourceModal from './components/RenameResourceModal';
 import { useDataDevelopmentPage } from './hooks/useDataDevelopmentPage';
 
 export default function DataDevelopmentPage() {
-  const { currentProject } = useSecurityProject();
-  const defaultProjectId = currentProject?.id
-    ? String(currentProject.id)
-    : undefined;
-  const page = useDataDevelopmentPage({ defaultProjectId });
+  const page = useDataDevelopmentPage();
 
   return (
     <ConfigProvider theme={BRAND_THEME}>
@@ -52,11 +47,10 @@ export default function DataDevelopmentPage() {
           type={page.createNodeType}
           directories={page.directories}
           loading={page.nodeSaving}
-          defaultProjectId={defaultProjectId}
           defaultDirectoryId={page.directoryIdForSelection}
           onCancel={page.closeCreateNode}
-          onNext={(type, projectId, directoryId, name) =>
-            void page.submitNode(type, projectId, directoryId, name)
+          onNext={(type, directoryId, name) =>
+            void page.submitNode(type, directoryId, name)
           }
         />
 

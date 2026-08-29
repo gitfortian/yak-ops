@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.domain.DevelopmentNode;
+import io.yak.ops.business.development.node.DevelopmentNodeService;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
 import io.yak.ops.business.taskcatalog.service.TaskCatalogService;
@@ -32,14 +33,13 @@ class DevelopmentNodeServiceTest {
         directories,
         mock(TaskCatalogService.class));
 
-    DevelopmentNode sql = service.create("用户清洗", "sql", null, folder.id());
-    DevelopmentNode shell = service.create("清理临时文件", "shell", 7L, null);
+    DevelopmentNode sql = service.create("用户清洗", "sql", folder.id());
+    DevelopmentNode shell = service.create("清理临时文件", "shell", null);
 
     assertEquals("SQL", sql.type());
     assertEquals(folder.id(), sql.directoryId());
     assertFalse(sql.configured());
     assertEquals("SHELL", shell.type());
-    assertEquals(7L, shell.projectId());
     assertFalse(shell.configured());
   }
 
@@ -54,12 +54,12 @@ class DevelopmentNodeServiceTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> service.create("任务", "SQL", null, 999L));
+        () -> service.create("任务", "SQL", 999L));
 
-    service.create("任务", "SQL", null, null);
+    service.create("任务", "SQL", null);
     assertThrows(
         IllegalStateException.class,
-        () -> service.create("任务", "SHELL", null, null));
+        () -> service.create("任务", "SHELL", null));
   }
 
   @Test
@@ -71,7 +71,7 @@ class DevelopmentNodeServiceTest {
         nodes,
         directories,
         taskCatalogService);
-    DevelopmentNode node = service.create("任务", "SQL", null, null);
+    DevelopmentNode node = service.create("任务", "SQL", null);
 
     DevelopmentNode renamed = service.rename(node.id(), "新任务");
     assertEquals("新任务", renamed.name());
@@ -98,7 +98,7 @@ class DevelopmentNodeServiceTest {
     public DevelopmentNode insert(
         String name,
         String type,
-        Long projectId,
+        Long ignoredProjectId,
         Long directoryId,
         boolean configured) {
       Long id = ids.getAndIncrement();
@@ -107,7 +107,7 @@ class DevelopmentNodeServiceTest {
           id,
           name,
           type,
-          projectId,
+          null,
           directoryId,
           configured,
           now,

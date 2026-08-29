@@ -51,7 +51,6 @@ export type DevelopmentResourceNode =
 export interface CreateDevelopmentNodePayload {
   name: string;
   type: DevelopmentNodeType;
-  projectId?: DevelopmentId;
   /** Omit to create the node in the data-development root. */
   directoryId?: DevelopmentId;
 }

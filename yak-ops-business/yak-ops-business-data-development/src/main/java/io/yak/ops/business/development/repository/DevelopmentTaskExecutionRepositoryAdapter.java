@@ -39,13 +39,14 @@ public class DevelopmentTaskExecutionRepositoryAdapter
     this.currentProject = currentProject;
   }
 
+  /** Compatibility constructor for focused tests; project-scoped operations will fail closed. */
   DevelopmentTaskExecutionRepositoryAdapter(JdbcTemplate jdbcTemplate) {
     this(jdbcTemplate, Optional::<io.yak.ops.core.project.ProjectContext>empty);
   }
 
   @Override
   public long createPending(PendingExecution pending) {
-    ensureCurrentProject(pending.projectId());
+    Long projectId = requireOwnerProject(pending.projectId());
     String sql = "INSERT INTO yak_dev_task_execution "
         + "(project_id, node_id, task_name, task_type, schema_version, trigger_type, status, operator_name, "
         + "retry_of_execution_id, content, config_json, start_time, create_time, update_time) "
@@ -54,8 +55,7 @@ public class DevelopmentTaskExecutionRepositoryAdapter
     jdbcTemplate.update(
         connection -> {
           PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-          if (pending.projectId() == null) statement.setObject(1, null);
-          else statement.setLong(1, pending.projectId());
+          statement.setLong(1, projectId);
           statement.setLong(2, pending.nodeId());
           statement.setString(3, pending.taskName());
           statement.setString(4, pending.taskType());
@@ -75,29 +75,25 @@ public class DevelopmentTaskExecutionRepositoryAdapter
 
   @Override
   public void attachRuntime(long id, String runtimeExecutionId, String status) {
-    Long projectId = currentProjectId();
-    String sql = "UPDATE yak_dev_task_execution SET runtime_execution_id = ?, status = ?, update_time = NOW(6) "
-        + "WHERE id = ? AND status IN ('PENDING', 'RUNNING')"
-        + (projectId == null ? "" : " AND project_id = ?");
-    List<Object> args = new ArrayList<>();
-    args.add(runtimeExecutionId);
-    args.add(status);
-    args.add(id);
-    if (projectId != null) args.add(projectId);
-    jdbcTemplate.update(sql, args.toArray());
+    Long projectId = requiredProjectId();
+    jdbcTemplate.update(
+        "UPDATE yak_dev_task_execution SET runtime_execution_id = ?, status = ?, update_time = NOW(6) "
+            + "WHERE id = ? AND project_id = ? AND status IN ('PENDING', 'RUNNING')",
+        runtimeExecutionId,
+        status,
+        id,
+        projectId);
   }
 
   @Override
   public void updateActiveStatus(long id, String status) {
-    Long projectId = currentProjectId();
-    String sql = "UPDATE yak_dev_task_execution SET status = ?, update_time = NOW(6) "
-        + "WHERE id = ? AND status IN ('PENDING', 'RUNNING')"
-        + (projectId == null ? "" : " AND project_id = ?");
-    List<Object> args = new ArrayList<>();
-    args.add(status);
-    args.add(id);
-    if (projectId != null) args.add(projectId);
-    jdbcTemplate.update(sql, args.toArray());
+    Long projectId = requiredProjectId();
+    jdbcTemplate.update(
+        "UPDATE yak_dev_task_execution SET status = ?, update_time = NOW(6) "
+            + "WHERE id = ? AND project_id = ? AND status IN ('PENDING', 'RUNNING')",
+        status,
+        id,
+        projectId);
   }
 
   @Override
@@ -107,19 +103,17 @@ public class DevelopmentTaskExecutionRepositoryAdapter
       long durationMs,
       String errorMessage,
       String outputJson) {
-    Long projectId = currentProjectId();
-    String sql = "UPDATE yak_dev_task_execution SET status = ?, duration_ms = ?, error_message = ?, output_json = ?, "
-        + "end_time = NOW(6), update_time = NOW(6) WHERE id = ?"
-        + (projectId == null ? "" : " AND project_id = ?")
-        + " AND status IN ('PENDING', 'RUNNING')";
-    List<Object> args = new ArrayList<>();
-    args.add(status);
-    args.add(durationMs);
-    args.add(errorMessage);
-    args.add(outputJson);
-    args.add(id);
-    if (projectId != null) args.add(projectId);
-    jdbcTemplate.update(sql, args.toArray());
+    Long projectId = requiredProjectId();
+    jdbcTemplate.update(
+        "UPDATE yak_dev_task_execution SET status = ?, duration_ms = ?, error_message = ?, output_json = ?, "
+            + "end_time = NOW(6), update_time = NOW(6) WHERE id = ? AND project_id = ? "
+            + "AND status IN ('PENDING', 'RUNNING')",
+        status,
+        durationMs,
+        errorMessage,
+        outputJson,
+        id,
+        projectId);
   }
 
   @Override
@@ -145,32 +139,33 @@ public class DevelopmentTaskExecutionRepositoryAdapter
 
   @Override
   public Optional<ExecutionRecord> findById(long id) {
-    Long projectId = currentProjectId();
-    String sql = detailSelect()
-        + " WHERE id = ?"
-        + (projectId == null ? "" : " AND project_id = ?")
-        + " LIMIT 1";
-    Object[] args = projectId == null ? new Object[] {id} : new Object[] {id, projectId};
-    return jdbcTemplate.query(sql, DevelopmentTaskExecutionRepositoryAdapter::mapRecord, args)
+    Long projectId = requiredProjectId();
+    String sql = detailSelect() + " WHERE id = ? AND project_id = ? LIMIT 1";
+    return jdbcTemplate.query(
+            sql,
+            DevelopmentTaskExecutionRepositoryAdapter::mapRecord,
+            id,
+            projectId)
         .stream()
         .findFirst();
   }
 
   @Override
   public Optional<ExecutionRecord> findLatestActiveByNode(long nodeId) {
-    Long projectId = currentProjectId();
+    Long projectId = requiredProjectId();
     String sql = detailSelect()
-        + " WHERE node_id = ? AND status IN ('PENDING', 'RUNNING')"
-        + (projectId == null ? "" : " AND project_id = ?")
+        + " WHERE node_id = ? AND project_id = ? AND status IN ('PENDING', 'RUNNING')"
         + " ORDER BY start_time DESC, id DESC LIMIT 1";
-    Object[] args = projectId == null
-        ? new Object[] {nodeId}
-        : new Object[] {nodeId, projectId};
-    return jdbcTemplate.query(sql, DevelopmentTaskExecutionRepositoryAdapter::mapRecord, args)
+    return jdbcTemplate.query(
+            sql,
+            DevelopmentTaskExecutionRepositoryAdapter::mapRecord,
+            nodeId,
+            projectId)
         .stream()
         .findFirst();
   }
 
+  /** Explicit cross-project dispatcher corridor. Callers must restore each returned project before IO. */
   @Override
   public List<ExecutionRecord> listActiveForReconciliation(int limit) {
     int safeLimit = Math.max(1, Math.min(500, limit));
@@ -183,12 +178,8 @@ public class DevelopmentTaskExecutionRepositoryAdapter
   }
 
   private String buildWhere(Query query, List<Object> args) {
-    StringBuilder where = new StringBuilder(" WHERE 1 = 1");
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      where.append(" AND project_id = ?");
-      args.add(projectId);
-    }
+    StringBuilder where = new StringBuilder(" WHERE project_id = ?");
+    args.add(requiredProjectId());
     if (query.keyword() != null && !query.keyword().isBlank()) {
       where.append(" AND (task_name LIKE ? OR runtime_execution_id LIKE ? OR operator_name LIKE ?)");
       String like = "%" + query.keyword() + "%";
@@ -250,17 +241,18 @@ public class DevelopmentTaskExecutionRepositoryAdapter
         toLocalDateTime(rs.getTimestamp("end_time")));
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private Long requiredProjectId() {
+    return currentProject.requireProjectId();
   }
 
-  private void ensureCurrentProject(Long ownerProjectId) {
-    currentProject.current().ifPresent(
-        context -> {
-          if (!Objects.equals(context.projectId(), ownerProjectId)) {
-            throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-          }
-        });
+  private Long requireOwnerProject(Long ownerProjectId) {
+    Long currentProjectId = requiredProjectId();
+    if (ownerProjectId == null
+        || ownerProjectId <= 0L
+        || !Objects.equals(currentProjectId, ownerProjectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    return currentProjectId;
   }
 
   private static LocalDateTime toLocalDateTime(Timestamp timestamp) {

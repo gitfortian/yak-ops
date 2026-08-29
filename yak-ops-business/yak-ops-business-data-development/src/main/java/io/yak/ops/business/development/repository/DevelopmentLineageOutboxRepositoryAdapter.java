@@ -1,7 +1,11 @@
 package io.yak.ops.business.development.repository;
 
 import io.yak.ops.business.development.repository.DevelopmentLineageOutboxRepository.OutboxRecord;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -11,23 +15,46 @@ public class DevelopmentLineageOutboxRepositoryAdapter
     implements DevelopmentLineageOutboxRepository {
 
   private final JdbcTemplate jdbc;
+  private final CurrentProject currentProject;
 
-  public DevelopmentLineageOutboxRepositoryAdapter(JdbcTemplate jdbc) {
+  @Autowired
+  public DevelopmentLineageOutboxRepositoryAdapter(
+      JdbcTemplate jdbc, CurrentProject currentProject) {
     this.jdbc = jdbc;
+    this.currentProject = currentProject;
+  }
+
+  /** Compatibility constructor for focused tests; enqueue will fail closed without ProjectContext. */
+  DevelopmentLineageOutboxRepositoryAdapter(JdbcTemplate jdbc) {
+    this(jdbc, Optional::<ProjectContext>empty);
   }
 
   @Override
   public void enqueue(String taskId, long nodeId, long revisionId) {
+    Long projectId = currentProject.requireProjectId();
+    Long ownedNodeCount = jdbc.queryForObject(
+        "SELECT COUNT(1) FROM yak_dev_node WHERE id=? AND project_id=?",
+        Long.class,
+        nodeId,
+        projectId);
+    if (ownedNodeCount == null || ownedNodeCount != 1L) {
+      throw new IllegalStateException(
+          "无法为当前 Project 的数据开发节点创建血缘 Outbox：nodeId=" + nodeId);
+    }
+
+    // INSERT IGNORE is intentionally idempotent: the same node/revision may already have an outbox row.
     jdbc.update(
         "INSERT IGNORE INTO yak_dev_lineage_outbox "
             + "(task_id,project_id,node_id,revision_id,status,attempts,next_attempt_time,create_time,update_time) "
             + "SELECT ?,project_id,id,?,'PENDING',0,NOW(6),NOW(6),NOW(6) FROM yak_dev_node "
-            + "WHERE id=? AND project_id IS NOT NULL",
+            + "WHERE id=? AND project_id=?",
         taskId,
         revisionId,
-        nodeId);
+        nodeId,
+        projectId);
   }
 
+  /** Cross-project dispatcher query; every record carries durable project ownership. */
   @Override
   public List<OutboxRecord> due(int limit) {
     return jdbc.query(
