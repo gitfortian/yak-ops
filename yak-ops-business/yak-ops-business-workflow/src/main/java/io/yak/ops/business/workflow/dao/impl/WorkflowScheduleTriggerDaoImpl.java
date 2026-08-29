@@ -23,7 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Repository;
 
-/** 基于 MyBatis-Plus 的工作流调度 Trigger Ledger DAO。 */
+/** Trigger Ledger DAO；普通业务访问 fail-closed，只有显式 startup dispatcher 可跨 Project。 */
 @Repository
 @DependsOn("workflowFlyway")
 @ConditionalOnProperty(
@@ -58,6 +58,7 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
     this.currentProject = currentProject;
   }
 
+  /** Test-only compatibility constructor. Calls still fail closed without CurrentProject. */
   public WorkflowScheduleTriggerDaoImpl(WorkflowScheduleTriggerMapper mapper) {
     this(
         mapper,
@@ -72,8 +73,8 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   public WorkflowScheduleTriggerPO claim(WorkflowScheduleTriggerPO trigger) {
     bindProject(trigger);
     if (trigger.getBackfillId() == null || trigger.getBackfillId().isBlank()) {
-      WorkflowScheduleTriggerPO legacy = selectBySchedulePlan(
-          trigger.getScheduleId(), trigger.getPlannedFireTime());
+      WorkflowScheduleTriggerPO legacy =
+          selectBySchedulePlan(trigger.getScheduleId(), trigger.getPlannedFireTime());
       if (legacy != null) return legacy;
     }
     mapper.insertIgnore(trigger);
@@ -87,20 +88,20 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   @Override
   public WorkflowScheduleTriggerPO selectByDedupeKey(String dedupeKey) {
     if (dedupeKey == null || dedupeKey.isBlank()) return null;
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectOne(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getDedupeKey, dedupeKey.trim()));
   }
 
   @Override
   public WorkflowScheduleTriggerPO selectBySchedulePlan(
       String scheduleId, Instant plannedFireTime) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectOne(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getScheduleId, scheduleId)
             .eq(WorkflowScheduleTriggerPO::getPlannedFireTime, plannedFireTime)
             .isNull(WorkflowScheduleTriggerPO::getBackfillId)
@@ -110,20 +111,21 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   @Override
   public WorkflowScheduleTriggerPO selectByExecutionId(String executionId) {
     if (executionId == null || executionId.isBlank()) return null;
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectOne(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getWorkflowExecutionId, executionId)
             .last("LIMIT 1"));
   }
 
   @Override
   public WorkflowScheduleTriggerPO selectNextWaiting(String workflowId) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
+    requireWorkflow(workflowId, projectId);
     return mapper.selectOne(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getWorkflowId, workflowId)
             .eq(WorkflowScheduleTriggerPO::getStatus, "WAITING")
             .orderByAsc(WorkflowScheduleTriggerPO::getPlannedFireTime)
@@ -133,20 +135,36 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
 
   @Override
   public List<WorkflowScheduleTriggerPO> selectPending() {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectList(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .in(WorkflowScheduleTriggerPO::getStatus, PENDING)
             .orderByAsc(WorkflowScheduleTriggerPO::getPlannedFireTime));
   }
 
   @Override
+  public List<Long> selectPendingProjectIdsForRecovery() {
+    return mapper.selectList(
+            Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
+                .select(WorkflowScheduleTriggerPO::getProjectId)
+                .isNotNull(WorkflowScheduleTriggerPO::getProjectId)
+                .in(WorkflowScheduleTriggerPO::getStatus, PENDING))
+        .stream()
+        .map(WorkflowScheduleTriggerPO::getProjectId)
+        .filter(Objects::nonNull)
+        .filter(value -> value > 0L)
+        .distinct()
+        .sorted()
+        .toList();
+  }
+
+  @Override
   public List<WorkflowScheduleTriggerPO> selectQueuedBySchedule(String scheduleId) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectList(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getScheduleId, scheduleId)
             .isNull(WorkflowScheduleTriggerPO::getBackfillId)
             .in(WorkflowScheduleTriggerPO::getStatus, List.of("RECEIVED", "WAITING"))
@@ -156,10 +174,10 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   @Override
   public List<WorkflowScheduleTriggerPO> selectByBackfillId(String backfillId) {
     if (backfillId == null || backfillId.isBlank()) return List.of();
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     return mapper.selectList(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getBackfillId, backfillId.trim())
             .orderByAsc(WorkflowScheduleTriggerPO::getPlannedFireTime));
   }
@@ -171,9 +189,9 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
       String backfillId,
       String status,
       int limit) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
     var query = Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-        .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId);
+        .eq(WorkflowScheduleTriggerPO::getProjectId, projectId);
     if (scheduleId != null && !scheduleId.isBlank()) {
       query.eq(WorkflowScheduleTriggerPO::getScheduleId, scheduleId.trim());
     }
@@ -194,8 +212,7 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
 
   @Override
   public int update(WorkflowScheduleTriggerPO trigger) {
-    Long projectId = currentProjectId();
-    if (projectId == null) return mapper.updateById(trigger);
+    long projectId = currentProjectId();
     bindProject(trigger);
     return mapper.update(
         trigger,
@@ -207,11 +224,12 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
   @Override
   public int bindPreparedExecution(
       String triggerId, String executionId, String executionStatus) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
+    requireExecution(executionId, projectId);
     return mapper.update(
         null,
         Wrappers.<WorkflowScheduleTriggerPO>lambdaUpdate()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getTriggerId, triggerId)
             .eq(WorkflowScheduleTriggerPO::getStatus, "LAUNCHING")
             .isNull(WorkflowScheduleTriggerPO::getWorkflowExecutionId)
@@ -223,110 +241,115 @@ public class WorkflowScheduleTriggerDaoImpl implements WorkflowScheduleTriggerDa
 
   @Override
   public void lockWorkflow(String workflowId) {
-    requireWorkflow(workflowId);
+    requireWorkflow(workflowId, currentProjectId());
     String locked = mapper.lockWorkflow(workflowId);
     if (locked == null) throw new IllegalArgumentException("工作流不存在：" + workflowId);
   }
 
   @Override
   public long countActiveExecutions(String workflowId) {
-    requireWorkflow(workflowId);
+    requireWorkflow(workflowId, currentProjectId());
     return mapper.countActiveExecutions(workflowId);
   }
 
   @Override
   public long countLaunchingTriggers(String workflowId) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
+    requireWorkflow(workflowId, projectId);
     return mapper.selectCount(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getWorkflowId, workflowId)
             .in(WorkflowScheduleTriggerPO::getStatus, List.of("LAUNCHING", "REACTIVATING")));
   }
 
   @Override
   public long countWaitingTriggers(String workflowId) {
-    Long projectId = currentProjectId();
+    long projectId = currentProjectId();
+    requireWorkflow(workflowId, projectId);
     return mapper.selectCount(
         Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-            .eq(projectId != null, WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
             .eq(WorkflowScheduleTriggerPO::getWorkflowId, workflowId)
             .eq(WorkflowScheduleTriggerPO::getStatus, "WAITING"));
   }
 
   @Override
   public String selectWorkflowIdByExecution(String executionId) {
-    Long projectId = currentProjectId();
-    if (projectId != null && executionMapper != null) {
-      WorkflowExecutionPO execution = executionMapper.selectOne(
-          Wrappers.<WorkflowExecutionPO>lambdaQuery()
-              .eq(WorkflowExecutionPO::getId, executionId)
-              .eq(WorkflowExecutionPO::getProjectId, projectId));
-      if (execution == null) return null;
-    }
+    long projectId = currentProjectId();
+    if (executionMapper == null) return null;
+    WorkflowExecutionPO execution = executionMapper.selectOne(
+        Wrappers.<WorkflowExecutionPO>lambdaQuery()
+            .eq(WorkflowExecutionPO::getId, executionId)
+            .eq(WorkflowExecutionPO::getProjectId, projectId));
+    if (execution == null) return null;
     return mapper.selectWorkflowIdByExecution(executionId);
   }
 
   @Override
   public String selectExecutionIdByTrigger(String triggerId) {
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      WorkflowScheduleTriggerPO trigger = mapper.selectOne(
-          Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
-              .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
-              .eq(WorkflowScheduleTriggerPO::getTriggerId, triggerId)
-              .last("LIMIT 1"));
-      if (trigger == null) return null;
-      if (trigger.getWorkflowExecutionId() != null) return trigger.getWorkflowExecutionId();
-    }
-    return mapper.selectExecutionIdByTrigger(triggerId);
+    long projectId = currentProjectId();
+    WorkflowScheduleTriggerPO trigger = mapper.selectOne(
+        Wrappers.<WorkflowScheduleTriggerPO>lambdaQuery()
+            .eq(WorkflowScheduleTriggerPO::getProjectId, projectId)
+            .eq(WorkflowScheduleTriggerPO::getTriggerId, triggerId)
+            .last("LIMIT 1"));
+    return trigger == null ? null : trigger.getWorkflowExecutionId();
   }
 
-  private Long currentProjectId() {
-    return currentProject.current().map(context -> context.projectId()).orElse(null);
+  private long currentProjectId() {
+    return currentProject.requireProjectId();
   }
 
   private void bindProject(WorkflowScheduleTriggerPO trigger) {
-    Long projectId = currentProjectId();
-    if (projectId != null) {
-      if (trigger.getProjectId() != null
-          && !Objects.equals(trigger.getProjectId(), projectId)) {
-        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
-      }
-      requireWorkflow(trigger.getWorkflowId());
-      trigger.setProjectId(projectId);
-      return;
+    long projectId = currentProjectId();
+    if (trigger.getProjectId() != null && !Objects.equals(trigger.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
-    if (trigger.getProjectId() != null) return;
-    if (scheduleMapper != null && trigger.getScheduleId() != null) {
-      WorkflowSchedulePO schedule = scheduleMapper.selectById(trigger.getScheduleId());
-      if (schedule != null && schedule.getProjectId() != null) {
-        trigger.setProjectId(schedule.getProjectId());
-        return;
-      }
-    }
-    if (backfillMapper != null && trigger.getBackfillId() != null) {
-      WorkflowBackfillPO backfill = backfillMapper.selectById(trigger.getBackfillId());
-      if (backfill != null && backfill.getProjectId() != null) {
-        trigger.setProjectId(backfill.getProjectId());
-        return;
-      }
-    }
-    if (definitionMapper != null && trigger.getWorkflowId() != null) {
-      WorkflowDefinitionPO definition = definitionMapper.selectById(trigger.getWorkflowId());
-      if (definition != null) trigger.setProjectId(definition.getProjectId());
-    }
+    requireWorkflow(trigger.getWorkflowId(), projectId);
+    requireSchedule(trigger.getScheduleId(), projectId);
+    requireBackfill(trigger.getBackfillId(), projectId);
+    trigger.setProjectId(projectId);
   }
 
-  private void requireWorkflow(String workflowId) {
-    Long projectId = currentProjectId();
-    if (projectId == null || definitionMapper == null) return;
+  private void requireWorkflow(String workflowId, long projectId) {
+    if (definitionMapper == null || workflowId == null || workflowId.isBlank()) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
     long count = definitionMapper.selectCount(
         Wrappers.<WorkflowDefinitionPO>lambdaQuery()
             .eq(WorkflowDefinitionPO::getId, workflowId)
             .eq(WorkflowDefinitionPO::getProjectId, projectId));
-    if (count == 0L) {
+    if (count == 0L) throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+  }
+
+  private void requireSchedule(String scheduleId, long projectId) {
+    if (scheduleId == null || scheduleId.isBlank() || scheduleMapper == null) return;
+    WorkflowSchedulePO schedule = scheduleMapper.selectOne(
+        Wrappers.<WorkflowSchedulePO>lambdaQuery()
+            .eq(WorkflowSchedulePO::getId, scheduleId)
+            .eq(WorkflowSchedulePO::getProjectId, projectId));
+    if (schedule == null) throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+  }
+
+  private void requireBackfill(String backfillId, long projectId) {
+    if (backfillId == null || backfillId.isBlank()) return;
+    if (backfillMapper == null) throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    WorkflowBackfillPO backfill = backfillMapper.selectOne(
+        Wrappers.<WorkflowBackfillPO>lambdaQuery()
+            .eq(WorkflowBackfillPO::getId, backfillId)
+            .eq(WorkflowBackfillPO::getProjectId, projectId));
+    if (backfill == null) throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+  }
+
+  private void requireExecution(String executionId, long projectId) {
+    if (executionMapper == null || executionId == null || executionId.isBlank()) {
       throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
     }
+    WorkflowExecutionPO execution = executionMapper.selectOne(
+        Wrappers.<WorkflowExecutionPO>lambdaQuery()
+            .eq(WorkflowExecutionPO::getId, executionId)
+            .eq(WorkflowExecutionPO::getProjectId, projectId));
+    if (execution == null) throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
   }
 }
