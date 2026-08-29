@@ -1,11 +1,9 @@
-import AttentionCenter from './components/AttentionCenter';
 import DataCenter from './components/DataCenter';
 import { HomeBackground } from './components/HomeBackground';
 import { HomeHeader } from './components/HomeHeader';
 import HomeWorkbench from './components/HomeWorkbench';
 import { QuickCreatePanel } from './components/QuickCreatePanel';
 import ScheduleCenter from './components/ScheduleCenter';
-import SystemLifecycleOverview from './components/SystemLifecycleOverview';
 import { useHomeCockpit } from './hooks/useHomeCockpit';
 
 export default function HomePage() {
@@ -19,17 +17,6 @@ export default function HomePage() {
         <HomeHeader stats={cockpit.data?.header} />
 
         <main className="px-4 pb-4">
-          <SystemLifecycleOverview
-            stages={cockpit.data?.lifecycle}
-            loading={cockpit.loading}
-            failed={cockpit.failed}
-          />
-          <AttentionCenter
-            attention={cockpit.data?.attention}
-            loading={cockpit.loading}
-            failed={cockpit.failed}
-          />
-
           <div className="mt-4">
             <QuickCreatePanel />
           </div>
