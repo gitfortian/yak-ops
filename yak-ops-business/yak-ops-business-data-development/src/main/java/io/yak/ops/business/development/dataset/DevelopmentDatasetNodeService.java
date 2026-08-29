@@ -37,7 +37,9 @@ public class DevelopmentDatasetNodeService {
 
   public DatasetNodeContext get(long nodeId) {
     DevelopmentNode datasetNode = requireDatasetNode(nodeId);
-    NodeDataset dataset = datasetFacade.findByDevelopmentNodeId(nodeId).orElse(null);
+    NodeDataset dataset = datasetFacade.findByDevelopmentNodeId(nodeId)
+        .map(candidate -> requireSameProject(datasetNode, candidate))
+        .orElse(null);
     return context(datasetNode, dataset, selectedSource(dataset));
   }
 
@@ -62,8 +64,10 @@ public class DevelopmentDatasetNodeService {
       String description,
       List<FieldDraft> fields) {
     DevelopmentNode datasetNode = requireDatasetNode(nodeId);
-    NodeDataset saved = datasetFacade.save(
-        nodeId, dataSourceId, sql, datasetNode.name(), description, fields);
+    NodeDataset saved = requireSameProject(
+        datasetNode,
+        datasetFacade.save(
+            nodeId, dataSourceId, sql, datasetNode.name(), description, fields));
     markConfigured(datasetNode);
     DevelopmentNode refreshed = nodeRepository.findById(nodeId).orElse(datasetNode);
     return context(refreshed, saved, null);
@@ -85,8 +89,10 @@ public class DevelopmentDatasetNodeService {
       List<FieldDraft> fields) {
     DevelopmentNode datasetNode = requireDatasetNode(nodeId);
     TaskAsset source = requireSelectableSqlAsset(datasetNode, sourceTaskAssetId);
-    NodeDataset saved = datasetFacade.save(
-        nodeId, source.id(), datasetNode.name(), description, fields);
+    NodeDataset saved = requireSameProject(
+        datasetNode,
+        datasetFacade.save(
+            nodeId, source.id(), datasetNode.name(), description, fields));
     markConfigured(datasetNode);
     DevelopmentNode refreshed = nodeRepository.findById(nodeId).orElse(datasetNode);
     return context(refreshed, saved, toSnapshot(source));
@@ -212,7 +218,24 @@ public class DevelopmentDatasetNodeService {
     if (type != DevelopmentNodeType.DATASET) {
       throw new IllegalArgumentException("当前节点不是 Dataset Node：" + nodeId);
     }
+    node.requireProjectId();
     return node;
+  }
+
+  private NodeDataset requireSameProject(DevelopmentNode datasetNode, NodeDataset dataset) {
+    long nodeProjectId = datasetNode.requireProjectId();
+    if (dataset.projectId() <= 0L || dataset.projectId() != nodeProjectId) {
+      throw new IllegalStateException(
+          "Dataset 与数据开发节点 Project 不一致：nodeId="
+              + datasetNode.id()
+              + ", nodeProjectId="
+              + nodeProjectId
+              + ", datasetId="
+              + dataset.datasetId()
+              + ", datasetProjectId="
+              + dataset.projectId());
+    }
+    return dataset;
   }
 
   private boolean sameProject(Long left, Long right) {
