@@ -9,7 +9,6 @@ import io.yak.ops.business.workflow.execution.WorkflowLauncher;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
-import io.yak.ops.core.project.ProjectMigrationMode;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -26,7 +25,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Tag(name = "工作流接口")
 @RestController
 @RequestMapping("/api/v1/workflows")
-@ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
+@ProjectScope
 public class WorkflowController {
 
   private final WorkflowRuntime workflowRuntimeService;
