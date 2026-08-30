@@ -31,3 +31,12 @@ jobs:
           grep -RInE --exclude-dir=target --include='*.java' 'currentProject\.current\(|projectId[[:space:]]*==[[:space:]]*null|projectId[[:space:]]*!=[[:space:]]*null|\.eq\(projectId != null|\.eq\(projectId == null' yak-ops-* || true
           echo '=== GLOBAL_OR_LEGACY_METHODS ==='
           grep -RInEi --exclude-dir=target --exclude='*.sql' --include='*.java' --include='*.xml' 'project_id[[:space:]]+is[[:space:]]+null|find[A-Za-z]*Global|claimLegacy|CompatibilityBackfill|ProjectCompatibilityCoordinator|selectById\([^,]+\)[[:space:]]*:[[:space:]]*' yak-ops-* || true
+      - name: Package source snapshot
+        shell: bash
+        run: |
+          tar --exclude=.git --exclude='**/target' --exclude='**/node_modules' -czf /tmp/yak-ops-stage10-source.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yak-ops-stage10-source
+          path: /tmp/yak-ops-stage10-source.tar.gz
+          retention-days: 1
