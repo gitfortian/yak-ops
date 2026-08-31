@@ -24,6 +24,21 @@ import org.springframework.beans.factory.ObjectProvider;
 class QualityAlertRecorderNotificationTest {
 
   @Test
+  void lightweightConstructorKeepsNotificationGatewayOptional() {
+    QualityAlertRepository repository = mock(QualityAlertRepository.class);
+
+    QualityAlertRecorder recorder = new QualityAlertRecorder(repository);
+    recorder.recordIfNecessary(
+        plan(false, NotifyChannel.EMAIL, AlertLevel.WARNING),
+        CheckResult.ERROR,
+        0,
+        0,
+        1);
+
+    verify(repository, never()).insertAlertEvent(any());
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void messageChannelPublishesQualityWarningToProjectOwners() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
