@@ -1,4 +1,3 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import {
   getDataServiceOverview,
   type DataServiceOverview,
@@ -6,8 +5,10 @@ import {
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
+import { Activity } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { HomeEmptyState } from './HomeEmptyState';
 import { SectionHeader } from './homeAssetOverviewShared';
 
 interface DataServiceOverviewState {
@@ -133,14 +134,12 @@ function TrendEmpty({ state }: { state: DataServiceOverviewState }) {
   }
 
   return (
-    <div className="flex h-[126px] items-center justify-center">
-      <YakOpsEmpty
-        width={116}
-        height={78}
-        title="近 7 日暂无 API 调用"
-        showCaption
-      />
-    </div>
+    <HomeEmptyState
+      icon={Activity}
+      title="近 7 日暂无 API 调用"
+      size="small"
+      className="h-[126px]"
+    />
   );
 }
 
