@@ -139,6 +139,7 @@ function RecentDatasetColumn({ state }: { state: HomeAssetOverviewState }) {
           failed={state.failed}
           unavailable={state.data?.dataset?.datasetCount == null}
           text="暂无数据集"
+          icon={Table2}
         />
       )}
     </div>
@@ -195,6 +196,7 @@ function OnlineDatasetColumn({ state }: { state: HomeAssetOverviewState }) {
           failed={state.failed}
           unavailable={state.data?.dataset?.datasetCount == null}
           text="暂无上线数据集"
+          icon={Database}
         />
       )}
 
