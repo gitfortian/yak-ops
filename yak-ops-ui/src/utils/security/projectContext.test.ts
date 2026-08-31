@@ -42,6 +42,9 @@ describe('Project Space request context', () => {
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/realtime-sync/11/events')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/workflows/definitions')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/workflows/instances')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/workflows/schedules')).toBe('PROJECT_REQUIRED');
+    expect(resolveProjectRequestMode('/api/v1/workflows/instances/run-1/events')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-quality/table-asset/page')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-quality/monitor/42')).toBe('PROJECT_REQUIRED');
     expect(resolveProjectRequestMode('/api/v1/data-quality/execution/page')).toBe('PROJECT_REQUIRED');
@@ -102,6 +105,9 @@ describe('Project Space request context', () => {
       '/api/v1/realtime-sync/42',
       '/api/v1/realtime-sync/42/observability',
       '/api/v1/workflows/definitions',
+      '/api/v1/workflows/instances',
+      '/api/v1/workflows/schedules',
+      '/api/v1/workflows/instances/run-1/events',
       '/api/v1/data-quality/table-asset/page',
       '/api/v1/data-quality/monitor/42',
       '/api/v1/data-quality/execution/page',
