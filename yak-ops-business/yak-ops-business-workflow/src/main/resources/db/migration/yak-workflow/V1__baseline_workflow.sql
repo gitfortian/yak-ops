@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS yak_workflow_execution (
     KEY idx_yak_workflow_execution_created (created_at),
     KEY idx_yak_workflow_execution_definition_status (definition_id, status, created_at),
     KEY idx_yak_workflow_execution_project_status (project_id, status, updated_at),
-    KEY idx_yak_workflow_execution_project_definition (project_id, definition_id, created_at)
+    KEY idx_yak_workflow_execution_project_definition (project_id, definition_id, created_at),
+    KEY idx_yak_workflow_execution_project_created (project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_node_execution (
@@ -132,7 +133,9 @@ CREATE TABLE IF NOT EXISTS yak_workflow_schedule (
     KEY idx_yak_workflow_schedule_workflow (workflow_id, update_time),
     KEY idx_yak_workflow_schedule_next_fire (status, next_fire_time),
     KEY idx_yak_workflow_schedule_project_status (project_id, status, next_fire_time),
-    KEY idx_yak_workflow_schedule_project_workflow (project_id, workflow_id, update_time)
+    KEY idx_yak_workflow_schedule_project_workflow (project_id, workflow_id, update_time),
+    KEY idx_yak_workflow_schedule_next_fire_only (next_fire_time),
+    KEY idx_yak_workflow_schedule_project_next_fire (project_id, next_fire_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_workflow_schedule_trigger (

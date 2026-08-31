@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS yak_ops_data_service_api (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
-    project_id BIGINT UNSIGNED DEFAULT NULL COMMENT 'Yak Security Project Space ID',
+    project_id BIGINT UNSIGNED NOT NULL COMMENT 'Yak Security Project Space ID',
     name VARCHAR(128) NOT NULL COMMENT '服务名称',
     path VARCHAR(255) NOT NULL COMMENT '服务相对路径',
     data_source_id BIGINT UNSIGNED NOT NULL COMMENT 'Yak Ops 数据源 ID',
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS yak_ops_data_service_documentation (
 
 CREATE TABLE IF NOT EXISTS yak_ops_data_service_call_log (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
-    project_id BIGINT UNSIGNED DEFAULT NULL COMMENT '调用发生时的数据服务 Project Space ID',
+    project_id BIGINT UNSIGNED NOT NULL COMMENT '调用发生时的数据服务 Project Space ID',
     api_id BIGINT UNSIGNED NOT NULL COMMENT '数据服务 API ID',
     service_name VARCHAR(128) NOT NULL COMMENT '调用时服务名称快照',
     service_path VARCHAR(255) NOT NULL COMMENT '调用时路径快照',

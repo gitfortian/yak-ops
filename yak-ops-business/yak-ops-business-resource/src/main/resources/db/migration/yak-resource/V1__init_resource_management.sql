@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS yak_ops_resource (
     id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL COMMENT 'Yak Security Project ID',
     parent_id BIGINT NOT NULL DEFAULT 0,
     name VARCHAR(255) NOT NULL,
     full_path VARCHAR(1024) NOT NULL,
@@ -16,8 +17,10 @@ CREATE TABLE IF NOT EXISTS yak_ops_resource (
     create_time DATETIME(3) NOT NULL,
     update_time DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_yak_resource_parent_name (parent_id, name),
+    UNIQUE KEY uk_yak_resource_project_parent_name (project_id, parent_id, name),
     KEY idx_yak_resource_full_path (full_path(255)),
     KEY idx_yak_resource_parent_type (parent_id, node_type),
-    KEY idx_yak_resource_storage (storage_type, storage_path(255))
+    KEY idx_yak_resource_storage (storage_type, storage_path(255)),
+    KEY idx_yak_resource_project_path (project_id, full_path(255)),
+    KEY idx_yak_resource_project_parent_type (project_id, parent_id, node_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

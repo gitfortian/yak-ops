@@ -6,7 +6,7 @@
 
 CREATE TABLE IF NOT EXISTS yak_dev_directory (
     id BIGINT NOT NULL,
-    project_id BIGINT NULL,
+    project_id BIGINT NOT NULL,
     parent_id BIGINT NOT NULL DEFAULT 0,
     name VARCHAR(128) NOT NULL,
     create_time DATETIME(6) NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS yak_dev_node (
     id BIGINT NOT NULL,
     name VARCHAR(200) NOT NULL,
     type VARCHAR(32) NOT NULL,
-    project_id BIGINT NULL,
+    project_id BIGINT NOT NULL,
     directory_id BIGINT NOT NULL DEFAULT 0,
     configured TINYINT(1) NOT NULL DEFAULT 0,
     deleted TINYINT(1) NOT NULL DEFAULT 0,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS yak_dev_editor_setting (
 
 CREATE TABLE IF NOT EXISTS yak_dev_task_execution (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    project_id BIGINT NULL,
+    project_id BIGINT NOT NULL,
     node_id BIGINT NOT NULL,
     task_name VARCHAR(200) NOT NULL,
     task_type VARCHAR(32) NOT NULL,
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS yak_dev_data_service_revision (
 
 CREATE TABLE IF NOT EXISTS yak_dev_lineage_outbox (
     task_id CHAR(36) NOT NULL,
-    project_id BIGINT NULL,
+    project_id BIGINT NOT NULL,
     node_id BIGINT NOT NULL,
     revision_id BIGINT NOT NULL,
     status VARCHAR(16) NOT NULL,
