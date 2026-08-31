@@ -1,7 +1,7 @@
 package io.yak.ops.business.sync.offline.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +14,7 @@ import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
 class OfflineExecutionEventRepositoryAdapterNotificationTest {
@@ -32,11 +33,14 @@ class OfflineExecutionEventRepositoryAdapterNotificationTest {
         new OfflineExecutionEventRepositoryAdapter(dao, executions, publisher);
     repository.append(event("RUNNING", "FAILED"));
 
-    verify(publisher).publishEvent(argThat(value ->
-        value instanceof OfflineExecutionFinalFailureEvent failure
-            && failure.executionId().equals(99L)
-            && failure.jobDefinitionId().equals(10L)
-            && "engine down".equals(failure.errorMessage())));
+    ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+    verify(publisher).publishEvent(captor.capture());
+    assertThat(captor.getValue()).isInstanceOf(OfflineExecutionFinalFailureEvent.class);
+    OfflineExecutionFinalFailureEvent failure =
+        (OfflineExecutionFinalFailureEvent) captor.getValue();
+    assertThat(failure.executionId()).isEqualTo(99L);
+    assertThat(failure.jobDefinitionId()).isEqualTo(10L);
+    assertThat(failure.errorMessage()).isEqualTo("engine down");
   }
 
   @Test
