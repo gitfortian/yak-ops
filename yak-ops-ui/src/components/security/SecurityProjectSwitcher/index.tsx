@@ -1,6 +1,6 @@
 import { productFeatures } from '@/config/productFeatures';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
-import { hasPermission } from '@/utils/security/permission';
+import { isSecurityRoot } from '@/utils/security/permission';
 import {
   getLocale,
   history,
@@ -17,8 +17,6 @@ import {
 } from 'lucide-react';
 
 type SupportedLocale = 'zh-CN' | 'en-US';
-
-const PROJECT_MANAGEMENT_PERMISSION = 'security:project:read';
 
 const getSupportedLocale = (): SupportedLocale =>
   getLocale().toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US';
@@ -76,10 +74,7 @@ function ProjectSwitcher() {
   const { initialState } = useModel('@@initialState');
   const { projects, currentProject, selectProject } = useSecurityProject();
   const permissionCodes = initialState?.currentUser?.permissionCodes ?? [];
-  const canManage = hasPermission(
-    permissionCodes,
-    PROJECT_MANAGEMENT_PERMISSION,
-  );
+  const canManage = isSecurityRoot(permissionCodes);
 
   const items: MenuProps['items'] = [
     ...projects.map((project) => ({
