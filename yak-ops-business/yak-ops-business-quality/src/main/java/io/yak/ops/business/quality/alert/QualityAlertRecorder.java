@@ -49,23 +49,38 @@ public class QualityAlertRecorder {
       int passed,
       int failed,
       int errors) {
-    if (!plan.notifyEnabled()
-        || result == CheckResult.PASSED
+    if (result == CheckResult.PASSED
         || result == CheckResult.RUNNING
         || result == CheckResult.NOT_RUN) {
       return;
     }
+
+    boolean recordConfiguredAlert = plan.notifyEnabled();
+    boolean publishMessage = result == CheckResult.ERROR
+        || (plan.notifyEnabled() && plan.notifyChannel() == NotifyChannel.MESSAGE);
+    if (!recordConfiguredAlert && !publishMessage) return;
+
+    String message = "质量监控“" + plan.monitor().name() + "”执行结果为 " + result
+        + "，通过 " + passed + " 条，未通过 " + failed + " 条，异常 " + errors + " 条。";
+
+    if (recordConfiguredAlert) {
+      recordConfiguredAlert(plan, result, message);
+    }
+    if (publishMessage) {
+      publishMessageNotification(plan, result, message);
+    }
+  }
+
+  private void recordConfiguredAlert(
+      QualityExecutionPlan plan,
+      CheckResult result,
+      String message) {
     try {
       String target = normalizeTarget(plan);
       String status = plan.notifyChannel() == NotifyChannel.MESSAGE ? "RECORDED" : "PENDING";
-      String message = "质量监控“" + plan.monitor().name() + "”执行结果为 " + result
-          + "，通过 " + passed + " 条，未通过 " + failed + " 条，异常 " + errors + " 条。";
       repository.insertAlertEvent(new AlertEventSpec(
           plan.monitor().id(), plan.executionNo(), result, plan.alertLevel(), plan.notifyChannel(),
           target, status, message, null, LocalDateTime.now()));
-      if (plan.notifyChannel() == NotifyChannel.MESSAGE) {
-        publishMessageNotification(plan, result, message);
-      }
       LOGGER.warn(
           "Quality alert recorded: monitor={}, execution={}, result={}, channel={}, target={}",
           plan.monitor().id(), plan.executionNo(), result, plan.notifyChannel(), target);
