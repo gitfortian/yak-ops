@@ -3,6 +3,7 @@ package io.yak.ops.business.sync.offline.repository;
 import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.PROJECT_ID;
 import static io.yak.ops.business.sync.offline.OfflineProjectTestContext.currentProject;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,6 +15,7 @@ import io.yak.ops.business.sync.offline.dao.OfflineJobDefinitionDao;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import io.yak.ops.common.bean.po.sync.offline.OfflineJobDefinitionPO;
+import io.yak.ops.core.project.ProjectContextException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,6 +78,21 @@ class OfflineJobDefinitionRepositoryAdapterTest {
     repository().pageForView(null);
 
     verify(dataSourceDao).selectByIds(List.of(1L, 2L, 3L));
+  }
+
+  @Test
+  void displayPageRejectsForeignProjectRowsBeforeDatasourceEnrichment() {
+    OfflineJobDefinitionPO foreign = definition();
+    foreign.setProjectId(PROJECT_ID + 1L);
+
+    Page<OfflineJobDefinitionPO> page = Page.of(1, 10);
+    page.setRecords(List.of(foreign));
+    page.setTotal(1L);
+    when(dao.selectPage(any())).thenReturn(page);
+
+    assertThatThrownBy(() -> repository().pageForView(null))
+        .isInstanceOf(ProjectContextException.class);
+    verifyNoInteractions(dataSourceDao);
   }
 
   private OfflineJobDefinitionRepositoryAdapter repository() {

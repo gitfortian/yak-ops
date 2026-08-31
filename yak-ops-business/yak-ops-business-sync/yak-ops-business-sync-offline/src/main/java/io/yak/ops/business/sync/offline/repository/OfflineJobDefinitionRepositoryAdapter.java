@@ -42,15 +42,18 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
 
   @Override
   public Optional<OfflineJobDefinition> findById(Long id) {
-    requireProject();
-    return Optional.ofNullable(toDomain(dao.selectById(id), Map.of()));
+    long projectId = requireProject();
+    OfflineJobDefinitionPO po = dao.selectById(id);
+    requireCurrentProject(po, projectId);
+    return Optional.ofNullable(toDomain(po, Map.of()));
   }
 
   @Override
   public Optional<OfflineJobDefinition> findForViewById(Long id) {
-    requireProject();
+    long projectId = requireProject();
     OfflineJobDefinitionPO po = dao.selectById(id);
     if (po == null) return Optional.empty();
+    requireCurrentProject(po, projectId);
     return Optional.of(toDomain(po, dataSourceNames(List.of(po))));
   }
 
@@ -104,6 +107,7 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
   private PageData<OfflineJobDefinition> page(
       OfflineDefinitionQuery query,
       boolean includeDisplayNames) {
+    long projectId = requireProject();
     OfflineDefinitionQuery q = query == null
         ? new OfflineDefinitionQuery(1, 10, null, null, null, null, null, null, null, null, null)
         : query;
@@ -113,6 +117,7 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
             q.sourceType(), q.sinkType(), q.sourceTable(), q.sinkTable(),
             q.createTimeStart(), q.createTimeEnd()));
     List<OfflineJobDefinitionPO> pageRecords = page.getRecords();
+    requireCurrentProject(pageRecords, projectId);
     Map<Long, String> dataSourceNames =
         includeDisplayNames ? dataSourceNames(pageRecords) : Map.of();
     List<OfflineJobDefinition> records = pageRecords.stream()
@@ -162,6 +167,20 @@ public class OfflineJobDefinitionRepositoryAdapter implements OfflineJobDefiniti
       }
     }
     return names;
+  }
+
+  private void requireCurrentProject(List<OfflineJobDefinitionPO> definitions, long projectId) {
+    if (definitions == null || definitions.isEmpty()) return;
+    for (OfflineJobDefinitionPO definition : definitions) {
+      requireCurrentProject(definition, projectId);
+    }
+  }
+
+  private void requireCurrentProject(OfflineJobDefinitionPO definition, long projectId) {
+    if (definition == null) return;
+    if (!Objects.equals(definition.getProjectId(), projectId)) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
   }
 
   private long requireProject() {

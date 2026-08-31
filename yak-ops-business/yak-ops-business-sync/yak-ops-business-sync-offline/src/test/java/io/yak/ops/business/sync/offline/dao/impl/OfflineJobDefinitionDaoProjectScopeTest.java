@@ -2,8 +2,11 @@ package io.yak.ops.business.sync.offline.dao.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineExecutionEventMapper;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobDefinitionMapper;
 import io.yak.ops.business.sync.offline.dao.mapper.OfflineJobExecutionMapper;
@@ -41,7 +44,24 @@ class OfflineJobDefinitionDaoProjectScopeTest {
 
     ArgumentCaptor<OfflineJobDefinitionPO> captor =
         ArgumentCaptor.forClass(OfflineJobDefinitionPO.class);
-    org.mockito.Mockito.verify(mapper).insert(captor.capture());
+    verify(mapper).insert(captor.capture());
     assertThat(captor.getValue().getProjectId()).isEqualTo(7L);
+  }
+
+  @Test
+  void pageAlwaysUsesCurrentProjectPredicate() {
+    CurrentProject currentProject = () -> Optional.of(new ProjectContext(7L, "Project A"));
+    OfflineJobDefinitionDaoImpl dao =
+        new OfflineJobDefinitionDaoImpl(
+            mapper, executionMapper, eventMapper, writeMapper, currentProject);
+
+    dao.selectPage(null);
+
+    verify(mapper).selectPage(
+        any(Page.class),
+        argThat(
+            wrapper ->
+                wrapper.getSqlSegment().contains("project_id")
+                    && wrapper.getParamNameValuePairs().containsValue(7L)));
   }
 }
