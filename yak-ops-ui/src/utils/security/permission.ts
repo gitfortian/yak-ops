@@ -14,22 +14,25 @@ type GrantedPermissions =
 /**
  * Yak Security 超级管理员权限。
  */
-const ROOT_PERMISSION = 'security:root';
+export const SECURITY_ROOT_PERMISSION = 'security:root';
 
 const permissionSet = (
   permissions: GrantedPermissions,
 ) => new Set(permissions ?? []);
 
-const isRoot = (
+/**
+ * 判断当前身份是否为 Yak Security 超级管理员。
+ */
+export const isSecurityRoot = (
   permissions: GrantedPermissions,
 ): boolean =>
-  permissionSet(permissions).has(ROOT_PERMISSION);
+  permissionSet(permissions).has(SECURITY_ROOT_PERMISSION);
 
 export const hasPermission = (
   permissions: GrantedPermissions,
   permission: PermissionCode,
 ): boolean => {
-  if (isRoot(permissions)) {
+  if (isSecurityRoot(permissions)) {
     return true;
   }
 
@@ -47,7 +50,7 @@ export const hasAnyPermission = (
     return false;
   }
 
-  if (isRoot(permissions)) {
+  if (isSecurityRoot(permissions)) {
     return true;
   }
 
@@ -62,7 +65,7 @@ export const hasAllPermissions = (
   permissions: GrantedPermissions,
   requiredPermissions: readonly PermissionCode[],
 ): boolean => {
-  if (isRoot(permissions)) {
+  if (isSecurityRoot(permissions)) {
     return true;
   }
 

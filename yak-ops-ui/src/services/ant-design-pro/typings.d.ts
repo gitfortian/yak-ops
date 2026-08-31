@@ -21,13 +21,18 @@ declare namespace API {
     deptId?: number | null;
     phone?: string | null;
     email?: string | null;
-    /** Optional until AccountController/current explicitly guarantees it. */
+    /** Current Yak Security roles. Optional only for rolling-upgrade compatibility. */
     roleList?: RoleBrief[] | null;
-    /** Optional until AccountController/current explicitly guarantees it. */
+    /** Effective permission codes. Optional only for rolling-upgrade compatibility. */
     permissionCodes?: string[] | null;
     /** Menu codes granted through the user's roles. */
     menuCodes?: string[] | null;
-    /** Security projects authorized for this identity, not an admin list. */
+    /**
+     * Enabled workspaces the identity may switch into.
+     * security:root receives every enabled workspace; other users receive only
+     * workspaces where they are an owner or member. Optional only for
+     * rolling-upgrade compatibility with older Yak Security backends.
+     */
     projectList?: ProjectBrief[] | null;
   };
 

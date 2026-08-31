@@ -17,24 +17,31 @@ describe('current identity normalization', () => {
     expect(user.menuCodes).toBeUndefined();
   });
 
-  it('uses only values supplied by the current-account response', () => {
+  it('preserves the complete root identity supplied by current-account', () => {
     const user = toCurrentUser({
       id: 8,
-      userName: 'operator',
-      realName: ' Yak Operator ',
+      userName: 'root',
+      realName: ' 系统管理员 ',
       deptId: 12,
-      roleList: [{ id: 2, roleName: 'operator' }],
-      permissionCodes: ['task:read'],
-      menuCodes: ['integration', 'batch-link-up'],
-      projectList: [{ id: 3, projectCode: 'SEC', projectName: 'Security' }],
+      roleList: [{ id: 2, roleName: '系统管理员' }],
+      permissionCodes: ['security:root'],
+      menuCodes: ['system', 'system-security-projects'],
+      projectList: [
+        { id: 3, projectCode: 'DEFAULT', projectName: '默认空间' },
+        { id: 4, projectCode: 'DATA', projectName: '数据空间' },
+      ],
     });
 
     expect(user).toMatchObject({
-      name: 'Yak Operator',
+      name: '系统管理员',
       deptId: 12,
-      permissionCodes: ['task:read'],
-      menuCodes: ['integration', 'batch-link-up'],
-      projectList: [{ id: 3, projectCode: 'SEC' }],
+      roleList: [{ id: 2, roleName: '系统管理员' }],
+      permissionCodes: ['security:root'],
+      menuCodes: ['system', 'system-security-projects'],
+      projectList: [
+        { id: 3, projectCode: 'DEFAULT' },
+        { id: 4, projectCode: 'DATA' },
+      ],
     });
   });
 });
