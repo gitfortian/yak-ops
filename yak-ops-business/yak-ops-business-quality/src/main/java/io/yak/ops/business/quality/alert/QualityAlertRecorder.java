@@ -28,19 +28,14 @@ public class QualityAlertRecorder {
   public QualityAlertRecorder(
       QualityAlertRepository repository,
       ObjectProvider<BusinessNotificationGateway> notificationGateways) {
-    this(repository, notificationGateways.getIfAvailable());
+    this.repository = repository;
+    this.notificationGateway = notificationGateways.getIfAvailable();
   }
 
   /** Focused tests retain the lightweight constructor. */
   public QualityAlertRecorder(QualityAlertRepository repository) {
-    this(repository, null);
-  }
-
-  private QualityAlertRecorder(
-      QualityAlertRepository repository,
-      BusinessNotificationGateway notificationGateway) {
     this.repository = repository;
-    this.notificationGateway = notificationGateway;
+    this.notificationGateway = null;
   }
 
   public void recordIfNecessary(
