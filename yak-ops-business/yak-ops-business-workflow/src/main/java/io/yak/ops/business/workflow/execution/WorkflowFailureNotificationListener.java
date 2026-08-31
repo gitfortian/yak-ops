@@ -1,12 +1,9 @@
 package io.yak.ops.business.workflow.execution;
 
-import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
 import io.yak.ops.business.workflow.domain.WorkflowExecutionTerminalEvent;
-import io.yak.ops.common.bean.po.workflow.WorkflowExecutionPO;
-import io.yak.ops.common.bean.po.workflow.WorkflowNodeExecutionPO;
+import io.yak.ops.business.workflow.execution.WorkflowExecutionNotificationReader.Snapshot;
 import io.yak.ops.core.notification.BusinessNotification;
 import io.yak.ops.core.notification.BusinessNotificationGateway;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -21,13 +18,13 @@ public class WorkflowFailureNotificationListener {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(WorkflowFailureNotificationListener.class);
 
-  private final WorkflowExecutionDao executionDao;
+  private final WorkflowExecutionNotificationReader executionReader;
   private final ObjectProvider<BusinessNotificationGateway> notificationGateways;
 
   public WorkflowFailureNotificationListener(
-      WorkflowExecutionDao executionDao,
+      WorkflowExecutionNotificationReader executionReader,
       ObjectProvider<BusinessNotificationGateway> notificationGateways) {
-    this.executionDao = executionDao;
+    this.executionReader = executionReader;
     this.notificationGateways = notificationGateways;
   }
 
@@ -38,24 +35,23 @@ public class WorkflowFailureNotificationListener {
     if (gateway == null) return;
 
     try {
-      WorkflowExecutionPO execution = executionDao.selectExecution(event.executionId());
-      if (execution == null || execution.getProjectId() == null || execution.getProjectId() <= 0L) {
-        return;
-      }
+      Snapshot execution = executionReader.find(event.executionId()).orElse(null);
+      if (execution == null) return;
 
-      String workflowName = StringUtils.hasText(execution.getWorkflowName())
-          ? execution.getWorkflowName().trim()
-          : "工作流 " + execution.getDefinitionId();
-      String error = firstError(executionDao.selectNodeExecutions(event.executionId()));
+      String workflowName = StringUtils.hasText(execution.workflowName())
+          ? execution.workflowName().trim()
+          : "工作流 " + event.executionId();
       boolean timedOut = "TIMED_OUT".equalsIgnoreCase(event.executionStatus());
       String title = timedOut ? "工作流执行超时" : "工作流执行失败";
-      String content = error == null
-          ? (timedOut ? "工作流执行已超时，请查看实例详情。" : "工作流执行失败，请查看实例详情。")
-          : error;
+      String content = StringUtils.hasText(execution.errorMessage())
+          ? execution.errorMessage().trim()
+          : timedOut
+              ? "工作流执行已超时，请查看实例详情。"
+              : "工作流执行失败，请查看实例详情。";
 
       gateway.publishToProjectOwners(
           new BusinessNotification(
-              execution.getProjectId(),
+              execution.projectId(),
               BusinessNotification.Type.TASK,
               BusinessNotification.Level.ERROR,
               title,
@@ -75,15 +71,5 @@ public class WorkflowFailureNotificationListener {
 
   private boolean notifiable(String status) {
     return "FAILED".equalsIgnoreCase(status) || "TIMED_OUT".equalsIgnoreCase(status);
-  }
-
-  private String firstError(List<WorkflowNodeExecutionPO> nodes) {
-    if (nodes == null) return null;
-    return nodes.stream()
-        .map(WorkflowNodeExecutionPO::getErrorMessage)
-        .filter(StringUtils::hasText)
-        .map(String::trim)
-        .findFirst()
-        .orElse(null);
   }
 }
