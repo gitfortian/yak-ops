@@ -1,38 +1,6 @@
-@font-face {
-  font-family: 'HarmonyOS Sans SC';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: local('HarmonyOS Sans SC Regular'), local('HarmonyOS Sans SC'),
-    url('/fonts/harmonyos-sans-sc/HarmonyOS_SansSC_Regular.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: 'HarmonyOS Sans SC';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: local('HarmonyOS Sans SC Medium'),
-    url('/fonts/harmonyos-sans-sc/HarmonyOS_SansSC_Medium.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: 'HarmonyOS Sans SC';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: local('HarmonyOS Sans SC Semibold'),
-    url('/fonts/harmonyos-sans-sc/HarmonyOS_SansSC_Semibold.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: 'HarmonyOS Sans SC';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: local('HarmonyOS Sans SC Bold'),
-    url('/fonts/harmonyos-sans-sc/HarmonyOS_SansSC_Bold.ttf') format('truetype');
-}
+// HarmonyOS Sans SC font-face declarations live under public/fonts and are
+// loaded as a static stylesheet from Umi config. Keeping asset URLs out of the
+// compiled Less prevents Mako from resolving public resources as source files.
 
 // Keep YakOps' existing Latin font for English, and switch the complete
 // Chinese UI (including Ant Design via --yak-font-family) to HarmonyOS Sans SC.
