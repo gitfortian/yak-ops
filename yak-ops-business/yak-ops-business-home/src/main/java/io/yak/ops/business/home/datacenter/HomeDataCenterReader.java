@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.datacenter;
 
 import io.yak.ops.business.quality.workspace.QualityExecutionOverviewReader;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionOverviewReader;
@@ -17,13 +17,13 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /** 首页数据中心只读聚合；领域运行语义由各业务 Reader 自己拥有。 */
-@Service
-public class HomeDataCenterService {
+@Component
+public class HomeDataCenterReader {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HomeDataCenterService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HomeDataCenterReader.class);
   private static final DateTimeFormatter DAY_LABEL = DateTimeFormatter.ofPattern("MM-dd");
   private static final int RECENT_TASK_LIMIT = 5;
   private static final int SCHEDULE_SOURCE_LIMIT = 20;
@@ -32,7 +32,7 @@ public class HomeDataCenterService {
   private final ObjectProvider<WorkflowExecutionOverviewReader> workflowReaderProvider;
   private final ObjectProvider<QualityExecutionOverviewReader> qualityReaderProvider;
 
-  public HomeDataCenterService(
+  public HomeDataCenterReader(
       ObjectProvider<OfflineExecutionOverviewReader> offlineReaderProvider,
       ObjectProvider<WorkflowExecutionOverviewReader> workflowReaderProvider,
       ObjectProvider<QualityExecutionOverviewReader> qualityReaderProvider) {

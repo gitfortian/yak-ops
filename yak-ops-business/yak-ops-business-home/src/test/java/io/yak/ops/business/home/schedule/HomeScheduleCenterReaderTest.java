@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.schedule;
 
 import static io.yak.ops.common.schedule.YakScheduleNamespaces.DATA_QUALITY;
 import static io.yak.ops.common.schedule.YakScheduleNamespaces.OFFLINE_SYNC;
@@ -23,7 +23,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
-class HomeScheduleCenterServiceTest {
+class HomeScheduleCenterReaderTest {
 
   @Test
   void shouldBuildCalendarFromUnifiedScheduleSnapshots() {
@@ -39,15 +39,15 @@ class HomeScheduleCenterServiceTest {
     when(manager.list(DATA_QUALITY)).thenReturn(List.of(snapshot(
         DATA_QUALITY, "21", "订单完整性检查", "0 0 11 * * ?", ScheduleStatus.ENABLED, Map.of())));
 
-    HomeScheduleCenterService service = new HomeScheduleCenterService(provider);
-    HomeScheduleCenterService.CalendarResponse response = service.calendar("2026-08");
+    HomeScheduleCenterReader reader = new HomeScheduleCenterReader(provider);
+    HomeScheduleCenterReader.CalendarResponse response = reader.calendar("2026-08");
 
     assertThat(response.totalSchedules()).isEqualTo(3);
     assertThat(response.days()).isNotEmpty();
     assertThat(response.overview()).hasSize(3);
-    assertThat(response.overview()).extracting(HomeScheduleCenterService.ScheduleSummary::taskType)
+    assertThat(response.overview()).extracting(HomeScheduleCenterReader.ScheduleSummary::taskType)
         .containsExactlyInAnyOrder("OFFLINE_SYNC", "WORKFLOW", "DATA_QUALITY");
-    assertThat(response.overview()).extracting(HomeScheduleCenterService.ScheduleSummary::scheduleText)
+    assertThat(response.overview()).extracting(HomeScheduleCenterReader.ScheduleSummary::scheduleText)
         .contains("0 0 9 * * ?", "0 30 10 * * ?", "0 0 11 * * ?");
     verify(manager).list(OFFLINE_SYNC);
     verify(manager).list(WORKFLOW);
@@ -65,8 +65,8 @@ class HomeScheduleCenterServiceTest {
     when(manager.list(WORKFLOW)).thenReturn(List.of());
     when(manager.list(DATA_QUALITY)).thenReturn(List.of());
 
-    HomeScheduleCenterService.CalendarResponse response =
-        new HomeScheduleCenterService(provider).calendar("2026-08");
+    HomeScheduleCenterReader.CalendarResponse response =
+        new HomeScheduleCenterReader(provider).calendar("2026-08");
 
     assertThat(response.totalSchedules()).isZero();
     assertThat(response.days()).isEmpty();

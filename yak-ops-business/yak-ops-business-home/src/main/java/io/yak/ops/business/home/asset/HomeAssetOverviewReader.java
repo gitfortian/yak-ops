@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.asset;
 
 import io.yak.ops.business.dataset.Dataset;
 import io.yak.ops.business.dataset.DatasetOverviewSnapshot;
@@ -16,13 +16,13 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /** 首页数据资产与血缘只读聚合。 */
-@Service
-public class HomeAssetOverviewService {
+@Component
+public class HomeAssetOverviewReader {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(HomeAssetOverviewService.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(HomeAssetOverviewReader.class);
   private static final int DATASET_LIST_LIMIT = 5;
   private static final int LINEAGE_RELATION_LIMIT = 6;
   private static final int LINEAGE_ACTIVITY_LIMIT = 3;
@@ -30,7 +30,7 @@ public class HomeAssetOverviewService {
   private final ObjectProvider<DatasetService> datasetServiceProvider;
   private final ObjectProvider<LineageQueryService> lineageQueryServiceProvider;
 
-  public HomeAssetOverviewService(
+  public HomeAssetOverviewReader(
       ObjectProvider<DatasetService> datasetServiceProvider,
       ObjectProvider<LineageQueryService> lineageQueryServiceProvider) {
     this.datasetServiceProvider = datasetServiceProvider;

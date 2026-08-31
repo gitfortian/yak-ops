@@ -33,5 +33,6 @@
         <module>yak-ops-business-quality</module>
         <module>yak-ops-business-workflow</module>
         <module>yak-ops-business-alert</module>
+        <module>yak-ops-business-home</module>
     </modules>
 </project>

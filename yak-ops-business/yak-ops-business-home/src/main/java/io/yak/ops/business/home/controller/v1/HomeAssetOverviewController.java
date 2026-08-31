@@ -1,7 +1,8 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.controller.v1;
 
 import io.yak.framework.common.Result;
-import io.yak.ops.boot.home.HomeAssetOverviewService.OverviewResponse;
+import io.yak.ops.business.home.asset.HomeAssetOverviewReader;
+import io.yak.ops.business.home.asset.HomeAssetOverviewReader.OverviewResponse;
 import io.yak.ops.core.project.ProjectScope;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,14 +14,14 @@ import org.springframework.web.bind.annotation.RestController;
 @ProjectScope
 public class HomeAssetOverviewController {
 
-  private final HomeAssetOverviewService service;
+  private final HomeAssetOverviewReader reader;
 
-  public HomeAssetOverviewController(HomeAssetOverviewService service) {
-    this.service = service;
+  public HomeAssetOverviewController(HomeAssetOverviewReader reader) {
+    this.reader = reader;
   }
 
   @GetMapping("/overview")
   public Result<OverviewResponse> overview() {
-    return Result.success(service.overview());
+    return Result.success(reader.overview());
   }
 }

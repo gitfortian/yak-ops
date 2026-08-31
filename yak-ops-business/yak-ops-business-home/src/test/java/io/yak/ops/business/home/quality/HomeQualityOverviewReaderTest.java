@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.quality;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -11,18 +11,18 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
-class HomeQualityOverviewServiceTest {
+class HomeQualityOverviewReaderTest {
 
   @Test
   void shouldExposeRealQualityOverviewValues() {
-    QualityOverviewReader reader = mock(QualityOverviewReader.class);
+    QualityOverviewReader qualityReader = mock(QualityOverviewReader.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<QualityOverviewReader> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(reader);
+    when(provider.getIfAvailable()).thenReturn(qualityReader);
 
     LocalDate today = LocalDate.now();
     LocalDateTime issueTime = today.atTime(10, 30);
-    when(reader.overview())
+    when(qualityReader.overview())
         .thenReturn(new QualityOverviewReader.Overview(
             today.minusDays(6),
             today,
@@ -46,8 +46,8 @@ class HomeQualityOverviewServiceTest {
                 "NOT_PASSED",
                 issueTime))));
 
-    HomeQualityOverviewService.OverviewResponse response =
-        new HomeQualityOverviewService(provider).overview();
+    HomeQualityOverviewReader.OverviewResponse response =
+        new HomeQualityOverviewReader(provider).overview();
 
     assertThat(response.passRate()).isEqualTo(97.5D);
     assertThat(response.monitoredTableCount()).isEqualTo(8L);
@@ -74,8 +74,8 @@ class HomeQualityOverviewServiceTest {
     ObjectProvider<QualityOverviewReader> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(null);
 
-    HomeQualityOverviewService.OverviewResponse response =
-        new HomeQualityOverviewService(provider).overview();
+    HomeQualityOverviewReader.OverviewResponse response =
+        new HomeQualityOverviewReader(provider).overview();
 
     assertThat(response.passRate()).isNull();
     assertThat(response.monitoredTableCount()).isNull();
@@ -89,14 +89,14 @@ class HomeQualityOverviewServiceTest {
 
   @Test
   void shouldKeepHomepageAvailableWhenQualityQueryFails() {
-    QualityOverviewReader reader = mock(QualityOverviewReader.class);
+    QualityOverviewReader qualityReader = mock(QualityOverviewReader.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<QualityOverviewReader> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(reader);
-    when(reader.overview()).thenThrow(new IllegalStateException("quality unavailable"));
+    when(provider.getIfAvailable()).thenReturn(qualityReader);
+    when(qualityReader.overview()).thenThrow(new IllegalStateException("quality unavailable"));
 
-    HomeQualityOverviewService.OverviewResponse response =
-        new HomeQualityOverviewService(provider).overview();
+    HomeQualityOverviewReader.OverviewResponse response =
+        new HomeQualityOverviewReader(provider).overview();
 
     assertThat(response.passRate()).isNull();
     assertThat(response.monitoredTableCount()).isNull();

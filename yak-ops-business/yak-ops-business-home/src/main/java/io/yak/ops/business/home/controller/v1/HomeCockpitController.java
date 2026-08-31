@@ -1,7 +1,8 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.controller.v1;
 
 import io.yak.framework.common.Result;
-import io.yak.ops.boot.home.HomeCockpitService.CockpitResponse;
+import io.yak.ops.business.home.cockpit.HomeCockpitReader;
+import io.yak.ops.business.home.cockpit.HomeCockpitReader.CockpitResponse;
 import io.yak.ops.core.project.ProjectScope;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,14 +14,14 @@ import org.springframework.web.bind.annotation.RestController;
 @ProjectScope
 public class HomeCockpitController {
 
-  private final HomeCockpitService service;
+  private final HomeCockpitReader reader;
 
-  public HomeCockpitController(HomeCockpitService service) {
-    this.service = service;
+  public HomeCockpitController(HomeCockpitReader reader) {
+    this.reader = reader;
   }
 
   @GetMapping
   public Result<CockpitResponse> cockpit() {
-    return Result.success(service.cockpit());
+    return Result.success(reader.cockpit());
   }
 }

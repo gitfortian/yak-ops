@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.asset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,7 +25,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
-class HomeAssetOverviewServiceTest {
+class HomeAssetOverviewReaderTest {
 
   @Test
   void shouldAggregateDatasetAndLineageOverviewFromBoundedReadServices() {
@@ -77,18 +77,18 @@ class HomeAssetOverviewServiceTest {
                 List.of(source, target),
                 List.of(relation)));
 
-    HomeAssetOverviewService.OverviewResponse response =
-        new HomeAssetOverviewService(datasetProvider, lineageProvider).overview();
+    HomeAssetOverviewReader.OverviewResponse response =
+        new HomeAssetOverviewReader(datasetProvider, lineageProvider).overview();
 
     assertThat(response.dataset().datasetCount()).isEqualTo(2L);
     assertThat(response.dataset().tableAssetCount()).isEqualTo(8L);
     assertThat(response.dataset().columnAssetCount()).isEqualTo(20L);
     assertThat(response.dataset().todayCreatedCount()).isEqualTo(1L);
     assertThat(response.dataset().recentDatasets())
-        .extracting(HomeAssetOverviewService.DatasetItem::name)
+        .extracting(HomeAssetOverviewReader.DatasetItem::name)
         .containsExactly("订单分析数据集", "客户画像数据集");
     assertThat(response.dataset().onlineDatasets())
-        .extracting(HomeAssetOverviewService.DatasetItem::name)
+        .extracting(HomeAssetOverviewReader.DatasetItem::name)
         .containsExactly("订单分析数据集");
 
     assertThat(response.lineage().assetCount()).isEqualTo(42L);
@@ -96,7 +96,7 @@ class HomeAssetOverviewServiceTest {
     assertThat(response.lineage().todayUpdatedCount()).isEqualTo(5L);
     assertThat(response.lineage().datasetAssetCount()).isEqualTo(3L);
     assertThat(response.lineage().nodes())
-        .extracting(HomeAssetOverviewService.LineageNode::name)
+        .extracting(HomeAssetOverviewReader.LineageNode::name)
         .containsExactly("ods_order", "dwd_order_detail");
     assertThat(response.lineage().edges()).hasSize(1);
     assertThat(response.lineage().recentActivities())
@@ -119,8 +119,8 @@ class HomeAssetOverviewServiceTest {
     when(datasetProvider.getIfAvailable()).thenReturn(null);
     when(lineageProvider.getIfAvailable()).thenReturn(null);
 
-    HomeAssetOverviewService.OverviewResponse response =
-        new HomeAssetOverviewService(datasetProvider, lineageProvider).overview();
+    HomeAssetOverviewReader.OverviewResponse response =
+        new HomeAssetOverviewReader(datasetProvider, lineageProvider).overview();
 
     assertThat(response.dataset().datasetCount()).isNull();
     assertThat(response.dataset().tableAssetCount()).isNull();
@@ -154,8 +154,8 @@ class HomeAssetOverviewServiceTest {
             new LineageQueryService.Overview(
                 1L, 0L, 0L, 1L, 0L, 0L, List.of(), List.of()));
 
-    HomeAssetOverviewService.OverviewResponse response =
-        new HomeAssetOverviewService(datasetProvider, lineageProvider).overview();
+    HomeAssetOverviewReader.OverviewResponse response =
+        new HomeAssetOverviewReader(datasetProvider, lineageProvider).overview();
 
     assertThat(response.dataset().datasetCount()).isNull();
     assertThat(response.dataset().tableAssetCount()).isEqualTo(1L);

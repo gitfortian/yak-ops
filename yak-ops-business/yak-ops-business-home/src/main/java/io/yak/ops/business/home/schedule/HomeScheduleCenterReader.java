@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.schedule;
 
 import io.yak.framework.schedule.api.ScheduleDefinition;
 import io.yak.framework.schedule.api.ScheduleManager;
@@ -25,11 +25,11 @@ import java.util.Map;
 import java.util.TimeZone;
 import org.quartz.CronExpression;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** 首页调度中心：只读取 Yak Schedule 统一运行时快照，不再重复解释各业务调度配置。 */
-@Service
-public class HomeScheduleCenterService {
+/** 首页调度中心只读投影：只读取 Yak Schedule 统一运行时快照。 */
+@Component
+public class HomeScheduleCenterReader {
 
   private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
   private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
@@ -39,7 +39,7 @@ public class HomeScheduleCenterService {
   private final YakScheduleGateway workflowSchedules;
   private final YakScheduleGateway qualitySchedules;
 
-  public HomeScheduleCenterService(ObjectProvider<ScheduleManager> scheduleManagers) {
+  public HomeScheduleCenterReader(ObjectProvider<ScheduleManager> scheduleManagers) {
     this.offlineSchedules = new YakScheduleGateway(
         scheduleManagers::getIfAvailable, YakScheduleNamespaces.OFFLINE_SYNC);
     this.workflowSchedules = new YakScheduleGateway(
@@ -175,7 +175,7 @@ public class HomeScheduleCenterService {
       Instant upperBound) {
     CronExpression cron;
     try {
-      // Cron 已在业务 Bridge -> ScheduleDefinition 阶段归一化，首页不再兼容或改写任何 Cron 方言。
+      // Cron 已在业务 Bridge -> ScheduleDefinition 阶段归一化，首页只投影统一表达式。
       cron = new CronExpression(task.trigger().expression());
       cron.setTimeZone(TimeZone.getTimeZone(task.zoneId()));
     } catch (Exception ignored) {
