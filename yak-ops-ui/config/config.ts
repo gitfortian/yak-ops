@@ -29,6 +29,12 @@ export default defineConfig({
   hash: true,
 
   publicPath: PUBLIC_PATH,
+  links: [
+    {
+      href: `${PUBLIC_PATH}fonts/harmonyos-sans-sc/font-face.css`,
+      rel: "stylesheet",
+    },
+  ],
 
   /**
    * @name 兼容性设置
