@@ -14,7 +14,7 @@ let mockProjects: Array<{ id: number; projectName: string }> = [
 let mockCurrentProject: { id: number; projectName: string } | undefined =
   mockProjects[0];
 
-const push = jest.fn();
+const mockHistoryPush = jest.fn();
 
 jest.mock('@/contexts/SecurityProjectContext', () => ({
   useSecurityProject: () => ({
@@ -33,7 +33,7 @@ jest.mock('@/services/security/messages', () => ({
 }));
 
 jest.mock('@umijs/max', () => ({
-  history: { push },
+  history: { push: mockHistoryPush },
 }));
 
 describe('home NotificationCenter', () => {
@@ -44,7 +44,7 @@ describe('home NotificationCenter', () => {
   beforeEach(() => {
     mockProjects = [{ id: 7, projectName: 'Project A' }];
     mockCurrentProject = mockProjects[0];
-    push.mockReset();
+    mockHistoryPush.mockReset();
     mockPageMessages.mockReset();
     mockMarkMessageRead.mockReset();
     mockNotifyMessageCountChanged.mockReset();
@@ -76,14 +76,14 @@ describe('home NotificationCenter', () => {
       }),
     );
 
-    expect(await screen.findByText('离线同步失败')).toBeInTheDocument();
-    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(await screen.findByText('离线同步失败')).toBeTruthy();
+    expect(screen.getByText('4')).toBeTruthy();
 
     fireEvent.click(screen.getByText('离线同步失败'));
 
     await waitFor(() => expect(mockMarkMessageRead).toHaveBeenCalledWith(11));
     expect(mockNotifyMessageCountChanged).toHaveBeenCalledTimes(1);
-    expect(push).toHaveBeenCalledWith('/batch-link-up');
+    expect(mockHistoryPush).toHaveBeenCalledWith('/batch-link-up');
   });
 
   it('uses the hardened backend system-only inbox when the user has no workspace', async () => {
