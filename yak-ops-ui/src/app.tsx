@@ -82,15 +82,16 @@ export async function getInitialState(): Promise<{
   const fetchUserInfo = async () => toCurrentUser(await getCurrentUser());
   const onLoginPage = isLoginPath(window.location.pathname);
 
-  // Probe cookie-backed authentication state on every route. The login page uses
-  // a silent probe so an expired session or an unavailable backend does not show
-  // an unrelated current-user notification before the user submits the form.
+  // Application bootstrap only probes cookie-backed authentication state. An
+  // anonymous first visit is expected, so keep this probe silent on every route
+  // and redirect to login without showing a misleading session-expired notice.
+  // Post-login refreshes still use fetchUserInfo and normal error handling.
   let currentUser: API.CurrentUser | undefined;
   let currentUserLoadError = false;
   try {
-    currentUser = onLoginPage
-      ? toCurrentUser(await getCurrentUser({ skipErrorHandler: true }))
-      : await fetchUserInfo();
+    currentUser = toCurrentUser(
+      await getCurrentUser({ skipErrorHandler: true }),
+    );
   } catch (error) {
     currentUserLoadError = true;
 
