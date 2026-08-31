@@ -8,6 +8,7 @@ import { useEffect } from "react";
 
 import defaultSettings from "../config/defaultSettings";
 import { GlobalSearch, Knowledge } from "./components/RightContent";
+import SidebarMenuLink from "./components/SidebarMenuLink";
 import { getCurrentUser } from "./services/security/account";
 import { toCurrentUser } from "./services/security/currentIdentity";
 import { AUTHENTICATION_INVALIDATED_EVENT } from "./utils/security/authentication";
