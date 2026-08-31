@@ -35,21 +35,24 @@ public class YakSecurityBusinessNotificationGateway implements BusinessNotificat
   @Override
   public void publishToProjectOwners(BusinessNotification notification) {
     Objects.requireNonNull(notification, "notification");
-    Runnable delivery = () -> publishNow(notification);
-
-    if (TransactionSynchronizationManager.isSynchronizationActive()
-        && TransactionSynchronizationManager.isActualTransactionActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              delivery.run();
-            }
-          });
-      return;
+    try {
+      Runnable delivery = () -> publishNow(notification);
+      if (TransactionSynchronizationManager.isSynchronizationActive()
+          && TransactionSynchronizationManager.isActualTransactionActive()) {
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+              @Override
+              public void afterCommit() {
+                delivery.run();
+              }
+            });
+        return;
+      }
+      delivery.run();
+    } catch (RuntimeException exception) {
+      // Even transaction-synchronization failures are secondary notification failures.
+      logFailure(notification, exception);
     }
-
-    delivery.run();
   }
 
   private void publishNow(BusinessNotification notification) {
@@ -64,10 +67,12 @@ public class YakSecurityBusinessNotificationGateway implements BusinessNotificat
         return;
       }
 
-      List<Long> ownerIds =
-          userProjectService
-              .getUserIdListByProjectId(notification.projectId(), ProjectUserCode.OWNER)
-              .stream()
+      List<Long> resolvedOwnerIds =
+          userProjectService.getUserIdListByProjectId(
+              notification.projectId(), ProjectUserCode.OWNER);
+      List<Long> ownerIds = resolvedOwnerIds == null
+          ? List.of()
+          : resolvedOwnerIds.stream()
               .filter(Objects::nonNull)
               .filter(userId -> userId > 0L)
               .distinct()
@@ -86,13 +91,19 @@ public class YakSecurityBusinessNotificationGateway implements BusinessNotificat
     } catch (RuntimeException exception) {
       // Notification delivery is deliberately best-effort. It must never turn a successful
       // business state transition into a failed sync/workflow/quality execution.
-      LOGGER.error(
-          "Business notification delivery failed: projectId={}, sourceType={}, sourceId={}",
-          notification.projectId(),
-          notification.sourceType(),
-          notification.sourceId(),
-          exception);
+      logFailure(notification, exception);
     }
+  }
+
+  private void logFailure(
+      BusinessNotification notification,
+      RuntimeException exception) {
+    LOGGER.error(
+        "Business notification delivery failed: projectId={}, sourceType={}, sourceId={}",
+        notification.projectId(),
+        notification.sourceType(),
+        notification.sourceId(),
+        exception);
   }
 
   private MessageDTO toMessage(BusinessNotification notification, Long userId) {
