@@ -15,7 +15,10 @@ const protocolRules: Record<
 > = {
   'yak-ops': {
     success: [API_SUCCESS_CODE],
-    unauthenticated: [401],
+    // Yak Security protects application endpoints too, so /api/v1/** may return
+    // the framework USER_NOT_LOGIN business code even though the URL is not under
+    // /yak-security/**.
+    unauthenticated: [401, 2001],
   },
   security: {
     success: [API_SUCCESS_CODE],
