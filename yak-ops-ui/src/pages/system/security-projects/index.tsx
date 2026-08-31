@@ -1,31 +1,21 @@
-import {
-  ApartmentOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
 import { useModel } from '@umijs/max';
 import {
   Alert,
-  Button,
   Descriptions,
   Drawer,
-  Form,
-  Input,
   Modal,
-  Select,
   Space,
   Switch,
   Tag,
-  TreeSelect,
   Typography,
   message,
   type TableColumnsType,
 } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import YakButton from '@/components/YakButton';
 import {
   AssignmentDrawer,
+  SecurityPagination,
   SecurityQueryTable,
 } from '@/components/security';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
@@ -57,6 +47,11 @@ import {
   formatSystemDateTime,
   getSystemErrorMessage,
 } from '../utils';
+import WorkspaceEditorDrawer from './components/WorkspaceEditorDrawer';
+import WorkspaceFilterBar, {
+  type WorkspaceFilters,
+} from './components/WorkspaceFilterBar';
+import WorkspaceRowActions from './components/WorkspaceRowActions';
 import {
   buildWorkspaceCreateInput,
   filterWorkspaceAssignmentCandidates,
@@ -67,13 +62,6 @@ import {
 
 const ROOT_PERMISSION = 'security:root';
 const DEFAULT_PAGE_SIZE = 10;
-
-interface WorkspaceFilters {
-  projectCode?: string;
-  projectName?: string;
-  ownerName?: string;
-  status?: SecurityProjectStatus;
-}
 
 interface AssignmentState {
   project: SecurityProjectSummary;
@@ -96,8 +84,6 @@ export default function SecurityProjectsPage() {
   const canManage = hasPermission(permissionCodes, ROOT_PERMISSION);
   const currentUserId = Number(initialState?.currentUser?.id ?? 0);
 
-  const [filterForm] = Form.useForm<WorkspaceFilters>();
-  const [editorForm] = Form.useForm<SecurityProjectInput>();
   const [filters, setFilters] = useState<WorkspaceFilters>({});
   const [rows, setRows] = useState<SecurityProjectSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -173,7 +159,6 @@ export default function SecurityProjectsPage() {
     if (saving) return;
     setEditorOpen(false);
     setEditing(undefined);
-    editorForm.resetFields();
   };
 
   const openEditor = async (project?: SecurityProjectSummary) => {
@@ -181,12 +166,6 @@ export default function SecurityProjectsPage() {
 
     setEditing(project);
     setEditorOpen(true);
-    editorForm.resetFields();
-    editorForm.setFieldsValue({
-      projectName: project?.projectName ?? '',
-      description: project?.description ?? '',
-      deptId: project?.deptId ?? undefined,
-    });
     await loadDepartments();
   };
 
@@ -211,7 +190,8 @@ export default function SecurityProjectsPage() {
         message.success('工作空间已创建，你已成为负责人');
       }
 
-      closeEditor();
+      setEditorOpen(false);
+      setEditing(undefined);
       await refreshProjects();
       await loadProjects();
     } catch (error) {
@@ -466,45 +446,28 @@ export default function SecurityProjectsPage() {
         title: '创建时间',
         dataIndex: 'createTime',
         width: 168,
-        render: (value) => formatSystemDateTime(value as string | undefined),
+        render: (value) =>
+          formatSystemDateTime(value as string | undefined),
       },
       {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: canManage ? 300 : 80,
+        width: canManage ? 190 : 88,
         render: (_, row) => (
-          <Space size={4} wrap>
-            <Button type="link" onClick={() => void showDetail(row)}>
-              详情
-            </Button>
-            {canManage ? (
-              <>
-                <Button type="link" onClick={() => void openEditor(row)}>
-                  编辑
-                </Button>
-                <Button
-                  type="link"
-                  onClick={() => void openAssignment(row, 'owner')}
-                >
-                  负责人
-                </Button>
-                <Button
-                  type="link"
-                  onClick={() => void openAssignment(row, 'member')}
-                >
-                  成员
-                </Button>
-                <Button
-                  danger
-                  type="link"
-                  onClick={() => void removeWorkspace(row)}
-                >
-                  删除
-                </Button>
-              </>
-            ) : null}
-          </Space>
+          <WorkspaceRowActions
+            project={row}
+            canManage={canManage}
+            onDetail={(project) => void showDetail(project)}
+            onEdit={(project) => void openEditor(project)}
+            onAssignOwner={(project) =>
+              void openAssignment(project, 'owner')
+            }
+            onAssignMembers={(project) =>
+              void openAssignment(project, 'member')
+            }
+            onDelete={(project) => void removeWorkspace(project)}
+          />
         ),
       },
     ],
@@ -515,214 +478,60 @@ export default function SecurityProjectsPage() {
     <SystemManagementPage
       title="工作空间"
       titleId="system-workspaces-title"
-      icon={<ApartmentOutlined className="text-slate-500" />}
-      className="min-h-full"
+      className="min-h-[calc(100vh-64px)] overflow-hidden"
     >
-      <Alert
-        showIcon
-        type="info"
-        className="mb-4"
-        message="工作空间是 Yak Ops 的业务数据隔离边界"
-        description="角色与功能权限决定用户能做什么；工作空间成员关系决定用户能进入哪里；数据源等业务数据通过 project_id 归属当前工作空间。Stage 1 暂不启用资源级授权。"
-      />
+      <div className="shrink-0">
+        <WorkspaceFilterBar
+          total={total}
+          loading={loading}
+          canManage={canManage}
+          onSearch={(nextFilters) => {
+            setPageNum(1);
+            setFilters(nextFilters);
+          }}
+          onRefresh={() => void loadProjects()}
+          onCreate={() => void openEditor()}
+        />
 
-      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <Form<WorkspaceFilters>
-            form={filterForm}
-            layout="inline"
-            onFinish={(values) => {
-              setPageNum(1);
-              setFilters(values);
-            }}
-          >
-            <Form.Item name="projectName" label="名称">
-              <Input allowClear placeholder="工作空间名称" />
-            </Form.Item>
-            <Form.Item name="projectCode" label="编码">
-              <Input allowClear placeholder="工作空间编码" />
-            </Form.Item>
-            <Form.Item name="ownerName" label="负责人">
-              <Input allowClear placeholder="用户名或姓名" />
-            </Form.Item>
-            <Form.Item name="status" label="状态">
-              <Select
-                allowClear
-                className="w-28"
-                placeholder="全部"
-                options={[
-                  { label: '启用', value: 'ENABLED' },
-                  { label: '停用', value: 'DISABLED' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item>
-              <Space>
-                <YakButton type="primary" htmlType="submit">
-                  查询
-                </YakButton>
-                <YakButton
-                  onClick={() => {
-                    filterForm.resetFields();
-                    setPageNum(1);
-                    setFilters({});
-                  }}
-                >
-                  重置
-                </YakButton>
-              </Space>
-            </Form.Item>
-          </Form>
-
-          <Space>
-            <YakButton
-              icon={<ReloadOutlined />}
-              loading={loading}
-              onClick={() => void loadProjects()}
-            >
-              刷新
-            </YakButton>
-            {canManage ? (
-              <YakButton
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => void openEditor()}
-              >
-                新增工作空间
-              </YakButton>
-            ) : null}
-          </Space>
-        </div>
+        <SecurityQueryTable<SecurityProjectSummary>
+          rowKey="id"
+          dataSource={rows}
+          columns={columns}
+          loading={loading}
+          pagination={false}
+          bordered
+          scroll={{ x: 'max-content' }}
+        />
       </div>
 
-      <SecurityQueryTable<SecurityProjectSummary>
-        dataSource={rows}
-        columns={columns}
-        loading={loading}
-        scroll={{ x: 1280 }}
-        pagination={{
-          current: pageNum,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          showTotal: (value) => `共 ${value} 个工作空间`,
-          onChange: (nextPage, nextPageSize) => {
-            setPageNum(nextPageSize === pageSize ? nextPage : 1);
-            setPageSize(nextPageSize);
-          },
+      <div className="min-h-6 flex-1" />
+
+      <SecurityPagination
+        current={pageNum}
+        pageSize={pageSize}
+        total={total}
+        disabled={loading}
+        onChange={(nextPage, nextPageSize) => {
+          setPageNum(nextPageSize === pageSize ? nextPage : 1);
+          setPageSize(nextPageSize);
         }}
       />
 
-      <Drawer
+      <WorkspaceEditorDrawer
         open={editorOpen}
-        title={editing ? '编辑工作空间' : '新增工作空间'}
-        width={520}
-        forceRender
-        maskClosable={!saving}
-        keyboard={!saving}
-        closable={!saving}
+        editing={editing}
+        saving={saving}
+        departmentLoading={departmentLoading}
+        departmentTreeData={departmentTreeData}
         onClose={closeEditor}
-        extra={
-          <Space>
-            <YakButton disabled={saving} onClick={closeEditor}>
-              取消
-            </YakButton>
-            <YakButton
-              type="primary"
-              loading={saving}
-              onClick={() => editorForm.submit()}
-            >
-              {editing ? '更新' : '创建'}
-            </YakButton>
-          </Space>
-        }
-      >
-        <Alert
-          showIcon
-          type="info"
-          className="mb-5"
-          message={
-            editing
-              ? '修改名称或所属部门不会改变已有负责人和成员关系。'
-              : '创建后当前用户会自动成为负责人，工作空间会立即出现在 Header 切换列表中。'
-          }
-        />
-
-        {departmentTreeData.length === 0 && !departmentLoading ? (
-          <Alert
-            showIcon
-            type="warning"
-            className="mb-4"
-            message="暂无可用部门"
-            description="工作空间必须归属真实部门，请先在“系统管理 > 部门管理”创建部门。"
-          />
-        ) : null}
-
-        <Form<SecurityProjectInput>
-          form={editorForm}
-          layout="vertical"
-          preserve={false}
-          disabled={saving}
-          onFinish={(values) => void saveWorkspace(values)}
-        >
-          {editing ? (
-            <Form.Item label="工作空间编码">
-              <Input disabled value={editing.projectCode || '-'} />
-            </Form.Item>
-          ) : null}
-
-          <Form.Item
-            name="projectName"
-            label="工作空间名称"
-            rules={[
-              {
-                required: true,
-                whitespace: true,
-                message: '请输入工作空间名称',
-              },
-            ]}
-          >
-            <Input
-              maxLength={128}
-              showCount
-              placeholder="例如：成都一院"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="deptId"
-            label="所属部门"
-            rules={[{ required: true, message: '请选择所属部门' }]}
-          >
-            <TreeSelect
-              treeData={departmentTreeData}
-              treeDefaultExpandAll
-              showSearch
-              allowClear={false}
-              loading={departmentLoading}
-              placeholder="请选择所属部门"
-              filterTreeNode={(input, node) =>
-                String(node.title ?? '')
-                  .toLocaleLowerCase()
-                  .includes(input.trim().toLocaleLowerCase())
-              }
-            />
-          </Form.Item>
-
-          <Form.Item name="description" label="工作空间描述">
-            <Input.TextArea
-              maxLength={500}
-              showCount
-              autoSize={{ minRows: 4, maxRows: 8 }}
-              placeholder="说明这个工作空间对应的医院、团队或业务范围"
-            />
-          </Form.Item>
-        </Form>
-      </Drawer>
+        onSave={(values) => void saveWorkspace(values)}
+      />
 
       <AssignmentDrawer
         open={Boolean(assigning)}
-        title={assigning?.mode === 'owner' ? '分配负责人' : '分配普通成员'}
+        title={
+          assigning?.mode === 'owner' ? '分配负责人' : '分配普通成员'
+        }
         mode={assigning?.mode === 'owner' ? 'single' : 'multiple'}
         options={candidates.map((user) => ({
           id: user.id,
@@ -779,7 +588,11 @@ export default function SecurityProjectsPage() {
                   key: 'status',
                   label: '状态',
                   children: (
-                    <Tag color={detail.status === 'ENABLED' ? 'success' : 'default'}>
+                    <Tag
+                      color={
+                        detail.status === 'ENABLED' ? 'success' : 'default'
+                      }
+                    >
                       {detail.status === 'ENABLED' ? '启用' : '停用'}
                     </Tag>
                   ),
@@ -800,7 +613,9 @@ export default function SecurityProjectsPage() {
                     <Tag key={owner.id}>{userDisplayName(owner)}</Tag>
                   ))
                 ) : (
-                  <Typography.Text type="secondary">暂未分配负责人</Typography.Text>
+                  <Typography.Text type="secondary">
+                    暂未分配负责人
+                  </Typography.Text>
                 )}
               </Space>
             </div>
@@ -813,7 +628,9 @@ export default function SecurityProjectsPage() {
                     <Tag key={member.id}>{userDisplayName(member)}</Tag>
                   ))
                 ) : (
-                  <Typography.Text type="secondary">暂无普通成员</Typography.Text>
+                  <Typography.Text type="secondary">
+                    暂无普通成员
+                  </Typography.Text>
                 )}
               </Space>
             </div>
