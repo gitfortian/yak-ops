@@ -2,6 +2,7 @@
 -- Dashboard owns composition/version lifecycle in application code; cross-table references stay logical.
 CREATE TABLE IF NOT EXISTS yak_dashboard (
     id BIGINT NOT NULL AUTO_INCREMENT,
+    project_id BIGINT NOT NULL COMMENT 'Yak Security Project ID',
     name VARCHAR(200) NOT NULL,
     description VARCHAR(2000) NULL,
     current_version_id BIGINT NULL,
@@ -14,7 +15,8 @@ CREATE TABLE IF NOT EXISTS yak_dashboard (
     PRIMARY KEY (id),
     KEY idx_yak_dashboard_update (update_time),
     KEY idx_yak_dashboard_current_version (current_version_id),
-    KEY idx_yak_dashboard_published_version (published_version_id)
+    KEY idx_yak_dashboard_published_version (published_version_id),
+    KEY idx_yak_dashboard_project_update (project_id, update_time, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS yak_dashboard_version (
