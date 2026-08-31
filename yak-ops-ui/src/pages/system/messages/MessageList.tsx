@@ -19,6 +19,8 @@ import { Alert, Button, Drawer, message, Space, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useMemo, useRef, useState } from 'react';
 
+export { MESSAGE_COUNT_CHANGED_EVENT } from '@/services/security/messages';
+
 const MESSAGE_TYPE_LABELS: Record<string, string> = {
   SYSTEM: '系统',
   SECURITY: '安全',
