@@ -2,7 +2,7 @@ import { AvatarDropdown, AvatarName, Footer } from "@/components";
 import type { Settings as LayoutSettings } from "@ant-design/pro-components";
 import { SettingDrawer } from "@ant-design/pro-components";
 import "@ant-design/v5-patch-for-react-19";
-import type { RunTimeLayoutConfig } from "@umijs/max";
+import type { RequestConfig, RunTimeLayoutConfig } from "@umijs/max";
 import { getLocale, history, useModel } from "@umijs/max";
 import { useEffect } from "react";
 
@@ -12,6 +12,7 @@ import SidebarMenuLink from "./components/SidebarMenuLink";
 import { getCurrentUser } from "./services/security/account";
 import { toCurrentUser } from "./services/security/currentIdentity";
 import { AUTHENTICATION_INVALIDATED_EVENT } from "./utils/security/authentication";
+import { applyCurrentProjectHeader } from "./utils/security/projectContext";
 import {
   getCurrentReturnTo,
   getSafeReturnTo,
@@ -27,6 +28,25 @@ const syncDocumentLocale = () => {
 
   document.documentElement.dataset.yakLocale = locale;
   document.documentElement.lang = locale;
+};
+
+/**
+ * Keep @umijs/max requests on the same Project Space contract as the shared
+ * umi-request client in utils/request.tsx. Some feature services (including
+ * Workflow) still use the Max request client, so without this interceptor a
+ * selected workspace would be visible in the header but absent from the HTTP
+ * request sent to PROJECT_REQUIRED endpoints.
+ */
+export const request: RequestConfig = {
+  requestInterceptors: [
+    (config) => ({
+      ...config,
+      headers: applyCurrentProjectHeader(
+        config?.url ?? "",
+        config?.headers as HeadersInit | undefined,
+      ) as typeof config.headers,
+    }),
+  ],
 };
 
 const redirectAnonymousUser = () => {
