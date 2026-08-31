@@ -1,12 +1,7 @@
 import YakOpsEmpty from '@/components/YakOpsEmpty';
 import type { HomeLatestTask } from '@/services/home';
 import { history } from '@umijs/max';
-import {
-  ArrowRightLeft,
-  Clock3,
-  ShieldCheck,
-  Workflow,
-} from 'lucide-react';
+import { ChevronRight, Layers2 } from 'lucide-react';
 
 import {
   formatDuration,
@@ -20,90 +15,49 @@ interface LatestTaskCardProps {
   failed: boolean;
 }
 
-interface TaskTheme {
-  cover: string;
-  iconBox: string;
-  icon: string;
-  tag: string;
+interface TaskMetricRowProps {
+  label: string;
+  value: React.ReactNode;
+  danger?: boolean;
 }
 
-const TASK_THEMES: Record<HomeLatestTask['taskType'], TaskTheme> = {
-  OFFLINE_SYNC: {
-    cover:
-      'bg-[linear-gradient(145deg,#f1f3ff_0%,#e9edff_48%,#dfe5ff_100%)]',
-    iconBox: 'bg-white/80',
-    icon: 'text-[#6675f5]',
-    tag: 'bg-[#6675f5] text-white',
-  },
-
-  WORKFLOW: {
-    cover:
-      'bg-[linear-gradient(145deg,#fff8e6_0%,#fff1c7_48%,#ffe7a3_100%)]',
-    iconBox: 'bg-white/80',
-    icon: 'text-[#d99b00]',
-    tag: 'bg-[#e9aa10] text-white',
-  },
-
-  DATA_QUALITY: {
-    cover:
-      'bg-[linear-gradient(145deg,#eefaf4_0%,#e1f6eb_48%,#d2efdf_100%)]',
-    iconBox: 'bg-white/80',
-    icon: 'text-[#249a67]',
-    tag: 'bg-[#2ba36e] text-white',
-  },
-};
-
-function TaskTypeIcon({
-  taskType,
-  size = 32,
-}: {
-  taskType: HomeLatestTask['taskType'];
-  size?: number;
-}) {
-  if (taskType === 'OFFLINE_SYNC') {
-    return <ArrowRightLeft size={size} strokeWidth={1.65} />;
-  }
-
-  if (taskType === 'WORKFLOW') {
-    return <Workflow size={size} strokeWidth={1.65} />;
-  }
-
-  return <ShieldCheck size={size} strokeWidth={1.65} />;
-}
-
-function StatusDot({ status }: { status?: string }) {
-  const label = statusLabel(status);
-
-  let dotClassName = 'bg-[#9ca3af]';
-
-  if (label === '成功') {
-    dotClassName = 'bg-[#34b27b]';
-  }
-
-  if (label === '失败') {
-    dotClassName = 'bg-[#ef5361]';
-  }
-
-  if (label === '运行中') {
-    dotClassName = 'bg-[#4f7df3]';
-  }
-
-  if (label === '已取消') {
-    dotClassName = 'bg-[#90949c]';
-  }
-
+function TaskMetricRow({
+  label,
+  value,
+  danger = false,
+}: TaskMetricRowProps) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <div className="flex h-6 items-center justify-between">
+      <span className="text-[11px] font-medium text-white/90">
+        {label}
+      </span>
+
       <span
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClassName}`}
-      />
-      <span>{label}</span>
-    </span>
+        className={`
+          max-w-[84px]
+          truncate
+          text-[11px]
+          font-semibold
+          ${
+            danger
+              ? 'text-[#ff8993]'
+              : 'text-white'
+          }
+        `}
+        title={typeof value === 'string' ? value : undefined}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 
-function LatestTaskContent({ task }: { task: HomeLatestTask }) {
-  const theme = TASK_THEMES[task.taskType];
+function LatestTaskContent({
+  task,
+}: {
+  task: HomeLatestTask;
+}) {
+  const status = statusLabel(task.status);
 
   const handleClick = () => {
     if (!task.detailPath) {
@@ -117,185 +71,315 @@ function LatestTaskContent({ task }: { task: HomeLatestTask }) {
     <button
       type="button"
       onClick={handleClick}
+      title={task.taskName}
       className="
         group
         relative
-        h-[240px]
+        h-[262px]
         w-full
         overflow-hidden
         rounded-[8px]
-        border
-        border-[#eaecf0]
+        bg-[#8f9092]
         text-left
-        transition-all
+        outline-none
+        transition-shadow
         duration-200
-        hover:border-[#dfe3e8]
-        hover:shadow-[0_5px_16px_rgba(31,35,41,0.08)]
-        focus-visible:outline-none
+        hover:shadow-[0_6px_20px_rgba(31,35,41,0.12)]
         focus-visible:ring-2
-        focus-visible:ring-[#dbe5ff]
-        lg:w-[176px]
+        focus-visible:ring-[#d9e4ff]
+        lg:w-[193px]
       "
     >
-      {/* 封面背景 */}
-      <div className={`absolute inset-0 ${theme.cover}`} />
-
-      {/* 装饰圆 */}
-      <div
-        aria-hidden="true"
-        className="
-          pointer-events-none
-          absolute
-          -right-10
-          top-8
-          h-[150px]
-          w-[150px]
-          rounded-full
-          border
-          border-white/35
-        "
-      />
+      {/* ==================== 封面 ==================== */}
 
       <div
-        aria-hidden="true"
         className="
-          pointer-events-none
           absolute
-          -right-2
-          top-[54px]
-          h-[100px]
-          w-[100px]
-          rounded-full
-          border
-          border-white/45
+          inset-0
+          overflow-hidden
+          transition-[filter,transform]
+          duration-300
+          ease-out
+          group-hover:scale-[1.045]
+          group-hover:blur-[8px]
+          group-focus:scale-[1.045]
+          group-focus:blur-[8px]
         "
-      />
-
-      {/* 顶部 */}
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-3 pt-3">
-        <span
-          className={`
-            inline-flex
-            h-5
-            items-center
-            rounded-[4px]
-            px-1.5
-            text-[10px]
-            font-medium
-            ${theme.tag}
-          `}
-        >
-          {taskTypeLabel(task.taskType)}
-        </span>
-
-        <span
+      >
+        {/* 灰色作品封面背景 */}
+        <div
           className="
-            inline-flex
-            h-5
-            items-center
+            absolute
+            inset-0
+            bg-[linear-gradient(180deg,#858688_0%,#a4a5a7_48%,#8d8e90_100%)]
+          "
+        />
+
+        {/* 一些很淡的背景光斑，让模糊后更像视频里的作品封面 */}
+        <div
+          aria-hidden="true"
+          className="
+            absolute
+            -left-8
+            top-[74px]
+            h-[90px]
+            w-[90px]
             rounded-full
-            bg-white/80
-            px-2
-            text-[10px]
-            font-medium
-            text-[#60646d]
-            backdrop-blur-sm
+            bg-white/20
+            blur-2xl
+          "
+        />
+
+        <div
+          aria-hidden="true"
+          className="
+            absolute
+            -right-8
+            top-[42px]
+            h-[120px]
+            w-[120px]
+            rounded-full
+            bg-white/15
+            blur-2xl
+          "
+        />
+
+        {/* Yak Ops 插画 */}
+        <div
+          className="
+            absolute
+            inset-x-0
+            top-[44px]
+            flex
+            h-[136px]
+            items-end
+            justify-center
+            overflow-hidden
           "
         >
-          <StatusDot status={task.status} />
-        </span>
-      </div>
-
-      {/* 中间任务视觉 */}
-      <div className="absolute inset-x-0 top-[44px] flex justify-center">
-        <div
-          className={`
-            flex
-            h-[72px]
-            w-[72px]
-            items-center
-            justify-center
-            rounded-[22px]
-            shadow-[0_8px_24px_rgba(31,35,41,0.06)]
-            backdrop-blur-sm
-            ${theme.iconBox}
-            ${theme.icon}
-            transition-transform
-            duration-300
-            group-hover:-translate-y-0.5
-            group-hover:scale-[1.02]
-          `}
-        >
-          <TaskTypeIcon taskType={task.taskType} size={34} />
+          <div
+            className="
+              translate-y-[7px]
+              transition-transform
+              duration-300
+              ease-out
+              group-hover:scale-[1.02]
+            "
+          >
+            <YakOpsEmpty
+              width={170}
+              height={132}
+              title={task.taskName}
+            />
+          </div>
         </div>
       </div>
 
-      {/* 底部渐变遮罩，参考抖音作品封面 */}
+      {/* hover 后整体压暗一点 */}
       <div
         aria-hidden="true"
         className="
           pointer-events-none
+          absolute
+          inset-0
+          z-[2]
+          bg-black/0
+          transition-colors
+          duration-300
+          group-hover:bg-black/[0.08]
+          group-focus:bg-black/[0.08]
+        "
+      />
+
+      {/* ==================== 顶部作品信息 ==================== */}
+
+      <div
+        className="
+          absolute
+          inset-x-0
+          top-0
+          z-20
+          flex
+          items-start
+          justify-between
+          px-3
+          pt-3
+        "
+      >
+        <div className="min-w-0 pr-2 text-white">
+          {/* 对应视频里的“1张” */}
+          <div
+            className="
+              truncate
+              text-[11px]
+              font-semibold
+              leading-[16px]
+            "
+          >
+            {taskTypeLabel(task.taskType)}
+          </div>
+
+          {/* 对应视频里的“00:00” */}
+          <div
+            className="
+              mt-[1px]
+              text-[12px]
+              font-semibold
+              leading-[16px]
+            "
+          >
+            {formatDuration(task.durationMs)}
+          </div>
+
+          {/* 对应视频第三行 */}
+          <div
+            className="
+              mt-[1px]
+              max-w-[110px]
+              truncate
+              text-[10px]
+              font-medium
+              leading-[14px]
+              text-white/90
+            "
+            title={task.taskName}
+          >
+            {task.taskName}
+          </div>
+        </div>
+
+        {/* 视频右上角小图标 */}
+        <div
+          className="
+            mt-[1px]
+            flex
+            h-[20px]
+            w-[20px]
+            shrink-0
+            items-center
+            justify-center
+            text-white
+          "
+        >
+          <Layers2
+            size={15}
+            strokeWidth={2.4}
+          />
+        </div>
+      </div>
+
+      {/* ==================== 底部信息区域 ==================== */}
+
+      <div
+        className="
           absolute
           inset-x-0
           bottom-0
-          h-[126px]
-          bg-[linear-gradient(180deg,rgba(30,32,38,0)_0%,rgba(30,32,38,0.18)_26%,rgba(28,30,36,0.86)_100%)]
+          z-10
+          h-[72px]
+          overflow-hidden
+          transition-[height]
+          duration-300
+          ease-out
+          group-hover:h-[150px]
+          group-focus:h-[150px]
         "
-      />
+      >
+        {/* 和视频一致：越靠底部越深 */}
+        <div
+          aria-hidden="true"
+          className="
+            pointer-events-none
+            absolute
+            inset-0
+            bg-[linear-gradient(180deg,rgba(45,46,48,0)_0%,rgba(45,46,48,0.36)_18%,rgba(44,45,47,0.78)_100%)]
+          "
+        />
 
-      {/* 任务信息 */}
-      <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-3">
         <div
           className="
-            line-clamp-2
-            min-h-[36px]
-            text-[13px]
-            font-semibold
-            leading-[18px]
-            text-white
+            relative
+            z-10
+            px-3
+            pt-[10px]
           "
-          title={task.taskName}
         >
-          {task.taskName}
-        </div>
+          {/* 默认状态就能看到这两项 */}
+          <TaskMetricRow
+            label="运行次数"
+            value={task.runCount}
+          />
 
-        <div className="mt-1 flex items-center gap-1 text-[9px] text-white/65">
-          <span className="truncate">ID {task.taskId}</span>
+          <TaskMetricRow
+            label="异常次数"
+            value={task.exceptionCount}
+            danger={task.exceptionCount > 0}
+          />
 
-          <span className="shrink-0">·</span>
+          {/* Hover 后露出来 */}
+          <div
+            className="
+              opacity-0
+              transition-opacity
+              delay-0
+              duration-150
+              group-hover:opacity-100
+              group-focus:opacity-100
+            "
+          >
+            <TaskMetricRow
+              label="任务状态"
+              value={status}
+              danger={status === '失败'}
+            />
 
-          <span className="flex shrink-0 items-center gap-1">
-            <Clock3 size={9} strokeWidth={1.8} />
-            {formatDuration(task.durationMs)}
-          </span>
-        </div>
+            <TaskMetricRow
+              label="任务 ID"
+              value={String(task.taskId)}
+            />
 
-        <div className="mt-2.5 border-t border-white/15 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-white/70">运行次数</span>
+            <div
+              className="
+                mt-[4px]
+                flex
+                h-[24px]
+                items-center
+                gap-[2px]
+                text-[11px]
+                font-semibold
+                text-white
+              "
+            >
+              <span>查看详情</span>
 
-              <span className="text-[11px] font-semibold text-white">
-                {task.runCount}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-white/70">异常</span>
-
-              <span
-                className={`text-[11px] font-semibold ${
-                  task.exceptionCount > 0
-                    ? 'text-[#ff8d96]'
-                    : 'text-white'
-                }`}
-              >
-                {task.exceptionCount}
-              </span>
+              <ChevronRight
+                size={14}
+                strokeWidth={2}
+                className="
+                  transition-transform
+                  duration-200
+                  group-hover:translate-x-[2px]
+                "
+              />
             </div>
           </div>
         </div>
       </div>
+
+      {/* 很轻的内部描边 */}
+      <div
+        aria-hidden="true"
+        className="
+          pointer-events-none
+          absolute
+          inset-0
+          z-30
+          rounded-[8px]
+          ring-1
+          ring-inset
+          ring-black/[0.04]
+        "
+      />
     </button>
   );
 }
@@ -305,16 +389,33 @@ function TaskLoadingCard() {
     <div
       className="
         flex
-        h-[240px]
+        h-[262px]
         w-full
         items-center
         justify-center
+        overflow-hidden
         rounded-[8px]
-        bg-[#f7f8fa]
+        bg-[#f4f5f6]
         lg:w-[176px]
       "
     >
-      <span className="text-[11px] text-[#9ca0a8]">任务数据加载中...</span>
+      <div className="flex flex-col items-center gap-2">
+        <div
+          className="
+            h-5
+            w-5
+            animate-spin
+            rounded-full
+            border-2
+            border-[#d9dce1]
+            border-t-[#8b8f97]
+          "
+        />
+
+        <span className="text-[11px] text-[#8b8f97]">
+          加载中...
+        </span>
+      </div>
     </div>
   );
 }
@@ -335,7 +436,9 @@ function TaskFailedCard() {
         lg:w-[176px]
       "
     >
-      <span className="text-[11px] text-[#9ca0a8]">任务数据加载失败</span>
+      <span className="text-[11px] text-[#9ca0a8]">
+        任务数据加载失败
+      </span>
     </div>
   );
 }
@@ -349,6 +452,7 @@ function TaskEmptyCard() {
         w-full
         items-center
         justify-center
+        overflow-hidden
         rounded-[8px]
         bg-[#f7f8fa]
         lg:w-[176px]
@@ -356,7 +460,7 @@ function TaskEmptyCard() {
     >
       <YakOpsEmpty
         width={136}
-        height={92}
+        height={100}
         title="暂无运行任务"
         showCaption
       />
@@ -375,15 +479,21 @@ export function LatestTaskCard({
         w-full
         shrink-0
         self-start
-        lg:w-[200px]
+        lg:w-[218px]
         lg:border-r
         lg:border-[#eef0f2]
         lg:pr-[23px]
       "
     >
-      {/* 和抖音一样：标题直接压在卡片上方，不再搞复杂 header */}
-      <div className="mb-2 flex h-[20px] items-center justify-between">
-        <span className="text-[13px] font-semibold leading-5 text-[#33363f]">
+      <div className="mb-2 flex h-5 items-center">
+        <span
+          className="
+            text-[13px]
+            font-semibold
+            leading-5
+            text-[#272a31]
+          "
+        >
           最新任务
         </span>
       </div>
