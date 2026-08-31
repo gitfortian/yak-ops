@@ -1,4 +1,3 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import type { HomeScheduleItem } from '@/services/home';
 import { history } from '@umijs/max';
 import { Clock3, RadioTower } from 'lucide-react';
@@ -9,17 +8,16 @@ import {
   statusLabel,
   taskTypeLabel,
 } from '../../utils/homeDataCenter';
+import { HomeEmptyState } from '../HomeEmptyState';
 
 function EmptySchedulePanel({ periodLabel }: { periodLabel: string }) {
   return (
-    <div className="flex min-h-[263px] items-center justify-center">
-      <YakOpsEmpty
-        width={160}
-        height={108}
-        title={`${periodLabel}暂无调度数据`}
-        showCaption
-      />
-    </div>
+    <HomeEmptyState
+      icon={RadioTower}
+      title={`${periodLabel}暂无调度数据`}
+      size="medium"
+      className="min-h-[263px]"
+    />
   );
 }
 

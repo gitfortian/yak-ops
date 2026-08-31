@@ -1,4 +1,3 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import { listDigitalScreens, type DigitalScreenInstance } from '@/services/digital-screen';
 import {
   fetchDashboardOverview,
@@ -9,6 +8,7 @@ import { history } from '@umijs/max';
 import { Clock3, LayoutDashboard, Monitor } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { HomeEmptyState } from './HomeEmptyState';
 import {
   formatMetric,
   relativeTime,
@@ -292,14 +292,12 @@ export default function HomeVisualizationOverview() {
           {loading ? '可视化数据加载中...' : '可视化数据加载失败'}
         </div>
       ) : (
-        <div className="flex min-h-[176px] items-center justify-center">
-          <YakOpsEmpty
-            width={150}
-            height={100}
-            title="暂无仪表盘或数字大屏"
-            showCaption
-          />
-        </div>
+        <HomeEmptyState
+          icon={LayoutDashboard}
+          title="暂无仪表盘或数字大屏"
+          size="medium"
+          className="min-h-[176px]"
+        />
       )}
     </section>
   );

@@ -5,6 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import { Activity } from 'lucide-react';
 import { useMemo } from 'react';
 
+import { HomeEmptyState } from './HomeEmptyState';
 import {
   assetTypeColor,
   compactName,
@@ -202,14 +203,12 @@ export function DataLineageOverview({
                     : '数据暂不可用'}
               </div>
             ) : (
-              <div className="flex min-h-[118px] items-center justify-center">
-                <YakOpsEmpty
-                  width={100}
-                  height={66}
-                  title="暂无最近关系"
-                  showCaption
-                />
-              </div>
+              <HomeEmptyState
+                icon={Activity}
+                title="暂无最近关系"
+                size="small"
+                className="min-h-[118px]"
+              />
             )}
           </div>
         </div>

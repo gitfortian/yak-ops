@@ -1,11 +1,12 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import {
   pageMessages,
   type SecurityMessage,
 } from '@/services/security/messages';
 import { history } from '@umijs/max';
-import { ChevronRight } from 'lucide-react';
+import { Bell, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
+
+import { HomeEmptyState } from './HomeEmptyState';
 
 interface NotificationState {
   items: SecurityMessage[];
@@ -125,14 +126,12 @@ export default function NotificationCenter() {
             {state.loading ? '通知加载中...' : '通知加载失败'}
           </div>
         ) : (
-          <div className="flex min-h-[126px] items-center justify-center">
-            <YakOpsEmpty
-              width={112}
-              height={74}
-              title="暂无通知"
-              showCaption
-            />
-          </div>
+          <HomeEmptyState
+            icon={Bell}
+            title="暂无通知"
+            size="small"
+            className="min-h-[126px]"
+          />
         )}
       </div>
     </section>

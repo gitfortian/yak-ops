@@ -1,4 +1,3 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import {
   homeQualityOverviewApi,
   type HomeQualityDimension,
@@ -9,9 +8,15 @@ import { BRAND_COLOR } from '@/styles/brand';
 import { history } from '@umijs/max';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
-import { AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  ShieldCheck,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { HomeEmptyState } from './HomeEmptyState';
 import { relativeTime, SectionHeader } from './homeAssetOverviewShared';
 
 interface QualitySidebarState {
@@ -298,14 +303,12 @@ export default function HomeQualitySidebarOverview() {
               {state.loading ? '质量数据加载中...' : '质量数据加载失败'}
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <YakOpsEmpty
-                width={108}
-                height={72}
-                title="暂无质量执行数据"
-                showCaption
-              />
-            </div>
+            <HomeEmptyState
+              icon={ShieldCheck}
+              title="暂无质量执行数据"
+              size="medium"
+              className="h-full"
+            />
           )}
         </div>
 
@@ -347,14 +350,12 @@ export default function HomeQualitySidebarOverview() {
                 : '问题数据暂不可用'}
           </div>
         ) : (
-          <div className="flex min-h-[92px] items-center justify-center">
-            <YakOpsEmpty
-              width={100}
-              height={66}
-              title="近 7 日暂无质量问题"
-              showCaption
-            />
-          </div>
+          <HomeEmptyState
+            icon={CheckCircle2}
+            title="近 7 日暂无质量问题"
+            size="small"
+            className="min-h-[92px]"
+          />
         )}
       </div>
     </section>
