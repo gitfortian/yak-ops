@@ -3,9 +3,7 @@ import type { HomeLatestTask } from '@/services/home';
 import { history } from '@umijs/max';
 import {
   ArrowRightLeft,
-  ChevronRight,
-  Clock,
-  Database,
+  Clock3,
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
@@ -22,153 +20,347 @@ interface LatestTaskCardProps {
   failed: boolean;
 }
 
-type TaskTheme = {
-  accent: string;
+interface TaskTheme {
+  cover: string;
   iconBox: string;
   icon: string;
   tag: string;
-};
+}
 
 const TASK_THEMES: Record<HomeLatestTask['taskType'], TaskTheme> = {
   OFFLINE_SYNC: {
-    accent: 'bg-[linear-gradient(90deg,#6675f5_0%,#94a8ff_100%)]',
-    iconBox: 'bg-[#eef1ff]',
-    icon: 'text-[#6572ed]',
-    tag: 'bg-[#f1f3ff] text-[#5d68dc]',
+    cover:
+      'bg-[linear-gradient(145deg,#f1f3ff_0%,#e9edff_48%,#dfe5ff_100%)]',
+    iconBox: 'bg-white/80',
+    icon: 'text-[#6675f5]',
+    tag: 'bg-[#6675f5] text-white',
   },
+
   WORKFLOW: {
-    accent: 'bg-[linear-gradient(90deg,#ffb900_0%,#ffd85a_100%)]',
-    iconBox: 'bg-[#fff7dc]',
-    icon: 'text-[#d49600]',
-    tag: 'bg-[#fff8e2] text-[#aa7600]',
+    cover:
+      'bg-[linear-gradient(145deg,#fff8e6_0%,#fff1c7_48%,#ffe7a3_100%)]',
+    iconBox: 'bg-white/80',
+    icon: 'text-[#d99b00]',
+    tag: 'bg-[#e9aa10] text-white',
   },
+
   DATA_QUALITY: {
-    accent: 'bg-[linear-gradient(90deg,#23a66b_0%,#66ce9b_100%)]',
-    iconBox: 'bg-[#eaf8f1]',
-    icon: 'text-[#259767]',
-    tag: 'bg-[#edf9f3] text-[#23855b]',
+    cover:
+      'bg-[linear-gradient(145deg,#eefaf4_0%,#e1f6eb_48%,#d2efdf_100%)]',
+    iconBox: 'bg-white/80',
+    icon: 'text-[#249a67]',
+    tag: 'bg-[#2ba36e] text-white',
   },
 };
 
-function TaskTypeIcon({ taskType }: { taskType: HomeLatestTask['taskType'] }) {
+function TaskTypeIcon({
+  taskType,
+  size = 32,
+}: {
+  taskType: HomeLatestTask['taskType'];
+  size?: number;
+}) {
   if (taskType === 'OFFLINE_SYNC') {
-    return <ArrowRightLeft size={20} strokeWidth={1.9} />;
+    return <ArrowRightLeft size={size} strokeWidth={1.65} />;
   }
+
   if (taskType === 'WORKFLOW') {
-    return <Workflow size={20} strokeWidth={1.9} />;
+    return <Workflow size={size} strokeWidth={1.65} />;
   }
-  if (taskType === 'DATA_QUALITY') {
-    return <ShieldCheck size={20} strokeWidth={1.9} />;
-  }
-  return <Database size={20} strokeWidth={1.9} />;
+
+  return <ShieldCheck size={size} strokeWidth={1.65} />;
 }
 
-function statusBadgeClassName(status?: string) {
+function StatusDot({ status }: { status?: string }) {
   const label = statusLabel(status);
-  if (label === '成功') return 'bg-[#ebf8f1] text-[#218557]';
-  if (label === '失败') return 'bg-[#fff0f1] text-[#dc4250]';
-  if (label === '运行中') return 'bg-[#eef4ff] text-[#4775d1]';
-  if (label === '已取消') return 'bg-[#f2f3f5] text-[#747983]';
-  return 'bg-[#f4f5f7] text-[#747983]';
+
+  let dotClassName = 'bg-[#9ca3af]';
+
+  if (label === '成功') {
+    dotClassName = 'bg-[#34b27b]';
+  }
+
+  if (label === '失败') {
+    dotClassName = 'bg-[#ef5361]';
+  }
+
+  if (label === '运行中') {
+    dotClassName = 'bg-[#4f7df3]';
+  }
+
+  if (label === '已取消') {
+    dotClassName = 'bg-[#90949c]';
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClassName}`}
+      />
+      <span>{label}</span>
+    </span>
+  );
 }
 
 function LatestTaskContent({ task }: { task: HomeLatestTask }) {
   const theme = TASK_THEMES[task.taskType];
-  const status = statusLabel(task.status);
+
+  const handleClick = () => {
+    if (!task.detailPath) {
+      return;
+    }
+
+    history.push(task.detailPath);
+  };
 
   return (
     <button
       type="button"
-      onClick={() => {
-        if (task.detailPath) history.push(task.detailPath);
-      }}
-      className="group relative flex h-[280px] w-full flex-col overflow-hidden rounded-[16px] border border-[#e8ebef] bg-white p-4 text-left shadow-[0_4px_14px_rgba(31,35,41,0.045),0_1px_2px_rgba(31,35,41,0.025)] transition-[border-color,box-shadow,transform] duration-[240ms] ease-out hover:-translate-y-px hover:border-[#dde2e8] hover:shadow-[0_9px_22px_rgba(31,35,41,0.07),0_1px_2px_rgba(31,35,41,0.025)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
+      onClick={handleClick}
+      className="
+        group
+        relative
+        h-[240px]
+        w-full
+        overflow-hidden
+        rounded-[8px]
+        border
+        border-[#eaecf0]
+        text-left
+        transition-all
+        duration-200
+        hover:border-[#dfe3e8]
+        hover:shadow-[0_5px_16px_rgba(31,35,41,0.08)]
+        focus-visible:outline-none
+        focus-visible:ring-2
+        focus-visible:ring-[#dbe5ff]
+        lg:w-[176px]
+      "
     >
-      <span
+      {/* 封面背景 */}
+      <div className={`absolute inset-0 ${theme.cover}`} />
+
+      {/* 装饰圆 */}
+      <div
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-x-0 top-0 h-[3px] ${theme.accent}`}
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full border border-[#eef0f4]"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-3 -top-5 h-24 w-24 rounded-full border border-[#f1f2f5]"
+        className="
+          pointer-events-none
+          absolute
+          -right-10
+          top-8
+          h-[150px]
+          w-[150px]
+          rounded-full
+          border
+          border-white/35
+        "
       />
 
-      <div className="relative flex items-start justify-between gap-2">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] ${theme.iconBox} ${theme.icon}`}
-        >
-          <TaskTypeIcon taskType={task.taskType} />
-        </div>
-        <span
-          className={`inline-flex max-w-[92px] items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium leading-none ${statusBadgeClassName(task.status)}`}
-        >
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80" />
-          <span className="truncate">{status}</span>
-        </span>
-      </div>
+      <div
+        aria-hidden="true"
+        className="
+          pointer-events-none
+          absolute
+          -right-2
+          top-[54px]
+          h-[100px]
+          w-[100px]
+          rounded-full
+          border
+          border-white/45
+        "
+      />
 
-      <div className="relative mt-3 min-w-0">
+      {/* 顶部 */}
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-3 pt-3">
         <span
-          className={`inline-flex rounded-[6px] px-2 py-1 text-[10px] font-medium leading-none ${theme.tag}`}
+          className={`
+            inline-flex
+            h-5
+            items-center
+            rounded-[4px]
+            px-1.5
+            text-[10px]
+            font-medium
+            ${theme.tag}
+          `}
         >
           {taskTypeLabel(task.taskType)}
         </span>
-        <div className="mt-2 truncate text-[14px] font-semibold leading-5 text-[#2b2e37]">
+
+        <span
+          className="
+            inline-flex
+            h-5
+            items-center
+            rounded-full
+            bg-white/80
+            px-2
+            text-[10px]
+            font-medium
+            text-[#60646d]
+            backdrop-blur-sm
+          "
+        >
+          <StatusDot status={task.status} />
+        </span>
+      </div>
+
+      {/* 中间任务视觉 */}
+      <div className="absolute inset-x-0 top-[44px] flex justify-center">
+        <div
+          className={`
+            flex
+            h-[72px]
+            w-[72px]
+            items-center
+            justify-center
+            rounded-[22px]
+            shadow-[0_8px_24px_rgba(31,35,41,0.06)]
+            backdrop-blur-sm
+            ${theme.iconBox}
+            ${theme.icon}
+            transition-transform
+            duration-300
+            group-hover:-translate-y-0.5
+            group-hover:scale-[1.02]
+          `}
+        >
+          <TaskTypeIcon taskType={task.taskType} size={34} />
+        </div>
+      </div>
+
+      {/* 底部渐变遮罩，参考抖音作品封面 */}
+      <div
+        aria-hidden="true"
+        className="
+          pointer-events-none
+          absolute
+          inset-x-0
+          bottom-0
+          h-[126px]
+          bg-[linear-gradient(180deg,rgba(30,32,38,0)_0%,rgba(30,32,38,0.18)_26%,rgba(28,30,36,0.86)_100%)]
+        "
+      />
+
+      {/* 任务信息 */}
+      <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-3">
+        <div
+          className="
+            line-clamp-2
+            min-h-[36px]
+            text-[13px]
+            font-semibold
+            leading-[18px]
+            text-white
+          "
+          title={task.taskName}
+        >
           {task.taskName}
         </div>
-        <div className="mt-1 truncate text-[10px] leading-4 text-[#9a9ea7]">
-          任务 ID · {task.taskId}
-        </div>
-      </div>
 
-      <div className="relative mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5">
-          <div className="text-[10px] leading-4 text-[#92969f]">运行次数</div>
-          <div className="mt-0.5 text-[17px] font-semibold leading-6 text-[#31343c]">
-            {task.runCount}
-            <span className="ml-0.5 text-[10px] font-normal text-[#a0a4ac]">
-              次
-            </span>
+        <div className="mt-1 flex items-center gap-1 text-[9px] text-white/65">
+          <span className="truncate">ID {task.taskId}</span>
+
+          <span className="shrink-0">·</span>
+
+          <span className="flex shrink-0 items-center gap-1">
+            <Clock3 size={9} strokeWidth={1.8} />
+            {formatDuration(task.durationMs)}
+          </span>
+        </div>
+
+        <div className="mt-2.5 border-t border-white/15 pt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-white/70">运行次数</span>
+
+              <span className="text-[11px] font-semibold text-white">
+                {task.runCount}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-white/70">异常</span>
+
+              <span
+                className={`text-[11px] font-semibold ${
+                  task.exceptionCount > 0
+                    ? 'text-[#ff8d96]'
+                    : 'text-white'
+                }`}
+              >
+                {task.exceptionCount}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5">
-          <div className="text-[10px] leading-4 text-[#92969f]">异常</div>
-          <div
-            className={`mt-0.5 text-[17px] font-semibold leading-6 ${
-              task.exceptionCount > 0 ? 'text-[#df4b58]' : 'text-[#31343c]'
-            }`}
-          >
-            {task.exceptionCount}
-            <span className="ml-0.5 text-[10px] font-normal text-[#a0a4ac]">
-              次
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative mt-2.5 flex items-center justify-between rounded-[10px] border border-[#eef0f3] bg-[#fbfbfc] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-[10px] text-[#858a93]">
-          <Clock size={12} strokeWidth={1.8} />
-          本次耗时
-        </span>
-        <strong className="text-[11px] font-semibold text-[#4c5059]">
-          {formatDuration(task.durationMs)}
-        </strong>
-      </div>
-
-      <div className="relative mt-auto flex items-center justify-between border-t border-[#eef0f3] pt-3 text-[11px] font-medium text-[#666b75] transition-colors group-hover:text-[#2f333b]">
-        <span>查看任务详情</span>
-        <ChevronRight
-          size={14}
-          strokeWidth={1.8}
-          className="transition-transform duration-200 group-hover:translate-x-0.5"
-        />
       </div>
     </button>
+  );
+}
+
+function TaskLoadingCard() {
+  return (
+    <div
+      className="
+        flex
+        h-[240px]
+        w-full
+        items-center
+        justify-center
+        rounded-[8px]
+        bg-[#f7f8fa]
+        lg:w-[176px]
+      "
+    >
+      <span className="text-[11px] text-[#9ca0a8]">任务数据加载中...</span>
+    </div>
+  );
+}
+
+function TaskFailedCard() {
+  return (
+    <div
+      className="
+        flex
+        h-[240px]
+        w-full
+        items-center
+        justify-center
+        rounded-[8px]
+        bg-[#f7f8fa]
+        px-4
+        text-center
+        lg:w-[176px]
+      "
+    >
+      <span className="text-[11px] text-[#9ca0a8]">任务数据加载失败</span>
+    </div>
+  );
+}
+
+function TaskEmptyCard() {
+  return (
+    <div
+      className="
+        flex
+        h-[240px]
+        w-full
+        items-center
+        justify-center
+        rounded-[8px]
+        bg-[#f7f8fa]
+        lg:w-[176px]
+      "
+    >
+      <YakOpsEmpty
+        width={136}
+        height={92}
+        title="暂无运行任务"
+        showCaption
+      />
+    </div>
   );
 }
 
@@ -178,31 +370,32 @@ export function LatestTaskCard({
   failed,
 }: LatestTaskCardProps) {
   return (
-    <aside className="w-full shrink-0 self-start lg:h-[310px] lg:w-[238px] lg:border-r lg:border-[#edf0f3] lg:pr-6">
-      <div className="mb-2 flex h-5 items-center justify-between gap-2">
-        <span className="text-[13px] font-semibold leading-5 text-[#353842]">
+    <aside
+      className="
+        w-full
+        shrink-0
+        self-start
+        lg:w-[200px]
+        lg:border-r
+        lg:border-[#eef0f2]
+        lg:pr-[23px]
+      "
+    >
+      {/* 和抖音一样：标题直接压在卡片上方，不再搞复杂 header */}
+      <div className="mb-2 flex h-[20px] items-center justify-between">
+        <span className="text-[13px] font-semibold leading-5 text-[#33363f]">
           最新任务
-        </span>
-        <span className="text-[10px] font-normal text-[#a1a5ad]">
-          最近一次执行
         </span>
       </div>
 
       {task ? (
         <LatestTaskContent task={task} />
-      ) : loading || failed ? (
-        <div className="flex h-[280px] w-full items-center justify-center rounded-[16px] border border-[#e8ebef] bg-[#fafbfc] text-[11px] text-[#9da1a8]">
-          {loading ? '任务数据加载中...' : '任务数据加载失败'}
-        </div>
+      ) : loading ? (
+        <TaskLoadingCard />
+      ) : failed ? (
+        <TaskFailedCard />
       ) : (
-        <div className="flex h-[280px] w-full items-center justify-center rounded-[16px] border border-[#e8ebef] bg-[#fafbfc]">
-          <YakOpsEmpty
-            width={144}
-            height={96}
-            title="暂无运行任务"
-            showCaption
-          />
-        </div>
+        <TaskEmptyCard />
       )}
     </aside>
   );
