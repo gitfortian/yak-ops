@@ -1,7 +1,7 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
+import type { LucideIcon } from 'lucide-react';
 import { ChevronRight } from 'lucide-react';
 
-import type { HomeAssetOverview } from './service';
+import { HomeEmptyState } from './HomeEmptyState';
 
 export interface HomeAssetOverviewState {
   data?: HomeAssetOverview;
@@ -102,11 +102,13 @@ export function EmptyList({
   failed,
   unavailable,
   text,
+  icon,
 }: {
   loading: boolean;
   failed: boolean;
   unavailable: boolean;
   text: string;
+  icon: LucideIcon;
 }) {
   if (loading || failed || unavailable) {
     return (
@@ -117,8 +119,11 @@ export function EmptyList({
   }
 
   return (
-    <div className="flex min-h-[214px] items-center justify-center">
-      <YakOpsEmpty width={150} height={100} title={text} showCaption />
-    </div>
+    <HomeEmptyState
+      icon={icon}
+      title={text}
+      size="medium"
+      className="min-h-[214px]"
+    />
   );
 }
