@@ -1,3 +1,4 @@
+import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import { listOfflineSyncTasks, type OfflineJobDefinitionVO } from '@/services/batch-link-up';
 import { history } from '@umijs/max';
 import { message } from 'antd';
@@ -22,7 +23,13 @@ const currentLocationSearch = () =>
   typeof window === 'undefined' ? '' : window.location.search;
 
 export const useOfflineSyncTasks = () => {
+  const { currentProject } = useSecurityProject();
+  const currentProjectId = currentProject?.id;
   const requestSequenceRef = useRef(0);
+  const activeProjectIdRef = useRef(currentProjectId);
+  const previousProjectIdRef = useRef(currentProjectId);
+  activeProjectIdRef.current = currentProjectId;
+
   const initialSearchState = useMemo(
     () => parseOfflineSyncSearchFromUrl(currentLocationSearch()),
     [],
@@ -46,15 +53,31 @@ export const useOfflineSyncTasks = () => {
   }, []);
 
   const loadTasks = useCallback(async () => {
+    const requestProjectId = currentProjectId;
     const requestSequence = requestSequenceRef.current + 1;
     requestSequenceRef.current = requestSequence;
+
+    if (!requestProjectId) {
+      setRecords([]);
+      setPagination((current) =>
+        current.total === 0 ? current : { ...current, total: 0 },
+      );
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     try {
       const result = await listOfflineSyncTasks(
         buildOfflineSyncPageQuery(search, pagination),
       );
-      if (requestSequence !== requestSequenceRef.current) return;
+      if (
+        requestSequence !== requestSequenceRef.current ||
+        requestProjectId !== activeProjectIdRef.current
+      ) {
+        return;
+      }
 
       setRecords(result?.bizData || []);
       setPagination((current) => ({
@@ -62,17 +85,35 @@ export const useOfflineSyncTasks = () => {
         total: result?.pagination?.total || 0,
       }));
     } catch (error) {
-      if (requestSequence === requestSequenceRef.current) {
+      if (
+        requestSequence === requestSequenceRef.current &&
+        requestProjectId === activeProjectIdRef.current
+      ) {
         message.error(
           error instanceof Error ? error.message : '查询离线同步任务失败',
         );
       }
     } finally {
-      if (requestSequence === requestSequenceRef.current) {
+      if (
+        requestSequence === requestSequenceRef.current &&
+        requestProjectId === activeProjectIdRef.current
+      ) {
         setLoading(false);
       }
     }
-  }, [pagination.current, pagination.pageSize, refreshVersion, search]);
+  }, [currentProjectId, pagination.current, pagination.pageSize, refreshVersion, search]);
+
+  useEffect(() => {
+    if (previousProjectIdRef.current === currentProjectId) return;
+    previousProjectIdRef.current = currentProjectId;
+    requestSequenceRef.current += 1;
+    setRecords([]);
+    setSelectedRowKeys([]);
+    setPagination((current) => {
+      if (current.current === 1 && current.total === 0) return current;
+      return { ...current, current: 1, total: 0 };
+    });
+  }, [currentProjectId]);
 
   useEffect(() => {
     const query = buildOfflineSyncQueryString(search, pagination);
