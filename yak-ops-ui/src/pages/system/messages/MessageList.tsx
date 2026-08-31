@@ -1,4 +1,5 @@
 import { SecurityQueryTable } from '@/components/security';
+import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import {
   batchReadMessages,
   getMessageDetail,
@@ -6,6 +7,7 @@ import {
   type MessageLevel,
   type MessageStatus,
   markMessageRead,
+  notifyMessageCountChanged,
   pageMessages,
   safeMessageActionPath,
   type SecurityMessage,
@@ -15,9 +17,9 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { history, useModel } from '@umijs/max';
 import { Alert, Button, Drawer, message, Space, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
-export const MESSAGE_COUNT_CHANGED_EVENT = 'yak-message-count-changed';
+export { MESSAGE_COUNT_CHANGED_EVENT } from '@/services/security/messages';
 
 const MESSAGE_TYPE_LABELS: Record<string, string> = {
   SYSTEM: '系统',
@@ -40,9 +42,6 @@ const MESSAGE_LEVEL_COLORS: Record<MessageLevel, string> = {
   ERROR: 'red',
 };
 
-const notifyCountChanged = () =>
-  window.dispatchEvent(new Event(MESSAGE_COUNT_CHANGED_EVENT));
-
 const messageTypeLabel = (value?: string) =>
   (value && MESSAGE_TYPE_LABELS[value]) || value || '消息';
 
@@ -64,6 +63,7 @@ const operationLogIdOf = (item?: SecurityMessage) =>
 export default function MessageList({ compact = false }: { compact?: boolean }) {
   const actionRef = useRef<ActionType>();
   const { initialState } = useModel('@@initialState');
+  const { projects } = useSecurityProject();
   const canReadLogs = satisfiesPermissionRequirement(
     initialState?.currentUser?.permissionCodes,
     {
@@ -74,10 +74,26 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
   const [selected, setSelected] = useState<Array<number | string>>([]);
   const [detail, setDetail] = useState<MessageDetail>();
 
+  const projectNameById = useMemo(
+    () =>
+      new Map(
+        projects.map((project) => [String(project.id), project.projectName]),
+      ),
+    [projects],
+  );
+
+  // Project ownership follows projectId, matching the hardened backend security
+  // boundary. scope remains presentation metadata and is not trusted for ownership.
+  const ownershipLabel = (item?: SecurityMessage) => {
+    if (item?.projectId === undefined || item.projectId === null) return '系统';
+    const projectName = projectNameById.get(String(item.projectId));
+    return projectName ? `项目 · ${projectName}` : `项目 #${item.projectId}`;
+  };
+
   const read = async (row: SecurityMessage) => {
     if (row.status === 'UNREAD') {
       await markMessageRead(row.id);
-      notifyCountChanged();
+      notifyMessageCountChanged();
       actionRef.current?.reload();
     }
     setDetail(await getMessageDetail(row.id));
@@ -110,6 +126,12 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
         QUALITY: { text: '质量' },
       },
       render: (_, row) => messageTypeLabel(row.type),
+    },
+    {
+      title: '范围',
+      dataIndex: 'scope',
+      search: false,
+      render: (_, row) => <Tag>{ownershipLabel(row)}</Tag>,
     },
     {
       title: '状态',
@@ -162,7 +184,9 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
           compact
             ? columns.filter(
                 (column) =>
-                  column.dataIndex !== 'summary' && column.dataIndex !== 'type',
+                  column.dataIndex !== 'summary' &&
+                  column.dataIndex !== 'type' &&
+                  column.dataIndex !== 'scope',
               )
             : columns
         }
@@ -200,7 +224,7 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
               await batchReadMessages(selected);
               setSelected([]);
               message.success('已标记为已读');
-              notifyCountChanged();
+              notifyMessageCountChanged();
               actionRef.current?.reload();
             }}
           >
@@ -225,13 +249,7 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
                   {MESSAGE_LEVEL_LABELS[detail.level]}
                 </Tag>
               ) : null}
-              {detail.scope ? (
-                <Tag>
-                  {detail.scope === 'PROJECT'
-                    ? `项目${detail.projectId ? ` #${detail.projectId}` : ''}`
-                    : '系统'}
-                </Tag>
-              ) : null}
+              <Tag>{ownershipLabel(detail)}</Tag>
               <Typography.Text type="secondary">
                 {formatMessageTime(detail.createTime)}
               </Typography.Text>

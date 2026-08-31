@@ -2,6 +2,8 @@ import { securityGetData, securityPostData } from './client';
 
 const MESSAGE_API = '/api/v1/message';
 
+export const MESSAGE_COUNT_CHANGED_EVENT = 'yak-message-count-changed';
+
 export type MessageStatus = 'UNREAD' | 'READ';
 export type MessageLevel = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
 export type MessageScope = 'SYSTEM' | 'PROJECT';
@@ -41,7 +43,9 @@ export interface MessageQuery {
   status?: MessageStatus;
   type?: string;
   projectId?: number | string;
+  /** Unix epoch milliseconds; aligned with yak-framework message-center contract. */
   startTime?: number;
+  /** Unix epoch milliseconds; aligned with yak-framework message-center contract. */
   endTime?: number;
 }
 
@@ -61,6 +65,12 @@ export const safeMessageActionPath = (value?: string) => {
     return undefined;
   }
   return value;
+};
+
+/** Notify mounted message counters that read state has changed. */
+export const notifyMessageCountChanged = () => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(MESSAGE_COUNT_CHANGED_EVENT));
 };
 
 export const pageMessages = (params: MessageQuery) =>

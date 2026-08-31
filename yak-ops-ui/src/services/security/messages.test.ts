@@ -1,4 +1,9 @@
-import { buildMessageQuery, safeMessageActionPath } from './messages';
+import {
+  buildMessageQuery,
+  MESSAGE_COUNT_CHANGED_EVENT,
+  notifyMessageCountChanged,
+  safeMessageActionPath,
+} from './messages';
 
 describe('message center contract', () => {
   it('serializes project scope and epoch time filters', () => {
@@ -39,5 +44,15 @@ describe('message center contract', () => {
     );
     expect(safeMessageActionPath('https://example.com')).toBeUndefined();
     expect(safeMessageActionPath('//example.com/path')).toBeUndefined();
+  });
+
+  it('emits a shared unread-count refresh event', () => {
+    const listener = jest.fn();
+    window.addEventListener(MESSAGE_COUNT_CHANGED_EVENT, listener);
+
+    notifyMessageCountChanged();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(MESSAGE_COUNT_CHANGED_EVENT, listener);
   });
 });
