@@ -32,7 +32,12 @@ class QualityAlertRecorderNotificationTest {
     when(provider.getIfAvailable()).thenReturn(gateway);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
-    recorder.recordIfNecessary(plan(NotifyChannel.MESSAGE), CheckResult.NOT_PASSED, 8, 2, 0);
+    recorder.recordIfNecessary(
+        plan(true, NotifyChannel.MESSAGE, AlertLevel.WARNING),
+        CheckResult.NOT_PASSED,
+        8,
+        2,
+        0);
 
     verify(repository).insertAlertEvent(any());
     ArgumentCaptor<BusinessNotification> captor =
@@ -51,20 +56,75 @@ class QualityAlertRecorderNotificationTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void nonMessageChannelKeepsAlertEvidenceWithoutMessageCenterDelivery() {
+  void configuredNonMessageProblemKeepsAlertEvidenceWithoutInboxDelivery() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
     BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
     ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(gateway);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
-    recorder.recordIfNecessary(plan(NotifyChannel.EMAIL), CheckResult.ERROR, 0, 0, 1);
+    recorder.recordIfNecessary(
+        plan(true, NotifyChannel.EMAIL, AlertLevel.WARNING),
+        CheckResult.NOT_PASSED,
+        8,
+        2,
+        0);
 
     verify(repository).insertAlertEvent(any());
     verify(gateway, never()).publishToProjectOwners(any());
   }
 
-  private QualityExecutionPlan plan(NotifyChannel channel) {
+  @Test
+  @SuppressWarnings("unchecked")
+  void executionErrorAlwaysSurfacesInInboxEvenWhenConfiguredAlertsAreDisabled() {
+    QualityAlertRepository repository = mock(QualityAlertRepository.class);
+    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
+    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(gateway);
+
+    QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
+    recorder.recordIfNecessary(
+        plan(false, NotifyChannel.EMAIL, AlertLevel.WARNING),
+        CheckResult.ERROR,
+        0,
+        0,
+        1);
+
+    verify(repository, never()).insertAlertEvent(any());
+    ArgumentCaptor<BusinessNotification> captor =
+        ArgumentCaptor.forClass(BusinessNotification.class);
+    verify(gateway).publishToProjectOwners(captor.capture());
+    assertThat(captor.getValue().level()).isEqualTo(BusinessNotification.Level.ERROR);
+    assertThat(captor.getValue().title()).isEqualTo("数据质量执行异常");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void criticalQualityProblemUsesErrorSeverity() {
+    QualityAlertRepository repository = mock(QualityAlertRepository.class);
+    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
+    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(gateway);
+
+    QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
+    recorder.recordIfNecessary(
+        plan(true, NotifyChannel.MESSAGE, AlertLevel.CRITICAL),
+        CheckResult.NOT_PASSED,
+        5,
+        5,
+        0);
+
+    ArgumentCaptor<BusinessNotification> captor =
+        ArgumentCaptor.forClass(BusinessNotification.class);
+    verify(gateway).publishToProjectOwners(captor.capture());
+    assertThat(captor.getValue().level()).isEqualTo(BusinessNotification.Level.ERROR);
+    assertThat(captor.getValue().title()).isEqualTo("数据质量检查发现严重问题");
+  }
+
+  private QualityExecutionPlan plan(
+      boolean notifyEnabled,
+      NotifyChannel channel,
+      AlertLevel alertLevel) {
     return new QualityExecutionPlan(
         7L,
         101L,
@@ -81,9 +141,9 @@ class QualityAlertRecorderNotificationTest {
             "alice"),
         List.of(),
         RuleFailureAction.CONTINUE,
-        true,
+        notifyEnabled,
         channel,
         null,
-        AlertLevel.WARNING);
+        alertLevel);
   }
 }
