@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.quality;
 
 import io.yak.ops.business.quality.workspace.QualityOverviewReader;
 import java.time.LocalDate;
@@ -7,17 +7,17 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 /** 首页数据质量只读聚合。 */
-@Service
-public class HomeQualityOverviewService {
+@Component
+public class HomeQualityOverviewReader {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(HomeQualityOverviewService.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(HomeQualityOverviewReader.class);
 
   private final ObjectProvider<QualityOverviewReader> readerProvider;
 
-  public HomeQualityOverviewService(ObjectProvider<QualityOverviewReader> readerProvider) {
+  public HomeQualityOverviewReader(ObjectProvider<QualityOverviewReader> readerProvider) {
     this.readerProvider = readerProvider;
   }
 

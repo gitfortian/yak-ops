@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.datacenter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,14 +16,14 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
-class HomeDataCenterServiceTest {
+class HomeDataCenterReaderTest {
 
   @Test
   void shouldMergeDomainReadModelsWithoutAveragingAverages() {
     OfflineExecutionOverviewReader offline = mock(OfflineExecutionOverviewReader.class);
     WorkflowExecutionOverviewReader workflow = mock(WorkflowExecutionOverviewReader.class);
     QualityExecutionOverviewReader quality = mock(QualityExecutionOverviewReader.class);
-    HomeDataCenterService service = service(offline, workflow, quality);
+    HomeDataCenterReader reader = reader(offline, workflow, quality);
 
     LocalDate yesterday = LocalDate.now().minusDays(1);
     LocalDateTime bucket = yesterday.atStartOfDay();
@@ -57,7 +57,7 @@ class HomeDataCenterServiceTest {
         .thenReturn(new WorkflowExecutionOverviewReader.TaskSummary(
             "wf-1", "工作流", workflowTime, 7, 6, 1, 300, "SUCCESS", "exec-1"));
 
-    HomeDataCenterService.OverviewResponse response = service.overview("7d");
+    HomeDataCenterReader.OverviewResponse response = reader.overview("7d");
 
     assertThat(response.metrics().successCount()).isEqualTo(6);
     assertThat(response.metrics().runningCount()).isEqualTo(4);
@@ -77,7 +77,7 @@ class HomeDataCenterServiceTest {
     OfflineExecutionOverviewReader offline = mock(OfflineExecutionOverviewReader.class);
     WorkflowExecutionOverviewReader workflow = mock(WorkflowExecutionOverviewReader.class);
     QualityExecutionOverviewReader quality = mock(QualityExecutionOverviewReader.class);
-    HomeDataCenterService service = service(offline, workflow, quality);
+    HomeDataCenterReader reader = reader(offline, workflow, quality);
 
     when(offline.overview(any(), any(), anyBoolean()))
         .thenThrow(new IllegalStateException("offline unavailable"));
@@ -91,7 +91,7 @@ class HomeDataCenterServiceTest {
     when(quality.overview(any(), any(), anyBoolean()))
         .thenReturn(qualityEmpty(), qualityEmpty());
 
-    HomeDataCenterService.OverviewResponse response = service.overview("7d");
+    HomeDataCenterReader.OverviewResponse response = reader.overview("7d");
 
     assertThat(response.metrics().successCount()).isEqualTo(2);
     assertThat(response.metrics().failedCount()).isZero();
@@ -102,7 +102,7 @@ class HomeDataCenterServiceTest {
     OfflineExecutionOverviewReader offline = mock(OfflineExecutionOverviewReader.class);
     WorkflowExecutionOverviewReader workflow = mock(WorkflowExecutionOverviewReader.class);
     QualityExecutionOverviewReader quality = mock(QualityExecutionOverviewReader.class);
-    HomeDataCenterService service = service(offline, workflow, quality);
+    HomeDataCenterReader reader = reader(offline, workflow, quality);
 
     LocalDateTime now = LocalDateTime.now();
     when(offline.schedules(anyInt())).thenReturn(List.of(
@@ -112,7 +112,7 @@ class HomeDataCenterServiceTest {
         new WorkflowExecutionOverviewReader.ScheduleSummary(
             "schedule-1", "工作流调度", "0 0 * * * ?", "ONLINE", now.minusDays(1), now.plusHours(1))));
 
-    HomeDataCenterService.ScheduleResponse response = service.schedules("7d");
+    HomeDataCenterReader.ScheduleResponse response = reader.schedules("7d");
 
     assertThat(response.items()).hasSize(2);
     assertThat(response.items().get(0).taskType()).isEqualTo("WORKFLOW");
@@ -121,7 +121,7 @@ class HomeDataCenterServiceTest {
   }
 
   @SuppressWarnings("unchecked")
-  private HomeDataCenterService service(
+  private HomeDataCenterReader reader(
       OfflineExecutionOverviewReader offline,
       WorkflowExecutionOverviewReader workflow,
       QualityExecutionOverviewReader quality) {
@@ -131,7 +131,7 @@ class HomeDataCenterServiceTest {
     when(offlineProvider.getIfAvailable()).thenReturn(offline);
     when(workflowProvider.getIfAvailable()).thenReturn(workflow);
     when(qualityProvider.getIfAvailable()).thenReturn(quality);
-    return new HomeDataCenterService(offlineProvider, workflowProvider, qualityProvider);
+    return new HomeDataCenterReader(offlineProvider, workflowProvider, qualityProvider);
   }
 
   private OfflineExecutionOverviewReader.Overview offlineEmpty() {

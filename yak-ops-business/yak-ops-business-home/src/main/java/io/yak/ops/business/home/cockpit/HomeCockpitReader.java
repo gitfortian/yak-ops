@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.cockpit;
 
 import io.yak.ops.business.datasource.domain.DataSourceSummary;
 import io.yak.ops.business.datasource.query.DataSourceReader;
@@ -9,13 +9,13 @@ import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-/** 首页头部摘要：仅组合首页头部需要的稳定 Reader。 */
-@Service
-public class HomeCockpitService {
+/** 首页头部只读聚合；只组合各业务域已经拥有的 read-side 事实。 */
+@Component
+public class HomeCockpitReader {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HomeCockpitService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HomeCockpitReader.class);
   private static final int RANGE_DAYS = 7;
 
   private final ObjectProvider<DataSourceReader> dataSourceReaderProvider;
@@ -23,7 +23,7 @@ public class HomeCockpitService {
   private final ObjectProvider<WorkflowExecutionOverviewReader> workflowReaderProvider;
   private final ObjectProvider<QualityExecutionOverviewReader> qualityExecutionReaderProvider;
 
-  public HomeCockpitService(
+  public HomeCockpitReader(
       ObjectProvider<DataSourceReader> dataSourceReaderProvider,
       ObjectProvider<OfflineExecutionOverviewReader> offlineReaderProvider,
       ObjectProvider<WorkflowExecutionOverviewReader> workflowReaderProvider,

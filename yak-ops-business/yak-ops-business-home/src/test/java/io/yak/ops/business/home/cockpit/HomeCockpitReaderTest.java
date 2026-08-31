@@ -1,4 +1,4 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.cockpit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,7 +13,7 @@ import io.yak.ops.business.workflow.execution.WorkflowExecutionOverviewReader;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
-class HomeCockpitServiceTest {
+class HomeCockpitReaderTest {
 
   @Test
   void shouldBuildHeaderFromRequiredDomainReadSides() {
@@ -32,13 +32,13 @@ class HomeCockpitServiceTest {
     when(qualityExecution.metrics(any(), any()))
         .thenReturn(new QualityExecutionOverviewReader.Metrics(4, 1, 1, 0, 0, 0, 0));
 
-    HomeCockpitService service = new HomeCockpitService(
+    HomeCockpitReader reader = new HomeCockpitReader(
         provider(dataSourceReader),
         provider(offline),
         provider(workflow),
         provider(qualityExecution));
 
-    HomeCockpitService.CockpitResponse response = service.cockpit();
+    HomeCockpitReader.CockpitResponse response = reader.cockpit();
 
     assertThat(response.header().dataSourceCount()).isEqualTo(12);
     assertThat(response.header().runningCount()).isEqualTo(4);
@@ -46,13 +46,13 @@ class HomeCockpitServiceTest {
 
   @Test
   void shouldKeepHeaderAvailableWhenOptionalReadSidesAreUnavailable() {
-    HomeCockpitService service = new HomeCockpitService(
+    HomeCockpitReader reader = new HomeCockpitReader(
         provider(null),
         provider(null),
         provider(null),
         provider(null));
 
-    HomeCockpitService.CockpitResponse response = service.cockpit();
+    HomeCockpitReader.CockpitResponse response = reader.cockpit();
 
     assertThat(response.header().dataSourceCount()).isZero();
     assertThat(response.header().runningCount()).isZero();

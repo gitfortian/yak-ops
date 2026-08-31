@@ -1,8 +1,9 @@
-package io.yak.ops.boot.home;
+package io.yak.ops.business.home.controller.v1;
 
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
-import io.yak.ops.boot.home.HomeQualityOverviewService.OverviewResponse;
+import io.yak.ops.business.home.quality.HomeQualityOverviewReader;
+import io.yak.ops.business.home.quality.HomeQualityOverviewReader.OverviewResponse;
 import io.yak.ops.business.quality.QualityPermissionCode;
 import io.yak.ops.core.project.ProjectScope;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,14 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiresPermission(QualityPermissionCode.EXECUTION_READ)
 public class HomeQualityOverviewController {
 
-  private final HomeQualityOverviewService service;
+  private final HomeQualityOverviewReader reader;
 
-  public HomeQualityOverviewController(HomeQualityOverviewService service) {
-    this.service = service;
+  public HomeQualityOverviewController(HomeQualityOverviewReader reader) {
+    this.reader = reader;
   }
 
   @GetMapping("/overview")
   public Result<OverviewResponse> overview() {
-    return Result.success(service.overview());
+    return Result.success(reader.overview());
   }
 }
