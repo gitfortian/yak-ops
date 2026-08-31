@@ -4,7 +4,7 @@ import { history } from '@umijs/max';
 import {
   ArrowRightLeft,
   ChevronRight,
-  Clock3,
+  Clock,
   Database,
   ShieldCheck,
   Workflow,
@@ -98,7 +98,9 @@ function LatestTaskContent({ task }: { task: HomeLatestTask }) {
       />
 
       <div className="relative flex items-start justify-between gap-2">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] ${theme.iconBox} ${theme.icon}`}>
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] ${theme.iconBox} ${theme.icon}`}
+        >
           <TaskTypeIcon taskType={task.taskType} />
         </div>
         <span
@@ -110,7 +112,9 @@ function LatestTaskContent({ task }: { task: HomeLatestTask }) {
       </div>
 
       <div className="relative mt-3 min-w-0">
-        <span className={`inline-flex rounded-[6px] px-2 py-1 text-[10px] font-medium leading-none ${theme.tag}`}>
+        <span
+          className={`inline-flex rounded-[6px] px-2 py-1 text-[10px] font-medium leading-none ${theme.tag}`}
+        >
           {taskTypeLabel(task.taskType)}
         </span>
         <div className="mt-2 truncate text-[14px] font-semibold leading-5 text-[#2b2e37]">
@@ -126,7 +130,9 @@ function LatestTaskContent({ task }: { task: HomeLatestTask }) {
           <div className="text-[10px] leading-4 text-[#92969f]">运行次数</div>
           <div className="mt-0.5 text-[17px] font-semibold leading-6 text-[#31343c]">
             {task.runCount}
-            <span className="ml-0.5 text-[10px] font-normal text-[#a0a4ac]">次</span>
+            <span className="ml-0.5 text-[10px] font-normal text-[#a0a4ac]">
+              次
+            </span>
           </div>
         </div>
         <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5">
@@ -137,14 +143,16 @@ function LatestTaskContent({ task }: { task: HomeLatestTask }) {
             }`}
           >
             {task.exceptionCount}
-            <span className="ml-0.5 text-[10px] font-normal text-[#a0a4ac]">次</span>
+            <span className="ml-0.5 text-[10px] font-normal text-[#a0a4ac]">
+              次
+            </span>
           </div>
         </div>
       </div>
 
       <div className="relative mt-2.5 flex items-center justify-between rounded-[10px] border border-[#eef0f3] bg-[#fbfbfc] px-3 py-2">
         <span className="flex items-center gap-1.5 text-[10px] text-[#858a93]">
-          <Clock3 size={12} strokeWidth={1.8} />
+          <Clock size={12} strokeWidth={1.8} />
           本次耗时
         </span>
         <strong className="text-[11px] font-semibold text-[#4c5059]">
@@ -175,7 +183,9 @@ export function LatestTaskCard({
         <span className="text-[13px] font-semibold leading-5 text-[#353842]">
           最新任务
         </span>
-        <span className="text-[10px] font-normal text-[#a1a5ad]">最近一次执行</span>
+        <span className="text-[10px] font-normal text-[#a1a5ad]">
+          最近一次执行
+        </span>
       </div>
 
       {task ? (
