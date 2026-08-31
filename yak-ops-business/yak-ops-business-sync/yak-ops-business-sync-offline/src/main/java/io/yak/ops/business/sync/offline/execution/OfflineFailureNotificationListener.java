@@ -9,9 +9,8 @@ import io.yak.ops.core.notification.BusinessNotificationGateway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
 
 /** Converts final Offline Sync failures into user-facing Project notifications. */
@@ -32,7 +31,7 @@ public class OfflineFailureNotificationListener {
     this.notificationGateways = notificationGateways;
   }
 
-  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+  @EventListener
   public void onFinalFailure(OfflineExecutionFinalFailureEvent event) {
     BusinessNotificationGateway gateway = notificationGateways.getIfAvailable();
     if (gateway == null || event == null || event.jobDefinitionId() == null) return;
