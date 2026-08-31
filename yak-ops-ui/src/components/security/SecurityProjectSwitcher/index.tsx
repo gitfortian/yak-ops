@@ -18,7 +18,7 @@ import {
 
 type SupportedLocale = 'zh-CN' | 'en-US';
 
-const PROJECT_MANAGEMENT_PERMISSION = 'security:project:read';
+const WORKSPACE_MANAGEMENT_PERMISSION = 'security:root';
 
 const getSupportedLocale = (): SupportedLocale =>
   getLocale().toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US';
@@ -78,7 +78,7 @@ function ProjectSwitcher() {
   const permissionCodes = initialState?.currentUser?.permissionCodes ?? [];
   const canManage = hasPermission(
     permissionCodes,
-    PROJECT_MANAGEMENT_PERMISSION,
+    WORKSPACE_MANAGEMENT_PERMISSION,
   );
 
   const items: MenuProps['items'] = [
