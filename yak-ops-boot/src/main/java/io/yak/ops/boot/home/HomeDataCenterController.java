@@ -4,6 +4,7 @@ import io.yak.framework.common.Result;
 import io.yak.ops.boot.home.HomeDataCenterService.OverviewResponse;
 import io.yak.ops.boot.home.HomeDataCenterService.RecentResponse;
 import io.yak.ops.boot.home.HomeDataCenterService.ScheduleResponse;
+import io.yak.ops.core.project.ProjectScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** 首页数据中心接口。 */
 @RestController
 @RequestMapping("/api/v1/home/data-center")
+@ProjectScope
 @RequiredArgsConstructor
 public class HomeDataCenterController {
 
