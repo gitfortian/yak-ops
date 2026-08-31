@@ -1,5 +1,7 @@
+import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import {
   pageMessages,
+  safeMessageActionPath,
   type SecurityMessage,
 } from '@/services/security/messages';
 import { history } from '@umijs/max';
@@ -15,20 +17,22 @@ interface NotificationState {
   failed: boolean;
 }
 
-const formatMessageDate = (value?: string) => {
-  if (!value) return '--';
+const formatMessageDate = (value?: string | number) => {
+  if (value === undefined || value === null || value === '') return '--';
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return value;
+  if (!Number.isFinite(date.getTime())) return String(value);
   return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate(),
   ).padStart(2, '0')}`;
 };
 
 function NotificationRow({ item }: { item: SecurityMessage }) {
+  const actionPath = safeMessageActionPath(item.actionPath);
+
   return (
     <button
       type="button"
-      onClick={() => history.push('/system/messages')}
+      onClick={() => history.push(actionPath || '/system/messages')}
       className="group flex w-full items-start gap-2 border-0 bg-transparent py-3 text-left"
     >
       <span
@@ -60,6 +64,7 @@ function NotificationRow({ item }: { item: SecurityMessage }) {
 }
 
 export default function NotificationCenter() {
+  const { projects, currentProject } = useSecurityProject();
   const [state, setState] = useState<NotificationState>({
     items: [],
     total: 0,
@@ -70,7 +75,22 @@ export default function NotificationCenter() {
   useEffect(() => {
     let active = true;
 
-    pageMessages({ pageNum: 1, pageSize: 3 })
+    // SecurityProjectProvider resolves the persisted/default workspace in a layout
+    // effect. Avoid issuing an unscoped request while that selection is pending.
+    if (projects.length > 0 && !currentProject) {
+      setState({ items: [], total: 0, loading: true, failed: false });
+      return () => {
+        active = false;
+      };
+    }
+
+    setState({ items: [], total: 0, loading: true, failed: false });
+
+    pageMessages({
+      pageNum: 1,
+      pageSize: 3,
+      projectId: currentProject?.id,
+    })
       .then((result) => {
         if (!active) return;
         setState({
@@ -88,7 +108,7 @@ export default function NotificationCenter() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentProject?.id, projects.length]);
 
   return (
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-5">
