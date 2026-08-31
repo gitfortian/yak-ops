@@ -28,35 +28,42 @@ export function OverviewPanel({
   );
   const trendLabels = overview?.trend?.labels || [];
   const trendValues = overview?.trend?.values || [];
-  const hasTrendData = trendValues.some((value) => value > 0);
+  const hasTrendData = trendLabels.length > 0 && trendValues.length > 0;
+
+  if (loading || failed) {
+    return (
+      <div className="flex h-[240px] items-center justify-center text-[12px] text-[#9da1a8]">
+        {loading ? '运行数据加载中...' : '运行数据加载失败'}
+      </div>
+    );
+  }
+
+  if (!hasTrendData) {
+    return (
+      <div className="flex h-[240px] items-center justify-center">
+        <YakOpsEmpty
+          width={120}
+          height={80}
+          title={`${periodLabel}暂无运行数据`}
+          showCaption
+        />
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className="lg:h-[240px]">
       <div className="mt-2 flex items-center justify-end gap-1.5 text-[12px] text-[#7f848e]">
         <span className="h-2 w-2 rounded-full bg-[#5b8cff]" />
         运行次数
       </div>
-      {loading || failed ? (
-        <div className="flex h-[152px] items-center justify-center text-[12px] text-[#9da1a8]">
-          {loading ? '运行数据加载中...' : '运行数据加载失败'}
-        </div>
-      ) : hasTrendData ? (
-        <TrendChart
-          key={`trend-${periodKey}`}
-          values={trendValues}
-          labels={trendLabels}
-          name="运行次数"
-        />
-      ) : (
-        <div className="flex h-[152px] items-center justify-center">
-          <YakOpsEmpty
-            width={120}
-            height={80}
-            title={`${periodLabel}暂无运行数据`}
-            showCaption
-          />
-        </div>
-      )}
+      <TrendChart
+        key={`trend-${periodKey}`}
+        values={trendValues}
+        labels={trendLabels}
+        name="运行次数"
+        height={132}
+      />
       <OverviewMetrics metrics={overviewMetrics} />
     </div>
   );

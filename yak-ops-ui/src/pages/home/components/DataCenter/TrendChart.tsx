@@ -6,9 +6,15 @@ interface TrendChartProps {
   values: number[];
   labels: string[];
   name: string;
+  height?: number;
 }
 
-export function TrendChart({ values, labels, name }: TrendChartProps) {
+export function TrendChart({
+  values,
+  labels,
+  name,
+  height = 152,
+}: TrendChartProps) {
   const option = useMemo<EChartsOption>(
     () => ({
       animation: true,
@@ -131,7 +137,7 @@ export function TrendChart({ values, labels, name }: TrendChartProps) {
       option={option}
       notMerge
       lazyUpdate
-      style={{ height: 152, width: '100%' }}
+      style={{ height, width: '100%' }}
     />
   );
 }
