@@ -1,4 +1,3 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import type { HomeRecentTask } from '@/services/home';
 import { history } from '@umijs/max';
 import { Clock3, Database } from 'lucide-react';
@@ -9,6 +8,7 @@ import {
   statusClassName,
   statusLabel,
 } from '../../utils/homeDataCenter';
+import { HomeEmptyState } from '../HomeEmptyState';
 
 interface RecentTasksPanelProps {
   items: HomeRecentTask[];
@@ -31,14 +31,12 @@ export function RecentTasksPanel({
 
   if (items.length === 0) {
     return (
-      <div className="flex min-h-[263px] items-center justify-center">
-        <YakOpsEmpty
-          width={160}
-          height={108}
-          title="暂无近期任务"
-          showCaption
-        />
-      </div>
+      <HomeEmptyState
+        icon={Database}
+        title="暂无近期任务"
+        size="medium"
+        className="min-h-[263px]"
+      />
     );
   }
 
