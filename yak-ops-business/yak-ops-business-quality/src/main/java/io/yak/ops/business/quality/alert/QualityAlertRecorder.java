@@ -4,12 +4,17 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.AlertEventSpec;
 import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
 import io.yak.ops.business.quality.repository.QualityAlertRepository;
+import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
+import io.yak.ops.core.notification.BusinessNotification;
+import io.yak.ops.core.notification.BusinessNotificationGateway;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /** Records alert evidence when an execution result requires notification. */
 @Component
@@ -17,9 +22,25 @@ import org.springframework.stereotype.Component;
 public class QualityAlertRecorder {
   private static final Logger LOGGER = LoggerFactory.getLogger(QualityAlertRecorder.class);
   private final QualityAlertRepository repository;
+  private final BusinessNotificationGateway notificationGateway;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  public QualityAlertRecorder(
+      QualityAlertRepository repository,
+      ObjectProvider<BusinessNotificationGateway> notificationGateways) {
+    this(repository, notificationGateways.getIfAvailable());
+  }
+
+  /** Focused tests retain the lightweight constructor. */
   public QualityAlertRecorder(QualityAlertRepository repository) {
+    this(repository, null);
+  }
+
+  private QualityAlertRecorder(
+      QualityAlertRepository repository,
+      BusinessNotificationGateway notificationGateway) {
     this.repository = repository;
+    this.notificationGateway = notificationGateway;
   }
 
   public void recordIfNecessary(
@@ -28,17 +49,35 @@ public class QualityAlertRecorder {
       int passed,
       int failed,
       int errors) {
-    if (!plan.notifyEnabled()
-        || result == CheckResult.PASSED
+    if (result == CheckResult.PASSED
         || result == CheckResult.RUNNING
         || result == CheckResult.NOT_RUN) {
       return;
     }
+
+    boolean recordConfiguredAlert = plan.notifyEnabled();
+    boolean publishMessage = result == CheckResult.ERROR
+        || (plan.notifyEnabled() && plan.notifyChannel() == NotifyChannel.MESSAGE);
+    if (!recordConfiguredAlert && !publishMessage) return;
+
+    String message = "质量监控“" + plan.monitor().name() + "”执行结果为 " + result
+        + "，通过 " + passed + " 条，未通过 " + failed + " 条，异常 " + errors + " 条。";
+
+    if (recordConfiguredAlert) {
+      recordConfiguredAlert(plan, result, message);
+    }
+    if (publishMessage) {
+      publishMessageNotification(plan, result, message);
+    }
+  }
+
+  private void recordConfiguredAlert(
+      QualityExecutionPlan plan,
+      CheckResult result,
+      String message) {
     try {
       String target = normalizeTarget(plan);
       String status = plan.notifyChannel() == NotifyChannel.MESSAGE ? "RECORDED" : "PENDING";
-      String message = "质量监控“" + plan.monitor().name() + "”执行结果为 " + result
-          + "，通过 " + passed + " 条，未通过 " + failed + " 条，异常 " + errors + " 条。";
       repository.insertAlertEvent(new AlertEventSpec(
           plan.monitor().id(), plan.executionNo(), result, plan.alertLevel(), plan.notifyChannel(),
           target, status, message, null, LocalDateTime.now()));
@@ -49,6 +88,44 @@ public class QualityAlertRecorder {
       LOGGER.error(
           "Failed to record quality alert for monitor {} and execution {}",
           plan.monitor().id(), plan.executionNo(), exception);
+    }
+  }
+
+  private void publishMessageNotification(
+      QualityExecutionPlan plan,
+      CheckResult result,
+      String message) {
+    if (notificationGateway == null) return;
+    try {
+      boolean error = result == CheckResult.ERROR || plan.alertLevel() == AlertLevel.CRITICAL;
+      String monitorName = StringUtils.hasText(plan.monitor().name())
+          ? plan.monitor().name().trim()
+          : "质量监控 #" + plan.monitor().id();
+      String table = StringUtils.hasText(plan.monitor().tableName())
+          ? plan.monitor().tableName().trim()
+          : null;
+      String summary = table == null ? monitorName : monitorName + " · " + table;
+      String title = result == CheckResult.ERROR
+          ? "数据质量执行异常"
+          : error ? "数据质量检查发现严重问题" : "数据质量检查发现问题";
+
+      notificationGateway.publishToProjectOwners(
+          new BusinessNotification(
+              plan.projectId(),
+              BusinessNotification.Type.QUALITY,
+              error ? BusinessNotification.Level.ERROR : BusinessNotification.Level.WARNING,
+              title,
+              summary,
+              message,
+              "DATA_QUALITY_EXECUTION",
+              plan.executionNo(),
+              "/data-quality/execution/" + plan.executionNo()));
+    } catch (RuntimeException exception) {
+      LOGGER.error(
+          "Failed to publish quality Message Center notification: monitor={}, execution={}",
+          plan.monitor().id(),
+          plan.executionNo(),
+          exception);
     }
   }
 
