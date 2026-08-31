@@ -2,6 +2,7 @@ import {
   hasAllPermissions,
   hasAnyPermission,
   hasPermission,
+  isSecurityRoot,
   satisfiesPermissionRequirement,
 } from './permission';
 
@@ -21,12 +22,15 @@ describe('permission helpers', () => {
   it('grants every permission requirement to the security root identity', () => {
     const root = ['security:root'];
 
+    expect(isSecurityRoot(root)).toBe(true);
+    expect(isSecurityRoot(['security:project:read'])).toBe(false);
     expect(hasPermission(root, 'task:batch:read')).toBe(true);
     expect(hasAnyPermission(root, ['quality:rule:read', 'operations:metrics:read'])).toBe(true);
     expect(hasAllPermissions(root, ['security:user:read', 'security:role:read'])).toBe(true);
   });
 
   it('uses fail-closed empty-set semantics while public remains public', () => {
+    expect(isSecurityRoot(undefined)).toBe(false);
     expect(hasAnyPermission(granted, [])).toBe(false);
     expect(hasAllPermissions(granted, [])).toBe(true);
     expect(satisfiesPermissionRequirement([], { mode: 'one', permission: 'task:read' })).toBe(false);
