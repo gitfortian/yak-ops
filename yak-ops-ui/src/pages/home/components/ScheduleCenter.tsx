@@ -1,12 +1,13 @@
-import YakOpsEmpty from '@/components/YakOpsEmpty';
 import {
   homeScheduleCenterApi,
   type HomeScheduleCalendar,
   type HomeScheduleDay,
 } from '@/services/home';
 import { history } from '@umijs/max';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+
+import { HomeEmptyState } from './HomeEmptyState';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
@@ -268,14 +269,12 @@ export default function ScheduleCenter() {
           ))}
 
           {calendar && calendar.overview.length === 0 && (
-            <div className="flex min-h-[126px] items-center justify-center">
-              <YakOpsEmpty
-                width={116}
-                height={78}
-                title="本月暂无调度配置"
-                showCaption
-              />
-            </div>
+            <HomeEmptyState
+              icon={Clock3}
+              title="本月暂无调度配置"
+              size="medium"
+              className="min-h-[126px]"
+            />
           )}
         </div>
       </div>
