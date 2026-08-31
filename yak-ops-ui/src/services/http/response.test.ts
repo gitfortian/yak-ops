@@ -68,6 +68,7 @@ describe('API response protocols', () => {
   it('recognizes authentication failures without treating forbidden as anonymous', () => {
     expect(isUnauthenticatedResponse({ code: 401 }, 'yak-ops')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 401 }, 'security')).toBe(true);
+    expect(isUnauthenticatedResponse({ code: 2001 }, 'yak-ops')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 2001 }, 'security')).toBe(true);
     expect(isUnauthenticatedResponse({ code: 403 }, 'security')).toBe(false);
     expect(
