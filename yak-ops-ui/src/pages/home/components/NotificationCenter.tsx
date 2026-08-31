@@ -1,5 +1,7 @@
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import {
+  markMessageRead,
+  notifyMessageCountChanged,
   pageMessages,
   safeMessageActionPath,
   type SecurityMessage,
@@ -12,7 +14,7 @@ import { HomeEmptyState } from './HomeEmptyState';
 
 interface NotificationState {
   items: SecurityMessage[];
-  total: number;
+  unreadTotal: number;
   loading: boolean;
   failed: boolean;
 }
@@ -26,28 +28,22 @@ const formatMessageDate = (value?: string | number) => {
   ).padStart(2, '0')}`;
 };
 
-function NotificationRow({ item }: { item: SecurityMessage }) {
-  const actionPath = safeMessageActionPath(item.actionPath);
-
+function NotificationRow({
+  item,
+  onOpen,
+}: {
+  item: SecurityMessage;
+  onOpen: (item: SecurityMessage) => void;
+}) {
   return (
     <button
       type="button"
-      onClick={() => history.push(actionPath || '/system/messages')}
+      onClick={() => onOpen(item)}
       className="group flex w-full items-start gap-2 border-0 bg-transparent py-3 text-left"
     >
-      <span
-        className={`mt-[7px] h-1 w-1 shrink-0 rounded-full ${
-          item.status === 'UNREAD' ? 'bg-[#ff3657]' : 'bg-[#d7d9de]'
-        }`}
-      />
+      <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[#ff3657]" />
       <span className="min-w-0 flex-1">
-        <strong
-          className={`line-clamp-2 block text-[12px] leading-5 transition-colors group-hover:text-[#20232b] ${
-            item.status === 'UNREAD'
-              ? 'font-semibold text-[#353943]'
-              : 'font-normal text-[#555a64]'
-          }`}
-        >
+        <strong className="line-clamp-2 block text-[12px] font-semibold leading-5 text-[#353943] transition-colors group-hover:text-[#20232b]">
           {item.title}
         </strong>
         {item.summary ? (
@@ -67,7 +63,7 @@ export default function NotificationCenter() {
   const { projects, currentProject } = useSecurityProject();
   const [state, setState] = useState<NotificationState>({
     items: [],
-    total: 0,
+    unreadTotal: 0,
     loading: true,
     failed: false,
   });
@@ -78,37 +74,55 @@ export default function NotificationCenter() {
     // SecurityProjectProvider resolves the persisted/default workspace in a layout
     // effect. Avoid issuing an unscoped request while that selection is pending.
     if (projects.length > 0 && !currentProject) {
-      setState({ items: [], total: 0, loading: true, failed: false });
+      setState({ items: [], unreadTotal: 0, loading: true, failed: false });
       return () => {
         active = false;
       };
     }
 
-    setState({ items: [], total: 0, loading: true, failed: false });
+    setState({ items: [], unreadTotal: 0, loading: true, failed: false });
 
+    // Homepage notifications are attention-oriented: only unread messages are shown.
+    // With yak-framework #113, omitting projectId for a user without workspaces is
+    // fail-closed to SYSTEM messages; with an active workspace the backend returns
+    // SYSTEM + that PROJECT.
     pageMessages({
       pageNum: 1,
       pageSize: 3,
+      status: 'UNREAD',
       projectId: currentProject?.id,
     })
       .then((result) => {
         if (!active) return;
         setState({
           items: result.records || [],
-          total: result.total || 0,
+          unreadTotal: result.total || 0,
           loading: false,
           failed: false,
         });
       })
       .catch(() => {
         if (!active) return;
-        setState({ items: [], total: 0, loading: false, failed: true });
+        setState({ items: [], unreadTotal: 0, loading: false, failed: true });
       });
 
     return () => {
       active = false;
     };
   }, [currentProject?.id, projects.length]);
+
+  const openNotification = async (item: SecurityMessage) => {
+    const actionPath = safeMessageActionPath(item.actionPath) || '/system/messages';
+
+    try {
+      await markMessageRead(item.id);
+      notifyMessageCountChanged();
+    } catch {
+      // Reading a notification must never block the user from opening its target.
+    } finally {
+      history.push(actionPath);
+    }
+  };
 
   return (
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-5">
@@ -117,9 +131,9 @@ export default function NotificationCenter() {
           <h2 className="text-xl font-semibold tracking-[-0.35px] text-[#252832]">
             通知
           </h2>
-          {state.total > 0 ? (
-            <span className="rounded-full bg-[#f4f5f7] px-2 py-0.5 text-[10px] text-[#8e939c]">
-              {state.total}
+          {state.unreadTotal > 0 ? (
+            <span className="rounded-full bg-[#fff0f2] px-2 py-0.5 text-[10px] font-medium text-[#e33f5c]">
+              {state.unreadTotal}
             </span>
           ) : null}
         </div>
@@ -138,7 +152,7 @@ export default function NotificationCenter() {
         {state.items.length > 0 ? (
           <div className="divide-y divide-[#f0f1f3]">
             {state.items.map((item) => (
-              <NotificationRow key={item.id} item={item} />
+              <NotificationRow key={item.id} item={item} onOpen={openNotification} />
             ))}
           </div>
         ) : state.loading || state.failed ? (
@@ -148,7 +162,7 @@ export default function NotificationCenter() {
         ) : (
           <HomeEmptyState
             icon={Bell}
-            title="暂无通知"
+            title="暂无未读通知"
             size="small"
             className="min-h-[126px]"
           />
