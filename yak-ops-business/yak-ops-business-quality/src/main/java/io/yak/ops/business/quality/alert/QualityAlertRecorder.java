@@ -4,6 +4,7 @@ import io.yak.ops.business.quality.config.ConditionalOnQualityEnabled;
 import io.yak.ops.business.quality.domain.QualityDomain.AlertEventSpec;
 import io.yak.ops.business.quality.domain.execution.QualityExecutionPlan;
 import io.yak.ops.business.quality.repository.QualityAlertRepository;
+import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
 import io.yak.ops.core.notification.BusinessNotification;
@@ -81,7 +82,7 @@ public class QualityAlertRecorder {
       String message) {
     if (notificationGateway == null) return;
     try {
-      boolean error = result == CheckResult.ERROR;
+      boolean error = result == CheckResult.ERROR || plan.alertLevel() == AlertLevel.CRITICAL;
       String monitorName = StringUtils.hasText(plan.monitor().name())
           ? plan.monitor().name().trim()
           : "质量监控 #" + plan.monitor().id();
@@ -89,13 +90,16 @@ public class QualityAlertRecorder {
           ? plan.monitor().tableName().trim()
           : null;
       String summary = table == null ? monitorName : monitorName + " · " + table;
+      String title = result == CheckResult.ERROR
+          ? "数据质量执行异常"
+          : error ? "数据质量检查发现严重问题" : "数据质量检查发现问题";
 
       notificationGateway.publishToProjectOwners(
           new BusinessNotification(
               plan.projectId(),
               BusinessNotification.Type.QUALITY,
               error ? BusinessNotification.Level.ERROR : BusinessNotification.Level.WARNING,
-              error ? "数据质量执行异常" : "数据质量检查发现问题",
+              title,
               summary,
               message,
               "DATA_QUALITY_EXECUTION",
