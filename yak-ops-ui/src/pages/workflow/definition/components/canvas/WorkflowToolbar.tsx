@@ -98,6 +98,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
   const busy = saving || statusAction;
   const reenable = status === "OFFLINE" && hasPublished && !draftChanged;
   const publishingUpdate = hasPublished && draftChanged;
+  const publishingOfflineUpdate = status === "OFFLINE" && publishingUpdate;
   const targetVersionNo = reenable
     ? activeVersionNo || 1
     : publishingUpdate
@@ -116,6 +117,8 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
     ? "已是最新版本"
     : reenable
     ? "重新上线"
+    : publishingOfflineUpdate
+    ? "发布更新并上线"
     : publishingUpdate
     ? "发布更新"
     : "发布并上线";
@@ -139,6 +142,8 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
 
     const title = reenable
       ? `重新上线工作流 v${targetVersionNo}？`
+      : publishingOfflineUpdate
+      ? `发布更新 v${targetVersionNo} 并上线？`
       : publishingUpdate
       ? `发布更新 v${targetVersionNo}？`
       : `发布并上线工作流 v${targetVersionNo}？`;
@@ -149,6 +154,8 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
       : `当前草稿将形成不可变的 v${targetVersionNo} 并开启正式运行入口；后续草稿修改不会影响该版本。`;
     const okText = reenable
       ? "重新上线"
+      : publishingOfflineUpdate
+      ? "发布更新并上线"
       : publishingUpdate
       ? "发布更新"
       : "发布并上线";
