@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.yak.ops.business.datasource.catalog.DataSourceCatalogReader;
 import io.yak.ops.business.datasource.connection.DataSourceConnectionResolver;
 import io.yak.ops.business.datasource.connection.DataSourceConnectionTester;
-import io.yak.ops.business.datasource.controller.v1.mapper.DataSourcePluginViewMapper;
-import io.yak.ops.business.datasource.controller.v1.mapper.DataSourceViewMapper;
+import io.yak.ops.business.datasource.controller.v1.converter.DataSourcePluginViewConverter;
+import io.yak.ops.business.datasource.controller.v1.converter.DataSourceViewConverter;
 import io.yak.ops.business.datasource.domain.plugin.DataSourcePluginDescriptor;
 import io.yak.ops.business.datasource.execution.DefaultSqlExecutionRuntime;
 import io.yak.ops.business.datasource.execution.domain.SqlExecutionAggregate;
@@ -62,8 +62,8 @@ class DataSourceGatewayArchitectureTest {
             DataSourceConnectionTester.class,
             DataSourceCatalogReader.class,
             DataSourcePluginReader.class,
-            DataSourceViewMapper.class,
-            DataSourcePluginViewMapper.class,
+            DataSourceViewConverter.class,
+            DataSourcePluginViewConverter.class,
             DefaultSqlExecutionRuntime.class)) {
       for (Field field : type.getDeclaredFields()) {
         String fieldType = field.getGenericType().getTypeName();
