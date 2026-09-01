@@ -4,9 +4,12 @@ import {
   taskCatalogOption,
 } from './taskOptions';
 
-const asset = (taskType: string): TaskCatalogAsset => ({
+const asset = (
+  taskType: string,
+  source = 'DATA_DEVELOPMENT',
+): TaskCatalogAsset => ({
   id: '12',
-  source: 'DATA_DEVELOPMENT',
+  source,
   sourceRef: '10001',
   projectId: '7',
   name: '测试资产',
@@ -32,5 +35,11 @@ describe('workflow task catalog options', () => {
     expect(isWorkflowEligibleTaskCatalogAsset(asset('DATA_SERVICE'))).toBe(false);
     expect(() => taskCatalogOption(asset('DATASET'))).toThrow('不能进入工作流编排');
     expect(() => taskCatalogOption(asset('DATA_SERVICE'))).toThrow('不能进入工作流编排');
+  });
+
+  test('maps task asset sources to workflow task categories', () => {
+    expect(taskCatalogOption(asset('SYNC', 'DATA_INTEGRATION')).typeLabel).toBe('数据同步');
+    expect(taskCatalogOption(asset('SQL', 'DATA_DEVELOPMENT')).typeLabel).toBe('数据开发');
+    expect(taskCatalogOption(asset('QUALITY_CHECK', 'DATA_QUALITY')).typeLabel).toBe('数据质量');
   });
 });
