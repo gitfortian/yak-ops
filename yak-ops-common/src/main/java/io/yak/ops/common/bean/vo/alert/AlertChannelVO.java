@@ -7,6 +7,9 @@ import lombok.Data;
 @Data
 public class AlertChannelVO {
 
+  /** 持久化渠道主键；尚未保存配置的插件描述为 null。 */
+  private Long id;
+
   /** 渠道类型标识 */
   private String type;
 
