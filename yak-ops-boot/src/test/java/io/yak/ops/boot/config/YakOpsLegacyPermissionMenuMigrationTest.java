@@ -9,20 +9,27 @@ import org.springframework.core.io.ClassPathResource;
 class YakOpsLegacyPermissionMenuMigrationTest {
 
   @Test
-  void migrationCompletesMenuCodesForLegacyLeafPermissions() throws Exception {
+  void reconciliationPreservesLegacyLeafPermissionMenuBindings() throws Exception {
     ClassPathResource resource = new ClassPathResource(
-        "yak-security/db/migration/V1310__link_legacy_permissions_to_menus.sql");
+        "yak-security/db/migration/V2006__reconcile_menu_permission_catalog.sql");
     String sql = resource.getContentAsString(StandardCharsets.UTF_8);
 
     assertThat(sql)
-        .contains("permission_code LIKE 'job:%'")
-        .contains("SET menu_code='batch-link-up'")
+        .contains("'task:batch:read'")
+        .contains("'datasource:create'")
+        .contains("'datasource:update'")
+        .contains("'datasource:delete'")
+        .contains("'datasource:test'")
+        .contains("'job:view'")
+        .contains("'job:execute'")
+        .contains("'resource:data-source:read'")
         .contains("'resource:view'")
         .contains("'resource:upload'")
-        .contains("'resource:download'")
-        .contains("'resource:update'")
-        .contains("'resource:delete'")
-        .contains("SET menu_code='data-source'")
-        .contains("INSERT IGNORE INTO yak_security_role_menu");
+        .contains("WHEN 'datasource:create' THEN 'data-source'")
+        .contains("WHEN 'job:view' THEN 'batch-link-up'")
+        .contains("WHEN 'resource:view' THEN 'resource-management'")
+        .contains("permission_row.menu_code IS NOT NULL")
+        .doesNotContain("DELETE FROM yak_security_permission")
+        .doesNotContain("DELETE FROM yak_security_menu");
   }
 }
