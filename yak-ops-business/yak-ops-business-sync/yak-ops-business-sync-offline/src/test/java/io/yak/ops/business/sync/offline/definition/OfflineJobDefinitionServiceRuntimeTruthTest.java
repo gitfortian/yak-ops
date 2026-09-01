@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
+import io.yak.ops.business.sync.offline.notification.OfflineNotificationPolicyCodec;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
@@ -71,6 +72,7 @@ class OfflineJobDefinitionServiceRuntimeTruthTest {
         batches,
         schedules,
         mock(OfflineDefinitionSupport.class),
+        mock(OfflineNotificationPolicyCodec.class),
         mock(OfflineScheduleSupport.class),
         lifecycle,
         mock(OfflineSyncViewMapper.class));

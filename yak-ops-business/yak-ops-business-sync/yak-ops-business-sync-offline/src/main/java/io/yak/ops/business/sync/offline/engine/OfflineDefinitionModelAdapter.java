@@ -77,6 +77,9 @@ public final class OfflineDefinitionModelAdapter {
       return definition;
     }
     ObjectNode adapted = (ObjectNode) definition.deepCopy();
+    // Notification is a Yak Ops control-plane concern. It must never alter engine JobSpec,
+    // execution snapshots or config digests when only delivery preferences change.
+    adapted.remove("notification");
     String mode = text(adapted.path("basic"), "mode", "GUIDE_SINGLE");
     adaptEndpoint(adapted, "source", mode, objectMapper);
     adaptEndpoint(adapted, "sink", mode, objectMapper);

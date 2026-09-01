@@ -34,6 +34,7 @@ public class OfflineJobDefinitionPO {
   @TableField(updateStrategy = FieldStrategy.ALWAYS) private String cronExpression;
   private Integer retryMaxAttempts;
   private Integer retryBackoffSeconds;
+  @ToString.Exclude @TableField(updateStrategy = FieldStrategy.ALWAYS) private String notificationConfigJson;
   @TableField(updateStrategy = FieldStrategy.ALWAYS) private LocalDateTime scheduleLastFireTime;
   @TableField(updateStrategy = FieldStrategy.ALWAYS) private LocalDateTime scheduleNextFireTime;
   private Integer version;

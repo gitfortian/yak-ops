@@ -11,6 +11,8 @@ class OfflineSlimSchemaTest {
 
   private static final String BASELINE =
       "/db/migration/yak-offline-sync/V1__baseline_offline_sync.sql";
+  private static final String NOTIFICATION_POLICY =
+      "/db/migration/yak-offline-sync/V2__add_offline_notification_config.sql";
 
   @Test
   void baselineCreatesOnlyCurrentOfflineSyncTables() throws Exception {
@@ -64,6 +66,17 @@ class OfflineSlimSchemaTest {
     assertFalse(sql.contains("UPDATE YAK_OFFLINE_"));
     assertFalse(sql.contains("SET STATUS = 'UNKNOWN'"));
     assertFalse(sql.contains("SET LAST_JOB_STATUS = 'UNKNOWN'"));
+  }
+
+  @Test
+  void notificationPolicyMigrationIsAdditiveAndDoesNotBackfillLegacyTasks() throws Exception {
+    String sql = read(NOTIFICATION_POLICY);
+    String upper = sql.toUpperCase();
+
+    assertTrue(sql.contains("ALTER TABLE yak_offline_job_definition"));
+    assertTrue(sql.contains("notification_config_json TEXT NULL"));
+    assertFalse(upper.contains("UPDATE YAK_OFFLINE_JOB_DEFINITION"));
+    assertFalse(upper.contains("NOT NULL"));
   }
 
   private String read(String path) throws Exception {
