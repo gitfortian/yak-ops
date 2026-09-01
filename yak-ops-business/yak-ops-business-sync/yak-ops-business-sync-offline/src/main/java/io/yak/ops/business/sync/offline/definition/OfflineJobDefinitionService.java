@@ -58,7 +58,7 @@ public class OfflineJobDefinitionService {
     ensureCanSaveDraft(existing);
 
     DraftDefinition draft = support.prepareDraft(dto);
-    String notificationConfigJson = notificationPolicyCodec.encode(dto.getNotification());
+    String notificationConfigJson = resolveNotificationConfig(dto, existing);
     ensureUniqueName(draft.getJobName(), id);
 
     OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
@@ -76,7 +76,7 @@ public class OfflineJobDefinitionService {
     ensureEditable(existing);
 
     PreparedDefinition prepared = support.prepare(dto);
-    String notificationConfigJson = notificationPolicyCodec.encode(dto.getNotification());
+    String notificationConfigJson = resolveNotificationConfig(dto, existing);
     ensureUniqueName(prepared.getJobName(), id);
 
     OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
@@ -118,7 +118,9 @@ public class OfflineJobDefinitionService {
   }
 
   public JsonNode getEditDetail(Long id) {
-    return support.editDetail(require(id));
+    OfflineJobDefinition definition = require(id);
+    return notificationPolicyCodec.applyToEditDetail(
+        support.editDetail(definition), definition.getNotificationConfigJson());
   }
 
   public PageData<OfflineJobDefinition> pageDomain(OfflineDefinitionQuery query) {
@@ -200,6 +202,17 @@ public class OfflineJobDefinitionService {
       dto.setId(id);
     }
     return id;
+  }
+
+  private String resolveNotificationConfig(
+      OfflineJobDefinitionDTO dto,
+      OfflineJobDefinition existing) {
+    if (dto.getNotification() == null && existing != null) {
+      // Backward compatibility: an older client does not know the notification field and must not
+      // erase an already-configured policy while editing another part of the task.
+      return existing.getNotificationConfigJson();
+    }
+    return notificationPolicyCodec.encode(dto.getNotification());
   }
 
   private void ensureCanSaveDraft(OfflineJobDefinition existing) {
