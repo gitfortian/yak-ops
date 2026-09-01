@@ -27,6 +27,8 @@ describe('offline sync notification policy', () => {
       recipientType: 'PROJECT_OWNER',
       recipientUserIds: [],
       inAppEnabled: true,
+      alertEnabled: false,
+      alertChannelIds: [],
     });
   });
 
@@ -61,6 +63,35 @@ describe('offline sync notification policy', () => {
       recipientType: 'EXPLICIT_USERS',
       recipientUserIds: [11, 12],
       inAppEnabled: true,
+      alertEnabled: false,
+      alertChannelIds: [],
     });
+  });
+
+  it('normalizes and serializes stable alert channel ids', () => {
+    const editor = normalizeEditDetail(
+      {
+        id: 10,
+        basic: {
+          jobName: '订单同步',
+          jobDesc: '',
+          mode: 'GUIDE_SINGLE',
+        },
+        source: {},
+        sink: {},
+        channel: {},
+        schedule: {},
+        notification: {
+          alertEnabled: true,
+          alertChannelIds: [7, '8', 7, -1, null],
+        },
+      },
+      '10',
+    );
+
+    const payload = buildSavePayload(editor);
+
+    expect(payload.notification.alertEnabled).toBe(true);
+    expect(payload.notification.alertChannelIds).toEqual([7, 8]);
   });
 });

@@ -27,6 +27,11 @@ public class AlertChannelDaoImpl implements AlertChannelDao {
   }
 
   @Override
+  public AlertChannelPO selectById(long id) {
+    return alertChannelMapper.selectById(id);
+  }
+
+  @Override
   public AlertChannelPO selectByChannelType(String channelType) {
     return alertChannelMapper.selectOne(
         Wrappers.<AlertChannelPO>lambdaQuery()
