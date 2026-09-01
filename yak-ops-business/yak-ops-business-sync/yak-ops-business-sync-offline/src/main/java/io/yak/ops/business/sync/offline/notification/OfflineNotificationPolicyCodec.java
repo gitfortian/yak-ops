@@ -1,7 +1,9 @@
 package io.yak.ops.business.sync.offline.notification;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobNotificationDTO;
 import io.yak.ops.core.notification.NotificationPolicy;
@@ -36,6 +38,32 @@ public class OfflineNotificationPolicyCodec {
       return objectMapper.writeValueAsString(normalize(value));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("序列化离线同步通知策略失败", exception);
+    }
+  }
+
+  /**
+   * The dedicated notification column is the source of truth for edit responses.
+   *
+   * <p>Old definition_json payloads may not contain notification at all, while older clients may
+   * keep stale embedded notification data. Always project the normalized dedicated column into the
+   * response and remove the embedded field for legacy NULL policies.</p>
+   */
+  public JsonNode applyToEditDetail(JsonNode detail, String json) {
+    if (detail == null || !detail.isObject()) {
+      throw new IllegalArgumentException("离线同步编辑详情必须是 JSON 对象");
+    }
+    ObjectNode result = ((ObjectNode) detail).deepCopy();
+    if (!StringUtils.hasText(json)) {
+      result.remove("notification");
+      return result;
+    }
+    try {
+      OfflineJobNotificationDTO normalized =
+          normalize(objectMapper.readValue(json, OfflineJobNotificationDTO.class));
+      result.set("notification", objectMapper.valueToTree(normalized));
+      return result;
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("离线同步通知策略 JSON 已损坏", exception);
     }
   }
 
