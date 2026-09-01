@@ -498,7 +498,7 @@ const directConfig = (
     config.fetchSize = Number(options.fetch_size);
   }
   if (!config.batchSize && options.batch_size) {
-    config.batchSize = Number(options.batchSize);
+    config.batchSize = Number(options.batch_size);
   }
 
   return {
