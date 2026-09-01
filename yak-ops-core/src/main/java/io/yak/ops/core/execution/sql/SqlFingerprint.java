@@ -116,7 +116,9 @@ public final class SqlFingerprint {
   public static String redactedPreview(String sql, int maxChars) {
     int limit = Math.max(32, maxChars);
     String normalized = normalize(sql);
-    return normalized.length() <= limit ? normalized : normalized.substring(0, limit) + "…";
+    if (normalized.length() <= limit) return normalized;
+    // Reserve 1 character for the ellipsis so the total length never exceeds maxChars.
+    return normalized.substring(0, limit - 1) + "…";
   }
 
   private static void appendToken(StringBuilder output, String token) {

@@ -45,4 +45,15 @@ class SqlFingerprintTest {
         SqlFingerprint.sha256("select id from users where id = 1"),
         SqlFingerprint.sha256("delete from users where id = 1"));
   }
+
+  @Test
+  void redactedPreviewNeverExceedsMaxChars() {
+    String longSql = "select " + String.join(", ", java.util.Collections.nCopies(500, "?"));
+    int maxChars = 64;
+    String preview = SqlFingerprint.redactedPreview(longSql, maxChars);
+    assertTrue(preview.length() <= maxChars,
+        "preview length (" + preview.length() + ") must not exceed maxChars (" + maxChars + ")");
+    assertTrue(preview.endsWith("…"),
+        "truncated preview must end with ellipsis");
+  }
 }
