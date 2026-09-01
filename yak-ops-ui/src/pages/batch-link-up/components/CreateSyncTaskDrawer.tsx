@@ -1,3 +1,7 @@
+import EmojiIconPicker, {
+  DEFAULT_EMOJI_ICON,
+  type EmojiIconValue,
+} from '@/components/EmojiIconPicker';
 import { YakButton } from '@/components/ui';
 import {
   createOfflineSyncDraft,
@@ -113,6 +117,7 @@ export default function CreateSyncTaskDrawer({
 }: CreateSyncTaskDrawerProps) {
   const [form] = Form.useForm<CreateSyncTaskFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [icon, setIcon] = useState<EmojiIconValue>(DEFAULT_EMOJI_ICON);
   const autoJobNameRef = useRef('');
 
   const connectorOptions = useMemo(
@@ -133,6 +138,7 @@ export default function CreateSyncTaskDrawer({
     const defaultJobName = buildDefaultJobName(defaultDbType, defaultDbType);
 
     autoJobNameRef.current = defaultJobName;
+    setIcon(DEFAULT_EMOJI_ICON);
     form.setFieldsValue({
       sourceDbType: defaultDbType,
       targetDbType: defaultDbType,
@@ -163,6 +169,7 @@ export default function CreateSyncTaskDrawer({
     if (submitting) return;
 
     form.resetFields();
+    setIcon(DEFAULT_EMOJI_ICON);
     autoJobNameRef.current = '';
     onCancel();
   };
@@ -180,12 +187,15 @@ export default function CreateSyncTaskDrawer({
 
       setSubmitting(true);
       const taskId = String(await getOfflineSyncUniqueId());
-      const payload = buildCreatePayload(
-        taskId,
-        normalizedValues,
-        source,
-        sink,
-      );
+      const payload = {
+        ...buildCreatePayload(
+          taskId,
+          normalizedValues,
+          source,
+          sink,
+        ),
+        editorMeta: { icon },
+      };
       const savedId = await createOfflineSyncDraft(payload);
       const createdId = String(savedId ?? taskId);
       const path =
@@ -194,6 +204,7 @@ export default function CreateSyncTaskDrawer({
           : `/sync/batch-link-up/${createdId}/config/single?scene=edit`;
 
       form.resetFields();
+      setIcon(DEFAULT_EMOJI_ICON);
       autoJobNameRef.current = '';
       message.success('任务草稿已创建，请继续配置数据源和同步表');
       onCreated(createdId, normalizedValues.mode);
@@ -314,21 +325,32 @@ export default function CreateSyncTaskDrawer({
             </div>
           </div>
 
-          <Form.Item
-            name="jobName"
-            label="任务名称"
-            rules={[
-              { required: true, message: '请输入任务名称' },
-              { max: 64, message: '任务名称不能超过 64 个字符' },
-            ]}
-          >
-            <Input
-              autoFocus
-              maxLength={64}
-              showCount
-              variant="filled"
-              placeholder="例如：订单数据每日同步"
-            />
+          <Form.Item label="任务名称" required className="!mb-6">
+            <div className="flex items-start gap-2.5">
+              <EmojiIconPicker
+                value={icon}
+                disabled={submitting}
+                onChange={setIcon}
+                className="mt-px"
+              />
+              <Form.Item
+                name="jobName"
+                noStyle
+                rules={[
+                  { required: true, message: '请输入任务名称' },
+                  { max: 64, message: '任务名称不能超过 64 个字符' },
+                ]}
+              >
+                <Input
+                  autoFocus
+                  maxLength={64}
+                  showCount
+                  variant="filled"
+                  placeholder="例如：订单数据每日同步"
+                  className="!h-[44px] !rounded-[10px]"
+                />
+              </Form.Item>
+            </div>
           </Form.Item>
 
           <Form.Item
@@ -350,7 +372,7 @@ export default function CreateSyncTaskDrawer({
             label="同步类型"
             rules={[{ required: true, message: '请选择同步类型' }]}
           >
-            <Radio.Group className="grid w-full grid-cols-2 gap-3">
+            <Radio.Group className="grid w-full grid-cols-2 gap-2.5">
               {modeOptions.map((option) => (
                 <Radio.Button
                   key={option.value}
@@ -360,20 +382,22 @@ export default function CreateSyncTaskDrawer({
                     '!rounded-lg',
                     '!border',
                     '!border-[#e4e7ec]',
-                    '!px-4',
-                    '!py-4',
+                    '!bg-white',
+                    '!px-3',
+                    '!py-3',
                     '!shadow-none',
                     'hover:!border-[var(--yak-brand-color-border)]',
-                    'hover:!bg-[var(--yak-brand-color-soft-hover)]',
+                    'hover:!bg-[#fbfcfe]',
                     '[&.ant-radio-button-wrapper-checked]:!border-[var(--yak-brand-color)]',
-                    '[&.ant-radio-button-wrapper-checked]:!bg-[var(--yak-brand-color-soft)]',
+                    '[&.ant-radio-button-wrapper-checked]:!bg-white',
                     '[&.ant-radio-button-wrapper-checked]:!text-inherit',
+                    '[&.ant-radio-button-wrapper-checked]:!shadow-[0_0_0_2px_rgba(201,40,72,0.08)]',
                     'before:!hidden',
                   ].join(' ')}
                 >
-                  <div className="flex items-start gap-3 whitespace-normal">
+                  <div className="flex items-start gap-2.5 whitespace-normal">
                     <div
-                      className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[17px]"
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[15px]"
                       style={{
                         color: BRAND_COLOR,
                         backgroundColor: BRAND_COLOR_SOFT_HOVER,
@@ -383,11 +407,11 @@ export default function CreateSyncTaskDrawer({
                     </div>
 
                     <div className="min-w-0 text-left">
-                      <div className="font-medium text-[#182230]">
+                      <div className="text-[13px] font-medium leading-5 text-[#182230]">
                         {option.title}
                       </div>
 
-                      <div className="mt-1 text-xs leading-5 text-[#667085]">
+                      <div className="mt-0.5 text-[11px] leading-[18px] text-[#667085]">
                         {option.description}
                       </div>
                     </div>
