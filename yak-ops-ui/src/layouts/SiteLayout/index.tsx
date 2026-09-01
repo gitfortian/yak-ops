@@ -259,16 +259,17 @@ function SiteLayoutContent() {
   const { initialState, setInitialState } = useModel("@@initialState");
   const currentUser = initialState?.currentUser;
   const permissionCodes = currentUser?.permissionCodes;
+  const menuCodes = currentUser?.menuCodes;
 
   // Navigation metadata remains the single source of truth. Recalculate every
-  // permission-derived collection together whenever the signed-in identity changes.
+  // authorization-derived collection together whenever the signed-in identity changes.
   const { standaloneRoutes, navigationGroups, quickCreateRoutes } = useMemo(
     () => ({
-      standaloneRoutes: getStandaloneNavigationRoutes(permissionCodes),
-      navigationGroups: getMainNavigationGroups(permissionCodes),
-      quickCreateRoutes: getQuickCreateRoutes(permissionCodes),
+      standaloneRoutes: getStandaloneNavigationRoutes(permissionCodes, menuCodes),
+      navigationGroups: getMainNavigationGroups(permissionCodes, menuCodes),
+      quickCreateRoutes: getQuickCreateRoutes(permissionCodes, menuCodes),
     }),
-    [permissionCodes],
+    [permissionCodes, menuCodes],
   );
   const homeRoutes = standaloneRoutes.filter((route) => route.id === "home");
   const businessStandaloneRoutes = standaloneRoutes.filter(
@@ -389,7 +390,8 @@ function SiteLayoutContent() {
   const [openGroupIds, setOpenGroupIds] = useState<Set<string>>(() => {
     const activeGroupId = getActiveNavigationGroupId(
       location.pathname,
-      permissionCodes
+      permissionCodes,
+      menuCodes,
     );
 
     return activeGroupId ? new Set([activeGroupId]) : new Set();
@@ -414,7 +416,8 @@ function SiteLayoutContent() {
   useEffect(() => {
     const activeGroupId = getActiveNavigationGroupId(
       location.pathname,
-      permissionCodes
+      permissionCodes,
+      menuCodes,
     );
 
     if (!activeGroupId) {
@@ -431,7 +434,7 @@ function SiteLayoutContent() {
 
       return next;
     });
-  }, [location.pathname, permissionCodes]);
+  }, [location.pathname, permissionCodes, menuCodes]);
 
   useEffect(() => {
     setQuickCreateOpen(false);
@@ -459,7 +462,8 @@ function SiteLayoutContent() {
 
   const activeNavigationId = getActiveNavigationId(
     location.pathname,
-    permissionCodes
+    permissionCodes,
+    menuCodes,
   );
 
   const routeMetadata = getRouteMetadata(location.pathname);
@@ -1042,7 +1046,10 @@ function SiteLayoutContent() {
               bg-white
             "
           >
-            <RouteAccessBoundary permissionCodes={permissionCodes}>
+            <RouteAccessBoundary
+              permissionCodes={permissionCodes}
+              menuCodes={menuCodes}
+            >
               <Outlet />
             </RouteAccessBoundary>
           </div>
