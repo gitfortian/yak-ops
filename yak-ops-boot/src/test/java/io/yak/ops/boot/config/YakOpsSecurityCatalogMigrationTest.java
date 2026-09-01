@@ -9,7 +9,7 @@ import org.springframework.core.io.ClassPathResource;
 class YakOpsSecurityCatalogMigrationTest {
 
   @Test
-  void migrationOwnsOnlyBusinessPermissionsMenusAndBackfills()
+  void baselineOwnsCurrentBusinessPermissionsMenusAndBackfills()
       throws Exception {
 
     ClassPathResource resource = new ClassPathResource(
@@ -20,20 +20,18 @@ class YakOpsSecurityCatalogMigrationTest {
         .contains("INSERT INTO yak_security_permission")
         .contains("INSERT INTO yak_security_menu")
         .contains("'task:batch:read'")
-        .contains("'workflow:definition:update'")
-        .contains("'workflow:definition:delete'")
-        .contains("'workflow:definition:publish'")
-        .contains("'workflow:instance:execute'")
-        .contains("'workflow:instance:stop'")
-        .contains("'workflow:schedule:manage'")
+        .contains("'task:batch:create'")
+        .contains("'datasource:create'")
+        .contains("'datasource:update'")
+        .contains("'datasource:delete'")
         .contains("'resource:data-source:read'")
-        .contains("'quality:report:read'")
-        .contains("'knowledge-management'")
-        .contains("INSERT IGNORE INTO yak_security_role_menu")
-        .contains("declared=VALUES(declared)")
-        .doesNotContain("('security','系统管理'")
-        .doesNotContain("SELECT 'security' parent_code")
+        .contains("'resource:view'")
+        .contains("('data-source', '数据源管理', 'resources'")
+        .contains("('resource-management', '文件资源', 'resources'")
+        .contains("permission_row.menu_code IS NOT NULL")
+        .contains("ON DUPLICATE KEY UPDATE")
         .doesNotContain("'system-users'")
-        .doesNotContain("INSERT IGNORE INTO yak_security_role_permission");
+        .doesNotContain("INSERT IGNORE")
+        .doesNotContain("INSERT INTO yak_security_role_permission");
   }
 }
