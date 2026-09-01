@@ -1,43 +1,28 @@
-import { hasRouteMenuAccess } from './menu';
+import { hasMenuAccess } from './menu';
 
-describe('route menu authorization', () => {
-  const protectedRoute = {
-    id: 'batch-link-up',
-    mode: 'one' as const,
-  };
-
-  it('enforces menu codes when the backend contract is present', () => {
+describe('menu authorization', () => {
+  it('enforces the declared stable menu code when the backend contract is present', () => {
     expect(
-      hasRouteMenuAccess(['batch-link-up'], protectedRoute, []),
+      hasMenuAccess(['batch-link-up'], 'batch-link-up', []),
     ).toBe(true);
     expect(
-      hasRouteMenuAccess(['client'], protectedRoute, []),
+      hasMenuAccess(['client'], 'batch-link-up', []),
     ).toBe(false);
-    expect(hasRouteMenuAccess([], protectedRoute, [])).toBe(false);
+    expect(hasMenuAccess([], 'batch-link-up', [])).toBe(false);
   });
 
-  it('inherits the parent grant for hidden detail routes', () => {
-    expect(
-      hasRouteMenuAccess(
-        ['batch-link-up'],
-        {
-          id: 'batch-link-up-detail',
-          parentId: 'batch-link-up',
-        },
-        [],
-      ),
-    ).toBe(true);
+  it('fails closed for an unmapped protected resource once menu grants are present', () => {
+    expect(hasMenuAccess([], undefined, [])).toBe(false);
+    expect(hasMenuAccess(['batch-link-up'], undefined, [])).toBe(false);
   });
 
   it('keeps public, root, and staggered deployments compatible', () => {
+    expect(hasMenuAccess([], undefined, [], true)).toBe(true);
     expect(
-      hasRouteMenuAccess([], { id: 'home', mode: 'public' }, []),
+      hasMenuAccess([], 'batch-link-up', ['security:root']),
     ).toBe(true);
     expect(
-      hasRouteMenuAccess([], protectedRoute, ['security:root']),
-    ).toBe(true);
-    expect(
-      hasRouteMenuAccess(undefined, protectedRoute, []),
+      hasMenuAccess(undefined, 'batch-link-up', []),
     ).toBe(true);
   });
 });
