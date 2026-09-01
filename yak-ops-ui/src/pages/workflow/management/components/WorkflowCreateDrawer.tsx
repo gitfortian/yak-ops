@@ -1,10 +1,16 @@
+import EmojiIconPicker, {
+  DEFAULT_EMOJI_ICON,
+  type EmojiIconValue,
+} from '@/components/EmojiIconPicker';
 import { YakButton } from '@/components/ui';
 import { Drawer, Form, Input } from 'antd';
 import { GitBranch } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export interface WorkflowCreateValues {
   name: string;
   description?: string;
+  icon: EmojiIconValue;
 }
 
 interface WorkflowCreateDrawerProps {
@@ -20,19 +26,28 @@ const WorkflowCreateDrawer = ({
   onClose,
   onSubmit,
 }: WorkflowCreateDrawerProps) => {
-  const [form] = Form.useForm<WorkflowCreateValues>();
+  const [form] = Form.useForm<Omit<WorkflowCreateValues, 'icon'>>();
+  const [icon, setIcon] = useState<EmojiIconValue>(DEFAULT_EMOJI_ICON);
+
+  useEffect(() => {
+    if (!open) return;
+    form.resetFields();
+    setIcon(DEFAULT_EMOJI_ICON);
+  }, [form, open]);
 
   const handleClose = () => {
     if (creating) return;
     form.resetFields();
+    setIcon(DEFAULT_EMOJI_ICON);
     onClose();
   };
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      await onSubmit(values);
+      await onSubmit({ ...values, icon });
       form.resetFields();
+      setIcon(DEFAULT_EMOJI_ICON);
     } catch {
       // Form owns validation feedback; request failures are surfaced by the page action.
     }
@@ -86,15 +101,29 @@ const WorkflowCreateDrawer = ({
       }}
     >
       <Form form={form} layout="vertical" requiredMark="optional">
-        <Form.Item
-          name="name"
-          label="工作流名称"
-          rules={[
-            { required: true, message: '请输入工作流名称' },
-            { max: 100, message: '名称不能超过 100 个字符' },
-          ]}
-        >
-          <Input variant="filled" placeholder="例如：每日订单同步工作流" />
+        <Form.Item label="工作流名称" required className="!mb-6">
+          <div className="flex items-start gap-2.5">
+            <EmojiIconPicker
+              value={icon}
+              disabled={creating}
+              onChange={setIcon}
+              className="mt-px"
+            />
+            <Form.Item
+              name="name"
+              noStyle
+              rules={[
+                { required: true, message: '请输入工作流名称' },
+                { max: 100, message: '名称不能超过 100 个字符' },
+              ]}
+            >
+              <Input
+                variant="filled"
+                placeholder="例如：每日订单同步工作流"
+                className="!h-[44px] !rounded-[10px]"
+              />
+            </Form.Item>
+          </div>
         </Form.Item>
 
         <Form.Item
