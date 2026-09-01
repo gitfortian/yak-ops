@@ -106,6 +106,19 @@ public class DevelopmentDirectoryRepositoryAdapter implements DevelopmentDirecto
   }
 
   @Override
+  public boolean updateParentId(Long id, Long parentId) {
+    Long projectId = requiredProjectId();
+    return mapper.update(
+            null,
+            new LambdaUpdateWrapper<DevelopmentDirectoryPO>()
+                .eq(DevelopmentDirectoryPO::getId, id)
+                .eq(DevelopmentDirectoryPO::getProjectId, projectId)
+                .set(DevelopmentDirectoryPO::getParentId, toStoredParentId(parentId))
+                .set(DevelopmentDirectoryPO::getUpdateTime, Instant.now()))
+        > 0;
+  }
+
+  @Override
   public boolean deleteById(Long id) {
     Long projectId = requiredProjectId();
     return mapper.delete(

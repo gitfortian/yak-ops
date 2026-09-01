@@ -25,6 +25,7 @@ export type DevelopmentTreeAction =
   | 'copy-name'
   | 'copy-path'
   | 'rename'
+  | 'move'
   | 'delete';
 
 export interface DevelopmentTreeNode extends DataNode {

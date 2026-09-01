@@ -125,6 +125,33 @@ public class DevelopmentNodeService {
     }
   }
 
+  /** Moves a node to a different directory. */
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DevelopmentNode move(Long id, Long targetDirectoryId) {
+    DevelopmentNode current = repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("节点不存在：" + id));
+    Long normalizedDirectoryId = normalizeDirectoryId(targetDirectoryId);
+
+    if (normalizedDirectoryId != null
+        && directoryRepository.findById(normalizedDirectoryId).isEmpty()) {
+      throw new IllegalArgumentException("目标目录不存在：" + normalizedDirectoryId);
+    }
+    if (normalizedDirectoryId != null && normalizedDirectoryId.equals(current.directoryId())) {
+      return current;
+    }
+    if (normalizedDirectoryId == null && current.directoryId() == null) {
+      return current;
+    }
+    if (repository.existsByName(normalizedDirectoryId, current.name())) {
+      throw new IllegalStateException("目标目录下已存在同名节点：" + current.name());
+    }
+    if (!repository.updateDirectoryId(id, normalizedDirectoryId)) {
+      throw new IllegalStateException("节点移动失败：" + id);
+    }
+    return repository.findById(id)
+        .orElseThrow(() -> new IllegalStateException("节点移动成功但无法重新读取：" + id));
+  }
+
   private Long normalizeDirectoryId(Long directoryId) {
     return directoryId == null || directoryId <= 0L ? null : directoryId;
   }

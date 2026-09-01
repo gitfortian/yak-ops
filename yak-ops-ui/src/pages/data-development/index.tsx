@@ -6,6 +6,7 @@ import CreateDirectoryModal from './components/CreateDirectoryModal';
 import DeleteDevelopmentResourceModal from './components/DeleteDevelopmentResourceModal';
 import DevelopmentEditorWorkspace from './components/DevelopmentEditorWorkspace';
 import DevelopmentTreePane from './components/DevelopmentTreePane';
+import MoveResourceModal from './components/MoveResourceModal';
 import RenameResourceModal from './components/RenameResourceModal';
 import { useDataDevelopmentPage } from './hooks/useDataDevelopmentPage';
 
@@ -81,6 +82,24 @@ export default function DataDevelopmentPage() {
           loading={page.deleteSaving}
           onCancel={page.closeDelete}
           onConfirm={() => void page.submitDelete()}
+        />
+
+        <MoveResourceModal
+          open={Boolean(page.moveTarget)}
+          resourceLabel={
+            page.moveTarget?.nodeType === 'directory' ? '目录' : '节点'
+          }
+          resourceName={page.moveTarget?.title || ''}
+          directories={page.directories}
+          resourceId={page.moveTarget?.resourceId || ''}
+          resourceType={
+            page.moveTarget?.nodeType === 'directory' ? 'directory' : 'node'
+          }
+          loading={page.moveSaving}
+          onCancel={page.closeMove}
+          onConfirm={(targetDirectoryId) =>
+            void page.submitMove(targetDirectoryId)
+          }
         />
       </div>
     </ConfigProvider>

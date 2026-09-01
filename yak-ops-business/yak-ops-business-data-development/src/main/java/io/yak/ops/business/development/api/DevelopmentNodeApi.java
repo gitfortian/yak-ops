@@ -18,4 +18,8 @@ public final class DevelopmentNodeApi {
 
   public record RenameRequest(@NotBlank @Size(max = 200) String name) {
   }
+
+  /** directoryId is null or 0 to move to the root level. */
+  public record MoveRequest(Long directoryId) {
+  }
 }

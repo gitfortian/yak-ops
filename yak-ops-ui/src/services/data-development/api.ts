@@ -62,6 +62,15 @@ export const renameDevelopmentDirectory = (
     { name },
   );
 
+export const moveDevelopmentDirectory = (
+  id: DevelopmentId,
+  parentId: DevelopmentId | null,
+): Promise<DevelopmentDirectory> =>
+  HttpUtils.putData<DevelopmentDirectory>(
+    `${resourcePath(DIRECTORY_API, id)}/parent`,
+    { parentId },
+  );
+
 export const deleteDevelopmentDirectory = async (
   id: DevelopmentId,
 ): Promise<void> => {
@@ -83,6 +92,15 @@ export const renameDevelopmentNode = (
   HttpUtils.putData<DevelopmentResourceNode>(
     `${resourcePath(NODE_API, id)}/name`,
     { name },
+  );
+
+export const moveDevelopmentNode = (
+  id: DevelopmentId,
+  directoryId: DevelopmentId | null,
+): Promise<DevelopmentResourceNode> =>
+  HttpUtils.putData<DevelopmentResourceNode>(
+    `${resourcePath(NODE_API, id)}/directory`,
+    { directoryId },
   );
 
 export const deleteDevelopmentNode = async (

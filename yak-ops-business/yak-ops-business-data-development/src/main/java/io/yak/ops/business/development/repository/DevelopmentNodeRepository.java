@@ -49,5 +49,8 @@ public interface DevelopmentNodeRepository {
     return false;
   }
 
+  /** Moves the node to a different directory (null or <= 0 means root). */
+  boolean updateDirectoryId(Long id, Long directoryId);
+
   boolean deleteById(Long id);
 }

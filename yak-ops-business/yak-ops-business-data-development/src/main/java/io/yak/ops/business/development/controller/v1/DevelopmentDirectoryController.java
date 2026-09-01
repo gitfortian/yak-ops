@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.development.api.DevelopmentDirectoryApi.CreateRequest;
+import io.yak.ops.business.development.api.DevelopmentDirectoryApi.MoveRequest;
 import io.yak.ops.business.development.api.DevelopmentDirectoryApi.RenameRequest;
 import io.yak.ops.business.development.directory.DevelopmentDirectoryService;
 import io.yak.ops.business.development.domain.DevelopmentDirectory;
@@ -56,6 +57,15 @@ public class DevelopmentDirectoryController {
       @PathVariable("id") Long id,
       @Valid @RequestBody RenameRequest request) {
     return Result.success(service.rename(id, request.name()));
+  }
+
+  @Operation(summary = "移动数据开发目录")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
+  @PutMapping("/{id}/parent")
+  public Result<DevelopmentDirectory> move(
+      @PathVariable("id") Long id,
+      @Valid @RequestBody MoveRequest request) {
+    return Result.success(service.move(id, request.parentId()));
   }
 
   @Operation(summary = "删除空数据开发目录")
