@@ -58,4 +58,16 @@ class NotificationPolicyTest {
         List.of()))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void alertPolicyRequiresConfiguredChannelIds() {
+    assertThatThrownBy(() -> new NotificationPolicy(
+        true,
+        NotificationPolicy.RecipientStrategy.PROJECT_OWNER,
+        List.of(),
+        Set.of(NotificationPolicy.Destination.ALERT),
+        List.of()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("alert channel ids");
+  }
 }
