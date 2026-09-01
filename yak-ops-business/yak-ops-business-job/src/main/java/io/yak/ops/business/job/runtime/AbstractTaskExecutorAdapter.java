@@ -22,10 +22,13 @@ import io.yak.ops.spi.task.model.TaskExecutionTrigger;
 import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +46,8 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
   private final ExecutorService workerExecutor;
   private final ConcurrentMap<String, ExecutionHandle> executions = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, String> idempotencyIndex = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, CompletableFuture<String>> idempotencyStarts =
+      new ConcurrentHashMap<>();
 
   protected AbstractTaskExecutorAdapter(
       TaskPluginRegistry pluginRegistry,
@@ -111,7 +116,7 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
   }
 
   @Override
-  public synchronized TaskExecution start(
+  public TaskExecution start(
       TaskVersionSnapshot snapshot,
       TaskExecutionTrigger trigger,
       String idempotencyKey,
@@ -121,41 +126,39 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     TaskExecutionTrigger safeTrigger =
         trigger == null ? TaskExecutionTrigger.WORKFLOW : trigger;
     String safeKey = normalizeKey(idempotencyKey);
-    if (safeKey != null) {
-      String existing = idempotencyIndex.get(safeKey);
-      if (existing != null) return status(existing);
+    if (safeKey == null) {
+      return startNewExecution(snapshot, safeTrigger, null, input);
     }
 
-    TaskDefinition definition = extractDefinition(snapshot);
-    TaskPlugin plugin = requireExecutablePlugin();
-    validateDefinition(plugin, definition);
+    String existing = idempotencyIndex.get(safeKey);
+    if (existing != null) return status(existing);
 
-    TaskExecutionContext context = contextFactory.create(
-        safeTrigger,
-        input,
-        builder -> configureContext(builder, snapshot.definitionSnapshotJson()));
-    io.yak.ops.plugin.task.api.TaskExecutor pluginExecutor =
-        plugin.createExecutor(definition, context);
-
-    String executionId = executionIdPrefix() + "-" + UUID.randomUUID();
-    TaskExecution initial = new TaskExecution(executionId, "RUNNING", null, Map.of());
-    ExecutionHandle handle = new ExecutionHandle(pluginExecutor, new AtomicReference<>(initial));
-    executions.put(executionId, handle);
-    if (safeKey != null) idempotencyIndex.put(safeKey, executionId);
+    CompletableFuture<String> owner = new CompletableFuture<>();
+    CompletableFuture<String> inFlight = idempotencyStarts.putIfAbsent(safeKey, owner);
+    if (inFlight != null) {
+      log.debug(
+          "{} task startup waiting for idempotent owner task={} idempotencyKey={}",
+          displayName(),
+          snapshot.taskId(),
+          safeKey);
+      return status(awaitExecutionId(inFlight));
+    }
 
     try {
-      workerExecutor.submit(
-          contextFactory.captureProjectContext(() -> runExecution(executionId, handle)));
-    } catch (RuntimeException exception) {
-      TaskExecution failed = new TaskExecution(
-          executionId,
-          "FAILED",
-          executionFailureMessage(exception),
-          Map.of());
-      handle.snapshot().set(failed);
-      return failed;
+      existing = idempotencyIndex.get(safeKey);
+      if (existing != null) {
+        owner.complete(existing);
+        return status(existing);
+      }
+      TaskExecution started = startNewExecution(snapshot, safeTrigger, safeKey, input);
+      owner.complete(started.executionId());
+      return started;
+    } catch (RuntimeException | Error failure) {
+      owner.completeExceptionally(failure);
+      throw failure;
+    } finally {
+      idempotencyStarts.remove(safeKey, owner);
     }
-    return initial;
   }
 
   @Override
@@ -188,6 +191,65 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     return resourceResolverProvider == null ? null : resourceResolverProvider.getIfAvailable();
   }
 
+  private TaskExecution startNewExecution(
+      TaskVersionSnapshot snapshot,
+      TaskExecutionTrigger trigger,
+      String idempotencyKey,
+      Map<String, Object> input) {
+    long startedAtNanos = System.nanoTime();
+    try {
+      logStartupStage("definition", snapshot, idempotencyKey, startedAtNanos);
+      TaskDefinition definition = extractDefinition(snapshot);
+      TaskPlugin plugin = requireExecutablePlugin();
+      validateDefinition(plugin, definition);
+
+      logStartupStage("context", snapshot, idempotencyKey, startedAtNanos);
+      TaskExecutionContext context = contextFactory.create(
+          trigger,
+          input,
+          builder -> configureContext(builder, snapshot.definitionSnapshotJson()));
+
+      logStartupStage("executor", snapshot, idempotencyKey, startedAtNanos);
+      io.yak.ops.plugin.task.api.TaskExecutor pluginExecutor =
+          plugin.createExecutor(definition, context);
+
+      String executionId = executionIdPrefix() + "-" + UUID.randomUUID();
+      TaskExecution initial = new TaskExecution(executionId, "RUNNING", null, Map.of());
+      ExecutionHandle handle = new ExecutionHandle(pluginExecutor, new AtomicReference<>(initial));
+      executions.put(executionId, handle);
+      if (idempotencyKey != null) idempotencyIndex.put(idempotencyKey, executionId);
+
+      logStartupStage("worker-submit", snapshot, idempotencyKey, startedAtNanos);
+      try {
+        workerExecutor.submit(
+            contextFactory.captureProjectContext(() -> runExecution(executionId, handle)));
+      } catch (VirtualMachineError | ThreadDeath fatal) {
+        throw fatal;
+      } catch (Throwable throwable) {
+        TaskExecution failed = new TaskExecution(
+            executionId,
+            "FAILED",
+            executionFailureMessage(throwable),
+            Map.of());
+        handle.snapshot().set(failed);
+        log.error(
+            "{} task worker submission failed [{}]",
+            displayName(),
+            executionId,
+            throwable);
+        return failed;
+      }
+      logStartupStage("started", snapshot, idempotencyKey, startedAtNanos);
+      return initial;
+    } catch (VirtualMachineError | ThreadDeath fatal) {
+      throw fatal;
+    } catch (RuntimeException exception) {
+      throw exception;
+    } catch (Throwable throwable) {
+      throw new IllegalStateException(executionFailureMessage(throwable), throwable);
+    }
+  }
+
   private void runExecution(String executionId, ExecutionHandle handle) {
     try {
       TaskExecutionResult result = handle.executor().execute();
@@ -201,15 +263,20 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
             completed.status(),
             completed.errorMessage());
       } else {
-        log.info("{} task execution completed [{}] status={}",
-            displayName(), executionId, completed.status());
+        log.info(
+            "{} task execution completed [{}] status={}",
+            displayName(),
+            executionId,
+            completed.status());
       }
-    } catch (Exception exception) {
-      log.error("{} task execution exception [{}]", displayName(), executionId, exception);
+    } catch (VirtualMachineError | ThreadDeath fatal) {
+      throw fatal;
+    } catch (Throwable throwable) {
+      log.error("{} task execution exception [{}]", displayName(), executionId, throwable);
       TaskExecution failed = new TaskExecution(
           executionId,
           "FAILED",
-          executionFailureMessage(exception),
+          executionFailureMessage(throwable),
           Map.of());
       handle.snapshot().updateAndGet(current -> current.terminal() ? current : failed);
     }
@@ -273,6 +340,33 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     ExecutionHandle handle = executions.get(executionId);
     if (handle == null) throw new IllegalArgumentException(executionNotFoundMessage(executionId));
     return handle;
+  }
+
+  private String awaitExecutionId(CompletableFuture<String> inFlight) {
+    try {
+      return inFlight.join();
+    } catch (CompletionException exception) {
+      Throwable cause = exception.getCause();
+      if (cause instanceof RuntimeException runtimeException) throw runtimeException;
+      if (cause instanceof Error error) throw error;
+      throw new IllegalStateException(cause == null ? exception : cause);
+    }
+  }
+
+  private void logStartupStage(
+      String stage,
+      TaskVersionSnapshot snapshot,
+      String idempotencyKey,
+      long startedAtNanos) {
+    if (!log.isDebugEnabled()) return;
+    long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+    log.debug(
+        "{} task startup stage={} task={} idempotencyKey={} elapsedMs={}",
+        displayName(),
+        stage,
+        snapshot.taskId(),
+        idempotencyKey,
+        elapsedMillis);
   }
 
   private static String normalizeKey(String key) {
