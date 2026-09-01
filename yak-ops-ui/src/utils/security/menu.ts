@@ -1,25 +1,19 @@
-type MenuProtectedRoute = {
-  id: string;
-  parentId?: string;
-  mode?: 'public' | 'one' | 'any' | 'all';
-};
-
 const ROOT_PERMISSION = 'security:root';
 
 /**
- * Checks the database-backed menu grant for one route.
+ * Checks one database-backed menu grant.
  *
- * <p>An undefined menuCodes value means the backend has not exposed the new
- * contract yet, so deployments can roll out backend and frontend separately.
- * Once the field is present, an empty array deliberately denies every
- * protected menu. Hidden detail routes inherit their parent menu grant.
+ * An undefined menuCodes value keeps staggered frontend/backend deployments
+ * compatible. Once the backend exposes menuCodes, protected navigation fails
+ * closed when no stable menu code is declared or granted.
  */
-export const hasRouteMenuAccess = (
+export const hasMenuAccess = (
   menuCodes: readonly string[] | null | undefined,
-  route: MenuProtectedRoute,
+  requiredMenuCode: string | null | undefined,
   permissionCodes?: readonly string[] | null,
+  publicAccess = false,
 ): boolean => {
-  if (route.mode === 'public') {
+  if (publicAccess) {
     return true;
   }
 
@@ -31,6 +25,9 @@ export const hasRouteMenuAccess = (
     return true;
   }
 
-  const requiredMenuCode = route.parentId ?? route.id;
+  if (!requiredMenuCode) {
+    return false;
+  }
+
   return menuCodes.includes(requiredMenuCode);
 };

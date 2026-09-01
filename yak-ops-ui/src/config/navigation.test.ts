@@ -1,3 +1,4 @@
+import { YAK_OPS_MENU_CODES } from '../constants/securityMenuCodes';
 import {
   appRoutes,
   canAccessNavigationRoute,
@@ -5,6 +6,7 @@ import {
   getMainNavigationGroups,
   getQuickCreateRoutes,
   getStandaloneNavigationRoutes,
+  resolveNavigationMenuCode,
 } from './navigation';
 
 describe('permission-aware navigation', () => {
@@ -25,6 +27,28 @@ describe('permission-aware navigation', () => {
     expect(canAccessNavigationRoute(detail, batchRead)).toBe(true);
     expect(canAccessNavigationRoute(detail, [])).toBe(false);
     expect(getActiveNavigationId('/sync/batch-link-up/42/detail', batchRead)).toBe('batch-link-up');
+  });
+
+  it('uses stable menu codes for protected routes and hidden descendants', () => {
+    const list = appRoutes.find((route) => route.id === 'batch-link-up')!;
+    const detail = appRoutes.find((route) => route.id === 'batch-link-up-detail')!;
+
+    expect(list.menuCode).toBe(YAK_OPS_MENU_CODES.batchLinkUp);
+    expect(resolveNavigationMenuCode(detail)).toBe(YAK_OPS_MENU_CODES.batchLinkUp);
+    expect(
+      canAccessNavigationRoute(list, batchRead, [YAK_OPS_MENU_CODES.batchLinkUp]),
+    ).toBe(true);
+    expect(
+      canAccessNavigationRoute(list, batchRead, [YAK_OPS_MENU_CODES.dataSource]),
+    ).toBe(false);
+    expect(
+      canAccessNavigationRoute(detail, batchRead, [YAK_OPS_MENU_CODES.batchLinkUp]),
+    ).toBe(true);
+    expect(getActiveNavigationId(
+      '/sync/batch-link-up/42/detail',
+      batchRead,
+      [YAK_OPS_MENU_CODES.dataSource],
+    )).toBeUndefined();
   });
 
   it('keeps public groups while filtering permission-protected groups and quick-create independently', () => {
@@ -51,6 +75,30 @@ describe('permission-aware navigation', () => {
     expect(getQuickCreateRoutes([...batchRead, 'task:batch:create']).map((route) => route.id)).toEqual(['batch-link-up']);
   });
 
+  it('uses menu grants when the backend menu contract is present', () => {
+    expect(
+      getMainNavigationGroups(batchRead, []).map((group) => group.id),
+    ).toEqual(['workflow', 'data-analysis']);
+    expect(
+      getMainNavigationGroups(
+        batchRead,
+        [YAK_OPS_MENU_CODES.batchLinkUp],
+      ).map((group) => group.id),
+    ).toEqual(['integration', 'workflow', 'data-analysis']);
+    expect(
+      getQuickCreateRoutes(
+        [...batchRead, 'task:batch:create'],
+        [],
+      ),
+    ).toEqual([]);
+    expect(
+      getQuickCreateRoutes(
+        [...batchRead, 'task:batch:create'],
+        [YAK_OPS_MENU_CODES.batchLinkUp],
+      ).map((route) => route.id),
+    ).toEqual(['batch-link-up']);
+  });
+
   it('keeps sidebar groups contiguous by navigation section', () => {
     const groups = getMainNavigationGroups(['security:root']);
     expect(groups.map((group) => group.id)).toEqual([
@@ -75,14 +123,16 @@ describe('permission-aware navigation', () => {
     ]);
   });
 
-  it('keeps data consumption focused on dashboard and catalog while preserving dashboard editor routes', () => {
+  it('keeps current data-consumption entries while preserving dashboard editor routes', () => {
     const dataConsumption = getMainNavigationGroups([]).find(
       (group) => group.id === 'data-analysis',
     );
     expect(dataConsumption?.title).toBe('数据消费');
     expect(dataConsumption?.routes.map((route) => route.id)).toEqual([
       'dashboard',
-      'data-analysis-catalog',
+      'dataset-management',
+      'data-analysis-lineage',
+      'digital-screen',
     ]);
     expect(getActiveNavigationId('/dashboard', [])).toBe('dashboard');
     expect(getActiveNavigationId('/dashboard/new', [])).toBe('dashboard');
@@ -126,6 +176,21 @@ describe('permission-aware navigation', () => {
     expect(getActiveNavigationId('/home', [])).toBe('home');
   });
 
+  it('filters protected standalone navigation by menu grant', () => {
+    expect(
+      getStandaloneNavigationRoutes(
+        ['resource:data-source:read'],
+        [],
+      ).map((route) => route.id),
+    ).toEqual(['home']);
+    expect(
+      getStandaloneNavigationRoutes(
+        ['resource:data-source:read'],
+        [YAK_OPS_MENU_CODES.dataSource],
+      ).map((route) => route.id),
+    ).toEqual(['home', 'data-source']);
+  });
+
   it('keeps the personal settings page addressable without exposing it in the main sidebar', () => {
     expect(getStandaloneNavigationRoutes([]).map((route) => route.id)).not.toContain('settings');
     expect(getActiveNavigationId('/settings', [])).toBe('settings');
@@ -163,6 +228,7 @@ describe('permission-aware navigation', () => {
     const groups = getMainNavigationGroups(qualityPermissions);
     const qualityGroup = groups.find((group) => group.id === 'data-quality');
     expect(qualityGroup?.routes.map((route) => route.id)).toEqual([
+      'data-quality-overview',
       'data-quality-table-config',
       'data-quality-execution',
       'data-quality-rule-template',

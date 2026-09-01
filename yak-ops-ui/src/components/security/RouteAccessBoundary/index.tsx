@@ -11,7 +11,6 @@ import {
   type NavigationRoute,
 } from '@/config/navigation';
 import ForbiddenPage from '@/pages/403';
-import { hasRouteMenuAccess } from '@/utils/security/menu';
 
 export interface RouteAccessBoundaryProps {
   /**
@@ -74,16 +73,10 @@ export default function RouteAccessBoundary({
   const allowed =
     identityPending ||
     !metadata ||
-    (
-      canAccessNavigationRoute(
-        metadata,
-        granted,
-      ) &&
-      hasRouteMenuAccess(
-        grantedMenus,
-        metadata,
-        granted,
-      )
+    canAccessNavigationRoute(
+      metadata,
+      granted,
+      grantedMenus,
     );
 
   if (!allowed) {
