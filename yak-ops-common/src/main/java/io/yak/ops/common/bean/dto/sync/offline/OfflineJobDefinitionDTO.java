@@ -31,4 +31,7 @@ public class OfflineJobDefinitionDTO {
 
   /** 任务级通知策略；缺省/null 保留历史 Project OWNER + IN_APP 默认行为。 */
   private OfflineJobNotificationDTO notification;
+
+  /** UI-only metadata such as the selected EmojiIconPicker icon. */
+  private OfflineJobEditorMetaDTO editorMeta;
 }

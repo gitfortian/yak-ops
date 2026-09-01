@@ -36,6 +36,7 @@ public class OfflineJobDefinitionService {
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineDefinitionSupport support;
   private final OfflineNotificationPolicyCodec notificationPolicyCodec;
+  private final OfflineEditorMetaCodec editorMetaCodec;
   private final OfflineScheduleSupport scheduleSupport;
   private final OfflineScheduleLifecycle scheduleLifecycle;
   private final OfflineSyncViewMapper viewMapper;
@@ -59,11 +60,13 @@ public class OfflineJobDefinitionService {
 
     DraftDefinition draft = support.prepareDraft(dto);
     String notificationConfigJson = resolveNotificationConfig(dto, existing);
+    String editorMetaJson = resolveEditorMeta(dto, existing);
     ensureUniqueName(draft.getJobName(), id);
 
     OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
     applyDraft(definition, existing, id, draft);
     definition.setNotificationConfigJson(notificationConfigJson);
+    definition.setEditorMetaJson(editorMetaJson);
     persist(existing, definition);
     saveScheduleAndSync(id, draft.getRequest().get("schedule"));
     return id;
@@ -77,11 +80,13 @@ public class OfflineJobDefinitionService {
 
     PreparedDefinition prepared = support.prepare(dto);
     String notificationConfigJson = resolveNotificationConfig(dto, existing);
+    String editorMetaJson = resolveEditorMeta(dto, existing);
     ensureUniqueName(prepared.getJobName(), id);
 
     OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
     applyPrepared(definition, existing, id, prepared);
     definition.setNotificationConfigJson(notificationConfigJson);
+    definition.setEditorMetaJson(editorMetaJson);
     persist(existing, definition);
     saveScheduleAndSync(id, prepared.getRequest().get("schedule"));
     return id;
@@ -119,8 +124,9 @@ public class OfflineJobDefinitionService {
 
   public JsonNode getEditDetail(Long id) {
     OfflineJobDefinition definition = require(id);
-    return notificationPolicyCodec.applyToEditDetail(
+    JsonNode detail = notificationPolicyCodec.applyToEditDetail(
         support.editDetail(definition), definition.getNotificationConfigJson());
+    return editorMetaCodec.applyToEditDetail(detail, definition.getEditorMetaJson());
   }
 
   public PageData<OfflineJobDefinition> pageDomain(OfflineDefinitionQuery query) {
@@ -213,6 +219,17 @@ public class OfflineJobDefinitionService {
       return existing.getNotificationConfigJson();
     }
     return notificationPolicyCodec.encode(dto.getNotification());
+  }
+
+  private String resolveEditorMeta(
+      OfflineJobDefinitionDTO dto,
+      OfflineJobDefinition existing) {
+    if (dto.getEditorMeta() == null && existing != null) {
+      // Editor metadata is optional for older clients. Keep the selected icon when they save other
+      // task settings so UI-only preferences never get erased accidentally.
+      return existing.getEditorMetaJson();
+    }
+    return editorMetaCodec.encode(dto.getEditorMeta());
   }
 
   private void ensureCanSaveDraft(OfflineJobDefinition existing) {
