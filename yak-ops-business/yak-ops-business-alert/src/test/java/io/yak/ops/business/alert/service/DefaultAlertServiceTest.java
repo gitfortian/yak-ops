@@ -100,6 +100,26 @@ class DefaultAlertServiceTest {
     assertEquals("1.0.0", vo.getVersion());
     assertFalse(vo.getEnabled()); // 未配置时默认 disabled
     assertEquals("UNKNOWN", vo.getConnStatus());
+    assertNull(vo.getId());
+    assertNull(vo.getConfigJson());
+  }
+
+  @Test
+  void listChannels_exposesStableIdButNotSensitiveConfig() {
+    AlertChannelSaveDTO dto = new AlertChannelSaveDTO();
+    dto.setChannelType(DINGTALK);
+    dto.setConfigJson("{\"webhookUrl\":\"https://example.com\",\"secret\":\"SEC123\"}");
+    dto.setEnabled(true);
+    assertTrue(alertService.saveChannel(dto));
+
+    AlertChannelVO listItem = alertService.listChannels().get(0);
+    assertEquals(41L, listItem.getId());
+    assertTrue(listItem.getEnabled());
+    assertNull(listItem.getConfigJson());
+
+    AlertChannelVO detail = alertService.getChannel(DINGTALK);
+    assertEquals(41L, detail.getId());
+    assertEquals(dto.getConfigJson(), detail.getConfigJson());
   }
 
   @Test
@@ -313,6 +333,13 @@ class DefaultAlertServiceTest {
     private AlertChannelDefinition stored;
 
     @Override
+    public Optional<AlertChannelDefinition> findById(long id) {
+      return stored != null && stored.getId() != null && stored.getId() == id
+          ? Optional.of(clone(stored))
+          : Optional.empty();
+    }
+
+    @Override
     public Optional<AlertChannelDefinition> findByChannelType(String channelType) {
       return stored != null && stored.getChannelType().equals(channelType)
           ? Optional.of(clone(stored))
@@ -327,6 +354,9 @@ class DefaultAlertServiceTest {
     @Override
     public boolean insert(AlertChannelDefinition definition) {
       stored = clone(definition);
+      if (stored.getId() == null) {
+        stored.setId(41L);
+      }
       return true;
     }
 
