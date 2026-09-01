@@ -36,6 +36,11 @@ public record NotificationPolicy(
         && recipientUserIds.isEmpty()) {
       throw new IllegalArgumentException("EXPLICIT_USERS in-app policy requires recipient user ids");
     }
+    if (enabled
+        && destinations.contains(Destination.ALERT)
+        && alertChannelIds.isEmpty()) {
+      throw new IllegalArgumentException("ALERT notification policy requires alert channel ids");
+    }
   }
 
   /** Current backward-compatible default inherited from the original Message Center integration. */
