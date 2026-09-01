@@ -5,6 +5,9 @@ import { connectorIdForDataSourceType } from './form-schema/valueAdapter';
 
 export type SyncMode = 'GUIDE_SINGLE' | 'GUIDE_MULTI';
 export type EndpointKind = 'source' | 'sink';
+export type SyncNotificationRecipientType =
+  | 'PROJECT_OWNER'
+  | 'EXPLICIT_USERS';
 
 export interface SyncTaskBasic {
   jobName: string;
@@ -43,6 +46,14 @@ export interface SyncSchedule {
   retryOnFailure: boolean;
 }
 
+export interface SyncNotification {
+  enabled: boolean;
+  triggers: string[];
+  recipientType: SyncNotificationRecipientType;
+  recipientUserIds: number[];
+  inAppEnabled: boolean;
+}
+
 export interface SyncEditorState {
   id: string;
   mode: SyncMode;
@@ -52,6 +63,7 @@ export interface SyncEditorState {
   channel: SyncChannel;
   mapping: SyncMapping;
   schedule: SyncSchedule;
+  notification: SyncNotification;
   state?: Record<string, any>;
 }
 
@@ -83,6 +95,14 @@ export const DEFAULT_SCHEDULE_CONFIG: SyncSchedule = {
   cron: '',
   enabled: false,
   retryOnFailure: false,
+};
+
+export const DEFAULT_NOTIFICATION_CONFIG: SyncNotification = {
+  enabled: true,
+  triggers: ['FINAL_FAILURE'],
+  recipientType: 'PROJECT_OWNER',
+  recipientUserIds: [],
+  inAppEnabled: true,
 };
 
 export const isApiSuccess = (response: any): boolean =>
@@ -195,6 +215,68 @@ const serializeSchedule = (
   retryOnFailure: Boolean(schedule?.retryOnFailure),
 });
 
+const normalizeNotificationUserIds = (value: unknown): number[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => Number(item))
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+    ),
+  );
+};
+
+const normalizeNotification = (raw: any): SyncNotification => {
+  const notification =
+    raw?.notification && typeof raw.notification === 'object'
+      ? raw.notification
+      : {};
+  const recipientType = String(
+    notification.recipientType || 'PROJECT_OWNER',
+  ).toUpperCase();
+
+  return {
+    enabled:
+      notification.enabled === undefined
+        ? DEFAULT_NOTIFICATION_CONFIG.enabled
+        : Boolean(notification.enabled),
+    triggers: ['FINAL_FAILURE'],
+    recipientType:
+      recipientType === 'EXPLICIT_USERS'
+        ? 'EXPLICIT_USERS'
+        : 'PROJECT_OWNER',
+    recipientUserIds: normalizeNotificationUserIds(
+      notification.recipientUserIds,
+    ),
+    inAppEnabled:
+      notification.inAppEnabled === undefined
+        ? DEFAULT_NOTIFICATION_CONFIG.inAppEnabled
+        : Boolean(notification.inAppEnabled),
+  };
+};
+
+const serializeNotification = (
+  notification?: SyncNotification,
+): SyncNotification => {
+  const recipientType =
+    notification?.recipientType === 'EXPLICIT_USERS'
+      ? 'EXPLICIT_USERS'
+      : 'PROJECT_OWNER';
+
+  return {
+    enabled: notification?.enabled !== false,
+    triggers: ['FINAL_FAILURE'],
+    recipientType,
+    recipientUserIds:
+      recipientType === 'EXPLICIT_USERS'
+        ? normalizeNotificationUserIds(
+            notification?.recipientUserIds,
+          )
+        : [],
+    inAppEnabled: notification?.inAppEnabled !== false,
+  };
+};
+
 const endpointFromType = (
   endpoint?: Partial<CreateSyncEndpoint> | null,
 ): SyncEndpoint => {
@@ -269,6 +351,7 @@ export const buildCreatePayload = (
       channel: serializeChannel(DEFAULT_CHANNEL_CONFIG),
       mapping: { ...DEFAULT_MAPPING_CONFIG },
       schedule: { ...DEFAULT_SCHEDULE_CONFIG },
+      notification: { ...DEFAULT_NOTIFICATION_CONFIG },
     };
   }
 
@@ -280,6 +363,7 @@ export const buildCreatePayload = (
     channel: DEFAULT_CHANNEL_CONFIG,
     mapping: { ...DEFAULT_MAPPING_CONFIG },
     schedule: { ...DEFAULT_SCHEDULE_CONFIG },
+    notification: { ...DEFAULT_NOTIFICATION_CONFIG },
   };
 };
 
@@ -469,6 +553,7 @@ export const normalizeEditDetail = (
     },
     mapping: normalizeMapping(raw),
     schedule: normalizeSchedule(raw),
+    notification: normalizeNotification(raw),
     state: raw?.state,
   };
 };
@@ -641,6 +726,7 @@ export const buildSavePayload = (
     ? serializeMapping(editor.mapping)
     : { ...DEFAULT_MAPPING_CONFIG };
   const schedule = serializeSchedule(editor.schedule);
+  const notification = serializeNotification(editor.notification);
 
   if (editor.mode === 'GUIDE_MULTI') {
     return {
@@ -651,6 +737,7 @@ export const buildSavePayload = (
       channel: serializeChannel(editor.channel),
       mapping,
       schedule,
+      notification,
     };
   }
 
@@ -662,5 +749,6 @@ export const buildSavePayload = (
     channel: editor.channel,
     mapping,
     schedule,
+    notification,
   };
 };
