@@ -4,6 +4,7 @@ package io.yak.ops.core.execution.sql;
 public enum SqlExecutionCaller {
   CONSOLE,
   SQL_TASK,
+  TASK_PLUGIN,
   DATASET,
   DATA_SERVICE,
   ANALYSIS,
