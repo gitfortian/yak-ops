@@ -14,8 +14,8 @@ import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
 import io.yak.ops.common.enums.quality.QualityEnums.RuleFailureAction;
-import io.yak.ops.core.notification.BusinessNotification;
-import io.yak.ops.core.notification.BusinessNotificationGateway;
+import io.yak.ops.core.notification.NotificationIntent;
+import io.yak.ops.core.notification.NotificationRouter;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,7 +24,7 @@ import org.springframework.beans.factory.ObjectProvider;
 class QualityAlertRecorderNotificationTest {
 
   @Test
-  void lightweightConstructorKeepsNotificationGatewayOptional() {
+  void lightweightConstructorKeepsNotificationRouterOptional() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository);
@@ -40,11 +40,11 @@ class QualityAlertRecorderNotificationTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void messageChannelPublishesQualityWarningToProjectOwners() {
+  void messageChannelPublishesQualityWarningIntent() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
-    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
-    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(gateway);
+    NotificationRouter router = mock(NotificationRouter.class);
+    ObjectProvider<NotificationRouter> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(router);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
     recorder.recordIfNecessary(
@@ -55,27 +55,27 @@ class QualityAlertRecorderNotificationTest {
         0);
 
     verify(repository).insertAlertEvent(any());
-    ArgumentCaptor<BusinessNotification> captor =
-        ArgumentCaptor.forClass(BusinessNotification.class);
-    verify(gateway).publishToProjectOwners(captor.capture());
-    BusinessNotification notification = captor.getValue();
-    assertThat(notification.projectId()).isEqualTo(7L);
-    assertThat(notification.type()).isEqualTo(BusinessNotification.Type.QUALITY);
-    assertThat(notification.level()).isEqualTo(BusinessNotification.Level.WARNING);
-    assertThat(notification.title()).isEqualTo("数据质量检查发现问题");
-    assertThat(notification.sourceType()).isEqualTo("DATA_QUALITY_EXECUTION");
-    assertThat(notification.sourceId()).isEqualTo("Q-20260831-001");
-    assertThat(notification.actionPath())
+    ArgumentCaptor<NotificationIntent> captor =
+        ArgumentCaptor.forClass(NotificationIntent.class);
+    verify(router).publish(captor.capture());
+    NotificationIntent intent = captor.getValue();
+    assertThat(intent.projectId()).isEqualTo(7L);
+    assertThat(intent.type()).isEqualTo(NotificationIntent.Type.QUALITY);
+    assertThat(intent.level()).isEqualTo(NotificationIntent.Level.WARNING);
+    assertThat(intent.title()).isEqualTo("数据质量检查发现问题");
+    assertThat(intent.sourceType()).isEqualTo("DATA_QUALITY_EXECUTION");
+    assertThat(intent.sourceId()).isEqualTo("Q-20260831-001");
+    assertThat(intent.actionPath())
         .isEqualTo("/data-quality/execution/Q-20260831-001");
   }
 
   @Test
   @SuppressWarnings("unchecked")
-  void configuredNonMessageProblemKeepsAlertEvidenceWithoutInboxDelivery() {
+  void configuredNonMessageProblemKeepsAlertEvidenceWithoutNotificationRouting() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
-    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
-    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(gateway);
+    NotificationRouter router = mock(NotificationRouter.class);
+    ObjectProvider<NotificationRouter> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(router);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
     recorder.recordIfNecessary(
@@ -86,16 +86,16 @@ class QualityAlertRecorderNotificationTest {
         0);
 
     verify(repository).insertAlertEvent(any());
-    verify(gateway, never()).publishToProjectOwners(any());
+    verify(router, never()).publish(any());
   }
 
   @Test
   @SuppressWarnings("unchecked")
-  void executionErrorAlwaysSurfacesInInboxEvenWhenConfiguredAlertsAreDisabled() {
+  void executionErrorAlwaysSurfacesEvenWhenConfiguredAlertsAreDisabled() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
-    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
-    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(gateway);
+    NotificationRouter router = mock(NotificationRouter.class);
+    ObjectProvider<NotificationRouter> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(router);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
     recorder.recordIfNecessary(
@@ -106,10 +106,10 @@ class QualityAlertRecorderNotificationTest {
         1);
 
     verify(repository, never()).insertAlertEvent(any());
-    ArgumentCaptor<BusinessNotification> captor =
-        ArgumentCaptor.forClass(BusinessNotification.class);
-    verify(gateway).publishToProjectOwners(captor.capture());
-    assertThat(captor.getValue().level()).isEqualTo(BusinessNotification.Level.ERROR);
+    ArgumentCaptor<NotificationIntent> captor =
+        ArgumentCaptor.forClass(NotificationIntent.class);
+    verify(router).publish(captor.capture());
+    assertThat(captor.getValue().level()).isEqualTo(NotificationIntent.Level.ERROR);
     assertThat(captor.getValue().title()).isEqualTo("数据质量执行异常");
   }
 
@@ -117,9 +117,9 @@ class QualityAlertRecorderNotificationTest {
   @SuppressWarnings("unchecked")
   void criticalQualityProblemUsesErrorSeverity() {
     QualityAlertRepository repository = mock(QualityAlertRepository.class);
-    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
-    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(gateway);
+    NotificationRouter router = mock(NotificationRouter.class);
+    ObjectProvider<NotificationRouter> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(router);
 
     QualityAlertRecorder recorder = new QualityAlertRecorder(repository, provider);
     recorder.recordIfNecessary(
@@ -129,10 +129,10 @@ class QualityAlertRecorderNotificationTest {
         5,
         0);
 
-    ArgumentCaptor<BusinessNotification> captor =
-        ArgumentCaptor.forClass(BusinessNotification.class);
-    verify(gateway).publishToProjectOwners(captor.capture());
-    assertThat(captor.getValue().level()).isEqualTo(BusinessNotification.Level.ERROR);
+    ArgumentCaptor<NotificationIntent> captor =
+        ArgumentCaptor.forClass(NotificationIntent.class);
+    verify(router).publish(captor.capture());
+    assertThat(captor.getValue().level()).isEqualTo(NotificationIntent.Level.ERROR);
     assertThat(captor.getValue().title()).isEqualTo("数据质量检查发现严重问题");
   }
 
