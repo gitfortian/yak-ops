@@ -51,6 +51,11 @@ import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO.AttemptVO;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO.NodeInstanceVO;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextError;
+import io.yak.ops.core.project.ProjectContextException;
+import io.yak.ops.core.project.ProjectContextScope;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
@@ -93,6 +98,9 @@ public class WorkflowRuntime {
   private final TaskRegistry taskRegistry;
   private final TaskExecutionGateway taskExecutionGateway;
   private final WorkflowRuntimeRepository runtimePersistence;
+  private final CurrentProject currentProject;
+  private final ProjectContextScope projectContextScope;
+  private final boolean projectRequired;
   private final long taskPollIntervalMillis;
   private final ConcurrentMap<String, ConcurrentLinkedQueue<NodeDispatch>> pendingDispatches =
       new ConcurrentHashMap<>();
@@ -100,6 +108,7 @@ public class WorkflowRuntime {
   private final ConcurrentMap<String, NodeTaskControl> taskControls = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, ConcurrentMap<String, NodeDispatch>> latestDispatches =
       new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, ProjectContext> executionProjects = new ConcurrentHashMap<>();
   private final Set<String> activeExecutions = ConcurrentHashMap.newKeySet();
   private final Map<String, WorkflowExecutionMetadata> metadata = new ConcurrentHashMap<>();
 
@@ -111,6 +120,8 @@ public class WorkflowRuntime {
       ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
       ObjectProvider<ExecutionRepository> executionRepository,
       ObjectProvider<WorkflowRuntimeRepository> runtimePersistence,
+      CurrentProject currentProject,
+      ProjectContextScope projectContextScope,
       @Value("${yak.database.enabled:true}") boolean databaseEnabled) {
     this(
         eventStreamService,
@@ -131,7 +142,44 @@ public class WorkflowRuntime {
             runtimePersistence,
             databaseEnabled,
             InMemoryWorkflowRuntimeRepository::new,
-            "WorkflowRuntimeRepository"));
+            "WorkflowRuntimeRepository"),
+        currentProject,
+        projectContextScope,
+        true);
+  }
+
+  /** Compatibility constructor used by persistence wiring tests. */
+  public WorkflowRuntime(
+      WorkflowEventStream eventStreamService,
+      TaskRegistry taskRegistry,
+      SyncTaskRunner syncTaskRunner,
+      ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
+      ObjectProvider<ExecutionRepository> executionRepository,
+      ObjectProvider<WorkflowRuntimeRepository> runtimePersistence,
+      boolean databaseEnabled) {
+    this(
+        eventStreamService,
+        taskRegistry,
+        legacyGateway(syncTaskRunner),
+        TASK_POLL_INTERVAL_MILLIS,
+        resolvePersistence(
+            definitionRepository,
+            databaseEnabled,
+            InMemoryWorkflowDefinitionRepository::new,
+            "WorkflowDefinitionRepository"),
+        resolvePersistence(
+            executionRepository,
+            databaseEnabled,
+            InMemoryExecutionRepository::new,
+            "ExecutionRepository"),
+        resolvePersistence(
+            runtimePersistence,
+            databaseEnabled,
+            InMemoryWorkflowRuntimeRepository::new,
+            "WorkflowRuntimeRepository"),
+        null,
+        null,
+        false);
   }
 
   /** Focused tests and explicit database-disabled development keep the lightweight runtime. */
@@ -147,7 +195,31 @@ public class WorkflowRuntime {
         taskPollIntervalMillis,
         new InMemoryWorkflowDefinitionRepository(),
         new InMemoryExecutionRepository(),
-        new InMemoryWorkflowRuntimeRepository());
+        new InMemoryWorkflowRuntimeRepository(),
+        null,
+        null,
+        false);
+  }
+
+  /** Project-aware focused runtime used by Project Space regression tests. */
+  public WorkflowRuntime(
+      WorkflowEventStream eventStreamService,
+      TaskRegistry taskRegistry,
+      SyncTaskRunner syncTaskRunner,
+      long taskPollIntervalMillis,
+      CurrentProject currentProject,
+      ProjectContextScope projectContextScope) {
+    this(
+        eventStreamService,
+        taskRegistry,
+        legacyGateway(syncTaskRunner),
+        taskPollIntervalMillis,
+        new InMemoryWorkflowDefinitionRepository(),
+        new InMemoryExecutionRepository(),
+        new InMemoryWorkflowRuntimeRepository(),
+        currentProject,
+        projectContextScope,
+        true);
   }
 
   private static <T> T resolvePersistence(
@@ -183,7 +255,10 @@ public class WorkflowRuntime {
         taskPollIntervalMillis,
         definitionRepository,
         executionRepository,
-        runtimePersistence);
+        runtimePersistence,
+        null,
+        null,
+        false);
   }
 
   public WorkflowRuntime(
@@ -194,10 +269,41 @@ public class WorkflowRuntime {
       WorkflowDefinitionRepository definitionRepository,
       ExecutionRepository executionRepository,
       WorkflowRuntimeRepository runtimePersistence) {
+    this(
+        eventStreamService,
+        taskRegistry,
+        taskExecutionGateway,
+        taskPollIntervalMillis,
+        definitionRepository,
+        executionRepository,
+        runtimePersistence,
+        null,
+        null,
+        false);
+  }
+
+  public WorkflowRuntime(
+      WorkflowEventStream eventStreamService,
+      TaskRegistry taskRegistry,
+      TaskExecutionGateway taskExecutionGateway,
+      long taskPollIntervalMillis,
+      WorkflowDefinitionRepository definitionRepository,
+      ExecutionRepository executionRepository,
+      WorkflowRuntimeRepository runtimePersistence,
+      CurrentProject currentProject,
+      ProjectContextScope projectContextScope,
+      boolean projectRequired) {
+    if (projectRequired && (currentProject == null || projectContextScope == null)) {
+      throw new IllegalArgumentException(
+          "Project-aware WorkflowRuntime requires CurrentProject and ProjectContextScope");
+    }
     this.eventStreamService = eventStreamService;
     this.taskRegistry = taskRegistry;
     this.taskExecutionGateway = taskExecutionGateway;
     this.runtimePersistence = runtimePersistence;
+    this.currentProject = currentProject;
+    this.projectContextScope = projectContextScope;
+    this.projectRequired = projectRequired;
     this.taskPollIntervalMillis = Math.max(1L, taskPollIntervalMillis);
     this.ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
     AtomicInteger schedulerIndex = new AtomicInteger();
@@ -237,11 +343,13 @@ public class WorkflowRuntime {
 
   /** 直接运行 API：DTO 只存在于接口边界，进入 Runtime 后立即转换为领域规格。 */
   public WorkflowInstanceVO run(WorkflowRunDTO request) {
+    requireCurrentProject();
     return run(toRunSpec(request));
   }
 
   /** 直接运行领域入口：执行开始前固定一次当前任务快照。 */
   public WorkflowInstanceVO run(WorkflowRunSpec request) {
+    requireCurrentProject();
     Map<String, TaskVersionSnapshot> snapshots = new LinkedHashMap<>();
     for (WorkflowNodeSpec node : request.nodes()) {
       snapshots.put(node.id(), taskRegistry.snapshot(node.taskId()));
@@ -256,6 +364,7 @@ public class WorkflowRuntime {
       String workflowVersionId,
       Integer workflowVersionNo,
       boolean testRun) {
+    requireCurrentProject();
     String definitionId = workflowVersionId == null || workflowVersionId.isBlank()
         ? "workflow-runtime-" + UUID.randomUUID()
         : workflowVersionId;
@@ -308,10 +417,12 @@ public class WorkflowRuntime {
   }
 
   public WorkflowInstanceVO pause(String executionId) {
+    requireMetadata(executionId);
     return publishAndView(engine.pause(executionId, "Paused from Yak Ops"));
   }
 
   public WorkflowInstanceVO resume(String executionId) {
+    requireMetadata(executionId);
     WorkflowExecution execution = engine.resume(executionId);
     activeExecutions.add(executionId);
     WorkflowInstanceVO snapshot = publishAndView(execution);
@@ -320,10 +431,12 @@ public class WorkflowRuntime {
   }
 
   public WorkflowInstanceVO cancel(String executionId) {
+    requireMetadata(executionId);
     return publishAndView(engine.cancel(executionId, "Canceled from Yak Ops"));
   }
 
   public WorkflowInstanceVO continueAfterFailure(String executionId, String nodeId) {
+    requireMetadata(executionId);
     WorkflowExecution execution = engine.continueAfterFailure(executionId, nodeId);
     WorkflowInstanceVO snapshot = publishAndView(execution);
     reactivateExecution(executionId);
@@ -359,6 +472,7 @@ public class WorkflowRuntime {
   }
 
   public List<WorkflowInstanceVO> listInstances() {
+    requireCurrentProject();
     List<WorkflowInstanceVO> result = new ArrayList<>();
     for (String id : runtimePersistence.listExecutionIds()) {
       WorkflowExecutionMetadata runMetadata = findMetadata(id);
@@ -372,7 +486,8 @@ public class WorkflowRuntime {
   }
 
   public WorkflowInstanceVO getInstance(String executionId) {
-    return toView(requireExecution(executionId), requireMetadata(executionId));
+    WorkflowExecutionMetadata runMetadata = requireMetadata(executionId);
+    return toView(requireExecutionAfterAuthorization(executionId), runMetadata);
   }
 
   public SseEmitter subscribe(String executionId) {
@@ -385,11 +500,12 @@ public class WorkflowRuntime {
 
   /** Called once after application startup to rebuild only non-terminal runtime state. */
   public int recoverPersistedExecutions() {
+    requireCurrentProject();
     int recovered = 0;
     for (String executionId : runtimePersistence.findRecoverableExecutionIds()) {
       try {
         WorkflowExecutionMetadata runMetadata = requireMetadata(executionId);
-        WorkflowExecution before = requireExecution(executionId);
+        WorkflowExecution before = requireExecutionAfterAuthorization(executionId);
         if (before.status().isTerminal()) continue;
 
         metadata.put(executionId, runMetadata);
@@ -431,24 +547,76 @@ public class WorkflowRuntime {
   }
 
   private void registerExecution(WorkflowExecution execution, WorkflowExecutionMetadata runMetadata) {
+    ProjectContext project = requireCurrentProject();
     runtimePersistence.saveMetadata(execution.id(), toPersistence(runMetadata));
+    bindExecutionProject(execution.id(), project);
     metadata.put(execution.id(), runMetadata);
+  }
+
+  private ProjectContext requireCurrentProject() {
+    if (!projectRequired) return null;
+    if (currentProject == null) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_REQUIRED);
+    }
+    return currentProject.require();
+  }
+
+  private void bindExecutionProject(String executionId, ProjectContext project) {
+    if (!projectRequired || project == null) return;
+    ProjectContext existing = executionProjects.putIfAbsent(executionId, project);
+    if (existing != null && !existing.projectId().equals(project.projectId())) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+  }
+
+  private ProjectContext requireBoundExecutionProject(String executionId) {
+    if (!projectRequired) return null;
+    ProjectContext project = executionProjects.get(executionId);
+    if (project == null) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+    return project;
+  }
+
+  private void verifyBoundExecutionProject(String executionId, ProjectContext caller) {
+    if (!projectRequired) return;
+    ProjectContext bound = executionProjects.get(executionId);
+    if (bound != null && !bound.projectId().equals(caller.projectId())) {
+      throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+    }
+  }
+
+  private Runnable scopeExecutionWork(String executionId, Runnable action) {
+    if (!projectRequired) return action;
+    ProjectContext project = requireBoundExecutionProject(executionId);
+    return () -> projectContextScope.run(project, action);
+  }
+
+  private void executeExecutionWork(String executionId, Runnable action) {
+    Runnable scoped = scopeExecutionWork(executionId, action);
+    ioExecutor.execute(scoped);
   }
 
   private WorkflowExecutionMetadata requireMetadata(String id) {
     WorkflowExecutionMetadata runMetadata = findMetadata(id);
     if (runMetadata == null) {
+      if (projectRequired) {
+        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+      }
       throw new IllegalArgumentException("Workflow execution metadata not found: " + id);
     }
     return runMetadata;
   }
 
   private WorkflowExecutionMetadata findMetadata(String id) {
+    ProjectContext caller = requireCurrentProject();
+    verifyBoundExecutionProject(id, caller);
     WorkflowExecutionMetadata cached = metadata.get(id);
     if (cached != null) return cached;
     return runtimePersistence.findMetadata(id)
         .map(this::fromPersistence)
         .map(value -> {
+          bindExecutionProject(id, caller);
           metadata.put(id, value);
           return value;
         })
@@ -456,6 +624,11 @@ public class WorkflowRuntime {
   }
 
   private WorkflowExecution requireExecution(String id) {
+    requireMetadata(id);
+    return requireExecutionAfterAuthorization(id);
+  }
+
+  private WorkflowExecution requireExecutionAfterAuthorization(String id) {
     return engine.findExecution(id)
         .orElseThrow(() -> new IllegalArgumentException("Workflow execution not found: " + id));
   }
@@ -625,7 +798,9 @@ public class WorkflowRuntime {
     long delayMillis = availableAt == null
         ? 0L
         : Math.max(0L, Duration.between(Instant.now(), availableAt).toMillis());
-    Runnable start = () -> ioExecutor.execute(() -> startNode(dispatch));
+    Runnable scopedStart = scopeExecutionWork(
+        dispatch.workflowExecutionId(), () -> startNode(dispatch));
+    Runnable start = () -> ioExecutor.execute(scopedStart);
     if (delayMillis <= 0L) {
       start.run();
       return;
@@ -735,8 +910,10 @@ public class WorkflowRuntime {
       TaskExecution taskExecution) {
     if (control.canceled()) return;
     if (!taskExecution.terminal()) {
+      Runnable scopedPoll = scopeExecutionWork(
+          dispatch.workflowExecutionId(), () -> pollNode(dispatch, control, node));
       runtimeScheduler.schedule(
-          () -> ioExecutor.execute(() -> pollNode(dispatch, control, node)),
+          () -> ioExecutor.execute(scopedPoll),
           taskPollIntervalMillis,
           TimeUnit.MILLISECONDS);
       return;
@@ -823,18 +1000,22 @@ public class WorkflowRuntime {
   private void scanTimeouts() {
     for (String executionId : List.copyOf(activeExecutions)) {
       try {
-        WorkflowExecution before = requireExecution(executionId);
-        String signature = runtimeSignature(before);
-        WorkflowExecution after = engine.checkTimeouts(executionId);
-        if (!signature.equals(runtimeSignature(after))) {
-          publishCurrent(executionId);
-        }
+        scopeExecutionWork(executionId, () -> scanExecutionTimeout(executionId)).run();
       } catch (RuntimeException exception) {
         log.debug(
             "[workflow] timeout scan skipped execution={}, message={}",
             executionId,
             exception.getMessage());
       }
+    }
+  }
+
+  private void scanExecutionTimeout(String executionId) {
+    WorkflowExecution before = requireExecution(executionId);
+    String signature = runtimeSignature(before);
+    WorkflowExecution after = engine.checkTimeouts(executionId);
+    if (!signature.equals(runtimeSignature(after))) {
+      publishCurrent(executionId);
     }
   }
 
@@ -882,6 +1063,7 @@ public class WorkflowRuntime {
     pendingDispatches.remove(executionId);
     latestDispatches.remove(executionId);
     metadata.remove(executionId);
+    executionProjects.remove(executionId);
     taskControls.entrySet()
         .removeIf(entry -> executionId.equals(entry.getValue().workflowExecutionId()));
   }
@@ -1002,6 +1184,7 @@ public class WorkflowRuntime {
   private final class RuntimeNodeExecutor implements NodeExecutor {
     @Override
     public void submit(NodeDispatch dispatch) {
+      bindExecutionProject(dispatch.workflowExecutionId(), requireCurrentProject());
       taskControls.computeIfAbsent(
           dispatch.attemptId(),
           ignored -> new NodeTaskControl(dispatch.workflowExecutionId()));
@@ -1011,6 +1194,7 @@ public class WorkflowRuntime {
     @Override
     public void recover(NodeRecovery recovery) {
       NodeDispatch dispatch = recovery.dispatch();
+      bindExecutionProject(dispatch.workflowExecutionId(), requireCurrentProject());
       latestDispatches
           .computeIfAbsent(dispatch.workflowExecutionId(), ignored -> new ConcurrentHashMap<>())
           .put(dispatch.nodeId(), dispatch);
@@ -1031,7 +1215,8 @@ public class WorkflowRuntime {
         enqueueDispatch(dispatch);
         return;
       }
-      ioExecutor.execute(() -> reconcileRecoveredAttempt(recovery, control));
+      executeExecutionWork(
+          dispatch.workflowExecutionId(), () -> reconcileRecoveredAttempt(recovery, control));
     }
 
     @Override
@@ -1042,7 +1227,8 @@ public class WorkflowRuntime {
       String taskExecutionId = control.taskExecutionId();
       String taskType = control.taskType();
       if (taskExecutionId != null && taskType != null) {
-        ioExecutor.execute(() -> cancelRemote(taskType, taskExecutionId));
+        executeExecutionWork(
+            control.workflowExecutionId(), () -> cancelRemote(taskType, taskExecutionId));
       }
     }
 
