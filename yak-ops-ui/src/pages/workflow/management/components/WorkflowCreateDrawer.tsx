@@ -29,9 +29,13 @@ const WorkflowCreateDrawer = ({
   };
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
-    await onSubmit(values);
-    form.resetFields();
+    try {
+      const values = await form.validateFields();
+      await onSubmit(values);
+      form.resetFields();
+    } catch {
+      // Form owns validation feedback; request failures are surfaced by the page action.
+    }
   };
 
   return (
