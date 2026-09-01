@@ -25,6 +25,7 @@ class OfflineNotificationPolicyCodecTest {
     assertThat(policy.recipientStrategy())
         .isEqualTo(NotificationPolicy.RecipientStrategy.PROJECT_OWNER);
     assertThat(policy.routesTo(NotificationPolicy.Destination.IN_APP)).isTrue();
+    assertThat(policy.routesTo(NotificationPolicy.Destination.ALERT)).isFalse();
   }
 
   @Test
@@ -44,6 +45,35 @@ class OfflineNotificationPolicyCodecTest {
   }
 
   @Test
+  void inAppAndAlertDestinationsCanBeCombined() {
+    OfflineJobNotificationDTO config = new OfflineJobNotificationDTO();
+    config.setAlertEnabled(true);
+    config.setAlertChannelIds(Arrays.asList(7L, null, -1L, 7L, 8L));
+
+    NotificationPolicy policy = codec.decodePolicy(codec.encode(config));
+
+    assertThat(policy.routesTo(NotificationPolicy.Destination.IN_APP)).isTrue();
+    assertThat(policy.routesTo(NotificationPolicy.Destination.ALERT)).isTrue();
+    assertThat(policy.alertChannelIds()).containsExactly(7L, 8L);
+  }
+
+  @Test
+  void alertOnlyPolicyDoesNotRequireInAppRecipients() {
+    OfflineJobNotificationDTO config = new OfflineJobNotificationDTO();
+    config.setInAppEnabled(false);
+    config.setRecipientType("EXPLICIT_USERS");
+    config.setAlertEnabled(true);
+    config.setAlertChannelIds(List.of(7L));
+
+    NotificationPolicy policy = codec.decodePolicy(codec.encode(config));
+
+    assertThat(policy.enabled()).isTrue();
+    assertThat(policy.routesTo(NotificationPolicy.Destination.IN_APP)).isFalse();
+    assertThat(policy.routesTo(NotificationPolicy.Destination.ALERT)).isTrue();
+    assertThat(policy.recipientUserIds()).isEmpty();
+  }
+
+  @Test
   void disabledTaskNotificationProducesDisabledPolicy() {
     OfflineJobNotificationDTO config = new OfflineJobNotificationDTO();
     config.setEnabled(false);
@@ -59,6 +89,8 @@ class OfflineNotificationPolicyCodecTest {
     OfflineJobNotificationDTO config = new OfflineJobNotificationDTO();
     config.setRecipientType("EXPLICIT_USERS");
     config.setRecipientUserIds(List.of(21L));
+    config.setAlertEnabled(true);
+    config.setAlertChannelIds(List.of(9L));
 
     JsonNode detail = objectMapper.readTree(
         "{\"id\":10,\"notification\":{\"recipientType\":\"PROJECT_OWNER\"}}");
@@ -68,6 +100,9 @@ class OfflineNotificationPolicyCodecTest {
         .isEqualTo("EXPLICIT_USERS");
     assertThat(result.path("notification").path("recipientUserIds").get(0).asLong())
         .isEqualTo(21L);
+    assertThat(result.path("notification").path("alertEnabled").asBoolean()).isTrue();
+    assertThat(result.path("notification").path("alertChannelIds").get(0).asLong())
+        .isEqualTo(9L);
   }
 
   @Test
@@ -88,5 +123,15 @@ class OfflineNotificationPolicyCodecTest {
     assertThatThrownBy(() -> codec.encode(config))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("至少选择一个用户");
+  }
+
+  @Test
+  void activeAlertPolicyRequiresAtLeastOneChannel() {
+    OfflineJobNotificationDTO config = new OfflineJobNotificationDTO();
+    config.setAlertEnabled(true);
+
+    assertThatThrownBy(() -> codec.encode(config))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("至少需要选择一个告警渠道");
   }
 }
