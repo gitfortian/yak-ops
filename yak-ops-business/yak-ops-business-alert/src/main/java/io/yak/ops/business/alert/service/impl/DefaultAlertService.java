@@ -117,7 +117,7 @@ public class DefaultAlertService implements AlertService {
         .map(AlertChannelVO::from)
         .toList();
 
-    // 数据库持久化配置 → 合并 id/enabled/connStatus/configJson
+    // 数据库持久化配置 → 合并安全的列表字段；敏感 configJson 仅由详情接口返回。
     Map<String, AlertChannelDefinition> persisted = repository.findAll().stream()
         .collect(Collectors.toMap(AlertChannelDefinition::getChannelType, Function.identity()));
 
@@ -127,7 +127,6 @@ public class DefaultAlertService implements AlertService {
         vo.setId(def.getId());
         vo.setEnabled(def.getEnabled());
         vo.setConnStatus(def.getConnStatus() != null ? def.getConnStatus().name() : "UNKNOWN");
-        vo.setConfigJson(def.getConfigJson());
       }
     }
     return channels;
