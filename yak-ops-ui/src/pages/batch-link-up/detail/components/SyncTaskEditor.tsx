@@ -125,6 +125,14 @@ export default function SyncTaskEditor({
         />
       </div>
 
+      <div id="schedule-config" className="scroll-mt-6">
+        <ScheduleConfigSection editor={editor} onChange={onChange} />
+      </div>
+
+      <div id="notification-config" className="scroll-mt-6">
+        <NotificationConfigSection editor={editor} onChange={onChange} />
+      </div>
+
       {editor.mode === 'GUIDE_SINGLE' ? (
         <div id="field-mapping" className="scroll-mt-6">
           <FieldMappingSection
@@ -140,14 +148,6 @@ export default function SyncTaskEditor({
           />
         </div>
       ) : null}
-
-      <div id="schedule-config" className="scroll-mt-6">
-        <ScheduleConfigSection editor={editor} onChange={onChange} />
-      </div>
-
-      <div id="notification-config" className="scroll-mt-6">
-        <NotificationConfigSection editor={editor} onChange={onChange} />
-      </div>
     </div>
   );
 }
