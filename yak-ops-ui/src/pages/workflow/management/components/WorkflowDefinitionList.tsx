@@ -7,6 +7,7 @@ import {
   pauseWorkflowDefinition,
   resumeWorkflowDefinition,
   runWorkflowDefinition,
+  updateWorkflowDefinition,
   type WorkflowDefinition,
 } from '@/services/workflow/definitions';
 import { history } from '@umijs/max';
@@ -154,10 +155,23 @@ const WorkflowDefinitionList = () => {
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
       });
+      const configured = await updateWorkflowDefinition(created.id, {
+        name: created.name,
+        description: created.description,
+        nodes: created.nodes,
+        edges: created.edges,
+        input: created.input,
+        editorMeta: {
+          ...created.editorMeta,
+          icon: values.icon,
+        },
+        workflowTimeoutSeconds: created.workflowTimeoutSeconds,
+        failureStrategy: created.failureStrategy,
+      });
 
       message.success('工作流草稿已创建，请继续配置任务节点');
       setCreateOpen(false);
-      history.push(`/workflow/definition/${created.id}?scene=create`);
+      history.push(`/workflow/definition/${configured.id}?scene=create`);
     } catch (error) {
       message.error(
         error instanceof Error ? error.message : '创建工作流失败',

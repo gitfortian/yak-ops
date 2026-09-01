@@ -1,10 +1,13 @@
+import {
+  EmojiIcon,
+  normalizeEmojiIconValue,
+} from '@/components/EmojiIconPicker';
 import { YakButton } from '@/components/ui';
 import type { WorkflowDefinition } from '@/services/workflow/definitions';
 import { motion } from 'framer-motion';
 import {
   CalendarClock,
   Clock3,
-  GitBranch,
   LoaderCircle,
   Pause,
   Pencil,
@@ -62,6 +65,7 @@ const WorkflowDefinitionCard = ({
   const definitionMeta = DEFINITION_STATUS_META[record.status];
   const runtimeMeta = runtimeStatusMeta(record.latestExecutionStatus);
   const activeRuntime = isActiveRuntime(record.latestExecutionStatus);
+  const definitionIcon = normalizeEmojiIconValue(record.editorMeta?.icon);
   const isListView = viewMode === 'list';
   const canDelete = record.status !== 'ONLINE' && !activeRuntime;
   const canRun =
@@ -173,9 +177,12 @@ const WorkflowDefinitionCard = ({
 
       <div className="relative z-[1] flex min-h-[108px] items-start gap-3 px-4 pb-4 pt-4">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] border border-[rgba(31,35,41,0.07)] bg-[linear-gradient(145deg,#ffffff_0%,#f5f7fa_100%)] text-[#566071] shadow-[0_5px_14px_rgba(31,35,41,0.055)] transition-transform duration-[260ms] group-hover:scale-[1.025]">
-            <GitBranch size={24} strokeWidth={1.75} />
-          </div>
+          <EmojiIcon
+            value={definitionIcon}
+            size={46}
+            title={`${record.name || '工作流'}图标`}
+            className="border border-[rgba(31,35,41,0.07)] shadow-[0_5px_14px_rgba(31,35,41,0.055)] transition-transform duration-[260ms] group-hover:scale-[1.025]"
+          />
 
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">

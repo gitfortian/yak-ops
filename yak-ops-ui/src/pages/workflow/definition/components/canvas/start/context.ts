@@ -43,6 +43,14 @@ const readStartMeta = (
   return isRecord(legacy) ? legacy as StartMeta : undefined;
 };
 
+const readEditorMetaExtras = (
+  editorMeta?: Record<string, unknown>,
+): Record<string, unknown> => Object.fromEntries(
+  Object.entries(editorMeta || {}).filter(
+    ([key]) => key !== WORKFLOW_START_META_KEY && key !== WORKFLOW_EDITOR_META_KEY,
+  ),
+);
+
 export const hydrateWorkflowStartConfig = (
   runtimeInput?: Record<string, unknown>,
   editorMeta?: Record<string, unknown>,
@@ -105,6 +113,7 @@ export const hydrateWorkflowStartConfig = (
     inputs,
     variables,
     nextNodeIds,
+    editorMetaExtras: readEditorMetaExtras(editorMeta),
   };
 };
 
@@ -147,6 +156,7 @@ export const serializeWorkflowStartContext = (
 export const serializeWorkflowStartEditorMeta = (
   config: WorkflowStartConfig,
 ): Record<string, unknown> => ({
+  ...(config.editorMetaExtras || {}),
   [WORKFLOW_START_META_KEY]: {
     version: 2,
     position: config.position,
