@@ -154,7 +154,7 @@ export default function HomeDataServiceOverview() {
     <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
       <SectionHeader
         title="数据服务"
-        description="近 7 日真实 API 调用与运行状态"
+        description=""
         onMore={() => history.push('/data-service/overview')}
       />
 

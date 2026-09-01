@@ -246,7 +246,7 @@ export default function HomeVisualizationOverview() {
     <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-6 pt-5">
       <SectionHeader
         title="可视化"
-        description="仪表盘与数字大屏的发布状态和最近更新"
+        description=""
       />
 
       <div className="mt-5 grid grid-cols-2 divide-x divide-[#eef0f3] lg:grid-cols-4">

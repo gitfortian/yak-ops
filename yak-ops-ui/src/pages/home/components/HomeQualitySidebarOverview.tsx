@@ -261,7 +261,7 @@ export default function HomeQualitySidebarOverview() {
     <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-5 pb-5 pt-5">
       <SectionHeader
         title="数据质量"
-        description="质量健康与最近问题"
+        description=""
         onMore={() => history.push('/data-quality/overview')}
       />
 

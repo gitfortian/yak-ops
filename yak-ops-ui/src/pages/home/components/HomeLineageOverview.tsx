@@ -169,7 +169,7 @@ export function DataLineageOverview({
     <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-5 pt-5">
       <SectionHeader
         title="数据血缘"
-        description="观察最近血缘关系与资产规模"
+        description=""
         onMore={() => history.push('/data-analysis/lineage')}
       />
 

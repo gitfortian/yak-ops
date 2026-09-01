@@ -217,7 +217,7 @@ export function DatasetOverview({ state }: { state: HomeAssetOverviewState }) {
     <section className="rounded-[22px] border border-[#f0f1f3] bg-white px-6 pb-6 pt-5">
       <SectionHeader
         title="数据集"
-        description="统一查看数据集，以及已纳入血缘的表和字段规模"
+        description=""
         onMore={() => history.push('/data-analysis/data-catalog')}
       />
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[0.76fr_1.15fr_1fr]">
