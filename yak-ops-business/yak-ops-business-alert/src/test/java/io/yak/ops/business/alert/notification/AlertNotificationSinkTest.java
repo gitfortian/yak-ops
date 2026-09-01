@@ -14,6 +14,7 @@ import io.yak.ops.common.bean.dto.alert.AlertNotifyDTO;
 import io.yak.ops.core.notification.NotificationIntent;
 import io.yak.ops.core.notification.NotificationPolicy;
 import io.yak.ops.plugin.alert.api.AlertResult;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -45,7 +46,7 @@ class AlertNotificationSinkTest {
     assertThat(captor.getAllValues())
         .extracting(AlertNotifyDTO::getTitle)
         .containsOnly("离线同步任务执行失败");
-    assertThat(captor.getAllValues().getFirst().getContent())
+    assertThat(captor.getAllValues().get(0).getContent())
         .contains("orders -> ods_orders")
         .contains("连接目标库超时")
         .contains("/sync/batch-link-up/10/detail");
@@ -87,7 +88,7 @@ class AlertNotificationSinkTest {
         NotificationPolicy.RecipientStrategy.PROJECT_OWNER,
         List.of(),
         Set.of(NotificationPolicy.Destination.ALERT),
-        List.of(ids));
+        Arrays.asList(ids));
   }
 
   private NotificationIntent intent(NotificationIntent.Level level) {
