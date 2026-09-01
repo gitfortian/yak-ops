@@ -2,8 +2,8 @@ package io.yak.ops.business.workflow.execution;
 
 import io.yak.ops.business.workflow.domain.WorkflowExecutionTerminalEvent;
 import io.yak.ops.business.workflow.execution.WorkflowExecutionNotificationReader.Snapshot;
-import io.yak.ops.core.notification.BusinessNotification;
-import io.yak.ops.core.notification.BusinessNotificationGateway;
+import io.yak.ops.core.notification.NotificationIntent;
+import io.yak.ops.core.notification.NotificationRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -11,7 +11,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Publishes actionable notifications for failed or timed-out Workflow executions. */
+/** Publishes notification intents for failed or timed-out Workflow executions. */
 @Component
 public class WorkflowFailureNotificationListener {
 
@@ -19,20 +19,20 @@ public class WorkflowFailureNotificationListener {
       LoggerFactory.getLogger(WorkflowFailureNotificationListener.class);
 
   private final WorkflowExecutionNotificationReader executionReader;
-  private final ObjectProvider<BusinessNotificationGateway> notificationGateways;
+  private final ObjectProvider<NotificationRouter> notificationRouters;
 
   public WorkflowFailureNotificationListener(
       WorkflowExecutionNotificationReader executionReader,
-      ObjectProvider<BusinessNotificationGateway> notificationGateways) {
+      ObjectProvider<NotificationRouter> notificationRouters) {
     this.executionReader = executionReader;
-    this.notificationGateways = notificationGateways;
+    this.notificationRouters = notificationRouters;
   }
 
   @EventListener
   public void onTerminal(WorkflowExecutionTerminalEvent event) {
     if (event == null || !notifiable(event.executionStatus())) return;
-    BusinessNotificationGateway gateway = notificationGateways.getIfAvailable();
-    if (gateway == null) return;
+    NotificationRouter router = notificationRouters.getIfAvailable();
+    if (router == null) return;
 
     try {
       Snapshot execution = executionReader.find(event.executionId()).orElse(null);
@@ -49,11 +49,11 @@ public class WorkflowFailureNotificationListener {
               ? "工作流执行已超时，请查看实例详情。"
               : "工作流执行失败，请查看实例详情。";
 
-      gateway.publishToProjectOwners(
-          new BusinessNotification(
+      router.publish(
+          new NotificationIntent(
               execution.projectId(),
-              BusinessNotification.Type.TASK,
-              BusinessNotification.Level.ERROR,
+              NotificationIntent.Type.TASK,
+              NotificationIntent.Level.ERROR,
               title,
               workflowName,
               content,
@@ -62,7 +62,7 @@ public class WorkflowFailureNotificationListener {
               "/workflow/instances/" + event.executionId()));
     } catch (RuntimeException exception) {
       LOGGER.error(
-          "Failed to publish Workflow failure notification: execution={}, status={}",
+          "Failed to publish Workflow failure notification intent: execution={}, status={}",
           event.executionId(),
           event.executionStatus(),
           exception);

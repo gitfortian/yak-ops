@@ -1,12 +1,13 @@
 package io.yak.ops.core.notification;
 
 /**
- * A user-facing business event worth surfacing in the Yak Ops notification inbox.
+ * A user-facing business event that may be routed to one or more notification destinations.
  *
  * <p>The owning business module supplies durable business identity and copy only. Recipient
- * resolution and persistence belong to the application notification adapter.</p>
+ * resolution, policy selection, transaction timing, and delivery belong to the notification
+ * routing layer.</p>
  */
-public record BusinessNotification(
+public record NotificationIntent(
     long projectId,
     Type type,
     Level level,
@@ -17,7 +18,7 @@ public record BusinessNotification(
     String sourceId,
     String actionPath) {
 
-  public BusinessNotification {
+  public NotificationIntent {
     if (projectId <= 0L) throw new IllegalArgumentException("notification projectId must be positive");
     if (type == null) throw new IllegalArgumentException("notification type must not be null");
     if (level == null) throw new IllegalArgumentException("notification level must not be null");

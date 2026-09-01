@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionFinalFailureEvent;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
-import io.yak.ops.core.notification.BusinessNotification;
-import io.yak.ops.core.notification.BusinessNotificationGateway;
+import io.yak.ops.core.notification.NotificationIntent;
+import io.yak.ops.core.notification.NotificationRouter;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,11 +19,11 @@ class OfflineFailureNotificationListenerTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void publishesActionableFailureToProjectOwners() {
+  void publishesActionableFailureIntent() {
     OfflineJobDefinitionRepository definitions = mock(OfflineJobDefinitionRepository.class);
-    BusinessNotificationGateway gateway = mock(BusinessNotificationGateway.class);
-    ObjectProvider<BusinessNotificationGateway> provider = mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(gateway);
+    NotificationRouter router = mock(NotificationRouter.class);
+    ObjectProvider<NotificationRouter> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(router);
 
     OfflineJobDefinition definition = new OfflineJobDefinition();
     definition.setId(10L);
@@ -37,17 +37,17 @@ class OfflineFailureNotificationListenerTest {
         new OfflineFailureNotificationListener(definitions, provider);
     listener.onFinalFailure(new OfflineExecutionFinalFailureEvent(99L, 10L, "engine down"));
 
-    ArgumentCaptor<BusinessNotification> captor =
-        ArgumentCaptor.forClass(BusinessNotification.class);
-    verify(gateway).publishToProjectOwners(captor.capture());
-    BusinessNotification notification = captor.getValue();
-    assertThat(notification.projectId()).isEqualTo(7L);
-    assertThat(notification.type()).isEqualTo(BusinessNotification.Type.TASK);
-    assertThat(notification.level()).isEqualTo(BusinessNotification.Level.ERROR);
-    assertThat(notification.summary()).contains("订单离线同步", "ods_order", "dwd_order");
-    assertThat(notification.content()).isEqualTo("engine down");
-    assertThat(notification.sourceType()).isEqualTo("OFFLINE_SYNC_EXECUTION");
-    assertThat(notification.sourceId()).isEqualTo("99");
-    assertThat(notification.actionPath()).isEqualTo("/sync/batch-link-up/10/detail");
+    ArgumentCaptor<NotificationIntent> captor =
+        ArgumentCaptor.forClass(NotificationIntent.class);
+    verify(router).publish(captor.capture());
+    NotificationIntent intent = captor.getValue();
+    assertThat(intent.projectId()).isEqualTo(7L);
+    assertThat(intent.type()).isEqualTo(NotificationIntent.Type.TASK);
+    assertThat(intent.level()).isEqualTo(NotificationIntent.Level.ERROR);
+    assertThat(intent.summary()).contains("订单离线同步", "ods_order", "dwd_order");
+    assertThat(intent.content()).isEqualTo("engine down");
+    assertThat(intent.sourceType()).isEqualTo("OFFLINE_SYNC_EXECUTION");
+    assertThat(intent.sourceId()).isEqualTo("99");
+    assertThat(intent.actionPath()).isEqualTo("/sync/batch-link-up/10/detail");
   }
 }

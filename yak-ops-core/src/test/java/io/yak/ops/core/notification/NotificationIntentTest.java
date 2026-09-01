@@ -5,14 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
-class BusinessNotificationTest {
+class NotificationIntentTest {
 
   @Test
   void normalizesCopyAndAcceptsOnlyInternalActions() {
-    BusinessNotification notification = new BusinessNotification(
+    NotificationIntent intent = new NotificationIntent(
         7L,
-        BusinessNotification.Type.TASK,
-        BusinessNotification.Level.ERROR,
+        NotificationIntent.Type.TASK,
+        NotificationIntent.Level.ERROR,
         "  Task failed  ",
         "  summary  ",
         "  detail  ",
@@ -20,19 +20,19 @@ class BusinessNotificationTest {
         "  99  ",
         "  /sync/batch-link-up/10/detail  ");
 
-    assertThat(notification.title()).isEqualTo("Task failed");
-    assertThat(notification.summary()).isEqualTo("summary");
-    assertThat(notification.sourceType()).isEqualTo("OFFLINE_SYNC_EXECUTION");
-    assertThat(notification.sourceId()).isEqualTo("99");
-    assertThat(notification.actionPath()).isEqualTo("/sync/batch-link-up/10/detail");
+    assertThat(intent.title()).isEqualTo("Task failed");
+    assertThat(intent.summary()).isEqualTo("summary");
+    assertThat(intent.sourceType()).isEqualTo("OFFLINE_SYNC_EXECUTION");
+    assertThat(intent.sourceId()).isEqualTo("99");
+    assertThat(intent.actionPath()).isEqualTo("/sync/batch-link-up/10/detail");
   }
 
   @Test
   void rejectsInvalidProjectAndExternalActions() {
-    assertThatThrownBy(() -> new BusinessNotification(
+    assertThatThrownBy(() -> new NotificationIntent(
         0L,
-        BusinessNotification.Type.TASK,
-        BusinessNotification.Level.ERROR,
+        NotificationIntent.Type.TASK,
+        NotificationIntent.Level.ERROR,
         "failed",
         null,
         null,
@@ -41,10 +41,10 @@ class BusinessNotificationTest {
         "/tasks/1"))
         .isInstanceOf(IllegalArgumentException.class);
 
-    assertThatThrownBy(() -> new BusinessNotification(
+    assertThatThrownBy(() -> new NotificationIntent(
         7L,
-        BusinessNotification.Type.TASK,
-        BusinessNotification.Level.ERROR,
+        NotificationIntent.Type.TASK,
+        NotificationIntent.Level.ERROR,
         "failed",
         null,
         null,
