@@ -44,8 +44,7 @@ interface WorkflowSummaryCardsProps {
 }
 
 const WorkflowSummaryCards = ({ summary }: WorkflowSummaryCardsProps) => (
-  <motion.section
-    variants={WORKFLOW_PAGE_ANIMATION.fadeUp}
+  <div
     className="flex flex-wrap gap-3"
   >
     {SUMMARY_ITEMS.map((item) => (
@@ -73,7 +72,7 @@ const WorkflowSummaryCards = ({ summary }: WorkflowSummaryCardsProps) => (
         </strong>
       </div>
     ))}
-  </motion.section>
+  </div>
 );
 
 export default WorkflowSummaryCards;

@@ -342,14 +342,10 @@ const WorkflowDefinitionList = () => {
   return (
     <>
       <div className="min-h-[calc(100dvh-56px)] bg-[#f7f8fa] text-[#242731]">
-        <motion.main
-          initial="hidden"
-          animate="visible"
-          variants={WORKFLOW_PAGE_ANIMATION.sectionStagger}
+        <div
           className="px-4 pb-4 pt-4"
         >
-          <motion.section
-            variants={WORKFLOW_PAGE_ANIMATION.fadeUp}
+          <div
             className="flex min-h-[calc(100dvh-88px)] flex-col rounded-[20px] bg-white px-6 pb-4 pt-5 shadow-[0_2px_10px_rgba(31,35,41,0.025)] max-md:px-4"
           >
             <div className="space-y-5">
@@ -371,7 +367,7 @@ const WorkflowDefinitionList = () => {
 
             <div className="mt-5 flex flex-1 flex-col">
               <Spin spinning={loading}>
-                <motion.section
+                <div
                   variants={WORKFLOW_PAGE_ANIMATION.cardStagger}
                   initial="hidden"
                   animate="visible"
@@ -398,7 +394,7 @@ const WorkflowDefinitionList = () => {
                       onResume={handleResume}
                     />
                   ))}
-                </motion.section>
+                </div>
 
                 {!loading && filteredDefinitions.length === 0 ? (
                   <div className="mt-6">
@@ -412,8 +408,7 @@ const WorkflowDefinitionList = () => {
               </Spin>
 
               {filteredDefinitions.length > 0 ? (
-                <motion.footer
-                  variants={WORKFLOW_PAGE_ANIMATION.fadeUp}
+                <div
                   className="mt-auto flex shrink-0 justify-end pt-6"
                 >
                   <Pagination
@@ -432,11 +427,11 @@ const WorkflowDefinitionList = () => {
                       setPageSize(nextPageSize);
                     }}
                   />
-                </motion.footer>
+                </div>
               ) : null}
             </div>
-          </motion.section>
-        </motion.main>
+          </div>
+        </div>
       </div>
 
       <WorkflowCreateDrawer
