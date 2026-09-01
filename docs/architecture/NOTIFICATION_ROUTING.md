@@ -53,7 +53,8 @@ It does not contain MessageDTO, DingTalk webhook configuration, Project membersh
 Describes the effective routing decision:
 
 - enabled / disabled
-- recipient strategy
+- recipient strategy (`PROJECT_OWNER`, `EXPLICIT_USERS`)
+- explicit recipient user IDs when a business resolver has already resolved task creator/custom users
 - destinations (`IN_APP`, `ALERT`)
 - selected external alert channel IDs for future Alert routing
 
@@ -62,11 +63,14 @@ The current compatibility default is:
 ```text
 enabled            = true
 recipientStrategy  = PROJECT_OWNER
+recipientUserIds   = []
 destinations       = [IN_APP]
 alertChannelIds    = []
 ```
 
 This preserves the behavior introduced by PR #906.
+
+`EXPLICIT_USERS` is intentionally generic. A business-specific resolver may map product concepts such as "task creator" or "selected users" to durable user IDs without teaching the Router or Message Center about Offline Sync concepts.
 
 ### NotificationPolicyResolver
 
@@ -84,6 +88,13 @@ Current sink:
 
 ```text
 IN_APP -> Yak Security Message Center
+```
+
+The IN_APP sink supports both:
+
+```text
+PROJECT_OWNER  -> resolve current Project owners through UserProjectService
+EXPLICIT_USERS -> use policy.recipientUserIds directly
 ```
 
 Future sink:
@@ -134,6 +145,17 @@ order: 100
 ```
 
 That resolver can read the task's `notification_config_json` and map it to `NotificationPolicy`.
+
+Examples:
+
+```text
+Project owner
+  -> recipientStrategy = PROJECT_OWNER
+
+Task creator / selected users
+  -> recipientStrategy = EXPLICIT_USERS
+  -> recipientUserIds = resolved user ids
+```
 
 For old tasks with no configuration, it should return the current compatibility policy:
 
