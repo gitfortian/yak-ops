@@ -1,4 +1,3 @@
-import YakButton from '@/components/YakButton';
 import { useAccess } from '@umijs/max';
 import { Tooltip } from 'antd';
 import { LoaderCircle, Play, Rocket, Save } from 'lucide-react';
@@ -69,7 +68,8 @@ const EditorToolbar = ({
                   title={!canExecute ? '无执行权限' : running ? '运行中' : '运行'}
                   mouseEnterDelay={0.35}
                 >
-                  <YakButton
+                  <button
+                    type="button"
                     aria-label="运行"
                     disabled={running || !canExecute}
                     onClick={onRun}
@@ -80,7 +80,7 @@ const EditorToolbar = ({
                     ) : (
                       <Play size={15} strokeWidth={1.8} />
                     )}
-                  </YakButton>
+                  </button>
                 </Tooltip>
               ) : null}
               {capabilities.save ? (
@@ -88,7 +88,8 @@ const EditorToolbar = ({
                   title={!canEdit ? '无编辑权限' : '保存草稿'}
                   mouseEnterDelay={0.35}
                 >
-                  <YakButton
+                  <button
+                    type="button"
                     aria-label="保存草稿"
                     disabled={saving || publishing || running || !canEdit}
                     onClick={onSave}
@@ -99,7 +100,7 @@ const EditorToolbar = ({
                     ) : (
                       <Save size={15} strokeWidth={1.8} />
                     )}
-                  </YakButton>
+                  </button>
                 </Tooltip>
               ) : null}
               {capabilities.publish ? (
@@ -107,7 +108,8 @@ const EditorToolbar = ({
                   title={!canPublish ? '无发布权限' : '发布版本'}
                   mouseEnterDelay={0.35}
                 >
-                  <YakButton
+                  <button
+                    type="button"
                     aria-label="发布版本"
                     disabled={saving || publishing || running || !canPublish}
                     onClick={onPublish}
@@ -118,7 +120,7 @@ const EditorToolbar = ({
                     ) : (
                       <Rocket size={15} strokeWidth={1.8} />
                     )}
-                  </YakButton>
+                  </button>
                 </Tooltip>
               ) : null}
             </div>

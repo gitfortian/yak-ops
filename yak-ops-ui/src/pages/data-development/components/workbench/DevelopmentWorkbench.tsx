@@ -465,6 +465,7 @@ const DevelopmentWorkbench = ({
         '发布任务失败',
       );
       setVersionsRefreshKey((current) => current + 1);
+      await onNodesChanged?.();
       message.success(`已发布 v${published.revisionNo}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '发布任务失败');
