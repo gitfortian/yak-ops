@@ -18,7 +18,6 @@ import {
   DeleteOutlined,
   DownOutlined,
   EditOutlined,
-  EyeOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
@@ -182,13 +181,13 @@ const getRuntimeHint = (
 ) => {
   if (!runtimeStatus) {
     return definitionStatus === 'ONLINE'
-      ? '已上线，可直接运行'
-      : '上线后可运行';
+      ? '已上线，可运行当前生效版本'
+      : '发布并上线后可正式运行';
   }
 
   switch (runtimeStatus) {
     case 'RUNNING':
-      return '存在活动执行，暂不可下线';
+      return '当前存在运行中的执行实例';
     case 'PAUSING':
       return '正在暂停当前执行';
     case 'PAUSED':
@@ -214,6 +213,15 @@ const getRuntimeHint = (
     default:
       return '查看运行记录获取更多信息';
   }
+};
+
+const getPublishActionLabel = (record: WorkflowDefinition) => {
+  if (record.status === 'ONLINE') return '下线工作流';
+  if (record.status === 'OFFLINE' && record.activeVersionNo && !record.draftChanged) {
+    return '重新上线';
+  }
+  if (record.activeVersionNo && record.draftChanged) return '发布更新并上线';
+  return '发布并上线';
 };
 
 export default function WorkflowDefinitionList() {
@@ -421,33 +429,62 @@ export default function WorkflowDefinitionList() {
   };
 
   const confirmOnline = (record: WorkflowDefinition) => {
+    if (record.nodeCount <= 0) {
+      message.warning('请先编辑工作流并添加至少一个任务节点');
+      return;
+    }
+
+    const reenable =
+      record.status === 'OFFLINE' &&
+      Boolean(record.activeVersionNo) &&
+      !record.draftChanged;
+    const publishingUpdate = Boolean(record.activeVersionNo) && record.draftChanged;
+    const targetVersionNo = reenable
+      ? record.activeVersionNo
+      : (record.latestVersionNo || 0) + 1;
+    const title = reenable
+      ? `重新上线工作流 v${targetVersionNo}？`
+      : publishingUpdate
+        ? `发布更新 v${targetVersionNo} 并上线？`
+        : `发布并上线工作流 v${targetVersionNo}？`;
+    const content = reenable
+      ? `将重新启用已发布的 v${targetVersionNo}，不会创建新版本，已保存调度将恢复触发。`
+      : publishingUpdate
+        ? `当前草稿将形成不可变的 v${targetVersionNo} 并成为正式运行版本；已有运行实例不会受到影响。`
+        : `当前草稿将形成不可变的 v${targetVersionNo} 并开启正式运行入口；后续草稿修改不会影响该版本。`;
+    const success = reenable
+      ? '工作流已重新上线'
+      : publishingUpdate
+        ? `工作流 v${targetVersionNo} 已发布并上线`
+        : `工作流 v${targetVersionNo} 已发布并上线`;
+
     Modal.confirm({
       centered: true,
-      title: '工作流上线',
-      content: '上线后工作流可以被手动运行，已保存的调度将同步启用。确认上线吗？',
-      okText: '确认',
+      title,
+      content,
+      okText: reenable
+        ? '重新上线'
+        : publishingUpdate
+          ? '发布更新并上线'
+          : '发布并上线',
       cancelText: '取消',
       async onOk() {
         await executeAction(
           record.id,
           () => onlineWorkflowDefinition(record.id),
-          '工作流已上线',
+          success,
         );
       },
     });
   };
 
   const confirmOffline = (record: WorkflowDefinition) => {
-    if (isActiveRuntime(record.latestExecutionStatus)) {
-      message.warning('工作流存在活动执行，请先暂停或等待执行结束后再下线');
-      return;
-    }
-
     Modal.confirm({
       centered: true,
-      title: '工作流下线',
-      content: '下线后工作流将不能被手动运行或调度触发，已启用调度会同步停用。确认下线吗？',
-      okText: '确认',
+      title: '下线工作流',
+      content:
+        '下线后将关闭新的正式运行和调度触发；已经启动的实例继续执行，草稿仍可继续编辑和测试。确认下线吗？',
+      okText: '下线',
       cancelText: '取消',
       async onOk() {
         await executeAction(
@@ -461,7 +498,6 @@ export default function WorkflowDefinitionList() {
 
   const handleMoreAction = (key: string, record: WorkflowDefinition) => {
     switch (key) {
-      case 'view':
       case 'edit':
         goToDefinition(record);
         break;
@@ -474,6 +510,20 @@ export default function WorkflowDefinitionList() {
       case 'offline':
         confirmOffline(record);
         break;
+      case 'pause':
+        void executeAction(
+          record.id,
+          () => pauseWorkflowDefinition(record.id),
+          '已请求暂停最近执行',
+        );
+        break;
+      case 'resume':
+        void executeAction(
+          record.id,
+          () => resumeWorkflowDefinition(record.id),
+          '最近执行已恢复',
+        );
+        break;
       case 'delete':
         handleDelete(record);
         break;
@@ -484,26 +534,56 @@ export default function WorkflowDefinitionList() {
 
   const getMoreMenuItems = (record: WorkflowDefinition): MenuProps['items'] => {
     const active = isActiveRuntime(record.latestExecutionStatus);
-    const canEdit = record.status !== 'ONLINE' && !active;
     const canDelete = record.status !== 'ONLINE' && !active;
-
-    return [
-      {
-        key: 'view',
-        icon: <EyeOutlined />,
-        label: '查看配置',
-      },
+    const items: NonNullable<MenuProps['items']> = [
       {
         key: 'edit',
         icon: <EditOutlined />,
-        label: '编辑配置',
-        disabled: !canEdit,
+        label: '编辑工作流',
       },
       {
         key: 'schedule',
         icon: <CalendarOutlined />,
         label: '调度配置',
       },
+    ];
+
+    // 草稿编辑与运行实例是两条独立生命周期；非 ONLINE 状态下仍保留最近执行的控制入口。
+    if (record.status !== 'ONLINE') {
+      if (isRunningRuntime(record.latestExecutionStatus)) {
+        items.push({
+          key: 'pause',
+          icon: <PauseCircleOutlined />,
+          label: '暂停最近执行',
+        });
+      } else if (record.latestExecutionStatus === 'PAUSED') {
+        items.push({
+          key: 'resume',
+          icon: <PlayCircleOutlined />,
+          label: '恢复最近执行',
+        });
+      } else if (
+        record.latestExecutionStatus === 'PAUSING' ||
+        record.latestExecutionStatus === 'RESUMING'
+      ) {
+        items.push({
+          key: 'runtime-transition',
+          icon:
+            record.latestExecutionStatus === 'PAUSING' ? (
+              <PauseCircleOutlined />
+            ) : (
+              <PlayCircleOutlined />
+            ),
+          label:
+            record.latestExecutionStatus === 'PAUSING'
+              ? '最近执行暂停中'
+              : '最近执行恢复中',
+          disabled: true,
+        });
+      }
+    }
+
+    items.push(
       { type: 'divider' },
       {
         key: record.status === 'ONLINE' ? 'offline' : 'online',
@@ -513,8 +593,7 @@ export default function WorkflowDefinitionList() {
           ) : (
             <CloudUploadOutlined />
           ),
-        label: record.status === 'ONLINE' ? '下线工作流' : '上线工作流',
-        disabled: active,
+        label: getPublishActionLabel(record),
       },
       { type: 'divider' },
       {
@@ -524,14 +603,16 @@ export default function WorkflowDefinitionList() {
         danger: true,
         disabled: !canDelete,
       },
-    ];
+    );
+
+    return items;
   };
 
   const getRunDisabledReason = (record: WorkflowDefinition) => {
     if (actionId && actionId !== record.id) return '正在处理其他工作流，请稍候';
-    if (record.status !== 'ONLINE') return '请先上线工作流';
+    if (record.status !== 'ONLINE') return '请先发布并上线工作流';
     if (record.nodeCount <= 0) return '请先完成节点编排';
-    if (!record.activeVersionNo) return '当前没有生效版本，请重新上线发布';
+    if (!record.activeVersionNo) return '当前没有生效版本，请重新发布并上线';
     if (isActiveRuntime(record.latestExecutionStatus)) return '当前已有活动执行';
     return undefined;
   };
@@ -539,6 +620,23 @@ export default function WorkflowDefinitionList() {
   const renderPrimaryAction = (record: WorkflowDefinition) => {
     const busy = actionId === record.id;
     const runtimeStatus = record.latestExecutionStatus;
+
+    // 草稿/下线状态的主任务是继续编辑，而不是让最近一次执行状态抢占入口。
+    if (record.status !== 'ONLINE') {
+      return (
+        <YakButton
+          size="small"
+          color="default"
+          variant="filled"
+          disabled={Boolean(actionId)}
+          icon={<EditOutlined />}
+          className="!h-7 !rounded-md !px-2.5 !text-xs"
+          onClick={() => goToDefinition(record)}
+        >
+          编辑
+        </YakButton>
+      );
+    }
 
     if (runtimeStatus === 'PAUSING') {
       return (
@@ -631,11 +729,11 @@ export default function WorkflowDefinitionList() {
       <Tooltip title={disabledReason}>
         <span className="inline-flex">
           <Popconfirm
-            title="运行工作流"
+            title="运行已上线版本"
             description={
               record.draftChanged
-                ? '当前存在未发布配置，本次将运行已生效版本。确认运行吗？'
-                : '确认运行当前工作流吗？'
+                ? `当前存在未发布草稿，本次仍运行已上线的 v${record.activeVersionNo}。确认运行吗？`
+                : `确认运行当前已上线的 v${record.activeVersionNo} 吗？`
             }
             okText="确认"
             cancelText="取消"
@@ -644,7 +742,7 @@ export default function WorkflowDefinitionList() {
               executeAction(
                 record.id,
                 () => runWorkflowDefinition(record.id),
-                '工作流已启动',
+                `工作流 v${record.activeVersionNo} 已启动`,
               )
             }
           >
@@ -727,7 +825,7 @@ export default function WorkflowDefinitionList() {
             {renderDefinitionStatus(record.status)}
             {record.draftChanged && (
               <span className="inline-flex h-6 items-center rounded-md bg-[#fff7e6] px-2 text-[11px] font-medium text-[#b54708]">
-                配置有变更
+                有草稿修改
               </span>
             )}
           </div>
@@ -905,7 +1003,7 @@ export default function WorkflowDefinitionList() {
               <span className="mr-2 text-[14px] text-[#faad14]">▲</span>
               <span className="font-medium text-[#344054]">【提示】</span>
               <span>
-                工作流可先完成节点编排与调度配置，再统一上线；上线会自动启用调度，下线会自动停用调度。
+                草稿可随时编辑和测试；发布后生成正式版本。调度仅对已上线版本生效，下线不会中断已经启动的实例。
               </span>
             </div>
           </div>
