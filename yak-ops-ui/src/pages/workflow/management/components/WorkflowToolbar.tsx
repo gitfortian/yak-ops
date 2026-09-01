@@ -31,8 +31,7 @@ const WorkflowToolbar = ({
   onViewModeChange,
   onReset,
 }: WorkflowToolbarProps) => (
-  <motion.section
-    variants={WORKFLOW_PAGE_ANIMATION.fadeUp}
+  <div
     className="flex min-h-9 items-end justify-between gap-6 border-b border-solid border-[#eceef2] max-xl:flex-col max-xl:items-stretch max-xl:gap-3"
   >
     <div className="flex items-end">
@@ -122,7 +121,7 @@ const WorkflowToolbar = ({
         />
       </div>
     </div>
-  </motion.section>
+  </div>
 );
 
 export default WorkflowToolbar;

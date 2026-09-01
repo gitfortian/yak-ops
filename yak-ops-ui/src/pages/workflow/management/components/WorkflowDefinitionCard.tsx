@@ -4,23 +4,20 @@ import {
 } from '@/components/EmojiIconPicker';
 import { YakButton } from '@/components/ui';
 import type { WorkflowDefinition } from '@/services/workflow/definitions';
-import { motion } from 'framer-motion';
+import { Dropdown, type MenuProps } from 'antd';
 import {
-  CalendarClock,
   Clock3,
   LoaderCircle,
+  MoreHorizontal,
   Pause,
-  Pencil,
   Play,
-  Power,
   Rocket,
   RotateCcw,
-  Trash2,
 } from 'lucide-react';
+import { useState } from 'react';
 
 import {
   DEFINITION_STATUS_META,
-  WORKFLOW_PAGE_ANIMATION,
   formatWorkflowDuration,
   formatWorkflowTime,
   getPublishActionLabel,
@@ -45,8 +42,17 @@ interface WorkflowDefinitionCardProps {
   onResume: (record: WorkflowDefinition) => void;
 }
 
-const actionButtonClassName =
-  '!h-[30px] !w-[30px] !rounded-[8px] !border !border-[#e9ebef] !bg-white/95 !p-0 !text-[#7e838d] !shadow-[0_1px_3px_rgba(31,35,41,0.035)] hover:!text-[#4058c8]';
+/**
+ * Hover 后右上角只保留「主操作 + 更多」两个入口。
+ *
+ * 这样可以避免原来 4~5 个按钮同时出现时过于拥挤，视觉上更接近
+ * Dify 卡片的轻量操作区：常用动作直接点击，其余动作收进菜单。
+ */
+const compactActionButtonClassName =
+  '!h-[32px] !w-[32px] !rounded-[8px] !border-0 !bg-transparent !p-0 !text-[#747985] !shadow-none transition-colors hover:!bg-[#f5f6f8] hover:!text-[#4058c8] disabled:!bg-transparent';
+
+const moreActionButtonClassName =
+  '!h-[32px] !w-[32px] !rounded-[8px] !border-0 !bg-[#f5f6f8] !p-0 !text-[#7f8590] !shadow-none transition-colors hover:!bg-[#eef0f3] hover:!text-[#3f4652]';
 
 const WorkflowDefinitionCard = ({
   record,
@@ -62,6 +68,8 @@ const WorkflowDefinitionCard = ({
   onPause,
   onResume,
 }: WorkflowDefinitionCardProps) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+
   const definitionMeta = DEFINITION_STATUS_META[record.status];
   const runtimeMeta = runtimeStatusMeta(record.latestExecutionStatus);
   const activeRuntime = isActiveRuntime(record.latestExecutionStatus);
@@ -75,7 +83,22 @@ const WorkflowDefinitionCard = ({
     !activeRuntime;
   const showDraftChanged = record.draftChanged && record.status !== 'DRAFT';
 
-  const renderRuntimeAction = () => {
+  const handlePublishAction = () => {
+    if (record.status === 'ONLINE') {
+      onOffline(record);
+      return;
+    }
+
+    onPublish(record);
+  };
+
+  /**
+   * 最常用的动作直接露出：
+   * - 运行中：暂停 / 恢复
+   * - 已上线且空闲：运行
+   * - 草稿 / 已下线：发布
+   */
+  const renderPrimaryAction = () => {
     const status = record.latestExecutionStatus;
 
     if (status === 'PAUSING' || status === 'RESUMING') {
@@ -86,8 +109,14 @@ const WorkflowDefinitionCard = ({
           iconOnly
           disabled
           title={status === 'PAUSING' ? '最近执行暂停中' : '最近执行恢复中'}
-          className={actionButtonClassName}
-          icon={<LoaderCircle size={14} strokeWidth={1.9} className="animate-spin" />}
+          className={compactActionButtonClassName}
+          icon={
+            <LoaderCircle
+              size={15}
+              strokeWidth={1.9}
+              className="animate-spin"
+            />
+          }
         />
       );
     }
@@ -101,8 +130,8 @@ const WorkflowDefinitionCard = ({
           title="恢复最近执行"
           loading={busy}
           disabled={blocked}
-          className={actionButtonClassName}
-          icon={<RotateCcw size={14} strokeWidth={1.9} />}
+          className={compactActionButtonClassName}
+          icon={<RotateCcw size={15} strokeWidth={1.9} />}
           onClick={() => onResume(record)}
         />
       );
@@ -117,8 +146,8 @@ const WorkflowDefinitionCard = ({
           title="暂停最近执行"
           loading={busy}
           disabled={blocked}
-          className={actionButtonClassName}
-          icon={<Pause size={14} strokeWidth={1.9} />}
+          className={compactActionButtonClassName}
+          icon={<Pause size={15} strokeWidth={1.9} />}
           onClick={() => onPause(record)}
         />
       );
@@ -141,14 +170,105 @@ const WorkflowDefinitionCard = ({
           }
           loading={busy}
           disabled={!canRun || blocked}
-          className={actionButtonClassName}
-          icon={<Play size={14} strokeWidth={1.9} />}
+          className={compactActionButtonClassName}
+          icon={<Play size={15} strokeWidth={1.9} />}
           onClick={() => onRun(record)}
         />
       );
     }
 
-    return null;
+    return (
+      <YakButton
+        type="text"
+        size="small"
+        iconOnly
+        title={getPublishActionLabel(record)}
+        loading={busy}
+        disabled={blocked}
+        className={compactActionButtonClassName}
+        icon={<Rocket size={15} strokeWidth={1.9} />}
+        onClick={() => onPublish(record)}
+      />
+    );
+  };
+
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'edit',
+      label: '编辑工作流',
+      disabled: blocked,
+      style: {
+        height: 36,
+        lineHeight: '36px',
+        paddingInline: 12,
+        borderRadius: 8,
+        fontSize: 13,
+      },
+    },
+    {
+      key: 'schedule',
+      label: '调度配置',
+      disabled: blocked,
+      style: {
+        height: 36,
+        lineHeight: '36px',
+        paddingInline: 12,
+        borderRadius: 8,
+        fontSize: 13,
+      },
+    },
+    { type: 'divider' },
+    {
+      key: 'publish',
+      label: getPublishActionLabel(record),
+      disabled: blocked || busy,
+      style: {
+        height: 36,
+        lineHeight: '36px',
+        paddingInline: 12,
+        borderRadius: 8,
+        fontSize: 13,
+      },
+    },
+    ...(canDelete
+      ? [
+          { type: 'divider' as const },
+          {
+            key: 'delete',
+            label: '删除工作流',
+            danger: true,
+            disabled: blocked,
+            style: {
+              height: 36,
+              lineHeight: '36px',
+              paddingInline: 12,
+              borderRadius: 8,
+              fontSize: 13,
+            },
+          },
+        ]
+      : []),
+  ];
+
+  const handleMenuClick: MenuProps['onClick'] = ({ key, domEvent }) => {
+    domEvent.stopPropagation();
+
+    switch (key) {
+      case 'edit':
+        onEdit(record);
+        break;
+      case 'schedule':
+        onSchedule(record);
+        break;
+      case 'publish':
+        handlePublishAction();
+        break;
+      case 'delete':
+        onDelete(record);
+        break;
+      default:
+        break;
+    }
   };
 
   return (
@@ -157,7 +277,7 @@ const WorkflowDefinitionCard = ({
         'group relative min-w-0 overflow-hidden rounded-[16px] border border-[rgba(31,35,41,0.075)] bg-white/[0.98]',
         'shadow-[0_3px_10px_rgba(31,35,41,0.035),0_1px_2px_rgba(31,35,41,0.02)]',
         'transition-[transform,border-color,box-shadow] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
-        ' hover:border-[rgba(31,35,41,0.11)] hover:shadow-[0_10px_24px_rgba(31,35,41,0.065),0_1px_2px_rgba(31,35,41,0.02)]',
+        'hover:border-[rgba(31,35,41,0.11)] hover:shadow-[0_10px_24px_rgba(31,35,41,0.065),0_1px_2px_rgba(31,35,41,0.02)]',
         isListView
           ? 'grid grid-cols-[minmax(430px,1.5fr)_minmax(430px,1fr)] max-xl:grid-cols-1'
           : '',
@@ -175,7 +295,7 @@ const WorkflowDefinitionCard = ({
       />
 
       <div className="relative z-[1] flex min-h-[108px] items-start gap-3 px-4 pb-4 pt-4">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3 pr-[74px]">
           <EmojiIcon
             value={definitionIcon}
             size={46}
@@ -218,73 +338,63 @@ const WorkflowDefinitionCard = ({
               {record.description || '暂无工作流描述'}
             </p>
 
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-4 text-[#9a9fa8]">
-              <span>{record.nodeCount} 个节点 · {record.edgeCount} 条依赖</span>
+            {/* <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-4 text-[#9a9fa8]">
+              <span>
+                {record.nodeCount} 个节点 · {record.edgeCount} 条依赖
+              </span>
               {record.workflowTimeoutSeconds > 0 ? (
-                <span>超时 {formatWorkflowDuration(record.workflowTimeoutSeconds)}</span>
+                <span>
+                  超时 {formatWorkflowDuration(record.workflowTimeoutSeconds)}
+                </span>
               ) : null}
-            </div>
+            </div> */}
           </div>
         </div>
 
-        <div className="absolute right-3 top-3 z-[3] flex -translate-y-1 gap-1 rounded-[10px] bg-white/90 p-1 opacity-0 shadow-[0_6px_18px_rgba(31,35,41,0.08)] backdrop-blur-sm transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
-          {renderRuntimeAction()}
+        {/*
+         * 参考截图中的 Dify 风格：
+         * Hover 后只出现一个紧凑的白色操作胶囊，主操作直接露出，其他动作放进「...」。
+         * moreOpen 时强制保持可见，避免鼠标移到下拉菜单后操作区突然消失。
+         */}
+        <div
+          className={[
+            'absolute right-3 top-3 z-[3] flex items-center rounded-[11px] border border-[#eceef2] bg-white p-[3px]',
+            'shadow-[0_5px_16px_rgba(31,35,41,0.08)] transition-[opacity,transform,box-shadow] duration-200 ease-out',
+            moreOpen
+              ? 'translate-y-0 opacity-100'
+              : '-translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100',
+          ].join(' ')}
+        >
+          {renderPrimaryAction()}
 
-          <YakButton
-            type="text"
-            size="small"
-            iconOnly
-            title="编辑工作流"
-            disabled={blocked}
-            className={actionButtonClassName}
-            icon={<Pencil size={14} strokeWidth={1.9} />}
-            onClick={() => onEdit(record)}
-          />
-
-          <YakButton
-            type="text"
-            size="small"
-            iconOnly
-            title="调度配置"
-            disabled={blocked}
-            className={actionButtonClassName}
-            icon={<CalendarClock size={14} strokeWidth={1.9} />}
-            onClick={() => onSchedule(record)}
-          />
-
-          <YakButton
-            type="text"
-            size="small"
-            iconOnly
-            title={getPublishActionLabel(record)}
-            loading={busy}
-            disabled={blocked}
-            className={actionButtonClassName}
-            icon={
-              record.status === 'ONLINE' ? (
-                <Power size={14} strokeWidth={1.9} />
-              ) : (
-                <Rocket size={14} strokeWidth={1.9} />
-              )
-            }
-            onClick={() =>
-              record.status === 'ONLINE' ? onOffline(record) : onPublish(record)
-            }
-          />
-
-          {canDelete ? (
-            <YakButton
-              type="text"
-              size="small"
-              danger
-              iconOnly
-              title="删除工作流"
-              disabled={blocked}
-              className="!h-[30px] !w-[30px] !rounded-[8px] !border !border-[#e9ebef] !bg-white/95 !p-0 !shadow-[0_1px_3px_rgba(31,35,41,0.035)]"
-              icon={<Trash2 size={14} strokeWidth={1.9} />}
-              onClick={() => onDelete(record)}
-            />
-          ) : null}
+          <Dropdown
+            trigger={['click']}
+            placement="bottomRight"
+            open={moreOpen}
+            onOpenChange={setMoreOpen}
+            menu={{
+              items: menuItems,
+              onClick: handleMenuClick,
+              style: {
+                width: 196,
+                padding: 6,
+                borderRadius: 12,
+                boxShadow:
+                  '0 14px 36px rgba(31, 35, 41, 0.12), 0 2px 8px rgba(31, 35, 41, 0.05)',
+              },
+            }}
+          >
+            <span onClick={(event) => event.stopPropagation()}>
+              <YakButton
+                type="text"
+                size="small"
+                iconOnly
+                title="更多操作"
+                className={moreActionButtonClassName}
+                icon={<MoreHorizontal size={17} strokeWidth={2} />}
+              />
+            </span>
+          </Dropdown>
         </div>
       </div>
 
@@ -323,7 +433,12 @@ const WorkflowDefinitionCard = ({
                 runtimeMeta.backgroundClassName,
               ].join(' ')}
             >
-              <span className={['h-1.5 w-1.5 shrink-0 rounded-full', runtimeMeta.dotClassName].join(' ')} />
+              <span
+                className={[
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  runtimeMeta.dotClassName,
+                ].join(' ')}
+              />
               <span className="truncate">{runtimeMeta.label}</span>
             </span>
           </div>
@@ -332,7 +447,11 @@ const WorkflowDefinitionCard = ({
         <div className="flex min-w-0 flex-col gap-1.5 border-l border-[#eff0f2] pl-2.5">
           <span className="text-[10px] leading-4 text-[#a0a4ad]">最近更新</span>
           <strong className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium leading-[18px] text-[#737882]">
-            <Clock3 size={11} strokeWidth={1.8} className="shrink-0 text-[#9ca0a9]" />
+            <Clock3
+              size={11}
+              strokeWidth={1.8}
+              className="shrink-0 text-[#9ca0a9]"
+            />
             <span className="truncate">{formatWorkflowTime(record.updateTime)}</span>
           </strong>
         </div>
