@@ -22,12 +22,13 @@ import org.junit.jupiter.api.Test;
 class OfflineJobDefinitionServiceNotificationCompatibilityTest {
 
   @Test
-  void olderClientOmittingNotificationPreservesConfiguredPolicy() {
+  void olderClientOmittingControlPlaneMetadataPreservesConfiguredValues() {
     OfflineJobDefinitionRepository definitions = mock(OfflineJobDefinitionRepository.class);
     OfflineBatchExecutionRepository batches = mock(OfflineBatchExecutionRepository.class);
     OfflineScheduleRepository schedules = mock(OfflineScheduleRepository.class);
     OfflineDefinitionSupport support = mock(OfflineDefinitionSupport.class);
     OfflineNotificationPolicyCodec codec = mock(OfflineNotificationPolicyCodec.class);
+    OfflineEditorMetaCodec editorMetaCodec = mock(OfflineEditorMetaCodec.class);
     OfflineScheduleSupport scheduleSupport = mock(OfflineScheduleSupport.class);
     OfflineScheduleLifecycle lifecycle = mock(OfflineScheduleLifecycle.class);
     OfflineSyncViewMapper viewMapper = mock(OfflineSyncViewMapper.class);
@@ -36,6 +37,8 @@ class OfflineJobDefinitionServiceNotificationCompatibilityTest {
     existing.setId(10L);
     existing.setReleaseState("OFFLINE");
     existing.setNotificationConfigJson("{\"enabled\":false}");
+    existing.setEditorMetaJson(
+        "{\"icon\":{\"emoji\":\"🚀\",\"background\":\"#DCEEFF\"}}");
     when(definitions.findById(10L)).thenReturn(Optional.of(existing));
     when(definitions.existsByName("订单同步", 10L)).thenReturn(false);
 
@@ -57,15 +60,18 @@ class OfflineJobDefinitionServiceNotificationCompatibilityTest {
         schedules,
         support,
         codec,
+        editorMetaCodec,
         scheduleSupport,
         lifecycle,
         viewMapper);
 
     OfflineJobDefinitionDTO dto = new OfflineJobDefinitionDTO();
     dto.setId(10L);
-    // Deliberately leave dto.notification null to simulate an older client.
+    // Deliberately leave dto.notification and dto.editorMeta null to simulate an older client.
     service.saveDraft(dto);
 
     assertThat(existing.getNotificationConfigJson()).isEqualTo("{\"enabled\":false}");
+    assertThat(existing.getEditorMetaJson())
+        .isEqualTo("{\"icon\":{\"emoji\":\"🚀\",\"background\":\"#DCEEFF\"}}");
   }
 }
