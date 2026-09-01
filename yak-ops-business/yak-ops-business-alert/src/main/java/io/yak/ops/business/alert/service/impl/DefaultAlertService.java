@@ -117,13 +117,14 @@ public class DefaultAlertService implements AlertService {
         .map(AlertChannelVO::from)
         .toList();
 
-    // 数据库持久化配置 → 合并 enabled/connStatus/configJson
+    // 数据库持久化配置 → 合并 id/enabled/connStatus/configJson
     Map<String, AlertChannelDefinition> persisted = repository.findAll().stream()
         .collect(Collectors.toMap(AlertChannelDefinition::getChannelType, Function.identity()));
 
     for (AlertChannelVO vo : channels) {
       AlertChannelDefinition def = persisted.get(vo.getType());
       if (def != null) {
+        vo.setId(def.getId());
         vo.setEnabled(def.getEnabled());
         vo.setConnStatus(def.getConnStatus() != null ? def.getConnStatus().name() : "UNKNOWN");
         vo.setConfigJson(def.getConfigJson());
@@ -147,6 +148,7 @@ public class DefaultAlertService implements AlertService {
     // 合并持久化配置
     AlertChannelDefinition def = repository.findByChannelType(channelType).orElse(null);
     if (def != null) {
+      vo.setId(def.getId());
       vo.setEnabled(def.getEnabled());
       vo.setConnStatus(def.getConnStatus() != null ? def.getConnStatus().name() : "UNKNOWN");
       vo.setConfigJson(def.getConfigJson());
