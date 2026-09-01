@@ -13,6 +13,9 @@ import io.yak.ops.business.job.runtime.TaskExecutionContextFactory;
 import io.yak.ops.business.job.task.TaskExecution;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.core.plugin.task.TaskPluginRegistry;
+import io.yak.ops.core.project.CurrentProject;
+import io.yak.ops.core.project.ProjectContext;
+import io.yak.ops.core.project.ProjectContextScope;
 import io.yak.ops.plugin.task.api.TaskExecutionContext;
 import io.yak.ops.plugin.task.api.TaskExecutionResult;
 import io.yak.ops.plugin.task.api.TaskPlugin;
@@ -25,7 +28,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -107,6 +112,65 @@ class SqlTaskExecutorAdapterTest {
   }
 
   @Test
+  void restoresCapturedProjectContextOnAsyncWorker() throws Exception {
+    ObjectMapper objectMapper = new ObjectMapper();
+    ThreadLocal<ProjectContext> projectHolder = new ThreadLocal<>();
+    CurrentProject currentProject = () -> Optional.ofNullable(projectHolder.get());
+    ProjectContextScope projectScope = new ProjectContextScope() {
+      @Override
+      public <T> T call(ProjectContext context, Supplier<T> action) {
+        ProjectContext previous = projectHolder.get();
+        projectHolder.set(context);
+        try {
+          return action.get();
+        } finally {
+          if (previous == null) {
+            projectHolder.remove();
+          } else {
+            projectHolder.set(previous);
+          }
+        }
+      }
+    };
+    AtomicReference<Long> executedProjectId = new AtomicReference<>();
+    RecordingSqlPlugin plugin = new RecordingSqlPlugin(() -> {
+      executedProjectId.set(currentProject.requireProjectId());
+      return TaskExecutionResult.success(Map.of("ok", true));
+    });
+    adapter = new SqlTaskExecutorAdapter(
+        TaskPluginRegistry.from(List.of(plugin)),
+        emptyDataSourceProvider(),
+        objectMapper,
+        contextFactory(currentProject, projectScope));
+    TaskDefinition definition = new TaskDefinition("SQL", 1, "select 1", "{}");
+    TaskVersionSnapshot snapshot = new TaskVersionSnapshot(
+        "development:42",
+        "项目上下文传播",
+        "SQL",
+        0L,
+        null,
+        objectMapper.writeValueAsString(definition),
+        definition.configJson());
+
+    projectHolder.set(new ProjectContext(42L, "Project A"));
+    TaskExecution started;
+    try {
+      started = adapter.start(
+          snapshot,
+          TaskExecutionTrigger.MANUAL,
+          null,
+          Map.of("nodeId", "42"));
+    } finally {
+      projectHolder.remove();
+    }
+    TaskExecution completed = awaitTerminal(started.executionId());
+
+    assertTrue(completed.successful());
+    assertEquals(42L, executedProjectId.get());
+    assertTrue(currentProject.current().isEmpty());
+  }
+
+  @Test
   void rejectsMissingImmutableSnapshotWithoutFallback() {
     adapter = new SqlTaskExecutorAdapter(
         TaskPluginRegistry.from(List.of(new RecordingSqlPlugin(TaskExecutionResult.success(Map.of())))),
@@ -174,13 +238,25 @@ class SqlTaskExecutorAdapterTest {
     return new TaskExecutionContextFactory(envVarService);
   }
 
+  private TaskExecutionContextFactory contextFactory(
+      CurrentProject currentProject,
+      ProjectContextScope projectScope) {
+    SystemEnvVarService envVarService = mock(SystemEnvVarService.class);
+    when(envVarService.resolveMergedEnv()).thenReturn(Map.of());
+    return new TaskExecutionContextFactory(envVarService, currentProject, projectScope);
+  }
+
   private static final class RecordingSqlPlugin implements TaskPlugin {
-    private final TaskExecutionResult result;
+    private final Supplier<TaskExecutionResult> resultSupplier;
     private final AtomicReference<TaskDefinition> definition = new AtomicReference<>();
     private final AtomicReference<TaskExecutionContext> context = new AtomicReference<>();
 
     private RecordingSqlPlugin(TaskExecutionResult result) {
-      this.result = result;
+      this(() -> result);
+    }
+
+    private RecordingSqlPlugin(Supplier<TaskExecutionResult> resultSupplier) {
+      this.resultSupplier = resultSupplier;
     }
 
     @Override
@@ -203,7 +279,7 @@ class SqlTaskExecutorAdapterTest {
       return new io.yak.ops.plugin.task.api.TaskExecutor() {
         @Override
         public TaskExecutionResult execute() {
-          return result;
+          return resultSupplier.get();
         }
       };
     }
