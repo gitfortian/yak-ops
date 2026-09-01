@@ -6,6 +6,7 @@ import io.yak.framework.common.Result;
 import io.yak.framework.security.extend.CurrentUserProvider;
 import io.yak.framework.security.web.RequiresPermission;
 import io.yak.ops.business.development.api.DevelopmentNodeApi.CreateRequest;
+import io.yak.ops.business.development.api.DevelopmentNodeApi.MoveRequest;
 import io.yak.ops.business.development.api.DevelopmentNodeApi.RenameRequest;
 import io.yak.ops.business.development.domain.DevelopmentNode;
 import io.yak.ops.business.development.node.DevelopmentNodeService;
@@ -70,6 +71,17 @@ public class DevelopmentNodeController {
       HttpServletRequest servletRequest) {
     DevelopmentNode renamed = service.rename(id, request.name());
     return Result.success(service.recordUpdater(renamed.id(), operatorName(servletRequest)));
+  }
+
+  @Operation(summary = "移动数据开发节点")
+  @RequiresPermission(DataDevelopmentPermissionCode.EDIT)
+  @PutMapping("/{id}/directory")
+  public Result<DevelopmentNode> move(
+      @PathVariable("id") Long id,
+      @Valid @RequestBody MoveRequest request,
+      HttpServletRequest servletRequest) {
+    DevelopmentNode moved = service.move(id, request.directoryId());
+    return Result.success(service.recordUpdater(moved.id(), operatorName(servletRequest)));
   }
 
   @Operation(summary = "删除数据开发节点")

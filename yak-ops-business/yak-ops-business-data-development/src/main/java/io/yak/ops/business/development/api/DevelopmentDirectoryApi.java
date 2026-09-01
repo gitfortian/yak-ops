@@ -16,4 +16,8 @@ public final class DevelopmentDirectoryApi {
 
   public record RenameRequest(@NotBlank @Size(max = 128) String name) {
   }
+
+  /** parentId is null or 0 to move to the root level. */
+  public record MoveRequest(Long parentId) {
+  }
 }

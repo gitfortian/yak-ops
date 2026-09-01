@@ -19,5 +19,8 @@ public interface DevelopmentDirectoryRepository {
 
   boolean updateName(Long id, String name);
 
+  /** Moves a directory under a different parent (null or <= 0 means root). */
+  boolean updateParentId(Long id, Long parentId);
+
   boolean deleteById(Long id);
 }

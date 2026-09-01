@@ -4,12 +4,9 @@ import io.yak.ops.business.development.domain.DevelopmentDirectory;
 import io.yak.ops.business.development.domain.DevelopmentDirectoryName;
 import io.yak.ops.business.development.repository.DevelopmentDirectoryRepository;
 import io.yak.ops.business.development.repository.DevelopmentNodeRepository;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import java.util.*;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,6 +81,52 @@ public class DevelopmentDirectoryService {
     if (!repository.deleteById(id)) {
       throw new IllegalStateException("目录删除失败：" + id);
     }
+  }
+
+  /** Moves a directory under a different parent directory. */
+  @Transactional(transactionManager = "yakBusinessTransactionManager", rollbackFor = Exception.class)
+  public DevelopmentDirectory move(Long id, Long targetParentId) {
+    DevelopmentDirectory current = repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("目录不存在：" + id));
+    Long normalizedParentId = normalizeParentId(targetParentId);
+
+    if (normalizedParentId != null) {
+      if (normalizedParentId.equals(id)) {
+        throw new IllegalStateException("不能将目录移动到自身下");
+      }
+      repository.findById(normalizedParentId)
+          .orElseThrow(() -> new IllegalArgumentException("目标父目录不存在：" + normalizedParentId));
+      if (isDescendant(normalizedParentId, id)) {
+        throw new IllegalStateException("不能将目录移动到其子目录下");
+      }
+    }
+    if (normalizedParentId != null && normalizedParentId.equals(current.parentId())) {
+      return requireFromList(id);
+    }
+    if (normalizedParentId == null && current.parentId() == null) {
+      return requireFromList(id);
+    }
+    if (repository.existsByName(normalizedParentId, current.name())) {
+      throw new IllegalStateException("目标路径下已存在同名目录：" + current.name());
+    }
+    if (!repository.updateParentId(id, normalizedParentId)) {
+      throw new IllegalStateException("目录移动失败：" + id);
+    }
+    return requireFromList(id);
+  }
+
+  /** Returns true when candidateId is a descendant of ancestorId. */
+  private boolean isDescendant(Long candidateId, Long ancestorId) {
+    Set<Long> visited = new HashSet<>();
+    Long currentId = candidateId;
+    while (currentId != null) {
+      if (currentId.equals(ancestorId)) return true;
+      if (!visited.add(currentId)) break;
+      Optional<DevelopmentDirectory> dir = repository.findById(currentId);
+      if (dir.isEmpty()) break;
+      currentId = dir.get().parentId();
+    }
+    return false;
   }
 
   private DevelopmentDirectory requireFromList(Long id) {

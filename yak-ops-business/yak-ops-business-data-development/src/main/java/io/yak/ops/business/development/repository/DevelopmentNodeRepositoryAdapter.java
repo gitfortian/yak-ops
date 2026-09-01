@@ -156,6 +156,19 @@ public class DevelopmentNodeRepositoryAdapter implements DevelopmentNodeReposito
   }
 
   @Override
+  public boolean updateDirectoryId(Long id, Long directoryId) {
+    Long projectId = requiredProjectId();
+    return mapper.update(
+            null,
+            new LambdaUpdateWrapper<DevelopmentNodePO>()
+                .eq(DevelopmentNodePO::getId, id)
+                .eq(DevelopmentNodePO::getProjectId, projectId)
+                .set(DevelopmentNodePO::getDirectoryId, toStoredDirectoryId(directoryId))
+                .set(DevelopmentNodePO::getUpdateTime, Instant.now()))
+        > 0;
+  }
+
+  @Override
   public boolean deleteById(Long id) {
     Long projectId = requiredProjectId();
     return mapper.delete(

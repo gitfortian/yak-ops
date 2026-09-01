@@ -5,6 +5,8 @@ import {
   deleteDevelopmentNode,
   listDevelopmentDirectories,
   listDevelopmentNodes,
+  moveDevelopmentDirectory,
+  moveDevelopmentNode,
   renameDevelopmentDirectory,
   renameDevelopmentNode,
   type DevelopmentDirectory,
@@ -62,6 +64,8 @@ export const useDataDevelopmentPage = () => {
   const [renameSaving, setRenameSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DevelopmentTreeNode>();
   const [deleteSaving, setDeleteSaving] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<DevelopmentTreeNode>();
+  const [moveSaving, setMoveSaving] = useState(false);
 
   const loadTree = useCallback(async () => {
     const requestSequence = requestSequenceRef.current + 1;
@@ -265,6 +269,10 @@ export const useDataDevelopmentPage = () => {
         setRenameTarget(resource);
         return;
       }
+      if (action === 'move') {
+        setMoveTarget(resource);
+        return;
+      }
       if (action === 'delete') setDeleteTarget(resource);
     },
     [copyResourceText, openCreateNode],
@@ -322,6 +330,33 @@ export const useDataDevelopmentPage = () => {
     if (!deleteSaving) setDeleteTarget(undefined);
   }, [deleteSaving]);
 
+  const submitMove = useCallback(
+    async (targetDirectoryId: DevelopmentId | null) => {
+      if (!moveTarget) return;
+      setMoveSaving(true);
+      try {
+        if (moveTarget.nodeType === 'directory') {
+          await moveDevelopmentDirectory(moveTarget.resourceId, targetDirectoryId);
+        } else {
+          await moveDevelopmentNode(moveTarget.resourceId, targetDirectoryId);
+        }
+        setMoveTarget(undefined);
+        setTreeKeyword('');
+        await loadTree();
+        message.success('移动成功');
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '移动失败');
+      } finally {
+        setMoveSaving(false);
+      }
+    },
+    [loadTree, moveTarget],
+  );
+
+  const closeMove = useCallback(() => {
+    if (!moveSaving) setMoveTarget(undefined);
+  }, [moveSaving]);
+
   const selectTreeNodes = useCallback((keys: Key[]) => {
     const key = keys[0];
     setSelectedNodeKey(
@@ -353,6 +388,8 @@ export const useDataDevelopmentPage = () => {
     renameSaving,
     deleteTarget,
     deleteSaving,
+    moveTarget,
+    moveSaving,
     setTreeKeyword,
     setTreeCollapsed,
     openCreateNode,
@@ -369,6 +406,8 @@ export const useDataDevelopmentPage = () => {
     closeRename,
     submitDelete,
     closeDelete,
+    submitMove,
+    closeMove,
     loadTree,
   };
 };

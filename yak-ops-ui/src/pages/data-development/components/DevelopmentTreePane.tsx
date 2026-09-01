@@ -9,6 +9,7 @@ import {
   Copy,
   Database,
   FileText,
+  FolderInput,
   FolderPlus,
   Network,
   Pencil,
@@ -282,6 +283,11 @@ const DevelopmentTreePane = ({
         key: 'rename',
         label: '重命名',
         icon: <Pencil size={14} strokeWidth={1.8} />,
+      },
+      {
+        key: 'move',
+        label: '移动',
+        icon: <FolderInput size={14} strokeWidth={1.8} />,
       },
       {
         key: 'delete',
