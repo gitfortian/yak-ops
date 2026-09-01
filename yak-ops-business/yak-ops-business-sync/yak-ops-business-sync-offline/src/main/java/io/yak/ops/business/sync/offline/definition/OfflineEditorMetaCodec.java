@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobEditorMetaDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobIconDTO;
+import java.util.Locale;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -77,7 +78,7 @@ public class OfflineEditorMetaCodec {
 
     OfflineJobIconDTO icon = new OfflineJobIconDTO();
     icon.setEmoji(emoji);
-    icon.setBackground(background.toUpperCase());
+    icon.setBackground(background.toUpperCase(Locale.ROOT));
     normalized.setIcon(icon);
     return normalized;
   }
