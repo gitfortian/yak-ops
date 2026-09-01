@@ -600,6 +600,9 @@ public class WorkflowRuntime {
   private WorkflowExecutionMetadata requireMetadata(String id) {
     WorkflowExecutionMetadata runMetadata = findMetadata(id);
     if (runMetadata == null) {
+      if (projectRequired) {
+        throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND);
+      }
       throw new IllegalArgumentException("Workflow execution metadata not found: " + id);
     }
     return runMetadata;
