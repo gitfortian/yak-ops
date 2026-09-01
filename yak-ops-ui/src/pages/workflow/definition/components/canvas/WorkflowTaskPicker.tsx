@@ -1,14 +1,9 @@
-import { listTaskCatalogAssets } from '@/services/taskCatalog';
-import { Input, Popover, Spin } from 'antd';
+import { Input, Popover } from 'antd';
 import type { PopoverProps } from 'antd';
 import { Search } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import WorkflowNodeIcon from './node/icons/WorkflowNodeIcon';
-import {
-  isWorkflowEligibleTaskCatalogAsset,
-  taskCatalogOption,
-} from './taskOptions';
 import type { WorkflowCanvasTaskOption } from './types';
 
 export type WorkflowTaskCategory = 'sync' | 'development' | 'quality';
@@ -75,8 +70,6 @@ const WorkflowTaskPicker = ({
   const [innerOpen, setInnerOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<WorkflowTaskCategory>(defaultCategory);
   const [searchText, setSearchText] = useState(createSearchState);
-  const [catalogOptions, setCatalogOptions] = useState<WorkflowCanvasTaskOption[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
   const open = controlledOpen ?? innerOpen;
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -85,43 +78,15 @@ const WorkflowTaskPicker = ({
     onOpenChange?.(nextOpen);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    let active = true;
-    setCatalogLoading(true);
-    void listTaskCatalogAssets({ source: 'DATA_DEVELOPMENT', status: 'ONLINE' })
-      .then((assets) => {
-        if (active) {
-          setCatalogOptions(
-            assets.filter(isWorkflowEligibleTaskCatalogAsset).map(taskCatalogOption),
-          );
-        }
-      })
-      .catch(() => {
-        if (active) setCatalogOptions([]);
-      })
-      .finally(() => {
-        if (active) setCatalogLoading(false);
-      });
-    return () => { active = false; };
-  }, [open]);
-
-  const allOptions = useMemo(() => {
-    const merged = new Map<string, WorkflowCanvasTaskOption>();
-    options.forEach((option) => merged.set(option.id, option));
-    catalogOptions.forEach((option) => merged.set(option.id, option));
-    return Array.from(merged.values());
-  }, [catalogOptions, options]);
-
   const groupedOptions = useMemo(() => {
     const grouped: Record<WorkflowTaskCategory, WorkflowCanvasTaskOption[]> = {
       sync: [],
       development: [],
       quality: [],
     };
-    allOptions.forEach((option) => grouped[resolveTaskCategory(option)].push(option));
+    options.forEach((option) => grouped[resolveTaskCategory(option)].push(option));
     return grouped;
-  }, [allOptions]);
+  }, [options]);
 
   const activeMeta = CATEGORY_META.find((item) => item.key === activeCategory) ?? CATEGORY_META[0];
   const keyword = searchText[activeCategory].trim().toLowerCase();
@@ -175,9 +140,7 @@ const WorkflowTaskPicker = ({
 
       <div className="border-t border-[#f0f1f3]">
         <div className="max-h-[420px] overflow-y-auto p-1">
-          {catalogLoading && activeCategory === 'development' && !filteredOptions.length ? (
-            <div className="flex h-16 items-center justify-center"><Spin size="small" /></div>
-          ) : filteredOptions.length ? filteredOptions.map((option) => (
+          {filteredOptions.length ? filteredOptions.map((option) => (
             <button
               key={option.id}
               type="button"
