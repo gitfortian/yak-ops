@@ -40,33 +40,20 @@ public class YakSecurityInAppNotificationSink implements NotificationSink {
   public void deliver(NotificationIntent intent, NotificationPolicy policy) {
     Objects.requireNonNull(intent, "intent");
     Objects.requireNonNull(policy, "policy");
-    if (policy.recipientStrategy() != NotificationPolicy.RecipientStrategy.PROJECT_OWNER) {
-      throw new IllegalArgumentException(
-          "IN_APP sink does not support recipient strategy: " + policy.recipientStrategy());
-    }
 
-    UserProjectService userProjectService = userProjectServices.getIfAvailable();
     NotificationPublisher notificationPublisher = notificationPublishers.getIfAvailable();
-    if (userProjectService == null || notificationPublisher == null) {
+    if (notificationPublisher == null) {
       LOGGER.debug(
-          "IN_APP notification skipped because Yak Security infrastructure is unavailable: sourceType={}, sourceId={}",
+          "IN_APP notification skipped because Yak Security publisher is unavailable: sourceType={}, sourceId={}",
           intent.sourceType(),
           intent.sourceId());
       return;
     }
 
-    List<Long> resolvedOwnerIds =
-        userProjectService.getUserIdListByProjectId(intent.projectId(), ProjectUserCode.OWNER);
-    List<Long> ownerIds = resolvedOwnerIds == null
-        ? List.of()
-        : resolvedOwnerIds.stream()
-            .filter(Objects::nonNull)
-            .filter(userId -> userId > 0L)
-            .distinct()
-            .toList();
-    if (ownerIds.isEmpty()) {
+    List<Long> recipientIds = resolveRecipients(intent, policy);
+    if (recipientIds.isEmpty()) {
       LOGGER.debug(
-          "IN_APP notification skipped because Project has no owner: projectId={}, sourceType={}, sourceId={}",
+          "IN_APP notification skipped because no recipient was resolved: projectId={}, sourceType={}, sourceId={}",
           intent.projectId(),
           intent.sourceType(),
           intent.sourceId());
@@ -74,7 +61,26 @@ public class YakSecurityInAppNotificationSink implements NotificationSink {
     }
 
     notificationPublisher.publishAll(
-        ownerIds.stream().map(userId -> toMessage(intent, userId)).toList());
+        recipientIds.stream().map(userId -> toMessage(intent, userId)).toList());
+  }
+
+  private List<Long> resolveRecipients(
+      NotificationIntent intent,
+      NotificationPolicy policy) {
+    if (policy.recipientStrategy() == NotificationPolicy.RecipientStrategy.EXPLICIT_USERS) {
+      return policy.recipientUserIds();
+    }
+
+    UserProjectService userProjectService = userProjectServices.getIfAvailable();
+    if (userProjectService == null) return List.of();
+    List<Long> resolvedOwnerIds =
+        userProjectService.getUserIdListByProjectId(intent.projectId(), ProjectUserCode.OWNER);
+    if (resolvedOwnerIds == null) return List.of();
+    return resolvedOwnerIds.stream()
+        .filter(Objects::nonNull)
+        .filter(userId -> userId > 0L)
+        .distinct()
+        .toList();
   }
 
   private MessageDTO toMessage(NotificationIntent intent, Long userId) {
