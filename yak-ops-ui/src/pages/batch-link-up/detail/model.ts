@@ -52,6 +52,8 @@ export interface SyncNotification {
   recipientType: SyncNotificationRecipientType;
   recipientUserIds: number[];
   inAppEnabled: boolean;
+  alertEnabled: boolean;
+  alertChannelIds: number[];
 }
 
 export interface SyncEditorState {
@@ -103,6 +105,8 @@ export const DEFAULT_NOTIFICATION_CONFIG: SyncNotification = {
   recipientType: 'PROJECT_OWNER',
   recipientUserIds: [],
   inAppEnabled: true,
+  alertEnabled: false,
+  alertChannelIds: [],
 };
 
 export const isApiSuccess = (response: any): boolean =>
@@ -215,7 +219,7 @@ const serializeSchedule = (
   retryOnFailure: Boolean(schedule?.retryOnFailure),
 });
 
-const normalizeNotificationUserIds = (value: unknown): number[] => {
+const normalizeNotificationIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) return [];
   return Array.from(
     new Set(
@@ -245,13 +249,20 @@ const normalizeNotification = (raw: any): SyncNotification => {
       recipientType === 'EXPLICIT_USERS'
         ? 'EXPLICIT_USERS'
         : 'PROJECT_OWNER',
-    recipientUserIds: normalizeNotificationUserIds(
+    recipientUserIds: normalizeNotificationIds(
       notification.recipientUserIds,
     ),
     inAppEnabled:
       notification.inAppEnabled === undefined
         ? DEFAULT_NOTIFICATION_CONFIG.inAppEnabled
         : Boolean(notification.inAppEnabled),
+    alertEnabled:
+      notification.alertEnabled === undefined
+        ? DEFAULT_NOTIFICATION_CONFIG.alertEnabled
+        : Boolean(notification.alertEnabled),
+    alertChannelIds: normalizeNotificationIds(
+      notification.alertChannelIds,
+    ),
   };
 };
 
@@ -262,6 +273,7 @@ const serializeNotification = (
     notification?.recipientType === 'EXPLICIT_USERS'
       ? 'EXPLICIT_USERS'
       : 'PROJECT_OWNER';
+  const alertEnabled = notification?.alertEnabled === true;
 
   return {
     enabled: notification?.enabled !== false,
@@ -269,11 +281,15 @@ const serializeNotification = (
     recipientType,
     recipientUserIds:
       recipientType === 'EXPLICIT_USERS'
-        ? normalizeNotificationUserIds(
+        ? normalizeNotificationIds(
             notification?.recipientUserIds,
           )
         : [],
     inAppEnabled: notification?.inAppEnabled !== false,
+    alertEnabled,
+    alertChannelIds: alertEnabled
+      ? normalizeNotificationIds(notification?.alertChannelIds)
+      : [],
   };
 };
 
@@ -482,7 +498,7 @@ const directConfig = (
     config.fetchSize = Number(options.fetch_size);
   }
   if (!config.batchSize && options.batch_size) {
-    config.batchSize = Number(options.batch_size);
+    config.batchSize = Number(options.batchSize);
   }
 
   return {
