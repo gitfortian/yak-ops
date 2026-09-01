@@ -16,19 +16,22 @@ class NotificationPolicyTest {
     assertThat(policy.enabled()).isTrue();
     assertThat(policy.recipientStrategy())
         .isEqualTo(NotificationPolicy.RecipientStrategy.PROJECT_OWNER);
+    assertThat(policy.recipientUserIds()).isEmpty();
     assertThat(policy.routesTo(NotificationPolicy.Destination.IN_APP)).isTrue();
     assertThat(policy.routesTo(NotificationPolicy.Destination.ALERT)).isFalse();
     assertThat(policy.alertChannelIds()).isEmpty();
   }
 
   @Test
-  void normalizesAlertChannelIds() {
+  void normalizesExplicitRecipientsAndAlertChannelIds() {
     NotificationPolicy policy = new NotificationPolicy(
         true,
-        NotificationPolicy.RecipientStrategy.PROJECT_OWNER,
-        Set.of(NotificationPolicy.Destination.ALERT),
+        NotificationPolicy.RecipientStrategy.EXPLICIT_USERS,
+        java.util.Arrays.asList(11L, null, -1L, 11L, 12L),
+        Set.of(NotificationPolicy.Destination.IN_APP, NotificationPolicy.Destination.ALERT),
         java.util.Arrays.asList(3L, null, -1L, 3L, 5L));
 
+    assertThat(policy.recipientUserIds()).containsExactly(11L, 12L);
     assertThat(policy.alertChannelIds()).containsExactly(3L, 5L);
   }
 
@@ -37,10 +40,22 @@ class NotificationPolicyTest {
     assertThatThrownBy(() -> new NotificationPolicy(
         true,
         NotificationPolicy.RecipientStrategy.PROJECT_OWNER,
+        List.of(),
         Set.of(),
         List.of()))
         .isInstanceOf(IllegalArgumentException.class);
 
     assertThat(NotificationPolicy.disabled().enabled()).isFalse();
+  }
+
+  @Test
+  void explicitInAppPolicyRequiresRecipients() {
+    assertThatThrownBy(() -> new NotificationPolicy(
+        true,
+        NotificationPolicy.RecipientStrategy.EXPLICIT_USERS,
+        List.of(),
+        Set.of(NotificationPolicy.Destination.IN_APP),
+        List.of()))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }
