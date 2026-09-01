@@ -32,6 +32,8 @@ export const PROJECT_REQUEST_RULES: readonly ProjectRequestRule[] = [
   { prefix: '/api/v1/data-service/runtime', mode: 'LEGACY_GLOBAL' },
   { prefix: '/api/v1/data-service', mode: 'PROJECT_REQUIRED' },
   { prefix: '/api/v1/task-catalog', mode: 'PROJECT_OPTIONAL' },
+  // Generic workflow task discovery includes Project-owned providers such as Offline Sync.
+  { prefix: '/api/v1/tasks', mode: 'PROJECT_REQUIRED' },
   // Link-Up engine health is platform-global; Offline definitions and runtime facts are Project data.
   { prefix: '/api/v1/job/batch-execution/health', mode: 'LEGACY_GLOBAL' },
   { prefix: '/api/v1/executor/health', mode: 'LEGACY_GLOBAL' },
