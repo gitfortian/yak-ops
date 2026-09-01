@@ -11,6 +11,8 @@ public interface AlertChannelDao {
 
   int update(AlertChannelPO po);
 
+  AlertChannelPO selectById(long id);
+
   AlertChannelPO selectByChannelType(String channelType);
 
   List<AlertChannelPO> selectAll();
