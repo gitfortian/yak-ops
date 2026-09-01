@@ -13,6 +13,7 @@ import java.util.Set;
 public record NotificationPolicy(
     boolean enabled,
     RecipientStrategy recipientStrategy,
+    List<Long> recipientUserIds,
     Set<Destination> destinations,
     List<Long> alertChannelIds) {
 
@@ -20,10 +21,20 @@ public record NotificationPolicy(
     if (recipientStrategy == null) {
       throw new IllegalArgumentException("notification recipientStrategy must not be null");
     }
+    recipientUserIds = normalizeIds(recipientUserIds);
     destinations = destinations == null ? Set.of() : Set.copyOf(destinations);
     alertChannelIds = normalizeIds(alertChannelIds);
     if (enabled && destinations.isEmpty()) {
       throw new IllegalArgumentException("enabled notification policy requires a destination");
+    }
+    if (recipientStrategy == RecipientStrategy.PROJECT_OWNER && !recipientUserIds.isEmpty()) {
+      throw new IllegalArgumentException("PROJECT_OWNER policy must not contain explicit user ids");
+    }
+    if (enabled
+        && destinations.contains(Destination.IN_APP)
+        && recipientStrategy == RecipientStrategy.EXPLICIT_USERS
+        && recipientUserIds.isEmpty()) {
+      throw new IllegalArgumentException("EXPLICIT_USERS in-app policy requires recipient user ids");
     }
   }
 
@@ -32,6 +43,7 @@ public record NotificationPolicy(
     return new NotificationPolicy(
         true,
         RecipientStrategy.PROJECT_OWNER,
+        List.of(),
         Set.of(Destination.IN_APP),
         List.of());
   }
@@ -40,6 +52,7 @@ public record NotificationPolicy(
     return new NotificationPolicy(
         false,
         RecipientStrategy.PROJECT_OWNER,
+        List.of(),
         Set.of(),
         List.of());
   }
@@ -49,7 +62,8 @@ public record NotificationPolicy(
   }
 
   public enum RecipientStrategy {
-    PROJECT_OWNER
+    PROJECT_OWNER,
+    EXPLICIT_USERS
   }
 
   public enum Destination {
