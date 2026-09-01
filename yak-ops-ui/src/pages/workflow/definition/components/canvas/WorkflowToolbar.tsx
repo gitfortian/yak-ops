@@ -96,20 +96,29 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
     failureStrategy !== "CONTINUE_INDEPENDENT_BRANCHES";
   const canPublish = !hasPublished || draftChanged || status === "OFFLINE";
   const busy = saving || statusAction;
+  const reenable = status === "OFFLINE" && hasPublished && !draftChanged;
+  const publishingUpdate = hasPublished && draftChanged;
+  const targetVersionNo = reenable
+    ? activeVersionNo || 1
+    : publishingUpdate
+    ? nextVersionNo
+    : 1;
 
   const lifecycleText = !hasPublished
     ? "草稿 · 尚未发布"
     : status === "OFFLINE"
-    ? `已停用 v${activeVersionNo}${draftChanged ? " · 有草稿修改" : ""}`
+    ? `已下线 v${activeVersionNo}${draftChanged ? " · 有草稿修改" : ""}`
     : draftChanged
-    ? `草稿 · 已发布 v${activeVersionNo} · 有草稿修改`
-    : `已发布 v${activeVersionNo}`;
+    ? `已上线 v${activeVersionNo} · 有草稿修改`
+    : `已上线 v${activeVersionNo}`;
 
   const publishButtonText = !canPublish
-    ? "已发布"
-    : status === "OFFLINE" && hasPublished && !draftChanged
-    ? "重新启用"
-    : "发布";
+    ? "已是最新版本"
+    : reenable
+    ? "重新上线"
+    : publishingUpdate
+    ? "发布更新"
+    : "发布并上线";
 
   const loadVersions = async () => {
     if (!definition?.id) return;
@@ -128,19 +137,27 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
   const confirmPublish = () => {
     if (!canPublish || testing || busy) return;
 
-    const reenable = status === "OFFLINE" && hasPublished && !draftChanged;
-    const targetVersionNo =
-      hasPublished && draftChanged ? nextVersionNo : activeVersionNo || 1;
+    const title = reenable
+      ? `重新上线工作流 v${targetVersionNo}？`
+      : publishingUpdate
+      ? `发布更新 v${targetVersionNo}？`
+      : `发布并上线工作流 v${targetVersionNo}？`;
+    const content = reenable
+      ? `将重新启用已发布的 v${targetVersionNo}，不会创建新版本。`
+      : publishingUpdate
+      ? `当前草稿将形成不可变的 v${targetVersionNo} 并成为新的正式运行版本；已有运行实例不会受到影响。`
+      : `当前草稿将形成不可变的 v${targetVersionNo} 并开启正式运行入口；后续草稿修改不会影响该版本。`;
+    const okText = reenable
+      ? "重新上线"
+      : publishingUpdate
+      ? "发布更新"
+      : "发布并上线";
 
     Modal.confirm({
       centered: true,
-      title: reenable
-        ? `重新启用工作流 v${targetVersionNo}？`
-        : `发布工作流 v${targetVersionNo}？`,
-      content: reenable
-        ? `将重新启用已发布的 v${targetVersionNo}，不会创建新的发布版本。`
-        : `当前草稿将形成不可变的 v${targetVersionNo}，已有运行实例不会受到影响。`,
-      okText: reenable ? "重新启用" : "发布",
+      title,
+      content,
+      okText,
       cancelText: "取消",
       onOk: onOnline,
     });
@@ -150,9 +167,10 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
     if (testing || busy || status !== "ONLINE" || !hasPublished) return;
     Modal.confirm({
       centered: true,
-      title: `停用工作流 v${activeVersionNo}？`,
-      content: "停用后将关闭正式运行入口，当前草稿仍可继续编辑和测试。",
-      okText: "停用",
+      title: `下线工作流 v${activeVersionNo}？`,
+      content:
+        "下线后将关闭新的正式运行和调度触发；已经启动的实例继续执行，当前草稿仍可继续编辑和测试。",
+      okText: "下线",
       cancelText: "取消",
       okButtonProps: { danger: true },
       onOk: onOffline,
@@ -271,7 +289,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
       ? [
           {
             key: "offline",
-            label: <span className="text-[#b42318]">停用正式运行入口</span>,
+            label: <span className="text-[#b42318]">下线工作流</span>,
             icon: <CircleStop size={13} className="text-[#b42318]" />,
           },
         ]
@@ -355,7 +373,7 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
 
         <span className="mx-1 h-5 w-px bg-[#eceef1]" />
 
-        <Tooltip title="保存当前草稿并按草稿配置测试，不影响已发布版本">
+        <Tooltip title="测试当前草稿；会先保存草稿，不影响已上线版本">
           <YakButton
             type="text"
             loading={testing}
@@ -380,7 +398,9 @@ const WorkflowToolbar = (props: WorkflowToolbarProps) => {
         </YakButton>
 
         <div className="flex items-center">
-          <Tooltip title={!canPublish ? "当前草稿与已发布版本一致" : undefined}>
+          <Tooltip
+            title={!canPublish ? "当前草稿与线上版本一致，无需再次发布" : undefined}
+          >
             <span>
               <Button
                 type="primary"
