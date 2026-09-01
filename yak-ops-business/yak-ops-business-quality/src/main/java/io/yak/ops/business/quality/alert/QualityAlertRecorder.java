@@ -7,8 +7,8 @@ import io.yak.ops.business.quality.repository.QualityAlertRepository;
 import io.yak.ops.common.enums.quality.QualityEnums.AlertLevel;
 import io.yak.ops.common.enums.quality.QualityEnums.CheckResult;
 import io.yak.ops.common.enums.quality.QualityEnums.NotifyChannel;
-import io.yak.ops.core.notification.BusinessNotification;
-import io.yak.ops.core.notification.BusinessNotificationGateway;
+import io.yak.ops.core.notification.NotificationIntent;
+import io.yak.ops.core.notification.NotificationRouter;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,20 +22,20 @@ import org.springframework.util.StringUtils;
 public class QualityAlertRecorder {
   private static final Logger LOGGER = LoggerFactory.getLogger(QualityAlertRecorder.class);
   private final QualityAlertRepository repository;
-  private final BusinessNotificationGateway notificationGateway;
+  private final NotificationRouter notificationRouter;
 
   @org.springframework.beans.factory.annotation.Autowired
   public QualityAlertRecorder(
       QualityAlertRepository repository,
-      ObjectProvider<BusinessNotificationGateway> notificationGateways) {
+      ObjectProvider<NotificationRouter> notificationRouters) {
     this.repository = repository;
-    this.notificationGateway = notificationGateways.getIfAvailable();
+    this.notificationRouter = notificationRouters.getIfAvailable();
   }
 
   /** Focused tests retain the lightweight constructor. */
   public QualityAlertRecorder(QualityAlertRepository repository) {
     this.repository = repository;
-    this.notificationGateway = null;
+    this.notificationRouter = null;
   }
 
   public void recordIfNecessary(
@@ -90,7 +90,7 @@ public class QualityAlertRecorder {
       QualityExecutionPlan plan,
       CheckResult result,
       String message) {
-    if (notificationGateway == null) return;
+    if (notificationRouter == null) return;
     try {
       boolean error = result == CheckResult.ERROR || plan.alertLevel() == AlertLevel.CRITICAL;
       String monitorName = StringUtils.hasText(plan.monitor().name())
@@ -104,11 +104,11 @@ public class QualityAlertRecorder {
           ? "数据质量执行异常"
           : error ? "数据质量检查发现严重问题" : "数据质量检查发现问题";
 
-      notificationGateway.publishToProjectOwners(
-          new BusinessNotification(
+      notificationRouter.publish(
+          new NotificationIntent(
               plan.projectId(),
-              BusinessNotification.Type.QUALITY,
-              error ? BusinessNotification.Level.ERROR : BusinessNotification.Level.WARNING,
+              NotificationIntent.Type.QUALITY,
+              error ? NotificationIntent.Level.ERROR : NotificationIntent.Level.WARNING,
               title,
               summary,
               message,
@@ -117,7 +117,7 @@ public class QualityAlertRecorder {
               "/data-quality/execution/" + plan.executionNo()));
     } catch (RuntimeException exception) {
       LOGGER.error(
-          "Failed to publish quality Message Center notification: monitor={}, execution={}",
+          "Failed to publish quality notification intent: monitor={}, execution={}",
           plan.monitor().id(),
           plan.executionNo(),
           exception);
