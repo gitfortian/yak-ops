@@ -9,6 +9,7 @@ import io.yak.ops.business.sync.offline.definition.OfflineDefinitionSupport.Prep
 import io.yak.ops.business.sync.offline.domain.OfflineDefinitionQuery;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
+import io.yak.ops.business.sync.offline.notification.OfflineNotificationPolicyCodec;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobDefinitionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineScheduleRepository;
@@ -34,6 +35,7 @@ public class OfflineJobDefinitionService {
   private final OfflineBatchExecutionRepository batchRepository;
   private final OfflineScheduleRepository scheduleRepository;
   private final OfflineDefinitionSupport support;
+  private final OfflineNotificationPolicyCodec notificationPolicyCodec;
   private final OfflineScheduleSupport scheduleSupport;
   private final OfflineScheduleLifecycle scheduleLifecycle;
   private final OfflineSyncViewMapper viewMapper;
@@ -56,10 +58,12 @@ public class OfflineJobDefinitionService {
     ensureCanSaveDraft(existing);
 
     DraftDefinition draft = support.prepareDraft(dto);
+    String notificationConfigJson = notificationPolicyCodec.encode(dto.getNotification());
     ensureUniqueName(draft.getJobName(), id);
 
     OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
     applyDraft(definition, existing, id, draft);
+    definition.setNotificationConfigJson(notificationConfigJson);
     persist(existing, definition);
     saveScheduleAndSync(id, draft.getRequest().get("schedule"));
     return id;
@@ -72,10 +76,12 @@ public class OfflineJobDefinitionService {
     ensureEditable(existing);
 
     PreparedDefinition prepared = support.prepare(dto);
+    String notificationConfigJson = notificationPolicyCodec.encode(dto.getNotification());
     ensureUniqueName(prepared.getJobName(), id);
 
     OfflineJobDefinition definition = existing == null ? new OfflineJobDefinition() : existing;
     applyPrepared(definition, existing, id, prepared);
+    definition.setNotificationConfigJson(notificationConfigJson);
     persist(existing, definition);
     saveScheduleAndSync(id, prepared.getRequest().get("schedule"));
     return id;
