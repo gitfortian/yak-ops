@@ -152,13 +152,12 @@ const WorkflowDefinitionCard = ({
   };
 
   return (
-    <motion.article
-      variants={WORKFLOW_PAGE_ANIMATION.fadeUp}
+    <div
       className={[
         'group relative min-w-0 overflow-hidden rounded-[16px] border border-[rgba(31,35,41,0.075)] bg-white/[0.98]',
         'shadow-[0_3px_10px_rgba(31,35,41,0.035),0_1px_2px_rgba(31,35,41,0.02)]',
         'transition-[transform,border-color,box-shadow] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
-        'hover:-translate-y-px hover:border-[rgba(31,35,41,0.11)] hover:shadow-[0_10px_24px_rgba(31,35,41,0.065),0_1px_2px_rgba(31,35,41,0.02)]',
+        ' hover:border-[rgba(31,35,41,0.11)] hover:shadow-[0_10px_24px_rgba(31,35,41,0.065),0_1px_2px_rgba(31,35,41,0.02)]',
         isListView
           ? 'grid grid-cols-[minmax(430px,1.5fr)_minmax(430px,1fr)] max-xl:grid-cols-1'
           : '',
@@ -338,7 +337,7 @@ const WorkflowDefinitionCard = ({
           </strong>
         </div>
       </div>
-    </motion.article>
+    </div>
   );
 };
 

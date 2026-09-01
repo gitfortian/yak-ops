@@ -368,9 +368,6 @@ const WorkflowDefinitionList = () => {
             <div className="mt-5 flex flex-1 flex-col">
               <Spin spinning={loading}>
                 <div
-                  variants={WORKFLOW_PAGE_ANIMATION.cardStagger}
-                  initial="hidden"
-                  animate="visible"
                   className={
                     viewMode === 'list'
                       ? 'grid grid-cols-1 gap-[14px]'
