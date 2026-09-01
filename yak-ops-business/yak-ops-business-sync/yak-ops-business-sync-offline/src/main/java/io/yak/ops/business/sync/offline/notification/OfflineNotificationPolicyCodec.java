@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobNotificationDTO;
 import io.yak.ops.core.notification.NotificationPolicy;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -75,19 +76,40 @@ public class OfflineNotificationPolicyCodec {
       OfflineJobNotificationDTO config =
           normalize(objectMapper.readValue(json, OfflineJobNotificationDTO.class));
       if (!Boolean.TRUE.equals(config.getEnabled())
-          || !Boolean.TRUE.equals(config.getInAppEnabled())
           || !config.getTriggers().contains(FINAL_FAILURE)) {
         return NotificationPolicy.disabled();
       }
-      if (EXPLICIT_USERS.equals(config.getRecipientType())) {
-        return new NotificationPolicy(
-            true,
-            NotificationPolicy.RecipientStrategy.EXPLICIT_USERS,
-            config.getRecipientUserIds(),
-            Set.of(NotificationPolicy.Destination.IN_APP),
-            List.of());
+
+      Set<NotificationPolicy.Destination> destinations =
+          EnumSet.noneOf(NotificationPolicy.Destination.class);
+      if (Boolean.TRUE.equals(config.getInAppEnabled())) {
+        destinations.add(NotificationPolicy.Destination.IN_APP);
       }
-      return NotificationPolicy.projectOwnersInApp();
+      if (Boolean.TRUE.equals(config.getAlertEnabled())) {
+        destinations.add(NotificationPolicy.Destination.ALERT);
+      }
+      if (destinations.isEmpty()) {
+        return NotificationPolicy.disabled();
+      }
+
+      NotificationPolicy.RecipientStrategy recipientStrategy =
+          EXPLICIT_USERS.equals(config.getRecipientType())
+              ? NotificationPolicy.RecipientStrategy.EXPLICIT_USERS
+              : NotificationPolicy.RecipientStrategy.PROJECT_OWNER;
+      List<Long> recipientUserIds =
+          recipientStrategy == NotificationPolicy.RecipientStrategy.EXPLICIT_USERS
+              ? config.getRecipientUserIds()
+              : List.of();
+      List<Long> alertChannelIds = Boolean.TRUE.equals(config.getAlertEnabled())
+          ? config.getAlertChannelIds()
+          : List.of();
+
+      return new NotificationPolicy(
+          true,
+          recipientStrategy,
+          recipientUserIds,
+          destinations,
+          alertChannelIds);
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("离线同步通知策略 JSON 已损坏", exception);
     }
@@ -101,6 +123,7 @@ public class OfflineNotificationPolicyCodec {
     normalized.setEnabled(value.getEnabled() == null ? Boolean.TRUE : value.getEnabled());
     normalized.setInAppEnabled(
         value.getInAppEnabled() == null ? Boolean.TRUE : value.getInAppEnabled());
+    normalized.setAlertEnabled(Boolean.TRUE.equals(value.getAlertEnabled()));
 
     List<String> triggers = value.getTriggers() == null || value.getTriggers().isEmpty()
         ? List.of(FINAL_FAILURE)
@@ -123,13 +146,7 @@ public class OfflineNotificationPolicyCodec {
     }
     normalized.setRecipientType(recipientType);
 
-    List<Long> userIds = value.getRecipientUserIds() == null
-        ? List.of()
-        : value.getRecipientUserIds().stream()
-            .filter(Objects::nonNull)
-            .filter(id -> id > 0L)
-            .distinct()
-            .toList();
+    List<Long> userIds = normalizeIds(value.getRecipientUserIds());
     if (EXPLICIT_USERS.equals(recipientType)
         && Boolean.TRUE.equals(normalized.getEnabled())
         && Boolean.TRUE.equals(normalized.getInAppEnabled())
@@ -137,6 +154,25 @@ public class OfflineNotificationPolicyCodec {
       throw new IllegalArgumentException("指定用户通知至少需要选择一个用户");
     }
     normalized.setRecipientUserIds(EXPLICIT_USERS.equals(recipientType) ? userIds : List.of());
+
+    List<Long> alertChannelIds = normalizeIds(value.getAlertChannelIds());
+    if (Boolean.TRUE.equals(normalized.getEnabled())
+        && Boolean.TRUE.equals(normalized.getAlertEnabled())
+        && alertChannelIds.isEmpty()) {
+      throw new IllegalArgumentException("外部告警通知至少需要选择一个告警渠道");
+    }
+    normalized.setAlertChannelIds(
+        Boolean.TRUE.equals(normalized.getAlertEnabled()) ? alertChannelIds : List.of());
     return normalized;
+  }
+
+  private List<Long> normalizeIds(List<Long> ids) {
+    return ids == null
+        ? List.of()
+        : ids.stream()
+            .filter(Objects::nonNull)
+            .filter(id -> id > 0L)
+            .distinct()
+            .toList();
   }
 }
