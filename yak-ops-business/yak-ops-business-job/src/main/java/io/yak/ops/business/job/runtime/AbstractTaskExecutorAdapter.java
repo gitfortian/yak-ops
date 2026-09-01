@@ -144,7 +144,8 @@ public abstract class AbstractTaskExecutorAdapter implements TaskExecutor {
     if (safeKey != null) idempotencyIndex.put(safeKey, executionId);
 
     try {
-      workerExecutor.submit(() -> runExecution(executionId, handle));
+      workerExecutor.submit(
+          contextFactory.captureProjectContext(() -> runExecution(executionId, handle)));
     } catch (RuntimeException exception) {
       TaskExecution failed = new TaskExecution(
           executionId,

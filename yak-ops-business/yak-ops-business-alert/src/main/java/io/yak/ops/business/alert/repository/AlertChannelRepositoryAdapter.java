@@ -18,6 +18,11 @@ public class AlertChannelRepositoryAdapter implements AlertChannelRepository {
   private final AlertChannelDao dao;
 
   @Override
+  public Optional<AlertChannelDefinition> findById(long id) {
+    return Optional.ofNullable(toDomain(dao.selectById(id)));
+  }
+
+  @Override
   public Optional<AlertChannelDefinition> findByChannelType(String channelType) {
     return Optional.ofNullable(toDomain(dao.selectByChannelType(channelType)));
   }

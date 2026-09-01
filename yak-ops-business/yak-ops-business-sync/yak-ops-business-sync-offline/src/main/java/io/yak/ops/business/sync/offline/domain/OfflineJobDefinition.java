@@ -34,6 +34,7 @@ public class OfflineJobDefinition {
   private String cronExpression;
   private Integer retryMaxAttempts;
   private Integer retryBackoffSeconds;
+  private String notificationConfigJson;
   private LocalDateTime scheduleLastFireTime;
   private LocalDateTime scheduleNextFireTime;
   private Integer version;

@@ -6,6 +6,7 @@ import { updateEndpointConfig, type SyncEditorState } from '../model';
 import ChannelConfigSection from './ChannelConfigSection';
 import FieldMappingSection, { type FieldMappingValue } from './FieldMappingSection';
 import MultiTableConfigSection from './MultiTableConfigSection';
+import NotificationConfigSection from './NotificationConfigSection';
 import ScheduleConfigSection from './ScheduleConfigSection';
 import SingleTableConfigSection from './SingleTableConfigSection';
 import TaskBasicSection from './TaskBasicSection';
@@ -124,6 +125,14 @@ export default function SyncTaskEditor({
         />
       </div>
 
+      <div id="schedule-config" className="scroll-mt-6">
+        <ScheduleConfigSection editor={editor} onChange={onChange} />
+      </div>
+
+      <div id="notification-config" className="scroll-mt-6">
+        <NotificationConfigSection editor={editor} onChange={onChange} />
+      </div>
+
       {editor.mode === 'GUIDE_SINGLE' ? (
         <div id="field-mapping" className="scroll-mt-6">
           <FieldMappingSection
@@ -139,10 +148,6 @@ export default function SyncTaskEditor({
           />
         </div>
       ) : null}
-
-      <div id="schedule-config" className="scroll-mt-6">
-        <ScheduleConfigSection editor={editor} onChange={onChange} />
-      </div>
     </div>
   );
 }

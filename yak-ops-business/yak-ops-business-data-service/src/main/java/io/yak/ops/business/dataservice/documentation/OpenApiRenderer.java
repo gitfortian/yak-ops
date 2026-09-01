@@ -25,7 +25,7 @@ public class OpenApiRenderer {
       Map<String, Object> item = new LinkedHashMap<>();
       item.put("name", parameter.name());
       item.put("in", "query");
-      item.put("required", true);
+      item.put("required", parameter.required());
       if (hasText(parameter.description())) item.put("description", parameter.description());
       item.put("schema", schema(parameter.type(), false));
       if (hasText(parameter.example())) item.put("example", parameter.example());
@@ -38,12 +38,14 @@ public class OpenApiRenderer {
     operation.put("x-yak-schema-stale", doc.schemaStale());
     if (hasText(doc.description())) operation.put("description", doc.description());
     operation.put("parameters", parameters);
-    if ("API_KEY".equals(doc.authMode())) operation.put("security", List.of(Map.of("ApiKeyAuth", List.of())));
+    if ("API_KEY".equals(doc.authMode())) {
+      operation.put("security", List.of(Map.of("ApiKeyAuth", List.of())));
+    }
     operation.put("responses", responses(doc.schemaStale() ? List.of() : doc.responseFields()));
     root.put("paths", Map.of(doc.runtimePath(), Map.of("get", operation)));
     if ("API_KEY".equals(doc.authMode())) {
-      root.put("components", Map.of("securitySchemes", Map.of("ApiKeyAuth",
-          map("type", "apiKey", "in", "header", "name", "X-API-Key"))));
+      root.put("components", Map.of("securitySchemes", Map.of(
+          "ApiKeyAuth", map("type", "apiKey", "in", "header", "name", "X-API-Key"))));
     }
     return root;
   }
@@ -58,17 +60,21 @@ public class OpenApiRenderer {
     }
     Map<String, Object> dataProperties = new LinkedHashMap<>();
     dataProperties.put("columns", map("type", "array", "items", Map.of("type", "string")));
-    dataProperties.put("rows", map("type", "array", "items",
+    dataProperties.put("rows", map(
+        "type", "array", "items",
         map("type", "object", "properties", rowProperties, "additionalProperties", true)));
     dataProperties.put("truncated", Map.of("type", "boolean"));
     dataProperties.put("rowCount", map("type", "integer", "format", "int32"));
     dataProperties.put("durationMs", map("type", "integer", "format", "int64"));
-    Map<String, Object> envelope = map("type", "object", "properties", map(
-        "code", map("type", "integer", "format", "int32"),
-        "data", map("type", "object", "properties", dataProperties),
-        "msg", Map.of("type", "string"), "message", Map.of("type", "string")));
+    Map<String, Object> envelope = map(
+        "type", "object", "properties", map(
+            "code", map("type", "integer", "format", "int32"),
+            "data", map("type", "object", "properties", dataProperties),
+            "msg", Map.of("type", "string"),
+            "message", Map.of("type", "string")));
     Map<String, Object> responses = new LinkedHashMap<>();
-    responses.put("200", map("description", "Success", "content",
+    responses.put("200", map(
+        "description", "Success", "content",
         Map.of("application/json", Map.of("schema", envelope))));
     responses.put("401", Map.of("description", "Missing or invalid API Key"));
     responses.put("429", Map.of("description", "Rate limit exceeded"));
@@ -80,23 +86,42 @@ public class OpenApiRenderer {
     String normalized = type == null ? "STRING" : type.trim().toUpperCase();
     Map<String, Object> schema = new LinkedHashMap<>();
     switch (normalized) {
-      case "INTEGER" -> { schema.put("type", "integer"); schema.put("format", "int64"); }
-      case "NUMBER" -> { schema.put("type", "number"); schema.put("format", "double"); }
+      case "INTEGER" -> {
+        schema.put("type", "integer");
+        schema.put("format", "int64");
+      }
+      case "NUMBER" -> {
+        schema.put("type", "number");
+        schema.put("format", "double");
+      }
       case "BOOLEAN" -> schema.put("type", "boolean");
-      case "DATE" -> { schema.put("type", "string"); schema.put("format", "date"); }
-      case "DATETIME" -> { schema.put("type", "string"); schema.put("format", "date-time"); }
-      case "OBJECT" -> { schema.put("type", "object"); schema.put("additionalProperties", true); }
+      case "DATE" -> {
+        schema.put("type", "string");
+        schema.put("format", "date");
+      }
+      case "DATETIME" -> {
+        schema.put("type", "string");
+        schema.put("format", "date-time");
+      }
+      case "OBJECT" -> {
+        schema.put("type", "object");
+        schema.put("additionalProperties", true);
+      }
       default -> schema.put("type", "string");
     }
     if (nullable) schema.put("nullable", true);
     return schema;
   }
 
-  private boolean hasText(String value) { return value != null && !value.isBlank(); }
+  private boolean hasText(String value) {
+    return value != null && !value.isBlank();
+  }
 
   private Map<String, Object> map(Object... values) {
     Map<String, Object> result = new LinkedHashMap<>();
-    for (int index = 0; index + 1 < values.length; index += 2) result.put(String.valueOf(values[index]), values[index + 1]);
+    for (int index = 0; index + 1 < values.length; index += 2) {
+      result.put(String.valueOf(values[index]), values[index + 1]);
+    }
     return result;
   }
 }
