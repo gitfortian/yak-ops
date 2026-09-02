@@ -192,7 +192,7 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
       if (!persisted) return;
       safeWrite(() -> {
         LocalDateTime now = LocalDateTime.now();
-        String summary = safeErrorMessage(cause);
+        String summary = reasonCode == null || reasonCode.isBlank() ? "OPERATION_FAILED" : reasonCode;
         int updated = jdbcTemplate.update(
             """
             UPDATE yak_audit_operation
@@ -212,7 +212,7 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
               actor,
               resourceType,
               resourceId,
-              summary == null ? "Operation failed" : summary,
+              summary,
               reasonCode,
               cause == null ? Map.of() : Map.of("exceptionType", cause.getClass().getName()));
         }
@@ -295,12 +295,6 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
       case OPERATION_FAILED -> "FAILURE";
       case OPERATION_STARTED -> "INFO";
     };
-  }
-
-  private static String safeErrorMessage(Throwable cause) {
-    if (cause == null || cause.getMessage() == null || cause.getMessage().isBlank()) return null;
-    String message = cause.getMessage().replaceAll("[\\r\\n]+", " ");
-    return message.length() <= 512 ? message : message.substring(0, 512);
   }
 
   private record ActorSnapshot(String id, String name) {}
