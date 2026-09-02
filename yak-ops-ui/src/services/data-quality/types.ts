@@ -127,8 +127,8 @@ export interface SaveRulePayload {
 }
 
 /**
- * New monitor editors use scheduleEnabled + cronExpression.
- * The friendly runMode/frequency fields remain optional for older API consumers.
+ * New monitor editors use scheduleEnabled + cronExpression as the canonical contract.
+ * Legacy friendly schedule fields remain optional for older API consumers.
  */
 export interface MonitorSettingsPayload {
   scheduleEnabled?: boolean;
@@ -230,8 +230,8 @@ export interface TableAssetView {
   ruleCount: number;
   lastResult: CheckResult;
   lastRunTime?: string;
-  registeredBy?: string;
-  registeredAt?: string;
+  registeredBy: string;
+  registeredAt: string;
 }
 
 export interface TableAssetPageView {
@@ -242,16 +242,11 @@ export interface TableAssetPageView {
 }
 
 export interface TableCandidateView {
-  dataSourceId: number;
-  dataSourceName: string;
   databaseName?: string;
   schemaName?: string;
   tableName: string;
   tableType?: string;
   remarks?: string;
-  registered: boolean;
-  assetId?: number;
-  monitorCount: number;
 }
 
 export interface TableCandidatePageView {
@@ -261,16 +256,24 @@ export interface TableCandidatePageView {
   pageSize: number;
 }
 
-export interface RegisterTablesPayload {
-  dataSourceId: number;
+export interface RegisterTableItem {
   databaseName?: string;
   schemaName?: string;
-  tableNames: string[];
+  tableName: string;
+  tableType?: string;
+  remarks?: string;
+}
+
+export interface RegisterTablesPayload {
+  dataSourceId: number;
+  dataSourceName: string;
+  databaseName?: string;
+  tables: RegisterTableItem[];
 }
 
 export interface RegisterTablesView {
-  createdCount: number;
-  skippedCount: number;
+  requested: number;
+  registered: number;
 }
 
 export interface RunView {
@@ -279,7 +282,7 @@ export interface RunView {
   checkResult: CheckResult;
 }
 
-export interface ExecutionRuleView {
+export interface RuleExecutionView {
   id: number;
   ruleId: number;
   ruleName: string;
@@ -292,103 +295,43 @@ export interface ExecutionRuleView {
   executedSql?: string;
   errorMessage?: string;
   durationMs?: number;
-  createdAt?: string;
 }
 
-export interface ExecutionView {
-  id: number;
+export interface ExecutionListItem {
   executionNo: string;
   monitorId: number;
   monitorName: string;
-  dataSourceId: number;
   dataSourceName: string;
-  databaseName?: string;
-  schemaName?: string;
-  tableName: string;
-  objectName?: string;
-  triggerType: TriggerType;
+  objectName: string;
   executionStatus: ExecutionStatus;
   checkResult: CheckResult;
   totalRules: number;
   passedRules: number;
   failedRules: number;
   errorRules: number;
-  operator?: string;
-  queuedAt?: string;
+  operator: string;
+  queuedAt: string;
   startedAt?: string;
   finishedAt?: string;
   durationMs?: number;
   errorMessage?: string;
-  rules?: ExecutionRuleView[];
+}
+
+export interface ExecutionView extends ExecutionListItem {
+  databaseName?: string;
+  schemaName?: string;
+  tableName: string;
+  rules: RuleExecutionView[];
 }
 
 export interface ExecutionPageView {
-  records: ExecutionView[];
+  records: ExecutionListItem[];
   total: number;
   current: number;
   pageSize: number;
 }
 
-export interface QualityMonitorPageQuery {
-  current?: number;
-  pageSize?: number;
-  keyword?: string;
-  dataSourceId?: number;
-  databaseName?: string;
-  schemaName?: string;
-  tableName?: string;
-  enabled?: boolean;
-  lastResult?: CheckResult;
-}
-
-export interface QualityExecutionPageQuery {
-  current?: number;
-  pageSize?: number;
-  monitorId?: number;
-  triggerType?: TriggerType;
-  executionStatus?: ExecutionStatus;
-  checkResult?: CheckResult;
-}
-
-export interface QualityTableAssetPageQuery {
-  current?: number;
-  pageSize?: number;
-  keyword?: string;
-  dataSourceId?: number;
-  databaseName?: string;
-  schemaName?: string;
-  monitored?: boolean;
-}
-
-export interface QualityTableCandidateQuery {
-  current?: number;
-  pageSize?: number;
-  keyword?: string;
-  dataSourceId: number;
-  databaseName?: string;
-  schemaName?: string;
-}
-
-export interface QualityTableSummaryQuery {
-  dataSourceId: number;
-  databaseName?: string;
-  schemaName?: string;
-}
-
-export interface QualityTemplateListQuery {
-  keyword?: string;
-  source?: TemplateSource;
-  dimension?: string;
-  folderId?: number;
-}
-
-export interface CatalogColumn {
-  name: string;
-  type?: string;
-  remarks?: string;
-}
-
-export interface MonitorWorkspaceStats {
+export interface WorkspaceStats {
   ruleCount: number;
   enabledRuleCount: number;
   executionCount: number;
@@ -399,10 +342,10 @@ export interface MonitorWorkspaceStats {
 export interface MonitorWorkspaceView {
   monitor: MonitorView;
   settings: MonitorSettingsView;
-  stats: MonitorWorkspaceStats;
+  stats: WorkspaceStats;
 }
 
-export interface MonitorReportOverview {
+export interface ReportOverview {
   totalRules: number;
   enabledRules: number;
   executedRules: number;
@@ -411,7 +354,7 @@ export interface MonitorReportOverview {
   passRate: number;
 }
 
-export interface DimensionReportView {
+export interface DimensionReport {
   dimension: string;
   total: number;
   passed: number;
@@ -420,7 +363,7 @@ export interface DimensionReportView {
   passRate: number;
 }
 
-export interface TrendPointView {
+export interface TrendPoint {
   date: string;
   dimension: string;
   total: number;
@@ -429,7 +372,7 @@ export interface TrendPointView {
   passRate: number;
 }
 
-export interface ColumnReportView {
+export interface ColumnReport {
   columnName: string;
   dimension: string;
   total: number;
@@ -439,13 +382,15 @@ export interface ColumnReportView {
 }
 
 export interface MonitorReportView {
-  overview: MonitorReportOverview;
-  dimensions: DimensionReportView[];
-  trends: TrendPointView[];
-  columns: ColumnReportView[];
+  reportDate: string;
+  trendStartDate: string;
+  overview: ReportOverview;
+  dimensions: DimensionReport[];
+  trend: TrendPoint[];
+  columns: ColumnReport[];
 }
 
-export interface OperationLogView {
+export interface OperationLogItem {
   id: string;
   operator: string;
   operationTime: string;
@@ -454,8 +399,197 @@ export interface OperationLogView {
 }
 
 export interface OperationLogPageView {
-  records: OperationLogView[];
+  records: OperationLogItem[];
   total: number;
   current: number;
   pageSize: number;
+}
+
+export interface CatalogTable {
+  database?: string;
+  schema?: string;
+  name: string;
+  type?: string;
+  remarks?: string;
+}
+
+export interface CatalogColumn {
+  name: string;
+  typeName?: string;
+  jdbcType?: number;
+  size?: number;
+  scale?: number;
+  nullable?: boolean;
+  ordinalPosition?: number;
+  primaryKey?: boolean;
+  remarks?: string;
+}
+
+export interface QualityTemplateListQuery {
+  keyword?: string;
+  dimension?: string;
+  scope?: RuleScope;
+  folderId?: number;
+  enabled?: boolean;
+}
+
+export interface QualityTableAssetPageQuery {
+  current: number;
+  pageSize: number;
+  dataSourceId: number;
+  keyword?: string;
+}
+
+export interface QualityTableCandidateQuery {
+  dataSourceId: number;
+  current: number;
+  pageSize: number;
+  keyword?: string;
+}
+
+export interface QualityMonitorPageQuery {
+  current?: number;
+  pageSize?: number;
+  keyword?: string;
+  dataSourceId?: number;
+  enabled?: boolean;
+  result?: CheckResult;
+}
+
+export interface QualityTableSummaryQuery {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
+}
+
+export interface QualityExecutionPageQuery {
+  current?: number;
+  pageSize?: number;
+  keyword?: string;
+  executionStatus?: ExecutionStatus;
+  checkResult?: CheckResult;
+  triggerType?: TriggerType;
+}
+
+export interface ExecutionWorkspaceQuery {
+  current?: number;
+  pageSize?: number;
+  keyword?: string;
+  objectKeyword?: string;
+  dataSourceId?: number;
+  monitorId?: number;
+  executionStatus?: ExecutionStatus;
+  checkResult?: CheckResult;
+  triggerType?: TriggerType;
+  hasIssues?: boolean;
+  dimension?: string;
+  scope?: RuleScope;
+  queuedAfter?: string;
+  queuedBefore?: string;
+}
+
+export interface ExecutionWorkspaceListItem {
+  executionNo: string;
+  monitorId: number;
+  monitorName: string;
+  dataSourceId: number;
+  dataSourceName: string;
+  objectName: string;
+  triggerType: TriggerType;
+  executionStatus: ExecutionStatus;
+  checkResult: CheckResult;
+  totalRules: number;
+  passedRules: number;
+  failedRules: number;
+  errorRules: number;
+  operator: string;
+  queuedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  errorMessage?: string;
+}
+
+export interface RuleExecutionWorkspaceListItem {
+  id: number;
+  ruleId: number;
+  executionNo: string;
+  monitorId: number;
+  monitorName: string;
+  dataSourceId: number;
+  dataSourceName: string;
+  databaseName?: string;
+  schemaName?: string;
+  tableName: string;
+  objectName: string;
+  ruleName: string;
+  templateCode: string;
+  ruleType: RuleType;
+  scope: RuleScope;
+  dimension: string;
+  columnName?: string;
+  triggerType: TriggerType;
+  executionStatus: ExecutionStatus;
+  checkResult: CheckResult;
+  metricValue?: string;
+  expectedValue?: string;
+  operator: string;
+  queuedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  errorMessage?: string;
+}
+
+export interface ExecutionWorkspaceRuleView {
+  id: number;
+  ruleId: number;
+  ruleName: string;
+  templateCode: string;
+  ruleType: RuleType;
+  scope: RuleScope;
+  dimension: string;
+  columnName?: string;
+  checkResult: CheckResult;
+  metricValue?: string;
+  expectedValue?: string;
+  executedSql?: string;
+  errorMessage?: string;
+  durationMs?: number;
+  createdAt?: string;
+}
+
+export interface ExecutionWorkspaceView extends ExecutionWorkspaceListItem {
+  databaseName?: string;
+  schemaName?: string;
+  tableName: string;
+  rules: ExecutionWorkspaceRuleView[];
+}
+
+export interface ExecutionWorkspacePageView {
+  records: ExecutionWorkspaceListItem[];
+  total: number;
+  current: number;
+  pageSize: number;
+}
+
+export interface RuleExecutionWorkspacePageView {
+  records: RuleExecutionWorkspaceListItem[];
+  total: number;
+  current: number;
+  pageSize: number;
+}
+
+export type ExecutionLogLevel = 'INFO' | 'WARN' | 'ERROR';
+
+export interface ExecutionLogLine {
+  timestamp?: string;
+  level: ExecutionLogLevel;
+  stage: string;
+  message: string;
+}
+
+export interface ExecutionLogView {
+  executionNo: string;
+  lines: ExecutionLogLine[];
 }
