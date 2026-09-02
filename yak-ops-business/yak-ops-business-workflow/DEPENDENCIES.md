@@ -28,7 +28,8 @@ Workflow production 内部允许的 top-level 依赖：
 Controller 只能进入稳定业务/运行入口：
 
 ```text
-definition -> WorkflowDefinitionManager
+definition -> WorkflowDefinitionManager (read/control)
+           -> WorkflowDefinitionAuditCoordinator (audited definition mutations)
 execution  -> WorkflowLauncher / WorkflowExecutionManager / WorkflowExecutionReactivator
 runtime    -> WorkflowRuntime
 schedule   -> create/revision/lifecycle/query + trigger query
@@ -36,6 +37,27 @@ backfill   -> WorkflowBackfillManager / WorkflowBackfillQuery
 ```
 
 Controller 不直接依赖 DAO、Repository、Schedule Engine Bridge 或 Trigger Admission/Coordinator。
+
+### Definition Audit Corridor
+
+Definition mutation 的审计入口固定为：
+
+```text
+WorkflowDefinitionController
+    -> WorkflowDefinitionAuditCoordinator
+    -> WorkflowDefinitionManager
+
+WorkflowDefinitionAuditCoordinator
+    -> shared BusinessAuditService
+```
+
+约束：
+
+- Audit 是 fail-open side effect，不能改变 Workflow command 结果；
+- Domain / Repository / DAO 不依赖 Audit；
+- Audit payload 只保存显式 allowlist 的业务差异，不复制 `input`、`editorMeta`、节点完整配置或 TaskVersionSnapshot；
+- 无实际 Definition 变化的保存不创建 AuditOperation；
+- Runtime / Schedule / Backfill 审计不属于这一 corridor，分别由后续 execution/schedule owner 接入。
 
 ## 3. Definition -> Runtime
 

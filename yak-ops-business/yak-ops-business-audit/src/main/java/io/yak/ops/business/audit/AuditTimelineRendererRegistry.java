@@ -22,7 +22,7 @@ public final class AuditTimelineRendererRegistry {
     values.put("AUTHORIZATION_DECISION", this::authorization);
     values.put("OPERATION_STARTED", fixed("操作开始"));
     values.put("RESOURCE_CREATED", fixed("资源已创建"));
-    values.put("RESOURCE_UPDATED", fixed("资源已更新"));
+    values.put("RESOURCE_UPDATED", this::resourceUpdated);
     values.put("RESOURCE_DELETED", fixed("资源已删除"));
     values.put("TASK_SUBMITTED", fixed("任务已提交"));
     values.put("TASK_QUEUED", fixed("任务已进入队列"));
@@ -55,6 +55,19 @@ public final class AuditTimelineRendererRegistry {
 
   private Function<RenderContext, AuditEventPresentation> fixed(String title) {
     return context -> new AuditEventPresentation(title, description(context));
+  }
+
+  private AuditEventPresentation resourceUpdated(RenderContext context) {
+    String changeType = stringValue(context.payload().get("changeType"));
+    String title =
+        switch (changeType == null ? "" : changeType) {
+          case "VERSION_PUBLISHED" -> "版本已发布";
+          case "RESOURCE_ENABLED" -> "资源已启用";
+          case "RESOURCE_DISABLED" -> "资源已停用";
+          case "TASK_REVISION_UPGRADE" -> "任务版本已升级";
+          default -> "资源已更新";
+        };
+    return new AuditEventPresentation(title, description(context));
   }
 
   private AuditEventPresentation authorization(RenderContext context) {

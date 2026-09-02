@@ -3,8 +3,9 @@ package io.yak.ops.business.workflow.controller.v1;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
-import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
+import io.yak.ops.business.workflow.definition.WorkflowDefinitionAuditCoordinator;
 import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
+import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
 import io.yak.ops.business.workflow.execution.WorkflowLauncher;
 import io.yak.ops.business.workflow.schedule.WorkflowDefinitionScheduleGuard;
 import io.yak.ops.common.bean.dto.workflow.WorkflowDefinitionCreateDTO;
@@ -14,6 +15,7 @@ import io.yak.ops.common.bean.vo.workflow.WorkflowVersionVO;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,14 +34,29 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkflowDefinitionController {
 
   private final WorkflowDefinitionManager definitionService;
+  private final WorkflowDefinitionAuditCoordinator definitionAudit;
   private final WorkflowLauncher launchService;
   private final WorkflowDefinitionScheduleGuard scheduleGuard;
 
+  @Autowired
+  public WorkflowDefinitionController(
+      WorkflowDefinitionManager definitionService,
+      WorkflowDefinitionAuditCoordinator definitionAudit,
+      WorkflowLauncher launchService,
+      WorkflowDefinitionScheduleGuard scheduleGuard) {
+    this.definitionService = definitionService;
+    this.definitionAudit = definitionAudit;
+    this.launchService = launchService;
+    this.scheduleGuard = scheduleGuard;
+  }
+
+  /** Focused compatibility constructor for tests that do not wire business audit. */
   public WorkflowDefinitionController(
       WorkflowDefinitionManager definitionService,
       WorkflowLauncher launchService,
       WorkflowDefinitionScheduleGuard scheduleGuard) {
     this.definitionService = definitionService;
+    this.definitionAudit = null;
     this.launchService = launchService;
     this.scheduleGuard = scheduleGuard;
   }
@@ -56,7 +73,8 @@ public class WorkflowDefinitionController {
   @PostMapping
   public Result<WorkflowDefinitionVO> create(
       @Valid @RequestBody WorkflowDefinitionCreateDTO request) {
-    return Result.success(definitionService.create(request));
+    return Result.success(
+        definitionAudit == null ? definitionService.create(request) : definitionAudit.create(request));
   }
 
   @Operation(summary = "查询工作流定义详情")
@@ -70,7 +88,10 @@ public class WorkflowDefinitionController {
   public Result<WorkflowDefinitionVO> update(
       @PathVariable("id") String id,
       @Valid @RequestBody WorkflowDefinitionUpdateDTO request) {
-    return Result.success(definitionService.update(id, request));
+    return Result.success(
+        definitionAudit == null
+            ? definitionService.update(id, request)
+            : definitionAudit.update(id, request));
   }
 
   @Operation(summary = "显式升级工作流节点到任务资产最新版本")
@@ -78,20 +99,25 @@ public class WorkflowDefinitionController {
   public Result<WorkflowDefinitionVO> upgradeTaskRevision(
       @PathVariable("id") String id,
       @PathVariable("nodeId") String nodeId) {
-    return Result.success(definitionService.upgradeTaskRevision(id, nodeId));
+    return Result.success(
+        definitionAudit == null
+            ? definitionService.upgradeTaskRevision(id, nodeId)
+            : definitionAudit.upgradeTaskRevision(id, nodeId));
   }
 
   @Operation(summary = "删除工作流定义")
   @DeleteMapping("/{id}")
   public Result<Boolean> delete(@PathVariable("id") String id) {
-    definitionService.delete(id);
+    if (definitionAudit == null) definitionService.delete(id);
+    else definitionAudit.delete(id);
     return Result.success(Boolean.TRUE);
   }
 
   @Operation(summary = "发布或重新启用工作流版本")
   @PostMapping("/{id}/online")
   public Result<WorkflowDefinitionVO> online(@PathVariable("id") String id) {
-    WorkflowDefinitionVO workflow = definitionService.online(id);
+    WorkflowDefinitionVO workflow =
+        definitionAudit == null ? definitionService.online(id) : definitionAudit.online(id);
     scheduleGuard.activateConfiguredSchedules(id);
     return Result.success(workflow);
   }
@@ -100,7 +126,8 @@ public class WorkflowDefinitionController {
   @PostMapping("/{id}/offline")
   public Result<WorkflowDefinitionVO> offline(@PathVariable("id") String id) {
     scheduleGuard.deactivateConfiguredSchedules(id);
-    return Result.success(definitionService.offline(id));
+    return Result.success(
+        definitionAudit == null ? definitionService.offline(id) : definitionAudit.offline(id));
   }
 
   @Operation(summary = "执行当前启用的已发布版本")
