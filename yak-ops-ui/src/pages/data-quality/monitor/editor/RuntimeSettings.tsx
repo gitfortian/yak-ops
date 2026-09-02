@@ -1,4 +1,5 @@
-import { Input, Radio, Select } from 'antd';
+import CronSchedulerInput from '@/components/CronSchedulerEditor/CronSchedulerInput';
+import { Radio, Select } from 'antd';
 import { CalendarClock, CirclePlay } from 'lucide-react';
 
 import type { RuntimeFormState } from './model';
@@ -140,6 +141,7 @@ export const RuntimeSettings = ({
                   </div>
 
                   <Select
+                    size="small"
                     variant="filled"
                     value={value.scheduleFrequency}
                     options={[
@@ -173,6 +175,7 @@ export const RuntimeSettings = ({
                     </div>
 
                     <Select
+                      size="small"
                       variant="filled"
                       value={value.scheduleWeekday}
                       options={WEEKDAYS}
@@ -194,6 +197,7 @@ export const RuntimeSettings = ({
                     </div>
 
                     <Select
+                      size="small"
                       variant="filled"
                       value={value.scheduleTime}
                       options={TIME_OPTIONS}
@@ -212,20 +216,19 @@ export const RuntimeSettings = ({
                       Cron 表达式
                     </div>
 
-                    <Input
-                      variant="filled"
+                    <CronSchedulerInput
                       value={value.cronExpression}
-                      placeholder="Spring Cron，例如：0 0 9 * * *"
-                      onChange={(event) =>
+                      placeholder="0 0 9 * * ?"
+                      onChange={(cronExpression) =>
                         onChange({
                           ...value,
-                          cronExpression: event.target.value,
+                          cronExpression,
                         })
                       }
                     />
 
-                    <div className="mt-1.5 text-[11px] text-[#98a2b3]">
-                      采用秒、分、时、日、月、周六段格式。
+                    <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
+                      点击输入框可展开可视化配置，也支持直接输入秒、分、时、日、月、周六段 Cron。
                     </div>
                   </div>
                 )}
