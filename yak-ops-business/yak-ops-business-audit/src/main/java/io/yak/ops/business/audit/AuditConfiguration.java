@@ -55,4 +55,11 @@ public class AuditConfiguration {
     return new JdbcBusinessAuditService(
         dataSource, transactionManager, currentProject, objectMapper, actorResolver);
   }
+
+  @Bean
+  public AuditQueryService auditQueryService(
+      @Qualifier("yakBusinessDataSource") DataSource dataSource, ObjectMapper objectMapper) {
+    return new JdbcAuditQueryService(
+        dataSource, objectMapper, new AuditTimelineRendererRegistry());
+  }
 }

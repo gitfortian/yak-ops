@@ -1,94 +1,49 @@
-import { FileSearchOutlined } from '@ant-design/icons';
+import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { history } from '@umijs/max';
-import {
-  useCallback,
-  useEffect,
-  useRef,
-} from 'react';
+import { useMemo, useState } from 'react';
 
-import {
-  SecurityPagination,
-  SecurityQueryTable,
-} from '@/components/security';
-import type { OperationLog } from '@/services/security/operationLogs';
+import YakTab from '@/components/YakTab';
 
 import SystemManagementPage from '../components/SystemManagementPage';
-import OperationLogDetailDrawer, {
-  type OperationLogDetailDrawerRef,
-} from './components/OperationLogDetailDrawer';
-import OperationLogFilterBar from './components/OperationLogFilterBar';
-import { useOperationLogColumns } from './hooks/useOperationLogColumns';
-import { useOperationLogs } from './hooks/useOperationLogs';
+import BusinessAuditPanel from './components/BusinessAuditPanel';
+import SecurityOperationLogsPanel from './components/SecurityOperationLogsPanel';
 
-export default function OperationLogsPage() {
-  const detailRef = useRef<OperationLogDetailDrawerRef>(null);
-  const {
-    logs,
-    options,
-    isLoading,
-    pagination,
-    refreshLogs,
-    searchLogs,
-    changePage,
-  } = useOperationLogs();
-
-  useEffect(() => {
-    const value = new URLSearchParams(
-      history.location.search,
-    ).get('messageLogId');
-    if (!value) return;
-
-    const logId = Number(value);
-    if (Number.isSafeInteger(logId) && logId > 0) {
-      void detailRef.current?.open(logId);
-    }
-  }, []);
-
-  const showDetail = useCallback((log: OperationLog) => {
-    void detailRef.current?.open(log.id);
-  }, []);
-
-  const columns = useOperationLogColumns({
-    onDetail: showDetail,
-  });
+export default function AuditCenterPage() {
+  const initialTab = useMemo(
+    () =>
+      new URLSearchParams(history.location.search).has('messageLogId')
+        ? 'security'
+        : 'business',
+    [],
+  );
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
     <SystemManagementPage
-      title="操作日志"
+      title="审计中心"
       titleId="system-operation-logs-title"
-      icon={<FileSearchOutlined className="text-slate-500" />}
+      icon={<SafetyCertificateOutlined className="text-slate-500" />}
       className="min-h-[calc(100vh-64px)] overflow-hidden"
     >
-      <div className="shrink-0">
-        <OperationLogFilterBar
-          options={options}
-          loading={isLoading}
-          onSearch={searchLogs}
-          onRefresh={refreshLogs}
-        />
-
-        <SecurityQueryTable<OperationLog>
-          rowKey="id"
-          columns={columns}
-          dataSource={logs}
-          loading={isLoading}
-          pagination={false}
-          bordered
-          scroll={{ x: 'max-content' }}
+      <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white px-4 pt-1">
+        <YakTab
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          className="flex min-h-0 flex-1 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-tabpane]:h-full"
+          items={[
+            {
+              key: 'business',
+              label: '业务审计',
+              children: <BusinessAuditPanel />,
+            },
+            {
+              key: 'security',
+              label: 'Security 操作日志',
+              children: <SecurityOperationLogsPanel />,
+            },
+          ]}
         />
       </div>
-
-      <div className="min-h-6 flex-1" />
-
-      <SecurityPagination
-        current={pagination.current}
-        pageSize={pagination.pageSize}
-        total={pagination.total}
-        disabled={isLoading}
-        onChange={changePage}
-      />
-
-      <OperationLogDetailDrawer ref={detailRef} />
     </SystemManagementPage>
   );
 }
