@@ -1,3 +1,5 @@
+import CronSchedulerInput from '@/components/CronSchedulerEditor/CronSchedulerInput';
+import YakButton from '@/components/YakButton';
 import { getWorkflowDefinition, type WorkflowDefinition } from '@/services/workflow/definitions';
 import {
   createWorkflowSchedule,
@@ -43,7 +45,6 @@ import {
 import BackfillDrawer from './BackfillDrawer';
 import BackfillHistoryDrawer from './BackfillHistoryDrawer';
 import TriggerLedgerDrawer from './TriggerLedgerDrawer';
-import YakButton from '@/components/YakButton';
 
 interface FormValues {
   name: string;
@@ -478,7 +479,7 @@ export default function WorkflowScheduleConfigPage() {
                         label="Cron 表达式"
                         rules={[{ required: true, message: '请输入 Cron 表达式' }]}
                       >
-                        <Input variant="filled" placeholder="0 0 2 * * ?" className="font-mono" />
+                        <CronSchedulerInput disabled={!canEdit} />
                       </Form.Item>
 
                       <div className="-mt-3 mb-5 flex flex-wrap items-center gap-1.5">
@@ -488,6 +489,7 @@ export default function WorkflowScheduleConfigPage() {
                             key={preset.value}
                             size="small"
                             type="text"
+                            disabled={!canEdit}
                             className="!h-7 !bg-[#f7f8fa] !px-2.5 !text-[11px] !text-[#667085] hover:!bg-[#eef0f3]"
                             onClick={() => form.setFieldValue('cronExpression', preset.value)}
                           >
