@@ -55,7 +55,7 @@ yak:
   # 快捷方式：设置 YAK_DATASOURCE_URL/USERNAME/PASSWORD 同时作用于两者。
   database:
     enabled: ${YAK_DATABASE_ENABLED:true}
-    url: ${YAK_DATABASE_URL:${YAK_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/do?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}
+    url: ${YAK_DATABASE_URL:${YAK_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yak_security?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}
     username: ${YAK_DATABASE_USERNAME:${YAK_DATASOURCE_USERNAME:root}}
     password: ${YAK_DATABASE_PASSWORD:${YAK_DATASOURCE_PASSWORD:123456}}
     driver-class-name: ${YAK_DATABASE_DRIVER:com.mysql.cj.jdbc.Driver}
