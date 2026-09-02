@@ -9,6 +9,10 @@ import io.yak.ops.business.dataservice.access.ApiKeyUpdate;
 import io.yak.ops.business.dataservice.access.ApiKeyView;
 import io.yak.ops.business.dataservice.access.CreatedApiKey;
 import io.yak.ops.business.dataservice.access.DataServiceApiKeyManager;
+import io.yak.ops.business.dataservice.access.DataServiceIpAccessManager;
+import io.yak.ops.business.dataservice.access.IpAccessPolicyView;
+import io.yak.ops.business.dataservice.access.IpAccessRuleInput;
+import io.yak.ops.business.dataservice.access.IpAccessRuleView;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.common.constant.dataservice.DataServicePermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
@@ -33,24 +37,25 @@ import org.springframework.web.bind.annotation.RestController;
 @ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
 @RequiresPermission(DataServicePermissionCode.ACCESS)
 public class DataServiceAccessController {
-  private final DataServiceApiKeyManager manager;
+  private final DataServiceApiKeyManager apiKeyManager;
+  private final DataServiceIpAccessManager ipAccessManager;
 
   @Operation(summary = "设置数据服务访问控制模式")
   @PutMapping("/{id}/auth-mode")
   public Result<String> setAuthMode(@PathVariable("id") Long id, @RequestParam("mode") String mode) {
-    return Result.success(manager.setAuthMode(id, mode).name());
+    return Result.success(apiKeyManager.setAuthMode(id, mode).name());
   }
 
   @Operation(summary = "查询数据服务 API Key")
   @GetMapping("/{id}/keys")
   public Result<List<ApiKeyView>> listKeys(@PathVariable("id") Long id) {
-    return Result.success(manager.listKeys(id));
+    return Result.success(apiKeyManager.listKeys(id));
   }
 
   @Operation(summary = "创建数据服务 API Key（明文仅返回一次）")
   @PostMapping("/{id}/keys")
   public Result<CreatedApiKey> createKey(@PathVariable("id") Long id, @RequestBody ApiKeyInput input) {
-    return Result.success(manager.createKey(id, input));
+    return Result.success(apiKeyManager.createKey(id, input));
   }
 
   @Operation(summary = "更新数据服务 API Key 配置")
@@ -59,7 +64,7 @@ public class DataServiceAccessController {
       @PathVariable("id") Long id,
       @PathVariable("keyId") Long keyId,
       @RequestBody ApiKeyUpdate input) {
-    return Result.success(manager.updateKey(id, keyId, input));
+    return Result.success(apiKeyManager.updateKey(id, keyId, input));
   }
 
   @Operation(summary = "启用或停用数据服务 API Key")
@@ -68,7 +73,7 @@ public class DataServiceAccessController {
       @PathVariable("id") Long id,
       @PathVariable("keyId") Long keyId,
       @RequestParam("enabled") boolean enabled) {
-    return Result.success(manager.setKeyEnabled(id, keyId, enabled));
+    return Result.success(apiKeyManager.setKeyEnabled(id, keyId, enabled));
   }
 
   @Operation(summary = "轮换数据服务 API Key（新明文仅返回一次）")
@@ -76,7 +81,7 @@ public class DataServiceAccessController {
   public Result<CreatedApiKey> rotateKey(
       @PathVariable("id") Long id,
       @PathVariable("keyId") Long keyId) {
-    return Result.success(manager.rotateKey(id, keyId));
+    return Result.success(apiKeyManager.rotateKey(id, keyId));
   }
 
   @Operation(summary = "删除数据服务 API Key")
@@ -84,7 +89,44 @@ public class DataServiceAccessController {
   public Result<Boolean> deleteKey(
       @PathVariable("id") Long id,
       @PathVariable("keyId") Long keyId) {
-    manager.deleteKey(id, keyId);
+    apiKeyManager.deleteKey(id, keyId);
+    return Result.success(Boolean.TRUE);
+  }
+
+  @Operation(summary = "查询数据服务 IP 黑白名单策略")
+  @GetMapping("/{id}/ip-access")
+  public Result<IpAccessPolicyView> getIpAccess(@PathVariable("id") Long id) {
+    return Result.success(ipAccessManager.getPolicy(id));
+  }
+
+  @Operation(summary = "设置数据服务 IP 访问模式")
+  @PutMapping("/{id}/ip-access/mode")
+  public Result<IpAccessPolicyView> setIpAccessMode(
+      @PathVariable("id") Long id, @RequestParam("mode") String mode) {
+    return Result.success(ipAccessManager.setMode(id, mode));
+  }
+
+  @Operation(summary = "新增数据服务 IP/CIDR 规则")
+  @PostMapping("/{id}/ip-access/rules")
+  public Result<IpAccessRuleView> createIpAccessRule(
+      @PathVariable("id") Long id, @RequestBody IpAccessRuleInput input) {
+    return Result.success(ipAccessManager.createRule(id, input));
+  }
+
+  @Operation(summary = "更新数据服务 IP/CIDR 规则")
+  @PutMapping("/{id}/ip-access/rules/{ruleId}")
+  public Result<IpAccessRuleView> updateIpAccessRule(
+      @PathVariable("id") Long id,
+      @PathVariable("ruleId") Long ruleId,
+      @RequestBody IpAccessRuleInput input) {
+    return Result.success(ipAccessManager.updateRule(id, ruleId, input));
+  }
+
+  @Operation(summary = "删除数据服务 IP/CIDR 规则")
+  @DeleteMapping("/{id}/ip-access/rules/{ruleId}")
+  public Result<Boolean> deleteIpAccessRule(
+      @PathVariable("id") Long id, @PathVariable("ruleId") Long ruleId) {
+    ipAccessManager.deleteRule(id, ruleId);
     return Result.success(Boolean.TRUE);
   }
 }
