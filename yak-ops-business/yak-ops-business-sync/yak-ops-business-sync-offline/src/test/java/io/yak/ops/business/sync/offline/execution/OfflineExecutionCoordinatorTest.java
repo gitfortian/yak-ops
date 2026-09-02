@@ -95,7 +95,7 @@ class OfflineExecutionCoordinatorTest {
   }
 
   @Test
-  void preflightFailureOccursAfterCreatedEvidenceAndClosesThroughNormalFailureProjection() {
+  void preflightFailurePreservesExistingBoundaryAndNeverCreatesDanglingAuditOperation() {
     OfflineJobExecution execution = execution(99L, "CREATED");
     BatchExecution batch = frozenBatch(BatchStatus.RUNNING, BatchScope.fullSelection());
     when(claimManager.claim(10L, "WORKFLOW", null, 1))
@@ -109,10 +109,9 @@ class OfflineExecutionCoordinatorTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("invalid job spec");
 
-    verify(stateManager).recordCreated(execution);
-    verify(auditBridge).ensureOperation(execution);
-    verify(stateManager).markFailed(execution, "invalid job spec", false);
-    verify(auditBridge).observeState(execution);
+    verify(stateManager, never()).recordCreated(execution);
+    verify(auditBridge, never()).ensureOperation(execution);
+    verify(auditBridge, never()).observeState(execution);
     verify(linkUpClient, never()).node();
   }
 
@@ -244,7 +243,7 @@ class OfflineExecutionCoordinatorTest {
         10L,
         new BatchKey("manual:test"),
         BatchTrigger.MANUAL,
-        scope,
+        BatchScope.fullSelection(),
         new ExecutionSnapshot(
             "{}",
             1,
