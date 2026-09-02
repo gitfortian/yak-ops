@@ -21,6 +21,10 @@ import java.util.Map;
 public final class QualityMonitorVO {
   private QualityMonitorVO() {}
 
+  /**
+   * scheduleEnabled is the canonical UI-facing scheduling flag.
+   * runMode/friendly schedule fields remain for backward compatibility.
+   */
   public record Settings(
       RunMode runMode,
       ScheduleFrequency scheduleFrequency,
@@ -32,7 +36,8 @@ public final class QualityMonitorVO {
       boolean notifyEnabled,
       NotifyChannel notifyChannel,
       String notifyTarget,
-      AlertLevel alertLevel) {}
+      AlertLevel alertLevel,
+      boolean scheduleEnabled) {}
 
   public record Rule(
       Long id,
