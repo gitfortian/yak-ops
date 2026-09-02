@@ -44,7 +44,7 @@ export default function SecurityOperationLogsPanel() {
   const columns = useOperationLogColumns({ onDetail: showDetail });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="shrink-0">
         <OperationLogFilterBar
           options={options}
@@ -52,7 +52,9 @@ export default function SecurityOperationLogsPanel() {
           onSearch={searchLogs}
           onRefresh={refreshLogs}
         />
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <SecurityQueryTable<OperationLog>
           rowKey="id"
           columns={columns}
@@ -64,15 +66,18 @@ export default function SecurityOperationLogsPanel() {
         />
       </div>
 
-      <div className="min-h-6 flex-1" />
-
-      <SecurityPagination
-        current={pagination.current}
-        pageSize={pagination.pageSize}
-        total={pagination.total}
-        disabled={isLoading}
-        onChange={changePage}
-      />
+      {pagination.total > 0 ? (
+        <div className="shrink-0 pt-3">
+          <SecurityPagination
+            current={pagination.current}
+            pageSize={pagination.pageSize}
+            total={pagination.total}
+            disabled={isLoading}
+            bordered={false}
+            onChange={changePage}
+          />
+        </div>
+      ) : null}
 
       <OperationLogDetailDrawer ref={detailRef} />
     </div>
