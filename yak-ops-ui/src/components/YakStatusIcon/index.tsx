@@ -75,7 +75,6 @@ function StatusGlyph({ status }: { status: YakStatus }) {
             <circle className="yak-status-icon__orbit-node yak-status-icon__orbit-node--minor" cx="6.35" cy="16.9" r="0.72" />
           </g>
           <circle className="yak-status-icon__core" cx="12" cy="12" r="3.15" />
-          <circle className="yak-status-icon__core-glint" cx="11.15" cy="11.05" r="0.72" />
         </>
       );
     case 'pending':
