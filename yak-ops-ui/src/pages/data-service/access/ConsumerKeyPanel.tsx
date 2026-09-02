@@ -11,8 +11,8 @@ import {
 } from '@/services/data-service';
 import { DatePicker, Form, Input, InputNumber, Modal, Spin, Switch, message } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { Copy, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Copy, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface ConsumerKeyPanelProps {
   consumer: DataServiceConsumer;
@@ -77,11 +77,6 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
     void load();
   }, [load]);
 
-  const activeCount = useMemo(
-    () => keys.filter((key) => key.enabled && !expired(key)).length,
-    [keys],
-  );
-
   const openCreate = () => {
     setEditing(undefined);
     form.resetFields();
@@ -112,6 +107,7 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
       const expiresAt = values.expiresAt
         ? values.expiresAt.format('YYYY-MM-DDTHH:mm:ss')
         : null;
+
       if (editing) {
         await updateDataServiceConsumerKey(consumer.id, editing.id, {
           name: values.name.trim(),
@@ -133,6 +129,7 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
         });
         message.success('API Key 已创建');
       }
+
       closeModal();
       await load();
       onChanged();
@@ -160,7 +157,7 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
   const rotate = (key: DataServiceConsumerKey) => {
     Modal.confirm({
       title: '轮换 API Key',
-      content: '轮换后旧密钥立即失效，新密钥只展示一次。请确认调用方可以及时更新。',
+      content: '轮换后旧密钥立即失效，新密钥只展示一次。',
       okText: '确认轮换',
       cancelText: '取消',
       onOk: async () => {
@@ -187,7 +184,7 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
   const remove = (key: DataServiceConsumerKey) => {
     Modal.confirm({
       title: '删除 API Key',
-      content: `确认删除「${key.name}」？使用该 Key 的请求会立即失效。`,
+      content: `确认删除「${key.name}」？`,
       okText: '删除',
       okButtonProps: { danger: true },
       cancelText: '取消',
@@ -209,83 +206,66 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
 
   if (loading) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-lg bg-white">
+      <div className="flex min-h-[260px] items-center justify-center rounded-xl bg-white">
         <Spin />
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <section className="rounded-lg bg-white">
-        <div className="flex items-start justify-between gap-4 px-5 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#f5f6f8] text-[#475467]">
-              <KeyRound size={17} />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-[#161823]">API Key</div>
-              <div className="mt-1 text-[11px] text-[#8a8f98]">
-                {activeCount}/{keys.length} 个有效凭证 · 同一调用方可保留多个 Key 做平滑轮换。
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-1.5">
-            <YakButton type="text" iconOnly icon={<RefreshCw size={14} />} onClick={() => void load()} />
-            <YakButton icon={<Plus size={14} />} onClick={openCreate}>创建 Key</YakButton>
-          </div>
+    <section className="rounded-xl bg-white">
+      <div className="flex items-center justify-between gap-4 px-7 pt-5">
+        <h2 className="m-0 text-[17px] font-semibold leading-6 text-[#161823]">
+          API Key
+        </h2>
+        <div className="flex gap-1.5">
+          <YakButton type="text" iconOnly icon={<RefreshCw size={14} />} onClick={() => void load()} />
+          <YakButton icon={<Plus size={14} />} onClick={openCreate}>创建 Key</YakButton>
         </div>
+      </div>
 
-        <div className="px-5 pb-5">
-          {keys.length ? (
-            <div className="overflow-hidden rounded-lg border border-solid border-[#eceef1]">
-              {keys.map((key, index) => {
-                const currentStatus = status(key);
-                return (
-                  <div
-                    key={key.id}
-                    className={[
-                      'grid gap-3 px-4 py-3 md:grid-cols-[minmax(180px,1.3fr)_130px_120px_150px_86px_140px] md:items-center',
-                      index ? 'border-t border-solid border-[#eceef1]' : '',
-                    ].join(' ')}
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-[12px] font-medium text-[#161823]">{key.name}</div>
-                      <div className="mt-1 font-mono text-[10px] text-[#98a2b3]">{key.keyPrefix}••••••••</div>
-                    </div>
-                    <div className="text-[11px] text-[#667085]">{key.rateLimitPerMinute}/min</div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#667085]">
-                      <span className={`h-1.5 w-1.5 rounded-full ${currentStatus.dot}`} />
-                      {currentStatus.label}
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-[#98a2b3]">最近调用</div>
-                      <div className="mt-0.5 text-[10px] text-[#667085]">{formatTime(key.lastUsedAt)}</div>
-                    </div>
-                    <Switch
-                      size="small"
-                      checked={key.enabled}
-                      loading={busyId === key.id}
-                      onChange={(checked) => void toggle(key, checked)}
-                    />
-                    <div className="flex justify-end gap-1">
-                      <YakButton type="text" iconOnly icon={<Pencil size={14} />} onClick={() => openEdit(key)} />
-                      <YakButton type="text" iconOnly icon={<RefreshCw size={14} />} loading={busyId === key.id} onClick={() => rotate(key)} />
-                      <YakButton type="text" danger iconOnly icon={<Trash2 size={14} />} loading={busyId === key.id} onClick={() => remove(key)} />
-                    </div>
+      <div className="px-7 py-6">
+        {keys.length ? (
+          <div className="overflow-hidden rounded-lg border border-solid border-[#eceef1]">
+            {keys.map((key, index) => {
+              const currentStatus = status(key);
+              return (
+                <div
+                  key={key.id}
+                  className={[
+                    'grid gap-3 px-4 py-3 md:grid-cols-[minmax(180px,1.3fr)_120px_100px_150px_70px_128px] md:items-center',
+                    index ? 'border-t border-solid border-[#eceef1]' : '',
+                  ].join(' ')}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[12px] font-medium text-[#161823]">{key.name}</div>
+                    <div className="mt-1 font-mono text-[10px] text-[#98a2b3]">{key.keyPrefix}••••••••</div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <YakEmpty
-              compact
-              title="暂无 API Key"
-              description="为调用方创建凭证后，同一 Key 可访问其已授权的多个 API。"
-            />
-          )}
-        </div>
-      </section>
+                  <div className="text-[11px] text-[#667085]">{key.rateLimitPerMinute}/min</div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#667085]">
+                    <span className={`h-1.5 w-1.5 rounded-full ${currentStatus.dot}`} />
+                    {currentStatus.label}
+                  </div>
+                  <div className="text-[10px] text-[#667085]">{formatTime(key.lastUsedAt)}</div>
+                  <Switch
+                    size="small"
+                    checked={key.enabled}
+                    loading={busyId === key.id}
+                    onChange={(checked) => void toggle(key, checked)}
+                  />
+                  <div className="flex justify-end gap-1">
+                    <YakButton type="text" iconOnly icon={<Pencil size={14} />} onClick={() => openEdit(key)} />
+                    <YakButton type="text" iconOnly icon={<RefreshCw size={14} />} loading={busyId === key.id} onClick={() => rotate(key)} />
+                    <YakButton type="text" danger iconOnly icon={<Trash2 size={14} />} loading={busyId === key.id} onClick={() => remove(key)} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <YakEmpty compact title="暂无 API Key" />
+        )}
+      </div>
 
       <Modal
         title={editing ? '编辑 API Key' : '创建 API Key'}
@@ -299,13 +279,13 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
       >
         <Form<KeyFormValues> form={form} layout="vertical" onFinish={(values) => void submit(values)}>
           <Form.Item name="name" label="Key 名称" rules={[{ required: true, message: '请输入 Key 名称' }]}>
-            <Input variant="filled" placeholder="例如：生产环境 / 备用 Key" maxLength={128} />
+            <Input variant="filled" placeholder="请输入 Key 名称" maxLength={128} />
           </Form.Item>
           <Form.Item name="rateLimitPerMinute" label="每分钟调用上限" rules={[{ required: true, message: '请输入调用上限' }]}>
             <InputNumber variant="filled" min={1} max={100000} className="w-full" />
           </Form.Item>
           <Form.Item name="expiresAt" label="过期时间">
-            <DatePicker showTime variant="filled" className="w-full" placeholder="不设置则永久有效" />
+            <DatePicker showTime variant="filled" className="w-full" placeholder="永久有效" />
           </Form.Item>
         </Form>
       </Modal>
@@ -314,14 +294,12 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
         title={secretView?.title}
         open={Boolean(secretView)}
         onCancel={() => setSecretView(undefined)}
-        footer={(
-          <YakButton onClick={() => setSecretView(undefined)}>我已保存</YakButton>
-        )}
+        footer={<YakButton onClick={() => setSecretView(undefined)}>我已保存</YakButton>}
       >
         {secretView ? (
           <div>
-            <div className="mb-3 text-[12px] leading-5 text-[#667085]">
-              「{secretView.name}」的密钥只展示这一次，请立即保存到安全位置。
+            <div className="mb-3 text-[12px] text-[#667085]">
+              「{secretView.name}」的密钥只展示这一次。
             </div>
             <div className="flex items-center gap-2 rounded-lg bg-[#f6f6f7] p-3">
               <code className="min-w-0 flex-1 break-all text-[12px] text-[#30343b]">
@@ -332,6 +310,6 @@ export default function ConsumerKeyPanel({ consumer, onChanged }: ConsumerKeyPan
           </div>
         ) : null}
       </Modal>
-    </div>
+    </section>
   );
 }
