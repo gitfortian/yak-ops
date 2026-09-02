@@ -1,20 +1,23 @@
 import YakButton from '@/components/YakButton';
+import { updateQualityMonitor } from '@/services/data-quality';
 import {
   Dropdown,
   Empty,
   Input,
+  message,
   Popover,
   Segmented,
   Select,
+  Switch,
   Table,
   Tag,
 } from 'antd';
 import type { MenuProps, TableColumnsType } from 'antd';
 import { ListFilter, MoreHorizontal, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { dataQualityTableClassName } from '../../components/tableStyle';
 import type { MonitorWorkspaceView } from '../../types';
-import { RUN_MODE_LABEL } from './model';
+import { RUN_MODE_LABEL, toSavePayload } from './model';
 
 interface MonitorListTabProps {
   workspace: MonitorWorkspaceView;
@@ -23,6 +26,7 @@ interface MonitorListTabProps {
   onRefresh: () => void;
   onRemove: () => void;
   onOpenLog: () => void;
+  onEdit?: () => void;
 }
 
 interface MonitorRecord {
@@ -59,6 +63,7 @@ const MonitorListTab = ({
   onRefresh,
   onRemove,
   onOpenLog,
+  onEdit,
 }: MonitorListTabProps) => {
   const { monitor, settings, stats } = workspace;
 
@@ -66,6 +71,7 @@ const MonitorListTab = ({
   const [draftFilters, setDraftFilters] =
     useState<MonitorFilterState>(createEmptyFilters);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [updatingEnabled, setUpdatingEnabled] = useState(false);
 
   const records = useMemo<MonitorRecord[]>(() => {
     const source: MonitorRecord[] = [
@@ -142,13 +148,37 @@ const MonitorListTab = ({
     }));
   };
 
+  const handleToggleEnabled = useCallback(
+    async (nextEnabled: boolean) => {
+      if (updatingEnabled) return;
+      setUpdatingEnabled(true);
+      try {
+        const payload = toSavePayload(
+          { ...monitor, enabled: nextEnabled },
+          settings,
+          monitor.rules,
+        );
+        await updateQualityMonitor(monitor.id, payload);
+        message.success(nextEnabled ? '监控已启用' : '监控已停用');
+        onRefresh();
+      } catch {
+        message.error('状态更新失败');
+      } finally {
+        setUpdatingEnabled(false);
+      }
+    },
+    [monitor, settings, updatingEnabled, onRefresh],
+  );
+
   const moreMenu: MenuProps = {
     items: [
+      { key: 'edit', label: '编辑监控' },
       { key: 'log', label: '操作日志' },
       { type: 'divider' },
       { key: 'remove', label: '删除', danger: true },
     ],
     onClick: ({ key }) => {
+      if (key === 'edit') onEdit?.();
       if (key === 'log') onOpenLog();
       if (key === 'remove') onRemove();
     },
@@ -218,13 +248,16 @@ const MonitorListTab = ({
     {
       title: '状态',
       dataIndex: 'enabled',
-      width: 90,
-      render: (value) => (
-        <Tag
-          className="!m-0 !border-0"
-        >
-          {value ? '启用' : '停用'}
-        </Tag>
+      width: 100,
+      render: (_, record) => (
+        <Switch
+          size="small"
+          checked={record.enabled}
+          loading={updatingEnabled}
+          checkedChildren="启用"
+          unCheckedChildren="停用"
+          onChange={() => handleToggleEnabled(!record.enabled)}
+        />
       ),
     },
     {

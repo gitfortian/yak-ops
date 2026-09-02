@@ -1,6 +1,6 @@
 import YakButton from '@/components/YakButton';
 import YakTab from '@/components/YakTab';
-import { Database, ExternalLink } from "lucide-react";
+import { Database, Edit3, ExternalLink } from "lucide-react";
 import type { MonitorWorkspaceView } from "../../types";
 import type { WorkspaceTab } from "./model";
 import { BRAND_COLOR, BRAND_COLOR_SOFT } from "@/styles/brand";
@@ -10,6 +10,7 @@ interface WorkspaceHeaderProps {
   activeTab: WorkspaceTab;
   onTabChange: (value: WorkspaceTab) => void;
   onBack: () => void;
+  onEdit?: () => void;
 }
 
 const WorkspaceHeader = ({
@@ -17,6 +18,7 @@ const WorkspaceHeader = ({
   activeTab,
   onTabChange,
   onBack,
+  onEdit,
 }: WorkspaceHeaderProps) => {
   const monitor = workspace?.monitor;
   const path = [
@@ -46,6 +48,16 @@ const WorkspaceHeader = ({
             <h1 className="m-0 truncate text-[18px] font-semibold leading-7 text-[#172033]">
               {monitor?.tableName || "规则管理"}
             </h1>
+            {onEdit ? (
+              <YakButton
+                type="text"
+                size="small"
+                className="!h-6 !px-0 !text-xs !text-[#245bdb]"
+                onClick={onEdit}
+              >
+                <Edit3 size={12} /> 编辑
+              </YakButton>
+            ) : null}
             <YakButton
               type="text"
               size="small"
