@@ -1,4 +1,4 @@
-import CronSchedulerEditor from '@/components/CronSchedulerEditor';
+import CronSchedulerInput from '@/components/CronSchedulerEditor/CronSchedulerInput';
 import YakButton from '@/components/YakButton';
 import type { WorkflowDefinition } from '@/services/workflow/definitions';
 import {
@@ -133,53 +133,31 @@ const ScheduleEditorDrawer = ({
           <Input variant="filled" placeholder="例如：每日凌晨订单同步" />
         </Form.Item>
 
-        <Form.Item name="timezone" label="时区" rules={[{ required: true }]}>
-          <Select
-            options={[
-              { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
-              { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
-              { value: 'UTC', label: 'UTC' },
-            ]}
-          />
-        </Form.Item>
-
         <Form.Item
           name="cronExpression"
-          hidden
+          label="Cron 表达式"
+          extra="点击输入框可使用可视化 Cron 调度配置；也可以直接手动输入 Quartz Cron。"
           rules={[{ required: true, message: '请配置 Cron 表达式' }]}
         >
-          <Input />
-        </Form.Item>
-        <Form.Item name="effectiveRange" hidden>
-          <DatePicker.RangePicker showTime />
+          <CronSchedulerInput />
         </Form.Item>
 
-        <div className="mb-6 rounded-xl border border-[#eef0f3] bg-[#fbfbfc] px-4 py-4">
-          <Form.Item
-            noStyle
-            shouldUpdate={(previous, current) =>
-              previous.cronExpression !== current.cronExpression ||
-              previous.timezone !== current.timezone ||
-              previous.effectiveRange !== current.effectiveRange
-            }
-          >
-            {() => (
-              <CronSchedulerEditor
-                value={form.getFieldValue('cronExpression')}
-                timezone={form.getFieldValue('timezone') || 'Asia/Shanghai'}
-                effectiveRange={form.getFieldValue('effectiveRange')}
-                onChange={(cronExpression) =>
-                  form.setFieldValue('cronExpression', cronExpression)
-                }
-                onEffectiveRangeChange={(effectiveRange) =>
-                  form.setFieldValue('effectiveRange', effectiveRange)
-                }
-              />
-            )}
+        <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+          <Form.Item name="timezone" label="时区" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
+                { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
+                { value: 'UTC', label: 'UTC' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="effectiveRange" label="生效区间（可选）">
+            <DatePicker.RangePicker showTime className="w-full" />
           </Form.Item>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
           <Form.Item
             name="executionStrategy"
             label="实例并发策略"
