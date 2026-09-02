@@ -8,22 +8,38 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Locks the pre-v1 Offline Sync baseline schema and Project ownership contract. */
+/** Locks Offline Sync migration ownership, baseline shape and additive post-baseline changes. */
 class OfflineSyncFlywayContractTest {
 
   @Test
-  void offlineSyncOwnsSingleConsolidatedBaseline() throws IOException {
+  void offlineSyncOwnsOrderedMigrationSequence() throws IOException {
     assertThat(sqlFiles(migrationRoot()))
-        .containsExactly("V1__baseline_offline_sync.sql");
+        .containsExactly(
+            "V1__baseline_offline_sync.sql",
+            "V2__add_offline_notification_config.sql",
+            "V3__add_batch_audit_carrier.sql");
 
-    String sql = Files.readString(migrationRoot().resolve("V1__baseline_offline_sync.sql"));
-    assertThat(sql)
+    String baseline = Files.readString(migrationRoot().resolve("V1__baseline_offline_sync.sql"));
+    assertThat(baseline)
         .contains("CREATE TABLE IF NOT EXISTS yak_offline_job_definition")
         .contains("CREATE TABLE IF NOT EXISTS yak_offline_batch_execution")
         .contains("CREATE TABLE IF NOT EXISTS yak_offline_job_execution")
         .contains("CREATE TABLE IF NOT EXISTS yak_offline_execution_event")
         .contains("CREATE TABLE IF NOT EXISTS yak_offline_sync_cursor")
-        .doesNotContain("ALTER TABLE");
+        .doesNotContain("ALTER TABLE")
+        .doesNotContain("audit_carrier_json");
+  }
+
+  @Test
+  void auditCarrierIsAnAdditiveNullableBatchCorrelationField() throws IOException {
+    String migration =
+        Files.readString(migrationRoot().resolve("V3__add_batch_audit_carrier.sql"));
+
+    assertThat(migration)
+        .contains("ALTER TABLE yak_offline_batch_execution")
+        .contains("audit_carrier_json LONGTEXT NULL")
+        .doesNotContain("UPDATE yak_offline_batch_execution")
+        .doesNotContain("NOT NULL");
   }
 
   @Test

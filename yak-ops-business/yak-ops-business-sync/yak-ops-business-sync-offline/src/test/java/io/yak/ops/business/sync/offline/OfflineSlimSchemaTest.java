@@ -13,6 +13,8 @@ class OfflineSlimSchemaTest {
       "/db/migration/yak-offline-sync/V1__baseline_offline_sync.sql";
   private static final String NOTIFICATION_POLICY =
       "/db/migration/yak-offline-sync/V2__add_offline_notification_config.sql";
+  private static final String AUDIT_CARRIER =
+      "/db/migration/yak-offline-sync/V3__add_batch_audit_carrier.sql";
 
   @Test
   void baselineCreatesOnlyCurrentOfflineSyncTables() throws Exception {
@@ -76,6 +78,17 @@ class OfflineSlimSchemaTest {
     assertTrue(sql.contains("ALTER TABLE yak_offline_job_definition"));
     assertTrue(sql.contains("notification_config_json TEXT NULL"));
     assertFalse(upper.contains("UPDATE YAK_OFFLINE_JOB_DEFINITION"));
+    assertFalse(upper.contains("NOT NULL"));
+  }
+
+  @Test
+  void auditCarrierMigrationIsAdditiveAndDoesNotRewriteExistingBatches() throws Exception {
+    String sql = read(AUDIT_CARRIER);
+    String upper = sql.toUpperCase();
+
+    assertTrue(sql.contains("ALTER TABLE yak_offline_batch_execution"));
+    assertTrue(sql.contains("audit_carrier_json LONGTEXT NULL"));
+    assertFalse(upper.contains("UPDATE YAK_OFFLINE_BATCH_EXECUTION"));
     assertFalse(upper.contains("NOT NULL"));
   }
 

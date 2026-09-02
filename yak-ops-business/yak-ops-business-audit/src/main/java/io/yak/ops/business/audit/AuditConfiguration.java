@@ -7,6 +7,7 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -47,7 +48,11 @@ public class AuditConfiguration {
       @Qualifier("yakBusinessDataSource") DataSource dataSource,
       @Qualifier("yakBusinessTransactionManager") PlatformTransactionManager transactionManager,
       CurrentProject currentProject,
-      ObjectMapper objectMapper) {
-    return new JdbcBusinessAuditService(dataSource, transactionManager, currentProject, objectMapper);
+      ObjectMapper objectMapper,
+      ObjectProvider<AuditActorResolver> actorResolverProvider) {
+    AuditActorResolver actorResolver =
+        actorResolverProvider.getIfAvailable(SpringSecurityAuditActorResolver::new);
+    return new JdbcBusinessAuditService(
+        dataSource, transactionManager, currentProject, objectMapper, actorResolver);
   }
 }

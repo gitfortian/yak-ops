@@ -2,12 +2,17 @@ package io.yak.ops.business.sync.offline.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.audit.AuditCarrier;
+import io.yak.ops.business.audit.AuditContext;
+import io.yak.ops.business.audit.AuditOperationHandle;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
@@ -42,6 +47,7 @@ class OfflineExecutionCoordinatorTest {
   @Mock private OfflineBatchRuntime batchRuntime;
   @Mock private OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
   @Mock private OfflineExecutionStateManager stateManager;
+  @Mock private OfflineAuditBridge auditBridge;
   @Mock private LinkUpClient linkUpClient;
 
   private OfflineExecutionCoordinator coordinator;
@@ -56,6 +62,7 @@ class OfflineExecutionCoordinatorTest {
         batchRuntime,
         scopeExecutionAdapter,
         stateManager,
+        auditBridge,
         linkUpClient,
         new ObjectMapper());
   }
@@ -83,6 +90,29 @@ class OfflineExecutionCoordinatorTest {
     verify(stateManager)
         .markFailed(execution, "无法连接 Link-Up Server：http://127.0.0.1:18080", true);
     verify(scopeExecutionAdapter).apply(10L, "{}", batch.batchScope());
+    verify(auditBridge).ensureOperation(execution);
+    verify(auditBridge).observeState(execution);
+  }
+
+  @Test
+  void preflightFailurePreservesExistingBoundaryAndNeverCreatesDanglingAuditOperation() {
+    OfflineJobExecution execution = execution(99L, "CREATED");
+    BatchExecution batch = frozenBatch(BatchStatus.RUNNING, BatchScope.fullSelection());
+    when(claimManager.claim(10L, "WORKFLOW", null, 1))
+        .thenReturn(new OfflineExecutionClaim(null, "logical", execution));
+    when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));
+    when(scopeExecutionAdapter.apply(10L, "logical", batch.batchScope())).thenReturn("scoped");
+    when(definitionService.resolveExecutionJobSpec("scoped"))
+        .thenThrow(new IllegalStateException("invalid job spec"));
+
+    assertThatThrownBy(() -> coordinator.execute(10L, "WORKFLOW", null, 1))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("invalid job spec");
+
+    verify(stateManager, never()).recordCreated(execution);
+    verify(auditBridge, never()).ensureOperation(execution);
+    verify(auditBridge, never()).observeState(execution);
+    verify(linkUpClient, never()).node();
   }
 
   @Test
@@ -105,6 +135,8 @@ class OfflineExecutionCoordinatorTest {
 
     verify(scopeExecutionAdapter).apply(10L, "logical", range);
     verify(stateManager).markFailed(retry, "engine down", true);
+    verify(auditBridge).ensureOperation(retry);
+    verify(auditBridge).observeState(retry);
   }
 
   @Test
@@ -115,7 +147,7 @@ class OfflineExecutionCoordinatorTest {
 
     assertThat(coordinator.executePendingBackfill(77L)).isSameAs(existing);
 
-    verifyNoInteractions(scopeExecutionAdapter, linkUpClient, stateManager);
+    verifyNoInteractions(scopeExecutionAdapter, linkUpClient, stateManager, auditBridge);
   }
 
   @Test
@@ -130,6 +162,8 @@ class OfflineExecutionCoordinatorTest {
     verify(batchRuntime).requireLatestOccupyingBatch(10L);
     verify(batchRuntime).cancelWaitingRetry(waiting);
     verify(stateManager).markWaitingRetryCanceled(latest);
+    verify(auditBridge).ensureOperation(latest);
+    verify(auditBridge).observeState(latest);
   }
 
   @Test
@@ -144,11 +178,11 @@ class OfflineExecutionCoordinatorTest {
         .hasMessageContaining("仅支持查询");
 
     verify(stateManager, never()).markCancellationRequested(history);
-    verifyNoInteractions(linkUpClient);
+    verifyNoInteractions(linkUpClient, auditBridge);
   }
 
   @Test
-  void reconcilerStateEntrypointsDelegateToStateManager() {
+  void reconcilerStateEntrypointsDelegateToStateManagerAndAuditBridge() {
     OfflineJobExecution execution = execution(99L, "RUNNING");
     LinkUpJobResponse response = new LinkUpJobResponse();
 
@@ -157,6 +191,39 @@ class OfflineExecutionCoordinatorTest {
 
     verify(stateManager).applySnapshot(execution, response, "RECONCILED");
     verify(stateManager).markUnknown(execution, "状态无法确认");
+    verify(auditBridge, org.mockito.Mockito.times(2)).ensureOperation(execution);
+    verify(auditBridge).observeState(execution);
+  }
+
+  @Test
+  void restoredAuditContextIsVisibleDuringStateApplicationAndClearedAfterward() {
+    OfflineJobExecution execution = execution(99L, "RUNNING");
+    AuditCarrier carrier =
+        new AuditCarrier(
+            "AUD-123",
+            "7",
+            "tester",
+            "USER",
+            10L,
+            "Project A",
+            "OFFLINE_SYNC",
+            "10",
+            "orders",
+            "WORKER");
+    AuditOperationHandle handle = mock(AuditOperationHandle.class);
+    when(handle.carrier()).thenReturn(carrier);
+    when(auditBridge.ensureOperation(execution)).thenReturn(handle);
+    doAnswer(
+            invocation -> {
+              assertThat(AuditContext.current()).contains(carrier);
+              return null;
+            })
+        .when(stateManager)
+        .markUnknown(execution, "状态无法确认");
+
+    assertThat(AuditContext.current()).isEmpty();
+    coordinator.markUnknown(execution, "状态无法确认");
+    assertThat(AuditContext.current()).isEmpty();
   }
 
   private OfflineJobExecution execution(long id, String status) {
