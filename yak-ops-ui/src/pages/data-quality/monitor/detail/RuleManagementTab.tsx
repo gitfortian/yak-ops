@@ -1,12 +1,13 @@
 import YakButton from '@/components/YakButton';
-import { Dropdown, Empty, Input, Popover, Segmented, Select, Table, Tag } from 'antd';
+import { updateQualityMonitor } from '@/services/data-quality';
+import { Dropdown, Empty, Input, message, Popover, Segmented, Select, Switch, Table, Tag } from 'antd';
 import type { MenuProps, TableColumnsType } from 'antd';
 import { ListFilter, MoreHorizontal, Play, RefreshCw, Search } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { dataQualityTableClassName } from '../../components/tableStyle';
 import type { MonitorWorkspaceView, RuleView } from '../../types';
-import { DIMENSION_ORDER, RUN_MODE_LABEL, ruleParameter, scopeLabel } from './model';
+import { DIMENSION_ORDER, RUN_MODE_LABEL, ruleParameter, scopeLabel, toSavePayload } from './model';
 
 interface RuleManagementTabProps {
   workspace: MonitorWorkspaceView;
@@ -15,6 +16,7 @@ interface RuleManagementTabProps {
   onOpenLog: () => void;
   onRefresh: () => void;
   onRemoveMonitor: () => void;
+  onEdit?: () => void;
 }
 
 type RuleStatusFilter = 'ALL' | 'ENABLED' | 'DISABLED';
@@ -37,7 +39,7 @@ const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_WIDTH = 420;
 const DEFAULT_LEFT_WIDTH = 286;
 
-const RuleManagementTab = ({ workspace, running, onRun, onOpenLog, onRefresh, onRemoveMonitor }: RuleManagementTabProps) => {
+const RuleManagementTab = ({ workspace, running, onRun, onOpenLog, onRefresh, onRemoveMonitor, onEdit }: RuleManagementTabProps) => {
   const { monitor, settings, stats } = workspace;
   const [monitorKeyword, setMonitorKeyword] = useState('');
   const [filters, setFilters] = useState<RuleFilterState>(createEmptyFilters);
@@ -45,6 +47,7 @@ const RuleManagementTab = ({ workspace, running, onRun, onOpenLog, onRefresh, on
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [resizing, setResizing] = useState(false);
+  const [updatingRuleId, setUpdatingRuleId] = useState<number | null>(null);
 
   const records = useMemo(() => {
     const normalizedKeyword = filters.keyword.trim().toLowerCase();
@@ -78,6 +81,28 @@ const RuleManagementTab = ({ workspace, running, onRun, onOpenLog, onRefresh, on
     setDraftFilters((current) => ({ ...current, enabled }));
     setFilters((current) => ({ ...current, enabled }));
   };
+
+  const handleToggleRuleEnabled = useCallback(
+    async (ruleId: number, nextEnabled: boolean) => {
+      if (updatingRuleId !== null) return;
+      setUpdatingRuleId(ruleId);
+      try {
+        const updatedRules = monitor.rules.map((rule) =>
+          rule.id === ruleId ? { ...rule, enabled: nextEnabled } : rule,
+        );
+        const payload = toSavePayload(monitor, settings, updatedRules);
+        await updateQualityMonitor(monitor.id, payload);
+        message.success(nextEnabled ? '规则已启用' : '规则已停用');
+        onRefresh();
+      } catch {
+        message.error('状态更新失败');
+      } finally {
+        setUpdatingRuleId(null);
+      }
+    },
+    [monitor, settings, updatingRuleId, onRefresh],
+  );
+
   const onResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -109,13 +134,28 @@ const RuleManagementTab = ({ workspace, running, onRun, onOpenLog, onRefresh, on
     { title: '规则模板', dataIndex: 'templateCode', width: 180, render: (value) => <span className="text-[#344054]">{value}</span> },
     { title: '监控阈值', width: 190, render: (_, rule) => <div><div className="font-medium text-[#344054]">{ruleParameter(rule)}</div><div className="mt-1 flex items-center gap-1.5 text-[11px]"><span className="h-1.5 w-1.5 rounded-full bg-[#ff4d4f]" /><span className="text-[#ff4d4f]">异常</span><span className="ml-1 h-1.5 w-1.5 rounded-full bg-[#12a150]" /><span className="text-[#12a150]">正常</span></div></div> },
     { title: '质量维度', dataIndex: 'dimension', width: 110, render: (value) => <span className="text-[#344054]">{value}</span> },
-    { title: '状态', dataIndex: 'enabled', width: 90, render: (value) => <Tag className="!m-0 !border-0" color={value ? 'processing' : 'default'}>{value ? '启用' : '停用'}</Tag> },
+    {
+      title: '状态',
+      dataIndex: 'enabled',
+      width: 100,
+      render: (_, rule) => (
+        <Switch
+          size="small"
+          checked={rule.enabled}
+          loading={updatingRuleId === rule.id}
+          checkedChildren="启用"
+          unCheckedChildren="停用"
+          onChange={() => handleToggleRuleEnabled(rule.id, !rule.enabled)}
+        />
+      ),
+    },
     { title: '操作', fixed: 'right', width: 110, render: () => <YakButton type="text" htmlType="button" className="!h-auto !min-h-0 !border-0 !bg-transparent !p-0 !text-xs !text-[#245bdb]" onClick={onOpenLog}>操作日志</YakButton> },
   ];
 
   const moreMenu: MenuProps = {
-    items: [{ key: 'refresh', label: '刷新数据' }, { key: 'log', label: '操作日志' }, { type: 'divider' }, { key: 'remove', label: '删除质量监控', danger: true }],
+    items: [{ key: 'edit', label: '编辑监控' }, { key: 'refresh', label: '刷新数据' }, { key: 'log', label: '操作日志' }, { type: 'divider' }, { key: 'remove', label: '删除质量监控', danger: true }],
     onClick: ({ key }) => {
+      if (key === 'edit') onEdit?.();
       if (key === 'refresh') onRefresh();
       if (key === 'log') onOpenLog();
       if (key === 'remove') onRemoveMonitor();

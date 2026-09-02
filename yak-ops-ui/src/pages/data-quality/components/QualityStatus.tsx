@@ -22,7 +22,7 @@ const EXECUTION_META: Record<
 export const CheckResultTag = ({ value }: { value?: CheckResult }) => {
   const meta = CHECK_META[value ?? "NOT_RUN"];
   return (
-    <Tag className="!m-0 !border-0 !bg-[#f2f4f7] !text-[11px] !text-[#667085]">
+    <Tag color={meta.color} className="!m-0 !border-0 !text-[11px]">
       {meta.label}
     </Tag>
   );

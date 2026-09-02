@@ -13,6 +13,10 @@ const MonitorDetailPage = () => {
   const params = useParams<{ id: string }>();
   const detail = useMonitorDetailPage(params.id);
 
+  const handleEdit = () => {
+    history.push(`/data-quality/monitor/${params.id}/edit`);
+  };
+
   return (
     <ConfigProvider theme={BRAND_THEME}>
       <div className="flex h-[calc(100vh-64px)] min-h-[620px] flex-col overflow-hidden bg-white">
@@ -21,6 +25,7 @@ const MonitorDetailPage = () => {
           activeTab={detail.activeTab}
           onTabChange={detail.setActiveTab}
           onBack={() => history.push('/data-quality/table-config')}
+          onEdit={handleEdit}
         />
 
         <Spin
@@ -37,6 +42,7 @@ const MonitorDetailPage = () => {
                   onOpenLog={detail.openLog}
                   onRefresh={detail.loadWorkspace}
                   onRemoveMonitor={detail.removeMonitor}
+                  onEdit={handleEdit}
                 />
               ) : null}
 
@@ -48,6 +54,7 @@ const MonitorDetailPage = () => {
                   onRefresh={detail.loadWorkspace}
                   onRemove={detail.removeMonitor}
                   onOpenLog={detail.openLog}
+                  onEdit={handleEdit}
                 />
               ) : null}
 
