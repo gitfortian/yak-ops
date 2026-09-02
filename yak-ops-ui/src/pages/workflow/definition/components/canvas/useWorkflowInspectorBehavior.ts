@@ -9,7 +9,9 @@ const PANEL_WIDTH_STORAGE_KEY = 'yak.workflow.inspector.width';
 
 const readStoredPanelWidth = (fallback: number) => {
   if (typeof window === 'undefined') return fallback;
-  const value = Number(window.localStorage.getItem(PANEL_WIDTH_STORAGE_KEY));
+  const stored = window.localStorage.getItem(PANEL_WIDTH_STORAGE_KEY);
+  if (!stored) return fallback;
+  const value = Number(stored);
   if (!Number.isFinite(value)) return fallback;
   return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, value));
 };
