@@ -6,7 +6,8 @@
   />
 </p>
 
-<img width="200" height="320" alt="99b465a562d33f20eb56e9202efe97dc" src="https://github.com/user-attachments/assets/8d5c03e6-c591-420c-a9cd-12df1de2cc6c" />
+
+<img width="200" height="320" alt="99b465a562d33f20eb56e9202efe97dc" src="https://github.com/user-attachments/assets/95c4888a-939c-4eb2-b826-87edeb59996d" />
 
 
 <h1 align="center">Yak Ops</h1>
