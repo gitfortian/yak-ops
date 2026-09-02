@@ -243,7 +243,7 @@ class OfflineExecutionCoordinatorTest {
         10L,
         new BatchKey("manual:test"),
         BatchTrigger.MANUAL,
-        BatchScope.fullSelection(),
+        scope,
         new ExecutionSnapshot(
             "{}",
             1,
