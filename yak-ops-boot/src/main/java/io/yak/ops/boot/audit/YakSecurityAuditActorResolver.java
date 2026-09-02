@@ -6,10 +6,12 @@ import io.yak.ops.business.audit.AuditActorResolver;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
 /** Adapts Yak Security's stable login identity into the shared Audit actor contract. */
 @Component
+@ConditionalOnBean(AuthenticationManager.class)
 @RequiredArgsConstructor
 public class YakSecurityAuditActorResolver implements AuditActorResolver {
 

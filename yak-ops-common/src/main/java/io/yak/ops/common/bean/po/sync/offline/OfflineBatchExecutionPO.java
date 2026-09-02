@@ -26,6 +26,7 @@ public class OfflineBatchExecutionPO {
   private Integer retryBackoffSeconds;
   private String configDigest;
   @ToString.Exclude private String logicalJobSpecJson;
+  @ToString.Exclude private String auditCarrierJson;
   private String status;
   private LocalDateTime createTime;
   private LocalDateTime updateTime;

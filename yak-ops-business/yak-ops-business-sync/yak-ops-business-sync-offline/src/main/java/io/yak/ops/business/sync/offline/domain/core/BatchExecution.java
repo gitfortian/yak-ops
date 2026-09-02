@@ -13,7 +13,20 @@ public record BatchExecution(
     BatchScope batchScope,
     ExecutionSnapshot snapshot,
     BatchStatus status,
+    String auditCarrierJson,
     List<ExecutionAttempt> attempts) {
+
+  public BatchExecution(
+      Long id,
+      long taskId,
+      BatchKey batchKey,
+      BatchTrigger trigger,
+      BatchScope batchScope,
+      ExecutionSnapshot snapshot,
+      BatchStatus status,
+      List<ExecutionAttempt> attempts) {
+    this(id, taskId, batchKey, trigger, batchScope, snapshot, status, null, attempts);
+  }
 
   public BatchExecution {
     if (id != null && id <= 0) throw new IllegalArgumentException("BatchExecutionId 必须大于 0");
@@ -35,5 +48,18 @@ public record BatchExecution(
 
   public Optional<ExecutionAttempt> latestAttempt() {
     return attempts.isEmpty() ? Optional.empty() : Optional.of(attempts.get(attempts.size() - 1));
+  }
+
+  public BatchExecution withAuditCarrierJson(String value) {
+    return new BatchExecution(
+        id,
+        taskId,
+        batchKey,
+        trigger,
+        batchScope,
+        snapshot,
+        status,
+        value,
+        attempts);
   }
 }
