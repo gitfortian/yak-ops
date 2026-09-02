@@ -28,9 +28,10 @@ import {
 import { ArrowLeft, PlayCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import DataServiceAccessControlPanel from '../components/DataServiceAccessControlPanel';
 import DataServiceApiCallPanel from '../components/DataServiceApiCallPanel';
 
-type DetailTabKey = 'overview' | 'access' | 'runtime' | 'logs';
+type DetailTabKey = 'overview' | 'access' | 'network' | 'runtime' | 'logs';
 
 const formatTime = (value?: string | null) =>
   value ? value.replace('T', ' ').slice(0, 19) : '-';
@@ -322,6 +323,10 @@ export default function DataServiceDetailPage() {
     />
   );
 
+  const networkAccessContent = (
+    <DataServiceAccessControlPanel apiId={service.id} />
+  );
+
   const runtimeContent = (
     <div className="grid gap-3 xl:grid-cols-2">
       <SectionCard title="运行指标">
@@ -385,6 +390,9 @@ export default function DataServiceDetailPage() {
   }> = [
     { key: 'overview', label: '总览', children: overviewContent },
     { key: 'access', label: 'API 调用', children: accessContent },
+    ...(canManageAccess
+      ? [{ key: 'network' as const, label: '访问控制', children: networkAccessContent }]
+      : []),
     ...(canRuntime ? [{ key: 'runtime' as const, label: 'Runtime', children: runtimeContent }] : []),
     ...(canObserve ? [{ key: 'logs' as const, label: '调用记录', children: logsContent }] : []),
   ];
