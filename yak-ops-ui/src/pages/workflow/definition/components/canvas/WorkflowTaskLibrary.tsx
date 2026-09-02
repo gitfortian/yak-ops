@@ -126,9 +126,9 @@ const WorkflowTaskLibrary = ({
               </div>
 
               {loading ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {[0, 1, 2].map((item) => (
-                    <div key={item} className="h-12 animate-pulse rounded-lg bg-[#f5f6f7]" />
+                    <div key={item} className="h-10 animate-pulse rounded-lg bg-[#f5f6f7]" />
                   ))}
                 </div>
               ) : filteredTasks.length ? (
@@ -136,23 +136,20 @@ const WorkflowTaskLibrary = ({
                   {filteredTasks.map((task) => (
                     <div
                       key={task.id}
+                      title={task.name}
                       draggable={!locked}
                       className={[
-                        'group flex min-h-12 items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 transition-colors',
+                        'group flex h-10 items-center gap-2.5 rounded-lg px-2.5 transition-[background-color,color,box-shadow]',
+                        'bg-[#f7f8fa] text-[#344054]',
                         locked
                           ? 'cursor-not-allowed opacity-50'
-                          : 'cursor-grab hover:border-[#e4e7ec] hover:bg-[#fafbfc] active:cursor-grabbing',
+                          : 'cursor-grab hover:bg-[#eceef2] hover:text-[#161823] hover:shadow-[inset_0_0_0_1px_rgba(16,24,40,.025)] active:cursor-grabbing active:bg-[#e7e9ee]',
                       ].join(' ')}
                       onDragStart={(event) => !locked && onDragStart(event, task)}
                     >
                       <WorkflowNodeIcon taskType={task.type} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[12px] font-medium text-[#344054]">
-                          {task.name}
-                        </div>
-                        <div className="mt-0.5 truncate text-[10px] text-[#98a2b3]">
-                          {taskTypeLabel(task.type)}
-                        </div>
+                      <div className="min-w-0 flex-1 truncate text-[12px] font-medium leading-5">
+                        {task.name}
                       </div>
                     </div>
                   ))}
