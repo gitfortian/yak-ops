@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Node } from 'reactflow';
 import type { WorkflowCanvasTaskOption, WorkflowNodeData } from './types';
+import useWorkflowInspectorBehavior from './useWorkflowInspectorBehavior';
 import WorkflowNodeIcon from './node/icons/WorkflowNodeIcon';
 import WorkflowNodeInspectorLastRun from './WorkflowNodeInspectorLastRun';
 import WorkflowNodeInspectorSettings from './WorkflowNodeInspectorSettings';
@@ -63,6 +64,7 @@ const WorkflowNodeInspector = ({
   onAppend,
 }: WorkflowNodeInspectorProps) => {
   const [activeTab, setActiveTab] = useState<InspectorTab>('settings');
+  const { panelWidth, resizing, handleResizePointerDown } = useWorkflowInspectorBehavior();
 
   useEffect(() => {
     setActiveTab('settings');
@@ -87,7 +89,26 @@ const WorkflowNodeInspector = ({
   ], [locked, onDelete, onDuplicate]);
 
   return (
-    <aside className="absolute bottom-0 right-0 top-0 z-20 flex w-[340px] flex-col overflow-hidden border-l border-[#e8eaee] bg-white">
+    <aside
+      className="absolute bottom-0 right-0 top-0 z-20 flex w-[340px] flex-col overflow-hidden border-l border-[#e8eaee] bg-white"
+      style={{ width: panelWidth }}
+    >
+      <div
+        role="separator"
+        aria-label="调整节点面板宽度"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(panelWidth)}
+        className="group/resize absolute left-0 top-0 z-30 flex h-full w-2 cursor-col-resize touch-none items-center justify-start"
+        onPointerDown={handleResizePointerDown}
+      >
+        <span
+          className={[
+            'h-full w-0.5 transition-colors duration-150',
+            resizing ? 'bg-[#6172f3]' : 'bg-transparent group-hover/resize:bg-[#6172f3]',
+          ].join(' ')}
+        />
+      </div>
+
       <header className="shrink-0 bg-white">
         <div className="flex h-12 items-center gap-2 border-b border-[#eef0f2] px-4">
           <WorkflowNodeIcon taskType={node.data.taskType} size="sm" />
