@@ -127,9 +127,6 @@ const DevelopmentTaskGlyph = ({
 };
 
 const developmentContainerClassName = (taskType: string) => {
-  if (taskType === 'SQL') {
-    return 'border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]';
-  }
   if (taskType === 'SHELL') {
     return 'border-[#d9ddff] bg-[#f4f5ff] text-[#6172f3]';
   }
@@ -165,6 +162,19 @@ const WorkflowNodeIcon = ({ taskType, size = 'md' }: WorkflowNodeIconProps) => {
         ].join(' ')}
       >
         <QualityEndGlyph className={COMPACT_ICON_SIZE[size]} />
+      </span>
+    );
+  }
+
+  if (normalizedTaskType === 'SQL') {
+    return (
+      <span
+        className={[
+          'flex shrink-0 items-center justify-center bg-[#f79009] text-white',
+          COMPACT_CONTAINER_SIZE[size],
+        ].join(' ')}
+      >
+        <DevelopmentTaskGlyph taskType={normalizedTaskType} size={size} />
       </span>
     );
   }
