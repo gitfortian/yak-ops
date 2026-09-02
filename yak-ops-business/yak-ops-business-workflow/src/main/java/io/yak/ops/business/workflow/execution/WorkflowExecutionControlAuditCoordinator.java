@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Audits short actor-owned pause/resume/cancel commands without replacing execution correlation. */
@@ -25,6 +26,7 @@ public class WorkflowExecutionControlAuditCoordinator {
   private final WorkflowRuntime runtime;
   private final BusinessAuditService auditService;
 
+  @Autowired
   public WorkflowExecutionControlAuditCoordinator(
       WorkflowRuntime runtime,
       ObjectProvider<BusinessAuditService> auditServiceProvider) {
