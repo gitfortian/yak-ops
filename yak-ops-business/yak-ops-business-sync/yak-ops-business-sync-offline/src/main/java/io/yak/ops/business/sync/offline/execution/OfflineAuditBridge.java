@@ -3,6 +3,7 @@ package io.yak.ops.business.sync.offline.execution;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.business.audit.AuditCarrier;
+import io.yak.ops.business.audit.AuditContext;
 import io.yak.ops.business.audit.AuditEventRequest;
 import io.yak.ops.business.audit.AuditEventType;
 import io.yak.ops.business.audit.AuditOperationHandle;
@@ -13,6 +14,7 @@ import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
+import io.yak.ops.business.sync.offline.repository.OfflineAuditCorrelationRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -32,29 +34,32 @@ public class OfflineAuditBridge {
 
   private final BusinessAuditService auditService;
   private final OfflineBatchExecutionRepository batchRepository;
+  private final OfflineAuditCorrelationRepository correlationRepository;
   private final ObjectMapper objectMapper;
 
   public OfflineAuditBridge(
       BusinessAuditService auditService,
       OfflineBatchExecutionRepository batchRepository,
+      OfflineAuditCorrelationRepository correlationRepository,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
     this.auditService = auditService;
     this.batchRepository = batchRepository;
+    this.correlationRepository = correlationRepository;
     this.objectMapper = objectMapper;
   }
 
-  /** Returns an existing operation for this Batch or creates and freezes a new carrier. */
+  /** Returns an existing operation or creates correlation only for a new first Attempt. */
   public AuditOperationHandle ensureOperation(OfflineJobExecution execution) {
-    if (execution == null || execution.getBatchId() == null || execution.getBatchId() <= 0L) {
+    if (!hasDurableBatch(execution)) {
       return AuditOperationHandle.noop(null);
     }
     try {
-      BatchExecution batch = batchRepository.findById(execution.getBatchId()).orElse(null);
-      if (batch == null) return AuditOperationHandle.noop(null);
-
-      AuditCarrier existing = readCarrier(batch.auditCarrierJson());
+      AuditCarrier existing = storedCarrier(execution.getBatchId());
       if (existing != null) {
         return auditService.resume(existing);
+      }
+      if (!eligibleToStartOperation(execution)) {
+        return AuditOperationHandle.noop(null);
       }
 
       AuditOperationHandle handle =
@@ -66,12 +71,12 @@ public class OfflineAuditBridge {
                   String.valueOf(execution.getJobDefinitionId()),
                   null,
                   source(execution.getTriggerType()),
-                  startMetadata(execution, batch)));
+                  startMetadata(execution)));
       AuditCarrier carrier = handle.carrier();
       if (carrier != null) {
         String carrierJson = objectMapper.writeValueAsString(carrier);
-        if (!batchRepository.update(batch.withAuditCarrierJson(carrierJson))) {
-          log.warn("Unable to persist offline audit carrier, batchId={}", batch.id());
+        if (!correlationRepository.updateCarrierJson(execution.getBatchId(), carrierJson)) {
+          log.warn("Unable to persist offline audit carrier, batchId={}", execution.getBatchId());
         }
       }
       return handle;
@@ -105,7 +110,7 @@ public class OfflineAuditBridge {
         execution,
         () -> {
           BatchExecution batch = requireBatch(execution);
-          AuditOperationHandle handle = resume(batch);
+          AuditOperationHandle handle = resume(execution);
           if (handle.carrier() == null) return;
 
           if (batch.status() == BatchStatus.CANCELED) {
@@ -179,12 +184,25 @@ public class OfflineAuditBridge {
   }
 
   private AuditOperationHandle resume(OfflineJobExecution execution) {
-    return resume(requireBatch(execution));
+    AuditCarrier carrier = storedCarrier(execution.getBatchId());
+    if (carrier == null) {
+      carrier = AuditContext.current().orElse(null);
+    }
+    return carrier == null ? AuditOperationHandle.noop(null) : auditService.resume(carrier);
   }
 
-  private AuditOperationHandle resume(BatchExecution batch) {
-    AuditCarrier carrier = readCarrier(batch.auditCarrierJson());
-    return carrier == null ? AuditOperationHandle.noop(null) : auditService.resume(carrier);
+  private AuditCarrier storedCarrier(Long batchId) {
+    if (batchId == null || batchId <= 0L) return null;
+    return correlationRepository.findCarrierJson(batchId).map(this::readCarrier).orElse(null);
+  }
+
+  private boolean eligibleToStartOperation(OfflineJobExecution execution) {
+    return OfflineExecutionStatus.isCreated(execution.getStatus())
+        && (execution.getAttemptNo() == null || execution.getAttemptNo() <= 1);
+  }
+
+  private boolean hasDurableBatch(OfflineJobExecution execution) {
+    return execution != null && execution.getBatchId() != null && execution.getBatchId() > 0L;
   }
 
   private BatchExecution requireBatch(OfflineJobExecution execution) {
@@ -206,11 +224,12 @@ public class OfflineAuditBridge {
     }
   }
 
-  private Map<String, Object> startMetadata(
-      OfflineJobExecution execution, BatchExecution batch) {
+  private Map<String, Object> startMetadata(OfflineJobExecution execution) {
     Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("batchId", batch.id());
-    metadata.put("triggerType", batch.trigger().name());
+    metadata.put("batchId", execution.getBatchId());
+    if (StringUtils.hasText(execution.getTriggerType())) {
+      metadata.put("triggerType", execution.getTriggerType());
+    }
     if (execution.getDefinitionVersion() != null) {
       metadata.put("definitionVersion", execution.getDefinitionVersion());
     }

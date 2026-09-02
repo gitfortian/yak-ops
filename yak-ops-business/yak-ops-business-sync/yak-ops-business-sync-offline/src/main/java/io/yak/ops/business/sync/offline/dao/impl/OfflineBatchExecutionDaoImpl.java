@@ -114,6 +114,20 @@ public class OfflineBatchExecutionDaoImpl implements OfflineBatchExecutionDao {
   }
 
   @Override
+  public boolean updateAuditCarrier(
+      Long batchId, String carrierJson, LocalDateTime updateTime) {
+    if (batchId == null || batchId <= 0L || !StringUtils.hasText(carrierJson)) return false;
+    long projectId = requiredProjectId();
+    return mapper.update(
+        null,
+        Wrappers.<OfflineBatchExecutionPO>lambdaUpdate()
+            .eq(OfflineBatchExecutionPO::getId, batchId)
+            .eq(OfflineBatchExecutionPO::getProjectId, projectId)
+            .set(OfflineBatchExecutionPO::getAuditCarrierJson, carrierJson.trim())
+            .set(OfflineBatchExecutionPO::getUpdateTime, updateTime)) > 0;
+  }
+
+  @Override
   public boolean insert(OfflineBatchExecutionPO batchPO) {
     bindCurrentProject(batchPO);
     return mapper.insert(batchPO) > 0;

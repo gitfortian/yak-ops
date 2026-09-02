@@ -1,6 +1,8 @@
 package io.yak.ops.common.bean.po.sync.offline;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
@@ -26,6 +28,7 @@ public class OfflineBatchExecutionPO {
   private Integer retryBackoffSeconds;
   private String configDigest;
   @ToString.Exclude private String logicalJobSpecJson;
+  @TableField(updateStrategy = FieldStrategy.NEVER)
   @ToString.Exclude private String auditCarrierJson;
   private String status;
   private LocalDateTime createTime;

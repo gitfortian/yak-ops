@@ -22,6 +22,9 @@ public interface OfflineBatchExecutionDao {
 
   boolean reservePendingBackfill(Long batchId, LocalDateTime updateTime);
 
+  /** Updates only the cross-cutting audit correlation field, never Batch runtime state. */
+  boolean updateAuditCarrier(Long batchId, String carrierJson, LocalDateTime updateTime);
+
   boolean insert(OfflineBatchExecutionPO batchPO);
 
   boolean updateById(OfflineBatchExecutionPO batchPO);

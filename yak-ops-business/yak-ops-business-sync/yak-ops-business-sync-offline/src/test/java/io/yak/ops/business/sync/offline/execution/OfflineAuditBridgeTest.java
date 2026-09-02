@@ -2,6 +2,7 @@ package io.yak.ops.business.sync.offline.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,6 +13,7 @@ import io.yak.ops.business.audit.AuditCarrier;
 import io.yak.ops.business.audit.AuditEventRequest;
 import io.yak.ops.business.audit.AuditEventType;
 import io.yak.ops.business.audit.AuditOperationHandle;
+import io.yak.ops.business.audit.AuditOperationRequest;
 import io.yak.ops.business.audit.BusinessAuditService;
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchExecution;
@@ -21,6 +23,7 @@ import io.yak.ops.business.sync.offline.domain.core.BatchStatus;
 import io.yak.ops.business.sync.offline.domain.core.BatchTrigger;
 import io.yak.ops.business.sync.offline.domain.core.ExecutionSnapshot;
 import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
+import io.yak.ops.business.sync.offline.repository.OfflineAuditCorrelationRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import java.util.List;
 import java.util.Optional;
@@ -32,20 +35,51 @@ class OfflineAuditBridgeTest {
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
+  void newFirstAttemptFreezesCarrierWithoutRewritingBatchRuntimeTruth() throws Exception {
+    BusinessAuditService auditService = mock(BusinessAuditService.class);
+    OfflineBatchExecutionRepository batchRepository = mock(OfflineBatchExecutionRepository.class);
+    OfflineAuditCorrelationRepository correlationRepository =
+        mock(OfflineAuditCorrelationRepository.class);
+    AuditOperationHandle handle = mock(AuditOperationHandle.class);
+    AuditCarrier carrier = carrier();
+    OfflineJobExecution execution = execution("CREATED", 1);
+
+    when(correlationRepository.findCarrierJson(77L)).thenReturn(Optional.empty());
+    when(auditService.start(any(AuditOperationRequest.class))).thenReturn(handle);
+    when(handle.carrier()).thenReturn(carrier);
+    when(correlationRepository.updateCarrierJson(eq(77L), any(String.class))).thenReturn(true);
+
+    AuditOperationHandle result =
+        new OfflineAuditBridge(
+                auditService, batchRepository, correlationRepository, objectMapper)
+            .ensureOperation(execution);
+
+    assertThat(result).isSameAs(handle);
+    ArgumentCaptor<String> stored = ArgumentCaptor.forClass(String.class);
+    verify(correlationRepository).updateCarrierJson(eq(77L), stored.capture());
+    assertThat(objectMapper.readValue(stored.getValue(), AuditCarrier.class)).isEqualTo(carrier);
+    verify(batchRepository, never()).update(any(BatchExecution.class));
+  }
+
+  @Test
   void runningAttemptResumesFrozenBatchCarrierAndUsesDeterministicEventKey() throws Exception {
     BusinessAuditService auditService = mock(BusinessAuditService.class);
     OfflineBatchExecutionRepository batchRepository = mock(OfflineBatchExecutionRepository.class);
+    OfflineAuditCorrelationRepository correlationRepository =
+        mock(OfflineAuditCorrelationRepository.class);
     AuditOperationHandle handle = mock(AuditOperationHandle.class);
     AuditCarrier carrier = carrier();
-    BatchExecution batch =
-        batch(BatchStatus.RUNNING).withAuditCarrierJson(objectMapper.writeValueAsString(carrier));
+    BatchExecution batch = batch(BatchStatus.RUNNING);
     OfflineJobExecution execution = execution("RUNNING", 2);
+    String carrierJson = objectMapper.writeValueAsString(carrier);
 
     when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));
+    when(correlationRepository.findCarrierJson(77L)).thenReturn(Optional.of(carrierJson));
     when(auditService.resume(carrier)).thenReturn(handle);
     when(handle.carrier()).thenReturn(carrier);
 
-    new OfflineAuditBridge(auditService, batchRepository, objectMapper).observeState(execution);
+    new OfflineAuditBridge(auditService, batchRepository, correlationRepository, objectMapper)
+        .observeState(execution);
 
     ArgumentCaptor<AuditEventRequest> event = ArgumentCaptor.forClass(AuditEventRequest.class);
     verify(handle).event(event.capture());
@@ -63,18 +97,21 @@ class OfflineAuditBridgeTest {
   void failedAttemptKeepsOperationOpenWhileBatchIsWaitingRetry() throws Exception {
     BusinessAuditService auditService = mock(BusinessAuditService.class);
     OfflineBatchExecutionRepository batchRepository = mock(OfflineBatchExecutionRepository.class);
+    OfflineAuditCorrelationRepository correlationRepository =
+        mock(OfflineAuditCorrelationRepository.class);
     AuditOperationHandle handle = mock(AuditOperationHandle.class);
     AuditCarrier carrier = carrier();
-    BatchExecution batch =
-        batch(BatchStatus.WAITING_RETRY)
-            .withAuditCarrierJson(objectMapper.writeValueAsString(carrier));
+    BatchExecution batch = batch(BatchStatus.WAITING_RETRY);
     OfflineJobExecution execution = execution("FAILED", 1);
+    String carrierJson = objectMapper.writeValueAsString(carrier);
 
     when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));
+    when(correlationRepository.findCarrierJson(77L)).thenReturn(Optional.of(carrierJson));
     when(auditService.resume(carrier)).thenReturn(handle);
     when(handle.carrier()).thenReturn(carrier);
 
-    new OfflineAuditBridge(auditService, batchRepository, objectMapper).observeState(execution);
+    new OfflineAuditBridge(auditService, batchRepository, correlationRepository, objectMapper)
+        .observeState(execution);
 
     ArgumentCaptor<AuditEventRequest> event = ArgumentCaptor.forClass(AuditEventRequest.class);
     verify(handle).event(event.capture());

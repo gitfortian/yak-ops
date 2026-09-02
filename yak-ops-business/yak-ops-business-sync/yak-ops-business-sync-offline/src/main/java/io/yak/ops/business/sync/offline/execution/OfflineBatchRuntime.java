@@ -159,7 +159,6 @@ public class OfflineBatchRuntime {
         batch.batchScope(),
         batch.snapshot(),
         status,
-        batch.auditCarrierJson(),
         batch.attempts());
   }
 

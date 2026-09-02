@@ -121,7 +121,6 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
         batch.batchScope(),
         batch.snapshot(),
         batch.status(),
-        batch.auditCarrierJson(),
         List.of());
   }
 
@@ -171,7 +170,6 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
         scope,
         snapshot,
         enumValue(BatchStatus.class, po.getStatus(), "status"),
-        po.getAuditCarrierJson(),
         attempts);
   }
 
@@ -260,7 +258,6 @@ public class OfflineBatchExecutionRepositoryAdapter implements OfflineBatchExecu
     po.setRetryBackoffSeconds(batch.snapshot().retryPolicy().backoffSeconds());
     po.setConfigDigest(batch.snapshot().configDigest());
     po.setLogicalJobSpecJson(batch.snapshot().logicalJobSpec());
-    po.setAuditCarrierJson(batch.auditCarrierJson());
     po.setStatus(batch.status().name());
 
     LocalDateTime now = LocalDateTime.now();
