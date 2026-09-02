@@ -25,20 +25,33 @@ public class QualityMonitorSettingsPolicy {
   public MonitorSettingsSpec normalize(
       QualityMonitorCommand.Settings command,
       MonitorSettings existing) {
+    if (command == null && existing != null) {
+      return new MonitorSettingsSpec(
+          existing.runMode(),
+          existing.scheduleFrequency(),
+          existing.scheduleTime(),
+          existing.scheduleWeekday(),
+          existing.cronExpression(),
+          null,
+          existing.ruleFailureAction(),
+          existing.notifyEnabled(),
+          existing.notifyChannel(),
+          existing.notifyTarget(),
+          existing.alertLevel());
+    }
+
     RuleFailureAction failureAction = command == null
-        ? existing == null ? RuleFailureAction.CONTINUE : existing.ruleFailureAction()
+        ? RuleFailureAction.CONTINUE
         : defaultValue(command.ruleFailureAction(), RuleFailureAction.CONTINUE);
-    boolean notifyEnabled = command == null
-        ? existing != null && existing.notifyEnabled()
-        : Boolean.TRUE.equals(command.notifyEnabled());
+    boolean notifyEnabled = command != null && Boolean.TRUE.equals(command.notifyEnabled());
     NotifyChannel notifyChannel = command == null
-        ? existing == null ? NotifyChannel.MESSAGE : existing.notifyChannel()
+        ? NotifyChannel.MESSAGE
         : defaultValue(command.notifyChannel(), NotifyChannel.MESSAGE);
     String notifyTarget = command == null
-        ? existing == null ? null : existing.notifyTarget()
+        ? null
         : QualityMonitorPolicy.trimToNull(command.notifyTarget());
     AlertLevel alertLevel = command == null
-        ? existing == null ? AlertLevel.WARNING : existing.alertLevel()
+        ? AlertLevel.WARNING
         : defaultValue(command.alertLevel(), AlertLevel.WARNING);
 
     MonitorSettingsSpec schedule = command != null && command.scheduleEnabled() != null
@@ -104,19 +117,15 @@ public class QualityMonitorSettingsPolicy {
       String notifyTarget,
       AlertLevel alertLevel) {
     RunMode runMode = command == null
-        ? existing == null ? RunMode.MANUAL : existing.runMode()
+        ? RunMode.MANUAL
         : defaultValue(command.runMode(), RunMode.MANUAL);
-    ScheduleFrequency frequency = command == null
-        ? existing == null ? null : existing.scheduleFrequency()
-        : command.scheduleFrequency();
+    ScheduleFrequency frequency = command == null ? null : command.scheduleFrequency();
     String scheduleTime = command == null
-        ? existing == null ? null : existing.scheduleTime()
+        ? null
         : QualityMonitorPolicy.trimToNull(command.scheduleTime());
-    ScheduleWeekday weekday = command == null
-        ? existing == null ? null : existing.scheduleWeekday()
-        : command.scheduleWeekday();
+    ScheduleWeekday weekday = command == null ? null : command.scheduleWeekday();
     String cron = command == null
-        ? existing == null ? null : existing.cronExpression()
+        ? null
         : QualityMonitorPolicy.trimToNull(command.cronExpression());
 
     if (runMode == RunMode.MANUAL) {
