@@ -100,6 +100,7 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
   const duration = formatRuntimeDuration(runtime?.elapsedMillis);
   const runtimeActive = isWorkflowNodeActive(runtime?.status);
   const errorTitle = runtime?.errorMessage || runtime?.failureReason;
+  const compactSync = (data.taskType || '').trim().toUpperCase() === 'SYNC';
 
   return (
     <div className="group relative w-60">
@@ -118,7 +119,8 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
       <div
         title={errorTitle}
         className={[
-          'relative rounded-[15px] border bg-white px-3 py-3',
+          'relative rounded-[15px] border bg-white px-3',
+          compactSync ? 'py-2' : 'py-3',
           'shadow-[0_1px_2px_rgba(22,24,35,.06)]',
           'transition-[border-color,box-shadow,opacity] duration-200',
           runtimeActive ? '' : 'group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
@@ -129,7 +131,12 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
           selected && visual ? 'ring-1 ring-[rgba(97,114,243,.22)]' : '',
         ].join(' ')}
       >
-        <div className="flex min-h-9 items-center gap-2.5">
+        <div
+          className={[
+            'flex items-center gap-2.5',
+            compactSync ? 'min-h-8' : 'min-h-9',
+          ].join(' ')}
+        >
           <WorkflowNodeIcon taskType={data.taskType} />
 
           <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#161823]">
