@@ -49,7 +49,13 @@ public class DataServiceAuthorizer {
     }
     DataServiceApiKey key = repository.findByHash(secrets.hash(rawKey.trim()))
         .orElseThrow(this::invalidConsumerKey);
-    if (key.consumerId() == null) throw invalidConsumerKey();
+
+    // A legacy API-scoped key created through the compatibility endpoints remains valid for its
+    // own API even after consumer management has been enabled for the same service.
+    if (key.consumerId() == null) {
+      if (definition.id().equals(key.apiId())) return admitLegacyKey(key);
+      throw invalidConsumerKey();
+    }
 
     DataServiceConsumer consumer = consumerRepository
         .findByIdForProject(key.consumerId(), definition.projectId())
@@ -60,9 +66,7 @@ public class DataServiceAuthorizer {
     }
 
     LocalDateTime now = LocalDateTime.now();
-    if (!key.enabled()) throw invalidConsumerKey();
-    if (key.expired(now)) throw new DataServiceUnauthorizedException("API Key 已过期");
-
+    validateKey(key, now);
     consumerIpAccessAuthorizer.authorize(consumer.id(), clientIp);
     admit(key, now);
     // Keep the existing audit schema: apiKeyName now records the stable caller name.
@@ -75,11 +79,19 @@ public class DataServiceAuthorizer {
     }
     DataServiceApiKey key = repository.findByHash(definition.id(), secrets.hash(rawKey.trim()))
         .orElseThrow(() -> new DataServiceUnauthorizedException("API Key 无效或已停用"));
+    return admitLegacyKey(key);
+  }
+
+  private AccessContext admitLegacyKey(DataServiceApiKey key) {
     LocalDateTime now = LocalDateTime.now();
-    if (!key.enabled()) throw new DataServiceUnauthorizedException("API Key 无效或已停用");
-    if (key.expired(now)) throw new DataServiceUnauthorizedException("API Key 已过期");
+    validateKey(key, now);
     admit(key, now);
     return new AccessContext("API_KEY", key.id(), key.name(), key.keyPrefix());
+  }
+
+  private void validateKey(DataServiceApiKey key, LocalDateTime now) {
+    if (!key.enabled()) throw new DataServiceUnauthorizedException("API Key 无效或已停用");
+    if (key.expired(now)) throw new DataServiceUnauthorizedException("API Key 已过期");
   }
 
   private void admit(DataServiceApiKey key, LocalDateTime now) {
