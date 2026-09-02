@@ -17,7 +17,7 @@ const readStoredPanelWidth = (fallback: number) => {
 const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
   const [panelWidth, setPanelWidth] = useState(() => readStoredPanelWidth(defaultWidth));
   const [resizing, setResizing] = useState(false);
-  const cleanupResizeRef = useRef<() => void>();
+  const cleanupResizeRef = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
     const keepInspectorOpen = (event: MouseEvent) => {
@@ -36,6 +36,14 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
   }, []);
 
   useEffect(() => () => cleanupResizeRef.current?.(), []);
+
+  useEffect(() => {
+    const miniMap = document.querySelector('.react-flow__minimap');
+    if (!(miniMap instanceof HTMLElement)) return undefined;
+
+    miniMap.style.setProperty('right', `${Math.round(panelWidth) + 24}px`, 'important');
+    return () => miniMap.style.removeProperty('right');
+  }, [panelWidth]);
 
   const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -64,7 +72,6 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
       document.body.style.userSelect = previousUserSelect;
       setResizing(false);
       cleanupResizeRef.current = undefined;
-      window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(Math.round(panelWidth)));
     };
 
     cleanupResizeRef.current = cleanup;
@@ -77,7 +84,6 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
   }, [panelWidth]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(Math.round(panelWidth)));
   }, [panelWidth]);
 
