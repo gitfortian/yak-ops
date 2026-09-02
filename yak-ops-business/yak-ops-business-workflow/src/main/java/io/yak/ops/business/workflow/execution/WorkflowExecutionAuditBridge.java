@@ -22,6 +22,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -38,6 +39,7 @@ public class WorkflowExecutionAuditBridge {
   private final WorkflowAuditCorrelationRepository correlationRepository;
   private final ObjectMapper objectMapper;
 
+  @Autowired
   public WorkflowExecutionAuditBridge(
       ObjectProvider<BusinessAuditService> auditServiceProvider,
       ObjectProvider<WorkflowAuditCorrelationRepository> correlationRepositoryProvider,
