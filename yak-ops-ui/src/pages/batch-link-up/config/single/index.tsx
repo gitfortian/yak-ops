@@ -39,6 +39,14 @@ const SECTION_ITEMS = [
     label: '通道配置',
   },
   {
+    key: 'schedule-config',
+    label: '调度配置',
+  },
+  {
+    key: 'notification-config',
+    label: '通知设置',
+  },
+  {
     key: 'field-mapping',
     label: '字段映射',
   },
