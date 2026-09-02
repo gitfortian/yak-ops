@@ -29,8 +29,9 @@ Controller 只能进入稳定业务/运行入口：
 
 ```text
 definition -> WorkflowDefinitionManager (read/control)
-           -> WorkflowDefinitionAuditCoordinator (audited definition mutations)
+           -> WorkflowDefinitionAuditCoordinator (audited definition mutations + editor pause/resume)
 execution  -> WorkflowLauncher / WorkflowExecutionManager / WorkflowExecutionReactivator
+           -> WorkflowExecutionControlAuditCoordinator (pause/resume/cancel)
 runtime    -> WorkflowRuntime
 schedule   -> create/revision/lifecycle/query + trigger query
 backfill   -> WorkflowBackfillManager / WorkflowBackfillQuery
@@ -57,7 +58,35 @@ WorkflowDefinitionAuditCoordinator
 - Domain / Repository / DAO 不依赖 Audit；
 - Audit payload 只保存显式 allowlist 的业务差异，不复制 `input`、`editorMeta`、节点完整配置或 TaskVersionSnapshot；
 - 无实际 Definition 变化的保存不创建 AuditOperation；
-- Runtime / Schedule / Backfill 审计不属于这一 corridor，分别由后续 execution/schedule owner 接入。
+- Runtime / Schedule / Backfill 审计不属于 Definition lifecycle corridor。
+
+编辑器现有 `/definitions/{id}/pause|resume` 路由虽然挂在 Definition HTTP surface 下，实际控制的是 `latestExecutionId`。因此这两个入口仍由 Definition facade 委托 Runtime，但 AuditOperation 的 `resource_type` 必须是 `WORKFLOW_EXECUTION`，并且不得替换该 Execution 的长期 carrier。
+
+### Execution Audit Corridor
+
+Workflow Execution 的启动相关性固定为：
+
+```text
+WorkflowLauncher
+    -> WorkflowExecutionAuditBridge
+    -> shared BusinessAuditService
+    -> WorkflowAuditCorrelationRepository
+    -> WorkflowExecutionDao
+    -> yak_workflow_execution.audit_carrier_json
+```
+
+Runtime 不直接依赖 Audit。终态继续由既有 durable truth 发布：
+
+```text
+WorkflowExecutionRepositoryAdapter
+    -> WorkflowExecutionTerminalEvent
+    -> AFTER_COMMIT WorkflowExecutionAuditTerminalListener
+    -> WorkflowExecutionAuditBridge
+```
+
+人工 `retry/continue` 会复用同一个 WorkflowExecution，因此必须在重新激活前创建新的 `WORKFLOW_EXECUTE` operation 并替换 carrier；失败时恢复旧 carrier。`pause/resume/cancel` 是独立短操作，不替换 execution carrier。
+
+Audit correlation 更新只能修改 `audit_carrier_json`，不能顺手更新 Runtime status、runtime metadata 或 `updated_at`。
 
 ## 3. Definition -> Runtime
 
@@ -74,10 +103,11 @@ Graph compiler、Task binding resolver 不直接调用 Runtime。Schedule activa
 Execution 创建/控制实例只允许进入 `WorkflowRuntime`。
 
 ```text
-WorkflowLauncher               -> WorkflowRuntime
-WorkflowExecutionManager       -> WorkflowRuntime
-WorkflowExecutionReactivator   -> WorkflowRuntime
-WorkflowPublishedVersionRunner -> WorkflowRuntime
+WorkflowLauncher                         -> WorkflowRuntime
+WorkflowExecutionManager                 -> WorkflowRuntime
+WorkflowExecutionReactivator             -> WorkflowRuntime
+WorkflowExecutionControlAuditCoordinator -> WorkflowRuntime
+WorkflowPublishedVersionRunner           -> WorkflowRuntime
 ```
 
 Execution 不直接依赖 Schedule/Backfill 实现。需要反向策略时使用 execution-owned Port。
@@ -133,6 +163,8 @@ Definition/Runtime 的 durable business contract：
 role -> WorkflowDefinitionRepository / WorkflowRuntimeRepository
      -> adapter -> DAO / engine SPI
 ```
+
+Audit correlation 使用独立的窄 Repository，只读写 execution 的相关性列，不进入 Workflow Runtime aggregate contract。
 
 Schedule/Trigger/Backfill 当前允许直接使用自己明确的 DAO/ledger primitive，但：
 

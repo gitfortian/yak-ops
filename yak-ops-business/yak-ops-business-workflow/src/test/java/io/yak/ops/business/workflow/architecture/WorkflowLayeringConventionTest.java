@@ -8,6 +8,7 @@ import io.yak.ops.business.workflow.dao.WorkflowCatalogDao;
 import io.yak.ops.business.workflow.dao.WorkflowExecutionDao;
 import io.yak.ops.business.workflow.dao.WorkflowScheduleDao;
 import io.yak.ops.business.workflow.dao.WorkflowScheduleTriggerDao;
+import io.yak.ops.business.workflow.repository.WorkflowAuditCorrelationRepository;
 import io.yak.ops.business.workflow.repository.WorkflowDefinitionRepository;
 import io.yak.ops.business.workflow.repository.WorkflowRuntimeRepository;
 import io.yak.ops.common.bean.po.workflow.WorkflowBackfillPO;
@@ -27,7 +28,10 @@ class WorkflowLayeringConventionTest {
   @Test
   void repositoryBoundariesDoNotExposeHttpOrPersistenceContracts() {
     assertCleanRepositoryBoundary(
-        List.of(WorkflowDefinitionRepository.class, WorkflowRuntimeRepository.class));
+        List.of(
+            WorkflowDefinitionRepository.class,
+            WorkflowRuntimeRepository.class,
+            WorkflowAuditCorrelationRepository.class));
   }
 
   @Test

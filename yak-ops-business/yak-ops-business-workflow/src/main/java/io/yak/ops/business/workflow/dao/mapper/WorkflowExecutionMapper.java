@@ -23,4 +23,13 @@ public interface WorkflowExecutionMapper extends BaseMapper<WorkflowExecutionPO>
   String selectEffectiveRuntimeMetadata(
       @Param("executionId") String executionId,
       @Param("projectId") long projectId);
+
+  String selectAuditCarrierJson(
+      @Param("executionId") String executionId,
+      @Param("projectId") long projectId);
+
+  int updateAuditCarrier(
+      @Param("executionId") String executionId,
+      @Param("projectId") long projectId,
+      @Param("carrierJson") String carrierJson);
 }

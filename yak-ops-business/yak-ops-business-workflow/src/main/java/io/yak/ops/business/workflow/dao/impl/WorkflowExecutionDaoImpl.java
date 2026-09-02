@@ -179,6 +179,16 @@ public class WorkflowExecutionDaoImpl implements WorkflowExecutionDao {
   }
 
   @Override
+  public String selectAuditCarrierJson(String executionId) {
+    return executionMapper.selectAuditCarrierJson(executionId, currentProjectId());
+  }
+
+  @Override
+  public int updateAuditCarrier(String executionId, String carrierJson) {
+    return executionMapper.updateAuditCarrier(executionId, currentProjectId(), carrierJson);
+  }
+
+  @Override
   public WorkflowNodeAttemptPO selectAttempt(String attemptId) {
     currentProjectId();
     WorkflowNodeAttemptPO attempt = nodeAttemptMapper.selectById(attemptId);

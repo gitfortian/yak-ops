@@ -4,6 +4,7 @@ import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -17,12 +18,25 @@ import org.springframework.stereotype.Service;
 public class WorkflowExecutionReactivator {
   private final WorkflowRuntime runtime;
   private final ObjectProvider<WorkflowExecutionReactivationGuard> guard;
+  private final WorkflowExecutionAuditBridge auditBridge;
 
+  @Autowired
+  public WorkflowExecutionReactivator(
+      WorkflowRuntime runtime,
+      ObjectProvider<WorkflowExecutionReactivationGuard> guard,
+      ObjectProvider<WorkflowExecutionAuditBridge> auditBridgeProvider) {
+    this.runtime = runtime;
+    this.guard = guard;
+    this.auditBridge = auditBridgeProvider.getIfAvailable();
+  }
+
+  /** Focused compatibility constructor without Audit wiring. */
   public WorkflowExecutionReactivator(
       WorkflowRuntime runtime,
       ObjectProvider<WorkflowExecutionReactivationGuard> guard) {
     this.runtime = runtime;
     this.guard = guard;
+    this.auditBridge = null;
   }
 
   public WorkflowInstanceVO continueAfterFailure(String executionId, String nodeId) {
@@ -31,6 +45,7 @@ public class WorkflowExecutionReactivator {
     return reactivate(
         id,
         "CONTINUE_AFTER_FAILURE",
+        node,
         () -> runtime.continueAfterFailure(id, node));
   }
 
@@ -40,6 +55,7 @@ public class WorkflowExecutionReactivator {
     return reactivate(
         id,
         "RETRY_FAILED_NODE",
+        node,
         () -> runtime.retryFailedNode(id, node));
   }
 
@@ -48,16 +64,22 @@ public class WorkflowExecutionReactivator {
     return reactivate(
         id,
         "RETRY_FAILED_NODES",
+        null,
         () -> runtime.retryFailedNodes(id));
   }
 
   private WorkflowInstanceVO reactivate(
       String executionId,
       String operation,
+      String nodeId,
       Supplier<WorkflowInstanceVO> action) {
-    WorkflowExecutionReactivationGuard value = guard.getIfAvailable();
-    if (value == null) return action.get();
-    return value.reactivateExecution(executionId, operation, action);
+    Supplier<WorkflowInstanceVO> guarded = () -> {
+      WorkflowExecutionReactivationGuard value = guard.getIfAvailable();
+      if (value == null) return action.get();
+      return value.reactivateExecution(executionId, operation, action);
+    };
+    if (auditBridge == null) return guarded.get();
+    return auditBridge.reactivate(executionId, operation, nodeId, guarded);
   }
 
   private String required(String value, String message) {

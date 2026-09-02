@@ -32,6 +32,12 @@ public interface WorkflowExecutionDao {
 
   String selectEffectiveRuntimeMetadata(String executionId);
 
+  /** Cross-cutting correlation read; still scoped to the trusted CurrentProject. */
+  String selectAuditCarrierJson(String executionId);
+
+  /** Updates only audit_carrier_json and never rewrites Workflow runtime status/timestamps. */
+  int updateAuditCarrier(String executionId, String carrierJson);
+
   WorkflowNodeAttemptPO selectAttempt(String attemptId);
 
   int bindExternalExecution(String attemptId, String externalExecutionId);

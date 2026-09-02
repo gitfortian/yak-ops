@@ -65,6 +65,13 @@ public final class AuditTimelineRendererRegistry {
           case "RESOURCE_ENABLED" -> "资源已启用";
           case "RESOURCE_DISABLED" -> "资源已停用";
           case "TASK_REVISION_UPGRADE" -> "任务版本已升级";
+          case "EXECUTION_STARTED" -> "执行开始";
+          case "EXECUTION_SUCCEEDED" -> "执行成功";
+          case "EXECUTION_FAILED" -> "执行失败";
+          case "EXECUTION_CANCELED" -> "执行已取消";
+          case "EXECUTION_PAUSED" -> "执行已暂停";
+          case "EXECUTION_RESUMED" -> "执行已恢复";
+          case "EXECUTION_CANCEL_REQUESTED" -> "已请求取消执行";
           default -> "资源已更新";
         };
     return new AuditEventPresentation(title, description(context));
@@ -125,6 +132,15 @@ public final class AuditTimelineRendererRegistry {
     labels.put("PROJECT_UNAVAILABLE", "项目空间当前不可用");
     labels.put("PROJECT_OWNER_ACCESS_ALLOWED", "项目所有者权限通过");
     labels.put("PROJECT_MEMBER_ACCESS_ALLOWED", "项目成员权限通过");
+    labels.put("WORKFLOW_EXECUTION_START_FAILED", "工作流启动失败");
+    labels.put("WORKFLOW_EXECUTION_REACTIVATION_FAILED", "工作流恢复执行失败");
+    labels.put("WORKFLOW_EXECUTION_FAILED", "工作流执行失败");
+    labels.put("WORKFLOW_EXECUTION_TIMED_OUT", "工作流执行超时");
+    labels.put("WORKFLOW_EXECUTION_WARNING", "工作流以告警状态结束");
+    labels.put("WORKFLOW_EXECUTION_CANCELED", "工作流执行已取消");
+    labels.put("WORKFLOW_EXECUTION_PAUSE_FAILED", "暂停工作流失败");
+    labels.put("WORKFLOW_EXECUTION_RESUME_FAILED", "恢复工作流失败");
+    labels.put("WORKFLOW_EXECUTION_CANCEL_FAILED", "取消工作流失败");
     return Map.copyOf(labels);
   }
 
