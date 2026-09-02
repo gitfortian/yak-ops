@@ -6,7 +6,7 @@ import {
 import { getWorkflowDefinition } from '@/services/workflow/definitions';
 import { Spin } from 'antd';
 import dayjs from 'dayjs';
-import { RefreshCw } from 'lucide-react';
+import { CircleAlert, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface WorkflowNodeInspectorLastRunProps {
@@ -14,36 +14,36 @@ interface WorkflowNodeInspectorLastRunProps {
   nodeId: string;
 }
 
-const STATUS_META: Record<string, { label: string; className: string; dotClassName: string }> = {
+const STATUS_META: Record<string, { label: string; textClassName: string; dotClassName: string }> = {
   SUCCESS: {
     label: 'SUCCESS',
-    className: 'border-[#86d9a8] bg-[linear-gradient(110deg,#effcf4,#e7fbf2)] text-[#138a4b]',
-    dotClassName: 'bg-[#22c55e]',
+    textClassName: 'text-[#067647]',
+    dotClassName: 'bg-[#12b76a]',
   },
   SUCCESS_WITH_WARNINGS: {
     label: 'SUCCESS WITH WARNINGS',
-    className: 'border-[#f4d68f] bg-[#fffaf0] text-[#b7791f]',
-    dotClassName: 'bg-[#f59e0b]',
+    textClassName: 'text-[#b54708]',
+    dotClassName: 'bg-[#f79009]',
   },
   RUNNING: {
     label: 'RUNNING',
-    className: 'border-[#a9c7ff] bg-[#f2f7ff] text-[#2563eb]',
-    dotClassName: 'bg-[#3b82f6]',
+    textClassName: 'text-[#175cd3]',
+    dotClassName: 'bg-[#2e90fa]',
   },
   FAILED: {
     label: 'FAILED',
-    className: 'border-[#ffc1ce] bg-[#fff4f6] text-[#d92d4a]',
-    dotClassName: 'bg-[#fe2c55]',
+    textClassName: 'text-[#b42318]',
+    dotClassName: 'bg-[#f04438]',
   },
   CANCELED: {
     label: 'CANCELED',
-    className: 'border-[#dadde3] bg-[#f7f7f8] text-[#667085]',
+    textClassName: 'text-[#667085]',
     dotClassName: 'bg-[#98a2b3]',
   },
   TIMED_OUT: {
     label: 'TIMED OUT',
-    className: 'border-[#ffc1ce] bg-[#fff4f6] text-[#d92d4a]',
-    dotClassName: 'bg-[#fe2c55]',
+    textClassName: 'text-[#b42318]',
+    dotClassName: 'bg-[#f04438]',
   },
 };
 
@@ -122,7 +122,7 @@ const WorkflowNodeInspectorLastRun = ({
     const status = nodeRun?.status || '';
     return STATUS_META[status] || {
       label: status || '--',
-      className: 'border-[#e4e7ec] bg-[#f7f7f8] text-[#667085]',
+      textClassName: 'text-[#667085]',
       dotClassName: 'bg-[#98a2b3]',
     };
   }, [nodeRun?.status]);
@@ -172,21 +172,21 @@ const WorkflowNodeInspectorLastRun = ({
         </button>
       </div>
 
-      <div className={`grid grid-cols-3 overflow-hidden rounded-xl border ${statusMeta.className}`}>
+      <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-[#e4e7ec] bg-[#fafafa]">
         <div className="px-3 py-2.5">
-          <div className="text-[9px] text-current opacity-60">状态</div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold">
+          <div className="text-[9px] text-[#98a2b3]">状态</div>
+          <div className={`mt-1 flex items-center gap-1.5 text-[11px] font-semibold ${statusMeta.textClassName}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClassName}`} />
             {statusMeta.label}
           </div>
         </div>
-        <div className="border-l border-current/10 px-3 py-2.5">
-          <div className="text-[9px] text-current opacity-60">运行时间</div>
-          <div className="mt-1 text-[11px] font-semibold">{formatElapsed(nodeRun)}</div>
+        <div className="border-l border-[#e4e7ec] px-3 py-2.5">
+          <div className="text-[9px] text-[#98a2b3]">运行时间</div>
+          <div className="mt-1 text-[11px] font-semibold text-[#475467]">{formatElapsed(nodeRun)}</div>
         </div>
-        <div className="border-l border-current/10 px-3 py-2.5">
-          <div className="text-[9px] text-current opacity-60">Attempt</div>
-          <div className="mt-1 text-[11px] font-semibold">{nodeRun.attemptCount || nodeRun.attempts?.length || 0}</div>
+        <div className="border-l border-[#e4e7ec] px-3 py-2.5">
+          <div className="text-[9px] text-[#98a2b3]">Attempt</div>
+          <div className="mt-1 text-[11px] font-semibold text-[#475467]">{nodeRun.attemptCount || nodeRun.attempts?.length || 0}</div>
         </div>
       </div>
 
@@ -196,8 +196,9 @@ const WorkflowNodeInspectorLastRun = ({
       {(nodeRun.errorMessage || nodeRun.failureReason) ? (
         <section>
           <div className="mb-2 text-[12px] font-semibold text-[#344054]">错误信息</div>
-          <div className="rounded-xl border border-[#ffc7d2] bg-[#fff5f7] px-3 py-2.5 text-[11px] leading-5 text-[#b4233f]">
-            {nodeRun.errorMessage || nodeRun.failureReason}
+          <div className="flex items-start gap-2 rounded-xl border border-[#e4e7ec] bg-[#fafafa] px-3 py-2.5 text-[11px] leading-5 text-[#475467]">
+            <CircleAlert size={14} className="mt-0.5 shrink-0 text-[#d92d50]" />
+            <span className="min-w-0 break-words">{nodeRun.errorMessage || nodeRun.failureReason}</span>
           </div>
         </section>
       ) : null}
