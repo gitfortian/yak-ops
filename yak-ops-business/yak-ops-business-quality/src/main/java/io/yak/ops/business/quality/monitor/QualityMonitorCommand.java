@@ -41,7 +41,8 @@ public final class QualityMonitorCommand {
       Boolean notifyEnabled,
       NotifyChannel notifyChannel,
       String notifyTarget,
-      AlertLevel alertLevel) {}
+      AlertLevel alertLevel,
+      Boolean scheduleEnabled) {}
 
   public record Rule(
       Long templateId,
