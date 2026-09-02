@@ -8,7 +8,7 @@ public class BusinessDatabaseProperties {
 
   private boolean enabled = true;
   private String url =
-      "jdbc:mysql://127.0.0.1:3306/yak_security"
+      "jdbc:mysql://127.0.0.1:3306/data_ops"
           + "?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8"
           + "&useSSL=false&serverTimezone=Asia/Shanghai";
   private String username = "root";

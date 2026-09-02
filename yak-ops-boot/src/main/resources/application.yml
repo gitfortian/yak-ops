@@ -84,9 +84,9 @@ yak:
       real-name: ${YAK_SECURITY_BOOTSTRAP_REAL_NAME:系统管理员}
     datasource:
       enabled: true
-      url: ${YAK_SECURITY_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yak_security?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}
-      username: ${YAK_SECURITY_DATASOURCE_USERNAME:root}
-      password: ${YAK_SECURITY_DATASOURCE_PASSWORD:123456}
+      url: ${YAK_DATASOURCE_URL:${YAK_SECURITY_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/data_ops?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}
+      username: ${YAK_DATASOURCE_USERNAME:${YAK_SECURITY_DATASOURCE_USERNAME:root}}
+      password: ${YAK_DATASOURCE_PASSWORD:${YAK_SECURITY_DATASOURCE_PASSWORD:123456}}
       driver-class-name: com.mysql.cj.jdbc.Driver
       initial-size: 1
       min-idle: 1
@@ -99,13 +99,13 @@ yak:
 
   database:
     enabled: ${YAK_DATABASE_ENABLED:true}
-    # 兼容原 yak.datasource.database、yak.resource.database、yak.sync.offline.datasource 配置及环境变量。
-    url: ${YAK_DATABASE_URL:${yak.datasource.database.url:${yak.resource.database.url:${yak.sync.offline.datasource.url:${YAK_DATASOURCE_URL:${YAK_RESOURCE_DATASOURCE_URL:${YAK_OFFLINE_SYNC_DATASOURCE_URL:${YAK_SECURITY_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yak_security?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}}}}}}}
-    username: ${YAK_DATABASE_USERNAME:${yak.datasource.database.username:${yak.resource.database.username:${yak.sync.offline.datasource.username:${YAK_DATASOURCE_USERNAME:${YAK_RESOURCE_DATASOURCE_USERNAME:${YAK_OFFLINE_SYNC_DATASOURCE_USERNAME:${YAK_SECURITY_DATASOURCE_USERNAME:root}}}}}}}}
-    password: ${YAK_DATABASE_PASSWORD:${yak.datasource.database.password:${yak.resource.database.password:${yak.sync.offline.datasource.password:${YAK_DATASOURCE_PASSWORD:${YAK_RESOURCE_DATASOURCE_PASSWORD:${YAK_OFFLINE_SYNC_DATASOURCE_PASSWORD:${YAK_SECURITY_DATASOURCE_PASSWORD:123456}}}}}}}}
-    driver-class-name: ${YAK_DATABASE_DRIVER:${yak.datasource.database.driver-class-name:${yak.resource.database.driver-class-name:${yak.sync.offline.datasource.driver-class-name:${YAK_DATASOURCE_DRIVER:${YAK_RESOURCE_DATASOURCE_DRIVER:${YAK_OFFLINE_SYNC_DATASOURCE_DRIVER:com.mysql.cj.jdbc.Driver}}}}}}}
-    minimum-idle: ${YAK_DATABASE_MINIMUM_IDLE:${yak.datasource.database.minimum-idle:${yak.resource.database.minimum-idle:${yak.sync.offline.datasource.minimum-idle:1}}}}
-    maximum-pool-size: ${YAK_DATABASE_MAXIMUM_POOL_SIZE:${yak.datasource.database.maximum-pool-size:${yak.resource.database.maximum-pool-size:${yak.sync.offline.datasource.maximum-pool-size:8}}}}
+    # 公共基础连接参数优先取 YAK_DATASOURCE_* 环境变量；可通过 YAK_DATABASE_* 或 YAK_SECURITY_DATASOURCE_* 单独覆盖。
+    url: ${YAK_DATABASE_URL:${YAK_DATASOURCE_URL:${YAK_SECURITY_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yak_security?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}}
+    username: ${YAK_DATABASE_USERNAME:${YAK_DATASOURCE_USERNAME:${YAK_SECURITY_DATASOURCE_USERNAME:root}}}
+    password: ${YAK_DATABASE_PASSWORD:${YAK_DATASOURCE_PASSWORD:${YAK_SECURITY_DATASOURCE_PASSWORD:123456}}}
+    driver-class-name: ${YAK_DATABASE_DRIVER:${YAK_DATASOURCE_DRIVER:com.mysql.cj.jdbc.Driver}}
+    minimum-idle: ${YAK_DATABASE_MINIMUM_IDLE:1}
+    maximum-pool-size: ${YAK_DATABASE_MAXIMUM_POOL_SIZE:8}
 
   datasource:
     enabled: true
