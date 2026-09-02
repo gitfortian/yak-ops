@@ -145,6 +145,7 @@ export interface MonitorSettingsPayload {
 }
 
 export interface MonitorSettingsView extends MonitorSettingsPayload {
+  runMode: RunMode;
   nextRunTime?: string;
 }
 
