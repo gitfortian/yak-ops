@@ -71,7 +71,6 @@ export default function CronSchedulerInput({
   const openRef = useRef(false);
   const originCronRef = useRef(value);
   const draftCronRef = useRef(value);
-  const committedCronRef = useRef(value);
 
   const [displayCron, setDisplayCron] = useState(value);
   const [draftCron, setDraftCron] = useState(value);
@@ -89,7 +88,7 @@ export default function CronSchedulerInput({
     if (!trigger || typeof window === 'undefined') return;
 
     const rect = trigger.getBoundingClientRect();
-    const availableWidth = Math.max(320, window.innerWidth - VIEWPORT_GAP * 2);
+    const availableWidth = Math.max(0, window.innerWidth - VIEWPORT_GAP * 2);
     const width = Math.min(panelWidth, availableWidth);
     const left = Math.max(
       VIEWPORT_GAP,
@@ -121,7 +120,6 @@ export default function CronSchedulerInput({
     const nextCron = draftCronRef.current.trim();
 
     draftCronRef.current = nextCron;
-    committedCronRef.current = nextCron;
     setDraftCron(nextCron);
     setDisplayCron(nextCron);
     onChange?.(nextCron);
@@ -134,8 +132,9 @@ export default function CronSchedulerInput({
     draftCronRef.current = originalCron;
     setDraftCron(originalCron);
     setDisplayCron(originalCron);
+    onChange?.(originalCron);
     startCloseAnimation();
-  }, [startCloseAnimation]);
+  }, [onChange, startCloseAnimation]);
 
   const openPanel = useCallback(() => {
     if (disabled || openRef.current) return;
@@ -161,15 +160,17 @@ export default function CronSchedulerInput({
     });
   }, [disabled, displayCron, updatePanelPosition]);
 
-  const updateDraftCron = useCallback((nextCron: string) => {
-    draftCronRef.current = nextCron;
-    setDraftCron(nextCron);
-    setDisplayCron(nextCron);
-  }, []);
+  const updateDraftCron = useCallback(
+    (nextCron: string) => {
+      draftCronRef.current = nextCron;
+      setDraftCron(nextCron);
+      setDisplayCron(nextCron);
+      onChange?.(nextCron);
+    },
+    [onChange],
+  );
 
   useEffect(() => {
-    committedCronRef.current = value;
-
     if (!openRef.current) {
       draftCronRef.current = value;
       setDraftCron(value);
@@ -204,7 +205,7 @@ export default function CronSchedulerInput({
         return;
       }
 
-      commitAndClose();
+      startCloseAnimation();
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -221,7 +222,7 @@ export default function CronSchedulerInput({
       document.removeEventListener('pointerdown', handlePointerDown, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [cancelAndClose, commitAndClose, expanded]);
+  }, [cancelAndClose, expanded, startCloseAnimation]);
 
   useEffect(
     () => () => {
@@ -285,7 +286,7 @@ export default function CronSchedulerInput({
 
                 <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-[#f0f1f3] bg-white/95 px-6 py-3 backdrop-blur">
                   <span className="text-[11px] text-[#98a2b3]">
-                    点击页面其它区域会自动应用当前配置
+                    点击页面其它区域会保留当前配置并关闭
                   </span>
                   <div className="flex shrink-0 items-center gap-2">
                     <YakButton onClick={cancelAndClose}>取消</YakButton>
