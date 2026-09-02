@@ -23,13 +23,13 @@ export default function AuditCenterPage() {
       title="审计中心"
       titleId="system-operation-logs-title"
       icon={<SafetyCertificateOutlined className="text-slate-500" />}
-      className="min-h-[calc(100vh-64px)] overflow-hidden"
+      className="h-[calc(100vh-64px)] min-h-0 overflow-hidden"
     >
       <div className="flex min-h-0 flex-1 flex-col bg-white px-4 pt-1">
         <YakTab
           activeKey={activeTab}
           onChange={setActiveTab}
-          className="flex min-h-0 flex-1 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-tabpane]:h-full"
+          className="flex min-h-0 flex-1 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-content-holder]:pt-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane-active]:flex [&_.ant-tabs-tabpane-active]:min-h-0 [&_.ant-tabs-tabpane-active]:flex-col"
           items={[
             {
               key: 'business',
