@@ -7,7 +7,6 @@ import type {
   NotifyChannel,
   RuleFailureAction,
   RuleType,
-  RunMode,
   SaveRulePayload,
   ScheduleFrequency,
   ScheduleWeekday,
@@ -22,32 +21,27 @@ export interface EditorRule extends SaveRulePayload {
   dimension: string;
 }
 
-export interface RuntimeFormState {
-  runMode: RunMode;
-  scheduleFrequency: ScheduleFrequency;
-  scheduleTime: string;
-  scheduleWeekday: ScheduleWeekday;
+/** Canonical editor state: manual execution is an action, scheduling is an optional capability. */
+export interface ScheduleSettingsState {
+  scheduleEnabled: boolean;
   cronExpression: string;
+  ruleFailureAction: RuleFailureAction;
 }
 
-export interface IssueStrategyState {
-  ruleFailureAction: RuleFailureAction;
+export interface NotificationSettingsState {
   notifyEnabled: boolean;
   notifyChannel: NotifyChannel;
   notifyTarget: string;
   alertLevel: AlertLevel;
 }
 
-export const DEFAULT_RUNTIME: RuntimeFormState = {
-  runMode: 'MANUAL',
-  scheduleFrequency: 'DAILY',
-  scheduleTime: '09:00',
-  scheduleWeekday: 'MON',
-  cronExpression: '0 0 9 * * *',
+export const DEFAULT_SCHEDULE: ScheduleSettingsState = {
+  scheduleEnabled: false,
+  cronExpression: '0 0 9 * * ?',
+  ruleFailureAction: 'CONTINUE',
 };
 
-export const DEFAULT_STRATEGY: IssueStrategyState = {
-  ruleFailureAction: 'CONTINUE',
+export const DEFAULT_NOTIFICATION: NotificationSettingsState = {
   notifyEnabled: false,
   notifyChannel: 'MESSAGE',
   notifyTarget: '',
@@ -130,20 +124,48 @@ export const monitorRules = (monitor: MonitorView): EditorRule[] =>
     enabled: rule.enabled,
   }));
 
-export const runtimeFromSettings = (
+const WEEKDAY_TO_QUARTZ: Record<ScheduleWeekday, number> = {
+  SUN: 1,
+  MON: 2,
+  TUE: 3,
+  WED: 4,
+  THU: 5,
+  FRI: 6,
+  SAT: 7,
+};
+
+const legacyScheduleCron = (settings: MonitorSettingsView): string | undefined => {
+  const explicit = settings.cronExpression?.trim();
+  if (explicit) return explicit;
+
+  const frequency = settings.scheduleFrequency as ScheduleFrequency | undefined;
+  if (frequency === 'CRON') return undefined;
+  if (frequency !== 'DAILY' && frequency !== 'WEEKLY') return undefined;
+
+  const [hour = '09', minute = '00'] = (settings.scheduleTime || '09:00').split(':');
+  if (frequency === 'DAILY') {
+    return `0 ${Number(minute)} ${Number(hour)} * * ?`;
+  }
+
+  const weekday = settings.scheduleWeekday as ScheduleWeekday | undefined;
+  if (!weekday) return undefined;
+  return `0 ${Number(minute)} ${Number(hour)} ? * ${WEEKDAY_TO_QUARTZ[weekday]}`;
+};
+
+/** Hydrates both the new canonical contract and historical DAILY/WEEKLY settings. */
+export const scheduleFromSettings = (
   settings: MonitorSettingsView,
-): RuntimeFormState => ({
-  runMode: settings.runMode || 'MANUAL',
-  scheduleFrequency: settings.scheduleFrequency || 'DAILY',
-  scheduleTime: settings.scheduleTime || '09:00',
-  scheduleWeekday: settings.scheduleWeekday || 'MON',
-  cronExpression: settings.cronExpression || '0 0 9 * * *',
+): ScheduleSettingsState => ({
+  scheduleEnabled:
+    settings.scheduleEnabled ?? settings.runMode === 'SCHEDULE',
+  cronExpression:
+    legacyScheduleCron(settings) || DEFAULT_SCHEDULE.cronExpression,
+  ruleFailureAction: settings.ruleFailureAction || 'CONTINUE',
 });
 
-export const strategyFromSettings = (
+export const notificationFromSettings = (
   settings: MonitorSettingsView,
-): IssueStrategyState => ({
-  ruleFailureAction: settings.ruleFailureAction || 'CONTINUE',
+): NotificationSettingsState => ({
   notifyEnabled: Boolean(settings.notifyEnabled),
   notifyChannel: settings.notifyChannel || 'MESSAGE',
   notifyTarget: settings.notifyTarget || '',
@@ -151,56 +173,33 @@ export const strategyFromSettings = (
 });
 
 export const buildSettings = (
-  runtime: RuntimeFormState,
-  strategy: IssueStrategyState,
+  schedule: ScheduleSettingsState,
+  notification: NotificationSettingsState,
 ): MonitorSettingsPayload => ({
-  runMode: runtime.runMode,
-  scheduleFrequency:
-    runtime.runMode === 'SCHEDULE' ? runtime.scheduleFrequency : undefined,
-  scheduleTime:
-    runtime.runMode === 'SCHEDULE' && runtime.scheduleFrequency !== 'CRON'
-      ? runtime.scheduleTime
-      : undefined,
-  scheduleWeekday:
-    runtime.runMode === 'SCHEDULE' && runtime.scheduleFrequency === 'WEEKLY'
-      ? runtime.scheduleWeekday
-      : undefined,
-  cronExpression:
-    runtime.runMode === 'SCHEDULE' && runtime.scheduleFrequency === 'CRON'
-      ? runtime.cronExpression.trim()
-      : undefined,
-  ruleFailureAction: strategy.ruleFailureAction,
-  notifyEnabled: strategy.notifyEnabled,
-  notifyChannel: strategy.notifyChannel,
-  notifyTarget: strategy.notifyTarget.trim() || undefined,
-  alertLevel: strategy.alertLevel,
+  scheduleEnabled: schedule.scheduleEnabled,
+  cronExpression: schedule.cronExpression.trim() || undefined,
+  ruleFailureAction: schedule.ruleFailureAction,
+  notifyEnabled: notification.notifyEnabled,
+  notifyChannel: notification.notifyChannel,
+  notifyTarget: notification.notifyTarget.trim() || undefined,
+  alertLevel: notification.alertLevel,
 });
 
 export const validateEditorSettings = (
-  runtime: RuntimeFormState,
-  strategy: IssueStrategyState,
+  schedule: ScheduleSettingsState,
+  notification: NotificationSettingsState,
 ) => {
-  if (runtime.runMode === 'SCHEDULE') {
-    if (
-      runtime.scheduleFrequency === 'CRON'
-      && !runtime.cronExpression.trim()
-    ) {
-      throw new Error('请输入 Cron 表达式');
-    }
-    if (
-      runtime.scheduleFrequency !== 'CRON'
-      && !runtime.scheduleTime
-    ) {
-      throw new Error('请选择执行时间');
-    }
+  if (schedule.scheduleEnabled && !schedule.cronExpression.trim()) {
+    throw new Error('启用调度时请输入 Cron 表达式');
   }
+
   if (
-    strategy.notifyEnabled
-    && strategy.notifyChannel !== 'MESSAGE'
-    && !strategy.notifyTarget.trim()
+    notification.notifyEnabled
+    && notification.notifyChannel !== 'MESSAGE'
+    && !notification.notifyTarget.trim()
   ) {
     throw new Error(
-      strategy.notifyChannel === 'EMAIL'
+      notification.notifyChannel === 'EMAIL'
         ? '请输入告警接收邮箱'
         : '请输入 Webhook 地址',
     );
