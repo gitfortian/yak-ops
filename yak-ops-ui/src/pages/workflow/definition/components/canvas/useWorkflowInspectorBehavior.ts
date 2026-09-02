@@ -19,7 +19,12 @@ const readStoredPanelWidth = (fallback: number) => {
 const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
   const [panelWidth, setPanelWidth] = useState(() => readStoredPanelWidth(defaultWidth));
   const [resizing, setResizing] = useState(false);
+  const panelWidthRef = useRef(panelWidth);
   const cleanupResizeRef = useRef<(() => void) | undefined>(undefined);
+
+  useEffect(() => {
+    panelWidthRef.current = panelWidth;
+  }, [panelWidth]);
 
   useEffect(() => {
     const keepInspectorOpen = (event: MouseEvent) => {
@@ -48,12 +53,16 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
   }, [panelWidth]);
 
   const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
     event.preventDefault();
     event.stopPropagation();
     cleanupResizeRef.current?.();
 
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
     const startX = event.clientX;
-    const startWidth = panelWidth;
+    const startWidth = panelWidthRef.current;
     const flowBounds = document.querySelector('.react-flow')?.getBoundingClientRect();
     const maxWidth = flowBounds
       ? Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, flowBounds.width - MIN_CANVAS_WIDTH))
@@ -61,15 +70,33 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
 
+    // The resize handle sits on top of a React Flow surface, which has its own pointer
+    // gestures. Capture the pointer explicitly so the drag keeps belonging to the
+    // inspector even after the cursor leaves the narrow handle hit area.
+    try {
+      handle.setPointerCapture(pointerId);
+    } catch {
+      // Older browsers may not expose pointer capture; window listeners below remain
+      // as a safe fallback.
+    }
+
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      moveEvent.preventDefault();
       const nextWidth = startWidth + startX - moveEvent.clientX;
       setPanelWidth(Math.min(maxWidth, Math.max(MIN_PANEL_WIDTH, nextWidth)));
     };
 
-    const cleanup = () => {
+    const cleanup = (endEvent?: PointerEvent) => {
+      if (endEvent && endEvent.pointerId !== pointerId) return;
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', cleanup);
       window.removeEventListener('pointercancel', cleanup);
+      try {
+        if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+      } catch {
+        // Pointer capture can already be released by the browser on pointercancel.
+      }
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       setResizing(false);
@@ -80,10 +107,10 @@ const useWorkflowInspectorBehavior = (defaultWidth = DEFAULT_PANEL_WIDTH) => {
     setResizing(true);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', cleanup);
     window.addEventListener('pointercancel', cleanup);
-  }, [panelWidth]);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(Math.round(panelWidth)));
