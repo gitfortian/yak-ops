@@ -1,4 +1,5 @@
-import { Input, Switch } from 'antd';
+import CronSchedulerInput from '@/components/CronSchedulerEditor/CronSchedulerInput';
+import { Switch } from 'antd';
 import type { ReactNode } from 'react';
 
 import type { SyncEditorState } from '../model';
@@ -54,11 +55,9 @@ export default function ScheduleConfigSection({
       <div className="grid grid-cols-[minmax(0,1.8fr)_minmax(180px,.6fr)_minmax(180px,.6fr)] gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
         <Field
           label="Cron 表达式"
-          hint="采用 Quartz Cron，例如每天凌晨 2 点：0 0 2 * * ?"
+          hint="采用 Quartz Cron，例如每天凌晨 2 点：0 0 2 * * ?；点击输入框可打开可视化调度配置。"
         >
-          <Input
-            allowClear
-            variant="filled"
+          <CronSchedulerInput
             value={editor.schedule.cron}
             placeholder="0 0 2 * * ?"
             status={
@@ -66,9 +65,7 @@ export default function ScheduleConfigSection({
                 ? 'error'
                 : undefined
             }
-            onChange={(event) =>
-              updateSchedule({ cron: event.target.value })
-            }
+            onChange={(cron) => updateSchedule({ cron })}
           />
         </Field>
 
