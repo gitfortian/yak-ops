@@ -274,60 +274,66 @@ const WorkflowCanvasTools = <T,>({
         </div>
       ) : null}
 
-      <div className="pointer-events-auto absolute left-3 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center rounded-lg border border-[#e4e7ec] bg-white p-0.5 shadow-[0_4px_14px_rgba(22,24,35,.08)]">
-        <WorkflowTaskPicker options={taskOptions} disabled={locked} placement="rightTop" onSelect={beginCandidate}>
-          <span>
-            <Tooltip title="新增节点" placement="right">
-              <button type="button" aria-label="新增节点" disabled={locked} className={`${iconButtonClass(Boolean(candidateTask))} ${disabledButtonClass}`}>
-                <CirclePlus size={16} strokeWidth={1.9} />
-              </button>
-            </Tooltip>
-          </span>
-        </WorkflowTaskPicker>
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-12 items-center justify-center p-1 pl-2">
+        <div className="pointer-events-auto flex flex-col items-center rounded-lg border border-[#e4e7ec] bg-white p-0.5 shadow-[0_4px_14px_rgba(22,24,35,.08)]">
+          <WorkflowTaskPicker options={taskOptions} disabled={locked} placement="rightTop" onSelect={beginCandidate}>
+            <span>
+              <Tooltip title="新增节点" placement="right">
+                <button type="button" aria-label="新增节点" disabled={locked} className={`${iconButtonClass(Boolean(candidateTask))} ${disabledButtonClass}`}>
+                  <CirclePlus size={16} strokeWidth={1.9} />
+                </button>
+              </Tooltip>
+            </span>
+          </WorkflowTaskPicker>
 
-        <Tooltip title="添加注释" placement="right">
-          <button type="button" aria-label="添加注释" disabled={locked} className={`${iconButtonClass()} ${disabledButtonClass}`} onClick={onAddNote}>
-            <StickyNote size={16} strokeWidth={1.9} />
-          </button>
-        </Tooltip>
-        <div className="my-1 h-px w-5 bg-[#eceef1]" />
-        <Tooltip title="选择模式（V）" placement="right">
-          <button type="button" aria-label="选择模式" disabled={locked} className={`${iconButtonClass(mode === 'pointer')} ${disabledButtonClass}`} onClick={() => onModeChange('pointer')}>
-            <MousePointer2 size={16} strokeWidth={1.9} />
-          </button>
-        </Tooltip>
-        <Tooltip title="画布拖拽模式（H）" placement="right">
-          <button type="button" aria-label="画布拖拽模式" disabled={locked} className={`${iconButtonClass(mode === 'hand')} ${disabledButtonClass}`} onClick={() => onModeChange('hand')}>
-            <Hand size={16} strokeWidth={1.9} />
-          </button>
-        </Tooltip>
-        <div className="my-1 h-px w-5 bg-[#eceef1]" />
-        <Tooltip title="适应画布" placement="right">
-          <button type="button" aria-label="适应画布" className={iconButtonClass()} onClick={() => void reactFlow.fitView({ padding: 0.18, maxZoom: 1, duration: 250 })}>
-            <Maximize2 size={15} strokeWidth={1.9} />
-          </button>
-        </Tooltip>
-      </div>
-
-      <div className="pointer-events-auto absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center rounded-lg border border-[#e4e7ec] bg-white p-0.5 shadow-[0_4px_14px_rgba(22,24,35,.08)]">
-        <Tooltip title="撤销（Ctrl/Cmd + Z）">
-          <button type="button" aria-label="撤销" disabled={locked || !canUndo} className={`${iconButtonClass()} ${disabledButtonClass}`} onClick={onUndo}>
-            <Undo2 size={16} strokeWidth={1.9} />
-          </button>
-        </Tooltip>
-        <Tooltip title="重做（Ctrl/Cmd + Shift + Z）">
-          <button type="button" aria-label="重做" disabled={locked || !canRedo} className={`${iconButtonClass()} ${disabledButtonClass}`} onClick={onRedo}>
-            <Redo2 size={16} strokeWidth={1.9} />
-          </button>
-        </Tooltip>
-        <div className="mx-1 h-4 w-px bg-[#e4e7ec]" />
-        <Popover open={historyOpen} onOpenChange={(open) => !locked && setHistoryOpen(open)} trigger="click" placement="top" arrow={false} content={historyContent} overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}>
-          <Tooltip title="变更历史">
-            <button type="button" aria-label="变更历史" disabled={locked} className={`${iconButtonClass(historyOpen)} ${disabledButtonClass}`}>
-              <History size={16} strokeWidth={1.9} />
+          <Tooltip title="添加注释" placement="right">
+            <button type="button" aria-label="添加注释" disabled={locked} className={`${iconButtonClass()} ${disabledButtonClass}`} onClick={onAddNote}>
+              <StickyNote size={16} strokeWidth={1.9} />
             </button>
           </Tooltip>
-        </Popover>
+          <div className="my-1 h-px w-5 bg-[#eceef1]" />
+          <Tooltip title="选择模式（V）" placement="right">
+            <button type="button" aria-label="选择模式" disabled={locked} className={`${iconButtonClass(mode === 'pointer')} ${disabledButtonClass}`} onClick={() => onModeChange('pointer')}>
+              <MousePointer2 size={16} strokeWidth={1.9} />
+            </button>
+          </Tooltip>
+          <Tooltip title="画布拖拽模式（H）" placement="right">
+            <button type="button" aria-label="画布拖拽模式" disabled={locked} className={`${iconButtonClass(mode === 'hand')} ${disabledButtonClass}`} onClick={() => onModeChange('hand')}>
+              <Hand size={16} strokeWidth={1.9} />
+            </button>
+          </Tooltip>
+          <div className="my-1 h-px w-5 bg-[#eceef1]" />
+          <Tooltip title="适应画布" placement="right">
+            <button type="button" aria-label="适应画布" className={iconButtonClass()} onClick={() => void reactFlow.fitView({ padding: 0.18, maxZoom: 1, duration: 250 })}>
+              <Maximize2 size={15} strokeWidth={1.9} />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-1">
+        <div className="flex justify-between px-1 pb-2">
+          <div className="pointer-events-auto flex items-center rounded-lg border border-[#e4e7ec] bg-white p-0.5 shadow-[0_4px_14px_rgba(22,24,35,.08)]">
+            <Tooltip title="撤销（Ctrl/Cmd + Z）">
+              <button type="button" aria-label="撤销" disabled={locked || !canUndo} className={`${iconButtonClass()} ${disabledButtonClass}`} onClick={onUndo}>
+                <Undo2 size={16} strokeWidth={1.9} />
+              </button>
+            </Tooltip>
+            <Tooltip title="重做（Ctrl/Cmd + Shift + Z）">
+              <button type="button" aria-label="重做" disabled={locked || !canRedo} className={`${iconButtonClass()} ${disabledButtonClass}`} onClick={onRedo}>
+                <Redo2 size={16} strokeWidth={1.9} />
+              </button>
+            </Tooltip>
+            <div className="mx-1 h-4 w-px bg-[#e4e7ec]" />
+            <Popover open={historyOpen} onOpenChange={(open) => !locked && setHistoryOpen(open)} trigger="click" placement="top" arrow={false} content={historyContent} overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}>
+              <Tooltip title="变更历史">
+                <button type="button" aria-label="变更历史" disabled={locked} className={`${iconButtonClass(historyOpen)} ${disabledButtonClass}`}>
+                  <History size={16} strokeWidth={1.9} />
+                </button>
+              </Tooltip>
+            </Popover>
+          </div>
+        </div>
       </div>
     </>
   );
