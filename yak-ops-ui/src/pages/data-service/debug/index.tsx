@@ -1,7 +1,7 @@
 import { history, useLocation } from '@umijs/max';
 import { Button, Empty, Input, Select, Spin, message } from 'antd';
 import { Play } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   fetchDataServiceDocumentation,
@@ -25,8 +25,9 @@ const prettyJson = (value: unknown) => JSON.stringify(value, null, 2);
 
 export default function DataServiceDebugPage() {
   const location = useLocation();
-  const requestedApiId = Number(
-    new URLSearchParams(location.search).get('apiId') || 0,
+  const requestedApiId = useMemo(
+    () => Number(new URLSearchParams(location.search).get('apiId') || 0),
+    [location.search],
   );
 
   const [services, setServices] = useState<DataServiceApi[]>([]);
@@ -37,6 +38,7 @@ export default function DataServiceDebugPage() {
   const [loading, setLoading] = useState(true);
   const [docLoading, setDocLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const serviceLoadStartedRef = useRef(false);
 
   const selectedService = useMemo(
     () => services.find((item) => Number(item.id) === Number(selectedApiId)),
@@ -52,35 +54,47 @@ export default function DataServiceDebugPage() {
   );
 
   const loadServices = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await fetchDataServices();
-      const nextServices = response.data || [];
-      setServices(nextServices);
-
-      const requested = nextServices.find(
-        (item) => Number(item.id) === requestedApiId,
-      );
-      const preferred = requested
-        || nextServices.find((item) => item.enabled)
-        || nextServices[0];
-
-      if (preferred) {
-        setSelectedApiId(preferred.id);
-        if (Number(preferred.id) !== requestedApiId) {
-          history.replace(`/data-service/debug?apiId=${preferred.id}`);
-        }
-      }
+      setServices(response.data || []);
     } catch (error: any) {
       message.error(error?.message || '加载 API 列表失败');
     } finally {
       setLoading(false);
     }
-  }, [requestedApiId]);
+  }, []);
 
   useEffect(() => {
+    if (serviceLoadStartedRef.current) return;
+    serviceLoadStartedRef.current = true;
     void loadServices();
   }, [loadServices]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!services.length) {
+      setSelectedApiId(undefined);
+      return;
+    }
+
+    const requested = services.find(
+      (item) => Number(item.id) === requestedApiId,
+    );
+    const preferred = requested
+      || services.find((item) => item.enabled)
+      || services[0];
+
+    if (!preferred) return;
+
+    const preferredId = Number(preferred.id);
+    setSelectedApiId((current) => (
+      Number(current) === preferredId ? current : preferred.id
+    ));
+
+    if (preferredId !== requestedApiId) {
+      history.replace(`/data-service/debug?apiId=${preferred.id}`);
+    }
+  }, [loading, requestedApiId, services]);
 
   useEffect(() => {
     if (!selectedApiId) {
