@@ -7,4 +7,10 @@ public interface BusinessAuditService {
   default AuditOperationHandle resume(AuditCarrier carrier) {
     return AuditOperationHandle.noop(carrier);
   }
+
+  /** Records or defers one authorization decision without making audit a business dependency. */
+  default void authorizationDecision(AuditAuthorizationDecision decision) {}
+
+  /** Clears request-scoped authorization state defensively at request boundaries. */
+  default void clearAuthorizationDecisions() {}
 }

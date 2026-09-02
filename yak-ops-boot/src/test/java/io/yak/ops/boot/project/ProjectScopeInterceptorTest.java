@@ -4,11 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.yak.framework.security.extend.CurrentUserProvider;
 import io.yak.ops.core.project.ProjectAccessGuard;
+import io.yak.ops.core.project.ProjectAuthorizationReason;
 import io.yak.ops.core.project.ProjectContext;
 import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
@@ -27,6 +29,7 @@ class ProjectScopeInterceptorTest {
   private ProjectContextRuntime currentProject;
   private ProjectAccessGuard accessGuard;
   private CurrentUserProvider currentUserProvider;
+  private ProjectAuthorizationAuditBridge authorizationAudit;
   private ProjectScopeInterceptor interceptor;
 
   @BeforeEach
@@ -34,7 +37,10 @@ class ProjectScopeInterceptorTest {
     currentProject = new ProjectContextRuntime();
     accessGuard = mock(ProjectAccessGuard.class);
     currentUserProvider = mock(CurrentUserProvider.class);
-    interceptor = new ProjectScopeInterceptor(currentProject, accessGuard, currentUserProvider);
+    authorizationAudit = mock(ProjectAuthorizationAuditBridge.class);
+    interceptor =
+        new ProjectScopeInterceptor(
+            currentProject, accessGuard, currentUserProvider, authorizationAudit);
   }
 
   @Test
@@ -45,6 +51,7 @@ class ProjectScopeInterceptorTest {
 
     assertFalse(currentProject.isPresent());
     verifyNoInteractions(accessGuard, currentUserProvider);
+    verify(authorizationAudit).beginRequest();
   }
 
   @Test
@@ -64,12 +71,31 @@ class ProjectScopeInterceptorTest {
     ProjectContextException error =
         assertThrows(
             ProjectContextException.class,
-            () -> interceptor.preHandle(
-                request,
-                new MockHttpServletResponse(),
-                handler("required")));
+            () ->
+                interceptor.preHandle(
+                    request, new MockHttpServletResponse(), handler("required")));
 
     assertEquals(ProjectContextError.PROJECT_REQUIRED, error.getError());
+    verify(authorizationAudit)
+        .denied(null, ProjectAuthorizationReason.PROJECT_REQUIRED.name());
+    verifyNoInteractions(accessGuard);
+  }
+
+  @Test
+  void invalidProjectHeaderIsAuditedWithoutPersistingRawInput() throws Exception {
+    MockHttpServletRequest request = requestWithProject("not-a-project-id");
+    when(currentUserProvider.getCurrentUser(request)).thenReturn("alice");
+
+    ProjectContextException error =
+        assertThrows(
+            ProjectContextException.class,
+            () ->
+                interceptor.preHandle(
+                    request, new MockHttpServletResponse(), handler("required")));
+
+    assertEquals(ProjectContextError.PROJECT_NOT_FOUND, error.getError());
+    verify(authorizationAudit)
+        .denied(null, ProjectAuthorizationReason.PROJECT_ID_INVALID.name());
     verifyNoInteractions(accessGuard);
   }
 
@@ -84,7 +110,7 @@ class ProjectScopeInterceptorTest {
   }
 
   @Test
-  void bindsAuthorizedProjectAndClearsItAfterRequest() throws Exception {
+  void bindsAuthorizedProjectAndClearsRequestContextsAfterCompletion() throws Exception {
     MockHttpServletRequest request = requestWithProject("7");
     when(currentUserProvider.getCurrentUser(request)).thenReturn("alice");
     when(accessGuard.requireAccessible(7L, "alice"))
@@ -95,6 +121,8 @@ class ProjectScopeInterceptorTest {
 
     interceptor.afterCompletion(
         request, new MockHttpServletResponse(), handler("required"), null);
+
+    verify(authorizationAudit).endRequest();
     assertFalse(currentProject.isPresent());
   }
 
@@ -111,15 +139,12 @@ class ProjectScopeInterceptorTest {
 
   private static class TestController {
 
-    void legacy() {
-    }
+    void legacy() {}
 
     @ProjectScope(ProjectMigrationMode.PROJECT_OPTIONAL)
-    void optional() {
-    }
+    void optional() {}
 
     @ProjectScope(ProjectMigrationMode.PROJECT_REQUIRED)
-    void required() {
-    }
+    void required() {}
   }
 }
