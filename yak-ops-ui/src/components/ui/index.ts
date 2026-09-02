@@ -6,5 +6,7 @@ export type {
   YakFilterSwitchOption,
   YakFilterSwitchProps,
 } from '../YakFilterSwitch';
+export { default as YakStatusIcon, YAK_STATUS_VALUES } from '../YakStatusIcon';
+export type { YakStatus, YakStatusIconProps } from '../YakStatusIcon';
 export { default as YakTab } from '../YakTab';
 export type { YakTabProps } from '../YakTab';
