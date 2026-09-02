@@ -25,17 +25,18 @@ class DataServiceAccessOverviewReaderTest {
   @Test
   void projectsAccessStateWithoutRequiringGeneralReadPermission() {
     DataServiceReader dataServiceReader = mock(DataServiceReader.class);
+    DataServiceParameterNameReader parameterNameReader = mock(DataServiceParameterNameReader.class);
     DataServiceApiKeyRepository keyRepository = mock(DataServiceApiKeyRepository.class);
     DataServiceIpAccessRepository ipRepository = mock(DataServiceIpAccessRepository.class);
-    DataServiceAccessOverviewReader reader =
-        new DataServiceAccessOverviewReader(dataServiceReader, keyRepository, ipRepository);
+    DataServiceAccessOverviewReader reader = new DataServiceAccessOverviewReader(
+        dataServiceReader, parameterNameReader, keyRepository, ipRepository);
 
     DataServiceDefinition definition = DataServiceDefinition.restore(
         7L,
         3L,
         4L,
         new DataServiceSettings("Orders", "/orders", 100, 30, true, null, false),
-        new PublishedRuntimeSnapshot(9L, "select id from orders"),
+        new PublishedRuntimeSnapshot(9L, "select id from orders where id = :id"),
         new SourceReference("TEST", "orders", 11L, 1),
         RuntimePolicy.defaults(false),
         AuthMode.API_KEY,
@@ -43,6 +44,8 @@ class DataServiceAccessOverviewReaderTest {
         LocalDateTime.of(2026, 9, 2, 9, 0));
 
     when(dataServiceReader.list()).thenReturn(List.of(definition));
+    when(parameterNameReader.parameterNames("select id from orders where id = :id"))
+        .thenReturn(List.of("id"));
     when(keyRepository.findByApiId(7L)).thenReturn(List.of(
         new DataServiceApiKey(1L, 7L, "active", "yak_a", "hash-a", true, 60,
             LocalDateTime.of(2099, 1, 1, 0, 0), null, null, null),
@@ -57,10 +60,11 @@ class DataServiceAccessOverviewReaderTest {
         new DataServiceIpAccessRule(3L, 7L, IpAccessRuleType.DENYLIST, "203.0.113.9/32",
             null, true, null, null, null)));
 
-    DataServiceAccessOverviewItem item = reader.list().getFirst();
+    DataServiceAccessOverviewItem item = reader.list().get(0);
 
     assertThat(item.apiId()).isEqualTo(7L);
     assertThat(item.runtimePath()).isEqualTo("/api/v1/data-service/runtime/orders");
+    assertThat(item.parameterNames()).containsExactly("id");
     assertThat(item.authMode()).isEqualTo(AuthMode.API_KEY);
     assertThat(item.ipAccessMode()).isEqualTo(IpAccessMode.DENYLIST);
     assertThat(item.apiKeyCount()).isEqualTo(2);

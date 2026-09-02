@@ -20,6 +20,7 @@ public class DataServiceAccessOverviewReader {
   private static final String RUNTIME_PREFIX = "/api/v1/data-service/runtime";
 
   private final DataServiceReader dataServiceReader;
+  private final DataServiceParameterNameReader parameterNameReader;
   private final DataServiceApiKeyRepository apiKeyRepository;
   private final DataServiceIpAccessRepository ipAccessRepository;
 
@@ -56,6 +57,7 @@ public class DataServiceAccessOverviewReader {
         definition.settings().name(),
         definition.settings().path(),
         RUNTIME_PREFIX + definition.settings().path(),
+        parameterNameReader.parameterNames(definition.runtimeSnapshot().sql()),
         definition.settings().enabled(),
         definition.authMode(),
         ipAccessRepository.findMode(definition.id()),
