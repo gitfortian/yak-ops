@@ -27,6 +27,14 @@ interface RuntimeVisual {
   icon: ReactNode;
 }
 
+const COMPACT_TASK_TYPES = new Set([
+  'SYNC',
+  'SQL',
+  'SHELL',
+  'PYTHON',
+  'JAVA',
+]);
+
 const runtimeVisual = (status?: string): RuntimeVisual | undefined => {
   switch (status) {
     case 'WAITING':
@@ -100,7 +108,8 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
   const duration = formatRuntimeDuration(runtime?.elapsedMillis);
   const runtimeActive = isWorkflowNodeActive(runtime?.status);
   const errorTitle = runtime?.errorMessage || runtime?.failureReason;
-  const compactSync = (data.taskType || '').trim().toUpperCase() === 'SYNC';
+  const normalizedTaskType = (data.taskType || '').trim().toUpperCase();
+  const compactNode = COMPACT_TASK_TYPES.has(normalizedTaskType);
 
   return (
     <div className="group relative w-60">
@@ -120,7 +129,7 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
         title={errorTitle}
         className={[
           'relative rounded-[15px] border bg-white px-3',
-          compactSync ? 'py-2' : 'py-3',
+          compactNode ? 'py-2' : 'py-3',
           'shadow-[0_1px_2px_rgba(22,24,35,.06)]',
           'transition-[border-color,box-shadow,opacity] duration-200',
           runtimeActive ? '' : 'group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
@@ -134,7 +143,7 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
         <div
           className={[
             'flex items-center gap-2.5',
-            compactSync ? 'min-h-8' : 'min-h-9',
+            compactNode ? 'min-h-8' : 'min-h-9',
           ].join(' ')}
         >
           <WorkflowNodeIcon taskType={data.taskType} />
