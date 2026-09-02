@@ -7,11 +7,9 @@ import type { ScheduleSettingsState } from './model';
 
 function Field({
   label,
-  hint,
   children,
 }: {
   label: string;
-  hint?: string;
   children: ReactNode;
 }) {
   return (
@@ -20,11 +18,6 @@ function Field({
         {label}
       </div>
       {children}
-      {hint ? (
-        <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
-          {hint}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -54,10 +47,7 @@ export const ScheduleSettings = ({
       }
     >
       <div className="grid grid-cols-[minmax(0,1.8fr)_minmax(150px,.55fr)_minmax(220px,.8fr)] gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-        <Field
-          label="Cron 表达式"
-          hint="采用 Quartz Cron；点击输入框可打开可视化调度配置，也支持直接输入。"
-        >
+        <Field label="Cron 表达式">
           <CronSchedulerInput
             value={value.cronExpression}
             placeholder="0 0 9 * * ?"
@@ -70,10 +60,7 @@ export const ScheduleSettings = ({
           />
         </Field>
 
-        <Field
-          label="启用调度"
-          hint="关闭后保留 Cron，仍可在详情页手动运行"
-        >
+        <Field label="启用调度">
           <div className="flex h-8 items-center">
             <Switch
               size="small"
@@ -83,10 +70,7 @@ export const ScheduleSettings = ({
           </div>
         </Field>
 
-        <Field
-          label="规则失败处理"
-          hint="控制单条规则失败后是否继续本次检查"
-        >
+        <Field label="规则失败处理">
           <Select
             size="small"
             variant="filled"

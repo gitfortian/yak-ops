@@ -21,15 +21,10 @@ export const NotificationSettings = ({
     <EditorSection id="notification-settings" title="通知设置">
       <div className="space-y-5">
         <div className="flex items-center justify-between gap-6 rounded-lg bg-[#f7f8fa] px-4 py-3">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <BellRing size={16} className="mt-0.5 shrink-0 text-[#667085]" />
-            <div>
-              <div className="text-[13px] font-medium text-[#344054]">
-                开启质量通知
-              </div>
-              <div className="mt-0.5 text-[11px] leading-5 text-[#98a2b3]">
-                质量检查未通过或执行异常时记录通知；外部渠道继续由现有投递链路处理。
-              </div>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <BellRing size={16} className="shrink-0 text-[#667085]" />
+            <div className="text-[13px] font-medium text-[#344054]">
+              开启质量通知
             </div>
           </div>
           <Switch
@@ -113,11 +108,7 @@ export const NotificationSettings = ({
               </div>
             ) : null}
           </div>
-        ) : (
-          <div className="text-[11px] leading-5 text-[#98a2b3]">
-            站内消息进入 Yak Ops 统一通知中心；当前监控负责人继续作为兼容接收目标。
-          </div>
-        )}
+        ) : null}
       </div>
     </EditorSection>
   );
