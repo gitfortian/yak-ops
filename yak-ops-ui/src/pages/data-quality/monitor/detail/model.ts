@@ -81,6 +81,8 @@ const toRulePayload = (rule: RuleView): SaveRulePayload => ({
 const toSettingsPayload = (
   settings: MonitorSettingsView,
 ): MonitorSettingsPayload => ({
+  scheduleEnabled:
+    settings.scheduleEnabled ?? settings.runMode === 'SCHEDULE',
   runMode: settings.runMode,
   scheduleFrequency: settings.scheduleFrequency,
   scheduleTime: settings.scheduleTime,
@@ -114,6 +116,7 @@ export const toSavePayload = (
 
 export const defaultsForSettings = (): MonitorSettingsView => ({
   runMode: 'MANUAL' as RunMode,
+  scheduleEnabled: false,
   ruleFailureAction: 'CONTINUE' as RuleFailureAction,
   notifyEnabled: false,
   notifyChannel: 'MESSAGE' as NotifyChannel,
