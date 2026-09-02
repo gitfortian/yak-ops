@@ -7,5 +7,6 @@ public enum SqlExecutionCaller {
   DATASET,
   DATA_SERVICE,
   ANALYSIS,
-  SYSTEM
+  SYSTEM,
+  TASK_PLUGIN
 }
