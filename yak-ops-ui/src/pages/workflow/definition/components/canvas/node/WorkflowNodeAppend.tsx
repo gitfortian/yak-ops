@@ -31,7 +31,7 @@ const WorkflowNodeAppend = ({
       className={[
         'nodrag nopan pointer-events-none absolute inset-0 z-20',
         'flex h-4 w-4 items-center justify-center rounded-full',
-        'bg-[#fe2c55] text-white shadow-[0_1px_3px_rgba(254,44,85,.22)]',
+        'bg-[#6172f3] text-white shadow-[0_1px_3px_rgba(97,114,243,.28)]',
         'transition-opacity duration-150',
         selected || open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
       ].join(' ')}

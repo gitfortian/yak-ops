@@ -47,6 +47,10 @@ public final class QualityMonitorDTO {
       @Size(max = 20000) String customSql,
       Boolean enabled) {}
 
+  /**
+   * Monitor settings keep the old friendly schedule fields for API compatibility.
+   * New clients should use scheduleEnabled + cronExpression as the canonical schedule contract.
+   */
   public record SettingsRequest(
       RunMode runMode,
       ScheduleFrequency scheduleFrequency,
@@ -58,7 +62,8 @@ public final class QualityMonitorDTO {
       Boolean notifyEnabled,
       NotifyChannel notifyChannel,
       @Size(max = 1000) String notifyTarget,
-      AlertLevel alertLevel) {}
+      AlertLevel alertLevel,
+      Boolean scheduleEnabled) {}
 
   public record SaveRequest(
       @NotBlank @Size(max = 100) String name,

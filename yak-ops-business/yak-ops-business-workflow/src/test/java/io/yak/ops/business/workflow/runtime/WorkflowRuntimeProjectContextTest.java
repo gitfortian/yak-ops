@@ -7,12 +7,12 @@ import io.yak.framework.workflow.engine.spi.ExecutionRepository;
 import io.yak.framework.workflow.engine.spi.WorkflowDefinitionRepository;
 import io.yak.framework.workflow.engine.support.InMemoryExecutionRepository;
 import io.yak.framework.workflow.engine.support.InMemoryWorkflowDefinitionRepository;
-import io.yak.ops.business.job.task.SyncTaskExecution;
-import io.yak.ops.business.job.task.SyncTaskExecutorAdapter;
-import io.yak.ops.business.job.task.SyncTaskRunner;
-import io.yak.ops.business.job.task.TaskExecutionGateway;
 import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.business.job.task.TaskExecutor;
 import io.yak.ops.business.job.task.TaskRegistry;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.workflow.observability.WorkflowEventStream;
 import io.yak.ops.business.workflow.repository.InMemoryWorkflowRuntimeRepository;
 import io.yak.ops.business.workflow.repository.WorkflowRuntimeRepository;
@@ -64,8 +64,8 @@ class WorkflowRuntimeProjectContextTest {
         return new TaskDefinition(taskId, taskId, "SYNC");
       }
     };
-    ProjectCheckingRunner runner = new ProjectCheckingRunner(projectContext, 20L);
-    runtime = runtime(projectContext, runner, registry, 5L);
+    ProjectCheckingTaskExecutor executor = new ProjectCheckingTaskExecutor(projectContext, 20L);
+    runtime = runtime(projectContext, executor, registry, 5L);
 
     assertThatThrownBy(() -> runtime.run(request("project-required-before-task-read", 0L)))
         .isInstanceOf(ProjectContextException.class);
@@ -75,14 +75,13 @@ class WorkflowRuntimeProjectContextTest {
   @Test
   void rejectsColdRuntimeCacheFromAnotherProject() {
     TestProjectContext projectContext = new TestProjectContext();
-    ProjectCheckingRunner runner = new ProjectCheckingRunner(projectContext, 5_000L);
+    ProjectCheckingTaskExecutor executor = new ProjectCheckingTaskExecutor(projectContext, 5_000L);
     TaskRegistry registry = registry();
     WorkflowDefinitionRepository definitions = new InMemoryWorkflowDefinitionRepository();
     ExecutionRepository executions = new InMemoryExecutionRepository();
     ProjectAwareRuntimeRepository persistence =
         new ProjectAwareRuntimeRepository(projectContext);
-    TaskExecutionGateway gateway =
-        new TaskExecutionGateway(List.of(new SyncTaskExecutorAdapter(runner)));
+    TaskExecutionGateway gateway = new TaskExecutionGateway(List.of(executor));
 
     WorkflowRuntime ownerRuntime = new WorkflowRuntime(
         new WorkflowEventStream(),
@@ -125,8 +124,8 @@ class WorkflowRuntimeProjectContextTest {
   @Test
   void rejectsCachedExecutionFromAnotherProject() {
     TestProjectContext projectContext = new TestProjectContext();
-    ProjectCheckingRunner runner = new ProjectCheckingRunner(projectContext, 5_000L);
-    runtime = runtime(projectContext, runner, 10L);
+    ProjectCheckingTaskExecutor executor = new ProjectCheckingTaskExecutor(projectContext, 5_000L);
+    runtime = runtime(projectContext, executor, 10L);
 
     WorkflowInstanceVO started = projectContext.call(
         PROJECT,
@@ -141,8 +140,8 @@ class WorkflowRuntimeProjectContextTest {
   @Test
   void rejectsCachedExecutionWhenProjectIsMissing() {
     TestProjectContext projectContext = new TestProjectContext();
-    ProjectCheckingRunner runner = new ProjectCheckingRunner(projectContext, 5_000L);
-    runtime = runtime(projectContext, runner, 10L);
+    ProjectCheckingTaskExecutor executor = new ProjectCheckingTaskExecutor(projectContext, 5_000L);
+    runtime = runtime(projectContext, executor, 10L);
 
     WorkflowInstanceVO started = projectContext.call(
         PROJECT,
@@ -155,8 +154,8 @@ class WorkflowRuntimeProjectContextTest {
   @Test
   void propagatesProjectToAsynchronousTaskStartAndPolling() throws InterruptedException {
     TestProjectContext projectContext = new TestProjectContext();
-    ProjectCheckingRunner runner = new ProjectCheckingRunner(projectContext, 80L);
-    runtime = runtime(projectContext, runner, 5L);
+    ProjectCheckingTaskExecutor executor = new ProjectCheckingTaskExecutor(projectContext, 80L);
+    runtime = runtime(projectContext, executor, 5L);
 
     WorkflowInstanceVO started = projectContext.call(
         PROJECT,
@@ -166,15 +165,15 @@ class WorkflowRuntimeProjectContextTest {
     WorkflowInstanceVO completed = waitForTerminal(projectContext, started.id(), 2_000L);
 
     assertThat(completed.status()).isEqualTo("SUCCESS");
-    assertThat(runner.startProjects()).containsExactly(7L);
-    assertThat(runner.statusProjects()).isNotEmpty().allMatch(projectId -> projectId == 7L);
+    assertThat(executor.startProjects()).containsExactly(7L);
+    assertThat(executor.statusProjects()).isNotEmpty().allMatch(projectId -> projectId == 7L);
   }
 
   @Test
   void propagatesProjectToTimeoutScannerAndRemoteCancellation() throws InterruptedException {
     TestProjectContext projectContext = new TestProjectContext();
-    ProjectCheckingRunner runner = new ProjectCheckingRunner(projectContext, 5_000L);
-    runtime = runtime(projectContext, runner, 10L);
+    ProjectCheckingTaskExecutor executor = new ProjectCheckingTaskExecutor(projectContext, 5_000L);
+    runtime = runtime(projectContext, executor, 10L);
 
     WorkflowInstanceVO started = projectContext.call(
         PROJECT,
@@ -182,29 +181,29 @@ class WorkflowRuntimeProjectContextTest {
     projectContext.run(PROJECT, () -> runtime.activate(started.id()));
 
     WorkflowInstanceVO completed = waitForTerminal(projectContext, started.id(), 3_000L);
-    waitForCancellation(runner, 1_000L);
+    waitForCancellation(executor, 1_000L);
 
     assertThat(completed.status()).isEqualTo("TIMED_OUT");
-    assertThat(runner.cancelProjects()).contains(7L);
-    assertThat(runner.cancelCount()).isGreaterThanOrEqualTo(1);
+    assertThat(executor.cancelProjects()).contains(7L);
+    assertThat(executor.cancelCount()).isGreaterThanOrEqualTo(1);
   }
 
   private WorkflowRuntime runtime(
       TestProjectContext projectContext,
-      ProjectCheckingRunner runner,
+      ProjectCheckingTaskExecutor executor,
       long pollIntervalMillis) {
-    return runtime(projectContext, runner, registry(), pollIntervalMillis);
+    return runtime(projectContext, executor, registry(), pollIntervalMillis);
   }
 
   private WorkflowRuntime runtime(
       TestProjectContext projectContext,
-      ProjectCheckingRunner runner,
+      ProjectCheckingTaskExecutor executor,
       TaskRegistry registry,
       long pollIntervalMillis) {
     return new WorkflowRuntime(
         new WorkflowEventStream(),
         registry,
-        runner,
+        new TaskExecutionGateway(List.of(executor)),
         pollIntervalMillis,
         projectContext,
         projectContext);
@@ -263,10 +262,10 @@ class WorkflowRuntimeProjectContextTest {
     return current;
   }
 
-  private void waitForCancellation(ProjectCheckingRunner runner, long timeoutMillis)
+  private void waitForCancellation(ProjectCheckingTaskExecutor executor, long timeoutMillis)
       throws InterruptedException {
     long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
-    while (runner.cancelCount() == 0 && System.nanoTime() < deadline) {
+    while (executor.cancelCount() == 0 && System.nanoTime() < deadline) {
       Thread.sleep(5L);
     }
   }
@@ -354,7 +353,7 @@ class WorkflowRuntimeProjectContextTest {
     }
   }
 
-  private static final class ProjectCheckingRunner implements SyncTaskRunner {
+  private static final class ProjectCheckingTaskExecutor implements TaskExecutor {
     private final CurrentProject currentProject;
     private final long durationMillis;
     private final AtomicLong sequence = new AtomicLong();
@@ -364,7 +363,7 @@ class WorkflowRuntimeProjectContextTest {
     private final List<Long> cancelProjects = new CopyOnWriteArrayList<>();
     private volatile State state;
 
-    private ProjectCheckingRunner(CurrentProject currentProject, long durationMillis) {
+    private ProjectCheckingTaskExecutor(CurrentProject currentProject, long durationMillis) {
       this.currentProject = currentProject;
       this.durationMillis = durationMillis;
     }
@@ -386,7 +385,16 @@ class WorkflowRuntimeProjectContextTest {
     }
 
     @Override
-    public SyncTaskExecution start(String taskId) {
+    public String taskType() {
+      return "SYNC";
+    }
+
+    @Override
+    public TaskExecution start(
+        TaskVersionSnapshot snapshot,
+        String idempotencyKey,
+        Map<String, Object> input) {
+      String taskId = snapshot.taskId();
       startProjects.add(currentProject.requireProjectId());
       State created = new State(
           "sync-" + sequence.incrementAndGet(),
@@ -398,7 +406,7 @@ class WorkflowRuntimeProjectContextTest {
     }
 
     @Override
-    public SyncTaskExecution status(String executionId) {
+    public TaskExecution status(String executionId) {
       statusProjects.add(currentProject.requireProjectId());
       State current = state;
       if (current == null || !current.executionId().equals(executionId)) {
@@ -417,12 +425,12 @@ class WorkflowRuntimeProjectContextTest {
       }
     }
 
-    private SyncTaskExecution view(State current) {
+    private TaskExecution view(State current) {
       long elapsedMillis = (System.nanoTime() - current.startedAtNanos()) / 1_000_000L;
       String status = current.canceled
           ? "CANCELED"
           : elapsedMillis >= current.durationMillis() ? "SUCCEEDED" : "RUNNING";
-      return new SyncTaskExecution(
+      return new TaskExecution(
           current.executionId(),
           status,
           null,

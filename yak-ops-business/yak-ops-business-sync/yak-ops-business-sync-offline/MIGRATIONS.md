@@ -1,48 +1,17 @@
 # Offline Sync Migration Contract
 
-Offline Sync 在 Yak Ops 第一版正式发布前使用一个干净的 Flyway 基线。
-
-## Namespace ownership
-
-Offline Sync 只拥有自己的 migration location 和 history table：
+Offline Sync owns an isolated Flyway namespace:
 
 ```text
 classpath:db/migration/yak-offline-sync
 yak_offline_sync_schema_history
 ```
 
-不得把 Offline Sync migration 放入 Datasource、Data Development、Data Service 或其他模块的 namespace。
+Migrations from Offline Sync must not be placed in Datasource, Data Development, Data Service, or another module's namespace.
 
-## First-release baseline
+## Baseline
 
-第一版正式发布前，数据库数据可丢弃，因此开发期的增量 migration 被收敛为：
-
-```text
-V1__baseline_offline_sync.sql
-```
-
-V1 直接表达当前最终 schema，不重放开发过程。
-
-历史开发过程包括：
-
-```text
-V1  Task / Attempt / Event baseline
-V2  BatchExecution + Attempt.batch_id
-V3  Batch status data backfill
-V4  frozen logical JobSpec + Cursor
-V5  LOST -> UNKNOWN data normalization
-V6  Project scope
-V7  overview indexes
-```
-
-最终 V1 的规则：
-
-1. V2/V4/V6/V7 的最终字段和索引直接进入 `CREATE TABLE`。
-2. V3/V5 属于历史数据修复；空的一期数据库不需要执行，因此不进入 baseline。
-3. Baseline 不包含 `ALTER TABLE`、历史 `UPDATE` backfill 或 Wave/Stage 迁移过程。
-4. Baseline 只创建当前仍由 Offline Sync 拥有的物理表。
-
-当前表：
+`V1__baseline_offline_sync.sql` is the consolidated first-release baseline. It directly creates the current core Offline Sync tables without replaying the earlier development-time expand/backfill chain:
 
 ```text
 yak_offline_job_definition
@@ -52,28 +21,34 @@ yak_offline_execution_event
 yak_offline_sync_cursor
 ```
 
-## Development database reset
+The baseline must not contain historical `ALTER TABLE` / `UPDATE` repair steps.
 
-这次 squash 不兼容已有开发期 Flyway checksum/history。合并后应一次性清理无价值的本地开发数据：
+Once additive migrations exist after V1, V1 is treated as immutable: do not edit its checksum to add later fields.
 
-```sql
-DROP TABLE IF EXISTS yak_offline_execution_event;
-DROP TABLE IF EXISTS yak_offline_sync_cursor;
-DROP TABLE IF EXISTS yak_offline_job_execution;
-DROP TABLE IF EXISTS yak_offline_batch_execution;
-DROP TABLE IF EXISTS yak_offline_job_definition;
+## Additive migrations
 
-DROP TABLE IF EXISTS yak_offline_core_schema_history;
-DROP TABLE IF EXISTS yak_offline_sync_schema_history;
+Current ordered migration sequence:
+
+```text
+V1  baseline Offline Sync schema
+V2  task notification policy
+V3  durable Batch AuditCarrier correlation snapshot
 ```
 
-不要在有价值或生产数据库执行该 reset。
+`V2__add_offline_notification_config.sql` adds nullable task notification configuration without rewriting legacy rows.
 
-## After first formal release
+`V3__add_batch_audit_carrier.sql` adds nullable `yak_offline_batch_execution.audit_carrier_json`. The field freezes the AuditCarrier for one business Batch so later Attempt retry/reconcile work can rejoin the same AuditOperation even after the original HTTP/thread/trace has ended. Existing historical batches remain nullable and queryable; the migration does not fabricate an operation for history that predates business audit correlation.
 
-第一版正式发布后：
+## Migration rules
 
-- `V1__baseline_offline_sync.sql` 立即冻结，不再修改或重命名；
-- 后续 schema 变更使用 `V2__...`, `V3__...`；
-- 不再通过 reset/squash 规避 Flyway history；
-- 已执行 migration 的 checksum/version/description 必须保持稳定。
+1. Applied migration version, description, and checksum are immutable.
+2. New schema changes use the next incremental version; do not fold them back into V1.
+3. Do not invent Project IDs, audit operation IDs, or other historical ownership/correlation facts during SQL migration.
+4. Additive compatibility columns should stay nullable when old rows cannot be truthfully backfilled.
+5. Runtime code must remain safe when reading historical rows created before the new additive field existed semantically.
+
+## Development database reset
+
+Old pre-consolidation development histories may still require a one-time reset if they were created before the V1 baseline was established. Do not use such a reset on a database containing valuable data.
+
+For databases already on the current V1/V2 migration stream, normal Flyway upgrade applies V3; do not reset them just to add AuditCarrier correlation.

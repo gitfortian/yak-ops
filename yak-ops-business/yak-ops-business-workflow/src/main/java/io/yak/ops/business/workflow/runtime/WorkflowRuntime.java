@@ -34,8 +34,6 @@ import io.yak.framework.workflow.engine.support.InMemoryExecutionRepository;
 import io.yak.framework.workflow.engine.support.InMemoryWorkflowDefinitionRepository;
 import io.yak.framework.workflow.engine.support.LocalExecutionLock;
 import io.yak.framework.workflow.engine.support.UuidIdGenerator;
-import io.yak.ops.business.job.task.SyncTaskExecutorAdapter;
-import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskExecution;
 import io.yak.ops.business.job.task.TaskExecutionGateway;
 import io.yak.ops.business.job.task.TaskRegistry;
@@ -148,11 +146,11 @@ public class WorkflowRuntime {
         true);
   }
 
-  /** Compatibility constructor used by persistence wiring tests. */
+  /** Focused persistence wiring constructor used by tests and database-disabled development. */
   public WorkflowRuntime(
       WorkflowEventStream eventStreamService,
       TaskRegistry taskRegistry,
-      SyncTaskRunner syncTaskRunner,
+      TaskExecutionGateway taskExecutionGateway,
       ObjectProvider<WorkflowDefinitionRepository> definitionRepository,
       ObjectProvider<ExecutionRepository> executionRepository,
       ObjectProvider<WorkflowRuntimeRepository> runtimePersistence,
@@ -160,7 +158,7 @@ public class WorkflowRuntime {
     this(
         eventStreamService,
         taskRegistry,
-        legacyGateway(syncTaskRunner),
+        taskExecutionGateway,
         TASK_POLL_INTERVAL_MILLIS,
         resolvePersistence(
             definitionRepository,
@@ -186,12 +184,12 @@ public class WorkflowRuntime {
   public WorkflowRuntime(
       WorkflowEventStream eventStreamService,
       TaskRegistry taskRegistry,
-      SyncTaskRunner syncTaskRunner,
+      TaskExecutionGateway taskExecutionGateway,
       long taskPollIntervalMillis) {
     this(
         eventStreamService,
         taskRegistry,
-        legacyGateway(syncTaskRunner),
+        taskExecutionGateway,
         taskPollIntervalMillis,
         new InMemoryWorkflowDefinitionRepository(),
         new InMemoryExecutionRepository(),
@@ -205,14 +203,14 @@ public class WorkflowRuntime {
   public WorkflowRuntime(
       WorkflowEventStream eventStreamService,
       TaskRegistry taskRegistry,
-      SyncTaskRunner syncTaskRunner,
+      TaskExecutionGateway taskExecutionGateway,
       long taskPollIntervalMillis,
       CurrentProject currentProject,
       ProjectContextScope projectContextScope) {
     this(
         eventStreamService,
         taskRegistry,
-        legacyGateway(syncTaskRunner),
+        taskExecutionGateway,
         taskPollIntervalMillis,
         new InMemoryWorkflowDefinitionRepository(),
         new InMemoryExecutionRepository(),
@@ -237,28 +235,6 @@ public class WorkflowRuntime {
     throw new IllegalStateException(
         "Workflow durable persistence bean is missing while yak.database.enabled=true: "
             + componentName);
-  }
-
-  /** Backward-compatible constructor used by existing SYNC-focused runtime tests. */
-  public WorkflowRuntime(
-      WorkflowEventStream eventStreamService,
-      TaskRegistry taskRegistry,
-      SyncTaskRunner syncTaskRunner,
-      long taskPollIntervalMillis,
-      WorkflowDefinitionRepository definitionRepository,
-      ExecutionRepository executionRepository,
-      WorkflowRuntimeRepository runtimePersistence) {
-    this(
-        eventStreamService,
-        taskRegistry,
-        legacyGateway(syncTaskRunner),
-        taskPollIntervalMillis,
-        definitionRepository,
-        executionRepository,
-        runtimePersistence,
-        null,
-        null,
-        false);
   }
 
   public WorkflowRuntime(
@@ -335,10 +311,6 @@ public class WorkflowRuntime {
         clock);
     this.runtimeScheduler.scheduleAtFixedRate(
         this::scanTimeouts, 250L, 250L, TimeUnit.MILLISECONDS);
-  }
-
-  private static TaskExecutionGateway legacyGateway(SyncTaskRunner syncTaskRunner) {
-    return new TaskExecutionGateway(List.of(new SyncTaskExecutorAdapter(syncTaskRunner)));
   }
 
   /** 直接运行 API：DTO 只存在于接口边界，进入 Runtime 后立即转换为领域规格。 */

@@ -45,8 +45,8 @@ const runtimeVisual = (status?: string): RuntimeVisual | undefined => {
     case 'RUNNING':
     case 'RESUMING':
       return {
-        borderClassName: 'border-[#fe2c55] shadow-[0_0_0_3px_rgba(254,44,85,.08)]',
-        badgeClassName: 'bg-[#fff1f3] text-[#d92d50]',
+        borderClassName: 'border-[#6172f3] shadow-[0_0_0_3px_rgba(97,114,243,.10)]',
+        badgeClassName: 'bg-[#eef0ff] text-[#4754c8]',
         icon: <LoaderCircle size={11} className="animate-spin" />,
       };
     case 'PAUSING':
@@ -124,9 +124,9 @@ const WorkflowNode = ({ id, data, selected }: NodeProps<WorkflowNodeData>) => {
           runtimeActive ? '' : 'group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
           visual?.borderClassName
             || (selected
-              ? 'border-[#fe2c55] shadow-[0_0_0_2px_rgba(254,44,85,.06)]'
+              ? 'border-[#6172f3] shadow-[0_0_0_2px_rgba(97,114,243,.10)]'
               : 'border-[#e8e9ec] group-hover:border-[#d7d9de]'),
-          selected && visual ? 'ring-1 ring-[rgba(254,44,85,.18)]' : '',
+          selected && visual ? 'ring-1 ring-[rgba(97,114,243,.22)]' : '',
         ].join(' ')}
       >
         <div className="flex min-h-9 items-center gap-2.5">

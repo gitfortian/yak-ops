@@ -8,7 +8,7 @@ import static org.mockito.Mockito.mock;
 
 import io.yak.framework.workflow.engine.spi.ExecutionRepository;
 import io.yak.framework.workflow.engine.spi.WorkflowDefinitionRepository;
-import io.yak.ops.business.job.task.SyncTaskRunner;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.workflow.repository.WorkflowRuntimeRepository;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ class WorkflowPersistenceWiringTest {
     assertThatThrownBy(() -> new WorkflowRuntime(
         new WorkflowEventStream(),
         mock(TaskRegistry.class),
-        mock(SyncTaskRunner.class),
+        mock(TaskExecutionGateway.class),
         provider(beans, WorkflowDefinitionRepository.class),
         provider(beans, ExecutionRepository.class),
         provider(beans, WorkflowRuntimeRepository.class),
@@ -54,7 +54,7 @@ class WorkflowPersistenceWiringTest {
     WorkflowRuntime runtime = new WorkflowRuntime(
         new WorkflowEventStream(),
         mock(TaskRegistry.class),
-        mock(SyncTaskRunner.class),
+        mock(TaskExecutionGateway.class),
         provider(beans, WorkflowDefinitionRepository.class),
         provider(beans, ExecutionRepository.class),
         provider(beans, WorkflowRuntimeRepository.class),

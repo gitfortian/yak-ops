@@ -1,4 +1,5 @@
-import { Radio, Select, Switch, Tag, Typography } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
+import { Popover, Radio, Select, Switch, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
@@ -17,6 +18,49 @@ import EditorSection from './EditorSection';
 interface NotificationConfigSectionProps {
   editor: SyncEditorState;
   onChange: (value: SyncEditorState) => void;
+}
+
+interface HelpTitleProps {
+  label: string;
+  help: string;
+  prominent?: boolean;
+}
+
+function HelpTitle({
+  label,
+  help,
+  prominent = false,
+}: HelpTitleProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        className={
+          prominent
+            ? 'text-[13px] font-medium text-[#344054]'
+            : 'text-[12px] font-medium text-[#475467]'
+        }
+      >
+        {label}
+      </span>
+      <Popover
+        placement="top"
+        trigger={['hover', 'focus']}
+        content={(
+          <div className="max-w-[320px] text-[12px] leading-5 text-[#475467]">
+            {help}
+          </div>
+        )}
+      >
+        <button
+          type="button"
+          aria-label={`${label}说明`}
+          className="inline-flex cursor-help items-center border-0 bg-transparent p-0 text-[#98a2b3] outline-none transition-colors hover:text-[#667085] focus:text-[#667085]"
+        >
+          <QuestionCircleOutlined className="text-[13px]" />
+        </button>
+      </Popover>
+    </div>
+  );
 }
 
 const uniqueUsers = (
@@ -153,19 +197,21 @@ export default function NotificationConfigSection({
     active &&
     editor.notification.alertEnabled &&
     editor.notification.alertChannelIds.length === 0;
+  const missingRecipient =
+    active &&
+    editor.notification.inAppEnabled &&
+    explicit &&
+    editor.notification.recipientUserIds.length === 0;
 
   return (
     <EditorSection title="通知设置">
       <div className="space-y-5">
-        <div className="flex items-start justify-between gap-6 rounded-lg bg-[#f7f8fa] px-4 py-3">
-          <div>
-            <div className="text-[13px] font-medium text-[#344054]">
-              开启任务通知
-            </div>
-            <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-              仅在重试策略耗尽或不可重试的最终失败时触发，不会为每次失败重试重复发送。
-            </div>
-          </div>
+        <div className="flex items-center justify-between gap-6 rounded-lg bg-[#f7f8fa] px-4 py-3">
+          <HelpTitle
+            label="开启任务通知"
+            prominent
+            help="仅在重试策略耗尽或不可重试的最终失败时触发，不会为每次失败重试重复发送。"
+          />
           <Switch
             checked={active}
             onChange={(enabled) => updateNotification({ enabled })}
@@ -174,20 +220,23 @@ export default function NotificationConfigSection({
 
         <div className="grid grid-cols-2 gap-5 max-md:grid-cols-1">
           <div>
-            <div className="mb-2 text-[12px] font-medium text-[#475467]">
-              触发条件
+            <div className="mb-2">
+              <HelpTitle
+                label="触发条件"
+                help="当前只开放高价值失败通知，成功通知暂不启用。"
+              />
             </div>
             <div className="flex h-8 items-center">
               <Tag color="error">最终执行失败</Tag>
             </div>
-            <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
-              当前只开放高价值失败通知，成功通知暂不启用。
-            </div>
           </div>
 
           <div>
-            <div className="mb-2 text-[12px] font-medium text-[#475467]">
-              通知方式
+            <div className="mb-2">
+              <HelpTitle
+                label="通知方式"
+                help="外部通知由全局 Alert 渠道和插件统一发送；任务只保存渠道 ID，不保存 Webhook 等敏感配置。"
+              />
             </div>
             <div className="space-y-2">
               <div className="flex h-8 items-center gap-3">
@@ -211,16 +260,16 @@ export default function NotificationConfigSection({
                 <span className="text-[12px] text-[#344054]">外部告警渠道</span>
               </div>
             </div>
-            <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
-              外部通知由全局 Alert 渠道和插件统一发送；任务只保存渠道 ID，不保存 Webhook 等敏感配置。
-            </div>
           </div>
         </div>
 
         {editor.notification.alertEnabled ? (
           <div>
-            <div className="mb-2 text-[12px] font-medium text-[#475467]">
-              外部告警渠道
+            <div className="mb-2">
+              <HelpTitle
+                label="外部告警渠道"
+                help="仅可选择已经在告警中心保存过配置的渠道；停用渠道不会实际发送。"
+              />
             </div>
             <div className="max-w-[640px]">
               <Select
@@ -239,21 +288,24 @@ export default function NotificationConfigSection({
                   updateNotification({ alertChannelIds })
                 }
               />
-              <Typography.Text
-                type={missingAlertChannel ? 'danger' : 'secondary'}
-                className="mt-1.5 block !text-[11px]"
-              >
-                {missingAlertChannel
-                  ? '开启外部告警后至少选择一个已配置渠道'
-                  : '仅可选择已经在告警中心保存过配置的渠道；停用渠道不会实际发送。'}
-              </Typography.Text>
+              {missingAlertChannel ? (
+                <Typography.Text
+                  type="danger"
+                  className="mt-1.5 block !text-[11px]"
+                >
+                  开启外部告警后至少选择一个已配置渠道
+                </Typography.Text>
+              ) : null}
             </div>
           </div>
         ) : null}
 
         <div>
-          <div className="mb-2 text-[12px] font-medium text-[#475467]">
-            站内消息接收人
+          <div className="mb-2">
+            <HelpTitle
+              label="站内消息接收人"
+              help="项目负责人会发送给当前 Project 的 OWNER 用户；指定用户仅可选择当前 Project 的负责人和成员，保存时只记录用户 ID。"
+            />
           </div>
           <Radio.Group
             disabled={!active || !editor.notification.inAppEnabled}
@@ -289,39 +341,21 @@ export default function NotificationConfigSection({
                     : '当前没有可用的项目空间'
                 }
                 className="w-full"
-                status={
-                  active &&
-                  editor.notification.inAppEnabled &&
-                  editor.notification.recipientUserIds.length === 0
-                    ? 'error'
-                    : undefined
-                }
+                status={missingRecipient ? 'error' : undefined}
                 onChange={(recipientUserIds) =>
                   updateNotification({ recipientUserIds })
                 }
               />
-              <Typography.Text
-                type={
-                  active &&
-                  editor.notification.inAppEnabled &&
-                  editor.notification.recipientUserIds.length === 0
-                    ? 'danger'
-                    : 'secondary'
-                }
-                className="mt-1.5 block !text-[11px]"
-              >
-                {active &&
-                editor.notification.inAppEnabled &&
-                editor.notification.recipientUserIds.length === 0
-                  ? '指定用户模式至少选择一个当前项目成员'
-                  : '仅展示当前 Project 的负责人和成员；保存时只记录稳定的用户 ID。'}
-              </Typography.Text>
+              {missingRecipient ? (
+                <Typography.Text
+                  type="danger"
+                  className="mt-1.5 block !text-[11px]"
+                >
+                  指定用户模式至少选择一个当前项目成员
+                </Typography.Text>
+              ) : null}
             </div>
-          ) : (
-            <div className="mt-2 text-[11px] leading-5 text-[#98a2b3]">
-              站内消息会发送给当前 Project 的 OWNER 用户，保持历史默认行为。
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
     </EditorSection>

@@ -1,3 +1,5 @@
+import CronSchedulerInput from '@/components/CronSchedulerEditor/CronSchedulerInput';
+import YakButton from '@/components/YakButton';
 import { getWorkflowDefinition, type WorkflowDefinition } from '@/services/workflow/definitions';
 import {
   createWorkflowSchedule,
@@ -16,7 +18,6 @@ import {
   DatePicker,
   Empty,
   Form,
-  Input,
   Modal,
   Select,
   Spin,
@@ -43,22 +44,18 @@ import {
 import BackfillDrawer from './BackfillDrawer';
 import BackfillHistoryDrawer from './BackfillHistoryDrawer';
 import TriggerLedgerDrawer from './TriggerLedgerDrawer';
-import YakButton from '@/components/YakButton';
 
 interface FormValues {
-  name: string;
   cronExpression: string;
   timezone: string;
   effectiveRange?: [Dayjs, Dayjs];
   executionStrategy: WorkflowScheduleExecutionStrategy;
   misfireStrategy: WorkflowScheduleMisfireStrategy;
-  inputJson: string;
 }
 
 const SECTION_ITEMS = [
   { key: 'schedule-basic', label: '调度设置' },
   { key: 'schedule-strategy', label: '运行策略' },
-  { key: 'schedule-advanced', label: '高级配置' },
 ] as const;
 
 type SectionKey = (typeof SECTION_ITEMS)[number]['key'];
@@ -85,41 +82,76 @@ interface SectionNavigatorProps {
   onSelect: (key: SectionKey) => void;
 }
 
-function SectionNavigator({ activeKey, onSelect }: SectionNavigatorProps) {
+function SectionNavigator({
+  activeKey,
+  onSelect,
+}: SectionNavigatorProps) {
   return (
-    <nav aria-label="调度配置区块定位" className="rounded-xl bg-white px-3 py-4">
-      <div className="mb-2 px-2 text-[12px] font-semibold text-[#344054]">
+    <nav
+      aria-label="调度配置区块定位"
+      className="rounded-xl bg-white px-3 py-4"
+    >
+      <div className="mb-3 px-2 text-[12px] font-semibold text-[#344054]">
         快速定位
       </div>
-      <div className="space-y-1">
-        {SECTION_ITEMS.map((item) => {
-          const active = activeKey === item.key;
-          return (
-            <YakButton
-              key={item.key}
-              type="YakButton"
-              aria-current={active ? 'location' : undefined}
-              className={[
-                'flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 px-2 py-2 text-left transition-colors',
-                active
-                  ? 'bg-[rgba(254,44,85,0.08)] text-[var(--yak-brand-color)]'
-                  : 'bg-transparent text-[#667085] hover:bg-[#f7f8fa] hover:text-[#344054]',
-              ].join(' ')}
-              onClick={() => onSelect(item.key)}
-            >
-              <span
-                aria-hidden
+
+      <div className="relative">
+        <span
+          aria-hidden
+          className="absolute bottom-4 left-[13px] top-4 w-px bg-[#e4e7ec]"
+        />
+
+        <div className="space-y-1">
+          {SECTION_ITEMS.map((item) => {
+            const active = activeKey === item.key;
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                aria-current={active ? 'location' : undefined}
                 className={[
-                  'h-2 w-2 shrink-0 rounded-full',
-                  active ? 'bg-[var(--yak-brand-color)]' : 'bg-[#c5c9d0]',
+                  'group relative flex w-full cursor-pointer items-center gap-3 rounded-lg border-0',
+                  'px-2 py-2 text-left transition-colors',
+                  active
+                    ? 'bg-[rgba(254,44,85,0.08)]'
+                    : 'bg-transparent hover:bg-[#f7f8fa]',
                 ].join(' ')}
-              />
-              <span className={active ? 'text-[12px] font-semibold' : 'text-[12px]'}>
-                {item.label}
-              </span>
-            </YakButton>
-          );
-        })}
+                onClick={() => onSelect(item.key)}
+              >
+                <span
+                  aria-hidden
+                  className={[
+                    'relative z-10 h-[11px] w-[11px] shrink-0 rounded-full border',
+                    'transition-all duration-200',
+                    active
+                      ? [
+                          'border-[var(--yak-brand-color)]',
+                          'bg-[var(--yak-brand-color)]',
+                          'shadow-[0_0_0_3px_rgba(254,44,85,0.12)]',
+                        ].join(' ')
+                      : [
+                          'border-[#d0d5dd]',
+                          'bg-[#98a2b3]',
+                          'group-hover:border-[#98a2b3]',
+                        ].join(' '),
+                  ].join(' ')}
+                />
+
+                <span
+                  className={[
+                    'text-[12px] leading-5 transition-colors',
+                    active
+                      ? 'font-semibold text-[var(--yak-brand-color)]'
+                      : 'font-normal text-[#667085] group-hover:text-[#344054]',
+                  ].join(' ')}
+                >
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
@@ -136,10 +168,23 @@ function SectionCard({
 }) {
   return (
     <section id={id} className="rounded-xl bg-white px-6 py-5">
-      <div className="mb-5 text-[14px] font-semibold text-[#161823]">{title}</div>
+      <div className="mb-5 text-[14px] font-semibold text-[#161823]">
+        {title}
+      </div>
       {children}
     </section>
   );
+}
+
+/**
+ * Workflow Schedule 后端历史契约仍要求 name。
+ * 页面不再暴露“调度名称”概念：编辑时保留旧值，新建时从工作流名称派生稳定内部名。
+ */
+function resolveInternalScheduleName(
+  workflow: WorkflowDefinition,
+  schedule?: WorkflowSchedule,
+) {
+  return schedule?.name?.trim() || `${workflow.name} 调度`;
 }
 
 export default function WorkflowScheduleConfigPage() {
@@ -208,7 +253,6 @@ export default function WorkflowScheduleConfigPage() {
   useEffect(() => {
     if (!workflow) return;
     form.setFieldsValue({
-      name: primarySchedule?.name || `${workflow.name} 调度`,
       cronExpression: primarySchedule?.cronExpression || '0 0 2 * * ?',
       timezone: primarySchedule?.timezone || 'Asia/Shanghai',
       effectiveRange:
@@ -217,7 +261,6 @@ export default function WorkflowScheduleConfigPage() {
           : undefined,
       executionStrategy: primarySchedule?.executionStrategy || 'SERIAL_WAIT',
       misfireStrategy: primarySchedule?.misfireStrategy || 'FIRE_ONCE',
-      inputJson: JSON.stringify(primarySchedule?.input || {}, null, 2),
     });
   }, [form, primarySchedule, workflow]);
 
@@ -225,7 +268,11 @@ export default function WorkflowScheduleConfigPage() {
     const container = pageRootRef.current;
     if (!container || locatingSectionRef.current) return;
 
-    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const maxScrollTop = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight,
+    );
+
     if (maxScrollTop - container.scrollTop <= SCROLL_BOTTOM_THRESHOLD) {
       setActiveSection(LAST_SECTION_KEY);
       return;
@@ -233,12 +280,14 @@ export default function WorkflowScheduleConfigPage() {
 
     const threshold = container.getBoundingClientRect().top + 140;
     let nextActive: SectionKey = SECTION_ITEMS[0].key;
+
     SECTION_ITEMS.forEach((item) => {
       const element = document.getElementById(item.key);
       if (element && element.getBoundingClientRect().top <= threshold) {
         nextActive = item.key;
       }
     });
+
     setActiveSection(nextActive);
   }, []);
 
@@ -279,11 +328,17 @@ export default function WorkflowScheduleConfigPage() {
     locatingSectionRef.current = key;
     setActiveSection(key);
 
-    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const maxScrollTop = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight,
+    );
     const containerRect = container.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
     const expectedTop =
-      container.scrollTop + elementRect.top - containerRect.top - SECTION_TOP_OFFSET;
+      container.scrollTop +
+      elementRect.top -
+      containerRect.top -
+      SECTION_TOP_OFFSET;
     const nextScrollTop =
       key === LAST_SECTION_KEY
         ? maxScrollTop
@@ -298,30 +353,27 @@ export default function WorkflowScheduleConfigPage() {
 
   const handleSave = async () => {
     if (!workflow || !canEdit) return;
+
     try {
       const values = await form.validateFields();
-      let input: Record<string, unknown> = {};
-      try {
-        input = values.inputJson.trim() ? JSON.parse(values.inputJson) : {};
-      } catch {
-        message.error('调度运行参数必须是合法 JSON');
-        return;
-      }
-
       const payload = {
-        name: values.name.trim(),
+        name: resolveInternalScheduleName(workflow, primarySchedule),
         cronExpression: values.cronExpression.trim(),
         timezone: values.timezone,
         startTime: values.effectiveRange?.[0]?.toISOString(),
         endTime: values.effectiveRange?.[1]?.toISOString(),
         executionStrategy: values.executionStrategy,
         misfireStrategy: values.misfireStrategy,
-        input,
+        // 高级配置不再对用户开放；编辑已有调度时保留历史 input，避免无意清空。
+        input: primarySchedule?.input || {},
       };
 
       setSaving(true);
-      if (primarySchedule) await updateWorkflowSchedule(primarySchedule.id, payload);
-      else await createWorkflowSchedule(workflow.id, payload);
+      if (primarySchedule) {
+        await updateWorkflowSchedule(primarySchedule.id, payload);
+      } else {
+        await createWorkflowSchedule(workflow.id, payload);
+      }
       message.success('调度配置已保存，上线工作流后将自动启用');
       await load(true);
     } catch (error: any) {
@@ -334,6 +386,7 @@ export default function WorkflowScheduleConfigPage() {
 
   const handleDelete = () => {
     if (!primarySchedule || !canEdit) return;
+
     Modal.confirm({
       centered: true,
       title: '删除调度配置',
@@ -373,7 +426,9 @@ export default function WorkflowScheduleConfigPage() {
     return (
       <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-[#f7f8fa]">
         <Empty description="未找到工作流" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          <YakButton onClick={() => history.push('/workflow/definitions')}>返回工作流定义</YakButton>
+          <YakButton onClick={() => history.push('/workflow/definitions')}>
+            返回工作流定义
+          </YakButton>
         </Empty>
       </div>
     );
@@ -382,7 +437,10 @@ export default function WorkflowScheduleConfigPage() {
   return (
     <ConfigProvider theme={BRAND_THEME}>
       <div className="h-[calc(100vh-64px)] overflow-hidden bg-[#f7f8fa] text-[#161823]">
-        <div ref={pageRootRef} className="h-full overflow-y-auto overscroll-contain scroll-smooth">
+        <div
+          ref={pageRootRef}
+          className="h-full overflow-y-auto overscroll-contain scroll-smooth"
+        >
           <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-6 px-6 pb-6 pt-6 max-xl:max-w-[1040px] xl:grid-cols-[minmax(0,1fr)_160px]">
             <div className="min-w-0">
               <main className="space-y-4">
@@ -396,6 +454,7 @@ export default function WorkflowScheduleConfigPage() {
                         className="!h-8 !w-8 !shrink-0 !px-0"
                         onClick={() => history.push('/workflow/definitions')}
                       />
+
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h1 className="m-0 truncate text-[18px] font-semibold leading-8 text-[#161823]">
@@ -413,7 +472,13 @@ export default function WorkflowScheduleConfigPage() {
 
                     {primarySchedule ? (
                       <div className="flex shrink-0 items-center gap-1.5">
-                        <Tooltip title={workflow.status !== 'ONLINE' ? '工作流上线后才能执行历史补数' : undefined}>
+                        <Tooltip
+                          title={
+                            workflow.status !== 'ONLINE'
+                              ? '工作流上线后才能执行历史补数'
+                              : undefined
+                          }
+                        >
                           <span>
                             <YakButton
                               size="small"
@@ -425,6 +490,7 @@ export default function WorkflowScheduleConfigPage() {
                             </YakButton>
                           </span>
                         </Tooltip>
+
                         <YakButton
                           size="small"
                           icon={<ListTree size={14} />}
@@ -435,6 +501,7 @@ export default function WorkflowScheduleConfigPage() {
                         >
                           触发记录
                         </YakButton>
+
                         <YakButton
                           size="small"
                           icon={<History size={14} />}
@@ -459,146 +526,173 @@ export default function WorkflowScheduleConfigPage() {
                   </div>
                 ) : null}
 
-                <Form form={form} layout="vertical" requiredMark="optional" disabled={!canEdit}>
-                  <div className="space-y-4">
-                    <SectionCard id="schedule-basic" title="调度设置">
-                      <Form.Item
-                        name="name"
-                        label="调度名称"
-                        rules={[
-                          { required: true, message: '请输入调度名称' },
-                          { max: 100, message: '名称不能超过 100 个字符' },
-                        ]}
-                      >
-                        <Input variant="filled" placeholder="例如：每日凌晨订单同步" />
-                      </Form.Item>
-
-                      <Form.Item
-                        name="cronExpression"
-                        label="Cron 表达式"
-                        rules={[{ required: true, message: '请输入 Cron 表达式' }]}
-                      >
-                        <Input variant="filled" placeholder="0 0 2 * * ?" className="font-mono" />
-                      </Form.Item>
-
-                      <div className="-mt-3 mb-5 flex flex-wrap items-center gap-1.5">
-                        <span className="mr-1 text-[11px] text-[#98a2b3]">快捷设置</span>
-                        {CRON_PRESETS.map((preset) => (
-                          <YakButton
-                            key={preset.value}
-                            size="small"
-                            type="text"
-                            className="!h-7 !bg-[#f7f8fa] !px-2.5 !text-[11px] !text-[#667085] hover:!bg-[#eef0f3]"
-                            onClick={() => form.setFieldValue('cronExpression', preset.value)}
-                          >
-                            {preset.label}
-                          </YakButton>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <Form.Item name="timezone" label="时区" rules={[{ required: true }]}>
-                          <Select
-                            options={[
-                              { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
-                              { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
-                              { value: 'UTC', label: 'UTC' },
-                            ]}
-                          />
-                        </Form.Item>
-                        <Form.Item name="effectiveRange" label="生效区间（可选）">
-                          <DatePicker.RangePicker showTime className="w-full" />
-                        </Form.Item>
-                      </div>
-                    </SectionCard>
-
-                    <SectionCard id="schedule-strategy" title="运行策略">
-                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <ConfigProvider variant="filled">
+                  <Form
+                    form={form}
+                    layout="vertical"
+                    requiredMark="optional"
+                    disabled={!canEdit}
+                  >
+                    <div className="space-y-4">
+                      <SectionCard id="schedule-basic" title="调度设置">
                         <Form.Item
-                          name="executionStrategy"
-                          label="实例并发策略"
-                          rules={[{ required: true }]}
+                          name="cronExpression"
+                          label="Cron 表达式"
+                          rules={[
+                            { required: true, message: '请输入 Cron 表达式' },
+                          ]}
                         >
-                          <Select
-                            options={[
-                              { value: 'SERIAL_WAIT', label: '等待上一次完成（推荐）' },
-                              { value: 'SERIAL_DISCARD', label: '上一次未完成则跳过' },
-                              { value: 'PARALLEL', label: '允许并行运行' },
-                            ]}
-                          />
+                          <CronSchedulerInput disabled={!canEdit} />
                         </Form.Item>
-                        <Form.Item
-                          name="misfireStrategy"
-                          label="错过调度策略"
-                          rules={[{ required: true }]}
-                        >
-                          <Select
-                            options={[
-                              { value: 'FIRE_ONCE', label: '恢复后补跑一次（推荐）' },
-                              { value: 'SKIP', label: '直接跳过' },
-                            ]}
-                          />
-                        </Form.Item>
-                      </div>
-                    </SectionCard>
 
-                    <SectionCard id="schedule-advanced" title="高级配置">
-                      <Form.Item name="inputJson" label="调度运行参数 JSON" className="mb-4">
-                        <Input.TextArea
-                          rows={7}
-                          spellCheck={false}
-                          className="font-mono text-[12px]"
-                        />
-                      </Form.Item>
-
-                      {primarySchedule && canEdit ? (
-                        <div className="flex justify-end">
-                          <YakButton
-                            danger
-                            type="text"
-                            icon={<Trash2 size={14} />}
-                            onClick={handleDelete}
-                          >
-                            删除调度
-                          </YakButton>
+                        <div className="-mt-3 mb-5 flex flex-wrap items-center gap-1.5">
+                          <span className="mr-1 text-[11px] text-[#98a2b3]">
+                            快捷设置
+                          </span>
+                          {CRON_PRESETS.map((preset) => (
+                            <YakButton
+                              key={preset.value}
+                              size="small"
+                              type="text"
+                              disabled={!canEdit}
+                              className="!h-7 !bg-[#f7f8fa] !px-2.5 !text-[11px] !text-[#667085] hover:!bg-[#eef0f3]"
+                              onClick={() =>
+                                form.setFieldValue('cronExpression', preset.value)
+                              }
+                            >
+                              {preset.label}
+                            </YakButton>
+                          ))}
                         </div>
-                      ) : null}
-                    </SectionCard>
-                  </div>
-                </Form>
+
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                          <Form.Item
+                            name="timezone"
+                            label="时区"
+                            rules={[{ required: true }]}
+                          >
+                            <Select
+                              options={[
+                                {
+                                  value: 'Asia/Shanghai',
+                                  label: 'Asia/Shanghai',
+                                },
+                                {
+                                  value: 'Asia/Tokyo',
+                                  label: 'Asia/Tokyo',
+                                },
+                                { value: 'UTC', label: 'UTC' },
+                              ]}
+                            />
+                          </Form.Item>
+
+                          <Form.Item
+                            name="effectiveRange"
+                            label="生效区间（可选）"
+                          >
+                            <DatePicker.RangePicker
+                              showTime
+                              className="w-full"
+                            />
+                          </Form.Item>
+                        </div>
+                      </SectionCard>
+
+                      <SectionCard id="schedule-strategy" title="运行策略">
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                          <Form.Item
+                            name="executionStrategy"
+                            label="实例并发策略"
+                            rules={[{ required: true }]}
+                          >
+                            <Select
+                              options={[
+                                {
+                                  value: 'SERIAL_WAIT',
+                                  label: '等待上一次完成（推荐）',
+                                },
+                                {
+                                  value: 'SERIAL_DISCARD',
+                                  label: '上一次未完成则跳过',
+                                },
+                                {
+                                  value: 'PARALLEL',
+                                  label: '允许并行运行',
+                                },
+                              ]}
+                            />
+                          </Form.Item>
+
+                          <Form.Item
+                            name="misfireStrategy"
+                            label="错过调度策略"
+                            rules={[{ required: true }]}
+                          >
+                            <Select
+                              options={[
+                                {
+                                  value: 'FIRE_ONCE',
+                                  label: '恢复后补跑一次（推荐）',
+                                },
+                                { value: 'SKIP', label: '直接跳过' },
+                              ]}
+                            />
+                          </Form.Item>
+                        </div>
+                      </SectionCard>
+                    </div>
+                  </Form>
+                </ConfigProvider>
               </main>
 
               <footer className="sticky bottom-0 z-50 mt-4 rounded-xl bg-white px-6 py-3">
-                <div className="flex items-center gap-3">
-                  <YakButton
-                    type="primary"
-                    loading={saving}
-                    disabled={!canEdit}
-                    icon={<Save size={15} />}
-                    className={[
-                      '!h-9 !min-w-[112px] !rounded-lg !px-5 !font-medium',
-                      canEdit
-                        ? '!text-white'
-                        : '!border-[#e3e6eb] !bg-[#f2f3f5] !text-[#a5acb6] !shadow-none',
-                    ].join(' ')}
-                    onClick={() => void handleSave()}
-                  >
-                    保存配置
-                  </YakButton>
-                  <YakButton
-                    disabled={saving}
-                    className="!h-9 !min-w-[96px] !rounded-lg !border-0 !bg-[#f2f3f5] !px-5 !font-medium !text-[#344054] hover:!bg-[#e9eaec]"
-                    onClick={() => history.push('/workflow/definitions')}
-                  >
-                    返回
-                  </YakButton>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <YakButton
+                      type="primary"
+                      loading={saving}
+                      disabled={!canEdit}
+                      icon={<Save size={15} />}
+                      className={[
+                        '!h-9 !min-w-[112px] !rounded-lg !px-5 !font-medium',
+                        canEdit
+                          ? '!text-white'
+                          : '!border-[#e3e6eb] !bg-[#f2f3f5] !text-[#a5acb6] !shadow-none',
+                      ].join(' ')}
+                      onClick={() => void handleSave()}
+                    >
+                      保存配置
+                    </YakButton>
+
+                    <YakButton
+                      disabled={saving}
+                      className="!h-9 !min-w-[96px] !rounded-lg !border-0 !bg-[#f2f3f5] !px-5 !font-medium !text-[#344054] hover:!bg-[#e9eaec]"
+                      onClick={() => history.push('/workflow/definitions')}
+                    >
+                      返回
+                    </YakButton>
+                  </div>
+
+                  {primarySchedule && canEdit ? (
+                    <YakButton
+                      danger
+                      type="text"
+                      icon={<Trash2 size={14} />}
+                      onClick={handleDelete}
+                    >
+                      删除调度
+                    </YakButton>
+                  ) : null}
                 </div>
               </footer>
             </div>
 
             <aside className="hidden xl:block">
               <div className="sticky top-6">
-                <SectionNavigator activeKey={activeSection} onSelect={handleSectionLocate} />
+                <SectionNavigator
+                  activeKey={activeSection}
+                  onSelect={handleSectionLocate}
+                />
               </div>
             </aside>
           </div>

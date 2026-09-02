@@ -3,6 +3,9 @@ package io.yak.ops.business.sync.offline.execution;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.yak.ops.business.audit.AuditCarrier;
+import io.yak.ops.business.audit.AuditContext;
+import io.yak.ops.business.audit.AuditOperationHandle;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.definition.OfflineJobDefinitionService;
 import io.yak.ops.business.sync.offline.domain.OfflineExecutionStatus;
@@ -19,6 +22,7 @@ import io.yak.ops.business.sync.offline.execution.adapter.OfflineBatchScopeExecu
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineJobExecutionRepository;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -35,6 +39,7 @@ public class OfflineExecutionCoordinator {
   private final OfflineBatchRuntime batchRuntime;
   private final OfflineBatchScopeExecutionAdapter scopeExecutionAdapter;
   private final OfflineExecutionStateManager stateManager;
+  private final OfflineAuditBridge auditBridge;
   private final LinkUpClient linkUpClient;
   private final ObjectMapper objectMapper;
 
@@ -46,6 +51,7 @@ public class OfflineExecutionCoordinator {
       OfflineBatchRuntime batchRuntime,
       OfflineBatchScopeExecutionAdapter scopeExecutionAdapter,
       OfflineExecutionStateManager stateManager,
+      OfflineAuditBridge auditBridge,
       LinkUpClient linkUpClient,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
     this.definitionService = definitionService;
@@ -55,6 +61,7 @@ public class OfflineExecutionCoordinator {
     this.batchRuntime = batchRuntime;
     this.scopeExecutionAdapter = scopeExecutionAdapter;
     this.stateManager = stateManager;
+    this.auditBridge = auditBridge;
     this.linkUpClient = linkUpClient;
     this.objectMapper = objectMapper;
   }
@@ -118,7 +125,9 @@ public class OfflineExecutionCoordinator {
     BatchExecution batch = batchRuntime.requireLatestOccupyingBatch(definitionId);
     if (batch.status() == BatchStatus.WAITING_RETRY) {
       OfflineJobExecution latest = batchRuntime.cancelWaitingRetry(batch);
-      stateManager.markWaitingRetryCanceled(latest);
+      AuditOperationHandle audit = auditBridge.ensureOperation(latest);
+      runInAuditContext(audit, () -> stateManager.markWaitingRetryCanceled(latest));
+      auditBridge.observeState(latest);
       return latest;
     }
     return cancel(batchRuntime.requireLatestAttempt(batch).getId());
@@ -131,25 +140,34 @@ public class OfflineExecutionCoordinator {
       throw new IllegalStateException("当前执行实例已结束，无需停止");
     }
 
-    stateManager.markCancellationRequested(execution);
-    if (StringUtils.hasText(execution.getEngineJobId())) {
-      stateManager.applySnapshot(
-          execution,
-          linkUpClient.cancel(execution.getEngineJobId()),
-          "CANCEL_ACCEPTED");
-    }
-    return execution;
+    AuditOperationHandle audit = auditBridge.ensureOperation(execution);
+    return callInAuditContext(
+        audit,
+        () -> {
+          stateManager.markCancellationRequested(execution);
+          if (StringUtils.hasText(execution.getEngineJobId())) {
+            stateManager.applySnapshot(
+                execution,
+                linkUpClient.cancel(execution.getEngineJobId()),
+                "CANCEL_ACCEPTED");
+          }
+          auditBridge.observeState(execution);
+          return execution;
+        });
   }
 
   public void applySnapshot(
       OfflineJobExecution execution,
       LinkUpJobResponse response,
       String eventType) {
-    stateManager.applySnapshot(execution, response, eventType);
+    AuditOperationHandle audit = auditBridge.ensureOperation(execution);
+    runInAuditContext(audit, () -> stateManager.applySnapshot(execution, response, eventType));
+    auditBridge.observeState(execution);
   }
 
   public void markUnknown(OfflineJobExecution execution, String message) {
-    stateManager.markUnknown(execution, message);
+    AuditOperationHandle audit = auditBridge.ensureOperation(execution);
+    runInAuditContext(audit, () -> stateManager.markUnknown(execution, message));
   }
 
   public OfflineJobExecution require(Long id) {
@@ -170,10 +188,16 @@ public class OfflineExecutionCoordinator {
   }
 
   private OfflineJobExecution submitClaim(OfflineExecutionClaim claim) {
-    String executionJobSpec = resolveScopedExecutionJobSpec(claim);
     OfflineJobExecution execution = claim.getExecution();
+    String executionJobSpec = resolveScopedExecutionJobSpec(claim);
     stateManager.recordCreated(execution);
+    AuditOperationHandle audit = auditBridge.ensureOperation(execution);
+    return callInAuditContext(
+        audit, () -> submitClaimInContext(execution, executionJobSpec));
+  }
 
+  private OfflineJobExecution submitClaimInContext(
+      OfflineJobExecution execution, String executionJobSpec) {
     try {
       LinkUpNodeResponse node = linkUpClient.node();
       stateManager.bindWorker(execution, node.getInstanceId());
@@ -187,6 +211,8 @@ public class OfflineExecutionCoordinator {
               execution.getDefinitionVersion(),
               jobSpec);
       stateManager.applySnapshot(execution, response, "SUBMITTED");
+      auditBridge.submitted(execution);
+      auditBridge.observeState(execution);
       return execution;
     } catch (LinkUpRequestException exception) {
       boolean retryable = exception.getStatusCode() == 429 || exception.getStatusCode() >= 500;
@@ -194,6 +220,7 @@ public class OfflineExecutionCoordinator {
           execution,
           exception.getCode() + "：" + exception.getMessage(),
           retryable);
+      auditBridge.observeState(execution);
       throw exception;
     } catch (LinkUpTransportException exception) {
       if (exception.isUncertain()) {
@@ -201,9 +228,11 @@ public class OfflineExecutionCoordinator {
         return execution;
       }
       stateManager.markFailed(execution, exception.getMessage(), true);
+      auditBridge.observeState(execution);
       throw exception;
     } catch (RuntimeException exception) {
       stateManager.markFailed(execution, exception.getMessage(), false);
+      auditBridge.observeState(execution);
       throw exception;
     }
   }
@@ -257,5 +286,19 @@ public class OfflineExecutionCoordinator {
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Link-Up JobSpec 已损坏", exception);
     }
+  }
+
+  private void runInAuditContext(AuditOperationHandle audit, Runnable action) {
+    AuditCarrier carrier = audit == null ? null : audit.carrier();
+    if (carrier == null) {
+      action.run();
+      return;
+    }
+    AuditContext.run(carrier, action);
+  }
+
+  private <T> T callInAuditContext(AuditOperationHandle audit, Supplier<T> action) {
+    AuditCarrier carrier = audit == null ? null : audit.carrier();
+    return carrier == null ? action.get() : AuditContext.call(carrier, action);
   }
 }

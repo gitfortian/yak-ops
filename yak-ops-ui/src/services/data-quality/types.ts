@@ -126,20 +126,26 @@ export interface SaveRulePayload {
   enabled?: boolean;
 }
 
+/**
+ * New monitor editors use scheduleEnabled + cronExpression as the canonical contract.
+ * Legacy friendly schedule fields remain optional for older API consumers.
+ */
 export interface MonitorSettingsPayload {
-  runMode: RunMode;
-  scheduleFrequency?: ScheduleFrequency;
-  scheduleTime?: string;
-  scheduleWeekday?: ScheduleWeekday;
+  scheduleEnabled?: boolean;
   cronExpression?: string;
   ruleFailureAction: RuleFailureAction;
   notifyEnabled: boolean;
   notifyChannel: NotifyChannel;
   notifyTarget?: string;
   alertLevel: AlertLevel;
+  runMode?: RunMode;
+  scheduleFrequency?: ScheduleFrequency;
+  scheduleTime?: string;
+  scheduleWeekday?: ScheduleWeekday;
 }
 
 export interface MonitorSettingsView extends MonitorSettingsPayload {
+  runMode: RunMode;
   nextRunTime?: string;
 }
 

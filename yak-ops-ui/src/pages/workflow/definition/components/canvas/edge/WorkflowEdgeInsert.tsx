@@ -31,7 +31,7 @@ const WorkflowEdgeInsert = ({
         'nodrag nopan flex h-6 w-6 items-center justify-center rounded-full',
         'border border-[#dfe1e5] bg-white text-[#667085]',
         'shadow-[0_1px_4px_rgba(22,24,35,.12)] transition-all duration-150',
-        'hover:scale-125 hover:border-[#fe2c55] hover:text-[#fe2c55]',
+        'hover:scale-125 hover:border-[#6172f3] hover:text-[#6172f3]',
         visible || open ? 'scale-100 opacity-100' : 'scale-90 opacity-0',
       ].join(' ')}
     >

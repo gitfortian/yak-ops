@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { Copy, Ellipsis, Trash2, X } from 'lucide-react';
@@ -5,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Node } from 'reactflow';
 import type { WorkflowCanvasTaskOption, WorkflowNodeData } from './types';
+import useWorkflowInspectorBehavior from './useWorkflowInspectorBehavior';
 import WorkflowNodeIcon from './node/icons/WorkflowNodeIcon';
 import WorkflowNodeInspectorLastRun from './WorkflowNodeInspectorLastRun';
 import WorkflowNodeInspectorSettings from './WorkflowNodeInspectorSettings';
@@ -24,6 +26,11 @@ interface WorkflowNodeInspectorProps {
   onDelete: () => void;
   onAppend: (taskId: string) => void;
 }
+
+const INSPECTOR_TABS = [
+  { key: 'settings', label: '属性' },
+  { key: 'lastRun', label: '上次运行' },
+];
 
 const ActionButton = ({
   label,
@@ -57,6 +64,7 @@ const WorkflowNodeInspector = ({
   onAppend,
 }: WorkflowNodeInspectorProps) => {
   const [activeTab, setActiveTab] = useState<InspectorTab>('settings');
+  const { panelWidth, resizing, handleResizePointerDown } = useWorkflowInspectorBehavior();
 
   useEffect(() => {
     setActiveTab('settings');
@@ -81,9 +89,28 @@ const WorkflowNodeInspector = ({
   ], [locked, onDelete, onDuplicate]);
 
   return (
-    <aside className="absolute bottom-0 right-0 top-0 z-20 flex w-[340px] flex-col overflow-hidden border-l border-[#e8eaee] bg-white">
-      <header className="shrink-0 border-b border-[#eef0f2] bg-white">
-        <div className="flex h-12 items-center gap-2 px-4">
+    <aside
+      className="absolute bottom-0 right-0 top-0 z-20 flex w-[340px] flex-col overflow-hidden border-l border-[#e8eaee] bg-white"
+      style={{ width: panelWidth }}
+    >
+      <div
+        role="separator"
+        aria-label="调整节点面板宽度"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(panelWidth)}
+        className="group/resize absolute left-0 top-0 z-30 flex h-full w-2 cursor-col-resize touch-none items-center justify-start"
+        onPointerDown={handleResizePointerDown}
+      >
+        <span
+          className={[
+            'h-full w-0.5 transition-colors duration-150',
+            resizing ? 'bg-[#6172f3]' : 'bg-transparent group-hover/resize:bg-[#6172f3]',
+          ].join(' ')}
+        />
+      </div>
+
+      <header className="shrink-0 bg-white">
+        <div className="flex h-12 items-center gap-2 border-b border-[#eef0f2] px-4">
           <WorkflowNodeIcon taskType={node.data.taskType} size="sm" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] font-semibold text-[#161823]">
@@ -111,30 +138,13 @@ const WorkflowNodeInspector = ({
           </div>
         </div>
 
-        <nav className="flex h-9 items-end gap-5 px-4" aria-label="节点配置页签">
-          <button
-            type="button"
-            className={[
-              'relative h-9 border-0 bg-transparent px-0 text-[11px] font-medium transition-colors',
-              activeTab === 'settings' ? 'text-[#161823]' : 'text-[#98a2b3] hover:text-[#475467]',
-            ].join(' ')}
-            onClick={() => setActiveTab('settings')}
-          >
-            属性
-            {activeTab === 'settings' ? <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#fe2c55]" /> : null}
-          </button>
-          <button
-            type="button"
-            className={[
-              'relative h-9 border-0 bg-transparent px-0 text-[11px] font-medium transition-colors',
-              activeTab === 'lastRun' ? 'text-[#161823]' : 'text-[#98a2b3] hover:text-[#475467]',
-            ].join(' ')}
-            onClick={() => setActiveTab('lastRun')}
-          >
-            上次运行
-            {activeTab === 'lastRun' ? <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#fe2c55]" /> : null}
-          </button>
-        </nav>
+        <div className="px-4">
+          <YakTab
+            activeKey={activeTab}
+            items={INSPECTOR_TABS}
+            onChange={(key) => setActiveTab(key as InspectorTab)}
+          />
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-white">

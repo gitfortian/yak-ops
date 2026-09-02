@@ -4,9 +4,10 @@ import io.yak.ops.business.workflow.observability.WorkflowEventStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.ops.business.job.task.SyncTaskExecution;
-import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.business.job.task.TaskExecutor;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
@@ -40,9 +41,9 @@ class WorkflowRuntimeP0Test {
   @Test
   void shouldHonorRetryDelayAndUseAttemptIdAsStartIdempotencyKey()
       throws InterruptedException {
-    RecordingRunner runner = new RecordingRunner();
-    runner.failNext("task-a", 1);
-    service = service(runner, "task-a");
+    RecordingTaskExecutor executor = new RecordingTaskExecutor();
+    executor.failNext("task-a", 1);
+    service = service(executor, "task-a");
 
     WorkflowRunSpec request = runSpec(
         "retry-delay",
@@ -53,17 +54,17 @@ class WorkflowRuntimeP0Test {
     WorkflowInstanceVO started = service.run(request);
     service.activate(started.id());
 
-    waitForStarts(runner, "task-a", 1);
+    waitForStarts(executor, "task-a", 1);
     Thread.sleep(200L);
-    assertThat(runner.started("task-a")).isEqualTo(1);
+    assertThat(executor.started("task-a")).isEqualTo(1);
 
     WorkflowInstanceVO completed = waitForTerminal(started.id(), 3_000L);
     assertThat(completed.status()).isEqualTo("SUCCESS");
-    assertThat(runner.started("task-a")).isEqualTo(2);
-    assertThat(runner.startGapMillis("task-a")).isGreaterThanOrEqualTo(800L);
+    assertThat(executor.started("task-a")).isEqualTo(2);
+    assertThat(executor.startGapMillis("task-a")).isGreaterThanOrEqualTo(800L);
 
     WorkflowInstanceVO.NodeInstanceVO node = node(completed, "a");
-    assertThat(runner.idempotencyKeys("task-a"))
+    assertThat(executor.idempotencyKeys("task-a"))
         .hasSize(2)
         .doesNotHaveDuplicates()
         .contains(node.currentAttemptId());
@@ -72,9 +73,9 @@ class WorkflowRuntimeP0Test {
   @Test
   void shouldNotStartDelayedRetryAfterWorkflowWasCanceled()
       throws InterruptedException {
-    RecordingRunner runner = new RecordingRunner();
-    runner.failNext("task-a", 1);
-    service = service(runner, "task-a");
+    RecordingTaskExecutor executor = new RecordingTaskExecutor();
+    executor.failNext("task-a", 1);
+    service = service(executor, "task-a");
 
     WorkflowRunSpec request = runSpec(
         "cancel-delayed-retry",
@@ -90,7 +91,7 @@ class WorkflowRuntimeP0Test {
     assertThat(canceled.status()).isEqualTo("CANCELED");
 
     Thread.sleep(1_200L);
-    assertThat(runner.started("task-a")).isEqualTo(1);
+    assertThat(executor.started("task-a")).isEqualTo(1);
   }
 
   private WorkflowRunSpec runSpec(String name, WorkflowNodeSpec node) {
@@ -103,7 +104,7 @@ class WorkflowRuntimeP0Test {
         "CONTINUE_INDEPENDENT_BRANCHES");
   }
 
-  private WorkflowRuntime service(RecordingRunner runner, String... taskIds) {
+  private WorkflowRuntime service(RecordingTaskExecutor executor, String... taskIds) {
     Map<String, TaskDefinition> tasks = new ConcurrentHashMap<>();
     for (String taskId : taskIds) {
       tasks.put(taskId, new TaskDefinition(taskId, taskId, "SYNC"));
@@ -124,7 +125,10 @@ class WorkflowRuntimeP0Test {
       }
     };
     return new WorkflowRuntime(
-        new WorkflowEventStream(), registry, runner, 2L);
+        new WorkflowEventStream(),
+        registry,
+        new TaskExecutionGateway(List.of(executor)),
+        2L);
   }
 
   private WorkflowInstanceVO waitForTerminal(String executionId, long timeoutMillis)
@@ -140,9 +144,9 @@ class WorkflowRuntimeP0Test {
     return service.getInstance(executionId);
   }
 
-  private void waitForStarts(RecordingRunner runner, String taskId, int expected)
+  private void waitForStarts(RecordingTaskExecutor executor, String taskId, int expected)
       throws InterruptedException {
-    for (int i = 0; i < 100 && runner.started(taskId) < expected; i++) {
+    for (int i = 0; i < 100 && executor.started(taskId) < expected; i++) {
       Thread.sleep(10L);
     }
   }
@@ -168,13 +172,13 @@ class WorkflowRuntimeP0Test {
         .orElseThrow();
   }
 
-  private static final class RecordingRunner implements SyncTaskRunner {
+  private static final class RecordingTaskExecutor implements TaskExecutor {
     private final AtomicLong sequence = new AtomicLong();
     private final ConcurrentMap<String, AtomicInteger> failures = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, AtomicInteger> starts = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ConcurrentLinkedQueue<Long>> startTimes = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ConcurrentLinkedQueue<String>> idempotencyKeys = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, SyncTaskExecution> executions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, TaskExecution> executions = new ConcurrentHashMap<>();
 
     void failNext(String taskId, int count) {
       failures.put(taskId, new AtomicInteger(count));
@@ -200,26 +204,29 @@ class WorkflowRuntimeP0Test {
     }
 
     @Override
-    public SyncTaskExecution start(String taskId) {
-      return startInternal(taskId);
+    public String taskType() {
+      return "SYNC";
     }
 
     @Override
-    public SyncTaskExecution start(TaskVersionSnapshot snapshot, String idempotencyKey) {
+    public TaskExecution start(
+        TaskVersionSnapshot snapshot,
+        String idempotencyKey,
+        Map<String, Object> input) {
       idempotencyKeys
           .computeIfAbsent(snapshot.taskId(), ignored -> new ConcurrentLinkedQueue<>())
           .offer(idempotencyKey);
       return startInternal(snapshot.taskId());
     }
 
-    private SyncTaskExecution startInternal(String taskId) {
+    private TaskExecution startInternal(String taskId) {
       starts.computeIfAbsent(taskId, ignored -> new AtomicInteger()).incrementAndGet();
       startTimes.computeIfAbsent(taskId, ignored -> new ConcurrentLinkedQueue<>())
           .offer(System.nanoTime());
       AtomicInteger remaining = failures.computeIfAbsent(taskId, ignored -> new AtomicInteger());
       boolean fail = remaining.getAndUpdate(value -> Math.max(0, value - 1)) > 0;
       String executionId = String.valueOf(sequence.incrementAndGet());
-      SyncTaskExecution execution = new SyncTaskExecution(
+      TaskExecution execution = new TaskExecution(
           executionId,
           fail ? "FAILED" : "SUCCEEDED",
           fail ? "planned failure" : null,
@@ -229,8 +236,8 @@ class WorkflowRuntimeP0Test {
     }
 
     @Override
-    public SyncTaskExecution status(String executionId) {
-      SyncTaskExecution execution = executions.get(executionId);
+    public TaskExecution status(String executionId) {
+      TaskExecution execution = executions.get(executionId);
       if (execution == null) {
         throw new IllegalArgumentException("execution not found: " + executionId);
       }

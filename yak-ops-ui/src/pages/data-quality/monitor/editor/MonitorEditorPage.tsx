@@ -6,9 +6,9 @@ import { useMemo } from 'react';
 import { BasicConfig } from './BasicConfig';
 import { SectionNavigator } from './EditorLayout';
 import { useMonitorEditorPage } from './hooks/useMonitorEditorPage';
-import { IssueStrategy } from './IssueStrategy';
+import { NotificationSettings } from './NotificationSettings';
 import { QualityRuleEditor } from './RuleEditor';
-import { RuntimeSettings } from './RuntimeSettings';
+import { ScheduleSettings } from './ScheduleSettings';
 import { useSectionNavigation } from './useSectionNavigation';
 
 const MonitorEditorPage = () => {
@@ -30,7 +30,7 @@ const MonitorEditorPage = () => {
   const { pageRootRef, activeSection, locateSection } = useSectionNavigation();
 
   return (
-    <ConfigProvider theme={BRAND_THEME}>
+    <ConfigProvider theme={BRAND_THEME} variant="filled">
       <div className="h-[calc(100vh-64px)] overflow-hidden bg-[#f7f8fa] text-[#161823]">
         <div
           ref={pageRootRef}
@@ -72,14 +72,14 @@ const MonitorEditorPage = () => {
                       columns={editor.columns}
                       templates={editor.templates}
                     />
-                    <RuntimeSettings
-                      value={editor.runtime}
-                      onChange={editor.setRuntime}
+                    <ScheduleSettings
+                      value={editor.schedule}
+                      onChange={editor.setSchedule}
                       nextRunTime={editor.nextRunTime}
                     />
-                    <IssueStrategy
-                      value={editor.strategy}
-                      onChange={editor.setStrategy}
+                    <NotificationSettings
+                      value={editor.notification}
+                      onChange={editor.setNotification}
                     />
                   </main>
                 </Form>
