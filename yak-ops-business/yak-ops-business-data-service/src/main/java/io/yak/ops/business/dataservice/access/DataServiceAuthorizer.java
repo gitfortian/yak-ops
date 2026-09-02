@@ -17,8 +17,15 @@ public class DataServiceAuthorizer {
   private final DataServiceApiKeyRepository repository;
   private final ApiKeySecretGenerator secrets;
   private final DataServiceRateLimiter rateLimiter;
+  private final DataServiceIpAccessAuthorizer ipAccessAuthorizer;
 
   public AccessContext authorize(DataServiceDefinition definition, String rawKey) {
+    return authorize(definition, rawKey, null);
+  }
+
+  /** Network policy is evaluated before API Key lookup/rate-limit work. */
+  public AccessContext authorize(DataServiceDefinition definition, String rawKey, String clientIp) {
+    ipAccessAuthorizer.authorize(definition.id(), clientIp);
     if (definition.authMode() == AuthMode.NONE) return AccessContext.publicAccess();
     if (rawKey == null || rawKey.isBlank()) throw new DataServiceUnauthorizedException("缺少 X-API-Key 请求头");
     DataServiceApiKey key = repository.findByHash(definition.id(), secrets.hash(rawKey.trim()))

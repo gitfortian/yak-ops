@@ -14,6 +14,10 @@ import type {
   DataServiceCallLog,
   DataServiceDocumentation,
   DataServiceDocumentationInput,
+  DataServiceIpAccessMode,
+  DataServiceIpAccessPolicy,
+  DataServiceIpAccessRule,
+  DataServiceIpAccessRuleInput,
   DataServicePublishPayload,
   DataServiceQueryResult,
   DataServiceRuntimeConfig,
@@ -191,6 +195,50 @@ export const deleteDataServiceKey = async (
 ): Promise<void> => {
   await HttpUtils.deleteData<boolean>(
     `${DATA_SERVICE_API_PREFIX}/${id}/keys/${keyId}`,
+  );
+};
+
+export const getDataServiceIpAccess = (
+  id: number,
+): Promise<DataServiceIpAccessPolicy> =>
+  HttpUtils.getData<DataServiceIpAccessPolicy>(
+    `${DATA_SERVICE_API_PREFIX}/${id}/ip-access`,
+  );
+
+export const setDataServiceIpAccessMode = (
+  id: number,
+  mode: DataServiceIpAccessMode,
+): Promise<DataServiceIpAccessPolicy> =>
+  HttpUtils.putData<DataServiceIpAccessPolicy>(
+    `${DATA_SERVICE_API_PREFIX}/${id}/ip-access/mode${queryString({ mode })}`,
+    {},
+  );
+
+export const createDataServiceIpAccessRule = (
+  id: number,
+  payload: DataServiceIpAccessRuleInput,
+): Promise<DataServiceIpAccessRule> =>
+  HttpUtils.postData<DataServiceIpAccessRule>(
+    `${DATA_SERVICE_API_PREFIX}/${id}/ip-access/rules`,
+    payload,
+  );
+
+export const updateDataServiceIpAccessRule = (
+  id: number,
+  ruleId: number,
+  payload: DataServiceIpAccessRuleInput,
+): Promise<DataServiceIpAccessRule> =>
+  HttpUtils.putData<DataServiceIpAccessRule>(
+    `${DATA_SERVICE_API_PREFIX}/${id}/ip-access/rules/${ruleId}`,
+    payload,
+  );
+
+export const deleteDataServiceIpAccessRule = async (
+  id: number,
+  ruleId: number,
+): Promise<void> => {
+  await HttpUtils.deleteData<boolean>(
+    `${DATA_SERVICE_API_PREFIX}/${id}/ip-access/rules/${ruleId}`,
   );
 };
 

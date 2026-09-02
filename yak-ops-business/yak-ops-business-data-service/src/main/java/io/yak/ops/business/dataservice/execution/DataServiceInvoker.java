@@ -1,6 +1,7 @@
 package io.yak.ops.business.dataservice.execution;
 
 import io.yak.ops.business.dataservice.access.DataServiceAuthorizer;
+import io.yak.ops.business.dataservice.access.DataServiceForbiddenException;
 import io.yak.ops.business.dataservice.access.DataServiceRateLimitException;
 import io.yak.ops.business.dataservice.access.DataServiceUnauthorizedException;
 import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
@@ -42,19 +43,35 @@ public class DataServiceInvoker {
   }
 
   public DataServiceQueryResponse invoke(String servicePath, Map<String, String> parameters, String rawApiKey) {
+    return invoke(servicePath, parameters, rawApiKey, null);
+  }
+
+  public DataServiceQueryResponse invoke(
+      String servicePath,
+      Map<String, String> parameters,
+      String rawApiKey,
+      String clientIp) {
     DataServiceDefinition definition = reader.requireByPath(normalizePath(servicePath));
     ProjectContext projectContext = requireProjectContext(definition);
     return projectContextScope.call(
         projectContext,
-        () -> invokeInProject(definition, parameters, rawApiKey));
+        () -> invokeInProject(definition, parameters, rawApiKey, clientIp));
   }
 
   private DataServiceQueryResponse invokeInProject(
-      DataServiceDefinition definition, Map<String, String> parameters, String rawApiKey) {
-    if (!definition.settings().enabled()) throw new IllegalStateException("数据服务未启用：" + definition.settings().path());
+      DataServiceDefinition definition,
+      Map<String, String> parameters,
+      String rawApiKey,
+      String clientIp) {
+    if (!definition.settings().enabled()) {
+      throw new IllegalStateException("数据服务未启用：" + definition.settings().path());
+    }
     AccessContext access;
     try {
-      access = authorizer.authorize(definition, rawApiKey);
+      access = authorizer.authorize(definition, rawApiKey, clientIp);
+    } catch (DataServiceForbiddenException exception) {
+      audit(definition, parameters, false, 0L, 0, safeMessage(exception), AccessContext.publicAccess());
+      throw exception;
     } catch (DataServiceUnauthorizedException | DataServiceRateLimitException exception) {
       audit(definition, parameters, false, 0L, 0, safeMessage(exception), AccessContext.rejectedApiKey());
       throw exception;
@@ -100,10 +117,7 @@ public class DataServiceInvoker {
     }
   }
 
-  /**
-   * Invocation audit is evidence, not the business result. A logging outage must never turn a
-   * successful query into a failed API call or replace the original invocation exception.
-   */
+  /** Invocation audit is evidence, not the business result. */
   private void audit(
       DataServiceDefinition definition,
       Map<String, String> parameters,
@@ -123,11 +137,7 @@ public class DataServiceInvoker {
     }
   }
 
-  /**
-   * Persisted monotonic generation is the primary cross-node cache namespace. Runtime-affecting
-   * settings/policy are also included so concurrent admin writes that observed the same generation
-   * still cannot reuse one another's cached results.
-   */
+  /** Persisted generation and runtime shape form the node-local cache namespace. */
   String runtimeNamespace(DataServiceDefinition definition) {
     SourceReference source = definition.sourceReference();
     RuntimePolicy policy = definition.runtimePolicy();
@@ -172,14 +182,21 @@ public class DataServiceInvoker {
     if (parameters == null || parameters.isEmpty()) return Map.of();
     if (!paginationEnabled) return parameters;
     Map<String, String> result = new LinkedHashMap<>(parameters);
-    result.remove("pageNum"); result.remove("pageSize"); result.remove("returnTotalNum");
+    result.remove("pageNum");
+    result.remove("pageSize");
+    result.remove("returnTotalNum");
     return result;
   }
 
   private int positiveInt(String raw, int fallback, String name) {
     if (!StringUtils.hasText(raw)) return fallback;
-    try { int value = Integer.parseInt(raw.trim()); if (value <= 0) throw new NumberFormatException(); return value; }
-    catch (NumberFormatException exception) { throw new IllegalArgumentException(name + " 必须是大于 0 的整数"); }
+    try {
+      int value = Integer.parseInt(raw.trim());
+      if (value <= 0) throw new NumberFormatException();
+      return value;
+    } catch (NumberFormatException exception) {
+      throw new IllegalArgumentException(name + " 必须是大于 0 的整数");
+    }
   }
 
   private boolean booleanValue(String raw, boolean fallback, String name) {
@@ -191,14 +208,20 @@ public class DataServiceInvoker {
 
   private String normalizePath(String path) {
     if (!StringUtils.hasText(path)) throw new IllegalArgumentException("服务路径不能为空");
-    String value = path.trim(); if (!value.startsWith("/")) value = "/" + value;
+    String value = path.trim();
+    if (!value.startsWith("/")) value = "/" + value;
     value = value.replaceAll("/{2,}", "/");
     if (value.length() > 1 && value.endsWith("/")) value = value.substring(0, value.length() - 1);
-    if (!value.matches("/[A-Za-z0-9._~/-]+")) throw new IllegalArgumentException("服务路径仅支持字母、数字、-、_、. 和 /：" + value);
+    if (!value.matches("/[A-Za-z0-9._~/-]+")) {
+      throw new IllegalArgumentException("服务路径仅支持字母、数字、-、_、. 和 /：" + value);
+    }
     return value;
   }
 
-  private long elapsedMs(long started) { return Math.max(0L, (System.nanoTime() - started) / 1_000_000L); }
+  private long elapsedMs(long started) {
+    return Math.max(0L, (System.nanoTime() - started) / 1_000_000L);
+  }
+
   private String safeMessage(Throwable throwable) {
     String message = throwable == null ? null : throwable.getMessage();
     return StringUtils.hasText(message) ? message : "数据服务调用失败";

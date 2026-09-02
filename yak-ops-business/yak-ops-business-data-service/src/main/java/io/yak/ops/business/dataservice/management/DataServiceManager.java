@@ -1,6 +1,7 @@
 package io.yak.ops.business.dataservice.management;
 
 import io.yak.ops.business.dataservice.access.DataServiceApiKeyManager;
+import io.yak.ops.business.dataservice.access.DataServiceIpAccessManager;
 import io.yak.ops.business.dataservice.domain.DataServiceDefinition;
 import io.yak.ops.business.dataservice.domain.DataServiceSettings;
 import io.yak.ops.business.dataservice.domain.PublishedRuntimeSnapshot;
@@ -24,6 +25,7 @@ public class DataServiceManager {
   private final DataServiceRepository repository;
   private final DataServiceReader reader;
   private final DataServiceApiKeyManager apiKeyManager;
+  private final DataServiceIpAccessManager ipAccessManager;
   private final DataServiceRuntimePolicyManager runtimeManager;
   private final CurrentProject currentProject;
 
@@ -74,6 +76,7 @@ public class DataServiceManager {
   public void delete(Long id) {
     reader.require(id);
     apiKeyManager.deleteKeysForApi(id);
+    ipAccessManager.deleteForApi(id);
     if (!repository.delete(id)) throw new IllegalArgumentException("数据服务不存在：" + id);
     runtimeManager.remove(id);
   }
