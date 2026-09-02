@@ -1,5 +1,7 @@
+import JavaIcon from '@/pages/data-development/icon/JavaIcon';
+import PythonIcon from '@/pages/data-development/icon/PythonIcon';
+import { TerminalSquare } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
-import SqlNodeIcon from './SqlNodeIcon';
 import SyncNodeIcon from './SyncNodeIcon';
 
 interface WorkflowNodeIconProps {
@@ -33,21 +35,86 @@ const NODE_ICON_META: Record<string, NodeIconMeta> = {
   SYNC: {
     icon: SyncNodeIcon,
   },
-  SQL: {
-    icon: SqlNodeIcon,
-  },
 };
 
-const DIFY_LLM_CONTAINER_SIZE: Record<NonNullable<WorkflowNodeIconProps['size']>, string> = {
+type IconSize = NonNullable<WorkflowNodeIconProps['size']>;
+
+const COMPACT_CONTAINER_SIZE: Record<IconSize, string> = {
   xs: 'h-4 w-4 rounded-[5px] shadow-[0_1px_2px_rgba(16,24,40,.05)]',
   sm: 'h-5 w-5 rounded-md shadow-[0_1px_2px_rgba(16,24,40,.05)]',
   md: 'h-6 w-6 rounded-lg shadow-[0_4px_8px_-2px_rgba(16,24,40,.10),0_2px_4px_-2px_rgba(16,24,40,.06)]',
 };
 
-const DIFY_LLM_ICON_SIZE: Record<NonNullable<WorkflowNodeIconProps['size']>, string> = {
+const COMPACT_ICON_SIZE: Record<IconSize, string> = {
   xs: 'h-3 w-3',
   sm: 'h-3.5 w-3.5',
   md: 'h-4 w-4',
+};
+
+const BRAND_ICON_SIZE: Record<IconSize, number> = {
+  xs: 11,
+  sm: 13,
+  md: 15,
+};
+
+const SQL_TEXT_SIZE: Record<IconSize, string> = {
+  xs: 'text-[6px]',
+  sm: 'text-[7px]',
+  md: 'text-[8px]',
+};
+
+const DATA_DEVELOPMENT_TASK_TYPES = new Set([
+  'SQL',
+  'SHELL',
+  'PYTHON',
+  'JAVA',
+]);
+
+const DevelopmentTaskGlyph = ({
+  taskType,
+  size,
+}: {
+  taskType: string;
+  size: IconSize;
+}) => {
+  if (taskType === 'SQL') {
+    return (
+      <span
+        className={[
+          'font-bold leading-none tracking-[-0.04em]',
+          SQL_TEXT_SIZE[size],
+        ].join(' ')}
+      >
+        SQL
+      </span>
+    );
+  }
+
+  if (taskType === 'JAVA') {
+    return <JavaIcon size={BRAND_ICON_SIZE[size]} />;
+  }
+
+  if (taskType === 'PYTHON') {
+    return <PythonIcon size={BRAND_ICON_SIZE[size]} />;
+  }
+
+  return (
+    <TerminalSquare
+      size={BRAND_ICON_SIZE[size]}
+      strokeWidth={1.8}
+      aria-hidden="true"
+    />
+  );
+};
+
+const developmentContainerClassName = (taskType: string) => {
+  if (taskType === 'SQL') {
+    return 'border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]';
+  }
+  if (taskType === 'SHELL') {
+    return 'border-[#d9ddff] bg-[#f4f5ff] text-[#6172f3]';
+  }
+  return 'border-[#e4e7ec] bg-white text-[#344054]';
 };
 
 const WorkflowNodeIcon = ({ taskType, size = 'md' }: WorkflowNodeIconProps) => {
@@ -61,10 +128,24 @@ const WorkflowNodeIcon = ({ taskType, size = 'md' }: WorkflowNodeIconProps) => {
         className={[
           'flex shrink-0 items-center justify-center border-[0.5px] border-white/[0.02]',
           'bg-[#6172f3] text-white',
-          DIFY_LLM_CONTAINER_SIZE[size],
+          COMPACT_CONTAINER_SIZE[size],
         ].join(' ')}
       >
-        <Icon className={DIFY_LLM_ICON_SIZE[size]} />
+        <Icon className={COMPACT_ICON_SIZE[size]} />
+      </span>
+    );
+  }
+
+  if (DATA_DEVELOPMENT_TASK_TYPES.has(normalizedTaskType)) {
+    return (
+      <span
+        className={[
+          'flex shrink-0 items-center justify-center border-[0.5px]',
+          COMPACT_CONTAINER_SIZE[size],
+          developmentContainerClassName(normalizedTaskType),
+        ].join(' ')}
+      >
+        <DevelopmentTaskGlyph taskType={normalizedTaskType} size={size} />
       </span>
     );
   }
