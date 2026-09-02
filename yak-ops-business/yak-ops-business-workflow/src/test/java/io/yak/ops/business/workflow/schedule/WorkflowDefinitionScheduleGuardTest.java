@@ -21,15 +21,15 @@ import org.springframework.beans.factory.ObjectProvider;
 class WorkflowDefinitionScheduleGuardTest {
 
   @Mock private ObjectProvider<WorkflowScheduleDao> scheduleDaoProvider;
-  @Mock private ObjectProvider<WorkflowScheduleLifecycle> scheduleLifecycleProvider;
+  @Mock private ObjectProvider<WorkflowScheduleAuditCoordinator> scheduleAuditProvider;
   @Mock private WorkflowScheduleDao scheduleDao;
-  @Mock private WorkflowScheduleLifecycle scheduleLifecycle;
+  @Mock private WorkflowScheduleAuditCoordinator scheduleAudit;
 
   private WorkflowDefinitionScheduleGuard guard;
 
   @BeforeEach
   void setUp() {
-    guard = new WorkflowDefinitionScheduleGuard(scheduleDaoProvider, scheduleLifecycleProvider);
+    guard = new WorkflowDefinitionScheduleGuard(scheduleDaoProvider, scheduleAuditProvider);
   }
 
   @Test
@@ -46,12 +46,12 @@ class WorkflowDefinitionScheduleGuardTest {
   void shouldActivateSavedSchedulesWhenWorkflowGoesOnline() {
     WorkflowSchedulePO schedule = schedule("schedule-1", "OFFLINE");
     when(scheduleDaoProvider.getIfAvailable()).thenReturn(scheduleDao);
-    when(scheduleLifecycleProvider.getIfAvailable()).thenReturn(scheduleLifecycle);
+    when(scheduleAuditProvider.getIfAvailable()).thenReturn(scheduleAudit);
     when(scheduleDao.selectSchedules("workflow-1", "OFFLINE")).thenReturn(List.of(schedule));
 
     guard.activateConfiguredSchedules("workflow-1");
 
-    verify(scheduleLifecycle).online("schedule-1");
+    verify(scheduleAudit).onlineFromWorkflow("schedule-1", "workflow-1");
   }
 
   @Test
@@ -59,24 +59,24 @@ class WorkflowDefinitionScheduleGuardTest {
     WorkflowSchedulePO schedule = schedule("schedule-expired", "OFFLINE");
     schedule.setEndTime(Instant.now().minus(1, ChronoUnit.DAYS));
     when(scheduleDaoProvider.getIfAvailable()).thenReturn(scheduleDao);
-    when(scheduleLifecycleProvider.getIfAvailable()).thenReturn(scheduleLifecycle);
+    when(scheduleAuditProvider.getIfAvailable()).thenReturn(scheduleAudit);
     when(scheduleDao.selectSchedules("workflow-1", "OFFLINE")).thenReturn(List.of(schedule));
 
     guard.activateConfiguredSchedules("workflow-1");
 
-    verifyNoInteractions(scheduleLifecycle);
+    verifyNoInteractions(scheduleAudit);
   }
 
   @Test
   void shouldDeactivateOnlineSchedulesBeforeWorkflowGoesOffline() {
     WorkflowSchedulePO schedule = schedule("schedule-1", "ONLINE");
     when(scheduleDaoProvider.getIfAvailable()).thenReturn(scheduleDao);
-    when(scheduleLifecycleProvider.getIfAvailable()).thenReturn(scheduleLifecycle);
+    when(scheduleAuditProvider.getIfAvailable()).thenReturn(scheduleAudit);
     when(scheduleDao.selectSchedules("workflow-1", "ONLINE")).thenReturn(List.of(schedule));
 
     guard.deactivateConfiguredSchedules("workflow-1");
 
-    verify(scheduleLifecycle).offline("schedule-1");
+    verify(scheduleAudit).offlineFromWorkflow("schedule-1", "workflow-1");
   }
 
   private WorkflowSchedulePO schedule(String id, String status) {

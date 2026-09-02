@@ -24,10 +24,10 @@ io.yak.ops.business.workflow
 ├── definition              # draft / version / graph / task binding
 ├── execution               # launcher / operations / reactivation ports
 ├── runtime                 # engine runtime adapter / recovery
-├── schedule                # schedule definition lifecycle / reconcile
+├── schedule                # schedule definition lifecycle / reconcile / audit orchestration
 │   ├── engine              # Yak Schedule bridge
 │   └── trigger             # durable trigger ledger / admission / queue
-├── backfill                # backfill batch / rerun / trigger adapter
+├── backfill                # backfill batch / rerun / trigger adapter / audit orchestration
 ├── observability           # SSE projection
 ├── repository              # durable business/engine persistence adapters
 │   └── support
@@ -50,17 +50,20 @@ WorkflowRuntime
 WorkflowBackfillManager
 ```
 
-它们可以使用 `@Service`，因为它们是稳定 use-case boundary，而不是因为“所有 Bean 都叫 Service”。Planner / Query / Coordinator / Reconciler / Adapter / Guard / EventStream 等内部专业角色使用 `@Component`。
+它们可以使用 `@Service`，因为它们是稳定 use-case boundary，而不是因为“所有 Bean 都叫 Service”。Audit Coordinator / Planner / Query / Coordinator / Reconciler / Adapter / Guard / EventStream 等内部专业角色使用 `@Component`。
+
+Audit Coordinator 只负责围绕已有业务入口记录业务事实，不成为 Definition / Execution / Schedule / Backfill 的第二 truth owner。
 
 ## 4. Definition Subsystem
 
 ```text
 Controller
-    -> WorkflowDefinitionManager
-         -> WorkflowTaskBindingResolver
-         -> WorkflowStartGraphCompiler
-         -> WorkflowDefinitionRepository
-         -> WorkflowRuntime
+    -> WorkflowDefinitionAuditCoordinator
+         -> WorkflowDefinitionManager
+              -> WorkflowTaskBindingResolver
+              -> WorkflowStartGraphCompiler
+              -> WorkflowDefinitionRepository
+              -> WorkflowRuntime
 ```
 
 DefinitionManager 拥有 current draft、publish、active version、Task revision binding 与 definition-level safety。
@@ -83,6 +86,7 @@ Restart / Rerun
         v
   WorkflowLauncher
         |
+        +-> WorkflowExecutionAuditBridge
         +-> resolve active/pinned version
         +-> record TriggerContext
         v
@@ -91,7 +95,7 @@ Restart / Rerun
 
 `WorkflowExecutionReactivator` 处理同一个 Execution 的 retry/continue。它只依赖 execution-owned `WorkflowExecutionReactivationGuard`；Schedule Trigger Coordinator 实现该 Port，从而能施加 Ledger 串行槽位规则而不制造 execution -> schedule package cycle。
 
-`WorkflowExecutionManager` 负责实例运维 read/use-case。businessDate rerun 通过 execution-owned `WorkflowBusinessDateRerunGateway` 进入 Backfill，而不是直接认识 Backfill 实现。
+`WorkflowExecutionManager` 负责实例运维 read/use-case。businessDate rerun 通过 execution-owned `WorkflowBusinessDateRerunGateway` 进入 `WorkflowBackfillAuditCoordinator`，而不是直接认识 Backfill business implementation。
 
 ## 6. Runtime Subsystem
 
@@ -107,22 +111,36 @@ Runtime 负责 engine adapter、NodeDispatch、TaskExecution polling、timeout�
 
 `WorkflowRuntimeRecovery` 只负责应用启动后的 durable recovery orchestration，不成为第二 runtime owner。Runtime 内存中的 dispatch queue、control map、active set 都是可恢复辅助状态。
 
+Business Audit 不进入 Runtime 状态机；Execution 终态通过 durable `WorkflowExecutionTerminalEvent` AFTER_COMMIT 投影到 Audit。
+
 ## 7. Schedule Subsystem
 
 ```text
-WorkflowSchedule create/revision/lifecycle
+HTTP direct schedule mutation
+Yak Schedule automatic expire/disable
+    -> WorkflowScheduleAuditCoordinator
+    -> create / revision / lifecycle
     -> durable schedule DAO
     -> WorkflowScheduleEngineBridge
          -> Yak Schedule
+
+Workflow online/offline linkage
+    -> WorkflowDefinitionScheduleGuard
+    -> WorkflowScheduleAuditCoordinator
+    -> lifecycle only (no second AuditOperation)
 
 Yak Schedule callback
     -> WorkflowScheduleTriggerHandler
     -> WorkflowScheduleTriggerCoordinator
 ```
 
+`WorkflowScheduleAuditCoordinator` 记录直接 Schedule mutation 和无父业务操作的 Scheduler 自动 lifecycle。Cron、timezone、日期区间和策略可作为审计业务事实，Schedule `input` 原值不能复制到 Audit。
+
+Workflow online/offline 的 Schedule 联动属于父 Workflow 操作的派生副作用，不再生成第二条 Schedule AuditOperation；这样既控制 Audit Center 噪音，也保证 Project authorization decision 仍归属父 `WORKFLOW_ENABLE/DISABLE`。
+
 `WorkflowScheduleEngineBridge` 是 framework boundary；Schedule 业务表仍是配置 truth。
 
-`WorkflowScheduleReconciler` 恢复 framework projection；`WorkflowScheduleRuntimeState` 只维护 last/next fire projection；`WorkflowScheduleMisfireRecovery` 生成可审计的恢复 Trigger。
+`WorkflowScheduleReconciler` 恢复 framework projection；`WorkflowScheduleRuntimeState` 只维护 last/next fire projection；`WorkflowScheduleMisfireRecovery` 生成 durable recovery Trigger。
 
 ## 8. Trigger Ledger Subsystem
 
@@ -132,21 +150,27 @@ callback / Backfill occurrence
         -> WorkflowScheduleTriggerAdmission
         -> durable Trigger Ledger
         -> WorkflowLauncher
+        -> WORKFLOW_EXECUTE audit
 ```
 
 Admission 拥有 claim/dedupe、SERIAL_WAIT/SERIAL_DISCARD/PARALLEL、LAUNCHING/REACTIVATING reservation、execution binding 与队首推进。
 
 Coordinator 负责跨步骤编排，不复制 Admission 的事务规则。
 
+Trigger Ledger 不为每个 RECEIVED/WAITING/SKIPPED 状态额外创建 Audit Center 行。真正启动的业务执行由 `WorkflowLauncher` 的 `WORKFLOW_EXECUTE` 记录，并通过 triggerId/scheduleId/backfillId 保留来源血缘。
+
 Backfill-specific trigger 创建/加载/launch 被隔离在 `WorkflowBackfillTriggerGateway` 后面；其实现位于 Backfill 子系统，Schedule 不 import Backfill implementation。
 
 ## 9. Backfill Subsystem
 
 ```text
-WorkflowBackfillManager
-    -> WorkflowBackfillPlanner
-    -> durable Backfill DAO
-    -> WorkflowScheduleTriggerCoordinator
+HTTP create/cancel
+Execution businessDate rerun port
+    -> WorkflowBackfillAuditCoordinator
+    -> WorkflowBackfillManager
+         -> WorkflowBackfillPlanner
+         -> durable Backfill DAO
+         -> WorkflowScheduleTriggerCoordinator
 
 WorkflowBackfillTriggerAdapter
     -> WorkflowBackfillQuery
@@ -154,13 +178,15 @@ WorkflowBackfillTriggerAdapter
     -> WorkflowLauncher
 ```
 
-Manager 拥有批次 create/cancel/businessDate rerun；Planner 只生成 occurrence；Reconciler 只根据 durable batch 补齐 Trigger。
+Manager 拥有批次 create/cancel/businessDate rerun 的业务语义；Planner 只生成 occurrence；Reconciler 只根据 durable batch 补齐 Trigger。
 
-Backfill 实现 execution-owned `WorkflowBusinessDateRerunGateway`，让 Execution use-case 不反向依赖 Backfill package。
+`WorkflowBackfillAuditCoordinator` 是 execution-owned `WorkflowBusinessDateRerunGateway` 的唯一 Backfill 实现，并把 create/cancel/rerun 转成管理 AuditOperation。每个真正启动的子 WorkflowExecution 继续由 Launcher 独立审计。
 
 ## 10. Observability
 
 `WorkflowEventStream` 只维护 SSE client 与 heartbeat，并消费 Runtime 投影。它不读取/修改 Definition、Schedule、Trigger Ledger 或 Engine persistence，SSE 断开也不影响执行。
+
+Business Audit 是独立业务解释投影，不取代 SSE、Runtime log 或 Trigger Ledger。
 
 ## 11. Persistence Boundary
 
@@ -209,6 +235,7 @@ Engine Execution = runtime state truth
 Schedule         = durable timer config
 Trigger Ledger   = dedupe/admission/lineage truth
 Backfill         = pinned-version batch truth
+Business Audit   = historical business-action explanation projection
 SSE/log          = projection only
 ```
 

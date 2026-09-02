@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkflowDefinitionScheduleGuard {
   private final ObjectProvider<WorkflowScheduleDao> scheduleDaoProvider;
-  private final ObjectProvider<WorkflowScheduleLifecycle> scheduleLifecycleProvider;
+  private final ObjectProvider<WorkflowScheduleAuditCoordinator> scheduleAuditProvider;
 
   public WorkflowDefinitionScheduleGuard(
       ObjectProvider<WorkflowScheduleDao> scheduleDaoProvider,
-      ObjectProvider<WorkflowScheduleLifecycle> scheduleLifecycleProvider) {
+      ObjectProvider<WorkflowScheduleAuditCoordinator> scheduleAuditProvider) {
     this.scheduleDaoProvider = scheduleDaoProvider;
-    this.scheduleLifecycleProvider = scheduleLifecycleProvider;
+    this.scheduleAuditProvider = scheduleAuditProvider;
   }
 
   /**
@@ -25,24 +25,24 @@ public class WorkflowDefinitionScheduleGuard {
   public void activateConfiguredSchedules(String workflowId) {
     String id = requireWorkflowId(workflowId);
     WorkflowScheduleDao scheduleDao = scheduleDaoProvider.getIfAvailable();
-    WorkflowScheduleLifecycle lifecycle = scheduleLifecycleProvider.getIfAvailable();
-    if (scheduleDao == null || lifecycle == null) return;
+    WorkflowScheduleAuditCoordinator audit = scheduleAuditProvider.getIfAvailable();
+    if (scheduleDao == null || audit == null) return;
 
     Instant now = Instant.now();
     scheduleDao.selectSchedules(id, "OFFLINE").stream()
         .filter(schedule -> schedule.getEndTime() == null || schedule.getEndTime().isAfter(now))
-        .forEach(schedule -> lifecycle.online(schedule.getId()));
+        .forEach(schedule -> audit.onlineFromWorkflow(schedule.getId(), id));
   }
 
   /** 工作流下线前自动停用所有在线调度，避免继续产生新的计划实例。 */
   public void deactivateConfiguredSchedules(String workflowId) {
     String id = requireWorkflowId(workflowId);
     WorkflowScheduleDao scheduleDao = scheduleDaoProvider.getIfAvailable();
-    WorkflowScheduleLifecycle lifecycle = scheduleLifecycleProvider.getIfAvailable();
-    if (scheduleDao == null || lifecycle == null) return;
+    WorkflowScheduleAuditCoordinator audit = scheduleAuditProvider.getIfAvailable();
+    if (scheduleDao == null || audit == null) return;
 
     scheduleDao.selectSchedules(id, "ONLINE")
-        .forEach(schedule -> lifecycle.offline(schedule.getId()));
+        .forEach(schedule -> audit.offlineFromWorkflow(schedule.getId(), id));
   }
 
   private String requireWorkflowId(String workflowId) {

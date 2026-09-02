@@ -33,8 +33,8 @@ definition -> WorkflowDefinitionManager (read/control)
 execution  -> WorkflowLauncher / WorkflowExecutionManager / WorkflowExecutionReactivator
            -> WorkflowExecutionControlAuditCoordinator (pause/resume/cancel)
 runtime    -> WorkflowRuntime
-schedule   -> create/revision/lifecycle/query + trigger query
-backfill   -> WorkflowBackfillManager / WorkflowBackfillQuery
+schedule   -> WorkflowScheduleAuditCoordinator / WorkflowScheduleQuery + trigger query
+backfill   -> WorkflowBackfillAuditCoordinator / WorkflowBackfillManager (preview) / WorkflowBackfillQuery
 ```
 
 Controller 不直接依赖 DAO、Repository、Schedule Engine Bridge 或 Trigger Admission/Coordinator。
@@ -87,6 +87,43 @@ WorkflowExecutionRepositoryAdapter
 人工 `retry/continue` 会复用同一个 WorkflowExecution，因此必须在重新激活前创建新的 `WORKFLOW_EXECUTE` operation 并替换 carrier；失败时恢复旧 carrier。`pause/resume/cancel` 是独立短操作，不替换 execution carrier。
 
 Audit correlation 更新只能修改 `audit_carrier_json`，不能顺手更新 Runtime status、runtime metadata 或 `updated_at`。
+
+### Schedule Audit Corridor
+
+直接 Schedule 配置/生命周期操作与无父业务操作的 Scheduler 自动动作进入：
+
+```text
+HTTP create/update/online/offline/delete
+Yak Schedule automatic expire/disable
+        -> WorkflowScheduleAuditCoordinator
+        -> existing CreateCommand / Revision / Lifecycle
+        -> shared BusinessAuditService
+```
+
+约束：
+
+- Schedule AuditOperation 的 resource 固定为 `WORKFLOW_SCHEDULE`；
+- Cron、timezone、日期区间和策略可以作为业务事实记录；
+- `input` 原值不能复制到 Audit，只允许 `inputConfigured/inputChanged`；
+- Scheduler 自动过期/停用使用 `source=SCHEDULE`；
+- Workflow online/offline 引起的 Schedule 联动**不创建第二条 AuditOperation**，父 `WORKFLOW_ENABLE/DISABLE` 已经表达用户意图，这也避免抢占父操作的 deferred authorization decision；
+- Trigger Ledger 本身不为每个触发额外创建 AuditOperation，成功启动后的业务历史由 `WORKFLOW_EXECUTE` 承担。
+
+### Backfill Audit Corridor
+
+Backfill 管理动作固定为：
+
+```text
+create/cancel
+businessDate rerun gateway
+        -> WorkflowBackfillAuditCoordinator
+        -> WorkflowBackfillManager
+        -> shared BusinessAuditService
+```
+
+Backfill 管理 Operation 只描述批次创建/取消事实。每个真正启动的子 WorkflowExecution 继续由 `WorkflowLauncher -> WorkflowExecutionAuditBridge` 单独记录，避免把运行期事件复制进 Backfill 管理日志。
+
+Backfill Audit payload 不允许复制 `input`、继承的 source input 或 Trigger runtime message，只保留 schedule/workflow/version、日期范围、执行策略和数量等稳定事实。
 
 ## 3. Definition -> Runtime
 
@@ -143,7 +180,7 @@ WorkflowBusinessDateRerunGateway
 WorkflowLauncher
 ```
 
-`WorkflowBackfillTriggerAdapter` 实现 Schedule-owned `WorkflowBackfillTriggerGateway`；Schedule 不 import `workflow.backfill.*`。
+`WorkflowBackfillAuditCoordinator` 是 execution-owned `WorkflowBusinessDateRerunGateway` 的唯一 Backfill 实现；`WorkflowBackfillManager` 保持纯 Backfill 业务 facade。`WorkflowBackfillTriggerAdapter` 实现 Schedule-owned `WorkflowBackfillTriggerGateway`；Schedule 不 import `workflow.backfill.*`。
 
 ## 7. Runtime -> Observability
 
@@ -215,7 +252,7 @@ execution.WorkflowExecutionReactivationGuard
     <- schedule.trigger.WorkflowScheduleTriggerCoordinator
 
 execution.WorkflowBusinessDateRerunGateway
-    <- backfill.WorkflowBackfillManager
+    <- backfill.WorkflowBackfillAuditCoordinator
 
 schedule.trigger.WorkflowBackfillTriggerGateway
     <- backfill.WorkflowBackfillTriggerAdapter

@@ -1,7 +1,6 @@
 package io.yak.ops.business.workflow.backfill;
 
 import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
-import io.yak.ops.business.workflow.execution.WorkflowBusinessDateRerunGateway;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleParameterResolver;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleQuery;
 import io.yak.ops.business.workflow.schedule.trigger.WorkflowScheduleTriggerAdmission;
@@ -35,7 +34,7 @@ import org.springframework.stereotype.Service;
 /** Backfill 批次创建、运维补跑、预览、取消与 Trigger Ledger 分发。 */
 @Service
 @ConditionalOnProperty(prefix = "yak.database", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class WorkflowBackfillManager implements WorkflowBusinessDateRerunGateway {
+public class WorkflowBackfillManager {
   private static final Logger log = LoggerFactory.getLogger(WorkflowBackfillManager.class);
   private static final Set<String> STRATEGIES = Set.of("SERIAL_WAIT", "PARALLEL");
   private static final Set<String> TERMINAL = Set.of(
@@ -149,7 +148,6 @@ public class WorkflowBackfillManager implements WorkflowBusinessDateRerunGateway
    * 按来源实例的不可变发布版本与调度语义，对指定 businessDate 创建运维补跑。
    * 旧实例的系统调度参数和旧运维血缘会被剥离，再根据新的逻辑计划时间重新注入。
    */
-  @Override
   public WorkflowBackfillVO createBusinessDateRerun(
       String sourceExecutionId,
       WorkflowInstanceVO source,

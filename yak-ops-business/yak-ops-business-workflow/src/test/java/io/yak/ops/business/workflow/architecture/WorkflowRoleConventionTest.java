@@ -2,6 +2,7 @@ package io.yak.ops.business.workflow.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.yak.ops.business.workflow.backfill.WorkflowBackfillAuditCoordinator;
 import io.yak.ops.business.workflow.backfill.WorkflowBackfillManager;
 import io.yak.ops.business.workflow.backfill.WorkflowBackfillPlanner;
 import io.yak.ops.business.workflow.backfill.WorkflowBackfillQuery;
@@ -20,6 +21,7 @@ import io.yak.ops.business.workflow.observability.WorkflowEventStream;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntimeRecovery;
 import io.yak.ops.business.workflow.schedule.WorkflowDefinitionScheduleGuard;
+import io.yak.ops.business.workflow.schedule.WorkflowScheduleAuditCoordinator;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleLifecycle;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleQuery;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleReconciler;
@@ -56,6 +58,8 @@ class WorkflowRoleConventionTest {
         WorkflowExecutionAuditBridge.class,
         WorkflowExecutionAuditTerminalListener.class,
         WorkflowExecutionControlAuditCoordinator.class,
+        WorkflowScheduleAuditCoordinator.class,
+        WorkflowBackfillAuditCoordinator.class,
         WorkflowPublishedVersionRunner.class,
         WorkflowRuntimeRecovery.class,
         WorkflowEventStream.class,

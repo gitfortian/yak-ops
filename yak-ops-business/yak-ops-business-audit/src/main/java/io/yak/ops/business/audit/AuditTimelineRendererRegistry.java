@@ -21,9 +21,9 @@ public final class AuditTimelineRendererRegistry {
     Map<String, Function<RenderContext, AuditEventPresentation>> values = new LinkedHashMap<>();
     values.put("AUTHORIZATION_DECISION", this::authorization);
     values.put("OPERATION_STARTED", fixed("操作开始"));
-    values.put("RESOURCE_CREATED", fixed("资源已创建"));
+    values.put("RESOURCE_CREATED", this::resourceCreated);
     values.put("RESOURCE_UPDATED", this::resourceUpdated);
-    values.put("RESOURCE_DELETED", fixed("资源已删除"));
+    values.put("RESOURCE_DELETED", this::resourceDeleted);
     values.put("TASK_SUBMITTED", fixed("任务已提交"));
     values.put("TASK_QUEUED", fixed("任务已进入队列"));
     values.put("WORKER_STARTED", fixed("执行器开始处理"));
@@ -57,6 +57,18 @@ public final class AuditTimelineRendererRegistry {
     return context -> new AuditEventPresentation(title, description(context));
   }
 
+  private AuditEventPresentation resourceCreated(RenderContext context) {
+    String changeType = stringValue(context.payload().get("changeType"));
+    String title =
+        switch (changeType == null ? "" : changeType) {
+          case "SCHEDULE_CREATED" -> "调度已创建";
+          case "BACKFILL_CREATED" -> "Backfill 已创建";
+          case "BUSINESS_DATE_RERUN_CREATED" -> "运维补跑已创建";
+          default -> "资源已创建";
+        };
+    return new AuditEventPresentation(title, description(context));
+  }
+
   private AuditEventPresentation resourceUpdated(RenderContext context) {
     String changeType = stringValue(context.payload().get("changeType"));
     String title =
@@ -72,8 +84,19 @@ public final class AuditTimelineRendererRegistry {
           case "EXECUTION_PAUSED" -> "执行已暂停";
           case "EXECUTION_RESUMED" -> "执行已恢复";
           case "EXECUTION_CANCEL_REQUESTED" -> "已请求取消执行";
+          case "SCHEDULE_UPDATED" -> "调度配置已更新";
+          case "SCHEDULE_ENABLED" -> "调度已启用";
+          case "SCHEDULE_DISABLED" -> "调度已停用";
+          case "SCHEDULE_EXPIRED" -> "调度已过期";
+          case "BACKFILL_CANCELED" -> "Backfill 已取消";
           default -> "资源已更新";
         };
+    return new AuditEventPresentation(title, description(context));
+  }
+
+  private AuditEventPresentation resourceDeleted(RenderContext context) {
+    String changeType = stringValue(context.payload().get("changeType"));
+    String title = "SCHEDULE_DELETED".equals(changeType) ? "调度已删除" : "资源已删除";
     return new AuditEventPresentation(title, description(context));
   }
 
@@ -141,6 +164,15 @@ public final class AuditTimelineRendererRegistry {
     labels.put("WORKFLOW_EXECUTION_PAUSE_FAILED", "暂停工作流失败");
     labels.put("WORKFLOW_EXECUTION_RESUME_FAILED", "恢复工作流失败");
     labels.put("WORKFLOW_EXECUTION_CANCEL_FAILED", "取消工作流失败");
+    labels.put("WORKFLOW_SCHEDULE_CREATE_FAILED", "创建工作流调度失败");
+    labels.put("WORKFLOW_SCHEDULE_UPDATE_FAILED", "更新工作流调度失败");
+    labels.put("WORKFLOW_SCHEDULE_ENABLE_FAILED", "启用工作流调度失败");
+    labels.put("WORKFLOW_SCHEDULE_DISABLE_FAILED", "停用工作流调度失败");
+    labels.put("WORKFLOW_SCHEDULE_EXPIRE_FAILED", "工作流调度过期处理失败");
+    labels.put("WORKFLOW_SCHEDULE_DELETE_FAILED", "删除工作流调度失败");
+    labels.put("WORKFLOW_BACKFILL_CREATE_FAILED", "创建 Backfill 失败");
+    labels.put("WORKFLOW_BACKFILL_CANCEL_FAILED", "取消 Backfill 失败");
+    labels.put("WORKFLOW_BUSINESS_DATE_RERUN_FAILED", "创建指定日期补跑失败");
     return Map.copyOf(labels);
   }
 
