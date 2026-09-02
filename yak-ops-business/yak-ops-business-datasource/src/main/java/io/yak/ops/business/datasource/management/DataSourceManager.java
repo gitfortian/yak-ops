@@ -84,7 +84,6 @@ public class DataSourceManager {
       transactionManager = "opsDataSourceTransactionManager",
       rollbackFor = Exception.class)
   public boolean update(Long id, DataSourceConfigurationCommand command) {
-    DataSourceDefinition existing = reader.require(id);
     AuditOperationHandle audit =
         auditService.start(
             new AuditOperationRequest(
@@ -92,10 +91,12 @@ public class DataSourceManager {
                 "Update datasource",
                 "DATASOURCE",
                 String.valueOf(id),
-                existing.getName(),
+                null,
                 "APPLICATION",
                 Map.of()));
     try {
+      DataSourceDefinition existing = reader.require(id);
+      audit.resource(String.valueOf(id), existing.getName());
       ensureNameAvailable(command.name(), id);
       assertTypeUnchanged(existing, command);
       ConnectionProfile connectionProfile =
@@ -129,7 +130,6 @@ public class DataSourceManager {
       transactionManager = "opsDataSourceTransactionManager",
       rollbackFor = Exception.class)
   public boolean delete(Long id) {
-    DataSourceDefinition existing = reader.require(id);
     AuditOperationHandle audit =
         auditService.start(
             new AuditOperationRequest(
@@ -137,10 +137,12 @@ public class DataSourceManager {
                 "Delete datasource",
                 "DATASOURCE",
                 String.valueOf(id),
-                existing.getName(),
+                null,
                 "APPLICATION",
                 Map.of()));
     try {
+      DataSourceDefinition existing = reader.require(id);
+      audit.resource(String.valueOf(id), existing.getName());
       if (!repository.delete(existing.getId())) {
         throw new DataSourceException(DataSourceErrorCode.DELETE_FAILED);
       }
