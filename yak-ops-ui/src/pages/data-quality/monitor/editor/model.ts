@@ -181,7 +181,10 @@ export const buildSettings = (
   ruleFailureAction: schedule.ruleFailureAction,
   notifyEnabled: notification.notifyEnabled,
   notifyChannel: notification.notifyChannel,
-  notifyTarget: notification.notifyTarget.trim() || undefined,
+  notifyTarget:
+    notification.notifyChannel === 'MESSAGE'
+      ? undefined
+      : notification.notifyTarget.trim() || undefined,
   alertLevel: notification.alertLevel,
 });
 
