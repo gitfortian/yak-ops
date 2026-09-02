@@ -12,6 +12,7 @@ Data Service 将已发布的数据定义转化为稳定、可调用、可保护�
 - SQL / Datasource 来源可信；
 - 调用参数安全绑定；
 - API Key 鉴权、调用方识别和集群共享调用配额；
+- IP/CIDR 来源白名单、黑名单与可信代理边界；
 - Cache / Circuit 等低延迟 Runtime 保护；
 - 多实例调用指标、审计生命周期和敏感参数保护；
 - 文档、OpenAPI、调用日志和运行概览；
@@ -22,7 +23,7 @@ Data Service 将已发布的数据定义转化为稳定、可调用、可保护�
 - Data Service 必须有稳定 ID、所属 Project Space、名称、Path、启用状态、最大返回行数、超时、分页开关和访问模式。
 - Path 在模块内唯一；由于 Public Invocation URL 不包含 Project namespace，Path 必须跨 Project 全局唯一。
 - 启用/停用不能改变已发布 SQL、Datasource 或 Source Revision。
-- 删除服务时必须清理其 API Key，并移除当前节点的 Runtime state。
+- 删除服务时必须清理其 API Key、IP 访问策略/规则，并移除当前节点的 Runtime state。
 - Runtime/Access 配置可以独立调整，不要求重新发布上游 Revision。
 - Data Service 必须维护持久化的单调 Runtime generation，用于区分不同发布/配置代际。
 
@@ -58,9 +59,11 @@ Source Provider
 - Pagination 控制参数 `pageNum/pageSize/returnTotalNum` 不得作为 SQL 命名参数透传。
 - `pageSize` 不能超过服务最大返回行数。
 
-## 5. Access / API Key
+## 5. Access / API Key / IP Policy
 
-- 支持 `NONE` 和 `API_KEY` 两种访问模式。
+API Key：
+
+- 支持 `NONE` 和 `API_KEY` 两种身份认证模式。
 - 切换到 `API_KEY` 前必须至少存在一个有效 Key。
 - Key create / rotate 时产生的 raw secret 只返回一次。
 - raw secret 永不落库；持久化只保存不可逆 hash 和可识别 prefix。
@@ -72,6 +75,21 @@ Source Provider
 - Key rotate / disable / delete 必须使对应共享限流窗口失效；过期窗口清理由维护任务处理，不能把扫描清理放在调用热路径。
 - 成功鉴权后调用日志需要记录 Key ID / Name / Prefix 快照，不记录 raw secret。
 - Console 管理 API Key 时必须先确认父 Data Service 属于 CurrentProject；keyId 不能绕过 Project ownership。
+
+来源 IP 访问策略：
+
+- 每个 Data Service 独立支持 `NONE / ALLOWLIST / DENYLIST` 三种 IP 访问模式；该模式与 `NONE / API_KEY` 身份认证模式正交。
+- 规则只表达 `ALLOWLIST` 或 `DENYLIST`，支持单 IP、IPv4 CIDR、IPv6 CIDR、enabled、可选过期时间和说明。
+- IP/CIDR 保存前必须规范化；相同 Data Service、相同名单类型、相同规范化网络不能重复创建。
+- `ALLOWLIST` 模式只允许命中至少一条 enabled 且未过期白名单规则的来源；空白名单等价于拒绝所有外部来源。
+- `DENYLIST` 模式拒绝命中任一 enabled 且未过期黑名单规则的来源；没有命中则继续调用。
+- IP 访问判定必须发生在 API Key 查询、Hash 校验和共享限流之前；来源被拒绝时返回 403。
+- 启用白名单或黑名单时，如果无法可信解析客户端 IP，必须 fail closed，不能静默绕过来源策略。
+- 默认只信任 TCP 直接对端地址；不能无条件信任客户端提供的 `X-Forwarded-For` 或 `X-Real-IP`。
+- 只有直接上游命中显式配置的 `yak.data-service.access.trusted-proxies` CIDR 时，才能读取 Forwarded Header。
+- `X-Forwarded-For` 必须从右向左按可信代理链解析，在第一个非可信 Hop 停止；客户端预置的伪造地址不能覆盖该结果。
+- Forwarded Header 格式异常时必须回退到直接对端，而不是继续信任另一个可伪造 Forwarded Header。
+- Console 管理 IP 策略/规则时必须先确认父 Data Service 属于 CurrentProject；ruleId 不能绕过 Project ownership。
 
 ## 6. Runtime Resilience
 
@@ -123,7 +141,7 @@ Source Provider
 调用审计是 evidence，不是业务结果 Truth：
 
 - 调用日志持久化失败不能把已经成功的查询变成失败响应；
-- 调用日志持久化失败不能覆盖原始 SQL / 鉴权 / 限流异常；
+- 调用日志持久化失败不能覆盖原始 SQL / IP 策略 / 鉴权 / 限流异常；
 - 审计故障允许降级为内部告警/日志，业务调用语义保持原状；
 - password/token/authorization/API Key/credential 等 Secret 参数必须在 JSON 序列化前完全脱敏；手机号、证件号、邮箱等常见个人标识必须按规则掩码；
 - 单个服务详情的调用记录必须支持按 Data Service ID 有界读取，不能依赖“读取全局最近日志后在浏览器过滤”；
@@ -145,17 +163,17 @@ Data Service 明确区分两个入口平面：
 
 ```text
 Management Plane -> Yak Project membership + Data Service RBAC
-Invocation Plane -> global service path + NONE/API_KEY
+Invocation Plane -> global service path + IP policy + NONE/API_KEY
 ```
 
 要求：
 
 - `/api/v1/data-service` 下的 Console 管理能力为 `PROJECT_REQUIRED`；
-- API 集市、详情、发布、配置、API Key、Runtime 管理、Documentation、Overview、Logs 都不能跨 Project 读取或修改；
+- API 集市、详情、发布、配置、API Key、IP 访问规则、Runtime 管理、Documentation、Overview、Logs 都不能跨 Project 读取或修改；
 - 管理权限至少拆分为 `read / publish / manage / delete / access / runtime / observe`；
 - Project membership 与 RBAC 是两个独立 gate，不能用其中一个替代另一个；
 - `/api/v1/data-service/runtime/{servicePath}` 是 Public Invocation Plane，不要求也不信任 Yak Project Header；
-- Public Invocation 只能通过全局唯一 runtime path 找到服务，再按已发布 `NONE/API_KEY` 契约鉴权；
+- Public Invocation 只能通过全局唯一 runtime path 找到服务，再按已发布 IP 访问策略与 `NONE/API_KEY` 契约鉴权；
 - Repository 只允许明确声明的全局窄 corridor，例如 Public Invocation 的 global-by-path 和首页只读 count；其他 management read/write 必须使用 CurrentProject；
 - Source-managed Data Service 仍必须从 owning authoring context 发起定义变更，Project/RBAC 不能绕过该 owner boundary。
 
@@ -167,6 +185,7 @@ Invocation Plane -> global service path + NONE/API_KEY
 - Source publication / republish；
 - Data Service invocation；
 - API Key / auth / cluster-wide rate limit；
+- Data Service 级 IP/CIDR allowlist / denylist 与可信代理解析；
 - node-local cache / circuit；
 - cluster invocation metric projection；
 - API documentation / OpenAPI；
@@ -181,7 +200,7 @@ Invocation Plane -> global service path + NONE/API_KEY
 - 任意 DML/DDL；
 - shared result-cache Truth；
 - distributed circuit-breaker state machine；
-- API Gateway；
+- 通用 API Gateway / WAF；
 - 数据血缘或质量计算；
 - 用 Project Header 替代 Public Runtime API Key 鉴权。
 
@@ -197,10 +216,10 @@ yak_ops_data_service_* 表的既有业务字段与 Flyway 历史
 yak-ops-core SqlExecutionRuntime contract
 Datasource Plugin / Catalog contract
 Data Development SourceProvider 业务语义
-401 / 429 / 503 HTTP 状态语义
+401 / 403 / 429 / 503 HTTP 状态语义
 ```
 
-Project cutover 可以通过 Expand + Backfill 增加 `project_id`，Stage 3 可以通过新 Flyway 增加 Runtime coordination / rollup 表，但不能改写已有 Flyway 历史。
+Project cutover 可以通过 Expand + Backfill 增加 `project_id`，Runtime coordination / rollup / access-policy schema 通过 Data Service 自有 Flyway namespace 演进，不能改写已发布 Flyway 历史。
 
 ## 12. 需求变更协议
 
