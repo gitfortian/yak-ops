@@ -25,7 +25,7 @@ export default function AuditCenterPage() {
       icon={<SafetyCertificateOutlined className="text-slate-500" />}
       className="min-h-[calc(100vh-64px)] overflow-hidden"
     >
-      <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white px-4 pt-1">
+      <div className="flex min-h-0 flex-1 flex-col bg-white px-4 pt-1">
         <YakTab
           activeKey={activeTab}
           onChange={setActiveTab}
