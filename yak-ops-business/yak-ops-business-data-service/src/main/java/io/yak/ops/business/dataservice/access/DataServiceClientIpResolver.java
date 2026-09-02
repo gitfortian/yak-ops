@@ -32,8 +32,10 @@ public class DataServiceClientIpResolver {
     String remote = IpNetwork.tryNormalizeAddress(request.getRemoteAddr());
     if (remote == null || !isTrustedProxy(remote)) return remote;
 
-    List<String> forwarded = parseForwardedFor(request.getHeader("X-Forwarded-For"));
-    if (!forwarded.isEmpty()) {
+    String forwardedHeader = request.getHeader("X-Forwarded-For");
+    if (StringUtils.hasText(forwardedHeader)) {
+      List<String> forwarded = parseForwardedFor(forwardedHeader);
+      if (forwarded.isEmpty()) return remote;
       String current = remote;
       for (int index = forwarded.size() - 1; index >= 0 && isTrustedProxy(current); index--) {
         current = forwarded.get(index);

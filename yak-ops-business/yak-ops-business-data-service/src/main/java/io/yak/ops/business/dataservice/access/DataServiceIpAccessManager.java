@@ -95,14 +95,14 @@ public class DataServiceIpAccessManager {
         : current == null ? null : current.networkCidr();
     if (!StringUtils.hasText(network)) throw new IllegalArgumentException("IP/CIDR 不能为空");
 
-    String description = input.description() == null
-        ? current == null ? null : current.description()
-        : normalizeDescription(input.description());
+    String description = normalizeDescription(input.description());
     boolean enabled = input.enabled() == null
         ? current == null || current.enabled()
         : input.enabled();
     LocalDateTime expiresAt = input.expiresAt();
-    if (expiresAt != null && !expiresAt.isAfter(LocalDateTime.now())) {
+    if (expiresAt != null
+        && !expiresAt.isAfter(LocalDateTime.now())
+        && (current == null || !expiresAt.equals(current.expiresAt()))) {
       throw new IllegalArgumentException("规则过期时间必须晚于当前时间");
     }
     return new RuleValues(type, network, description, enabled, expiresAt);

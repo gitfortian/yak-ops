@@ -5,27 +5,18 @@ import io.yak.ops.business.dataservice.domain.access.IpAccessMode;
 import io.yak.ops.business.dataservice.domain.access.IpAccessRuleType;
 import io.yak.ops.business.dataservice.repository.DataServiceIpAccessRepository;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnDataSourceEnabled
 public class DataServiceIpAccessAuthorizer {
   private final DataServiceIpAccessRepository repository;
-  private final Clock clock;
 
-  @Autowired
   public DataServiceIpAccessAuthorizer(DataServiceIpAccessRepository repository) {
-    this(repository, Clock.systemDefaultZone());
-  }
-
-  DataServiceIpAccessAuthorizer(DataServiceIpAccessRepository repository, Clock clock) {
     this.repository = Objects.requireNonNull(repository, "repository");
-    this.clock = Objects.requireNonNull(clock, "clock");
   }
 
   public void authorize(Long apiId, String clientIp) {
@@ -40,7 +31,7 @@ public class DataServiceIpAccessAuthorizer {
     IpAccessRuleType activeType = mode == IpAccessMode.ALLOWLIST
         ? IpAccessRuleType.ALLOWLIST
         : IpAccessRuleType.DENYLIST;
-    LocalDateTime now = LocalDateTime.now(clock);
+    LocalDateTime now = LocalDateTime.now();
     List<DataServiceIpAccessRule> rules = repository.findRules(apiId).stream()
         .filter(rule -> rule.ruleType() == activeType)
         .filter(rule -> rule.active(now))
