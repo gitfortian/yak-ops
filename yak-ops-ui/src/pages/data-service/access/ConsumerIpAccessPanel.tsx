@@ -12,7 +12,7 @@ import {
 } from '@/services/data-service';
 import { DatePicker, Form, Input, Modal, Spin, Switch, message } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { Pencil, Plus, Shield, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface ConsumerIpAccessPanelProps {
@@ -27,10 +27,7 @@ interface RuleFormValues {
   enabled: boolean;
 }
 
-const MODES: Array<{
-  key: DataServiceIpAccessMode;
-  title: string;
-}> = [
+const MODES: Array<{ key: DataServiceIpAccessMode; title: string }> = [
   { key: 'NONE', title: '不限制' },
   { key: 'ALLOWLIST', title: '白名单' },
   { key: 'DENYLIST', title: '黑名单' },
@@ -112,7 +109,7 @@ export default function ConsumerIpAccessPanel({
     if (nextMode === 'ALLOWLIST' && activeAllow === 0) {
       Modal.confirm({
         title: '启用空白名单？',
-        content: '当前没有生效中的白名单规则。启用后，该调用方的所有外部请求都会被拒绝。',
+        content: '当前没有生效中的白名单规则。启用后，该调用方的请求都会被拒绝。',
         okText: '仍然启用',
         cancelText: '取消',
         onOk: () => saveMode(nextMode),
@@ -160,6 +157,7 @@ export default function ConsumerIpAccessPanel({
           ? values.expiresAt.format('YYYY-MM-DDTHH:mm:ss')
           : null,
       };
+
       if (editing) {
         await updateDataServiceConsumerIpAccessRule(consumer.id, editing.id, payload);
         message.success('访问规则已更新');
@@ -167,6 +165,7 @@ export default function ConsumerIpAccessPanel({
         await createDataServiceConsumerIpAccessRule(consumer.id, payload);
         message.success('访问规则已添加');
       }
+
       closeModal();
       await load();
       onChanged();
@@ -222,7 +221,7 @@ export default function ConsumerIpAccessPanel({
 
   if (loading) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-lg bg-white">
+      <div className="flex min-h-[260px] items-center justify-center rounded-xl bg-white">
         <Spin />
       </div>
     );
@@ -232,16 +231,15 @@ export default function ConsumerIpAccessPanel({
   const denyCount = rules.filter((rule) => rule.ruleType === 'DENYLIST').length;
 
   return (
-    <div className="space-y-3">
-      <section className="rounded-lg bg-white p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#f5f6f8] text-[#475467]">
-            <Shield size={17} />
-          </div>
-          <div className="text-[15px] font-semibold text-[#161823]">来源策略</div>
-        </div>
+    <section className="rounded-xl bg-white">
+      <div className="px-7 pt-5">
+        <h2 className="m-0 text-[17px] font-semibold leading-6 text-[#161823]">
+          来源限制
+        </h2>
+      </div>
 
-        <div className="mt-5 grid gap-2 md:grid-cols-3">
+      <div className="px-7 py-6">
+        <div className="grid gap-2 md:grid-cols-3">
           {MODES.map((item) => (
             <button
               key={item.key}
@@ -267,14 +265,8 @@ export default function ConsumerIpAccessPanel({
             </button>
           ))}
         </div>
-      </section>
 
-      <section className="rounded-lg bg-white">
-        <div className="flex items-center justify-between gap-4 px-5 pt-4">
-          <div className="text-[15px] font-semibold text-[#161823]">黑白名单</div>
-          <YakButton icon={<Plus size={14} />} onClick={openCreate}>添加规则</YakButton>
-        </div>
-        <div className="px-5">
+        <div className="mt-6 flex items-center justify-between gap-4">
           <YakTab
             activeKey={activeList}
             onChange={(key) => setActiveList(key as DataServiceIpAccessRuleType)}
@@ -283,15 +275,17 @@ export default function ConsumerIpAccessPanel({
               { key: 'DENYLIST', label: `黑名单 ${denyCount}` },
             ]}
           />
+          <YakButton icon={<Plus size={14} />} onClick={openCreate}>添加规则</YakButton>
         </div>
-        <div className="px-5 pb-5">
+
+        <div className="mt-3">
           {visibleRules.length ? (
             <div className="overflow-hidden rounded-lg border border-solid border-[#eceef1]">
               {visibleRules.map((rule, index) => (
                 <div
                   key={rule.id}
                   className={[
-                    'grid gap-3 px-4 py-3 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1.2fr)_140px_100px_116px] md:items-center',
+                    'grid gap-3 px-4 py-3 md:grid-cols-[minmax(180px,1fr)_minmax(160px,1fr)_140px_84px_104px] md:items-center',
                     index ? 'border-t border-solid border-[#eceef1]' : '',
                   ].join(' ')}
                 >
@@ -325,7 +319,7 @@ export default function ConsumerIpAccessPanel({
             <YakEmpty compact title={activeList === 'ALLOWLIST' ? '暂无白名单规则' : '暂无黑名单规则'} />
           )}
         </div>
-      </section>
+      </div>
 
       <Modal
         title={editing ? '编辑访问规则' : `添加${activeList === 'ALLOWLIST' ? '白名单' : '黑名单'}规则`}
@@ -342,16 +336,16 @@ export default function ConsumerIpAccessPanel({
             <Input variant="filled" placeholder="例如 10.20.0.0/16 或 203.0.113.8" />
           </Form.Item>
           <Form.Item name="description" label="说明">
-            <Input variant="filled" placeholder="例如：合作方生产出口 IP" maxLength={255} />
+            <Input variant="filled" placeholder="请输入说明" maxLength={255} />
           </Form.Item>
           <Form.Item name="expiresAt" label="有效期">
-            <DatePicker showTime variant="filled" className="w-full" placeholder="不设置则永久有效" />
+            <DatePicker showTime variant="filled" className="w-full" placeholder="永久有效" />
           </Form.Item>
           <Form.Item name="enabled" label="状态" valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </section>
   );
 }

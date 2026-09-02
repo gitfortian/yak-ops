@@ -1,4 +1,4 @@
-import { YakButton, YakEmpty, YakTab } from '@/components/ui';
+import { YakButton, YakEmpty } from '@/components/ui';
 import {
   createDataServiceConsumer,
   deleteDataServiceConsumer,
@@ -13,30 +13,32 @@ import {
   Drawer,
   Form,
   Input,
+  InputNumber,
   Modal,
   Select,
+  Switch,
   Table,
   message,
   type TableColumnsType,
 } from 'antd';
 import {
-  Pencil,
   Plus,
   RefreshCw,
   Search,
   Settings2,
-  Trash2,
-  Users,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import ConsumerApiAccessPanel from './ConsumerApiAccessPanel';
-import ConsumerEditor, { type ConsumerEditorValues } from './ConsumerEditor';
-import ConsumerIpAccessPanel from './ConsumerIpAccessPanel';
-import ConsumerKeyPanel from './ConsumerKeyPanel';
+import ConsumerManagementPanel from './ConsumerManagementPanel';
 
 type StatusFilter = 'ALL' | 'ENABLED' | 'DISABLED';
-type DrawerTab = 'OVERVIEW' | 'KEYS' | 'APIS' | 'IP';
+
+interface ConsumerFormValues {
+  name: string;
+  description?: string;
+  enabled: boolean;
+  defaultRateLimitPerMinute: number;
+}
 
 const formatTime = (value?: string | null) =>
   value ? value.replace('T', ' ').slice(0, 19) : '-';
@@ -50,20 +52,21 @@ const ipModeLabel = {
 const Metric = ({ label, value }: { label: string; value: number }) => (
   <div className="min-w-0 px-4 py-3">
     <div className="text-[11px] text-[#98a2b3]">{label}</div>
-    <div className="mt-1 text-[20px] font-semibold tracking-[-.02em] text-[#161823]">{value}</div>
+    <div className="mt-1 text-[20px] font-semibold tracking-[-.02em] text-[#161823]">
+      {value}
+    </div>
   </div>
 );
 
 export default function DataServiceAccessPage() {
-  const [form] = Form.useForm<ConsumerEditorValues>();
+  const [form] = Form.useForm<ConsumerFormValues>();
   const [records, setRecords] = useState<DataServiceConsumer[]>([]);
   const [apis, setApis] = useState<DataServiceAccessOverviewItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [selected, setSelected] = useState<DataServiceConsumer>();
-  const [drawerTab, setDrawerTab] = useState<DrawerTab>('OVERVIEW');
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DataServiceConsumer>();
   const [saving, setSaving] = useState(false);
 
@@ -119,7 +122,7 @@ export default function DataServiceAccessPage() {
     setEditing(undefined);
     form.resetFields();
     form.setFieldsValue({ enabled: true, defaultRateLimitPerMinute: 60 });
-    setEditorOpen(true);
+    setFormOpen(true);
   };
 
   const openEdit = (consumer: DataServiceConsumer) => {
@@ -130,17 +133,17 @@ export default function DataServiceAccessPage() {
       enabled: consumer.enabled,
       defaultRateLimitPerMinute: consumer.defaultRateLimitPerMinute,
     });
-    setEditorOpen(true);
+    setFormOpen(true);
   };
 
-  const closeEditor = () => {
+  const closeForm = () => {
     if (saving) return;
-    setEditorOpen(false);
+    setFormOpen(false);
     setEditing(undefined);
     form.resetFields();
   };
 
-  const submitConsumer = async (values: ConsumerEditorValues) => {
+  const submitConsumer = async (values: ConsumerFormValues) => {
     setSaving(true);
     try {
       const payload = {
@@ -149,6 +152,7 @@ export default function DataServiceAccessPage() {
         enabled: values.enabled,
         defaultRateLimitPerMinute: values.defaultRateLimitPerMinute,
       };
+
       if (editing) {
         const next = await updateDataServiceConsumer(editing.id, payload);
         setRecords((current) => current.map((item) => item.id === next.id ? next : item));
@@ -158,10 +162,10 @@ export default function DataServiceAccessPage() {
         const next = await createDataServiceConsumer(payload);
         setRecords((current) => [next, ...current]);
         setSelected(next);
-        setDrawerTab('APIS');
         message.success('调用方已创建');
       }
-      setEditorOpen(false);
+
+      setFormOpen(false);
       setEditing(undefined);
       form.resetFields();
     } catch (error: any) {
@@ -174,7 +178,7 @@ export default function DataServiceAccessPage() {
   const removeConsumer = (consumer: DataServiceConsumer) => {
     Modal.confirm({
       title: '删除调用方',
-      content: `确认删除「${consumer.name}」？其全部 API Key 和来源规则会同时失效。`,
+      content: `确认删除「${consumer.name}」？其 API Key 和来源规则会同时失效。`,
       okText: '删除',
       okButtonProps: { danger: true },
       cancelText: '取消',
@@ -191,17 +195,10 @@ export default function DataServiceAccessPage() {
     });
   };
 
-  if (editorOpen) {
-    return (
-      <ConsumerEditor
-        form={form}
-        editing={Boolean(editing)}
-        saving={saving}
-        onCancel={closeEditor}
-        onSubmit={submitConsumer}
-      />
-    );
-  }
+  const updateSelected = (next: DataServiceConsumer) => {
+    setSelected(next);
+    setRecords((current) => current.map((item) => item.id === next.id ? next : item));
+  };
 
   const columns: TableColumnsType<DataServiceConsumer> = [
     {
@@ -233,8 +230,12 @@ export default function DataServiceAccessPage() {
       width: 150,
       render: (_, record) => (
         <div>
-          <div className="text-[11px] font-medium text-[#475467]">{record.activeKeyCount}/{record.keyCount} 个有效 Key</div>
-          <div className="mt-0.5 text-[10px] text-[#98a2b3]">默认 {record.defaultRateLimitPerMinute}/min</div>
+          <div className="text-[11px] font-medium text-[#475467]">
+            {record.activeKeyCount}/{record.keyCount} 个有效 Key
+          </div>
+          <div className="mt-0.5 text-[10px] text-[#98a2b3]">
+            默认 {record.defaultRateLimitPerMinute}/min
+          </div>
         </div>
       ),
     },
@@ -244,7 +245,9 @@ export default function DataServiceAccessPage() {
       width: 140,
       render: (_, record) => (
         <div>
-          <div className="text-[11px] font-medium text-[#475467]">{ipModeLabel[record.ipAccessMode]}</div>
+          <div className="text-[11px] font-medium text-[#475467]">
+            {ipModeLabel[record.ipAccessMode]}
+          </div>
           {record.ipRuleCount > 0 ? (
             <div className="mt-0.5 text-[10px] text-[#98a2b3]">{record.ipRuleCount} 条规则</div>
           ) : null}
@@ -266,7 +269,9 @@ export default function DataServiceAccessPage() {
       title: '更新时间',
       dataIndex: 'updateTime',
       width: 150,
-      render: (value?: string | null) => <span className="text-[10px] text-[#98a2b3]">{formatTime(value)}</span>,
+      render: (value?: string | null) => (
+        <span className="text-[10px] text-[#98a2b3]">{formatTime(value)}</span>
+      ),
     },
     {
       title: '操作',
@@ -278,10 +283,7 @@ export default function DataServiceAccessPage() {
           type="text"
           size="small"
           icon={<Settings2 size={13} />}
-          onClick={() => {
-            setSelected(record);
-            setDrawerTab('OVERVIEW');
-          }}
+          onClick={() => setSelected(record)}
         >
           管理
         </YakButton>
@@ -304,7 +306,9 @@ export default function DataServiceAccessPage() {
             >
               刷新
             </YakButton>
-            <YakButton icon={<Plus size={14} />} onClick={openCreate}>新建调用方</YakButton>
+            <YakButton icon={<Plus size={14} />} onClick={openCreate}>
+              新建调用方
+            </YakButton>
           </div>
         </div>
 
@@ -363,87 +367,75 @@ export default function DataServiceAccessPage() {
 
       <Drawer
         open={Boolean(selected)}
-        width={960}
+        width={1100}
         onClose={() => setSelected(undefined)}
         title={selected ? (
           <div className="truncate text-[14px] font-semibold text-[#161823]">{selected.name}</div>
         ) : 'API 调用'}
+        styles={{
+          body: {
+            padding: 0,
+            overflow: 'hidden',
+            background: '#f7f8fa',
+          },
+        }}
       >
         {selected ? (
-          <div className="-mt-3">
-            <YakTab
-              activeKey={drawerTab}
-              onChange={(key) => setDrawerTab(key as DrawerTab)}
-              items={[
-                { key: 'OVERVIEW', label: '概览' },
-                { key: 'KEYS', label: `API Key ${selected.keyCount}` },
-                { key: 'APIS', label: 'API 权限' },
-                { key: 'IP', label: '来源限制' },
-              ]}
-            />
-
-            <div className="mt-3 rounded-lg bg-[#f7f7f8] p-3">
-              {drawerTab === 'OVERVIEW' ? (
-                <div className="space-y-3">
-                  <section className="rounded-lg bg-white p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#f5f6f8] text-[#475467]">
-                          <Users size={17} />
-                        </div>
-                        <div>
-                          <div className="text-[15px] font-semibold text-[#161823]">{selected.name}</div>
-                          {selected.description ? (
-                            <div className="mt-1 text-[11px] leading-5 text-[#8a8f98]">{selected.description}</div>
-                          ) : null}
-                        </div>
-                      </div>
-                      <YakButton type="text" icon={<Pencil size={14} />} onClick={() => openEdit(selected)}>编辑</YakButton>
-                    </div>
-                    <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-lg bg-[#f7f7f8] p-3">
-                        <div className="text-[10px] text-[#98a2b3]">API 权限</div>
-                        <div className="mt-1 text-[13px] font-medium text-[#344054]">{selected.accessScope === 'ALL' ? '所有 API' : `${selected.apiCount} 个 API`}</div>
-                      </div>
-                      <div className="rounded-lg bg-[#f7f7f8] p-3">
-                        <div className="text-[10px] text-[#98a2b3]">有效凭证</div>
-                        <div className="mt-1 text-[13px] font-medium text-[#344054]">{selected.activeKeyCount}/{selected.keyCount}</div>
-                      </div>
-                      <div className="rounded-lg bg-[#f7f7f8] p-3">
-                        <div className="text-[10px] text-[#98a2b3]">默认限流</div>
-                        <div className="mt-1 text-[13px] font-medium text-[#344054]">{selected.defaultRateLimitPerMinute}/min</div>
-                      </div>
-                      <div className="rounded-lg bg-[#f7f7f8] p-3">
-                        <div className="text-[10px] text-[#98a2b3]">来源策略</div>
-                        <div className="mt-1 text-[13px] font-medium text-[#344054]">{ipModeLabel[selected.ipAccessMode]}</div>
-                      </div>
-                    </div>
-                  </section>
-
-                  <div className="flex justify-end">
-                    <YakButton type="text" danger icon={<Trash2 size={14} />} onClick={() => removeConsumer(selected)}>
-                      删除调用方
-                    </YakButton>
-                  </div>
-                </div>
-              ) : drawerTab === 'KEYS' ? (
-                <ConsumerKeyPanel consumer={selected} onChanged={() => void refreshConsumer(selected.id)} />
-              ) : drawerTab === 'APIS' ? (
-                <ConsumerApiAccessPanel
-                  consumer={selected}
-                  apis={apis}
-                  onChanged={(next) => {
-                    setSelected(next);
-                    setRecords((current) => current.map((item) => item.id === next.id ? next : item));
-                  }}
-                />
-              ) : (
-                <ConsumerIpAccessPanel consumer={selected} onChanged={() => void refreshConsumer(selected.id)} />
-              )}
-            </div>
-          </div>
+          <ConsumerManagementPanel
+            consumer={selected}
+            apis={apis}
+            onEdit={() => openEdit(selected)}
+            onDelete={() => removeConsumer(selected)}
+            onRefresh={() => void refreshConsumer(selected.id)}
+            onConsumerChanged={updateSelected}
+          />
         ) : null}
       </Drawer>
+
+      <Modal
+        title={editing ? '编辑调用方' : '新建调用方'}
+        open={formOpen}
+        onCancel={closeForm}
+        onOk={() => form.submit()}
+        confirmLoading={saving}
+        okText={editing ? '保存' : '创建'}
+        cancelText="取消"
+        width={520}
+        destroyOnClose
+      >
+        <Form<ConsumerFormValues>
+          form={form}
+          layout="vertical"
+          onFinish={(values) => void submitConsumer(values)}
+        >
+          <Form.Item
+            name="name"
+            label="调用方名称"
+            rules={[{ required: true, message: '请输入调用方名称' }]}
+          >
+            <Input variant="filled" placeholder="请输入调用方名称" maxLength={128} />
+          </Form.Item>
+          <Form.Item name="description" label="说明">
+            <Input.TextArea variant="filled" rows={3} placeholder="请输入说明" maxLength={500} />
+          </Form.Item>
+          <Form.Item
+            name="defaultRateLimitPerMinute"
+            label="默认限流"
+            rules={[{ required: true, message: '请输入调用上限' }]}
+          >
+            <InputNumber
+              variant="filled"
+              min={1}
+              max={100000}
+              addonAfter="次 / 分钟"
+              className="w-full"
+            />
+          </Form.Item>
+          <Form.Item name="enabled" label="状态" valuePropName="checked">
+            <Switch checkedChildren="可调用" unCheckedChildren="停用" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
