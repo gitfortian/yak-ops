@@ -67,9 +67,6 @@ export const BasicConfig = ({
                   已固定
                 </span>
               </div>
-              <div className="mt-2 border-t border-[#e8e9ec] pt-2 text-[11px] leading-5 text-[#98a2b3]">
-                监控对象来自数据表监控中的已注册数据表，创建过程中不可切换。
-              </div>
             </div>
           ) : (
             <div></div>
