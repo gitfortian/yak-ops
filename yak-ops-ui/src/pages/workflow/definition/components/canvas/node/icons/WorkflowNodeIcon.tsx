@@ -9,7 +9,6 @@ interface WorkflowNodeIconProps {
 
 interface NodeIconMeta {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  className: string;
 }
 
 const DefaultNodeIcon = (props: SVGProps<SVGSVGElement>) => (
@@ -28,17 +27,14 @@ const DefaultNodeIcon = (props: SVGProps<SVGSVGElement>) => (
 
 const DEFAULT_ICON_META: NodeIconMeta = {
   icon: DefaultNodeIcon,
-  className: 'bg-[#f4f4f5] text-[#52525b]',
 };
 
 const NODE_ICON_META: Record<string, NodeIconMeta> = {
   SYNC: {
     icon: SyncNodeIcon,
-    className: 'bg-[rgba(254,44,85,.08)] text-[#fe2c55]',
   },
   SQL: {
     icon: SqlNodeIcon,
-    className: 'bg-[#f4f4f5] text-[#344054]',
   },
 };
 
@@ -51,13 +47,12 @@ const WorkflowNodeIcon = ({ taskType, size = 'md' }: WorkflowNodeIconProps) => {
   return (
     <span
       className={[
-        'flex shrink-0 items-center justify-center',
+        'flex shrink-0 items-center justify-center border border-[#eceef1] bg-[#fafafa] text-[#667085]',
         tiny
           ? 'h-6 w-6 rounded-[7px]'
           : compact
             ? 'h-7 w-7 rounded-[8px]'
             : 'h-9 w-9 rounded-[10px]',
-        meta.className,
       ].join(' ')}
     >
       <Icon
