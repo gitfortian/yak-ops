@@ -95,6 +95,28 @@ class OfflineExecutionCoordinatorTest {
   }
 
   @Test
+  void preflightFailureOccursAfterCreatedEvidenceAndClosesThroughNormalFailureProjection() {
+    OfflineJobExecution execution = execution(99L, "CREATED");
+    BatchExecution batch = frozenBatch(BatchStatus.RUNNING, BatchScope.fullSelection());
+    when(claimManager.claim(10L, "WORKFLOW", null, 1))
+        .thenReturn(new OfflineExecutionClaim(null, "logical", execution));
+    when(batchRepository.findById(77L)).thenReturn(Optional.of(batch));
+    when(scopeExecutionAdapter.apply(10L, "logical", batch.batchScope())).thenReturn("scoped");
+    when(definitionService.resolveExecutionJobSpec("scoped"))
+        .thenThrow(new IllegalStateException("invalid job spec"));
+
+    assertThatThrownBy(() -> coordinator.execute(10L, "WORKFLOW", null, 1))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("invalid job spec");
+
+    verify(stateManager).recordCreated(execution);
+    verify(auditBridge).ensureOperation(execution);
+    verify(stateManager).markFailed(execution, "invalid job spec", false);
+    verify(auditBridge).observeState(execution);
+    verify(linkUpClient, never()).node();
+  }
+
+  @Test
   void retryKeepsOriginalBatchScopeAtSubmissionBoundary() {
     OfflineJobExecution previous = execution(98L, "FAILED");
     OfflineJobExecution retry = execution(99L, "CREATED");
