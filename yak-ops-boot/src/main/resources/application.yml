@@ -50,6 +50,18 @@ sa-token:
   max-login-count: ${YAK_SECURITY_MAX_LOGIN_COUNT:5}
 
 yak:
+  # 数据库连接参数统一定义于此；yak.security.datasource 默认复用本节值。
+  # 可通过 YAK_DATABASE_* 覆盖本节，或通过 YAK_SECURITY_DATASOURCE_* 单独覆盖安全数据源。
+  # 快捷方式：设置 YAK_DATASOURCE_URL/USERNAME/PASSWORD 同时作用于两者。
+  database:
+    enabled: ${YAK_DATABASE_ENABLED:true}
+    url: ${YAK_DATABASE_URL:${YAK_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/do?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}
+    username: ${YAK_DATABASE_USERNAME:${YAK_DATASOURCE_USERNAME:root}}
+    password: ${YAK_DATABASE_PASSWORD:${YAK_DATASOURCE_PASSWORD:123456}}
+    driver-class-name: ${YAK_DATABASE_DRIVER:com.mysql.cj.jdbc.Driver}
+    minimum-idle: ${YAK_DATABASE_MINIMUM_IDLE:1}
+    maximum-pool-size: ${YAK_DATABASE_MAXIMUM_POOL_SIZE:8}
+
   security:
     enabled: true
     database-enabled: true
@@ -84,10 +96,11 @@ yak:
       real-name: ${YAK_SECURITY_BOOTSTRAP_REAL_NAME:系统管理员}
     datasource:
       enabled: true
-      url: ${YAK_DATASOURCE_URL:${YAK_SECURITY_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/data_ops?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}
-      username: ${YAK_DATASOURCE_USERNAME:${YAK_SECURITY_DATASOURCE_USERNAME:root}}
-      password: ${YAK_DATASOURCE_PASSWORD:${YAK_SECURITY_DATASOURCE_PASSWORD:123456}}
-      driver-class-name: com.mysql.cj.jdbc.Driver
+      # 连接参数默认复用 yak.database；可通过 YAK_SECURITY_DATASOURCE_* 环境变量单独覆盖（如需指向不同库）。
+      url: ${YAK_SECURITY_DATASOURCE_URL:${yak.database.url}}
+      username: ${YAK_SECURITY_DATASOURCE_USERNAME:${yak.database.username}}
+      password: ${YAK_SECURITY_DATASOURCE_PASSWORD:${yak.database.password}}
+      driver-class-name: ${yak.database.driver-class-name}
       initial-size: 1
       min-idle: 1
       max-active: 8
@@ -96,16 +109,6 @@ yak:
       test-while-idle: true
       test-on-borrow: false
       test-on-return: false
-
-  database:
-    enabled: ${YAK_DATABASE_ENABLED:true}
-    # 公共基础连接参数优先取 YAK_DATASOURCE_* 环境变量；可通过 YAK_DATABASE_* 或 YAK_SECURITY_DATASOURCE_* 单独覆盖。
-    url: ${YAK_DATABASE_URL:${YAK_DATASOURCE_URL:${YAK_SECURITY_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yak_security?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai}}}
-    username: ${YAK_DATABASE_USERNAME:${YAK_DATASOURCE_USERNAME:${YAK_SECURITY_DATASOURCE_USERNAME:root}}}
-    password: ${YAK_DATABASE_PASSWORD:${YAK_DATASOURCE_PASSWORD:${YAK_SECURITY_DATASOURCE_PASSWORD:123456}}}
-    driver-class-name: ${YAK_DATABASE_DRIVER:${YAK_DATASOURCE_DRIVER:com.mysql.cj.jdbc.Driver}}
-    minimum-idle: ${YAK_DATABASE_MINIMUM_IDLE:1}
-    maximum-pool-size: ${YAK_DATABASE_MAXIMUM_POOL_SIZE:8}
 
   datasource:
     enabled: true
