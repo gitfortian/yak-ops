@@ -6,9 +6,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.yak.framework.workflow.engine.support.InMemoryExecutionRepository;
 import io.yak.framework.workflow.engine.support.InMemoryWorkflowDefinitionRepository;
-import io.yak.ops.business.job.task.SyncTaskExecution;
-import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.business.job.task.TaskExecutor;
 import io.yak.ops.business.job.task.TaskRegistry;
 import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.business.workflow.domain.WorkflowNodeSpec;
@@ -40,25 +41,25 @@ class WorkflowRuntimeRecoveryTest {
     InMemoryWorkflowDefinitionRepository definitions = new InMemoryWorkflowDefinitionRepository();
     InMemoryExecutionRepository executions = new InMemoryExecutionRepository();
     InMemoryWorkflowRuntimeRepository runtime = new InMemoryWorkflowRuntimeRepository();
-    RecordingRunner runner = new RecordingRunner();
+    RecordingTaskExecutor executor = new RecordingTaskExecutor();
     TaskRegistry registry = registry();
 
-    first = service(registry, runner, definitions, executions, runtime);
+    first = service(registry, executor, definitions, executions, runtime);
     WorkflowInstanceVO prepared = first.run(request());
     String attemptId = node(prepared).currentAttemptId();
-    assertThat(runner.starts()).isZero();
+    assertThat(executor.starts()).isZero();
     first.shutdown();
     first = null;
 
-    second = service(registry, runner, definitions, executions, runtime);
+    second = service(registry, executor, definitions, executions, runtime);
     second.activate(prepared.id());
     assertThat(second.recoverPersistedExecutions()).isEqualTo(1);
-    waitFor(() -> runner.starts() == 1);
+    waitFor(() -> executor.starts() == 1);
 
     WorkflowInstanceVO recovered = second.getInstance(prepared.id());
     assertThat(node(recovered).currentAttemptId()).isEqualTo(attemptId);
     assertThat(node(recovered).attemptCount()).isEqualTo(1);
-    assertThat(runner.idempotencyKey()).isEqualTo(attemptId);
+    assertThat(executor.idempotencyKey()).isEqualTo(attemptId);
   }
 
   @Test
@@ -67,37 +68,37 @@ class WorkflowRuntimeRecoveryTest {
     InMemoryWorkflowDefinitionRepository definitions = new InMemoryWorkflowDefinitionRepository();
     InMemoryExecutionRepository executions = new InMemoryExecutionRepository();
     InMemoryWorkflowRuntimeRepository runtime = new InMemoryWorkflowRuntimeRepository();
-    RecordingRunner runner = new RecordingRunner();
+    RecordingTaskExecutor executor = new RecordingTaskExecutor();
     TaskRegistry registry = registry();
 
-    first = service(registry, runner, definitions, executions, runtime);
+    first = service(registry, executor, definitions, executions, runtime);
     WorkflowInstanceVO prepared = first.run(request());
     first.activate(prepared.id());
-    waitFor(() -> runner.starts() == 1);
+    waitFor(() -> executor.starts() == 1);
     waitFor(() -> "RUNNING".equals(node(first.getInstance(prepared.id())).status()));
     String attemptId = node(first.getInstance(prepared.id())).currentAttemptId();
     first.shutdown();
     first = null;
 
-    second = service(registry, runner, definitions, executions, runtime);
+    second = service(registry, executor, definitions, executions, runtime);
     second.activate(prepared.id());
     assertThat(second.recoverPersistedExecutions()).isEqualTo(1);
-    waitFor(() -> runner.statusCalls() > 0);
+    waitFor(() -> executor.statusCalls() > 0);
 
-    assertThat(runner.starts()).isEqualTo(1);
+    assertThat(executor.starts()).isEqualTo(1);
     assertThat(node(second.getInstance(prepared.id())).currentAttemptId()).isEqualTo(attemptId);
   }
 
   private WorkflowRuntime service(
       TaskRegistry registry,
-      RecordingRunner runner,
+      RecordingTaskExecutor executor,
       InMemoryWorkflowDefinitionRepository definitions,
       InMemoryExecutionRepository executions,
       InMemoryWorkflowRuntimeRepository runtime) {
     return new WorkflowRuntime(
         new WorkflowEventStream(),
         registry,
-        runner,
+        new TaskExecutionGateway(List.of(executor)),
         10_000L,
         definitions,
         executions,
@@ -150,10 +151,10 @@ class WorkflowRuntimeRecoveryTest {
     boolean done();
   }
 
-  private static final class RecordingRunner implements SyncTaskRunner {
+  private static final class RecordingTaskExecutor implements TaskExecutor {
     private final AtomicInteger starts = new AtomicInteger();
     private final AtomicInteger statusCalls = new AtomicInteger();
-    private final ConcurrentMap<String, SyncTaskExecution> executions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, TaskExecution> executions = new ConcurrentHashMap<>();
     private volatile String idempotencyKey;
 
     int starts() {
@@ -169,20 +170,19 @@ class WorkflowRuntimeRecoveryTest {
     }
 
     @Override
-    public SyncTaskExecution start(String taskId) {
-      return startInternal(null);
+    public String taskType() {
+      return "SYNC";
     }
 
     @Override
-    public SyncTaskExecution start(TaskVersionSnapshot snapshot, String key) {
+    public TaskExecution start(
+        TaskVersionSnapshot snapshot,
+        String key,
+        Map<String, Object> input) {
       idempotencyKey = key;
-      return startInternal(key);
-    }
-
-    private SyncTaskExecution startInternal(String key) {
       int number = starts.incrementAndGet();
       String id = "remote-" + number;
-      SyncTaskExecution execution = new SyncTaskExecution(
+      TaskExecution execution = new TaskExecution(
           id,
           "RUNNING",
           null,
@@ -192,9 +192,9 @@ class WorkflowRuntimeRecoveryTest {
     }
 
     @Override
-    public SyncTaskExecution status(String executionId) {
+    public TaskExecution status(String executionId) {
       statusCalls.incrementAndGet();
-      SyncTaskExecution execution = executions.get(executionId);
+      TaskExecution execution = executions.get(executionId);
       if (execution == null) {
         throw new IllegalArgumentException("execution not found: " + executionId);
       }

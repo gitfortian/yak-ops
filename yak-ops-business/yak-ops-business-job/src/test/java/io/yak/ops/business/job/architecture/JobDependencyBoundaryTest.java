@@ -83,6 +83,18 @@ class JobDependencyBoundaryTest {
   }
 
   @Test
+  void legacySyncTaskCompatibilityBoundaryCannotReturn() throws IOException {
+    for (Path source : productionJavaFiles()) {
+      assertThat(Files.readString(source))
+          .as(relative(source))
+          .doesNotContain(
+              "SyncTaskRunner",
+              "SyncTaskExecutorAdapter",
+              "SyncTaskExecution");
+    }
+  }
+
+  @Test
   void broadBusinessBucketsCannotReturn() {
     for (String bucket : List.of(
         "service", "common", "helper", "helpers", "utils", "util", "base", "support")) {

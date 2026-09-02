@@ -4,10 +4,12 @@ import io.yak.ops.business.workflow.observability.WorkflowEventStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.yak.ops.business.job.task.SyncTaskExecution;
-import io.yak.ops.business.job.task.SyncTaskRunner;
 import io.yak.ops.business.job.task.TaskDefinition;
+import io.yak.ops.business.job.task.TaskExecution;
+import io.yak.ops.business.job.task.TaskExecutionGateway;
+import io.yak.ops.business.job.task.TaskExecutor;
 import io.yak.ops.business.job.task.TaskRegistry;
+import io.yak.ops.business.job.task.TaskVersionSnapshot;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.EdgeDTO;
 import io.yak.ops.common.bean.dto.workflow.WorkflowRunDTO.NodeDTO;
@@ -38,8 +40,8 @@ class WorkflowRuntimeTest {
 
   @Test
   void shouldExecuteReferencedSyncTasksInSerial() throws InterruptedException {
-    FakeRunner runner = new FakeRunner();
-    service = service(runner, "task-a", "task-b");
+    FakeTaskExecutor executor = new FakeTaskExecutor();
+    service = service(executor, "task-a", "task-b");
     WorkflowRunDTO request = new WorkflowRunDTO(
         "serial",
         List.of(node("a", "task-a"), node("b", "task-b")),
@@ -59,9 +61,9 @@ class WorkflowRuntimeTest {
 
   @Test
   void shouldRetryRealTaskUsingNewWorkflowAttempt() throws InterruptedException {
-    FakeRunner runner = new FakeRunner();
-    runner.failNext("task-a", 1);
-    service = service(runner, "task-a");
+    FakeTaskExecutor executor = new FakeTaskExecutor();
+    executor.failNext("task-a", 1);
+    service = service(executor, "task-a");
     WorkflowRunDTO request = new WorkflowRunDTO(
         "retry",
         List.of(node("a", "task-a")),
@@ -78,14 +80,14 @@ class WorkflowRuntimeTest {
     assertThat(completed.status()).isEqualTo("SUCCESS");
     assertThat(node(completed, "a").attemptCount()).isEqualTo(2);
     assertThat(node(completed, "a").currentAttemptId()).isNotEqualTo(firstAttempt);
-    assertThat(runner.started("task-a")).isEqualTo(2);
+    assertThat(executor.started("task-a")).isEqualTo(2);
   }
 
   @Test
   void shouldPreserveFailurePropagation() throws InterruptedException {
-    FakeRunner runner = new FakeRunner();
-    runner.failNext("task-bad", 10);
-    service = service(runner, "task-root", "task-bad", "task-blocked", "task-independent");
+    FakeTaskExecutor executor = new FakeTaskExecutor();
+    executor.failNext("task-bad", 10);
+    service = service(executor, "task-root", "task-bad", "task-blocked", "task-independent");
     WorkflowRunDTO request = new WorkflowRunDTO(
         "failure",
         List.of(
@@ -111,8 +113,8 @@ class WorkflowRuntimeTest {
 
   @Test
   void shouldKeepInputMappingAcrossTaskReferences() throws InterruptedException {
-    FakeRunner runner = new FakeRunner();
-    service = service(runner, "task-load", "task-consume");
+    FakeTaskExecutor executor = new FakeTaskExecutor();
+    service = service(executor, "task-load", "task-consume");
     NodeDTO load = node(
         "load", "task-load", Map.of("requestId", "$workflow.requestId"));
     NodeDTO consume = node(
@@ -133,9 +135,9 @@ class WorkflowRuntimeTest {
 
   @Test
   void shouldCancelSyncExecutionWhenWorkflowTimesOut() throws InterruptedException {
-    FakeRunner runner = new FakeRunner();
-    runner.duration("task-slow", 3_000L);
-    service = service(runner, "task-slow");
+    FakeTaskExecutor executor = new FakeTaskExecutor();
+    executor.duration("task-slow", 3_000L);
+    service = service(executor, "task-slow");
     WorkflowInstanceVO started = service.run(new WorkflowRunDTO(
         "timeout",
         List.of(node("slow", "task-slow")),
@@ -148,8 +150,8 @@ class WorkflowRuntimeTest {
     WorkflowInstanceVO completed = waitForTerminal(started.id());
     assertThat(completed.status()).isEqualTo("TIMED_OUT");
     assertThat(node(completed, "slow").status()).isEqualTo("CANCELED");
-    waitForCancel(runner);
-    assertThat(runner.cancelCount()).isGreaterThanOrEqualTo(1);
+    waitForCancel(executor);
+    assertThat(executor.cancelCount()).isGreaterThanOrEqualTo(1);
   }
 
   private NodeDTO node(String id, String taskId) {
@@ -162,7 +164,7 @@ class WorkflowRuntimeTest {
         inputMapping, "ALL_SUCCESS", "FAIL_WORKFLOW");
   }
 
-  private WorkflowRuntime service(FakeRunner runner, String... taskIds) {
+  private WorkflowRuntime service(FakeTaskExecutor executor, String... taskIds) {
     Map<String, TaskDefinition> tasks = new ConcurrentHashMap<>();
     for (String taskId : taskIds) {
       tasks.put(taskId, new TaskDefinition(taskId, taskId, "SYNC"));
@@ -183,7 +185,10 @@ class WorkflowRuntimeTest {
       }
     };
     return new WorkflowRuntime(
-        new WorkflowEventStream(), registry, runner, 2L);
+        new WorkflowEventStream(),
+        registry,
+        new TaskExecutionGateway(List.of(executor)),
+        2L);
   }
 
   private WorkflowInstanceVO waitForTerminal(String executionId) throws InterruptedException {
@@ -197,8 +202,8 @@ class WorkflowRuntimeTest {
     return service.getInstance(executionId);
   }
 
-  private void waitForCancel(FakeRunner runner) throws InterruptedException {
-    for (int i = 0; i < 100 && runner.cancelCount() == 0; i++) {
+  private void waitForCancel(FakeTaskExecutor executor) throws InterruptedException {
+    for (int i = 0; i < 100 && executor.cancelCount() == 0; i++) {
       Thread.sleep(5L);
     }
   }
@@ -207,7 +212,7 @@ class WorkflowRuntimeTest {
     return instance.nodes().stream().filter(item -> id.equals(item.id())).findFirst().orElseThrow();
   }
 
-  private static final class FakeRunner implements SyncTaskRunner {
+  private static final class FakeTaskExecutor implements TaskExecutor {
     private final AtomicLong sequence = new AtomicLong();
     private final AtomicInteger cancels = new AtomicInteger();
     private final ConcurrentMap<String, AtomicInteger> failures = new ConcurrentHashMap<>();
@@ -233,7 +238,16 @@ class WorkflowRuntimeTest {
     }
 
     @Override
-    public SyncTaskExecution start(String taskId) {
+    public String taskType() {
+      return "SYNC";
+    }
+
+    @Override
+    public TaskExecution start(
+        TaskVersionSnapshot snapshot,
+        String idempotencyKey,
+        Map<String, Object> input) {
+      String taskId = snapshot.taskId();
       AtomicInteger remaining = failures.computeIfAbsent(taskId, ignored -> new AtomicInteger());
       boolean fail = remaining.getAndUpdate(value -> Math.max(0, value - 1)) > 0;
       String id = String.valueOf(sequence.incrementAndGet());
@@ -249,7 +263,7 @@ class WorkflowRuntimeTest {
     }
 
     @Override
-    public SyncTaskExecution status(String executionId) {
+    public TaskExecution status(String executionId) {
       return view(executions.get(executionId));
     }
 
@@ -262,7 +276,7 @@ class WorkflowRuntimeTest {
       }
     }
 
-    private SyncTaskExecution view(State state) {
+    private TaskExecution view(State state) {
       if (state == null) {
         throw new IllegalArgumentException("execution not found");
       }
@@ -270,7 +284,7 @@ class WorkflowRuntimeTest {
       String status = state.canceled
           ? "CANCELED"
           : elapsed >= state.durationMillis ? state.terminalStatus : "RUNNING";
-      return new SyncTaskExecution(
+      return new TaskExecution(
           state.executionId,
           status,
           "FAILED".equals(status) ? "planned failure" : null,
