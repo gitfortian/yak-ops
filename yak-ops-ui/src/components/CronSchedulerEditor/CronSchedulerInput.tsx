@@ -1,5 +1,5 @@
 import YakButton from '@/components/YakButton';
-import { Input } from 'antd';
+import { ConfigProvider, Input } from 'antd';
 import { ChevronDown } from 'lucide-react';
 import {
   useCallback,
@@ -15,6 +15,11 @@ const MEGA_NAV_ANIMATION_MS = 750;
 const VIEWPORT_GAP = 16;
 const PANEL_GAP = 8;
 const DEFAULT_PANEL_WIDTH = 760;
+/**
+ * Ant Design 的 Select / TimePicker 等浮层默认 z-index 为 1050。
+ * Mega Panel 必须略低于它，否则这些挂到 body 的 popup 会被面板本身遮住。
+ */
+const MEGA_PANEL_Z_INDEX = 1040;
 
 interface PanelPosition {
   top: number;
@@ -245,7 +250,7 @@ export default function CronSchedulerInput({
             top: panelPosition.top,
             left: panelPosition.left,
             width: panelPosition.width,
-            zIndex: 2100,
+            zIndex: MEGA_PANEL_Z_INDEX,
             pointerEvents: expanded ? 'auto' : 'none',
           }}
         >
@@ -276,12 +281,14 @@ export default function CronSchedulerInput({
                 </div>
 
                 <div className="px-6 py-5">
-                  <CronSchedulerEditor
-                    value={draftCron}
-                    onChange={updateDraftCron}
-                    showTimezoneTip={false}
-                    showEffectiveDate={false}
-                  />
+                  <ConfigProvider componentSize="small" variant="filled">
+                    <CronSchedulerEditor
+                      value={draftCron}
+                      onChange={updateDraftCron}
+                      showTimezoneTip={false}
+                      showEffectiveDate={false}
+                    />
+                  </ConfigProvider>
                 </div>
 
                 <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-[#f0f1f3] bg-white/95 px-6 py-3 backdrop-blur">
