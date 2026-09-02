@@ -22,7 +22,7 @@ const runtimeStroke = (status?: string) => {
       return '#f79009';
     case 'RUNNING':
     case 'RESUMING':
-      return '#fe2c55';
+      return '#6172f3';
     case 'SUCCESS':
       return '#12b76a';
     case 'FAILED':
@@ -70,7 +70,7 @@ const WorkflowEdge = ({
   const executionStroke = runtimeStroke(data?.runtimeStatus);
   const stroke = executionStroke
     || (highlighted
-      ? '#fe2c55'
+      ? '#6172f3'
       : hovered || insertOpen
         ? '#8a8f99'
         : '#cfd2d7');

@@ -6,6 +6,7 @@ import { GitBranch, Plus, RefreshCw, Trash2, Variable, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorkflowNextStep from '../WorkflowNextStep';
 import type { WorkflowCanvasTaskOption } from '../types';
+import useWorkflowInspectorBehavior from '../useWorkflowInspectorBehavior';
 import type {
   WorkflowStartConfig,
   WorkflowStartInputField,
@@ -119,6 +120,7 @@ const WorkflowStartInspector = ({
   const [draft, setDraft] = useState<EditorDraft>(newDraft());
   const [lastRunLoading, setLastRunLoading] = useState(false);
   const [lastRun, setLastRun] = useState<Awaited<ReturnType<typeof getWorkflowInstances>>[number]>();
+  const { panelWidth, resizing, handleResizePointerDown } = useWorkflowInspectorBehavior();
 
   const loadLastRun = useCallback(async () => {
     setLastRunLoading(true);
@@ -249,17 +251,36 @@ const WorkflowStartInspector = ({
         : 'bg-[#98a2b3]';
 
   const startStepIcon = (
-    <span className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[#eceef1] bg-[#fafafa] text-[#667085]">
-      <GitBranch size={14} strokeWidth={2} />
+    <span className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#6172f3] text-white shadow-[0_1px_2px_rgba(97,114,243,.22)]">
+      <GitBranch size={14} strokeWidth={2.1} />
     </span>
   );
 
   return (
-    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[400px] flex-col overflow-hidden rounded-2xl border border-[#e2e5e9] bg-white shadow-[0_12px_36px_rgba(22,24,35,.12)]">
+    <aside
+      className="absolute bottom-3 right-3 top-3 z-20 flex w-[400px] flex-col overflow-hidden rounded-2xl border border-[#e2e5e9] bg-white shadow-[0_12px_36px_rgba(22,24,35,.12)]"
+      style={{ width: panelWidth }}
+    >
+      <div
+        role="separator"
+        aria-label="调整开始节点面板宽度"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(panelWidth)}
+        className="group/resize absolute left-0 top-0 z-30 flex h-full w-2 cursor-col-resize touch-none items-center justify-start"
+        onPointerDown={handleResizePointerDown}
+      >
+        <span
+          className={[
+            'h-full w-0.5 transition-colors duration-150',
+            resizing ? 'bg-[#6172f3]' : 'bg-transparent group-hover/resize:bg-[#6172f3]',
+          ].join(' ')}
+        />
+      </div>
+
       <header className="shrink-0 bg-white">
         <div className="flex items-center gap-2 px-4 pb-2 pt-4">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[#eceef1] bg-[#fafafa] text-[#667085]">
-            <GitBranch size={15} strokeWidth={2} />
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-[#6172f3] text-white shadow-[0_1px_2px_rgba(97,114,243,.22)]">
+            <GitBranch size={15} strokeWidth={2.1} />
           </span>
           <div className="min-w-0 flex-1 text-[14px] font-semibold text-[#161823]">开始</div>
           <button
@@ -308,7 +329,7 @@ const WorkflowStartInspector = ({
                     key={field.id}
                     className="group flex items-center gap-2 rounded-xl border border-[#e7e9ed] bg-white px-2.5 py-2 hover:bg-[#fafafa]"
                   >
-                    <Variable size={14} className="shrink-0 text-[#667085]" />
+                    <Variable size={14} className="shrink-0 text-[#6172f3]" />
                     <button
                       type="button"
                       disabled={locked}
@@ -360,7 +381,7 @@ const WorkflowStartInspector = ({
               <div className="space-y-1.5">
                 {config.variables.map((variable) => (
                   <div key={variable.id} className="flex items-center gap-2 rounded-xl border border-[#e7e9ed] px-2.5 py-2">
-                    <Variable size={14} className="shrink-0 text-[#667085]" />
+                    <Variable size={14} className="shrink-0 text-[#6172f3]" />
                     <button
                       type="button"
                       disabled={locked}

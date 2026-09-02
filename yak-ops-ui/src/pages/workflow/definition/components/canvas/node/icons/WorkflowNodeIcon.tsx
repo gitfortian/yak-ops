@@ -47,7 +47,8 @@ const WorkflowNodeIcon = ({ taskType, size = 'md' }: WorkflowNodeIconProps) => {
   return (
     <span
       className={[
-        'flex shrink-0 items-center justify-center border border-[#eceef1] bg-[#fafafa] text-[#667085]',
+        'flex shrink-0 items-center justify-center bg-[#6172f3] text-white',
+        'shadow-[0_1px_2px_rgba(97,114,243,.22)]',
         tiny
           ? 'h-6 w-6 rounded-[7px]'
           : compact
