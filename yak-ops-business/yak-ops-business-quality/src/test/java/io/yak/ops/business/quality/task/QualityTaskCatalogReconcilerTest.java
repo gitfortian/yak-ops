@@ -1,6 +1,7 @@
 package io.yak.ops.business.quality.task;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.yak.framework.common.PageData;
@@ -38,5 +39,19 @@ class QualityTaskCatalogReconcilerTest {
     verify(publisher).sync(monitor);
     org.assertj.core.api.Assertions.assertThat(reconciler.source())
         .isEqualTo(TaskAssetSource.DATA_QUALITY);
+  }
+
+  @Test
+  void discoveryWithoutProjectDoesNotReadOrRepairQualityData() {
+    QualityMonitorRepository monitors = Mockito.mock(QualityMonitorRepository.class);
+    QualityTaskPublisher publisher = Mockito.mock(QualityTaskPublisher.class);
+    CurrentProject currentProject = Mockito.mock(CurrentProject.class);
+    when(currentProject.isPresent()).thenReturn(false);
+    QualityTaskCatalogReconciler reconciler = new QualityTaskCatalogReconciler(
+        monitors, publisher, currentProject);
+
+    reconciler.reconcile();
+
+    verifyNoInteractions(monitors, publisher);
   }
 }
