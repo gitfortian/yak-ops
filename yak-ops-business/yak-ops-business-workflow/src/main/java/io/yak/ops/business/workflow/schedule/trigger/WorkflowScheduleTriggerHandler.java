@@ -4,6 +4,7 @@ import io.yak.framework.schedule.api.ScheduleExecutionContext;
 import io.yak.framework.schedule.api.ScheduleExecutionResult;
 import io.yak.framework.schedule.api.ScheduleHandler;
 import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
+import io.yak.ops.business.workflow.schedule.WorkflowScheduleAuditCoordinator;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleLifecycle;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleQuery;
 import io.yak.ops.business.workflow.schedule.WorkflowScheduleRuntimeState;
@@ -14,6 +15,7 @@ import io.yak.ops.core.project.ProjectContext;
 import io.yak.ops.core.project.ProjectContextScope;
 import java.time.Instant;
 import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -24,11 +26,32 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
   private final WorkflowScheduleQuery schedules;
   private final WorkflowDefinitionManager definitions;
   private final WorkflowScheduleTriggerCoordinator coordinator;
-  private final WorkflowScheduleLifecycle lifecycle;
+  private final WorkflowScheduleAuditCoordinator scheduleAudit;
+  private final WorkflowScheduleLifecycle lifecycleFallback;
   private final WorkflowScheduleEngineBridge engine;
   private final WorkflowScheduleRuntimeState runtimeState;
   private final ProjectContextScope projectScope;
 
+  @Autowired
+  public WorkflowScheduleTriggerHandler(
+      WorkflowScheduleQuery schedules,
+      WorkflowDefinitionManager definitions,
+      WorkflowScheduleTriggerCoordinator coordinator,
+      WorkflowScheduleAuditCoordinator scheduleAudit,
+      WorkflowScheduleEngineBridge engine,
+      WorkflowScheduleRuntimeState runtimeState,
+      ProjectContextScope projectScope) {
+    this.schedules = schedules;
+    this.definitions = definitions;
+    this.coordinator = coordinator;
+    this.scheduleAudit = scheduleAudit;
+    this.lifecycleFallback = null;
+    this.engine = engine;
+    this.runtimeState = runtimeState;
+    this.projectScope = projectScope;
+  }
+
+  /** Focused compatibility constructor for tests that do not wire business Audit. */
   public WorkflowScheduleTriggerHandler(
       WorkflowScheduleQuery schedules,
       WorkflowDefinitionManager definitions,
@@ -40,7 +63,8 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
     this.schedules = schedules;
     this.definitions = definitions;
     this.coordinator = coordinator;
-    this.lifecycle = lifecycle;
+    this.scheduleAudit = null;
+    this.lifecycleFallback = lifecycle;
     this.engine = engine;
     this.runtimeState = runtimeState;
     this.projectScope = projectScope;
@@ -85,7 +109,7 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
     }
 
     if (schedule.getEndTime() != null && plannedFireTime.isAfter(schedule.getEndTime())) {
-      lifecycle.expire(scheduleId, actualFireTime);
+      expire(scheduleId, actualFireTime);
       return ScheduleExecutionResult.accepted(null, "调度已超过生效时间并自动停用");
     }
 
@@ -93,11 +117,11 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
     try {
       workflow = definitions.get(schedule.getWorkflowId());
     } catch (IllegalArgumentException missing) {
-      lifecycle.offline(scheduleId);
+      offline(scheduleId, "WORKFLOW_DEFINITION_MISSING");
       return ScheduleExecutionResult.accepted(null, "工作流定义已删除，调度自动停用");
     }
     if (!"ONLINE".equals(workflow.status()) || workflow.activeVersionId() == null) {
-      lifecycle.offline(scheduleId);
+      offline(scheduleId, "WORKFLOW_NOT_ONLINE");
       return ScheduleExecutionResult.accepted(null, "工作流已下线，调度自动停用");
     }
 
@@ -110,6 +134,22 @@ public class WorkflowScheduleTriggerHandler implements ScheduleHandler {
           context.manual() ? "MANUAL" : "CRON");
     } finally {
       refreshFireState(schedule, actualFireTime);
+    }
+  }
+
+  private void expire(String scheduleId, Instant actualFireTime) {
+    if (scheduleAudit != null) {
+      scheduleAudit.expire(scheduleId, actualFireTime);
+    } else {
+      lifecycleFallback.expire(scheduleId, actualFireTime);
+    }
+  }
+
+  private void offline(String scheduleId, String cause) {
+    if (scheduleAudit != null) {
+      scheduleAudit.offlineFromScheduler(scheduleId, cause);
+    } else {
+      lifecycleFallback.offline(scheduleId);
     }
   }
 

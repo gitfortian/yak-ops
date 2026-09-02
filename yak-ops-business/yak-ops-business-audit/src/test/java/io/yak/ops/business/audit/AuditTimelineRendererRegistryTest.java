@@ -107,6 +107,55 @@ class AuditTimelineRendererRegistryTest {
   }
 
   @Test
+  void scheduleAndBackfillChangesUseBusinessCopy() {
+    assertThat(registry
+            .render(
+                "RESOURCE_CREATED",
+                "SUCCESS",
+                null,
+                "created",
+                Map.of("changeType", "SCHEDULE_CREATED"))
+            .title())
+        .isEqualTo("调度已创建");
+    assertThat(registry
+            .render(
+                "RESOURCE_UPDATED",
+                "SUCCESS",
+                null,
+                "enabled",
+                Map.of("changeType", "SCHEDULE_ENABLED"))
+            .title())
+        .isEqualTo("调度已启用");
+    assertThat(registry
+            .render(
+                "RESOURCE_CREATED",
+                "SUCCESS",
+                null,
+                "created",
+                Map.of("changeType", "BACKFILL_CREATED"))
+            .title())
+        .isEqualTo("Backfill 已创建");
+    assertThat(registry
+            .render(
+                "RESOURCE_CREATED",
+                "SUCCESS",
+                null,
+                "created",
+                Map.of("changeType", "BUSINESS_DATE_RERUN_CREATED"))
+            .title())
+        .isEqualTo("运维补跑已创建");
+    assertThat(registry
+            .render(
+                "RESOURCE_UPDATED",
+                "SUCCESS",
+                null,
+                "canceled",
+                Map.of("changeType", "BACKFILL_CANCELED"))
+            .title())
+        .isEqualTo("Backfill 已取消");
+  }
+
+  @Test
   void unknownEventHasSafeFallback() {
     AuditEventPresentation presentation =
         registry.render("CUSTOM_EVENT", "INFO", null, null, Map.of());
