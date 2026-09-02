@@ -35,6 +35,7 @@ public class OfflineJobDefinition {
   private Integer retryMaxAttempts;
   private Integer retryBackoffSeconds;
   private String notificationConfigJson;
+  private String editorMetaJson;
   private LocalDateTime scheduleLastFireTime;
   private LocalDateTime scheduleNextFireTime;
   private Integer version;

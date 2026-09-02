@@ -73,6 +73,7 @@ class OfflineJobDefinitionServiceRuntimeTruthTest {
         schedules,
         mock(OfflineDefinitionSupport.class),
         mock(OfflineNotificationPolicyCodec.class),
+        mock(OfflineEditorMetaCodec.class),
         mock(OfflineScheduleSupport.class),
         lifecycle,
         mock(OfflineSyncViewMapper.class));

@@ -28,6 +28,10 @@ export interface WorkflowStartConfig {
   variables: WorkflowStartVariable[];
   /** Start 的显式后继节点，是编辑器历史状态的一部分。 */
   nextNodeIds: string[];
+  /**
+   * 编辑器不识别的顶层元数据需要原样透传，避免保存画布时误删图标等公共 UI 元数据。
+   */
+  editorMetaExtras?: Record<string, unknown>;
 }
 
 export interface WorkflowStartNodeData {
