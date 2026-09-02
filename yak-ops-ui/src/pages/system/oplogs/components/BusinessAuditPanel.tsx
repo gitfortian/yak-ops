@@ -1,7 +1,6 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { history } from '@umijs/max';
 import {
-  Button,
   DatePicker,
   Input,
   Select,
@@ -18,6 +17,7 @@ import {
   SecurityPagination,
   SecurityQueryTable,
 } from '@/components/security';
+import { YakButton } from '@/components/ui';
 import {
   getAuditFilterOptions,
   queryAuditOperations,
@@ -236,13 +236,13 @@ export default function BusinessAuditPanel() {
         fixed: 'right',
         width: 80,
         render: (_, record) => (
-          <Button
+          <YakButton
             type="link"
             size="small"
             onClick={() => setSelectedOperationId(record.operationId)}
           >
             查看
-          </Button>
+          </YakButton>
         ),
       },
     ],
@@ -266,34 +266,37 @@ export default function BusinessAuditPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            allowClear
-            value={filters.keyword}
-            onChange={(event) =>
-              setFilters((current) => ({ ...current, keyword: event.target.value }))
-            }
-            onPressEnter={search}
-            placeholder="操作名 / Operation ID / 资源 / 摘要"
-            className="w-[260px]"
-          />
-          <DatePicker.RangePicker
-            value={filters.timeRange}
-            onChange={(value) =>
-              setFilters((current) => ({
-                ...current,
-                timeRange:
-                  value?.[0] && value?.[1] ? [value[0], value[1]] : undefined,
-              }))
-            }
-            className="w-[260px]"
-          />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Input
+          allowClear
+          value={filters.keyword}
+          variant="filled"
+          onChange={(event) =>
+            setFilters((current) => ({ ...current, keyword: event.target.value }))
+          }
+          onPressEnter={search}
+          placeholder="操作名 / Operation ID / 资源 / 摘要"
+          className="w-[280px]"
+        />
+        <DatePicker.RangePicker
+          value={filters.timeRange}
+          variant="filled"
+          onChange={(value) =>
+            setFilters((current) => ({
+              ...current,
+              timeRange:
+                value?.[0] && value?.[1] ? [value[0], value[1]] : undefined,
+            }))
+          }
+          className="w-[250px]"
+        />
+        <Space.Compact>
           <Select
             allowClear
             showSearch
             optionFilterProp="label"
             value={filters.projectId}
+            variant="filled"
             options={selectOptions(options.projects)}
             onChange={(value) =>
               setFilters((current) => ({ ...current, projectId: value }))
@@ -306,6 +309,7 @@ export default function BusinessAuditPanel() {
             showSearch
             optionFilterProp="label"
             value={filters.actor}
+            variant="filled"
             options={selectOptions(options.actors)}
             onChange={(value) =>
               setFilters((current) => ({ ...current, actor: value }))
@@ -313,11 +317,14 @@ export default function BusinessAuditPanel() {
             placeholder="操作人"
             className="w-[140px]"
           />
+        </Space.Compact>
+        <Space.Compact>
           <Select
             allowClear
             showSearch
             optionFilterProp="label"
             value={filters.operationType}
+            variant="filled"
             options={selectOptions(options.operationTypes)}
             onChange={(value) =>
               setFilters((current) => ({ ...current, operationType: value }))
@@ -330,6 +337,7 @@ export default function BusinessAuditPanel() {
             showSearch
             optionFilterProp="label"
             value={filters.resourceType}
+            variant="filled"
             options={selectOptions(options.resourceTypes)}
             onChange={(value) =>
               setFilters((current) => ({ ...current, resourceType: value }))
@@ -337,10 +345,16 @@ export default function BusinessAuditPanel() {
             placeholder="资源类型"
             className="w-[150px]"
           />
+        </Space.Compact>
+        <Space.Compact>
           <Select
             allowClear
             value={filters.status}
-            options={selectOptions(options.statuses, (option) => statusMeta(option.value).label)}
+            variant="filled"
+            options={selectOptions(
+              options.statuses,
+              (option) => statusMeta(option.value).label,
+            )}
             onChange={(value) =>
               setFilters((current) => ({ ...current, status: value }))
             }
@@ -350,6 +364,7 @@ export default function BusinessAuditPanel() {
           <Select
             allowClear
             value={filters.source}
+            variant="filled"
             options={selectOptions(options.sources)}
             onChange={(value) =>
               setFilters((current) => ({ ...current, source: value }))
@@ -357,15 +372,15 @@ export default function BusinessAuditPanel() {
             placeholder="来源"
             className="w-[110px]"
           />
-          <Space size={6}>
-            <Button type="primary" icon={<SearchOutlined />} onClick={search}>
-              查询
-            </Button>
-            <Button onClick={reset}>重置</Button>
-            <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>
-              刷新
-            </Button>
-          </Space>
+        </Space.Compact>
+        <div className="flex items-center gap-2">
+          <YakButton type="primary" icon={<SearchOutlined />} onClick={search}>
+            查询
+          </YakButton>
+          <YakButton onClick={reset}>重置</YakButton>
+          <YakButton icon={<ReloadOutlined />} onClick={refresh} loading={loading}>
+            刷新
+          </YakButton>
         </div>
       </div>
 

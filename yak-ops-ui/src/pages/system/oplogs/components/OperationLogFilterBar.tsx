@@ -8,6 +8,7 @@ import {
   Input,
   Popover,
   Select,
+  Space,
 } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
@@ -156,6 +157,7 @@ export default function OperationLogFilterBar({
           allowClear
           showSearch
           value={draftAdvanced.operateType}
+          variant="filled"
           options={selectOptions(options.operateTypes)}
           placeholder="全部操作类型"
           className="w-full"
@@ -174,6 +176,7 @@ export default function OperationLogFilterBar({
           allowClear
           showSearch
           value={draftAdvanced.operatePage}
+          variant="filled"
           options={selectOptions(options.operatePages)}
           placeholder="全部操作页面"
           className="w-full"
@@ -192,6 +195,7 @@ export default function OperationLogFilterBar({
           allowClear
           showSearch
           value={draftAdvanced.targetType}
+          variant="filled"
           options={selectOptions(options.targetTypes)}
           placeholder="全部目标类型"
           className="w-full"
@@ -209,6 +213,7 @@ export default function OperationLogFilterBar({
         <DatePicker.RangePicker
           showTime
           value={draftAdvanced.timeRange}
+          variant="filled"
           className="w-full"
           onChange={(value) =>
             setDraftAdvanced((current) => ({
@@ -242,20 +247,19 @@ export default function OperationLogFilterBar({
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <div className="flex h-8 w-[330px] max-w-full overflow-hidden rounded-md bg-[#f2f2f4]">
+        <Space.Compact className="w-[330px] max-w-full">
           <Select<OperationLogSearchField>
             value={searchField}
             options={OPERATION_LOG_SEARCH_FIELDS}
-            variant="borderless"
+            variant="filled"
             popupMatchSelectWidth={120}
-            className="h-8 w-[104px] shrink-0"
+            className="w-[104px] shrink-0"
             onChange={changeSearchField}
           />
-          <div className="my-2 w-px shrink-0 bg-slate-200" />
           <Input
             allowClear
             value={keyword}
-            variant="borderless"
+            variant="filled"
             placeholder={OPERATION_LOG_SEARCH_PLACEHOLDERS[searchField]}
             suffix={
               <SearchOutlined
@@ -263,7 +267,7 @@ export default function OperationLogFilterBar({
                 onClick={submit}
               />
             }
-            className="min-w-0 flex-1 !h-8 !bg-transparent !shadow-none"
+            className="min-w-0 flex-1"
             onChange={(event) => {
               const value = event.target.value;
               setKeyword(value);
@@ -275,7 +279,7 @@ export default function OperationLogFilterBar({
             }}
             onPressEnter={submit}
           />
-        </div>
+        </Space.Compact>
 
         <Popover
           trigger="click"

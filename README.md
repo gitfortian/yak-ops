@@ -6,120 +6,300 @@
   />
 </p>
 
-
-<img width="200" height="320" alt="99b465a562d33f20eb56e9202efe97dc" src="https://github.com/user-attachments/assets/95c4888a-939c-4eb2-b826-87edeb59996d" />
-
-
 <h1 align="center">Yak Ops</h1>
 
 <p align="center">
-  A focused data operations platform for datasource management, offline synchronization, resources, data quality, and system administration.
+  <strong>Open-source data operations platform for data integration, workflow automation, data quality, and governance.</strong>
 </p>
 
-> Yak Ops is continuously evolving to make complex data engineering workflows simpler and more product-oriented.
+<p align="center">
+  Connect data sources, move data, build tasks, orchestrate workflows, validate quality, and operate data from one self-hosted workspace.
+</p>
 
-## Current scope
+<p align="center">
+  <a href="./README.md">English</a>
+  ·
+  <a href="./README_CN.md">简体中文</a>
+  ·
+  <a href="https://doc.yak-ops.com/">Documentation</a>
+  ·
+  <a href="https://github.com/weifuwan/yak-ops/issues">Issues</a>
+  ·
+  <a href="https://github.com/weifuwan/yak-ops/pulls">Pull Requests</a>
+</p>
 
-Yak Ops currently keeps a deliberately small and maintainable feature set:
+<p align="center">
+  <a href="https://github.com/weifuwan/yak-ops/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/weifuwan/yak-ops?style=flat-square" alt="License" />
+  </a>
+  <a href="https://github.com/weifuwan/yak-ops/stargazers">
+    <img src="https://img.shields.io/github/stars/weifuwan/yak-ops?style=flat-square" alt="GitHub Stars" />
+  </a>
+  <a href="https://github.com/weifuwan/yak-ops/issues">
+    <img src="https://img.shields.io/github/issues/weifuwan/yak-ops?style=flat-square" alt="GitHub Issues" />
+  </a>
+  <img src="https://img.shields.io/badge/Java-21-blue?style=flat-square" alt="Java 21" />
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D20-blue?style=flat-square" alt="Node.js 20+" />
+</p>
 
-- datasource management;
-- offline synchronization and the realtime CDC control plane under Data Integration;
-- resource management, including files, clients, and connectors;
-- data-quality rule templates, table monitors, manual checks, and execution results;
-- system management and security administration.
+---
 
-Realtime synchronization submits Pipeline YAML through the local Flink CDC CLI and manages each
-job through the Flink REST API. See `yak-ops-business/yak-ops-business-sync/yak-ops-business-sync-realtime/README.md` for the module contract and operations.
+## What is Yak Ops?
+
+Data operations are rarely a single job. A real workflow usually starts with a connection, moves through integration and development, becomes a scheduled workflow, needs quality checks and operational visibility, and eventually has to be exposed or governed for other people to use.
+
+Those steps are often scattered across scripts, engine consoles, scheduler pages, metadata tools, monitoring systems, and internal admin panels. **Yak Ops brings that operating context into one open-source control plane.**
+
+Yak Ops started from data integration, but the project is no longer positioned as a thin Web UI for one execution engine. The product boundary is the lifecycle around data: **connect, sync, build, orchestrate, validate, serve, and govern**. Runtime engines are integrations behind that control plane, not the definition of the product itself.
+
+```text
+Data Sources
+     │
+     ▼
+Data Integration ──► Data Development
+     │                    │
+     └────────┬───────────┘
+              ▼
+          Workflows
+              │
+              ▼
+        Data Quality
+              │
+              ▼
+   Datasets / Analysis / APIs
+              │
+              ▼
+   Project Space / RBAC / Audit
+```
+
+## What you can do today
+
+| Area | Current capabilities |
+| --- | --- |
+| **Data Sources** | Reusable datasource connections, connection testing, metadata and catalog discovery, plugin-based datasource capabilities. |
+| **Data Integration** | Offline synchronization with single-table, multi-table and script-oriented configuration; realtime CDC definitions, deployments and runtime control. |
+| **Data Development** | Development tasks, release and execution lifecycle, with task plugin foundations for SQL, Python, Shell and Java. |
+| **Workflow Automation** | Visual workflow definitions, scheduling, execution instances, node-level execution state and operational history. |
+| **Data Quality** | Quality overview, table monitors, reusable rule templates, rules, executions and result inspection. |
+| **Data Assets & Consumption** | Managed files, datasets, lineage, analysis, dashboards, digital screens, and data-service APIs with runtime records. |
+| **Governance & Operations** | Project spaces, users, departments, roles and permissions, operation logs, audit capabilities, notifications and alert foundations. |
+
+The repository is evolving quickly. Some areas are more mature than others, and product boundaries will continue to be refined as the workflows become more coherent.
+
+## How we think about the product
+
+Yak Ops is guided by a few principles:
+
+**1. The control plane should be coherent.**  
+A datasource, task, workflow, quality check, dataset, API and audit event should not feel like unrelated admin pages. They should form one understandable operating lifecycle.
+
+**2. Execution engines should remain replaceable.**  
+Yak Ops should own product concepts, lifecycle, permissions, observability and orchestration. Engines should do what they are good at: execute work.
+
+**3. Important state should be visible.**  
+Long-running work, schedules, retries, failures, runtime events and cross-module operations should be inspectable instead of hidden behind a button that only says "running" or "failed".
+
+**4. Extensibility should be a contract, not a fork.**  
+Datasource, storage, task and alert integrations are modeled as plugin capabilities so new integrations do not have to rewrite the core product.
+
+**5. Open source is the product.**  
+Yak Ops is intended to be useful as a complete open-source project. The repository is not a reduced demo whose main purpose is to push users toward a closed edition.
+
+## Current integrations
+
+The current codebase includes these runtime and plugin integrations:
+
+- **Offline synchronization:** Link-Up integration for task definitions, execution and reconciliation.
+- **Realtime synchronization:** Flink CDC pipeline submission with Flink runtime control through its REST API.
+- **Datasource plugins:** JDBC-based integrations and Doris support.
+- **Storage plugins:** Local filesystem, MinIO and HDFS.
+- **Task plugins:** SQL, Python, Shell and Java foundations.
+- **Alert plugins:** DingTalk integration and a common alert SPI.
+
+These are the integrations implemented today, not permanent limits on the platform.
 
 ## Quick start
 
-Install `yak-framework:1.0.0-SNAPSHOT` into the same Maven local repository first.
+### Docker Compose
 
-Create the Yak Security database:
-
-```sql
-CREATE DATABASE yak_security
-  DEFAULT CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-```
-
-Build and start:
+For local evaluation, Docker Compose is the shortest path. The default compose stack contains MySQL, the Yak Ops backend, and the frontend/reverse proxy.
 
 ```bash
-mvn clean package -DskipTests
-java -jar yak-ops-boot/target/yak-ops-boot-1.0.0.jar
+git clone https://github.com/weifuwan/yak-ops.git
+cd yak-ops
+cp .env.example .env
 ```
 
-Verify the application:
+Before starting, edit `.env` and replace the example datasource master key with your own random secret:
+
+```env
+YAK_OPS_DATASOURCE_MASTER_KEY=replace_with_your_own_random_secret
+```
+
+Then start the stack with the images referenced by `.env`:
 
 ```bash
-curl http://localhost:8080/api/test/ping
+docker compose pull
+docker compose up -d
 ```
 
-Swagger UI:
+With the current `.env.example`, open:
 
 ```text
-http://localhost:8080/swagger-ui.html
+http://localhost:9001
 ```
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f yak-ops-api
+docker compose down
+```
+
+> The values in `.env.example` are development examples. Change database passwords and the datasource master key before using Yak Ops outside a local evaluation environment.
+
+If you already have MySQL, use `.env.without-mysql.example` together with `compose.without-mysql.yaml` instead of starting the bundled database.
+
+### Build from source
+
+Source builds currently require:
+
+- JDK 21
+- Node.js 20+
+- Yarn Classic
+- Maven, or the included Maven Wrapper
+- MySQL 8.0 for a local runtime
+- `yak-framework:1.0.0-SNAPSHOT` installed in the same local Maven repository
+
+Build the frontend first:
+
+```bash
+cd yak-ops-ui
+yarn install
+yarn build
+cd ..
+```
+
+Then build the full reactor and distribution:
+
+```bash
+./mvnw clean package -DskipTests
+```
+
+On Windows:
+
+```cmd
+mvnw.cmd clean package -DskipTests
+```
+
+The assembled distribution is generated under:
+
+```text
+yak-ops-dist/target/
+```
+
+See the [project documentation](https://doc.yak-ops.com/) for environment-specific configuration and deployment details.
 
 ## Architecture
 
+Yak Ops separates product domains, runtime contracts, and integrations so that execution details do not leak through every layer of the application.
+
+```text
+┌─────────────────────────────────────────────────────┐
+│                    yak-ops-ui                       │
+│              React / Umi / Ant Design               │
+└───────────────────────┬─────────────────────────────┘
+                        │ HTTP / WebSocket
+                        ▼
+┌─────────────────────────────────────────────────────┐
+│                   yak-ops-boot                      │
+│                Spring Boot runtime                  │
+└───────────────────────┬─────────────────────────────┘
+                        │
+          ┌─────────────┴─────────────┐
+          ▼                           ▼
+┌──────────────────────┐   ┌──────────────────────────┐
+│   Business domains   │   │ Security / project      │
+│ datasource / sync    │   │ RBAC / audit / context  │
+│ development / job    │   │ operational boundaries  │
+│ workflow / quality   │   └──────────────────────────┘
+│ dataset / lineage    │
+│ analysis / dashboard │
+│ data service / alert │
+└──────────┬───────────┘
+           │ SPI
+           ▼
+┌─────────────────────────────────────────────────────┐
+│ Plugins: datasource / storage / task / alert        │
+└───────────────────────┬─────────────────────────────┘
+                        ▼
+       Databases / storage / Link-Up / Flink CDC / ...
+```
+
+At repository level, the main modules are:
+
 ```text
 yak-ops
-├── yak-ops-bom
-├── yak-ops-common
-├── yak-ops-spi
-├── yak-ops-core
-├── yak-ops-business
-│   ├── yak-ops-business-datasource
-│   ├── yak-ops-business-job
-│   ├── yak-ops-business-quality
-│   ├── yak-ops-business-resource
-│   └── yak-ops-business-sync
-│       ├── yak-ops-business-sync-offline
-│       └── yak-ops-business-sync-realtime
-├── yak-ops-plugins
-│   ├── yak-ops-plugin-datasource
-│   └── yak-ops-plugin-storage
-├── yak-ops-boot
-├── yak-ops-ui
-└── yak-ops-dist
+├── yak-ops-bom           dependency alignment
+├── yak-ops-common        shared primitives
+├── yak-ops-spi           extension contracts
+├── yak-ops-core          core platform capabilities
+├── yak-ops-business      product business domains
+├── yak-ops-plugins       datasource / storage / task / alert plugins
+├── yak-ops-boot          Spring Boot application
+├── yak-ops-ui            web application
+└── yak-ops-dist          release distribution assembly
 ```
 
-### Offline synchronization
+Yak Ops also builds on [yak-framework](https://github.com/weifuwan/yak-framework) for shared infrastructure such as security, scheduling and workflow runtime capabilities.
 
-Offline synchronization keeps task definition management, Link-Up engine integration, worker registration, execution reconciliation, and scheduling support.
+## Project Space and governance
 
-### Data quality
+Yak Ops treats **Project Space** as the business workspace and data-isolation boundary inside the application. Roles answer *what a user can do*; project membership answers *where they can do it*; project ownership on business data answers *which workspace the data belongs to*.
 
-The first data-quality milestone forms a small closed loop:
+This boundary is being applied across datasource, synchronization, development, workflow, quality, dataset, analysis, dashboard and data-service flows so list, detail, mutation and runtime paths follow the same isolation rules.
 
-```text
-select a table -> create a monitor -> add rules from templates
--> run manually -> inspect execution results
-```
+For the design baseline, see [`docs/architecture/PROJECT_SCOPE.md`](docs/architecture/PROJECT_SCOPE.md).
 
-The built-in templates cover table row count, column not-null ratio, column uniqueness, numeric range, enum membership, and custom read-only SQL.
+## Security
 
-### Datasource plugins
+Yak Ops uses Yak Security for identity and permission abstractions and uses Sa-Token as the default authentication backend.
 
-Datasource plugins provide connection normalization, connection tests, and catalog metadata capabilities.
+Datasource connections and data-processing tasks can reach external systems. A production deployment should explicitly review:
 
-### Resource management
+- project and functional permissions;
+- network access and egress restrictions;
+- datasource secret management and master-key handling;
+- audit and operation-log retention;
+- query and runtime limits;
+- database backup, schema migration and upgrade procedures.
 
-Resource management supports managed files and pluggable Local, MinIO, and HDFS storage backends.
+Do not put real production credentials or sensitive data into a public demo environment.
 
-## Removed domains and data
+## Project status
 
-The following runtime modules and frontend pages are not assembled:
+Yak Ops is under active development. APIs, database schemas, navigation and module boundaries may continue to change as the project converges on cleaner end-to-end product flows.
 
-- Data Development and its task plugins;
-- historical data-quality scheduling and alerting implementations.
+That pace is intentional: the goal is not to freeze a large collection of features early, but to keep turning disconnected data-engineering operations into a smaller number of understandable workflows.
 
-Existing database tables are not automatically dropped. Deployments that already contain historical data can retain it for audit or migrate it separately.
+If you are evaluating Yak Ops for production, start with a non-production environment and validate the security, deployment and runtime assumptions that matter to your infrastructure.
 
-## Security note
+## Contributing
 
-Yak Ops delegates login-state management to Yak Security and uses the Sa-Token backend by default. To temporarily roll back to the legacy Servlet Session backend, set `YAK_SECURITY_AUTHENTICATION_MODE=session` before startup. Business modules should continue to depend on Yak Security's current-user and permission abstractions instead of calling Sa-Token directly.
+Yak Ops is developed in the open. Bug reports, design discussions, documentation improvements and code contributions are welcome.
 
-Datasource connections, offline synchronization, and data-quality checks can access external systems. Production deployments should apply project permissions, network restrictions, audit rules, query limits, and secret management before granting access.
+A good way to contribute is to:
+
+1. search the existing [issues](https://github.com/weifuwan/yak-ops/issues);
+2. open an issue for a bug, product gap or design proposal;
+3. keep a pull request focused on one problem and explain the user-visible behavior it changes;
+4. add or update tests and documentation where the change introduces a new contract.
+
+Before contributing code, please read [`CODE_STYLE.md`](CODE_STYLE.md). Frontend changes should also follow [`yak-ops-ui/FRONTEND_CODE_STYLE.md`](yak-ops-ui/FRONTEND_CODE_STYLE.md).
+
+If Yak Ops is useful to you, a ⭐ helps more people discover the project.
+
+## License
+
+Yak Ops is licensed under the [Apache License 2.0](LICENSE).

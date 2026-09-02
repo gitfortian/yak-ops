@@ -9,13 +9,26 @@
 <h1 align="center">Yak Ops</h1>
 
 <p align="center">
-  一个面向生产环境的现代化、可视化 Apache SeaTunnel 第三方 Web 管理平台。
+  <strong>一个面向数据集成、工作流编排、数据质量与治理的开源数据运维平台。</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/weifuwan/yak-ops/releases">
-    <img src="https://img.shields.io/github/v/release/weifuwan/yak-ops?include_prereleases&style=flat-square" alt="版本发布" />
-  </a>
+  把数据源、同步、开发任务、工作流、质量检查、数据服务和治理，放进同一个可自托管的工作空间。
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a>
+  ·
+  <a href="./README_CN.md">简体中文</a>
+  ·
+  <a href="https://doc.yak-ops.com/">项目文档</a>
+  ·
+  <a href="https://github.com/weifuwan/yak-ops/issues">问题反馈</a>
+  ·
+  <a href="https://github.com/weifuwan/yak-ops/pulls">Pull Requests</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/weifuwan/yak-ops/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/weifuwan/yak-ops?style=flat-square" alt="开源许可证" />
   </a>
@@ -27,156 +40,93 @@
   </a>
   <img src="https://img.shields.io/badge/Java-21-blue?style=flat-square" alt="Java 21" />
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-blue?style=flat-square" alt="Node.js 20+" />
-  <img src="https://img.shields.io/badge/LinkUp-2.3.13-blue?style=flat-square" alt="LinkUp 2.3.13" />
-</p>
-
-<p align="center">
-  <a href="http://111.230.213.87:8000">在线体验</a>
-  ·
-  <a href="https://doc.yak-ops.com/">项目文档</a>
-  ·
-  <a href="http://111.230.213.87:9001/">项目首页</a>
-  ·
-  <a href="https://github.com/weifuwan/yak-ops/issues">问题反馈</a>
 </p>
 
 ---
 
-## 项目介绍
+## Yak Ops 是什么？
 
-**Yak Ops** 是一个面向 **Apache SeaTunnel** 构建的独立第三方 Web 管理平台。
+真实的数据运维很少只有一个动作。
 
-它提供了一种直观、实用的方式来创建、配置、运行、调度和监控数据同步任务，用户无需再手动维护复杂的 LinkUp 配置文件。
+一条数据链路往往从连接数据源开始，经过同步和开发，进入工作流调度，需要质量检查和运行可观测，最终还可能形成数据集、分析结果或 API，交给其他人继续使用。同时，权限、项目空间、审计和告警又贯穿整个过程。
 
-通过 Yak Ops，用户可以在统一的 Web 界面中管理数据源、构建离线与实时同步链路、配置字段映射、生成 LinkUp 任务配置、向 LinkUp 引擎提交任务、查看运行日志并监控执行指标。
+现实中，这些事情经常散落在脚本、执行引擎控制台、调度页面、元数据工具、监控系统和各种内部管理后台里。**Yak Ops 想做的，是把这些上下文重新放回一个统一、开放的数据运维控制面。**
 
-> 我们的目标很简单：让 Apache SeaTunnel 在真实的数据集成场景中更容易使用。
+Yak Ops 最早从数据集成出发，但现在它已经不再把自己定义成“给某一个执行引擎套一层 Web UI”。项目真正关注的是数据从接入到运行、再到消费和治理的完整生命周期：**连接、同步、开发、编排、校验、服务、治理。**
 
-## 核心能力
+执行引擎只是控制面背后的运行时能力，而不是 Yak Ops 的产品边界。
 
-### 可视化任务编排
+```text
+数据源
+  │
+  ▼
+数据集成 ─────► 数据开发
+  │               │
+  └───────┬───────┘
+          ▼
+        工作流
+          │
+          ▼
+        数据质量
+          │
+          ▼
+  数据集 / 分析 / API
+          │
+          ▼
+ 项目空间 / RBAC / 审计
+```
 
-通过拖拽式 DAG 编辑器构建数据同步链路。
+## 现在可以做什么？
 
-用户可以可视化配置 Source、Transform 和 Sink 节点，让复杂的数据同步流程更加直观，也更易于维护。
-
-### 离线与实时同步
-
-通过统一界面创建和管理离线批处理任务与实时流式同步任务。
-
-Yak Ops 支持多种任务创建方式，包括可视化向导配置和脚本模式配置。
-
-### 数据源管理
-
-统一管理常用数据源，包括：
-
-* MySQL
-* PostgreSQL
-* Oracle
-* 其他兼容 JDBC 的数据源
-
-用户可以配置数据源连接、测试连通性、读取元数据，并在不同任务中复用已创建的数据源。
-
-### 字段映射与数据转换
-
-通过可视化方式配置源端字段与目标端字段的映射关系。
-
-Yak Ops 同时支持基于 SQL 的数据转换，并能够自动生成对应的 LinkUp 任务配置。
-
-### 任务全生命周期管理
-
-管理 LinkUp 任务的完整生命周期：
-
-* 创建和编辑任务
-* 发布任务定义
-* 提交任务
-* 停止运行中的任务
-* 查看执行历史
-* 查看运行日志
-* 跟踪任务状态
-* 管理定时调度
-
-### 运行指标
-
-直接在 Web 界面中查看关键运行指标，包括：
-
-* 读取行数
-* 写入行数
-* 读取 QPS
-* 写入 QPS
-* 数据量
-* 任务状态
-* 任务执行进度
-
-内置的指标页面能够帮助用户快速了解任务运行情况，在进行基础问题排查时，无需额外部署独立的监控平台。
-
-### 自动生成任务配置
-
-Yak Ops 可以将可视化任务定义转换为可执行的 LinkUp 配置文件。
-
-这能够减少重复的配置工作，并帮助团队统一数据同步任务的开发规范。
-
-## 为什么选择 Yak Ops？
-
-Apache SeaTunnel 提供了强大的数据集成能力，但在大规模或多团队协作环境中，手动编写和维护配置文件仍然存在一定门槛。
-
-Yak Ops 适合有以下需求的团队：
-
-* 为 Apache SeaTunnel 提供可视化 Web 管理界面
-* 统一管理数据源
-* 通过低代码方式配置数据同步链路
-* 复用已有同步流程
-* 统一管理离线和实时任务
-* 管理任务调度和执行历史
-* 查看运行日志和指标
-* 降低配置与维护成本
-* 降低新用户上手门槛
-
-## 兼容性
-
-当前版本支持或推荐使用以下环境：
-
-| 组件 | 支持或推荐版本 |
+| 领域 | 当前能力 |
 | --- | --- |
-| Apache SeaTunnel | 2.3.13 |
-| Java | JDK/JRE 21 |
-| Node.js | 20 及以上，仅源码构建时需要 |
-| Yarn | Yarn Classic 1.x |
-| MySQL | 推荐 MySQL 8.0 |
-| Docker | Docker Engine 或 Docker Desktop |
-| Docker Compose | Compose v2 |
-| 操作系统 | 推荐 Linux |
-| 浏览器 | 最新版 Chrome 或 Edge |
+| **数据源** | 统一管理和复用数据连接，测试连通性，读取元数据与目录信息，并通过插件扩展数据源能力。 |
+| **数据集成** | 离线同步支持单表、多表和脚本化配置；实时同步提供 CDC 任务定义、部署与运行控制。 |
+| **数据开发** | 管理开发任务、发布和执行生命周期，并提供 SQL、Python、Shell、Java 等任务插件基础。 |
+| **工作流** | 可视化定义工作流，配置调度，查看执行实例、节点状态和运行历史。 |
+| **数据质量** | 质量总览、数据表监控、规则模板、质量规则、执行记录和结果查看。 |
+| **数据资产与消费** | 文件资源、数据集、血缘、分析、仪表盘、数字化大屏，以及数据服务 API 和运行记录。 |
+| **治理与运维** | 项目空间、用户、部门、角色与权限、操作日志、审计能力，以及通知和告警基础设施。 |
 
-> Yak Ops 在连接 LinkUp 引擎时会进行版本校验，请使用当前支持的 LinkUp 版本。
+项目仍在快速演进，不同模块的成熟度并不完全一致。Yak Ops 会继续收敛产品边界，让这些能力最终组成更连贯的端到端工作流，而不是简单堆叠更多菜单。
 
-## 系统架构
+## 我们怎么看这个产品？
 
-Yak Ops 采用前后端分离架构。
+Yak Ops 的设计会尽量遵循下面几个原则。
 
-在容器化部署模式下，Nginx 用于提供前端静态资源，并将 API 和 WebSocket 请求代理到 Spring Boot 服务。Spring Boot 服务负责连接 Yak Ops 元数据库，并与已配置的 Apache SeaTunnel 引擎进行通信。
+**1. 控制面应该是一体的。**  
+数据源、任务、工作流、质量检查、数据集、API 和审计事件，不应该像一组彼此无关的后台页面。用户应该能够理解它们之间的关系，并沿着同一条链路完成操作和排查。
 
-<img width="1448" height="1086" alt="Yak Ops 系统架构" src="https://github.com/user-attachments/assets/187f2558-3668-4cc0-9ba8-9eb8807c3b02" />
+**2. 执行引擎应该可以替换。**  
+Yak Ops 负责产品语义、生命周期、权限、可观测和编排；具体引擎负责执行它擅长的工作。平台不应该因为绑定某一个引擎，而把自己的边界限制死。
 
+**3. 重要状态必须能被看见。**  
+长任务、调度、重试、失败、运行事件和跨模块操作，不应该被藏在一个只会显示“运行中”或“失败”的按钮后面。运维系统首先应该帮助人理解正在发生什么。
+
+**4. 扩展应该依赖契约，而不是依赖 Fork。**  
+数据源、存储、任务和告警能力通过 SPI / Plugin 进行扩展，新能力应该尽量通过稳定契约接入，而不是反复修改核心代码。
+
+**5. 开源本身就是产品。**  
+Yak Ops 希望作为一个完整的开源项目被真正使用，而不是把开源仓库做成一个功能受限的演示版，再依赖关闭功能来推动商业版本。
+
+## 当前集成能力
+
+目前代码仓库已经包含以下运行时和插件能力：
+
+- **离线同步：** 通过 Link-Up 完成任务定义、执行与状态协调。
+- **实时同步：** 通过 Flink CDC 提交 Pipeline，并使用 Flink REST API 管理运行状态。
+- **数据源插件：** JDBC 通用能力以及 Doris 支持。
+- **存储插件：** Local、MinIO、HDFS。
+- **任务插件：** SQL、Python、Shell、Java 基础能力。
+- **告警插件：** DingTalk 集成与通用 Alert SPI。
+
+这些只是当前已经实现的集成，不代表 Yak Ops 未来只能支持这些技术栈。
 
 ## 快速开始
 
-推荐使用 Docker Compose 在本地运行 Yak Ops。
+### Docker Compose
 
-完整的安装和部署说明请参考项目文档：
-
-**项目文档：**  
-https://doc.yak-ops.com/
-
-### 方式一：使用 Docker Compose 和 MySQL 部署
-
-该方式会同时启动以下服务：
-
-* MySQL 8.0
-* Yak Ops API
-* Nginx 前端服务
-
-克隆项目并创建环境变量文件：
+如果只是本地体验，Docker Compose 是最短的启动路径。默认 Compose 会运行 MySQL、Yak Ops 后端以及前端 / 反向代理。
 
 ```bash
 git clone https://github.com/weifuwan/yak-ops.git
@@ -184,375 +134,182 @@ cd yak-ops
 cp .env.example .env
 ```
 
-构建并启动服务：
+启动前，请编辑 `.env`，把示例中的数据源主密钥替换成你自己的随机密钥：
+
+```env
+YAK_OPS_DATASOURCE_MASTER_KEY=replace_with_your_own_random_secret
+```
+
+使用 `.env` 中配置的镜像启动：
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-访问 Yak Ops：
+按照当前 `.env.example` 的默认端口，可以访问：
 
 ```text
-http://localhost:9527
+http://localhost:9001
 ```
 
-查看服务状态和日志：
+常用命令：
 
 ```bash
 docker compose ps
 docker compose logs -f yak-ops-api
-```
-
-停止服务：
-
-```bash
 docker compose down
 ```
 
-如需重新创建本地 MySQL 数据库，并再次执行初始化脚本：
+> `.env.example` 中的密码和密钥只是开发示例。在本地体验之外使用 Yak Ops 时，请务必更换数据库密码和数据源主密钥。
 
-```bash
-docker compose down -v
-docker compose up -d --build
-```
+如果已经有自己的 MySQL，可以使用 `.env.without-mysql.example` 和 `compose.without-mysql.yaml`，不再启动默认 MySQL 容器。
 
-> `docker compose down -v` 会永久删除由 Docker Compose 管理的 MySQL 数据卷，请谨慎执行。
+### 从源码构建
 
-### 方式二：使用 Docker Compose 连接已有 MySQL
+源码构建当前需要：
 
-当宿主机已经安装 MySQL，或 MySQL 部署在其他服务器上时，可以使用该方式。
+- JDK 21
+- Node.js 20+
+- Yarn Classic
+- Maven，或项目自带的 Maven Wrapper
+- 本地运行时使用 MySQL 8.0
+- 在同一个 Maven 本地仓库中安装 `yak-framework:1.0.0-SNAPSHOT`
 
-启动 Yak Ops 前，请先创建外部数据库并执行 MySQL 初始化 SQL。相关 SQL 文件位于发行包的 `sql/` 目录中，也可以在源码仓库的以下目录中找到：
-
-```text
-yak-ops-api/src/main/resources/sql/
-```
-
-创建环境变量文件：
-
-```bash
-cp .env.without-mysql.example .env.without-mysql
-```
-
-配置已有数据库：
-
-```env
-MYSQL_HOST=host.docker.internal
-MYSQL_PORT=3306
-MYSQL_DATABASE=yak_ops
-MYSQL_USER=linkup
-MYSQL_PASSWORD=change_me
-```
-
-在 Windows 或 macOS 的 Docker Desktop 环境中，请使用：
-
-```env
-MYSQL_HOST=host.docker.internal
-```
-
-如果连接远程 MySQL 服务器，请将 `MYSQL_HOST` 设置为对应的主机名或 IP 地址。
-
-MySQL 用户必须允许来自 Docker 宿主机的连接，建议创建独立数据库用户：
-
-```sql
-CREATE USER IF NOT EXISTS 'linkup'@'%' IDENTIFIED BY 'change_me';
-GRANT ALL PRIVILEGES ON yak_ops.* TO 'linkup'@'%';
-FLUSH PRIVILEGES;
-```
-
-启动 Yak Ops，但不启动新的 MySQL 容器：
-
-```bash
-docker compose   --env-file .env.without-mysql   -f compose.without-mysql.yaml   up -d --build
-```
-
-查看日志：
-
-```bash
-docker compose   --env-file .env.without-mysql   -f compose.without-mysql.yaml   logs -f yak-ops-api
-```
-
-### 方式三：从源码构建发行包
-
-环境要求：
-
-* JDK 21
-* Node.js 20 及以上
-* Yarn Classic
-* MySQL 8.0
-* Maven，或项目中自带的 Maven Wrapper
-
-首先构建前端资源：
+先构建前端：
 
 ```bash
 cd yak-ops-ui
-yarn install --frozen-lockfile
+yarn install
 yarn build
 cd ..
 ```
 
-在项目根目录构建完整发行包：
+再构建完整 Maven Reactor 和发行包：
 
 ```bash
 ./mvnw clean package -DskipTests
 ```
 
-Windows 环境执行：
+Windows：
 
 ```cmd
 mvnw.cmd clean package -DskipTests
 ```
 
-生成的发行包位于：
+最终发行包生成在：
 
 ```text
 yak-ops-dist/target/
 ```
 
-发行包目录结构如下：
+更详细的环境配置与部署方式请查看 [Yak Ops 项目文档](https://doc.yak-ops.com/)。
+
+## 系统架构
+
+Yak Ops 尽量把产品领域、运行时契约和具体集成分开，避免某一个执行引擎的细节渗透到整个系统。
 
 ```text
-yak-ops-<version>/
-├── bin/
-│   ├── run-yak-ops.sh
-│   ├── start-yak-ops.sh
-│   ├── status-yak-ops.sh
-│   └── stop-yak-ops.sh
-├── conf/
-│   ├── application.yml
-│   ├── logback-spring.xml
-│   └── nginx/
-│       └── default.conf
-├── jdbc-drivers/
-├── libs/
-│   └── yak-ops-api.jar
-├── sql/
-├── web/
-├── LICENSE
-├── NOTICE
-└── README.md
+┌─────────────────────────────────────────────────────┐
+│                    yak-ops-ui                       │
+│              React / Umi / Ant Design               │
+└───────────────────────┬─────────────────────────────┘
+                        │ HTTP / WebSocket
+                        ▼
+┌─────────────────────────────────────────────────────┐
+│                   yak-ops-boot                      │
+│                Spring Boot Runtime                  │
+└───────────────────────┬─────────────────────────────┘
+                        │
+          ┌─────────────┴─────────────┐
+          ▼                           ▼
+┌──────────────────────┐   ┌──────────────────────────┐
+│       业务领域        │   │ 安全 / 项目空间          │
+│ 数据源 / 数据集成     │   │ RBAC / 审计 / 上下文     │
+│ 数据开发 / Job       │   │ 业务数据隔离边界         │
+│ 工作流 / 数据质量     │   └──────────────────────────┘
+│ 数据集 / 血缘         │
+│ 分析 / 仪表盘         │
+│ 数据服务 / 告警       │
+└──────────┬───────────┘
+           │ SPI
+           ▼
+┌─────────────────────────────────────────────────────┐
+│ Plugin：数据源 / 存储 / 任务 / 告警                 │
+└───────────────────────┬─────────────────────────────┘
+                        ▼
+       数据库 / 存储 / Link-Up / Flink CDC / ...
 ```
 
-同一个发行包会用于构建以下两个运行时镜像：
-
-* `yak-ops-api`：Java 21 后端运行时镜像
-* `yak-ops`：Nginx 前端和反向代理镜像
-
-如果采用 Linux 手动部署，请解压发行包，检查 `conf/application.yml` 配置，使用 `bin/` 目录下的脚本启动后端服务，并通过 `conf/nginx/default.conf` 配置 Nginx。
-
-### 连接 Apache SeaTunnel
-
-Yak Ops 启动后：
-
-1. 打开 LinkUp 客户端管理页面。
-2. 添加 Apache SeaTunnel 2.3.13 引擎地址。
-3. 测试连接。
-4. 创建数据源。
-5. 创建并发布数据同步任务。
-6. 提交任务并查看运行日志和指标。
-
-## 开发说明
-
-### 后端开发
-
-环境要求：
-
-* JDK 21
-* Maven 3.8 及以上
-* MySQL 8.0
-
-启动后端服务：
-
-```bash
-./mvnw clean install -DskipTests
-./mvnw -pl yak-ops-api spring-boot:run
-```
-
-后端默认端口：
+仓库主要模块：
 
 ```text
-9527
+yak-ops
+├── yak-ops-bom           依赖版本对齐
+├── yak-ops-common        公共基础能力
+├── yak-ops-spi           扩展契约
+├── yak-ops-core          平台核心能力
+├── yak-ops-business      各产品业务域
+├── yak-ops-plugins       数据源 / 存储 / 任务 / 告警插件
+├── yak-ops-boot          Spring Boot 应用入口
+├── yak-ops-ui            Web 前端
+└── yak-ops-dist          发行包组装
 ```
 
-### 前端开发
+Yak Ops 同时基于 [yak-framework](https://github.com/weifuwan/yak-framework) 复用安全、调度、工作流运行时等通用基础设施。
 
-进入前端目录：
+## Project Space 与治理
 
-```bash
-cd yak-ops-ui
+Yak Ops 把 **Project Space** 定义为应用内部的业务工作空间和数据隔离边界：
+
+```text
+角色 / 权限   → 决定“能做什么”
+项目成员关系  → 决定“能在哪个空间做”
+project_id    → 决定“业务数据属于哪个空间”
 ```
 
-安装依赖：
+这套边界正在统一应用到数据源、同步任务、数据开发、工作流、数据质量、数据集、分析、仪表盘和数据服务等链路，目标不是只过滤列表，而是让详情、编辑、删除、发布、执行以及异步运行记录都遵守同一套项目隔离规则。
 
-```bash
-yarn
-```
-
-构建生产环境资源：
-
-```bash
-yarn build
-```
-
-## 项目文档
-
-详细的安装、配置、运维和使用指南请查看：
-
-### Yak Ops 项目文档
-
-https://doc.yak-ops.com/
-
-文档内容包括：
-
-* 环境准备
-* 数据库初始化
-* LinkUp 引擎配置
-* 数据源管理
-* 离线同步
-* 实时同步
-* 工作流配置
-* 字段映射
-* 任务调度
-* 运行日志
-* 指标监控
-* Docker 和 Docker Compose 部署
-* 常见问题排查
-
-## 在线体验
-
-在线体验环境地址：
-
-http://111.230.213.87:8000
-
-该环境仅用于产品预览和功能体验。
-
-请勿在公共体验环境中填写机密数据、敏感数据或生产环境数据。
-
-## 后续规划
-
-计划持续完善以下能力：
-
-* 支持更多数据源插件
-* 兼容更多 LinkUp 版本
-* 完善版本升级和数据库迁移能力
-* 增强任务配置校验
-* 增加告警和通知能力
-* 完善运行监控能力
-* 增强权限管理
-* 完善国际化支持
-* 完善容器镜像发布、升级和迁移工具
-
-后续规划的优先级可能会根据社区反馈和实际使用场景进行调整。
-
-## 已知限制
-
-使用当前版本前，请注意：
-
-* 当前已完成验证的 LinkUp 版本为 2.3.13。
-* Yak Ops 元数据库推荐使用 MySQL 8.0。
-* 部分高级 LinkUp Connector 参数仍可能需要通过脚本模式进行配置。
-* 生产环境部署时，请使用安全的数据库密码、持久化数据卷，并限制网络访问范围。
-* 公共体验环境禁止使用敏感数据。
-* 升级到新版本前，请备份 Yak Ops 数据库。
-
-在生产环境部署前，建议先查看当前未解决的问题：
-
-https://github.com/weifuwan/yak-ops/issues
-
-## 参与贡献
-
-非常欢迎大家参与贡献。
-
-你可以通过以下方式参与项目：
-
-* 提交 Bug
-* 提交功能建议
-* 完善项目文档
-* 添加数据源插件
-* 修复已有问题
-* 完善测试覆盖率
-* 分享部署和使用经验
-* 帮助其他社区用户
-
-推荐的贡献流程：
-
-1. Fork 项目仓库。
-2. 创建功能分支。
-3. 完成修改并进行测试。
-4. 提交 Pull Request。
-5. 清晰描述修改动机、实现方式和验证过程。
-
-项目仓库：
-
-https://github.com/weifuwan/yak-ops
-
-问题反馈：
-
-https://github.com/weifuwan/yak-ops/issues
-
-Pull Request：
-
-https://github.com/weifuwan/yak-ops/pulls
-
-## 社区交流
-
-如果你对 Yak Ops 感兴趣，希望分享使用反馈，或愿意参与项目建设，欢迎加入社区交流。
-
-参与贡献并不局限于编写代码。完善文档、参与测试、提交问题、讨论功能、提出产品建议以及分享使用经验，都非常有价值。
-
-<p align="center">
-  <img
-    width="200"
-    height="320"
-    src="https://github.com/user-attachments/assets/41de5095-91af-41e6-9345-7c26496f9469"
-    alt="Yak Ops 社区交流群"
-  />
-</p>
-
-<p align="center">
-  欢迎加入 Yak Ops 社区，一起参与项目建设。
-</p>
+完整设计基线见 [`docs/architecture/PROJECT_SCOPE.md`](docs/architecture/PROJECT_SCOPE.md)。
 
 ## 安全说明
 
-请不要通过公开的 GitHub Issue 披露安全漏洞。
+Yak Ops 使用 Yak Security 提供身份与权限抽象，并默认使用 Sa-Token 作为认证后端。
 
-提交安全问题时，请尽量提供以下信息：
+数据源连接和数据处理任务可能访问外部系统。如果准备在生产环境使用，至少需要明确检查：
 
-* 受影响的版本
-* 受影响的组件
-* 问题复现步骤
-* 潜在影响
-* 可行的修复建议（如有）
+- 项目空间与功能权限；
+- 网络访问和出站限制；
+- 数据源密钥管理和主密钥保护；
+- 审计与操作日志保留策略；
+- 查询和任务运行限制；
+- 数据库备份、Schema 迁移与升级流程。
 
-后续将在 `SECURITY.md` 中补充专门的安全问题报告流程。
+不要在公共体验环境中填写真实生产凭据或敏感数据。
+
+## 项目状态
+
+Yak Ops 仍处于活跃开发阶段。随着端到端产品流程继续收敛，API、数据库结构、导航以及部分模块边界仍可能发生变化。
+
+这种变化是有意的：现阶段比起尽早冻结一大批功能，我们更希望不断把零散的数据工程操作重新整理成更少、更清晰、更容易理解的工作流。
+
+如果你准备把 Yak Ops 用在生产环境，建议先从非生产环境验证，并根据自己的基础设施要求检查安全、部署、备份和运行时假设。
+
+## 参与贡献
+
+Yak Ops 在 GitHub 上公开开发。Bug、产品建议、设计讨论、文档改进和代码贡献都非常欢迎。
+
+建议按照这个方式参与：
+
+1. 先搜索已有 [Issues](https://github.com/weifuwan/yak-ops/issues)；
+2. 对 Bug、产品缺口或设计想法提交 Issue；
+3. Pull Request 尽量只解决一个清晰问题，并说明它改变了什么用户行为；
+4. 如果修改引入了新的契约，同步补充测试和文档。
+
+提交代码前请阅读 [`CODE_STYLE.md`](CODE_STYLE.md)。前端修改还应遵循 [`yak-ops-ui/FRONTEND_CODE_STYLE.md`](yak-ops-ui/FRONTEND_CODE_STYLE.md)。
+
+如果 Yak Ops 对你有帮助，一个 ⭐ 可以让更多人看到这个项目。
 
 ## 开源许可证
 
-Yak Ops 基于 Apache License 2.0 开源。
-
-详细信息请查看 [LICENSE](./LICENSE) 文件。
-
-## 免责声明
-
-Yak Ops 是一个独立的第三方项目。
-
-本项目不是 Apache 软件基金会的官方项目，也未获得 Apache 软件基金会的隶属、认可或背书。
-
-Apache SeaTunnel、LinkUp、Apache 以及 Apache 羽毛标志均为 Apache 软件基金会的商标。
-
-本项目名称和文档中使用 Apache SeaTunnel，仅用于说明本项目与 Apache SeaTunnel 的兼容性和集成关系。
-
----
-
-<p align="center">
-  由 Yak Ops 社区用 ❤️ 构建
-</p>
-
-<p align="center">
-  <a href="https://github.com/weifuwan/yak-ops">GitHub</a>
-  ·
-  <a href="https://doc.yak-ops.com/">项目文档</a>
-  ·
-  <a href="https://github.com/weifuwan/yak-ops/issues">问题反馈</a>
-</p>
+Yak Ops 使用 [Apache License 2.0](LICENSE) 开源。
