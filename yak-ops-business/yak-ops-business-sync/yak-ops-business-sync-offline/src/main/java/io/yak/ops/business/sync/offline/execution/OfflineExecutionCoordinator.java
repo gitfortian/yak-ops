@@ -189,15 +189,16 @@ public class OfflineExecutionCoordinator {
 
   private OfflineJobExecution submitClaim(OfflineExecutionClaim claim) {
     OfflineJobExecution execution = claim.getExecution();
+    String executionJobSpec = resolveScopedExecutionJobSpec(claim);
     stateManager.recordCreated(execution);
     AuditOperationHandle audit = auditBridge.ensureOperation(execution);
-    return callInAuditContext(audit, () -> submitClaimInContext(claim, execution));
+    return callInAuditContext(
+        audit, () -> submitClaimInContext(execution, executionJobSpec));
   }
 
   private OfflineJobExecution submitClaimInContext(
-      OfflineExecutionClaim claim, OfflineJobExecution execution) {
+      OfflineJobExecution execution, String executionJobSpec) {
     try {
-      String executionJobSpec = resolveScopedExecutionJobSpec(claim);
       LinkUpNodeResponse node = linkUpClient.node();
       stateManager.bindWorker(execution, node.getInstanceId());
 
