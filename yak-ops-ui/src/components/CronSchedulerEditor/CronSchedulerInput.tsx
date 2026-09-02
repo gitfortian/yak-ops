@@ -275,9 +275,6 @@ export default function CronSchedulerInput({
                   <div className="text-[14px] font-semibold text-[#161823]">
                     Cron 调度配置
                   </div>
-                  <div className="mt-1 text-[11px] leading-5 text-[#98a2b3]">
-                    选择周期与执行时间，Cron 表达式会实时回显到输入框。
-                  </div>
                 </div>
 
                 <div className="px-6 py-5">
@@ -293,7 +290,7 @@ export default function CronSchedulerInput({
 
                 <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-[#f0f1f3] bg-white/95 px-6 py-3 backdrop-blur">
                   <span className="text-[11px] text-[#98a2b3]">
-                    点击页面其它区域会保留当前配置并关闭
+                    
                   </span>
                   <div className="flex shrink-0 items-center gap-2">
                     <YakButton onClick={cancelAndClose}>取消</YakButton>
