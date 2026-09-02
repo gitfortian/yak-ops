@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.yak.ops.core.project.CurrentProject;
 import io.yak.ops.core.project.ProjectContext;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -21,6 +24,7 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
 
   private static final Logger log = LoggerFactory.getLogger(JdbcBusinessAuditService.class);
   private static final int SCHEMA_VERSION = 1;
+  private static final int MAX_EVENT_KEY_LENGTH = 160;
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
@@ -57,6 +61,45 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
 
   @Override
   public AuditOperationHandle start(AuditOperationRequest request) {
+    return startInternal(request, true);
+  }
+
+  @Override
+  public AuditOperationHandle resume(AuditCarrier carrier) {
+    if (carrier == null) return AuditOperationHandle.noop(null);
+    AuditCarrier persisted = loadCarrier(carrier.operationId());
+    return persisted == null
+        ? AuditOperationHandle.noop(null)
+        : new JdbcAuditOperationHandle(persisted, true);
+  }
+
+  @Override
+  public void authorizationDecision(AuditAuthorizationDecision decision) {
+    if (decision == null) return;
+
+    AuditCarrier activeCarrier = AuditContext.current().orElse(null);
+    if (activeCarrier != null) {
+      resume(activeCarrier).event(authorizationEvent(decision));
+      return;
+    }
+
+    if (decision.allowed()) {
+      AuditAuthorizationDecisionContext.defer(decision);
+      return;
+    }
+
+    writeStandaloneAuthorizationDecision(decision);
+  }
+
+  @Override
+  public void clearAuthorizationDecisions() {
+    AuditAuthorizationDecisionContext.clear();
+  }
+
+  private AuditOperationHandle startInternal(
+      AuditOperationRequest request, boolean attachDeferredAuthorization) {
+    List<AuditAuthorizationDecision> deferredAuthorization =
+        attachDeferredAuthorization ? AuditAuthorizationDecisionContext.drain() : List.of();
     String operationId = "AUD-" + UUID.randomUUID();
     AuditActor actor = safeActor();
     ProjectContext project = currentProject.current().orElse(null);
@@ -103,11 +146,17 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
                   SCHEMA_VERSION,
                   now,
                   now);
+              for (AuditAuthorizationDecision decision : deferredAuthorization) {
+                insertAuthorizationEvent(carrier, decision);
+              }
               insertEvent(
                   carrier,
                   AuditEventType.OPERATION_STARTED,
-                  "INFO",
+                  AuditEventCategory.BUSINESS,
+                  AuditEventStatus.INFO,
                   "operation:started",
+                  null,
+                  null,
                   "Operation started",
                   null,
                   Map.of());
@@ -115,13 +164,67 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
     return new JdbcAuditOperationHandle(carrier, persisted);
   }
 
-  @Override
-  public AuditOperationHandle resume(AuditCarrier carrier) {
-    if (carrier == null) return AuditOperationHandle.noop(null);
-    AuditCarrier persisted = loadCarrier(carrier.operationId());
-    return persisted == null
-        ? AuditOperationHandle.noop(null)
-        : new JdbcAuditOperationHandle(persisted, true);
+  private void writeStandaloneAuthorizationDecision(AuditAuthorizationDecision decision) {
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("permission", decision.permission());
+    metadata.put("decision", decision.decision().name());
+    AuditOperationHandle handle =
+        startInternal(
+            new AuditOperationRequest(
+                "AUTHORIZATION_CHECK",
+                "Authorize " + decision.permission(),
+                decision.resourceType(),
+                decision.resourceId(),
+                decision.resourceName(),
+                "WEB",
+                metadata),
+            false);
+    handle.event(authorizationEvent(decision));
+    if (decision.allowed()) {
+      handle.success("Authorization allowed");
+    } else {
+      handle.failure(decision.reasonCode(), null);
+    }
+  }
+
+  private void insertAuthorizationEvent(
+      AuditCarrier carrier, AuditAuthorizationDecision decision) {
+    AuditEventRequest request = authorizationEvent(decision);
+    insertEvent(
+        carrier,
+        request.type(),
+        request.category(),
+        request.status(),
+        request.eventKey(),
+        request.resourceType(),
+        request.resourceId(),
+        request.message(),
+        request.reasonCode(),
+        request.payload());
+  }
+
+  private AuditEventRequest authorizationEvent(AuditAuthorizationDecision decision) {
+    return AuditEventRequest.authorization(decision, authorizationEventKey(decision));
+  }
+
+  private String authorizationEventKey(AuditAuthorizationDecision decision) {
+    String key =
+        "authorization:"
+            + keyToken(decision.permission())
+            + ":"
+            + keyToken(decision.resourceType())
+            + ":"
+            + keyToken(decision.resourceId())
+            + ":"
+            + decision.decision().name().toLowerCase(Locale.ROOT)
+            + ":"
+            + keyToken(decision.reasonCode());
+    return key.length() <= MAX_EVENT_KEY_LENGTH ? key : key.substring(0, MAX_EVENT_KEY_LENGTH);
+  }
+
+  private String keyToken(String value) {
+    if (value == null || value.isBlank()) return "none";
+    return value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "-");
   }
 
   private final class JdbcAuditOperationHandle implements AuditOperationHandle {
@@ -170,13 +273,20 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
     @Override
     public void event(AuditEventRequest request) {
       if (!persisted || request == null) return;
+      AuditEventCategory category =
+          request.category() == null ? AuditEventCategory.BUSINESS : request.category();
+      AuditEventStatus status =
+          request.status() == null ? eventStatus(request.type()) : request.status();
       safeWrite(
           () ->
               insertEvent(
                   carrier(),
                   request.type(),
-                  eventStatus(request.type()),
+                  category,
+                  status,
                   request.eventKey(),
+                  request.resourceType(),
+                  request.resourceId(),
                   request.message(),
                   request.reasonCode(),
                   request.payload()));
@@ -203,8 +313,11 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
               insertEvent(
                   carrier(),
                   AuditEventType.OPERATION_SUCCEEDED,
-                  "SUCCESS",
+                  AuditEventCategory.BUSINESS,
+                  AuditEventStatus.SUCCESS,
                   "operation:succeeded",
+                  null,
+                  null,
                   summary == null ? "Operation succeeded" : summary,
                   null,
                   Map.of());
@@ -236,8 +349,11 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
               insertEvent(
                   carrier(),
                   AuditEventType.OPERATION_FAILED,
-                  "FAILURE",
+                  AuditEventCategory.BUSINESS,
+                  AuditEventStatus.FAILURE,
                   "operation:failed",
+                  null,
+                  null,
                   summary,
                   reasonCode,
                   cause == null ? Map.of() : Map.of("exceptionType", cause.getClass().getName()));
@@ -249,8 +365,11 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
   private void insertEvent(
       AuditCarrier carrier,
       AuditEventType type,
-      String eventStatus,
+      AuditEventCategory category,
+      AuditEventStatus eventStatus,
       String eventKey,
+      String eventResourceType,
+      String eventResourceId,
       String message,
       String reasonCode,
       Map<String, ?> payload) {
@@ -261,7 +380,7 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
           operation_id, event_type, event_category, event_status, occurred_at,
           actor_id, resource_type, resource_id, trace_id, span_id,
           reason_code, event_key, message, payload_json, schema_version, created_at
-        ) VALUES (?, ?, 'BUSINESS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
     if (eventKey != null) {
       sql += " ON DUPLICATE KEY UPDATE id = id";
@@ -270,11 +389,12 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
         sql,
         carrier.operationId(),
         type.name(),
-        eventStatus,
+        category.name(),
+        eventStatus.name(),
         now,
         carrier.actorId(),
-        carrier.resourceType(),
-        carrier.resourceId(),
+        eventResourceType == null ? carrier.resourceType() : eventResourceType,
+        eventResourceId == null ? carrier.resourceId() : eventResourceId,
         MDC.get("traceId"),
         MDC.get("spanId"),
         reasonCode,
@@ -350,15 +470,19 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
     }
   }
 
-  private static String eventStatus(AuditEventType type) {
+  private static AuditEventStatus eventStatus(AuditEventType type) {
     return switch (type) {
       case RESOURCE_CREATED,
           RESOURCE_UPDATED,
           RESOURCE_DELETED,
           TASK_SUCCEEDED,
-          OPERATION_SUCCEEDED -> "SUCCESS";
-      case TASK_FAILED, TASK_CANCELED, OPERATION_FAILED -> "FAILURE";
-      case OPERATION_STARTED, TASK_SUBMITTED, TASK_QUEUED, WORKER_STARTED -> "INFO";
+          OPERATION_SUCCEEDED -> AuditEventStatus.SUCCESS;
+      case TASK_FAILED, TASK_CANCELED, OPERATION_FAILED -> AuditEventStatus.FAILURE;
+      case OPERATION_STARTED,
+          AUTHORIZATION_DECISION,
+          TASK_SUBMITTED,
+          TASK_QUEUED,
+          WORKER_STARTED -> AuditEventStatus.INFO;
     };
   }
 }

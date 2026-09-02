@@ -2,6 +2,7 @@ package io.yak.ops.boot.project;
 
 import io.yak.framework.security.extend.CurrentUserProvider;
 import io.yak.ops.core.project.ProjectAccessGuard;
+import io.yak.ops.core.project.ProjectAuthorizationReason;
 import io.yak.ops.core.project.ProjectContext;
 import io.yak.ops.core.project.ProjectContextError;
 import io.yak.ops.core.project.ProjectContextException;
@@ -23,18 +24,22 @@ public class ProjectScopeInterceptor implements HandlerInterceptor {
   private final ProjectContextRuntime currentProject;
   private final ProjectAccessGuard accessGuard;
   private final CurrentUserProvider currentUserProvider;
+  private final ProjectAuthorizationAuditBridge authorizationAudit;
 
   public ProjectScopeInterceptor(
       ProjectContextRuntime currentProject,
       ProjectAccessGuard accessGuard,
-      CurrentUserProvider currentUserProvider) {
+      CurrentUserProvider currentUserProvider,
+      ProjectAuthorizationAuditBridge authorizationAudit) {
     this.currentProject = currentProject;
     this.accessGuard = accessGuard;
     this.currentUserProvider = currentUserProvider;
+    this.authorizationAudit = authorizationAudit;
   }
 
   @Override
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+    authorizationAudit.beginRequest();
     currentProject.clear();
     if (!(handler instanceof HandlerMethod handlerMethod)) {
       return true;
@@ -74,7 +79,11 @@ public class ProjectScopeInterceptor implements HandlerInterceptor {
       HttpServletResponse response,
       Object handler,
       Exception exception) {
-    currentProject.clear();
+    try {
+      authorizationAudit.endRequest();
+    } finally {
+      currentProject.clear();
+    }
   }
 
   ProjectMigrationMode resolveMode(HandlerMethod handlerMethod) {
@@ -92,6 +101,7 @@ public class ProjectScopeInterceptor implements HandlerInterceptor {
   private Long parseProjectId(String rawProjectId, ProjectMigrationMode mode) {
     if (!StringUtils.hasText(rawProjectId)) {
       if (mode == ProjectMigrationMode.PROJECT_REQUIRED) {
+        authorizationAudit.denied(null, ProjectAuthorizationReason.PROJECT_REQUIRED.name());
         throw new ProjectContextException(ProjectContextError.PROJECT_REQUIRED);
       }
       return null;
@@ -104,6 +114,7 @@ public class ProjectScopeInterceptor implements HandlerInterceptor {
       }
       return projectId;
     } catch (NumberFormatException exception) {
+      authorizationAudit.denied(null, ProjectAuthorizationReason.PROJECT_ID_INVALID.name());
       throw new ProjectContextException(ProjectContextError.PROJECT_NOT_FOUND, exception);
     }
   }
