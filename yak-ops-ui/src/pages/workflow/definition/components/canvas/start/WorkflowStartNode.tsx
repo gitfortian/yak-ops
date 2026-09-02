@@ -25,23 +25,23 @@ const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeDa
           'shadow-[0_1px_2px_rgba(22,24,35,.06)]',
           'transition-[border-color,box-shadow] duration-200',
           running
-            ? 'border-[#fe2c55] shadow-[0_0_0_3px_rgba(254,44,85,.08)]'
+            ? 'border-[#6172f3] shadow-[0_0_0_3px_rgba(97,114,243,.10)]'
             : succeeded
               ? 'border-[#12b76a] shadow-[0_0_0_2px_rgba(18,183,106,.07)]'
               : selected
-                ? 'border-[#fe2c55] shadow-[0_0_0_2px_rgba(254,44,85,.08)]'
+                ? 'border-[#6172f3] shadow-[0_0_0_2px_rgba(97,114,243,.10)]'
                 : 'border-[#e8e9ec] group-hover:border-[#d7d9de] group-hover:shadow-[0_6px_18px_rgba(22,24,35,.10)]',
         ].join(' ')}
       >
         <div className="flex min-h-9 items-center gap-2.5 px-3 py-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#eceef1] bg-[#fafafa] text-[#667085]">
-            <GitBranch size={18} strokeWidth={2} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#6172f3] text-white shadow-[0_1px_2px_rgba(97,114,243,.22)]">
+            <GitBranch size={18} strokeWidth={2.1} />
           </span>
           <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#161823]">
             开始
           </div>
           {running ? (
-            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-[#fff1f3] px-1.5 text-[10px] font-medium text-[#d92d50]">
+            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-[#eef0ff] px-1.5 text-[10px] font-medium text-[#4754c8]">
               <LoaderCircle size={11} className="animate-spin" />
               运行中
             </span>
@@ -61,7 +61,7 @@ const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeDa
                   key={field.id}
                   className="flex h-6 items-center gap-1.5 rounded-md bg-[#f5f6f7] px-1.5 text-[10px]"
                 >
-                  <Variable size={12} className="shrink-0 text-[#667085]" />
+                  <Variable size={12} className="shrink-0 text-[#6172f3]" />
                   <span className="min-w-0 flex-1 truncate text-[#475467]">{field.name}</span>
                   {field.required ? (
                     <span className="shrink-0 text-[9px] font-medium text-[#98a2b3]">必填</span>
