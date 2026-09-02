@@ -1,3 +1,4 @@
+import YakTab from '@/components/YakTab';
 import { getWorkflowInstances } from '@/services/workflow';
 import { Input, Modal, Select, Switch, message } from 'antd';
 import dayjs from 'dayjs';
@@ -49,6 +50,11 @@ const INPUT_TYPE_OPTIONS = [
   { value: 'BOOLEAN', label: 'Boolean' },
   { value: 'FILE', label: 'File' },
   { value: 'ARRAY_STRING', label: 'Array[String]' },
+];
+
+const START_INSPECTOR_TABS = [
+  { key: 'settings', label: '属性' },
+  { key: 'lastRun', label: '上次运行' },
 ];
 
 const VARIABLE_TYPE_OPTIONS = INPUT_TYPE_OPTIONS.filter((item) => item.value !== 'FILE');
@@ -226,18 +232,34 @@ const WorkflowStartInspector = ({
     { name: 'sys.workflowName', value: workflowName || '--' },
   ], [definitionId, workflowName]);
 
+  const lastRunStatus = lastRun?.status || '';
+  const lastRunStatusClassName = lastRunStatus === 'SUCCESS'
+    ? 'text-[#067647]'
+    : lastRunStatus === 'FAILED' || lastRunStatus === 'TIMED_OUT'
+      ? 'text-[#b42318]'
+      : lastRunStatus === 'RUNNING'
+        ? 'text-[#175cd3]'
+        : 'text-[#667085]';
+  const lastRunStatusDotClassName = lastRunStatus === 'SUCCESS'
+    ? 'bg-[#12b76a]'
+    : lastRunStatus === 'FAILED' || lastRunStatus === 'TIMED_OUT'
+      ? 'bg-[#f04438]'
+      : lastRunStatus === 'RUNNING'
+        ? 'bg-[#2e90fa]'
+        : 'bg-[#98a2b3]';
+
   const startStepIcon = (
-    <span className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#155eef] text-white shadow-[0_1px_2px_rgba(21,94,239,.18)]">
-      <GitBranch size={14} strokeWidth={2.2} />
+    <span className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[#eceef1] bg-[#fafafa] text-[#667085]">
+      <GitBranch size={14} strokeWidth={2} />
     </span>
   );
 
   return (
     <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[400px] flex-col overflow-hidden rounded-2xl border border-[#e2e5e9] bg-white shadow-[0_12px_36px_rgba(22,24,35,.12)]">
-      <header className="shrink-0 border-b border-[#eceef1] bg-white">
+      <header className="shrink-0 bg-white">
         <div className="flex items-center gap-2 px-4 pb-2 pt-4">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-[#eaf2ff] text-[#155eef]">
-            <GitBranch size={15} strokeWidth={2.2} />
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[#eceef1] bg-[#fafafa] text-[#667085]">
+            <GitBranch size={15} strokeWidth={2} />
           </span>
           <div className="min-w-0 flex-1 text-[14px] font-semibold text-[#161823]">开始</div>
           <button
@@ -252,22 +274,13 @@ const WorkflowStartInspector = ({
         <div className="px-4 pb-2 text-[11px] leading-5 text-[rgba(22,24,35,.36)]">
           定义工作流输入和可供后续所有节点引用的上下文变量。
         </div>
-        <nav className="flex h-10 items-end gap-5 px-4">
-          {(['settings', 'lastRun'] as TabKey[]).map((key) => (
-            <button
-              key={key}
-              type="button"
-              className={[
-                'relative h-10 border-0 bg-transparent px-0 text-[12px] font-semibold',
-                tab === key ? 'text-[#344054]' : 'text-[#667085] hover:text-[#344054]',
-              ].join(' ')}
-              onClick={() => setTab(key)}
-            >
-              {key === 'settings' ? '设置' : '上次运行'}
-              {tab === key ? <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#fe2c55]" /> : null}
-            </button>
-          ))}
-        </nav>
+        <div className="px-4">
+          <YakTab
+            activeKey={tab}
+            items={START_INSPECTOR_TABS}
+            onChange={(key) => setTab(key as TabKey)}
+          />
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -295,7 +308,7 @@ const WorkflowStartInspector = ({
                     key={field.id}
                     className="group flex items-center gap-2 rounded-xl border border-[#e7e9ed] bg-white px-2.5 py-2 hover:bg-[#fafafa]"
                   >
-                    <Variable size={14} className="shrink-0 text-[#155eef]" />
+                    <Variable size={14} className="shrink-0 text-[#667085]" />
                     <button
                       type="button"
                       disabled={locked}
@@ -347,7 +360,7 @@ const WorkflowStartInspector = ({
               <div className="space-y-1.5">
                 {config.variables.map((variable) => (
                   <div key={variable.id} className="flex items-center gap-2 rounded-xl border border-[#e7e9ed] px-2.5 py-2">
-                    <Variable size={14} className="shrink-0 text-[#7f56d9]" />
+                    <Variable size={14} className="shrink-0 text-[#667085]" />
                     <button
                       type="button"
                       disabled={locked}
@@ -420,14 +433,17 @@ const WorkflowStartInspector = ({
             </div>
             {lastRun ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 rounded-xl border border-[#f5c2cc] bg-[#fff6f8]">
+                <div className="grid grid-cols-2 rounded-xl border border-[#e4e7ec] bg-[#fafafa]">
                   <div className="px-3 py-2.5">
-                    <div className="text-[9px] text-[#667085]">状态</div>
-                    <div className="mt-1 text-[11px] font-semibold text-[#fe2c55]">{lastRun.status}</div>
+                    <div className="text-[9px] text-[#98a2b3]">状态</div>
+                    <div className={`mt-1 flex items-center gap-1.5 text-[11px] font-semibold ${lastRunStatusClassName}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${lastRunStatusDotClassName}`} />
+                      {lastRun.status}
+                    </div>
                   </div>
-                  <div className="border-l border-[#f5c2cc] px-3 py-2.5">
-                    <div className="text-[9px] text-[#667085]">开始时间</div>
-                    <div className="mt-1 text-[11px] font-semibold text-[#344054]">{dayjs(lastRun.startedAt).format('YYYY-MM-DD HH:mm:ss')}</div>
+                  <div className="border-l border-[#e4e7ec] px-3 py-2.5">
+                    <div className="text-[9px] text-[#98a2b3]">开始时间</div>
+                    <div className="mt-1 text-[11px] font-semibold text-[#475467]">{dayjs(lastRun.startedAt).format('YYYY-MM-DD HH:mm:ss')}</div>
                   </div>
                 </div>
                 <div>
