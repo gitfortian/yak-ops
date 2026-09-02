@@ -60,9 +60,9 @@ const WorkflowNodeHandle = ({
         "after:absolute after:top-1 after:h-2 after:w-0.5 after:rounded-full after:content-['']",
         isTarget ? 'after:left-[7px]' : 'after:right-[7px]',
         selected || appendOpen
-          ? 'after:bg-[#fe2c55]'
-          : 'after:bg-[#c7c9ce] group-hover:after:bg-[#fe2c55]',
-        'transition-all duration-150 hover:scale-125 hover:after:bg-[#fe2c55]',
+          ? 'after:bg-[#667085]'
+          : 'after:bg-[#c7c9ce] group-hover:after:bg-[#667085]',
+        'transition-all duration-150 hover:scale-125 hover:after:bg-[#475467]',
       ].join(' ')}
     >
       {canAppend ? (
