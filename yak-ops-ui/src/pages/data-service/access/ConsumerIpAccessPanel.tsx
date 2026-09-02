@@ -12,7 +12,7 @@ import {
 } from '@/services/data-service';
 import { DatePicker, Form, Input, Modal, Spin, Switch, message } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { Plus, Shield, Trash2, Pencil } from 'lucide-react';
+import { Pencil, Plus, Shield, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface ConsumerIpAccessPanelProps {
@@ -30,11 +30,10 @@ interface RuleFormValues {
 const MODES: Array<{
   key: DataServiceIpAccessMode;
   title: string;
-  description: string;
 }> = [
-  { key: 'NONE', title: '不限制', description: '该调用方不额外限制来源 IP' },
-  { key: 'ALLOWLIST', title: '白名单', description: '仅允许名单中的 IP/CIDR 使用该调用方凭证' },
-  { key: 'DENYLIST', title: '黑名单', description: '拒绝名单中的 IP/CIDR 使用该调用方凭证' },
+  { key: 'NONE', title: '不限制' },
+  { key: 'ALLOWLIST', title: '白名单' },
+  { key: 'DENYLIST', title: '黑名单' },
 ];
 
 const formatTime = (value?: string | null) =>
@@ -86,6 +85,7 @@ export default function ConsumerIpAccessPanel({
     () => rules.filter((rule) => rule.ruleType === activeList),
     [activeList, rules],
   );
+
   const activeAllow = useMemo(
     () => rules.filter((rule) => rule.ruleType === 'ALLOWLIST' && rule.enabled && !expired(rule)).length,
     [rules],
@@ -228,19 +228,17 @@ export default function ConsumerIpAccessPanel({
     );
   }
 
+  const allowCount = rules.filter((rule) => rule.ruleType === 'ALLOWLIST').length;
+  const denyCount = rules.filter((rule) => rule.ruleType === 'DENYLIST').length;
+
   return (
     <div className="space-y-3">
       <section className="rounded-lg bg-white p-5">
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#f5f6f8] text-[#475467]">
             <Shield size={17} />
           </div>
-          <div>
-            <div className="text-[15px] font-semibold text-[#161823]">调用方来源策略</div>
-            <div className="mt-1 text-[11px] leading-5 text-[#8a8f98]">
-              IP/CIDR 跟随调用方，而不是复制到每个 API。API 自身的来源规则仍作为更高优先级硬闸门保留。
-            </div>
-          </div>
+          <div className="text-[15px] font-semibold text-[#161823]">来源策略</div>
         </div>
 
         <div className="mt-5 grid gap-2 md:grid-cols-3">
@@ -258,13 +256,14 @@ export default function ConsumerIpAccessPanel({
               ].join(' ')}
             >
               <div className="flex items-center gap-2 text-[13px] font-medium text-[#161823]">
-                <span className={[
-                  'h-2 w-2 rounded-full',
-                  mode === item.key ? 'bg-[#161823]' : 'bg-[#d0d5dd]',
-                ].join(' ')} />
+                <span
+                  className={[
+                    'h-2 w-2 rounded-full',
+                    mode === item.key ? 'bg-[#161823]' : 'bg-[#d0d5dd]',
+                  ].join(' ')}
+                />
                 {item.title}
               </div>
-              <div className="mt-1.5 text-[11px] leading-5 text-[#8a8f98]">{item.description}</div>
             </button>
           ))}
         </div>
@@ -272,10 +271,7 @@ export default function ConsumerIpAccessPanel({
 
       <section className="rounded-lg bg-white">
         <div className="flex items-center justify-between gap-4 px-5 pt-4">
-          <div>
-            <div className="text-[15px] font-semibold text-[#161823]">黑白名单</div>
-            <div className="mt-1 text-[11px] text-[#8a8f98]">支持单 IP、IPv4/IPv6 CIDR、有效期和单规则启停。</div>
-          </div>
+          <div className="text-[15px] font-semibold text-[#161823]">黑白名单</div>
           <YakButton icon={<Plus size={14} />} onClick={openCreate}>添加规则</YakButton>
         </div>
         <div className="px-5">
@@ -283,8 +279,8 @@ export default function ConsumerIpAccessPanel({
             activeKey={activeList}
             onChange={(key) => setActiveList(key as DataServiceIpAccessRuleType)}
             items={[
-              { key: 'ALLOWLIST', label: `白名单 ${rules.filter((rule) => rule.ruleType === 'ALLOWLIST').length}` },
-              { key: 'DENYLIST', label: `黑名单 ${rules.filter((rule) => rule.ruleType === 'DENYLIST').length}` },
+              { key: 'ALLOWLIST', label: `白名单 ${allowCount}` },
+              { key: 'DENYLIST', label: `黑名单 ${denyCount}` },
             ]}
           />
         </div>
@@ -305,20 +301,28 @@ export default function ConsumerIpAccessPanel({
                   </div>
                   <div className="truncate text-[12px] text-[#667085]">{rule.description || '—'}</div>
                   <div className="text-[11px] text-[#667085]">{formatTime(rule.expiresAt)}</div>
-                  <Switch size="small" checked={rule.enabled} loading={busyId === rule.id} onChange={(checked) => void toggle(rule, checked)} />
+                  <Switch
+                    size="small"
+                    checked={rule.enabled}
+                    loading={busyId === rule.id}
+                    onChange={(checked) => void toggle(rule, checked)}
+                  />
                   <div className="flex justify-end gap-1">
                     <YakButton type="text" iconOnly icon={<Pencil size={14} />} onClick={() => openEdit(rule)} />
-                    <YakButton type="text" danger iconOnly icon={<Trash2 size={14} />} loading={busyId === rule.id} onClick={() => remove(rule)} />
+                    <YakButton
+                      type="text"
+                      danger
+                      iconOnly
+                      icon={<Trash2 size={14} />}
+                      loading={busyId === rule.id}
+                      onClick={() => remove(rule)}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <YakEmpty
-              compact
-              title={activeList === 'ALLOWLIST' ? '暂无白名单规则' : '暂无黑名单规则'}
-              description="添加 IP 或 CIDR 后，再启用对应来源策略。"
-            />
+            <YakEmpty compact title={activeList === 'ALLOWLIST' ? '暂无白名单规则' : '暂无黑名单规则'} />
           )}
         </div>
       </section>
