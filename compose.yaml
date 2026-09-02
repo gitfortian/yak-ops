@@ -65,9 +65,11 @@ services:
       YAK_OPS_DATABASE_PORT: 3306
       YAK_OPS_DATABASE_NAME: ${MYSQL_DATABASE:-yak_ops}
 
-      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-yak_ops}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true"
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-linkup}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-change_me}
+      # Shared datasource – both yak.security.datasource and yak.database read these.
+      # Override with YAK_SECURITY_DATASOURCE_* or YAK_DATABASE_* to split databases.
+      YAK_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-yak_ops}?useUnicode=true&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai"
+      YAK_DATASOURCE_USERNAME: ${MYSQL_ROOT_PASSWORD:+root}
+      YAK_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me}
 
       SPRING_FLYWAY_ENABLED: "true"
 
