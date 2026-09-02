@@ -34,8 +34,8 @@ const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeDa
         ].join(' ')}
       >
         <div className="flex min-h-9 items-center gap-2.5 px-3 py-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#eaf2ff] text-[#155eef]">
-            <GitBranch size={18} strokeWidth={2.2} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#eceef1] bg-[#fafafa] text-[#667085]">
+            <GitBranch size={18} strokeWidth={2} />
           </span>
           <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#161823]">
             开始
@@ -61,7 +61,7 @@ const WorkflowStartNode = ({ id, data, selected }: NodeProps<WorkflowStartNodeDa
                   key={field.id}
                   className="flex h-6 items-center gap-1.5 rounded-md bg-[#f5f6f7] px-1.5 text-[10px]"
                 >
-                  <Variable size={12} className="shrink-0 text-[#155eef]" />
+                  <Variable size={12} className="shrink-0 text-[#667085]" />
                   <span className="min-w-0 flex-1 truncate text-[#475467]">{field.name}</span>
                   {field.required ? (
                     <span className="shrink-0 text-[9px] font-medium text-[#98a2b3]">必填</span>
