@@ -7,6 +7,7 @@ import io.yak.ops.business.workflow.backfill.WorkflowBackfillPlanner;
 import io.yak.ops.business.workflow.backfill.WorkflowBackfillQuery;
 import io.yak.ops.business.workflow.backfill.WorkflowBackfillReconciler;
 import io.yak.ops.business.workflow.backfill.WorkflowBackfillTriggerAdapter;
+import io.yak.ops.business.workflow.definition.WorkflowDefinitionAuditCoordinator;
 import io.yak.ops.business.workflow.definition.WorkflowDefinitionManager;
 import io.yak.ops.business.workflow.execution.WorkflowExecutionManager;
 import io.yak.ops.business.workflow.execution.WorkflowExecutionReactivator;
@@ -48,6 +49,7 @@ class WorkflowRoleConventionTest {
   @Test
   void internalRolesRemainExplicitComponents() {
     for (Class<?> role : List.of(
+        WorkflowDefinitionAuditCoordinator.class,
         WorkflowPublishedVersionRunner.class,
         WorkflowRuntimeRecovery.class,
         WorkflowEventStream.class,

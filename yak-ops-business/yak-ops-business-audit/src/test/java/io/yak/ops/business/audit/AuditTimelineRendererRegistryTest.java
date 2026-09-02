@@ -33,6 +33,40 @@ class AuditTimelineRendererRegistryTest {
   }
 
   @Test
+  void resourceUpdateUsesStableBusinessChangeTypeWhenAvailable() {
+    assertThat(
+            registry
+                .render(
+                    "RESOURCE_UPDATED",
+                    "SUCCESS",
+                    null,
+                    "Workflow version published",
+                    Map.of("changeType", "VERSION_PUBLISHED"))
+                .title())
+        .isEqualTo("版本已发布");
+    assertThat(
+            registry
+                .render(
+                    "RESOURCE_UPDATED",
+                    "SUCCESS",
+                    null,
+                    "Workflow enabled",
+                    Map.of("changeType", "RESOURCE_ENABLED"))
+                .title())
+        .isEqualTo("资源已启用");
+    assertThat(
+            registry
+                .render(
+                    "RESOURCE_UPDATED",
+                    "SUCCESS",
+                    null,
+                    "Workflow disabled",
+                    Map.of("changeType", "RESOURCE_DISABLED"))
+                .title())
+        .isEqualTo("资源已停用");
+  }
+
+  @Test
   void unknownEventHasSafeFallback() {
     AuditEventPresentation presentation =
         registry.render("CUSTOM_EVENT", "INFO", null, null, Map.of());
