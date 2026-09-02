@@ -118,7 +118,10 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
   @Override
   public AuditOperationHandle resume(AuditCarrier carrier) {
     if (carrier == null) return AuditOperationHandle.noop(null);
-    return new JdbcAuditOperationHandle(carrier, operationExists(carrier.operationId()));
+    AuditCarrier persisted = loadCarrier(carrier.operationId());
+    return persisted == null
+        ? AuditOperationHandle.noop(null)
+        : new JdbcAuditOperationHandle(persisted, true);
   }
 
   private final class JdbcAuditOperationHandle implements AuditOperationHandle {
@@ -282,22 +285,38 @@ final class JdbcBusinessAuditService implements BusinessAuditService {
         now);
   }
 
-  private boolean operationExists(String operationId) {
+  private AuditCarrier loadCarrier(String operationId) {
     try {
-      Boolean exists =
-          transactionTemplate.execute(
-              status -> {
-                Integer count =
-                    jdbcTemplate.queryForObject(
-                        "SELECT COUNT(*) FROM yak_audit_operation WHERE operation_id = ?",
-                        Integer.class,
-                        operationId);
-                return count != null && count > 0;
-              });
-      return Boolean.TRUE.equals(exists);
+      return transactionTemplate.execute(
+          status ->
+              jdbcTemplate.query(
+                  """
+                  SELECT actor_id, actor_name, project_id, project_name,
+                         resource_type, resource_id, resource_name, source
+                    FROM yak_audit_operation
+                   WHERE operation_id = ?
+                  """,
+                  resultSet -> {
+                    if (!resultSet.next()) return null;
+                    Number projectId = (Number) resultSet.getObject("project_id");
+                    String actorId = resultSet.getString("actor_id");
+                    String actorName = resultSet.getString("actor_name");
+                    return new AuditCarrier(
+                        operationId,
+                        actorId,
+                        actorName,
+                        actorId == null && actorName == null ? "SYSTEM" : "USER",
+                        projectId == null ? null : projectId.longValue(),
+                        resultSet.getString("project_name"),
+                        resultSet.getString("resource_type"),
+                        resultSet.getString("resource_id"),
+                        resultSet.getString("resource_name"),
+                        resultSet.getString("source"));
+                  },
+                  operationId));
     } catch (RuntimeException exception) {
       log.warn("Business audit resume failed; the business action will continue", exception);
-      return false;
+      return null;
     }
   }
 

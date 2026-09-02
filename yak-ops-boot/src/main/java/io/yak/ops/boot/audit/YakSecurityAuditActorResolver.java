@@ -6,21 +6,26 @@ import io.yak.ops.business.audit.AuditActorResolver;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /** Adapts Yak Security's stable login identity into the shared Audit actor contract. */
 @Component
-@ConditionalOnBean(AuthenticationManager.class)
+@Primary
 @RequiredArgsConstructor
 public class YakSecurityAuditActorResolver implements AuditActorResolver {
 
   private static final Logger log = LoggerFactory.getLogger(YakSecurityAuditActorResolver.class);
 
-  private final AuthenticationManager authenticationManager;
+  private final ObjectProvider<AuthenticationManager> authenticationManagerProvider;
 
   @Override
   public AuditActor currentActor() {
+    AuthenticationManager authenticationManager = authenticationManagerProvider.getIfAvailable();
+    if (authenticationManager == null) {
+      return AuditActor.system();
+    }
     try {
       if (!authenticationManager.isLogin()) {
         return AuditActor.system();
