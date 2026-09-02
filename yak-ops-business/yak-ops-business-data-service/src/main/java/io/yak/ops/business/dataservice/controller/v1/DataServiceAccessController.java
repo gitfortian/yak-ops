@@ -13,6 +13,8 @@ import io.yak.ops.business.dataservice.access.DataServiceIpAccessManager;
 import io.yak.ops.business.dataservice.access.IpAccessPolicyView;
 import io.yak.ops.business.dataservice.access.IpAccessRuleInput;
 import io.yak.ops.business.dataservice.access.IpAccessRuleView;
+import io.yak.ops.business.dataservice.query.DataServiceAccessOverviewItem;
+import io.yak.ops.business.dataservice.query.DataServiceAccessOverviewReader;
 import io.yak.ops.business.datasource.config.ConditionalOnDataSourceEnabled;
 import io.yak.ops.common.constant.dataservice.DataServicePermissionCode;
 import io.yak.ops.core.project.ProjectMigrationMode;
@@ -39,6 +41,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class DataServiceAccessController {
   private final DataServiceApiKeyManager apiKeyManager;
   private final DataServiceIpAccessManager ipAccessManager;
+  private final DataServiceAccessOverviewReader accessOverviewReader;
+
+  @Operation(summary = "查询当前项目的数据服务访问控制概览")
+  @GetMapping("/access-overview")
+  public Result<List<DataServiceAccessOverviewItem>> accessOverview() {
+    return Result.success(accessOverviewReader.list());
+  }
 
   @Operation(summary = "设置数据服务访问控制模式")
   @PutMapping("/{id}/auth-mode")

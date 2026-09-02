@@ -31,6 +31,7 @@ export const YAK_OPS_MENU_CODES = {
   digitalScreen: 'digital-screen',
   dataService: 'data-service',
   dataServiceApi: 'data-service-api',
+  dataServiceAccess: 'data-service-access',
   dataServiceDebug: 'data-service-debug',
   dataServiceOverview: 'data-service-overview',
   dataServiceLogs: 'data-service-logs',

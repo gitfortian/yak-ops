@@ -7,6 +7,7 @@ on:
       - 'yak-ops-ui/src/config/navigationMenuContract.test.ts'
       - 'yak-ops-ui/src/constants/securityMenuCodes.ts'
       - 'yak-ops-boot/src/main/resources/yak-security/db/migration/V2006__reconcile_menu_permission_catalog.sql'
+      - 'yak-ops-boot/src/main/resources/yak-security/db/migration/V2007__register_data_service_access_page.sql'
       - '.github/workflows/navigation-menu-contract.yml'
   workflow_dispatch:
 
