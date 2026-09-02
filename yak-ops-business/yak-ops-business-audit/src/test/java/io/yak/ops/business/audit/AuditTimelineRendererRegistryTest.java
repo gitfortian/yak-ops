@@ -67,6 +67,46 @@ class AuditTimelineRendererRegistryTest {
   }
 
   @Test
+  void workflowExecutionStateChangesUseBusinessCopyWithoutGrowingEventVocabulary() {
+    assertThat(registry
+            .render(
+                "RESOURCE_UPDATED",
+                "INFO",
+                null,
+                "Workflow execution started",
+                Map.of("changeType", "EXECUTION_STARTED"))
+            .title())
+        .isEqualTo("执行开始");
+    assertThat(registry
+            .render(
+                "RESOURCE_UPDATED",
+                "SUCCESS",
+                null,
+                "Workflow execution succeeded",
+                Map.of("changeType", "EXECUTION_SUCCEEDED"))
+            .title())
+        .isEqualTo("执行成功");
+    assertThat(registry
+            .render(
+                "RESOURCE_UPDATED",
+                "FAILURE",
+                "WORKFLOW_EXECUTION_FAILED",
+                "Workflow execution failed",
+                Map.of("changeType", "EXECUTION_FAILED"))
+            .title())
+        .isEqualTo("执行失败");
+    assertThat(registry
+            .render(
+                "RESOURCE_UPDATED",
+                "FAILURE",
+                "WORKFLOW_EXECUTION_CANCELED",
+                "Workflow execution canceled",
+                Map.of("changeType", "EXECUTION_CANCELED"))
+            .title())
+        .isEqualTo("执行已取消");
+  }
+
+  @Test
   void unknownEventHasSafeFallback() {
     AuditEventPresentation presentation =
         registry.render("CUSTOM_EVENT", "INFO", null, null, Map.of());

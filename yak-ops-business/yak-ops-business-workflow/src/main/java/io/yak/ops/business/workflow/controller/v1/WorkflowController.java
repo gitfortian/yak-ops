@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.yak.framework.common.Result;
 import io.yak.ops.business.workflow.domain.WorkflowTriggerContext;
+import io.yak.ops.business.workflow.execution.WorkflowExecutionControlAuditCoordinator;
 import io.yak.ops.business.workflow.execution.WorkflowExecutionReactivator;
 import io.yak.ops.business.workflow.execution.WorkflowLauncher;
 import io.yak.ops.business.workflow.runtime.WorkflowRuntime;
@@ -12,6 +13,7 @@ import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import io.yak.ops.core.project.ProjectScope;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +33,21 @@ public class WorkflowController {
   private final WorkflowRuntime workflowRuntimeService;
   private final WorkflowLauncher workflowLaunchService;
   private final WorkflowExecutionReactivator workflowReactivationService;
+  private final WorkflowExecutionControlAuditCoordinator executionControlAudit;
 
+  @Autowired
+  public WorkflowController(
+      WorkflowRuntime workflowRuntimeService,
+      WorkflowLauncher workflowLaunchService,
+      WorkflowExecutionReactivator workflowReactivationService,
+      WorkflowExecutionControlAuditCoordinator executionControlAudit) {
+    this.workflowRuntimeService = workflowRuntimeService;
+    this.workflowLaunchService = workflowLaunchService;
+    this.workflowReactivationService = workflowReactivationService;
+    this.executionControlAudit = executionControlAudit;
+  }
+
+  /** Focused compatibility constructor without Audit wiring. */
   public WorkflowController(
       WorkflowRuntime workflowRuntimeService,
       WorkflowLauncher workflowLaunchService,
@@ -39,6 +55,7 @@ public class WorkflowController {
     this.workflowRuntimeService = workflowRuntimeService;
     this.workflowLaunchService = workflowLaunchService;
     this.workflowReactivationService = workflowReactivationService;
+    this.executionControlAudit = null;
   }
 
   @Operation(summary = "创建工作流运行实例")
@@ -59,21 +76,30 @@ public class WorkflowController {
   @PostMapping("/instances/{executionId}/pause")
   public Result<WorkflowInstanceVO> pause(
       @PathVariable("executionId") String executionId) {
-    return Result.success(workflowRuntimeService.pause(executionId));
+    return Result.success(
+        executionControlAudit == null
+            ? workflowRuntimeService.pause(executionId)
+            : executionControlAudit.pause(executionId));
   }
 
   @Operation(summary = "恢复工作流实例")
   @PostMapping("/instances/{executionId}/resume")
   public Result<WorkflowInstanceVO> resume(
       @PathVariable("executionId") String executionId) {
-    return Result.success(workflowRuntimeService.resume(executionId));
+    return Result.success(
+        executionControlAudit == null
+            ? workflowRuntimeService.resume(executionId)
+            : executionControlAudit.resume(executionId));
   }
 
   @Operation(summary = "取消工作流实例")
   @PostMapping("/instances/{executionId}/cancel")
   public Result<WorkflowInstanceVO> cancel(
       @PathVariable("executionId") String executionId) {
-    return Result.success(workflowRuntimeService.cancel(executionId));
+    return Result.success(
+        executionControlAudit == null
+            ? workflowRuntimeService.cancel(executionId)
+            : executionControlAudit.cancel(executionId));
   }
 
   @Operation(summary = "人工放行失败节点并继续执行后续节点")

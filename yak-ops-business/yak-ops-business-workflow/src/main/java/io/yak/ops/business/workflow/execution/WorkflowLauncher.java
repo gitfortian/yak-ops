@@ -28,17 +28,29 @@ public class WorkflowLauncher {
   private final WorkflowRuntime runtimeService;
   private final WorkflowExecutionTriggerRecorder triggerRecorder;
   private final WorkflowPublishedVersionRunner publishedVersionRunner;
+  private final WorkflowExecutionAuditBridge auditBridge;
 
   @Autowired
   public WorkflowLauncher(
       WorkflowDefinitionManager definitionService,
       WorkflowRuntime runtimeService,
       WorkflowExecutionTriggerRecorder triggerRecorder,
-      WorkflowPublishedVersionRunner publishedVersionRunner) {
+      WorkflowPublishedVersionRunner publishedVersionRunner,
+      WorkflowExecutionAuditBridge auditBridge) {
     this.definitionService = definitionService;
     this.runtimeService = runtimeService;
     this.triggerRecorder = triggerRecorder;
     this.publishedVersionRunner = publishedVersionRunner;
+    this.auditBridge = auditBridge;
+  }
+
+  /** Focused tests retain the previous constructor without Audit wiring. */
+  public WorkflowLauncher(
+      WorkflowDefinitionManager definitionService,
+      WorkflowRuntime runtimeService,
+      WorkflowExecutionTriggerRecorder triggerRecorder,
+      WorkflowPublishedVersionRunner publishedVersionRunner) {
+    this(definitionService, runtimeService, triggerRecorder, publishedVersionRunner, null);
   }
 
   /** Focused tests retain the lightweight constructor without pinned-version wiring. */
@@ -46,7 +58,7 @@ public class WorkflowLauncher {
       WorkflowDefinitionManager definitionService,
       WorkflowRuntime runtimeService,
       WorkflowExecutionTriggerRecorder triggerRecorder) {
-    this(definitionService, runtimeService, triggerRecorder, null);
+    this(definitionService, runtimeService, triggerRecorder, null, null);
   }
 
   /** 正式执行当前启用的已发布版本；手工/API 启动仍保持单实例安全默认。 */
@@ -59,7 +71,8 @@ public class WorkflowLauncher {
         id,
         triggerContext,
         () -> definitionService.run(id),
-        WorkflowDefinitionVO::latestExecutionId);
+        WorkflowDefinitionVO::latestExecutionId,
+        WorkflowDefinitionVO::name);
   }
 
   public WorkflowDefinitionVO runScheduledPublished(
@@ -81,7 +94,8 @@ public class WorkflowLauncher {
           id,
           triggerContext,
           () -> definitionService.runConcurrent(id),
-          WorkflowDefinitionVO::latestExecutionId);
+          WorkflowDefinitionVO::latestExecutionId,
+          WorkflowDefinitionVO::name);
     }
   }
 
@@ -133,7 +147,8 @@ public class WorkflowLauncher {
           workflowId + "@" + workflowVersionId,
           triggerContext,
           () -> publishedVersionRunner.run(workflowId, workflowVersionId),
-          WorkflowInstanceVO::id);
+          WorkflowInstanceVO::id,
+          WorkflowInstanceVO::name);
     }
   }
 
@@ -147,7 +162,8 @@ public class WorkflowLauncher {
         id,
         triggerContext,
         () -> definitionService.testRun(id),
-        WorkflowDefinitionVO::latestExecutionId);
+        WorkflowDefinitionVO::latestExecutionId,
+        WorkflowDefinitionVO::name);
   }
 
   /** 兼容直接提交 DAG 的底层运行接口，同时纳入统一 Trigger 入口并真正激活实例。 */
@@ -203,6 +219,7 @@ public class WorkflowLauncher {
         triggerContext,
         prepare,
         WorkflowInstanceVO::id,
+        WorkflowInstanceVO::name,
         prepared -> runtimeService.activate(prepared.id()));
   }
 
@@ -211,8 +228,16 @@ public class WorkflowLauncher {
       String target,
       WorkflowTriggerContext triggerContext,
       Supplier<T> action,
-      Function<T, String> executionIdExtractor) {
-    return launch(mode, target, triggerContext, action, executionIdExtractor, Function.identity());
+      Function<T, String> executionIdExtractor,
+      Function<T, String> resourceNameExtractor) {
+    return launch(
+        mode,
+        target,
+        triggerContext,
+        action,
+        executionIdExtractor,
+        resourceNameExtractor,
+        Function.identity());
   }
 
   private <T> T launch(
@@ -221,8 +246,11 @@ public class WorkflowLauncher {
       WorkflowTriggerContext triggerContext,
       Supplier<T> action,
       Function<T, String> executionIdExtractor,
+      Function<T, String> resourceNameExtractor,
       Function<T, T> afterRecord) {
     Objects.requireNonNull(triggerContext, "workflow trigger context");
+    WorkflowExecutionAuditBridge.LaunchAudit audit =
+        auditBridge == null ? null : auditBridge.beginLaunch(mode, target, triggerContext);
     log.info(
         "[workflow-launch] start mode={}, target={}, triggerType={}, triggerId={}, scheduleId={}, backfillId={}, plannedFireTime={}",
         mode,
@@ -233,8 +261,11 @@ public class WorkflowLauncher {
         triggerContext.backfillId(),
         triggerContext.plannedFireTime());
     try {
-      T prepared = action.get();
+      T prepared =
+          auditBridge == null ? action.get() : auditBridge.call(audit, action);
       String executionId = prepared == null ? null : executionIdExtractor.apply(prepared);
+      String resourceName = prepared == null ? null : resourceNameExtractor.apply(prepared);
+      if (auditBridge != null) auditBridge.attachLaunch(audit, executionId, resourceName);
       triggerRecorder.record(executionId, triggerContext);
       log.info(
           "[workflow-launch] created mode={}, target={}, triggerType={}, triggerId={}, execution={}",
@@ -245,6 +276,7 @@ public class WorkflowLauncher {
           executionId);
       return prepared == null ? null : afterRecord.apply(prepared);
     } catch (RuntimeException exception) {
+      if (auditBridge != null) auditBridge.failLaunch(audit, exception);
       log.warn(
           "[workflow-launch] failed mode={}, target={}, triggerType={}, triggerId={}, message={}",
           mode,

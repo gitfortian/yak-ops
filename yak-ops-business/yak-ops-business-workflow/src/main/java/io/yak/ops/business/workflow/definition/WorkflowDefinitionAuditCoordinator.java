@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Component;
 public class WorkflowDefinitionAuditCoordinator {
 
   private static final String RESOURCE_TYPE = "WORKFLOW";
+  private static final String EXECUTION_RESOURCE_TYPE = "WORKFLOW_EXECUTION";
   private static final String SOURCE = "WEB";
   private static final BusinessAuditService NOOP_AUDIT =
       request -> AuditOperationHandle.noop(null);
@@ -216,6 +218,28 @@ public class WorkflowDefinitionAuditCoordinator {
     }
   }
 
+  /** The editor-facing pause route controls the latest execution but keeps its original carrier. */
+  public WorkflowDefinitionVO pauseExecution(String workflowId) {
+    return controlExecution(
+        workflowId,
+        "WORKFLOW_EXECUTION_PAUSE",
+        "Pause workflow execution",
+        "EXECUTION_PAUSED",
+        "Workflow execution paused",
+        () -> definitions.pause(workflowId));
+  }
+
+  /** The editor-facing resume route controls the latest execution but keeps its original carrier. */
+  public WorkflowDefinitionVO resumeExecution(String workflowId) {
+    return controlExecution(
+        workflowId,
+        "WORKFLOW_EXECUTION_RESUME",
+        "Resume workflow execution",
+        "EXECUTION_RESUMED",
+        "Workflow execution resumed",
+        () -> definitions.resume(workflowId));
+  }
+
   public void delete(String id) {
     WorkflowDefinitionVO before = definitions.get(id);
     AuditOperationHandle audit =
@@ -242,6 +266,41 @@ public class WorkflowDefinitionAuditCoordinator {
     }
   }
 
+  private WorkflowDefinitionVO controlExecution(
+      String workflowId,
+      String operationType,
+      String operationName,
+      String changeType,
+      String message,
+      Supplier<WorkflowDefinitionVO> action) {
+    WorkflowDefinitionVO before = definitions.get(workflowId);
+    String executionId = trimToNull(before.latestExecutionId());
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("workflowId", before.id());
+    putIfNotNull(metadata, "latestExecutionStatus", before.latestExecutionStatus());
+    AuditOperationHandle audit =
+        startExecution(
+            operationType,
+            operationName,
+            executionId,
+            before.name(),
+            Map.copyOf(metadata));
+    try {
+      WorkflowDefinitionVO updated = action.get();
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("changeType", changeType);
+      payload.put("workflowId", before.id());
+      putIfNotNull(payload, "executionId", executionId);
+      putIfNotNull(payload, "status", updated.latestExecutionStatus());
+      audit.event(AuditEventType.RESOURCE_UPDATED, message, Map.copyOf(payload));
+      audit.success(message);
+      return updated;
+    } catch (RuntimeException exception) {
+      audit.failure(operationType + "_FAILED", exception);
+      throw exception;
+    }
+  }
+
   private AuditOperationHandle start(
       String operationType,
       String operationName,
@@ -254,6 +313,23 @@ public class WorkflowDefinitionAuditCoordinator {
             operationName,
             RESOURCE_TYPE,
             resourceId,
+            resourceName,
+            SOURCE,
+            metadata));
+  }
+
+  private AuditOperationHandle startExecution(
+      String operationType,
+      String operationName,
+      String executionId,
+      String resourceName,
+      Map<String, ?> metadata) {
+    return auditService.start(
+        new AuditOperationRequest(
+            operationType,
+            operationName,
+            EXECUTION_RESOURCE_TYPE,
+            executionId,
             resourceName,
             SOURCE,
             metadata));

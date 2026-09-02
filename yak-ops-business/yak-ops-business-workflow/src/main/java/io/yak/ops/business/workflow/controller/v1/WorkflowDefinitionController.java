@@ -151,12 +151,18 @@ public class WorkflowDefinitionController {
   @Operation(summary = "暂停工作流最近一次执行")
   @PostMapping("/{id}/pause")
   public Result<WorkflowDefinitionVO> pause(@PathVariable("id") String id) {
-    return Result.success(definitionService.pause(id));
+    return Result.success(
+        definitionAudit == null
+            ? definitionService.pause(id)
+            : definitionAudit.pauseExecution(id));
   }
 
   @Operation(summary = "恢复工作流最近一次执行")
   @PostMapping("/{id}/resume")
   public Result<WorkflowDefinitionVO> resume(@PathVariable("id") String id) {
-    return Result.success(definitionService.resume(id));
+    return Result.success(
+        definitionAudit == null
+            ? definitionService.resume(id)
+            : definitionAudit.resumeExecution(id));
   }
 }

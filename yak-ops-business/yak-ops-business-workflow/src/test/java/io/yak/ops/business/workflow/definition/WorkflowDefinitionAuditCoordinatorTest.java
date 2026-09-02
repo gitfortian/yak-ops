@@ -139,6 +139,31 @@ class WorkflowDefinitionAuditCoordinatorTest {
   }
 
   @Test
+  void editorPauseAuditsLatestExecutionInsteadOfOnlyWorkflowDefinition() {
+    WorkflowDefinitionManager definitions = mock(WorkflowDefinitionManager.class);
+    RecordingAuditService audit = new RecordingAuditService();
+    WorkflowDefinitionAuditCoordinator coordinator =
+        new WorkflowDefinitionAuditCoordinator(definitions, audit);
+    WorkflowDefinitionVO before = workflowWithExecution("RUNNING");
+    WorkflowDefinitionVO after = workflowWithExecution("PAUSED");
+    when(definitions.get("wf-1")).thenReturn(before);
+    when(definitions.pause("wf-1")).thenReturn(after);
+
+    WorkflowDefinitionVO result = coordinator.pauseExecution("wf-1");
+
+    assertThat(result).isSameAs(after);
+    assertThat(audit.request.operationType()).isEqualTo("WORKFLOW_EXECUTION_PAUSE");
+    assertThat(audit.request.resourceType()).isEqualTo("WORKFLOW_EXECUTION");
+    assertThat(audit.request.resourceId()).isEqualTo("execution-1");
+    assertThat(audit.handle.events).singleElement().satisfies(event -> {
+      assertThat(event.payload())
+          .containsEntry("changeType", "EXECUTION_PAUSED")
+          .containsEntry("executionId", "execution-1")
+          .containsEntry("status", "PAUSED");
+    });
+  }
+
+  @Test
   void deleteFailureClosesAuditAsFailedWithoutChangingBusinessException() {
     WorkflowDefinitionManager definitions = mock(WorkflowDefinitionManager.class);
     RecordingAuditService audit = new RecordingAuditService();
@@ -164,6 +189,41 @@ class WorkflowDefinitionAuditCoordinatorTest {
       Map<String, Object> input,
       Map<String, Object> editorMeta,
       List<NodeVO> nodes) {
+    return workflow(
+        status,
+        activeVersionId,
+        activeVersionNo,
+        draftChanged,
+        input,
+        editorMeta,
+        nodes,
+        null,
+        null);
+  }
+
+  private static WorkflowDefinitionVO workflowWithExecution(String executionStatus) {
+    return workflow(
+        "ONLINE",
+        "wv-1",
+        1,
+        false,
+        Map.of(),
+        Map.of(),
+        List.of(),
+        "execution-1",
+        executionStatus);
+  }
+
+  private static WorkflowDefinitionVO workflow(
+      String status,
+      String activeVersionId,
+      Integer activeVersionNo,
+      boolean draftChanged,
+      Map<String, Object> input,
+      Map<String, Object> editorMeta,
+      List<NodeVO> nodes,
+      String latestExecutionId,
+      String latestExecutionStatus) {
     Instant now = Instant.parse("2026-09-02T00:00:00Z");
     return new WorkflowDefinitionVO(
         "wf-1",
@@ -182,8 +242,8 @@ class WorkflowDefinitionAuditCoordinatorTest {
         activeVersionNo,
         activeVersionNo == null ? 0 : activeVersionNo,
         draftChanged,
-        null,
-        null,
+        latestExecutionId,
+        latestExecutionStatus,
         now,
         now);
   }
