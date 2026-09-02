@@ -45,7 +45,7 @@ interface CandidatePointer {
 const iconButtonClass = (active = false) => [
   'flex h-8 w-8 items-center justify-center rounded-md border-0 transition-colors',
   active
-    ? 'bg-[rgba(254,44,85,.08)] text-[#fe2c55]'
+    ? 'bg-[rgba(97,114,243,.10)] text-[#6172f3]'
     : 'bg-transparent text-[#667085] hover:bg-[#f2f4f7] hover:text-[#344054]',
 ].join(' ');
 
@@ -261,7 +261,6 @@ const WorkflowCanvasTools = <T,>({
       <style>{`
         .react-flow__controls { display: none !important; }
         .react-flow__minimap { right: 12px !important; bottom: 12px !important; transition: right 180ms ease; }
-        div:has(> aside) > .react-flow .react-flow__minimap { right: 424px !important; }
       `}</style>
 
       {candidateTask && candidatePointer ? (
