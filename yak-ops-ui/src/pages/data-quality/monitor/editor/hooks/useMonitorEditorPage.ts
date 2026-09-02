@@ -19,15 +19,15 @@ import { useEffect, useMemo, useState } from 'react';
 
 import {
   buildSettings,
-  DEFAULT_RUNTIME,
-  DEFAULT_STRATEGY,
+  DEFAULT_NOTIFICATION,
+  DEFAULT_SCHEDULE,
   monitorRules,
-  runtimeFromSettings,
-  strategyFromSettings,
+  notificationFromSettings,
+  scheduleFromSettings,
   validateEditorSettings,
   type EditorRule,
-  type IssueStrategyState,
-  type RuntimeFormState,
+  type NotificationSettingsState,
+  type ScheduleSettingsState,
 } from '../model';
 import { validateRules } from '../RuleEditor';
 
@@ -59,9 +59,10 @@ export const useMonitorEditorPage = ({
   const [columns, setColumns] = useState<CatalogColumn[]>([]);
   const [templates, setTemplates] = useState<TemplateView[]>([]);
   const [rules, setRules] = useState<EditorRule[]>([]);
-  const [runtime, setRuntime] = useState<RuntimeFormState>(DEFAULT_RUNTIME);
-  const [strategy, setStrategy] =
-    useState<IssueStrategyState>(DEFAULT_STRATEGY);
+  const [schedule, setSchedule] =
+    useState<ScheduleSettingsState>(DEFAULT_SCHEDULE);
+  const [notification, setNotification] =
+    useState<NotificationSettingsState>(DEFAULT_NOTIFICATION);
   const [nextRunTime, setNextRunTime] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -107,8 +108,8 @@ export const useMonitorEditorPage = ({
             enabled: monitor.enabled,
           });
           setRules(monitorRules(monitor));
-          setRuntime(runtimeFromSettings(settings));
-          setStrategy(strategyFromSettings(settings));
+          setSchedule(scheduleFromSettings(settings));
+          setNotification(notificationFromSettings(settings));
           setNextRunTime(settings.nextRunTime);
         } else {
           form.setFieldsValue({
@@ -156,7 +157,7 @@ export const useMonitorEditorPage = ({
         throw new Error('监控对象无效，请从数据表监控页面重新创建');
       }
 
-      validateEditorSettings(runtime, strategy);
+      validateEditorSettings(schedule, notification);
       validateRules(rules);
       const source = dataSources.find(
         (item) => Number(item.id) === Number(values.dataSourceId),
@@ -165,7 +166,7 @@ export const useMonitorEditorPage = ({
         ...values,
         dataSourceId: Number(values.dataSourceId),
         dataSourceName: source?.name || values.dataSourceName,
-        settings: buildSettings(runtime, strategy),
+        settings: buildSettings(schedule, notification),
         rules: rules.map(
           ({
             key: _key,
@@ -201,10 +202,10 @@ export const useMonitorEditorPage = ({
     templates,
     rules,
     setRules,
-    runtime,
-    setRuntime,
-    strategy,
-    setStrategy,
+    schedule,
+    setSchedule,
+    notification,
+    setNotification,
     nextRunTime,
     loading,
     saving,
