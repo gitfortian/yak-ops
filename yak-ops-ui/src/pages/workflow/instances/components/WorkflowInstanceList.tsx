@@ -333,6 +333,19 @@ const WorkflowInstancesPage = () => {
         ),
       },
       {
+        title: '创建用户',
+        dataIndex: 'creatorName',
+        width: 160,
+        render: (value?: string) => (
+          <span
+            className="block truncate text-[12px] text-[#667085]"
+            title={value || undefined}
+          >
+            {value || '-'}
+          </span>
+        ),
+      },
+      {
         title: '状态',
         dataIndex: 'status',
         width: 150,
@@ -620,7 +633,7 @@ const WorkflowInstancesPage = () => {
                     : '当前实例没有可批量恢复的失败/阻断节点',
                 }),
               }}
-              scroll={{ x: 1050 }}
+              scroll={{ x: 1320 }}
               locale={{
                 emptyText: (
                   <Empty
