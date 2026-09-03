@@ -83,9 +83,9 @@ const normalizeStatus = (value?: string) => {
 
 const TaskStatus = ({ status, errorMessage }: TaskStatusProps) => {
   const normalized = normalizeStatus(status);
-  const meta = STATUS_META[normalized] || {
+  const meta: StatusMeta = STATUS_META[normalized] || {
     label: normalized,
-    yakStatus: 'unknown' as const,
+    yakStatus: 'unknown',
   };
 
   const statusContent = (
