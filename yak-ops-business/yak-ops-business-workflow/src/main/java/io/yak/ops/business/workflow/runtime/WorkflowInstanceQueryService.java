@@ -11,7 +11,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-/** Read-side enrichment for Workflow instances that must not mutate runtime execution truth. */
+/** Read-side enrichment for Workflow instance list views. */
 @Service
 public class WorkflowInstanceQueryService {
 
@@ -68,29 +68,6 @@ public class WorkflowInstanceQueryService {
           projectId,
           exception);
       return instances;
-    }
-  }
-
-  public WorkflowInstanceVO getInstance(String executionId) {
-    WorkflowInstanceVO instance = workflowRuntime.getInstance(executionId);
-    if (auditQueryService == null || currentProject == null) return instance;
-
-    Long projectId = currentProject.requireProjectId();
-    try {
-      String creatorName =
-          auditQueryService.firstActorNames(
-                  WORKFLOW_EXECUTE_OPERATION,
-                  WORKFLOW_EXECUTION_RESOURCE,
-                  List.of(instance.id()),
-                  projectId)
-              .get(instance.id());
-      return withCreator(instance, creatorName);
-    } catch (RuntimeException exception) {
-      log.debug(
-          "Workflow instance creator enrichment unavailable for execution {}",
-          instance.id(),
-          exception);
-      return instance;
     }
   }
 
