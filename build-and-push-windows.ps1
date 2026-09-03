@@ -1,22 +1,44 @@
-﻿$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Continue"
 Set-StrictMode -Version Latest
+
+Set-Location $PSScriptRoot
+
+$ReleaseConfigPath = Join-Path $PSScriptRoot "release.env"
+if (-not (Test-Path $ReleaseConfigPath)) {
+    throw "release.env was not found in $PSScriptRoot"
+}
+
+$ReleaseConfig = @{}
+foreach ($Line in Get-Content $ReleaseConfigPath) {
+    $Trimmed = $Line.Trim()
+    if ([string]::IsNullOrWhiteSpace($Trimmed) -or $Trimmed.StartsWith("#")) {
+        continue
+    }
+
+    $Parts = $Trimmed -split "=", 2
+    if ($Parts.Count -eq 2) {
+        $ReleaseConfig[$Parts[0].Trim()] = $Parts[1].Trim()
+    }
+}
+
+if (-not $ReleaseConfig.ContainsKey("YAK_OPS_VERSION") -or -not $ReleaseConfig.ContainsKey("DOCKERHUB_NAMESPACE")) {
+    throw "release.env must define YAK_OPS_VERSION and DOCKERHUB_NAMESPACE"
+}
 
 # ============================================================
 # Yak Ops Docker image publishing configuration
 # Uses the local Docker image store and the default Docker builder.
 # It does not create a Buildx builder, pull base images, or run Maven/npm builds.
 # ============================================================
-$DockerHubUsername = "weifuwan"
-$Version = "1.0.0"
+$DockerHubUsername = if ($env:DOCKERHUB_USERNAME) { $env:DOCKERHUB_USERNAME } else { $ReleaseConfig["DOCKERHUB_NAMESPACE"] }
+$Version = if ($env:VERSION) { $env:VERSION } else { $ReleaseConfig["YAK_OPS_VERSION"] }
 $BackendRepository = "yak-ops-api"
 $FrontendRepository = "yak-ops"
-$PushLatest = $true
+$PushLatest = if ($env:PUSH_LATEST) { $env:PUSH_LATEST -eq "true" } else { $true }
 
 # Local base images required by Dockerfile.
 $BackendBaseImage = "eclipse-temurin:21-jre-jammy"
 $FrontendBaseImage = "nginx:latest"
-
-Set-Location $PSScriptRoot
 
 function Write-Step {
     param([Parameter(Mandatory = $true)][string]$Message)
