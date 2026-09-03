@@ -178,10 +178,7 @@ public class WorkflowController {
   @GetMapping("/instances/{executionId}")
   public Result<WorkflowInstanceVO> instance(
       @PathVariable("executionId") String executionId) {
-    return Result.success(
-        workflowInstanceQueryService == null
-            ? workflowRuntimeService.getInstance(executionId)
-            : workflowInstanceQueryService.getInstance(executionId));
+    return Result.success(workflowRuntimeService.getInstance(executionId));
   }
 
   @Operation(summary = "订阅工作流实例实时状态")
