@@ -13,7 +13,9 @@ It records:
 - `YAK_FRAMEWORK_REF`: immutable Yak Framework source commit used by CI/release builds;
 - `DOCKERHUB_NAMESPACE`: namespace used for published images.
 
-Yak Framework is currently published in source form as `1.0.0-SNAPSHOT` and does not yet have an immutable GitHub/Maven release. To make Yak Ops builds reproducible, CI checks out the exact `YAK_FRAMEWORK_REF` and installs that source revision before building Yak Ops. Once Yak Framework has a formal release, replace the snapshot coordinate and remove the source checkout step.
+Yak Framework is currently a private repository, still uses `1.0.0-SNAPSHOT`, and does not yet have an immutable public Maven/GitHub release. To make Yak Ops release builds reproducible, CI checks out the exact `YAK_FRAMEWORK_REF` and installs that source revision before building Yak Ops.
+
+This is a temporary release constraint: external contributors can validate and build the Yak Ops frontend without private access, but a full Maven distribution build requires read access to `weifuwan/yak-framework`. Once Yak Framework is published as a stable public dependency, replace the snapshot coordinate and remove the private source checkout/token requirement.
 
 ## Why Maven POMs are normalized during release
 
@@ -25,21 +27,24 @@ The committed frontend `package.json` and Docker example tags must already match
 
 Configure these repository secrets before pushing the first release tag:
 
+- `YAK_FRAMEWORK_READ_TOKEN`: fine-grained GitHub personal access token with read-only **Contents** access to the private `weifuwan/yak-framework` repository;
 - `DOCKERHUB_USERNAME`: Docker Hub account allowed to push the Yak Ops images;
 - `DOCKERHUB_TOKEN`: Docker Hub access token for that account.
 
-The account must be able to push to the namespace declared by `DOCKERHUB_NAMESPACE`.
+The Docker Hub account must be able to push to the namespace declared by `DOCKERHUB_NAMESPACE`.
+
+For pull requests where `YAK_FRAMEWORK_READ_TOKEN` is unavailable (for example, untrusted fork PRs), CI still validates release metadata and performs a frozen frontend build. The Maven distribution steps are skipped with an explicit warning. On `main`, configure the token so CI also verifies the complete release distribution before a tag is created.
 
 ## Release flow
 
 1. Update `release.env` for the next release.
 2. Update the committed frontend version and `.env.example` Docker tags to the same version.
 3. Run `./scripts/release/check-release-metadata.sh`.
-4. Merge the release preparation changes into `main` and wait for CI to pass.
+4. Merge the release preparation changes into `main` and confirm the complete CI build passes with `YAK_FRAMEWORK_READ_TOKEN` configured.
 5. Create and push a tag whose version exactly matches `release.env`, for example `v0.1.0`.
 6. The `Release` workflow checks out the tag and pinned Yak Framework commit, builds the frontend and Maven distribution from source, publishes both Docker images, creates `SHA256SUMS`, and creates the GitHub Release.
 
-A mismatched tag is rejected before any image is published.
+A mismatched tag or missing release credential is rejected before any image is published.
 
 ## Published artifacts
 
