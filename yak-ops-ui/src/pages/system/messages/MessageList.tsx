@@ -1,4 +1,3 @@
-import { SecurityQueryTable } from '@/components/security';
 import { useSecurityProject } from '@/contexts/SecurityProjectContext';
 import {
   batchReadMessages,
@@ -13,13 +12,25 @@ import {
   type SecurityMessage,
 } from '@/services/security/messages';
 import { satisfiesPermissionRequirement } from '@/utils/security/permission';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { history, useModel } from '@umijs/max';
-import { Alert, Button, Drawer, message, Space, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  DatePicker,
+  Empty,
+  message,
+  Modal,
+  Pagination,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from 'antd';
+import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { useMemo, useRef, useState } from 'react';
-
-export { MESSAGE_COUNT_CHANGED_EVENT } from '@/services/security/messages';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const MESSAGE_TYPE_LABELS: Record<string, string> = {
   SYSTEM: '系统',
@@ -35,13 +46,6 @@ const MESSAGE_LEVEL_LABELS: Record<MessageLevel, string> = {
   ERROR: '错误',
 };
 
-const MESSAGE_LEVEL_COLORS: Record<MessageLevel, string> = {
-  INFO: 'blue',
-  SUCCESS: 'green',
-  WARNING: 'orange',
-  ERROR: 'red',
-};
-
 const messageTypeLabel = (value?: string) =>
   (value && MESSAGE_TYPE_LABELS[value]) || value || '消息';
 
@@ -51,17 +55,12 @@ const formatMessageTime = (value?: string | number | null) => {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : String(value);
 };
 
-const toTimestamp = (value?: string) => {
-  if (!value) return undefined;
-  const parsed = dayjs(value);
-  return parsed.isValid() ? parsed.valueOf() : undefined;
-};
-
 const operationLogIdOf = (item?: SecurityMessage) =>
   item?.operationLogId ?? item?.oplogId;
 
-export default function MessageList({ compact = false }: { compact?: boolean }) {
-  const actionRef = useRef<ActionType>();
+type MessageDateRange = [Dayjs | null, Dayjs | null] | null;
+
+export default function MessageList() {
   const { initialState } = useModel('@@initialState');
   const { projects } = useSecurityProject();
   const canReadLogs = satisfiesPermissionRequirement(
@@ -71,8 +70,19 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
       permission: 'security:operation-log:read',
     },
   );
+
+  const [items, setItems] = useState<SecurityMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [selected, setSelected] = useState<Array<number | string>>([]);
   const [detail, setDetail] = useState<MessageDetail>();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [status, setStatus] = useState<MessageStatus>();
+  const [type, setType] = useState<string>();
+  const [dateRange, setDateRange] = useState<MessageDateRange>(null);
+  const requestSequence = useRef(0);
 
   const projectNameById = useMemo(
     () =>
@@ -84,212 +94,307 @@ export default function MessageList({ compact = false }: { compact?: boolean }) 
 
   // Project ownership follows projectId, matching the hardened backend security
   // boundary. scope remains presentation metadata and is not trusted for ownership.
-  const ownershipLabel = (item?: SecurityMessage) => {
-    if (item?.projectId === undefined || item.projectId === null) return '系统';
-    const projectName = projectNameById.get(String(item.projectId));
-    return projectName ? `项目 · ${projectName}` : `项目 #${item.projectId}`;
-  };
+  const ownershipLabel = useCallback(
+    (item?: SecurityMessage) => {
+      if (item?.projectId === undefined || item.projectId === null) return '系统';
+      const projectName = projectNameById.get(String(item.projectId));
+      return projectName ? `项目 · ${projectName}` : `项目 #${item.projectId}`;
+    },
+    [projectNameById],
+  );
 
-  const read = async (row: SecurityMessage) => {
-    if (row.status === 'UNREAD') {
-      await markMessageRead(row.id);
-      notifyMessageCountChanged();
-      actionRef.current?.reload();
+  const loadMessages = useCallback(async () => {
+    const sequence = ++requestSequence.current;
+    setLoading(true);
+    try {
+      const result = await pageMessages({
+        pageNum: page,
+        pageSize,
+        status,
+        type,
+        startTime: dateRange?.[0]?.valueOf(),
+        endTime: dateRange?.[1]?.valueOf(),
+      });
+      if (sequence !== requestSequence.current) return;
+      setItems(result.records ?? []);
+      setTotal(result.total ?? 0);
+    } catch {
+      if (sequence === requestSequence.current) {
+        message.error('消息加载失败');
+      }
+    } finally {
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+      }
     }
-    setDetail(await getMessageDetail(row.id));
+  }, [dateRange, page, pageSize, status, type]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [loadMessages]);
+
+  const resetToFirstPage = () => {
+    setSelected([]);
+    setPage(1);
   };
 
-  const columns: ProColumns<SecurityMessage>[] = [
-    {
-      title: '标题',
-      dataIndex: 'title',
-      search: false,
-      render: (_, row) => (
-        <Button
-          type="link"
-          className={row.status === 'UNREAD' ? 'font-semibold' : ''}
-          onClick={() => read(row)}
-        >
-          {row.title}
-        </Button>
-      ),
-    },
-    { title: '摘要', dataIndex: 'summary', search: false, ellipsis: true },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      valueType: 'select',
-      valueEnum: {
-        SYSTEM: { text: '系统' },
-        SECURITY: { text: '安全' },
-        TASK: { text: '任务' },
-        QUALITY: { text: '质量' },
-      },
-      render: (_, row) => messageTypeLabel(row.type),
-    },
-    {
-      title: '范围',
-      dataIndex: 'scope',
-      search: false,
-      render: (_, row) => <Tag>{ownershipLabel(row)}</Tag>,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      valueType: 'select',
-      valueEnum: {
-        UNREAD: { text: '未读', status: 'Processing' },
-        READ: { text: '已读', status: 'Default' },
-      },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createTime',
-      valueType: 'dateTimeRange',
-      render: (_, row) => formatMessageTime(row.createTime),
-    },
-    {
-      title: '关联日志',
-      search: false,
-      render: (_, row) => {
-        const operationLogId = operationLogIdOf(row);
-        if (!operationLogId) return '-';
-        if (!canReadLogs) {
-          return <Typography.Text type="secondary">不可访问</Typography.Text>;
-        }
-        return (
-          <Button
-            type="link"
-            onClick={() =>
-              history.push(
-                `/system/oplogs?messageLogId=${encodeURIComponent(operationLogId)}`,
-              )
-            }
-          >
-            查看日志
-          </Button>
+  const openDetail = async (row: SecurityMessage) => {
+    setDetailLoading(true);
+    try {
+      if (row.status === 'UNREAD') {
+        await markMessageRead(row.id);
+        setItems((current) =>
+          current.map((item) =>
+            item.id === row.id ? { ...item, status: 'READ' } : item,
+          ),
         );
-      },
-    },
-  ];
+        setSelected((current) => current.filter((id) => id !== row.id));
+        notifyMessageCountChanged();
+      }
+      setDetail(await getMessageDetail(row.id));
+    } catch {
+      message.error('消息详情加载失败');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const toggleSelected = (row: SecurityMessage, checked: boolean) => {
+    setSelected((current) => {
+      if (checked) {
+        return current.includes(row.id) ? current : [...current, row.id];
+      }
+      return current.filter((id) => id !== row.id);
+    });
+  };
+
+  const markSelectedRead = async () => {
+    if (!selected.length) return;
+    try {
+      await batchReadMessages(selected);
+      const selectedIds = new Set(selected);
+      setItems((current) =>
+        current.map((item) =>
+          selectedIds.has(item.id) ? { ...item, status: 'READ' } : item,
+        ),
+      );
+      setSelected([]);
+      notifyMessageCountChanged();
+      message.success('已标记为已读');
+    } catch {
+      message.error('批量标记已读失败');
+    }
+  };
 
   const detailActionPath = safeMessageActionPath(detail?.actionPath);
   const detailOperationLogId = operationLogIdOf(detail);
 
   return (
-    <>
-      <SecurityQueryTable<SecurityMessage>
-        actionRef={actionRef}
-        columns={
-          compact
-            ? columns.filter(
-                (column) =>
-                  column.dataIndex !== 'summary' &&
-                  column.dataIndex !== 'type' &&
-                  column.dataIndex !== 'scope',
-              )
-            : columns
-        }
-        search={compact ? false : undefined}
-        pagination={{
-          defaultPageSize: compact ? 5 : 10,
-          showSizeChanger: !compact,
-        }}
-        rowSelection={{
-          selectedRowKeys: selected,
-          onChange: (keys) => setSelected(keys as Array<number | string>),
-          getCheckboxProps: (row) => ({ disabled: row.status === 'READ' }),
-        }}
-        request={async (params) => {
-          const range = params.createTime as [string, string] | undefined;
-          const result = await pageMessages({
-            pageNum: params.current ?? 1,
-            pageSize: params.pageSize ?? (compact ? 5 : 10),
-            status: params.status as MessageStatus,
-            type: params.type as string,
-            startTime: toTimestamp(range?.[0]),
-            endTime: toTimestamp(range?.[1]),
-          });
-          return {
-            data: result.records,
-            total: result.total,
-            success: true,
-          };
-        }}
-        tableAlertRender={() => `已选择 ${selected.length} 条未读消息`}
-        tableAlertOptionRender={() => (
-          <Button
-            disabled={!selected.length}
-            onClick={async () => {
-              await batchReadMessages(selected);
-              setSelected([]);
-              message.success('已标记为已读');
-              notifyMessageCountChanged();
-              actionRef.current?.reload();
-            }}
-          >
+    <div className="min-h-[520px] bg-white">
+      <div className="flex flex-wrap items-center gap-2 px-5 pb-4 pt-1">
+        <Select<MessageStatus>
+          allowClear
+          variant="filled"
+          className="w-32"
+          placeholder="全部状态"
+          value={status}
+          options={[
+            { label: '未读', value: 'UNREAD' },
+            { label: '已读', value: 'READ' },
+          ]}
+          onChange={(value) => {
+            setStatus(value);
+            resetToFirstPage();
+          }}
+        />
+        <Select<string>
+          allowClear
+          variant="filled"
+          className="w-32"
+          placeholder="全部类型"
+          value={type}
+          options={Object.entries(MESSAGE_TYPE_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+          onChange={(value) => {
+            setType(value);
+            resetToFirstPage();
+          }}
+        />
+        <DatePicker.RangePicker
+          allowClear
+          variant="filled"
+          value={dateRange}
+          onChange={(value) => {
+            setDateRange(value as MessageDateRange);
+            resetToFirstPage();
+          }}
+        />
+
+        <div className="ml-auto flex items-center gap-2">
+          {selected.length > 0 ? (
+            <Typography.Text type="secondary" className="text-xs">
+              已选择 {selected.length} 条未读消息
+            </Typography.Text>
+          ) : null}
+          <Button disabled={!selected.length} onClick={() => void markSelectedRead()}>
             批量已读
           </Button>
-        )}
-      />
+        </div>
+      </div>
 
-      <Drawer
-        title={detail?.title ?? '消息详情'}
-        width={560}
-        open={Boolean(detail)}
-        onClose={() => setDetail(undefined)}
-        destroyOnClose
-      >
-        {detail && (
-          <Space direction="vertical" size="middle" className="w-full">
-            <Space wrap>
-              <Tag>{messageTypeLabel(detail.type)}</Tag>
-              {detail.level ? (
-                <Tag color={MESSAGE_LEVEL_COLORS[detail.level]}>
-                  {MESSAGE_LEVEL_LABELS[detail.level]}
-                </Tag>
-              ) : null}
-              <Tag>{ownershipLabel(detail)}</Tag>
-              <Typography.Text type="secondary">
-                {formatMessageTime(detail.createTime)}
-              </Typography.Text>
-            </Space>
-
-            <Typography.Paragraph className="whitespace-pre-wrap break-words">
-              {detail.content ?? detail.summary ?? '-'}
-            </Typography.Paragraph>
-
-            {detailActionPath ? (
-              <Button
-                type="primary"
-                onClick={() => history.push(detailActionPath)}
-              >
-                前往处理
-              </Button>
-            ) : null}
-
-            {detailOperationLogId &&
-              (canReadLogs ? (
-                <Button
-                  onClick={() =>
-                    history.push(
-                      `/system/oplogs?messageLogId=${encodeURIComponent(detailOperationLogId)}`,
-                    )
-                  }
+      <Spin spinning={loading}>
+        <div className="min-h-[400px] border-t border-[rgba(22,24,35,0.08)]">
+          {!loading && items.length === 0 ? (
+            <div className="flex min-h-[400px] items-center justify-center">
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无消息" />
+            </div>
+          ) : (
+            items.map((item) => {
+              const unread = item.status === 'UNREAD';
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-start gap-3 border-b border-[rgba(22,24,35,0.08)] px-5 py-4 transition-colors duration-150 hover:bg-[#fafafa]"
                 >
-                  查看关联操作日志
+                  <div className="flex h-6 shrink-0 items-center">
+                    <Checkbox
+                      aria-label={`选择消息：${item.title}`}
+                      checked={selected.includes(item.id)}
+                      disabled={!unread}
+                      onChange={(event) => toggleSelected(item, event.target.checked)}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="group min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
+                    onClick={() => void openDetail(item)}
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className={[
+                          'mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full',
+                          unread ? 'bg-[#fe2c55]' : 'bg-transparent',
+                        ].join(' ')}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-6">
+                          <div
+                            className={[
+                              'min-w-0 truncate text-[14px] leading-6 text-[#161823]',
+                              unread ? 'font-semibold' : 'font-medium',
+                            ].join(' ')}
+                          >
+                            {item.title}
+                          </div>
+                          <time className="shrink-0 pt-0.5 text-[12px] leading-5 text-[rgba(22,24,35,0.42)]">
+                            {formatMessageTime(item.createTime)}
+                          </time>
+                        </div>
+
+                        <div className="mt-1 line-clamp-2 text-[13px] leading-5 text-[rgba(22,24,35,0.62)]">
+                          {item.summary || '暂无摘要'}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] leading-5 text-[rgba(22,24,35,0.42)]">
+                          <span>{messageTypeLabel(item.type)}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>{ownershipLabel(item)}</span>
+                          {item.level ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span>{MESSAGE_LEVEL_LABELS[item.level]}</span>
+                            </>
+                          ) : null}
+                          {unread ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="font-medium text-[#161823]">未读</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </Spin>
+
+      <div className="flex justify-end px-5 py-4">
+        <Pagination
+          current={page}
+          pageSize={pageSize}
+          total={total}
+          showSizeChanger
+          showTotal={(value) => `共 ${value} 条`}
+          onChange={(nextPage, nextPageSize) => {
+            setSelected([]);
+            setPage(nextPageSize !== pageSize ? 1 : nextPage);
+            setPageSize(nextPageSize);
+          }}
+        />
+      </div>
+
+      <Modal
+        title={detail?.title ?? '消息详情'}
+        width={640}
+        open={Boolean(detail)}
+        footer={null}
+        destroyOnClose
+        onCancel={() => setDetail(undefined)}
+      >
+        <Spin spinning={detailLoading}>
+          {detail ? (
+            <Space direction="vertical" size="middle" className="w-full pt-2">
+              <Space wrap>
+                <Tag>{messageTypeLabel(detail.type)}</Tag>
+                {detail.level ? <Tag>{MESSAGE_LEVEL_LABELS[detail.level]}</Tag> : null}
+                <Tag>{ownershipLabel(detail)}</Tag>
+                <Typography.Text type="secondary">
+                  {formatMessageTime(detail.createTime)}
+                </Typography.Text>
+              </Space>
+
+              <Typography.Paragraph className="whitespace-pre-wrap break-words">
+                {detail.content ?? detail.summary ?? '-'}
+              </Typography.Paragraph>
+
+              {detailActionPath ? (
+                <Button type="primary" onClick={() => history.push(detailActionPath)}>
+                  前往处理
                 </Button>
-              ) : (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="关联日志不可访问"
-                  description="当前身份没有操作日志查看权限。"
-                />
-              ))}
-          </Space>
-        )}
-      </Drawer>
-    </>
+              ) : null}
+
+              {detailOperationLogId &&
+                (canReadLogs ? (
+                  <Button
+                    onClick={() =>
+                      history.push(
+                        `/system/oplogs?messageLogId=${encodeURIComponent(detailOperationLogId)}`,
+                      )
+                    }
+                  >
+                    查看关联操作日志
+                  </Button>
+                ) : (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="关联日志不可访问"
+                    description="当前身份没有操作日志查看权限。"
+                  />
+                ))}
+            </Space>
+          ) : null}
+        </Spin>
+      </Modal>
+    </div>
   );
 }
