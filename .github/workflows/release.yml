@@ -30,7 +30,7 @@ jobs:
           set -a
           source release.env
           set +a
-          cat release.env >> "$GITHUB_ENV"
+          grep -E '^[A-Z0-9_]+=' release.env >> "$GITHUB_ENV"
 
       - name: Validate release tag
         shell: bash
