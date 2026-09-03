@@ -1,14 +1,18 @@
-import { YakButton, YakFilterSwitch } from '@/components/ui';
+import {
+  YakButton,
+  YakFilterSwitch,
+  YakStatusIcon,
+  type YakStatus,
+} from '@/components/ui';
 import {
   batchRetryWorkflowInstances,
   getWorkflowInstances,
   isWorkflowTerminal,
   type WorkflowInstance,
 } from '@/services/workflow';
-import { CopyOutlined, FilterOutlined, SearchOutlined } from '@ant-design/icons';
+import { FilterOutlined, SearchOutlined } from '@ant-design/icons';
 import { history } from '@umijs/max';
 import {
-  Button,
   ConfigProvider,
   DatePicker,
   Empty,
@@ -18,7 +22,6 @@ import {
   Popover,
   Select,
   Table,
-  Tooltip,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -29,18 +32,60 @@ import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
 
 const { RangePicker } = DatePicker;
 
-const statusLabel: Record<string, string> = {
-  CREATED: '已创建',
-  RUNNING: '运行中',
-  PAUSING: '暂停中',
-  PAUSED: '已暂停',
-  RESUMING: '恢复中',
-  SUCCESS: '成功',
-  SUCCESS_WITH_WARNINGS: '完成（有告警）',
-  FAILED: '失败',
-  WARNING: '告警',
-  CANCELED: '已取消',
-  TIMED_OUT: '已超时',
+interface WorkflowStatusMeta {
+  label: string;
+  yakStatus: YakStatus;
+  animated?: boolean;
+}
+
+const WORKFLOW_STATUS_META: Record<string, WorkflowStatusMeta> = {
+  CREATED: {
+    label: '已创建',
+    yakStatus: 'pending',
+  },
+  RUNNING: {
+    label: '运行中',
+    yakStatus: 'running',
+    animated: true,
+  },
+  PAUSING: {
+    label: '暂停中',
+    yakStatus: 'running',
+    animated: true,
+  },
+  PAUSED: {
+    label: '已暂停',
+    yakStatus: 'paused',
+  },
+  RESUMING: {
+    label: '恢复中',
+    yakStatus: 'running',
+    animated: true,
+  },
+  SUCCESS: {
+    label: '成功',
+    yakStatus: 'success',
+  },
+  SUCCESS_WITH_WARNINGS: {
+    label: '完成（有告警）',
+    yakStatus: 'warning',
+  },
+  FAILED: {
+    label: '失败',
+    yakStatus: 'failed',
+  },
+  WARNING: {
+    label: '告警',
+    yakStatus: 'warning',
+  },
+  CANCELED: {
+    label: '已取消',
+    yakStatus: 'canceled',
+  },
+  TIMED_OUT: {
+    label: '已超时',
+    yakStatus: 'failed',
+  },
 };
 
 const RUNNING_STATUSES = new Set([
@@ -87,16 +132,6 @@ const formatDuration = (record: WorkflowInstance) => {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} 分 ${seconds % 60} 秒`;
   return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
-};
-
-const statusBadgeClassName = (status: string) => {
-  if (FAILED_STATUSES.has(status)) {
-    return 'border-[#ffd6d6] bg-[#fff5f5] text-[#d92d20]';
-  }
-  if (status === 'RUNNING' || status === 'RESUMING') {
-    return 'border-[#d0d5dd] bg-[#f8f9fb] text-[#344054]';
-  }
-  return 'border-[#eaecf0] bg-[#fafafa] text-[#667085]';
 };
 
 const isRetryableInstance = (instance: WorkflowInstance) =>
@@ -156,15 +191,7 @@ const WorkflowInstancesPage = () => {
 
     return instances.filter((record) => {
       if (!matchesGroup(record.status)) return false;
-      if (
-        q &&
-        ![
-          record.name,
-          record.id,
-          record.definitionId,
-          String(record.input?.businessDate || ''),
-        ].some((value) => value?.toLowerCase().includes(q))
-      ) {
+      if (q && !(record.name || '').toLowerCase().includes(q)) {
         return false;
       }
       if (instanceId && !record.id.toLowerCase().includes(instanceId)) {
@@ -247,15 +274,6 @@ const WorkflowInstancesPage = () => {
     history.push(`/workflow/instances/${encodeURIComponent(record.id)}`);
   };
 
-  const copyId = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      message.success('实例 ID 已复制');
-    } catch {
-      message.error('复制失败，请手动复制');
-    }
-  };
-
   const batchRetry = async () => {
     if (!selectedKeys.length || batchLoading) return;
     setBatchLoading(true);
@@ -302,108 +320,85 @@ const WorkflowInstancesPage = () => {
   const columns = useMemo<ColumnsType<WorkflowInstance>>(
     () => [
       {
-        title: '名称 / ID',
+        title: '名称',
         dataIndex: 'name',
-        width: 315,
+        width: 300,
         render: (_: unknown, record) => (
-          <div className="min-w-0 py-0.5">
-            <div className="truncate text-[13px] font-medium text-[#344054]">
-              {record.name || '-'}
-            </div>
-            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#98a2b3]">
-              <span className="truncate">{record.id}</span>
-              <Tooltip title="复制实例 ID">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  className="!h-5 !w-5 !min-w-0 !p-0"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void copyId(record.id);
-                  }}
-                />
-              </Tooltip>
-            </div>
-            <div className="truncate text-[11px] text-[#b0b7c3]">
-              definition：{record.definitionId || '-'}
-            </div>
+          <div
+            className="truncate text-[13px] font-medium leading-5 text-[#344054]"
+            title={record.name || undefined}
+          >
+            {record.name || '-'}
           </div>
         ),
       },
       {
         title: '状态',
         dataIndex: 'status',
-        width: 120,
+        width: 150,
         align: 'center',
-        render: (status: string) => (
-          <span
-            className={`inline-flex min-h-6 items-center rounded-md border px-2 text-[12px] font-medium ${statusBadgeClassName(status)}`}
-          >
-            {statusLabel[status] || status}
-          </span>
-        ),
-      },
-      {
-        title: '调度上下文',
-        width: 190,
-        render: (_: unknown, record) => (
-          <div className="text-[11px] leading-5 text-[#667085]">
-            <div>
-              <span className="text-[#98a2b3]">businessDate：</span>
-              {String(record.input?.businessDate || '-')}
-            </div>
-            <div>
-              <span className="text-[#98a2b3]">trigger：</span>
-              {String(
-                record.input?.triggerType ||
-                  (record.testRun ? 'TEST' : 'MANUAL'),
-              )}
-            </div>
-            <div>
-              <span className="text-[#98a2b3]">version：</span>
-              {record.workflowVersionNo ? `V${record.workflowVersionNo}` : '-'}
-            </div>
-          </div>
-        ),
+        render: (status: string) => {
+          const meta: WorkflowStatusMeta = WORKFLOW_STATUS_META[status] || {
+            label: status || '-',
+            yakStatus: 'unknown',
+          };
+          return (
+            <span className="inline-flex min-h-6 items-center justify-center gap-1.5 whitespace-nowrap text-[12px] font-medium text-[#475467]">
+              <YakStatusIcon
+                status={meta.yakStatus}
+                size={17}
+                animated={Boolean(meta.animated)}
+              />
+              <span>{meta.label}</span>
+            </span>
+          );
+        },
       },
       {
         title: '执行概况',
-        width: 175,
+        width: 220,
         render: (_: unknown, record) => (
           <div className="text-[12px] leading-5 text-[#667085]">
             <div>
               节点 / 连线：{record.nodeCount} / {record.edgeCount}
             </div>
-            <div>运行时长：{formatDuration(record)}</div>
+            <div className="text-[#98a2b3]">运行时长：{formatDuration(record)}</div>
           </div>
         ),
       },
       {
         title: '开始时间',
         dataIndex: 'startedAt',
-        width: 170,
-        render: formatTime,
+        width: 190,
+        render: (value?: string) => (
+          <span className="whitespace-nowrap text-[12px] text-[#667085]">
+            {formatTime(value)}
+          </span>
+        ),
       },
       {
         title: '结束时间',
         dataIndex: 'endedAt',
-        width: 170,
-        render: formatTime,
+        width: 190,
+        render: (value?: string) => (
+          <span className="whitespace-nowrap text-[12px] text-[#667085]">
+            {formatTime(value)}
+          </span>
+        ),
       },
       {
         title: '操作',
-        width: 88,
+        width: 100,
         fixed: 'right',
         render: (_: unknown, record) => (
-          <Button
-            type="link"
+          <YakButton
+            type="text"
             size="small"
-            className="!px-0 !text-[12px]"
+            className="!h-7 !px-2 !text-[12px] !text-[#475467]"
             onClick={() => openDetail(record)}
           >
             运维
-          </Button>
+          </YakButton>
         ),
       },
     ],
@@ -500,19 +495,15 @@ const WorkflowInstancesPage = () => {
         },
       }}
     >
-      <div className="flex min-h-[calc(100vh-64px)] flex-col bg-white px-5 pt-4 text-[#161823]">
-        <div className="mb-3">
+      <div className="flex h-[calc(100vh-64px)] min-h-0 flex-col overflow-hidden bg-white px-5 pt-4 text-[#161823]">
+        <div className="mb-2 shrink-0">
           <h1 className="m-0 text-[17px] font-semibold leading-7">
             工作流实例
           </h1>
-          <div className="mt-1 flex items-center gap-2 text-[12px] text-[#98a2b3]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#34a853]" />
-            <span>自动更新 · 每 2.5 秒同步运行状态</span>
-          </div>
         </div>
 
-        <div className="mx-auto flex w-full max-w-full flex-1 flex-col">
-          <div className="flex min-h-[52px] items-center justify-between gap-4 border-b border-[#eceef2]">
+        <div className="mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col">
+          <div className="flex min-h-[52px] shrink-0 items-center justify-between gap-4 border-b border-[#eceef2]">
             <YakFilterSwitch
               value={statusGroup}
               options={statusTabs}
@@ -528,8 +519,8 @@ const WorkflowInstancesPage = () => {
                 allowClear
                 variant="filled"
                 prefix={<SearchOutlined className="text-[#98a2b3]" />}
-                placeholder="名称 / 实例 ID / businessDate"
-                className="!h-9 !w-[260px] !min-w-[220px]"
+                placeholder="搜索实例名称"
+                className="!h-9 !w-[220px] !min-w-[190px]"
                 value={keywordDraft}
                 onChange={(event) => setKeywordDraft(event.target.value)}
                 onPressEnter={handleSearch}
@@ -594,7 +585,7 @@ const WorkflowInstancesPage = () => {
           </div>
 
           {selectedKeys.length > 0 ? (
-            <div className="mt-2 flex min-h-10 items-center justify-between rounded-[10px] bg-[#fafbfc] px-3">
+            <div className="mt-2 flex min-h-10 shrink-0 items-center justify-between rounded-[10px] bg-[#fafbfc] px-3">
               <span className="text-[12px] text-[#667085]">
                 已选择 {selectedKeys.length} 个可恢复实例
               </span>
@@ -609,15 +600,7 @@ const WorkflowInstancesPage = () => {
             </div>
           ) : null}
 
-          <div className="mt-2 flex min-h-9 items-center gap-2 rounded-[9px] bg-[#f8f9fb] px-3 text-[12px] text-[#667085]">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#98a2b3]" />
-            <span>
-              <b className="font-medium text-[#344054]">实例恢复</b>
-              {' · '}单节点 Retry 在原实例恢复；“从此节点重跑”创建新实例并复用成功祖先结果；指定 businessDate 重跑固定来源发布版本。
-            </span>
-          </div>
-
-          <div className="mt-3 flex-1">
+          <div className="mt-3 min-h-0 flex-1 overflow-auto">
             <Table<WorkflowInstance>
               rowKey="id"
               bordered
@@ -637,7 +620,7 @@ const WorkflowInstancesPage = () => {
                     : '当前实例没有可批量恢复的失败/阻断节点',
                 }),
               }}
-              scroll={{ x: 1260 }}
+              scroll={{ x: 1050 }}
               locale={{
                 emptyText: (
                   <Empty
@@ -677,10 +660,9 @@ const WorkflowInstancesPage = () => {
             />
           </div>
 
-          <div className="sticky bottom-0 z-20 mt-auto flex min-h-[56px] items-center justify-between border border-t-0 border-[#e5e7eb] bg-white px-5 py-3 shadow-[0_-4px_12px_rgba(16,24,40,0.04)]">
+          <div className="sticky bottom-0 z-20 mt-auto flex min-h-[56px] shrink-0 items-center justify-between border border-t-0 border-[#e5e7eb] bg-white px-5 py-3 shadow-[0_-4px_12px_rgba(16,24,40,0.04)]">
             <div className="text-[12px] text-[#98a2b3]">
-              当前筛选 {filtered.length} 条 · 可批量恢复{' '}
-              {filtered.filter(isRetryableInstance).length} 条
+              共 {filtered.length} 条
             </div>
             <div className="flex items-center gap-3">
               <Pagination
