@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -130,6 +131,56 @@ final class JdbcAuditQueryService implements AuditQueryService {
         simpleDistinctOptions("resource_type"),
         simpleDistinctOptions("status"),
         simpleDistinctOptions("source"));
+  }
+
+  @Override
+  public Map<String, String> firstActorNames(
+      String resourceType,
+      List<String> resourceIds,
+      Long projectId) {
+    String normalizedResourceType = normalize(resourceType);
+    if (normalizedResourceType == null || resourceIds == null || resourceIds.isEmpty()) {
+      return Map.of();
+    }
+
+    List<String> normalizedIds = resourceIds.stream()
+        .map(this::normalize)
+        .filter(value -> value != null)
+        .distinct()
+        .toList();
+    if (normalizedIds.isEmpty()) return Map.of();
+
+    MapSqlParameterSource params = new MapSqlParameterSource()
+        .addValue("resourceType", normalizedResourceType)
+        .addValue("resourceIds", normalizedIds);
+    String projectPredicate = "";
+    if (projectId != null && projectId > 0L) {
+      projectPredicate = " AND project_id = :projectId";
+      params.addValue("projectId", projectId);
+    }
+
+    String sql =
+        "SELECT operation.resource_id, operation.actor_name "
+            + "FROM yak_audit_operation operation "
+            + "JOIN ("
+            + "  SELECT resource_id, MIN(id) AS first_id "
+            + "  FROM yak_audit_operation "
+            + "  WHERE resource_type = :resourceType "
+            + "    AND resource_id IN (:resourceIds)"
+            + projectPredicate
+            + "  GROUP BY resource_id"
+            + ") first_operation ON first_operation.first_id = operation.id";
+
+    Map<String, String> result = new LinkedHashMap<>();
+    jdbcTemplate.query(
+        sql,
+        params,
+        resultSet -> {
+          String resourceId = normalize(resultSet.getString("resource_id"));
+          String actorName = normalize(resultSet.getString("actor_name"));
+          if (resourceId != null && actorName != null) result.put(resourceId, actorName);
+        });
+    return Map.copyOf(result);
   }
 
   private QuerySpec operationWhere(AuditOperationQuery query) {
