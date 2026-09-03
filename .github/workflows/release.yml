@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout Yak Ops tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -41,26 +41,46 @@ jobs:
             exit 1
           fi
 
+      - name: Validate release credentials
+        shell: bash
+        env:
+          YAK_FRAMEWORK_READ_TOKEN: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          missing=0
+          for name in YAK_FRAMEWORK_READ_TOKEN DOCKERHUB_USERNAME DOCKERHUB_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name is required for public releases."
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
+
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
       - name: Checkout pinned Yak Framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: weifuwan/yak-framework
           ref: ${{ env.YAK_FRAMEWORK_REF }}
           path: .deps/yak-framework
+          token: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
+          persist-credentials: false
 
       - name: Install pinned Yak Framework
         working-directory: .deps/yak-framework
         run: mvn -B -ntp -DskipTests install
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: yarn
