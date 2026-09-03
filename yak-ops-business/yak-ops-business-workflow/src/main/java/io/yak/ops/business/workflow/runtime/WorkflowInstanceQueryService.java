@@ -5,6 +5,8 @@ import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import io.yak.ops.core.project.CurrentProject;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class WorkflowInstanceQueryService {
 
+  private static final Logger log = LoggerFactory.getLogger(WorkflowInstanceQueryService.class);
   private static final String WORKFLOW_EXECUTE_OPERATION = "WORKFLOW_EXECUTE";
   private static final String WORKFLOW_EXECUTION_RESOURCE = "WORKFLOW_EXECUTION";
 
@@ -46,31 +49,49 @@ public class WorkflowInstanceQueryService {
       return instances;
     }
 
-    Map<String, String> creators =
-        auditQueryService.firstActorNames(
-            WORKFLOW_EXECUTE_OPERATION,
-            WORKFLOW_EXECUTION_RESOURCE,
-            instances.stream().map(WorkflowInstanceVO::id).toList(),
-            currentProject.requireProjectId());
-    if (creators.isEmpty()) return instances;
+    Long projectId = currentProject.requireProjectId();
+    try {
+      Map<String, String> creators =
+          auditQueryService.firstActorNames(
+              WORKFLOW_EXECUTE_OPERATION,
+              WORKFLOW_EXECUTION_RESOURCE,
+              instances.stream().map(WorkflowInstanceVO::id).toList(),
+              projectId);
+      if (creators.isEmpty()) return instances;
 
-    return instances.stream()
-        .map(instance -> withCreator(instance, creators.get(instance.id())))
-        .toList();
+      return instances.stream()
+          .map(instance -> withCreator(instance, creators.get(instance.id())))
+          .toList();
+    } catch (RuntimeException exception) {
+      log.debug(
+          "Workflow instance creator enrichment unavailable for project {}",
+          projectId,
+          exception);
+      return instances;
+    }
   }
 
   public WorkflowInstanceVO getInstance(String executionId) {
     WorkflowInstanceVO instance = workflowRuntime.getInstance(executionId);
     if (auditQueryService == null || currentProject == null) return instance;
 
-    String creatorName =
-        auditQueryService.firstActorNames(
-                WORKFLOW_EXECUTE_OPERATION,
-                WORKFLOW_EXECUTION_RESOURCE,
-                List.of(instance.id()),
-                currentProject.requireProjectId())
-            .get(instance.id());
-    return withCreator(instance, creatorName);
+    Long projectId = currentProject.requireProjectId();
+    try {
+      String creatorName =
+          auditQueryService.firstActorNames(
+                  WORKFLOW_EXECUTE_OPERATION,
+                  WORKFLOW_EXECUTION_RESOURCE,
+                  List.of(instance.id()),
+                  projectId)
+              .get(instance.id());
+      return withCreator(instance, creatorName);
+    } catch (RuntimeException exception) {
+      log.debug(
+          "Workflow instance creator enrichment unavailable for execution {}",
+          instance.id(),
+          exception);
+      return instance;
+    }
   }
 
   private WorkflowInstanceVO withCreator(WorkflowInstanceVO instance, String creatorName) {
