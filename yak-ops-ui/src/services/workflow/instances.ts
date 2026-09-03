@@ -102,6 +102,7 @@ export interface WorkflowInstance {
   definitionId: string;
   sourceExecutionId?: string;
   name: string;
+  creatorName?: string;
   status: string;
   failureStrategy: WorkflowFailureStrategy;
   startedAt: string;
