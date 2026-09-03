@@ -2,23 +2,33 @@
 
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ ! -f release.env ]]; then
+    printf 'release.env was not found in %s\n' "$SCRIPT_DIR" >&2
+    exit 1
+fi
+
+set -a
+# shellcheck disable=SC1091
+source release.env
+set +a
+
 # ============================================================
 # Yak Ops Docker image publishing configuration
 # Uses the local Docker image store and the default Docker builder.
 # It does not create a Buildx builder, pull base images, or run Maven/npm builds.
 # ============================================================
-DOCKERHUB_USERNAME="weifuwan"
-VERSION="1.0.0"
+DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-$DOCKERHUB_NAMESPACE}"
+VERSION="${VERSION:-$YAK_OPS_VERSION}"
 BACKEND_REPOSITORY="yak-ops-api"
 FRONTEND_REPOSITORY="yak-ops"
-PUSH_LATEST="true"
+PUSH_LATEST="${PUSH_LATEST:-true}"
 
 # Local base images required by Dockerfile.
 BACKEND_BASE_IMAGE="eclipse-temurin:21-jre-jammy"
 FRONTEND_BASE_IMAGE="nginx:latest"
-
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
 
 write_step() {
     printf '\n==> %s\n' "$1"
