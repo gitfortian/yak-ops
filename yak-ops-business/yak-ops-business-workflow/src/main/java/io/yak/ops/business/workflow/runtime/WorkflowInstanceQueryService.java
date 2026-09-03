@@ -5,7 +5,6 @@ import io.yak.ops.common.bean.vo.workflow.WorkflowInstanceVO;
 import io.yak.ops.core.project.CurrentProject;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,6 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class WorkflowInstanceQueryService {
 
+  private static final String WORKFLOW_EXECUTE_OPERATION = "WORKFLOW_EXECUTE";
   private static final String WORKFLOW_EXECUTION_RESOURCE = "WORKFLOW_EXECUTION";
 
   private final WorkflowRuntime workflowRuntime;
@@ -48,6 +48,7 @@ public class WorkflowInstanceQueryService {
 
     Map<String, String> creators =
         auditQueryService.firstActorNames(
+            WORKFLOW_EXECUTE_OPERATION,
             WORKFLOW_EXECUTION_RESOURCE,
             instances.stream().map(WorkflowInstanceVO::id).toList(),
             currentProject.requireProjectId());
@@ -64,6 +65,7 @@ public class WorkflowInstanceQueryService {
 
     String creatorName =
         auditQueryService.firstActorNames(
+                WORKFLOW_EXECUTE_OPERATION,
                 WORKFLOW_EXECUTION_RESOURCE,
                 List.of(instance.id()),
                 currentProject.requireProjectId())
