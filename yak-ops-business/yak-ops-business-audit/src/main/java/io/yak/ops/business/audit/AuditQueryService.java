@@ -14,10 +14,11 @@ public interface AuditQueryService {
   AuditFilterOptions options();
 
   /**
-   * Returns the actor name from the first audit operation for each supplied resource.
+   * Returns the actor name from the first matching audit operation for each supplied resource.
    * Later retry/recovery operations must not replace the original creator attribution.
    */
   default Map<String, String> firstActorNames(
+      String operationType,
       String resourceType,
       List<String> resourceIds,
       Long projectId) {
