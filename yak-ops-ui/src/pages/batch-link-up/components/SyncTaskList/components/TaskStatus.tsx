@@ -1,18 +1,9 @@
 import {
-  CanceledStatusIcon,
-  CreatedStatusIcon,
-  FailedStatusIcon,
-  IdleStatusIcon,
-  LostStatusIcon,
-  QueuedStatusIcon,
-  RunningStatusIcon,
-  SubmittedStatusIcon,
-  SucceededStatusIcon,
-  UnknownStatusIcon,
-} from "./TaskStatusIcons";
-
-import { Button, Popover, Tag, message } from "antd";
-import React, { useMemo } from "react";
+  YakButton,
+  YakStatusIcon,
+  type YakStatus,
+} from '@/components/ui';
+import { Popover, message } from 'antd';
 
 interface TaskStatusProps {
   status?: string;
@@ -21,111 +12,106 @@ interface TaskStatusProps {
 
 interface StatusMeta {
   label: string;
-  color: string;
-  icon: React.ReactNode;
-  active?: boolean;
+  yakStatus: YakStatus;
+  animated?: boolean;
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
+  IDLE: {
+    label: '未运行',
+    yakStatus: 'pending',
+  },
   CREATED: {
-    label: "已创建",
-    color: "default",
-    icon: <CreatedStatusIcon />,
-    active: true,
+    label: '已创建',
+    yakStatus: 'pending',
   },
-
   SUBMITTED: {
-    label: "提交中",
-    color: "processing",
-    icon: <SubmittedStatusIcon />,
-    active: true,
+    label: '提交中',
+    yakStatus: 'pending',
+    animated: true,
   },
-
   QUEUED: {
-    label: "排队中",
-    color: "processing",
-    icon: <QueuedStatusIcon />,
-    active: true,
+    label: '排队中',
+    yakStatus: 'pending',
+    animated: true,
   },
-
   RUNNING: {
-    label: "运行中",
-    color: "processing",
-    icon: <RunningStatusIcon />,
-    active: true,
+    label: '运行中',
+    yakStatus: 'running',
+    animated: true,
   },
-
   SUCCEEDED: {
-    label: "已完成",
-    color: "success",
-    icon: <SucceededStatusIcon />,
+    label: '已完成',
+    yakStatus: 'success',
   },
-
   FAILED: {
-    label: "失败",
-    color: "error",
-    icon: <FailedStatusIcon />,
+    label: '失败',
+    yakStatus: 'failed',
   },
-
+  PAUSED: {
+    label: '已暂停',
+    yakStatus: 'paused',
+  },
   CANCELED: {
-    label: "已取消",
-    color: "default",
-    icon: <CanceledStatusIcon />,
+    label: '已取消',
+    yakStatus: 'canceled',
   },
-
   LOST: {
-    label: "状态丢失",
-    color: "warning",
-    icon: <LostStatusIcon />,
+    label: '状态丢失',
+    yakStatus: 'warning',
   },
 };
 
-const LEGACY_ALIASES: Record<string, string> = {
-  FINISHED: "SUCCEEDED",
-  COMPLETED: "SUCCEEDED",
-  CANCELLED: "CANCELED",
-  PENDING: "QUEUED",
+const STATUS_ALIASES: Record<string, string> = {
+  FINISHED: 'SUCCEEDED',
+  COMPLETED: 'SUCCEEDED',
+  SUCCESS: 'SUCCEEDED',
+  CANCELLED: 'CANCELED',
+  STOPPED: 'CANCELED',
+  PENDING: 'QUEUED',
+  WAITING: 'QUEUED',
+  NOT_STARTED: 'IDLE',
+  NONE: 'IDLE',
 };
 
 const normalizeStatus = (value?: string) => {
-  const normalized = String(value || "")
+  const normalized = String(value || '')
     .trim()
     .toUpperCase();
-  return LEGACY_ALIASES[normalized] || normalized;
+  return STATUS_ALIASES[normalized] || normalized || 'IDLE';
 };
 
-const TaskStatus: React.FC<TaskStatusProps> = ({ status, errorMessage }) => {
+const TaskStatus = ({ status, errorMessage }: TaskStatusProps) => {
   const normalized = normalizeStatus(status);
-  const meta = useMemo<StatusMeta>(
-    () =>
-      STATUS_META[normalized] || {
-        label: normalized || "未运行",
-        color: "default",
-        icon: normalized ? <UnknownStatusIcon /> : <IdleStatusIcon />,
-      },
-    [normalized]
-  );
+  const meta = STATUS_META[normalized] || {
+    label: normalized,
+    yakStatus: 'unknown' as const,
+  };
 
-  const tag = (
-    <Tag
-      color={meta.color}
-      icon={meta.icon}
-      className="!m-0 inline-flex min-w-[76px] items-center justify-center !rounded-md !px-2 !py-0.5 text-xs"
+  const statusContent = (
+    <span
+      className="inline-flex min-w-[78px] items-center justify-center gap-1.5 whitespace-nowrap text-[12px] font-medium leading-5 text-[#475467]"
+      data-offline-sync-status={normalized}
     >
-      &nbsp;{meta.label}
-    </Tag>
+      <YakStatusIcon
+        status={meta.yakStatus}
+        size={17}
+        animated={Boolean(meta.animated)}
+      />
+      <span>{meta.label}</span>
+    </span>
   );
 
-  if (!errorMessage || (normalized !== "FAILED" && normalized !== "LOST")) {
-    return tag;
+  if (!errorMessage || (normalized !== 'FAILED' && normalized !== 'LOST')) {
+    return statusContent;
   }
 
   const copyError = async () => {
     try {
       await navigator.clipboard.writeText(errorMessage);
-      message.success("错误信息已复制");
+      message.success('错误信息已复制');
     } catch {
-      message.error("复制失败，请手动复制");
+      message.error('复制失败，请手动复制');
     }
   };
 
@@ -139,14 +125,16 @@ const TaskStatus: React.FC<TaskStatusProps> = ({ status, errorMessage }) => {
             {errorMessage}
           </div>
           <div className="mt-2 flex justify-end">
-            <Button size="small" onClick={copyError}>
+            <YakButton size="small" onClick={copyError}>
               复制错误
-            </Button>
+            </YakButton>
           </div>
         </div>
       }
     >
-      <span className="inline-flex cursor-help">{tag}</span>
+      <span className="inline-flex cursor-help rounded-md transition-colors hover:bg-[#fff7f6]">
+        {statusContent}
+      </span>
     </Popover>
   );
 };
