@@ -135,11 +135,16 @@ final class JdbcAuditQueryService implements AuditQueryService {
 
   @Override
   public Map<String, String> firstActorNames(
+      String operationType,
       String resourceType,
       List<String> resourceIds,
       Long projectId) {
+    String normalizedOperationType = normalize(operationType);
     String normalizedResourceType = normalize(resourceType);
-    if (normalizedResourceType == null || resourceIds == null || resourceIds.isEmpty()) {
+    if (normalizedOperationType == null
+        || normalizedResourceType == null
+        || resourceIds == null
+        || resourceIds.isEmpty()) {
       return Map.of();
     }
 
@@ -151,6 +156,7 @@ final class JdbcAuditQueryService implements AuditQueryService {
     if (normalizedIds.isEmpty()) return Map.of();
 
     MapSqlParameterSource params = new MapSqlParameterSource()
+        .addValue("operationType", normalizedOperationType)
         .addValue("resourceType", normalizedResourceType)
         .addValue("resourceIds", normalizedIds);
     String projectPredicate = "";
@@ -160,16 +166,17 @@ final class JdbcAuditQueryService implements AuditQueryService {
     }
 
     String sql =
-        "SELECT operation.resource_id, operation.actor_name "
-            + "FROM yak_audit_operation operation "
+        "SELECT o.resource_id, o.actor_name "
+            + "FROM yak_audit_operation o "
             + "JOIN ("
             + "  SELECT resource_id, MIN(id) AS first_id "
             + "  FROM yak_audit_operation "
-            + "  WHERE resource_type = :resourceType "
+            + "  WHERE operation_type = :operationType "
+            + "    AND resource_type = :resourceType "
             + "    AND resource_id IN (:resourceIds)"
             + projectPredicate
             + "  GROUP BY resource_id"
-            + ") first_operation ON first_operation.first_id = operation.id";
+            + ") first_operation ON first_operation.first_id = o.id";
 
     Map<String, String> result = new LinkedHashMap<>();
     jdbcTemplate.query(
