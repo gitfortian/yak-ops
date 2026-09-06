@@ -34,6 +34,21 @@ export interface OfflineConnectorRuntimeSnapshot {
   profiles: OfflineConnectorRuntimeProfile[];
 }
 
+export interface LinkUpConnectorOptionSchema {
+  key: string;
+  valueType?: string;
+  javaType?: string;
+  elementJavaType?: string;
+  defaultValue?: unknown;
+  allowedValues?: unknown[];
+  description?: string;
+  fallbackKeys?: string[];
+  required?: boolean;
+  sensitive?: boolean;
+  semanticType?: string;
+  scope?: string;
+}
+
 export type LinkUpConnectorSchema = Record<string, unknown> & {
   connectorId: string;
   role: OfflineConnectorRole;
@@ -42,7 +57,7 @@ export type LinkUpConnectorSchema = Record<string, unknown> & {
   implementationClass?: string;
   implementationVersion?: string;
   capabilities?: string[];
-  options?: unknown[];
+  options?: LinkUpConnectorOptionSchema[];
   rules?: unknown[];
 };
 

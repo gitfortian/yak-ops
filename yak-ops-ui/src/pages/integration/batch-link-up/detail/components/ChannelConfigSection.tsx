@@ -1,12 +1,18 @@
 import { InputNumber, Select } from 'antd';
 import type { ReactNode } from 'react';
 
+import {
+  allowsCapability,
+  CONNECTOR_CAPABILITY,
+  type EndpointCapabilityState,
+} from '../capabilities';
 import type { SyncEditorState } from '../model';
 import EditorSection from './EditorSection';
 
 interface ChannelConfigSectionProps {
   editor: SyncEditorState;
   sinkConfig: Record<string, any>;
+  sinkCapability: EndpointCapabilityState;
   onChange: (value: SyncEditorState) => void;
   onSinkChange: (patch: Record<string, any>) => void;
 }
@@ -31,9 +37,24 @@ function Field({
 export default function ChannelConfigSection({
   editor,
   sinkConfig,
+  sinkCapability,
   onChange,
   onSinkChange,
 }: ChannelConfigSectionProps) {
+  const supportsDirtyDataHandling = allowsCapability(
+    sinkCapability,
+    CONNECTOR_CAPABILITY.DIRTY_DATA_HANDLING,
+  );
+  const currentDirtyPolicy = editor.channel.dirtyDataPolicy;
+  const dirtyPolicyOptions = [
+    { label: '遇错停止', value: 'stop' },
+    ...(supportsDirtyDataHandling
+      ? [{ label: '跳过并继续', value: 'skip' }]
+      : currentDirtyPolicy === 'skip'
+        ? [{ label: '跳过并继续（当前不支持）', value: 'skip', disabled: true }]
+        : []),
+  ];
+
   const updateChannel = (patch: Partial<SyncEditorState['channel']>) => {
     onChange({
       ...editor,
@@ -115,16 +136,23 @@ export default function ChannelConfigSection({
         <Field label="脏数据策略">
           <Select
             variant="filled"
-            value={editor.channel.dirtyDataPolicy}
-            options={[
-              { label: '遇错停止', value: 'stop' },
-              { label: '跳过并继续', value: 'skip' },
-            ]}
+            value={currentDirtyPolicy}
+            options={dirtyPolicyOptions}
             className="w-full"
             onChange={(dirtyDataPolicy) =>
-              updateChannel({ dirtyDataPolicy })
+              updateChannel({
+                dirtyDataPolicy,
+                ...(dirtyDataPolicy === 'skip'
+                  ? {}
+                  : { dirtyDataLimit: 0 }),
+              })
             }
           />
+          {!supportsDirtyDataHandling && currentDirtyPolicy === 'skip' ? (
+            <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
+              当前 Sink Connector 未声明 DIRTY_DATA_HANDLING，请改为遇错停止。
+            </div>
+          ) : null}
         </Field>
 
         <Field label="脏数据上限">
@@ -132,7 +160,7 @@ export default function ChannelConfigSection({
             min={0}
             max={10000000}
             variant="filled"
-            disabled={editor.channel.dirtyDataPolicy !== 'skip'}
+            disabled={currentDirtyPolicy !== 'skip'}
             className="!w-full"
             value={Number(editor.channel.dirtyDataLimit || 0)}
             onChange={(dirtyDataLimit) =>
