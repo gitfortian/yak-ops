@@ -67,6 +67,35 @@ class JdbcOfflineSyncConnectorAdapterExecutionTest {
   }
 
   @Test
+  void injectsGoldenDbDialectAndForcesExistingTableSink() {
+    ObjectMapper mapper = new ObjectMapper();
+    JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);
+    DataSourcePO dataSource = new DataSourcePO();
+    dataSource.setId(13L);
+    dataSource.setName("goldendb");
+    dataSource.setDbType(DataSourceDbType.GOLDENDB);
+    dataSource.setConnectionParams(
+        "{\"jdbcUrl\":\"jdbc:mysql://127.0.0.1:1111/archive\","
+            + "\"driverClassName\":\"com.mysql.cj.jdbc.Driver\","
+            + "\"username\":\"root\",\"password\":\"secret\"}");
+
+    ObjectNode options = mapper.createObjectNode();
+    options.put("dialect", "mysql");
+    options.put("schema_save_mode", "CREATE_SCHEMA_WHEN_NOT_EXIST");
+    options.put("table_path", "archive.orders");
+    adapter.resolveForExecution(
+        new ExecutionContext("jdbc", Role.SINK, "目标端", dataSource, options));
+
+    assertThat(options.path("url").asText())
+        .isEqualTo("jdbc:mysql://127.0.0.1:1111/archive");
+    assertThat(options.path("driver").asText()).isEqualTo("com.mysql.cj.jdbc.Driver");
+    assertThat(options.path("dialect").asText()).isEqualTo("goldendb");
+    assertThat(options.path("schema_save_mode").asText())
+        .isEqualTo("ERROR_WHEN_SCHEMA_NOT_EXIST");
+    assertThat(options.path("password").asText()).isEqualTo("secret");
+  }
+
+  @Test
   void injectsHanaDialectAndSchemaFromDatasourceOwnedConnection() {
     ObjectMapper mapper = new ObjectMapper();
     JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);

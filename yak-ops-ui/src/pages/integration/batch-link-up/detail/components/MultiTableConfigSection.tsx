@@ -23,6 +23,7 @@ interface MultiTableConfigSectionProps {
   sourceConfig: Record<string, any>;
   sinkConfig: Record<string, any>;
   sinkCapability: EndpointCapabilityState;
+  autoCreateTableEnabled: boolean;
   sourceTables: string[];
   sourceLoading: boolean;
   sourceReady: boolean;
@@ -98,6 +99,7 @@ export default function MultiTableConfigSection({
   sourceConfig,
   sinkConfig,
   sinkCapability,
+  autoCreateTableEnabled,
   sourceTables,
   sourceLoading,
   sourceReady,
@@ -111,10 +113,12 @@ export default function MultiTableConfigSection({
   const tableNamingRule = String(
     sinkConfig.tableNamingRule || 'same_name',
   ).toLowerCase();
-  const supportsAutoCreate = allowsCapability(
-    sinkCapability,
-    CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE,
-  );
+  const supportsAutoCreate =
+    autoCreateTableEnabled &&
+    allowsCapability(
+      sinkCapability,
+      CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE,
+    );
   const supportsUpsert = allowsCapability(
     sinkCapability,
     CONNECTOR_CAPABILITY.UPSERT,
@@ -296,7 +300,9 @@ export default function MultiTableConfigSection({
               </div>
               {!supportsAutoCreate && sinkConfig.autoCreateTable ? (
                 <div className="mt-2 text-[11px] leading-5 text-[#b54708]">
-                  当前 Sink Connector 未声明 AUTO_CREATE_TABLE，请关闭后再保存。
+                  {autoCreateTableEnabled
+                    ? '当前 Sink Connector 未声明 AUTO_CREATE_TABLE，请关闭后再保存。'
+                    : '当前目标数据源 Stage 1 仅支持写入已有表，请关闭自动建表后再保存。'}
                 </div>
               ) : null}
             </div>

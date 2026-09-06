@@ -102,6 +102,29 @@ describe('offline connector capabilities', () => {
     expect(errors).toEqual([]);
   });
 
+  it('keeps GoldenDB Stage 1 on existing target tables even when JDBC advertises auto create', () => {
+    const value = editor();
+    value.sink.dbType = 'GOLDENDB';
+    value.sink.pluginName = 'JDBC-GOLDENDB';
+    value.sink.config = {
+      targetTableName: 'orders',
+      autoCreateTable: true,
+      writeMode: 'append',
+    };
+
+    const errors = validateEditorCapabilities(
+      value,
+      snapshot(
+        ['TABLE_SCHEMA_DISCOVERY'],
+        ['AUTO_CREATE_TABLE', 'UPSERT'],
+      ),
+    );
+
+    expect(errors).toContain(
+      'GOLDENDB Stage 1 仅支持写入已有表，请关闭自动建表',
+    );
+  });
+
   it('requires both connector roles to advertise MULTI_TABLE', () => {
     const value = editor();
     value.mode = 'GUIDE_MULTI';

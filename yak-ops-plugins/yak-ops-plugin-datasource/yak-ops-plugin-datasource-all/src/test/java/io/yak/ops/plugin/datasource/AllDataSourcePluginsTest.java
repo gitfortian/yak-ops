@@ -22,6 +22,7 @@ class AllDataSourcePluginsTest {
         .containsExactlyInAnyOrder(
             DataSourceDbType.MYSQL,
             DataSourceDbType.TIDB,
+            DataSourceDbType.GOLDENDB,
             DataSourceDbType.HANA,
             DataSourceDbType.POSTGRE_SQL,
             DataSourceDbType.ORACLE,

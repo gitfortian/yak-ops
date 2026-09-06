@@ -28,6 +28,7 @@ interface DataSourceToolbarProps {
 const DB_TYPE_LABELS: Record<string, string> = {
   MYSQL: 'MYSQL',
   TIDB: 'TiDB',
+  GOLDENDB: 'GoldenDB',
   HANA: 'SAP HANA',
   ORACLE: 'ORACLE',
   POSTGRE_SQL: 'PostgreSQL',
