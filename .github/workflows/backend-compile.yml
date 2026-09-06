@@ -12,7 +12,7 @@ on:
       - 'yak-ops-business/**'
       - 'yak-ops-plugins/**'
       - 'yak-ops-boot/**'
-      - 'release.env'
+      - '.github/maven-settings.xml'
       - '.github/workflows/backend-compile.yml'
   push:
     branches:
@@ -27,7 +27,7 @@ on:
       - 'yak-ops-business/**'
       - 'yak-ops-plugins/**'
       - 'yak-ops-boot/**'
-      - 'release.env'
+      - '.github/maven-settings.xml'
       - '.github/workflows/backend-compile.yml'
   workflow_dispatch:
 
@@ -44,27 +44,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      YAK_MAVEN_USERNAME: ${{ secrets.YAK_MAVEN_USERNAME }}
+      YAK_MAVEN_PASSWORD: ${{ secrets.YAK_MAVEN_PASSWORD }}
+
     steps:
       - name: Checkout Yak Ops
         uses: actions/checkout@v7
-
-      - name: Load Yak Framework ref
-        shell: bash
-        run: |
-          set -a
-          source release.env
-          set +a
-          echo "YAK_FRAMEWORK_REF=$YAK_FRAMEWORK_REF" >> "$GITHUB_ENV"
-
-      - name: Require Yak Framework read token
-        shell: bash
-        env:
-          YAK_FRAMEWORK_READ_TOKEN: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
-        run: |
-          if [[ -z "$YAK_FRAMEWORK_READ_TOKEN" ]]; then
-            echo "::error::YAK_FRAMEWORK_READ_TOKEN is required to compile the backend because yak-framework is private."
-            exit 1
-          fi
 
       - name: Set up Java 21
         uses: actions/setup-java@v6
@@ -73,18 +59,13 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Checkout pinned Yak Framework
-        uses: actions/checkout@v7
-        with:
-          repository: weifuwan/yak-framework
-          ref: ${{ env.YAK_FRAMEWORK_REF }}
-          path: .deps/yak-framework
-          token: ${{ secrets.YAK_FRAMEWORK_READ_TOKEN }}
-          persist-credentials: false
-
-      - name: Install Yak Framework
-        working-directory: .deps/yak-framework
-        run: mvn -B -ntp -DskipTests install
+      - name: Require Yak Maven credentials
+        shell: bash
+        run: |
+          if [[ -z "$YAK_MAVEN_USERNAME" || -z "$YAK_MAVEN_PASSWORD" ]]; then
+            echo "::error::YAK_MAVEN_USERNAME and YAK_MAVEN_PASSWORD are required to resolve yak-framework snapshots."
+            exit 1
+          fi
 
       - name: Compile Yak Ops backend
-        run: ./mvnw -B -ntp -DskipTests -pl yak-ops-boot -am compile
+        run: ./mvnw -s .github/maven-settings.xml -B -ntp -DskipTests -pl yak-ops-boot -am compile
