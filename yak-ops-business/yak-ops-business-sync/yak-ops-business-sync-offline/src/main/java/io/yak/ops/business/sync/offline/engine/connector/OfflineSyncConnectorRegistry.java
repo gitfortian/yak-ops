@@ -28,6 +28,11 @@ public final class OfflineSyncConnectorRegistry {
       jdbcProfile("opengauss-jdbc", DataSourceDbType.OPEN_GAUSS, "JDBC-OPENGAUSS"),
       jdbcProfile("sqlserver-jdbc", DataSourceDbType.SQL_SERVER, "JDBC-SQLSERVER"),
       jdbcProfile("oceanbase-jdbc", DataSourceDbType.OCEANBASE, "JDBC-OCEANBASE"),
+      jdbcProfile("yashandb-jdbc", DataSourceDbType.YASHAN_DB, "JDBC-YASHANDB"),
+      jdbcProfile("highgo-jdbc", DataSourceDbType.HIGHGO, "JDBC-HIGHGO"),
+      jdbcProfile("iris-jdbc", DataSourceDbType.IRIS, "JDBC-IRIS"),
+      jdbcProfile("xugu-jdbc", DataSourceDbType.XUGU, "JDBC-XUGU"),
+      jdbcProfile("duckdb-jdbc", DataSourceDbType.DUCKDB, "JDBC-DUCKDB"),
       nativeProfile("doris-native", DataSourceDbType.DORIS, "doris", "DORIS"),
       nativeProfile("starrocks-native", DataSourceDbType.STARROCKS, "starrocks", "STARROCKS"),
       nativeProfile("clickhouse-native", DataSourceDbType.CLICKHOUSE, "clickhouse", "CLICKHOUSE"),
@@ -57,16 +62,23 @@ public final class OfflineSyncConnectorRegistry {
       "HIVE",
       "DM");
 
-  private static final Map<String, DataSourceDbType> DATA_SOURCE_ALIASES = Map.of(
-      "POSTGRESQL", DataSourceDbType.POSTGRE_SQL,
-      "POSTGRES", DataSourceDbType.POSTGRE_SQL,
-      "OPENGAUSS", DataSourceDbType.OPEN_GAUSS,
-      "SQLSERVER", DataSourceDbType.SQL_SERVER,
-      "MSSQL", DataSourceDbType.SQL_SERVER,
-      "ELASTICSEARCH_7", DataSourceDbType.ELASTICSEARCH7,
-      "ES7", DataSourceDbType.ELASTICSEARCH7,
-      "ELASTICSEARCH_8", DataSourceDbType.ELASTICSEARCH8,
-      "ES8", DataSourceDbType.ELASTICSEARCH8);
+  private static final Map<String, DataSourceDbType> DATA_SOURCE_ALIASES = Map.ofEntries(
+      Map.entry("POSTGRESQL", DataSourceDbType.POSTGRE_SQL),
+      Map.entry("POSTGRES", DataSourceDbType.POSTGRE_SQL),
+      Map.entry("OPENGAUSS", DataSourceDbType.OPEN_GAUSS),
+      Map.entry("SQLSERVER", DataSourceDbType.SQL_SERVER),
+      Map.entry("MSSQL", DataSourceDbType.SQL_SERVER),
+      Map.entry("YASHANDB", DataSourceDbType.YASHAN_DB),
+      Map.entry("YASDB", DataSourceDbType.YASHAN_DB),
+      Map.entry("HIGH_GO", DataSourceDbType.HIGHGO),
+      Map.entry("HGDB", DataSourceDbType.HIGHGO),
+      Map.entry("INTERSYSTEMS_IRIS", DataSourceDbType.IRIS),
+      Map.entry("XUGUDB", DataSourceDbType.XUGU),
+      Map.entry("DUCK_DB", DataSourceDbType.DUCKDB),
+      Map.entry("ELASTICSEARCH_7", DataSourceDbType.ELASTICSEARCH7),
+      Map.entry("ES7", DataSourceDbType.ELASTICSEARCH7),
+      Map.entry("ELASTICSEARCH_8", DataSourceDbType.ELASTICSEARCH8),
+      Map.entry("ES8", DataSourceDbType.ELASTICSEARCH8));
 
   private static final Map<DataSourceDbType, OfflineSyncConnectorProfile> DEFAULTS =
       buildDefaults();

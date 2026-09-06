@@ -6,7 +6,7 @@ import {
   OFFLINE_SYNC_CONNECTOR_PROFILES,
 } from './connectorProfiles';
 
-test('uses native profiles for new OLAP and versioned Elasticsearch tasks while keeping JDBC explicit', () => {
+test('uses native profiles where needed while keeping JDBC datasource expansion explicit', () => {
   expect(OFFLINE_SYNC_CONNECTOR_PROFILES.map((profile) => profile.dbType)).toEqual([
     'MYSQL',
     'ORACLE',
@@ -15,6 +15,11 @@ test('uses native profiles for new OLAP and versioned Elasticsearch tasks while 
     'OPEN_GAUSS',
     'SQL_SERVER',
     'OCEANBASE',
+    'YASHAN_DB',
+    'HIGHGO',
+    'IRIS',
+    'XUGU',
+    'DUCKDB',
     'DORIS',
     'STARROCKS',
     'CLICKHOUSE',
@@ -36,6 +41,13 @@ test('uses native profiles for new OLAP and versioned Elasticsearch tasks while 
     profileId: 'clickhouse-native',
     sourceConnectorId: 'clickhouse',
   });
+  for (const dbType of ['YASHAN_DB', 'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB']) {
+    expect(defaultOfflineSyncConnectorProfile(dbType)).toMatchObject({
+      dbType,
+      sourceConnectorId: 'jdbc',
+      sinkConnectorId: 'jdbc',
+    });
+  }
   expect(defaultOfflineSyncConnectorProfile('ELASTICSEARCH7')).toMatchObject({
     profileId: 'elasticsearch7-native',
     sourceConnectorId: 'elasticsearch7',
@@ -48,7 +60,6 @@ test('uses native profiles for new OLAP and versioned Elasticsearch tasks while 
     sinkConnectorId: 'elasticsearch8',
     guideMultiEnabled: false,
   });
-  expect(defaultOfflineSyncConnectorProfile('DB2')?.sourceConnectorId).toBe('jdbc');
 });
 
 test('separates legacy inference from new-task profile selection', () => {
@@ -58,6 +69,10 @@ test('separates legacy inference from new-task profile selection', () => {
   expect(connectorIdForNewDataSourceType('DORIS')).toBe('doris');
   expect(connectorIdForNewDataSourceType('STARROCKS')).toBe('starrocks');
   expect(connectorIdForNewDataSourceType('CLICKHOUSE')).toBe('clickhouse');
+  expect(connectorIdForNewDataSourceType('YASHANDB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('HGDB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('XUGUDB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('DUCK_DB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('ES7')).toBe('elasticsearch7');
   expect(connectorIdForNewDataSourceType('ELASTICSEARCH_8')).toBe('elasticsearch8');
 });
@@ -69,6 +84,11 @@ test('resolves datasource aliases from one frontend registry', () => {
   expect(connectorIdForDataSourceType('SQLSERVER')).toBe('jdbc');
   expect(connectorIdForDataSourceType('MSSQL')).toBe('jdbc');
   expect(connectorIdForDataSourceType('OCEANBASE')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('YASDB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('HIGH_GO')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('INTERSYSTEMS_IRIS')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('XUGUDB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('DUCK_DB')).toBe('jdbc');
   expect(connectorIdForDataSourceType('HTTP')).toBe('http');
   expect(connectorIdForDataSourceType('custom-api')).toBe('custom_api');
   expect(defaultOfflineSyncConnectorProfile('postgres')).toMatchObject({
@@ -81,8 +101,10 @@ test('resolves datasource aliases from one frontend registry', () => {
   });
 });
 
-test('keeps Elasticsearch on the single-table guide without hardcoding drawer connector sets', () => {
+test('keeps multi-table guide policy connector-profile driven', () => {
   expect(isGuideMultiEnabledForDataSourceType('MYSQL')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('YASHAN_DB')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('DUCKDB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('DORIS')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('ELASTICSEARCH7')).toBe(false);
   expect(isGuideMultiEnabledForDataSourceType('ES8')).toBe(false);

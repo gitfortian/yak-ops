@@ -28,10 +28,21 @@ class OfflineSyncConnectorRegistryTest {
         .isEqualTo("elasticsearch8");
     assertThat(profiles.get(DataSourceDbType.ELASTICSEARCH8).sinkConnectorId())
         .isEqualTo("elasticsearch8");
-    assertThat(profiles.get(DataSourceDbType.DB2).sourceConnectorId()).isEqualTo("jdbc");
-    assertThat(profiles.get(DataSourceDbType.OPEN_GAUSS).sourceConnectorId()).isEqualTo("jdbc");
-    assertThat(profiles.get(DataSourceDbType.SQL_SERVER).sourceConnectorId()).isEqualTo("jdbc");
-    assertThat(profiles.get(DataSourceDbType.OCEANBASE).sourceConnectorId()).isEqualTo("jdbc");
+
+    for (DataSourceDbType dbType : new DataSourceDbType[] {
+      DataSourceDbType.DB2,
+      DataSourceDbType.OPEN_GAUSS,
+      DataSourceDbType.SQL_SERVER,
+      DataSourceDbType.OCEANBASE,
+      DataSourceDbType.YASHAN_DB,
+      DataSourceDbType.HIGHGO,
+      DataSourceDbType.IRIS,
+      DataSourceDbType.XUGU,
+      DataSourceDbType.DUCKDB
+    }) {
+      assertThat(profiles.get(dbType).sourceConnectorId()).isEqualTo("jdbc");
+      assertThat(profiles.get(dbType).sinkConnectorId()).isEqualTo("jdbc");
+    }
   }
 
   @Test
@@ -40,6 +51,10 @@ class OfflineSyncConnectorRegistryTest {
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("STARROCKS")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("CLICKHOUSE")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("POSTGRESQL")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("YASHANDB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HGDB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("XUGUDB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("DUCK_DB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HTTP")).isEmpty();
   }
 
