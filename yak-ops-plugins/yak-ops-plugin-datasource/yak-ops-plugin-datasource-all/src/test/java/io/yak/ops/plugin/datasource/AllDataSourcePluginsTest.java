@@ -25,6 +25,10 @@ class AllDataSourcePluginsTest {
             DataSourceDbType.ORACLE,
             DataSourceDbType.KINGBASE,
             DataSourceDbType.DAMENG,
+            DataSourceDbType.DB2,
+            DataSourceDbType.OPEN_GAUSS,
+            DataSourceDbType.SQL_SERVER,
+            DataSourceDbType.OCEANBASE,
             DataSourceDbType.DORIS);
   }
 }

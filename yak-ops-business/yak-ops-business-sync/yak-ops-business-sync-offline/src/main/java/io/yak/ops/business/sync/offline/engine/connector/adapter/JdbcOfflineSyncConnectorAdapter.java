@@ -23,7 +23,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Preserves the existing bounded JDBC source/sink JobSpec contract behind an adapter boundary. */
+/** Preserves the bounded JDBC source/sink JobSpec contract behind an adapter boundary. */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdapter {
@@ -188,6 +188,14 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     if (StringUtils.hasText(connection.schema())) {
       options.put("schema", connection.schema());
     }
+    if (connection.properties() != null
+        && connection.properties().isObject()
+        && !connection.properties().isEmpty()) {
+      options.set("properties", connection.properties().deepCopy());
+    }
+    if (StringUtils.hasText(connection.compatibleMode())) {
+      options.put("compatible_mode", connection.compatibleMode().trim().toLowerCase(Locale.ROOT));
+    }
   }
 
   private ConnectionDetails connection(DataSourcePO dataSource) {
@@ -217,12 +225,19 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
       throw new IllegalArgumentException("数据源 " + dataSource.getName() + " 缺少 JDBC Driver");
     }
 
+    JsonNode properties = parameters.get("properties");
+    if (properties != null && !properties.isObject()) {
+      properties = null;
+    }
+
     return new ConnectionDetails(
         url.trim(),
         driver.trim(),
         firstTextAllowEmpty(parameters, "username", "user"),
         firstTextAllowEmpty(parameters, "password", "passwd"),
-        firstText(parameters, "schema", "schemaName", "schema_name"));
+        firstText(parameters, "schema", "schemaName", "schema_name"),
+        properties == null ? null : properties.deepCopy(),
+        firstText(parameters, "compatibleMode", "compatible_mode"));
   }
 
   private JsonNode parseJson(String value) {
@@ -417,6 +432,18 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     if (normalized.contains("mariadb")) {
       return "org.mariadb.jdbc.Driver";
     }
+    if (normalized.contains("oceanbase")) {
+      return "com.oceanbase.jdbc.Driver";
+    }
+    if (normalized.contains("sqlserver") || normalized.contains("sql_server")) {
+      return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    }
+    if (normalized.contains("opengauss") || normalized.contains("open_gauss")) {
+      return "org.opengauss.Driver";
+    }
+    if (normalized.contains("db2")) {
+      return "com.ibm.db2.jcc.DB2Driver";
+    }
     if (normalized.contains("mysql") || normalized.contains("doris")) {
       return "com.mysql.cj.jdbc.Driver";
     }
@@ -491,5 +518,7 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
       String driver,
       String username,
       String password,
-      String schema) {}
+      String schema,
+      JsonNode properties,
+      String compatibleMode) {}
 }

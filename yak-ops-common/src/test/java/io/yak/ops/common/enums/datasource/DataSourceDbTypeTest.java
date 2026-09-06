@@ -8,11 +8,29 @@ import org.junit.jupiter.api.Test;
 class DataSourceDbTypeTest {
 
   @Test
-  void shouldSupportPostgresAliases() {
+  void shouldSupportStableDatasourceAliases() {
     assertThat(DataSourceDbType.parse("postgresql"))
         .isEqualTo(DataSourceDbType.POSTGRE_SQL);
     assertThat(DataSourceDbType.parse("POSTGRES"))
         .isEqualTo(DataSourceDbType.POSTGRE_SQL);
+    assertThat(DataSourceDbType.parse("opengauss"))
+        .isEqualTo(DataSourceDbType.OPEN_GAUSS);
+    assertThat(DataSourceDbType.parse("SQLSERVER"))
+        .isEqualTo(DataSourceDbType.SQL_SERVER);
+    assertThat(DataSourceDbType.parse("mssql"))
+        .isEqualTo(DataSourceDbType.SQL_SERVER);
+  }
+
+  @Test
+  void shouldExposeJdbcWaveOneAsFirstClassTypes() {
+    assertThat(DataSourceDbType.values())
+        .contains(
+            DataSourceDbType.DB2,
+            DataSourceDbType.OPEN_GAUSS,
+            DataSourceDbType.SQL_SERVER,
+            DataSourceDbType.OCEANBASE);
+    assertThat(DataSourceDbType.OPEN_GAUSS.getDisplayName()).isEqualTo("openGauss");
+    assertThat(DataSourceDbType.SQL_SERVER.getDisplayName()).isEqualTo("SQL Server");
   }
 
   @Test

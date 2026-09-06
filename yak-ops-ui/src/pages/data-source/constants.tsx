@@ -32,6 +32,10 @@ export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'MYSQL', value: 'MYSQL' },
   { label: 'ORACLE', value: 'ORACLE' },
   { label: 'POSTGRE_SQL', value: 'POSTGRE_SQL' },
+  { label: 'DB2', value: 'DB2' },
+  { label: 'OPEN_GAUSS', value: 'OPEN_GAUSS' },
+  { label: 'SQL_SERVER', value: 'SQL_SERVER' },
+  { label: 'OCEANBASE', value: 'OCEANBASE' },
   { label: 'DORIS', value: 'DORIS' },
   { label: 'KINGBASE', value: 'KINGBASE' },
   { label: 'DAMENG', value: 'DAMENG' },
@@ -43,41 +47,27 @@ export const ENVIRONMENT_OPTIONS: DataSourceOptionItem[] = [
   { label: 'PROD', value: 'PROD' },
 ];
 
+const relationalDataSource = (dbType: string) => ({
+  onlyDiScript: false,
+  dbType,
+  type: dbType,
+  connectorType: 'Jdbc',
+});
+
 export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] => [
   {
     groupKey: 'relational',
     groupName: intl.formatMessage({ id: 'pages.datasource.group.relational' }),
     datasourceList: [
-      {
-        onlyDiScript: false,
-        dbType: 'MYSQL',
-        type: 'MYSQL',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'ORACLE',
-        type: 'ORACLE',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'POSTGRE_SQL',
-        type: 'POSTGRE_SQL',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'KINGBASE',
-        type: 'KINGBASE',
-        connectorType: 'Jdbc',
-      },
-      {
-        onlyDiScript: false,
-        dbType: 'DAMENG',
-        type: 'DAMENG',
-        connectorType: 'Jdbc',
-      },
+      relationalDataSource('MYSQL'),
+      relationalDataSource('ORACLE'),
+      relationalDataSource('POSTGRE_SQL'),
+      relationalDataSource('DB2'),
+      relationalDataSource('OPEN_GAUSS'),
+      relationalDataSource('SQL_SERVER'),
+      relationalDataSource('OCEANBASE'),
+      relationalDataSource('KINGBASE'),
+      relationalDataSource('DAMENG'),
     ],
   },
   {

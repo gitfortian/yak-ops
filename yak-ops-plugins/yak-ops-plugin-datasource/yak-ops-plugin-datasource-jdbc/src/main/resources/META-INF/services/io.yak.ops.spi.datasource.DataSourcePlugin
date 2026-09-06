@@ -3,3 +3,7 @@ io.yak.ops.plugin.database.jdbc.postgresql.PostgreSqlDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.oracle.OracleDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.kingbase.KingbaseDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.dameng.DamengDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.db2.Db2DataSourcePlugin
+io.yak.ops.plugin.database.jdbc.opengauss.OpenGaussDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.sqlserver.SqlServerDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.oceanbase.OceanBaseDataSourcePlugin
