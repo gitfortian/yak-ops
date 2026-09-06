@@ -2,7 +2,7 @@ import { List, Tag, Typography } from "antd";
 import React from "react";
 import type { IntlShape } from "react-intl";
 
-import type { HistoryItem } from "@/pages/batch-link-up/type";
+import type { HistoryItem } from "@/pages/integration/batch-link-up/type";
 import { getHistoryStatusMeta } from "../utils/historyStatus";
 
 interface HistoryListItemProps {

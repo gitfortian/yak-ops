@@ -1,5 +1,5 @@
-import JavaIcon from '@/pages/data-development/icon/JavaIcon';
-import PythonIcon from '@/pages/data-development/icon/PythonIcon';
+import JavaIcon from '@/pages/development/data-development/icon/JavaIcon';
+import PythonIcon from '@/pages/development/data-development/icon/PythonIcon';
 import { TerminalSquare } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
 import SyncNodeIcon from './SyncNodeIcon';

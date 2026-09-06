@@ -5,7 +5,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
 import {dataSourceCatalogApi, fetchDataSourceOptions,} from "@/pages/data-source/service";
 
-import {linkupJobDefinitionApi} from "@/pages/batch-link-up/api";
+import {linkupJobDefinitionApi} from "@/pages/integration/batch-link-up/api";
 import {buildTableItems, DEFAULT_DB_TYPE, DEFAULT_FORM_VALUES,} from "../config";
 import {DbTypeValue, TableItem} from "../types";
 import {JobDefinitionState, markJobDefinitionSynced, normalizeJobDefinitionState} from "../jobDefinitionState";

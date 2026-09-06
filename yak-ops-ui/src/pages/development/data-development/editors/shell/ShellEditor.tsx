@@ -4,8 +4,8 @@ import { Typography } from 'antd';
 import { Snail, Trash2, Upload } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import { FileSuffixIcon } from '@/pages/resource-management/components/FileSuffixIcon';
-import type { ResourceId } from '@/pages/resource-management/types';
+import { FileSuffixIcon } from '@/pages/resources/resource-management/components/FileSuffixIcon';
+import type { ResourceId } from '@/pages/resources/resource-management/types';
 import ResourcePicker, { type ResourcePickerValue } from '../../components/ResourcePicker';
 import { useEditorMode } from '../session/editorModeStore';
 import {
@@ -18,41 +18,41 @@ import type {
   DevelopmentEditorContext,
   DevelopmentEditorRunResultContext,
 } from '../types';
-import PythonMonacoEditor, { type PythonEditorPosition } from './PythonMonacoEditor';
+import ShellMonacoEditor, { type ShellEditorPosition } from './ShellMonacoEditor';
 
-interface PythonTaskConfigJson {
+interface ShellTaskConfigJson {
   resourceId?: string;
   resourceName?: string;
   resourceVersion?: number;
   checksum?: string;
-  pythonExecutable?: string;
+  shellExecutable?: string;
   scriptArgs?: string[];
   envVars?: Record<string, string>;
   timeoutSeconds?: number;
 }
 
-const parseConfigJson = (configJson: string): PythonTaskConfigJson => {
+const parseConfigJson = (configJson: string): ShellTaskConfigJson => {
   try {
-    return JSON.parse(configJson) as PythonTaskConfigJson;
+    return JSON.parse(configJson) as ShellTaskConfigJson;
   } catch {
     return {};
   }
 };
 
-const buildConfigJson = (config: PythonTaskConfigJson): string => {
+const buildConfigJson = (config: ShellTaskConfigJson): string => {
   const cleaned: Record<string, unknown> = {};
   if (config.resourceId != null && config.resourceId !== '') cleaned.resourceId = config.resourceId;
   if (config.resourceName) cleaned.resourceName = config.resourceName;
   if (config.resourceVersion != null) cleaned.resourceVersion = config.resourceVersion;
   if (config.checksum) cleaned.checksum = config.checksum;
-  if (config.pythonExecutable) cleaned.pythonExecutable = config.pythonExecutable;
+  if (config.shellExecutable) cleaned.shellExecutable = config.shellExecutable;
   if (config.scriptArgs && config.scriptArgs.length > 0) cleaned.scriptArgs = config.scriptArgs;
   if (config.envVars && Object.keys(config.envVars).length > 0) cleaned.envVars = config.envVars;
   if (config.timeoutSeconds != null) cleaned.timeoutSeconds = config.timeoutSeconds;
   return JSON.stringify(cleaned);
 };
 
-type PythonEditMode = 'inline' | 'resource';
+type ShellEditMode = 'inline' | 'resource';
 
 const extractSuffix = (name?: string): string | undefined => {
   if (!name) return undefined;
@@ -60,7 +60,7 @@ const extractSuffix = (name?: string): string | undefined => {
   return dot > 0 ? name.substring(dot + 1).toLowerCase() : undefined;
 };
 
-export const PythonEditor = ({
+export const ShellEditor = ({
   node,
   onRunContent,
   running,
@@ -73,19 +73,19 @@ export const PythonEditor = ({
   );
   const hasResource =
     config.resourceId != null && config.resourceId !== '' && config.resourceId !== '0';
-  const [editMode, setEditMode] = useState<PythonEditMode>(() =>
+  const [editMode, setEditMode] = useState<ShellEditMode>(() =>
     hasResource ? 'resource' : 'inline',
   );
   useEditorMode(node.id, editMode);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [position, setPosition] = useState<PythonEditorPosition>(() => ({
+  const [position, setPosition] = useState<ShellEditorPosition>(() => ({
     lineNumber: session.viewState?.lineNumber || 1,
     column: session.viewState?.column || 1,
     selectionLength: 0,
   }));
 
   const updateConfig = useCallback(
-    (partial: Partial<PythonTaskConfigJson>) => {
+    (partial: Partial<ShellTaskConfigJson>) => {
       const next = { ...config, ...partial };
       updateEditorSessionConfig(node.id, buildConfigJson(next));
     },
@@ -111,7 +111,7 @@ export const PythonEditor = ({
     });
   };
 
-  const language = 'Python';
+  const language = 'Shell';
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
@@ -144,7 +144,7 @@ export const PythonEditor = ({
 
       {editMode === 'inline' ? (
         <div className="min-h-0 flex-1">
-          <PythonMonacoEditor
+          <ShellMonacoEditor
             id={String(node.id)}
             value={session.content}
             initialViewState={session.viewState}
@@ -227,7 +227,7 @@ export const PythonEditor = ({
 
           <ResourcePicker
             open={pickerOpen}
-            acceptSuffixes={['.py']}
+            acceptSuffixes={['.sh', '.bash', '.ps1', '.psm1']}
             selectedId={config.resourceId as ResourceId | undefined}
             onCancel={() => setPickerOpen(false)}
             onConfirm={handleResourceSelected}
@@ -237,7 +237,7 @@ export const PythonEditor = ({
 
       <div className="flex h-6 shrink-0 items-center justify-between border-t border-[#eef0f2] bg-[#fafafa] px-2.5 text-[10px] text-[#7b808a]">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="font-medium text-[#667085]">Python</span>
+          <span className="font-medium text-[#667085]">Shell</span>
           <span className="truncate">{node.name}</span>
           {session.dirty ? (
             <span className="inline-flex shrink-0 items-center gap-1 text-[#667085]">
@@ -266,14 +266,14 @@ export const PythonEditor = ({
   );
 };
 
-export const PythonRunConfig = ({ node }: DevelopmentEditorContext) => {
+export const ShellRunConfig = ({ node }: DevelopmentEditorContext) => {
   const intl = useIntl();
   return (
     <div className="text-[12px] leading-6 text-[#667085]">
       <div className="font-medium text-[#344054]">
         {intl.formatMessage(
           { id: 'pages.dataDevelopment.editor.script.runConfig' },
-          { language: 'Python' },
+          { language: 'Shell' },
         )}
       </div>
       <div className="mt-2">
@@ -283,7 +283,7 @@ export const PythonRunConfig = ({ node }: DevelopmentEditorContext) => {
         )}
       </div>
       <div className="mt-3 border-t border-[#eef0f2] pt-3 text-[11px] leading-5 text-[#98a2b3]">
-        <div>{intl.formatMessage({ id: 'pages.dataDevelopment.editor.script.pythonRuntimeHint' })}</div>
+        <div>{intl.formatMessage({ id: 'pages.dataDevelopment.editor.script.shellRuntimeHint' })}</div>
         <div className="mt-2">
           {intl.formatMessage({ id: 'pages.dataDevelopment.editor.script.configHint' })}
         </div>
@@ -292,9 +292,9 @@ export const PythonRunConfig = ({ node }: DevelopmentEditorContext) => {
   );
 };
 
-export const PythonRunResult = ({ result }: DevelopmentEditorRunResultContext) => {
+export const ShellRunResult = ({ result }: DevelopmentEditorRunResultContext) => {
   const intl = useIntl();
-  const language = 'Python';
+  const language = 'Shell';
   if (!result) {
     return (
       <div className="flex h-full items-center justify-center text-center">
@@ -364,7 +364,6 @@ export const PythonRunResult = ({ result }: DevelopmentEditorRunResultContext) =
   const stdout = output.stdout ? String(output.stdout) : '';
   const stderr = output.stderr ? String(output.stderr) : '';
   const exitCode = output.exitCode ?? '—';
-  const pythonExecutable = output.pythonExecutable ? String(output.pythonExecutable) : '';
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -382,16 +381,6 @@ export const PythonRunResult = ({ result }: DevelopmentEditorRunResultContext) =
           )}
         </span>
       </div>
-      {pythonExecutable ? (
-        <div className="flex shrink-0 items-center border-b border-[#eef0f2] bg-[#f5f6f8] px-3 py-1">
-          <span className="text-[10px] text-[#98a2b3]">
-            {intl.formatMessage(
-              { id: 'pages.dataDevelopment.editor.script.interpreter' },
-              { value: pythonExecutable },
-            )}
-          </span>
-        </div>
-      ) : null}
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {stdout ? (
           <div className="mb-3">

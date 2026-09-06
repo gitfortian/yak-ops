@@ -26,7 +26,7 @@ describe('RouteAccessBoundary', () => {
       permission: 'task:batch:read',
       path: '/sync/batch-link-up',
       title: '离线同步',
-      component: './batch-link-up',
+      component: './integration/batch-link-up',
     };
 
     const { rerender } = render(
