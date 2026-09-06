@@ -39,6 +39,8 @@ export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'DORIS', value: 'DORIS' },
   { label: 'STARROCKS', value: 'STARROCKS' },
   { label: 'CLICKHOUSE', value: 'CLICKHOUSE' },
+  { label: 'ELASTICSEARCH7', value: 'ELASTICSEARCH7' },
+  { label: 'ELASTICSEARCH8', value: 'ELASTICSEARCH8' },
   { label: 'KINGBASE', value: 'KINGBASE' },
   { label: 'DAMENG', value: 'DAMENG' },
 ];
@@ -56,7 +58,7 @@ const relationalDataSource = (dbType: string) => ({
   connectorType: 'Jdbc',
 });
 
-const olapDataSource = (dbType: string, connectorType: string) => ({
+const nativeDataSource = (dbType: string, connectorType: string) => ({
   onlyDiScript: false,
   dbType,
   type: dbType,
@@ -83,9 +85,17 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
     groupKey: 'olap',
     groupName: intl.formatMessage({ id: 'pages.datasource.group.olap' }),
     datasourceList: [
-      olapDataSource('DORIS', 'Doris'),
-      olapDataSource('STARROCKS', 'StarRocks'),
-      olapDataSource('CLICKHOUSE', 'ClickHouse'),
+      nativeDataSource('DORIS', 'Doris'),
+      nativeDataSource('STARROCKS', 'StarRocks'),
+      nativeDataSource('CLICKHOUSE', 'ClickHouse'),
+    ],
+  },
+  {
+    groupKey: 'search',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.search' }),
+    datasourceList: [
+      nativeDataSource('ELASTICSEARCH7', 'Elasticsearch7'),
+      nativeDataSource('ELASTICSEARCH8', 'Elasticsearch8'),
     ],
   },
 ];

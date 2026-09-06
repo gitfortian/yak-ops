@@ -60,6 +60,8 @@ export default {
   'pages.batchLinkUp.create.mode.singleDescription': '配置一张来源表到一张目标表的离线同步任务',
   'pages.batchLinkUp.create.mode.multi': '多表同步',
   'pages.batchLinkUp.create.mode.multiDescription': '批量选择多张来源表，并按规则写入目标端',
+  'pages.batchLinkUp.create.mode.profileSingleOnlyDescription': '当前选择的数据源 Profile 仅开放单表 / 单索引离线同步',
+  'pages.batchLinkUp.create.mode.profileSingleOnlyError': '当前选择的数据源 Profile 不支持创建多表同步任务',
   'pages.batchLinkUp.create.defaultJobName': '{source} → {target} 离线同步',
   'pages.batchLinkUp.create.success': '任务草稿已创建，请继续配置数据源和同步表',
   'pages.batchLinkUp.create.failed': '创建同步任务失败',

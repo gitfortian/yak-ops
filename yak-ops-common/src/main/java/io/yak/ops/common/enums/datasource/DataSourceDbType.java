@@ -19,6 +19,8 @@ public enum DataSourceDbType {
   DORIS("Doris"),
   STARROCKS("StarRocks"),
   CLICKHOUSE("ClickHouse"),
+  ELASTICSEARCH7("Elasticsearch 7"),
+  ELASTICSEARCH8("Elasticsearch 8"),
   KINGBASE("KingbaseES"),
   DAMENG("达梦");
 
@@ -36,6 +38,10 @@ public enum DataSourceDbType {
       normalized = "OPEN_GAUSS";
     } else if ("SQLSERVER".equals(normalized) || "MSSQL".equals(normalized)) {
       normalized = "SQL_SERVER";
+    } else if ("ELASTICSEARCH_7".equals(normalized) || "ES7".equals(normalized)) {
+      normalized = "ELASTICSEARCH7";
+    } else if ("ELASTICSEARCH_8".equals(normalized) || "ES8".equals(normalized)) {
+      normalized = "ELASTICSEARCH8";
     }
 
     try {

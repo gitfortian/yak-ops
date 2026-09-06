@@ -32,6 +32,8 @@ const DATA_SOURCE_TYPES = [
   { value: 'DORIS', displayName: 'Doris' },
   { value: 'STARROCKS', displayName: 'StarRocks' },
   { value: 'CLICKHOUSE', displayName: 'ClickHouse' },
+  { value: 'ELASTICSEARCH7', displayName: 'Elasticsearch 7' },
+  { value: 'ELASTICSEARCH8', displayName: 'Elasticsearch 8' },
   { value: 'KINGBASE', displayName: 'KINGBASE' },
   { value: 'DAMENG', displayName: 'DAMENG' },
 ] as const;

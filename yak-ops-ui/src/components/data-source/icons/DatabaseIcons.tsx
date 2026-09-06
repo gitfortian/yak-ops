@@ -48,6 +48,8 @@ const DatabaseIcons = ({
     case 'doris':
       return <DorisIcon width={width} height={height} />;
     case 'elasticsearch':
+    case 'elasticsearch7':
+    case 'elasticsearch8':
       return <ElasticSearchIcon width={width} height={height} />;
     case 'postgre_sql':
     case 'postgresql':

@@ -60,6 +60,8 @@ export default {
   'pages.batchLinkUp.create.mode.singleDescription': 'Configure an offline sync task from one source table to one target table',
   'pages.batchLinkUp.create.mode.multi': 'Multi-table Sync',
   'pages.batchLinkUp.create.mode.multiDescription': 'Select multiple source tables and write them to the target using rules',
+  'pages.batchLinkUp.create.mode.profileSingleOnlyDescription': 'The selected data source profile currently supports only single-table / single-index offline sync',
+  'pages.batchLinkUp.create.mode.profileSingleOnlyError': 'The selected data source profile cannot create a multi-table sync task',
   'pages.batchLinkUp.create.defaultJobName': '{source} → {target} Offline Sync',
   'pages.batchLinkUp.create.success': 'Task draft created. Continue configuring data sources and sync tables.',
   'pages.batchLinkUp.create.failed': 'Failed to create sync task',

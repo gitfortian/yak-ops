@@ -34,6 +34,10 @@ const DB_TYPE_LABELS: Record<string, string> = {
   SQL_SERVER: 'SQL Server',
   OCEANBASE: 'OceanBase',
   DORIS: 'Doris',
+  STARROCKS: 'StarRocks',
+  CLICKHOUSE: 'ClickHouse',
+  ELASTICSEARCH7: 'Elasticsearch 7',
+  ELASTICSEARCH8: 'Elasticsearch 8',
   KINGBASE: 'KINGBASE',
   DAMENG: 'DAMENG',
 };

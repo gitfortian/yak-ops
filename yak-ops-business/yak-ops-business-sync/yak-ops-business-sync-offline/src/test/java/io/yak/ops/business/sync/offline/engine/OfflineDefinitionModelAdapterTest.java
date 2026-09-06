@@ -169,6 +169,70 @@ class OfflineDefinitionModelAdapterTest {
   }
 
   @Test
+  void shouldStripElasticsearchDatasourceFieldsFromEveryPersistedShape() throws Exception {
+    ObjectNode definition = (ObjectNode) mapper.readTree("""
+        {
+          "source": {
+            "connectorId": "elasticsearch7",
+            "dbType": "ELASTICSEARCH7",
+            "host": "es-a",
+            "username": "elastic",
+            "password": "top-secret",
+            "options": {
+              "hosts": ["http://es-a:9200"],
+              "password": "option-secret",
+              "query": "{\"match_all\":{}}",
+              "scroll_size": 500
+            },
+            "config": {
+              "password": "config-secret",
+              "connectorOptions": {
+                "username": "bad-user",
+                "password": "nested-secret",
+                "document_id_field": "id",
+                "max_retries": 3
+              }
+            }
+          },
+          "sink": {
+            "dbType": "ELASTICSEARCH8",
+            "endpoint": "https://es-b:9200",
+            "connectionParams": "secret-json",
+            "options": {
+              "socket_timeout_ms": 999,
+              "batch_size": 200
+            }
+          }
+        }
+        """);
+
+    OfflineDefinitionModelAdapter.sanitizeForPersistence(definition);
+
+    JsonNode source = definition.path("source");
+    assertThat(source.has("host")).isFalse();
+    assertThat(source.has("username")).isFalse();
+    assertThat(source.has("password")).isFalse();
+    assertThat(source.path("options").has("hosts")).isFalse();
+    assertThat(source.path("options").has("password")).isFalse();
+    assertThat(source.path("options").path("query").asText())
+        .isEqualTo("{\"match_all\":{}}");
+    assertThat(source.path("options").path("scroll_size").asInt()).isEqualTo(500);
+    assertThat(source.path("config").has("password")).isFalse();
+    assertThat(source.path("config").path("connectorOptions").has("username")).isFalse();
+    assertThat(source.path("config").path("connectorOptions").has("password")).isFalse();
+    assertThat(source.path("config").path("connectorOptions").path("document_id_field").asText())
+        .isEqualTo("id");
+    assertThat(source.path("config").path("connectorOptions").path("max_retries").asInt())
+        .isEqualTo(3);
+
+    JsonNode sink = definition.path("sink");
+    assertThat(sink.has("endpoint")).isFalse();
+    assertThat(sink.has("connectionParams")).isFalse();
+    assertThat(sink.path("options").has("socket_timeout_ms")).isFalse();
+    assertThat(sink.path("options").path("batch_size").asInt()).isEqualTo(200);
+  }
+
+  @Test
   void shouldKeepLegacyWorkflowDefinitionUntouched() throws Exception {
     JsonNode definition = mapper.readTree("""
         {

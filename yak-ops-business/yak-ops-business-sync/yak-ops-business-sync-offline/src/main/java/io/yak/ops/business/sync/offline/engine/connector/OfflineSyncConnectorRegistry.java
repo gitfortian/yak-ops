@@ -31,6 +31,16 @@ public final class OfflineSyncConnectorRegistry {
       nativeProfile("doris-native", DataSourceDbType.DORIS, "doris", "DORIS"),
       nativeProfile("starrocks-native", DataSourceDbType.STARROCKS, "starrocks", "STARROCKS"),
       nativeProfile("clickhouse-native", DataSourceDbType.CLICKHOUSE, "clickhouse", "CLICKHOUSE"),
+      nativeProfile(
+          "elasticsearch7-native",
+          DataSourceDbType.ELASTICSEARCH7,
+          "elasticsearch7",
+          "ELASTICSEARCH7"),
+      nativeProfile(
+          "elasticsearch8-native",
+          DataSourceDbType.ELASTICSEARCH8,
+          "elasticsearch8",
+          "ELASTICSEARCH8"),
       jdbcProfile("kingbase-jdbc", DataSourceDbType.KINGBASE, "JDBC-KINGBASE"),
       jdbcProfile("dameng-jdbc", DataSourceDbType.DAMENG, "JDBC-DAMENG"));
 
@@ -52,7 +62,11 @@ public final class OfflineSyncConnectorRegistry {
       "POSTGRES", DataSourceDbType.POSTGRE_SQL,
       "OPENGAUSS", DataSourceDbType.OPEN_GAUSS,
       "SQLSERVER", DataSourceDbType.SQL_SERVER,
-      "MSSQL", DataSourceDbType.SQL_SERVER);
+      "MSSQL", DataSourceDbType.SQL_SERVER,
+      "ELASTICSEARCH_7", DataSourceDbType.ELASTICSEARCH7,
+      "ES7", DataSourceDbType.ELASTICSEARCH7,
+      "ELASTICSEARCH_8", DataSourceDbType.ELASTICSEARCH8,
+      "ES8", DataSourceDbType.ELASTICSEARCH8);
 
   private static final Map<DataSourceDbType, OfflineSyncConnectorProfile> DEFAULTS =
       buildDefaults();

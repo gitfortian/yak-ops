@@ -20,6 +20,14 @@ class OfflineSyncConnectorRegistryTest {
     assertThat(profiles.get(DataSourceDbType.DORIS).sourceConnectorId()).isEqualTo("doris");
     assertThat(profiles.get(DataSourceDbType.STARROCKS).sourceConnectorId()).isEqualTo("starrocks");
     assertThat(profiles.get(DataSourceDbType.CLICKHOUSE).sourceConnectorId()).isEqualTo("clickhouse");
+    assertThat(profiles.get(DataSourceDbType.ELASTICSEARCH7).sourceConnectorId())
+        .isEqualTo("elasticsearch7");
+    assertThat(profiles.get(DataSourceDbType.ELASTICSEARCH7).sinkConnectorId())
+        .isEqualTo("elasticsearch7");
+    assertThat(profiles.get(DataSourceDbType.ELASTICSEARCH8).sourceConnectorId())
+        .isEqualTo("elasticsearch8");
+    assertThat(profiles.get(DataSourceDbType.ELASTICSEARCH8).sinkConnectorId())
+        .isEqualTo("elasticsearch8");
     assertThat(profiles.get(DataSourceDbType.DB2).sourceConnectorId()).isEqualTo("jdbc");
     assertThat(profiles.get(DataSourceDbType.OPEN_GAUSS).sourceConnectorId()).isEqualTo("jdbc");
     assertThat(profiles.get(DataSourceDbType.SQL_SERVER).sourceConnectorId()).isEqualTo("jdbc");
@@ -33,5 +41,17 @@ class OfflineSyncConnectorRegistryTest {
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("CLICKHOUSE")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("POSTGRESQL")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HTTP")).isEmpty();
+  }
+
+  @Test
+  void shouldResolveVersionedElasticsearchAliasesWithoutCollapsingThem() {
+    assertThat(OfflineSyncConnectorRegistry.defaultProfile("ES7"))
+        .get()
+        .extracting(OfflineSyncConnectorProfile::sourceConnectorId)
+        .isEqualTo("elasticsearch7");
+    assertThat(OfflineSyncConnectorRegistry.defaultProfile("ELASTICSEARCH_8"))
+        .get()
+        .extracting(OfflineSyncConnectorProfile::sourceConnectorId)
+        .isEqualTo("elasticsearch8");
   }
 }
