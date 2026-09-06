@@ -9,7 +9,7 @@ import { Drawer, Form, message } from 'antd';
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 
 import { getDataSourceGroupList } from '../constants';
-import DatabaseIcons from '../icon/DatabaseIcons';
+import DatabaseIcons from '@/components/data-source/icons/DatabaseIcons';
 import type {
   DataSourceFormValues,
   DataSourceModalOpenPayload,

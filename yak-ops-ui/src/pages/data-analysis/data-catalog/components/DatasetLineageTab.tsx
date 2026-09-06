@@ -23,8 +23,8 @@ import ReactFlow, {
   type Node,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import LineageNode, { type LineageNodeData } from '../../lineage/LineageNode';
-import { buildLineageView, lineageLevels } from '../../lineage/graph-layout';
+import LineageNode, { type LineageNodeData } from '@/features/lineage/LineageNode';
+import { buildLineageView, lineageLevels } from '@/features/lineage/graph-layout';
 
 const DEFAULT_DEPTH = 3;
 const nodeTypes = { lineage: LineageNode };

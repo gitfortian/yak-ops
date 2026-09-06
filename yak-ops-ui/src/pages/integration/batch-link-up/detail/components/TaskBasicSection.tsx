@@ -5,7 +5,7 @@ import {
 import { Input, Select, Tag } from 'antd';
 import { useMemo } from 'react';
 
-import type { DataSourceRecord } from '@/pages/data-source/types';
+import type { DataSourceRecord } from '@/services/data-source';
 import {
   BRAND_COLOR,
   BRAND_COLOR_SOFT_HOVER,

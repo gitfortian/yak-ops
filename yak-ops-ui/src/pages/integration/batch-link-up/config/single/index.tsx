@@ -8,8 +8,8 @@ import {
   useState,
 } from 'react';
 
-import { fetchDataSourceAll } from '@/pages/data-source/service';
-import type { DataSourceRecord } from '@/pages/data-source/types';
+import { fetchDataSourceAll } from '@/services/data-source/legacy';
+import type { DataSourceRecord } from '@/services/data-source';
 import { BRAND_THEME } from '@/styles/brand';
 
 import { linkupJobDefinitionApi } from '../../api';

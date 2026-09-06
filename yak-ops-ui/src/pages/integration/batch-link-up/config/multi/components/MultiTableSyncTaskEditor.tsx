@@ -1,4 +1,4 @@
-import type { DataSourceRecord } from '@/pages/data-source/types';
+import type { DataSourceRecord } from '@/services/data-source';
 
 import SyncTaskEditor from '../../../detail/components/SyncTaskEditor';
 import type { SyncEditorState } from '../../../detail/model';

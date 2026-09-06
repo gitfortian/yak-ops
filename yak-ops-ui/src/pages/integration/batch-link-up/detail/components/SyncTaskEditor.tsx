@@ -1,4 +1,4 @@
-import type { DataSourceRecord } from '@/pages/data-source/types';
+import type { DataSourceRecord } from '@/services/data-source';
 
 import useDataSourceColumns from '../hooks/useDataSourceColumns';
 import useDataSourceTables from '../hooks/useDataSourceTables';

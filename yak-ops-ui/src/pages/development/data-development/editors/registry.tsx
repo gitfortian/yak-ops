@@ -1,7 +1,7 @@
 import { Braces, Code2, DatabaseZap, Network, TerminalSquare } from 'lucide-react';
 
-import JavaIcon from '../icon/JavaIcon';
-import PythonIcon from '../icon/PythonIcon';
+import JavaIcon from '@/components/data-development/icons/JavaIcon';
+import PythonIcon from '@/components/data-development/icons/PythonIcon';
 
 import type { DevelopmentNodeType, DevelopmentTaskType } from '../types';
 import { JavaEditor, JavaRunConfig, JavaRunResult } from './java/JavaEditor';

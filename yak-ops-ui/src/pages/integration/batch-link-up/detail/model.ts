@@ -1,4 +1,4 @@
-import type { DataSourceRecord } from '@/pages/data-source/types';
+import type { DataSourceRecord } from '@/services/data-source';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 
 import { connectorIdForDataSourceType } from './form-schema/valueAdapter';

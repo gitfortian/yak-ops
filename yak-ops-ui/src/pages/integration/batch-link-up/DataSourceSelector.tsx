@@ -1,20 +1,20 @@
-import MysqlIcon from '@/pages/data-source/icon/MysqlIcon';
-import OracleIcon from '@/pages/data-source/icon/OracleIcon';
+import MysqlIcon from '@/components/data-source/icons/MysqlIcon';
+import OracleIcon from '@/components/data-source/icons/OracleIcon';
 import { SendOutlined } from '@ant-design/icons';
 import { Select } from 'antd';
-import CacheIcon from '@/pages/data-source/icon/CacheIcon';
-import ClickhouseIcon from '@/pages/data-source/icon/ClickhouseIcon';
-import DaMengIcon from '@/pages/data-source/icon/DamengIcon';
-import DB2Icon from '@/pages/data-source/icon/DB2Icon';
-import DorisIcon from '@/pages/data-source/icon/DorisIcon';
-import HiveIcon from '@/pages/data-source/icon/HiveIcon';
-import MongoDBIcon from '@/pages/data-source/icon/MongoDBIcon';
-import OpenGaussIcon from '@/pages/data-source/icon/OpenGaussIcon';
-import PostgreSQL from '@/pages/data-source/icon/PsSqlIcon';
-import SQLServer from '@/pages/data-source/icon/SQLServer';
-import StarRocksIcon from '@/pages/data-source/icon/StarRocksIcon';
-import KingBaseIcon from '@/pages/data-source/icon/KingBaseIcon';
-import TiDBIcon from '@/pages/data-source/icon/TiDBIcon';
+import CacheIcon from '@/components/data-source/icons/CacheIcon';
+import ClickhouseIcon from '@/components/data-source/icons/ClickhouseIcon';
+import DaMengIcon from '@/components/data-source/icons/DamengIcon';
+import DB2Icon from '@/components/data-source/icons/DB2Icon';
+import DorisIcon from '@/components/data-source/icons/DorisIcon';
+import HiveIcon from '@/components/data-source/icons/HiveIcon';
+import MongoDBIcon from '@/components/data-source/icons/MongoDBIcon';
+import OpenGaussIcon from '@/components/data-source/icons/OpenGaussIcon';
+import PostgreSQL from '@/components/data-source/icons/PsSqlIcon';
+import SQLServer from '@/components/data-source/icons/SQLServer';
+import StarRocksIcon from '@/components/data-source/icons/StarRocksIcon';
+import KingBaseIcon from '@/components/data-source/icons/KingBaseIcon';
+import TiDBIcon from '@/components/data-source/icons/TiDBIcon';
 
 const { Option } = Select;
 
