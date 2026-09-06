@@ -27,6 +27,7 @@ interface DataSourceToolbarProps {
 
 const DB_TYPE_LABELS: Record<string, string> = {
   MYSQL: 'MYSQL',
+  TIDB: 'TiDB',
   ORACLE: 'ORACLE',
   POSTGRE_SQL: 'PostgreSQL',
   DB2: 'IBM Db2',

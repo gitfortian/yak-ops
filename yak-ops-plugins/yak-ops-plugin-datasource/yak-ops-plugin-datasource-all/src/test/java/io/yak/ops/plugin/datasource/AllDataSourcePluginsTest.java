@@ -21,6 +21,7 @@ class AllDataSourcePluginsTest {
     assertThat(discovered)
         .containsExactlyInAnyOrder(
             DataSourceDbType.MYSQL,
+            DataSourceDbType.TIDB,
             DataSourceDbType.POSTGRE_SQL,
             DataSourceDbType.ORACLE,
             DataSourceDbType.KINGBASE,

@@ -184,6 +184,9 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
   private void appendConnection(ObjectNode options, ConnectionDetails connection) {
     options.put("url", connection.url());
     options.put("driver", connection.driver());
+    if (StringUtils.hasText(connection.dialect())) {
+      options.put("dialect", connection.dialect().trim().toLowerCase(Locale.ROOT));
+    }
     if (connection.username() != null) {
       options.put("username", connection.username());
     }
@@ -230,6 +233,13 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
       throw new IllegalArgumentException("数据源 " + dataSource.getName() + " 缺少 JDBC Driver");
     }
 
+    String dialect = firstText(parameters, "dialect");
+    if (!StringUtils.hasText(dialect)
+        && dataSource.getDbType() != null
+        && "TIDB".equals(dataSource.getDbType().name())) {
+      dialect = "tidb";
+    }
+
     JsonNode properties = parameters.get("properties");
     if (properties != null && !properties.isObject()) {
       properties = null;
@@ -242,6 +252,7 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
         firstTextAllowEmpty(parameters, "password", "passwd"),
         firstText(parameters, "schema", "schemaName", "schema_name"),
         properties == null ? null : properties.deepCopy(),
+        dialect,
         firstText(parameters, "compatibleMode", "compatible_mode"));
   }
 
@@ -449,7 +460,9 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     if (normalized.contains("db2")) {
       return "com.ibm.db2.jcc.DB2Driver";
     }
-    if (normalized.contains("mysql") || normalized.contains("doris")) {
+    if (normalized.contains("tidb")
+        || normalized.contains("mysql")
+        || normalized.contains("doris")) {
       return "com.mysql.cj.jdbc.Driver";
     }
     if (normalized.contains("postgres")) {
@@ -525,5 +538,6 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
       String password,
       String schema,
       JsonNode properties,
+      String dialect,
       String compatibleMode) {}
 }

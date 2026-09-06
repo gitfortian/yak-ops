@@ -23,6 +23,7 @@ const executionMetadata = (dbType: string) => {
 
 const DATA_SOURCE_TYPES = [
   { value: 'MYSQL', displayName: 'MYSQL' },
+  { value: 'TIDB', displayName: 'TiDB' },
   { value: 'ORACLE', displayName: 'ORACLE' },
   { value: 'POSTGRE_SQL', displayName: 'PostgreSQL' },
   { value: 'DB2', displayName: 'IBM Db2' },
