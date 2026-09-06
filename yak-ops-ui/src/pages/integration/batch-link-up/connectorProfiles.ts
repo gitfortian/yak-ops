@@ -44,6 +44,26 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
     connectorType: 'Jdbc', pluginName: 'JDBC-OCEANBASE', defaultProfile: true,
   },
   {
+    profileId: 'yashandb-jdbc', dbType: 'YASHAN_DB', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-YASHANDB', defaultProfile: true,
+  },
+  {
+    profileId: 'highgo-jdbc', dbType: 'HIGHGO', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-HIGHGO', defaultProfile: true,
+  },
+  {
+    profileId: 'iris-jdbc', dbType: 'IRIS', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-IRIS', defaultProfile: true,
+  },
+  {
+    profileId: 'xugu-jdbc', dbType: 'XUGU', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-XUGU', defaultProfile: true,
+  },
+  {
+    profileId: 'duckdb-jdbc', dbType: 'DUCKDB', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-DUCKDB', defaultProfile: true,
+  },
+  {
     profileId: 'doris-native', dbType: 'DORIS', sourceConnectorId: 'doris', sinkConnectorId: 'doris',
     connectorType: 'Doris', pluginName: 'DORIS', defaultProfile: true,
   },
@@ -91,6 +111,13 @@ const DB_TYPE_ALIASES: Record<string, string> = {
   OPENGAUSS: 'OPEN_GAUSS',
   SQLSERVER: 'SQL_SERVER',
   MSSQL: 'SQL_SERVER',
+  YASHANDB: 'YASHAN_DB',
+  YASDB: 'YASHAN_DB',
+  HIGH_GO: 'HIGHGO',
+  HGDB: 'HIGHGO',
+  INTERSYSTEMS_IRIS: 'IRIS',
+  XUGUDB: 'XUGU',
+  DUCK_DB: 'DUCKDB',
   ELASTICSEARCH_7: 'ELASTICSEARCH7',
   ES7: 'ELASTICSEARCH7',
   ELASTICSEARCH_8: 'ELASTICSEARCH8',

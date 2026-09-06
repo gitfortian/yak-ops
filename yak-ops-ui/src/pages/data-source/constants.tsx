@@ -36,6 +36,11 @@ export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'OPEN_GAUSS', value: 'OPEN_GAUSS' },
   { label: 'SQL_SERVER', value: 'SQL_SERVER' },
   { label: 'OCEANBASE', value: 'OCEANBASE' },
+  { label: 'YASHAN_DB', value: 'YASHAN_DB' },
+  { label: 'HIGHGO', value: 'HIGHGO' },
+  { label: 'IRIS', value: 'IRIS' },
+  { label: 'XUGU', value: 'XUGU' },
+  { label: 'DUCKDB', value: 'DUCKDB' },
   { label: 'DORIS', value: 'DORIS' },
   { label: 'STARROCKS', value: 'STARROCKS' },
   { label: 'CLICKHOUSE', value: 'CLICKHOUSE' },
@@ -58,7 +63,7 @@ const relationalDataSource = (dbType: string) => ({
   connectorType: 'Jdbc',
 });
 
-const nativeDataSource = (dbType: string, connectorType: string) => ({
+const typedDataSource = (dbType: string, connectorType: string) => ({
   onlyDiScript: false,
   dbType,
   type: dbType,
@@ -77,6 +82,10 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
       relationalDataSource('OPEN_GAUSS'),
       relationalDataSource('SQL_SERVER'),
       relationalDataSource('OCEANBASE'),
+      relationalDataSource('YASHAN_DB'),
+      relationalDataSource('HIGHGO'),
+      relationalDataSource('IRIS'),
+      relationalDataSource('XUGU'),
       relationalDataSource('KINGBASE'),
       relationalDataSource('DAMENG'),
     ],
@@ -85,17 +94,18 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
     groupKey: 'olap',
     groupName: intl.formatMessage({ id: 'pages.datasource.group.olap' }),
     datasourceList: [
-      nativeDataSource('DORIS', 'Doris'),
-      nativeDataSource('STARROCKS', 'StarRocks'),
-      nativeDataSource('CLICKHOUSE', 'ClickHouse'),
+      typedDataSource('DORIS', 'Doris'),
+      typedDataSource('STARROCKS', 'StarRocks'),
+      typedDataSource('CLICKHOUSE', 'ClickHouse'),
+      typedDataSource('DUCKDB', 'Jdbc'),
     ],
   },
   {
     groupKey: 'search',
     groupName: intl.formatMessage({ id: 'pages.datasource.group.search' }),
     datasourceList: [
-      nativeDataSource('ELASTICSEARCH7', 'Elasticsearch7'),
-      nativeDataSource('ELASTICSEARCH8', 'Elasticsearch8'),
+      typedDataSource('ELASTICSEARCH7', 'Elasticsearch7'),
+      typedDataSource('ELASTICSEARCH8', 'Elasticsearch8'),
     ],
   },
 ];

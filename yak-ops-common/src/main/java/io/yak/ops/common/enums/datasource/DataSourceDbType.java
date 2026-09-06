@@ -16,6 +16,11 @@ public enum DataSourceDbType {
   OPEN_GAUSS("openGauss"),
   SQL_SERVER("SQL Server"),
   OCEANBASE("OceanBase"),
+  YASHAN_DB("YashanDB"),
+  HIGHGO("HighGo"),
+  IRIS("InterSystems IRIS"),
+  XUGU("XuguDB"),
+  DUCKDB("DuckDB"),
   DORIS("Doris"),
   STARROCKS("StarRocks"),
   CLICKHOUSE("ClickHouse"),
@@ -38,6 +43,16 @@ public enum DataSourceDbType {
       normalized = "OPEN_GAUSS";
     } else if ("SQLSERVER".equals(normalized) || "MSSQL".equals(normalized)) {
       normalized = "SQL_SERVER";
+    } else if ("YASHANDB".equals(normalized) || "YASDB".equals(normalized)) {
+      normalized = "YASHAN_DB";
+    } else if ("HIGH_GO".equals(normalized) || "HGDB".equals(normalized)) {
+      normalized = "HIGHGO";
+    } else if ("INTERSYSTEMS_IRIS".equals(normalized)) {
+      normalized = "IRIS";
+    } else if ("XUGUDB".equals(normalized)) {
+      normalized = "XUGU";
+    } else if ("DUCK_DB".equals(normalized)) {
+      normalized = "DUCKDB";
     } else if ("ELASTICSEARCH_7".equals(normalized) || "ES7".equals(normalized)) {
       normalized = "ELASTICSEARCH7";
     } else if ("ELASTICSEARCH_8".equals(normalized) || "ES8".equals(normalized)) {
