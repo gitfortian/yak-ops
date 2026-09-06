@@ -4,8 +4,8 @@ import { YakButton } from '@/components/ui';
 import {
   isBindableScreenComponent,
   SCREEN_AGGREGATION_LABELS,
-  type DigitalScreenComponentBinding,
-} from '@/services/digital-screen';
+} from '@/features/digital-screen/binding';
+import type { DigitalScreenComponentBinding } from '@/services/digital-screen';
 import { Select, Spin } from 'antd';
 import { Database, Plus, Trash2, Unlink } from 'lucide-react';
 

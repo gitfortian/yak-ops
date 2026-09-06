@@ -3,7 +3,7 @@ import { useIntl } from '@umijs/max';
 import { Empty, Popover } from 'antd';
 import type { ReactNode } from 'react';
 
-import DatabaseIcons from '@/pages/data-source/icon/DatabaseIcons';
+import DatabaseIcons from '@/components/data-source/icons/DatabaseIcons';
 
 interface DataSourceSyncPlanProps {
   record: any;

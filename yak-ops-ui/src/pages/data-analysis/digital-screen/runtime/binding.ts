@@ -1,13 +1,12 @@
 import type { ScreenComponent } from '@/components/screen-engine';
+import {
+  isBindableScreenComponent,
+  SCREEN_AGGREGATION_LABELS,
+} from '@/features/digital-screen/binding';
 import type { DigitalScreenComponentBinding } from '@/services/digital-screen';
-import { SCREEN_AGGREGATION_LABELS } from './adapters/shared';
 import { screenRuntimeComponentRegistry } from './registry/builtin-plugins';
 
-export { SCREEN_AGGREGATION_LABELS };
-
-export const isBindableScreenComponent = (component?: ScreenComponent) => (
-  screenRuntimeComponentRegistry.isBindable(component)
-);
+export { isBindableScreenComponent, SCREEN_AGGREGATION_LABELS };
 
 export const canQueryScreenComponent = (
   component: ScreenComponent,

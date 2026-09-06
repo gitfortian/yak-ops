@@ -1,12 +1,12 @@
 import { SendOutlined } from "@ant-design/icons";
 import { Select } from "antd";
 import { useMemo } from "react";
-import MysqlIcon from "@/pages/data-source/icon/MysqlIcon";
-import OracleIcon from "@/pages/data-source/icon/OracleIcon";
-import PostgreSQL from "@/pages/data-source/icon/PsSqlIcon";
-import DorisIcon from "@/pages/data-source/icon/DorisIcon";
-import KingBaseIcon from "@/pages/data-source/icon/KingBaseIcon";
-import DaMengIcon from "@/pages/data-source/icon/DamengIcon";
+import MysqlIcon from "@/components/data-source/icons/MysqlIcon";
+import OracleIcon from "@/components/data-source/icons/OracleIcon";
+import PostgreSQL from "@/components/data-source/icons/PsSqlIcon";
+import DorisIcon from "@/components/data-source/icons/DorisIcon";
+import KingBaseIcon from "@/components/data-source/icons/KingBaseIcon";
+import DaMengIcon from "@/components/data-source/icons/DamengIcon";
 import "./index.less";
 // 类型定义
 interface DataSourceType {

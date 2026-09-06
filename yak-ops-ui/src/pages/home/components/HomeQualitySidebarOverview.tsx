@@ -1,4 +1,4 @@
-import { formatQualityDimension } from '@/pages/data-quality/i18n';
+import { formatQualityDimension } from '@/features/data-quality/i18n';
 import {
   homeQualityOverviewApi,
   type HomeQualityDimension,

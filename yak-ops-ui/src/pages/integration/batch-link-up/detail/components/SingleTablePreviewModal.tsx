@@ -3,7 +3,7 @@ import { Alert, Button, Empty, Modal, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { dataSourceCatalogApi } from '@/pages/data-source/service';
+import { dataSourceCatalogApi } from '@/services/data-source/legacy';
 import { API_SUCCESS_CODE } from '@/services/http/response';
 
 interface DataSourcePreviewColumn {

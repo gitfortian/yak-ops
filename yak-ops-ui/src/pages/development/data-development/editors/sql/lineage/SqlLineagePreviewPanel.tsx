@@ -15,9 +15,9 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import { buildLineageView } from '@/pages/data-analysis/lineage/graph-layout';
-import LineageNode, { type LineageNodeData } from '@/pages/data-analysis/lineage/LineageNode';
-import type { LineageAssetType, LineageGraph } from '@/pages/data-analysis/lineage/types';
+import { buildLineageView } from '@/features/lineage/graph-layout';
+import LineageNode, { type LineageNodeData } from '@/features/lineage/LineageNode';
+import type { LineageAssetType, LineageGraph } from '@/services/data-analysis';
 import type { DevelopmentId, DevelopmentSqlLineageColumnMapping, DevelopmentSqlLineagePreview } from '../../../types';
 import ColumnLineageNode, { type ColumnLineageNodeData, columnHandleId } from './ColumnLineageNode';
 import { LineageInteractionContext, useLineageInteraction } from './LineageInteractionContext';

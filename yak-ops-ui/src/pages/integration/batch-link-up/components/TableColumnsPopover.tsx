@@ -2,7 +2,7 @@ import { API_SUCCESS_CODE } from '@/services/http/response';
 import React, { useState } from "react";
 import { Popover, Table, message } from "antd";
 import "../index.less";
-import { dataSourceCatalogApi } from "@/pages/data-source/service";
+import { dataSourceCatalogApi } from "@/services/data-source/legacy";
 
 interface TableColumnsPopoverProps {
   sourceId?: string | number;

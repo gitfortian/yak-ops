@@ -1,3 +1,4 @@
+import { SCREEN_AGGREGATION_LABELS } from '@/features/digital-screen/binding';
 import type {
   Aggregation,
   DatasetQueryResult,
@@ -6,14 +7,7 @@ import type {
 } from '@/services/dataset';
 import type { DigitalScreenComponentBinding } from '@/services/digital-screen';
 
-export const SCREEN_AGGREGATION_LABELS: Record<Aggregation, string> = {
-  SUM: '求和',
-  AVG: '平均',
-  COUNT: '计数',
-  COUNT_DISTINCT: '去重计数',
-  MAX: '最大值',
-  MIN: '最小值',
-};
+export { SCREEN_AGGREGATION_LABELS };
 
 export const getCell = (
   result: DatasetQueryResult,

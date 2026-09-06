@@ -3,7 +3,7 @@ import {FormInstance, message} from "antd";
 import {debounce} from "lodash";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
-import {dataSourceCatalogApi, fetchDataSourceOptions,} from "@/pages/data-source/service";
+import {dataSourceCatalogApi, fetchDataSourceOptions,} from "@/services/data-source/legacy";
 
 import {linkupJobDefinitionApi} from "@/pages/integration/batch-link-up/api";
 import {buildTableItems, DEFAULT_DB_TYPE, DEFAULT_FORM_VALUES,} from "../config";

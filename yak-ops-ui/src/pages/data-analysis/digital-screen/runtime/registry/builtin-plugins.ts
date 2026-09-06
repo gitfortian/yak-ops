@@ -1,3 +1,4 @@
+import { isBindableScreenComponentType } from '@/features/digital-screen/binding';
 import type { DatasetQueryPayload } from '@/services/dataset';
 import type { DigitalScreenComponentBinding } from '@/services/digital-screen';
 import { adaptCartesianData } from '../adapters/cartesian.adapter';
@@ -27,7 +28,7 @@ const payload = (
 
 const metricPlugin: ScreenRuntimeComponentPlugin = {
   type: 'metric',
-  bindable: true,
+  bindable: isBindableScreenComponentType('metric'),
   canQuery: (binding) => binding.metrics.length === 1,
   buildQuery: (binding) => payload(binding, [], 200),
   adaptData: adaptMetricData,
@@ -35,7 +36,7 @@ const metricPlugin: ScreenRuntimeComponentPlugin = {
 
 const cartesianPlugin = (type: 'line' | 'bar'): ScreenRuntimeComponentPlugin => ({
   type,
-  bindable: true,
+  bindable: isBindableScreenComponentType(type),
   canQuery: (binding) => binding.dimensions.length > 0 && binding.metrics.length > 0,
   buildQuery: (binding) => payload(binding, binding.dimensions, 200),
   adaptData: adaptCartesianData,
@@ -43,7 +44,7 @@ const cartesianPlugin = (type: 'line' | 'bar'): ScreenRuntimeComponentPlugin => 
 
 const piePlugin: ScreenRuntimeComponentPlugin = {
   type: 'pie',
-  bindable: true,
+  bindable: isBindableScreenComponentType('pie'),
   canQuery: (binding) => binding.dimensions.length > 0 && binding.metrics.length > 0,
   buildQuery: (binding) => payload(binding, binding.dimensions, 200),
   adaptData: adaptPieData,
@@ -51,7 +52,7 @@ const piePlugin: ScreenRuntimeComponentPlugin = {
 
 const tablePlugin: ScreenRuntimeComponentPlugin = {
   type: 'table',
-  bindable: true,
+  bindable: isBindableScreenComponentType('table'),
   canQuery: (binding) => binding.dimensions.length > 0 || binding.metrics.length > 0,
   buildQuery: (binding) => payload(binding, binding.dimensions, 100),
   adaptData: adaptTableData,
@@ -59,7 +60,7 @@ const tablePlugin: ScreenRuntimeComponentPlugin = {
 
 const staticPlugin = (type: 'text' | 'map' | 'ticker'): ScreenRuntimeComponentPlugin => ({
   type,
-  bindable: false,
+  bindable: isBindableScreenComponentType(type),
 });
 
 export const createBuiltinScreenRuntimeComponentRegistry = () => [

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { dataSourceCatalogApi } from '@/pages/data-source/service';
+import { dataSourceCatalogApi } from '@/services/data-source/legacy';
 
 export interface DataSourceColumnOption {
   label: string;

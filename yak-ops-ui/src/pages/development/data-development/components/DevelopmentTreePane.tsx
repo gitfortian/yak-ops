@@ -23,8 +23,8 @@ import {
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import JavaIcon from '../icon/JavaIcon';
-import PythonIcon from '../icon/PythonIcon';
+import JavaIcon from '@/components/data-development/icons/JavaIcon';
+import PythonIcon from '@/components/data-development/icons/PythonIcon';
 import type {
   DevelopmentNodeCreateType,
   DevelopmentTreeAction,
