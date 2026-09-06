@@ -9,6 +9,7 @@ import {
 test('uses native profiles where needed while keeping JDBC datasource expansion explicit', () => {
   expect(OFFLINE_SYNC_CONNECTOR_PROFILES.map((profile) => profile.dbType)).toEqual([
     'MYSQL',
+    'TIDB',
     'ORACLE',
     'POSTGRE_SQL',
     'DB2',
@@ -28,6 +29,12 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     'KINGBASE',
     'DAMENG',
   ]);
+  expect(defaultOfflineSyncConnectorProfile('TIDB')).toMatchObject({
+    profileId: 'tidb-jdbc',
+    sourceConnectorId: 'jdbc',
+    sinkConnectorId: 'jdbc',
+    pluginName: 'JDBC-TIDB',
+  });
   expect(defaultOfflineSyncConnectorProfile('DORIS')).toMatchObject({
     profileId: 'doris-native',
     sourceConnectorId: 'doris',
@@ -69,6 +76,8 @@ test('separates legacy inference from new-task profile selection', () => {
   expect(connectorIdForNewDataSourceType('DORIS')).toBe('doris');
   expect(connectorIdForNewDataSourceType('STARROCKS')).toBe('starrocks');
   expect(connectorIdForNewDataSourceType('CLICKHOUSE')).toBe('clickhouse');
+  expect(connectorIdForNewDataSourceType('TIDB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('TI-DB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('YASHANDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('HGDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('XUGUDB')).toBe('jdbc');
@@ -79,6 +88,7 @@ test('separates legacy inference from new-task profile selection', () => {
 
 test('resolves datasource aliases from one frontend registry', () => {
   expect(connectorIdForDataSourceType('POSTGRESQL')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('TIDB')).toBe('jdbc');
   expect(connectorIdForDataSourceType('DB2')).toBe('jdbc');
   expect(connectorIdForDataSourceType('opengauss')).toBe('jdbc');
   expect(connectorIdForDataSourceType('SQLSERVER')).toBe('jdbc');
@@ -103,6 +113,7 @@ test('resolves datasource aliases from one frontend registry', () => {
 
 test('keeps multi-table guide policy connector-profile driven', () => {
   expect(isGuideMultiEnabledForDataSourceType('MYSQL')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('TIDB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('YASHAN_DB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('DUCKDB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('DORIS')).toBe(true);

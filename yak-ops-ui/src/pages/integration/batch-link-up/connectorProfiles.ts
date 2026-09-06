@@ -20,6 +20,10 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
     connectorType: 'Jdbc', pluginName: 'JDBC-MYSQL', defaultProfile: true,
   },
   {
+    profileId: 'tidb-jdbc', dbType: 'TIDB', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-TIDB', defaultProfile: true,
+  },
+  {
     profileId: 'oracle-jdbc', dbType: 'ORACLE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
     connectorType: 'Jdbc', pluginName: 'JDBC-ORACLE', defaultProfile: true,
   },
@@ -108,6 +112,7 @@ const LEGACY_JDBC_TYPES = new Set([
 const DB_TYPE_ALIASES: Record<string, string> = {
   POSTGRESQL: 'POSTGRE_SQL',
   POSTGRES: 'POSTGRE_SQL',
+  TI_DB: 'TIDB',
   OPENGAUSS: 'OPEN_GAUSS',
   SQLSERVER: 'SQL_SERVER',
   MSSQL: 'SQL_SERVER',

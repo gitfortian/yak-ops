@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 public enum DataSourceDbType {
 
   MYSQL("MySQL"),
+  TIDB("TiDB"),
   ORACLE("Oracle"),
   POSTGRE_SQL("PostgreSQL"),
   DB2("IBM Db2"),
@@ -39,6 +40,8 @@ public enum DataSourceDbType {
     String normalized = value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
     if ("POSTGRESQL".equals(normalized) || "POSTGRES".equals(normalized)) {
       normalized = "POSTGRE_SQL";
+    } else if ("TI_DB".equals(normalized)) {
+      normalized = "TIDB";
     } else if ("OPENGAUSS".equals(normalized)) {
       normalized = "OPEN_GAUSS";
     } else if ("SQLSERVER".equals(normalized) || "MSSQL".equals(normalized)) {

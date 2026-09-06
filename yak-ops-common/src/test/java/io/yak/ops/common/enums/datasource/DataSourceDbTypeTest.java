@@ -13,6 +13,10 @@ class DataSourceDbTypeTest {
         .isEqualTo(DataSourceDbType.POSTGRE_SQL);
     assertThat(DataSourceDbType.parse("POSTGRES"))
         .isEqualTo(DataSourceDbType.POSTGRE_SQL);
+    assertThat(DataSourceDbType.parse("tidb"))
+        .isEqualTo(DataSourceDbType.TIDB);
+    assertThat(DataSourceDbType.parse("ti-db"))
+        .isEqualTo(DataSourceDbType.TIDB);
     assertThat(DataSourceDbType.parse("opengauss"))
         .isEqualTo(DataSourceDbType.OPEN_GAUSS);
     assertThat(DataSourceDbType.parse("SQLSERVER"))
@@ -43,6 +47,7 @@ class DataSourceDbTypeTest {
   void shouldExposeCurrentDatasourceTypesAsFirstClassTypes() {
     assertThat(DataSourceDbType.values())
         .contains(
+            DataSourceDbType.TIDB,
             DataSourceDbType.DB2,
             DataSourceDbType.OPEN_GAUSS,
             DataSourceDbType.SQL_SERVER,
@@ -57,6 +62,7 @@ class DataSourceDbTypeTest {
             DataSourceDbType.CLICKHOUSE,
             DataSourceDbType.ELASTICSEARCH7,
             DataSourceDbType.ELASTICSEARCH8);
+    assertThat(DataSourceDbType.TIDB.getDisplayName()).isEqualTo("TiDB");
     assertThat(DataSourceDbType.YASHAN_DB.getDisplayName()).isEqualTo("YashanDB");
     assertThat(DataSourceDbType.HIGHGO.getDisplayName()).isEqualTo("HighGo");
     assertThat(DataSourceDbType.IRIS.getDisplayName()).isEqualTo("InterSystems IRIS");

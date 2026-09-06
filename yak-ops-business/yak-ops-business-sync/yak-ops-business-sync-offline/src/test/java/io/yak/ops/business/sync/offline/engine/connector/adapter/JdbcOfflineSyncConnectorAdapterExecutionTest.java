@@ -39,4 +39,30 @@ class JdbcOfflineSyncConnectorAdapterExecutionTest {
     assertThat(options.path("properties").path("connectTimeout").asText()).isEqualTo("30000");
     assertThat(options.path("password").asText()).isEqualTo("secret");
   }
+
+  @Test
+  void injectsExplicitTiDbDialectForMysqlProtocolUrls() {
+    ObjectMapper mapper = new ObjectMapper();
+    JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);
+    DataSourcePO dataSource = new DataSourcePO();
+    dataSource.setId(11L);
+    dataSource.setName("tidb");
+    dataSource.setDbType(DataSourceDbType.TIDB);
+    dataSource.setConnectionParams(
+        "{\"jdbcUrl\":\"jdbc:mysql://127.0.0.1:4000/app\","
+            + "\"driverClassName\":\"com.mysql.cj.jdbc.Driver\","
+            + "\"username\":\"root\",\"password\":\"secret\"}");
+
+    ObjectNode options = mapper.createObjectNode();
+    options.put("dialect", "mysql");
+    options.put("table_path", "app.orders");
+    adapter.resolveForExecution(
+        new ExecutionContext("jdbc", Role.SOURCE, "来源端", dataSource, options));
+
+    assertThat(options.path("url").asText())
+        .isEqualTo("jdbc:mysql://127.0.0.1:4000/app");
+    assertThat(options.path("driver").asText()).isEqualTo("com.mysql.cj.jdbc.Driver");
+    assertThat(options.path("dialect").asText()).isEqualTo("tidb");
+    assertThat(options.path("password").asText()).isEqualTo("secret");
+  }
 }
