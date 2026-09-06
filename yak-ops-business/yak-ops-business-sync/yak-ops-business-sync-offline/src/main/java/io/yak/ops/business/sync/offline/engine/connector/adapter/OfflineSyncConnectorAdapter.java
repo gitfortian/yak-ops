@@ -19,6 +19,17 @@ public interface OfflineSyncConnectorAdapter {
 
   boolean requiresDataSource(String connectorId, Role role);
 
+  /**
+   * Whether this Yak Ops adapter can translate GUIDE_MULTI directly for the given Link-Up role.
+   *
+   * <p>This is deliberately an adapter capability rather than a dbType switch. The execution plan
+   * may choose NATIVE_MULTI only when the complete source/sink adapter pair returns true; otherwise
+   * the control plane can FAN_OUT the frozen multi-table definition into single-table JobSpecs.</p>
+   */
+  default boolean supportsNativeMultiTable(String connectorId, Role role) {
+    return false;
+  }
+
   BuildResult build(BuildContext context);
 
   void resolveForExecution(ExecutionContext context);

@@ -94,16 +94,24 @@ public class OfflineExecutionQuery {
 
   public JsonNode tableMetrics(Long id) {
     OfflineJobExecution execution = require(id);
+    JsonNode snapshot = readEngineSnapshot(execution);
+    JsonNode snapshotPipelines = snapshotPipelines(snapshot);
+
     if (!OfflineExecutionStatus.isActive(execution.getStatus())) {
-      JsonNode snapshotPipelines = snapshotPipelines(execution);
       if (snapshotPipelines.isArray() && !snapshotPipelines.isEmpty()) {
         return OfflinePipelineMetricsMapper.flatten(objectMapper, snapshotPipelines);
       }
     }
 
+    // FAN_OUT has no single parent Link-Up jobId. Its control-plane aggregate snapshot is the live
+    // table-metrics read model and is refreshed by each child submit/reconcile transition.
     if (!StringUtils.hasText(execution.getEngineJobId())) {
+      if (isFanOutSnapshot(snapshot)) {
+        return OfflinePipelineMetricsMapper.flatten(objectMapper, snapshotPipelines);
+      }
       throw new IllegalStateException("当前执行实例尚未获得 Link-Up jobId");
     }
+
     return OfflinePipelineMetricsMapper.flatten(
         objectMapper, linkUpClient.pipelines(execution.getEngineJobId()));
   }
@@ -168,8 +176,12 @@ public class OfflineExecutionQuery {
     }
   }
 
-  private JsonNode snapshotPipelines(OfflineJobExecution execution) {
-    JsonNode snapshot = readEngineSnapshot(execution);
+  private boolean isFanOutSnapshot(JsonNode snapshot) {
+    return snapshot != null
+        && "FAN_OUT".equals(snapshot.path("transitions").path("strategy").asText());
+  }
+
+  private JsonNode snapshotPipelines(JsonNode snapshot) {
     if (snapshot == null) {
       return objectMapper.createArrayNode();
     }

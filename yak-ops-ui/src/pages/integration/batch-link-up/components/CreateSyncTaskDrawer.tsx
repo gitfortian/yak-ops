@@ -69,7 +69,6 @@ interface ConnectorOption {
 }
 
 const DEFAULT_DB_TYPE = 'MYSQL';
-const NATIVE_SINGLE_ONLY_CONNECTORS = new Set(['doris', 'starrocks', 'clickhouse']);
 
 const brandCssVariables = {
   '--yak-brand-color': BRAND_COLOR,
@@ -113,11 +112,6 @@ export default function CreateSyncTaskDrawer({
 
   const sourceDbType = Form.useWatch('sourceDbType', form);
   const targetDbType = Form.useWatch('targetDbType', form);
-  const sourceConnectorId = connectorIdForNewDataSourceType(sourceDbType, 'SOURCE');
-  const targetConnectorId = connectorIdForNewDataSourceType(targetDbType, 'SINK');
-  const nativeSingleOnly =
-    NATIVE_SINGLE_ONLY_CONNECTORS.has(sourceConnectorId) ||
-    NATIVE_SINGLE_ONLY_CONNECTORS.has(targetConnectorId);
 
   const modeOptions: Array<{
     value: SyncMode;
@@ -137,13 +131,10 @@ export default function CreateSyncTaskDrawer({
     {
       value: 'GUIDE_MULTI',
       title: intl.formatMessage({ id: 'pages.batchLinkUp.create.mode.multi' }),
-      description: nativeSingleOnly
-        ? '当前选择的 Native Connector 本阶段仅开放单表离线同步'
-        : intl.formatMessage({
-            id: 'pages.batchLinkUp.create.mode.multiDescription',
-          }),
+      description: intl.formatMessage({
+        id: 'pages.batchLinkUp.create.mode.multiDescription',
+      }),
       icon: <DatabaseOutlined />,
-      disabled: nativeSingleOnly,
     },
   ];
 
@@ -180,12 +171,6 @@ export default function CreateSyncTaskDrawer({
     });
   }, [connectorOptions, form, open]);
 
-  useEffect(() => {
-    if (nativeSingleOnly && form.getFieldValue('mode') === 'GUIDE_MULTI') {
-      form.setFieldValue('mode', 'GUIDE_SINGLE');
-    }
-  }, [form, nativeSingleOnly]);
-
   const updateAutoJobName = (side: 'source' | 'target', value: string) => {
     const nextSourceDbType =
       side === 'source' ? value : form.getFieldValue('sourceDbType') || '';
@@ -220,13 +205,6 @@ export default function CreateSyncTaskDrawer({
       const values = await form.validateFields();
       const source = resolveEndpoint(values.sourceDbType, connectorOptions, 'SOURCE');
       const sink = resolveEndpoint(values.targetDbType, connectorOptions, 'SINK');
-      if (
-        values.mode === 'GUIDE_MULTI' &&
-        (NATIVE_SINGLE_ONLY_CONNECTORS.has(source.connectorId) ||
-          NATIVE_SINGLE_ONLY_CONNECTORS.has(sink.connectorId))
-      ) {
-        throw new Error('当前选择的 Native Connector 本阶段仅支持单表离线同步');
-      }
 
       const normalizedValues: CreateSyncTaskValues = {
         jobName: values.jobName.trim(),
