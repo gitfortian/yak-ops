@@ -2,7 +2,7 @@ import Header from "@/components/Header";
 import { useIntl } from "@umijs/max";
 import { Descriptions } from "antd";
 import React from "react";
-import DatabaseIcons from "../data-source/icon/DatabaseIcons";
+import DatabaseIcons from "@/pages/data-source/icon/DatabaseIcons";
 
 import { DoubleRightOutlined } from "@ant-design/icons";
 

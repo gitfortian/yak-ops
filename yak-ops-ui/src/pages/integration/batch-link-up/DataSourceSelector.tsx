@@ -1,20 +1,20 @@
-import MysqlIcon from '../data-source/icon/MysqlIcon';
-import OracleIcon from '../data-source/icon/OracleIcon';
+import MysqlIcon from '@/pages/data-source/icon/MysqlIcon';
+import OracleIcon from '@/pages/data-source/icon/OracleIcon';
 import { SendOutlined } from '@ant-design/icons';
 import { Select } from 'antd';
-import CacheIcon from '../data-source/icon/CacheIcon';
-import ClickhouseIcon from '../data-source/icon/ClickhouseIcon';
-import DaMengIcon from '../data-source/icon/DamengIcon';
-import DB2Icon from '../data-source/icon/DB2Icon';
-import DorisIcon from '../data-source/icon/DorisIcon';
-import HiveIcon from '../data-source/icon/HiveIcon';
-import MongoDBIcon from '../data-source/icon/MongoDBIcon';
-import OpenGaussIcon from '../data-source/icon/OpenGaussIcon';
-import PostgreSQL from '../data-source/icon/PsSqlIcon';
-import SQLServer from '../data-source/icon/SQLServer';
-import StarRocksIcon from '../data-source/icon/StarRocksIcon';
-import KingBaseIcon from '../data-source/icon/KingBaseIcon';
-import TiDBIcon from '../data-source/icon/TiDBIcon';
+import CacheIcon from '@/pages/data-source/icon/CacheIcon';
+import ClickhouseIcon from '@/pages/data-source/icon/ClickhouseIcon';
+import DaMengIcon from '@/pages/data-source/icon/DamengIcon';
+import DB2Icon from '@/pages/data-source/icon/DB2Icon';
+import DorisIcon from '@/pages/data-source/icon/DorisIcon';
+import HiveIcon from '@/pages/data-source/icon/HiveIcon';
+import MongoDBIcon from '@/pages/data-source/icon/MongoDBIcon';
+import OpenGaussIcon from '@/pages/data-source/icon/OpenGaussIcon';
+import PostgreSQL from '@/pages/data-source/icon/PsSqlIcon';
+import SQLServer from '@/pages/data-source/icon/SQLServer';
+import StarRocksIcon from '@/pages/data-source/icon/StarRocksIcon';
+import KingBaseIcon from '@/pages/data-source/icon/KingBaseIcon';
+import TiDBIcon from '@/pages/data-source/icon/TiDBIcon';
 
 const { Option } = Select;
 
