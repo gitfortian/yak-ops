@@ -23,6 +23,7 @@ public final class OfflineSyncConnectorRegistry {
   private static final List<OfflineSyncConnectorProfile> PROFILES = List.of(
       jdbcProfile("mysql-jdbc", DataSourceDbType.MYSQL, "JDBC-MYSQL"),
       jdbcProfile("tidb-jdbc", DataSourceDbType.TIDB, "JDBC-TIDB"),
+      jdbcProfile("goldendb-jdbc", DataSourceDbType.GOLDENDB, "JDBC-GOLDENDB"),
       jdbcProfile("hana-jdbc", DataSourceDbType.HANA, "JDBC-HANA"),
       jdbcProfile("oracle-jdbc", DataSourceDbType.ORACLE, "JDBC-ORACLE"),
       jdbcProfile("postgresql-jdbc", DataSourceDbType.POSTGRE_SQL, "JDBC-POSTGRESQL"),
@@ -69,6 +70,8 @@ public final class OfflineSyncConnectorRegistry {
       Map.entry("POSTGRESQL", DataSourceDbType.POSTGRE_SQL),
       Map.entry("POSTGRES", DataSourceDbType.POSTGRE_SQL),
       Map.entry("TI_DB", DataSourceDbType.TIDB),
+      Map.entry("GOLDEN_DB", DataSourceDbType.GOLDENDB),
+      Map.entry("ZTE_GOLDENDB", DataSourceDbType.GOLDENDB),
       Map.entry("SAP_HANA", DataSourceDbType.HANA),
       Map.entry("SAPHANA", DataSourceDbType.HANA),
       Map.entry("OPENGAUSS", DataSourceDbType.OPEN_GAUSS),
