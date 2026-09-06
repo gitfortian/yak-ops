@@ -37,6 +37,7 @@ interface SingleTableConfigSectionProps {
   primaryKeyLoading: boolean;
   sourceReady: boolean;
   targetReady: boolean;
+  allowCustomTargetName?: boolean;
   sourceExtraParameters: ReactNode;
   sinkExtraParameters: ReactNode;
   onSourceTableSearch: (keyword: string) => void;
@@ -94,6 +95,7 @@ export default function SingleTableConfigSection({
   primaryKeyLoading,
   sourceReady,
   targetReady,
+  allowCustomTargetName = false,
   sourceExtraParameters,
   sinkExtraParameters,
   onSourceTableSearch,
@@ -200,7 +202,7 @@ export default function SingleTableConfigSection({
                 onDropdownVisibleChange={(open) => {
                   if (open) onSourceTableSearch('');
                 }}
-                onChange={(table: string) => onSourceChange({ table })}
+                onChange={(table: string) => onSourceChange({ table, fields: [] })}
               />
             </div>
           )}
@@ -252,6 +254,22 @@ export default function SingleTableConfigSection({
                 placeholder={targetReady ? '请输入需要创建的目标表名' : '请先选择目标数据源'}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => onSinkChange({ targetTableName: event.target.value })}
               />
+            </div>
+          ) : allowCustomTargetName ? (
+            <div>
+              <FieldLabel required>目标 Collection</FieldLabel>
+              <Input
+                variant="filled"
+                disabled={!targetReady}
+                value={sinkConfig.table || ''}
+                placeholder={targetReady ? '输入已有或新的 Collection 名称' : '请先选择目标数据源'}
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                  onSinkChange({ table: event.target.value, primaryKey: '' })
+                }
+              />
+              <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
+                MongoDB 会在首次成功 INSERT 时自然创建不存在的 Collection；这里不启用 Link-Up AUTO_CREATE_TABLE 语义。
+              </div>
             </div>
           ) : (
             <div>

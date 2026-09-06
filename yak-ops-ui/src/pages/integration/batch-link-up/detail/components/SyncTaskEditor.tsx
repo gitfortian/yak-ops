@@ -1,4 +1,4 @@
-import { Alert } from 'antd';
+import { Alert, Select } from 'antd';
 import type { DataSourceRecord } from '@/services/data-source';
 
 import {
@@ -75,23 +75,32 @@ export default function SyncTaskEditor({
     sinkCapability.available,
   );
 
-  const sourceCatalog = useDataSourceTables(sourceId);
-  const targetCatalog = useDataSourceTables(targetId);
+  const isMongoSource =
+    editor.mode === 'GUIDE_SINGLE' &&
+    String(editor.source.connectorId || '').toLowerCase() === 'mongodb' &&
+    sourceConfig.readMode !== 'sql';
+  const isMongoSink =
+    editor.mode === 'GUIDE_SINGLE' &&
+    String(editor.sink.connectorId || '').toLowerCase() === 'mongodb';
+
+  const sourceCatalog = useDataSourceTables(sourceId, sourceConfig.database);
+  const targetCatalog = useDataSourceTables(targetId, sinkConfig.database);
   const sourceColumnRequest = sourceConfig.readMode === 'sql'
     ? sourceConfig.sql?.trim() ? { query: sourceConfig.sql } : undefined
     : sourceConfig.table ? { table_path: sourceConfig.table } : undefined;
-  const targetColumnRequest = !sinkConfig.autoCreateTable && sinkConfig.table
+  const targetColumnRequest = !sinkConfig.autoCreateTable && !isMongoSink && sinkConfig.table
     ? { table_path: sinkConfig.table }
     : undefined;
   const sourceColumnCatalog = useDataSourceColumns(sourceId, sourceColumnRequest);
   const targetColumnCatalog = useDataSourceColumns(targetId, targetColumnRequest);
-  const primaryKeyCatalog = sinkConfig.autoCreateTable
+  const targetSchemaDerived = Boolean(sinkConfig.autoCreateTable || isMongoSink);
+  const primaryKeyCatalog = targetSchemaDerived
     ? sourceColumnCatalog
     : targetColumnCatalog;
-  const mappingTargetColumns = sinkConfig.autoCreateTable
+  const mappingTargetColumns = targetSchemaDerived
     ? sourceColumnCatalog.columns
     : targetColumnCatalog.columns;
-  const mappingTargetLoading = sinkConfig.autoCreateTable
+  const mappingTargetLoading = targetSchemaDerived
     ? sourceColumnCatalog.loading
     : targetColumnCatalog.loading;
 
@@ -101,6 +110,10 @@ export default function SyncTaskEditor({
     onChange(updateEndpointConfig(editor, 'sink', patch));
   const updateMapping = (columns: FieldMappingValue[]) =>
     onChange({ ...editor, mapping: { columns } });
+
+  const selectedMongoFields = Array.isArray(sourceConfig.fields)
+    ? sourceConfig.fields.filter(Boolean).map(String)
+    : [];
 
   const runtimeNotice = (() => {
     if (connectorRuntime.loading && !connectorRuntime.snapshot) {
@@ -153,15 +166,48 @@ export default function SyncTaskEditor({
     return null;
   })();
 
+  const mongoFieldSelector = isMongoSource && sourceConfig.table ? (
+    <div className="rounded-lg border border-[#eaecf0] bg-white p-3.5">
+      <div className="mb-2 text-[12px] font-semibold text-[#344054]">
+        来源字段
+      </div>
+      <Select
+        mode="multiple"
+        allowClear
+        showSearch
+        variant="filled"
+        className="w-full"
+        loading={sourceColumnCatalog.loading}
+        disabled={!sourceId || !sourceConfig.table}
+        value={selectedMongoFields}
+        placeholder="不选择则同步全部自动发现字段"
+        options={sourceColumnCatalog.columns.map((column) => ({
+          label: column.description
+            ? `${column.label} · ${column.description}`
+            : column.label,
+          value: column.value,
+        }))}
+        optionFilterProp="label"
+        onChange={(fields) => updateSource({ fields })}
+      />
+      <div className="mt-1.5 text-[11px] leading-5 text-[#98a2b3]">
+        MongoDB 字段类型由 Catalog 自动采样推断，只选择字段名即可；嵌套字段可直接选择 address.city 这类路径。
+      </div>
+    </div>
+  ) : null;
+
   const sourceExtraParameters = (
-    <ConnectorExtraParameters
-      role="SOURCE"
-      schema={sourceSchema.schema}
-      loading={sourceSchema.loading}
-      error={sourceSchema.error}
-      config={sourceConfig}
-      onChange={updateSource}
-    />
+    <div className="space-y-3.5">
+      {mongoFieldSelector}
+      <ConnectorExtraParameters
+        role="SOURCE"
+        schema={sourceSchema.schema}
+        loading={sourceSchema.loading}
+        error={sourceSchema.error}
+        config={sourceConfig}
+        onChange={updateSource}
+      />
+    </div>
   );
   const sinkExtraParameters = (
     <ConnectorExtraParameters
@@ -218,11 +264,18 @@ export default function SyncTaskEditor({
             primaryKeyLoading={primaryKeyCatalog.loading}
             sourceReady={Boolean(sourceId)}
             targetReady={Boolean(targetId)}
+            allowCustomTargetName={isMongoSink}
             sourceExtraParameters={sourceExtraParameters}
             sinkExtraParameters={sinkExtraParameters}
             onSourceTableSearch={sourceCatalog.search}
             onTargetTableSearch={targetCatalog.search}
-            onSourceChange={updateSource}
+            onSourceChange={(patch) =>
+              updateSource(
+                isMongoSource && Object.prototype.hasOwnProperty.call(patch, 'table')
+                  ? { ...patch, fields: [] }
+                  : patch,
+              )
+            }
             onSinkChange={updateSink}
           />
         )}
@@ -256,8 +309,8 @@ export default function SyncTaskEditor({
             sourceLoading={sourceColumnCatalog.loading}
             targetLoading={mappingTargetLoading}
             sourceReady={Boolean(sourceId && sourceColumnRequest)}
-            targetReady={Boolean(targetId && (sinkConfig.autoCreateTable || targetColumnRequest))}
-            targetDerived={Boolean(sinkConfig.autoCreateTable)}
+            targetReady={Boolean(targetId && (targetSchemaDerived || targetColumnRequest))}
+            targetDerived={targetSchemaDerived}
           />
         </div>
       ) : null}

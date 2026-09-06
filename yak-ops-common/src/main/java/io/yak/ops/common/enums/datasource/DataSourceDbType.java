@@ -28,6 +28,7 @@ public enum DataSourceDbType {
   CLICKHOUSE("ClickHouse"),
   ELASTICSEARCH7("Elasticsearch 7"),
   ELASTICSEARCH8("Elasticsearch 8"),
+  MONGODB("MongoDB"),
   KINGBASE("KingbaseES"),
   DAMENG("达梦");
 
@@ -63,6 +64,8 @@ public enum DataSourceDbType {
       normalized = "ELASTICSEARCH7";
     } else if ("ELASTICSEARCH_8".equals(normalized) || "ES8".equals(normalized)) {
       normalized = "ELASTICSEARCH8";
+    } else if ("MONGO".equals(normalized) || "MONGO_DB".equals(normalized)) {
+      normalized = "MONGODB";
     }
 
     try {

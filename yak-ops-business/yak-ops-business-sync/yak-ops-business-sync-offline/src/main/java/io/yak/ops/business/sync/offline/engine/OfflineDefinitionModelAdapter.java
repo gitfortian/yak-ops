@@ -61,6 +61,23 @@ public final class OfflineDefinitionModelAdapter {
       "connection_params",
       "connect_timeout_ms",
       "socket_timeout_ms");
+  private static final Set<String> MONGODB_DATASOURCE_OWNED_FIELDS = Set.of(
+      "uri",
+      "url",
+      "host",
+      "hosts",
+      "hostname",
+      "port",
+      "username",
+      "user",
+      "password",
+      "passwd",
+      "authSource",
+      "auth_source",
+      "connectionParams",
+      "connection_params",
+      "connect_timeout_ms",
+      "socket_timeout_ms");
 
   private static final List<String> SOURCE_FIELDS = List.of(
       "database",
@@ -68,6 +85,7 @@ public final class OfflineDefinitionModelAdapter {
       "table",
       "tables",
       "tablePattern",
+      "fields",
       "sql",
       "whereCondition",
       "fetchSize");
@@ -94,8 +112,6 @@ public final class OfflineDefinitionModelAdapter {
       return definition;
     }
     ObjectNode adapted = (ObjectNode) definition.deepCopy();
-    // Notification and editor metadata are Yak Ops control-plane concerns. They must never alter
-    // engine JobSpec, execution snapshots or config digests when only UI preferences change.
     adapted.remove("notification");
     adapted.remove("editorMeta");
     String mode = text(adapted.path("basic"), "mode", "GUIDE_SINGLE");
@@ -104,10 +120,7 @@ public final class OfflineDefinitionModelAdapter {
     return adapted;
   }
 
-  /**
-   * 清理由数据源负责维护的连接字段，防止凭据进入 definition_json。
-   * 非数据源拥有的 Task Connector options 保持原样。
-   */
+  /** 清理由数据源负责维护的连接字段，防止凭据进入 definition_json。 */
   public static void sanitizeForPersistence(ObjectNode definition) {
     if (definition == null) {
       return;
@@ -160,6 +173,9 @@ public final class OfflineDefinitionModelAdapter {
     if ("elasticsearch7".equalsIgnoreCase(connectorId)
         || "elasticsearch8".equalsIgnoreCase(connectorId)) {
       return ELASTICSEARCH_DATASOURCE_OWNED_FIELDS;
+    }
+    if ("mongodb".equalsIgnoreCase(connectorId)) {
+      return MONGODB_DATASOURCE_OWNED_FIELDS;
     }
     return Set.of();
   }
