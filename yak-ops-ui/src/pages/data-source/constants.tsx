@@ -49,6 +49,7 @@ export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'CLICKHOUSE', value: 'CLICKHOUSE' },
   { label: 'ELASTICSEARCH7', value: 'ELASTICSEARCH7' },
   { label: 'ELASTICSEARCH8', value: 'ELASTICSEARCH8' },
+  { label: 'MONGODB', value: 'MONGODB' },
   { label: 'KINGBASE', value: 'KINGBASE' },
   { label: 'DAMENG', value: 'DAMENG' },
 ];
@@ -105,6 +106,11 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
       typedDataSource('CLICKHOUSE', 'ClickHouse'),
       typedDataSource('DUCKDB', 'Jdbc'),
     ],
+  },
+  {
+    groupKey: 'document',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.document' }),
+    datasourceList: [typedDataSource('MONGODB', 'MongoDB')],
   },
   {
     groupKey: 'search',

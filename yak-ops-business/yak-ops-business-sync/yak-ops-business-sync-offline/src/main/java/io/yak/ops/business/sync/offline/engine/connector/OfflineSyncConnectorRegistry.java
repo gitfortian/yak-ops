@@ -49,6 +49,7 @@ public final class OfflineSyncConnectorRegistry {
           DataSourceDbType.ELASTICSEARCH8,
           "elasticsearch8",
           "ELASTICSEARCH8"),
+      nativeProfile("mongodb-native", DataSourceDbType.MONGODB, "mongodb", "MONGODB"),
       jdbcProfile("kingbase-jdbc", DataSourceDbType.KINGBASE, "JDBC-KINGBASE"),
       jdbcProfile("dameng-jdbc", DataSourceDbType.DAMENG, "JDBC-DAMENG"));
 
@@ -86,7 +87,9 @@ public final class OfflineSyncConnectorRegistry {
       Map.entry("ELASTICSEARCH_7", DataSourceDbType.ELASTICSEARCH7),
       Map.entry("ES7", DataSourceDbType.ELASTICSEARCH7),
       Map.entry("ELASTICSEARCH_8", DataSourceDbType.ELASTICSEARCH8),
-      Map.entry("ES8", DataSourceDbType.ELASTICSEARCH8));
+      Map.entry("ES8", DataSourceDbType.ELASTICSEARCH8),
+      Map.entry("MONGO", DataSourceDbType.MONGODB),
+      Map.entry("MONGO_DB", DataSourceDbType.MONGODB));
 
   private static final Map<DataSourceDbType, OfflineSyncConnectorProfile> DEFAULTS =
       buildDefaults();

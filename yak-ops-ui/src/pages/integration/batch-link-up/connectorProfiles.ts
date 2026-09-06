@@ -103,6 +103,11 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
     guideMultiEnabled: false,
   },
   {
+    profileId: 'mongodb-native', dbType: 'MONGODB',
+    sourceConnectorId: 'mongodb', sinkConnectorId: 'mongodb',
+    connectorType: 'MongoDB', pluginName: 'MONGODB', defaultProfile: true,
+  },
+  {
     profileId: 'kingbase-jdbc', dbType: 'KINGBASE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
     connectorType: 'Jdbc', pluginName: 'JDBC-KINGBASE', defaultProfile: true,
   },
@@ -142,6 +147,8 @@ const DB_TYPE_ALIASES: Record<string, string> = {
   ES7: 'ELASTICSEARCH7',
   ELASTICSEARCH_8: 'ELASTICSEARCH8',
   ES8: 'ELASTICSEARCH8',
+  MONGO: 'MONGODB',
+  MONGO_DB: 'MONGODB',
 };
 
 const normalizeDbType = (value?: string): string => {

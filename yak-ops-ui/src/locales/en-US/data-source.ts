@@ -58,6 +58,7 @@ export default {
 
   'pages.datasource.group.relational': 'Relational Databases',
   'pages.datasource.group.olap': 'OLAP Databases',
+  'pages.datasource.group.document': 'Document Databases',
   'pages.datasource.group.search': 'Search Engines',
   'pages.datasource.typeSelector.title': 'Select a Data Source',
   'pages.datasource.typeSelector.searchPlaceholder': 'Search data sources',

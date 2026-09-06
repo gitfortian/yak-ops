@@ -20,9 +20,7 @@ const normalizeTableNames = (data: any): string[] => {
         .map((item: any) =>
           typeof item === 'string'
             ? item
-            : item?.name ||
-              item?.value ||
-              item?.label,
+            : item?.name || item?.value || item?.label,
         )
         .filter(Boolean)
         .map(String),
@@ -30,14 +28,11 @@ const normalizeTableNames = (data: any): string[] => {
   );
 };
 
-/**
- * Loads only a bounded table window and delegates filtering to the backend.
- *
- * Large hospital / warehouse catalogs can contain thousands of tables. Keeping the search term in
- * this hook avoids materializing the complete catalog in the browser while preserving the selected
- * value in the editor state.
- */
-export default function useDataSourceTables(dataSourceId: string) {
+/** Loads a bounded table/collection window and delegates filtering to the backend. */
+export default function useDataSourceTables(
+  dataSourceId: string,
+  database?: string,
+) {
   const [tables, setTables] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -45,7 +40,7 @@ export default function useDataSourceTables(dataSourceId: string) {
   useEffect(() => {
     setKeyword('');
     setTables([]);
-  }, [dataSourceId]);
+  }, [dataSourceId, database]);
 
   useEffect(() => {
     if (!dataSourceId) {
@@ -63,20 +58,17 @@ export default function useDataSourceTables(dataSourceId: string) {
           dataSourceId,
           keyword.trim() || undefined,
           TABLE_SEARCH_LIMIT,
+          database?.trim() || undefined,
         )
         .then((response) => {
           if (!active) return;
           setTables(normalizeTableNames(response?.data));
         })
         .catch(() => {
-          if (active) {
-            setTables([]);
-          }
+          if (active) setTables([]);
         })
         .finally(() => {
-          if (active) {
-            setLoading(false);
-          }
+          if (active) setLoading(false);
         });
     }, TABLE_SEARCH_DEBOUNCE_MS);
 
@@ -84,15 +76,11 @@ export default function useDataSourceTables(dataSourceId: string) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [dataSourceId, keyword]);
+  }, [dataSourceId, database, keyword]);
 
   const search = useCallback((value: string) => {
     setKeyword(value);
   }, []);
 
-  return {
-    tables,
-    loading,
-    search,
-  };
+  return { tables, loading, search };
 }

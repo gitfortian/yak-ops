@@ -42,6 +42,7 @@ const DATA_SOURCE_TYPES = [
   { value: 'CLICKHOUSE', displayName: 'ClickHouse' },
   { value: 'ELASTICSEARCH7', displayName: 'Elasticsearch 7' },
   { value: 'ELASTICSEARCH8', displayName: 'Elasticsearch 8' },
+  { value: 'MONGODB', displayName: 'MongoDB' },
   { value: 'KINGBASE', displayName: 'KINGBASE' },
   { value: 'DAMENG', displayName: 'DAMENG' },
 ] as const;

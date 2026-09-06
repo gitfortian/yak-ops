@@ -46,6 +46,7 @@ const DB_TYPE_LABELS: Record<string, string> = {
   CLICKHOUSE: 'ClickHouse',
   ELASTICSEARCH7: 'Elasticsearch 7',
   ELASTICSEARCH8: 'Elasticsearch 8',
+  MONGODB: 'MongoDB',
   KINGBASE: 'KINGBASE',
   DAMENG: 'DAMENG',
 };

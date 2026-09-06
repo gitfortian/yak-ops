@@ -57,6 +57,7 @@ const SOURCE_MANAGED_KEYS = new Set(
     'fetch_size',
     // Native product controls mapped by connector adapters.
     'table',
+    'fields',
     'doris.filter.query',
     'doris.batch.size',
     'scan_filter',

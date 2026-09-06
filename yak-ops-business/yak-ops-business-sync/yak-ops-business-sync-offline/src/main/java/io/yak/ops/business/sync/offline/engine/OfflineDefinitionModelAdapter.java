@@ -61,6 +61,23 @@ public final class OfflineDefinitionModelAdapter {
       "connection_params",
       "connect_timeout_ms",
       "socket_timeout_ms");
+  private static final Set<String> MONGODB_DATASOURCE_OWNED_FIELDS = Set.of(
+      "uri",
+      "url",
+      "host",
+      "hosts",
+      "hostname",
+      "port",
+      "username",
+      "user",
+      "password",
+      "passwd",
+      "authSource",
+      "auth_source",
+      "connectionParams",
+      "connection_params",
+      "connect_timeout_ms",
+      "socket_timeout_ms");
 
   private static final List<String> SOURCE_FIELDS = List.of(
       "database",
@@ -68,6 +85,7 @@ public final class OfflineDefinitionModelAdapter {
       "table",
       "tables",
       "tablePattern",
+      "fields",
       "sql",
       "whereCondition",
       "fetchSize");
@@ -160,6 +178,9 @@ public final class OfflineDefinitionModelAdapter {
     if ("elasticsearch7".equalsIgnoreCase(connectorId)
         || "elasticsearch8".equalsIgnoreCase(connectorId)) {
       return ELASTICSEARCH_DATASOURCE_OWNED_FIELDS;
+    }
+    if ("mongodb".equalsIgnoreCase(connectorId)) {
+      return MONGODB_DATASOURCE_OWNED_FIELDS;
     }
     return Set.of();
   }
