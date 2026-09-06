@@ -11,6 +11,8 @@ export interface OfflineSyncConnectorProfile {
   defaultProfile: boolean;
   /** Product-level guide policy. Backend adapters remain the final enforcement boundary. */
   guideMultiEnabled?: boolean;
+  /** Product-level target DDL policy layered on top of connector-wide capabilities. */
+  autoCreateTableEnabled?: boolean;
 }
 
 /** Control-plane default execution profiles for datasource types exposed by Yak Ops. */
@@ -22,6 +24,11 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
   {
     profileId: 'tidb-jdbc', dbType: 'TIDB', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
     connectorType: 'Jdbc', pluginName: 'JDBC-TIDB', defaultProfile: true,
+  },
+  {
+    profileId: 'goldendb-jdbc', dbType: 'GOLDENDB', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-GOLDENDB', defaultProfile: true,
+    autoCreateTableEnabled: false,
   },
   {
     profileId: 'hana-jdbc', dbType: 'HANA', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
@@ -122,6 +129,8 @@ const DB_TYPE_ALIASES: Record<string, string> = {
   POSTGRESQL: 'POSTGRE_SQL',
   POSTGRES: 'POSTGRE_SQL',
   TI_DB: 'TIDB',
+  GOLDEN_DB: 'GOLDENDB',
+  ZTE_GOLDENDB: 'GOLDENDB',
   SAP_HANA: 'HANA',
   SAPHANA: 'HANA',
   OPENGAUSS: 'OPEN_GAUSS',
@@ -158,6 +167,9 @@ export const defaultOfflineSyncConnectorProfile = (
 
 export const isGuideMultiEnabledForDataSourceType = (dbType?: string): boolean =>
   defaultOfflineSyncConnectorProfile(dbType)?.guideMultiEnabled !== false;
+
+export const isAutoCreateTableEnabledForDataSourceType = (dbType?: string): boolean =>
+  defaultOfflineSyncConnectorProfile(dbType)?.autoCreateTableEnabled !== false;
 
 /** Compatibility inference used only when a persisted endpoint has no durable connectorId. */
 export const connectorIdForDataSourceType = (
