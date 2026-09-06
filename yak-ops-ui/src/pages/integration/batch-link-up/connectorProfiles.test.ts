@@ -10,6 +10,7 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
   expect(OFFLINE_SYNC_CONNECTOR_PROFILES.map((profile) => profile.dbType)).toEqual([
     'MYSQL',
     'TIDB',
+    'HANA',
     'ORACLE',
     'POSTGRE_SQL',
     'DB2',
@@ -35,6 +36,16 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     sinkConnectorId: 'jdbc',
     pluginName: 'JDBC-TIDB',
   });
+  expect(defaultOfflineSyncConnectorProfile('HANA')).toMatchObject({
+    profileId: 'hana-jdbc',
+    sourceConnectorId: 'jdbc',
+    sinkConnectorId: 'jdbc',
+    pluginName: 'JDBC-HANA',
+  });
+  expect(defaultOfflineSyncConnectorProfile('SAP-HANA')).toMatchObject({
+    profileId: 'hana-jdbc',
+    dbType: 'HANA',
+  });
   expect(defaultOfflineSyncConnectorProfile('DORIS')).toMatchObject({
     profileId: 'doris-native',
     sourceConnectorId: 'doris',
@@ -48,7 +59,7 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     profileId: 'clickhouse-native',
     sourceConnectorId: 'clickhouse',
   });
-  for (const dbType of ['YASHAN_DB', 'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB']) {
+  for (const dbType of ['HANA', 'YASHAN_DB', 'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB']) {
     expect(defaultOfflineSyncConnectorProfile(dbType)).toMatchObject({
       dbType,
       sourceConnectorId: 'jdbc',
@@ -78,6 +89,9 @@ test('separates legacy inference from new-task profile selection', () => {
   expect(connectorIdForNewDataSourceType('CLICKHOUSE')).toBe('clickhouse');
   expect(connectorIdForNewDataSourceType('TIDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('TI-DB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('HANA')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('SAP-HANA')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('SAPHANA')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('YASHANDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('HGDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('XUGUDB')).toBe('jdbc');
@@ -89,6 +103,9 @@ test('separates legacy inference from new-task profile selection', () => {
 test('resolves datasource aliases from one frontend registry', () => {
   expect(connectorIdForDataSourceType('POSTGRESQL')).toBe('jdbc');
   expect(connectorIdForDataSourceType('TIDB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('HANA')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('SAP-HANA')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('SAPHANA')).toBe('jdbc');
   expect(connectorIdForDataSourceType('DB2')).toBe('jdbc');
   expect(connectorIdForDataSourceType('opengauss')).toBe('jdbc');
   expect(connectorIdForDataSourceType('SQLSERVER')).toBe('jdbc');
@@ -105,6 +122,10 @@ test('resolves datasource aliases from one frontend registry', () => {
     profileId: 'postgresql-jdbc',
     dbType: 'POSTGRE_SQL',
   });
+  expect(defaultOfflineSyncConnectorProfile('SAPHANA')).toMatchObject({
+    profileId: 'hana-jdbc',
+    dbType: 'HANA',
+  });
   expect(defaultOfflineSyncConnectorProfile('ES8')).toMatchObject({
     dbType: 'ELASTICSEARCH8',
     sourceConnectorId: 'elasticsearch8',
@@ -114,6 +135,8 @@ test('resolves datasource aliases from one frontend registry', () => {
 test('keeps multi-table guide policy connector-profile driven', () => {
   expect(isGuideMultiEnabledForDataSourceType('MYSQL')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('TIDB')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('HANA')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('SAP-HANA')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('YASHAN_DB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('DUCKDB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('DORIS')).toBe(true);

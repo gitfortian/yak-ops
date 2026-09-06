@@ -88,7 +88,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
     try (Connection opened = openConnection()) {
       Set<String> schemas = new LinkedHashSet<>();
       DatabaseMetaData metadata = opened.getMetaData();
-      String catalog = usesOracleStyle() ? null : trimToNull(database);
+      String catalog = metadataCatalog(database);
       try (ResultSet resultSet = schemas(metadata, catalog)) {
         while (resultSet.next()) {
           String schema = resultSet.getString("TABLE_SCHEM");
@@ -341,7 +341,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
             oceanBaseOracleMode()
                 ? query + " WHERE ROWNUM <= " + limit
                 : query + " LIMIT " + limit;
-        case MYSQL, TIDB, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+        case MYSQL, TIDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
             query + " LIMIT " + limit;
         case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
         case ELASTICSEARCH7, ELASTICSEARCH8 ->
@@ -360,7 +360,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
           oceanBaseOracleMode()
               ? "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit
               : "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
-      case MYSQL, TIDB, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+      case MYSQL, TIDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
           "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
       case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
       case ELASTICSEARCH7, ELASTICSEARCH8 ->
@@ -406,7 +406,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   }
 
   private String metadataCatalog(String requestedDatabase) {
-    if (usesOracleStyle()) {
+    if (usesOracleStyle() || connection.dbType() == DataSourceDbType.HANA) {
       return null;
     }
     return firstNonBlank(requestedDatabase, connection.database());

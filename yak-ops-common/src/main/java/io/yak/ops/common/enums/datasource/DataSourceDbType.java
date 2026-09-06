@@ -11,6 +11,7 @@ public enum DataSourceDbType {
 
   MYSQL("MySQL"),
   TIDB("TiDB"),
+  HANA("SAP HANA"),
   ORACLE("Oracle"),
   POSTGRE_SQL("PostgreSQL"),
   DB2("IBM Db2"),
@@ -42,6 +43,8 @@ public enum DataSourceDbType {
       normalized = "POSTGRE_SQL";
     } else if ("TI_DB".equals(normalized)) {
       normalized = "TIDB";
+    } else if ("SAP_HANA".equals(normalized) || "SAPHANA".equals(normalized)) {
+      normalized = "HANA";
     } else if ("OPENGAUSS".equals(normalized)) {
       normalized = "OPEN_GAUSS";
     } else if ("SQLSERVER".equals(normalized) || "MSSQL".equals(normalized)) {

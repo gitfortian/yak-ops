@@ -31,6 +31,7 @@ export const EMPTY_DATA_SOURCE_SUMMARY: DataSourceSummary = {
 export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'MYSQL', value: 'MYSQL' },
   { label: 'TIDB', value: 'TIDB' },
+  { label: 'HANA', value: 'HANA' },
   { label: 'ORACLE', value: 'ORACLE' },
   { label: 'POSTGRE_SQL', value: 'POSTGRE_SQL' },
   { label: 'DB2', value: 'DB2' },
@@ -78,6 +79,7 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
     datasourceList: [
       relationalDataSource('MYSQL'),
       relationalDataSource('TIDB'),
+      relationalDataSource('HANA'),
       relationalDataSource('ORACLE'),
       relationalDataSource('POSTGRE_SQL'),
       relationalDataSource('DB2'),
