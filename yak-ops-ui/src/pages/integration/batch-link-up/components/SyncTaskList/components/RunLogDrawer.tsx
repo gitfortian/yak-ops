@@ -1,5 +1,5 @@
 import { API_SUCCESS_CODE } from '@/services/http/response';
-import { linkupClientApi } from "@/pages/batch-link-up/type";
+import { linkupClientApi } from "@/pages/integration/batch-link-up/type";
 import {
   CloseOutlined, EditOutlined,
   FileSearchOutlined,

@@ -1,4 +1,4 @@
-import { generateDataSourceOptions } from "@/pages/batch-link-up/DataSourceSelect";
+import { generateDataSourceOptions } from "@/pages/integration/batch-link-up/DataSourceSelect";
 import { linkupClientApi } from "@/pages/client/api";
 import AddClientModal from "@/pages/client/components/AddClientModal";
 import AddOrEditDataSourceModal from "@/pages/data-source/components/AddOrEditDataSourceModal";

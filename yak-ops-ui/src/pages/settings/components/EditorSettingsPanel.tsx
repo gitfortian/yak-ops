@@ -8,11 +8,11 @@ import {
   YAK_EDITOR_THEMES,
   setYakEditorSettings,
   type YakEditorSettings,
-} from '../../data-development/editors/sql/editorSettings';
+} from '../../development/data-development/editors/sql/editorSettings';
 import {
   getDevelopmentEditorSettings,
   saveDevelopmentEditorSettings,
-} from '../../data-development/service';
+} from '../../development/data-development/service';
 
 const labelClassName = 'mb-2 block text-[13px] font-medium text-[#344054]';
 const rowClassName = 'grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-2';

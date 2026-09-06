@@ -4,7 +4,7 @@ import { Input, Typography } from 'antd';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import { FileSuffixIcon } from '@/pages/resource-management/components/FileSuffixIcon';
+import { FileSuffixIcon } from '@/pages/resources/resource-management/components/FileSuffixIcon';
 import ResourcePicker, { type ResourcePickerValue } from '../../components/ResourcePicker';
 import {
   updateEditorSessionConfig,

@@ -1,6 +1,6 @@
 import { API_SUCCESS_CODE } from '@/services/http/response';
-import { linkupJobInstanceApi } from "@/pages/batch-link-up/api";
-import { HistoryItem } from "@/pages/batch-link-up/type";
+import { linkupJobInstanceApi } from "@/pages/integration/batch-link-up/api";
+import { HistoryItem } from "@/pages/integration/batch-link-up/type";
 import { message } from "antd";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";

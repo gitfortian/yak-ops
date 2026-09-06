@@ -4,8 +4,8 @@ import { Typography } from 'antd';
 import { Snail, Trash2, Upload } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import { FileSuffixIcon } from '@/pages/resource-management/components/FileSuffixIcon';
-import type { ResourceId } from '@/pages/resource-management/types';
+import { FileSuffixIcon } from '@/pages/resources/resource-management/components/FileSuffixIcon';
+import type { ResourceId } from '@/pages/resources/resource-management/types';
 import ResourcePicker, { type ResourcePickerValue } from '../../components/ResourcePicker';
 import { useEditorMode } from '../session/editorModeStore';
 import {

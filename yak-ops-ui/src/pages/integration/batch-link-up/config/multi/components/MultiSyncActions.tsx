@@ -1,6 +1,6 @@
-import {linkupJobDefinitionApi} from "@/pages/batch-link-up/api";
-import CloseIcon from "@/pages/batch-link-up/workflow/icon/CloseIcon";
-import CodeBlockWithCopy from "@/pages/batch-link-up/workflow/operator/CodeBlockWithCopy";
+import {linkupJobDefinitionApi} from "@/pages/integration/batch-link-up/api";
+import CloseIcon from "@/pages/integration/batch-link-up/workflow/icon/CloseIcon";
+import CodeBlockWithCopy from "@/pages/integration/batch-link-up/workflow/operator/CodeBlockWithCopy";
 import {FileTextOutlined, SaveOutlined} from "@ant-design/icons";
 import {Button, Divider, message, Popover, Tooltip} from "antd";
 import React from "react";

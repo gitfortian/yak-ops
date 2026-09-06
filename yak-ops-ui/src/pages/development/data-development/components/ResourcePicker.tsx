@@ -5,9 +5,9 @@ import type { ColumnsType } from 'antd/es/table';
 import { Folder, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { FileSuffixIcon } from '@/pages/resource-management/components/FileSuffixIcon';
-import type { ResourceId, ResourceItem } from '@/pages/resource-management/types';
-import { fetchResourceList } from '@/pages/resource-management/service';
+import { FileSuffixIcon } from '@/pages/resources/resource-management/components/FileSuffixIcon';
+import type { ResourceId, ResourceItem } from '@/pages/resources/resource-management/types';
+import { fetchResourceList } from '@/pages/resources/resource-management/service';
 
 export interface ResourcePickerValue {
   id: ResourceId;
