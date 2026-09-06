@@ -12,6 +12,10 @@ public enum DataSourceDbType {
   MYSQL("MySQL"),
   ORACLE("Oracle"),
   POSTGRE_SQL("PostgreSQL"),
+  DB2("IBM Db2"),
+  OPEN_GAUSS("openGauss"),
+  SQL_SERVER("SQL Server"),
+  OCEANBASE("OceanBase"),
   DORIS("Doris"),
   KINGBASE("KingbaseES"),
   DAMENG("达梦");
@@ -26,6 +30,10 @@ public enum DataSourceDbType {
     String normalized = value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
     if ("POSTGRESQL".equals(normalized) || "POSTGRES".equals(normalized)) {
       normalized = "POSTGRE_SQL";
+    } else if ("OPENGAUSS".equals(normalized)) {
+      normalized = "OPEN_GAUSS";
+    } else if ("SQLSERVER".equals(normalized) || "MSSQL".equals(normalized)) {
+      normalized = "SQL_SERVER";
     }
 
     try {

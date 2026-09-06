@@ -11,84 +11,60 @@ export interface OfflineSyncConnectorProfile {
   defaultProfile: boolean;
 }
 
-/**
- * Control-plane default execution profiles for the datasource types Yak Ops exposes today.
- *
- * Keep this module as the only frontend dbType -> connector mapping. The presentation layer may
- * still own icons/labels, but execution identity must not be redefined in individual components.
- */
+/** Control-plane default execution profiles for datasource types exposed by Yak Ops. */
 export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfile[] = [
   {
-    profileId: 'mysql-jdbc',
-    dbType: 'MYSQL',
-    sourceConnectorId: 'jdbc',
-    sinkConnectorId: 'jdbc',
-    connectorType: 'Jdbc',
-    pluginName: 'JDBC-MYSQL',
-    defaultProfile: true,
+    profileId: 'mysql-jdbc', dbType: 'MYSQL', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-MYSQL', defaultProfile: true,
   },
   {
-    profileId: 'oracle-jdbc',
-    dbType: 'ORACLE',
-    sourceConnectorId: 'jdbc',
-    sinkConnectorId: 'jdbc',
-    connectorType: 'Jdbc',
-    pluginName: 'JDBC-ORACLE',
-    defaultProfile: true,
+    profileId: 'oracle-jdbc', dbType: 'ORACLE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-ORACLE', defaultProfile: true,
   },
   {
-    profileId: 'postgresql-jdbc',
-    dbType: 'POSTGRE_SQL',
-    sourceConnectorId: 'jdbc',
-    sinkConnectorId: 'jdbc',
-    connectorType: 'Jdbc',
-    pluginName: 'JDBC-POSTGRESQL',
-    defaultProfile: true,
+    profileId: 'postgresql-jdbc', dbType: 'POSTGRE_SQL', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-POSTGRESQL', defaultProfile: true,
   },
   {
-    profileId: 'doris-jdbc',
-    dbType: 'DORIS',
-    sourceConnectorId: 'jdbc',
-    sinkConnectorId: 'jdbc',
-    connectorType: 'Doris',
-    pluginName: 'DORIS',
-    defaultProfile: true,
+    profileId: 'db2-jdbc', dbType: 'DB2', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-DB2', defaultProfile: true,
   },
   {
-    profileId: 'kingbase-jdbc',
-    dbType: 'KINGBASE',
-    sourceConnectorId: 'jdbc',
-    sinkConnectorId: 'jdbc',
-    connectorType: 'Jdbc',
-    pluginName: 'JDBC-KINGBASE',
-    defaultProfile: true,
+    profileId: 'opengauss-jdbc', dbType: 'OPEN_GAUSS', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-OPENGAUSS', defaultProfile: true,
   },
   {
-    profileId: 'dameng-jdbc',
-    dbType: 'DAMENG',
-    sourceConnectorId: 'jdbc',
-    sinkConnectorId: 'jdbc',
-    connectorType: 'Jdbc',
-    pluginName: 'JDBC-DAMENG',
-    defaultProfile: true,
+    profileId: 'sqlserver-jdbc', dbType: 'SQL_SERVER', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-SQLSERVER', defaultProfile: true,
+  },
+  {
+    profileId: 'oceanbase-jdbc', dbType: 'OCEANBASE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-OCEANBASE', defaultProfile: true,
+  },
+  {
+    profileId: 'doris-jdbc', dbType: 'DORIS', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Doris', pluginName: 'DORIS', defaultProfile: true,
+  },
+  {
+    profileId: 'kingbase-jdbc', dbType: 'KINGBASE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-KINGBASE', defaultProfile: true,
+  },
+  {
+    profileId: 'dameng-jdbc', dbType: 'DAMENG', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    connectorType: 'Jdbc', pluginName: 'JDBC-DAMENG', defaultProfile: true,
   },
 ] as const;
 
 const LEGACY_JDBC_TYPES = new Set([
-  'JDBC',
-  'MARIADB',
-  'SQLSERVER',
-  'SQL_SERVER',
-  'STARROCKS',
-  'CLICKHOUSE',
-  'DB2',
-  'HIVE',
-  'DM',
+  'JDBC', 'MARIADB', 'STARROCKS', 'CLICKHOUSE', 'HIVE', 'DM',
 ]);
 
 const DB_TYPE_ALIASES: Record<string, string> = {
   POSTGRESQL: 'POSTGRE_SQL',
   POSTGRES: 'POSTGRE_SQL',
+  OPENGAUSS: 'OPEN_GAUSS',
+  SQLSERVER: 'SQL_SERVER',
+  MSSQL: 'SQL_SERVER',
 };
 
 const normalizeDbType = (value?: string): string => {

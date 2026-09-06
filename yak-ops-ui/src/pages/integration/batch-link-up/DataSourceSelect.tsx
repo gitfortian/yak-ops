@@ -1,15 +1,10 @@
-import { SendOutlined } from "@ant-design/icons";
-import { Select } from "antd";
-import MysqlIcon from "@/components/data-source/icons/MysqlIcon";
-import OracleIcon from "@/components/data-source/icons/OracleIcon";
-import PostgreSQL from "@/components/data-source/icons/PsSqlIcon";
-import DorisIcon from "@/components/data-source/icons/DorisIcon";
-import KingBaseIcon from "@/components/data-source/icons/KingBaseIcon";
-import DaMengIcon from "@/components/data-source/icons/DamengIcon";
-import { defaultOfflineSyncConnectorProfile } from "./connectorProfiles";
-import "./index.less";
+import { SendOutlined } from '@ant-design/icons';
+import { Select } from 'antd';
 
-// 类型定义
+import DatabaseIcons from '@/components/data-source/icons/DatabaseIcons';
+import { defaultOfflineSyncConnectorProfile } from './connectorProfiles';
+import './index.less';
+
 interface DataSourceType {
   value: string;
   label: React.ReactNode;
@@ -26,71 +21,32 @@ const executionMetadata = (dbType: string) => {
   };
 };
 
-// 生成数据源选项配置。图标/文案属于 UI；执行 Connector 元数据统一来自 Profile Registry。
-export const generateDataSourceOptions = (): DataSourceType[] => [
-  {
-    value: "MYSQL",
-    ...executionMetadata("MYSQL"),
-    label: (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <MysqlIcon height="24px" width="24px" />
-        <span style={{ marginLeft: 8 }}>MYSQL</span>
-      </div>
-    ),
-  },
-  {
-    value: "ORACLE",
-    ...executionMetadata("ORACLE"),
-    label: (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <OracleIcon />
-        <span style={{ marginLeft: 8 }}>ORACLE</span>
-      </div>
-    ),
-  },
-  {
-    value: "POSTGRE_SQL",
-    ...executionMetadata("POSTGRE_SQL"),
-    label: (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <PostgreSQL />
-        <span style={{ marginLeft: 8 }}>PostGreSQL</span>
-      </div>
-    ),
-  },
-  {
-    value: "DORIS",
-    ...executionMetadata("DORIS"),
-    label: (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <DorisIcon />
-        <span style={{ marginLeft: 8 }}>Doris</span>
-      </div>
-    ),
-  },
-  {
-    value: "KINGBASE",
-    ...executionMetadata("KINGBASE"),
-    label: (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <KingBaseIcon />
-        <span style={{ marginLeft: 8 }}>KINGBASE</span>
-      </div>
-    ),
-  },
-  {
-    value: "DAMENG",
-    ...executionMetadata("DAMENG"),
-    label: (
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <DaMengIcon />
-        <span style={{ marginLeft: 8 }}>DAMENG</span>
-      </div>
-    ),
-  },
-];
+const DATA_SOURCE_TYPES = [
+  { value: 'MYSQL', displayName: 'MYSQL' },
+  { value: 'ORACLE', displayName: 'ORACLE' },
+  { value: 'POSTGRE_SQL', displayName: 'PostgreSQL' },
+  { value: 'DB2', displayName: 'IBM Db2' },
+  { value: 'OPEN_GAUSS', displayName: 'openGauss' },
+  { value: 'SQL_SERVER', displayName: 'SQL Server' },
+  { value: 'OCEANBASE', displayName: 'OceanBase' },
+  { value: 'DORIS', displayName: 'Doris' },
+  { value: 'KINGBASE', displayName: 'KINGBASE' },
+  { value: 'DAMENG', displayName: 'DAMENG' },
+] as const;
 
-// 数据源选择器组件
+/** UI presentation stays here; execution identity comes exclusively from Connector Profiles. */
+export const generateDataSourceOptions = (): DataSourceType[] =>
+  DATA_SOURCE_TYPES.map(({ value, displayName }) => ({
+    value,
+    ...executionMetadata(value),
+    label: (
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <DatabaseIcons dbType={value} width="24px" height="24px" />
+        <span style={{ marginLeft: 8 }}>{displayName}</span>
+      </div>
+    ),
+  }));
+
 interface DataSourceSelectProps {
   value: any;
   onChange: (value: string, option: any) => void;
@@ -106,27 +62,23 @@ export const DataSourceSelect: React.FC<DataSourceSelectProps> = ({
   placeholder,
   prefix,
   dataSourceOptions,
-  width = "42%",
-}) => {
-  return (
-    <Select
-      showSearch
-      className="custom-ant-select-selector"
-      placeholder={placeholder}
-      value={value?.dbType}
-      optionFilterProp="label"
-      onChange={onChange}
-      suffixIcon={<SendOutlined />}
-      style={{ width: width, borderRadius: 24 }}
-      prefix={<span style={{ fontSize: 12,fontWeight: 500 }}>{prefix}</span>}
-      filterOption={(input, option) => {
-        const labelText =
-          typeof option?.label === "string" ? option.label : "MYSQL";
-        return labelText.toLowerCase().includes(input.toLowerCase());
-      }}
-      options={dataSourceOptions}
-    />
-  );
-};
+  width = '42%',
+}) => (
+  <Select
+    showSearch
+    className="custom-ant-select-selector"
+    placeholder={placeholder}
+    value={value?.dbType}
+    optionFilterProp="value"
+    onChange={onChange}
+    suffixIcon={<SendOutlined />}
+    style={{ width, borderRadius: 24 }}
+    prefix={<span style={{ fontSize: 12, fontWeight: 500 }}>{prefix}</span>}
+    filterOption={(input, option) =>
+      String(option?.value || '').toLowerCase().includes(input.toLowerCase())
+    }
+    options={dataSourceOptions}
+  />
+);
 
 export default DataSourceSelect;
