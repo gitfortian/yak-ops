@@ -4,6 +4,7 @@ import type {
   OfflineConnectorRuntimeSnapshot,
 } from '@/services/batch-link-up';
 
+import { isAutoCreateTableEnabledForDataSourceType } from '../connectorProfiles';
 import type { SyncEditorState } from './model';
 
 export const CONNECTOR_CAPABILITY = {
@@ -102,8 +103,23 @@ export const validateEditorCapabilities = (
   editor: SyncEditorState,
   snapshot: OfflineConnectorRuntimeSnapshot | null | undefined,
 ): string[] => {
+  const sourceConfig = editor.source.config || {};
+  const sinkConfig = editor.sink.config || {};
+  const writeMode = String(sinkConfig.writeMode || '').toLowerCase();
+  const errors: string[] = [];
+
+  // Datasource-profile policies are control-plane contracts and do not depend on Worker reachability.
+  if (
+    Boolean(sinkConfig.autoCreateTable) &&
+    !isAutoCreateTableEnabledForDataSourceType(editor.sink.dbType)
+  ) {
+    errors.push(
+      `${editor.sink.dbType || '当前目标数据源'} Stage 1 仅支持写入已有表，请关闭自动建表`,
+    );
+  }
+
   if (!snapshot || !snapshot.reachable) {
-    return [];
+    return errors;
   }
 
   const source = resolveEndpointCapability(
@@ -116,7 +132,6 @@ export const validateEditorCapabilities = (
     editor.sink.connectorId,
     'SINK',
   );
-  const errors: string[] = [];
 
   if (!source.available) {
     errors.push(
@@ -128,7 +143,7 @@ export const validateEditorCapabilities = (
       `当前 Link-Up Worker 未加载 Sink Connector：${editor.sink.connectorId || 'UNKNOWN'}`,
     );
   }
-  if (errors.length > 0) {
+  if (errors.some((message) => message.startsWith('当前 Link-Up Worker 未加载'))) {
     return errors;
   }
 
@@ -145,10 +160,6 @@ export const validateEditorCapabilities = (
     }
   }
 
-  const sourceConfig = editor.source.config || {};
-  const sinkConfig = editor.sink.config || {};
-  const writeMode = String(sinkConfig.writeMode || '').toLowerCase();
-
   if (
     String(sourceConfig.readMode || '').toLowerCase() === 'sql' &&
     !hasCapability(source, CONNECTOR_CAPABILITY.CUSTOM_SQL)
@@ -160,6 +171,7 @@ export const validateEditorCapabilities = (
 
   if (
     Boolean(sinkConfig.autoCreateTable) &&
+    isAutoCreateTableEnabledForDataSourceType(editor.sink.dbType) &&
     !hasCapability(sink, CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE)
   ) {
     errors.push(

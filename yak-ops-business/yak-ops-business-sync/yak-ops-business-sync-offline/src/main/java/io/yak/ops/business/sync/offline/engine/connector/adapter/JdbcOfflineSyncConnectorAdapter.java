@@ -11,6 +11,7 @@ import io.yak.ops.business.sync.offline.engine.connector.adapter.OfflineSyncConn
 import io.yak.ops.business.sync.offline.engine.connector.adapter.OfflineSyncConnectorAdapter.ExecutionContext;
 import io.yak.ops.business.sync.offline.engine.connector.adapter.OfflineSyncConnectorAdapter.Role;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
+import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -76,6 +77,13 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     }
     removeDatasourceOwnedOptions(context.options());
     appendConnection(context.options(), connection(context.dataSource()));
+
+    if (context.role() == Role.SINK
+        && context.dataSource().getDbType() == DataSourceDbType.GOLDENDB) {
+      // GoldenDB Stage 1 in Link-Up intentionally supports existing target tables only. Keep this
+      // execution-time guard even for old/stale definitions that still contain auto-create intent.
+      context.options().put("schema_save_mode", "ERROR_WHEN_SCHEMA_NOT_EXIST");
+    }
   }
 
   private BuildResult buildSource(BuildContext context) {
@@ -234,10 +242,12 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     }
 
     String dialect = firstText(parameters, "dialect");
-    if (!StringUtils.hasText(dialect)
-        && dataSource.getDbType() != null
-        && "TIDB".equals(dataSource.getDbType().name())) {
-      dialect = "tidb";
+    if (!StringUtils.hasText(dialect) && dataSource.getDbType() != null) {
+      if (dataSource.getDbType() == DataSourceDbType.TIDB) {
+        dialect = "tidb";
+      } else if (dataSource.getDbType() == DataSourceDbType.GOLDENDB) {
+        dialect = "goldendb";
+      }
     }
 
     JsonNode properties = parameters.get("properties");
@@ -460,7 +470,8 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
     if (normalized.contains("db2")) {
       return "com.ibm.db2.jcc.DB2Driver";
     }
-    if (normalized.contains("tidb")
+    if (normalized.contains("goldendb")
+        || normalized.contains("tidb")
         || normalized.contains("mysql")
         || normalized.contains("doris")) {
       return "com.mysql.cj.jdbc.Driver";
