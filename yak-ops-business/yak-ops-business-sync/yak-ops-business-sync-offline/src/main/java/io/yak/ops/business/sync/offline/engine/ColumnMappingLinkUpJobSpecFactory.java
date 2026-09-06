@@ -7,8 +7,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.yak.ops.business.datasource.dao.DataSourceDao;
 import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
+import io.yak.ops.business.sync.offline.engine.connector.adapter.OfflineSyncConnectorAdapterRegistry;
 import java.util.HashSet;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -29,9 +31,19 @@ public class ColumnMappingLinkUpJobSpecFactory extends LinkUpJobSpecFactory {
 
   private final ObjectMapper objectMapper;
 
+  @Autowired
   public ColumnMappingLinkUpJobSpecFactory(
       DataSourceDao dataSourceDao,
-      @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
+      @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper,
+      OfflineSyncConnectorAdapterRegistry adapterRegistry) {
+    super(dataSourceDao, objectMapper, adapterRegistry);
+    this.objectMapper = objectMapper;
+  }
+
+  /** Keeps focused unit tests and historical direct construction source-compatible. */
+  public ColumnMappingLinkUpJobSpecFactory(
+      DataSourceDao dataSourceDao,
+      ObjectMapper objectMapper) {
     super(dataSourceDao, objectMapper);
     this.objectMapper = objectMapper;
   }
@@ -42,9 +54,8 @@ public class ColumnMappingLinkUpJobSpecFactory extends LinkUpJobSpecFactory {
     ObjectNode mapping = objectMapping(normalizedDefinition.get("mapping"));
 
     if (mapping != null) {
-      String mode = normalizedDefinition.path("basic")
-          .path("mode")
-          .asText("GUIDE_SINGLE");
+      String mode =
+          normalizedDefinition.path("basic").path("mode").asText("GUIDE_SINGLE");
       if (!"GUIDE_SINGLE".equalsIgnoreCase(mode)) {
         throw new IllegalArgumentException("多表同步暂不支持自定义字段映射");
       }
@@ -128,9 +139,7 @@ public class ColumnMappingLinkUpJobSpecFactory extends LinkUpJobSpecFactory {
         throw new IllegalArgumentException("目标字段不能重复映射：" + target);
       }
 
-      normalizedColumns.addObject()
-          .put("source", source)
-          .put("target", target);
+      normalizedColumns.addObject().put("source", source).put("target", target);
     }
 
     ObjectNode normalized = objectMapper.createObjectNode();
@@ -139,9 +148,7 @@ public class ColumnMappingLinkUpJobSpecFactory extends LinkUpJobSpecFactory {
   }
 
   private ObjectNode objectMapping(JsonNode mapping) {
-    return mapping != null && mapping.isObject()
-        ? (ObjectNode) mapping
-        : null;
+    return mapping != null && mapping.isObject() ? (ObjectNode) mapping : null;
   }
 
   private String text(JsonNode node, String field, String fallback) {
