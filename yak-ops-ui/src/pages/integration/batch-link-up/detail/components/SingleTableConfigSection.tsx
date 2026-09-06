@@ -29,6 +29,7 @@ interface SingleTableConfigSectionProps {
   sinkConfig: Record<string, any>;
   sourceCapability: EndpointCapabilityState;
   sinkCapability: EndpointCapabilityState;
+  autoCreateTableEnabled: boolean;
   sourceTables: string[];
   targetTables: string[];
   sourceLoading: boolean;
@@ -86,6 +87,7 @@ export default function SingleTableConfigSection({
   sinkConfig,
   sourceCapability,
   sinkCapability,
+  autoCreateTableEnabled,
   sourceTables,
   targetTables,
   sourceLoading,
@@ -107,10 +109,14 @@ export default function SingleTableConfigSection({
     sourceCapability,
     CONNECTOR_CAPABILITY.CUSTOM_SQL,
   );
-  const supportsAutoCreate = allowsCapability(
-    sinkCapability,
-    CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE,
-  );
+  const supportsAutoCreate =
+    autoCreateTableEnabled &&
+    allowsCapability(
+      sinkCapability,
+      CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE,
+    );
+  const effectiveAutoCreateTable =
+    supportsAutoCreate && Boolean(sinkConfig.autoCreateTable);
   const supportsUpsert = allowsCapability(
     sinkCapability,
     CONNECTOR_CAPABILITY.UPSERT,
@@ -236,13 +242,15 @@ export default function SingleTableConfigSection({
               </div>
               {!supportsAutoCreate && sinkConfig.autoCreateTable ? (
                 <div className="mt-2 text-[11px] leading-5 text-[#b54708]">
-                  当前 Sink Connector 未声明 AUTO_CREATE_TABLE，请关闭后选择已有目标表。
+                  {autoCreateTableEnabled
+                    ? '当前 Sink Connector 未声明 AUTO_CREATE_TABLE，请关闭后选择已有目标表。'
+                    : '当前目标数据源 Stage 1 仅支持写入已有表，请关闭自动建表后选择目标表。'}
                 </div>
               ) : null}
             </div>
           ) : null}
 
-          {sinkConfig.autoCreateTable ? (
+          {effectiveAutoCreateTable ? (
             <div>
               <FieldLabel required>目标表名</FieldLabel>
               <Input

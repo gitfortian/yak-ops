@@ -17,6 +17,12 @@ class DataSourceDbTypeTest {
         .isEqualTo(DataSourceDbType.TIDB);
     assertThat(DataSourceDbType.parse("ti-db"))
         .isEqualTo(DataSourceDbType.TIDB);
+    assertThat(DataSourceDbType.parse("goldendb"))
+        .isEqualTo(DataSourceDbType.GOLDENDB);
+    assertThat(DataSourceDbType.parse("golden-db"))
+        .isEqualTo(DataSourceDbType.GOLDENDB);
+    assertThat(DataSourceDbType.parse("zte-goldendb"))
+        .isEqualTo(DataSourceDbType.GOLDENDB);
     assertThat(DataSourceDbType.parse("hana"))
         .isEqualTo(DataSourceDbType.HANA);
     assertThat(DataSourceDbType.parse("sap-hana"))
@@ -54,6 +60,7 @@ class DataSourceDbTypeTest {
     assertThat(DataSourceDbType.values())
         .contains(
             DataSourceDbType.TIDB,
+            DataSourceDbType.GOLDENDB,
             DataSourceDbType.HANA,
             DataSourceDbType.DB2,
             DataSourceDbType.OPEN_GAUSS,
@@ -70,6 +77,7 @@ class DataSourceDbTypeTest {
             DataSourceDbType.ELASTICSEARCH7,
             DataSourceDbType.ELASTICSEARCH8);
     assertThat(DataSourceDbType.TIDB.getDisplayName()).isEqualTo("TiDB");
+    assertThat(DataSourceDbType.GOLDENDB.getDisplayName()).isEqualTo("GoldenDB");
     assertThat(DataSourceDbType.HANA.getDisplayName()).isEqualTo("SAP HANA");
     assertThat(DataSourceDbType.YASHAN_DB.getDisplayName()).isEqualTo("YashanDB");
     assertThat(DataSourceDbType.HIGHGO.getDisplayName()).isEqualTo("HighGo");

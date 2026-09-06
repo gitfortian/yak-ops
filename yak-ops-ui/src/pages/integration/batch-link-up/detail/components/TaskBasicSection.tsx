@@ -11,7 +11,10 @@ import {
   BRAND_COLOR_SOFT_HOVER,
 } from '@/styles/brand';
 
-import { connectorIdForNewDataSourceType } from '../../connectorProfiles';
+import {
+  connectorIdForNewDataSourceType,
+  isAutoCreateTableEnabledForDataSourceType,
+} from '../../connectorProfiles';
 import {
   applyEndpointSelection,
   type EndpointKind,
@@ -111,6 +114,21 @@ export default function TaskBasicSection({
           ? current.pluginName
           : selected[kind].pluginName,
     };
+
+    if (
+      kind === 'sink' &&
+      !isAutoCreateTableEnabledForDataSourceType(String(record.dbType || ''))
+    ) {
+      selected.sink = {
+        ...selected.sink,
+        config: {
+          ...selected.sink.config,
+          autoCreateTable: false,
+          targetTableName: '',
+          primaryKey: '',
+        },
+      };
+    }
 
     onChange(selected);
   };

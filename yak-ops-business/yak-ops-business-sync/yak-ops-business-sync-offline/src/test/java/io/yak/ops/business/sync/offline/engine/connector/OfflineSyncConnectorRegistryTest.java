@@ -31,6 +31,7 @@ class OfflineSyncConnectorRegistryTest {
 
     for (DataSourceDbType dbType : new DataSourceDbType[] {
       DataSourceDbType.TIDB,
+      DataSourceDbType.GOLDENDB,
       DataSourceDbType.HANA,
       DataSourceDbType.DB2,
       DataSourceDbType.OPEN_GAUSS,
@@ -55,6 +56,9 @@ class OfflineSyncConnectorRegistryTest {
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("POSTGRESQL")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("TIDB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("TI-DB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GOLDENDB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("GOLDEN-DB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("ZTE-GOLDENDB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HANA")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SAP-HANA")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SAPHANA")).contains("jdbc");

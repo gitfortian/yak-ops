@@ -2,6 +2,7 @@ import {
   connectorIdForDataSourceType,
   connectorIdForNewDataSourceType,
   defaultOfflineSyncConnectorProfile,
+  isAutoCreateTableEnabledForDataSourceType,
   isGuideMultiEnabledForDataSourceType,
   OFFLINE_SYNC_CONNECTOR_PROFILES,
 } from './connectorProfiles';
@@ -10,6 +11,7 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
   expect(OFFLINE_SYNC_CONNECTOR_PROFILES.map((profile) => profile.dbType)).toEqual([
     'MYSQL',
     'TIDB',
+    'GOLDENDB',
     'HANA',
     'ORACLE',
     'POSTGRE_SQL',
@@ -36,6 +38,17 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     sinkConnectorId: 'jdbc',
     pluginName: 'JDBC-TIDB',
   });
+  expect(defaultOfflineSyncConnectorProfile('GOLDENDB')).toMatchObject({
+    profileId: 'goldendb-jdbc',
+    sourceConnectorId: 'jdbc',
+    sinkConnectorId: 'jdbc',
+    pluginName: 'JDBC-GOLDENDB',
+    autoCreateTableEnabled: false,
+  });
+  expect(defaultOfflineSyncConnectorProfile('GOLDEN-DB')).toMatchObject({
+    profileId: 'goldendb-jdbc',
+    dbType: 'GOLDENDB',
+  });
   expect(defaultOfflineSyncConnectorProfile('HANA')).toMatchObject({
     profileId: 'hana-jdbc',
     sourceConnectorId: 'jdbc',
@@ -59,7 +72,7 @@ test('uses native profiles where needed while keeping JDBC datasource expansion 
     profileId: 'clickhouse-native',
     sourceConnectorId: 'clickhouse',
   });
-  for (const dbType of ['HANA', 'YASHAN_DB', 'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB']) {
+  for (const dbType of ['GOLDENDB', 'HANA', 'YASHAN_DB', 'HIGHGO', 'IRIS', 'XUGU', 'DUCKDB']) {
     expect(defaultOfflineSyncConnectorProfile(dbType)).toMatchObject({
       dbType,
       sourceConnectorId: 'jdbc',
@@ -89,6 +102,9 @@ test('separates legacy inference from new-task profile selection', () => {
   expect(connectorIdForNewDataSourceType('CLICKHOUSE')).toBe('clickhouse');
   expect(connectorIdForNewDataSourceType('TIDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('TI-DB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GOLDENDB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('GOLDEN-DB')).toBe('jdbc');
+  expect(connectorIdForNewDataSourceType('ZTE-GOLDENDB')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('HANA')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('SAP-HANA')).toBe('jdbc');
   expect(connectorIdForNewDataSourceType('SAPHANA')).toBe('jdbc');
@@ -103,6 +119,9 @@ test('separates legacy inference from new-task profile selection', () => {
 test('resolves datasource aliases from one frontend registry', () => {
   expect(connectorIdForDataSourceType('POSTGRESQL')).toBe('jdbc');
   expect(connectorIdForDataSourceType('TIDB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('GOLDENDB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('GOLDEN-DB')).toBe('jdbc');
+  expect(connectorIdForDataSourceType('ZTE-GOLDENDB')).toBe('jdbc');
   expect(connectorIdForDataSourceType('HANA')).toBe('jdbc');
   expect(connectorIdForDataSourceType('SAP-HANA')).toBe('jdbc');
   expect(connectorIdForDataSourceType('SAPHANA')).toBe('jdbc');
@@ -122,6 +141,10 @@ test('resolves datasource aliases from one frontend registry', () => {
     profileId: 'postgresql-jdbc',
     dbType: 'POSTGRE_SQL',
   });
+  expect(defaultOfflineSyncConnectorProfile('ZTE-GOLDENDB')).toMatchObject({
+    profileId: 'goldendb-jdbc',
+    dbType: 'GOLDENDB',
+  });
   expect(defaultOfflineSyncConnectorProfile('SAPHANA')).toMatchObject({
     profileId: 'hana-jdbc',
     dbType: 'HANA',
@@ -132,9 +155,10 @@ test('resolves datasource aliases from one frontend registry', () => {
   });
 });
 
-test('keeps multi-table guide policy connector-profile driven', () => {
+test('keeps multi-table guide and target DDL policy profile driven', () => {
   expect(isGuideMultiEnabledForDataSourceType('MYSQL')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('TIDB')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('GOLDENDB')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('HANA')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('SAP-HANA')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('YASHAN_DB')).toBe(true);
@@ -142,4 +166,10 @@ test('keeps multi-table guide policy connector-profile driven', () => {
   expect(isGuideMultiEnabledForDataSourceType('DORIS')).toBe(true);
   expect(isGuideMultiEnabledForDataSourceType('ELASTICSEARCH7')).toBe(false);
   expect(isGuideMultiEnabledForDataSourceType('ES8')).toBe(false);
+
+  expect(isAutoCreateTableEnabledForDataSourceType('MYSQL')).toBe(true);
+  expect(isAutoCreateTableEnabledForDataSourceType('TIDB')).toBe(true);
+  expect(isAutoCreateTableEnabledForDataSourceType('GOLDENDB')).toBe(false);
+  expect(isAutoCreateTableEnabledForDataSourceType('GOLDEN-DB')).toBe(false);
+  expect(isAutoCreateTableEnabledForDataSourceType('HANA')).toBe(true);
 });
