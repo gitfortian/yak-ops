@@ -30,6 +30,8 @@ const DATA_SOURCE_TYPES = [
   { value: 'SQL_SERVER', displayName: 'SQL Server' },
   { value: 'OCEANBASE', displayName: 'OceanBase' },
   { value: 'DORIS', displayName: 'Doris' },
+  { value: 'STARROCKS', displayName: 'StarRocks' },
+  { value: 'CLICKHOUSE', displayName: 'ClickHouse' },
   { value: 'KINGBASE', displayName: 'KINGBASE' },
   { value: 'DAMENG', displayName: 'DAMENG' },
 ] as const;

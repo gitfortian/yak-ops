@@ -2,6 +2,7 @@ package io.yak.ops.plugin.database.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.yak.ops.plugin.database.jdbc.clickhouse.ClickHouseDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.dameng.DamengDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.db2.Db2DataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.kingbase.KingbaseDataSourcePlugin;
@@ -11,6 +12,7 @@ import io.yak.ops.plugin.database.jdbc.opengauss.OpenGaussDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.oracle.OracleDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.postgresql.PostgreSqlDataSourcePlugin;
 import io.yak.ops.plugin.database.jdbc.sqlserver.SqlServerDataSourcePlugin;
+import io.yak.ops.plugin.database.jdbc.starrocks.StarRocksDataSourcePlugin;
 import io.yak.ops.spi.datasource.DataSourceCapability;
 import io.yak.ops.spi.datasource.DataSourcePlugin;
 import io.yak.ops.spi.datasource.DataSourcePluginDescriptor;
@@ -66,6 +68,8 @@ class JdbcDatasourcePluginContractTest {
         new Db2DataSourcePlugin(),
         new OpenGaussDataSourcePlugin(),
         new SqlServerDataSourcePlugin(),
-        new OceanBaseDataSourcePlugin());
+        new OceanBaseDataSourcePlugin(),
+        new StarRocksDataSourcePlugin(),
+        new ClickHouseDataSourcePlugin());
   }
 }

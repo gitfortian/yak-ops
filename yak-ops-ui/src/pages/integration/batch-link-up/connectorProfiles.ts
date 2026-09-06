@@ -42,8 +42,16 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
     connectorType: 'Jdbc', pluginName: 'JDBC-OCEANBASE', defaultProfile: true,
   },
   {
-    profileId: 'doris-jdbc', dbType: 'DORIS', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
+    profileId: 'doris-native', dbType: 'DORIS', sourceConnectorId: 'doris', sinkConnectorId: 'doris',
     connectorType: 'Doris', pluginName: 'DORIS', defaultProfile: true,
+  },
+  {
+    profileId: 'starrocks-native', dbType: 'STARROCKS', sourceConnectorId: 'starrocks', sinkConnectorId: 'starrocks',
+    connectorType: 'StarRocks', pluginName: 'STARROCKS', defaultProfile: true,
+  },
+  {
+    profileId: 'clickhouse-native', dbType: 'CLICKHOUSE', sourceConnectorId: 'clickhouse', sinkConnectorId: 'clickhouse',
+    connectorType: 'ClickHouse', pluginName: 'CLICKHOUSE', defaultProfile: true,
   },
   {
     profileId: 'kingbase-jdbc', dbType: 'KINGBASE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
@@ -55,8 +63,12 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
   },
 ] as const;
 
+/**
+ * Records without connectorId are legacy definitions. Keep their historical JDBC inference so
+ * merely opening/saving an old task cannot silently switch its engine implementation.
+ */
 const LEGACY_JDBC_TYPES = new Set([
-  'JDBC', 'MARIADB', 'STARROCKS', 'CLICKHOUSE', 'HIVE', 'DM',
+  'JDBC', 'MARIADB', 'DORIS', 'STARROCKS', 'CLICKHOUSE', 'HIVE', 'DM',
 ]);
 
 const DB_TYPE_ALIASES: Record<string, string> = {
@@ -81,18 +93,32 @@ export const defaultOfflineSyncConnectorProfile = (
   );
 };
 
+/** Compatibility inference used only when a persisted endpoint has no durable connectorId. */
 export const connectorIdForDataSourceType = (
   value?: string,
   role: OfflineSyncConnectorRole = 'SOURCE',
 ): string => {
   const normalized = normalizeDbType(value);
   if (!normalized) return '';
+  if (LEGACY_JDBC_TYPES.has(normalized)) return 'jdbc';
 
   const profile = defaultOfflineSyncConnectorProfile(normalized);
   if (profile) {
     return role === 'SINK' ? profile.sinkConnectorId : profile.sourceConnectorId;
   }
-  return LEGACY_JDBC_TYPES.has(normalized)
-    ? 'jdbc'
-    : normalized.toLowerCase();
+  return normalized.toLowerCase();
+};
+
+/** New-task resolver: always uses the current default profile and persists its connectorId. */
+export const connectorIdForNewDataSourceType = (
+  value?: string,
+  role: OfflineSyncConnectorRole = 'SOURCE',
+): string => {
+  const normalized = normalizeDbType(value);
+  if (!normalized) return '';
+  const profile = defaultOfflineSyncConnectorProfile(normalized);
+  if (profile) {
+    return role === 'SINK' ? profile.sinkConnectorId : profile.sourceConnectorId;
+  }
+  return normalized.toLowerCase();
 };

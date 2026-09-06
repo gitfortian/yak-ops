@@ -11,6 +11,7 @@ import {
   BRAND_COLOR_SOFT_HOVER,
 } from '@/styles/brand';
 
+import { connectorIdForNewDataSourceType } from '../../connectorProfiles';
 import {
   applyEndpointSelection,
   type EndpointKind,
@@ -90,7 +91,28 @@ export default function TaskBasicSection({
     );
     if (!record) return;
 
-    onChange(applyEndpointSelection(editor, kind, record));
+    const current = editor[kind];
+    const selected = applyEndpointSelection(editor, kind, record);
+    const sameDbType = normalizeType(current.dbType) === normalizeType(record.dbType);
+
+    // Datasource selection must not re-derive execution identity for an existing task. New native
+    // tasks already persist connectorId; old tasks already resolved to their compatibility path.
+    selected[kind] = {
+      ...selected[kind],
+      connectorId:
+        sameDbType && current.connectorId
+          ? current.connectorId
+          : connectorIdForNewDataSourceType(
+              String(record.dbType || ''),
+              kind === 'source' ? 'SOURCE' : 'SINK',
+            ),
+      pluginName:
+        sameDbType && current.pluginName
+          ? current.pluginName
+          : selected[kind].pluginName,
+    };
+
+    onChange(selected);
   };
 
   return (

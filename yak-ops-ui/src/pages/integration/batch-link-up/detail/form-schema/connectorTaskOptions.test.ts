@@ -63,6 +63,25 @@ describe('connectorTaskOptions', () => {
     ]);
   });
 
+  it('filters native keys already owned by Yak Ops single-table controls', () => {
+    const nativeSchema: LinkUpConnectorSchema = {
+      connectorId: 'doris',
+      role: 'SINK',
+      options: [
+        { key: 'table', valueType: 'STRING' },
+        { key: 'sink.key-type', valueType: 'STRING' },
+        { key: 'doris.batch.size', valueType: 'INT' },
+        { key: 'sink.enable-2pc', valueType: 'BOOLEAN' },
+      ],
+    };
+
+    expect(
+      connectorTaskOptionFields(nativeSchema, 'SINK').map(
+        (item) => item.option.key,
+      ),
+    ).toEqual(['sink.enable-2pc']);
+  });
+
   it('validates only visible task-owned required options', () => {
     const errors = validateRequiredConnectorTaskOptions(
       schema(),

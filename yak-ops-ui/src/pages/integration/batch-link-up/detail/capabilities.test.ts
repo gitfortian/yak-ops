@@ -2,6 +2,7 @@ import type { OfflineConnectorRuntimeSnapshot } from '@/services/batch-link-up';
 
 import {
   allowsCapability,
+  allowsOverwrite,
   CONNECTOR_CAPABILITY,
   resolveEndpointCapability,
   validateEditorCapabilities,
@@ -49,18 +50,19 @@ const editor = (): SyncEditorState => ({
 const snapshot = (
   sourceCapabilities: string[],
   sinkCapabilities: string[],
+  connectorId = 'jdbc',
 ): OfflineConnectorRuntimeSnapshot => ({
   reachable: true,
   stale: false,
   connectors: [
     {
-      connectorId: 'jdbc',
+      connectorId,
       role: 'SOURCE',
       available: true,
       capabilities: sourceCapabilities,
     },
     {
-      connectorId: 'jdbc',
+      connectorId,
       role: 'SINK',
       available: true,
       capabilities: sinkCapabilities,
@@ -135,6 +137,21 @@ describe('offline connector capabilities', () => {
         'Sink Connector jdbc 不支持 Upsert（UPSERT）',
         'Sink Connector jdbc 不支持跳过脏数据（DIRTY_DATA_HANDLING）',
       ]),
+    );
+  });
+
+  it('treats the current native sinks as no-overwrite implementations', () => {
+    const value = editor();
+    value.source.connectorId = 'clickhouse';
+    value.sink.connectorId = 'clickhouse';
+    value.sink.config.writeMode = 'overwrite';
+    const runtime = snapshot(['TABLE_SCHEMA_DISCOVERY'], [], 'clickhouse');
+
+    expect(
+      allowsOverwrite(resolveEndpointCapability(runtime, 'clickhouse', 'SINK')),
+    ).toBe(false);
+    expect(validateEditorCapabilities(value, runtime)).toContain(
+      'Sink Connector clickhouse 当前 Native 实现不支持覆盖写入（OVERWRITE）',
     );
   });
 

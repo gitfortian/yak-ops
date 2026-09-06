@@ -15,6 +15,7 @@ import { useState, type ChangeEvent, type ReactNode } from 'react';
 
 import {
   allowsCapability,
+  allowsOverwrite,
   CONNECTOR_CAPABILITY,
   type EndpointCapabilityState,
 } from '../capabilities';
@@ -114,6 +115,7 @@ export default function SingleTableConfigSection({
     sinkCapability,
     CONNECTOR_CAPABILITY.UPSERT,
   );
+  const supportsOverwrite = allowsOverwrite(sinkCapability);
   const previewDisabled =
     !sourceDataSourceId ||
     (sourceReadMode === 'sql'
@@ -132,7 +134,11 @@ export default function SingleTableConfigSection({
   const currentWriteMode = String(sinkConfig.writeMode || 'append').toLowerCase();
   const writeModeOptions = [
     { label: '追加写入 Append', value: 'append' },
-    { label: '覆盖写入 Overwrite', value: 'overwrite' },
+    ...(supportsOverwrite
+      ? [{ label: '覆盖写入 Overwrite', value: 'overwrite' }]
+      : currentWriteMode === 'overwrite'
+        ? [{ label: '覆盖写入 Overwrite（当前不支持）', value: 'overwrite', disabled: true }]
+        : []),
     ...(supportsUpsert
       ? [{ label: '主键更新 Upsert', value: 'upsert' }]
       : currentWriteMode === 'upsert'
@@ -284,6 +290,12 @@ export default function SingleTableConfigSection({
                 })
               }
             />
+            {!supportsOverwrite && currentWriteMode === 'overwrite' ? (
+              <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
+                当前 Native Sink 不支持覆盖写入，请选择 Append
+                {supportsUpsert ? ' 或 Upsert' : ''}。
+              </div>
+            ) : null}
             {!supportsUpsert && currentWriteMode === 'upsert' ? (
               <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
                 当前 Sink Connector 未声明 UPSERT，请选择其他写入模式。

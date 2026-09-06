@@ -7,3 +7,5 @@ io.yak.ops.plugin.database.jdbc.db2.Db2DataSourcePlugin
 io.yak.ops.plugin.database.jdbc.opengauss.OpenGaussDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.sqlserver.SqlServerDataSourcePlugin
 io.yak.ops.plugin.database.jdbc.oceanbase.OceanBaseDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.starrocks.StarRocksDataSourcePlugin
+io.yak.ops.plugin.database.jdbc.clickhouse.ClickHouseDataSourcePlugin
