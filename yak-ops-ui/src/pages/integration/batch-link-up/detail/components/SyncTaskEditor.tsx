@@ -1,6 +1,7 @@
 import { Alert, Select } from 'antd';
 import type { DataSourceRecord } from '@/services/data-source';
 
+import { isAutoCreateTableEnabledForDataSourceType } from '../../connectorProfiles';
 import {
   resolveEndpointCapability,
   validateEditorCapabilities,
@@ -47,6 +48,10 @@ export default function SyncTaskEditor({
   const sourceId = editor.source.dataSourceId;
   const targetId = editor.sink.dataSourceId;
   const mappingColumns = normalizeMappings(editor.mapping?.columns);
+  const sinkAutoCreateTableEnabled =
+    isAutoCreateTableEnabledForDataSourceType(editor.sink.dbType);
+  const sinkAutoCreateTable =
+    sinkAutoCreateTableEnabled && Boolean(sinkConfig.autoCreateTable);
 
   const connectorRuntime = useOfflineConnectorRuntime();
   const sourceCapability = resolveEndpointCapability(
@@ -88,12 +93,12 @@ export default function SyncTaskEditor({
   const sourceColumnRequest = sourceConfig.readMode === 'sql'
     ? sourceConfig.sql?.trim() ? { query: sourceConfig.sql } : undefined
     : sourceConfig.table ? { table_path: sourceConfig.table } : undefined;
-  const targetColumnRequest = !sinkConfig.autoCreateTable && !isMongoSink && sinkConfig.table
+  const targetColumnRequest = !sinkAutoCreateTable && !isMongoSink && sinkConfig.table
     ? { table_path: sinkConfig.table }
     : undefined;
   const sourceColumnCatalog = useDataSourceColumns(sourceId, sourceColumnRequest);
   const targetColumnCatalog = useDataSourceColumns(targetId, targetColumnRequest);
-  const targetSchemaDerived = Boolean(sinkConfig.autoCreateTable || isMongoSink);
+  const targetSchemaDerived = Boolean(sinkAutoCreateTable || isMongoSink);
   const primaryKeyCatalog = targetSchemaDerived
     ? sourceColumnCatalog
     : targetColumnCatalog;
@@ -239,6 +244,7 @@ export default function SyncTaskEditor({
             sourceConfig={sourceConfig}
             sinkConfig={sinkConfig}
             sinkCapability={sinkCapability}
+            autoCreateTableEnabled={sinkAutoCreateTableEnabled}
             sourceTables={sourceCatalog.tables}
             sourceLoading={sourceCatalog.loading}
             sourceReady={Boolean(sourceId)}
@@ -256,6 +262,7 @@ export default function SyncTaskEditor({
             sinkConfig={sinkConfig}
             sourceCapability={sourceCapability}
             sinkCapability={sinkCapability}
+            autoCreateTableEnabled={sinkAutoCreateTableEnabled}
             sourceTables={sourceCatalog.tables}
             targetTables={targetCatalog.tables}
             sourceLoading={sourceCatalog.loading}
