@@ -341,7 +341,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
             oceanBaseOracleMode()
                 ? query + " WHERE ROWNUM <= " + limit
                 : query + " LIMIT " + limit;
-        case MYSQL, POSTGRE_SQL, DORIS, KINGBASE, OPEN_GAUSS -> query + " LIMIT " + limit;
+        case MYSQL, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+            query + " LIMIT " + limit;
       };
     }
 
@@ -356,7 +357,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
           oceanBaseOracleMode()
               ? "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit
               : "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
-      case MYSQL, POSTGRE_SQL, DORIS, KINGBASE, OPEN_GAUSS ->
+      case MYSQL, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
           "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
     };
   }
@@ -516,6 +517,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   private boolean usesCatalogAsNamespace() {
     return connection.dbType() == DataSourceDbType.MYSQL
         || connection.dbType() == DataSourceDbType.DORIS
+        || connection.dbType() == DataSourceDbType.STARROCKS
+        || connection.dbType() == DataSourceDbType.CLICKHOUSE
         || (connection.dbType() == DataSourceDbType.OCEANBASE && !oceanBaseOracleMode());
   }
 

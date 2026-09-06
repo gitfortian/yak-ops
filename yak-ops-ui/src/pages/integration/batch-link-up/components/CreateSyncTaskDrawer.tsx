@@ -40,7 +40,10 @@ import {
 } from '@/styles/brand';
 
 import { generateDataSourceOptions } from '../DataSourceSelect';
-import { connectorIdForDataSourceType } from '../detail/form-schema/valueAdapter';
+import {
+  connectorIdForNewDataSourceType,
+  type OfflineSyncConnectorRole,
+} from '../connectorProfiles';
 import {
   buildCreatePayload,
   type CreateSyncEndpoint,
@@ -66,6 +69,7 @@ interface ConnectorOption {
 }
 
 const DEFAULT_DB_TYPE = 'MYSQL';
+const NATIVE_SINGLE_ONLY_CONNECTORS = new Set(['doris', 'starrocks', 'clickhouse']);
 
 const brandCssVariables = {
   '--yak-brand-color': BRAND_COLOR,
@@ -77,12 +81,13 @@ const brandCssVariables = {
 const resolveEndpoint = (
   dbType: string,
   options: ConnectorOption[],
+  role: OfflineSyncConnectorRole,
 ): CreateSyncEndpoint => {
   const option = options.find((item) => item.value === dbType);
 
   return {
     dbType,
-    connectorId: connectorIdForDataSourceType(dbType),
+    connectorId: connectorIdForNewDataSourceType(dbType, role),
     pluginName: option?.pluginName || `JDBC-${dbType}`,
   };
 };
@@ -108,11 +113,18 @@ export default function CreateSyncTaskDrawer({
 
   const sourceDbType = Form.useWatch('sourceDbType', form);
   const targetDbType = Form.useWatch('targetDbType', form);
+  const sourceConnectorId = connectorIdForNewDataSourceType(sourceDbType, 'SOURCE');
+  const targetConnectorId = connectorIdForNewDataSourceType(targetDbType, 'SINK');
+  const nativeSingleOnly =
+    NATIVE_SINGLE_ONLY_CONNECTORS.has(sourceConnectorId) ||
+    NATIVE_SINGLE_ONLY_CONNECTORS.has(targetConnectorId);
+
   const modeOptions: Array<{
     value: SyncMode;
     title: string;
     description: string;
     icon: ReactNode;
+    disabled?: boolean;
   }> = [
     {
       value: 'GUIDE_SINGLE',
@@ -125,10 +137,13 @@ export default function CreateSyncTaskDrawer({
     {
       value: 'GUIDE_MULTI',
       title: intl.formatMessage({ id: 'pages.batchLinkUp.create.mode.multi' }),
-      description: intl.formatMessage({
-        id: 'pages.batchLinkUp.create.mode.multiDescription',
-      }),
+      description: nativeSingleOnly
+        ? '当前选择的 Native Connector 本阶段仅开放单表离线同步'
+        : intl.formatMessage({
+            id: 'pages.batchLinkUp.create.mode.multiDescription',
+          }),
       icon: <DatabaseOutlined />,
+      disabled: nativeSingleOnly,
     },
   ];
 
@@ -165,6 +180,12 @@ export default function CreateSyncTaskDrawer({
     });
   }, [connectorOptions, form, open]);
 
+  useEffect(() => {
+    if (nativeSingleOnly && form.getFieldValue('mode') === 'GUIDE_MULTI') {
+      form.setFieldValue('mode', 'GUIDE_SINGLE');
+    }
+  }, [form, nativeSingleOnly]);
+
   const updateAutoJobName = (side: 'source' | 'target', value: string) => {
     const nextSourceDbType =
       side === 'source' ? value : form.getFieldValue('sourceDbType') || '';
@@ -197,13 +218,21 @@ export default function CreateSyncTaskDrawer({
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      const source = resolveEndpoint(values.sourceDbType, connectorOptions, 'SOURCE');
+      const sink = resolveEndpoint(values.targetDbType, connectorOptions, 'SINK');
+      if (
+        values.mode === 'GUIDE_MULTI' &&
+        (NATIVE_SINGLE_ONLY_CONNECTORS.has(source.connectorId) ||
+          NATIVE_SINGLE_ONLY_CONNECTORS.has(sink.connectorId))
+      ) {
+        throw new Error('当前选择的 Native Connector 本阶段仅支持单表离线同步');
+      }
+
       const normalizedValues: CreateSyncTaskValues = {
         jobName: values.jobName.trim(),
         jobDesc: values.jobDesc?.trim(),
         mode: values.mode,
       };
-      const source = resolveEndpoint(values.sourceDbType, connectorOptions);
-      const sink = resolveEndpoint(values.targetDbType, connectorOptions);
 
       setSubmitting(true);
       const taskId = String(await getOfflineSyncUniqueId());
@@ -450,6 +479,7 @@ export default function CreateSyncTaskDrawer({
                 <Radio.Button
                   key={option.value}
                   value={option.value}
+                  disabled={option.disabled}
                   className={[
                     '!h-auto',
                     '!rounded-lg',

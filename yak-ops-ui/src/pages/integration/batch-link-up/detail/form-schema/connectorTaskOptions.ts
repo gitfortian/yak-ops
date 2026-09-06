@@ -49,16 +49,26 @@ const DATASOURCE_OWNED_KEYS = new Set(
 
 const SOURCE_MANAGED_KEYS = new Set(
   [
+    // JDBC product controls.
     'table_path',
     'table_list',
     'query',
     'where_condition',
     'fetch_size',
+    // Native product controls mapped by connector adapters.
+    'table',
+    'doris.filter.query',
+    'doris.batch.size',
+    'scan_filter',
+    'scan_batch_rows',
+    'filter_query',
+    'batch_size',
   ].map(normalizeLoose),
 );
 
 const SINK_MANAGED_KEYS = new Set(
   [
+    // JDBC product controls.
     'table_path',
     'schema_save_mode',
     'data_save_mode',
@@ -68,6 +78,12 @@ const SINK_MANAGED_KEYS = new Set(
     'batch_size',
     'dirty_data_policy',
     'dirty_data_max_count',
+    // Native product controls mapped by connector adapters.
+    'table',
+    'doris.batch.size',
+    'sink.key-type',
+    'batch_max_rows',
+    'sink.batch_size',
   ].map(normalizeLoose),
 );
 

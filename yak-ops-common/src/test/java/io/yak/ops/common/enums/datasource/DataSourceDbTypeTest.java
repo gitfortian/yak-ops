@@ -22,15 +22,18 @@ class DataSourceDbTypeTest {
   }
 
   @Test
-  void shouldExposeJdbcWaveOneAsFirstClassTypes() {
+  void shouldExposeJdbcAndNativeOlapTypesAsFirstClassTypes() {
     assertThat(DataSourceDbType.values())
         .contains(
             DataSourceDbType.DB2,
             DataSourceDbType.OPEN_GAUSS,
             DataSourceDbType.SQL_SERVER,
-            DataSourceDbType.OCEANBASE);
-    assertThat(DataSourceDbType.OPEN_GAUSS.getDisplayName()).isEqualTo("openGauss");
-    assertThat(DataSourceDbType.SQL_SERVER.getDisplayName()).isEqualTo("SQL Server");
+            DataSourceDbType.OCEANBASE,
+            DataSourceDbType.DORIS,
+            DataSourceDbType.STARROCKS,
+            DataSourceDbType.CLICKHOUSE);
+    assertThat(DataSourceDbType.STARROCKS.getDisplayName()).isEqualTo("StarRocks");
+    assertThat(DataSourceDbType.CLICKHOUSE.getDisplayName()).isEqualTo("ClickHouse");
   }
 
   @Test

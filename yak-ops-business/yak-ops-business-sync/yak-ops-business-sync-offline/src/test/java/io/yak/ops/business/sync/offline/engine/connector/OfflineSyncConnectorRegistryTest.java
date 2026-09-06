@@ -17,28 +17,21 @@ class OfflineSyncConnectorRegistryTest {
             .collect(Collectors.toMap(OfflineSyncConnectorProfile::dbType, value -> value));
 
     assertThat(profiles).containsOnlyKeys(DataSourceDbType.values());
-    assertThat(profiles.values())
-        .allSatisfy(profile -> {
-          assertThat(profile.sourceConnectorId()).isEqualTo("jdbc");
-          assertThat(profile.sinkConnectorId()).isEqualTo("jdbc");
-        });
-    assertThat(profiles.get(DataSourceDbType.DB2).pluginName()).isEqualTo("JDBC-DB2");
-    assertThat(profiles.get(DataSourceDbType.OPEN_GAUSS).pluginName())
-        .isEqualTo("JDBC-OPENGAUSS");
-    assertThat(profiles.get(DataSourceDbType.SQL_SERVER).pluginName())
-        .isEqualTo("JDBC-SQLSERVER");
-    assertThat(profiles.get(DataSourceDbType.OCEANBASE).pluginName())
-        .isEqualTo("JDBC-OCEANBASE");
+    assertThat(profiles.get(DataSourceDbType.DORIS).sourceConnectorId()).isEqualTo("doris");
+    assertThat(profiles.get(DataSourceDbType.STARROCKS).sourceConnectorId()).isEqualTo("starrocks");
+    assertThat(profiles.get(DataSourceDbType.CLICKHOUSE).sourceConnectorId()).isEqualTo("clickhouse");
+    assertThat(profiles.get(DataSourceDbType.DB2).sourceConnectorId()).isEqualTo("jdbc");
+    assertThat(profiles.get(DataSourceDbType.OPEN_GAUSS).sourceConnectorId()).isEqualTo("jdbc");
+    assertThat(profiles.get(DataSourceDbType.SQL_SERVER).sourceConnectorId()).isEqualTo("jdbc");
+    assertThat(profiles.get(DataSourceDbType.OCEANBASE).sourceConnectorId()).isEqualTo("jdbc");
   }
 
   @Test
-  void shouldKeepHistoricalAndProductAliasesOnJdbc() {
-    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("POSTGRESQL")).contains("jdbc");
-    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("DB2")).contains("jdbc");
-    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("OPENGAUSS")).contains("jdbc");
-    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SQLSERVER")).contains("jdbc");
-    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("OCEANBASE")).contains("jdbc");
+  void shouldKeepDefinitionsWithoutDurableConnectorIdOnHistoricalJdbcPath() {
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("DORIS")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("STARROCKS")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("CLICKHOUSE")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("POSTGRESQL")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HTTP")).isEmpty();
   }
 }

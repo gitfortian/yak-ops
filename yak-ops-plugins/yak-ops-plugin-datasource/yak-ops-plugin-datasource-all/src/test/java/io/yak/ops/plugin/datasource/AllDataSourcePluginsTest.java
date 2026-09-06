@@ -29,6 +29,8 @@ class AllDataSourcePluginsTest {
             DataSourceDbType.OPEN_GAUSS,
             DataSourceDbType.SQL_SERVER,
             DataSourceDbType.OCEANBASE,
-            DataSourceDbType.DORIS);
+            DataSourceDbType.DORIS,
+            DataSourceDbType.STARROCKS,
+            DataSourceDbType.CLICKHOUSE);
   }
 }

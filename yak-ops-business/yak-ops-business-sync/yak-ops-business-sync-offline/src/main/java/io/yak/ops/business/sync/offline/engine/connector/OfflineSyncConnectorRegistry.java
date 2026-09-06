@@ -12,32 +12,36 @@ import java.util.Set;
 /**
  * 离线同步 Connector Profile 注册表。
  *
- * <p>这里是 Yak Ops 控制面默认 {@code dbType -> connectorId} 关系的单一后端来源。
- * Resolver 只负责兼容输入优先级与标识规范化。</p>
- *
- * <p>当前产品数据源默认仍走 JDBC；是否切换到 native Connector 必须由独立 Profile
- * 变更显式完成，不能因为新增 DataSourceDbType 而改变执行语义。</p>
+ * <p>Profile 描述新建任务的默认执行身份；{@link #defaultConnectorId(String)} 则只服务于
+ * 没有固化 connectorId 的历史定义兼容解析。两者刻意分开，避免 Profile 切换到 native
+ * 后静默改变旧任务的执行语义。</p>
  */
 public final class OfflineSyncConnectorRegistry {
 
   private static final String JDBC = "jdbc";
 
   private static final List<OfflineSyncConnectorProfile> PROFILES = List.of(
-      profile("mysql-jdbc", DataSourceDbType.MYSQL, "JDBC-MYSQL"),
-      profile("oracle-jdbc", DataSourceDbType.ORACLE, "JDBC-ORACLE"),
-      profile("postgresql-jdbc", DataSourceDbType.POSTGRE_SQL, "JDBC-POSTGRESQL"),
-      profile("db2-jdbc", DataSourceDbType.DB2, "JDBC-DB2"),
-      profile("opengauss-jdbc", DataSourceDbType.OPEN_GAUSS, "JDBC-OPENGAUSS"),
-      profile("sqlserver-jdbc", DataSourceDbType.SQL_SERVER, "JDBC-SQLSERVER"),
-      profile("oceanbase-jdbc", DataSourceDbType.OCEANBASE, "JDBC-OCEANBASE"),
-      profile("doris-jdbc", DataSourceDbType.DORIS, "DORIS"),
-      profile("kingbase-jdbc", DataSourceDbType.KINGBASE, "JDBC-KINGBASE"),
-      profile("dameng-jdbc", DataSourceDbType.DAMENG, "JDBC-DAMENG"));
+      jdbcProfile("mysql-jdbc", DataSourceDbType.MYSQL, "JDBC-MYSQL"),
+      jdbcProfile("oracle-jdbc", DataSourceDbType.ORACLE, "JDBC-ORACLE"),
+      jdbcProfile("postgresql-jdbc", DataSourceDbType.POSTGRE_SQL, "JDBC-POSTGRESQL"),
+      jdbcProfile("db2-jdbc", DataSourceDbType.DB2, "JDBC-DB2"),
+      jdbcProfile("opengauss-jdbc", DataSourceDbType.OPEN_GAUSS, "JDBC-OPENGAUSS"),
+      jdbcProfile("sqlserver-jdbc", DataSourceDbType.SQL_SERVER, "JDBC-SQLSERVER"),
+      jdbcProfile("oceanbase-jdbc", DataSourceDbType.OCEANBASE, "JDBC-OCEANBASE"),
+      nativeProfile("doris-native", DataSourceDbType.DORIS, "doris", "DORIS"),
+      nativeProfile("starrocks-native", DataSourceDbType.STARROCKS, "starrocks", "STARROCKS"),
+      nativeProfile("clickhouse-native", DataSourceDbType.CLICKHOUSE, "clickhouse", "CLICKHOUSE"),
+      jdbcProfile("kingbase-jdbc", DataSourceDbType.KINGBASE, "JDBC-KINGBASE"),
+      jdbcProfile("dameng-jdbc", DataSourceDbType.DAMENG, "JDBC-DAMENG"));
 
-  /** Historical datasource labels that remain JDBC even without a product profile. */
+  /**
+   * Historical labels accepted before connectorId became durable execution identity.
+   * Native-capable OLAP labels intentionally stay JDBC here so old definitions are not upgraded.
+   */
   private static final Set<String> LEGACY_JDBC_LABELS = Set.of(
       "JDBC",
       "MARIADB",
+      "DORIS",
       "STARROCKS",
       "CLICKHOUSE",
       "HIVE",
@@ -64,11 +68,17 @@ public final class OfflineSyncConnectorRegistry {
     return dbType == null ? Optional.empty() : Optional.ofNullable(DEFAULTS.get(dbType));
   }
 
-  /** Resolves a product/legacy datasource label to its historical default Connector ID. */
+  /**
+   * Compatibility resolver for definitions that predate durable connectorId.
+   * New definitions must use {@link #defaultProfile(String)} and persist its connector IDs.
+   */
   public static Optional<String> defaultConnectorId(String value) {
     String normalized = normalize(value);
     if (normalized == null) {
       return Optional.empty();
+    }
+    if (LEGACY_JDBC_LABELS.contains(normalized)) {
+      return Optional.of(JDBC);
     }
 
     Optional<OfflineSyncConnectorProfile> profile = defaultProfile(normalized);
@@ -80,25 +90,39 @@ public final class OfflineSyncConnectorRegistry {
       }
       return Optional.of(selected.sourceConnectorId());
     }
-
-    return LEGACY_JDBC_LABELS.contains(normalized)
-        ? Optional.of(JDBC)
-        : Optional.empty();
+    return Optional.empty();
   }
 
   public static boolean isLegacyDatasourceLabel(String value) {
     return defaultConnectorId(value).isPresent();
   }
 
+  private static OfflineSyncConnectorProfile jdbcProfile(
+      String profileId,
+      DataSourceDbType dbType,
+      String pluginName) {
+    return profile(profileId, dbType, JDBC, JDBC, pluginName);
+  }
+
+  private static OfflineSyncConnectorProfile nativeProfile(
+      String profileId,
+      DataSourceDbType dbType,
+      String connectorId,
+      String pluginName) {
+    return profile(profileId, dbType, connectorId, connectorId, pluginName);
+  }
+
   private static OfflineSyncConnectorProfile profile(
       String profileId,
       DataSourceDbType dbType,
+      String sourceConnectorId,
+      String sinkConnectorId,
       String pluginName) {
     return new OfflineSyncConnectorProfile(
         profileId,
         dbType,
-        JDBC,
-        JDBC,
+        sourceConnectorId,
+        sinkConnectorId,
         pluginName,
         true);
   }

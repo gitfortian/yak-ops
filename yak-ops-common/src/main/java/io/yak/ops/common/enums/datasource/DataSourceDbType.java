@@ -17,6 +17,8 @@ public enum DataSourceDbType {
   SQL_SERVER("SQL Server"),
   OCEANBASE("OceanBase"),
   DORIS("Doris"),
+  STARROCKS("StarRocks"),
+  CLICKHOUSE("ClickHouse"),
   KINGBASE("KingbaseES"),
   DAMENG("达梦");
 

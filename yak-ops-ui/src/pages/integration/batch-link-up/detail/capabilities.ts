@@ -32,6 +32,12 @@ export interface EndpointCapabilityState {
   runtime?: OfflineConnectorRoleRuntime;
 }
 
+const NATIVE_NO_OVERWRITE_SINKS = new Set([
+  'doris',
+  'starrocks',
+  'clickhouse',
+]);
+
 const normalizeConnectorId = (value: string) =>
   String(value || '').trim().toLowerCase();
 
@@ -83,6 +89,10 @@ export const allowsCapability = (
   state: EndpointCapabilityState,
   capability: ConnectorCapability | string,
 ) => !state.metadataKnown || hasCapability(state, capability);
+
+/** Overwrite is a control-plane write-mode semantic, not a Link-Up capability enum today. */
+export const allowsOverwrite = (state: EndpointCapabilityState) =>
+  !NATIVE_NO_OVERWRITE_SINKS.has(normalizeConnectorId(state.connectorId));
 
 export const isDefinitivelyUnavailable = (
   state: EndpointCapabilityState,
@@ -137,6 +147,7 @@ export const validateEditorCapabilities = (
 
   const sourceConfig = editor.source.config || {};
   const sinkConfig = editor.sink.config || {};
+  const writeMode = String(sinkConfig.writeMode || '').toLowerCase();
 
   if (
     String(sourceConfig.readMode || '').toLowerCase() === 'sql' &&
@@ -157,11 +168,17 @@ export const validateEditorCapabilities = (
   }
 
   if (
-    String(sinkConfig.writeMode || '').toLowerCase() === 'upsert' &&
+    writeMode === 'upsert' &&
     !hasCapability(sink, CONNECTOR_CAPABILITY.UPSERT)
   ) {
     errors.push(
       `Sink Connector ${sink.connectorId} 不支持 Upsert（UPSERT）`,
+    );
+  }
+
+  if (writeMode === 'overwrite' && !allowsOverwrite(sink)) {
+    errors.push(
+      `Sink Connector ${sink.connectorId} 当前 Native 实现不支持覆盖写入（OVERWRITE）`,
     );
   }
 

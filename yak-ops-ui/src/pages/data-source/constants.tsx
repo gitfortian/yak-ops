@@ -37,6 +37,8 @@ export const COMMON_DB_OPTIONS: DataSourceOptionItem[] = [
   { label: 'SQL_SERVER', value: 'SQL_SERVER' },
   { label: 'OCEANBASE', value: 'OCEANBASE' },
   { label: 'DORIS', value: 'DORIS' },
+  { label: 'STARROCKS', value: 'STARROCKS' },
+  { label: 'CLICKHOUSE', value: 'CLICKHOUSE' },
   { label: 'KINGBASE', value: 'KINGBASE' },
   { label: 'DAMENG', value: 'DAMENG' },
 ];
@@ -52,6 +54,13 @@ const relationalDataSource = (dbType: string) => ({
   dbType,
   type: dbType,
   connectorType: 'Jdbc',
+});
+
+const olapDataSource = (dbType: string, connectorType: string) => ({
+  onlyDiScript: false,
+  dbType,
+  type: dbType,
+  connectorType,
 });
 
 export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] => [
@@ -74,12 +83,9 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
     groupKey: 'olap',
     groupName: intl.formatMessage({ id: 'pages.datasource.group.olap' }),
     datasourceList: [
-      {
-        onlyDiScript: false,
-        dbType: 'DORIS',
-        type: 'DORIS',
-        connectorType: 'Doris',
-      },
+      olapDataSource('DORIS', 'Doris'),
+      olapDataSource('STARROCKS', 'StarRocks'),
+      olapDataSource('CLICKHOUSE', 'ClickHouse'),
     ],
   },
 ];
