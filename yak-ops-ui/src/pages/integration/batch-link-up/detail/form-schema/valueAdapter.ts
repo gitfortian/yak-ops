@@ -1,30 +1,7 @@
+import { connectorIdForDataSourceType } from '../../connectorProfiles';
 import type { ConnectorFormValues, ConnectorRole } from './types';
 
-const RELATIONAL_TYPES = new Set([
-  'MYSQL',
-  'MARIADB',
-  'POSTGRE_SQL',
-  'POSTGRESQL',
-  'POSTGRES',
-  'ORACLE',
-  'SQLSERVER',
-  'SQL_SERVER',
-  'DORIS',
-  'STARROCKS',
-  'CLICKHOUSE',
-  'DB2',
-  'HIVE',
-  'KINGBASE',
-  'DAMENG',
-  'DM',
-  'JDBC',
-]);
-
-export const connectorIdForDataSourceType = (value?: string): string => {
-  const normalized = (value || '').trim().toUpperCase().replace(/-/g, '_');
-  if (!normalized) return '';
-  return RELATIONAL_TYPES.has(normalized) ? 'jdbc' : normalized.toLowerCase();
-};
+export { connectorIdForDataSourceType };
 
 const splitKeys = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
