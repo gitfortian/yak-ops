@@ -202,7 +202,7 @@ export default function SingleTableConfigSection({
                 onDropdownVisibleChange={(open) => {
                   if (open) onSourceTableSearch('');
                 }}
-                onChange={(table: string) => onSourceChange({ table, fields: [] })}
+                onChange={(table: string) => onSourceChange({ table })}
               />
             </div>
           )}
