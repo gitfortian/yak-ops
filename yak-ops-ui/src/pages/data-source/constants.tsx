@@ -106,12 +106,16 @@ export const getDataSourceGroupList = (intl: IntlFormatter): DataSourceGroup[] =
     ],
   },
   {
+    groupKey: 'document',
+    groupName: intl.formatMessage({ id: 'pages.datasource.group.document' }),
+    datasourceList: [typedDataSource('MONGODB', 'MongoDB')],
+  },
+  {
     groupKey: 'search',
     groupName: intl.formatMessage({ id: 'pages.datasource.group.search' }),
     datasourceList: [
       typedDataSource('ELASTICSEARCH7', 'Elasticsearch7'),
       typedDataSource('ELASTICSEARCH8', 'Elasticsearch8'),
-      typedDataSource('MONGODB', 'MongoDB'),
     ],
   },
 ];

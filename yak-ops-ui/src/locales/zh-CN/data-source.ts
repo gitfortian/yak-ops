@@ -58,6 +58,7 @@ export default {
 
   'pages.datasource.group.relational': '关系型数据库',
   'pages.datasource.group.olap': 'OLAP 数据库',
+  'pages.datasource.group.document': '文档数据库',
   'pages.datasource.group.search': '搜索引擎',
   'pages.datasource.typeSelector.title': '选择数据源',
   'pages.datasource.typeSelector.searchPlaceholder': '搜索数据源',
