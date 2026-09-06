@@ -1,4 +1,4 @@
-package io.yak.ops.business.sync.offline.connector;
+package io.yak.ops.business.sync.offline.engine.connector;
 
 import io.yak.ops.common.enums.datasource.DataSourceDbType;
 import java.util.EnumMap;

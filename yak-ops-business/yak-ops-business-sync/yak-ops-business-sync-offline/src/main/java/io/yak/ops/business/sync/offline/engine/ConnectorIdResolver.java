@@ -1,6 +1,6 @@
 package io.yak.ops.business.sync.offline.engine;
 
-import io.yak.ops.business.sync.offline.connector.OfflineSyncConnectorRegistry;
+import io.yak.ops.business.sync.offline.engine.connector.OfflineSyncConnectorRegistry;
 import java.util.Locale;
 import org.springframework.util.StringUtils;
 
