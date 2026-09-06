@@ -185,23 +185,19 @@ public class MongoOfflineSyncConnectorAdapter implements OfflineSyncConnectorAda
   private MongoPath path(String configuredDatabase, String rawTable, String message) {
     if (!StringUtils.hasText(rawTable)) throw new IllegalArgumentException(message);
     String database = trim(configuredDatabase);
-    String table = rawTable.trim();
+    String collection = rawTable.trim();
 
     if (database != null) {
       String prefix = database + ".";
-      if (table.regionMatches(true, 0, prefix, 0, prefix.length())) {
-        table = table.substring(prefix.length());
+      if (collection.regionMatches(true, 0, prefix, 0, prefix.length())) {
+        collection = collection.substring(prefix.length());
       }
-      return new MongoPath(database, requireCollection(table));
+      return new MongoPath(database, requireCollection(collection));
     }
 
-    int separator = table.indexOf('.');
-    if (separator > 0 && separator < table.length() - 1) {
-      return new MongoPath(
-          table.substring(0, separator),
-          requireCollection(table.substring(separator + 1)));
-    }
-    return new MongoPath(null, requireCollection(table));
+    // Collection names may contain dots. Without an explicit database field, keep the entire value
+    // as the collection name and inherit the datasource default database at execution time.
+    return new MongoPath(null, requireCollection(collection));
   }
 
   private String normalizeSeed(String value, int defaultPort) {

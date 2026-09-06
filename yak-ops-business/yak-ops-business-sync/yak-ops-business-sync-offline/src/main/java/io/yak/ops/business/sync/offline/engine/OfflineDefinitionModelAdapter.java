@@ -112,6 +112,8 @@ public final class OfflineDefinitionModelAdapter {
       return definition;
     }
     ObjectNode adapted = (ObjectNode) definition.deepCopy();
+    // Notification and editor metadata are Yak Ops control-plane concerns. They must never alter
+    // engine JobSpec, execution snapshots or config digests when only UI preferences change.
     adapted.remove("notification");
     adapted.remove("editorMeta");
     String mode = text(adapted.path("basic"), "mode", "GUIDE_SINGLE");
@@ -120,7 +122,10 @@ public final class OfflineDefinitionModelAdapter {
     return adapted;
   }
 
-  /** 清理由数据源负责维护的连接字段，防止凭据进入 definition_json。 */
+  /**
+   * 清理由数据源负责维护的连接字段，防止凭据进入 definition_json。
+   * 非数据源拥有的 Task Connector options 保持原样。
+   */
   public static void sanitizeForPersistence(ObjectNode definition) {
     if (definition == null) {
       return;
