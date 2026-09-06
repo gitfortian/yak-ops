@@ -11,24 +11,19 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>yak-ops-plugin-datasource-all</artifactId>
+    <artifactId>yak-ops-plugin-datasource-elasticsearch</artifactId>
 
-    <name>Yak Ops All Datasource Plugins</name>
-    <description>Runtime aggregation of all built-in Yak Ops datasource plugins</description>
+    <name>Yak Ops Elasticsearch Datasource Plugin</name>
+    <description>SDK-free Elasticsearch 7/8 control-plane datasource integration over HTTP</description>
 
     <dependencies>
         <dependency>
             <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-datasource-jdbc</artifactId>
+            <artifactId>yak-ops-plugin-datasource-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-datasource-doris</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.yak.ops</groupId>
-            <artifactId>yak-ops-plugin-datasource-elasticsearch</artifactId>
-            <version>${project.version}</version>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

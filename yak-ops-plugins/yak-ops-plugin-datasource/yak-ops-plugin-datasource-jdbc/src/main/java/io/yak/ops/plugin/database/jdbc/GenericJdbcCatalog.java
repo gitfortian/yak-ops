@@ -343,6 +343,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
                 : query + " LIMIT " + limit;
         case MYSQL, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
             query + " LIMIT " + limit;
+        case ELASTICSEARCH7, ELASTICSEARCH8 ->
+            throw new IllegalStateException("Elasticsearch must not use GenericJdbcCatalog");
       };
     }
 
@@ -359,6 +361,8 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
               : "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
       case MYSQL, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
           "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
+      case ELASTICSEARCH7, ELASTICSEARCH8 ->
+          throw new IllegalStateException("Elasticsearch must not use GenericJdbcCatalog");
     };
   }
 

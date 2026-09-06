@@ -9,6 +9,8 @@ export interface OfflineSyncConnectorProfile {
   connectorType: string;
   pluginName: string;
   defaultProfile: boolean;
+  /** Product-level guide policy. Backend adapters remain the final enforcement boundary. */
+  guideMultiEnabled?: boolean;
 }
 
 /** Control-plane default execution profiles for datasource types exposed by Yak Ops. */
@@ -54,6 +56,18 @@ export const OFFLINE_SYNC_CONNECTOR_PROFILES: readonly OfflineSyncConnectorProfi
     connectorType: 'ClickHouse', pluginName: 'CLICKHOUSE', defaultProfile: true,
   },
   {
+    profileId: 'elasticsearch7-native', dbType: 'ELASTICSEARCH7',
+    sourceConnectorId: 'elasticsearch7', sinkConnectorId: 'elasticsearch7',
+    connectorType: 'Elasticsearch7', pluginName: 'ELASTICSEARCH7', defaultProfile: true,
+    guideMultiEnabled: false,
+  },
+  {
+    profileId: 'elasticsearch8-native', dbType: 'ELASTICSEARCH8',
+    sourceConnectorId: 'elasticsearch8', sinkConnectorId: 'elasticsearch8',
+    connectorType: 'Elasticsearch8', pluginName: 'ELASTICSEARCH8', defaultProfile: true,
+    guideMultiEnabled: false,
+  },
+  {
     profileId: 'kingbase-jdbc', dbType: 'KINGBASE', sourceConnectorId: 'jdbc', sinkConnectorId: 'jdbc',
     connectorType: 'Jdbc', pluginName: 'JDBC-KINGBASE', defaultProfile: true,
   },
@@ -77,6 +91,10 @@ const DB_TYPE_ALIASES: Record<string, string> = {
   OPENGAUSS: 'OPEN_GAUSS',
   SQLSERVER: 'SQL_SERVER',
   MSSQL: 'SQL_SERVER',
+  ELASTICSEARCH_7: 'ELASTICSEARCH7',
+  ES7: 'ELASTICSEARCH7',
+  ELASTICSEARCH_8: 'ELASTICSEARCH8',
+  ES8: 'ELASTICSEARCH8',
 };
 
 const normalizeDbType = (value?: string): string => {
@@ -92,6 +110,9 @@ export const defaultOfflineSyncConnectorProfile = (
     (profile) => profile.defaultProfile && profile.dbType === normalized,
   );
 };
+
+export const isGuideMultiEnabledForDataSourceType = (dbType?: string): boolean =>
+  defaultOfflineSyncConnectorProfile(dbType)?.guideMultiEnabled !== false;
 
 /** Compatibility inference used only when a persisted endpoint has no durable connectorId. */
 export const connectorIdForDataSourceType = (

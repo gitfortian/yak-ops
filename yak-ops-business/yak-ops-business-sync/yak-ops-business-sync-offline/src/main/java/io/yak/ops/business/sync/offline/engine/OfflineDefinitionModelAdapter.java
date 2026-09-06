@@ -44,6 +44,23 @@ public final class OfflineDefinitionModelAdapter {
       "connection_check_timeout_sec",
       "connect_timeout_ms",
       "socket_timeout_ms");
+  private static final Set<String> ELASTICSEARCH_DATASOURCE_OWNED_FIELDS = Set.of(
+      "url",
+      "endpoint",
+      "hosts",
+      "host",
+      "hostname",
+      "scheme",
+      "protocol",
+      "port",
+      "username",
+      "user",
+      "password",
+      "passwd",
+      "connectionParams",
+      "connection_params",
+      "connect_timeout_ms",
+      "socket_timeout_ms");
 
   private static final List<String> SOURCE_FIELDS = List.of(
       "database",
@@ -88,8 +105,8 @@ public final class OfflineDefinitionModelAdapter {
   }
 
   /**
-   * 清理 JDBC 数据源负责维护的连接字段，防止凭据进入 definition_json。
-   * 非 JDBC Connector 的 options 不做处理。
+   * 清理由数据源负责维护的连接字段，防止凭据进入 definition_json。
+   * 非数据源拥有的 Task Connector options 保持原样。
    */
   public static void sanitizeForPersistence(ObjectNode definition) {
     if (definition == null) {
@@ -115,28 +132,40 @@ public final class OfflineDefinitionModelAdapter {
     } catch (IllegalArgumentException ignored) {
       return;
     }
-    if (!ConnectorIdResolver.isJdbc(connectorId)) {
+    Set<String> datasourceOwnedFields = datasourceOwnedFields(connectorId);
+    if (datasourceOwnedFields.isEmpty()) {
       return;
     }
 
-    removeDatasourceOwnedFields(endpoint);
+    removeDatasourceOwnedFields(endpoint, datasourceOwnedFields);
     JsonNode options = endpoint.get("options");
     if (options != null && options.isObject()) {
-      removeDatasourceOwnedFields((ObjectNode) options);
+      removeDatasourceOwnedFields((ObjectNode) options, datasourceOwnedFields);
     }
     JsonNode config = endpoint.get("config");
     if (config != null && config.isObject()) {
       ObjectNode configObject = (ObjectNode) config;
-      removeDatasourceOwnedFields(configObject);
+      removeDatasourceOwnedFields(configObject, datasourceOwnedFields);
       JsonNode connectorOptions = configObject.get("connectorOptions");
       if (connectorOptions != null && connectorOptions.isObject()) {
-        removeDatasourceOwnedFields((ObjectNode) connectorOptions);
+        removeDatasourceOwnedFields((ObjectNode) connectorOptions, datasourceOwnedFields);
       }
     }
   }
 
-  private static void removeDatasourceOwnedFields(ObjectNode node) {
-    JDBC_DATASOURCE_OWNED_FIELDS.forEach(node::remove);
+  private static Set<String> datasourceOwnedFields(String connectorId) {
+    if (ConnectorIdResolver.isJdbc(connectorId)) {
+      return JDBC_DATASOURCE_OWNED_FIELDS;
+    }
+    if ("elasticsearch7".equalsIgnoreCase(connectorId)
+        || "elasticsearch8".equalsIgnoreCase(connectorId)) {
+      return ELASTICSEARCH_DATASOURCE_OWNED_FIELDS;
+    }
+    return Set.of();
+  }
+
+  private static void removeDatasourceOwnedFields(ObjectNode node, Set<String> fields) {
+    fields.forEach(node::remove);
   }
 
   private static void adaptEndpoint(

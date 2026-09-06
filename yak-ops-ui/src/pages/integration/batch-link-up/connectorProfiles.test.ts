@@ -2,10 +2,11 @@ import {
   connectorIdForDataSourceType,
   connectorIdForNewDataSourceType,
   defaultOfflineSyncConnectorProfile,
+  isGuideMultiEnabledForDataSourceType,
   OFFLINE_SYNC_CONNECTOR_PROFILES,
 } from './connectorProfiles';
 
-test('uses native profiles for new OLAP tasks while keeping JDBC profiles explicit', () => {
+test('uses native profiles for new OLAP and versioned Elasticsearch tasks while keeping JDBC explicit', () => {
   expect(OFFLINE_SYNC_CONNECTOR_PROFILES.map((profile) => profile.dbType)).toEqual([
     'MYSQL',
     'ORACLE',
@@ -17,6 +18,8 @@ test('uses native profiles for new OLAP tasks while keeping JDBC profiles explic
     'DORIS',
     'STARROCKS',
     'CLICKHOUSE',
+    'ELASTICSEARCH7',
+    'ELASTICSEARCH8',
     'KINGBASE',
     'DAMENG',
   ]);
@@ -33,6 +36,18 @@ test('uses native profiles for new OLAP tasks while keeping JDBC profiles explic
     profileId: 'clickhouse-native',
     sourceConnectorId: 'clickhouse',
   });
+  expect(defaultOfflineSyncConnectorProfile('ELASTICSEARCH7')).toMatchObject({
+    profileId: 'elasticsearch7-native',
+    sourceConnectorId: 'elasticsearch7',
+    sinkConnectorId: 'elasticsearch7',
+    guideMultiEnabled: false,
+  });
+  expect(defaultOfflineSyncConnectorProfile('ELASTICSEARCH8')).toMatchObject({
+    profileId: 'elasticsearch8-native',
+    sourceConnectorId: 'elasticsearch8',
+    sinkConnectorId: 'elasticsearch8',
+    guideMultiEnabled: false,
+  });
   expect(defaultOfflineSyncConnectorProfile('DB2')?.sourceConnectorId).toBe('jdbc');
 });
 
@@ -43,6 +58,8 @@ test('separates legacy inference from new-task profile selection', () => {
   expect(connectorIdForNewDataSourceType('DORIS')).toBe('doris');
   expect(connectorIdForNewDataSourceType('STARROCKS')).toBe('starrocks');
   expect(connectorIdForNewDataSourceType('CLICKHOUSE')).toBe('clickhouse');
+  expect(connectorIdForNewDataSourceType('ES7')).toBe('elasticsearch7');
+  expect(connectorIdForNewDataSourceType('ELASTICSEARCH_8')).toBe('elasticsearch8');
 });
 
 test('resolves datasource aliases from one frontend registry', () => {
@@ -58,4 +75,15 @@ test('resolves datasource aliases from one frontend registry', () => {
     profileId: 'postgresql-jdbc',
     dbType: 'POSTGRE_SQL',
   });
+  expect(defaultOfflineSyncConnectorProfile('ES8')).toMatchObject({
+    dbType: 'ELASTICSEARCH8',
+    sourceConnectorId: 'elasticsearch8',
+  });
+});
+
+test('keeps Elasticsearch on the single-table guide without hardcoding drawer connector sets', () => {
+  expect(isGuideMultiEnabledForDataSourceType('MYSQL')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('DORIS')).toBe(true);
+  expect(isGuideMultiEnabledForDataSourceType('ELASTICSEARCH7')).toBe(false);
+  expect(isGuideMultiEnabledForDataSourceType('ES8')).toBe(false);
 });

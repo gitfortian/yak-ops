@@ -42,6 +42,7 @@ import {
 import { generateDataSourceOptions } from '../DataSourceSelect';
 import {
   connectorIdForNewDataSourceType,
+  isGuideMultiEnabledForDataSourceType,
   type OfflineSyncConnectorRole,
 } from '../connectorProfiles';
 import {
@@ -112,6 +113,9 @@ export default function CreateSyncTaskDrawer({
 
   const sourceDbType = Form.useWatch('sourceDbType', form);
   const targetDbType = Form.useWatch('targetDbType', form);
+  const guideMultiEnabled =
+    isGuideMultiEnabledForDataSourceType(sourceDbType) &&
+    isGuideMultiEnabledForDataSourceType(targetDbType);
 
   const modeOptions: Array<{
     value: SyncMode;
@@ -132,9 +136,12 @@ export default function CreateSyncTaskDrawer({
       value: 'GUIDE_MULTI',
       title: intl.formatMessage({ id: 'pages.batchLinkUp.create.mode.multi' }),
       description: intl.formatMessage({
-        id: 'pages.batchLinkUp.create.mode.multiDescription',
+        id: guideMultiEnabled
+          ? 'pages.batchLinkUp.create.mode.multiDescription'
+          : 'pages.batchLinkUp.create.mode.profileSingleOnlyDescription',
       }),
       icon: <DatabaseOutlined />,
+      disabled: !guideMultiEnabled,
     },
   ];
 
@@ -171,6 +178,12 @@ export default function CreateSyncTaskDrawer({
     });
   }, [connectorOptions, form, open]);
 
+  useEffect(() => {
+    if (!guideMultiEnabled && form.getFieldValue('mode') === 'GUIDE_MULTI') {
+      form.setFieldValue('mode', 'GUIDE_SINGLE');
+    }
+  }, [form, guideMultiEnabled]);
+
   const updateAutoJobName = (side: 'source' | 'target', value: string) => {
     const nextSourceDbType =
       side === 'source' ? value : form.getFieldValue('sourceDbType') || '';
@@ -205,6 +218,17 @@ export default function CreateSyncTaskDrawer({
       const values = await form.validateFields();
       const source = resolveEndpoint(values.sourceDbType, connectorOptions, 'SOURCE');
       const sink = resolveEndpoint(values.targetDbType, connectorOptions, 'SINK');
+      if (
+        values.mode === 'GUIDE_MULTI' &&
+        (!isGuideMultiEnabledForDataSourceType(values.sourceDbType) ||
+          !isGuideMultiEnabledForDataSourceType(values.targetDbType))
+      ) {
+        throw new Error(
+          intl.formatMessage({
+            id: 'pages.batchLinkUp.create.mode.profileSingleOnlyError',
+          }),
+        );
+      }
 
       const normalizedValues: CreateSyncTaskValues = {
         jobName: values.jobName.trim(),

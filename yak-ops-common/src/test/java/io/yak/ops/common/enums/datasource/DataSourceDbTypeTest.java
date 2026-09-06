@@ -19,10 +19,14 @@ class DataSourceDbTypeTest {
         .isEqualTo(DataSourceDbType.SQL_SERVER);
     assertThat(DataSourceDbType.parse("mssql"))
         .isEqualTo(DataSourceDbType.SQL_SERVER);
+    assertThat(DataSourceDbType.parse("es7"))
+        .isEqualTo(DataSourceDbType.ELASTICSEARCH7);
+    assertThat(DataSourceDbType.parse("elasticsearch-8"))
+        .isEqualTo(DataSourceDbType.ELASTICSEARCH8);
   }
 
   @Test
-  void shouldExposeJdbcAndNativeOlapTypesAsFirstClassTypes() {
+  void shouldExposeJdbcNativeOlapAndVersionedSearchTypesAsFirstClassTypes() {
     assertThat(DataSourceDbType.values())
         .contains(
             DataSourceDbType.DB2,
@@ -31,9 +35,13 @@ class DataSourceDbTypeTest {
             DataSourceDbType.OCEANBASE,
             DataSourceDbType.DORIS,
             DataSourceDbType.STARROCKS,
-            DataSourceDbType.CLICKHOUSE);
+            DataSourceDbType.CLICKHOUSE,
+            DataSourceDbType.ELASTICSEARCH7,
+            DataSourceDbType.ELASTICSEARCH8);
     assertThat(DataSourceDbType.STARROCKS.getDisplayName()).isEqualTo("StarRocks");
     assertThat(DataSourceDbType.CLICKHOUSE.getDisplayName()).isEqualTo("ClickHouse");
+    assertThat(DataSourceDbType.ELASTICSEARCH7.getDisplayName()).isEqualTo("Elasticsearch 7");
+    assertThat(DataSourceDbType.ELASTICSEARCH8.getDisplayName()).isEqualTo("Elasticsearch 8");
   }
 
   @Test

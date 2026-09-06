@@ -31,6 +31,8 @@ class AllDataSourcePluginsTest {
             DataSourceDbType.OCEANBASE,
             DataSourceDbType.DORIS,
             DataSourceDbType.STARROCKS,
-            DataSourceDbType.CLICKHOUSE);
+            DataSourceDbType.CLICKHOUSE,
+            DataSourceDbType.ELASTICSEARCH7,
+            DataSourceDbType.ELASTICSEARCH8);
   }
 }
