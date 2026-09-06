@@ -325,8 +325,8 @@ abstract class AbstractElasticsearchDataSourcePlugin implements DataSourcePlugin
     return List.copyOf(result);
   }
 
-  private FormRule required(String message) {
-    return new FormRule(true, null, null, null, message);
+  private List<FormRule> required(String message) {
+    return List.of(new FormRule(true, null, null, null, message));
   }
 
   private FormField field(
