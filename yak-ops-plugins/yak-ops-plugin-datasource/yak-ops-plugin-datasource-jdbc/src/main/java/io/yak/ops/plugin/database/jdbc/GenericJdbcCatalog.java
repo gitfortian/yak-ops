@@ -341,7 +341,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
             oceanBaseOracleMode()
                 ? query + " WHERE ROWNUM <= " + limit
                 : query + " LIMIT " + limit;
-        case MYSQL, TIDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+        case MYSQL, TIDB, GOLDENDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
             query + " LIMIT " + limit;
         case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
         case ELASTICSEARCH7, ELASTICSEARCH8, MONGODB ->
@@ -360,7 +360,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
           oceanBaseOracleMode()
               ? "SELECT * FROM (" + query + ") yak_ops_preview WHERE ROWNUM <= " + limit
               : "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
-      case MYSQL, TIDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
+      case MYSQL, TIDB, GOLDENDB, HANA, POSTGRE_SQL, DORIS, STARROCKS, CLICKHOUSE, KINGBASE, OPEN_GAUSS ->
           "SELECT * FROM (" + query + ") yak_ops_preview LIMIT " + limit;
       case YASHAN_DB, HIGHGO, IRIS, XUGU, DUCKDB -> query;
       case ELASTICSEARCH7, ELASTICSEARCH8, MONGODB ->
@@ -523,6 +523,7 @@ public class GenericJdbcCatalog implements DataSourceCatalog {
   private boolean usesCatalogAsNamespace() {
     return connection.dbType() == DataSourceDbType.MYSQL
         || connection.dbType() == DataSourceDbType.TIDB
+        || connection.dbType() == DataSourceDbType.GOLDENDB
         || connection.dbType() == DataSourceDbType.DORIS
         || connection.dbType() == DataSourceDbType.STARROCKS
         || connection.dbType() == DataSourceDbType.CLICKHOUSE
