@@ -8,6 +8,7 @@ import io.yak.ops.business.sync.offline.execution.OfflineJobExecutionService;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationVO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineConnectorRuntimeSnapshotVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineEngineHealthVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionLogPageVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineJobExecutionDetailVO;
@@ -35,6 +36,20 @@ public class OfflineJobExecutionController {
   @GetMapping({"/api/v1/job/batch-execution/health", "/api/v1/executor/health"})
   @ProjectScope(ProjectMigrationMode.LEGACY_GLOBAL)
   public Result<OfflineEngineHealthVO> health() { return Result.success(service.health()); }
+
+  @GetMapping("/api/v1/job/batch-execution/connectors")
+  @ProjectScope(ProjectMigrationMode.LEGACY_GLOBAL)
+  public Result<OfflineConnectorRuntimeSnapshotVO> connectors() {
+    return Result.success(service.connectorRuntime());
+  }
+
+  @GetMapping("/api/v1/job/batch-execution/connectors/{connectorId}/schema")
+  @ProjectScope(ProjectMigrationMode.LEGACY_GLOBAL)
+  public Result<JsonNode> connectorSchema(
+      @PathVariable String connectorId,
+      @RequestParam String role) {
+    return Result.success(service.connectorSchema(connectorId, role));
+  }
 
   @PostMapping("/api/v1/job/batch-execution/{jobDefineId}/execute")
   public Result<OfflineJobExecutionVO> execute(@PathVariable Long jobDefineId) {

@@ -7,6 +7,7 @@ import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.domain.core.BatchTriggerToken;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient.LinkUpJobResponse;
+import io.yak.ops.business.sync.offline.engine.connector.OfflineSyncConnectorRuntime;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
@@ -15,6 +16,7 @@ import io.yak.ops.common.bean.dto.sync.offline.OfflineBatchOperationDTO;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobExecutionQueryDTO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationErrorVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineBatchOperationVO;
+import io.yak.ops.common.bean.vo.sync.offline.OfflineConnectorRuntimeSnapshotVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineEngineHealthVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionEventVO;
 import io.yak.ops.common.bean.vo.sync.offline.OfflineExecutionLogPageVO;
@@ -37,9 +39,20 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
   private final OfflineExecutionLogQuery executionLogQuery;
   private final LinkUpClient linkUpClient;
   private final OfflineSyncViewMapper viewMapper;
+  private final OfflineSyncConnectorRuntime connectorRuntime;
 
   public OfflineEngineHealthVO health() {
     return viewMapper.engineHealth(linkUpClient.node());
+  }
+
+  /** Global runtime inventory for the currently configured Link-Up Worker. */
+  public OfflineConnectorRuntimeSnapshotVO connectorRuntime() {
+    return connectorRuntime.snapshot();
+  }
+
+  /** Full current Worker schema. Unlike the inventory summary, this never falls back to stale data. */
+  public JsonNode connectorSchema(String connectorId, String role) {
+    return connectorRuntime.schema(connectorId, role);
   }
 
   @Override

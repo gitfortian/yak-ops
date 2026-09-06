@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.yak.ops.business.sync.offline.domain.OfflineJobExecution;
 import io.yak.ops.business.sync.offline.engine.LinkUpClient;
+import io.yak.ops.business.sync.offline.engine.connector.OfflineSyncConnectorRuntime;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionLogQuery;
 import io.yak.ops.business.sync.offline.execution.query.OfflineExecutionQuery;
 import io.yak.ops.business.sync.offline.mapping.OfflineSyncViewMapper;
@@ -82,6 +83,7 @@ class OfflineJobExecutionServiceEntryPointTest {
     OfflineExecutionLogQuery executionLogQuery = mock(OfflineExecutionLogQuery.class);
     LinkUpClient linkUpClient = mock(LinkUpClient.class);
     OfflineSyncViewMapper viewMapper = mock(OfflineSyncViewMapper.class);
+    OfflineSyncConnectorRuntime connectorRuntime = mock(OfflineSyncConnectorRuntime.class);
     return new Fixture(
         new OfflineJobExecutionService(
             coordinator,
@@ -89,7 +91,8 @@ class OfflineJobExecutionServiceEntryPointTest {
             executionQuery,
             executionLogQuery,
             linkUpClient,
-            viewMapper),
+            viewMapper,
+            connectorRuntime),
         coordinator,
         runtime,
         executionQuery);
