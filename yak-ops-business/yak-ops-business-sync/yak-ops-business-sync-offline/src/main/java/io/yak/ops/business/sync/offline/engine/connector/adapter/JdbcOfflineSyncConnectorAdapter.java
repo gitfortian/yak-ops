@@ -59,6 +59,11 @@ public class JdbcOfflineSyncConnectorAdapter implements OfflineSyncConnectorAdap
   }
 
   @Override
+  public boolean supportsNativeMultiTable(String connectorId, Role role) {
+    return true;
+  }
+
+  @Override
   public BuildResult build(BuildContext context) {
     removeDatasourceOwnedOptions(context.options());
     return context.role() == Role.SOURCE ? buildSource(context) : buildSink(context);

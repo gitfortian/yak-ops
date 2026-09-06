@@ -169,6 +169,11 @@ public class OfflineJobExecutionService implements OfflineScheduleExecutionGatew
     return executionLogQuery.logs(executionQuery.require(id), cursor, limit);
   }
 
+  /** Reconciler lets the execution layer own FAN_OUT child discovery/aggregation. */
+  public boolean reconcileFanOutIfNeeded(OfflineJobExecution execution) {
+    return coordinator.reconcileFanOutIfNeeded(execution);
+  }
+
   /** Reconciler enters state application through the stable facade. */
   public void applySnapshot(OfflineJobExecution execution, LinkUpJobResponse response, String type) {
     coordinator.applySnapshot(execution, response, type);

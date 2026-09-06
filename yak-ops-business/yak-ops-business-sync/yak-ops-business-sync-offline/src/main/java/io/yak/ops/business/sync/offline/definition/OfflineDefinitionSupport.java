@@ -8,29 +8,45 @@ import io.yak.ops.business.sync.offline.config.ConditionalOnOfflineSyncEnabled;
 import io.yak.ops.business.sync.offline.domain.OfflineJobDefinition;
 import io.yak.ops.business.sync.offline.engine.LinkUpJobSpecFactory;
 import io.yak.ops.business.sync.offline.engine.OfflineDefinitionModelAdapter;
+import io.yak.ops.business.sync.offline.engine.plan.OfflineExecutionPlanFactory;
 import io.yak.ops.common.bean.dto.sync.offline.OfflineJobDefinitionDTO;
 import io.yak.ops.common.bean.po.datasource.DataSourcePO;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 离线同步任务定义规范化、JobSpec 构建与运行时凭据解析。 */
+/** 离线同步任务定义规范化、执行策略冻结、JobSpec 构建与运行时凭据解析。 */
 @ConditionalOnOfflineSyncEnabled
 @Component
 public class OfflineDefinitionSupport {
 
   private final LinkUpJobSpecFactory jobSpecFactory;
+  private final OfflineExecutionPlanFactory executionPlanFactory;
   private final ObjectMapper objectMapper;
 
+  @Autowired
   public OfflineDefinitionSupport(
       LinkUpJobSpecFactory jobSpecFactory,
+      OfflineExecutionPlanFactory executionPlanFactory,
       @Qualifier("offlineSyncJsonMapper") ObjectMapper objectMapper) {
     this.jobSpecFactory = jobSpecFactory;
+    this.executionPlanFactory = executionPlanFactory;
     this.objectMapper = objectMapper;
+  }
+
+  /** Keeps focused direct construction source-compatible with the pre-PR7 boundary. */
+  public OfflineDefinitionSupport(
+      LinkUpJobSpecFactory jobSpecFactory,
+      ObjectMapper objectMapper) {
+    this(
+        jobSpecFactory,
+        new OfflineExecutionPlanFactory(jobSpecFactory, objectMapper),
+        objectMapper);
   }
 
   public PreparedDefinition prepare(OfflineJobDefinitionDTO dto) {
@@ -40,7 +56,7 @@ public class OfflineDefinitionSupport {
     String mode = mode(basic);
 
     JsonNode buildRequest = OfflineDefinitionModelAdapter.forJobSpec(request, objectMapper);
-    LinkUpJobSpecFactory.BuildResult result = jobSpecFactory.build(buildRequest);
+    OfflineExecutionPlanFactory.BuildResult result = executionPlanFactory.build(buildRequest);
     DataSourcePO source = result.getSourceDataSource();
     DataSourcePO sink = result.getSinkDataSource();
 
@@ -50,14 +66,14 @@ public class OfflineDefinitionSupport {
         trim(text(basic, "jobDesc", null)),
         mode,
         write(request),
-        result.getJobSpecJson(),
+        result.getLogicalSpecJson(),
         id(source),
         id(sink),
         displayType(source, result.getSourceConnectorId()),
         displayType(sink, result.getSinkConnectorId()),
         result.getSourceTable(),
         result.getSinkTable(),
-        digest(result.getJobSpecJson()));
+        digest(result.getLogicalSpecJson()));
   }
 
   public DraftDefinition prepareDraft(OfflineJobDefinitionDTO dto) {
