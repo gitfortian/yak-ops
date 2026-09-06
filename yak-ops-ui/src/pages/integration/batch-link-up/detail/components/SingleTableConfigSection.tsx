@@ -13,6 +13,11 @@ import {
 } from 'antd';
 import { useState, type ChangeEvent, type ReactNode } from 'react';
 
+import {
+  allowsCapability,
+  CONNECTOR_CAPABILITY,
+  type EndpointCapabilityState,
+} from '../capabilities';
 import type { DataSourceColumnOption } from '../hooks/useDataSourceColumns';
 import EditorSection from './EditorSection';
 import SingleTablePreviewModal from './SingleTablePreviewModal';
@@ -21,6 +26,8 @@ interface SingleTableConfigSectionProps {
   sourceDataSourceId?: string | number;
   sourceConfig: Record<string, any>;
   sinkConfig: Record<string, any>;
+  sourceCapability: EndpointCapabilityState;
+  sinkCapability: EndpointCapabilityState;
   sourceTables: string[];
   targetTables: string[];
   sourceLoading: boolean;
@@ -76,6 +83,8 @@ export default function SingleTableConfigSection({
   sourceDataSourceId,
   sourceConfig,
   sinkConfig,
+  sourceCapability,
+  sinkCapability,
   sourceTables,
   targetTables,
   sourceLoading,
@@ -93,11 +102,43 @@ export default function SingleTableConfigSection({
 }: SingleTableConfigSectionProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const sourceReadMode = sourceConfig.readMode === 'sql' ? 'sql' : 'table';
+  const supportsCustomSql = allowsCapability(
+    sourceCapability,
+    CONNECTOR_CAPABILITY.CUSTOM_SQL,
+  );
+  const supportsAutoCreate = allowsCapability(
+    sinkCapability,
+    CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE,
+  );
+  const supportsUpsert = allowsCapability(
+    sinkCapability,
+    CONNECTOR_CAPABILITY.UPSERT,
+  );
   const previewDisabled =
     !sourceDataSourceId ||
     (sourceReadMode === 'sql'
       ? !String(sourceConfig.sql || '').trim()
       : !String(sourceConfig.table || '').trim());
+
+  const readModeOptions = [
+    { label: '选择数据表', value: 'table' },
+    ...(supportsCustomSql
+      ? [{ label: '自定义 SQL', value: 'sql' }]
+      : sourceReadMode === 'sql'
+        ? [{ label: '自定义 SQL（当前不支持）', value: 'sql', disabled: true }]
+        : []),
+  ];
+
+  const currentWriteMode = String(sinkConfig.writeMode || 'append').toLowerCase();
+  const writeModeOptions = [
+    { label: '追加写入 Append', value: 'append' },
+    { label: '覆盖写入 Overwrite', value: 'overwrite' },
+    ...(supportsUpsert
+      ? [{ label: '主键更新 Upsert', value: 'upsert' }]
+      : currentWriteMode === 'upsert'
+        ? [{ label: '主键更新 Upsert（当前不支持）', value: 'upsert', disabled: true }]
+        : []),
+  ];
 
   return (
     <EditorSection title="单表同步配置">
@@ -107,11 +148,8 @@ export default function SingleTableConfigSection({
             <FieldLabel>读取方式</FieldLabel>
             <Segmented
               block
-              value={sourceConfig.readMode || 'table'}
-              options={[
-                { label: '选择数据表', value: 'table' },
-                { label: '自定义 SQL', value: 'sql' },
-              ]}
+              value={sourceReadMode}
+              options={readModeOptions}
               onChange={(readMode: string | number) =>
                 onSourceChange({
                   readMode,
@@ -121,7 +159,7 @@ export default function SingleTableConfigSection({
             />
           </div>
 
-          {sourceConfig.readMode === 'sql' ? (
+          {sourceReadMode === 'sql' ? (
             <div>
               <FieldLabel required>查询 SQL</FieldLabel>
               <Input.TextArea
@@ -132,6 +170,11 @@ export default function SingleTableConfigSection({
                 className="font-mono"
                 onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onSourceChange({ sql: event.target.value })}
               />
+              {!supportsCustomSql ? (
+                <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
+                  当前 Source Connector 未声明 CUSTOM_SQL，请切换为数据表读取后再保存。
+                </div>
+              ) : null}
             </div>
           ) : (
             <div>
@@ -169,20 +212,29 @@ export default function SingleTableConfigSection({
         </EndpointPanel>
 
         <EndpointPanel icon={<ExportOutlined />} title="Sink 目标配置">
-          <div className="flex items-center justify-between rounded-lg bg-[#f5f5f6] px-3.5 py-3">
-            <div className="text-[12px] font-medium text-[#475467]">自动创建目标表</div>
-            <Switch
-              checked={Boolean(sinkConfig.autoCreateTable)}
-              onChange={(autoCreateTable: boolean) =>
-                onSinkChange({
-                  autoCreateTable,
-                  table: '',
-                  targetTableName: '',
-                  primaryKey: '',
-                })
-              }
-            />
-          </div>
+          {supportsAutoCreate || sinkConfig.autoCreateTable ? (
+            <div className="rounded-lg bg-[#f5f5f6] px-3.5 py-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[12px] font-medium text-[#475467]">自动创建目标表</div>
+                <Switch
+                  checked={Boolean(sinkConfig.autoCreateTable)}
+                  onChange={(autoCreateTable: boolean) =>
+                    onSinkChange({
+                      autoCreateTable,
+                      table: '',
+                      targetTableName: '',
+                      primaryKey: '',
+                    })
+                  }
+                />
+              </div>
+              {!supportsAutoCreate && sinkConfig.autoCreateTable ? (
+                <div className="mt-2 text-[11px] leading-5 text-[#b54708]">
+                  当前 Sink Connector 未声明 AUTO_CREATE_TABLE，请关闭后选择已有目标表。
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {sinkConfig.autoCreateTable ? (
             <div>
@@ -222,12 +274,8 @@ export default function SingleTableConfigSection({
             <FieldLabel required>写入模式</FieldLabel>
             <Select
               variant="filled"
-              value={sinkConfig.writeMode || 'append'}
-              options={[
-                { label: '追加写入 Append', value: 'append' },
-                { label: '覆盖写入 Overwrite', value: 'overwrite' },
-                { label: '主键更新 Upsert', value: 'upsert' },
-              ]}
+              value={currentWriteMode}
+              options={writeModeOptions}
               className="w-full"
               onChange={(writeMode: string) =>
                 onSinkChange({
@@ -236,9 +284,14 @@ export default function SingleTableConfigSection({
                 })
               }
             />
+            {!supportsUpsert && currentWriteMode === 'upsert' ? (
+              <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
+                当前 Sink Connector 未声明 UPSERT，请选择其他写入模式。
+              </div>
+            ) : null}
           </div>
 
-          {sinkConfig.writeMode === 'upsert' ? (
+          {currentWriteMode === 'upsert' ? (
             <div>
               <FieldLabel required>主键字段</FieldLabel>
               <Select

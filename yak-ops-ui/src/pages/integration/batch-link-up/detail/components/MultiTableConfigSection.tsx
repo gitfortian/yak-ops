@@ -12,11 +12,17 @@ import {
 } from 'antd';
 import { useMemo, type ReactNode } from 'react';
 
+import {
+  allowsCapability,
+  CONNECTOR_CAPABILITY,
+  type EndpointCapabilityState,
+} from '../capabilities';
 import EditorSection from './EditorSection';
 
 interface MultiTableConfigSectionProps {
   sourceConfig: Record<string, any>;
   sinkConfig: Record<string, any>;
+  sinkCapability: EndpointCapabilityState;
   sourceTables: string[];
   sourceLoading: boolean;
   sourceReady: boolean;
@@ -91,6 +97,7 @@ function FieldLabel({
 export default function MultiTableConfigSection({
   sourceConfig,
   sinkConfig,
+  sinkCapability,
   sourceTables,
   sourceLoading,
   sourceReady,
@@ -103,6 +110,17 @@ export default function MultiTableConfigSection({
 }: MultiTableConfigSectionProps) {
   const tableNamingRule = String(
     sinkConfig.tableNamingRule || 'same_name',
+  ).toLowerCase();
+  const supportsAutoCreate = allowsCapability(
+    sinkCapability,
+    CONNECTOR_CAPABILITY.AUTO_CREATE_TABLE,
+  );
+  const supportsUpsert = allowsCapability(
+    sinkCapability,
+    CONNECTOR_CAPABILITY.UPSERT,
+  );
+  const currentWriteMode = String(
+    sinkConfig.writeMode || 'append',
   ).toLowerCase();
 
   const selectedTables = useMemo(
@@ -126,9 +144,19 @@ export default function MultiTableConfigSection({
     [selectedTables, sourceTables],
   );
 
+  const writeModeOptions = [
+    { label: '追加写入 Append', value: 'append' },
+    { label: '覆盖写入 Overwrite', value: 'overwrite' },
+    ...(supportsUpsert
+      ? [{ label: '主键更新 Upsert', value: 'upsert' }]
+      : currentWriteMode === 'upsert'
+        ? [{ label: '主键更新 Upsert（当前不支持）', value: 'upsert', disabled: true }]
+        : []),
+  ];
+
   return (
     <EditorSection title="多表同步配置">
-      <div className="grid grid-cols-2 items-start gap-5 max-lg:grid-cols-1" style={{height: 500}}>
+      <div className="grid grid-cols-2 items-start gap-5 max-lg:grid-cols-1">
         <EndpointPanel
           icon={<DatabaseOutlined />}
           title="Source 来源配置"
@@ -154,9 +182,7 @@ export default function MultiTableConfigSection({
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="text-[12px] font-medium text-[#475467]">
                 来源表
-                <span className="ml-1 text-[var(--yak-brand-color)]">
-                  *
-                </span>
+                <span className="ml-1 text-[var(--yak-brand-color)]">*</span>
               </div>
 
               <span className="text-[11px] text-[#98a2b3]">
@@ -254,18 +280,27 @@ export default function MultiTableConfigSection({
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-[#f5f5f6] px-3.5 py-3">
-            <div className="text-[12px] font-medium text-[#475467]">
-              自动创建目标表
-            </div>
+          {supportsAutoCreate || sinkConfig.autoCreateTable ? (
+            <div className="rounded-lg bg-[#f5f5f6] px-3.5 py-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[12px] font-medium text-[#475467]">
+                  自动创建目标表
+                </div>
 
-            <Switch
-              checked={Boolean(sinkConfig.autoCreateTable)}
-              onChange={(autoCreateTable) =>
-                onSinkChange({ autoCreateTable })
-              }
-            />
-          </div>
+                <Switch
+                  checked={Boolean(sinkConfig.autoCreateTable)}
+                  onChange={(autoCreateTable) =>
+                    onSinkChange({ autoCreateTable })
+                  }
+                />
+              </div>
+              {!supportsAutoCreate && sinkConfig.autoCreateTable ? (
+                <div className="mt-2 text-[11px] leading-5 text-[#b54708]">
+                  当前 Sink Connector 未声明 AUTO_CREATE_TABLE，请关闭后再保存。
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div>
             <FieldLabel required>目标表命名</FieldLabel>
@@ -319,20 +354,24 @@ export default function MultiTableConfigSection({
             <FieldLabel required>写入模式</FieldLabel>
             <Select
               variant="filled"
-              value={String(sinkConfig.writeMode || 'append').toLowerCase()}
-              options={[
-                { label: '追加写入 Append', value: 'append' },
-                { label: '覆盖写入 Overwrite', value: 'overwrite' },
-                { label: '主键更新 Upsert', value: 'upsert' },
-              ]}
+              value={currentWriteMode}
+              options={writeModeOptions}
               className="w-full"
               onChange={(writeMode) =>
-                onSinkChange({ writeMode })
+                onSinkChange({
+                  writeMode,
+                  ...(writeMode === 'upsert' ? {} : { primaryKey: '' }),
+                })
               }
             />
+            {!supportsUpsert && currentWriteMode === 'upsert' ? (
+              <div className="mt-1.5 text-[11px] leading-5 text-[#b54708]">
+                当前 Sink Connector 未声明 UPSERT，请选择其他写入模式。
+              </div>
+            ) : null}
           </div>
 
-          {String(sinkConfig.writeMode || '').toLowerCase() === 'upsert' ? (
+          {currentWriteMode === 'upsert' ? (
             <div>
               <FieldLabel required>主键字段</FieldLabel>
               <Input
