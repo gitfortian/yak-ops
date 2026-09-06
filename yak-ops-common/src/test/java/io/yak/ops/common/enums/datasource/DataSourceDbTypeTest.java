@@ -17,6 +17,12 @@ class DataSourceDbTypeTest {
         .isEqualTo(DataSourceDbType.TIDB);
     assertThat(DataSourceDbType.parse("ti-db"))
         .isEqualTo(DataSourceDbType.TIDB);
+    assertThat(DataSourceDbType.parse("hana"))
+        .isEqualTo(DataSourceDbType.HANA);
+    assertThat(DataSourceDbType.parse("sap-hana"))
+        .isEqualTo(DataSourceDbType.HANA);
+    assertThat(DataSourceDbType.parse("saphana"))
+        .isEqualTo(DataSourceDbType.HANA);
     assertThat(DataSourceDbType.parse("opengauss"))
         .isEqualTo(DataSourceDbType.OPEN_GAUSS);
     assertThat(DataSourceDbType.parse("SQLSERVER"))
@@ -48,6 +54,7 @@ class DataSourceDbTypeTest {
     assertThat(DataSourceDbType.values())
         .contains(
             DataSourceDbType.TIDB,
+            DataSourceDbType.HANA,
             DataSourceDbType.DB2,
             DataSourceDbType.OPEN_GAUSS,
             DataSourceDbType.SQL_SERVER,
@@ -63,6 +70,7 @@ class DataSourceDbTypeTest {
             DataSourceDbType.ELASTICSEARCH7,
             DataSourceDbType.ELASTICSEARCH8);
     assertThat(DataSourceDbType.TIDB.getDisplayName()).isEqualTo("TiDB");
+    assertThat(DataSourceDbType.HANA.getDisplayName()).isEqualTo("SAP HANA");
     assertThat(DataSourceDbType.YASHAN_DB.getDisplayName()).isEqualTo("YashanDB");
     assertThat(DataSourceDbType.HIGHGO.getDisplayName()).isEqualTo("HighGo");
     assertThat(DataSourceDbType.IRIS.getDisplayName()).isEqualTo("InterSystems IRIS");

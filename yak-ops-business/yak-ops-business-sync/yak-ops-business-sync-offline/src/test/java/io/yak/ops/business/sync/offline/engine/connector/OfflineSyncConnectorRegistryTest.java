@@ -31,6 +31,7 @@ class OfflineSyncConnectorRegistryTest {
 
     for (DataSourceDbType dbType : new DataSourceDbType[] {
       DataSourceDbType.TIDB,
+      DataSourceDbType.HANA,
       DataSourceDbType.DB2,
       DataSourceDbType.OPEN_GAUSS,
       DataSourceDbType.SQL_SERVER,
@@ -54,6 +55,9 @@ class OfflineSyncConnectorRegistryTest {
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("POSTGRESQL")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("TIDB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("TI-DB")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HANA")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SAP-HANA")).contains("jdbc");
+    assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("SAPHANA")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("YASHANDB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("HGDB")).contains("jdbc");
     assertThat(OfflineSyncConnectorRegistry.defaultConnectorId("XUGUDB")).contains("jdbc");

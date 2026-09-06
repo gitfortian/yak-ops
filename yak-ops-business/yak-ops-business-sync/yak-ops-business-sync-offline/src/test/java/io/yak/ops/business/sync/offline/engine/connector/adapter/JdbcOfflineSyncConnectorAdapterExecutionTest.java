@@ -65,4 +65,33 @@ class JdbcOfflineSyncConnectorAdapterExecutionTest {
     assertThat(options.path("dialect").asText()).isEqualTo("tidb");
     assertThat(options.path("password").asText()).isEqualTo("secret");
   }
+
+  @Test
+  void injectsHanaDialectAndSchemaFromDatasourceOwnedConnection() {
+    ObjectMapper mapper = new ObjectMapper();
+    JdbcOfflineSyncConnectorAdapter adapter = new JdbcOfflineSyncConnectorAdapter(mapper);
+    DataSourcePO dataSource = new DataSourcePO();
+    dataSource.setId(12L);
+    dataSource.setName("hana");
+    dataSource.setDbType(DataSourceDbType.HANA);
+    dataSource.setConnectionParams(
+        "{\"jdbcUrl\":\"jdbc:sap://127.0.0.1:30013/?databaseName=HXE\","
+            + "\"driverClassName\":\"com.sap.db.jdbc.Driver\","
+            + "\"username\":\"SYSTEM\",\"password\":\"secret\","
+            + "\"schema\":\"SALES\",\"dialect\":\"hana\"}");
+
+    ObjectNode options = mapper.createObjectNode();
+    options.put("url", "jdbc:mysql://stale:3306/source");
+    options.put("dialect", "mysql");
+    options.put("table_path", "SALES.ORDERS");
+    adapter.resolveForExecution(
+        new ExecutionContext("jdbc", Role.SINK, "目标端", dataSource, options));
+
+    assertThat(options.path("url").asText())
+        .isEqualTo("jdbc:sap://127.0.0.1:30013/?databaseName=HXE");
+    assertThat(options.path("driver").asText()).isEqualTo("com.sap.db.jdbc.Driver");
+    assertThat(options.path("dialect").asText()).isEqualTo("hana");
+    assertThat(options.path("schema").asText()).isEqualTo("SALES");
+    assertThat(options.path("password").asText()).isEqualTo("secret");
+  }
 }
