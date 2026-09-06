@@ -1,13 +1,14 @@
 import { SendOutlined } from "@ant-design/icons";
 import { Select } from "antd";
-import { useMemo } from "react";
 import MysqlIcon from "@/components/data-source/icons/MysqlIcon";
 import OracleIcon from "@/components/data-source/icons/OracleIcon";
 import PostgreSQL from "@/components/data-source/icons/PsSqlIcon";
 import DorisIcon from "@/components/data-source/icons/DorisIcon";
 import KingBaseIcon from "@/components/data-source/icons/KingBaseIcon";
 import DaMengIcon from "@/components/data-source/icons/DamengIcon";
+import { defaultOfflineSyncConnectorProfile } from "./connectorProfiles";
 import "./index.less";
+
 // 类型定义
 interface DataSourceType {
   value: string;
@@ -16,12 +17,20 @@ interface DataSourceType {
   connectorType?: string;
   pluginName?: string;
 }
-// 生成数据源选项配置
+
+const executionMetadata = (dbType: string) => {
+  const profile = defaultOfflineSyncConnectorProfile(dbType);
+  return {
+    connectorType: profile?.connectorType,
+    pluginName: profile?.pluginName,
+  };
+};
+
+// 生成数据源选项配置。图标/文案属于 UI；执行 Connector 元数据统一来自 Profile Registry。
 export const generateDataSourceOptions = (): DataSourceType[] => [
   {
     value: "MYSQL",
-    connectorType: "Jdbc",
-    pluginName: "JDBC-MYSQL",
+    ...executionMetadata("MYSQL"),
     label: (
       <div style={{ display: "flex", alignItems: "center" }}>
         <MysqlIcon height="24px" width="24px" />
@@ -31,8 +40,7 @@ export const generateDataSourceOptions = (): DataSourceType[] => [
   },
   {
     value: "ORACLE",
-    connectorType: "Jdbc",
-    pluginName: "JDBC-ORACLE",
+    ...executionMetadata("ORACLE"),
     label: (
       <div style={{ display: "flex", alignItems: "center" }}>
         <OracleIcon />
@@ -42,8 +50,7 @@ export const generateDataSourceOptions = (): DataSourceType[] => [
   },
   {
     value: "POSTGRE_SQL",
-    connectorType: "Jdbc",
-    pluginName: "JDBC-POSTGRESQL",
+    ...executionMetadata("POSTGRE_SQL"),
     label: (
       <div style={{ display: "flex", alignItems: "center" }}>
         <PostgreSQL />
@@ -53,8 +60,7 @@ export const generateDataSourceOptions = (): DataSourceType[] => [
   },
   {
     value: "DORIS",
-    connectorType: "Doris",
-    pluginName: "DORIS",
+    ...executionMetadata("DORIS"),
     label: (
       <div style={{ display: "flex", alignItems: "center" }}>
         <DorisIcon />
@@ -64,8 +70,7 @@ export const generateDataSourceOptions = (): DataSourceType[] => [
   },
   {
     value: "KINGBASE",
-    connectorType: "Jdbc",
-    pluginName: "JDBC-KINGBASE",
+    ...executionMetadata("KINGBASE"),
     label: (
       <div style={{ display: "flex", alignItems: "center" }}>
         <KingBaseIcon />
@@ -75,8 +80,7 @@ export const generateDataSourceOptions = (): DataSourceType[] => [
   },
   {
     value: "DAMENG",
-    connectorType: "Jdbc",
-    pluginName: "JDBC-DAMENG",
+    ...executionMetadata("DAMENG"),
     label: (
       <div style={{ display: "flex", alignItems: "center" }}>
         <DaMengIcon />
@@ -86,14 +90,13 @@ export const generateDataSourceOptions = (): DataSourceType[] => [
   },
 ];
 
-
 // 数据源选择器组件
 interface DataSourceSelectProps {
   value: any;
   onChange: (value: string, option: any) => void;
   placeholder: string;
   prefix: string;
-  dataSourceOptions: any[],
+  dataSourceOptions: any[];
   width?: string;
 }
 
