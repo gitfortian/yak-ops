@@ -26,6 +26,7 @@ import io.yak.ops.business.sync.offline.domain.core.RetryPolicySnapshot;
 import io.yak.ops.business.sync.offline.repository.OfflineAuditCorrelationRepository;
 import io.yak.ops.business.sync.offline.repository.OfflineBatchExecutionRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -85,11 +86,11 @@ class OfflineAuditBridgeTest {
     verify(handle).event(event.capture());
     assertThat(event.getValue().type()).isEqualTo(AuditEventType.WORKER_STARTED);
     assertThat(event.getValue().eventKey()).isEqualTo("offline:attempt:99:worker-started");
-    assertThat(event.getValue().payload())
-        .containsEntry("batchId", 77L)
-        .containsEntry("attemptId", 99L)
-        .containsEntry("attemptNo", 2)
-        .containsEntry("status", "RUNNING");
+    Map<String, ?> payload = event.getValue().payload();
+    assertThat(payload.get("batchId")).isEqualTo(77L);
+    assertThat(payload.get("attemptId")).isEqualTo(99L);
+    assertThat(payload.get("attemptNo")).isEqualTo(2);
+    assertThat(payload.get("status")).isEqualTo("RUNNING");
     verify(auditService).resume(carrier);
   }
 
