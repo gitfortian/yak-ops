@@ -14,18 +14,24 @@ import { HomeEmptyState } from './HomeEmptyState';
 
 interface NotificationState {
   items: SecurityMessage[];
-  unreadTotal: number;
   loading: boolean;
   failed: boolean;
 }
 
 const formatMessageDate = (value?: string | number) => {
   if (value === undefined || value === null || value === '') return '--';
+
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return String(value);
-  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}`;
+
+  if (!Number.isFinite(date.getTime())) {
+    return String(value);
+  }
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 };
 
 function NotificationRow({
@@ -39,20 +45,47 @@ function NotificationRow({
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className="group flex w-full items-start gap-2 border-0 bg-transparent py-3 text-left"
+      className="
+        group
+        flex
+        h-10
+        w-full
+        items-center
+        gap-4
+        border-0
+        bg-transparent
+        px-2
+        text-left
+        transition-colors
+        duration-150
+        hover:bg-[#f5f6f8]
+      "
     >
-      <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[#ff3657]" />
-      <span className="min-w-0 flex-1">
-        <strong className="line-clamp-2 block text-[12px] font-semibold leading-5 text-[#353943] transition-colors group-hover:text-[#20232b]">
-          {item.title}
-        </strong>
-        {item.summary ? (
-          <span className="mt-0.5 block truncate text-[10px] leading-4 text-[#9a9ea6]">
-            {item.summary}
-          </span>
-        ) : null}
+      <span
+        className="
+          min-w-0
+          flex-1
+          truncate
+          text-[14px]
+          font-normal
+          leading-5
+          text-[#30333b]
+          transition-colors
+          duration-150
+          group-hover:text-[#17191f]
+        "
+      >
+        {item.title}
       </span>
-      <span className="shrink-0 pt-0.5 text-[10px] leading-5 text-[#a0a4ac]">
+
+      <span
+        className="
+          shrink-0
+          text-[12px]
+          leading-5
+          text-[#858a94]
+        "
+      >
         {formatMessageDate(item.createTime)}
       </span>
     </button>
@@ -62,9 +95,9 @@ function NotificationRow({
 export default function NotificationCenter() {
   const intl = useIntl();
   const { projects, currentProject } = useSecurityProject();
+
   const [state, setState] = useState<NotificationState>({
     items: [],
-    unreadTotal: 0,
     loading: true,
     failed: false,
   });
@@ -73,13 +106,22 @@ export default function NotificationCenter() {
     let active = true;
 
     if (projects.length > 0 && !currentProject) {
-      setState({ items: [], unreadTotal: 0, loading: true, failed: false });
+      setState({
+        items: [],
+        loading: true,
+        failed: false,
+      });
+
       return () => {
         active = false;
       };
     }
 
-    setState({ items: [], unreadTotal: 0, loading: true, failed: false });
+    setState({
+      items: [],
+      loading: true,
+      failed: false,
+    });
 
     pageMessages({
       pageNum: 1,
@@ -89,16 +131,21 @@ export default function NotificationCenter() {
     })
       .then((result) => {
         if (!active) return;
+
         setState({
           items: result.records || [],
-          unreadTotal: result.total || 0,
           loading: false,
           failed: false,
         });
       })
       .catch(() => {
         if (!active) return;
-        setState({ items: [], unreadTotal: 0, loading: false, failed: true });
+
+        setState({
+          items: [],
+          loading: false,
+          failed: true,
+        });
       });
 
     return () => {
@@ -107,7 +154,8 @@ export default function NotificationCenter() {
   }, [currentProject?.id, projects.length]);
 
   const openNotification = async (item: SecurityMessage) => {
-    const actionPath = safeMessageActionPath(item.actionPath) || '/system/messages';
+    const actionPath =
+      safeMessageActionPath(item.actionPath) || '/system/messages';
 
     try {
       await markMessageRead(item.id);
@@ -120,38 +168,53 @@ export default function NotificationCenter() {
   };
 
   return (
-    <section className="min-w-0 rounded-[22px] border border-[#f0f1f3] bg-white px-5 pb-4 pt-5">
-      <header className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-xl font-semibold tracking-[-0.35px] text-[#252832]">
-            {intl.formatMessage({ id: 'pages.home.notification.title' })}
-          </h2>
-          {state.unreadTotal > 0 ? (
-            <span className="rounded-full bg-[#fff0f2] px-2 py-0.5 text-[10px] font-medium text-[#e33f5c]">
-              {state.unreadTotal}
-            </span>
-          ) : null}
-        </div>
+    <section className="min-w-0 rounded-[22px] bg-white px-6 pb-4 pt-5">
+      <header className="flex items-center justify-between gap-4 border-b border-[#eceef1] pb-3">
+        <h2 className="text-xl font-semibold tracking-[-0.35px] text-[#252832]">
+          {intl.formatMessage({
+            id: 'pages.home.notification.title',
+          })}
+        </h2>
 
         <button
           type="button"
           onClick={() => history.push('/system/messages')}
-          className="flex shrink-0 items-center gap-0.5 border-0 bg-transparent p-0 text-[12px] text-[#666b75] transition-colors hover:text-[#252832]"
+          className="
+            flex
+            shrink-0
+            items-center
+            gap-0.5
+            border-0
+            bg-transparent
+            p-0
+            text-[12px]
+            text-[#666b75]
+            transition-colors
+            duration-150
+            hover:text-[#252832]
+          "
         >
-          {intl.formatMessage({ id: 'pages.home.common.viewMore' })}
+          {intl.formatMessage({
+            id: 'pages.home.common.viewMore',
+          })}
+
           <ChevronRight size={14} strokeWidth={1.8} />
         </button>
       </header>
 
-      <div className="mt-3 min-h-[126px]">
+      <div className="min-h-[120px] pt-1">
         {state.items.length > 0 ? (
-          <div className="divide-y divide-[#f0f1f3]">
+          <div>
             {state.items.map((item) => (
-              <NotificationRow key={item.id} item={item} onOpen={openNotification} />
+              <NotificationRow
+                key={item.id}
+                item={item}
+                onOpen={openNotification}
+              />
             ))}
           </div>
         ) : state.loading || state.failed ? (
-          <div className="flex min-h-[126px] items-center justify-center text-[11px] text-[#9da1a8]">
+          <div className="flex min-h-[120px] items-center justify-center text-[11px] text-[#9da1a8]">
             {intl.formatMessage({
               id: state.loading
                 ? 'pages.home.notification.loading'
@@ -161,9 +224,11 @@ export default function NotificationCenter() {
         ) : (
           <HomeEmptyState
             icon={Bell}
-            title={intl.formatMessage({ id: 'pages.home.notification.empty' })}
+            title={intl.formatMessage({
+              id: 'pages.home.notification.empty',
+            })}
             size="small"
-            className="min-h-[126px]"
+            className="min-h-[120px]"
           />
         )}
       </div>
