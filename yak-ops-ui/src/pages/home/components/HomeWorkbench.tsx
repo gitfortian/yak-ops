@@ -766,7 +766,7 @@ function RecentIssues({
 
         <div className="flex shrink-0 gap-6">
           <div className="text-right">
-            <div className="text-[9px] leading-4 text-[#a0a5ad]">
+            <div className="text-[12px] leading-4 text-[#a0a5ad]">
               {isChinese
                 ? '今日问题表'
                 : 'Issue tables'}
@@ -788,7 +788,7 @@ function RecentIssues({
           </div>
 
           <div className="text-right">
-            <div className="text-[9px] leading-4 text-[#a0a5ad]">
+            <div className="text-[12px] leading-4 text-[#a0a5ad]">
               {isChinese
                 ? '近 7 日问题'
                 : '7d issues'}
