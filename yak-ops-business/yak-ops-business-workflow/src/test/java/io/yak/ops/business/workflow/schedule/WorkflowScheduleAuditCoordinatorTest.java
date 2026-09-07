@@ -49,9 +49,8 @@ class WorkflowScheduleAuditCoordinatorTest {
     assertThat(audit.request.metadata().toString()).doesNotContain("schedule-secret");
     assertThat(audit.handle.events).hasSize(1);
     Map<String, ?> payload = audit.handle.events.get(0).payload();
-    assertThat(payload)
-        .containsEntry("changeType", "SCHEDULE_CREATED")
-        .containsEntry("inputConfigured", true);
+    assertThat(payload.get("changeType")).isEqualTo("SCHEDULE_CREATED");
+    assertThat(payload.get("inputConfigured")).isEqualTo(true);
     assertThat(payload.toString()).doesNotContain("schedule-secret");
   }
 
@@ -102,10 +101,11 @@ class WorkflowScheduleAuditCoordinatorTest {
 
     assertThat(audit.request.operationType()).isEqualTo("WORKFLOW_SCHEDULE_DISABLE");
     assertThat(audit.request.source()).isEqualTo("SCHEDULE");
-    assertThat(audit.request.metadata()).containsEntry("cause", "WORKFLOW_NOT_ONLINE");
-    assertThat(audit.handle.events.get(0).payload())
-        .containsEntry("changeType", "SCHEDULE_DISABLED")
-        .containsEntry("cause", "WORKFLOW_NOT_ONLINE");
+    assertThat(audit.request.metadata().get("cause")).isEqualTo("WORKFLOW_NOT_ONLINE");
+    assertThat(audit.handle.events.get(0).payload().get("changeType"))
+        .isEqualTo("SCHEDULE_DISABLED");
+    assertThat(audit.handle.events.get(0).payload().get("cause"))
+        .isEqualTo("WORKFLOW_NOT_ONLINE");
   }
 
   @Test
@@ -127,9 +127,9 @@ class WorkflowScheduleAuditCoordinatorTest {
 
     assertThat(audit.request.operationType()).isEqualTo("WORKFLOW_SCHEDULE_EXPIRE");
     assertThat(audit.request.source()).isEqualTo("SCHEDULE");
-    assertThat(audit.handle.events.get(0).payload())
-        .containsEntry("changeType", "SCHEDULE_EXPIRED")
-        .containsEntry("fireTime", fireTime);
+    assertThat(audit.handle.events.get(0).payload().get("changeType"))
+        .isEqualTo("SCHEDULE_EXPIRED");
+    assertThat(audit.handle.events.get(0).payload().get("fireTime")).isEqualTo(fireTime);
   }
 
   private static WorkflowScheduleVO schedule(String status, Map<String, Object> input) {
